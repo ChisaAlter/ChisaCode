@@ -1,0 +1,13 @@
+export type { ConnectionRole, RelaySessionAttachment } from "./types.js";
+
+export {
+  generateKeyPair,
+  exportPublicKey,
+  importPublicKey,
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+} from "./crypto.js";
+
+export { createClientChannel, createDaemonChannel, EncryptedChannel } from "./encrypted-channel.js";
+export type { Transport, EncryptedChannelEvents } from "./encrypted-channel.js";

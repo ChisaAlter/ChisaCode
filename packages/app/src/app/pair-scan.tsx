@@ -1,0 +1,278 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import type { BarcodeScanningResult, BarcodeSettings } from "expo-camera";
+import { useHostMutations } from "@/runtime/host-runtime";
+import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
+import { connectToDaemon } from "@/utils/test-daemon-connection";
+import { ConnectionOfferSchema } from "@fleurdelys/protocol/connection-offer";
+import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
+import { isWeb } from "@/constants/platform";
+import { BackHeader } from "@/components/headers/back-header";
+
+const styles = StyleSheet.create((theme) => ({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.surface0,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: theme.spacing[6],
+  },
+  cameraWrap: {
+    flex: 1,
+    overflow: "hidden",
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface2,
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scanFrame: {
+    width: 260,
+    height: 260,
+  },
+  corner: {
+    position: "absolute",
+    width: 36,
+    height: 36,
+    borderColor: theme.colors.accent,
+  },
+  cornerTL: {
+    left: 0,
+    top: 0,
+    borderLeftWidth: 4,
+    borderTopWidth: 4,
+    borderTopLeftRadius: 12,
+  },
+  cornerTR: {
+    right: 0,
+    top: 0,
+    borderRightWidth: 4,
+    borderTopWidth: 4,
+    borderTopRightRadius: 12,
+  },
+  cornerBL: {
+    left: 0,
+    bottom: 0,
+    borderLeftWidth: 4,
+    borderBottomWidth: 4,
+    borderBottomLeftRadius: 12,
+  },
+  cornerBR: {
+    right: 0,
+    bottom: 0,
+    borderRightWidth: 4,
+    borderBottomWidth: 4,
+    borderBottomRightRadius: 12,
+  },
+  helperText: {
+    marginTop: theme.spacing[6],
+    color: theme.colors.foregroundMuted,
+    textAlign: "center",
+    fontSize: theme.fontSize.base,
+  },
+  permissionCard: {
+    marginTop: theme.spacing[6],
+    padding: theme.spacing[6],
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface2,
+    gap: theme.spacing[4],
+  },
+  permissionTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  permissionBody: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.base,
+  },
+  permissionButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: theme.spacing[6],
+    paddingVertical: theme.spacing[3],
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.palette.blue[500],
+  },
+  permissionButtonText: {
+    color: theme.colors.palette.white,
+    fontWeight: theme.fontWeight.semibold,
+  },
+}));
+
+function extractOfferUrlFromScan(result: BarcodeScanningResult): string | null {
+  const raw = typeof result.data === "string" ? result.data.trim() : "";
+  if (!raw) return null;
+
+  if (raw.includes("#offer=")) return raw;
+
+  return null;
+}
+
+export default function PairScanScreen() {
+  const { theme } = useUnistyles();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    source?: string;
+  }>();
+  const source = typeof params.source === "string" ? params.source : "settings";
+  const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
+
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isPairing, setIsPairing] = useState(false);
+  const lastScannedRef = useRef<string | null>(null);
+
+  const navigateToPairedHost = useCallback(
+    (serverId: string) => {
+      if (source === "onboarding") {
+        router.replace(buildHostRootRoute(serverId));
+        return;
+      }
+      router.replace(buildSettingsHostRoute(serverId));
+    },
+    [router, source],
+  );
+
+  const closeToSource = useCallback(() => {
+    try {
+      router.back();
+    } catch {
+      router.replace("/" as Href);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (isWeb) return;
+    if (permission && permission.granted) return;
+    void requestPermission().catch(() => undefined);
+  }, [permission, requestPermission]);
+
+  const handleScan = useCallback(
+    async (result: BarcodeScanningResult) => {
+      if (isPairing) return;
+      const offerUrl = extractOfferUrlFromScan(result);
+      if (!offerUrl) return;
+
+      if (lastScannedRef.current === offerUrl) return;
+      lastScannedRef.current = offerUrl;
+
+      try {
+        setIsPairing(true);
+        const idx = offerUrl.indexOf("#offer=");
+        const encoded = offerUrl.slice(idx + "#offer=".length).trim();
+        const offerPayload = decodeOfferFragmentPayload(encoded);
+        const offer = ConnectionOfferSchema.parse(offerPayload);
+
+        const { client, hostname } = await connectToDaemon(
+          {
+            id: "probe",
+            type: "relay",
+            relayEndpoint: normalizeHostPort(offer.relay.endpoint),
+            useTls: offer.relay.useTls,
+            daemonPublicKeyB64: offer.daemonPublicKeyB64,
+          },
+          { serverId: offer.serverId },
+        );
+        await client.close().catch(() => undefined);
+
+        const profile = await upsertDaemonFromOfferUrl(offerUrl, hostname ?? undefined);
+
+        navigateToPairedHost(profile.serverId);
+      } catch (error) {
+        lastScannedRef.current = null;
+        const message = error instanceof Error ? error.message : "Unable to pair host";
+        Alert.alert("错误", message);
+      } finally {
+        setIsPairing(false);
+      }
+    },
+    [isPairing, navigateToPairedHost, upsertDaemonFromOfferUrl],
+  );
+
+  const handleRouterBack = useCallback(() => router.back(), [router]);
+  const handleRequestPermission = useCallback(() => {
+    void requestPermission();
+  }, [requestPermission]);
+
+  const bodyStyle = useMemo(
+    () => [styles.body, { paddingBottom: insets.bottom + theme.spacing[6] }],
+    [insets.bottom, theme.spacing],
+  );
+  const helperTextStyle = useMemo(
+    () => [styles.helperText, { color: theme.colors.foreground }],
+    [theme.colors.foreground],
+  );
+
+  if (isWeb) {
+    return (
+      <View style={styles.container}>
+        <BackHeader title="扫描二维码" onBack={handleRouterBack} />
+        <View style={bodyStyle}>
+          <View style={styles.permissionCard}>
+            <Text style={styles.permissionTitle}>网页端不可用</Text>
+            <Text style={styles.permissionBody}>网页版不支持扫描二维码。请改用“粘贴链接”。</Text>
+            <Pressable style={styles.permissionButton} onPress={closeToSource}>
+              <Text style={styles.permissionButtonText}>返回设置</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  const granted = Boolean(permission?.granted);
+
+  return (
+    <View style={styles.container}>
+      <BackHeader title="扫描二维码" onBack={closeToSource} />
+
+      <View style={bodyStyle}>
+        {!granted ? (
+          <View style={styles.permissionCard}>
+            <Text style={styles.permissionTitle}>相机权限</Text>
+            <Text style={styles.permissionBody}>
+              允许访问相机，以扫描 daemon 提供的配对二维码。
+            </Text>
+            <Pressable style={styles.permissionButton} onPress={handleRequestPermission}>
+              <Text style={styles.permissionButtonText}>授予权限</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.cameraWrap}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={BARCODE_SCANNER_SETTINGS}
+              onBarcodeScanned={handleScan}
+            />
+            <View style={styles.overlay} pointerEvents="none">
+              <View style={styles.scanFrame}>
+                <View style={CORNER_TL_STYLE} />
+                <View style={CORNER_TR_STYLE} />
+                <View style={CORNER_BL_STYLE} />
+                <View style={CORNER_BR_STYLE} />
+              </View>
+              {isPairing ? <Text style={helperTextStyle}>正在配对...</Text> : null}
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const BARCODE_SCANNER_SETTINGS: BarcodeSettings = { barcodeTypes: ["qr"] };
+const CORNER_TL_STYLE = [styles.corner, styles.cornerTL];
+const CORNER_TR_STYLE = [styles.corner, styles.cornerTR];
+const CORNER_BL_STYLE = [styles.corner, styles.cornerBL];
+const CORNER_BR_STYLE = [styles.corner, styles.cornerBR];

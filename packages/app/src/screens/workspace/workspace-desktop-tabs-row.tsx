@@ -1,0 +1,1074 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type PressableStateCallbackType,
+} from "react-native";
+import {
+  CopyX,
+  ArrowLeftToLine,
+  ArrowRightToLine,
+  Columns2,
+  Copy,
+  Pencil,
+  RotateCw,
+  Rows2,
+  Globe,
+  SquarePen,
+  SquareTerminal,
+  X,
+} from "lucide-react-native";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { SortableInlineList } from "@/components/sortable-inline-list";
+import type {
+  DraggableListDragHandleProps,
+  DraggableRenderItemInfo,
+} from "@/components/draggable-list.types";
+import { isNative, isWeb } from "@/constants/platform";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { Shortcut } from "@/components/ui/shortcut";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
+import {
+  WorkspaceTabPresentationResolver,
+  WorkspaceTabIcon,
+  type WorkspaceTabPresentation,
+} from "@/screens/workspace/workspace-tab-presentation";
+import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
+import {
+  buildWorkspaceDesktopTabActions,
+  type WorkspaceDesktopTabActions,
+  type WorkspaceTabMenuEntry,
+} from "@/screens/workspace/workspace-tab-menu";
+import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
+import type { Theme } from "@/styles/theme";
+
+const DROPDOWN_WIDTH = 220;
+const LOADING_TAB_LABEL_SKELETON_WIDTH = 80;
+
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedX = withUnistyles(X);
+const ThemedCopy = withUnistyles(Copy);
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
+const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
+const ThemedCopyX = withUnistyles(CopyX);
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedSquarePen = withUnistyles(SquarePen);
+const ThemedSquareTerminal = withUnistyles(SquareTerminal);
+const ThemedGlobe = withUnistyles(Globe);
+const ThemedColumns2 = withUnistyles(Columns2);
+const ThemedRows2 = withUnistyles(Rows2);
+
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+
+function newTabActionButtonStyle({ hovered, pressed }: PressableStateCallbackType) {
+  return [styles.newTabActionButton, (hovered || pressed) && styles.newTabActionButtonHovered];
+}
+
+function TabContextMenuItem({
+  entry,
+}: {
+  entry: Extract<WorkspaceTabMenuEntry, { kind: "item" }>;
+}) {
+  const leading = useMemo(() => {
+    switch (entry.icon) {
+      case "copy":
+        return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
+      case "rotate-cw":
+        return <ThemedRotateCw size={16} uniProps={mutedColorMapping} />;
+      case "arrow-left-to-line":
+        return <ThemedArrowLeftToLine size={16} uniProps={mutedColorMapping} />;
+      case "arrow-right-to-line":
+        return <ThemedArrowRightToLine size={16} uniProps={mutedColorMapping} />;
+      case "copy-x":
+        return <ThemedCopyX size={16} uniProps={mutedColorMapping} />;
+      case "pencil":
+        return <ThemedPencil size={16} uniProps={mutedColorMapping} />;
+      case "x":
+        return <ThemedX size={16} uniProps={mutedColorMapping} />;
+      default:
+        return undefined;
+    }
+  }, [entry.icon]);
+  const trailing = useMemo(
+    () => (entry.hint ? <Text style={styles.menuItemHint}>{entry.hint}</Text> : undefined),
+    [entry.hint],
+  );
+  return (
+    <ContextMenuItem
+      testID={entry.testID}
+      disabled={entry.disabled}
+      destructive={entry.destructive}
+      onSelect={entry.onSelect}
+      tooltip={entry.tooltip}
+      leading={leading}
+      trailing={trailing}
+    >
+      {entry.label}
+    </ContextMenuItem>
+  );
+}
+
+function tabKeyExtractor(tab: WorkspaceDesktopTabRowItem) {
+  return `${tab.tab.key}:${tab.tab.kind}`;
+}
+
+export interface WorkspaceDesktopTabRowItem {
+  tab: WorkspaceTabDescriptor;
+  isActive: boolean;
+  isCloseHovered: boolean;
+  isClosingTab: boolean;
+}
+
+interface WorkspaceDesktopTabsRowProps {
+  paneId?: string;
+  isFocused?: boolean;
+  tabs: WorkspaceDesktopTabRowItem[];
+  normalizedServerId: string;
+  normalizedWorkspaceId: string;
+  setHoveredTabKey: Dispatch<SetStateAction<string | null>>;
+  setHoveredCloseTabKey: Dispatch<SetStateAction<string | null>>;
+  onNavigateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => Promise<void> | void;
+  onCopyResumeCommand: (agentId: string) => Promise<void> | void;
+  onCopyAgentId: (agentId: string) => Promise<void> | void;
+  onReloadAgent: (agentId: string) => Promise<void> | void;
+  onRenameTab: (tab: WorkspaceTabDescriptor) => void;
+  onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
+  onCloseTabsToRight: (tabId: string) => Promise<void> | void;
+  onCloseOtherTabs: (tabId: string) => Promise<void> | void;
+  onCreateDraftTab: (input: { paneId?: string }) => void;
+  onCreateTerminalTab: (input: { paneId?: string }) => void;
+  onCreateBrowserTab: (input: { paneId?: string }) => void;
+  showCreateBrowserTab?: boolean;
+  disableCreateTerminal?: boolean;
+  isWaitingOnTerminalReadiness?: boolean;
+  onReorderTabs: (nextTabs: WorkspaceTabDescriptor[]) => void;
+  onSplitRight: () => void;
+  onSplitDown: () => void;
+  externalDndContext?: boolean;
+  activeDragTabId?: string | null;
+  tabDropPreviewIndex?: number | null;
+  showPaneSplitActions?: boolean;
+}
+
+function getFallbackTabLabel(tab: WorkspaceTabDescriptor): string {
+  if (tab.target.kind === "draft") {
+    return "新建智能体";
+  }
+  if (tab.target.kind === "setup") {
+    return "设置";
+  }
+  if (tab.target.kind === "terminal") {
+    return "终端";
+  }
+  if (tab.target.kind === "file") {
+    return tab.target.path.split("/").findLast(Boolean) ?? tab.target.path;
+  }
+  return "智能体";
+}
+
+function useMiddleClickClose(onClose: () => void) {
+  const ref = useRef<View>(null);
+
+  useEffect(() => {
+    if (isNative) return;
+    const node = ref.current as unknown as HTMLElement | null;
+    if (!node) return;
+
+    function handleAuxClick(event: MouseEvent) {
+      if (event.button === 1) {
+        event.preventDefault();
+        onClose();
+      }
+    }
+
+    node.addEventListener("auxclick", handleAuxClick);
+    return () => node.removeEventListener("auxclick", handleAuxClick);
+  }, [onClose]);
+
+  return ref;
+}
+
+function TabHandleContent({
+  presentation,
+  isHighlighted,
+  showLabel,
+  tabLabelSkeletonStyle,
+  tabLabelStyle,
+}: {
+  presentation: WorkspaceTabPresentation;
+  isHighlighted: boolean;
+  showLabel: boolean;
+  tabLabelSkeletonStyle: React.ComponentProps<typeof View>["style"];
+  tabLabelStyle: React.ComponentProps<typeof Text>["style"];
+}) {
+  return (
+    <View style={styles.tabHandle}>
+      <View style={styles.tabIcon}>
+        <WorkspaceTabIcon presentation={presentation} active={isHighlighted} />
+      </View>
+      {showLabel && presentation.titleState === "loading" ? (
+        <View style={tabLabelSkeletonStyle} />
+      ) : null}
+      {showLabel && presentation.titleState !== "loading" ? (
+        <Text style={tabLabelStyle} selectable={false} numberOfLines={1} ellipsizeMode="tail">
+          {presentation.label}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function TabChip({
+  tab,
+  isActive,
+  isDragging,
+  isFocused,
+  resolvedTabWidth,
+  showLabel,
+  showCloseButton,
+  isCloseHovered,
+  isClosingTab,
+  presentation,
+  tooltipLabel,
+  resolvedTab,
+  setHoveredTabKey,
+  setHoveredCloseTabKey,
+  onNavigateTab,
+  onCloseTab,
+  dragHandleProps,
+}: {
+  tab: WorkspaceTabDescriptor;
+  isActive: boolean;
+  isDragging: boolean;
+  isFocused: boolean;
+  resolvedTabWidth: number;
+  showLabel: boolean;
+  showCloseButton: boolean;
+  isCloseHovered: boolean;
+  isClosingTab: boolean;
+  presentation: WorkspaceTabPresentation;
+  tooltipLabel: string;
+  resolvedTab: WorkspaceDesktopTabActions;
+  setHoveredTabKey: Dispatch<SetStateAction<string | null>>;
+  setHoveredCloseTabKey: Dispatch<SetStateAction<string | null>>;
+  onNavigateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => Promise<void> | void;
+  dragHandleProps: DraggableListDragHandleProps | undefined;
+}) {
+  const { closeButtonTestId, contextMenuTestId, menuEntries } = resolvedTab;
+  const middleClickRef = useMiddleClickClose(
+    useCallback(() => void onCloseTab(tab.tabId), [onCloseTab, tab.tabId]),
+  );
+  const [hovered, setHovered] = useState(false);
+  const isHighlighted = isActive || hovered || isCloseHovered;
+  const closeButtonDragBlockers = isWeb
+    ? ({
+        onPointerDown: (event: { stopPropagation?: () => void }) => {
+          event.stopPropagation?.();
+        },
+        onMouseDown: (event: { stopPropagation?: () => void }) => {
+          event.stopPropagation?.();
+        },
+      } as const)
+    : undefined;
+
+  const tabChipStyle = useCallback(
+    () => [
+      styles.tab,
+      isWeb && isDragging && ({ cursor: "grabbing" } as object),
+      {
+        minWidth: resolvedTabWidth,
+        width: resolvedTabWidth,
+        maxWidth: resolvedTabWidth,
+      },
+    ],
+    [isDragging, resolvedTabWidth],
+  );
+
+  const handleTabHoverIn = useCallback(() => {
+    setHovered(true);
+    setHoveredTabKey(tab.key);
+  }, [setHoveredTabKey, tab.key]);
+
+  const handleTabHoverOut = useCallback(() => {
+    setHovered(false);
+    setHoveredTabKey((current) => (current === tab.key ? null : current));
+  }, [setHoveredTabKey, tab.key]);
+
+  const handleNavigateTab = useCallback(() => {
+    onNavigateTab(tab.tabId);
+  }, [onNavigateTab, tab.tabId]);
+
+  const handleCloseButtonPressIn = useCallback((event: { stopPropagation?: () => void }) => {
+    event.stopPropagation?.();
+  }, []);
+
+  const handleCloseButtonHoverIn = useCallback(() => {
+    setHoveredTabKey(tab.key);
+    setHoveredCloseTabKey(tab.key);
+  }, [setHoveredTabKey, setHoveredCloseTabKey, tab.key]);
+
+  const handleCloseButtonHoverOut = useCallback(() => {
+    setHoveredTabKey((current) => (current === tab.key ? null : current));
+    setHoveredCloseTabKey((current) => (current === tab.key ? null : current));
+  }, [setHoveredTabKey, setHoveredCloseTabKey, tab.key]);
+
+  const handleCloseButtonPress = useCallback(
+    (event: { stopPropagation?: () => void }) => {
+      event.stopPropagation?.();
+      void onCloseTab(tab.tabId);
+    },
+    [onCloseTab, tab.tabId],
+  );
+
+  const closeButtonStyle = useCallback(
+    ({ hovered: isButtonHovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.tabCloseButton,
+      styles.tabCloseButtonShown,
+      (Boolean(isButtonHovered) || pressed) && styles.tabCloseButtonActive,
+    ],
+    [],
+  );
+
+  const tabAccessibilityState = useMemo(() => ({ selected: isActive }), [isActive]);
+  const tabFocusIndicatorStyle = useMemo(
+    () => [styles.tabFocusIndicator, !isFocused && styles.tabFocusIndicatorUnfocused],
+    [isFocused],
+  );
+  const tabLabelSkeletonStyle = useMemo(
+    () => [styles.tabLabelSkeleton, showCloseButton && styles.tabLabelSkeletonWithCloseButton],
+    [showCloseButton],
+  );
+  const tabLabelStyle = useMemo(
+    () => [
+      styles.tabLabel,
+      isHighlighted && styles.tabLabelActive,
+      showCloseButton && styles.tabLabelWithCloseButton,
+    ],
+    [isHighlighted, showCloseButton],
+  );
+
+  return (
+    <View ref={middleClickRef}>
+      <ContextMenu key={tab.key}>
+        <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger asChild triggerRefProp="triggerRef">
+            <ContextMenuTrigger
+              {...(dragHandleProps?.attributes as object | undefined)}
+              {...(dragHandleProps?.listeners as object | undefined)}
+              testID={`workspace-tab-${buildDeterministicWorkspaceTabId(tab.target)}`}
+              triggerRef={dragHandleProps?.setActivatorNodeRef as unknown as undefined}
+              enabledOnMobile={false}
+              style={tabChipStyle}
+              onHoverIn={handleTabHoverIn}
+              onHoverOut={handleTabHoverOut}
+              onPressIn={handleNavigateTab}
+              onPress={handleNavigateTab}
+              accessibilityRole="button"
+              accessibilityLabel={tooltipLabel}
+              accessibilityState={tabAccessibilityState}
+              aria-selected={isActive}
+            >
+              {isActive && <View style={tabFocusIndicatorStyle} />}
+              <TabHandleContent
+                presentation={presentation}
+                isHighlighted={isHighlighted}
+                showLabel={showLabel}
+                tabLabelSkeletonStyle={tabLabelSkeletonStyle}
+                tabLabelStyle={tabLabelStyle}
+              />
+
+              {showCloseButton ? (
+                <Pressable
+                  {...(closeButtonDragBlockers as object | undefined)}
+                  testID={closeButtonTestId}
+                  disabled={isClosingTab}
+                  onPressIn={handleCloseButtonPressIn}
+                  onHoverIn={handleCloseButtonHoverIn}
+                  onHoverOut={handleCloseButtonHoverOut}
+                  onPress={handleCloseButtonPress}
+                  style={closeButtonStyle}
+                >
+                  {({ hovered: closeHovered, pressed }) =>
+                    isClosingTab ? (
+                      <ThemedActivityIndicator
+                        size={12}
+                        uniProps={
+                          closeHovered || pressed ? foregroundColorMapping : mutedColorMapping
+                        }
+                      />
+                    ) : (
+                      <ThemedX
+                        size={12}
+                        uniProps={
+                          closeHovered || pressed ? foregroundColorMapping : mutedColorMapping
+                        }
+                      />
+                    )
+                  }
+                </Pressable>
+              ) : null}
+            </ContextMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            {tab.target.kind === "agent" ? (
+              <View style={styles.tooltipAgentRow}>
+                <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
+                <Text style={styles.tooltipAgentId}>{tab.target.agentId.slice(0, 7)}</Text>
+              </View>
+            ) : (
+              <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
+            )}
+          </TooltipContent>
+        </Tooltip>
+
+        <ContextMenuContent align="start" width={DROPDOWN_WIDTH} testID={contextMenuTestId}>
+          {menuEntries.map((entry) =>
+            entry.kind === "separator" ? (
+              <ContextMenuSeparator key={entry.key} />
+            ) : (
+              <TabContextMenuItem key={entry.key} entry={entry} />
+            ),
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+    </View>
+  );
+}
+
+export function WorkspaceDesktopTabsRow({
+  paneId,
+  isFocused = false,
+  tabs,
+  normalizedServerId,
+  normalizedWorkspaceId,
+  setHoveredTabKey,
+  setHoveredCloseTabKey,
+  onNavigateTab,
+  onCloseTab,
+  onCopyResumeCommand,
+  onCopyAgentId,
+  onReloadAgent,
+  onRenameTab,
+  onCloseTabsToLeft,
+  onCloseTabsToRight,
+  onCloseOtherTabs,
+  onCreateDraftTab,
+  onCreateTerminalTab,
+  onCreateBrowserTab,
+  showCreateBrowserTab = false,
+  disableCreateTerminal = false,
+  isWaitingOnTerminalReadiness = false,
+  onReorderTabs,
+  onSplitRight,
+  onSplitDown,
+  externalDndContext = false,
+  activeDragTabId = null,
+  tabDropPreviewIndex = null,
+  showPaneSplitActions = true,
+}: WorkspaceDesktopTabsRowProps) {
+  const newTabKeys = useShortcutKeys("workspace-tab-new");
+  const newTerminalKeys = useShortcutKeys("workspace-terminal-new");
+  const splitRightKeys = useShortcutKeys("workspace-pane-split-right");
+  const splitDownKeys = useShortcutKeys("workspace-pane-split-down");
+  const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
+  const [tabsActionsWidth, setTabsActionsWidth] = useState<number>(0);
+
+  const handleTabsContainerLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = Math.round(event.nativeEvent.layout.width);
+    setTabsContainerWidth((current) => (Math.abs(current - nextWidth) > 1 ? nextWidth : current));
+  }, []);
+
+  const handleTabsActionsLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = Math.round(event.nativeEvent.layout.width);
+    setTabsActionsWidth((current) => (Math.abs(current - nextWidth) > 1 ? nextWidth : current));
+  }, []);
+
+  const layoutMetrics = useMemo(
+    () => ({
+      rowHorizontalInset: 0,
+      actionsReservedWidth: Math.max(0, tabsActionsWidth),
+      rowPaddingHorizontal: 0,
+      tabGap: 0,
+      maxTabWidth: 200,
+      tabIconWidth: 14,
+      tabHorizontalPadding: 12,
+      estimatedCharWidth: 7,
+      closeButtonWidth: 22,
+    }),
+    [tabsActionsWidth],
+  );
+
+  const tabLabelLengths = useMemo(
+    () =>
+      tabs.map((tab) => {
+        const label = getFallbackTabLabel(tab.tab);
+        return label.length;
+      }),
+    [tabs],
+  );
+
+  const { layout } = useWorkspaceTabLayout({
+    tabLabelLengths,
+    viewportWidthOverride: tabsContainerWidth > 0 ? tabsContainerWidth : null,
+    metrics: layoutMetrics,
+  });
+
+  const handleDragEnd = useCallback(
+    (nextTabs: WorkspaceDesktopTabRowItem[]) => {
+      onReorderTabs(nextTabs.map((tab) => tab.tab));
+    },
+    [onReorderTabs],
+  );
+
+  const getTabDragData = useMemo(() => {
+    if (!paneId) return undefined;
+    return (tab: WorkspaceDesktopTabRowItem) => ({
+      kind: "workspace-tab" as const,
+      paneId,
+      tabId: tab.tab.tabId,
+    });
+  }, [paneId]);
+
+  const handleCreateAgentTab = useCallback(() => {
+    onCreateDraftTab({ paneId });
+  }, [onCreateDraftTab, paneId]);
+
+  const handleCreateTerminal = useCallback(() => {
+    onCreateTerminalTab({ paneId });
+  }, [onCreateTerminalTab, paneId]);
+
+  const handleCreateBrowser = useCallback(() => {
+    onCreateBrowserTab({ paneId });
+  }, [onCreateBrowserTab, paneId]);
+
+  const terminalDisabled = disableCreateTerminal || isWaitingOnTerminalReadiness;
+  const newTerminalActionButtonStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType) => [
+      styles.newTabActionButton,
+      terminalDisabled && styles.newTabActionButtonDisabled,
+      (hovered || pressed) && styles.newTabActionButtonHovered,
+    ],
+    [terminalDisabled],
+  );
+
+  const renderTab = useCallback(
+    ({
+      item,
+      index,
+      dragHandleProps,
+      isActive,
+    }: DraggableRenderItemInfo<WorkspaceDesktopTabRowItem>) => {
+      const shouldShowCloseButton = layout.closeButtonPolicy === "all";
+      const layoutItem = layout.items[index] ?? null;
+      const resolvedTabWidth = layoutItem?.width ?? 150;
+      const showLabel = layoutItem?.showLabel ?? true;
+      const showDropIndicatorBefore = activeDragTabId !== null && tabDropPreviewIndex === index;
+      const showDropIndicatorAfter =
+        activeDragTabId !== null &&
+        tabDropPreviewIndex === tabs.length &&
+        index === tabs.length - 1;
+
+      return (
+        <ResolvedDesktopTabChip
+          key={`${item.tab.key}:${item.tab.kind}`}
+          item={item}
+          isFocused={isFocused}
+          isDragging={isActive}
+          index={index}
+          tabCount={tabs.length}
+          normalizedServerId={normalizedServerId}
+          normalizedWorkspaceId={normalizedWorkspaceId}
+          onCopyResumeCommand={onCopyResumeCommand}
+          onCopyAgentId={onCopyAgentId}
+          onReloadAgent={onReloadAgent}
+          onRenameTab={onRenameTab}
+          onCloseTabsToLeft={onCloseTabsToLeft}
+          onCloseTabsToRight={onCloseTabsToRight}
+          onCloseOtherTabs={onCloseOtherTabs}
+          resolvedTabWidth={resolvedTabWidth}
+          showLabel={showLabel}
+          showCloseButton={shouldShowCloseButton}
+          setHoveredTabKey={setHoveredTabKey}
+          setHoveredCloseTabKey={setHoveredCloseTabKey}
+          onNavigateTab={onNavigateTab}
+          onCloseTab={onCloseTab}
+          dragHandleProps={dragHandleProps}
+          showDropIndicatorBefore={showDropIndicatorBefore}
+          showDropIndicatorAfter={showDropIndicatorAfter}
+        />
+      );
+    },
+    [
+      activeDragTabId,
+      isFocused,
+      layout.closeButtonPolicy,
+      layout.items,
+      normalizedServerId,
+      normalizedWorkspaceId,
+      onCloseOtherTabs,
+      onCloseTab,
+      onCloseTabsToLeft,
+      onCloseTabsToRight,
+      onCopyAgentId,
+      onCopyResumeCommand,
+      onNavigateTab,
+      onReloadAgent,
+      onRenameTab,
+      setHoveredCloseTabKey,
+      setHoveredTabKey,
+      tabDropPreviewIndex,
+      tabs.length,
+    ],
+  );
+
+  const tabsScrollStyle = useMemo(
+    () => [
+      styles.tabsScroll,
+      layout.requiresHorizontalScrollFallback
+        ? styles.tabsScrollOverflow
+        : styles.tabsScrollFitContent,
+    ],
+    [layout.requiresHorizontalScrollFallback],
+  );
+
+  return (
+    <View
+      style={styles.tabsContainer}
+      testID="workspace-tabs-row"
+      onLayout={handleTabsContainerLayout}
+    >
+      <ScrollView
+        horizontal
+        scrollEnabled={layout.requiresHorizontalScrollFallback}
+        testID="workspace-tabs-scroll"
+        style={tabsScrollStyle}
+        contentContainerStyle={styles.tabsContent}
+        showsHorizontalScrollIndicator={false}
+      >
+        <SortableInlineList
+          data={tabs}
+          keyExtractor={tabKeyExtractor}
+          useDragHandle
+          disabled={!externalDndContext && tabs.length < 2}
+          onDragEnd={handleDragEnd}
+          externalDndContext={externalDndContext}
+          activeId={activeDragTabId}
+          getItemData={getTabDragData}
+          renderItem={renderTab}
+        />
+      </ScrollView>
+      <View style={styles.tabsActions} onLayout={handleTabsActionsLayout}>
+        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger
+            testID="workspace-new-agent-tab"
+            onPress={handleCreateAgentTab}
+            accessibilityRole="button"
+            accessibilityLabel="新建智能体标签页"
+            style={newTabActionButtonStyle}
+          >
+            <ThemedSquarePen size={14} uniProps={mutedColorMapping} />
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <View style={styles.newTabTooltipRow}>
+              <Text style={styles.newTabTooltipText}>新建智能体标签页</Text>
+              {newTabKeys ? (
+                <Shortcut chord={newTabKeys} style={styles.newTabTooltipShortcut} />
+              ) : null}
+            </View>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger
+            testID="workspace-new-terminal"
+            onPress={handleCreateTerminal}
+            disabled={terminalDisabled}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isWaitingOnTerminalReadiness ? "正在准备终端标签页" : "新建终端标签页"
+            }
+            style={newTerminalActionButtonStyle}
+          >
+            <ThemedSquareTerminal size={14} uniProps={mutedColorMapping} />
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <View style={styles.newTabTooltipRow}>
+              <Text style={styles.newTabTooltipText}>
+                {isWaitingOnTerminalReadiness ? "正在准备终端..." : "新建终端标签页"}
+              </Text>
+              {newTerminalKeys ? (
+                <Shortcut chord={newTerminalKeys} style={styles.newTabTooltipShortcut} />
+              ) : null}
+            </View>
+          </TooltipContent>
+        </Tooltip>
+        {showCreateBrowserTab ? (
+          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+            <TooltipTrigger
+              testID="workspace-new-browser"
+              onPress={handleCreateBrowser}
+              accessibilityRole="button"
+              accessibilityLabel="新建浏览器标签页"
+              style={newTabActionButtonStyle}
+            >
+              <ThemedGlobe size={14} uniProps={mutedColorMapping} />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" offset={8}>
+              <View style={styles.newTabTooltipRow}>
+                <Text style={styles.newTabTooltipText}>新建浏览器标签页</Text>
+              </View>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        {showPaneSplitActions ? (
+          <>
+            <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+              <TooltipTrigger
+                onPress={onSplitRight}
+                accessibilityRole="button"
+                accessibilityLabel="向右拆分窗格"
+                style={newTabActionButtonStyle}
+              >
+                <ThemedColumns2 size={14} uniProps={mutedColorMapping} />
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center" offset={8}>
+                <View style={styles.newTabTooltipRow}>
+                  <Text style={styles.newTabTooltipText}>向右拆分窗格</Text>
+                  {splitRightKeys ? (
+                    <Shortcut chord={splitRightKeys} style={styles.newTabTooltipShortcut} />
+                  ) : null}
+                </View>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+              <TooltipTrigger
+                onPress={onSplitDown}
+                accessibilityRole="button"
+                accessibilityLabel="向下拆分窗格"
+                style={newTabActionButtonStyle}
+              >
+                <ThemedRows2 size={14} uniProps={mutedColorMapping} />
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center" offset={8}>
+                <View style={styles.newTabTooltipRow}>
+                  <Text style={styles.newTabTooltipText}>向下拆分窗格</Text>
+                  {splitDownKeys ? (
+                    <Shortcut chord={splitDownKeys} style={styles.newTabTooltipShortcut} />
+                  ) : null}
+                </View>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function ResolvedDesktopTabChip({
+  item,
+  isFocused,
+  isDragging,
+  index,
+  tabCount,
+  normalizedServerId,
+  normalizedWorkspaceId,
+  onCopyResumeCommand,
+  onCopyAgentId,
+  onReloadAgent,
+  onRenameTab,
+  onCloseTabsToLeft,
+  onCloseTabsToRight,
+  onCloseOtherTabs,
+  resolvedTabWidth,
+  showLabel,
+  showCloseButton,
+  setHoveredTabKey,
+  setHoveredCloseTabKey,
+  onNavigateTab,
+  onCloseTab,
+  dragHandleProps,
+  showDropIndicatorBefore,
+  showDropIndicatorAfter,
+}: {
+  item: WorkspaceDesktopTabRowItem;
+  isFocused: boolean;
+  isDragging: boolean;
+  index: number;
+  tabCount: number;
+  normalizedServerId: string;
+  normalizedWorkspaceId: string;
+  onCopyResumeCommand: (agentId: string) => Promise<void> | void;
+  onCopyAgentId: (agentId: string) => Promise<void> | void;
+  onReloadAgent: (agentId: string) => Promise<void> | void;
+  onRenameTab: (tab: WorkspaceTabDescriptor) => void;
+  onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
+  onCloseTabsToRight: (tabId: string) => Promise<void> | void;
+  onCloseOtherTabs: (tabId: string) => Promise<void> | void;
+  resolvedTabWidth: number;
+  showLabel: boolean;
+  showCloseButton: boolean;
+  setHoveredTabKey: Dispatch<SetStateAction<string | null>>;
+  setHoveredCloseTabKey: Dispatch<SetStateAction<string | null>>;
+  onNavigateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => Promise<void> | void;
+  dragHandleProps: DraggableListDragHandleProps | undefined;
+  showDropIndicatorBefore: boolean;
+  showDropIndicatorAfter: boolean;
+}) {
+  const resolvedTab = useMemo(
+    () =>
+      buildWorkspaceDesktopTabActions({
+        tab: item.tab,
+        index,
+        tabCount,
+        onCopyResumeCommand,
+        onCopyAgentId,
+        onReloadAgent,
+        onRenameTab,
+        onCloseTab,
+        onCloseTabsToLeft,
+        onCloseTabsToRight,
+        onCloseOtherTabs,
+      }),
+    [
+      index,
+      item.tab,
+      onCloseOtherTabs,
+      onCloseTab,
+      onCloseTabsToLeft,
+      onCloseTabsToRight,
+      onCopyAgentId,
+      onCopyResumeCommand,
+      onReloadAgent,
+      onRenameTab,
+      tabCount,
+    ],
+  );
+
+  return (
+    <WorkspaceTabPresentationResolver
+      tab={item.tab}
+      serverId={normalizedServerId}
+      workspaceId={normalizedWorkspaceId}
+    >
+      {(presentation) => {
+        const tooltipLabel =
+          presentation.titleState === "loading" ? "正在加载智能体标题" : presentation.label;
+
+        return (
+          <View style={styles.tabSlot}>
+            {showDropIndicatorBefore ? <View style={TAB_DROP_INDICATOR_BEFORE_STYLE} /> : null}
+            <TabChip
+              tab={item.tab}
+              isActive={item.isActive}
+              isDragging={isDragging}
+              isFocused={isFocused}
+              resolvedTabWidth={resolvedTabWidth}
+              showLabel={showLabel}
+              showCloseButton={showCloseButton}
+              isCloseHovered={item.isCloseHovered}
+              isClosingTab={item.isClosingTab}
+              presentation={presentation}
+              tooltipLabel={tooltipLabel}
+              resolvedTab={resolvedTab}
+              setHoveredTabKey={setHoveredTabKey}
+              setHoveredCloseTabKey={setHoveredCloseTabKey}
+              onNavigateTab={onNavigateTab}
+              onCloseTab={onCloseTab}
+              dragHandleProps={dragHandleProps}
+            />
+            {showDropIndicatorAfter ? <View style={TAB_DROP_INDICATOR_AFTER_STYLE} /> : null}
+          </View>
+        );
+      }}
+    </WorkspaceTabPresentationResolver>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  tabsContainer: {
+    minWidth: 0,
+    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    flexDirection: "row",
+    alignItems: "center",
+    overflow: "visible",
+  },
+  tabsScroll: {
+    minWidth: 0,
+  },
+  tabsScrollFitContent: {
+    flex: 1,
+  },
+  tabsScrollOverflow: {
+    flex: 1,
+  },
+  tabsContent: {
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  tabsActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing[2],
+  },
+  tab: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRightWidth: 1,
+    borderRightColor: theme.colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    userSelect: "none",
+  },
+  tabSlot: {
+    position: "relative",
+    overflow: "visible",
+  },
+  tabHandle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    flex: 1,
+    minWidth: 0,
+    userSelect: "none",
+  },
+  tabIcon: {
+    flexShrink: 0,
+  },
+  tabFocusIndicator: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: theme.colors.accent,
+  },
+  tabFocusIndicatorUnfocused: {
+    backgroundColor: theme.colors.borderAccent,
+  },
+  tabDropIndicator: {
+    position: "absolute",
+    top: theme.spacing[2],
+    bottom: theme.spacing[2],
+    width: 5,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
+    zIndex: 10,
+    pointerEvents: "none",
+  },
+  tabDropIndicatorBefore: {
+    left: -3,
+  },
+  tabDropIndicatorAfter: {
+    right: -3,
+  },
+  tabLabel: {
+    flexShrink: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+    userSelect: "none",
+  },
+  tabLabelSkeleton: {
+    width: 96,
+    maxWidth: "100%",
+    flexShrink: 1,
+    minWidth: 0,
+    height: 10,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface3,
+    opacity: 0.9,
+  },
+  tabLabelSkeletonWithCloseButton: {
+    width: LOADING_TAB_LABEL_SKELETON_WIDTH,
+  },
+  tabLabelWithCloseButton: {
+    paddingRight: 0,
+  },
+  tabLabelActive: {
+    color: theme.colors.foreground,
+  },
+  tabCloseButton: {
+    width: 18,
+    height: 18,
+    marginLeft: 0,
+    borderRadius: theme.borderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabCloseButtonShown: {
+    opacity: 1,
+  },
+  tabCloseButtonActive: {
+    backgroundColor: theme.colors.surface3,
+  },
+  newTabActionButton: {
+    width: 22,
+    height: 22,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  newTabActionButtonDisabled: {
+    opacity: 0.5,
+  },
+  newTabActionButtonHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  newTabTooltipText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  newTabTooltipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  newTabTooltipShortcut: {},
+  tooltipAgentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  tooltipAgentId: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  menuItemHint: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+}));
+
+const TAB_DROP_INDICATOR_BEFORE_STYLE = [styles.tabDropIndicator, styles.tabDropIndicatorBefore];
+const TAB_DROP_INDICATOR_AFTER_STYLE = [styles.tabDropIndicator, styles.tabDropIndicatorAfter];
