@@ -22,7 +22,7 @@ describe("searchHomeDirectories", () => {
     homeDir = realpathSync(homeDir);
     outsideDir = realpathSync(outsideDir);
 
-    mkdirSync(path.join(homeDir, "projects", "paseo"), { recursive: true });
+    mkdirSync(path.join(homeDir, "projects", "chisacode"), { recursive: true });
     mkdirSync(path.join(homeDir, "projects", "playground"), { recursive: true });
     mkdirSync(path.join(homeDir, "documents", "plans"), { recursive: true });
     mkdirSync(path.join(homeDir, ".hidden", "cache"), { recursive: true });
@@ -57,7 +57,9 @@ describe("searchHomeDirectories", () => {
 
     const resolvedResults = results.map((result) => realpathSync.native(result));
     expect(resolvedResults).toContain(realpathSync.native(path.join(homeDir, "projects")));
-    expect(resolvedResults).toContain(realpathSync.native(path.join(homeDir, "projects", "paseo")));
+    expect(resolvedResults).toContain(
+      realpathSync.native(path.join(homeDir, "projects", "chisacode")),
+    );
     expect(results).not.toContain(path.join(homeDir, "projects", "README.md"));
   });
 
@@ -69,7 +71,7 @@ describe("searchHomeDirectories", () => {
     });
 
     expect(results.map((result) => realpathSync.native(result))).toEqual([
-      realpathSync.native(path.join(homeDir, "projects", "paseo")),
+      realpathSync.native(path.join(homeDir, "projects", "chisacode")),
     ]);
   });
 
@@ -174,7 +176,7 @@ describe("searchWorkspaceEntries", () => {
     mkdirSync(path.join(workspaceDir, "docs"), { recursive: true });
     mkdirSync(path.join(outsideDir, "escaped"), { recursive: true });
 
-    writeFileSync(path.join(workspaceDir, "README.md"), "# paseo\n");
+    writeFileSync(path.join(workspaceDir, "README.md"), "# chisacode\n");
     writeFileSync(
       path.join(workspaceDir, "src", "components", "chat-input.tsx"),
       "export const ChatInput = null;\n",
@@ -272,7 +274,7 @@ describe("searchWorkspaceEntries", () => {
     mkdirSync(path.join(workspaceDir, "packages", "app", "src"), { recursive: true });
     writeFileSync(path.join(workspaceDir, "src", "file.ts"), "");
     writeFileSync(path.join(workspaceDir, "packages", "app", "src", "file.ts"), "");
-    writeFileSync(path.join(workspaceDir, "src", "paseo-config-file.ts"), "");
+    writeFileSync(path.join(workspaceDir, "src", "chisacode-config-file.ts"), "");
 
     const basenameResults = await searchWorkspaceEntries({
       cwd: workspaceDir,

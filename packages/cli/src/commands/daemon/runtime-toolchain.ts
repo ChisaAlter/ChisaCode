@@ -1,5 +1,5 @@
 import { platform } from "node:os";
-import { execCommand } from "@fleurdelys/server";
+import { execCommand } from "@chisacode/server";
 
 export interface NodePathFromPidResult {
   nodePath: string | null;

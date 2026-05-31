@@ -8,7 +8,7 @@ import { createWithWorkspace, type WithWorkspace } from "./helpers/with-workspac
 // across spec-file boundaries — Playwright sometimes skips it for the first test of a
 // subsequent spec when multiple specs run in the same worker. Auto fixtures run
 // reliably for every test that uses this `test` object.
-const test = base.extend<{ paseoE2ESetup: void; withWorkspace: WithWorkspace }>({
+const test = base.extend<{ chisacodeE2ESetup: void; withWorkspace: WithWorkspace }>({
   baseURL: async ({}, provide) => {
     const metroPort = process.env.E2E_METRO_PORT;
     if (!metroPort) {
@@ -16,7 +16,7 @@ const test = base.extend<{ paseoE2ESetup: void; withWorkspace: WithWorkspace }>(
     }
     await provide(`http://localhost:${metroPort}`);
   },
-  paseoE2ESetup: [
+  chisacodeE2ESetup: [
     async ({ page }, provide, testInfo) => {
       const daemonPort = getE2EDaemonPort();
       const metroPort = process.env.E2E_METRO_PORT;
@@ -61,7 +61,7 @@ const test = base.extend<{ paseoE2ESetup: void; withWorkspace: WithWorkspace }>(
           // `addInitScript` runs on every navigation (including reloads). Some tests intentionally
           // override storage and reload; they can opt out of seeding for the *next* navigation by
           // setting this flag before the reload.
-          const disableOnceKey = "@paseo:e2e-disable-default-seed-once";
+          const disableOnceKey = "@chisacode:e2e-disable-default-seed-once";
           const disableValue = localStorage.getItem(disableOnceKey);
           if (disableValue) {
             localStorage.removeItem(disableOnceKey);
@@ -70,13 +70,13 @@ const test = base.extend<{ paseoE2ESetup: void; withWorkspace: WithWorkspace }>(
             }
           }
 
-          localStorage.setItem("@paseo:e2e", "1");
-          localStorage.setItem("@paseo:e2e-seed-nonce", nonce);
+          localStorage.setItem("@chisacode:e2e", "1");
+          localStorage.setItem("@chisacode:e2e-seed-nonce", nonce);
 
           // Hard-reset anything that could point to a developer's real daemon.
-          localStorage.setItem("@paseo:daemon-registry", JSON.stringify([daemon]));
-          localStorage.removeItem("@paseo:settings");
-          localStorage.setItem("@paseo:create-agent-preferences", JSON.stringify(preferences));
+          localStorage.setItem("@chisacode:daemon-registry", JSON.stringify([daemon]));
+          localStorage.removeItem("@chisacode:settings");
+          localStorage.setItem("@chisacode:create-agent-preferences", JSON.stringify(preferences));
         },
         { daemon: testDaemon, preferences: createAgentPreferences, seedNonce },
       );

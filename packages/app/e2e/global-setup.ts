@@ -6,7 +6,7 @@ import path from "node:path";
 import net from "node:net";
 import { Buffer } from "node:buffer";
 import dotenv from "dotenv";
-import { forkPaseoHomeMetadata, resolvePaseoHomePath } from "./helpers/paseo-home-fork";
+import { forkChisaCodeHomeMetadata, resolveChisaCodeHomePath } from "./helpers/chisacode-home-fork";
 
 interface WaitForServerOptions {
   host?: string;
@@ -187,19 +187,19 @@ async function isOpenAiApiKeyUsable(apiKey: string | undefined): Promise<boolean
 
 let daemonProcess: ChildProcess | null = null;
 let metroProcess: ChildProcess | null = null;
-let paseoHome: string | null = null;
+let chisacodeHome: string | null = null;
 let fakeToolBinDir: string | null = null;
 let relayProcess: ChildProcess | null = null;
 
-function resolveOptionalPaseoHomeEnv(value: string | undefined): string | null {
+function resolveOptionalChisaCodeHomeEnv(value: string | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) {
     return null;
   }
   if (trimmed === "current") {
-    return resolvePaseoHomePath("~/.paseo");
+    return resolveChisaCodeHomePath("~/.chisacode");
   }
-  return resolvePaseoHomePath(trimmed);
+  return resolveChisaCodeHomePath(trimmed);
 }
 
 interface OfferPayload {
@@ -210,7 +210,7 @@ interface OfferPayload {
 }
 
 async function createFakeToolBin(): Promise<string> {
-  const binDir = await mkdtemp(path.join(tmpdir(), "paseo-e2e-tool-bin-"));
+  const binDir = await mkdtemp(path.join(tmpdir(), "chisacode-e2e-tool-bin-"));
   const ghPath = path.join(binDir, "gh");
   await writeFile(
     ghPath,
@@ -246,7 +246,7 @@ if (args[0] === "pr" && args[1] === "list") {
     {
       number: 515,
       title: "Review selected start ref",
-      url: "https://github.com/getpaseo/paseo/pull/515",
+      url: "https://github.com/getchisacode/chisacode/pull/515",
       state: "OPEN",
       body: "Fixture pull request for app e2e.",
       labels: [],
@@ -258,7 +258,7 @@ if (args[0] === "pr" && args[1] === "list") {
 }
 
 if (args[0] === "pr" && args[1] === "view" && args[2] === "--json" && args[3]) {
-  const fixture = path.join(process.cwd(), ".paseo-e2e-pr.json");
+  const fixture = path.join(process.cwd(), ".chisacode-e2e-pr.json");
   if (fs.existsSync(fixture)) {
     console.log(fs.readFileSync(fixture, "utf8"));
     process.exit(0);
@@ -267,7 +267,7 @@ if (args[0] === "pr" && args[1] === "view" && args[2] === "--json" && args[3]) {
 }
 
 if (args[0] === "api" && args[1] === "graphql") {
-  const fixture = path.join(process.cwd(), ".paseo-e2e-timeline.json");
+  const fixture = path.join(process.cwd(), ".chisacode-e2e-timeline.json");
   if (fs.existsSync(fixture)) {
     console.log(fs.readFileSync(fixture, "utf8"));
     process.exit(0);
@@ -288,7 +288,7 @@ forwardToRealGh();
   const fakeEditorSource = `#!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
-const recordPath = process.env.PASEO_E2E_EDITOR_RECORD_PATH;
+const recordPath = process.env.CHISACODE_E2E_EDITOR_RECORD_PATH;
 
 if (recordPath) {
   fs.appendFileSync(recordPath, JSON.stringify({
@@ -320,7 +320,7 @@ function ensureRelayBuildArtifact(repoRoot: string): void {
     return;
   }
 
-  console.log("[e2e] Building @fleurdelys/relay for daemon startup");
+  console.log("[e2e] Building @chisacode/relay for daemon startup");
   execSync("npm run build:relay", {
     cwd: repoRoot,
     stdio: "inherit",
@@ -343,7 +343,7 @@ function decodeOfferFromFragmentUrl(url: string): OfferPayload {
   return offer as OfferPayload;
 }
 
-function loadPairingOfferFromCli(repoRoot: string, paseoHomePath: string): OfferPayload {
+function loadPairingOfferFromCli(repoRoot: string, chisacodeHomePath: string): OfferPayload {
   const stdout = execFileSync(
     process.execPath,
     ["--import", "tsx", "packages/cli/src/index.ts", "daemon", "pair", "--json"],
@@ -351,7 +351,7 @@ function loadPairingOfferFromCli(repoRoot: string, paseoHomePath: string): Offer
       cwd: repoRoot,
       env: {
         ...process.env,
-        PASEO_HOME: paseoHomePath,
+        CHISACODE_HOME: chisacodeHomePath,
       },
       encoding: "utf8",
     },
@@ -365,7 +365,7 @@ function loadPairingOfferFromCli(repoRoot: string, paseoHomePath: string): Offer
 
 async function waitForPairingOfferFromCli(args: {
   repoRoot: string;
-  paseoHome: string;
+  chisacodeHome: string;
   timeoutMs?: number;
 }): Promise<OfferPayload> {
   const timeoutMs = args.timeoutMs ?? 15000;
@@ -374,7 +374,7 @@ async function waitForPairingOfferFromCli(args: {
 
   while (Date.now() - start < timeoutMs) {
     try {
-      return loadPairingOfferFromCli(args.repoRoot, args.paseoHome);
+      return loadPairingOfferFromCli(args.repoRoot, args.chisacodeHome);
     } catch (error) {
       lastError = error;
       await sleep(100);
@@ -382,7 +382,7 @@ async function waitForPairingOfferFromCli(args: {
   }
 
   throw new Error(
-    `Timed out waiting for \`paseo daemon pair --json\` to produce a pairing offer: ${
+    `Timed out waiting for \`chisacode daemon pair --json\` to produce a pairing offer: ${
       lastError instanceof Error ? lastError.message : String(lastError)
     }`,
   );
@@ -400,27 +400,27 @@ async function loadEnvTestFile(repoRoot: string): Promise<void> {
   }
 }
 
-async function applyPaseoHomeFork(targetHome: string): Promise<void> {
-  const forkSourceHome = resolveOptionalPaseoHomeEnv(process.env.E2E_FORK_PASEO_HOME_FROM);
+async function applyChisaCodeHomeFork(targetHome: string): Promise<void> {
+  const forkSourceHome = resolveOptionalChisaCodeHomeEnv(process.env.E2E_FORK_CHISACODE_HOME_FROM);
   if (!forkSourceHome) {
     return;
   }
-  const forkResult = await forkPaseoHomeMetadata({
+  const forkResult = await forkChisaCodeHomeMetadata({
     sourceHome: forkSourceHome,
     targetHome,
   });
-  process.env.E2E_FORK_SOURCE_PASEO_HOME = forkResult.sourceHome;
-  process.env.E2E_FORK_TARGET_PASEO_HOME = forkResult.targetHome;
+  process.env.E2E_FORK_SOURCE_CHISACODE_HOME = forkResult.sourceHome;
+  process.env.E2E_FORK_TARGET_CHISACODE_HOME = forkResult.targetHome;
   process.env.E2E_FORK_COPIED_FILES = String(forkResult.copiedFiles);
   process.env.E2E_FORK_COPIED_BYTES = String(forkResult.copiedBytes);
   console.log(
-    `[e2e] Forked Paseo metadata from ${forkResult.sourceHome} to ${forkResult.targetHome} ` +
+    `[e2e] Forked ChisaCode metadata from ${forkResult.sourceHome} to ${forkResult.targetHome} ` +
       `(${forkResult.agentFiles} agent files, ${forkResult.projectFiles} project registry files, ` +
       `${forkResult.copiedBytes} bytes)`,
   );
   if (forkResult.skippedMissing.length > 0) {
     console.warn(
-      `[e2e] Paseo metadata fork skipped missing paths: ${forkResult.skippedMissing.join(", ")}`,
+      `[e2e] ChisaCode metadata fork skipped missing paths: ${forkResult.skippedMissing.join(", ")}`,
     );
   }
 }
@@ -429,7 +429,7 @@ async function resolveDictationConfig(): Promise<DictationConfig> {
   const openAiUsable = await isOpenAiApiKeyUsable(process.env.OPENAI_API_KEY);
   const defaultLocalModelsDir = path.join(
     process.env.HOME ?? "",
-    ".paseo",
+    ".chisacode",
     "models",
     "local-speech",
   );
@@ -438,11 +438,11 @@ async function resolveDictationConfig(): Promise<DictationConfig> {
 
   // Fork PRs run without secrets and usually without local models. Don't crash
   // the whole Playwright run — disable dictation/voice and let tests that need
-  // them gate on PASEO_DICTATION_ENABLED.
+  // them gate on CHISACODE_DICTATION_ENABLED.
   if (!openAiUsable && !hasDefaultLocalModelsDir) {
     console.warn(
       "[e2e] Neither OPENAI_API_KEY nor local speech models found — running with dictation/voice disabled. " +
-        "Tests that require dictation should gate on PASEO_DICTATION_ENABLED.",
+        "Tests that require dictation should gate on CHISACODE_DICTATION_ENABLED.",
     );
     return { openAiUsable: false, localModelsDir: null };
   }
@@ -628,7 +628,7 @@ interface DaemonSpawnArgs {
   port: number;
   relayPort: number;
   metroPort: number;
-  paseoHome: string;
+  chisacodeHome: string;
   fakeToolBinDir: string;
   editorRecordPath: string;
   dictation: DictationConfig;
@@ -645,23 +645,23 @@ function startDaemon(args: DaemonSpawnArgs): ChildProcess {
     env: {
       ...process.env,
       PATH: `${args.fakeToolBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
-      PASEO_HOME: args.paseoHome,
-      PASEO_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
-      PASEO_SERVER_ID: "srv_e2e_test_daemon",
-      PASEO_LISTEN: `0.0.0.0:${args.port}`,
-      PASEO_RELAY_ENDPOINT: `127.0.0.1:${args.relayPort}`,
-      PASEO_CORS_ORIGINS: `http://localhost:${args.metroPort}`,
-      PASEO_DICTATION_ENABLED: openAiUsable ? "1" : "0",
-      PASEO_VOICE_MODE_ENABLED: openAiUsable ? "1" : "0",
-      PASEO_NODE_ENV: "development",
+      CHISACODE_HOME: args.chisacodeHome,
+      CHISACODE_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
+      CHISACODE_SERVER_ID: "srv_e2e_test_daemon",
+      CHISACODE_LISTEN: `0.0.0.0:${args.port}`,
+      CHISACODE_RELAY_ENDPOINT: `127.0.0.1:${args.relayPort}`,
+      CHISACODE_CORS_ORIGINS: `http://localhost:${args.metroPort}`,
+      CHISACODE_DICTATION_ENABLED: openAiUsable ? "1" : "0",
+      CHISACODE_VOICE_MODE_ENABLED: openAiUsable ? "1" : "0",
+      CHISACODE_NODE_ENV: "development",
       ...(openAiUsable
         ? {
-            PASEO_DICTATION_STT_PROVIDER: "openai",
-            PASEO_VOICE_STT_PROVIDER: "openai",
-            PASEO_VOICE_TTS_PROVIDER: "openai",
+            CHISACODE_DICTATION_STT_PROVIDER: "openai",
+            CHISACODE_VOICE_STT_PROVIDER: "openai",
+            CHISACODE_VOICE_TTS_PROVIDER: "openai",
           }
         : {}),
-      ...(localModelsDir ? { PASEO_LOCAL_MODELS_DIR: localModelsDir } : {}),
+      ...(localModelsDir ? { CHISACODE_LOCAL_MODELS_DIR: localModelsDir } : {}),
       NODE_ENV: "development",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -695,7 +695,7 @@ function startDaemon(args: DaemonSpawnArgs): ChildProcess {
   return child;
 }
 
-async function performCleanup(shouldRemovePaseoHome: boolean): Promise<void> {
+async function performCleanup(shouldRemoveChisaCodeHome: boolean): Promise<void> {
   await Promise.all([
     stopProcess(daemonProcess),
     stopProcess(metroProcess),
@@ -704,11 +704,11 @@ async function performCleanup(shouldRemovePaseoHome: boolean): Promise<void> {
   daemonProcess = null;
   metroProcess = null;
   relayProcess = null;
-  if (paseoHome && shouldRemovePaseoHome) {
-    await rm(paseoHome, { recursive: true, force: true });
-    paseoHome = null;
-  } else if (paseoHome) {
-    console.log(`[e2e] Preserving PASEO_HOME: ${paseoHome}`);
+  if (chisacodeHome && shouldRemoveChisaCodeHome) {
+    await rm(chisacodeHome, { recursive: true, force: true });
+    chisacodeHome = null;
+  } else if (chisacodeHome) {
+    console.log(`[e2e] Preserving CHISACODE_HOME: ${chisacodeHome}`);
   }
   if (fakeToolBinDir) {
     await rm(fakeToolBinDir, { recursive: true, force: true });
@@ -723,17 +723,19 @@ export default async function globalSetup() {
 
   const port = await getAvailablePort();
   const metroPort = await getAvailablePort();
-  const requestedPaseoHome = resolveOptionalPaseoHomeEnv(process.env.E2E_PASEO_HOME);
-  const shouldRemovePaseoHome = !requestedPaseoHome && process.env.E2E_KEEP_PASEO_HOME !== "1";
-  paseoHome = requestedPaseoHome ?? (await mkdtemp(path.join(tmpdir(), "paseo-e2e-home-")));
-  const editorRecordPath = path.join(paseoHome, "editor-open-records.jsonl");
+  const requestedChisaCodeHome = resolveOptionalChisaCodeHomeEnv(process.env.E2E_CHISACODE_HOME);
+  const shouldRemoveChisaCodeHome =
+    !requestedChisaCodeHome && process.env.E2E_KEEP_CHISACODE_HOME !== "1";
+  chisacodeHome =
+    requestedChisaCodeHome ?? (await mkdtemp(path.join(tmpdir(), "chisacode-e2e-home-")));
+  const editorRecordPath = path.join(chisacodeHome, "editor-open-records.jsonl");
   fakeToolBinDir = await createFakeToolBin();
   const metroLineBuffer = createLineBuffer();
   const daemonLineBuffer = createLineBuffer();
 
-  await applyPaseoHomeFork(paseoHome);
+  await applyChisaCodeHomeFork(chisacodeHome);
 
-  const cleanup = () => performCleanup(shouldRemovePaseoHome);
+  const cleanup = () => performCleanup(shouldRemoveChisaCodeHome);
 
   const dictation = await resolveDictationConfig();
 
@@ -744,7 +746,7 @@ export default async function globalSetup() {
       port,
       relayPort,
       metroPort,
-      paseoHome,
+      chisacodeHome,
       fakeToolBinDir,
       editorRecordPath,
       dictation,
@@ -753,7 +755,7 @@ export default async function globalSetup() {
 
     await Promise.all([
       waitForServer(port, {
-        label: "Paseo daemon",
+        label: "ChisaCode daemon",
         childProcess: daemonProcess,
         getRecentOutput: daemonLineBuffer.dump,
       }),
@@ -767,7 +769,7 @@ export default async function globalSetup() {
 
     const offer = await waitForPairingOfferFromCli({
       repoRoot,
-      paseoHome,
+      chisacodeHome,
     });
 
     process.env.E2E_DAEMON_PORT = String(port);
@@ -775,10 +777,10 @@ export default async function globalSetup() {
     process.env.E2E_SERVER_ID = offer.serverId;
     process.env.E2E_RELAY_DAEMON_PUBLIC_KEY = offer.daemonPublicKeyB64;
     process.env.E2E_METRO_PORT = String(metroPort);
-    process.env.E2E_PASEO_HOME = paseoHome;
+    process.env.E2E_CHISACODE_HOME = chisacodeHome;
     process.env.E2E_EDITOR_RECORD_PATH = editorRecordPath;
     console.log(
-      `[e2e] Test daemon started on port ${port}, Metro on port ${metroPort}, home: ${paseoHome}`,
+      `[e2e] Test daemon started on port ${port}, Metro on port ${metroPort}, home: ${chisacodeHome}`,
     );
 
     return async () => {

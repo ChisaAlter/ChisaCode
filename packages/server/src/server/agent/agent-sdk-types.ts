@@ -1,5 +1,5 @@
 import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentAttachment } from "@fleurdelys/protocol/messages";
+import type { AgentAttachment } from "@chisacode/protocol/messages";
 
 export type AgentProvider = string;
 
@@ -630,7 +630,7 @@ export interface AgentClient {
   getDiagnostic?(): Promise<{ diagnostic: string }>;
   /**
    * Archive a persisted session in the native provider (best-effort).
-   * Called when Paseo archives an agent so the provider's own UI reflects the same state.
+   * Called when ChisaCode archives an agent so the provider's own UI reflects the same state.
    */
   archiveNativeSession?(handle: AgentPersistenceHandle): Promise<void>;
   /**

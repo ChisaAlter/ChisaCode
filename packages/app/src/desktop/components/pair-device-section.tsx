@@ -172,7 +172,7 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
 
   return (
     <View style={styles.content}>
-      <Text style={styles.hint}>用手机上的芙露德莉斯扫描这个二维码，或复制下面的链接。</Text>
+      <Text style={styles.hint}>用手机上的ChisaCode扫描这个二维码，或复制下面的链接。</Text>
       <View style={styles.qrContainer}>
         <PairDeviceQrContent qrImageSource={qrImageSource} qrQuery={qrQuery} />
       </View>

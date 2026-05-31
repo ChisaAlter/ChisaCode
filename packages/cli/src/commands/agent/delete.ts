@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import { isSameOrDescendantPath } from "../../utils/paths.js";
 
@@ -45,7 +45,7 @@ export async function runDeleteCommand(
     const error: CommandError = {
       code: "MISSING_ARGUMENT",
       message: "Agent ID required unless --all or --cwd is specified",
-      details: "Usage: fleurdelys agent delete <id> | --all | --cwd <path>",
+      details: "Usage: chisacode agent delete <id> | --all | --cwd <path>",
     };
     throw error;
   }
@@ -58,7 +58,7 @@ export async function runDeleteCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }
@@ -81,7 +81,7 @@ export async function runDeleteCommand(
         const error: CommandError = {
           code: "AGENT_NOT_FOUND",
           message: `No agent found matching: ${id}`,
-          details: "Use `fleurdelys ls` to list available agents",
+          details: "Use `chisacode ls` to list available agents",
         };
         throw error;
       }

@@ -8,7 +8,7 @@ import { basename, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { z } from "zod";
 import type { ToolSet } from "ai";
-import { CLIENT_CAPS, type ClientCapability } from "@fleurdelys/protocol/client-capabilities";
+import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
   isLegacyEditorTargetId,
   serializeAgentStreamEvent,
@@ -38,7 +38,7 @@ import {
   encodeFileTransferFrame,
   FileTransferOpcode,
   type TerminalStreamFrame,
-} from "@fleurdelys/protocol/binary-frames/index";
+} from "@chisacode/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
 import { SortablePager, type SortSpec } from "./pagination/sortable-pager.js";
 import { TTSManager } from "./agent/tts-manager.js";
@@ -46,7 +46,7 @@ import { STTManager } from "./agent/stt-manager.js";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech/speech-provider.js";
 import type { TurnDetectionProvider } from "./speech/turn-detection-provider.js";
 import { maybePersistTtsDebugAudio } from "./agent/tts-debug.js";
-import { isPaseoDictationDebugEnabled } from "./agent/recordings-debug.js";
+import { isChisaCodeDictationDebugEnabled } from "./agent/recordings-debug.js";
 import { listAvailableEditorTargets, openInEditorTarget } from "./editor-targets.js";
 import { getPidLockInfo } from "./pid-lock.js";
 import { generateLocalPairingOffer } from "./pairing-offer.js";
@@ -78,15 +78,15 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import {
   buildWorkspaceScriptPayloads,
-  readPaseoConfigForProjection,
+  readChisaCodeConfigForProjection,
 } from "./script-status-projection.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
-import { getErrorMessage, getErrorMessageOr } from "@fleurdelys/protocol/error-utils";
-import { getAgentStatusPriority } from "@fleurdelys/protocol/agent-state-bucket";
+import { getErrorMessage, getErrorMessageOr } from "@chisacode/protocol/error-utils";
+import { getAgentStatusPriority } from "@chisacode/protocol/agent-state-bucket";
 import type {
   WorkspaceGitRuntimeSnapshot,
   WorkspaceGitService,
@@ -183,10 +183,10 @@ import {
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import { PushTokenStore } from "./push/token-store.js";
 import {
-  readPaseoConfigForEdit,
-  writePaseoConfigForEdit,
+  readChisaCodeConfigForEdit,
+  writeChisaCodeConfigForEdit,
   type ProjectConfigRpcError,
-} from "../utils/paseo-config-file.js";
+} from "../utils/chisacode-config-file.js";
 import { buildMetadataPrompt } from "../utils/build-metadata-prompt.js";
 import { archivePersistedWorkspaceRecord } from "./workspace-archive-service.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
@@ -202,7 +202,7 @@ import {
   createPullRequest,
   renameCurrentBranch,
 } from "../utils/checkout-git.js";
-import { validateBranchSlug } from "@fleurdelys/protocol/branch-slug";
+import { validateBranchSlug } from "@chisacode/protocol/branch-slug";
 import { getProjectIcon } from "../utils/project-icon.js";
 import { expandTilde } from "../utils/path.js";
 import { searchHomeDirectories, searchWorkspaceEntries } from "../utils/directory-suggestions.js";
@@ -239,20 +239,20 @@ import {
 } from "./workspace-directory.js";
 import {
   attemptFirstAgentBranchAutoName,
-  createPaseoWorktree,
-  type CreatePaseoWorktreeInput,
-  type CreatePaseoWorktreeResult,
-} from "./paseo-worktree-service.js";
+  createChisaCodeWorktree,
+  type CreateChisaCodeWorktreeInput,
+  type CreateChisaCodeWorktreeResult,
+} from "./chisacode-worktree-service.js";
 import { generateBranchNameFromFirstAgentContext } from "./worktree-branch-name-generator.js";
 import {
   assertSafeGitRef as assertWorktreeSafeGitRef,
   buildAgentSessionConfig as buildWorktreeAgentSessionConfig,
-  createPaseoWorktreeWorkflow as createWorktreeWorkflow,
-  type CreatePaseoWorktreeSetupContinuationInput,
-  type CreatePaseoWorktreeWorkflowResult,
-  handleCreatePaseoWorktreeRequest as handleCreateWorktreeRequest,
-  handlePaseoWorktreeArchiveRequest as handleWorktreeArchiveRequest,
-  handlePaseoWorktreeListRequest as handleWorktreeListRequest,
+  createChisaCodeWorktreeWorkflow as createWorktreeWorkflow,
+  type CreateChisaCodeWorktreeSetupContinuationInput,
+  type CreateChisaCodeWorktreeWorkflowResult,
+  handleCreateChisaCodeWorktreeRequest as handleCreateWorktreeRequest,
+  handleChisaCodeWorktreeArchiveRequest as handleWorktreeArchiveRequest,
+  handleChisaCodeWorktreeListRequest as handleWorktreeListRequest,
   handleWorkspaceSetupStatusRequest as handleWorkspaceSetupStatusRequestMessage,
 } from "./worktree-session.js";
 import { toWorktreeWireError } from "./worktree-errors.js";
@@ -371,7 +371,7 @@ function buildWorkspaceCheckout(
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     };
   }
@@ -382,7 +382,7 @@ function buildWorkspaceCheckout(
       currentBranch: workspace.displayName,
       remoteUrl: null,
       worktreeRoot: workspace.cwd,
-      isPaseoOwnedWorktree: true,
+      isChisaCodeOwnedWorktree: true,
       mainRepoRoot: project.rootPath,
     };
   }
@@ -392,7 +392,7 @@ function buildWorkspaceCheckout(
     currentBranch: workspace.displayName,
     remoteUrl: null,
     worktreeRoot: workspace.cwd,
-    isPaseoOwnedWorktree: false,
+    isChisaCodeOwnedWorktree: false,
     mainRepoRoot: null,
   };
 }
@@ -566,7 +566,7 @@ export interface SessionOptions {
   logger: pino.Logger;
   downloadTokenStore: DownloadTokenStore;
   pushTokenStore: PushTokenStore;
-  paseoHome: string;
+  chisacodeHome: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
@@ -730,7 +730,7 @@ export class Session {
   private readonly onBinaryMessage: ((frame: Uint8Array) => void) | null;
   private readonly onLifecycleIntent: ((intent: SessionLifecycleIntent) => void) | null;
   private readonly sessionLogger: pino.Logger;
-  private readonly paseoHome: string;
+  private readonly chisacodeHome: string;
 
   // State machine
   private abortController: AbortController;
@@ -847,7 +847,7 @@ export class Session {
       logger,
       downloadTokenStore,
       pushTokenStore,
-      paseoHome,
+      chisacodeHome,
       agentManager,
       agentStorage,
       projectRegistry,
@@ -888,7 +888,7 @@ export class Session {
     this.onLifecycleIntent = onLifecycleIntent ?? null;
     this.downloadTokenStore = downloadTokenStore;
     this.pushTokenStore = pushTokenStore;
-    this.paseoHome = paseoHome;
+    this.chisacodeHome = chisacodeHome;
     this.sessionLogger = logger.child({
       module: "session",
       clientId: this.clientId,
@@ -916,13 +916,13 @@ export class Session {
       sessionLogger: this.sessionLogger,
     });
     this.createAgentLifecycleDispatch = new CreateAgentLifecycleDispatch({
-      paseoHome: this.paseoHome,
+      chisacodeHome: this.chisacodeHome,
       agentManager: this.agentManager,
       agentStorage: this.agentStorage,
       github: this.github,
       workspaceGitService: this.workspaceGitService,
-      createPaseoWorktreeWorkflow: (input, workflowOptions) =>
-        this.createPaseoWorktreeWorkflow(input, workflowOptions),
+      createChisaCodeWorktreeWorkflow: (input, workflowOptions) =>
+        this.createChisaCodeWorktreeWorkflow(input, workflowOptions),
       archiveAgentForClose: (agentId) => this.archiveAgentForClose(agentId),
       archiveWorkspaceRecord: (workspaceId) => this.archiveWorkspaceRecord(workspaceId),
       emit: (message) => this.emit(message),
@@ -1635,7 +1635,7 @@ export class Session {
           currentBranch: null,
           remoteUrl: null,
           worktreeRoot: null,
-          isPaseoOwnedWorktree: false,
+          isChisaCodeOwnedWorktree: false,
           mainRepoRoot: null,
         },
       };
@@ -1930,7 +1930,7 @@ export class Session {
       return;
     }
 
-    const result = readPaseoConfigForEdit(repoRoot);
+    const result = readChisaCodeConfigForEdit(repoRoot);
     if (!result.ok) {
       this.sessionLogger.warn(
         { repoRoot, requestId: msg.requestId, outcome: result.error.code },
@@ -1975,7 +1975,7 @@ export class Session {
       { repoRoot, requestId: msg.requestId, outcome: "write_attempt" },
       "Writing project config",
     );
-    const result = writePaseoConfigForEdit({
+    const result = writeChisaCodeConfigForEdit({
       repoRoot,
       config: msg.config,
       expectedRevision: msg.expectedRevision,
@@ -2098,12 +2098,12 @@ export class Session {
     switch (msg.type) {
       case "fetch_workspaces_request":
         return this.handleFetchWorkspacesRequest(msg);
-      case "paseo_worktree_list_request":
-        return this.handlePaseoWorktreeListRequest(msg);
-      case "paseo_worktree_archive_request":
-        return this.handlePaseoWorktreeArchiveRequest(msg);
-      case "create_paseo_worktree_request":
-        return this.handleCreatePaseoWorktreeRequest(msg);
+      case "chisacode_worktree_list_request":
+        return this.handleChisaCodeWorktreeListRequest(msg);
+      case "chisacode_worktree_archive_request":
+        return this.handleChisaCodeWorktreeArchiveRequest(msg);
+      case "create_chisacode_worktree_request":
+        return this.handleCreateChisaCodeWorktreeRequest(msg);
       case "workspace_setup_status_request":
         return this.handleWorkspaceSetupStatusRequest(msg);
       case "list_available_editors_request":
@@ -3068,7 +3068,7 @@ export class Session {
       }`,
     );
 
-    let createdWorktreeForCleanup: CreatePaseoWorktreeWorkflowResult | null = null;
+    let createdWorktreeForCleanup: CreateChisaCodeWorktreeWorkflowResult | null = null;
     let createdAgentId: string | null = null;
     try {
       const trimmedPrompt = initialPrompt?.trim();
@@ -3097,7 +3097,7 @@ export class Session {
           agentManager: this.agentManager,
           agentStorage: this.agentStorage,
           logger: this.sessionLogger,
-          paseoHome: this.paseoHome,
+          chisacodeHome: this.chisacodeHome,
           workspaceGitService: this.workspaceGitService,
           providerSnapshotManager: this.providerSnapshotManager,
           daemonConfig: this.readStructuredGenerationDaemonConfig(),
@@ -3300,7 +3300,7 @@ export class Session {
         workspaceGitService: this.workspaceGitService,
         providerSnapshotManager: this.providerSnapshotManager,
         daemonConfig: this.readStructuredGenerationDaemonConfig(),
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
         logger: this.sessionLogger,
       });
       await this.registerWorkspaceForImportedAgent(snapshot.cwd);
@@ -3473,15 +3473,15 @@ export class Session {
     firstAgentContext?: FirstAgentContext,
   ): Promise<{
     sessionConfig: AgentSessionConfig;
-    setupContinuation?: CreatePaseoWorktreeWorkflowResult["setupContinuation"];
+    setupContinuation?: CreateChisaCodeWorktreeWorkflowResult["setupContinuation"];
   }> {
     return buildWorktreeAgentSessionConfig(
       {
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
         sessionLogger: this.sessionLogger,
         workspaceGitService: this.workspaceGitService,
-        createPaseoWorktree: (input, serviceOptions) =>
-          this.createPaseoWorktreeWorkflow(input, {
+        createChisaCodeWorktree: (input, serviceOptions) =>
+          this.createChisaCodeWorktreeWorkflow(input, {
             ...serviceOptions,
             setupContinuation: {
               kind: "agent",
@@ -3768,7 +3768,7 @@ export class Session {
     msg: Extract<SessionInboundMessage, { type: "daemon.get_status.request" }>,
   ): Promise<void> {
     try {
-      const pidInfo = await getPidLockInfo(this.paseoHome);
+      const pidInfo = await getPidLockInfo(this.chisacodeHome);
       const providers = (await this.agentManager.listProviderAvailability()).map((p) => ({
         provider: p.provider,
         available: p.available,
@@ -3813,7 +3813,7 @@ export class Session {
     try {
       const relay = this.daemonRuntimeConfig?.relay;
       const pairing = await generateLocalPairingOffer({
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
         relayEnabled: relay?.enabled ?? true,
         relayEndpoint: relay?.endpoint,
         relayPublicEndpoint: relay?.publicEndpoint,
@@ -4109,7 +4109,7 @@ export class Session {
       ) {
         return {
           title: "Update changes",
-          body: "Automated PR generated by Paseo.",
+          body: "Automated PR generated by ChisaCode.",
         };
       }
       throw error;
@@ -4592,7 +4592,7 @@ export class Session {
           behindOfOrigin: null,
           hasRemote: false,
           remoteUrl: null,
-          isPaseoOwnedWorktree: false,
+          isChisaCodeOwnedWorktree: false,
           error: toCheckoutError(error),
           requestId,
         },
@@ -5073,7 +5073,7 @@ export class Session {
   // Stash handlers
   // ---------------------------------------------------------------------------
 
-  private static readonly FLEURDELYS_STASH_PREFIX = "fleurdelys-auto-stash:";
+  private static readonly CHISACODE_STASH_PREFIX = "chisacode-auto-stash:";
 
   private async handleStashSaveRequest(
     msg: Extract<SessionInboundMessage, { type: "stash_save_request" }>,
@@ -5082,8 +5082,8 @@ export class Session {
     try {
       const branchLabel = msg.branch?.trim() ?? "";
       const message = branchLabel
-        ? `${Session.FLEURDELYS_STASH_PREFIX} ${branchLabel}`
-        : `${Session.FLEURDELYS_STASH_PREFIX} unnamed`;
+        ? `${Session.CHISACODE_STASH_PREFIX} ${branchLabel}`
+        : `${Session.CHISACODE_STASH_PREFIX} unnamed`;
       await execCommand("git", ["stash", "push", "--include-untracked", "-m", message], {
         cwd,
       });
@@ -5127,9 +5127,9 @@ export class Session {
     msg: Extract<SessionInboundMessage, { type: "stash_list_request" }>,
   ): Promise<void> {
     const { cwd, requestId } = msg;
-    const paseoOnly = msg.paseoOnly !== false;
+    const chisacodeOnly = msg.chisacodeOnly !== false;
     try {
-      const entries = await this.workspaceGitService.listStashes(cwd, { paseoOnly });
+      const entries = await this.workspaceGitService.listStashes(cwd, { chisacodeOnly });
 
       this.emit({
         type: "stash_list_response",
@@ -5217,7 +5217,7 @@ export class Session {
           baseRef,
           mode: msg.strategy === "squash" ? "squash" : "merge",
         },
-        { paseoHome: this.paseoHome },
+        { chisacodeHome: this.chisacodeHome },
       );
       await Promise.all([
         this.notifyGitMutation(mutatedCwd, "merge-to-base", { invalidateGithub: true }),
@@ -5679,25 +5679,25 @@ export class Session {
     }
   }
 
-  private async handlePaseoWorktreeListRequest(
-    msg: Extract<SessionInboundMessage, { type: "paseo_worktree_list_request" }>,
+  private async handleChisaCodeWorktreeListRequest(
+    msg: Extract<SessionInboundMessage, { type: "chisacode_worktree_list_request" }>,
   ): Promise<void> {
     return handleWorktreeListRequest(
       {
         emit: (message) => this.emit(message),
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
         workspaceGitService: this.workspaceGitService,
       },
       msg,
     );
   }
 
-  private async handlePaseoWorktreeArchiveRequest(
-    msg: Extract<SessionInboundMessage, { type: "paseo_worktree_archive_request" }>,
+  private async handleChisaCodeWorktreeArchiveRequest(
+    msg: Extract<SessionInboundMessage, { type: "chisacode_worktree_archive_request" }>,
   ): Promise<void> {
     return handleWorktreeArchiveRequest(
       {
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
         github: this.github,
         workspaceGitService: this.workspaceGitService,
         agentManager: this.agentManager,
@@ -6274,7 +6274,7 @@ export class Session {
           ? buildWorkspaceScriptPayloads({
               workspaceId: workspace.workspaceId,
               workspaceDirectory: workspace.cwd,
-              paseoConfig: readPaseoConfigForProjection(workspace.cwd, this.sessionLogger),
+              chisacodeConfig: readChisaCodeConfigForProjection(workspace.cwd, this.sessionLogger),
               routeStore: this.scriptRouteStore,
               runtimeStore: this.scriptRuntimeStore,
               daemonPort: this.getDaemonTcpPort?.() ?? null,
@@ -6300,7 +6300,7 @@ export class Session {
     return {
       currentBranch: snapshot.git.currentBranch,
       remoteUrl: snapshot.git.remoteUrl,
-      isPaseoOwnedWorktree: snapshot.git.isPaseoOwnedWorktree,
+      isChisaCodeOwnedWorktree: snapshot.git.isChisaCodeOwnedWorktree,
       isDirty: snapshot.git.isDirty,
       aheadBehind: snapshot.git.aheadBehind,
       aheadOfOrigin: snapshot.git.aheadOfOrigin,
@@ -6341,7 +6341,7 @@ export class Session {
   }
 
   private async describeCreatedWorktreeWorkspace(
-    result: CreatePaseoWorktreeResult,
+    result: CreateChisaCodeWorktreeResult,
   ): Promise<WorkspaceDescriptorPayload> {
     const projectRecord = await this.projectRegistry.get(result.workspace.projectId);
     return {
@@ -6364,7 +6364,7 @@ export class Session {
       gitRuntime: {
         currentBranch: result.worktree.branchName || null,
         remoteUrl: null,
-        isPaseoOwnedWorktree: true,
+        isChisaCodeOwnedWorktree: true,
         isDirty: false,
         aheadBehind: null,
         aheadOfOrigin: null,
@@ -6645,13 +6645,13 @@ export class Session {
     return unarchivedWorkspace;
   }
 
-  private async createPaseoWorktree(
-    input: CreatePaseoWorktreeInput,
+  private async createChisaCodeWorktree(
+    input: CreateChisaCodeWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
     },
-  ): Promise<CreatePaseoWorktreeResult> {
-    const result = await createPaseoWorktree(input, {
+  ): Promise<CreateChisaCodeWorktreeResult> {
+    const result = await createChisaCodeWorktree(input, {
       github: this.github,
       ...(options?.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
@@ -7104,7 +7104,7 @@ export class Session {
     return buildWorkspaceScriptPayloads({
       workspaceId,
       workspaceDirectory,
-      paseoConfig: readPaseoConfigForProjection(workspaceDirectory, this.sessionLogger),
+      chisacodeConfig: readChisaCodeConfigForProjection(workspaceDirectory, this.sessionLogger),
       routeStore: this.scriptRouteStore,
       runtimeStore: this.scriptRuntimeStore,
       daemonPort: this.getDaemonTcpPort?.() ?? null,
@@ -7279,33 +7279,33 @@ export class Session {
     }
   }
 
-  private async handleCreatePaseoWorktreeRequest(
-    request: Extract<SessionInboundMessage, { type: "create_paseo_worktree_request" }>,
+  private async handleCreateChisaCodeWorktreeRequest(
+    request: Extract<SessionInboundMessage, { type: "create_chisacode_worktree_request" }>,
   ): Promise<void> {
     return handleCreateWorktreeRequest(
       {
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
         describeWorkspaceRecord: (result) => this.describeCreatedWorktreeWorkspace(result),
         emit: (message) => this.emit(message),
         sessionLogger: this.sessionLogger,
-        createPaseoWorktreeWorkflow: (input) => this.createPaseoWorktreeWorkflow(input),
+        createChisaCodeWorktreeWorkflow: (input) => this.createChisaCodeWorktreeWorkflow(input),
       },
       request,
     );
   }
 
-  private async createPaseoWorktreeWorkflow(
-    input: CreatePaseoWorktreeInput,
+  private async createChisaCodeWorktreeWorkflow(
+    input: CreateChisaCodeWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-      setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
+      setupContinuation?: CreateChisaCodeWorktreeSetupContinuationInput;
     },
-  ): Promise<CreatePaseoWorktreeWorkflowResult> {
+  ): Promise<CreateChisaCodeWorktreeWorkflowResult> {
     return createWorktreeWorkflow(
       {
-        paseoHome: this.paseoHome,
-        createPaseoWorktree: (workflowInput, serviceOptions) =>
-          this.createPaseoWorktree(workflowInput, serviceOptions),
+        chisacodeHome: this.chisacodeHome,
+        createChisaCodeWorktree: (workflowInput, serviceOptions) =>
+          this.createChisaCodeWorktree(workflowInput, serviceOptions),
         warmWorkspaceGitData: (workspace) => this.warmWorkspaceGitDataForWorkspace(workspace),
         autoNameWorkspaceBranchForFirstAgent: (autoNameInput) =>
           this.scheduleAutoNameWorkspaceBranchForFirstAgent(autoNameInput),
@@ -7352,7 +7352,7 @@ export class Session {
         throw new Error(`Workspace not found: ${request.workspaceId}`);
       }
       if (existing.kind === "worktree") {
-        throw new Error("Use worktree archive for Paseo worktrees");
+        throw new Error("Use worktree archive for ChisaCode worktrees");
       }
       const archivedAt = new Date().toISOString();
       await this.archiveWorkspaceRecord(existing.workspaceId, archivedAt);
@@ -8420,7 +8420,7 @@ export class Session {
     );
     if (
       msg.type === "audio_output" &&
-      (process.env.TTS_DEBUG_AUDIO_DIR || isPaseoDictationDebugEnabled()) &&
+      (process.env.TTS_DEBUG_AUDIO_DIR || isChisaCodeDictationDebugEnabled()) &&
       msg.payload.groupId &&
       typeof msg.payload.audio === "string"
     ) {

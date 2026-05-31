@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { createNoopWorkspaceGitService } from "../test-utils/workspace-git-service-stub.js";
-import { MAX_AUTO_AGENT_TITLE_CHARS } from "@fleurdelys/protocol/agent-title-limits";
+import { MAX_AUTO_AGENT_TITLE_CHARS } from "@chisacode/protocol/agent-title-limits";
 import {
   generateAndApplyAgentMetadata,
   type AgentMetadataGeneratorDeps,
@@ -115,9 +115,9 @@ describe("agent metadata generator auto-title", () => {
   });
 
   it.each([
-    ["paseo.json missing", undefined],
-    ["paseo.json exists but invalid JSON", "{ nope"],
-    ["paseo.json valid but missing metadataGeneration", {}],
+    ["chisacode.json missing", undefined],
+    ["chisacode.json exists but invalid JSON", "{ nope"],
+    ["chisacode.json valid but missing metadataGeneration", {}],
     [
       "metadataGeneration exists but missing agentTitle",
       { metadataGeneration: { branchName: { instructions: "Use mb/." } } },
@@ -165,12 +165,12 @@ describe("agent metadata generator auto-title", () => {
 });
 
 async function generateTitlePromptWithConfig(config: unknown): Promise<{ prompt: string }> {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), "paseo-title-config-"));
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "chisacode-title-config-"));
   cleanupPaths.push(repoRoot);
   if (typeof config === "string") {
-    writeFileSync(path.join(repoRoot, "paseo.json"), config);
+    writeFileSync(path.join(repoRoot, "chisacode.json"), config);
   } else if (config !== undefined) {
-    writeFileSync(path.join(repoRoot, "paseo.json"), `${JSON.stringify(config)}\n`);
+    writeFileSync(path.join(repoRoot, "chisacode.json"), `${JSON.stringify(config)}\n`);
   }
 
   const setGeneratedTitle = vi.fn().mockResolvedValue(undefined);

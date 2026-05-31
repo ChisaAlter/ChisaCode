@@ -3,7 +3,7 @@ import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import { collectMultiple } from "../../utils/command-options.js";
 import type { CommandError, CommandOptions, SingleResult } from "../../output/index.js";
 import { agentRunSchema, type AgentRunResult } from "./run.js";
-import type { AgentSnapshotPayload } from "@fleurdelys/protocol/messages";
+import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 
 const IMPORT_PROVIDER_LIST = ["claude", "codex", "opencode", "pi", "acp"] as const;
 const IMPORT_PROVIDERS = new Set<string>(IMPORT_PROVIDER_LIST);
@@ -11,7 +11,7 @@ const IMPORT_PROVIDER_HELP = IMPORT_PROVIDER_LIST.join(", ");
 
 export function addImportOptions(cmd: Command): Command {
   return cmd
-    .description("Import an existing provider session as a Fleurdelys agent")
+    .description("Import an existing provider session as a ChisaCode agent")
     .argument("<id>", "Provider session/thread ID to import")
     .requiredOption("--provider <provider>", `Agent provider: ${IMPORT_PROVIDER_HELP}`)
     .option("--cwd <path>", "Working directory for providers that require it")
@@ -48,7 +48,7 @@ function parseImportProvider(provider: string | undefined): string {
     throw {
       code: "MISSING_PROVIDER",
       message: "Provider is required",
-      details: "Usage: fleurdelys import --provider <provider> <id>",
+      details: "Usage: chisacode import --provider <provider> <id>",
     } satisfies CommandError;
   }
 
@@ -117,7 +117,7 @@ async function connectToDaemonOrThrow(
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     } satisfies CommandError;
   }
 }
@@ -133,7 +133,7 @@ export async function runImportCommand(
     throw {
       code: "MISSING_SESSION_ID",
       message: "Session ID is required",
-      details: "Usage: fleurdelys import --provider <provider> <id>",
+      details: "Usage: chisacode import --provider <provider> <id>",
     } satisfies CommandError;
   }
 

@@ -61,7 +61,7 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useLatchedBoolean } from "@/hooks/use-latched-boolean";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
 import { useOpenProject } from "@/hooks/use-open-project";
-import { useAppSettings } from "@/hooks/use-settings";
+import { useAppSettings, useSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { appI18n } from "@/i18n";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
@@ -613,7 +613,7 @@ function MobileGestureWrapper({
 }
 
 function ProvidersWrapper({ children }: { children: ReactNode }) {
-  const { settings, isLoading: settingsLoading } = useAppSettings();
+  const { settings, isLoading: settingsLoading } = useSettings();
   const { upsertConnectionFromOfferUrl } = useHostMutations();
 
   // Apply theme setting on mount and when it changes

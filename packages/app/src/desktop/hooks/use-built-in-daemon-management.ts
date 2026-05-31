@@ -55,7 +55,7 @@ export function useBuiltInDaemonManagement(
       reportError({
         error,
         message: settings.manageBuiltInDaemon
-          ? "内置 daemon 管理已暂停，但芙露德莉斯无法停止 daemon。"
+          ? "内置 daemon 管理已暂停，但ChisaCode无法停止 daemon。"
           : "无法更新内置 daemon 管理设置。",
         logLabel: "[Settings] Failed to update built-in daemon management",
       });

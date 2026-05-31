@@ -18,7 +18,7 @@ interface TcpServerHandle {
 
 function createWorkspaceRepo(options?: {
   branchName?: string;
-  paseoConfig?: Record<string, unknown>;
+  chisacodeConfig?: Record<string, unknown>;
 }): { tempDir: string; repoDir: string; cleanup: () => void } {
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "script-health-monitor-")));
   const repoDir = path.join(tempDir, "repo");
@@ -33,8 +33,11 @@ function createWorkspaceRepo(options?: {
   });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "hello\n");
-  if (options?.paseoConfig) {
-    writeFileSync(path.join(repoDir, "paseo.json"), JSON.stringify(options.paseoConfig, null, 2));
+  if (options?.chisacodeConfig) {
+    writeFileSync(
+      path.join(repoDir, "chisacode.json"),
+      JSON.stringify(options.chisacodeConfig, null, 2),
+    );
   }
   execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], {
@@ -428,7 +431,7 @@ describe("ScriptHealthMonitor", () => {
     servers.add(service.server);
 
     const workspace = createWorkspaceRepo({
-      paseoConfig: {
+      chisacodeConfig: {
         scripts: {
           typecheck: { command: "npm run typecheck" },
           api: { type: "service", command: "npm run api", port: service.port },

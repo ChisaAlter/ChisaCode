@@ -85,7 +85,7 @@ function createSession(): ACPAgentSession {
   return new ACPAgentSession(
     {
       provider: "claude-acp",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/chisacode-acp-test",
     },
     {
       provider: "claude-acp",
@@ -111,7 +111,7 @@ function createSessionWithConfig(
   return new ACPAgentSession(
     {
       provider: config.provider ?? "claude-acp",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/chisacode-acp-test",
       modeId: config.modeId ?? undefined,
       model: config.model ?? undefined,
     },
@@ -159,7 +159,7 @@ function createCopilotSessionWithConfig(modeId?: string | null): ACPAgentSession
   return new ACPAgentSession(
     {
       provider: "copilot",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/chisacode-acp-test",
       modeId: modeId ?? undefined,
     },
     {
@@ -496,7 +496,7 @@ describe("ACPAgentSession terminal tools", () => {
 });
 
 describe("mapACPUsage", () => {
-  test("maps ACP usage fields into Paseo usage", () => {
+  test("maps ACP usage fields into ChisaCode usage", () => {
     expect(
       mapACPUsage({
         inputTokens: 11,
@@ -1419,7 +1419,7 @@ describe("ACPAgentSession slash commands", () => {
     const session = new ACPAgentSession(
       {
         provider: "claude-acp",
-        cwd: "/tmp/paseo-acp-test",
+        cwd: "/tmp/chisacode-acp-test",
       },
       {
         provider: "claude-acp",
@@ -1445,7 +1445,7 @@ describe("ACPAgentSession slash commands", () => {
     const session = new ACPAgentSession(
       {
         provider: "claude-acp",
-        cwd: "/tmp/paseo-acp-test",
+        cwd: "/tmp/chisacode-acp-test",
       },
       {
         provider: "claude-acp",
@@ -1717,11 +1717,11 @@ describe("ACPAgentSession", () => {
     await connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
       clientCapabilities: {},
-      clientInfo: { name: "Paseo test", version: "dev" },
+      clientInfo: { name: "ChisaCode test", version: "dev" },
     });
     expect(agentConnection.signal.aborted).toBe(false);
     const sessionResponse = await connection.newSession({
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/chisacode-acp-test",
       mcpServers: [],
     });
     const turnFailed = new Promise<Extract<AgentStreamEvent, { type: "turn_failed" }>>(

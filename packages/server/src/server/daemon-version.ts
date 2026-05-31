@@ -1,6 +1,6 @@
 import { PackageVersionResolutionError, resolvePackageVersion } from "./package-version.js";
 
-const SERVER_PACKAGE_NAME = "@fleurdelys/server";
+const SERVER_PACKAGE_NAME = "@chisacode/server";
 
 export class DaemonVersionResolutionError extends PackageVersionResolutionError {}
 

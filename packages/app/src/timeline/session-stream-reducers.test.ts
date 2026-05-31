@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentStreamEventPayload } from "@fleurdelys/protocol/messages";
+import type { AgentStreamEventPayload } from "@chisacode/protocol/messages";
 import {
   buildOptimisticUserMessage,
   hydrateStreamState,

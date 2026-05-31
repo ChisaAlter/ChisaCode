@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost, resolveAgentId } from "../../utils/client.js";
 import type {
   CommandOptions,
@@ -51,7 +51,7 @@ export async function runArchiveCommand(
     const error: CommandError = {
       code: "MISSING_AGENT_ID",
       message: "Agent ID is required",
-      details: "Usage: fleurdelys agent archive <id-or-name>",
+      details: "Usage: chisacode agent archive <id-or-name>",
     };
     throw error;
   }
@@ -64,7 +64,7 @@ export async function runArchiveCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }
@@ -77,7 +77,7 @@ export async function runArchiveCommand(
       const error: CommandError = {
         code: "AGENT_NOT_FOUND",
         message: `Agent not found: ${agentIdArg}`,
-        details: 'Use "fleurdelys ls" to list available agents',
+        details: 'Use "chisacode ls" to list available agents',
       };
       throw error;
     }
@@ -102,7 +102,7 @@ export async function runArchiveCommand(
         code: "AGENT_RUNNING",
         message: `Agent ${agentId.slice(0, 7)} is currently running`,
         details:
-          "Use --force to archive a running agent (it will interrupt the active run), or stop it first with: fleurdelys agent stop. Use fleurdelys agent delete to hard-delete it.",
+          "Use --force to archive a running agent (it will interrupt the active run), or stop it first with: chisacode agent stop. Use chisacode agent delete to hard-delete it.",
       };
       throw error;
     }

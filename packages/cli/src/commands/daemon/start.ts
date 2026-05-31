@@ -15,15 +15,15 @@ type RawStartCommandOptions = StartOptions & {
 
 export function startCommand(): Command {
   return new Command("start")
-    .description("Start the local Fleurdelys daemon")
+    .description("Start the local ChisaCode daemon")
     .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
     .option("--port <port>", "Port to listen on (default: 6767)")
-    .option("--home <path>", "Fleurdelys home directory (default: ~/.paseo)")
+    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
     .option("--foreground", "Run in foreground (don't daemonize)")
     .option("--no-relay", "Disable relay connection")
     .option("--relay-use-tls", "Use wss:// for the relay connection and pairing offers")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
-    .option("--no-inject-mcp", "Disable auto-injecting the Fleurdelys MCP into created agents")
+    .option("--no-inject-mcp", "Disable auto-injecting the ChisaCode MCP into created agents")
     .option(
       "--hostnames <hosts>",
       'Daemon hostnames (comma-separated, e.g. "myhost,.example.com" or "true" for any)',

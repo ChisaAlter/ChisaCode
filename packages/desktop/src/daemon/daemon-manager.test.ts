@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("electron", () => ({
   app: {
-    getPath: vi.fn(() => "/tmp/paseo-user-data"),
+    getPath: vi.fn(() => "/tmp/chisacode-user-data"),
     getVersion: vi.fn(() => "1.2.3"),
     isPackaged: false,
   },
@@ -31,8 +31,8 @@ vi.mock("electron-log/main", () => ({
   default: { info: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock("@fleurdelys/server", () => ({
-  resolvePaseoHome: vi.fn(() => "/tmp/paseo-home"),
+vi.mock("@chisacode/server", () => ({
+  resolveChisaCodeHome: vi.fn(() => "/tmp/chisacode-home"),
   spawnProcess: mocks.spawnProcess,
 }));
 
@@ -136,7 +136,7 @@ describe("daemon-manager commands", () => {
       listen: null,
       hostname: null,
       pid: null,
-      home: "/tmp/paseo-home",
+      home: "/tmp/chisacode-home",
       version: null,
       desktopManaged: false,
       error: null,
@@ -167,7 +167,7 @@ describe("daemon-manager commands", () => {
       listen: null,
       hostname: null,
       pid: null,
-      home: "/tmp/paseo-home",
+      home: "/tmp/chisacode-home",
       version: null,
       desktopManaged: false,
       error: null,
@@ -214,7 +214,7 @@ describe("daemon-manager commands", () => {
       listen: "127.0.0.1:6767",
       hostname: "dev-host",
       pid: null,
-      home: "/tmp/paseo-home",
+      home: "/tmp/chisacode-home",
       version: "1.2.2",
       desktopManaged: false,
       error: null,

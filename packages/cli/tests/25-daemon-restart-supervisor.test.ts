@@ -18,9 +18,9 @@ $.verbose = false;
 
 const pollIntervalMs = 100;
 const testEnv = {
-  PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
-  PASEO_DICTATION_ENABLED: process.env.PASEO_DICTATION_ENABLED ?? "0",
-  PASEO_VOICE_MODE_ENABLED: process.env.PASEO_VOICE_MODE_ENABLED ?? "0",
+  CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
+  CHISACODE_DICTATION_ENABLED: process.env.CHISACODE_DICTATION_ENABLED ?? "0",
+  CHISACODE_VOICE_MODE_ENABLED: process.env.CHISACODE_VOICE_MODE_ENABLED ?? "0",
 };
 
 function sleep(ms: number): Promise<void> {
@@ -74,9 +74,9 @@ interface DaemonStatus {
   pid: number | null;
 }
 
-async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
+async function readDaemonStatus(chisacodeHome: string): Promise<DaemonStatus> {
   const result =
-    await $`PASEO_HOME=${paseoHome} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${testEnv.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${testEnv.PASEO_VOICE_MODE_ENABLED} npx paseo daemon status --home ${paseoHome} --json`.nothrow();
+    await $`CHISACODE_HOME=${chisacodeHome} CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD} CHISACODE_DICTATION_ENABLED=${testEnv.CHISACODE_DICTATION_ENABLED} CHISACODE_VOICE_MODE_ENABLED=${testEnv.CHISACODE_VOICE_MODE_ENABLED} npx chisacode daemon status --home ${chisacodeHome} --json`.nothrow();
   if (result.exitCode !== 0) {
     return { localDaemon: null, pid: null };
   }
@@ -94,8 +94,11 @@ async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
   }
 }
 
-async function readCapturedSupervisorLogs(paseoHome: string, recentLogs: string): Promise<string> {
-  const durableLogs = await readFile(join(paseoHome, "daemon.log"), "utf8").catch(() => "");
+async function readCapturedSupervisorLogs(
+  chisacodeHome: string,
+  recentLogs: string,
+): Promise<string> {
+  const durableLogs = await readFile(join(chisacodeHome, "daemon.log"), "utf8").catch(() => "");
   return `${recentLogs}\n${durableLogs}`;
 }
 
@@ -119,7 +122,7 @@ async function waitFor(
 console.log("=== Daemon Restart (supervisor regression) ===\n");
 
 const port = await getAvailablePort();
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-restart-supervisor-"));
+const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-restart-supervisor-"));
 const cliRoot = join(import.meta.dirname, "..");
 const host = `127.0.0.1:${port}`;
 
@@ -127,7 +130,7 @@ let supervisorProcess: ChildProcess | null = null;
 let recentSupervisorLogs = "";
 
 try {
-  console.log("Test 1: start supervisor-entrypoint in dev mode with isolated PASEO_HOME");
+  console.log("Test 1: start supervisor-entrypoint in dev mode with isolated CHISACODE_HOME");
 
   supervisorProcess = spawn(
     process.execPath,
@@ -137,9 +140,9 @@ try {
       env: {
         ...process.env,
         ...testEnv,
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: host,
-        PASEO_RELAY_ENABLED: "false",
+        CHISACODE_HOME: chisacodeHome,
+        CHISACODE_LISTEN: host,
+        CHISACODE_RELAY_ENABLED: "false",
         CI: "true",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -155,7 +158,7 @@ try {
 
   await waitFor(
     async () => {
-      const status = await readDaemonStatus(paseoHome);
+      const status = await readDaemonStatus(chisacodeHome);
       return (
         status.localDaemon === "running" && status.pid !== null && isProcessRunning(status.pid)
       );
@@ -164,7 +167,7 @@ try {
     "daemon did not become running in time",
   );
 
-  const statusBeforeRestart = await readDaemonStatus(paseoHome);
+  const statusBeforeRestart = await readDaemonStatus(chisacodeHome);
   const supervisorPid = statusBeforeRestart.pid;
   assert.strictEqual(
     statusBeforeRestart.localDaemon,
@@ -216,7 +219,7 @@ try {
     "worker pid should change after restart",
   );
 
-  const statusAfterRestart = await readDaemonStatus(paseoHome);
+  const statusAfterRestart = await readDaemonStatus(chisacodeHome);
   assert.strictEqual(
     statusAfterRestart.localDaemon,
     "running",
@@ -227,7 +230,10 @@ try {
     supervisorPid,
     "supervisor pid should remain stable across restart",
   );
-  const capturedSupervisorLogs = await readCapturedSupervisorLogs(paseoHome, recentSupervisorLogs);
+  const capturedSupervisorLogs = await readCapturedSupervisorLogs(
+    chisacodeHome,
+    recentSupervisorLogs,
+  );
   assert(
     capturedSupervisorLogs.includes("Restart requested by worker. Stopping worker for restart..."),
     `restart should route through supervisor restart intent, logs:\n${capturedSupervisorLogs}`,
@@ -245,8 +251,8 @@ try {
     });
   }
 
-  await $`PASEO_HOME=${paseoHome} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${testEnv.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${testEnv.PASEO_VOICE_MODE_ENABLED} npx paseo daemon stop --home ${paseoHome} --force`.nothrow();
-  await rm(paseoHome, { recursive: true, force: true });
+  await $`CHISACODE_HOME=${chisacodeHome} CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.CHISACODE_LOCAL_SPEECH_AUTO_DOWNLOAD} CHISACODE_DICTATION_ENABLED=${testEnv.CHISACODE_DICTATION_ENABLED} CHISACODE_VOICE_MODE_ENABLED=${testEnv.CHISACODE_VOICE_MODE_ENABLED} npx chisacode daemon stop --home ${chisacodeHome} --force`.nothrow();
+  await rm(chisacodeHome, { recursive: true, force: true });
 }
 
 if (recentSupervisorLogs.trim().length === 0) {

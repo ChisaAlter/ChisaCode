@@ -3,8 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
-} from "@fleurdelys/protocol/binary-frames/index";
-import type { TerminalCell, TerminalState } from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/binary-frames/index";
+import type { TerminalCell, TerminalState } from "@chisacode/protocol/messages";
 import {
   encodeTerminalRestoreFrame,
   resolveRestoreAfterOutputOverflow,

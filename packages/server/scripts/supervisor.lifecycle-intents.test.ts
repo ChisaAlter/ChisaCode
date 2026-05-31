@@ -6,8 +6,8 @@ describe("supervisor lifecycle intents", () => {
     const source = readFileSync(new URL("./supervisor.ts", import.meta.url), "utf8");
     const legacyShutdownReason = ["cli", "shutdown"].join("_");
 
-    expect(source).toContain('"paseo:shutdown"');
-    expect(source).toContain('"paseo:restart"');
+    expect(source).toContain('"chisacode:shutdown"');
+    expect(source).toContain('"chisacode:restart"');
     expect(source).not.toContain(legacyShutdownReason);
   });
 });

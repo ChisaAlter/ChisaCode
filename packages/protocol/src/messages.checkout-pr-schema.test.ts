@@ -13,7 +13,7 @@ describe("checkout PR schemas", () => {
     expect(
       CheckoutPrStatusSchema.parse({
         number: 42,
-        url: "https://github.com/getpaseo/paseo/pull/42",
+        url: "https://github.com/getchisacode/chisacode/pull/42",
         title: "Ship it",
         state: "open",
         baseRefName: "main",
@@ -29,7 +29,7 @@ describe("checkout PR schemas", () => {
   test("keeps missing provider-specific GitHub PR facts absent for old daemons", () => {
     const parsed = CheckoutPrStatusSchema.parse({
       number: 42,
-      url: "https://github.com/getpaseo/paseo/pull/42",
+      url: "https://github.com/getchisacode/chisacode/pull/42",
       title: "Ship it",
       state: "open",
       baseRefName: "main",
@@ -45,7 +45,7 @@ describe("checkout PR schemas", () => {
     expect(
       CheckoutPrStatusSchema.parse({
         number: 993,
-        url: "https://github.com/getpaseo/paseo/pull/993",
+        url: "https://github.com/getchisacode/chisacode/pull/993",
         title: "Block direct merge while checks run",
         state: "open",
         baseRefName: "main",

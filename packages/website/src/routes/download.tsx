@@ -20,8 +20,8 @@ import "~/styles.css";
 export const Route = createFileRoute("/download")({
   head: () =>
     pageMeta(
-      "Download Paseo for macOS, Windows, Linux, iOS, and Android",
-      "Install Paseo on every platform. Native desktop apps for macOS, Windows, and Linux. Mobile apps for iOS and Android. Self-hosted, open source, free to download.",
+      "Download ChisaCode for macOS, Windows, Linux, iOS, and Android",
+      "Install ChisaCode on every platform. Native desktop apps for macOS, Windows, and Linux. Mobile apps for iOS and Android. Self-hosted, open source, free to download.",
       "/download",
     ),
   component: Download,
@@ -68,7 +68,7 @@ function Download() {
               <TerminalIcon className="h-5 w-5 text-foreground" />
               <span className="font-medium">Homebrew</span>
             </div>
-            <CodeBlock size="sm">brew install --cask paseo</CodeBlock>
+            <CodeBlock size="sm">brew install --cask chisacode</CodeBlock>
           </div>
 
           {/* Windows */}
@@ -165,7 +165,7 @@ function Download() {
           <div>
             <h2 className="text-2xl font-semibold">Server</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Run the Paseo server anywhere, connect from any client
+              Run the ChisaCode server anywhere, connect from any client
             </p>
           </div>
           <TerminalIcon className="h-5 w-5 text-muted-foreground mt-1.5" />
@@ -177,7 +177,7 @@ function Download() {
               <TerminalIcon className="h-5 w-5 text-foreground" />
               <span className="font-medium">npm</span>
             </div>
-            <CodeBlock size="sm">npm install -g @fleurdelys/cli && paseo</CodeBlock>
+            <CodeBlock size="sm">npm install -g @chisacode/cli && chisacode</CodeBlock>
           </div>
 
           <div className="flex flex-col gap-3 py-5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
@@ -185,7 +185,7 @@ function Download() {
               <TerminalIcon className="h-5 w-5 text-foreground" />
               <span className="font-medium">Nix</span>
             </div>
-            <CodeBlock size="sm">nix run github:getpaseo/paseo</CodeBlock>
+            <CodeBlock size="sm">nix run github:getchisacode/chisacode</CodeBlock>
           </div>
         </div>
       </section>
@@ -193,7 +193,7 @@ function Download() {
       <p className="text-center text-xs text-muted-foreground mt-8">
         All releases are available on{" "}
         <a
-          href="https://github.com/getpaseo/paseo/releases"
+          href="https://github.com/getchisacode/chisacode/releases"
           target="_blank"
           rel="noopener noreferrer"
           className="underline hover:text-foreground transition-colors"

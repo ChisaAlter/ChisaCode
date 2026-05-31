@@ -15,7 +15,7 @@ import {
   type GitHubCurrentPullRequestStatus,
   type GitHubReadOptions,
 } from "./github-service.js";
-import { CheckoutPrStatusResponseSchema } from "@fleurdelys/protocol/messages";
+import { CheckoutPrStatusResponseSchema } from "@chisacode/protocol/messages";
 
 const EXPECTED_GITHUB_FAST_POLL_MS = 20_000;
 const EXPECTED_GITHUB_SLOW_POLL_MS = 120_000;
@@ -245,8 +245,8 @@ function pullRequestCheckoutTargetJson(): string {
           isCrossRepository: true,
           headRepositoryOwner: { login: "therainisme" },
           headRepository: {
-            sshUrl: "git@github.com:therainisme/paseo.git",
-            url: "https://github.com/therainisme/paseo",
+            sshUrl: "git@github.com:therainisme/chisacode.git",
+            url: "https://github.com/therainisme/chisacode",
           },
         },
       },
@@ -256,8 +256,8 @@ function pullRequestCheckoutTargetJson(): string {
 
 function repoViewJson(): string {
   return JSON.stringify({
-    owner: { login: "getpaseo" },
-    name: "paseo",
+    owner: { login: "getchisacode" },
+    name: "chisacode",
     parent: null,
   });
 }
@@ -611,8 +611,8 @@ describe("GitHubService", () => {
       baseRefName: "main",
       headRefName: "main",
       headOwnerLogin: "therainisme",
-      headRepositorySshUrl: "git@github.com:therainisme/paseo.git",
-      headRepositoryUrl: "https://github.com/therainisme/paseo",
+      headRepositorySshUrl: "git@github.com:therainisme/chisacode.git",
+      headRepositoryUrl: "https://github.com/therainisme/chisacode",
       isCrossRepository: true,
     });
 
@@ -623,8 +623,8 @@ describe("GitHubService", () => {
     });
     expect(runner.calls[1]?.cwd).toBe("/repo");
     expect(runner.calls[1]?.args.slice(0, 3)).toEqual(["api", "graphql", "-f"]);
-    expect(runner.calls[1]?.args).toContain("owner=getpaseo");
-    expect(runner.calls[1]?.args).toContain("name=paseo");
+    expect(runner.calls[1]?.args).toContain("owner=getchisacode");
+    expect(runner.calls[1]?.args).toContain("name=chisacode");
     expect(runner.calls[1]?.args).toContain("number=526");
   });
 
@@ -1425,7 +1425,7 @@ describe("GitHubService", () => {
     const runner = createScriptedRunner([
       currentPullRequestJson({
         number: 993,
-        url: "https://github.com/getpaseo/paseo/pull/993",
+        url: "https://github.com/getchisacode/chisacode/pull/993",
         title: "Auto-merge UX",
         headRefName: "github-pr-auto-merge-ux",
         mergeable: "MERGEABLE",
@@ -1437,7 +1437,7 @@ describe("GitHubService", () => {
             workflowName: "CI",
             status: "IN_PROGRESS",
             conclusion: null,
-            detailsUrl: "https://github.com/getpaseo/paseo/actions/runs/993",
+            detailsUrl: "https://github.com/getchisacode/chisacode/actions/runs/993",
           },
         ],
       }),
@@ -1462,7 +1462,7 @@ describe("GitHubService", () => {
         {
           name: "server tests",
           status: "pending",
-          url: "https://github.com/getpaseo/paseo/actions/runs/993",
+          url: "https://github.com/getchisacode/chisacode/actions/runs/993",
           workflow: "CI",
         },
       ],
@@ -2198,7 +2198,7 @@ describe("GitHubService", () => {
 
     await service.searchIssuesAndPrs({
       cwd: "/repo",
-      query: "https://github.com/getpaseo/paseo/pull/793",
+      query: "https://github.com/getchisacode/chisacode/pull/793",
       limit: 5,
     });
 
@@ -2382,12 +2382,16 @@ describe("GitHubService", () => {
 
     try {
       execFileSync("git", ["init", "-b", "main"], { cwd, stdio: "ignore" });
-      execFileSync("git", ["remote", "add", "origin", "git@github.com:getpaseo/paseo.git"], {
-        cwd,
-        stdio: "ignore",
-      });
+      execFileSync(
+        "git",
+        ["remote", "add", "origin", "git@github.com:getchisacode/chisacode.git"],
+        {
+          cwd,
+          stdio: "ignore",
+        },
+      );
 
-      await expect(resolveGitHubRepo(cwd)).resolves.toBe("getpaseo/paseo");
+      await expect(resolveGitHubRepo(cwd)).resolves.toBe("getchisacode/chisacode");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentProviderSchema } from "@fleurdelys/protocol/provider-manifest";
+import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
 
 export const ScheduleStatusSchema = z.enum(["active", "paused", "completed"]);
 export type ScheduleStatus = z.infer<typeof ScheduleStatusSchema>;

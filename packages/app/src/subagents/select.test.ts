@@ -1,4 +1,4 @@
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { afterEach, describe, expect, it } from "vitest";
 import { selectSubagentsForParent } from "./select";
 import { useSessionStore, type Agent } from "@/stores/session-store";

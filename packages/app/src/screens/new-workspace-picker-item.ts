@@ -1,5 +1,5 @@
-import type { CreatePaseoWorktreeInput } from "@fleurdelys/client/internal/daemon-client";
-import type { GitHubSearchItem } from "@fleurdelys/protocol/messages";
+import type { CreateChisaCodeWorktreeInput } from "@chisacode/client/internal/daemon-client";
+import type { GitHubSearchItem } from "@chisacode/protocol/messages";
 
 export type PickerItem =
   | { kind: "branch"; name: string }
@@ -9,7 +9,7 @@ export type PickerItem =
     };
 
 export type PickerCheckoutRequest = Pick<
-  CreatePaseoWorktreeInput,
+  CreateChisaCodeWorktreeInput,
   "action" | "refName" | "githubPrNumber"
 >;
 

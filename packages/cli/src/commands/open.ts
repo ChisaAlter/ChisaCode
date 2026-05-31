@@ -1,15 +1,15 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { spawnProcess } from "@fleurdelys/server";
+import { spawnProcess } from "@chisacode/server";
 
 function findDesktopApp(): string | null {
   if (process.platform === "darwin") {
     const candidates = [
-      "/Applications/Fleurdelys.app",
-      path.join(homedir(), "Applications", "Fleurdelys.app"),
-      "/Applications/Paseo.app",
-      path.join(homedir(), "Applications", "Paseo.app"),
+      "/Applications/ChisaCode.app",
+      path.join(homedir(), "Applications", "ChisaCode.app"),
+      "/Applications/ChisaCode.app",
+      path.join(homedir(), "Applications", "ChisaCode.app"),
     ];
 
     for (const candidate of candidates) {
@@ -23,12 +23,12 @@ function findDesktopApp(): string | null {
 
   if (process.platform === "linux") {
     const candidates = [
-      "/usr/bin/Fleurdelys",
-      "/opt/Fleurdelys/Fleurdelys",
-      path.join(homedir(), "Applications", "Fleurdelys.AppImage"),
-      "/usr/bin/Paseo",
-      "/opt/Paseo/Paseo",
-      path.join(homedir(), "Applications", "Paseo.AppImage"),
+      "/usr/bin/ChisaCode",
+      "/opt/ChisaCode/ChisaCode",
+      path.join(homedir(), "Applications", "ChisaCode.AppImage"),
+      "/usr/bin/ChisaCode",
+      "/opt/ChisaCode/ChisaCode",
+      path.join(homedir(), "Applications", "ChisaCode.AppImage"),
     ];
 
     for (const candidate of candidates) {
@@ -47,8 +47,8 @@ function findDesktopApp(): string | null {
     }
 
     const candidates = [
-      path.join(localAppData, "Programs", "Fleurdelys", "Fleurdelys.exe"),
-      path.join(localAppData, "Programs", "Paseo", "Paseo.exe"),
+      path.join(localAppData, "Programs", "ChisaCode", "ChisaCode.exe"),
+      path.join(localAppData, "Programs", "ChisaCode", "ChisaCode.exe"),
     ];
     return candidates.find((candidate) => existsSync(candidate)) ?? null;
   }
@@ -63,7 +63,7 @@ function cleanEnvForDesktopLaunch(): NodeJS.ProcessEnv {
   // desktop app would start as a bare Node process instead of Electron.
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.ELECTRON_NO_ATTACH_CONSOLE;
-  delete env.PASEO_NODE_ENV;
+  delete env.CHISACODE_NODE_ENV;
   return env;
 }
 
@@ -77,7 +77,7 @@ function spawnDetached(command: string, args: string[]): void {
 
 export async function openDesktopWithProject(projectPath: string): Promise<void> {
   try {
-    if (process.env.PASEO_DESKTOP_CLI === "1") {
+    if (process.env.CHISACODE_DESKTOP_CLI === "1") {
       throw new Error(
         "Cannot open a desktop project while running in desktop CLI passthrough mode.",
       );
@@ -86,7 +86,7 @@ export async function openDesktopWithProject(projectPath: string): Promise<void>
     const desktopApp = findDesktopApp();
     if (!desktopApp) {
       throw new Error(
-        "Fleurdelys desktop app not found. Install it from your Fleurdelys release page",
+        "ChisaCode desktop app not found. Install it from your ChisaCode release page",
       );
     }
 

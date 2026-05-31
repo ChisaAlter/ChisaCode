@@ -1,4 +1,4 @@
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Agent } from "@/stores/session-store";

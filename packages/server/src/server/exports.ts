@@ -1,7 +1,11 @@
-// CLI exports for @fleurdelys/server
-export { createPaseoDaemon, type PaseoDaemon, type PaseoDaemonConfig } from "./bootstrap.js";
+// CLI exports for @chisacode/server
+export {
+  createChisaCodeDaemon,
+  type ChisaCodeDaemon,
+  type ChisaCodeDaemonConfig,
+} from "./bootstrap.js";
 export { loadConfig, type CliConfigOverrides } from "./config.js";
-export { resolvePaseoHome } from "./paseo-home.js";
+export { resolveChisaCodeHome } from "./chisacode-home.js";
 export { getOrCreateServerId } from "./server-id.js";
 export { createRootLogger, type LogLevel, type LogFormat } from "./logger.js";
 export {
@@ -16,21 +20,21 @@ export {
   decodeOfferFragmentPayload,
   parseConnectionOfferFromUrl,
   type ConnectionOffer,
-} from "@fleurdelys/protocol/connection-offer";
-export { buildRelayWebSocketUrl } from "@fleurdelys/protocol/daemon-endpoints";
+} from "@chisacode/protocol/connection-offer";
+export { buildRelayWebSocketUrl } from "@chisacode/protocol/daemon-endpoints";
 export {
   buildDaemonWebSocketUrl,
   deriveLabelFromEndpoint,
   normalizeHostPort,
   parseConnectionUri,
   shouldUseTlsForDefaultHostedRelay,
-} from "@fleurdelys/protocol/daemon-endpoints";
-export { PARENT_AGENT_ID_LABEL } from "@fleurdelys/protocol/agent-labels";
+} from "@chisacode/protocol/daemon-endpoints";
+export { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
 export {
   DirectTcpHostConnectionSchema,
   type DirectTcpHostConnection,
   type NormalizedDirectTcpHostConnection,
-} from "@fleurdelys/protocol/host-connection-schema";
+} from "@chisacode/protocol/host-connection-schema";
 export {
   ensureLocalSpeechModels,
   listLocalSpeechModels,
@@ -61,7 +65,7 @@ export {
   AGENT_PROVIDER_DEFINITIONS,
   BUILTIN_PROVIDER_IDS,
   type AgentProviderDefinition,
-} from "@fleurdelys/protocol/provider-manifest";
+} from "@chisacode/protocol/provider-manifest";
 
 // Agent SDK types for CLI commands
 export type {
@@ -95,4 +99,4 @@ export type {
   AgentSnapshotPayload,
   AgentStreamEventPayload,
   AgentStreamMessage,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";

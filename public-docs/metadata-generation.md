@@ -1,15 +1,15 @@
 ---
 title: Metadata generation
-description: How Paseo uses providers to generate agent titles, branch names, commit messages, and pull request text, and how to configure them.
+description: How ChisaCode uses providers to generate agent titles, branch names, commit messages, and pull request text, and how to configure them.
 nav: Metadata generation
 order: 11
 ---
 
 # Metadata generation
 
-Paseo asks a language model to write short pieces of text for you so you don't have to. This is separate from the agent you're talking to: it's a small, one-shot call made in the background.
+ChisaCode asks a language model to write short pieces of text for you so you don't have to. This is separate from the agent you're talking to: it's a small, one-shot call made in the background.
 
-Paseo generates four kinds of metadata:
+ChisaCode generates four kinds of metadata:
 
 - **Agent titles** — a short title for a new agent, derived from your first prompt. Only generated when you didn't type one yourself.
 - **Worktree branch names** — a slug for the branch a new worktree agent runs on.
@@ -18,7 +18,7 @@ Paseo generates four kinds of metadata:
 
 ## How a model is chosen
 
-You don't have to configure anything — Paseo picks a model automatically. It builds an ordered list of candidates and tries each one until a generation succeeds, so a slow or unavailable model falls through to the next.
+You don't have to configure anything — ChisaCode picks a model automatically. It builds an ordered list of candidates and tries each one until a generation succeeds, so a slow or unavailable model falls through to the next.
 
 The candidate list is assembled in this order:
 
@@ -36,7 +36,7 @@ The intent of the default order is to prefer small, fast, cheap models for these
 
 ## Configuring the providers
 
-To control which models Paseo uses — for example to keep all metadata generation on one provider, or to prefer a local model — set `agents.metadataGeneration.providers` in `~/.paseo/config.json`. Your entries are tried before the built-in defaults.
+To control which models ChisaCode uses — for example to keep all metadata generation on one provider, or to prefer a local model — set `agents.metadataGeneration.providers` in `~/.chisacode/config.json`. Your entries are tried before the built-in defaults.
 
 ```json
 {
@@ -61,7 +61,7 @@ Restart the daemon after editing the file.
 
 ## Per-project instructions
 
-You can steer the wording of each kind of metadata per repository with a `paseo.json` file at your repo root. Paseo reads it from the committed version of the base branch, the same way it reads worktree config.
+You can steer the wording of each kind of metadata per repository with a `chisacode.json` file at your repo root. ChisaCode reads it from the committed version of the base branch, the same way it reads worktree config.
 
 ```json
 {

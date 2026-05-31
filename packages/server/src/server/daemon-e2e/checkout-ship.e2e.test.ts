@@ -21,7 +21,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  paseoHome?: string;
+  chisacodeHome?: string;
 }
 
 function createLegacyWorktreeForTest(
@@ -40,7 +40,7 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    paseoHome: options.paseoHome,
+    chisacodeHome: options.chisacodeHome,
   });
 }
 
@@ -64,11 +64,11 @@ const testWithGitHubCliAuth = hasGitHubCliAuth() ? test : test.skip;
 
 function initGitRepo(repoDir: string): void {
   execSync("git init -b main", { cwd: repoDir, stdio: "pipe" });
-  execSync("git config user.email 'paseo-test@example.com'", {
+  execSync("git config user.email 'chisacode-test@example.com'", {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Paseo Test'", {
+  execSync("git config user.name 'ChisaCode Test'", {
     cwd: repoDir,
     stdio: "pipe",
   });
@@ -146,7 +146,7 @@ describe("daemon checkout ship loop", () => {
           cwd: repoDir,
           baseBranch: "main",
           worktreeSlug: "ship-loop",
-          paseoHome: ctx.daemon.paseoHome,
+          chisacodeHome: ctx.daemon.chisacodeHome,
         });
 
         const agent = await ctx.client.createAgent({
@@ -160,7 +160,7 @@ describe("daemon checkout ship loop", () => {
 
         const status = await ctx.client.getCheckoutStatus(worktree.worktreePath);
         expect(status.isGit).toBe(true);
-        expect(status.isPaseoOwnedWorktree).toBe(true);
+        expect(status.isChisaCodeOwnedWorktree).toBe(true);
         expect(realpathSync(status.repoRoot)).toBe(realpathSync(worktree.worktreePath));
         if (status.isGit) {
           expect(status.baseRef).toBe("main");
@@ -237,7 +237,7 @@ describe("daemon checkout ship loop", () => {
         });
         expect(baseDiffAfterMerge.files.length).toBe(0);
 
-        const worktreeList = await ctx.client.getPaseoWorktreeList({
+        const worktreeList = await ctx.client.getChisaCodeWorktreeList({
           cwd: repoDir,
         });
         expect(worktreeList.error).toBeNull();
@@ -249,13 +249,13 @@ describe("daemon checkout ship loop", () => {
           ),
         ).toBe(true);
 
-        const archiveResult = await ctx.client.archivePaseoWorktree({
+        const archiveResult = await ctx.client.archiveChisaCodeWorktree({
           worktreePath: worktree.worktreePath,
         });
         expect(archiveResult.error).toBeNull();
         expect(archiveResult.success).toBe(true);
 
-        const worktreeListAfter = await ctx.client.getPaseoWorktreeList({
+        const worktreeListAfter = await ctx.client.getChisaCodeWorktreeList({
           cwd: repoDir,
         });
         expect(
@@ -293,7 +293,7 @@ describe("daemon checkout ship loop", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "merge-from-base",
-        paseoHome: ctx.daemon.paseoHome,
+        chisacodeHome: ctx.daemon.chisacodeHome,
       });
 
       const agent = await ctx.client.createAgent({

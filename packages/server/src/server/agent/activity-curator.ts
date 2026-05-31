@@ -1,6 +1,6 @@
 import type { AgentTimelineItem } from "./agent-sdk-types.js";
-import { isLikelyExternalToolName } from "@fleurdelys/protocol/tool-name-normalization";
-import { buildToolCallDisplayModel } from "@fleurdelys/protocol/tool-call-display";
+import { isLikelyExternalToolName } from "@chisacode/protocol/tool-name-normalization";
+import { buildToolCallDisplayModel } from "@chisacode/protocol/tool-call-display";
 import { projectTimelineRows } from "./timeline-projection.js";
 
 const DEFAULT_MAX_ITEMS = 0;

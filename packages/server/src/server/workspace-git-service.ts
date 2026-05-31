@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { LRUCache } from "lru-cache";
 import pLimit from "p-limit";
 import type pino from "pino";
-import type { ProjectCheckoutLitePayload } from "@fleurdelys/protocol/messages";
+import type { ProjectCheckoutLitePayload } from "@chisacode/protocol/messages";
 import type { CheckoutContext } from "../utils/checkout-git.js";
 import {
   type BranchCheckoutResolution,
@@ -32,7 +32,7 @@ import {
 import { parseGitRevParsePath } from "../utils/git-rev-parse-path.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { resolveGitHubRemote, type GitHubRemoteIdentity } from "../utils/github-remote.js";
-import { listPaseoWorktrees, type PaseoWorktreeInfo } from "../utils/worktree.js";
+import { listChisaCodeWorktrees, type ChisaCodeWorktreeInfo } from "../utils/worktree.js";
 import { READ_ONLY_GIT_ENV } from "./checkout-git-utils.js";
 import {
   buildWorkspaceGitMetadataFromSnapshot,
@@ -58,7 +58,7 @@ const LINUX_WATCH_REFRESH_COOLDOWN_MS = 2_000;
 const LINUX_WATCH_IGNORE_TTL_MS = 5 * 60 * 1_000;
 
 const linuxWatchReaddirConcurrency =
-  parseInt(process.env.PASEO_LINUX_WATCH_READDIR_CONCURRENCY ?? "16", 10) || 16;
+  parseInt(process.env.CHISACODE_LINUX_WATCH_READDIR_CONCURRENCY ?? "16", 10) || 16;
 const linuxWatchReaddirLimit = pLimit(linuxWatchReaddirConcurrency);
 
 export interface WorkspaceGitRuntimeSnapshot {
@@ -69,7 +69,7 @@ export interface WorkspaceGitRuntimeSnapshot {
     mainRepoRoot: string | null;
     currentBranch: string | null;
     remoteUrl: string | null;
-    isPaseoOwnedWorktree: boolean;
+    isChisaCodeOwnedWorktree: boolean;
     isDirty: boolean | null;
     baseRef: string | null;
     aheadBehind: { ahead: number; behind: number } | null;
@@ -184,19 +184,19 @@ export interface WorkspaceGitBranchSuggestionsOptions {
 }
 
 export interface WorkspaceGitStashListOptions {
-  paseoOnly?: boolean;
+  chisacodeOnly?: boolean;
 }
 
 export interface WorkspaceGitStashEntry {
   index: number;
   message: string;
   branch: string | null;
-  isPaseo: boolean;
+  isChisaCode: boolean;
 }
 
 export type WorkspaceGitBranchValidationResult = BranchCheckoutResolution;
 export type WorkspaceGitBranchSuggestion = BranchSuggestion;
-export type WorkspaceGitWorktreeInfo = PaseoWorktreeInfo;
+export type WorkspaceGitWorktreeInfo = ChisaCodeWorktreeInfo;
 
 export type WorkspaceGitSnapshotOptions =
   | {
@@ -247,7 +247,7 @@ interface WorkspaceGitServiceDependencies {
   resolveBranchCheckout: typeof resolveBranchCheckout;
   resolveRepositoryDefaultBranch: typeof resolveRepositoryDefaultBranch;
   listBranchSuggestions: typeof listBranchSuggestions;
-  listPaseoWorktrees: typeof listPaseoWorktrees;
+  listChisaCodeWorktrees: typeof listChisaCodeWorktrees;
   github: GitHubService;
   resolveAbsoluteGitDir: (cwd: string) => Promise<string | null>;
   hasOriginRemote: (cwd: string) => Promise<boolean>;
@@ -258,7 +258,7 @@ interface WorkspaceGitServiceDependencies {
 
 interface WorkspaceGitServiceOptions {
   logger: pino.Logger;
-  paseoHome: string;
+  chisacodeHome: string;
   deps?: Partial<WorkspaceGitServiceDependencies>;
 }
 
@@ -328,7 +328,7 @@ function buildDefaultWorkspaceGitServiceDeps(): WorkspaceGitServiceDependencies 
     resolveBranchCheckout,
     resolveRepositoryDefaultBranch,
     listBranchSuggestions,
-    listPaseoWorktrees,
+    listChisaCodeWorktrees,
     github: createGitHubService(),
     resolveAbsoluteGitDir,
     hasOriginRemote,
@@ -346,7 +346,7 @@ function resolveWorkspaceGitServiceDeps(
 
 export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly logger: pino.Logger;
-  private readonly paseoHome: string;
+  private readonly chisacodeHome: string;
   private readonly deps: WorkspaceGitServiceDependencies;
   private readonly snapshotUpdatedListeners = new Set<WorkspaceGitSnapshotUpdatedListener>();
   private readonly workspaceTargets = new Map<string, WorkspaceGitTarget>();
@@ -384,7 +384,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   >({ max: WORKSPACE_GIT_CHECKOUT_DIFF_CACHE_MAX });
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
-    this.paseoHome = options.paseoHome;
+    this.chisacodeHome = options.chisacodeHome;
     this.deps = resolveWorkspaceGitServiceDeps(options.deps);
   }
 
@@ -437,7 +437,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const normalizedCwd = normalizeWorkspaceId(cwd);
     try {
       const status = await this.deps.getCheckoutStatus(normalizedCwd, {
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
         logger: this.logger,
       });
       if (!status.isGit) {
@@ -446,7 +446,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
           currentBranch: null,
           remoteUrl: null,
           repoRoot: null,
-          isPaseoOwnedWorktree: false,
+          isChisaCodeOwnedWorktree: false,
           mainRepoRoot: null,
         });
       }
@@ -455,7 +455,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         currentBranch: status.currentBranch,
         remoteUrl: status.remoteUrl,
         repoRoot: status.repoRoot,
-        isPaseoOwnedWorktree: status.isPaseoOwnedWorktree,
+        isChisaCodeOwnedWorktree: status.isChisaCodeOwnedWorktree,
         mainRepoRoot: status.mainRepoRoot,
       });
     } catch {
@@ -464,7 +464,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         currentBranch: null,
         remoteUrl: null,
         repoRoot: null,
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       });
     }
@@ -484,7 +484,9 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const normalizedOptions = this.normalizeCheckoutDiffOptions(options);
     const key = this.buildCheckoutDiffCacheKey(normalizedCwd, normalizedOptions);
     return this.readAuxiliaryCache(this.checkoutDiffCache, key, readOptions, () =>
-      this.deps.getCheckoutDiff(normalizedCwd, normalizedOptions, { paseoHome: this.paseoHome }),
+      this.deps.getCheckoutDiff(normalizedCwd, normalizedOptions, {
+        chisacodeHome: this.chisacodeHome,
+      }),
     );
   }
 
@@ -560,14 +562,14 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<WorkspaceGitStashEntry[]> {
     const normalizedCwd = normalizeWorkspaceId(cwd);
-    const paseoOnly = options?.paseoOnly !== false;
-    const key = JSON.stringify(["stashes", normalizedCwd, paseoOnly]);
+    const chisacodeOnly = options?.chisacodeOnly !== false;
+    const key = JSON.stringify(["stashes", normalizedCwd, chisacodeOnly]);
     return this.readAuxiliaryCache(this.stashListCache, key, readOptions, async () => {
       const { stdout } = await this.deps.runGitCommand(["stash", "list", "--format=%gd%x00%s"], {
         cwd: normalizedCwd,
         envOverlay: READ_ONLY_GIT_ENV,
       });
-      return parseWorkspaceGitStashList(stdout, { paseoOnly });
+      return parseWorkspaceGitStashList(stdout, { chisacodeOnly });
     });
   }
 
@@ -578,9 +580,9 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const repoRoot = await this.resolveRepoRoot(cwdOrRepoRoot, options);
     const key = JSON.stringify(["worktrees", repoRoot]);
     return this.readAuxiliaryCache(this.worktreeListCache, key, options, () =>
-      this.deps.listPaseoWorktrees({
+      this.deps.listChisaCodeWorktrees({
         cwd: repoRoot,
-        paseoHome: this.paseoHome,
+        chisacodeHome: this.chisacodeHome,
       }),
     );
   }
@@ -591,7 +593,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       throw new Error("Create worktree requires a git repository");
     }
 
-    return snapshot.git.isPaseoOwnedWorktree
+    return snapshot.git.isChisaCodeOwnedWorktree
       ? (snapshot.git.mainRepoRoot ?? snapshot.git.repoRoot ?? normalizeWorkspaceId(cwd))
       : (snapshot.git.repoRoot ?? normalizeWorkspaceId(cwd));
   }
@@ -878,7 +880,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     target: WorkspaceGitTarget,
   ): Promise<CheckoutSnapshotFacts | null> {
     return this.loadCheckoutFacts(target, {
-      paseoHome: this.paseoHome,
+      chisacodeHome: this.chisacodeHome,
       logger: this.logger,
       allowRecent: true,
     });
@@ -1566,7 +1568,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
     const cwd = target.cwd;
     const previousGitHubPollKey = this.getGitHubPollKey(target);
-    const baseContext: CheckoutContext = { paseoHome: this.paseoHome, logger: this.logger };
+    const baseContext: CheckoutContext = { chisacodeHome: this.chisacodeHome, logger: this.logger };
     const facts = await this.loadCheckoutFacts(target, {
       ...baseContext,
       allowRecent: !request.force,
@@ -1593,7 +1595,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       mainRepoRoot: checkoutStatus.mainRepoRoot,
       currentBranch: checkoutStatus.currentBranch,
       remoteUrl: checkoutStatus.remoteUrl,
-      isPaseoOwnedWorktree: checkoutStatus.isPaseoOwnedWorktree,
+      isChisaCodeOwnedWorktree: checkoutStatus.isChisaCodeOwnedWorktree,
       isDirty: checkoutStatus.isDirty,
       baseRef: checkoutStatus.baseRef,
       aheadBehind: checkoutStatus.aheadBehind,
@@ -1890,7 +1892,7 @@ async function loadGitHubSnapshot(options: {
 
 function parseWorkspaceGitStashList(
   stdout: string,
-  options: { paseoOnly: boolean },
+  options: { chisacodeOnly: boolean },
 ): WorkspaceGitStashEntry[] {
   const entries: WorkspaceGitStashEntry[] = [];
   const lines = stdout.trim().split("\n").filter(Boolean);
@@ -1909,20 +1911,20 @@ function parseWorkspaceGitStashList(
     }
 
     const index = Number(indexMatch[1]);
-    const prefixes = ["fleurdelys-auto-stash:", "paseo-auto-stash:"] as const;
+    const prefixes = ["chisacode-auto-stash:", "chisacode-auto-stash:"] as const;
     const matchedPrefix = prefixes.find((prefix) => subject.includes(prefix));
     const prefixIdx = matchedPrefix ? subject.indexOf(matchedPrefix) : -1;
-    const isPaseo = matchedPrefix !== undefined;
+    const isChisaCode = matchedPrefix !== undefined;
     const branch =
-      isPaseo && matchedPrefix
+      isChisaCode && matchedPrefix
         ? subject.slice(prefixIdx + matchedPrefix.length).trim() || null
         : null;
 
-    if (options.paseoOnly && !isPaseo) {
+    if (options.chisacodeOnly && !isChisaCode) {
       continue;
     }
 
-    entries.push({ index, message: subject, branch, isPaseo });
+    entries.push({ index, message: subject, branch, isChisaCode });
   }
 
   return entries;
@@ -1937,7 +1939,7 @@ function buildNotGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
       mainRepoRoot: null,
       currentBranch: null,
       remoteUrl: null,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       isDirty: null,
       baseRef: null,
       aheadBehind: null,

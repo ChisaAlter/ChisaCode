@@ -5,7 +5,7 @@ import {
   isKnownEditorTargetId,
   type EditorTargetId,
   type KnownEditorTargetId,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 
 interface EditorAppIconProps {
   editorId: EditorTargetId;

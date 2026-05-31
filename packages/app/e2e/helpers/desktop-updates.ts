@@ -23,28 +23,28 @@ export interface RealDaemonState {
 
 /**
  * Reads live state from the running E2E test daemon: version from the HTTP
- * status endpoint, PID from the paseo.pid lock file, log path from the
- * E2E_PASEO_HOME directory. Call this in Node test code (not in the browser).
+ * status endpoint, PID from the chisacode.pid lock file, log path from the
+ * E2E_CHISACODE_HOME directory. Call this in Node test code (not in the browser).
  */
 export async function loadRealDaemonState(): Promise<RealDaemonState> {
   const port = getE2EDaemonPort();
-  const paseoHome = process.env.E2E_PASEO_HOME;
-  if (!paseoHome) throw new Error("E2E_PASEO_HOME not set — globalSetup must run first");
+  const chisacodeHome = process.env.E2E_CHISACODE_HOME;
+  if (!chisacodeHome) throw new Error("E2E_CHISACODE_HOME not set — globalSetup must run first");
 
   const resp = await fetch(`http://127.0.0.1:${port}/api/status`);
   const data: DaemonApiStatus = await resp.json();
 
   let pid: number | null = null;
   try {
-    const raw = readFileSync(`${paseoHome}/paseo.pid`, "utf8");
+    const raw = readFileSync(`${chisacodeHome}/chisacode.pid`, "utf8");
     const pidContent: PidFileContent = JSON.parse(raw);
     pid = pidContent.pid ?? null;
   } catch (err) {
     // PID file may not be present yet on a very fresh daemon start
-    console.warn("[desktop-updates] paseo.pid not found:", err);
+    console.warn("[desktop-updates] chisacode.pid not found:", err);
   }
 
-  return { version: data.version, pid, logPath: `${paseoHome}/daemon.log` };
+  return { version: data.version, pid, logPath: `${chisacodeHome}/daemon.log` };
 }
 
 export interface DesktopBridgeConfig {
@@ -78,7 +78,7 @@ declare global {
 }
 
 /**
- * Injects window.paseoDesktop before app load so all Electron-gated code
+ * Injects window.chisacodeDesktop before app load so all Electron-gated code
  * activates. The update-check IPC is mocked at the boundary so the real
  * auto-updater never fires. Daemon start/stop commands are stateful: the mock
  * tracks running state and assigns a fresh PID on each start, letting tests
@@ -108,7 +108,7 @@ export async function injectDesktopBridge(page: Page, config: DesktopBridgeConfi
       };
     }
 
-    (window as unknown as { paseoDesktop: unknown }).paseoDesktop = {
+    (window as unknown as { chisacodeDesktop: unknown }).chisacodeDesktop = {
       platform: "darwin",
       invoke: async (command: string, args?: Record<string, unknown>) => {
         if (command === "check_app_update") {

@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager, type ManagedAgent } from "./agent-manager.js";
 import { AgentStorage } from "./agent-storage.js";
-import { PARENT_AGENT_ID_LABEL } from "@fleurdelys/protocol/agent-labels";
+import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
 import { formatSystemNotificationPrompt } from "./agent-prompt.js";
 import type { StoredAgentRecord } from "./agent-storage.js";
 import type {
@@ -159,7 +159,7 @@ class EnvProbeAgentClient extends TestAgentClient {
     const script = `
       process.stdout.write(JSON.stringify({
         probe: process.env.CHUNK14_PROBE ?? null,
-        agentId: process.env.PASEO_AGENT_ID ?? null
+        agentId: process.env.CHISACODE_AGENT_ID ?? null
       }));
     `;
     const child = spawn(process.execPath, ["-e", script], {
@@ -899,7 +899,7 @@ test("createAgent passes daemon launch env through the provider launch context",
   expect(client.lastLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
-      PASEO_AGENT_ID: snapshot.id,
+      CHISACODE_AGENT_ID: snapshot.id,
     },
   });
 });
@@ -946,7 +946,7 @@ test("createAgent passes persistSession to provider create options", async () =>
   rmSync(workdir, { recursive: true, force: true });
 });
 
-test("createAgent injects paseo MCP server when manager has an MCP base URL", async () => {
+test("createAgent injects chisacode MCP server when manager has an MCP base URL", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -983,7 +983,7 @@ test("createAgent injects paseo MCP server when manager has an MCP base URL", as
   });
 
   expect(snapshot.config.mcpServers).toEqual({
-    paseo: {
+    chisacode: {
       type: "http",
       url: `http://127.0.0.1:6767/mcp/agents?callerAgentId=${snapshot.id}`,
     },
@@ -995,7 +995,7 @@ test("createAgent injects paseo MCP server when manager has an MCP base URL", as
   expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
 });
 
-test("createAgent preserves a user-provided paseo MCP config", async () => {
+test("createAgent preserves a user-provided chisacode MCP config", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -1024,17 +1024,17 @@ test("createAgent preserves a user-provided paseo MCP config", async () => {
     provider: "codex",
     cwd: workdir,
     mcpServers: {
-      paseo: {
+      chisacode: {
         type: "http",
-        url: "https://example.com/custom-paseo",
+        url: "https://example.com/custom-chisacode",
       },
     },
   });
 
   expect(snapshot.config.mcpServers).toEqual({
-    paseo: {
+    chisacode: {
       type: "http",
-      url: "https://example.com/custom-paseo",
+      url: "https://example.com/custom-chisacode",
     },
   });
   expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
@@ -1332,20 +1332,20 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     cwd: workdir,
     systemPrompt: "new prompt",
     mcpServers: {
-      paseo: {
+      chisacode: {
         type: "stdio",
         command: "node",
-        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
+        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/chisacode.sock"],
       },
     },
   });
 
   expect(resumed.config.systemPrompt).toBe("new prompt");
   expect(resumed.config.mcpServers).toEqual({
-    paseo: {
+    chisacode: {
       type: "stdio",
       command: "node",
-      args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
+      args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/chisacode.sock"],
     },
   });
   expect(client.lastResumeOverrides).toMatchObject({
@@ -1353,17 +1353,17 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
     modeId: "auto",
     systemPrompt: "new prompt",
     mcpServers: {
-      paseo: {
+      chisacode: {
         type: "stdio",
         command: "node",
-        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/paseo.sock"],
+        args: ["/tmp/mcp-bridge.mjs", "--socket", "/tmp/chisacode.sock"],
       },
     },
   });
   expect(client.lastResumeLaunchContext).toEqual({
     agentId: resumed.id,
     env: {
-      PASEO_AGENT_ID: resumed.id,
+      CHISACODE_AGENT_ID: resumed.id,
     },
   });
 });
@@ -1474,7 +1474,7 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
   expect(client.lastCreateLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
-      PASEO_AGENT_ID: snapshot.id,
+      CHISACODE_AGENT_ID: snapshot.id,
     },
   });
 
@@ -1485,7 +1485,7 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
   expect(client.lastResumeLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
-      PASEO_AGENT_ID: snapshot.id,
+      CHISACODE_AGENT_ID: snapshot.id,
     },
   });
 });
@@ -5602,7 +5602,7 @@ test("listImportablePersistedAgents narrows to the providerFilter when supplied"
   expect(result.map((d) => d.provider)).toEqual(["claude"]);
 });
 
-test("user_message events wrapping a paseo-system envelope are not added to the timeline", async () => {
+test("user_message events wrapping a chisacode-system envelope are not added to the timeline", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-envelope-live-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);
@@ -5635,7 +5635,7 @@ test("user_message events wrapping a paseo-system envelope are not added to the 
   expect(userMessages[0].text).toBe("plain user message");
 });
 
-test("user_message events wrapping a paseo-system envelope are not restored during history replay", async () => {
+test("user_message events wrapping a chisacode-system envelope are not restored during history replay", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-envelope-history-"));
   const storagePath = join(workdir, "agents");
   const storage = new AgentStorage(storagePath, logger);

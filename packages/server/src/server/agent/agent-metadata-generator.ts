@@ -11,7 +11,7 @@ import {
   resolveStructuredGenerationProviders,
   type StructuredGenerationDaemonConfig,
 } from "./structured-generation-providers.js";
-import { MAX_AUTO_AGENT_TITLE_CHARS } from "@fleurdelys/protocol/agent-title-limits";
+import { MAX_AUTO_AGENT_TITLE_CHARS } from "@chisacode/protocol/agent-title-limits";
 import { buildMetadataPrompt } from "../../utils/build-metadata-prompt.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
@@ -34,7 +34,7 @@ export interface AgentMetadataGenerationOptions {
   };
   initialPrompt?: string | null;
   explicitTitle?: string | null;
-  paseoHome?: string;
+  chisacodeHome?: string;
   logger: Logger;
   deps?: AgentMetadataGeneratorDeps;
 }
@@ -59,7 +59,7 @@ function normalizeAutoTitle(title: string): string | null {
 export async function determineAgentMetadataNeeds(
   options: Pick<
     AgentMetadataGenerationOptions,
-    "initialPrompt" | "explicitTitle" | "cwd" | "paseoHome" | "deps"
+    "initialPrompt" | "explicitTitle" | "cwd" | "chisacodeHome" | "deps"
   >,
 ): Promise<AgentMetadataNeeds> {
   const prompt = options.initialPrompt?.trim();

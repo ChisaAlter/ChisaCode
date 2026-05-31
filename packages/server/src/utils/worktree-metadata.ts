@@ -2,12 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { isAbsolute, join, resolve } from "path";
 import { z } from "zod";
 
-const PaseoWorktreeMetadataV1Schema = z.object({
+const ChisaCodeWorktreeMetadataV1Schema = z.object({
   version: z.literal(1),
   baseRefName: z.string().min(1),
 });
 
-const PaseoWorktreeMetadataV2Schema = z.object({
+const ChisaCodeWorktreeMetadataV2Schema = z.object({
   version: z.literal(2),
   baseRefName: z.string().min(1),
   firstAgentBranchAutoName: z
@@ -30,12 +30,12 @@ const PaseoWorktreeMetadataV2Schema = z.object({
     .optional(),
 });
 
-const PaseoWorktreeMetadataSchema = z.union([
-  PaseoWorktreeMetadataV1Schema,
-  PaseoWorktreeMetadataV2Schema,
+const ChisaCodeWorktreeMetadataSchema = z.union([
+  ChisaCodeWorktreeMetadataV1Schema,
+  ChisaCodeWorktreeMetadataV2Schema,
 ]);
 
-export type PaseoWorktreeMetadata = z.infer<typeof PaseoWorktreeMetadataSchema>;
+export type ChisaCodeWorktreeMetadata = z.infer<typeof ChisaCodeWorktreeMetadataSchema>;
 
 function getGitDirForWorktreeRoot(worktreeRoot: string): string {
   const gitPath = join(worktreeRoot, ".git");
@@ -59,9 +59,9 @@ function getGitDirForWorktreeRoot(worktreeRoot: string): string {
   return gitPath;
 }
 
-export function getPaseoWorktreeMetadataPath(worktreeRoot: string): string {
+export function getChisaCodeWorktreeMetadataPath(worktreeRoot: string): string {
   const gitDir = getGitDirForWorktreeRoot(worktreeRoot);
-  return join(gitDir, "paseo", "worktree.json");
+  return join(gitDir, "chisacode", "worktree.json");
 }
 
 export function normalizeBaseRefName(input: string): string {
@@ -75,7 +75,7 @@ export function normalizeBaseRefName(input: string): string {
   return trimmed;
 }
 
-export function writePaseoWorktreeMetadata(
+export function writeChisaCodeWorktreeMetadata(
   worktreeRoot: string,
   options: { baseRefName: string },
 ): void {
@@ -90,13 +90,13 @@ export function writePaseoWorktreeMetadata(
     throw new Error(`Invalid base branch: ${baseRefName}`);
   }
 
-  const metadataPath = getPaseoWorktreeMetadataPath(worktreeRoot);
-  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "paseo"), { recursive: true });
-  const metadata: PaseoWorktreeMetadata = { version: 1, baseRefName };
+  const metadataPath = getChisaCodeWorktreeMetadataPath(worktreeRoot);
+  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "chisacode"), { recursive: true });
+  const metadata: ChisaCodeWorktreeMetadata = { version: 1, baseRefName };
   writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
 }
 
-export function writePaseoWorktreeRuntimeMetadata(
+export function writeChisaCodeWorktreeRuntimeMetadata(
   worktreeRoot: string,
   options: { worktreePort: number },
 ): void {
@@ -104,14 +104,14 @@ export function writePaseoWorktreeRuntimeMetadata(
     throw new Error(`Invalid worktree runtime port: ${options.worktreePort}`);
   }
 
-  const current = readPaseoWorktreeMetadata(worktreeRoot);
+  const current = readChisaCodeWorktreeMetadata(worktreeRoot);
   if (!current) {
     throw new Error("Cannot persist worktree runtime metadata: missing base metadata");
   }
 
-  const metadataPath = getPaseoWorktreeMetadataPath(worktreeRoot);
-  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "paseo"), { recursive: true });
-  const next: PaseoWorktreeMetadata = {
+  const metadataPath = getChisaCodeWorktreeMetadataPath(worktreeRoot);
+  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "chisacode"), { recursive: true });
+  const next: ChisaCodeWorktreeMetadata = {
     version: 2,
     baseRefName: current.baseRefName,
     ...(current.version === 2 && current.firstAgentBranchAutoName
@@ -124,7 +124,7 @@ export function writePaseoWorktreeRuntimeMetadata(
   writeFileSync(metadataPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
-export function writePaseoWorktreeFirstAgentBranchAutoNameMetadata(
+export function writeChisaCodeWorktreeFirstAgentBranchAutoNameMetadata(
   worktreeRoot: string,
   options: { placeholderBranchName: string },
 ): void {
@@ -133,12 +133,12 @@ export function writePaseoWorktreeFirstAgentBranchAutoNameMetadata(
     throw new Error("Placeholder branch name is required");
   }
 
-  const current = readPaseoWorktreeMetadata(worktreeRoot);
+  const current = readChisaCodeWorktreeMetadata(worktreeRoot);
   if (!current) {
     throw new Error("Cannot persist first-agent branch auto-name metadata: missing base metadata");
   }
 
-  writePaseoWorktreeMetadataFile(worktreeRoot, {
+  writeChisaCodeWorktreeMetadataFile(worktreeRoot, {
     version: 2,
     baseRefName: current.baseRefName,
     firstAgentBranchAutoName: {
@@ -149,16 +149,16 @@ export function writePaseoWorktreeFirstAgentBranchAutoNameMetadata(
   });
 }
 
-export function markPaseoWorktreeFirstAgentBranchAutoNameAttempted(
+export function markChisaCodeWorktreeFirstAgentBranchAutoNameAttempted(
   worktreeRoot: string,
   options: { attemptedAt?: string } = {},
-): PaseoWorktreeMetadata | null {
-  const current = readPaseoWorktreeMetadata(worktreeRoot);
+): ChisaCodeWorktreeMetadata | null {
+  const current = readChisaCodeWorktreeMetadata(worktreeRoot);
   if (!current || current.version !== 2 || current.firstAgentBranchAutoName?.status !== "pending") {
     return current;
   }
 
-  const next: PaseoWorktreeMetadata = {
+  const next: ChisaCodeWorktreeMetadata = {
     version: 2,
     baseRefName: current.baseRefName,
     firstAgentBranchAutoName: {
@@ -168,30 +168,32 @@ export function markPaseoWorktreeFirstAgentBranchAutoNameAttempted(
     },
     ...(current.runtime ? { runtime: current.runtime } : {}),
   };
-  writePaseoWorktreeMetadataFile(worktreeRoot, next);
+  writeChisaCodeWorktreeMetadataFile(worktreeRoot, next);
   return next;
 }
 
-export function readPaseoWorktreeMetadata(worktreeRoot: string): PaseoWorktreeMetadata | null {
-  const metadataPath = getPaseoWorktreeMetadataPath(worktreeRoot);
+export function readChisaCodeWorktreeMetadata(
+  worktreeRoot: string,
+): ChisaCodeWorktreeMetadata | null {
+  const metadataPath = getChisaCodeWorktreeMetadataPath(worktreeRoot);
   if (!existsSync(metadataPath)) {
     return null;
   }
   const parsed = JSON.parse(readFileSync(metadataPath, "utf8"));
-  return PaseoWorktreeMetadataSchema.parse(parsed);
+  return ChisaCodeWorktreeMetadataSchema.parse(parsed);
 }
 
-export function requirePaseoWorktreeBaseRefName(worktreeRoot: string): string {
-  const metadataPath = getPaseoWorktreeMetadataPath(worktreeRoot);
-  const metadata = readPaseoWorktreeMetadata(worktreeRoot);
+export function requireChisaCodeWorktreeBaseRefName(worktreeRoot: string): string {
+  const metadataPath = getChisaCodeWorktreeMetadataPath(worktreeRoot);
+  const metadata = readChisaCodeWorktreeMetadata(worktreeRoot);
   if (!metadata) {
-    throw new Error(`Missing Paseo worktree base metadata: ${metadataPath}`);
+    throw new Error(`Missing ChisaCode worktree base metadata: ${metadataPath}`);
   }
   return metadata.baseRefName;
 }
 
-export function readPaseoWorktreeRuntimePort(worktreeRoot: string): number | null {
-  const metadata = readPaseoWorktreeMetadata(worktreeRoot);
+export function readChisaCodeWorktreeRuntimePort(worktreeRoot: string): number | null {
+  const metadata = readChisaCodeWorktreeMetadata(worktreeRoot);
   if (!metadata) {
     return null;
   }
@@ -201,11 +203,11 @@ export function readPaseoWorktreeRuntimePort(worktreeRoot: string): number | nul
   return null;
 }
 
-function writePaseoWorktreeMetadataFile(
+function writeChisaCodeWorktreeMetadataFile(
   worktreeRoot: string,
-  metadata: PaseoWorktreeMetadata,
+  metadata: ChisaCodeWorktreeMetadata,
 ): void {
-  const metadataPath = getPaseoWorktreeMetadataPath(worktreeRoot);
-  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "paseo"), { recursive: true });
+  const metadataPath = getChisaCodeWorktreeMetadataPath(worktreeRoot);
+  mkdirSync(join(getGitDirForWorktreeRoot(worktreeRoot), "chisacode"), { recursive: true });
   writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
 }

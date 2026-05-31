@@ -26,7 +26,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-na
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
 import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
@@ -57,6 +57,7 @@ import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerHeightMirror } from "./height-mirror";
 import { computeCanStartDictation } from "./state";
+import { useTranslation } from "react-i18next";
 
 export interface AttachmentMenuItem {
   id: string;
@@ -204,12 +205,14 @@ function AttachmentDropdown({
   attachButtonStyle,
   renderAttachButtonIcon,
   attachmentMenuItems,
+  addAttachmentLabel,
 }: {
   isConnected: boolean;
   disabled: boolean;
   attachButtonStyle: React.ComponentProps<typeof DropdownMenuTrigger>["style"];
   renderAttachButtonIcon: (input: { hovered?: boolean }) => React.ReactElement;
   attachmentMenuItems: AttachmentMenuItem[];
+  addAttachmentLabel: string;
 }) {
   return (
     <DropdownMenu>
@@ -217,7 +220,7 @@ function AttachmentDropdown({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             disabled={!isConnected || disabled}
-            accessibilityLabel="添加附件"
+            accessibilityLabel={addAttachmentLabel}
             accessibilityRole="button"
             testID="message-input-attach-button"
             style={attachButtonStyle}
@@ -226,7 +229,7 @@ function AttachmentDropdown({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>
-          <Text style={styles.tooltipText}>添加附件</Text>
+          <Text style={styles.tooltipText}>{addAttachmentLabel}</Text>
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -318,42 +321,63 @@ function resolveSubmitAccessibilityLabel(input: {
   canPressLoadingButton: boolean;
   defaultActionQueues: boolean;
   isAgentRunning: boolean;
+  labels: {
+    interruptAgent: string;
+    queueMessage: string;
+    sendAndInterrupt: string;
+    sendMessage: string;
+  };
 }): string {
   if (input.submitButtonAccessibilityLabel) return input.submitButtonAccessibilityLabel;
-  if (input.canPressLoadingButton) return "打断智能体";
-  if (input.defaultActionQueues) return "消息排队";
-  if (input.isAgentRunning) return "发送并打断";
-  return "发送消息";
+  if (input.canPressLoadingButton) return input.labels.interruptAgent;
+  if (input.defaultActionQueues) return input.labels.queueMessage;
+  if (input.isAgentRunning) return input.labels.sendAndInterrupt;
+  return input.labels.sendMessage;
 }
 
 function resolveVoiceAccessibilityLabel(input: {
   isRealtimeVoiceForCurrentAgent: boolean;
   isMuted: boolean;
   isDictating: boolean;
+  labels: {
+    unmuteVoiceMode: string;
+    muteVoiceMode: string;
+    stopDictation: string;
+    startDictation: string;
+  };
 }): string {
   if (input.isRealtimeVoiceForCurrentAgent) {
-    return input.isMuted ? "取消静音语音模式" : "静音语音模式";
+    return input.isMuted ? input.labels.unmuteVoiceMode : input.labels.muteVoiceMode;
   }
-  if (input.isDictating) return "停止听写";
-  return "开始听写";
+  if (input.isDictating) return input.labels.stopDictation;
+  return input.labels.startDictation;
 }
 
 function resolveVoiceTooltipText(input: {
   isRealtimeVoiceForCurrentAgent: boolean;
   isMuted: boolean;
+  labels: {
+    unmute: string;
+    mute: string;
+    dictation: string;
+  };
 }): string {
   if (input.isRealtimeVoiceForCurrentAgent) {
-    return input.isMuted ? "取消静音" : "静音";
+    return input.isMuted ? input.labels.unmute : input.labels.mute;
   }
-  return "听写";
+  return input.labels.dictation;
 }
 
 function resolveSendTooltipLabel(input: {
   submitButtonAccessibilityLabel: string | undefined;
   defaultActionQueues: boolean;
+  labels: {
+    queue: string;
+    send: string;
+  };
 }): string {
   if (input.submitButtonAccessibilityLabel) return input.submitButtonAccessibilityLabel;
-  return input.defaultActionQueues ? "排队" : "发送";
+  return input.defaultActionQueues ? input.labels.queue : input.labels.send;
 }
 
 interface DesktopKeyPressContext {
@@ -633,14 +657,17 @@ function MessageInputOverlay({
 function FocusHint({
   visible,
   focusInputKeys,
+  label,
 }: {
   visible: boolean;
   focusInputKeys: ShortcutChord | null | undefined;
+  label: string;
 }) {
   if (!visible || !focusInputKeys) return null;
+  const shortcut = formatShortcut(focusInputKeys[0], getShortcutOs());
   return (
     <Text style={styles.focusHintText} pointerEvents="none">
-      {formatShortcut(focusInputKeys[0], getShortcutOs())} to focus
+      {label.replace("{{shortcut}}", shortcut)}
     </Text>
   );
 }
@@ -696,9 +723,8 @@ function SendButtonTooltip({
   isSubmitLoading,
   submitIcon,
   buttonIconSize,
-  submitButtonAccessibilityLabel,
-  defaultActionQueues,
   sendKeys,
+  sendTooltipLabel,
 }: {
   shouldShow: boolean;
   canPressLoadingButton: boolean;
@@ -710,9 +736,8 @@ function SendButtonTooltip({
   isSubmitLoading: boolean;
   submitIcon: "arrow" | "return";
   buttonIconSize: number;
-  submitButtonAccessibilityLabel: string | undefined;
-  defaultActionQueues: boolean;
   sendKeys: ShortcutChord | null | undefined;
+  sendTooltipLabel: string;
 }) {
   if (!shouldShow) return null;
   return (
@@ -731,10 +756,7 @@ function SendButtonTooltip({
         />
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
-        <SendTooltipBody
-          label={resolveSendTooltipLabel({ submitButtonAccessibilityLabel, defaultActionQueues })}
-          sendKeys={sendKeys}
-        />
+        <SendTooltipBody label={sendTooltipLabel} sendKeys={sendKeys} />
       </TooltipContent>
     </Tooltip>
   );
@@ -1083,7 +1105,7 @@ interface ResolvedMessageInputProps {
   onAddImages: ((images: ImageAttachment[]) => void) | undefined;
   client: DaemonClient | null;
   isReadyForDictation: boolean | undefined;
-  placeholder: string;
+  placeholder: string | undefined;
   autoFocus: boolean;
   autoFocusKey: string | undefined;
   disabled: boolean;
@@ -1123,7 +1145,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onAddImages: props.onAddImages,
     client: props.client,
     isReadyForDictation: props.isReadyForDictation,
-    placeholder: props.placeholder ?? "输入消息...",
+    placeholder: props.placeholder,
     autoFocus: props.autoFocus ?? false,
     autoFocusKey: props.autoFocusKey,
     disabled: props.disabled ?? false,
@@ -1192,6 +1214,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       inputWrapperStyle,
       attachmentSlot,
     } = resolveMessageInputProps(props);
+    const { t } = useTranslation();
     const isCompact = useIsCompactFormFactor();
     const { height: windowHeight } = useWindowDimensions();
     const maxInputHeight = resolveMaxInputHeight(windowHeight);
@@ -1631,17 +1654,43 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       canPressLoadingButton,
       defaultActionQueues,
       isAgentRunning,
+      labels: {
+        interruptAgent: t("composer.interruptAgent"),
+        queueMessage: t("composer.queueMessage"),
+        sendAndInterrupt: t("composer.sendAndInterrupt"),
+        sendMessage: t("composer.sendMessage"),
+      },
     });
 
     const voiceButtonAccessibilityLabel = resolveVoiceAccessibilityLabel({
       isRealtimeVoiceForCurrentAgent,
       isMuted: Boolean(voice?.isMuted),
       isDictating,
+      labels: {
+        unmuteVoiceMode: t("composer.unmuteVoiceMode"),
+        muteVoiceMode: t("composer.muteVoiceMode"),
+        stopDictation: t("composer.stopDictation"),
+        startDictation: t("composer.startDictation"),
+      },
     });
 
     const voiceTooltipText = resolveVoiceTooltipText({
       isRealtimeVoiceForCurrentAgent,
       isMuted: Boolean(voice?.isMuted),
+      labels: {
+        unmute: t("composer.unmute"),
+        mute: t("composer.mute"),
+        dictation: t("composer.dictation"),
+      },
+    });
+
+    const sendTooltipLabel = resolveSendTooltipLabel({
+      submitButtonAccessibilityLabel,
+      defaultActionQueues,
+      labels: {
+        queue: t("composer.queue"),
+        send: t("composer.send"),
+      },
     });
 
     const handleInputChange = useCallback(
@@ -1738,9 +1787,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               ref={textInputRef}
               value={value}
               onChangeText={handleInputChange}
-              placeholder={placeholder}
+              placeholder={placeholder ?? t("composer.placeholder")}
               uniProps={textInputPlaceholderColorMapping}
-              accessibilityLabel="给智能体发消息..."
+              accessibilityLabel={t("composer.messageAgent")}
               onFocus={handleInputFocus}
               onBlur={handleInputBlur}
               style={textInputStyle}
@@ -1756,6 +1805,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             <FocusHint
               visible={isWeb && isPaneFocused && !isInputFocused && !value}
               focusInputKeys={focusInputKeys}
+              label={t("composer.focusHint")}
             />
           </View>
 
@@ -1769,6 +1819,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 attachButtonStyle={attachButtonStyle}
                 renderAttachButtonIcon={renderAttachButtonIcon}
                 attachmentMenuItems={attachmentMenuItems}
+                addAttachmentLabel={t("composer.addAttachment")}
               />
               {leftContent}
             </View>
@@ -1799,9 +1850,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 isSubmitLoading={isSubmitLoading}
                 submitIcon={submitIcon}
                 buttonIconSize={buttonIconSize}
-                submitButtonAccessibilityLabel={submitButtonAccessibilityLabel}
-                defaultActionQueues={defaultActionQueues}
                 sendKeys={sendKeys}
+                sendTooltipLabel={sendTooltipLabel}
               />
             </View>
           </View>

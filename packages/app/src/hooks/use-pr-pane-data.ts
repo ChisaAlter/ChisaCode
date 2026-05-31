@@ -4,8 +4,8 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import type {
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
-} from "@fleurdelys/protocol/messages";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+} from "@chisacode/protocol/messages";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { mapPrPaneData, type PrPaneData } from "@/git/pr-pane-data";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { prPaneTimelineQueryKey } from "@/git/query-keys";

@@ -6,8 +6,8 @@ import {
   type AgentToolCallItem,
   isAgentToolCallItem,
 } from "./stream";
-import type { AgentStreamEventPayload } from "@fleurdelys/protocol/messages";
-import type { ToolCallDetail } from "@fleurdelys/protocol/agent-types";
+import type { AgentStreamEventPayload } from "@chisacode/protocol/messages";
+import type { ToolCallDetail } from "@chisacode/protocol/agent-types";
 
 interface HarnessUpdate {
   event: AgentStreamEventPayload;

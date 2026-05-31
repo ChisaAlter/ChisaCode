@@ -1,11 +1,11 @@
 import {
   normalizeHostPort,
   normalizeLoopbackToLocalhost,
-} from "@fleurdelys/protocol/daemon-endpoints";
+} from "@chisacode/protocol/daemon-endpoints";
 import {
   DirectTcpHostConnectionSchema,
   type DirectTcpHostConnection,
-} from "@fleurdelys/protocol/host-connection-schema";
+} from "@chisacode/protocol/host-connection-schema";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
 

@@ -188,9 +188,9 @@ describe("opencode tool-call mapper", () => {
         toolName: "read",
         callId: "opencode-read-xml",
         status: "completed",
-        input: { filePath: "/Users/moboudra/dev/paseo/docs/release.md" },
+        input: { filePath: "/Users/moboudra/dev/chisacode/docs/release.md" },
         output: [
-          "<path>/Users/moboudra/dev/paseo/docs/release.md</path>",
+          "<path>/Users/moboudra/dev/chisacode/docs/release.md</path>",
           "<type>file</type>",
           "<content>",
           "1: # Release",
@@ -203,7 +203,7 @@ describe("opencode tool-call mapper", () => {
 
     expect(item.detail).toEqual({
       type: "read",
-      filePath: "/Users/moboudra/dev/paseo/docs/release.md",
+      filePath: "/Users/moboudra/dev/chisacode/docs/release.md",
       content: [
         "1: # Release",
         "2:",
@@ -282,7 +282,7 @@ describe("opencode tool-call mapper", () => {
         callId: "opencode-write-success-text",
         status: "completed",
         input: {
-          filePath: "/Users/moboudra/.paseo/worktrees/1luy0po7/cold-ladybug/dummy.txt",
+          filePath: "/Users/moboudra/.chisacode/worktrees/1luy0po7/cold-ladybug/dummy.txt",
           content: "hello world\n",
         },
         output: "Wrote file successfully.",
@@ -291,7 +291,7 @@ describe("opencode tool-call mapper", () => {
 
     expect(item.detail).toEqual({
       type: "write",
-      filePath: "/Users/moboudra/.paseo/worktrees/1luy0po7/cold-ladybug/dummy.txt",
+      filePath: "/Users/moboudra/.chisacode/worktrees/1luy0po7/cold-ladybug/dummy.txt",
       content: "hello world\n",
     });
   });
@@ -303,7 +303,7 @@ describe("opencode tool-call mapper", () => {
         callId: "opencode-edit-camel",
         status: "completed",
         input: {
-          filePath: "/Users/moboudra/dev/paseo/packages/website/src/data/agent-pages.ts",
+          filePath: "/Users/moboudra/dev/chisacode/packages/website/src/data/agent-pages.ts",
           oldString: 'metaTitle: "Junie agent Mobile and Desktop App, Open Source"',
           newString: 'metaTitle: "Junie Agent Mobile and Desktop App, Open Source"',
         },
@@ -313,7 +313,7 @@ describe("opencode tool-call mapper", () => {
 
     expect(item.detail).toEqual({
       type: "edit",
-      filePath: "/Users/moboudra/dev/paseo/packages/website/src/data/agent-pages.ts",
+      filePath: "/Users/moboudra/dev/chisacode/packages/website/src/data/agent-pages.ts",
       oldString: 'metaTitle: "Junie agent Mobile and Desktop App, Open Source"',
       newString: 'metaTitle: "Junie Agent Mobile and Desktop App, Open Source"',
     });
@@ -510,7 +510,7 @@ describe("opencode tool-call mapper", () => {
   it("does not apply cross-provider speak normalization in opencode mapper", () => {
     const item = expectMapped(
       mapOpencodeToolCall({
-        toolName: "paseo_voice.speak",
+        toolName: "chisacode_voice.speak",
         callId: "opencode-call-voice-1",
         status: "completed",
         input: { text: "Voice response from OpenCode." },
@@ -518,7 +518,7 @@ describe("opencode tool-call mapper", () => {
       }),
     );
 
-    expect(item.name).toBe("paseo_voice.speak");
+    expect(item.name).toBe("chisacode_voice.speak");
     expect(item.detail).toEqual({
       type: "unknown",
       input: { text: "Voice response from OpenCode." },

@@ -5,7 +5,7 @@ import { areEquivalentPaths, createPathEquivalenceMatcher } from "./path.js";
 describe("path equivalence", () => {
   test.each([
     ["C:/Users/Administrator/GhostFactory", "C:\\Users\\Administrator\\GhostFactory"],
-    ["d:\\Projects\\paseo", "D:\\Projects\\paseo"],
+    ["d:\\Projects\\chisacode", "D:\\Projects\\chisacode"],
     ["C:\\Users\\Administrator\\GhostFactory\\", "C:\\Users\\Administrator\\GhostFactory"],
     [String.raw`\\?\C:\Users\Administrator\GhostFactory`, "C:\\Users\\Administrator\\GhostFactory"],
     [String.raw`\\?\UNC\server\share\GhostFactory`, String.raw`\\server\share\GhostFactory`],

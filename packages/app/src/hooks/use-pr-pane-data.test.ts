@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import {
   createInMemoryUnsupportedTimelineRegistry,
   extractPrRepoIdentity,
@@ -39,7 +39,7 @@ const githubStatus: CheckoutPrStatus["github"] = {
 function prStatus(overrides: Partial<CheckoutPrStatus> = {}): CheckoutPrStatus {
   return {
     number: 42,
-    url: "https://github.com/getpaseo/paseo/pull/42",
+    url: "https://github.com/getchisacode/chisacode/pull/42",
     title: "Wire real PR pane data",
     state: "open",
     baseRefName: "main",
@@ -49,8 +49,8 @@ function prStatus(overrides: Partial<CheckoutPrStatus> = {}): CheckoutPrStatus {
     mergeable: "UNKNOWN",
     checks: [],
     reviewDecision: null,
-    repoOwner: "getpaseo",
-    repoName: "paseo",
+    repoOwner: "getchisacode",
+    repoName: "chisacode",
     github: githubStatus,
     ...overrides,
   };
@@ -117,8 +117,8 @@ describe("extractPrRepoIdentity", () => {
   it("reads the PR number, owner, and name from a status payload", () => {
     expect(extractPrRepoIdentity(prStatus())).toEqual({
       prNumber: 42,
-      repoOwner: "getpaseo",
-      repoName: "paseo",
+      repoOwner: "getchisacode",
+      repoName: "chisacode",
     });
   });
 
@@ -151,7 +151,7 @@ describe("shouldFetchTimelineFrom", () => {
     timelineEnabled: true,
     githubFeaturesEnabled: true,
     cwd: "/repo",
-    identity: { prNumber: 42, repoOwner: "getpaseo", repoName: "paseo" },
+    identity: { prNumber: 42, repoOwner: "getchisacode", repoName: "chisacode" },
     timelineUnsupported: false,
   };
 
@@ -211,12 +211,12 @@ describe("fetchPrPaneTimelinePage", () => {
       serverId: "host",
       cwd: "/repo",
       prNumber: 42,
-      repoOwner: "getpaseo",
-      repoName: "paseo",
+      repoOwner: "getchisacode",
+      repoName: "chisacode",
     });
 
     expect(client.calls).toEqual([
-      { cwd: "/repo", prNumber: 42, repoOwner: "getpaseo", repoName: "paseo" },
+      { cwd: "/repo", prNumber: 42, repoOwner: "getchisacode", repoName: "chisacode" },
     ]);
   });
 
@@ -229,7 +229,7 @@ describe("fetchPrPaneTimelinePage", () => {
           author: "octocat",
           body: "Looks good",
           createdAt: Date.now(),
-          url: "https://github.com/getpaseo/paseo/pull/42#c1",
+          url: "https://github.com/getchisacode/chisacode/pull/42#c1",
         },
       ],
     });
@@ -242,8 +242,8 @@ describe("fetchPrPaneTimelinePage", () => {
       serverId: "host",
       cwd: "/repo",
       prNumber: 42,
-      repoOwner: "getpaseo",
-      repoName: "paseo",
+      repoOwner: "getchisacode",
+      repoName: "chisacode",
     });
 
     expect(result).toBe(payload);
@@ -263,8 +263,8 @@ describe("fetchPrPaneTimelinePage", () => {
         serverId: "host",
         cwd: "/repo",
         prNumber: 99,
-        repoOwner: "getpaseo",
-        repoName: "paseo",
+        repoOwner: "getchisacode",
+        repoName: "chisacode",
       }),
     ).rejects.toBe(error);
 
@@ -287,8 +287,8 @@ describe("fetchPrPaneTimelinePage", () => {
         serverId: "host",
         cwd: "/repo",
         prNumber: 99,
-        repoOwner: "getpaseo",
-        repoName: "paseo",
+        repoOwner: "getchisacode",
+        repoName: "chisacode",
       }),
     ).rejects.toBe(error);
 
@@ -313,8 +313,8 @@ describe("fetchPrPaneTimelinePage", () => {
         serverId: "host",
         cwd: "/repo-a",
         prNumber: 1,
-        repoOwner: "getpaseo",
-        repoName: "paseo",
+        repoOwner: "getchisacode",
+        repoName: "chisacode",
       }),
     ).rejects.toThrow();
 
@@ -324,8 +324,8 @@ describe("fetchPrPaneTimelinePage", () => {
       serverId: "host",
       cwd: "/repo-b",
       prNumber: 2,
-      repoOwner: "getpaseo",
-      repoName: "paseo",
+      repoOwner: "getchisacode",
+      repoName: "chisacode",
     });
 
     expect(result.prNumber).toBe(2);
@@ -402,7 +402,7 @@ describe("selectPrPaneState", () => {
             author: "octocat",
             body: "Belongs to another PR",
             createdAt: Date.now(),
-            url: "https://github.com/getpaseo/paseo/pull/41#c1",
+            url: "https://github.com/getchisacode/chisacode/pull/41#c1",
           },
         ],
       }),

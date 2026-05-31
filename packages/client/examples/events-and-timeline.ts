@@ -1,7 +1,7 @@
-import { createPaseoClient, type PaseoClient } from "@fleurdelys/client";
+import { createChisaCodeClient, type ChisaCodeClient } from "@chisacode/client";
 
-export function createClient(url: string): PaseoClient {
-  return createPaseoClient({
+export function createClient(url: string): ChisaCodeClient {
+  return createChisaCodeClient({
     url,
   });
 }

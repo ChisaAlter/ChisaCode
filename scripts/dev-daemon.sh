@@ -5,21 +5,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$SCRIPT_DIR/../node_modules/.bin:$PATH"
 
 source "$SCRIPT_DIR/dev-home.sh"
-configure_dev_paseo_home
+configure_dev_chisacode_home
 
-if [ -z "${PASEO_LOCAL_MODELS_DIR}" ]; then
-  export PASEO_LOCAL_MODELS_DIR="$HOME/.paseo/models/local-speech"
-  mkdir -p "$PASEO_LOCAL_MODELS_DIR"
+if [ -z "${CHISACODE_LOCAL_MODELS_DIR}" ]; then
+  export CHISACODE_LOCAL_MODELS_DIR="$HOME/.chisacode/models/local-speech"
+  mkdir -p "$CHISACODE_LOCAL_MODELS_DIR"
 fi
 
 echo "══════════════════════════════════════════════════════"
-echo "  Paseo Dev Daemon"
+echo "  ChisaCode Dev Daemon"
 echo "══════════════════════════════════════════════════════"
-echo "  Home:    ${PASEO_HOME}"
-echo "  Models:  ${PASEO_LOCAL_MODELS_DIR}"
+echo "  Home:    ${CHISACODE_HOME}"
+echo "  Models:  ${CHISACODE_LOCAL_MODELS_DIR}"
 echo "══════════════════════════════════════════════════════"
 
-export PASEO_CORS_ORIGINS="${PASEO_CORS_ORIGINS:-*}"
-export PASEO_NODE_INSPECT="${PASEO_NODE_INSPECT:---inspect=0}"
+export CHISACODE_CORS_ORIGINS="${CHISACODE_CORS_ORIGINS:-*}"
+export CHISACODE_NODE_INSPECT="${CHISACODE_NODE_INSPECT:---inspect=0}"
 
 exec npm run dev:server

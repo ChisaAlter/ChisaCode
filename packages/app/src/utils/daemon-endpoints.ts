@@ -10,9 +10,9 @@ import {
   serializeConnectionUriForStorage,
   shouldUseTlsForDefaultHostedRelay,
   type HostPortParts,
-} from "@fleurdelys/protocol/daemon-endpoints";
+} from "@chisacode/protocol/daemon-endpoints";
 
-export { decodeOfferFragmentPayload } from "@fleurdelys/protocol/connection-offer";
+export { decodeOfferFragmentPayload } from "@chisacode/protocol/connection-offer";
 
 export type { HostPortParts };
 

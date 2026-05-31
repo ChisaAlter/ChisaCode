@@ -5,23 +5,23 @@ import {
   BranchAlreadyCheckedOutError,
   createWorktree as createWorktreePrimitive,
   deriveWorktreeProjectHash,
-  deletePaseoWorktree,
+  deleteChisaCodeWorktree,
   getScriptConfigs,
   getWorktreeSetupCommands,
   getWorktreeTerminalSpecs,
   getWorktreeTeardownCommands,
   isServiceScript,
-  isPaseoOwnedWorktreeCwd,
-  listPaseoWorktrees,
-  readPaseoConfig,
+  isChisaCodeOwnedWorktreeCwd,
+  listChisaCodeWorktrees,
+  readChisaCodeConfig,
   resolveWorktreeRuntimeEnv,
   type WorktreeSetupCommandProgressEvent,
   runWorktreeSetupCommands,
   type CreateWorktreeOptions,
   type WorktreeConfig,
 } from "./worktree";
-import type { PaseoConfig } from "@fleurdelys/protocol/paseo-config-schema";
-import { getPaseoWorktreeMetadataPath } from "./worktree-metadata.js";
+import type { ChisaCodeConfig } from "@chisacode/protocol/chisacode-config-schema";
+import { getChisaCodeWorktreeMetadataPath } from "./worktree-metadata.js";
 import { execFileSync } from "child_process";
 import { isPlatform } from "../test-utils/platform.js";
 import {
@@ -37,8 +37,8 @@ import { dirname, join } from "path";
 import { tmpdir } from "os";
 import net from "node:net";
 
-function loadConfigForTest(repoRoot: string): PaseoConfig | null {
-  const result = readPaseoConfig(repoRoot);
+function loadConfigForTest(repoRoot: string): ChisaCodeConfig | null {
+  const result = readChisaCodeConfig(repoRoot);
   return result.ok ? result.config : null;
 }
 
@@ -48,7 +48,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  paseoHome?: string;
+  chisacodeHome?: string;
 }
 
 function createLegacyWorktreeForTest(
@@ -67,7 +67,7 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    paseoHome: options.paseoHome,
+    chisacodeHome: options.chisacodeHome,
   });
 }
 
@@ -75,13 +75,13 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
   describe("createWorktree", () => {
     let tempDir: string;
     let repoDir: string;
-    let paseoHome: string;
+    let chisacodeHome: string;
 
     beforeEach(() => {
       // Use realpathSync to resolve symlinks (e.g., /var -> /private/var on macOS)
       tempDir = realpathSync(mkdtempSync(join(tmpdir(), "worktree-test-")));
       repoDir = join(tempDir, "test-repo");
-      paseoHome = join(tempDir, "paseo-home");
+      chisacodeHome = join(tempDir, "chisacode-home");
 
       // Create a git repo with an initial commit
       mkdirSync(repoDir, { recursive: true });
@@ -106,24 +106,26 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "hello-world",
-        paseoHome,
+        chisacodeHome,
       });
 
-      expect(result.worktreePath).toBe(join(paseoHome, "worktrees", projectHash, "hello-world"));
+      expect(result.worktreePath).toBe(
+        join(chisacodeHome, "worktrees", projectHash, "hello-world"),
+      );
       expect(existsSync(result.worktreePath)).toBe(true);
       expect(existsSync(join(result.worktreePath, "file.txt"))).toBe(true);
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getChisaCodeWorktreeMetadataPath(result.worktreePath);
       expect(existsSync(metadataPath)).toBe(true);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({ version: 1, baseRefName: "main" });
     });
 
-    it.skip("detects paseo-owned worktrees across realpath differences (macOS /var vs /private/var)", async () => {
+    it.skip("detects chisacode-owned worktrees across realpath differences (macOS /var vs /private/var)", async () => {
       // Intentionally create repo using the non-realpath tmpdir() variant (often /var/... on macOS).
       const varTempDir = mkdtempSync(join(tmpdir(), "worktree-realpath-test-"));
       const privateTempDir = realpathSync(varTempDir);
       const varRepoDir = join(varTempDir, "test-repo");
-      const varPaseoHome = join(varTempDir, "paseo-home");
+      const varChisaCodeHome = join(varTempDir, "chisacode-home");
       mkdirSync(varRepoDir, { recursive: true });
       execFileSync("git", ["init", "-b", "main"], { cwd: varRepoDir });
       execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: varRepoDir });
@@ -139,37 +141,37 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: varRepoDir,
         baseBranch: "main",
         worktreeSlug: "realpath-test",
-        paseoHome: varPaseoHome,
+        chisacodeHome: varChisaCodeHome,
       });
 
       const projectHash = await deriveWorktreeProjectHash(varRepoDir);
       const privateWorktreePath = join(
         privateTempDir,
-        "paseo-home",
+        "chisacode-home",
         "worktrees",
         projectHash,
         "realpath-test",
       );
       expect(existsSync(privateWorktreePath)).toBe(true);
 
-      const ownership = await isPaseoOwnedWorktreeCwd(privateWorktreePath, {
-        paseoHome: varPaseoHome,
+      const ownership = await isChisaCodeOwnedWorktreeCwd(privateWorktreePath, {
+        chisacodeHome: varChisaCodeHome,
       });
       expect(ownership.allowed).toBe(true);
 
       rmSync(varTempDir, { recursive: true, force: true });
     });
 
-    it("reports repoRoot as the repository root for paseo-owned worktrees", async () => {
+    it("reports repoRoot as the repository root for chisacode-owned worktrees", async () => {
       const result = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "repo-root-check",
-        paseoHome,
+        chisacodeHome,
       });
 
-      const ownership = await isPaseoOwnedWorktreeCwd(result.worktreePath, { paseoHome });
+      const ownership = await isChisaCodeOwnedWorktreeCwd(result.worktreePath, { chisacodeHome });
       expect(ownership.allowed).toBe(true);
       expect(ownership.repoRoot).toBe(repoDir);
     });
@@ -178,7 +180,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       const nonGitDir = join(tempDir, "not-a-repo");
       mkdirSync(nonGitDir, { recursive: true });
 
-      const ownership = await isPaseoOwnedWorktreeCwd(nonGitDir, { paseoHome });
+      const ownership = await isChisaCodeOwnedWorktreeCwd(nonGitDir, { chisacodeHome });
 
       expect(ownership.allowed).toBe(false);
       expect(ownership.worktreePath).toBe(realpathSync(nonGitDir));
@@ -191,10 +193,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "my-feature",
         source: { kind: "branch-off", baseBranch: "main", branchName: "feature/x" },
         runSetup: true,
-        paseoHome,
+        chisacodeHome,
       });
 
-      expect(result.worktreePath).toBe(join(paseoHome, "worktrees", projectHash, "my-feature"));
+      expect(result.worktreePath).toBe(join(chisacodeHome, "worktrees", projectHash, "my-feature"));
       expect(existsSync(result.worktreePath)).toBe(true);
 
       const currentBranch = execFileSync("git", ["branch", "--show-current"], {
@@ -207,7 +209,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: result.worktreePath,
       });
 
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getChisaCodeWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({ version: 1, baseRefName: "main" });
     });
@@ -220,7 +222,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "dev-worktree",
         source: { kind: "checkout-branch", branchName: "dev" },
         runSetup: true,
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -231,7 +233,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         .trim();
       expect(currentBranch).toBe("dev");
 
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getChisaCodeWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({ version: 1, baseRefName: "dev" });
     });
@@ -244,7 +246,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           worktreeSlug: "dev-worktree",
           source: { kind: "checkout-branch", branchName: "main" },
           runSetup: true,
-          paseoHome,
+          chisacodeHome,
         });
       } catch (error) {
         caughtError = error;
@@ -266,7 +268,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       execFileSync("git", ["checkout", "-b", "contributor/feature"], { cwd: remoteCloneDir });
       writeFileSync(join(remoteCloneDir, "file.txt"), "from-pr\n");
       writeFileSync(
-        join(remoteCloneDir, "paseo.json"),
+        join(remoteCloneDir, "chisacode.json"),
         JSON.stringify({ worktree: { setup: ['echo "setup ran" > setup.log'] } }),
       );
       execFileSync("git", ["add", "."], { cwd: remoteCloneDir });
@@ -289,7 +291,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           baseRefName: "main",
         },
         runSetup: true,
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-pr\n");
@@ -301,7 +303,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         .trim();
       expect(currentBranch).toBe("user/feature");
 
-      const metadataPath = getPaseoWorktreeMetadataPath(result.worktreePath);
+      const metadataPath = getChisaCodeWorktreeMetadataPath(result.worktreePath);
       const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
       expect(metadata).toMatchObject({ baseRefName: "main" });
     });
@@ -338,7 +340,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "prefer-origin-feature",
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-origin\n");
@@ -361,7 +363,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "prefer-local-fallback-feature",
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(readFileSync(join(result.worktreePath, "file.txt"), "utf8")).toBe("from-local-only\n");
@@ -375,7 +377,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           baseBranch: "does-not-exist",
           worktreeSlug: "missing-base-feature",
           runSetup: false,
-          paseoHome,
+          chisacodeHome,
         }),
       ).rejects.toThrow("Base branch not found: does-not-exist");
     });
@@ -401,11 +403,11 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "hello",
-        paseoHome,
+        chisacodeHome,
       });
 
       // Should create branch "hello-1" since "hello" exists
-      expect(result.worktreePath).toBe(join(paseoHome, "worktrees", projectHash, "hello"));
+      expect(result.worktreePath).toBe(join(chisacodeHome, "worktrees", projectHash, "hello"));
       expect(existsSync(result.worktreePath)).toBe(true);
 
       const branches = execFileSync("git", ["branch"], { cwd: repoDir }).toString();
@@ -422,7 +424,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "hello",
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -431,22 +433,22 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(branches).toContain("hello-2");
     });
 
-    it("runs setup commands from paseo.json", async () => {
-      // Create paseo.json with setup commands
-      const paseoConfig = {
+    it("runs setup commands from chisacode.json", async () => {
+      // Create chisacode.json with setup commands
+      const chisacodeConfig = {
         worktree: {
           setup: [
-            'echo "source=$PASEO_SOURCE_CHECKOUT_PATH" > setup.log',
-            'echo "root_alias=$PASEO_ROOT_PATH" >> setup.log',
-            'echo "worktree=$PASEO_WORKTREE_PATH" >> setup.log',
-            'echo "branch=$PASEO_BRANCH_NAME" >> setup.log',
-            'echo "port=$PASEO_WORKTREE_PORT" >> setup.log',
+            'echo "source=$CHISACODE_SOURCE_CHECKOUT_PATH" > setup.log',
+            'echo "root_alias=$CHISACODE_ROOT_PATH" >> setup.log',
+            'echo "worktree=$CHISACODE_WORKTREE_PATH" >> setup.log',
+            'echo "branch=$CHISACODE_BRANCH_NAME" >> setup.log',
+            'echo "port=$CHISACODE_WORKTREE_PORT" >> setup.log',
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add chisacode.json"], {
         cwd: repoDir,
       });
 
@@ -455,7 +457,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "setup-test",
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -473,14 +475,14 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(portValue).toBeGreaterThan(0);
     });
 
-    it("runs string setup scripts from paseo.json as a single shell command", async () => {
-      const paseoConfig = {
+    it("runs string setup scripts from chisacode.json as a single shell command", async () => {
+      const chisacodeConfig = {
         worktree: {
           setup: 'greeting="hello from string setup"\necho "$greeting" > setup.log',
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add string setup"], {
         cwd: repoDir,
       });
@@ -490,7 +492,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "string-setup-test",
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(getWorktreeSetupCommands(result.worktreePath)).toEqual([
@@ -503,7 +505,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("treats blank lifecycle strings as empty", () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({
           worktree: {
             setup: " \n\t ",
@@ -518,7 +520,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("filters non-string and blank entries from lifecycle arrays", () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({
           worktree: {
             setup: [
@@ -528,10 +530,10 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
               'echo "second" >> setup-array.log',
             ],
             teardown: [
-              'echo "first" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+              'echo "first" > "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
               null,
               "",
-              'echo "second" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+              'echo "second" >> "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
             ],
           },
         }),
@@ -542,20 +544,20 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         'echo "second" >> setup-array.log',
       ]);
       expect(getWorktreeTeardownCommands(repoDir)).toEqual([
-        'echo "first" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
-        'echo "second" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+        'echo "first" > "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
+        'echo "second" >> "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown-array.log"',
       ]);
     });
 
     it("does not run setup commands when runSetup=false", async () => {
-      const paseoConfig = {
+      const chisacodeConfig = {
         worktree: {
           setup: ['echo "setup ran" > setup.log'],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add chisacode.json"], {
         cwd: repoDir,
       });
 
@@ -565,7 +567,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "no-setup-test",
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(existsSync(result.worktreePath)).toBe(true);
@@ -573,13 +575,13 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
     });
 
     it("streams setup command progress events while commands are executing", async () => {
-      const paseoConfig = {
+      const chisacodeConfig = {
         worktree: {
           setup: ['echo "first line"; echo "second line" 1>&2'],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add streaming setup"], {
         cwd: repoDir,
       });
@@ -607,7 +609,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "runtime-env-port-reuse",
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
       const first = await resolveWorktreeRuntimeEnv({
@@ -619,7 +621,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         branchName: result.branchName,
       });
 
-      expect(second.PASEO_WORKTREE_PORT).toBe(first.PASEO_WORKTREE_PORT);
+      expect(second.CHISACODE_WORKTREE_PORT).toBe(first.CHISACODE_WORKTREE_PORT);
     });
 
     it("fails runtime env resolution when persisted port is in use", async () => {
@@ -629,14 +631,14 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         baseBranch: "main",
         worktreeSlug: "runtime-env-port-conflict",
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
       const env = await resolveWorktreeRuntimeEnv({
         worktreePath: result.worktreePath,
         branchName: result.branchName,
       });
-      const port = Number(env.PASEO_WORKTREE_PORT);
+      const port = Number(env.CHISACODE_WORKTREE_PORT);
 
       const server = net.createServer();
       await new Promise<void>((resolve, reject) => {
@@ -663,19 +665,19 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
     });
 
     it("cleans up worktree if setup command fails", async () => {
-      // Create paseo.json with failing setup command
-      const paseoConfig = {
+      // Create chisacode.json with failing setup command
+      const chisacodeConfig = {
         worktree: {
           setup: ["exit 1"],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add chisacode.json"], {
         cwd: repoDir,
       });
 
-      const expectedWorktreePath = join(paseoHome, "worktrees", "test-repo", "fail-test");
+      const expectedWorktreePath = join(chisacodeHome, "worktrees", "test-repo", "fail-test");
 
       await expect(
         createLegacyWorktreeForTest({
@@ -683,7 +685,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           cwd: repoDir,
           baseBranch: "main",
           worktreeSlug: "fail-test",
-          paseoHome,
+          chisacodeHome,
         }),
       ).rejects.toThrow("Worktree setup command failed");
 
@@ -691,8 +693,8 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(existsSync(expectedWorktreePath)).toBe(false);
     });
 
-    it("reads worktree terminal specs from paseo.json with optional name", async () => {
-      const paseoConfig = {
+    it("reads worktree terminal specs from chisacode.json with optional name", async () => {
+      const chisacodeConfig = {
         worktree: {
           terminals: [
             { name: "Dev Server", command: "npm run dev" },
@@ -700,7 +702,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
 
       expect(getWorktreeTerminalSpecs(repoDir)).toEqual([
         { name: "Dev Server", command: "npm run dev" },
@@ -709,7 +711,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
     });
 
     it("filters invalid worktree terminal specs", async () => {
-      const paseoConfig = {
+      const chisacodeConfig = {
         worktree: {
           terminals: [
             null,
@@ -720,7 +722,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
 
       expect(getWorktreeTerminalSpecs(repoDir)).toEqual([
         { name: "Watch", command: "npm run watch" },
@@ -730,7 +732,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("parses omitted script type as a plain script", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({
           scripts: {
             typecheck: {
@@ -752,7 +754,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("parses service scripts and preserves optional port", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({
           scripts: {
             server: {
@@ -778,7 +780,7 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
 
     it("ignores invalid script entries gracefully", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({
           scripts: {
             valid: {
@@ -813,9 +815,9 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       );
     });
 
-    it("seeds an uncommitted paseo.json from the main repo into a new worktree", async () => {
+    it("seeds an uncommitted chisacode.json from the main repo into a new worktree", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({ scripts: { dev: { command: "echo hi" } } }),
       );
 
@@ -824,28 +826,28 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "seed-uncommitted",
         source: { kind: "branch-off", baseBranch: "main", branchName: "feature/seed" },
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
-      const worktreeConfigPath = join(result.worktreePath, "paseo.json");
+      const worktreeConfigPath = join(result.worktreePath, "chisacode.json");
       expect(existsSync(worktreeConfigPath)).toBe(true);
       expect(JSON.parse(readFileSync(worktreeConfigPath, "utf8"))).toEqual({
         scripts: { dev: { command: "echo hi" } },
       });
     });
 
-    it("does not overwrite a committed paseo.json with uncommitted edits in the main repo", async () => {
+    it("does not overwrite a committed chisacode.json with uncommitted edits in the main repo", async () => {
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({ scripts: { dev: { command: "committed" } } }),
       );
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
-      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add paseo.json"], {
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add chisacode.json"], {
         cwd: repoDir,
       });
 
       writeFileSync(
-        join(repoDir, "paseo.json"),
+        join(repoDir, "chisacode.json"),
         JSON.stringify({ scripts: { dev: { command: "uncommitted" } } }),
       );
 
@@ -854,37 +856,37 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         worktreeSlug: "preserve-committed",
         source: { kind: "branch-off", baseBranch: "main", branchName: "feature/preserve" },
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
-      const worktreeConfigPath = join(result.worktreePath, "paseo.json");
+      const worktreeConfigPath = join(result.worktreePath, "chisacode.json");
       expect(JSON.parse(readFileSync(worktreeConfigPath, "utf8"))).toEqual({
         scripts: { dev: { command: "committed" } },
       });
     });
 
-    it("creates a worktree without error when no paseo.json exists in the main repo", async () => {
+    it("creates a worktree without error when no chisacode.json exists in the main repo", async () => {
       const result = await createLegacyWorktreeForTest({
         cwd: repoDir,
         worktreeSlug: "no-config",
         source: { kind: "branch-off", baseBranch: "main", branchName: "feature/no-config" },
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
 
-      expect(existsSync(join(result.worktreePath, "paseo.json"))).toBe(false);
+      expect(existsSync(join(result.worktreePath, "chisacode.json"))).toBe(false);
     });
   });
 
-  describe("paseo worktree manager", () => {
+  describe("chisacode worktree manager", () => {
     let tempDir: string;
     let repoDir: string;
-    let paseoHome: string;
+    let chisacodeHome: string;
 
     beforeEach(() => {
       tempDir = realpathSync(mkdtempSync(join(tmpdir(), "worktree-manager-test-")));
       repoDir = join(tempDir, "test-repo");
-      paseoHome = join(tempDir, "paseo-home");
+      chisacodeHome = join(tempDir, "chisacode-home");
 
       mkdirSync(repoDir, { recursive: true });
       execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -922,87 +924,91 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoA,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        chisacodeHome,
       });
       const fromRepoB = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoB,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        chisacodeHome,
       });
 
       expect(dirname(fromRepoA.worktreePath)).not.toBe(dirname(fromRepoB.worktreePath));
       expect(fromRepoA.worktreePath.endsWith("alpha-1")).toBe(false);
       expect(fromRepoB.worktreePath.endsWith("alpha-1")).toBe(false);
 
-      const repoAWorktrees = await listPaseoWorktrees({ cwd: repoA, paseoHome });
-      const repoBWorktrees = await listPaseoWorktrees({ cwd: repoB, paseoHome });
+      const repoAWorktrees = await listChisaCodeWorktrees({ cwd: repoA, chisacodeHome });
+      const repoBWorktrees = await listChisaCodeWorktrees({ cwd: repoB, chisacodeHome });
 
       expect(repoAWorktrees.map((entry) => entry.path)).toEqual([fromRepoA.worktreePath]);
       expect(repoBWorktrees.map((entry) => entry.path)).toEqual([fromRepoB.worktreePath]);
     });
 
-    it("lists and deletes paseo worktrees under ~/.paseo/worktrees/{hash}", async () => {
+    it("lists and deletes chisacode worktrees under ~/.chisacode/worktrees/{hash}", async () => {
       const first = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        chisacodeHome,
       });
       const second = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "beta",
-        paseoHome,
+        chisacodeHome,
       });
 
-      const worktrees = await listPaseoWorktrees({ cwd: repoDir, paseoHome });
+      const worktrees = await listChisaCodeWorktrees({ cwd: repoDir, chisacodeHome });
       const paths = worktrees.map((worktree) => worktree.path).sort();
       expect(paths).toEqual([first.worktreePath, second.worktreePath].sort());
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: first.worktreePath, paseoHome });
+      await deleteChisaCodeWorktree({
+        cwd: repoDir,
+        worktreePath: first.worktreePath,
+        chisacodeHome,
+      });
       expect(existsSync(first.worktreePath)).toBe(false);
 
-      const remaining = await listPaseoWorktrees({ cwd: repoDir, paseoHome });
+      const remaining = await listChisaCodeWorktrees({ cwd: repoDir, chisacodeHome });
       expect(remaining.map((worktree) => worktree.path)).toEqual([second.worktreePath]);
     });
 
-    it("deletes a paseo worktree even when given a subdirectory path", async () => {
+    it("deletes a chisacode worktree even when given a subdirectory path", async () => {
       const created = await createLegacyWorktreeForTest({
         branchName: "main",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "alpha",
-        paseoHome,
+        chisacodeHome,
       });
 
       const nestedDir = join(created.worktreePath, "nested", "dir");
       mkdirSync(nestedDir, { recursive: true });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: nestedDir, paseoHome });
+      await deleteChisaCodeWorktree({ cwd: repoDir, worktreePath: nestedDir, chisacodeHome });
       expect(existsSync(created.worktreePath)).toBe(false);
 
-      const remaining = await listPaseoWorktrees({ cwd: repoDir, paseoHome });
+      const remaining = await listChisaCodeWorktrees({ cwd: repoDir, chisacodeHome });
       expect(remaining.some((worktree) => worktree.path === created.worktreePath)).toBe(false);
     });
 
-    it("runs teardown commands from paseo.json before deleting a worktree", async () => {
-      const paseoConfig = {
+    it("runs teardown commands from chisacode.json before deleting a worktree", async () => {
+      const chisacodeConfig = {
         worktree: {
           teardown: [
-            'echo "source=$PASEO_SOURCE_CHECKOUT_PATH" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "root_alias=$PASEO_ROOT_PATH" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "worktree=$PASEO_WORKTREE_PATH" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "branch=$PASEO_BRANCH_NAME" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
-            'echo "port=$PASEO_WORKTREE_PORT" >> "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "source=$CHISACODE_SOURCE_CHECKOUT_PATH" > "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "root_alias=$CHISACODE_ROOT_PATH" >> "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "worktree=$CHISACODE_WORKTREE_PATH" >> "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "branch=$CHISACODE_BRANCH_NAME" >> "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'echo "port=$CHISACODE_WORKTREE_PORT" >> "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown.log"',
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add teardown commands"], {
         cwd: repoDir,
       });
@@ -1012,14 +1018,18 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-test",
-        paseoHome,
+        chisacodeHome,
       });
       const runtimeEnv = await resolveWorktreeRuntimeEnv({
         worktreePath: created.worktreePath,
         branchName: created.branchName,
       });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome });
+      await deleteChisaCodeWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        chisacodeHome,
+      });
       expect(existsSync(created.worktreePath)).toBe(false);
 
       const teardownLog = readFileSync(join(repoDir, "teardown.log"), "utf8");
@@ -1027,18 +1037,18 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
       expect(teardownLog).toContain(`root_alias=${repoDir}`);
       expect(teardownLog).toContain(`worktree=${created.worktreePath}`);
       expect(teardownLog).toContain("branch=teardown-branch");
-      expect(teardownLog).toContain(`port=${runtimeEnv.PASEO_WORKTREE_PORT}`);
+      expect(teardownLog).toContain(`port=${runtimeEnv.CHISACODE_WORKTREE_PORT}`);
     });
 
-    it("runs string teardown scripts from paseo.json as a single shell command", async () => {
-      const paseoConfig = {
+    it("runs string teardown scripts from chisacode.json as a single shell command", async () => {
+      const chisacodeConfig = {
         worktree: {
           teardown:
-            'cleanup_message="teardown string"\necho "$cleanup_message" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
+            'cleanup_message="teardown string"\necho "$cleanup_message" > "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown.log"',
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
       execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add string teardown"], {
         cwd: repoDir,
       });
@@ -1048,27 +1058,31 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-string-test",
-        paseoHome,
+        chisacodeHome,
       });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome });
+      await deleteChisaCodeWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        chisacodeHome,
+      });
 
       expect(getWorktreeTeardownCommands(repoDir)).toEqual([
-        'cleanup_message="teardown string"\necho "$cleanup_message" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown.log"',
+        'cleanup_message="teardown string"\necho "$cleanup_message" > "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown.log"',
       ]);
       expect(readFileSync(join(repoDir, "teardown.log"), "utf8").trim()).toBe("teardown string");
     });
 
-    it("omits PASEO_WORKTREE_PORT from teardown env when runtime metadata is missing", async () => {
-      const paseoConfig = {
+    it("omits CHISACODE_WORKTREE_PORT from teardown env when runtime metadata is missing", async () => {
+      const chisacodeConfig = {
         worktree: {
           teardown: [
-            'echo "port=${PASEO_WORKTREE_PORT-unset}" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-port.log"',
+            'echo "port=${CHISACODE_WORKTREE_PORT-unset}" > "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown-port.log"',
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
       execFileSync(
         "git",
         ["-c", "commit.gpgsign=false", "commit", "-m", "add teardown port logging"],
@@ -1080,26 +1094,30 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-port-missing-test",
-        paseoHome,
+        chisacodeHome,
       });
 
-      await deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome });
+      await deleteChisaCodeWorktree({
+        cwd: repoDir,
+        worktreePath: created.worktreePath,
+        chisacodeHome,
+      });
 
       expect(readFileSync(join(repoDir, "teardown-port.log"), "utf8").trim()).toBe("port=unset");
       expect(existsSync(created.worktreePath)).toBe(false);
     });
 
     it("does not remove worktree when a teardown command fails", async () => {
-      const paseoConfig = {
+      const chisacodeConfig = {
         worktree: {
           teardown: [
-            'echo "started" > "$PASEO_SOURCE_CHECKOUT_PATH/teardown-start.log"',
+            'echo "started" > "$CHISACODE_SOURCE_CHECKOUT_PATH/teardown-start.log"',
             "echo boom 1>&2; exit 9",
           ],
         },
       };
-      writeFileSync(join(repoDir, "paseo.json"), JSON.stringify(paseoConfig));
-      execFileSync("git", ["add", "paseo.json"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify(chisacodeConfig));
+      execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir });
       execFileSync(
         "git",
         ["-c", "commit.gpgsign=false", "commit", "-m", "add failing teardown commands"],
@@ -1111,11 +1129,15 @@ describe.skipIf(isPlatform("win32"))("worktree POSIX-only", () => {
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "teardown-failure-test",
-        paseoHome,
+        chisacodeHome,
       });
 
       await expect(
-        deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome }),
+        deleteChisaCodeWorktree({
+          cwd: repoDir,
+          worktreePath: created.worktreePath,
+          chisacodeHome,
+        }),
       ).rejects.toThrow("Worktree teardown command failed");
 
       expect(existsSync(created.worktreePath)).toBe(true);

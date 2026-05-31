@@ -8,7 +8,7 @@ import { createBranchChangeRouteHandler } from "./script-route-branch-handler.js
 
 function createWorkspaceRepo(options?: {
   branchName?: string;
-  paseoConfig?: Record<string, unknown>;
+  chisacodeConfig?: Record<string, unknown>;
 }): { tempDir: string; repoDir: string; cleanup: () => void } {
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "script-branch-handler-")));
   const repoDir = path.join(tempDir, "repo");
@@ -23,8 +23,11 @@ function createWorkspaceRepo(options?: {
   });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "hello\n");
-  if (options?.paseoConfig) {
-    writeFileSync(path.join(repoDir, "paseo.json"), JSON.stringify(options.paseoConfig, null, 2));
+  if (options?.chisacodeConfig) {
+    writeFileSync(
+      path.join(repoDir, "chisacode.json"),
+      JSON.stringify(options.chisacodeConfig, null, 2),
+    );
   }
   execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], {
@@ -47,7 +50,7 @@ function registerRoute(
     hostname,
     port,
     workspaceId = "workspace-a",
-    projectSlug = "paseo",
+    projectSlug = "chisacode",
     scriptName,
   }: {
     hostname: string;
@@ -70,7 +73,7 @@ describe("script-route-branch-handler", () => {
   it("updates routes on branch rename by removing old hostnames and registering new ones", () => {
     const routeStore = new ScriptRouteStore();
     registerRoute(routeStore, {
-      hostname: "api.feature-auth.paseo.localhost",
+      hostname: "api.feature-auth.chisacode.localhost",
       port: 3001,
       scriptName: "api",
     });
@@ -83,9 +86,9 @@ describe("script-route-branch-handler", () => {
 
     handleBranchChange("workspace-a", "feature/auth", "feature/billing");
 
-    expect(routeStore.findRoute("api.feature-auth.paseo.localhost")).toBeNull();
-    expect(routeStore.findRoute("api.feature-billing.paseo.localhost")).toEqual({
-      hostname: "api.feature-billing.paseo.localhost",
+    expect(routeStore.findRoute("api.feature-auth.chisacode.localhost")).toBeNull();
+    expect(routeStore.findRoute("api.feature-billing.chisacode.localhost")).toEqual({
+      hostname: "api.feature-billing.chisacode.localhost",
       port: 3001,
     });
   });
@@ -107,7 +110,7 @@ describe("script-route-branch-handler", () => {
   it("is a no-op when the resolved hostnames do not change", () => {
     const routeStore = new ScriptRouteStore();
     registerRoute(routeStore, {
-      hostname: "api.paseo.localhost",
+      hostname: "api.chisacode.localhost",
       port: 3001,
       scriptName: "api",
     });
@@ -122,10 +125,10 @@ describe("script-route-branch-handler", () => {
 
     expect(routeStore.listRoutesForWorkspace("workspace-a")).toEqual([
       {
-        hostname: "api.paseo.localhost",
+        hostname: "api.chisacode.localhost",
         port: 3001,
         workspaceId: "workspace-a",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         scriptName: "api",
       },
     ]);
@@ -135,7 +138,7 @@ describe("script-route-branch-handler", () => {
   it("triggers shared reprojection after a route change", () => {
     const routeStore = new ScriptRouteStore();
     registerRoute(routeStore, {
-      hostname: "api.feature-auth.paseo.localhost",
+      hostname: "api.feature-auth.chisacode.localhost",
       port: 3001,
       scriptName: "api",
     });
@@ -154,12 +157,12 @@ describe("script-route-branch-handler", () => {
   it("updates all services for a workspace when multiple routes are registered", () => {
     const routeStore = new ScriptRouteStore();
     registerRoute(routeStore, {
-      hostname: "api.feature-auth.paseo.localhost",
+      hostname: "api.feature-auth.chisacode.localhost",
       port: 3001,
       scriptName: "api",
     });
     registerRoute(routeStore, {
-      hostname: "web.feature-auth.paseo.localhost",
+      hostname: "web.feature-auth.chisacode.localhost",
       port: 3002,
       scriptName: "web",
     });
@@ -181,17 +184,17 @@ describe("script-route-branch-handler", () => {
 
     expect(routeStore.listRoutesForWorkspace("workspace-a")).toEqual([
       {
-        hostname: "api.feature-billing.paseo.localhost",
+        hostname: "api.feature-billing.chisacode.localhost",
         port: 3001,
         workspaceId: "workspace-a",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         scriptName: "api",
       },
       {
-        hostname: "web.feature-billing.paseo.localhost",
+        hostname: "web.feature-billing.chisacode.localhost",
         port: 3002,
         workspaceId: "workspace-a",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         scriptName: "web",
       },
     ]);
@@ -209,7 +212,7 @@ describe("script-route-branch-handler", () => {
   it("does not emit a status update when no changes are needed", () => {
     const routeStore = new ScriptRouteStore();
     registerRoute(routeStore, {
-      hostname: "web.paseo.localhost",
+      hostname: "web.chisacode.localhost",
       port: 3002,
       scriptName: "web",
     });
@@ -228,7 +231,7 @@ describe("script-route-branch-handler", () => {
   it("renames only service routes and leaves plain scripts unaffected", () => {
     const workspace = createWorkspaceRepo({
       branchName: "feature/auth",
-      paseoConfig: {
+      chisacodeConfig: {
         scripts: {
           api: { type: "service", command: "npm run api" },
           typecheck: { command: "npm run typecheck" },

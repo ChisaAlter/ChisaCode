@@ -7,7 +7,7 @@ function makePrPaneData(overrides: Partial<PrPaneData> = {}): PrPaneData {
     number: 42,
     title: "Sample PR",
     state: "open",
-    url: "https://github.com/getpaseo/paseo/pull/42",
+    url: "https://github.com/getchisacode/chisacode/pull/42",
     reviewDecision: "pending",
     awaitingReviewers: [],
     checks: [],

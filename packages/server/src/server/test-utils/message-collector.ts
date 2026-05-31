@@ -1,5 +1,5 @@
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
-import type { SessionOutboundMessage } from "@fleurdelys/protocol/messages";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { SessionOutboundMessage } from "@chisacode/protocol/messages";
 
 export interface MessageCollector {
   messages: SessionOutboundMessage[];

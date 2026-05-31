@@ -11,15 +11,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 FLOW_TEMPLATE_DIR="$REPO_ROOT/packages/app/maestro"
 SETUP_TEMPLATE="$REPO_ROOT/packages/app/maestro/workspace-create-android-ready-sidebar.yaml"
 FOCUS_TEMPLATE="$REPO_ROOT/packages/app/maestro/workspace-create-android-create-focused.yaml"
-OUT_DIR="/tmp/paseo-workspace-create-android-focus-$(date +%s)"
-VIDEO_DIR="/tmp/paseo-maestro-videos"
-DEVICE_VIDEO="/sdcard/paseo-maestro-workspace-create-focused.mp4"
-LOCAL_VIDEO="$VIDEO_DIR/paseo-maestro-workspace-create-focused.mp4"
+OUT_DIR="/tmp/chisacode-workspace-create-android-focus-$(date +%s)"
+VIDEO_DIR="/tmp/chisacode-maestro-videos"
+DEVICE_VIDEO="/sdcard/chisacode-maestro-workspace-create-focused.mp4"
+LOCAL_VIDEO="$VIDEO_DIR/chisacode-maestro-workspace-create-focused.mp4"
 CLIENT_EXPORTS="$REPO_ROOT/packages/client/dist/daemon-client.js"
 
-export PASEO_MAESTRO_APP_ID="${PASEO_MAESTRO_APP_ID:-sh.paseo.debug}"
-export PASEO_MAESTRO_DIRECT_ENDPOINT="${PASEO_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6767}"
-export PASEO_MAESTRO_DAEMON_WS_URL="${PASEO_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6767/ws}"
+export CHISACODE_MAESTRO_APP_ID="${CHISACODE_MAESTRO_APP_ID:-sh.chisacode.debug}"
+export CHISACODE_MAESTRO_DIRECT_ENDPOINT="${CHISACODE_MAESTRO_DIRECT_ENDPOINT:-127.0.0.1:6767}"
+export CHISACODE_MAESTRO_DAEMON_WS_URL="${CHISACODE_MAESTRO_DAEMON_WS_URL:-ws://127.0.0.1:6767/ws}"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -33,9 +33,9 @@ render_flow() {
   local target="$2"
   mkdir -p "$(dirname "$target")"
   perl -0pe '
-    s/\$\{PASEO_MAESTRO_APP_ID\}/$ENV{PASEO_MAESTRO_APP_ID}/g;
-    s/\$\{PASEO_MAESTRO_DIRECT_ENDPOINT\}/$ENV{PASEO_MAESTRO_DIRECT_ENDPOINT}/g;
-    s/\$\{PASEO_MAESTRO_PROJECT_NAME\}/$ENV{PASEO_MAESTRO_PROJECT_NAME}/g;
+    s/\$\{CHISACODE_MAESTRO_APP_ID\}/$ENV{CHISACODE_MAESTRO_APP_ID}/g;
+    s/\$\{CHISACODE_MAESTRO_DIRECT_ENDPOINT\}/$ENV{CHISACODE_MAESTRO_DIRECT_ENDPOINT}/g;
+    s/\$\{CHISACODE_MAESTRO_PROJECT_NAME\}/$ENV{CHISACODE_MAESTRO_PROJECT_NAME}/g;
   ' "$source" > "$target"
 }
 
@@ -62,21 +62,21 @@ if [ ! -f "$CLIENT_EXPORTS" ]; then
   exit 1
 fi
 
-if [ -z "${PASEO_MAESTRO_PROJECT_PATH:-}" ]; then
-  PROJECT_PARENT="$(mktemp -d /tmp/paseo-maestro-project-XXXXXX)"
+if [ -z "${CHISACODE_MAESTRO_PROJECT_PATH:-}" ]; then
+  PROJECT_PARENT="$(mktemp -d /tmp/chisacode-maestro-project-XXXXXX)"
   PROJECT_BASENAME="aaa-workspace-create-android-$(basename "$PROJECT_PARENT")"
-  export PASEO_MAESTRO_PROJECT_PATH="$PROJECT_PARENT/$PROJECT_BASENAME"
-  mkdir -p "$PASEO_MAESTRO_PROJECT_PATH"
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" init >/dev/null
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" checkout -b main >/dev/null 2>&1 || true
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.name "Paseo Maestro"
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" config user.email "maestro@fleurdelys.local"
-  printf "# Workspace create Android focused recording\n" > "$PASEO_MAESTRO_PROJECT_PATH/README.md"
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" add README.md
-  git -C "$PASEO_MAESTRO_PROJECT_PATH" commit -m "Initial commit" >/dev/null
+  export CHISACODE_MAESTRO_PROJECT_PATH="$PROJECT_PARENT/$PROJECT_BASENAME"
+  mkdir -p "$CHISACODE_MAESTRO_PROJECT_PATH"
+  git -C "$CHISACODE_MAESTRO_PROJECT_PATH" init >/dev/null
+  git -C "$CHISACODE_MAESTRO_PROJECT_PATH" checkout -b main >/dev/null 2>&1 || true
+  git -C "$CHISACODE_MAESTRO_PROJECT_PATH" config user.name "ChisaCode Maestro"
+  git -C "$CHISACODE_MAESTRO_PROJECT_PATH" config user.email "maestro@chisacode.local"
+  printf "# Workspace create Android focused recording\n" > "$CHISACODE_MAESTRO_PROJECT_PATH/README.md"
+  git -C "$CHISACODE_MAESTRO_PROJECT_PATH" add README.md
+  git -C "$CHISACODE_MAESTRO_PROJECT_PATH" commit -m "Initial commit" >/dev/null
 fi
 
-export PASEO_MAESTRO_PROJECT_NAME="${PASEO_MAESTRO_PROJECT_NAME:-$(basename "$PASEO_MAESTRO_PROJECT_PATH")}"
+export CHISACODE_MAESTRO_PROJECT_NAME="${CHISACODE_MAESTRO_PROJECT_NAME:-$(basename "$CHISACODE_MAESTRO_PROJECT_PATH")}"
 
 SETUP_FLOW="$OUT_DIR/workspace-create-android-ready-sidebar.rendered.yaml"
 FOCUS_FLOW="$OUT_DIR/workspace-create-android-create-focused.rendered.yaml"
@@ -85,8 +85,8 @@ render_flow_tree
 echo "=== Focused Android Workspace Create Recording ==="
 echo "Output dir: $OUT_DIR"
 echo "Video: $LOCAL_VIDEO"
-echo "Project: $PASEO_MAESTRO_PROJECT_PATH"
-echo "Project name: $PASEO_MAESTRO_PROJECT_NAME"
+echo "Project: $CHISACODE_MAESTRO_PROJECT_PATH"
+echo "Project name: $CHISACODE_MAESTRO_PROJECT_NAME"
 
 adb reverse tcp:6767 tcp:6767 >/dev/null
 
@@ -97,8 +97,8 @@ import { pathToFileURL } from "node:url";
 import WebSocket from "ws";
 
 const repoRoot = process.env.REPO_ROOT;
-const projectPath = process.env.PASEO_MAESTRO_PROJECT_PATH;
-const daemonUrl = process.env.PASEO_MAESTRO_DAEMON_WS_URL;
+const projectPath = process.env.CHISACODE_MAESTRO_PROJECT_PATH;
+const daemonUrl = process.env.CHISACODE_MAESTRO_DAEMON_WS_URL;
 if (!repoRoot || !projectPath || !daemonUrl) {
   throw new Error("Missing required environment for daemon project setup.");
 }

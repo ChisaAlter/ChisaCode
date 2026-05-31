@@ -129,8 +129,8 @@ async function seedPr(args: {
   git(["clone", authedUrl, localPath, "--quiet", "-b", branch], basePath);
   // Clean remote URL (no embedded token) so gh can parse owner/repo
   git(["remote", "set-url", "origin", `https://github.com/${fullName}.git`], localPath);
-  git(["config", "user.email", "e2e@paseo.test"], localPath);
-  git(["config", "user.name", "Paseo E2E"], localPath);
+  git(["config", "user.email", "e2e@chisacode.test"], localPath);
+  git(["config", "user.name", "ChisaCode E2E"], localPath);
   git(["config", "commit.gpgsign", "false"], localPath);
 
   return {
@@ -153,10 +153,10 @@ function seedIssue(args: { spec: IssueSpec; basePath: string }): GhIssueFixture 
   return { number: issueNumber, title: spec.title, url: issueUrl };
 }
 
-// Single namespace for temporary GitHub repos created by Paseo tests.
-// Bulk cleanup relies on this prefix being unmistakable — never reuse `paseo-`
-// (collides with real repos like `paseo`, `paseo-website`).
-const TEMP_GITHUB_REPO_PREFIX = "paseotmp-";
+// Single namespace for temporary GitHub repos created by ChisaCode tests.
+// Bulk cleanup relies on this prefix being unmistakable — never reuse `chisacode-`
+// (collides with real repos like `chisacode`, `chisacode-website`).
+const TEMP_GITHUB_REPO_PREFIX = "chisacodetmp-";
 
 export async function createTempGithubRepo(options: {
   category: string;
@@ -170,8 +170,8 @@ export async function createTempGithubRepo(options: {
   // Bootstrap local git repo
   const basePath = await mkdtemp(path.join("/tmp", `${repoName}-base-`));
   git(["init", "-b", "main"], basePath);
-  git(["config", "user.email", "e2e@paseo.test"], basePath);
-  git(["config", "user.name", "Paseo E2E"], basePath);
+  git(["config", "user.email", "e2e@chisacode.test"], basePath);
+  git(["config", "user.name", "ChisaCode E2E"], basePath);
   git(["config", "commit.gpgsign", "false"], basePath);
   await writeFile(path.join(basePath, "README.md"), "# E2E Test Repo\n");
   git(["add", "README.md"], basePath);

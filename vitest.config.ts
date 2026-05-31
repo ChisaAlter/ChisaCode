@@ -31,11 +31,11 @@ export default defineConfig({
     ],
     alias: [
       {
-        find: /^@fleurdelys\/relay\/e2ee$/,
+        find: /^@chisacode\/relay\/e2ee$/,
         replacement: path.resolve(__dirname, "packages/relay/src/e2ee.ts"),
       },
       {
-        find: /^@fleurdelys\/relay$/,
+        find: /^@chisacode\/relay$/,
         replacement: path.resolve(__dirname, "packages/relay/src/index.ts"),
       },
       { find: "@", replacement: path.resolve(appDir, "src") },

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { queryClient as appQueryClient } from "@/query/query-client";
 import { useSessionStore } from "@/stores/session-store";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
@@ -298,13 +298,13 @@ describe("checkout-git-actions-store", () => {
   it("hides an archived worktree optimistically while the archive RPC is in flight", async () => {
     const deferred = createDeferred<Record<string, never>>();
     const client = {
-      archivePaseoWorktree: vi.fn(() => deferred.promise),
+      archiveChisaCodeWorktree: vi.fn(() => deferred.promise),
     };
     const featureWorkspace = workspace({ id: cwd, name: "feature" });
     useSessionStore.getState().initializeSession(serverId, client as unknown as DaemonClient);
     useSessionStore.getState().setWorkspaces(serverId, new Map([[cwd, featureWorkspace]]));
     appQueryClient.setQueryData(
-      ["sidebarPaseoWorktreeList", serverId, "/tmp"],
+      ["sidebarChisaCodeWorktreeList", serverId, "/tmp"],
       [{ worktreePath: cwd }, { worktreePath: "/tmp/other" }],
     );
 
@@ -313,9 +313,9 @@ describe("checkout-git-actions-store", () => {
       .archiveWorktree({ serverId, cwd, worktreePath: cwd });
 
     expect(useSessionStore.getState().sessions[serverId]?.workspaces.has(cwd)).toBe(false);
-    expect(appQueryClient.getQueryData(["sidebarPaseoWorktreeList", serverId, "/tmp"])).toEqual([
-      { worktreePath: "/tmp/other" },
-    ]);
+    expect(appQueryClient.getQueryData(["sidebarChisaCodeWorktreeList", serverId, "/tmp"])).toEqual(
+      [{ worktreePath: "/tmp/other" }],
+    );
     expect(isLocalWorktreeArchivePending({ serverId, cwd })).toBe(true);
 
     deferred.resolve({});
@@ -332,7 +332,7 @@ describe("checkout-git-actions-store", () => {
   it("hides an archived worktree when the workspace map is keyed by opaque id", async () => {
     const deferred = createDeferred<Record<string, never>>();
     const client = {
-      archivePaseoWorktree: vi.fn(() => deferred.promise),
+      archiveChisaCodeWorktree: vi.fn(() => deferred.promise),
     };
     const featureWorkspace = workspace({
       id: "ws-feature",
@@ -354,13 +354,13 @@ describe("checkout-git-actions-store", () => {
 
   it("restores an optimistically hidden worktree when archive fails", async () => {
     const client = {
-      archivePaseoWorktree: vi.fn(async () => ({ error: { message: "archive failed" } })),
+      archiveChisaCodeWorktree: vi.fn(async () => ({ error: { message: "archive failed" } })),
     };
     const featureWorkspace = workspace({ id: cwd, name: "feature" });
     const listSnapshot = [{ worktreePath: cwd }, { worktreePath: "/tmp/other" }];
     useSessionStore.getState().initializeSession(serverId, client as unknown as DaemonClient);
     useSessionStore.getState().setWorkspaces(serverId, new Map([[cwd, featureWorkspace]]));
-    appQueryClient.setQueryData(["sidebarPaseoWorktreeList", serverId, "/tmp"], listSnapshot);
+    appQueryClient.setQueryData(["sidebarChisaCodeWorktreeList", serverId, "/tmp"], listSnapshot);
 
     await expect(
       useCheckoutGitActionsStore.getState().archiveWorktree({ serverId, cwd, worktreePath: cwd }),
@@ -369,7 +369,7 @@ describe("checkout-git-actions-store", () => {
     expect(useSessionStore.getState().sessions[serverId]?.workspaces.get(cwd)).toEqual(
       featureWorkspace,
     );
-    expect(appQueryClient.getQueryData(["sidebarPaseoWorktreeList", serverId, "/tmp"])).toEqual(
+    expect(appQueryClient.getQueryData(["sidebarChisaCodeWorktreeList", serverId, "/tmp"])).toEqual(
       listSnapshot,
     );
   });
@@ -377,7 +377,7 @@ describe("checkout-git-actions-store", () => {
   it("reports local archive pending only while the archive action is in flight", async () => {
     const deferred = createDeferred<Record<string, never>>();
     const client = {
-      archivePaseoWorktree: vi.fn(() => deferred.promise),
+      archiveChisaCodeWorktree: vi.fn(() => deferred.promise),
     };
     const featureWorkspace = workspace({ id: cwd, name: "feature" });
     useSessionStore.getState().initializeSession(serverId, client as unknown as DaemonClient);

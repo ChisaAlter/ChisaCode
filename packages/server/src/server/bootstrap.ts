@@ -88,8 +88,8 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { createGitHubService } from "../services/github-service.js";
-import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
-import { createPaseoWorktreeWorkflow } from "./worktree-session.js";
+import { createChisaCodeWorktree as createRegisteredChisaCodeWorktree } from "./chisacode-worktree-service.js";
+import { createChisaCodeWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import type { OpenAiSpeechProviderConfig } from "./speech/providers/openai/config.js";
 import type { LocalSpeechProviderConfig } from "./speech/providers/local/config.js";
@@ -201,18 +201,18 @@ function summarizeAgentMcpDebugBody(body: unknown): Record<string, unknown> {
   };
 }
 
-export type PaseoOpenAIConfig = OpenAiSpeechProviderConfig;
-export type PaseoLocalSpeechConfig = LocalSpeechProviderConfig;
+export type ChisaCodeOpenAIConfig = OpenAiSpeechProviderConfig;
+export type ChisaCodeLocalSpeechConfig = LocalSpeechProviderConfig;
 
-export interface PaseoSpeechSttLanguages {
+export interface ChisaCodeSpeechSttLanguages {
   dictation: string;
   voice: string;
 }
 
-export interface PaseoSpeechConfig {
+export interface ChisaCodeSpeechConfig {
   providers: RequestedSpeechProviders;
-  sttLanguages?: PaseoSpeechSttLanguages;
-  local?: PaseoLocalSpeechConfig;
+  sttLanguages?: ChisaCodeSpeechSttLanguages;
+  local?: ChisaCodeLocalSpeechConfig;
 }
 
 export type DaemonLifecycleIntent =
@@ -228,9 +228,9 @@ export type DaemonLifecycleIntent =
       reason?: string;
     };
 
-export interface PaseoDaemonConfig {
+export interface ChisaCodeDaemonConfig {
   listen: string;
-  paseoHome: string;
+  chisacodeHome: string;
   corsAllowedOrigins: string[];
   allowedHosts?: HostnamesConfig;
   hostnames?: HostnamesConfig;
@@ -250,8 +250,8 @@ export interface PaseoDaemonConfig {
   relayPublicUseTls?: boolean;
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
-  openai?: PaseoOpenAIConfig;
-  speech?: PaseoSpeechConfig;
+  openai?: ChisaCodeOpenAIConfig;
+  speech?: ChisaCodeSpeechConfig;
   voiceLlmProvider?: AgentProvider | null;
   voiceLlmProviderExplicit?: boolean;
   voiceLlmModel?: string | null;
@@ -271,8 +271,8 @@ export interface PaseoDaemonConfig {
   pushNotificationSender?: PushNotificationSender;
 }
 
-export interface PaseoDaemon {
-  config: PaseoDaemonConfig;
+export interface ChisaCodeDaemon {
+  config: ChisaCodeDaemonConfig;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   terminalManager: TerminalManager;
@@ -283,16 +283,16 @@ export interface PaseoDaemon {
   getListenTarget(): ListenTarget | null;
 }
 
-export async function createPaseoDaemon(
-  config: PaseoDaemonConfig,
+export async function createChisaCodeDaemon(
+  config: ChisaCodeDaemonConfig,
   rootLogger: Logger,
-): Promise<PaseoDaemon> {
+): Promise<ChisaCodeDaemon> {
   const logger = rootLogger.child({ module: "bootstrap" });
   const bootstrapStart = performance.now();
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
   const daemonVersion = resolveDaemonVersion(import.meta.url);
   const daemonConfigStore = new DaemonConfigStore(
-    config.paseoHome,
+    config.chisacodeHome,
     {
       mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
       providers: Object.fromEntries(
@@ -313,8 +313,8 @@ export async function createPaseoDaemon(
     logger,
   );
 
-  const serverId = getOrCreateServerId(config.paseoHome, { logger });
-  const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.paseoHome, logger);
+  const serverId = getOrCreateServerId(config.chisacodeHome, { logger });
+  const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.chisacodeHome, logger);
   let relayTransport: RelayTransportController | null = null;
 
   const staticDir = config.staticDir;
@@ -373,8 +373,8 @@ export async function createPaseoDaemon(
   // CORS - allow same-origin + configured origins
   const allowedOrigins = new Set([
     ...config.corsAllowedOrigins,
-    // Packaged desktop renderers use the custom paseo:// protocol scheme.
-    "paseo://app",
+    // Packaged desktop renderers use the custom chisacode:// protocol scheme.
+    "chisacode://app",
     // For TCP, add localhost variants
     ...(listenTarget.type === "tcp"
       ? [
@@ -502,22 +502,22 @@ export async function createPaseoDaemon(
 
   const agentStorage = new AgentStorage(config.agentStoragePath, logger);
   const projectRegistry = new FileBackedProjectRegistry(
-    path.join(config.paseoHome, "projects", "projects.json"),
+    path.join(config.chisacodeHome, "projects", "projects.json"),
     logger,
   );
   workspaceRegistry = new FileBackedWorkspaceRegistry(
-    path.join(config.paseoHome, "projects", "workspaces.json"),
+    path.join(config.chisacodeHome, "projects", "workspaces.json"),
     logger,
   );
   const chatService = new FileBackedChatService({
-    paseoHome: config.paseoHome,
+    chisacodeHome: config.chisacodeHome,
     logger,
   });
   const terminalManager = createConfiguredTerminalManager();
   const github = createGitHubService();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger,
-    paseoHome: config.paseoHome,
+    chisacodeHome: config.chisacodeHome,
     deps: {
       github,
     },
@@ -548,7 +548,7 @@ export async function createPaseoDaemon(
   await agentStorage.initialize();
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({
-    paseoHome: config.paseoHome,
+    chisacodeHome: config.chisacodeHome,
     agentStorage,
     projectRegistry,
     workspaceRegistry,
@@ -580,18 +580,18 @@ export async function createPaseoDaemon(
   logger.info({ elapsed: elapsed() }, "Chat service initialized");
   const checkoutDiffManager = new CheckoutDiffManager({
     logger,
-    paseoHome: config.paseoHome,
+    chisacodeHome: config.chisacodeHome,
     workspaceGitService,
   });
   const loopService = new LoopService({
-    paseoHome: config.paseoHome,
+    chisacodeHome: config.chisacodeHome,
     logger,
     agentManager,
   });
   await loopService.initialize();
   logger.info({ elapsed: elapsed() }, "Loop service initialized");
   const scheduleService = new ScheduleService({
-    paseoHome: config.paseoHome,
+    chisacodeHome: config.chisacodeHome,
     logger,
     agentManager,
     agentStorage,
@@ -656,7 +656,7 @@ export async function createPaseoDaemon(
   };
 
   setupAutoArchiveOnMerge({
-    paseoHome: config.paseoHome,
+    chisacodeHome: config.chisacodeHome,
     daemonConfigStore,
     workspaceGitService,
     github,
@@ -690,12 +690,12 @@ export async function createPaseoDaemon(
         emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
         markWorkspaceArchiving: markWorkspaceArchivingExternal,
         clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
-        createPaseoWorktree: async (input, serviceOptions) => {
-          return createPaseoWorktreeWorkflow(
+        createChisaCodeWorktree: async (input, serviceOptions) => {
+          return createChisaCodeWorktreeWorkflow(
             {
-              paseoHome: config.paseoHome,
-              createPaseoWorktree: async (workflowInput, workflowOptions) => {
-                return createRegisteredPaseoWorktree(workflowInput, {
+              chisacodeHome: config.chisacodeHome,
+              createChisaCodeWorktree: async (workflowInput, workflowOptions) => {
+                return createRegisteredChisaCodeWorktree(workflowInput, {
                   github,
                   ...(workflowOptions?.resolveDefaultBranch
                     ? {
@@ -739,7 +739,7 @@ export async function createPaseoDaemon(
             serviceOptions,
           );
         },
-        paseoHome: config.paseoHome,
+        chisacodeHome: config.chisacodeHome,
         callerAgentId,
         enableVoiceTools: false,
         resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
@@ -892,11 +892,11 @@ export async function createPaseoDaemon(
             agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");
           });
           const relayEnabled = config.relayEnabled ?? true;
-          const relayEndpoint = config.relayEndpoint ?? "relay.paseo.sh:443";
+          const relayEndpoint = config.relayEndpoint ?? "relay.chisacode.sh:443";
           const relayPublicEndpoint = config.relayPublicEndpoint ?? relayEndpoint;
-          const relayUseTls = config.relayUseTls ?? relayEndpoint === "relay.paseo.sh:443";
+          const relayUseTls = config.relayUseTls ?? relayEndpoint === "relay.chisacode.sh:443";
           const relayPublicUseTls = config.relayPublicUseTls ?? relayUseTls;
-          const appBaseUrl = config.appBaseUrl ?? "https://app.paseo.sh";
+          const appBaseUrl = config.appBaseUrl ?? "https://app.chisacode.sh";
 
           if (boundListenTarget.type === "tcp") {
             logger.info(
@@ -929,7 +929,7 @@ export async function createPaseoDaemon(
             agentManager,
             agentStorage,
             downloadTokenStore,
-            config.paseoHome,
+            config.chisacodeHome,
             daemonConfigStore,
             mcpBaseUrl,
             { allowedOrigins, hostnames: configuredHostnames },

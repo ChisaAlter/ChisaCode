@@ -23,7 +23,7 @@ interface Session {
 }
 
 const WS_ENDPOINT_PATH = "/ws";
-const IPC_PREFIXES = ["fleurdelys", "paseo"] as const;
+const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
 
 let nextSessionId = 0;
 const sessions = new Map<string, Session>();
@@ -41,7 +41,7 @@ function emitTransportEvent(payload: TransportEventPayload): void {
  * named pipe.  The `ws` library supports these via the `ws+unix://` scheme:
  *
  *   ws+unix:///path/to/socket:/ws
- *   ws+unix://./pipe/paseo:/ws        (Windows named pipe)
+ *   ws+unix://./pipe/chisacode:/ws        (Windows named pipe)
  *
  * The part before `:` is the IPC path, the part after is the HTTP request
  * path used during the WebSocket upgrade handshake.

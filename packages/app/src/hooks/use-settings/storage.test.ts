@@ -12,8 +12,8 @@ import {
 } from "./storage";
 import { createFakeDesktopBridge, createInMemoryKeyValueStorage } from "./fakes";
 
-const LEGACY_SETTINGS_KEY = "@paseo:settings";
-const LEGACY_APP_SETTINGS_KEY = "@paseo:app-settings";
+const LEGACY_SETTINGS_KEY = "@chisacode:settings";
+const LEGACY_APP_SETTINGS_KEY = "@chisacode:app-settings";
 
 function makeDeps(
   overrides: {
@@ -117,7 +117,7 @@ describe("loadAppSettingsFromStorage", () => {
     expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(JSON.stringify(result));
   });
 
-  it("migrates legacy paseo app settings into fleurdelys app settings", async () => {
+  it("migrates legacy chisacode app settings into chisacode app settings", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
         [LEGACY_APP_SETTINGS_KEY]: JSON.stringify({
@@ -190,6 +190,47 @@ describe("loadSettingsFromStorage", () => {
     expect(result.releaseChannel).toBe("stable");
   });
 
+  it("loads language from app settings outside Electron", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ language: "en" }),
+      }),
+    });
+
+    const result = await loadSettingsFromStorage(deps);
+
+    expect(result.language).toBe("en");
+  });
+
+  it("uses desktop settings language inside Electron", async () => {
+    const desktop = createFakeDesktopBridge({
+      isElectron: true,
+      settings: {
+        language: "zh-CN",
+        releaseChannel: "stable",
+        daemon: { manageBuiltInDaemon: true, keepRunningAfterQuit: true },
+      },
+    });
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "light", language: "en" }),
+      }),
+      desktop,
+    });
+
+    const result = await loadSettingsFromStorage(deps);
+
+    expect(result).toEqual({
+      theme: "light",
+      language: "zh-CN",
+      sendBehavior: "interrupt",
+      serviceUrlBehavior: "ask",
+      terminalScrollbackLines: 10_000,
+      manageBuiltInDaemon: true,
+      releaseChannel: "stable",
+    });
+  });
+
   it("migrates legacy desktop-owned settings through the bridge before reading effective settings", async () => {
     const desktop = createFakeDesktopBridge({
       isElectron: true,
@@ -203,6 +244,7 @@ describe("loadSettingsFromStorage", () => {
       storage: createInMemoryKeyValueStorage({
         [APP_SETTINGS_KEY]: JSON.stringify({
           theme: "light",
+          language: "en",
           manageBuiltInDaemon: false,
           releaseChannel: "beta",
         }),
@@ -213,7 +255,7 @@ describe("loadSettingsFromStorage", () => {
     const result = await loadSettingsFromStorage(deps);
 
     expect(desktop.migrationsApplied).toEqual([
-      { manageBuiltInDaemon: false, releaseChannel: "beta" },
+      { manageBuiltInDaemon: false, releaseChannel: "beta", language: "en" },
     ]);
     expect(result).toEqual({
       theme: "light",

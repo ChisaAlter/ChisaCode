@@ -39,12 +39,12 @@ async function readTerminalLayoutMetrics(page: Page): Promise<TerminalLayoutMetr
     const xtermScreenRect = xtermScreen?.getBoundingClientRect() ?? null;
     const term = (
       window as Window & {
-        __paseoTerminal?: {
+        __chisacodeTerminal?: {
           rows?: number;
           cols?: number;
         };
       }
-    ).__paseoTerminal;
+    ).__chisacodeTerminal;
 
     return {
       visibleSurfaceCount: visibleSurfaces.length,

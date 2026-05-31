@@ -1,4 +1,4 @@
-import type { TerminalState } from "@fleurdelys/protocol/messages";
+import type { TerminalState } from "@chisacode/protocol/messages";
 
 export interface WorkspaceTerminalSnapshots {
   get: (input: { terminalId: string }) => TerminalState | null;

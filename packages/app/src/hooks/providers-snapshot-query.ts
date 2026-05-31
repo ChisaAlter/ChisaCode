@@ -1,4 +1,4 @@
-import type { AgentProvider } from "@fleurdelys/protocol/agent-types";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
 
 export const PROVIDERS_SNAPSHOT_QUERY_ROOT = "providersSnapshot";
 

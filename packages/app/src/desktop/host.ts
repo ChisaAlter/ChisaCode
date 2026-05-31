@@ -118,8 +118,7 @@ export interface DesktopHostBridge {
 
 declare global {
   interface Window {
-    fleurdelysDesktop?: DesktopHostBridge;
-    paseoDesktop?: DesktopHostBridge;
+    chisacodeDesktop?: DesktopHostBridge;
   }
 }
 

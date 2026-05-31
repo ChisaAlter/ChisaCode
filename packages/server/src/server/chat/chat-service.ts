@@ -10,7 +10,7 @@ import {
   type ChatMessage,
   type ChatRoom,
   type ChatRoomDetail,
-} from "@fleurdelys/protocol/chat/types";
+} from "@chisacode/protocol/chat/types";
 
 const ChatStorePayloadSchema = z.object({
   rooms: z.array(ChatRoomSchema),
@@ -116,8 +116,8 @@ export class FileBackedChatService {
   private persistQueue: Promise<void> = Promise.resolve();
   private readonly waitersByRoomId = new Map<string, Set<Waiter>>();
 
-  constructor(options: { paseoHome: string; logger: pino.Logger }) {
-    this.filePath = path.join(options.paseoHome, "chat", "rooms.json");
+  constructor(options: { chisacodeHome: string; logger: pino.Logger }) {
+    this.filePath = path.join(options.chisacodeHome, "chat", "rooms.json");
     this.logger = options.logger.child({ component: "chat-service" });
   }
 

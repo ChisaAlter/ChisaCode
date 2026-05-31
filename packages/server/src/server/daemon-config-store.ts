@@ -7,12 +7,12 @@ import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 
-export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@fleurdelys/protocol/messages";
+export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
 
-type MutableDaemonConfig = import("@fleurdelys/protocol/messages").MutableDaemonConfig;
-type MutableDaemonConfigPatch = import("@fleurdelys/protocol/messages").MutableDaemonConfigPatch;
+type MutableDaemonConfig = import("@chisacode/protocol/messages").MutableDaemonConfig;
+type MutableDaemonConfigPatch = import("@chisacode/protocol/messages").MutableDaemonConfigPatch;
 type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOverride;
 
 interface LoggerLike {
@@ -83,13 +83,13 @@ export function applyMutableProviderConfigToOverrides(
 
 export class DaemonConfigStore {
   private current: MutableDaemonConfig;
-  private readonly paseoHome: string;
+  private readonly chisacodeHome: string;
   private readonly logger: LoggerLike | undefined;
   private readonly changeListeners = new Set<ConfigListener>();
   private readonly fieldChangeHandlers = new Map<string, Set<FieldChangeHandler>>();
 
-  constructor(paseoHome: string, initial: MutableDaemonConfig, logger?: LoggerLike) {
-    this.paseoHome = paseoHome;
+  constructor(chisacodeHome: string, initial: MutableDaemonConfig, logger?: LoggerLike) {
+    this.chisacodeHome = chisacodeHome;
     this.logger = getLogger(logger);
     this.current = MutableDaemonConfigSchema.parse(initial);
   }
@@ -158,12 +158,12 @@ export class DaemonConfigStore {
   }
 
   private persistConfig(config: MutableDaemonConfig): void {
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    const persisted = loadPersistedConfig(this.chisacodeHome, this.logger);
     const nextPersisted = mergeMutableConfigIntoPersistedConfig({
       persisted,
       mutable: config,
     });
-    savePersistedConfig(this.paseoHome, nextPersisted, this.logger);
+    savePersistedConfig(this.chisacodeHome, nextPersisted, this.logger);
   }
 }
 

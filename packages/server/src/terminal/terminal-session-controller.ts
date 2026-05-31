@@ -13,13 +13,13 @@ import type {
   UnsubscribeTerminalRequest,
   UnsubscribeTerminalsRequest,
 } from "../server/messages.js";
-import { killTerminalsUnderPath as killWorktreeTerminalsUnderPath } from "../server/paseo-worktree-archive-service.js";
+import { killTerminalsUnderPath as killWorktreeTerminalsUnderPath } from "../server/chisacode-worktree-archive-service.js";
 import {
   TerminalStreamOpcode,
   decodeTerminalResizePayload,
   encodeTerminalStreamFrame,
   type TerminalStreamFrame,
-} from "@fleurdelys/protocol/binary-frames/index";
+} from "@chisacode/protocol/binary-frames/index";
 import { TerminalOutputCoalescer } from "./terminal-output-coalescer.js";
 import {
   MAX_TERMINAL_OUTPUT_FRAME_BYTES,

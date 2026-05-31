@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { ToolCallDetail } from "@fleurdelys/protocol/agent-types";
+import type { ToolCallDetail } from "@chisacode/protocol/agent-types";
 import type { ToolCallDisplayInput } from "@/utils/tool-call-display";
 import { buildToolCallDisplayModel } from "@/utils/tool-call-display";
 import { extractToolCallFilePath } from "@/utils/extract-tool-call-file-path";

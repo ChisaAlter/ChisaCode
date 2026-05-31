@@ -14,7 +14,7 @@ Each agent in `AgentManager` carries a `lastStatus` of `initializing`, `idle`, `
 
 ## Relationships
 
-Agents can launch other agents via the `create_agent` MCP tool. When they do, the daemon stamps the new agent with a label `paseo.parent-agent-id` pointing back at the caller (`packages/server/src/server/agent/mcp-server.ts:804`). The client surfaces that as `agent.parentAgentId`.
+Agents can launch other agents via the `create_agent` MCP tool. When they do, the daemon stamps the new agent with a label `chisacode.parent-agent-id` pointing back at the caller (`packages/server/src/server/agent/mcp-server.ts:804`). The client surfaces that as `agent.parentAgentId`.
 
 There is exactly one relationship type today: `parentAgentId`. The daemon does not distinguish between:
 
@@ -27,7 +27,7 @@ Both look the same in storage. This is an accepted limitation — see [Limitatio
 
 Archive is a **soft delete**: the agent record stays on disk with `archivedAt` set, the runtime is closed, and the agent disappears from active lists. Archive is **global** — it lives on the server and propagates to every connected client.
 
-`create_agent_request` can opt an agent into `autoArchive`. In that mode the daemon archives the agent after the first terminal turn event (`turn_completed`, `turn_failed`, or `turn_canceled`). If the same request created a Paseo worktree through its `worktree` field, auto-archive archives that worktree too, which removes the agent records inside the worktree.
+`create_agent_request` can opt an agent into `autoArchive`. In that mode the daemon archives the agent after the first terminal turn event (`turn_completed`, `turn_failed`, or `turn_canceled`). If the same request created a ChisaCode worktree through its `worktree` field, auto-archive archives that worktree too, which removes the agent records inside the worktree.
 
 Archiving runs through `AgentManager.archiveAgent` (`packages/server/src/server/agent/agent-manager.ts`):
 
@@ -35,7 +35,7 @@ Archiving runs through `AgentManager.archiveAgent` (`packages/server/src/server/
 2. Set `archivedAt` and normalize `lastStatus` away from `running`/`initializing`
 3. Notify subscribers
 4. Close the runtime (kills the process if still running)
-5. **Cascade-archive children** — any agent whose `paseo.parent-agent-id` label matches the archived agent gets archived too, recursively
+5. **Cascade-archive children** — any agent whose `chisacode.parent-agent-id` label matches the archived agent gets archived too, recursively
 
 Cascade is what keeps subagent fleets from outliving their orchestrator.
 
@@ -79,7 +79,7 @@ We considered universal decoupling (no tab close ever archives, archive is alway
 
 ### Detached agents are cascade-archived
 
-The daemon can't tell a "subagent" apart from a "detached agent" — both carry `paseo.parent-agent-id`. So when you archive an agent that previously launched a detached child (e.g. via `/paseo-handoff`), cascade will archive the detached child too, even though semantically it should outlive the originator.
+The daemon can't tell a "subagent" apart from a "detached agent" — both carry `chisacode.parent-agent-id`. So when you archive an agent that previously launched a detached child (e.g. via `/chisacode-handoff`), cascade will archive the detached child too, even though semantically it should outlive the originator.
 
 Until a richer relation model lands (e.g. a `relation: "subagent" | "detached"` field on creation, or a separate channel for handoff launches), this trade-off stands. Workaround: don't archive an agent whose work was handed off, or unarchive the detached child afterward.
 
@@ -94,16 +94,16 @@ Closing a subagent's tab on one client doesn't affect other clients' layouts. Th
 ## Storage
 
 ```
-$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json
+$CHISACODE_HOME/agents/{cwd-with-dashes}/{agent-id}.json
 ```
 
 Each agent is a single JSON file. Fields relevant to this doc:
 
-| Field                             | Type          | Meaning                                                       |
-| --------------------------------- | ------------- | ------------------------------------------------------------- |
-| `id`                              | `string`      | Stable identifier                                             |
-| `archivedAt`                      | `string?`     | Soft-delete timestamp (ISO 8601)                              |
-| `labels["paseo.parent-agent-id"]` | `string?`     | Parent agent ID, set automatically by `create_agent` MCP tool |
-| `lastStatus`                      | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`      |
+| Field                                 | Type          | Meaning                                                       |
+| ------------------------------------- | ------------- | ------------------------------------------------------------- |
+| `id`                                  | `string`      | Stable identifier                                             |
+| `archivedAt`                          | `string?`     | Soft-delete timestamp (ISO 8601)                              |
+| `labels["chisacode.parent-agent-id"]` | `string?`     | Parent agent ID, set automatically by `create_agent` MCP tool |
+| `lastStatus`                          | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`      |
 
 See [`docs/data-model.md`](./data-model.md) for the full agent record.

@@ -1,4 +1,4 @@
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { normalizeWorkspaceDescriptor, type WorkspaceDescriptor } from "@/stores/session-store";
 import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
 

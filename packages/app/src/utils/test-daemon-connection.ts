@@ -1,5 +1,5 @@
-import { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
-import type { DaemonClientConfig } from "@fleurdelys/client/internal/daemon-client";
+import { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { DaemonClientConfig } from "@chisacode/client/internal/daemon-client";
 import type { HostConnection } from "@/types/host-connection";
 import { getOrCreateClientId } from "./client-id";
 import { resolveAppVersion } from "./app-version";

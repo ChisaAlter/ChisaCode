@@ -60,8 +60,8 @@ function DocsLayout() {
       <header className="md:hidden sticky top-0 z-50 bg-background border-b border-border">
         <div className="flex items-center justify-between p-4">
           <Link to="/" className="flex items-center gap-3">
-            <img src="/logo.svg" alt="Paseo" className="w-6 h-6" />
-            <span className="text-lg font-medium">Paseo</span>
+            <img src="/logo.svg" alt="ChisaCode" className="w-6 h-6" />
+            <span className="text-lg font-medium">ChisaCode</span>
           </Link>
           <button
             type="button"
@@ -102,8 +102,8 @@ function DocsLayout() {
         {/* Desktop sidebar */}
         <aside className="hidden md:flex md:flex-col w-56 shrink-0 border-r border-border p-6 sticky top-0 h-screen">
           <Link to="/" className="flex items-center gap-3 mb-8 shrink-0">
-            <img src="/logo.svg" alt="Paseo" className="w-6 h-6" />
-            <span className="text-lg font-medium">Paseo</span>
+            <img src="/logo.svg" alt="ChisaCode" className="w-6 h-6" />
+            <span className="text-lg font-medium">ChisaCode</span>
           </Link>
           <nav className="flex-1 min-h-0 overflow-y-auto -ml-3 -mr-3 pr-3 space-y-4">
             {groups.map((group) => (

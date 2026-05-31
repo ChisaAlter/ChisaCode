@@ -13,7 +13,7 @@ function reviewAttachment(body: string): WorkspaceComposerAttachment {
     commentCount: 1,
     attachment: {
       type: "review",
-      mimeType: "application/paseo-review",
+      mimeType: "application/chisacode-review",
       cwd: "/repo",
       mode: "uncommitted",
       baseRef: null,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { AgentProvider, ProviderSnapshotEntry } from "@fleurdelys/protocol/agent-types";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { AgentProvider, ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { queryClient as singletonQueryClient } from "@/query/query-client";

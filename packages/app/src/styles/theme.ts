@@ -1,4 +1,4 @@
-import { darkHighlightColors, lightHighlightColors } from "@fleurdelys/highlight";
+import { darkHighlightColors, lightHighlightColors } from "@chisacode/highlight";
 
 export const baseColors = {
   // Base colors
@@ -320,8 +320,8 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// Paseo — subtle teal-green tint (default)
-const paseoDarkColors = buildDarkSemanticColors({
+// ChisaCode — subtle teal-green tint (default)
+const chisacodeDarkColors = buildDarkSemanticColors({
   surface0: "#181B1A",
   surface1: "#1E2120",
   surface2: "#272A29",
@@ -530,7 +530,7 @@ function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemanticColor
   } as const;
 }
 
-export const darkTheme = buildDarkTheme(paseoDarkColors);
+export const darkTheme = buildDarkTheme(chisacodeDarkColors);
 export const darkZincTheme = buildDarkTheme(zincDarkColors);
 export const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
 export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);

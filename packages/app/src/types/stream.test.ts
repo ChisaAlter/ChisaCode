@@ -14,9 +14,9 @@ import {
   type StreamItem,
   isAgentToolCallItem,
 } from "./stream";
-import type { AgentProvider, ToolCallDetail } from "@fleurdelys/protocol/agent-types";
-import type { AgentStreamEventPayload } from "@fleurdelys/protocol/messages";
-import { buildToolCallDisplayModel } from "@fleurdelys/protocol/tool-call-display";
+import type { AgentProvider, ToolCallDetail } from "@chisacode/protocol/agent-types";
+import type { AgentStreamEventPayload } from "@chisacode/protocol/messages";
+import { buildToolCallDisplayModel } from "@chisacode/protocol/tool-call-display";
 
 type CanonicalToolStatus = "running" | "completed" | "failed" | "canceled";
 

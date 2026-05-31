@@ -1,4 +1,4 @@
-import type { ServerCapabilityState } from "@fleurdelys/protocol/messages";
+import type { ServerCapabilityState } from "@chisacode/protocol/messages";
 import type { DaemonServerInfo } from "@/stores/session-store";
 
 export type VoiceReadinessMode = "dictation" | "voice";

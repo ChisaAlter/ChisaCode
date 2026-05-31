@@ -22,7 +22,7 @@ interface CreateAgentWorktreeTestOptions {
   branchName: string;
   baseBranch: string;
   worktreeSlug: string;
-  paseoHome?: string;
+  chisacodeHome?: string;
 }
 
 interface CreateAgentWorktreeTestResult {
@@ -58,7 +58,7 @@ async function createBootstrapWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: false,
-    paseoHome: options.paseoHome,
+    chisacodeHome: options.chisacodeHome,
   });
   return { worktree, shouldBootstrap: true };
 }
@@ -66,14 +66,14 @@ async function createBootstrapWorktreeForTest(
 describe("runAsyncWorktreeBootstrap", () => {
   let tempDir: string;
   let repoDir: string;
-  let paseoHome: string;
+  let chisacodeHome: string;
   let realTerminalManagers: TerminalManager[];
 
   beforeEach(() => {
     realTerminalManagers = [];
     tempDir = realpathSync(mkdtempSync(join(tmpdir(), "worktree-bootstrap-test-")));
     repoDir = join(tempDir, "repo");
-    paseoHome = join(tempDir, "paseo-home");
+    chisacodeHome = join(tempDir, "chisacode-home");
 
     mkdirSync(repoDir, { recursive: true });
     execFileSync("git", ["init", "-b", "main"], { cwd: repoDir, stdio: "pipe" });
@@ -94,14 +94,14 @@ describe("runAsyncWorktreeBootstrap", () => {
 
   it("does not fail setup when live timeline emission throws", async () => {
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         worktree: {
           setup: ['echo "ok"'],
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add setup"], {
       cwd: repoDir,
       stdio: "pipe",
@@ -112,7 +112,7 @@ describe("runAsyncWorktreeBootstrap", () => {
       branchName: "feature-live-failure",
       baseBranch: "main",
       worktreeSlug: "feature-live-failure",
-      paseoHome,
+      chisacodeHome,
     });
 
     const persisted: AgentTimelineItem[] = [];
@@ -133,7 +133,7 @@ describe("runAsyncWorktreeBootstrap", () => {
     ).resolves.toBeUndefined();
 
     const persistedSetupItems = persisted.filter(
-      (item) => item.type === "tool_call" && item.name === "paseo_worktree_setup",
+      (item) => item.type === "tool_call" && item.name === "chisacode_worktree_setup",
     );
     expect(persistedSetupItems).toHaveLength(1);
     if (persistedSetupItems[0]?.type === "tool_call") {
@@ -145,14 +145,14 @@ describe("runAsyncWorktreeBootstrap", () => {
     const largeOutputCommand =
       "node -e \"process.stdout.write('prefix-'); process.stdout.write('x'.repeat(70000)); process.stdout.write('-suffix')\"";
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         worktree: {
           setup: [largeOutputCommand],
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add large output setup"], {
       cwd: repoDir,
       stdio: "pipe",
@@ -163,7 +163,7 @@ describe("runAsyncWorktreeBootstrap", () => {
       branchName: "feature-large-output",
       baseBranch: "main",
       worktreeSlug: "feature-large-output",
-      paseoHome,
+      chisacodeHome,
     });
 
     const persisted: AgentTimelineItem[] = [];
@@ -181,7 +181,7 @@ describe("runAsyncWorktreeBootstrap", () => {
 
     const persistedSetupItem = persisted.find(
       (item): item is Extract<AgentTimelineItem, { type: "tool_call" }> =>
-        item.type === "tool_call" && item.name === "paseo_worktree_setup",
+        item.type === "tool_call" && item.name === "chisacode_worktree_setup",
     );
     expect(persistedSetupItem).toBeDefined();
     expect(persistedSetupItem?.detail.type).toBe("worktree_setup");
@@ -202,7 +202,7 @@ describe("runAsyncWorktreeBootstrap", () => {
 
   it("waits for terminal output before sending bootstrap commands", async () => {
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         worktree: {
           terminals: [
@@ -214,7 +214,7 @@ describe("runAsyncWorktreeBootstrap", () => {
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync(
       "git",
       ["-c", "commit.gpgsign=false", "commit", "-m", "add terminal bootstrap config"],
@@ -229,7 +229,7 @@ describe("runAsyncWorktreeBootstrap", () => {
       branchName: "feature-terminal-readiness",
       baseBranch: "main",
       worktreeSlug: "feature-terminal-readiness",
-      paseoHome,
+      chisacodeHome,
     });
 
     let readyAt = 0;
@@ -417,15 +417,15 @@ describe("runAsyncWorktreeBootstrap", () => {
     expect(createTerminalCalls[0]?.name).toBe("api");
     expect(terminalRecords[0]?.sentInputs).toEqual(["npm run api\r"]);
     expect(createTerminalCalls[0]?.env).not.toHaveProperty("PORT");
-    expect(createTerminalCalls[0]?.env?.PASEO_PORT).toEqual(expect.any(String));
+    expect(createTerminalCalls[0]?.env?.CHISACODE_PORT).toEqual(expect.any(String));
     expect(createTerminalCalls[0]?.env?.HOST).toBe("127.0.0.1");
-    expect(createTerminalCalls[0]?.env?.PASEO_URL).toBe(
+    expect(createTerminalCalls[0]?.env?.CHISACODE_URL).toBe(
       "http://api.feature-socket-service.repo.localhost:6767",
     );
-    expect(createTerminalCalls[0]?.env?.PASEO_SERVICE_API_PORT).toBe(
-      createTerminalCalls[0]?.env?.PASEO_PORT,
+    expect(createTerminalCalls[0]?.env?.CHISACODE_SERVICE_API_PORT).toBe(
+      createTerminalCalls[0]?.env?.CHISACODE_PORT,
     );
-    expect(createTerminalCalls[0]?.env?.PASEO_SERVICE_API_URL).toBe(
+    expect(createTerminalCalls[0]?.env?.CHISACODE_SERVICE_API_URL).toBe(
       "http://api.feature-socket-service.repo.localhost:6767",
     );
   }
@@ -446,10 +446,10 @@ describe("runAsyncWorktreeBootstrap", () => {
     if (plannedAppServerPort === undefined) {
       throw new Error("Expected app-server to be present in the service port plan");
     }
-    expect(createTerminalCalls[0]?.env?.PASEO_SERVICE_APP_SERVER_PORT).toBe(
+    expect(createTerminalCalls[0]?.env?.CHISACODE_SERVICE_APP_SERVER_PORT).toBe(
       String(plannedAppServerPort),
     );
-    expect(createTerminalCalls[0]?.env?.PASEO_SERVICE_APP_SERVER_URL).toBe(
+    expect(createTerminalCalls[0]?.env?.CHISACODE_SERVICE_APP_SERVER_URL).toBe(
       "http://app-server.feature-socket-service.repo.localhost:6767",
     );
   }
@@ -466,12 +466,12 @@ describe("runAsyncWorktreeBootstrap", () => {
     });
   }
 
-  function commitPaseoScripts(
+  function commitChisaCodeScripts(
     scripts: Record<string, { command: string; type?: "script" | "service" }>,
     message = "add script config",
   ): void {
-    writeFileSync(join(repoDir, "paseo.json"), JSON.stringify({ scripts }));
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    writeFileSync(join(repoDir, "chisacode.json"), JSON.stringify({ scripts }));
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", message], {
       cwd: repoDir,
       stdio: "pipe",
@@ -479,7 +479,7 @@ describe("runAsyncWorktreeBootstrap", () => {
   }
 
   it("spawns plain scripts in persistent shell terminals without env injection or routes", async () => {
-    commitPaseoScripts({
+    commitChisaCodeScripts({
       web: {
         command: "npm run dev",
       },
@@ -519,7 +519,7 @@ describe("runAsyncWorktreeBootstrap", () => {
   });
 
   it("records plain script exit codes from shell command completion without terminal exit", async () => {
-    commitPaseoScripts(
+    commitChisaCodeScripts(
       {
         typecheck: {
           command: 'node -e "process.exit(7)"',
@@ -558,7 +558,7 @@ describe("runAsyncWorktreeBootstrap", () => {
   });
 
   it("reuses a live terminal when rerunning after plain script completion", async () => {
-    commitPaseoScripts(
+    commitChisaCodeScripts(
       {
         typecheck: {
           command: "npm run typecheck",
@@ -624,7 +624,7 @@ describe("runAsyncWorktreeBootstrap", () => {
   });
 
   it("tracks command completion when reusing a live terminal from a stopped plain script entry", async () => {
-    commitPaseoScripts(
+    commitChisaCodeScripts(
       {
         typecheck: {
           command: "npm run typecheck",
@@ -679,7 +679,7 @@ describe("runAsyncWorktreeBootstrap", () => {
   });
 
   it("uses terminal exit as a fallback before shell command completion", async () => {
-    commitPaseoScripts(
+    commitChisaCodeScripts(
       {
         typecheck: {
           command: "npm run typecheck",
@@ -717,7 +717,7 @@ describe("runAsyncWorktreeBootstrap", () => {
   });
 
   it("rejects duplicate plain script starts while running", async () => {
-    commitPaseoScripts(
+    commitChisaCodeScripts(
       {
         typecheck: {
           command: 'node -e "setTimeout(() => {}, 30000)"',
@@ -760,7 +760,7 @@ describe("runAsyncWorktreeBootstrap", () => {
   });
 
   it("spawns services with route registration and injected peer service env vars", async () => {
-    commitPaseoScripts(
+    commitChisaCodeScripts(
       {
         api: {
           type: "service",
@@ -815,7 +815,7 @@ describe("runAsyncWorktreeBootstrap", () => {
 
   it("refreshes a stopped service port on respawn and updates the route", async () => {
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         scripts: {
           api: {
@@ -829,7 +829,7 @@ describe("runAsyncWorktreeBootstrap", () => {
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync(
       "git",
       ["-c", "commit.gpgsign=false", "commit", "-m", "add respawn service script config"],
@@ -910,7 +910,7 @@ describe("runAsyncWorktreeBootstrap", () => {
     }
     expect(secondPort).not.toBe(firstPort);
     expect(secondPort).toEqual(expect.any(Number));
-    expect(createTerminalCalls[2]?.env?.PASEO_SERVICE_WORKER_PORT).toBe(String(workerPort));
+    expect(createTerminalCalls[2]?.env?.CHISACODE_SERVICE_WORKER_PORT).toBe(String(workerPort));
     expect(routeStore.getRouteEntry("api.feature-respawn-service.repo.localhost")).toMatchObject({
       hostname: "api.feature-respawn-service.repo.localhost",
       port: secondPort,
@@ -922,7 +922,7 @@ describe("runAsyncWorktreeBootstrap", () => {
 
   it("removes the current service route on exit after a branch rename", async () => {
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         scripts: {
           api: {
@@ -932,7 +932,7 @@ describe("runAsyncWorktreeBootstrap", () => {
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync(
       "git",
       ["-c", "commit.gpgsign=false", "commit", "-m", "add renamed service script config"],
@@ -984,7 +984,7 @@ describe("runAsyncWorktreeBootstrap", () => {
 
   it("fails normalized service env name collisions before terminal creation", async () => {
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         scripts: {
           "app-server": {
@@ -998,7 +998,7 @@ describe("runAsyncWorktreeBootstrap", () => {
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync(
       "git",
       ["-c", "commit.gpgsign=false", "commit", "-m", "add colliding service config"],
@@ -1033,7 +1033,7 @@ describe("runAsyncWorktreeBootstrap", () => {
     ).toBeNull();
 
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         scripts: {
           "app-server": {
@@ -1070,13 +1070,13 @@ describe("runAsyncWorktreeBootstrap", () => {
 
     expect(Array.from(plan.keys())).toEqual(["app-server", "worker"]);
     expect(createTerminalCalls).toHaveLength(1);
-    expect(createTerminalCalls[0]?.env).toHaveProperty("PASEO_SERVICE_APP_SERVER_PORT");
-    expect(createTerminalCalls[0]?.env).toHaveProperty("PASEO_SERVICE_WORKER_PORT");
+    expect(createTerminalCalls[0]?.env).toHaveProperty("CHISACODE_SERVICE_APP_SERVER_PORT");
+    expect(createTerminalCalls[0]?.env).toHaveProperty("CHISACODE_SERVICE_WORKER_PORT");
   });
 
   it("binds services to the network when the daemon listens on a non-loopback host", async () => {
     writeFileSync(
-      join(repoDir, "paseo.json"),
+      join(repoDir, "chisacode.json"),
       JSON.stringify({
         scripts: {
           web: {
@@ -1086,7 +1086,7 @@ describe("runAsyncWorktreeBootstrap", () => {
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync(
       "git",
       ["-c", "commit.gpgsign=false", "commit", "-m", "add remote service script config"],
@@ -1115,7 +1115,7 @@ describe("runAsyncWorktreeBootstrap", () => {
 
     expect(createTerminalCalls).toHaveLength(1);
     expect(createTerminalCalls[0]?.env?.HOST).toBe("0.0.0.0");
-    expect(createTerminalCalls[0]?.env?.PASEO_URL).toBe(
+    expect(createTerminalCalls[0]?.env?.CHISACODE_URL).toBe(
       "http://web.feature-remote-service.repo.localhost:6767",
     );
   });

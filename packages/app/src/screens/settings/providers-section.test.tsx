@@ -4,8 +4,8 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ProviderSnapshotEntry } from "@fleurdelys/protocol/agent-types";
-import type { MutableDaemonConfig } from "@fleurdelys/protocol/messages";
+import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
+import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
 const { theme, snapshotState, configState, patchConfigMock, openProviderSettingsMock } = vi.hoisted(
   () => ({

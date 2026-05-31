@@ -17,7 +17,7 @@ import type {
   SendAgentMessageRequest,
   SessionOutboundMessage,
   WorkspaceDescriptorPayload,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import { DaemonClient } from "./daemon-client.js";
 import type {
   FetchAgentTimelineCursor,
@@ -41,14 +41,14 @@ export type ConnectionState =
   | { status: "disconnected"; reason?: string }
   | { status: "disposed" };
 
-export interface PaseoLogger {
+export interface ChisaCodeLogger {
   debug(obj: object, msg?: string): void;
   info(obj: object, msg?: string): void;
   warn(obj: object, msg?: string): void;
   error(obj: object, msg?: string): void;
 }
 
-export interface PaseoClientConfig {
+export interface ChisaCodeClientConfig {
   url: string;
   clientId?: string;
   appVersion?: string;
@@ -56,7 +56,7 @@ export interface PaseoClientConfig {
   password?: string;
   authHeader?: string;
   suppressSendErrors?: boolean;
-  logger?: PaseoLogger;
+  logger?: ChisaCodeLogger;
   connectTimeoutMs?: number;
   e2ee?: {
     enabled?: boolean;
@@ -71,98 +71,98 @@ export interface PaseoClientConfig {
   runtimeMetricsWindowMs?: number;
 }
 
-export type PaseoWorkspace = WorkspaceDescriptorPayload;
-export type PaseoAgent = AgentSnapshotPayload;
-export type PaseoWorkspaceListOptions = Omit<
+export type ChisaCodeWorkspace = WorkspaceDescriptorPayload;
+export type ChisaCodeAgent = AgentSnapshotPayload;
+export type ChisaCodeWorkspaceListOptions = Omit<
   FetchWorkspacesRequestMessage,
   "type" | "requestId"
 > & {
   requestId?: string;
 };
 
-export interface PaseoWorkspaceListResult {
+export interface ChisaCodeWorkspaceListResult {
   requestId: string;
   subscriptionId?: string | null;
-  entries: PaseoWorkspace[];
+  entries: ChisaCodeWorkspace[];
   pageInfo: FetchWorkspacesResponseMessage["payload"]["pageInfo"];
 }
 
-export interface PaseoWorkspaceOpenOptions {
+export interface ChisaCodeWorkspaceOpenOptions {
   cwd: string;
   requestId?: string;
 }
 
-export interface PaseoWorkspaceOpenResult {
+export interface ChisaCodeWorkspaceOpenResult {
   requestId: string;
-  workspace: PaseoWorkspaceHandle | null;
+  workspace: ChisaCodeWorkspaceHandle | null;
   error: string | null;
 }
 
-export interface PaseoWorkspaceArchiveResult {
+export interface ChisaCodeWorkspaceArchiveResult {
   requestId: string;
   workspaceId: string;
   archivedAt: string | null;
   error: string | null;
 }
 
-export type PaseoWorkspaceUpdate = Extract<
+export type ChisaCodeWorkspaceUpdate = Extract<
   SessionOutboundMessage,
   { type: "workspace_update" }
 >["payload"];
 
-export type PaseoWorkspaceUpdateHandler = (update: PaseoWorkspaceUpdate) => void;
+export type ChisaCodeWorkspaceUpdateHandler = (update: ChisaCodeWorkspaceUpdate) => void;
 
 /**
  * A handle is a stable typed reference to a daemon resource. Its identity is the
  * daemon id, and `latest()` only returns the most recent snapshot this handle has
  * seen through construction, `refetch()`, or this handle's local subscription.
  */
-export interface PaseoWorkspaceHandle {
+export interface ChisaCodeWorkspaceHandle {
   readonly id: string;
-  latest(): PaseoWorkspace | null;
+  latest(): ChisaCodeWorkspace | null;
   /**
    * Fetches a fresh workspace snapshot through the existing workspace list RPC,
    * exact-matches this handle id from the result, and updates `latest()`.
    */
-  refetch(options?: { requestId?: string }): Promise<PaseoWorkspace | null>;
-  archive(requestId?: string): Promise<PaseoWorkspaceArchiveResult>;
+  refetch(options?: { requestId?: string }): Promise<ChisaCodeWorkspace | null>;
+  archive(requestId?: string): Promise<ChisaCodeWorkspaceArchiveResult>;
   /**
    * Subscribes to already-emitted daemon workspace_update events for this id.
    * This returns a local unsubscribe function; it does not own app cache state or
    * send a daemon unsubscribe RPC. Call `workspaces.list({ subscribe: {} })` when
    * the daemon should start streaming workspace directory updates.
    */
-  subscribe(handler: (update: PaseoWorkspaceUpdate) => void): () => void;
+  subscribe(handler: (update: ChisaCodeWorkspaceUpdate) => void): () => void;
 }
 
-export interface PaseoWorkspaceActions {
-  list(options?: PaseoWorkspaceListOptions): Promise<PaseoWorkspaceListResult>;
-  ref(workspace: string | PaseoWorkspace): PaseoWorkspaceHandle;
+export interface ChisaCodeWorkspaceActions {
+  list(options?: ChisaCodeWorkspaceListOptions): Promise<ChisaCodeWorkspaceListResult>;
+  ref(workspace: string | ChisaCodeWorkspace): ChisaCodeWorkspaceHandle;
   open(
-    input: string | PaseoWorkspaceOpenOptions,
+    input: string | ChisaCodeWorkspaceOpenOptions,
     requestId?: string,
-  ): Promise<PaseoWorkspaceOpenResult>;
+  ): Promise<ChisaCodeWorkspaceOpenResult>;
   create(
-    input: string | PaseoWorkspaceOpenOptions,
+    input: string | ChisaCodeWorkspaceOpenOptions,
     requestId?: string,
-  ): Promise<PaseoWorkspaceOpenResult>;
+  ): Promise<ChisaCodeWorkspaceOpenResult>;
   archive(
-    workspace: string | PaseoWorkspaceHandle,
+    workspace: string | ChisaCodeWorkspaceHandle,
     requestId?: string,
-  ): Promise<PaseoWorkspaceArchiveResult>;
+  ): Promise<ChisaCodeWorkspaceArchiveResult>;
   /**
    * Local event subscription over the low-level driver's workspace_update stream.
    * The returned function only removes this SDK listener.
    */
-  subscribe(handler: PaseoWorkspaceUpdateHandler): () => void;
+  subscribe(handler: ChisaCodeWorkspaceUpdateHandler): () => void;
 }
 
-type PaseoAgentSessionConfig = CreateAgentRequestMessage["config"];
-type PaseoAgentProvider = PaseoAgentSessionConfig["provider"];
-type PaseoAgentConfigOverrides = Partial<Omit<PaseoAgentSessionConfig, "provider" | "cwd">>;
+type ChisaCodeAgentSessionConfig = CreateAgentRequestMessage["config"];
+type ChisaCodeAgentProvider = ChisaCodeAgentSessionConfig["provider"];
+type ChisaCodeAgentConfigOverrides = Partial<Omit<ChisaCodeAgentSessionConfig, "provider" | "cwd">>;
 
-export interface PaseoAgentCreateOptions extends PaseoAgentConfigOverrides {
-  config?: PaseoAgentSessionConfig;
+export interface ChisaCodeAgentCreateOptions extends ChisaCodeAgentConfigOverrides {
+  config?: ChisaCodeAgentSessionConfig;
   provider?: CreateAgentRequestMessage["config"]["provider"];
   cwd?: string;
   workspaceId?: string;
@@ -177,12 +177,12 @@ export interface PaseoAgentCreateOptions extends PaseoAgentConfigOverrides {
   labels?: Record<string, string>;
 }
 
-export interface PaseoAgentRefetchResult {
-  agent: PaseoAgent;
+export interface ChisaCodeAgentRefetchResult {
+  agent: ChisaCodeAgent;
   project: ProjectPlacementPayload | null;
 }
 
-export interface PaseoAgentTimelineRefetchOptions {
+export interface ChisaCodeAgentTimelineRefetchOptions {
   direction?: FetchAgentTimelineDirection;
   cursor?: FetchAgentTimelineCursor;
   limit?: number;
@@ -190,30 +190,36 @@ export interface PaseoAgentTimelineRefetchOptions {
   requestId?: string;
 }
 
-export interface PaseoAgentSendOptions {
+export interface ChisaCodeAgentSendOptions {
   messageId?: string;
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: SendAgentMessageRequest["attachments"];
 }
 
-export type PaseoAgentUpdate = Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
+export type ChisaCodeAgentUpdate = Extract<
+  SessionOutboundMessage,
+  { type: "agent_update" }
+>["payload"];
 
-export type PaseoAgentStream = Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"];
+export type ChisaCodeAgentStream = Extract<
+  SessionOutboundMessage,
+  { type: "agent_stream" }
+>["payload"];
 
-export type PaseoAgentUpdateHandler = (update: PaseoAgentUpdate) => void;
+export type ChisaCodeAgentUpdateHandler = (update: ChisaCodeAgentUpdate) => void;
 
-export interface PaseoAgentTimelineHandle {
+export interface ChisaCodeAgentTimelineHandle {
   /**
    * Fetches a fresh timeline page through the existing daemon RPC. If the daemon
    * includes an agent snapshot in the response, the parent handle's `latest()`
    * is updated to that snapshot.
    */
-  refetch(options?: PaseoAgentTimelineRefetchOptions): Promise<FetchAgentTimelinePayload>;
+  refetch(options?: ChisaCodeAgentTimelineRefetchOptions): Promise<FetchAgentTimelinePayload>;
   /**
    * Local listener for agent_stream events matching this handle id. It does not
    * retain timeline entries or own application cache state.
    */
-  subscribe(handler: (event: PaseoAgentStream) => void): () => void;
+  subscribe(handler: (event: ChisaCodeAgentStream) => void): () => void;
 }
 
 /**
@@ -222,91 +228,94 @@ export interface PaseoAgentTimelineHandle {
  * handle through construction, `refetch()`, timeline refetch, archive, or local
  * agent_update subscription.
  */
-export interface PaseoAgentHandle {
+export interface ChisaCodeAgentHandle {
   readonly id: string;
-  readonly timeline: PaseoAgentTimelineHandle;
-  latest(): PaseoAgent | null;
-  refetch(requestId?: string): Promise<PaseoAgentRefetchResult | null>;
-  send(text: string, options?: PaseoAgentSendOptions): Promise<void>;
+  readonly timeline: ChisaCodeAgentTimelineHandle;
+  latest(): ChisaCodeAgent | null;
+  refetch(requestId?: string): Promise<ChisaCodeAgentRefetchResult | null>;
+  send(text: string, options?: ChisaCodeAgentSendOptions): Promise<void>;
   archive(): Promise<{ archivedAt: string }>;
-  subscribe(handler: (update: PaseoAgentUpdate) => void): () => void;
+  subscribe(handler: (update: ChisaCodeAgentUpdate) => void): () => void;
 }
 
-export interface PaseoAgentActions {
-  ref(agent: string | PaseoAgent): PaseoAgentHandle;
-  create(options: PaseoAgentCreateOptions): Promise<PaseoAgentHandle>;
+export interface ChisaCodeAgentActions {
+  ref(agent: string | ChisaCodeAgent): ChisaCodeAgentHandle;
+  create(options: ChisaCodeAgentCreateOptions): Promise<ChisaCodeAgentHandle>;
   /**
    * Local event subscription over the low-level driver's agent_update stream.
    * The returned function only removes this SDK listener.
    */
-  subscribe(handler: PaseoAgentUpdateHandler): () => void;
+  subscribe(handler: ChisaCodeAgentUpdateHandler): () => void;
 }
 
-export interface PaseoProviderConfig extends PaseoProviderConfigInput {
-  provider: PaseoAgentProvider;
+export interface ChisaCodeProviderConfig extends ChisaCodeProviderConfigInput {
+  provider: ChisaCodeAgentProvider;
 }
-export type PaseoProviderFeatureValues = Record<string, unknown>;
+export type ChisaCodeProviderFeatureValues = Record<string, unknown>;
 
-export interface PaseoProviderConfigInput {
+export interface ChisaCodeProviderConfigInput {
   model?: string;
   modeId?: string;
   thinkingOptionId?: string;
-  featureValues?: PaseoProviderFeatureValues;
+  featureValues?: ChisaCodeProviderFeatureValues;
 }
 
-export type PaseoProviderModelsResult = ListProviderModelsResponseMessage["payload"];
-export type PaseoProviderModesResult = ListProviderModesResponseMessage["payload"];
-export type PaseoProviderFeaturesInput = ListProviderFeaturesRequestMessage["draftConfig"];
-export type PaseoProviderFeaturesResult = ListProviderFeaturesResponseMessage["payload"];
-export type PaseoProviderAvailabilityResult = ListAvailableProvidersResponse["payload"];
-export type PaseoProviderSnapshotResult = GetProvidersSnapshotResponseMessage["payload"];
-export type PaseoProviderSnapshotUpdate = Extract<
+export type ChisaCodeProviderModelsResult = ListProviderModelsResponseMessage["payload"];
+export type ChisaCodeProviderModesResult = ListProviderModesResponseMessage["payload"];
+export type ChisaCodeProviderFeaturesInput = ListProviderFeaturesRequestMessage["draftConfig"];
+export type ChisaCodeProviderFeaturesResult = ListProviderFeaturesResponseMessage["payload"];
+export type ChisaCodeProviderAvailabilityResult = ListAvailableProvidersResponse["payload"];
+export type ChisaCodeProviderSnapshotResult = GetProvidersSnapshotResponseMessage["payload"];
+export type ChisaCodeProviderSnapshotUpdate = Extract<
   SessionOutboundMessage,
   { type: "providers_snapshot_update" }
 >["payload"];
-export type PaseoProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
-export type PaseoProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
+export type ChisaCodeProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
+export type ChisaCodeProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
 
-export interface PaseoProviderListOptions {
+export interface ChisaCodeProviderListOptions {
   cwd?: string;
   requestId?: string;
 }
 
-export interface PaseoProviderRefreshOptions {
+export interface ChisaCodeProviderRefreshOptions {
   cwd?: string;
-  providers?: PaseoAgentProvider[];
+  providers?: ChisaCodeAgentProvider[];
   requestId?: string;
 }
 
-export interface PaseoProviderActions {
-  codex(input?: PaseoProviderConfigInput): PaseoProviderConfig;
-  claude(input?: PaseoProviderConfigInput): PaseoProviderConfig;
-  opencode(input?: PaseoProviderConfigInput): PaseoProviderConfig;
-  copilot(input?: PaseoProviderConfigInput): PaseoProviderConfig;
-  config(provider: PaseoAgentProvider, input?: PaseoProviderConfigInput): PaseoProviderConfig;
+export interface ChisaCodeProviderActions {
+  codex(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  claude(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  opencode(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  copilot(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  config(
+    provider: ChisaCodeAgentProvider,
+    input?: ChisaCodeProviderConfigInput,
+  ): ChisaCodeProviderConfig;
   listModels(
-    provider: PaseoAgentProvider,
-    options?: PaseoProviderListOptions,
-  ): Promise<PaseoProviderModelsResult>;
+    provider: ChisaCodeAgentProvider,
+    options?: ChisaCodeProviderListOptions,
+  ): Promise<ChisaCodeProviderModelsResult>;
   listModes(
-    provider: PaseoAgentProvider,
-    options?: PaseoProviderListOptions,
-  ): Promise<PaseoProviderModesResult>;
+    provider: ChisaCodeAgentProvider,
+    options?: ChisaCodeProviderListOptions,
+  ): Promise<ChisaCodeProviderModesResult>;
   listFeatures(
-    draftConfig: PaseoProviderFeaturesInput,
+    draftConfig: ChisaCodeProviderFeaturesInput,
     options?: { requestId?: string },
-  ): Promise<PaseoProviderFeaturesResult>;
-  listAvailable(options?: { requestId?: string }): Promise<PaseoProviderAvailabilityResult>;
-  snapshot(options?: PaseoProviderListOptions): Promise<PaseoProviderSnapshotResult>;
-  refresh(options?: PaseoProviderRefreshOptions): Promise<PaseoProviderRefreshResult>;
+  ): Promise<ChisaCodeProviderFeaturesResult>;
+  listAvailable(options?: { requestId?: string }): Promise<ChisaCodeProviderAvailabilityResult>;
+  snapshot(options?: ChisaCodeProviderListOptions): Promise<ChisaCodeProviderSnapshotResult>;
+  refresh(options?: ChisaCodeProviderRefreshOptions): Promise<ChisaCodeProviderRefreshResult>;
   diagnostic(
-    provider: PaseoAgentProvider,
+    provider: ChisaCodeAgentProvider,
     options?: { requestId?: string },
-  ): Promise<PaseoProviderDiagnosticResult>;
-  subscribe(handler: (update: PaseoProviderSnapshotUpdate) => void): () => void;
+  ): Promise<ChisaCodeProviderDiagnosticResult>;
+  subscribe(handler: (update: ChisaCodeProviderSnapshotUpdate) => void): () => void;
 }
 
-export interface PaseoConfigActions {
+export interface ChisaCodeConfigActions {
   /**
    * Reads daemon config through the existing config RPC. Provider profiles,
    * custom provider entries, keys/env, custom binaries, and provider enablement
@@ -326,18 +335,18 @@ export interface PaseoConfigActions {
   ): Promise<{ requestId: string; config: MutableDaemonConfig }>;
 }
 
-export interface PaseoClient {
-  readonly workspaces: PaseoWorkspaceActions;
-  readonly agents: PaseoAgentActions;
-  readonly providers: PaseoProviderActions;
-  readonly config: PaseoConfigActions;
+export interface ChisaCodeClient {
+  readonly workspaces: ChisaCodeWorkspaceActions;
+  readonly agents: ChisaCodeAgentActions;
+  readonly providers: ChisaCodeProviderActions;
+  readonly config: ChisaCodeConfigActions;
   connect(): Promise<void>;
   close(): Promise<void>;
   ensureConnected(): void;
   getConnectionState(): ConnectionState;
 }
 
-export function createPaseoClient(config: PaseoClientConfig): PaseoClient {
+export function createChisaCodeClient(config: ChisaCodeClientConfig): ChisaCodeClient {
   const daemonClient = new DaemonClient({
     ...config,
     clientId: config.clientId ?? createGeneratedClientId(),
@@ -402,8 +411,8 @@ export function createPaseoClient(config: PaseoClientConfig): PaseoClient {
   };
 }
 
-type WorkspaceHandleFactory = (workspace: string | PaseoWorkspace) => PaseoWorkspaceHandle;
-type AgentHandleFactory = (agent: string | PaseoAgent) => PaseoAgentHandle;
+type WorkspaceHandleFactory = (workspace: string | ChisaCodeWorkspace) => ChisaCodeWorkspaceHandle;
+type AgentHandleFactory = (agent: string | ChisaCodeAgent) => ChisaCodeAgentHandle;
 
 function createWorkspaceHandleFactory(daemonClient: DaemonClient): WorkspaceHandleFactory {
   return (workspace) => {
@@ -450,7 +459,7 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
     const id = typeof agent === "string" ? agent : agent.id;
     let latest = typeof agent === "string" ? null : agent;
 
-    const handle: PaseoAgentHandle = {
+    const handle: ChisaCodeAgentHandle = {
       id,
       timeline: {
         refetch: async (options) => {
@@ -502,9 +511,9 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
 async function openWorkspace(
   daemonClient: DaemonClient,
   createWorkspaceHandle: WorkspaceHandleFactory,
-  input: string | PaseoWorkspaceOpenOptions,
+  input: string | ChisaCodeWorkspaceOpenOptions,
   requestId?: string,
-): Promise<PaseoWorkspaceOpenResult> {
+): Promise<ChisaCodeWorkspaceOpenResult> {
   const options = typeof input === "string" ? { cwd: input, requestId } : input;
   const result = await daemonClient.openProject(options.cwd, options.requestId);
   return {
@@ -513,14 +522,14 @@ async function openWorkspace(
   };
 }
 
-function resolveWorkspaceId(workspace: string | PaseoWorkspaceHandle): string {
+function resolveWorkspaceId(workspace: string | ChisaCodeWorkspaceHandle): string {
   return typeof workspace === "string" ? workspace : workspace.id;
 }
 
 function providerConfig(
-  provider: PaseoAgentProvider,
-  input: PaseoProviderConfigInput = {},
-): PaseoProviderConfig {
+  provider: ChisaCodeAgentProvider,
+  input: ChisaCodeProviderConfigInput = {},
+): ChisaCodeProviderConfig {
   return {
     provider,
     ...(input.model !== undefined ? { model: input.model } : {}),
@@ -535,5 +544,5 @@ function createGeneratedClientId(): string {
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
       : Math.random().toString(36).slice(2);
-  return `paseo-sdk-${randomId}`;
+  return `chisacode-sdk-${randomId}`;
 }

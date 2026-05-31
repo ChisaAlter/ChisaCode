@@ -17,8 +17,8 @@ interface StoredBlobRecord {
   fileName: string | null;
 }
 
-const DB_NAME = "fleurdelys-attachment-bytes";
-const LEGACY_DB_NAME = "paseo-attachment-bytes";
+const DB_NAME = "chisacode-attachment-bytes";
+const LEGACY_DB_NAME = "chisacode-attachment-bytes";
 const STORE_NAME = "attachments";
 const DB_VERSION = 1;
 

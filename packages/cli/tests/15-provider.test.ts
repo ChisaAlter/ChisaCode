@@ -25,7 +25,7 @@ import { join } from "node:path";
 import {
   createE2ETestContext,
   createTempDirs,
-  runPaseoCli,
+  runChisaCodeCli,
   startTestDaemon,
 } from "./helpers/test-daemon.ts";
 
@@ -101,7 +101,7 @@ async function runProviderModelsJson(provider: string): Promise<ProviderModel[]>
   const transientNeedles = ["transport closed", "timed out", "timeout", "socket", "econn"];
 
   async function attemptRun(attempt: number): Promise<ProviderModel[]> {
-    const result = await ctx.paseo(["provider", "models", provider, "--json"]);
+    const result = await ctx.chisacode(["provider", "models", provider, "--json"]);
     if (result.exitCode === 0) {
       return JSON.parse(result.stdout.trim()) as ProviderModel[];
     }
@@ -154,7 +154,7 @@ try {
   // Test 1: provider --help shows subcommands
   {
     console.log("Test 1: provider --help shows subcommands");
-    const result = await ctx.paseo(["provider", "--help"]);
+    const result = await ctx.chisacode(["provider", "--help"]);
     assert.strictEqual(result.exitCode, 0, "provider --help should exit 0");
     assert(result.stdout.includes("ls"), "help should mention ls");
     assert(result.stdout.includes("models"), "help should mention models");
@@ -164,7 +164,7 @@ try {
   // Test 2: provider ls lists all providers
   {
     console.log("Test 2: provider ls lists all providers");
-    const result = await ctx.paseo(["provider", "ls"]);
+    const result = await ctx.chisacode(["provider", "ls"]);
     assert.strictEqual(result.exitCode, 0, "provider ls should exit 0");
     assert(result.stdout.includes("claude"), "output should include claude");
     assert(result.stdout.includes("codex"), "output should include codex");
@@ -183,7 +183,7 @@ try {
   // Test 3: provider ls --json outputs valid JSON
   {
     console.log("Test 3: provider ls --json outputs valid JSON");
-    const result = await ctx.paseo(["provider", "ls", "--json"]);
+    const result = await ctx.chisacode(["provider", "ls", "--json"]);
     assert.strictEqual(result.exitCode, 0, "should exit 0");
     const data = JSON.parse(result.stdout.trim());
     assert(Array.isArray(data), "output should be an array");
@@ -210,9 +210,9 @@ try {
   // Test 4: provider ls includes disabled providers
   {
     console.log("Test 4: provider ls includes disabled providers");
-    const { paseoHome, workDir } = await createTempDirs();
+    const { chisacodeHome, workDir } = await createTempDirs();
     await writeFile(
-      join(paseoHome, "config.json"),
+      join(chisacodeHome, "config.json"),
       JSON.stringify(
         {
           version: 1,
@@ -229,9 +229,9 @@ try {
       ) + "\n",
     );
 
-    const disabledCtx = await startTestDaemon({ paseoHome, workDir, timeout: 120000 });
+    const disabledCtx = await startTestDaemon({ chisacodeHome, workDir, timeout: 120000 });
     try {
-      const result = await runPaseoCli(disabledCtx, ["provider", "ls", "--json"]);
+      const result = await runChisaCodeCli(disabledCtx, ["provider", "ls", "--json"]);
       assert.strictEqual(result.exitCode, 0, "provider ls should exit 0");
       const data = JSON.parse(result.stdout.trim()) as ProviderListRow[];
       const claude = data.find((p) => p.provider === "claude");
@@ -242,7 +242,7 @@ try {
       assert(opencode, "enabled opencode provider should stay in provider ls");
       assert.strictEqual(opencode.enabled, "Enabled", "enabled provider should report Enabled");
 
-      const modelsResult = await runPaseoCli(disabledCtx, ["provider", "models", "claude"]);
+      const modelsResult = await runChisaCodeCli(disabledCtx, ["provider", "models", "claude"]);
       assert.notStrictEqual(
         modelsResult.exitCode,
         0,
@@ -266,7 +266,7 @@ try {
   // Test 5: provider ls --quiet outputs provider names only
   {
     console.log("Test 5: provider ls --quiet outputs provider names only");
-    const result = await ctx.paseo(["provider", "ls", "--quiet"]);
+    const result = await ctx.chisacode(["provider", "ls", "--quiet"]);
     assert.strictEqual(result.exitCode, 0, "should exit 0");
     const lines = result.stdout.trim().split("\n");
     assert(lines.length >= 3, `should have at least 3 lines, got ${lines.length}`);
@@ -330,7 +330,7 @@ try {
   // Test 9: provider models unknown fails with error
   {
     console.log("Test 9: provider models unknown fails with error");
-    const result = await ctx.paseo(["provider", "models", "unknown"]);
+    const result = await ctx.chisacode(["provider", "models", "unknown"]);
     assert.notStrictEqual(result.exitCode, 0, "should fail for unknown provider");
     const output = result.stdout + result.stderr;
     assert(
@@ -362,7 +362,7 @@ try {
       claudeModelIdsFromJson.length > 0,
       "claude model IDs should be captured from --json output",
     );
-    const result = await ctx.paseo(["provider", "models", "claude", "--quiet"]);
+    const result = await ctx.chisacode(["provider", "models", "claude", "--quiet"]);
     assert.strictEqual(result.exitCode, 0, "should exit 0");
     const lines = result.stdout.trim().split("\n").filter(Boolean);
     assert.strictEqual(

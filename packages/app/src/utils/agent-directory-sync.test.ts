@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { DaemonClient, FetchAgentsEntry } from "@fleurdelys/client/internal/daemon-client";
-import type { AgentSnapshotPayload } from "@fleurdelys/protocol/messages";
-import { PARENT_AGENT_ID_LABEL } from "@fleurdelys/protocol/agent-labels";
+import type { DaemonClient, FetchAgentsEntry } from "@chisacode/client/internal/daemon-client";
+import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
+import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
 import { useSessionStore } from "@/stores/session-store";
 import { replaceFetchedAgentDirectory } from "./agent-directory-sync";
 
@@ -49,7 +49,7 @@ function createEntry(agent: AgentSnapshotPayload): FetchAgentsEntry {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },

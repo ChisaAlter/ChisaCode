@@ -1,7 +1,7 @@
 import type {
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 
 export type PrState = "open" | "draft" | "merged" | "closed";
 export type CheckStatus = "success" | "failure" | "pending" | "skipped";

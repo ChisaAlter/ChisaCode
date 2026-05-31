@@ -9,8 +9,8 @@ import {
   resolvePackagedAsarPath,
 } from "../package-paths.js";
 
-const CLI_PACKAGE_NAME = "@fleurdelys/cli";
-const CLI_BIN_ENTRY = `${CLI_PACKAGE_NAME}/bin/fleurdelys`;
+const CLI_PACKAGE_NAME = "@chisacode/cli";
+const CLI_BIN_ENTRY = `${CLI_PACKAGE_NAME}/bin/chisacode`;
 const CLI_RUN_ENTRY = `${CLI_PACKAGE_NAME}/dist/run.js`;
 
 const esmRequire = createRequire(__filename);
@@ -30,7 +30,7 @@ export function resolveExternalCliEntrypoint(): NodeEntrypointSpec {
         filePath: path.join(
           resolvePackagedAsarPath(),
           "node_modules",
-          "@fleurdelys",
+          "@chisacode",
           "cli",
           "dist",
           "index.js",
@@ -65,7 +65,7 @@ export function resolvePassthroughCliEntrypoint(): string {
       filePath: path.join(
         resolvePackagedAsarPath(),
         "node_modules",
-        "@fleurdelys",
+        "@chisacode",
         "cli",
         "dist",
         "run.js",

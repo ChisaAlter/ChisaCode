@@ -14,13 +14,14 @@ import * as Clipboard from "expo-clipboard";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { BookOpen, Copy, RotateCw, TriangleAlert } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { PaseoLogo } from "@/components/icons/paseo-logo";
+import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
 import { Button } from "@/components/ui/button";
 import { Fonts } from "@/constants/theme";
 import { getDesktopDaemonLogs, type DesktopDaemonLogs } from "@/desktop/daemon/desktop-daemon";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isNative, isWeb } from "@/constants/platform";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
+import { useTranslation } from "react-i18next";
 
 interface StartupSplashScreenProps {
   bootstrapState?: {
@@ -29,8 +30,8 @@ interface StartupSplashScreenProps {
   };
 }
 
-const GITHUB_ISSUE_URL = "https://github.com/getpaseo/paseo/issues/new";
-const DOCS_URL = "https://paseo.sh/docs";
+const GITHUB_ISSUE_URL = "https://github.com/getchisacode/chisacode/issues/new";
+const DOCS_URL = "https://chisacode.sh/docs";
 
 const LOGO_SIZE = 96;
 const SHIMMER_PEAK_WIDTH = 120;
@@ -44,8 +45,8 @@ function openDocs(): void {
   void openExternalUrl(DOCS_URL);
 }
 
-const WEB_SPLASH_SHIMMER_KEYFRAME_ID = "paseo-splash-shimmer-keyframes";
-const WEB_SPLASH_SHIMMER_ANIMATION_NAME = "paseo-splash-shimmer";
+const WEB_SPLASH_SHIMMER_KEYFRAME_ID = "chisacode-splash-shimmer-keyframes";
+const WEB_SPLASH_SHIMMER_ANIMATION_NAME = "chisacode-splash-shimmer";
 
 const WEB_SPLASH_SHIMMER_KEYFRAME_CSS = `
   @keyframes ${WEB_SPLASH_SHIMMER_ANIMATION_NAME} {
@@ -150,7 +151,7 @@ function NativeLogoShimmer({ color }: { color: string }) {
   const maskElement = useMemo(
     () => (
       <View style={styles.shimmerMask}>
-        <PaseoLogo size={LOGO_SIZE} color="#000000" />
+        <ChisaCodeLogo size={LOGO_SIZE} color="#000000" />
       </View>
     ),
     [],
@@ -160,7 +161,7 @@ function NativeLogoShimmer({ color }: { color: string }) {
     <MaskedView style={trackStyle} maskElement={maskElement}>
       <View style={trackStyle}>
         <View style={styles.nativeShimmerBase}>
-          <PaseoLogo size={LOGO_SIZE} color={color} />
+          <ChisaCodeLogo size={LOGO_SIZE} color={color} />
         </View>
         <Animated.View style={peakCombinedStyle}>
           <Svg width="100%" height="100%" preserveAspectRatio="none">
@@ -298,6 +299,7 @@ const styles = StyleSheet.create((theme) => ({
 
 export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const webScrollbarStyle = useWebScrollbarStyle();
   const errorScrollViewStyle = useMemo(
     () => [styles.errorScrollView, webScrollbarStyle],
@@ -339,7 +341,7 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
         }
         const message = error instanceof Error ? error.message : String(error);
         setDaemonLogs(null);
-        setLogsError(`Unable to load daemon logs: ${message}`);
+        setLogsError(t("startup.daemonLogsLoadFailed", { message }));
       })
       .finally(() => {
         if (!isCancelled) {
@@ -350,11 +352,11 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
     return () => {
       isCancelled = true;
     };
-  }, [isError]);
+  }, [isError, t]);
 
   const logsText = useMemo(() => {
     if (isLoadingLogs) {
-      return "正在加载 daemon 日志...";
+      return t("startup.loadingDaemonLogs");
     }
     if (daemonLogs?.contents) {
       return daemonLogs.contents;
@@ -362,8 +364,8 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
     if (logsError) {
       return logsError;
     }
-    return "No daemon logs available.";
-  }, [daemonLogs?.contents, isLoadingLogs, logsError]);
+    return t("startup.noDaemonLogs");
+  }, [daemonLogs?.contents, isLoadingLogs, logsError, t]);
 
   const handleCopyLogs = useCallback(() => {
     const payload = daemonLogs?.logPath
@@ -408,14 +410,11 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
       >
         <View style={styles.errorContent}>
           <View style={styles.errorHeader}>
-            <PaseoLogo size={64} />
-            <Text style={styles.title}>出错了</Text>
+            <ChisaCodeLogo size={64} />
+            <Text style={styles.title}>{t("startup.errorTitle")}</Text>
           </View>
 
-          <Text style={styles.errorDescription}>
-            The local server failed to start. If this keeps happening, please report the issue on
-            GitHub and include the logs below.
-          </Text>
+          <Text style={styles.errorDescription}>{t("startup.serverFailed")}</Text>
 
           <Text style={styles.errorMessage}>{bootstrapState.splashError}</Text>
 
@@ -435,16 +434,16 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
 
           <View style={styles.actionRow}>
             <Button variant="secondary" leftIcon={copyIcon} onPress={handleCopyLogs}>
-              Copy logs
+              {t("startup.copyLogs")}
             </Button>
             <Button variant="outline" leftIcon={warningIcon} onPress={openGithubIssue}>
-              Open GitHub issue
+              {t("startup.openGithubIssue")}
             </Button>
             <Button variant="outline" leftIcon={bookIcon} onPress={openDocs}>
-              Docs
+              {t("startup.docs")}
             </Button>
             <Button variant="default" leftIcon={retryIcon} onPress={bootstrapState.retry}>
-              Retry
+              {t("common.retry")}
             </Button>
           </View>
         </View>

@@ -43,7 +43,7 @@ export async function installCli(): Promise<InstallStatus> {
       "@echo off",
       `set "BUNDLED_CLI=${shimPath}"`,
       `if not exist "%BUNDLED_CLI%" (`,
-      `  echo Fleurdelys CLI not found at %BUNDLED_CLI% - is Fleurdelys installed? 1>&2`,
+      `  echo ChisaCode CLI not found at %BUNDLED_CLI% - is ChisaCode installed? 1>&2`,
       `  exit /b 1`,
       `)`,
       `call "%BUNDLED_CLI%" %*`,

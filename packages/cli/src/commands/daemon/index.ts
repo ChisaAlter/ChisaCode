@@ -15,24 +15,24 @@ function resolveHostnamesOption(hostnames: unknown, allowedHosts: unknown): stri
 }
 
 export function createDaemonCommand(): Command {
-  const daemon = new Command("daemon").description("Manage the Fleurdelys daemon");
+  const daemon = new Command("daemon").description("Manage the ChisaCode daemon");
 
   daemon.addCommand(startCommand());
   daemon.addCommand(pairCommand());
 
   addJsonOption(daemon.command("status").description("Show local daemon status"))
-    .option("--home <path>", "Fleurdelys home directory (default: ~/.paseo)")
+    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
     .action(withOutput(runStatusCommand));
 
   addJsonOption(daemon.command("stop").description("Stop the local daemon"))
-    .option("--home <path>", "Fleurdelys home directory (default: ~/.paseo)")
+    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
     .option("--timeout <seconds>", "Wait timeout before failing (default: 15)")
     .option("--force", "Send SIGKILL if graceful stop times out")
     .option("--kill-timeout <seconds>", "Wait after SIGKILL before failing (default: 3)")
     .action(withOutput(runStopCommand));
 
   addJsonOption(daemon.command("restart").description("Restart the local daemon"))
-    .option("--home <path>", "Fleurdelys home directory (default: ~/.paseo)")
+    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
     .option("--timeout <seconds>", "Wait timeout before force step (default: 15)")
     .option("--force", "Send SIGKILL if graceful stop times out")
     .option(
@@ -42,7 +42,7 @@ export function createDaemonCommand(): Command {
     .option("--port <port>", "Port for restarted daemon listen target")
     .option("--no-relay", "Disable relay on restarted daemon")
     .option("--no-mcp", "Disable Agent MCP on restarted daemon")
-    .option("--no-inject-mcp", "Disable auto-injecting the Fleurdelys MCP into created agents")
+    .option("--no-inject-mcp", "Disable auto-injecting the ChisaCode MCP into created agents")
     .option(
       "--hostnames <hosts>",
       'Daemon hostnames (comma-separated, e.g. "myhost,.example.com" or "true" for any)',
@@ -66,7 +66,7 @@ export function createDaemonCommand(): Command {
       .command("set-password")
       .description("Prompt for and save a hashed daemon password to config.json"),
   )
-    .option("--home <path>", "Fleurdelys home directory (default: ~/.paseo)")
+    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
     .action(withOutput(runSetPasswordCommand));
 
   return daemon;

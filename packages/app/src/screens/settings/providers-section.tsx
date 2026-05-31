@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { ChevronRight, Plus } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -25,18 +27,24 @@ interface ProviderStatus {
   modelCount: number | null;
 }
 
-function getProviderStatus(status: string, enabled: boolean, modelCount: number): ProviderStatus {
-  if (!enabled) return { tone: "muted", label: "已禁用", modelCount: null };
-  if (status === "loading") return { tone: "loading", label: "加载中", modelCount: null };
-  if (status === "error") return { tone: "danger", label: "错误", modelCount: null };
+function getProviderStatus(
+  status: string,
+  enabled: boolean,
+  modelCount: number,
+  t: TFunction,
+): ProviderStatus {
+  if (!enabled) return { tone: "muted", label: t("providers.disabled"), modelCount: null };
+  if (status === "loading")
+    return { tone: "loading", label: t("providers.loading"), modelCount: null };
+  if (status === "error") return { tone: "danger", label: t("providers.error"), modelCount: null };
   if (status === "ready") {
     return {
       tone: "success",
-      label: "可用",
+      label: t("providers.ready"),
       modelCount: modelCount > 0 ? modelCount : null,
     };
   }
-  return { tone: "warning", label: "未安装", modelCount: null };
+  return { tone: "warning", label: t("providers.missing"), modelCount: null };
 }
 
 interface ProviderRowProps {
@@ -59,6 +67,7 @@ function ProviderRow({
   onToggleEnabled,
 }: ProviderRowProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const ProviderIcon = getProviderIcon(def.id);
   const providerError =
     enabled &&
@@ -68,7 +77,7 @@ function ProviderRow({
       ? entry.error.trim()
       : null;
   const modelCount = entry.models?.length ?? 0;
-  const providerStatus = getProviderStatus(entry.status, enabled, modelCount);
+  const providerStatus = getProviderStatus(entry.status, enabled, modelCount, t);
 
   const handlePress = useCallback(() => {
     onPress(def.id);
@@ -95,7 +104,7 @@ function ProviderRow({
       style={rowStyle}
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel={`${def.label} provider details`}
+      accessibilityLabel={t("providers.detailsLabel", { provider: def.label })}
     >
       {({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
         <>
@@ -124,7 +133,7 @@ function ProviderRow({
             value={enabled}
             onValueChange={handleToggleValueChange}
             disabled={isToggling}
-            accessibilityLabel={`Enable ${def.label}`}
+            accessibilityLabel={t("providers.enableLabel", { provider: def.label })}
           />
         </>
       )}
@@ -147,6 +156,7 @@ function getDotColor(tone: StatusTone, theme: ReturnType<typeof useUnistyles>["t
 
 function StatusIndicator({ status }: { status: ProviderStatus }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const dotStyle = useMemo(
     () => [styles.statusDot, { backgroundColor: getDotColor(status.tone, theme) }],
     [status.tone, theme],
@@ -164,7 +174,7 @@ function StatusIndicator({ status }: { status: ProviderStatus }) {
         <>
           <Text style={styles.separator}>·</Text>
           <Text style={styles.statusLabel}>
-            {status.modelCount === 1 ? "1 model" : `${status.modelCount} models`}
+            {t("providers.modelCount", { count: status.modelCount })}
           </Text>
         </>
       ) : null}
@@ -178,6 +188,7 @@ export interface ProvidersSectionProps {
 
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { entries, isLoading } = useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
@@ -202,12 +213,15 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        Alert.alert("无法更新提供商", error instanceof Error ? error.message : String(error));
+        Alert.alert(
+          t("providers.updateFailed"),
+          error instanceof Error ? error.message : String(error),
+        );
       } finally {
         setPendingProviderId((current) => (current === providerId ? null : current));
       }
     },
-    [patchConfig],
+    [patchConfig, t],
   );
 
   const headerActions = useMemo(
@@ -219,11 +233,11 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
             hitSlop={8}
             style={settingsStyles.sectionHeaderLink}
             accessibilityRole="button"
-            accessibilityLabel="添加提供商"
+            accessibilityLabel={t("providers.add")}
             testID="add-provider-button"
           >
             <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-            <Text style={settingsStyles.sectionHeaderLinkText}>添加提供商</Text>
+            <Text style={settingsStyles.sectionHeaderLinkText}>{t("providers.add")}</Text>
           </Pressable>
         </View>
       ) : undefined,
@@ -233,25 +247,26 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       handleOpenAddProvider,
       theme.iconSize.sm,
       theme.colors.foregroundMuted,
+      t,
     ],
   );
 
   return (
     <>
       <SettingsSection
-        title="提供商"
+        title={t("providers.title")}
         trailing={headerActions}
         testID="host-page-providers-card"
         style={styles.sectionSpacing}
       >
         {!hasServer || !isConnected ? (
           <View style={EMPTY_CARD_STYLE}>
-            <Text style={styles.emptyText}>连接到此主机以查看提供商</Text>
+            <Text style={styles.emptyText}>{t("providers.connectToView")}</Text>
           </View>
         ) : null}
         {hasServer && isConnected && isLoading ? (
           <View style={EMPTY_CARD_STYLE}>
-            <Text style={styles.emptyText}>加载中...</Text>
+            <Text style={styles.emptyText}>{t("common.loading")}</Text>
           </View>
         ) : null}
         {hasServer && isConnected && !isLoading && providerDefinitions.length > 0 ? (

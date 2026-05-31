@@ -10,9 +10,9 @@ describe("runCli", () => {
       createCliParseArgv({
         argv: [],
         cwd: process.cwd(),
-        nodeArgv: ["node", "paseo"],
+        nodeArgv: ["node", "chisacode"],
       }),
-    ).toEqual(["node", "paseo", "onboard"]);
+    ).toEqual(["node", "chisacode", "onboard"]);
   });
 
   it("preserves known CLI command argv", () => {
@@ -20,13 +20,13 @@ describe("runCli", () => {
       createCliParseArgv({
         argv: ["daemon", "set-password"],
         cwd: process.cwd(),
-        nodeArgv: ["node", "paseo"],
+        nodeArgv: ["node", "chisacode"],
       }),
-    ).toEqual(["node", "paseo", "daemon", "set-password"]);
+    ).toEqual(["node", "chisacode", "daemon", "set-password"]);
   });
 
   it("classifies existing unknown directories as open-project invocations", () => {
-    const root = mkdtempSync(path.join(tmpdir(), "paseo-cli-run-"));
+    const root = mkdtempSync(path.join(tmpdir(), "chisacode-cli-run-"));
     const project = path.join(root, "project");
     mkdirSync(project);
 
@@ -35,7 +35,7 @@ describe("runCli", () => {
         createCliParseArgv({
           argv: ["project"],
           cwd: root,
-          nodeArgv: ["node", "paseo"],
+          nodeArgv: ["node", "chisacode"],
         }),
       ).toEqual({
         kind: "open-project",

@@ -16,8 +16,8 @@ import {
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
-} from "@fleurdelys/protocol/terminal-stream-protocol";
-import { CLIENT_CAPS } from "@fleurdelys/protocol/client-capabilities";
+} from "@chisacode/protocol/terminal-stream-protocol";
+import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 
 type SocketListener = (...args: unknown[]) => void;
 
@@ -209,7 +209,7 @@ function createServer(options?: { speechReadiness?: SpeechReadinessSnapshot | nu
     }),
     createStub<AgentStorage>({}),
     createStub<DownloadTokenStore>({}),
-    "/tmp/paseo-test",
+    "/tmp/chisacode-test",
     createStub<DaemonConfigStore>(daemonConfigStore),
     null,
     { allowedOrigins: new Set() },

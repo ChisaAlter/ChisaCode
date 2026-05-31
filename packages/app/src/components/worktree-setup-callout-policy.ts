@@ -1,4 +1,4 @@
-import type { PaseoConfigRaw } from "@fleurdelys/protocol/messages";
+import type { ChisaCodeConfigRaw } from "@chisacode/protocol/messages";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
 
 export interface WorktreeSetupWorkspaceInput {
@@ -20,7 +20,7 @@ export interface ActiveGitWorkspaceProject {
 
 interface ReadProjectConfigResult {
   ok: boolean;
-  config?: PaseoConfigRaw | null;
+  config?: ChisaCodeConfigRaw | null;
 }
 
 export interface WorktreeSetupCalloutPolicy {
@@ -73,7 +73,7 @@ export function buildWorktreeSetupCalloutPolicy(
   };
 }
 
-function hasSetupCommands(config: PaseoConfigRaw): boolean {
+function hasSetupCommands(config: ChisaCodeConfigRaw): boolean {
   const setup = config.worktree?.setup;
   if (typeof setup === "string") {
     return setup.trim().length > 0;

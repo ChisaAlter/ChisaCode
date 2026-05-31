@@ -1,4 +1,4 @@
-import { parseGitHubRemoteUrl } from "@fleurdelys/protocol/git-remote";
+import { parseGitHubRemoteUrl } from "@chisacode/protocol/git-remote";
 
 export function parseGitHubRepoFromRemote(remoteUrl: string | null | undefined): string | null {
   const trimmed = remoteUrl?.trim();

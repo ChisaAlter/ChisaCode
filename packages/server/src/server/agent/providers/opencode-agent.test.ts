@@ -249,8 +249,8 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
     openCodeClient.appAgentsResponse = {
       data: [
         {
-          name: "paseo-test-custom",
-          description: "Custom agent defined for Paseo integration test",
+          name: "chisacode-test-custom",
+          description: "Custom agent defined for ChisaCode integration test",
           mode: "primary",
         },
         { name: "compaction", mode: "subagent" },
@@ -268,10 +268,10 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
     expect(modes.some((mode) => mode.id === "build")).toBe(true);
     expect(modes.some((mode) => mode.id === "plan")).toBe(true);
 
-    const custom = modes.find((mode) => mode.id === "paseo-test-custom");
+    const custom = modes.find((mode) => mode.id === "chisacode-test-custom");
     expect(custom).toBeDefined();
-    expect(custom!.label).toBe("Paseo-test-custom");
-    expect(custom!.description).toBe("Custom agent defined for Paseo integration test");
+    expect(custom!.label).toBe("ChisaCode-test-custom");
+    expect(custom!.description).toBe("Custom agent defined for ChisaCode integration test");
 
     // System agents should not appear as selectable modes
     expect(modes.some((mode) => mode.id === "compaction")).toBe(false);
@@ -660,7 +660,7 @@ describe("OpenCode adapter context-window normalization", () => {
         mimeType: "application/github-issue",
         number: 55,
         title: "Improve startup error details",
-        url: "https://github.com/getpaseo/paseo/issues/55",
+        url: "https://github.com/getchisacode/chisacode/issues/55",
         body: "Issue body",
       },
     ]);
@@ -725,7 +725,7 @@ describe("OpenCode adapter startTurn error handling", () => {
         provider: "opencode",
         cwd,
         mcpServers: {
-          paseo: {
+          chisacode: {
             type: "http",
             url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
           },
@@ -737,7 +737,7 @@ describe("OpenCode adapter startTurn error handling", () => {
       expect(openCodeClient.calls.mcpAdd).toEqual([
         {
           directory: cwd,
-          name: "paseo",
+          name: "chisacode",
           config: {
             type: "remote",
             url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
@@ -758,7 +758,7 @@ describe("OpenCode adapter startTurn error handling", () => {
     const openCodeClient = new TestOpenCodeClient();
     openCodeClient.mcpAddResponse = {
       data: {
-        paseo: {
+        chisacode: {
           status: "failed",
           error: "SSE error: Non-200 status code (400)",
         },
@@ -773,7 +773,7 @@ describe("OpenCode adapter startTurn error handling", () => {
         provider: "opencode",
         cwd,
         mcpServers: {
-          paseo: {
+          chisacode: {
             type: "http",
             url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
           },
@@ -781,7 +781,7 @@ describe("OpenCode adapter startTurn error handling", () => {
       });
 
       await expect(collectTurnEvents(streamSession(session, "hello"))).rejects.toThrow(
-        /Failed to add OpenCode MCP server 'paseo': SSE error/,
+        /Failed to add OpenCode MCP server 'chisacode': SSE error/,
       );
 
       await session.close();

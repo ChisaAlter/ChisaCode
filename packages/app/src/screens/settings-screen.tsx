@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -37,7 +38,6 @@ import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
-  useAppSettings,
   useSettings,
   parseTerminalScrollbackLines,
   type AppLanguage,
@@ -53,7 +53,6 @@ import {
   useHostRuntimeIsConnected,
   useHosts,
 } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import type { HostProfile } from "@/types/host-connection";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
@@ -78,8 +77,6 @@ import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissi
 import { IntegrationsSection } from "@/desktop/components/integrations-section";
 import { isElectronRuntime } from "@/desktop/host";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
-import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
-import { resolveAppVersion } from "@/utils/app-version";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
 import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
@@ -187,11 +184,6 @@ function selectedSidebarItemStyle({ hovered }: PressableStateCallbackType & { ho
 }
 
 const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
-
-const RELEASE_CHANNEL_OPTIONS = [
-  { value: "stable" as const, label: "稳定版" },
-  { value: "beta" as const, label: "测试版" },
-];
 
 const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
 const APP_LANGUAGE_VALUES: AppLanguage[] = ["zh-CN", "en"];
@@ -506,29 +498,18 @@ function DiagnosticsSection({
   );
 }
 
-interface AboutSectionProps {
-  appVersion: string | null;
-  appVersionText: string;
-  isDesktopApp: boolean;
-}
-
-function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSectionProps) {
+function AboutSection({ isDesktopApp }: { isDesktopApp: boolean }) {
   const { t } = useTranslation();
   return (
     <>
-      <SettingsSection title={t("settings.about.title")}>
-        <View style={settingsStyles.card}>
-          <View style={settingsStyles.row}>
-            <View style={settingsStyles.rowContent}>
-              <Text style={settingsStyles.rowTitle}>{t("settings.about.appVersion")}</Text>
-              <Text style={settingsStyles.rowHint}>{t("settings.about.thisDevice")}</Text>
-            </View>
-            <Text style={styles.aboutValue}>{appVersionText}</Text>
+      {isDesktopApp ? (
+        <SettingsSection title={t("settings.about.title")}>
+          <View style={settingsStyles.card}>
+            <DesktopAppUpdateRow />
           </View>
-          {isDesktopApp ? <DesktopAppUpdateRow /> : null}
-        </View>
-      </SettingsSection>
-      <ConnectedHostsSection clientVersion={appVersion} />
+        </SettingsSection>
+      ) : null}
+      <ConnectedHostsSection />
       <View style={styles.aboutCommunity}>
         <CommunityLinks />
       </View>
@@ -536,13 +517,7 @@ function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSection
   );
 }
 
-function normalizeVersion(version: string | null | undefined): string | null {
-  const trimmed = version?.trim();
-  if (!trimmed) return null;
-  return trimmed.replace(/^v/i, "");
-}
-
-function ConnectedHostsSection({ clientVersion }: { clientVersion: string | null }) {
+function ConnectedHostsSection() {
   const { t } = useTranslation();
   const hosts = useHosts();
   if (hosts.length === 0) {
@@ -552,55 +527,20 @@ function ConnectedHostsSection({ clientVersion }: { clientVersion: string | null
     <SettingsSection title={t("settings.about.connectedHosts")}>
       <View style={settingsStyles.card}>
         {hosts.map((host, index) => (
-          <HostVersionRow
-            key={host.serverId}
-            host={host}
-            showBorder={index > 0}
-            clientVersion={clientVersion}
-          />
+          <HostVersionRow key={host.serverId} host={host} showBorder={index > 0} />
         ))}
       </View>
     </SettingsSection>
   );
 }
 
-function HostVersionRow({
-  host,
-  showBorder,
-  clientVersion,
-}: {
-  host: HostProfile;
-  showBorder: boolean;
-  clientVersion: string | null;
-}) {
+function HostVersionRow({ host, showBorder }: { host: HostProfile; showBorder: boolean }) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(host.serverId);
-  const daemonVersion = useSessionStore(
-    (state) => state.sessions[host.serverId]?.serverInfo?.version ?? null,
-  );
 
   const rowStyle = useMemo(
     () => [settingsStyles.row, showBorder && settingsStyles.rowBorder],
     [showBorder],
-  );
-
-  const normalizedHost = normalizeVersion(daemonVersion);
-  const normalizedClient = normalizeVersion(clientVersion);
-  const isMismatch =
-    normalizedHost !== null && normalizedClient !== null && normalizedHost !== normalizedClient;
-
-  let valueText: string;
-  if (!isConnected) {
-    valueText = t("settings.about.offline");
-  } else if (normalizedHost) {
-    valueText = formatVersionWithPrefix(normalizedHost);
-  } else {
-    valueText = "—";
-  }
-
-  const valueStyle = useMemo(
-    () => [styles.aboutValue, isMismatch && styles.aboutVersionMismatch],
-    [isMismatch],
   );
 
   return (
@@ -609,9 +549,11 @@ function HostVersionRow({
         <Text style={settingsStyles.rowTitle} numberOfLines={1}>
           {host.label}
         </Text>
-        {isMismatch ? <Text style={settingsStyles.rowHint}>版本与此设备不同</Text> : null}
+        <Text style={settingsStyles.rowHint}>{t("settings.about.thisDevice")}</Text>
       </View>
-      <Text style={valueStyle}>{valueText}</Text>
+      <Text style={styles.aboutValue}>
+        {isConnected ? t("settings.about.online") : t("settings.about.offline")}
+      </Text>
     </View>
   );
 }
@@ -619,13 +561,15 @@ function HostVersionRow({
 function getUpdateButtonLabel(
   isInstalling: boolean,
   latestVersion: string | null | undefined,
+  t: TFunction,
 ): string {
-  if (isInstalling) return "安装中...";
-  if (latestVersion) return `更新到 ${formatVersionWithPrefix(latestVersion)}`;
-  return "更新";
+  if (isInstalling) return t("settings.updates.installing");
+  if (latestVersion) return t("settings.updates.installConfirm");
+  return t("settings.updates.update");
 }
 
 function DesktopAppUpdateRow() {
+  const { t } = useTranslation();
   const { settings, updateSettings } = useSettings();
   const {
     isDesktopApp,
@@ -668,10 +612,10 @@ function DesktopAppUpdateRow() {
     }
 
     void confirmDialog({
-      title: "安装桌面端更新",
-      message: "这会更新此电脑上的芙露德莉斯",
-      confirmLabel: "安装更新",
-      cancelLabel: "取消",
+      title: t("settings.updates.installTitle"),
+      message: t("settings.updates.installMessage"),
+      confirmLabel: t("settings.updates.installConfirm"),
+      cancelLabel: t("common.cancel"),
     })
       .then((confirmed) => {
         if (!confirmed) {
@@ -682,9 +626,17 @@ function DesktopAppUpdateRow() {
       })
       .catch((error) => {
         console.error("[Settings] Failed to open app update confirmation", error);
-        Alert.alert("错误", "无法打开更新确认对话框。");
+        Alert.alert(t("common.error"), t("settings.updates.confirmOpenFailed"));
       });
-  }, [installUpdate, isDesktopApp]);
+  }, [installUpdate, isDesktopApp, t]);
+
+  const releaseChannelOptions = useMemo(
+    () => [
+      { value: "stable" as const, label: t("settings.updates.stable") },
+      { value: "beta" as const, label: t("settings.updates.beta") },
+    ],
+    [t],
+  );
 
   if (!isDesktopApp) {
     return null;
@@ -694,25 +646,20 @@ function DesktopAppUpdateRow() {
     <>
       <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>发布通道</Text>
-          <Text style={settingsStyles.rowHint}>切换到测试版可以更早获得更新并参与改进</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.updates.releaseChannel")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.updates.releaseChannelHint")}</Text>
         </View>
         <SegmentedControl
           size="sm"
           value={settings.releaseChannel}
           onValueChange={handleReleaseChannelChange}
-          options={RELEASE_CHANNEL_OPTIONS}
+          options={releaseChannelOptions}
         />
       </View>
       <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>应用更新</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.updates.appUpdates")}</Text>
           <Text style={settingsStyles.rowHint}>{statusText}</Text>
-          {availableUpdate?.latestVersion ? (
-            <Text style={settingsStyles.rowHint}>
-              可安装：{formatVersionWithPrefix(availableUpdate.latestVersion)}
-            </Text>
-          ) : null}
           {errorMessage ? <Text style={styles.aboutErrorText}>{errorMessage}</Text> : null}
         </View>
         <View style={styles.aboutUpdateActions}>
@@ -722,7 +669,7 @@ function DesktopAppUpdateRow() {
             onPress={handleCheckForUpdates}
             disabled={isChecking || isInstalling}
           >
-            {isChecking ? "检查中..." : "检查"}
+            {isChecking ? t("settings.updates.checking") : t("settings.updates.check")}
           </Button>
           <Button
             variant="default"
@@ -730,7 +677,7 @@ function DesktopAppUpdateRow() {
             onPress={handleInstallUpdate}
             disabled={isChecking || isInstalling || !availableUpdate}
           >
-            {getUpdateButtonLabel(isInstalling, availableUpdate?.latestVersion)}
+            {getUpdateButtonLabel(isInstalling, availableUpdate?.latestVersion, t)}
           </Button>
         </View>
       </View>
@@ -1010,15 +957,13 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const voiceAudioEngine = useVoiceAudioEngineOptional();
-  const { settings, isLoading: settingsLoading, updateSettings } = useAppSettings();
+  const { settings, isLoading: settingsLoading, updateSettings } = useSettings();
   const [isAddHostMethodVisible, setIsAddHostMethodVisible] = useState(false);
   const [isDirectHostVisible, setIsDirectHostVisible] = useState(false);
   const [isPasteLinkVisible, setIsPasteLinkVisible] = useState(false);
   const [isPlaybackTestRunning, setIsPlaybackTestRunning] = useState(false);
   const [playbackTestResult, setPlaybackTestResult] = useState<string | null>(null);
   const isDesktopApp = isElectronRuntime();
-  const appVersion = resolveAppVersion();
-  const appVersionText = formatVersionWithPrefix(appVersion);
   const isCompactLayout = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
   const insetBottomStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
@@ -1267,13 +1212,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
             />
           );
         case "about":
-          return (
-            <AboutSection
-              appVersion={appVersion}
-              appVersionText={appVersionText}
-              isDesktopApp={isDesktopApp}
-            />
-          );
+          return <AboutSection isDesktopApp={isDesktopApp} />;
       }
     }
     return null;

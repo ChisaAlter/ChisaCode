@@ -253,7 +253,7 @@ function lastNonEmptyLineIsPrompt(state: ReturnType<TerminalSession["getState"]>
 }
 
 function removeZshShellIntegrationRuntimeDir(): void {
-  rmSync(join(tmpdir(), `${userInfo().username || "unknown"}-paseo-zsh`), {
+  rmSync(join(tmpdir(), `${userInfo().username || "unknown"}-chisacode-zsh`), {
     recursive: true,
     force: true,
   });
@@ -264,26 +264,26 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
     const resolvedEnv = buildTerminalEnvironment({
       shell: "/bin/zsh",
       env: {
-        HOME: "/tmp/paseo-home",
-        ZDOTDIR: "/tmp/paseo-zdotdir",
+        HOME: "/tmp/chisacode-home",
+        ZDOTDIR: "/tmp/chisacode-zdotdir",
       },
     });
 
     expect(resolvedEnv.TERM).toBe("xterm-256color");
     expect(resolvedEnv.TERM_PROGRAM).toBe("kitty");
-    expect(resolvedEnv.PASEO_ZSH_ZDOTDIR).toBe("/tmp/paseo-zdotdir");
-    expect(resolvedEnv.ZDOTDIR).not.toBe("/tmp/paseo-zdotdir");
+    expect(resolvedEnv.CHISACODE_ZSH_ZDOTDIR).toBe("/tmp/chisacode-zdotdir");
+    expect(resolvedEnv.ZDOTDIR).not.toBe("/tmp/chisacode-zdotdir");
     expect(existsSync(join(resolvedEnv.ZDOTDIR, ".zshenv"))).toBe(true);
-    expect(existsSync(join(resolvedEnv.ZDOTDIR, "paseo-integration.zsh"))).toBe(true);
+    expect(existsSync(join(resolvedEnv.ZDOTDIR, "chisacode-integration.zsh"))).toBe(true);
   });
 
   it("reuses zsh shell integration copied from read-only source files", () => {
-    const integrationSourceDir = mkdtempSync(join(tmpdir(), "paseo-zsh-readonly-source-"));
-    const tmpHome = mkdtempSync(join(tmpdir(), "paseo-zsh-readonly-home-"));
+    const integrationSourceDir = mkdtempSync(join(tmpdir(), "chisacode-zsh-readonly-source-"));
+    const tmpHome = mkdtempSync(join(tmpdir(), "chisacode-zsh-readonly-home-"));
     temporaryDirs.push(integrationSourceDir, tmpHome);
     cpSync(resolveZshShellIntegrationDir(), integrationSourceDir, { recursive: true });
     chmodSync(join(integrationSourceDir, ".zshenv"), 0o444);
-    chmodSync(join(integrationSourceDir, "paseo-integration.zsh"), 0o444);
+    chmodSync(join(integrationSourceDir, "chisacode-integration.zsh"), 0o444);
     removeZshShellIntegrationRuntimeDir();
 
     const buildEnvironment = () =>
@@ -378,13 +378,13 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       temporaryDirs.push(homeDir);
       const realZdotdir = join(homeDir, ".config", "zsh");
       mkdirSync(realZdotdir, { recursive: true });
-      writeFileSync(join(realZdotdir, ".zshenv"), "export PASEO_TEST_REAL_ZDOTDIR=1\n");
+      writeFileSync(join(realZdotdir, ".zshenv"), "export CHISACODE_TEST_REAL_ZDOTDIR=1\n");
 
       const session = trackSession(
         await createTerminal({
           cwd: homeDir,
           command: "/bin/zsh",
-          args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${PASEO_TEST_REAL_ZDOTDIR-}"'],
+          args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${CHISACODE_TEST_REAL_ZDOTDIR-}"'],
           env: {
             HOME: homeDir,
             ZDOTDIR: realZdotdir,
@@ -602,14 +602,14 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
     it.skipIf(!hasZsh)("loads the user's zsh prompt when the integration dir is packaged", () => {
       const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-packaged-home-"));
       temporaryDirs.push(homeDir);
-      writeFileSync(join(homeDir, ".zshrc"), "PS1='PASEO_CUSTOM_PROMPT> '\n");
+      writeFileSync(join(homeDir, ".zshrc"), "PS1='CHISACODE_CUSTOM_PROMPT> '\n");
 
-      const fakeAppRoot = join(homeDir, "Paseo.app", "Contents", "Resources");
+      const fakeAppRoot = join(homeDir, "ChisaCode.app", "Contents", "Resources");
       const inaccessiblePackagedIntegrationDir = join(
         fakeAppRoot,
         "app.asar",
         "node_modules",
-        "@fleurdelys",
+        "@chisacode",
         "server",
         "dist",
         "server",
@@ -621,7 +621,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
         fakeAppRoot,
         "app.asar.unpacked",
         "node_modules",
-        "@fleurdelys",
+        "@chisacode",
         "server",
         "dist",
         "server",
@@ -648,7 +648,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       });
 
       expect(result.status).toBe(0);
-      expect(result.stdout.split(/\r?\n/)).toContain("PASEO_CUSTOM_PROMPT> ");
+      expect(result.stdout.split(/\r?\n/)).toContain("CHISACODE_CUSTOM_PROMPT> ");
     });
 
     it.skipIf(!hasZsh)("emits zsh shell integration command completion", async () => {

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { generateLocalPairingOffer, loadConfig, resolvePaseoHome } from "@fleurdelys/server";
+import { generateLocalPairingOffer, loadConfig, resolveChisaCodeHome } from "@chisacode/server";
 import { tryConnectToDaemon } from "../../utils/client.js";
 import { resolveLocalDaemonState, resolveTcpHostFromListen } from "./local-daemon.js";
 import { addJsonOption } from "../../utils/command-options.js";
@@ -12,7 +12,7 @@ interface PairOptions {
 
 export function pairCommand(): Command {
   return addJsonOption(new Command("pair").description("Print the daemon pairing QR code and link"))
-    .option("--home <path>", "Fleurdelys home directory (default: ~/.paseo)")
+    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
     .action(async (_options: PairOptions, command: Command) => {
       await runPairCommand(command.optsWithGlobals());
     });
@@ -20,11 +20,11 @@ export function pairCommand(): Command {
 
 export async function runPairCommand(options: PairOptions): Promise<void> {
   if (options.home) {
-    process.env.PASEO_HOME = options.home;
+    process.env.CHISACODE_HOME = options.home;
   }
 
-  const paseoHome = resolvePaseoHome();
-  const state = resolveLocalDaemonState({ home: paseoHome });
+  const chisacodeHome = resolveChisaCodeHome();
+  const state = resolveLocalDaemonState({ home: chisacodeHome });
   const host = resolveTcpHostFromListen(state.listen);
 
   // Try to get the pairing offer from the running daemon first.
@@ -53,9 +53,9 @@ export async function runPairCommand(options: PairOptions): Promise<void> {
   }
 
   // Fall back to local pairing offer generation.
-  const config = loadConfig(paseoHome);
+  const config = loadConfig(chisacodeHome);
   const pairing = await generateLocalPairingOffer({
-    paseoHome,
+    chisacodeHome,
     relayEnabled: config.relayEnabled,
     relayEndpoint: config.relayEndpoint,
     relayPublicEndpoint: config.relayPublicEndpoint,

@@ -3,7 +3,7 @@ import os from "node:os";
 import {
   ConnectionOfferV2Schema,
   type ConnectionOffer,
-} from "@fleurdelys/protocol/connection-offer";
+} from "@chisacode/protocol/connection-offer";
 
 interface BuildOfferEndpointsArgs {
   listenHost: string;
@@ -53,7 +53,7 @@ export function encodeOfferToFragmentUrl(args: {
 }
 
 function getPrimaryLanIp(): string | null {
-  const override = process.env.PASEO_PRIMARY_LAN_IP?.trim();
+  const override = process.env.CHISACODE_PRIMARY_LAN_IP?.trim();
   if (override) return override;
 
   const nets = os.networkInterfaces();

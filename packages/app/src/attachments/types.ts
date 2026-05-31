@@ -1,4 +1,4 @@
-import type { AgentAttachment, GitHubSearchItem } from "@fleurdelys/protocol/messages";
+import type { AgentAttachment, GitHubSearchItem } from "@chisacode/protocol/messages";
 
 export type AttachmentStorageType = "web-indexeddb" | "desktop-file" | "native-file";
 

@@ -32,9 +32,9 @@ import { toErrorMessage } from "@/utils/error-messages";
 import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
-import type { AgentAttachment, GitHubSearchItem } from "@fleurdelys/protocol/messages";
-import type { CreatePaseoWorktreeInput } from "@fleurdelys/client/internal/daemon-client";
-import type { AgentProvider } from "@fleurdelys/protocol/agent-types";
+import type { AgentAttachment, GitHubSearchItem } from "@chisacode/protocol/messages";
+import type { CreateChisaCodeWorktreeInput } from "@chisacode/client/internal/daemon-client";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
   pickerItemToCheckoutRequest,
@@ -42,6 +42,7 @@ import {
   type PickerItem,
 } from "./new-workspace-picker-item";
 import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
+import { useTranslation } from "react-i18next";
 
 function resolveCheckoutRequest(
   selectedItem: PickerItem | null,
@@ -123,6 +124,7 @@ function RefPickerTrigger({
   iconColor: string;
   iconSize: number;
 }) {
+  const { t } = useTranslation();
   return (
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
@@ -133,7 +135,7 @@ function RefPickerTrigger({
           disabled={disabled}
           style={badgePressableStyle}
           accessibilityRole="button"
-          accessibilityLabel="起始引用"
+          accessibilityLabel={t("workspace.startRef")}
         >
           <RefPickerBadgeContent
             selectedItem={selectedItem}
@@ -144,7 +146,7 @@ function RefPickerTrigger({
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
-        <Text style={styles.tooltipText}>选择从哪里开始</Text>
+        <Text style={styles.tooltipText}>{t("workspace.chooseStartRef")}</Text>
       </TooltipContent>
     </Tooltip>
   );
@@ -163,17 +165,18 @@ function CheckoutHintBadge({
   iconColor: string;
   iconSize: number;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.checkoutHintBadge}>
       <Text style={styles.badgeText} numberOfLines={1}>
-        Check out PR #{prNumber}?
+        {t("workspace.checkoutPrPrompt", { number: prNumber })}
       </Text>
       <Pressable
         testID="new-workspace-checkout-hint-accept"
         onPress={onAccept}
         style={styles.checkoutHintAction}
         accessibilityRole="button"
-        accessibilityLabel={`Check out PR #${prNumber}`}
+        accessibilityLabel={t("workspace.checkoutPr", { number: prNumber })}
       >
         <Check size={iconSize} color={iconColor} />
       </Pressable>
@@ -182,7 +185,7 @@ function CheckoutHintBadge({
         onPress={onDismiss}
         style={styles.checkoutHintAction}
         accessibilityRole="button"
-        accessibilityLabel={`Dismiss PR #${prNumber} checkout hint`}
+        accessibilityLabel={t("workspace.dismissCheckoutHint", { number: prNumber })}
       >
         <X size={iconSize} color={iconColor} />
       </Pressable>
@@ -317,7 +320,7 @@ interface SubmitDraftInput {
 async function createAndMergeWorkspace(input: {
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   createInput: Parameters<
-    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createPaseoWorktree"]
+    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createChisaCodeWorktree"]
   >[0];
   mergeWorkspaces: (
     serverId: string,
@@ -325,7 +328,7 @@ async function createAndMergeWorkspace(input: {
   ) => void;
   serverId: string;
 }): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
-  const payload = await input.client.createPaseoWorktree(input.createInput);
+  const payload = await input.client.createChisaCodeWorktree(input.createInput);
   if (payload.error || !payload.workspace) {
     throw new Error(payload.error ?? "Failed to create worktree");
   }
@@ -507,6 +510,7 @@ export function NewWorkspaceScreen({
   projectId,
   displayName: displayNameProp,
 }: NewWorkspaceScreenProps) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
@@ -710,7 +714,7 @@ export function NewWorkspaceScreen({
       cwd: string;
       prompt: string;
       attachments: AgentAttachment[];
-    }): CreatePaseoWorktreeInput => {
+    }): CreateChisaCodeWorktreeInput => {
       const checkoutRequest = resolveCheckoutRequest(selectedItem, currentBranch);
       const trimmedPrompt = input.prompt.trim();
       const hasFirstAgentContext = trimmedPrompt.length > 0 || input.attachments.length > 0;
@@ -857,8 +861,8 @@ export function NewWorkspaceScreen({
 
   const pickerEmptyText =
     branchSuggestionsQuery.isFetching || githubPrSearchQuery.isFetching
-      ? "搜索中..."
-      : "没有匹配的引用。";
+      ? t("workspace.searching")
+      : t("workspace.noMatchingRefs");
 
   const composerFooter = useMemo(
     () => (
@@ -879,8 +883,8 @@ export function NewWorkspaceScreen({
             value={selectedOptionId}
             onSelect={handleSelectOption}
             searchable
-            searchPlaceholder="搜索分支和 PR"
-            title="从这里开始"
+            searchPlaceholder={t("workspace.searchBranchesAndPrs")}
+            title={t("workspace.startFrom")}
             open={pickerOpen}
             onOpenChange={handlePickerOpenChange}
             onSearchQueryChange={setPickerSearchQuery}
@@ -923,6 +927,7 @@ export function NewWorkspaceScreen({
       agentControlsWithDisabled,
       theme.colors.foregroundMuted,
       theme.iconSize.sm,
+      t,
       triggerLabel,
     ],
   );
@@ -936,7 +941,7 @@ export function NewWorkspaceScreen({
               <SidebarMenuToggle />
               <View style={styles.headerTitleContainer}>
                 <Text style={styles.headerTitle} numberOfLines={1}>
-                  新工作区
+                  {t("workspace.newWorkspace")}
                 </Text>
                 <Text style={styles.headerProjectTitle} numberOfLines={1}>
                   {workspaceTitle}
@@ -956,7 +961,7 @@ export function NewWorkspaceScreen({
               isPaneFocused={true}
               onSubmitMessage={handleSubmitNewWorkspace}
               allowEmptySubmit={true}
-              submitButtonAccessibilityLabel="创建"
+              submitButtonAccessibilityLabel={t("workspace.create")}
               submitIcon="return"
               isSubmitLoading={pendingAction !== null}
               submitBehavior="preserve-and-lock"

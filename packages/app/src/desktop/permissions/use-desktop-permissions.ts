@@ -124,7 +124,7 @@ export function useDesktopPermissions(): UseDesktopPermissionsReturn {
     setTestNotificationError(null);
     try {
       const sent = await sendOsNotification({
-        title: "Fleurdelys notification test",
+        title: "ChisaCode notification test",
         body: "If you can see this, desktop notifications work.",
       });
       if (!sent) {

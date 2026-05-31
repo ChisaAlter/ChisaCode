@@ -1,4 +1,4 @@
-import type { SessionOutboundMessage } from "@fleurdelys/protocol/messages";
+import type { SessionOutboundMessage } from "@chisacode/protocol/messages";
 
 interface RuntimeMetricsLogger {
   info(obj: object, msg?: string): void;

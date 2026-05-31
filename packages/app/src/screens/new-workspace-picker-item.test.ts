@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GitHubSearchItem } from "@fleurdelys/protocol/messages";
+import type { GitHubSearchItem } from "@chisacode/protocol/messages";
 import { pickerItemToCheckoutRequest, type PickerItem } from "./new-workspace-picker-item";
 
 const prItem: GitHubSearchItem = {

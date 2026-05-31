@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceScriptPayload } from "@fleurdelys/protocol/messages";
+import type { WorkspaceScriptPayload } from "@chisacode/protocol/messages";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { patchWorkspaceScripts } from "./session-workspace-scripts";
 
@@ -27,9 +27,9 @@ function workspace(input: {
 const runningScript: WorkspaceScriptPayload = {
   scriptName: "web",
   type: "service",
-  hostname: "web.paseo.localhost",
+  hostname: "web.chisacode.localhost",
   port: 3000,
-  proxyUrl: "http://web.paseo.localhost:6767",
+  proxyUrl: "http://web.chisacode.localhost:6767",
   lifecycle: "running",
   health: "healthy",
   exitCode: null,

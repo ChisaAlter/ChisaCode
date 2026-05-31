@@ -24,7 +24,7 @@ function inMemoryStorage(initial: Record<string, string> = {}): InMemoryStorage 
 
 describe("clientIdResolver", () => {
   it("returns the stored client id when present and does not regenerate", async () => {
-    const storage = inMemoryStorage({ "@fleurdelys:client-id-v1": "cid_existing" });
+    const storage = inMemoryStorage({ "@chisacode:client-id-v1": "cid_existing" });
     const resolver = createClientIdResolver({
       storage,
       generateUuid: () => {
@@ -36,8 +36,8 @@ describe("clientIdResolver", () => {
     expect(storage.setCallCount).toBe(0);
   });
 
-  it("migrates a legacy paseo client id", async () => {
-    const storage = inMemoryStorage({ "@paseo:client-id-v1": "cid_existing" });
+  it("migrates a legacy chisacode client id", async () => {
+    const storage = inMemoryStorage({ "@chisacode:client-id-v1": "cid_existing" });
     const resolver = createClientIdResolver({
       storage,
       generateUuid: () => {
@@ -46,7 +46,7 @@ describe("clientIdResolver", () => {
     });
 
     expect(await resolver.getOrCreate()).toBe("cid_existing");
-    expect(storage.items.get("@fleurdelys:client-id-v1")).toBe("cid_existing");
+    expect(storage.items.get("@chisacode:client-id-v1")).toBe("cid_existing");
   });
 
   it("creates and persists a new client id when storage is empty", async () => {
@@ -57,7 +57,7 @@ describe("clientIdResolver", () => {
     });
 
     expect(await resolver.getOrCreate()).toBe("cid_123456781234123412341234567890ab");
-    expect(storage.items.get("@fleurdelys:client-id-v1")).toBe(
+    expect(storage.items.get("@chisacode:client-id-v1")).toBe(
       "cid_123456781234123412341234567890ab",
     );
   });
@@ -82,13 +82,13 @@ describe("clientIdResolver", () => {
   });
 
   it("ignores stored blank strings and treats them as missing", async () => {
-    const storage = inMemoryStorage({ "@fleurdelys:client-id-v1": "   " });
+    const storage = inMemoryStorage({ "@chisacode:client-id-v1": "   " });
     const resolver = createClientIdResolver({
       storage,
       generateUuid: () => "newuuid",
     });
 
     expect(await resolver.getOrCreate()).toBe("cid_newuuid");
-    expect(storage.items.get("@fleurdelys:client-id-v1")).toBe("cid_newuuid");
+    expect(storage.items.get("@chisacode:client-id-v1")).toBe("cid_newuuid");
   });
 });

@@ -64,20 +64,19 @@ CLAUDE.local.md
 
 .debug.conversations/
 .debug/
-.paseo/
+.chisacode/
 .wrangler/
 **/.wrangler/
 **/.tanstack/
 
 # Local agent/tooling artifacts (do not commit)
 .tmp/
-.workbuddy/
 PLAN.md
 .valknut/
 valknut-report.html/
 valknut-report.json/
 **/.playwright-mcp/
-**/.paseo-provider-history/
+**/.chisacode-provider-history/
 .claude/settings.local.json
 **/.claude/settings.local.json
 .claude/scheduled_tasks.lock

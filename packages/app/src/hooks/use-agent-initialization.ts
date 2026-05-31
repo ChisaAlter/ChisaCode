@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
 import {
   attachInitTimeout,

@@ -7,32 +7,35 @@ import net from "node:net";
 import { createHash } from "node:crypto";
 import stripAnsi from "strip-ansi";
 import { buildStringCommandShellInvocation } from "./string-command-shell.js";
-import { readPaseoConfigJson, resolvePaseoConfigPath } from "./paseo-config-file.js";
+import { readChisaCodeConfigJson, resolveChisaCodeConfigPath } from "./chisacode-config-file.js";
 export {
-  PaseoConfigRawSchema,
-  PaseoLifecycleCommandRawSchema,
-  PaseoScriptEntryRawSchema,
-  PaseoWorktreeConfigRawSchema,
-  PaseoConfigSchema,
-  type PaseoConfig,
-  type PaseoConfigRaw,
-} from "@fleurdelys/protocol/paseo-config-schema";
-import { PaseoConfigSchema, type PaseoConfig } from "@fleurdelys/protocol/paseo-config-schema";
+  ChisaCodeConfigRawSchema,
+  ChisaCodeLifecycleCommandRawSchema,
+  ChisaCodeScriptEntryRawSchema,
+  ChisaCodeWorktreeConfigRawSchema,
+  ChisaCodeConfigSchema,
+  type ChisaCodeConfig,
+  type ChisaCodeConfigRaw,
+} from "@chisacode/protocol/chisacode-config-schema";
+import {
+  ChisaCodeConfigSchema,
+  type ChisaCodeConfig,
+} from "@chisacode/protocol/chisacode-config-schema";
 import {
   normalizeBaseRefName,
-  readPaseoWorktreeMetadata,
-  readPaseoWorktreeRuntimePort,
-  writePaseoWorktreeMetadata,
-  writePaseoWorktreeRuntimeMetadata,
+  readChisaCodeWorktreeMetadata,
+  readChisaCodeWorktreeRuntimePort,
+  writeChisaCodeWorktreeMetadata,
+  writeChisaCodeWorktreeRuntimeMetadata,
 } from "./worktree-metadata.js";
 import { runGitCommand } from "./run-git-command.js";
 import { spawnProcess } from "./spawn.js";
-import { resolvePaseoHome } from "../server/paseo-home.js";
-import { createExternalProcessEnv } from "../server/paseo-env.js";
+import { resolveChisaCodeHome } from "../server/chisacode-home.js";
+import { createExternalProcessEnv } from "../server/chisacode-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
-import { validateBranchSlug } from "@fleurdelys/protocol/branch-slug";
+import { validateBranchSlug } from "@chisacode/protocol/branch-slug";
 
-export { slugify, validateBranchSlug } from "@fleurdelys/protocol/branch-slug";
+export { slugify, validateBranchSlug } from "@chisacode/protocol/branch-slug";
 
 const execFileAsync = promisify(execFile);
 const READ_ONLY_GIT_ENV = {
@@ -46,16 +49,11 @@ export interface WorktreeConfig {
 
 export interface WorktreeRuntimeEnv {
   [key: string]: string;
-  FLEURDELYS_SOURCE_CHECKOUT_PATH: string;
-  FLEURDELYS_ROOT_PATH: string;
-  FLEURDELYS_WORKTREE_PATH: string;
-  FLEURDELYS_BRANCH_NAME: string;
-  FLEURDELYS_WORKTREE_PORT: string;
-  PASEO_SOURCE_CHECKOUT_PATH: string;
-  PASEO_ROOT_PATH: string;
-  PASEO_WORKTREE_PATH: string;
-  PASEO_BRANCH_NAME: string;
-  PASEO_WORKTREE_PORT: string;
+  CHISACODE_SOURCE_CHECKOUT_PATH: string;
+  CHISACODE_ROOT_PATH: string;
+  CHISACODE_WORKTREE_PATH: string;
+  CHISACODE_BRANCH_NAME: string;
+  CHISACODE_WORKTREE_PORT: string;
 }
 
 export interface WorktreeSetupCommandResult {
@@ -141,14 +139,14 @@ export class WorktreeTeardownError extends Error {
   }
 }
 
-export interface PaseoWorktreeInfo {
+export interface ChisaCodeWorktreeInfo {
   path: string;
   createdAt: string;
   branchName?: string;
   head?: string;
 }
 
-export interface PaseoWorktreeOwnership {
+export interface ChisaCodeWorktreeOwnership {
   allowed: boolean;
   repoRoot?: string;
   worktreeRoot?: string;
@@ -172,13 +170,13 @@ export interface CreateWorktreeOptions {
   worktreeSlug: string;
   source: WorktreeSource;
   runSetup: boolean;
-  paseoHome?: string;
+  chisacodeHome?: string;
 }
 
 interface ResolveExistingWorktreeForSlugOptions {
   slug: string;
   repoRoot: string;
-  paseoHome?: string;
+  chisacodeHome?: string;
 }
 
 export class BranchAlreadyCheckedOutError extends Error {
@@ -203,47 +201,47 @@ export class UnknownBranchError extends Error {
   }
 }
 
-export type ReadPaseoConfigResult =
-  | { ok: true; config: PaseoConfig | null }
+export type ReadChisaCodeConfigResult =
+  | { ok: true; config: ChisaCodeConfig | null }
   | { ok: false; configPath: string; error: unknown };
 
-export function readPaseoConfig(repoRoot: string): ReadPaseoConfigResult {
+export function readChisaCodeConfig(repoRoot: string): ReadChisaCodeConfigResult {
   try {
-    const json = readPaseoConfigJson(repoRoot);
+    const json = readChisaCodeConfigJson(repoRoot);
     if (json === null) {
       return { ok: true, config: null };
     }
-    return { ok: true, config: PaseoConfigSchema.parse(json) };
+    return { ok: true, config: ChisaCodeConfigSchema.parse(json) };
   } catch (error) {
-    return { ok: false, configPath: resolvePaseoConfigPath(repoRoot), error };
+    return { ok: false, configPath: resolveChisaCodeConfigPath(repoRoot), error };
   }
 }
 
-export function paseoConfigParseError(failure: { configPath: string; error: unknown }): Error {
+export function chisacodeConfigParseError(failure: { configPath: string; error: unknown }): Error {
   const detail = failure.error instanceof Error ? failure.error.message : String(failure.error);
   return new Error(`Failed to parse project config at ${failure.configPath}: ${detail}`, {
     cause: failure.error,
   });
 }
 
-function readPaseoConfigOrThrow(repoRoot: string): PaseoConfig | null {
-  const result = readPaseoConfig(repoRoot);
+function readChisaCodeConfigOrThrow(repoRoot: string): ChisaCodeConfig | null {
+  const result = readChisaCodeConfig(repoRoot);
   if (!result.ok) {
-    throw paseoConfigParseError(result);
+    throw chisacodeConfigParseError(result);
   }
   return result.config;
 }
 
 export function getWorktreeSetupCommands(repoRoot: string): string[] {
-  return readPaseoConfigOrThrow(repoRoot)?.worktree?.setup ?? [];
+  return readChisaCodeConfigOrThrow(repoRoot)?.worktree?.setup ?? [];
 }
 
 export function getWorktreeTeardownCommands(repoRoot: string): string[] {
-  return readPaseoConfigOrThrow(repoRoot)?.worktree?.teardown ?? [];
+  return readChisaCodeConfigOrThrow(repoRoot)?.worktree?.teardown ?? [];
 }
 
 export function getWorktreeTerminalSpecs(repoRoot: string): WorktreeTerminalConfig[] {
-  const terminals = readPaseoConfigOrThrow(repoRoot)?.worktree?.terminals;
+  const terminals = readChisaCodeConfigOrThrow(repoRoot)?.worktree?.terminals;
   if (!Array.isArray(terminals) || terminals.length === 0) {
     return [];
   }
@@ -276,7 +274,7 @@ export function getWorktreeTerminalSpecs(repoRoot: string): WorktreeTerminalConf
   return specs;
 }
 
-export function getScriptConfigs(config: PaseoConfig | null): Map<string, ScriptConfig> {
+export function getScriptConfigs(config: ChisaCodeConfig | null): Map<string, ScriptConfig> {
   const scripts = config?.scripts;
   if (!scripts || typeof scripts !== "object") {
     return new Map();
@@ -580,7 +578,7 @@ export async function runWorktreeSetupCommands(options: {
   runtimeEnv?: WorktreeRuntimeEnv;
   onEvent?: (event: WorktreeSetupCommandProgressEvent) => void;
 }): Promise<WorktreeSetupCommandResult[]> {
-  // Read paseo.json from the worktree (it will have the same content as the source repo)
+  // Read chisacode.json from the worktree (it will have the same content as the source repo)
   const setupCommands = getWorktreeSetupCommands(options.worktreePath);
   if (setupCommands.length === 0) {
     return [];
@@ -660,12 +658,12 @@ export async function resolveWorktreeRuntimeEnv(options: {
   const branchName =
     options.branchName ?? (await resolveBranchNameForWorktreePath(options.worktreePath));
 
-  let worktreePort = readPaseoWorktreeRuntimePort(options.worktreePath);
+  let worktreePort = readChisaCodeWorktreeRuntimePort(options.worktreePath);
   if (worktreePort === null) {
     worktreePort = await getAvailablePort();
-    const metadata = readPaseoWorktreeMetadata(options.worktreePath);
+    const metadata = readChisaCodeWorktreeMetadata(options.worktreePath);
     if (metadata) {
-      writePaseoWorktreeRuntimeMetadata(options.worktreePath, { worktreePort });
+      writeChisaCodeWorktreeRuntimeMetadata(options.worktreePath, { worktreePort });
     }
   } else {
     await assertPortAvailable(worktreePort);
@@ -675,17 +673,11 @@ export async function resolveWorktreeRuntimeEnv(options: {
     // Source checkout path is the original git repo root (shared across worktrees), not the
     // worktree itself. This allows setup scripts to copy local files (e.g. .env) from the
     // source checkout.
-    FLEURDELYS_SOURCE_CHECKOUT_PATH: repoRootPath,
-    FLEURDELYS_ROOT_PATH: repoRootPath,
-    FLEURDELYS_WORKTREE_PATH: options.worktreePath,
-    FLEURDELYS_BRANCH_NAME: branchName,
-    FLEURDELYS_WORKTREE_PORT: String(worktreePort),
-    PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
-    // Backward-compatible alias.
-    PASEO_ROOT_PATH: repoRootPath,
-    PASEO_WORKTREE_PATH: options.worktreePath,
-    PASEO_BRANCH_NAME: branchName,
-    PASEO_WORKTREE_PORT: String(worktreePort),
+    CHISACODE_SOURCE_CHECKOUT_PATH: repoRootPath,
+    CHISACODE_ROOT_PATH: repoRootPath,
+    CHISACODE_WORKTREE_PATH: options.worktreePath,
+    CHISACODE_BRANCH_NAME: branchName,
+    CHISACODE_WORKTREE_PORT: String(worktreePort),
   };
 }
 
@@ -694,7 +686,7 @@ export async function runWorktreeTeardownCommands(options: {
   branchName?: string;
   repoRootPath?: string;
 }): Promise<WorktreeTeardownCommandResult[]> {
-  // Read paseo.json from the worktree (it will have the same content as the source repo)
+  // Read chisacode.json from the worktree (it will have the same content as the source repo)
   const teardownCommands = getWorktreeTeardownCommands(options.worktreePath);
   if (teardownCommands.length === 0) {
     return [];
@@ -704,23 +696,17 @@ export async function runWorktreeTeardownCommands(options: {
     options.repoRootPath ?? (await inferRepoRootPathFromWorktreePath(options.worktreePath));
   const branchName =
     options.branchName ?? (await resolveBranchNameForWorktreePath(options.worktreePath));
-  const worktreePort = readPaseoWorktreeRuntimePort(options.worktreePath);
+  const worktreePort = readChisaCodeWorktreeRuntimePort(options.worktreePath);
 
   const teardownEnv: NodeJS.ProcessEnv = createExternalProcessEnv(process.env, {
     // Source checkout path is the original git repo root (shared across worktrees), not the
     // worktree itself. This allows lifecycle scripts to copy or clean resources using paths
     // from the source checkout.
-    FLEURDELYS_SOURCE_CHECKOUT_PATH: repoRootPath,
-    FLEURDELYS_ROOT_PATH: repoRootPath,
-    FLEURDELYS_WORKTREE_PATH: options.worktreePath,
-    FLEURDELYS_BRANCH_NAME: branchName,
-    ...(worktreePort !== null ? { FLEURDELYS_WORKTREE_PORT: String(worktreePort) } : {}),
-    PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
-    // Backward-compatible alias.
-    PASEO_ROOT_PATH: repoRootPath,
-    PASEO_WORKTREE_PATH: options.worktreePath,
-    PASEO_BRANCH_NAME: branchName,
-    ...(worktreePort !== null ? { PASEO_WORKTREE_PORT: String(worktreePort) } : {}),
+    CHISACODE_SOURCE_CHECKOUT_PATH: repoRootPath,
+    CHISACODE_ROOT_PATH: repoRootPath,
+    CHISACODE_WORKTREE_PATH: options.worktreePath,
+    CHISACODE_BRANCH_NAME: branchName,
+    ...(worktreePort !== null ? { CHISACODE_WORKTREE_PORT: String(worktreePort) } : {}),
   });
 
   const results: WorktreeTeardownCommandResult[] = [];
@@ -781,8 +767,11 @@ export async function deriveWorktreeProjectHash(cwd: string): Promise<string> {
   }
 }
 
-export async function getPaseoWorktreesRoot(cwd: string, paseoHome?: string): Promise<string> {
-  const home = paseoHome ? resolve(paseoHome) : resolvePaseoHome();
+export async function getChisaCodeWorktreesRoot(
+  cwd: string,
+  chisacodeHome?: string,
+): Promise<string> {
+  const home = chisacodeHome ? resolve(chisacodeHome) : resolveChisaCodeHome();
   const projectHash = await deriveWorktreeProjectHash(cwd);
   return join(home, "worktrees", projectHash);
 }
@@ -790,9 +779,9 @@ export async function getPaseoWorktreesRoot(cwd: string, paseoHome?: string): Pr
 export async function computeWorktreePath(
   cwd: string,
   slug: string,
-  paseoHome?: string,
+  chisacodeHome?: string,
 ): Promise<string> {
-  const worktreesRoot = await getPaseoWorktreesRoot(cwd, paseoHome);
+  const worktreesRoot = await getChisaCodeWorktreesRoot(cwd, chisacodeHome);
   return join(worktreesRoot, slug);
 }
 
@@ -811,10 +800,10 @@ function resolveRepoRootFromGitCommonDir(commonDir: string): string {
     : normalizedCommonDir;
 }
 
-export async function isPaseoOwnedWorktreeCwd(
+export async function isChisaCodeOwnedWorktreeCwd(
   cwd: string,
-  options?: { paseoHome?: string },
-): Promise<PaseoWorktreeOwnership> {
+  options?: { chisacodeHome?: string },
+): Promise<ChisaCodeWorktreeOwnership> {
   const resolvedCwd = normalizePathForOwnership(cwd);
 
   // repoRoot is best-effort: git may be unreachable from the worktree (e.g. a
@@ -828,14 +817,17 @@ export async function isPaseoOwnedWorktreeCwd(
     // ignore
   }
 
-  const paseoHome = options?.paseoHome ? resolve(options.paseoHome) : resolvePaseoHome();
-  const paseoWorktreesPrefix = normalizePathForOwnership(join(paseoHome, "worktrees")) + sep;
+  const chisacodeHome = options?.chisacodeHome
+    ? resolve(options.chisacodeHome)
+    : resolveChisaCodeHome();
+  const chisacodeWorktreesPrefix =
+    normalizePathForOwnership(join(chisacodeHome, "worktrees")) + sep;
 
-  // Ownership is defined by the path living under $PASEO_HOME/worktrees/<hash>/<slug>[/...].
-  // The <hash>/<slug> prefix is Paseo-private — nothing else writes there — so the
+  // Ownership is defined by the path living under $CHISACODE_HOME/worktrees/<hash>/<slug>[/...].
+  // The <hash>/<slug> prefix is ChisaCode-private — nothing else writes there — so the
   // path shape alone is sufficient proof of ownership, even when git has already
   // forgotten about the worktree.
-  if (!resolvedCwd.startsWith(paseoWorktreesPrefix)) {
+  if (!resolvedCwd.startsWith(chisacodeWorktreesPrefix)) {
     return {
       allowed: false,
       ...(repoRoot !== undefined ? { repoRoot } : {}),
@@ -843,7 +835,7 @@ export async function isPaseoOwnedWorktreeCwd(
     };
   }
 
-  const relative = resolvedCwd.slice(paseoWorktreesPrefix.length);
+  const relative = resolvedCwd.slice(chisacodeWorktreesPrefix.length);
   const parts = relative.split(sep).filter((part) => part.length > 0);
   if (parts.length < 2) {
     return {
@@ -853,7 +845,7 @@ export async function isPaseoOwnedWorktreeCwd(
     };
   }
 
-  const worktreesRoot = join(paseoHome, "worktrees", parts[0]);
+  const worktreesRoot = join(chisacodeHome, "worktrees", parts[0]);
   return {
     allowed: true,
     ...(repoRoot !== undefined ? { repoRoot } : {}),
@@ -862,11 +854,11 @@ export async function isPaseoOwnedWorktreeCwd(
   };
 }
 
-type ParsedPaseoWorktreeInfo = Omit<PaseoWorktreeInfo, "createdAt">;
+type ParsedChisaCodeWorktreeInfo = Omit<ChisaCodeWorktreeInfo, "createdAt">;
 
-function parseWorktreeList(output: string): ParsedPaseoWorktreeInfo[] {
-  const entries: ParsedPaseoWorktreeInfo[] = [];
-  let current: ParsedPaseoWorktreeInfo | null = null;
+function parseWorktreeList(output: string): ParsedChisaCodeWorktreeInfo[] {
+  const entries: ParsedChisaCodeWorktreeInfo[] = [];
+  let current: ParsedChisaCodeWorktreeInfo | null = null;
 
   for (const line of output.split("\n")) {
     if (line.startsWith("worktree ")) {
@@ -913,14 +905,14 @@ function resolveWorktreeCreatedAtIso(worktreePath: string): string {
   }
 }
 
-export async function listPaseoWorktrees({
+export async function listChisaCodeWorktrees({
   cwd,
-  paseoHome,
+  chisacodeHome,
 }: {
   cwd: string;
-  paseoHome?: string;
-}): Promise<PaseoWorktreeInfo[]> {
-  const worktreesRoot = await getPaseoWorktreesRoot(cwd, paseoHome);
+  chisacodeHome?: string;
+}): Promise<ChisaCodeWorktreeInfo[]> {
+  const worktreesRoot = await getChisaCodeWorktreesRoot(cwd, chisacodeHome);
   const { stdout } = await runGitCommand(["worktree", "list", "--porcelain"], {
     cwd,
     envOverlay: READ_ONLY_GIT_ENV,
@@ -938,11 +930,11 @@ export async function listPaseoWorktrees({
 export async function resolveExistingWorktreeForSlug({
   slug,
   repoRoot,
-  paseoHome,
+  chisacodeHome,
 }: ResolveExistingWorktreeForSlugOptions): Promise<WorktreeConfig | null> {
-  const worktrees = await listPaseoWorktrees({
+  const worktrees = await listChisaCodeWorktrees({
     cwd: repoRoot,
-    paseoHome,
+    chisacodeHome,
   });
   const slugSuffix = `${sep}${slug}`;
   const existingWorktree = worktrees.find((worktree) => worktree.path.endsWith(slugSuffix));
@@ -965,9 +957,9 @@ export async function resolveExistingWorktreeForSlug({
   };
 }
 
-export async function resolvePaseoWorktreeRootForCwd(
+export async function resolveChisaCodeWorktreeRootForCwd(
   cwd: string,
-  options?: { paseoHome?: string },
+  options?: { chisacodeHome?: string },
 ): Promise<{ repoRoot: string; worktreeRoot: string; worktreePath: string } | null> {
   let gitCommonDir: string;
   try {
@@ -976,7 +968,7 @@ export async function resolvePaseoWorktreeRootForCwd(
     return null;
   }
 
-  const worktreesRoot = await getPaseoWorktreesRoot(cwd, options?.paseoHome);
+  const worktreesRoot = await getChisaCodeWorktreesRoot(cwd, options?.chisacodeHome);
   const resolvedRoot = normalizePathForOwnership(worktreesRoot) + sep;
 
   let worktreeRoot: string | null = null;
@@ -999,9 +991,9 @@ export async function resolvePaseoWorktreeRootForCwd(
     return null;
   }
 
-  const knownWorktrees = await listPaseoWorktrees({
+  const knownWorktrees = await listChisaCodeWorktrees({
     cwd,
-    paseoHome: options?.paseoHome,
+    chisacodeHome: options?.chisacodeHome,
   });
   const match = knownWorktrees.find((entry) => entry.path === resolvedWorktreeRoot);
   if (!match) {
@@ -1015,18 +1007,18 @@ export async function resolvePaseoWorktreeRootForCwd(
   };
 }
 
-export async function deletePaseoWorktree({
+export async function deleteChisaCodeWorktree({
   cwd,
   worktreePath,
   worktreeSlug,
   worktreesRoot,
-  paseoHome,
+  chisacodeHome,
 }: {
   cwd: string | null;
   worktreePath?: string;
   worktreeSlug?: string;
   worktreesRoot?: string;
-  paseoHome?: string;
+  chisacodeHome?: string;
 }): Promise<void> {
   if (!worktreePath && !worktreeSlug) {
     throw new Error("worktreePath or worktreeSlug is required");
@@ -1039,20 +1031,20 @@ export async function deletePaseoWorktree({
   if (worktreesRoot) {
     resolvedWorktreesRoot = worktreesRoot;
   } else if (cwd) {
-    resolvedWorktreesRoot = await getPaseoWorktreesRoot(cwd, paseoHome);
+    resolvedWorktreesRoot = await getChisaCodeWorktreesRoot(cwd, chisacodeHome);
   } else {
-    throw new Error("cwd or worktreesRoot is required to delete a Paseo worktree");
+    throw new Error("cwd or worktreesRoot is required to delete a ChisaCode worktree");
   }
 
   const resolvedRoot = normalizePathForOwnership(resolvedWorktreesRoot) + sep;
   const requestedPath = worktreePath ?? join(resolvedWorktreesRoot, worktreeSlug!);
   const resolvedRequested = normalizePathForOwnership(requestedPath);
   const resolvedWorktree =
-    (await resolvePaseoWorktreeRootForCwd(requestedPath, { paseoHome }))?.worktreePath ??
+    (await resolveChisaCodeWorktreeRootForCwd(requestedPath, { chisacodeHome }))?.worktreePath ??
     resolvedRequested;
 
   if (!resolvedWorktree.startsWith(resolvedRoot)) {
-    throw new Error("Refusing to delete non-Paseo worktree");
+    throw new Error("Refusing to delete non-ChisaCode worktree");
   }
 
   if (await pathExists(resolvedWorktree)) {
@@ -1135,10 +1127,10 @@ export const createWorktree = async ({
   source,
   worktreeSlug,
   runSetup,
-  paseoHome,
+  chisacodeHome,
 }: CreateWorktreeOptions): Promise<WorktreeConfig> => {
   const sourcePlan = await resolveWorktreeSourcePlan({ cwd, source, desiredSlug: worktreeSlug });
-  let worktreePath = join(await getPaseoWorktreesRoot(cwd, paseoHome), worktreeSlug);
+  let worktreePath = join(await getChisaCodeWorktreesRoot(cwd, chisacodeHome), worktreeSlug);
   mkdirSync(dirname(worktreePath), { recursive: true });
 
   // Also handle worktree path collision
@@ -1164,12 +1156,12 @@ export const createWorktree = async ({
     });
   }
 
-  writePaseoWorktreeMetadata(worktreePath, { baseRefName: sourcePlan.metadataBaseRefName });
+  writeChisaCodeWorktreeMetadata(worktreePath, { baseRefName: sourcePlan.metadataBaseRefName });
 
   // If the project config exists in the main repo but wasn't checked into the worktree
   // (e.g. uncommitted on first-time setup), seed the worktree with it so setup
   // commands and scripts pick up the user's intended config.
-  const mainConfigPath = resolvePaseoConfigPath(cwd);
+  const mainConfigPath = resolveChisaCodeConfigPath(cwd);
   const worktreeConfigPath = join(worktreePath, basename(mainConfigPath));
   try {
     await stat(worktreeConfigPath);
@@ -1279,7 +1271,7 @@ async function resolveWorktreeSourcePlan({
         ...(source.pushRemoteUrl
           ? {
               pushRemote: {
-                name: `fleurdelys-pr-${source.githubPrNumber}`,
+                name: `chisacode-pr-${source.githubPrNumber}`,
                 url: source.pushRemoteUrl,
                 headRef: source.headRef,
               },
@@ -1325,10 +1317,10 @@ function validateWorktreeBranchName(branchName: string): void {
 function normalizeRequiredBaseBranch(baseBranch: string): string {
   const normalizedBaseBranch = normalizeBaseRefName(baseBranch);
   if (!normalizedBaseBranch) {
-    throw new Error("Base branch is required when creating a Paseo worktree");
+    throw new Error("Base branch is required when creating a ChisaCode worktree");
   }
   if (normalizedBaseBranch === "HEAD") {
-    throw new Error("Base branch cannot be HEAD when creating a Paseo worktree");
+    throw new Error("Base branch cannot be HEAD when creating a ChisaCode worktree");
   }
   return normalizedBaseBranch;
 }

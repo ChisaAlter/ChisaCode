@@ -1,6 +1,6 @@
 import path from "path";
 import type { Command } from "commander";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type {
   CommandOptions,
@@ -47,7 +47,7 @@ export async function runArchiveCommand(
     const error: CommandError = {
       code: "MISSING_WORKTREE_NAME",
       message: "Worktree name is required",
-      details: "Usage: fleurdelys worktree archive <name>",
+      details: "Usage: chisacode worktree archive <name>",
     };
     throw error;
   }
@@ -60,14 +60,14 @@ export async function runArchiveCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }
 
   try {
     // Get the list of worktrees first to resolve the name
-    const listResponse = await client.getPaseoWorktreeList({});
+    const listResponse = await client.getChisaCodeWorktreeList({});
 
     if (listResponse.error) {
       const error: CommandError = {
@@ -87,13 +87,13 @@ export async function runArchiveCommand(
       const error: CommandError = {
         code: "WORKTREE_NOT_FOUND",
         message: `Worktree not found: ${nameArg}`,
-        details: 'Use "fleurdelys worktree ls" to list available worktrees',
+        details: 'Use "chisacode worktree ls" to list available worktrees',
       };
       throw error;
     }
 
     // Archive the worktree
-    const response = await client.archivePaseoWorktree({
+    const response = await client.archiveChisaCodeWorktree({
       worktreePath: worktree.worktreePath,
     });
 

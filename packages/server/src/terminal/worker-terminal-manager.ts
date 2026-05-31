@@ -1,8 +1,8 @@
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import type { TerminalState } from "@fleurdelys/protocol/messages";
-import { TerminalInputModeTracker } from "@fleurdelys/protocol/terminal-input-mode";
+import type { TerminalState } from "@chisacode/protocol/messages";
+import { TerminalInputModeTracker } from "@chisacode/protocol/terminal-input-mode";
 import type {
   ClientMessage,
   ServerMessage,

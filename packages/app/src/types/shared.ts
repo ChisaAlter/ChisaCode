@@ -1,4 +1,4 @@
-import type { AgentPermissionRequest } from "@fleurdelys/protocol/agent-types";
+import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
 
 /**
  * Pending permission structure

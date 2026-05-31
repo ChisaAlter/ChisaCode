@@ -7,10 +7,10 @@ describe("cli-install-path", () => {
       resolveCliInstallSourcePath({
         platform: "darwin",
         isPackaged: true,
-        executablePath: "/Applications/Paseo.app/Contents/MacOS/Paseo",
-        shimPath: "/Applications/Paseo.app/Contents/Resources/bin/paseo",
+        executablePath: "/Applications/ChisaCode.app/Contents/MacOS/ChisaCode",
+        shimPath: "/Applications/ChisaCode.app/Contents/Resources/bin/chisacode",
       }),
-    ).toBe("/Applications/Paseo.app/Contents/Resources/bin/paseo");
+    ).toBe("/Applications/ChisaCode.app/Contents/Resources/bin/chisacode");
   });
 
   it("prefers the original AppImage path on linux", () => {
@@ -18,11 +18,11 @@ describe("cli-install-path", () => {
       resolveCliInstallSourcePath({
         platform: "linux",
         isPackaged: true,
-        executablePath: "/tmp/.mount_paseo123/paseo",
-        shimPath: "/tmp/.mount_paseo123/resources/bin/paseo",
-        appImagePath: "/home/user/Applications/Paseo.AppImage",
+        executablePath: "/tmp/.mount_chisacode123/chisacode",
+        shimPath: "/tmp/.mount_chisacode123/resources/bin/chisacode",
+        appImagePath: "/home/user/Applications/ChisaCode.AppImage",
       }),
-    ).toBe("/home/user/Applications/Paseo.AppImage");
+    ).toBe("/home/user/Applications/ChisaCode.AppImage");
   });
 
   it("falls back to the shim on windows and in development", () => {
@@ -30,18 +30,19 @@ describe("cli-install-path", () => {
       resolveCliInstallSourcePath({
         platform: "win32",
         isPackaged: true,
-        executablePath: "C:\\Users\\user\\AppData\\Local\\Programs\\Paseo\\Paseo.exe",
-        shimPath: "C:\\Users\\user\\AppData\\Local\\Programs\\Paseo\\resources\\bin\\paseo.cmd",
+        executablePath: "C:\\Users\\user\\AppData\\Local\\Programs\\ChisaCode\\ChisaCode.exe",
+        shimPath:
+          "C:\\Users\\user\\AppData\\Local\\Programs\\ChisaCode\\resources\\bin\\chisacode.cmd",
       }),
-    ).toBe("C:\\Users\\user\\AppData\\Local\\Programs\\Paseo\\resources\\bin\\paseo.cmd");
+    ).toBe("C:\\Users\\user\\AppData\\Local\\Programs\\ChisaCode\\resources\\bin\\chisacode.cmd");
 
     expect(
       resolveCliInstallSourcePath({
         platform: "linux",
         isPackaged: false,
-        executablePath: "/opt/Paseo/paseo",
-        shimPath: "/opt/Paseo/resources/bin/paseo",
+        executablePath: "/opt/ChisaCode/chisacode",
+        shimPath: "/opt/ChisaCode/resources/bin/chisacode",
       }),
-    ).toBe("/opt/Paseo/resources/bin/paseo");
+    ).toBe("/opt/ChisaCode/resources/bin/chisacode");
   });
 });

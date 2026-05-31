@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import type { AgentProviderDefinition } from "@fleurdelys/protocol/provider-manifest";
+import type { AgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
 import type {
   AgentMode,
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@fleurdelys/protocol/agent-types";
+} from "@chisacode/protocol/agent-types";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import {

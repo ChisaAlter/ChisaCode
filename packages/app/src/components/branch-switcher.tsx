@@ -10,6 +10,7 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
 import { ScreenTitle } from "@/components/headers/screen-title";
+import { useTranslation } from "react-i18next";
 
 interface BranchSwitcherProps {
   currentBranchName: string | null;
@@ -27,6 +28,7 @@ export function BranchSwitcher({
   isGitCheckout,
 }: BranchSwitcherProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const anchorRef = useRef<View>(null);
   const client = useHostRuntimeClient(serverId);
@@ -91,7 +93,7 @@ export function BranchSwitcher({
         onPress={handleOpen}
         style={triggerStyle}
         accessibilityRole="button"
-        accessibilityLabel={`Current branch: ${currentBranchName}. Press to switch branch.`}
+        accessibilityLabel={t("branches.currentBranchLabel", { branch: currentBranchName })}
       >
         {titleContent}
         {!isCompact ? <ChevronDown size={12} color={theme.colors.foregroundMuted} /> : null}
@@ -101,10 +103,10 @@ export function BranchSwitcher({
         value={currentBranchName}
         onSelect={handleBranchSelect}
         searchable
-        placeholder="Switch branch..."
-        searchPlaceholder="Filter branches..."
-        emptyText="No branches found."
-        title="Switch branch"
+        placeholder={t("branches.placeholder")}
+        searchPlaceholder={t("branches.searchPlaceholder")}
+        emptyText={t("branches.empty")}
+        title={t("branches.title")}
         open={isOpen}
         onOpenChange={setIsOpen}
         anchorRef={anchorRef}

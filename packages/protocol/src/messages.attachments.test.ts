@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CreateAgentRequestMessageSchema,
-  CreatePaseoWorktreeRequestSchema,
+  CreateChisaCodeWorktreeRequestSchema,
   SendAgentMessageRequestSchema,
 } from "./messages.js";
 
@@ -16,7 +16,7 @@ describe("shared messages attachments", () => {
       attachments: [
         {
           type: "review",
-          mimeType: "application/paseo-review",
+          mimeType: "application/chisacode-review",
           cwd: "/tmp/repo",
           mode: "base",
           baseRef: "main",
@@ -58,7 +58,7 @@ describe("shared messages attachments", () => {
     expect(parsed.attachments).toEqual([
       {
         type: "review",
-        mimeType: "application/paseo-review",
+        mimeType: "application/chisacode-review",
         cwd: "/tmp/repo",
         mode: "base",
         baseRef: "main",
@@ -106,7 +106,7 @@ describe("shared messages attachments", () => {
       attachments: [
         {
           type: "review",
-          mimeType: "application/paseo-review",
+          mimeType: "application/chisacode-review",
           cwd: "/tmp/repo",
           mode: "uncommitted",
           comments: [
@@ -133,7 +133,7 @@ describe("shared messages attachments", () => {
           mimeType: "application/github-issue",
           number: 55,
           title: "Improve startup error details",
-          url: "https://github.com/getpaseo/paseo/issues/55",
+          url: "https://github.com/getchisacode/chisacode/issues/55",
         },
       ],
     });
@@ -144,7 +144,7 @@ describe("shared messages attachments", () => {
         mimeType: "application/github-issue",
         number: 55,
         title: "Improve startup error details",
-        url: "https://github.com/getpaseo/paseo/issues/55",
+        url: "https://github.com/getchisacode/chisacode/issues/55",
       },
     ]);
   });
@@ -164,7 +164,7 @@ describe("shared messages attachments", () => {
           mimeType: "application/github-pr",
           number: 123,
           title: "Fix race in worktree setup",
-          url: "https://github.com/getpaseo/paseo/pull/123",
+          url: "https://github.com/getchisacode/chisacode/pull/123",
           body: "Body",
           baseRefName: "main",
           headRefName: "fix/worktree-race",
@@ -183,7 +183,7 @@ describe("shared messages attachments", () => {
         mimeType: "application/github-pr",
         number: 123,
         title: "Fix race in worktree setup",
-        url: "https://github.com/getpaseo/paseo/pull/123",
+        url: "https://github.com/getchisacode/chisacode/pull/123",
         body: "Body",
         baseRefName: "main",
         headRefName: "fix/worktree-race",
@@ -203,7 +203,7 @@ describe("shared messages attachments", () => {
           mimeType: "application/github-issue",
           number: 55,
           title: "Improve startup error details",
-          url: "https://github.com/getpaseo/paseo/issues/55",
+          url: "https://github.com/getchisacode/chisacode/issues/55",
           body: "Body",
         },
         {
@@ -220,15 +220,15 @@ describe("shared messages attachments", () => {
         mimeType: "application/github-issue",
         number: 55,
         title: "Improve startup error details",
-        url: "https://github.com/getpaseo/paseo/issues/55",
+        url: "https://github.com/getchisacode/chisacode/issues/55",
         body: "Body",
       },
     ]);
   });
 
   it("keeps known firstAgentContext attachments and drops unknown ones", () => {
-    const parsed = CreatePaseoWorktreeRequestSchema.parse({
-      type: "create_paseo_worktree_request",
+    const parsed = CreateChisaCodeWorktreeRequestSchema.parse({
+      type: "create_chisacode_worktree_request",
       requestId: "req-3",
       cwd: "/tmp/repo",
       firstAgentContext: {
@@ -239,7 +239,7 @@ describe("shared messages attachments", () => {
             mimeType: "application/github-pr",
             number: 99,
             title: "Fork-safe PR checkout",
-            url: "https://github.com/getpaseo/paseo/pull/99",
+            url: "https://github.com/getchisacode/chisacode/pull/99",
           },
           {
             type: "future_attachment",
@@ -256,29 +256,29 @@ describe("shared messages attachments", () => {
         mimeType: "application/github-pr",
         number: 99,
         title: "Fork-safe PR checkout",
-        url: "https://github.com/getpaseo/paseo/pull/99",
+        url: "https://github.com/getchisacode/chisacode/pull/99",
       },
     ]);
     expect(parsed.firstAgentContext?.prompt).toBe("Investigate flaky test");
   });
 
   it("parses worktree-create payloads without a firstAgentContext", () => {
-    const parsed = CreatePaseoWorktreeRequestSchema.parse({
-      type: "create_paseo_worktree_request",
+    const parsed = CreateChisaCodeWorktreeRequestSchema.parse({
+      type: "create_chisacode_worktree_request",
       requestId: "req-4",
       cwd: "/tmp/repo",
     });
 
     expect(parsed).toEqual({
-      type: "create_paseo_worktree_request",
+      type: "create_chisacode_worktree_request",
       requestId: "req-4",
       cwd: "/tmp/repo",
     });
   });
 
   it("accepts and strips create-worktree intent fields compatibly", () => {
-    const parsed = CreatePaseoWorktreeRequestSchema.parse({
-      type: "create_paseo_worktree_request",
+    const parsed = CreateChisaCodeWorktreeRequestSchema.parse({
+      type: "create_chisacode_worktree_request",
       requestId: "req-5",
       cwd: "/tmp/repo",
       action: "checkout",
@@ -288,7 +288,7 @@ describe("shared messages attachments", () => {
     });
 
     expect(parsed).toEqual({
-      type: "create_paseo_worktree_request",
+      type: "create_chisacode_worktree_request",
       requestId: "req-5",
       cwd: "/tmp/repo",
       action: "checkout",

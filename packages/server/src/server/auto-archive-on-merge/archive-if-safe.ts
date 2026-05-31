@@ -3,7 +3,10 @@ import type { Logger } from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { AgentStorage } from "../agent/agent-storage.js";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
-import { archivePaseoWorktree, killTerminalsUnderPath } from "../paseo-worktree-archive-service.js";
+import {
+  archiveChisaCodeWorktree,
+  killTerminalsUnderPath,
+} from "../chisacode-worktree-archive-service.js";
 import { isSameOrDescendantPath } from "../path-utils.js";
 import type {
   WorkspaceGitRuntimeSnapshot,
@@ -11,10 +14,10 @@ import type {
 } from "../workspace-git-service.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
-import { isPaseoOwnedWorktreeCwd } from "../../utils/worktree.js";
+import { isChisaCodeOwnedWorktreeCwd } from "../../utils/worktree.js";
 
 export interface AutoArchiveArchiveOptions {
-  paseoHome: string;
+  chisacodeHome: string;
   daemonConfigStore: DaemonConfigStore;
   workspaceGitService: WorkspaceGitServiceImpl;
   github: GitHubService;
@@ -28,15 +31,15 @@ export interface AutoArchiveArchiveOptions {
 }
 
 export interface ArchiveIfSafeDependencies {
-  archivePaseoWorktree: typeof archivePaseoWorktree;
-  isPaseoOwnedWorktreeCwd: typeof isPaseoOwnedWorktreeCwd;
+  archiveChisaCodeWorktree: typeof archiveChisaCodeWorktree;
+  isChisaCodeOwnedWorktreeCwd: typeof isChisaCodeOwnedWorktreeCwd;
   killTerminalsUnderPath: typeof killTerminalsUnderPath;
   isPathWithinRoot: typeof isSameOrDescendantPath;
 }
 
 const defaultDependencies: ArchiveIfSafeDependencies = {
-  archivePaseoWorktree,
-  isPaseoOwnedWorktreeCwd,
+  archiveChisaCodeWorktree,
+  isChisaCodeOwnedWorktreeCwd,
   killTerminalsUnderPath,
   isPathWithinRoot: isSameOrDescendantPath,
 };
@@ -81,15 +84,17 @@ export async function archiveIfSafe(input: {
       return;
     }
 
-    const ownership = await deps.isPaseoOwnedWorktreeCwd(cwd, { paseoHome: options.paseoHome });
+    const ownership = await deps.isChisaCodeOwnedWorktreeCwd(cwd, {
+      chisacodeHome: options.chisacodeHome,
+    });
     if (!ownership.allowed) {
       return;
     }
 
     try {
-      await deps.archivePaseoWorktree(
+      await deps.archiveChisaCodeWorktree(
         {
-          paseoHome: options.paseoHome,
+          chisacodeHome: options.chisacodeHome,
           github: options.github,
           workspaceGitService: options.workspaceGitService,
           agentManager: options.agentManager,

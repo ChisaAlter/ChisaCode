@@ -1,6 +1,6 @@
-import type { AgentSnapshotPayload } from "@fleurdelys/protocol/messages";
-import type { AgentPermissionRequest } from "@fleurdelys/protocol/agent-types";
-import { readParentAgentIdLabel } from "@fleurdelys/protocol/agent-labels";
+import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
+import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
+import { readParentAgentIdLabel } from "@chisacode/protocol/agent-labels";
 
 export function derivePendingPermissionKey(
   agentId: string,

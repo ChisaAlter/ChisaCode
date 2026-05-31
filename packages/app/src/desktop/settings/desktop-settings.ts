@@ -137,6 +137,7 @@ export async function updatePersistedDesktopSettings(
 export async function migrateLegacyDesktopSettings(input: {
   manageBuiltInDaemon?: boolean;
   releaseChannel?: ReleaseChannel;
+  language?: AppLanguage;
 }): Promise<void> {
   if (!getIsElectron()) {
     return;

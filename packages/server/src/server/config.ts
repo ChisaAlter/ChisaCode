@@ -1,8 +1,8 @@
 import path from "node:path";
-import { resolvePaseoNodeEnv } from "./paseo-env.js";
+import { resolveChisaCodeNodeEnv } from "./chisacode-env.js";
 import { z } from "zod";
 
-import type { PaseoDaemonConfig } from "./bootstrap.js";
+import type { ChisaCodeDaemonConfig } from "./bootstrap.js";
 import {
   loadPersistedConfig,
   LogFormatSchema,
@@ -15,14 +15,14 @@ import type {
   ProviderOverride,
 } from "./agent/provider-launch-config.js";
 import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
-import { AgentProviderSchema } from "@fleurdelys/protocol/provider-manifest";
+import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
 import { hashDaemonPassword } from "./auth.js";
 import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 
 const DEFAULT_PORT = 6767;
-const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
-const DEFAULT_APP_BASE_URL = "https://app.paseo.sh";
+const DEFAULT_RELAY_ENDPOINT = "relay.chisacode.sh:443";
+const DEFAULT_APP_BASE_URL = "https://app.chisacode.sh";
 
 function parseBooleanEnv(value: string | undefined): boolean | undefined {
   if (value === undefined) {
@@ -48,9 +48,8 @@ function normalizeLogEnv(value: string | undefined): string | undefined {
   return value.trim().toLowerCase();
 }
 
-function renamedEnv(env: NodeJS.ProcessEnv, suffix: string): string | undefined {
-  // COMPAT(paseo-name-migration): FLEURDELYS_* is canonical; PASEO_* remains readable.
-  return env[`FLEURDELYS_${suffix}`] ?? env[`PASEO_${suffix}`];
+function chisacodeEnv(env: NodeJS.ProcessEnv, suffix: string): string | undefined {
+  return env[`CHISACODE_${suffix}`];
 }
 
 export type CliConfigOverrides = Partial<{
@@ -66,8 +65,8 @@ function resolveLogConfigFromEnv(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): PersistedConfig["log"] {
-  const envLogLevel = LogLevelSchema.safeParse(normalizeLogEnv(renamedEnv(env, "LOG_LEVEL")));
-  const envLogFormat = LogFormatSchema.safeParse(normalizeLogEnv(renamedEnv(env, "LOG_FORMAT")));
+  const envLogLevel = LogLevelSchema.safeParse(normalizeLogEnv(chisacodeEnv(env, "LOG_LEVEL")));
+  const envLogFormat = LogFormatSchema.safeParse(normalizeLogEnv(chisacodeEnv(env, "LOG_FORMAT")));
 
   if (!envLogLevel.success && !envLogFormat.success) {
     return persisted.log;
@@ -170,26 +169,26 @@ function resolveTlsFromEnv(
 function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
   const enabled =
     input.cliRelayEnabled ??
-    parseBooleanEnv(renamedEnv(input.env, "RELAY_ENABLED")) ??
+    parseBooleanEnv(chisacodeEnv(input.env, "RELAY_ENABLED")) ??
     input.persisted.daemon?.relay?.enabled ??
     true;
   const endpoint =
-    renamedEnv(input.env, "RELAY_ENDPOINT") ??
+    chisacodeEnv(input.env, "RELAY_ENDPOINT") ??
     input.persisted.daemon?.relay?.endpoint ??
     DEFAULT_RELAY_ENDPOINT;
   const publicEndpoint =
-    renamedEnv(input.env, "RELAY_PUBLIC_ENDPOINT") ??
+    chisacodeEnv(input.env, "RELAY_PUBLIC_ENDPOINT") ??
     input.persisted.daemon?.relay?.publicEndpoint ??
     endpoint;
   const useTls =
     input.cliRelayUseTls ??
     resolveTlsFromEnv(
-      renamedEnv(input.env, "RELAY_USE_TLS"),
+      chisacodeEnv(input.env, "RELAY_USE_TLS"),
       input.persisted.daemon?.relay?.useTls,
       endpoint === DEFAULT_RELAY_ENDPOINT,
     );
   const publicUseTls = resolveTlsFromEnv(
-    renamedEnv(input.env, "RELAY_PUBLIC_USE_TLS"),
+    chisacodeEnv(input.env, "RELAY_PUBLIC_USE_TLS"),
     input.persisted.daemon?.relay?.publicUseTls,
     useTls,
   );
@@ -206,7 +205,9 @@ function resolveVoiceLlmConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): ResolvedVoiceLlm {
-  const envVoiceLlmProvider = parseOptionalVoiceLlmProvider(renamedEnv(env, "VOICE_LLM_PROVIDER"));
+  const envVoiceLlmProvider = parseOptionalVoiceLlmProvider(
+    chisacodeEnv(env, "VOICE_LLM_PROVIDER"),
+  );
   const persistedVoiceLlmProvider = parseOptionalVoiceLlmProvider(
     persisted.features?.voiceMode?.llm?.provider,
   );
@@ -221,7 +222,7 @@ function resolveCorsAllowedOrigins(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): string[] {
-  const corsOrigins = renamedEnv(env, "CORS_ORIGINS");
+  const corsOrigins = chisacodeEnv(env, "CORS_ORIGINS");
   const envCorsOrigins = corsOrigins ? corsOrigins.split(",").map((s) => s.trim()) : [];
   const persistedCorsOrigins = persisted.daemon?.cors?.allowedOrigins ?? [];
   return Array.from(
@@ -229,7 +230,7 @@ function resolveCorsAllowedOrigins(
   );
 }
 
-// PASEO_LISTEN can be:
+// CHISACODE_LISTEN can be:
 // - host:port (TCP)
 // - /path/to/socket (Unix socket)
 // - unix:///path/to/socket (Unix socket)
@@ -241,7 +242,7 @@ function resolveListenAddress(
 ): string {
   return (
     cli?.listen ??
-    renamedEnv(env, "LISTEN") ??
+    chisacodeEnv(env, "LISTEN") ??
     persisted.daemon?.listen ??
     `127.0.0.1:${env.PORT ?? DEFAULT_PORT}`
   );
@@ -250,8 +251,8 @@ function resolveListenAddress(
 function resolveAuthConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
-): PaseoDaemonConfig["auth"] {
-  const envPassword = renamedEnv(env, "PASSWORD")?.trim();
+): ChisaCodeDaemonConfig["auth"] {
+  const envPassword = chisacodeEnv(env, "PASSWORD")?.trim();
   if (envPassword) {
     return { password: hashDaemonPassword(envPassword) };
   }
@@ -277,24 +278,22 @@ function resolveStaticLoadConfigSettings(
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
-      parseHostnamesEnv(
-        renamedEnv(env, "HOSTNAMES") ?? env.FLEURDELYS_ALLOWED_HOSTS ?? env.PASEO_ALLOWED_HOSTS,
-      ),
+      parseHostnamesEnv(chisacodeEnv(env, "HOSTNAMES") ?? env.CHISACODE_ALLOWED_HOSTS),
       cli?.hostnames,
     ]),
-    appBaseUrl: renamedEnv(env, "APP_BASE_URL") ?? persisted.app?.baseUrl ?? DEFAULT_APP_BASE_URL,
+    appBaseUrl: chisacodeEnv(env, "APP_BASE_URL") ?? persisted.app?.baseUrl ?? DEFAULT_APP_BASE_URL,
   };
 }
 
 export function loadConfig(
-  paseoHome: string,
+  chisacodeHome: string,
   options?: {
     env?: NodeJS.ProcessEnv;
     cli?: CliConfigOverrides;
   },
-): PaseoDaemonConfig {
+): ChisaCodeDaemonConfig {
   const env = options?.env ?? process.env;
-  const persisted = loadPersistedConfig(paseoHome);
+  const persisted = loadPersistedConfig(chisacodeHome);
 
   const listen = resolveListenAddress(env, options?.cli, persisted);
   const {
@@ -314,7 +313,7 @@ export function loadConfig(
   });
 
   const { openai, speech } = resolveSpeechConfig({
-    paseoHome,
+    chisacodeHome,
     env,
     persisted,
   });
@@ -326,7 +325,7 @@ export function loadConfig(
 
   return {
     listen,
-    paseoHome,
+    chisacodeHome,
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted),
     hostnames,
     mcpEnabled,
@@ -334,8 +333,8 @@ export function loadConfig(
     autoArchiveAfterMerge,
     appendSystemPrompt,
     mcpDebug: env.MCP_DEBUG === "1",
-    isDev: resolvePaseoNodeEnv(env) === "development",
-    agentStoragePath: path.join(paseoHome, "agents"),
+    isDev: resolveChisaCodeNodeEnv(env) === "development",
+    agentStoragePath: path.join(chisacodeHome, "agents"),
     staticDir: "public",
     agentClients: {},
     relayEnabled: relay.enabled,

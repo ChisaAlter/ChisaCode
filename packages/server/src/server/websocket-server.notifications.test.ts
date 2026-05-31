@@ -101,7 +101,7 @@ function createServer(agentManagerOverrides?: Record<string, unknown>) {
     createStub<AgentManager>(agentManager),
     createStub<AgentStorage>({}),
     createStub<DownloadTokenStore>({}),
-    "/tmp/paseo-test",
+    "/tmp/chisacode-test",
     createStub<DaemonConfigStore>(daemonConfigStore),
     null,
     { allowedOrigins: new Set() },

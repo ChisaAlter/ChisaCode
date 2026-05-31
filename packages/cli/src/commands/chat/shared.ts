@@ -17,7 +17,7 @@ export async function connectChatClient(host?: string) {
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${daemonHost}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }
@@ -122,6 +122,6 @@ export function parseTimeoutMs(input?: string): number | undefined {
 }
 
 export function resolveChatAuthorAgentId(): string {
-  const agentId = process.env.PASEO_AGENT_ID?.trim();
+  const agentId = process.env.CHISACODE_AGENT_ID?.trim();
   return agentId && agentId.length > 0 ? agentId : "manual";
 }

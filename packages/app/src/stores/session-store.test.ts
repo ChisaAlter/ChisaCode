@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
-import type { WorkspaceDescriptorPayload } from "@fleurdelys/protocol/messages";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { WorkspaceDescriptorPayload } from "@chisacode/protocol/messages";
 
 import {
   normalizeWorkspaceDescriptor,
@@ -56,9 +56,9 @@ describe("normalizeWorkspaceDescriptor", () => {
       {
         scriptName: "web",
         type: "service" as const,
-        hostname: "web.paseo.localhost",
+        hostname: "web.chisacode.localhost",
         port: 3000,
-        proxyUrl: "http://web.paseo.localhost:6767",
+        proxyUrl: "http://web.chisacode.localhost:6767",
         lifecycle: "running" as const,
         health: "healthy" as const,
         exitCode: null,
@@ -85,9 +85,9 @@ describe("normalizeWorkspaceDescriptor", () => {
       {
         scriptName: "web",
         type: "service",
-        hostname: "web.paseo.localhost",
+        hostname: "web.chisacode.localhost",
         port: 3000,
-        proxyUrl: "http://web.paseo.localhost:6767",
+        proxyUrl: "http://web.chisacode.localhost:6767",
         lifecycle: "running",
         health: "healthy",
         exitCode: null,
@@ -164,7 +164,7 @@ describe("normalizeWorkspaceDescriptor", () => {
           currentBranch: "main",
           remoteUrl: "https://github.com/acme/app.git",
           worktreeRoot: "/repo/app",
-          isPaseoOwnedWorktree: false,
+          isChisaCodeOwnedWorktree: false,
           mainRepoRoot: null,
         },
       },
@@ -179,7 +179,7 @@ describe("normalizeWorkspaceDescriptor", () => {
         currentBranch: "main",
         remoteUrl: "https://github.com/acme/app.git",
         worktreeRoot: "/repo/app",
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       },
     });
@@ -202,9 +202,9 @@ describe("mergeWorkspaces", () => {
           {
             scriptName: "web",
             type: "service",
-            hostname: "web.paseo.localhost",
+            hostname: "web.chisacode.localhost",
             port: 3000,
-            proxyUrl: "http://web.paseo.localhost:6767",
+            proxyUrl: "http://web.chisacode.localhost:6767",
             lifecycle: "running",
             health: "healthy",
             exitCode: null,
@@ -218,9 +218,9 @@ describe("mergeWorkspaces", () => {
       {
         scriptName: "web",
         type: "service",
-        hostname: "web.paseo.localhost",
+        hostname: "web.chisacode.localhost",
         port: 3000,
-        proxyUrl: "http://web.paseo.localhost:6767",
+        proxyUrl: "http://web.chisacode.localhost:6767",
         lifecycle: "running",
         health: "healthy",
         exitCode: null,
@@ -330,9 +330,9 @@ describe("patchWorkspaceScripts", () => {
     const script = {
       scriptName: "web",
       type: "service" as const,
-      hostname: "web.paseo.localhost",
+      hostname: "web.chisacode.localhost",
       port: 3000,
-      proxyUrl: "http://web.paseo.localhost:6767",
+      proxyUrl: "http://web.chisacode.localhost:6767",
       lifecycle: "running" as const,
       health: "healthy" as const,
       exitCode: null,

@@ -430,7 +430,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       onClose={handleClose}
       testID="add-host-modal"
     >
-      <Text style={styles.helper}>输入芙露德莉斯服务器地址。</Text>
+      <Text style={styles.helper}>输入ChisaCode服务器地址。</Text>
 
       <View style={styles.portRow}>
         <View style={hostFieldStyle}>

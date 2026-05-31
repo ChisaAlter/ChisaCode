@@ -1,4 +1,4 @@
-import { parseGitHubRemoteUrl } from "@fleurdelys/protocol/git-remote";
+import { parseGitHubRemoteUrl } from "@chisacode/protocol/git-remote";
 
 export type GithubRefKind = "pull" | "issues";
 

@@ -1,4 +1,4 @@
-const PASEO_NODE_ENV = "PASEO_NODE_ENV";
+const CHISACODE_NODE_ENV = "CHISACODE_NODE_ENV";
 
 export interface NodeEntrypointSpec {
   entryPath: string;
@@ -30,7 +30,7 @@ export function createElectronNodeEnv(
   return {
     ...baseEnv,
     ELECTRON_RUN_AS_NODE: "1",
-    ...(options?.isPackaged === true ? { [PASEO_NODE_ENV]: "production" } : {}),
+    ...(options?.isPackaged === true ? { [CHISACODE_NODE_ENV]: "production" } : {}),
   };
 }
 

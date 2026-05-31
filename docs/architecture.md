@@ -1,8 +1,8 @@
 # Architecture
 
-Paseo is a client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket. Clients (mobile app, CLI, desktop app) connect to the daemon to observe and interact with agents.
+ChisaCode is a client-server system for monitoring and controlling local AI coding agents. The daemon runs on your machine, manages agent processes, and streams their output in real time over WebSocket. Clients (mobile app, CLI, desktop app) connect to the daemon to observe and interact with agents.
 
-Your code never leaves your machine. Paseo is local-first.
+Your code never leaves your machine. ChisaCode is local-first.
 
 ## System overview
 
@@ -43,7 +43,7 @@ Your code never leaves your machine. Paseo is local-first.
 
 ### `packages/server` — The daemon
 
-The heart of Paseo. A Node.js process that:
+The heart of ChisaCode. A Node.js process that:
 
 - Listens for WebSocket connections from clients
 - Manages agent lifecycle (create, run, stop, resume, archive)
@@ -61,7 +61,7 @@ All paths are under `packages/server/src/`.
 | `server/websocket-server.ts`    | WebSocket connection management, hello handshake, binary frame routing       |
 | `server/session.ts`             | Per-client session state, timeline subscriptions, terminal operations        |
 | `server/agent/agent-manager.ts` | Agent lifecycle state machine, timeline tracking, subscriber management      |
-| `server/agent/agent-storage.ts` | File-backed JSON persistence at `$PASEO_HOME/agents/`                        |
+| `server/agent/agent-storage.ts` | File-backed JSON persistence at `$CHISACODE_HOME/agents/`                    |
 | `server/agent/mcp-server.ts`    | MCP server for sub-agent creation, permissions, timeouts                     |
 | `server/agent/providers/`       | Provider adapters (see "Agent providers" below)                              |
 | `server/relay-transport.ts`     | Outbound relay connection with E2E encryption                                |
@@ -73,15 +73,15 @@ All paths are under `packages/server/src/`.
 
 The source of truth for WebSocket messages, binary frame codecs, endpoint parsing,
 agent timeline types, provider config schemas, and other values shared by daemon
-and clients. Server, app, CLI, and `@fleurdelys/client` all depend on this package;
+and clients. Server, app, CLI, and `@chisacode/client` all depend on this package;
 it does not depend on the server.
 
 ### `packages/client` — Daemon client library and SDK facade
 
-Owns the low-level daemon WebSocket driver plus the higher-level `PaseoClient`
+Owns the low-level daemon WebSocket driver plus the higher-level `ChisaCodeClient`
 facade. App and CLI may import the low-level driver from
-`@fleurdelys/client/internal/daemon-client` during migration, while new SDK-shaped
-code imports from `@fleurdelys/client`.
+`@chisacode/client/internal/daemon-client` during migration, while new SDK-shaped
+code imports from `@chisacode/client`.
 
 ### `packages/app` — Mobile + web client (Expo)
 
@@ -97,18 +97,18 @@ Cross-platform React Native app that connects to one or more daemons.
 
 ### `packages/cli` — Command-line client
 
-Commander.js CLI with Docker-style commands. Common agent operations are also exposed at the top level (e.g. `paseo ls`, `paseo run`).
+Commander.js CLI with Docker-style commands. Common agent operations are also exposed at the top level (e.g. `chisacode ls`, `chisacode run`).
 
-- `paseo agent ls/run/import/attach/logs/stop/delete/send/inspect/wait/archive/reload/update/mode`
-- `paseo daemon start/stop/restart/status/pair/set-password`
-- `paseo chat ls/create/inspect/post/read/wait/delete`
-- `paseo terminal ls/create/capture/send-keys/kill`
-- `paseo loop run/ls/inspect/logs/stop`
-- `paseo schedule create/ls/inspect/update/pause/resume/run-once/logs/delete`
-- `paseo permit allow/deny/ls`
-- `paseo provider ls/models`
-- `paseo worktree create/ls/archive`
-- `paseo speech …`
+- `chisacode agent ls/run/import/attach/logs/stop/delete/send/inspect/wait/archive/reload/update/mode`
+- `chisacode daemon start/stop/restart/status/pair/set-password`
+- `chisacode chat ls/create/inspect/post/read/wait/delete`
+- `chisacode terminal ls/create/capture/send-keys/kill`
+- `chisacode loop run/ls/inspect/logs/stop`
+- `chisacode schedule create/ls/inspect/update/pause/resume/run-once/logs/delete`
+- `chisacode permit allow/deny/ls`
+- `chisacode provider ls/models`
+- `chisacode worktree create/ls/archive`
+- `chisacode speech …`
 
 Communicates with the daemon via the same WebSocket protocol as the app.
 
@@ -120,7 +120,7 @@ Enables remote access when the daemon is behind a firewall.
 - Relay server is zero-knowledge — it routes encrypted bytes, cannot read content
 - Client and daemon channels with identical API (`createClientChannel`, `createDaemonChannel`)
 - Pairing via QR code transfers the daemon's public key to the client
-- Self-hosted relays opt into TLS with `daemon.relay.useTls` or `PASEO_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `PASEO_RELAY_PUBLIC_USE_TLS`
+- Self-hosted relays opt into TLS with `daemon.relay.useTls` or `CHISACODE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `CHISACODE_RELAY_PUBLIC_USE_TLS`
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
 
@@ -134,7 +134,7 @@ Electron wrapper for macOS, Linux, and Windows.
 
 ### `packages/website` — Marketing site
 
-TanStack Router + Cloudflare Workers. Serves paseo.sh.
+TanStack Router + Cloudflare Workers. Serves chisacode.sh.
 
 ## WebSocket protocol
 
@@ -224,7 +224,7 @@ initializing → idle ⇄ running
 - Timeline is append-only with epochs (each run starts a new epoch). Storage uses sequence numbers for client-side dedup; the default fetch page is 200 items
 - Timeline row `timestamp` values are canonical daemon-owned timestamps. Providers may supply original replay timestamps, but clients must not guess timestamp trust or hide time UI based on local clock heuristics.
 - Events stream to connected clients in real time; correctness is backed by authoritative timeline fetches and paged-to-completion catch-up.
-- Agent state persists to `$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json` (timeline rows live alongside the record)
+- Agent state persists to `$CHISACODE_HOME/agents/{cwd-with-dashes}/{agent-id}.json` (timeline rows live alongside the record)
 
 ## Agent providers
 
@@ -245,7 +245,7 @@ The built-in, user-facing providers are Claude Code, Codex, Copilot, OpenCode, a
 
 All providers:
 
-- Handle their own authentication (Paseo does not manage API keys)
+- Handle their own authentication (ChisaCode does not manage API keys)
 - Support session resume via persistence handles
 - Map tool calls to a normalized `ToolCallDetail` type
 - Expose provider-specific modes (plan, default, full-access)
@@ -262,10 +262,10 @@ All providers:
 
 ## Storage
 
-`$PASEO_HOME` defaults to `~/.paseo`. The most important files:
+`$CHISACODE_HOME` defaults to `~/.chisacode`. The most important files:
 
 ```
-$PASEO_HOME/
+$CHISACODE_HOME/
 ├── agents/{cwd-with-dashes}/{agent-id}.json   # Agent record + persisted timeline rows
 ├── projects/projects.json                      # Project registry
 ├── projects/workspaces.json                    # Workspace registry
@@ -275,12 +275,12 @@ $PASEO_HOME/
 ├── config.json                                 # Daemon config (mutable)
 ├── daemon-keypair.json                         # Daemon identity for relay/E2EE
 ├── push-tokens.json                            # Mobile push tokens
-├── paseo.sock / paseo.pid                      # Local IPC socket and pidfile
+├── chisacode.sock / chisacode.pid                      # Local IPC socket and pidfile
 └── daemon.log                                  # Daemon trace logs (rotated)
 ```
 
 ## Deployment models
 
-1. **Local daemon** (default): `paseo daemon start` on `127.0.0.1:6767`
+1. **Local daemon** (default): `chisacode daemon start` on `127.0.0.1:6767`
 2. **Managed desktop**: Electron app spawns daemon as subprocess
 3. **Remote + relay**: Daemon behind firewall, relay bridges with E2E encryption

@@ -1,4 +1,4 @@
-appId: sh.paseo
+appId: sh.chisacode
 ---
 - runFlow: flows/land-in-chat.yaml
 

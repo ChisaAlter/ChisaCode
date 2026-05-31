@@ -4,7 +4,7 @@ import {
   parseGitHubRemoteIdentity,
   parseGitRemoteLocation,
   type GitHubRemoteIdentity as ResolvedGitHubRemoteIdentity,
-} from "@fleurdelys/protocol/git-remote";
+} from "@chisacode/protocol/git-remote";
 import { findExecutable } from "./executable.js";
 import { execCommand } from "./spawn.js";
 
@@ -13,7 +13,7 @@ const sshHostnameResolutionCache = new Map<string, Promise<string | null>>();
 
 export type SshHostnameResolver = (host: string) => Promise<string | null>;
 
-export { parseGitHubRemoteUrl, type GitHubRemoteIdentity } from "@fleurdelys/protocol/git-remote";
+export { parseGitHubRemoteUrl, type GitHubRemoteIdentity } from "@chisacode/protocol/git-remote";
 
 export async function resolveGitHubRemote(input: {
   remoteUrl: string;

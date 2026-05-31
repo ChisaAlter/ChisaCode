@@ -5,14 +5,14 @@ import {
 } from "./desktop-daemon-transport";
 import { createFakeLocalDaemonTransportRpc } from "./test-local-daemon-transport-rpc";
 
-const LOCAL_URL = "fleurdelys+local://socket?path=%2Ftmp%2Fpaseo.sock";
-const LEGACY_LOCAL_URL = "paseo+local://socket?path=%2Ftmp%2Fpaseo.sock";
+const LOCAL_URL = "chisacode+local://socket?path=%2Ftmp%2Fchisacode.sock";
+const LEGACY_LOCAL_URL = "chisacode+local://socket?path=%2Ftmp%2Fchisacode.sock";
 
 describe("desktop-daemon-transport", () => {
-  it("builds fleurdelys+local URLs", () => {
+  it("builds chisacode+local URLs", () => {
     expect(
       buildLocalDaemonTransportUrl({ transportType: "socket", transportPath: "/tmp/a.sock" }),
-    ).toBe("fleurdelys+local://socket?path=%2Ftmp%2Fa.sock");
+    ).toBe("chisacode+local://socket?path=%2Ftmp%2Fa.sock");
   });
 
   it("emits open after the session resolves even if the rust open event raced earlier", async () => {
@@ -34,7 +34,7 @@ describe("desktop-daemon-transport", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts legacy paseo+local URLs", async () => {
+  it("accepts legacy chisacode+local URLs", async () => {
     const rpc = createFakeLocalDaemonTransportRpc();
     const transportFactory = createDesktopLocalDaemonTransportFactory(rpc);
     expect(transportFactory).not.toBeNull();

@@ -2,7 +2,7 @@ import {
   createClientChannel,
   type EncryptedChannel,
   type Transport as RelayTransport,
-} from "@fleurdelys/relay/e2ee";
+} from "@chisacode/relay/e2ee";
 import type {
   DaemonTransport,
   DaemonTransportFactory,

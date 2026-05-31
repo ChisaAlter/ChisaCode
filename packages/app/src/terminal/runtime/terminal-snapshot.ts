@@ -1,1 +1,1 @@
-export { renderTerminalSnapshotToAnsi } from "@fleurdelys/protocol/terminal-snapshot";
+export { renderTerminalSnapshotToAnsi } from "@chisacode/protocol/terminal-snapshot";

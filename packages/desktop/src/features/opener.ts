@@ -1,7 +1,7 @@
 import { shell, ipcMain } from "electron";
 
 const ALLOWED_EXTERNAL_URL_PROTOCOLS = new Set(["http:", "https:"]);
-const IPC_PREFIXES = ["fleurdelys", "paseo"] as const;
+const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
 
 export function isAllowedExternalUrl(value: unknown): value is string {
   if (typeof value !== "string") {

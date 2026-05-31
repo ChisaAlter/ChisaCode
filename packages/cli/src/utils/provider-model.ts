@@ -22,7 +22,7 @@ export function resolveProviderAndModel(
       code: "MISSING_PROVIDER",
       message: "Provider is required",
       details:
-        "Pass --provider <provider> or --provider <provider>/<model>. Use `fleurdelys provider ls` to see providers and `fleurdelys provider models <provider>` to see models.",
+        "Pass --provider <provider> or --provider <provider>/<model>. Use `chisacode provider ls` to see providers and `chisacode provider models <provider>` to see models.",
     };
     throw error;
   }

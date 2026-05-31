@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { type QueryClient } from "@tanstack/react-query";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
-import type { ListTerminalsResponse } from "@fleurdelys/protocol/messages";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { ListTerminalsResponse } from "@chisacode/protocol/messages";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { useSessionStore } from "@/stores/session-store";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";

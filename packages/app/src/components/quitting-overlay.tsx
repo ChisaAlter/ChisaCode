@@ -37,7 +37,7 @@ export function QuittingOverlay() {
   return (
     <View style={styles.overlay}>
       <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
-      <Text style={styles.title}>Quitting Fleurdelys...</Text>
+      <Text style={styles.title}>Quitting ChisaCode...</Text>
       <Text style={styles.detail}>正在停止本地 daemon。</Text>
     </View>
   );

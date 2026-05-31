@@ -7,7 +7,7 @@ import pino from "pino";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
 import { ClaudeAgentClient } from "../agent/providers/claude/agent.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestChisaCodeDaemon } from "../test-utils/chisacode-daemon.js";
 import { getFullAccessConfig, isProviderAvailable } from "./agent-configs.js";
 
 function tmpCwd(): string {
@@ -60,7 +60,7 @@ describe("daemon E2E (real claude) - thinking effort memory", () => {
   test("changing thinking effort preserves the previous conversation", async () => {
     const logger = pino({ level: "silent" });
     const cwd = tmpCwd();
-    const daemon = await createTestPaseoDaemon({
+    const daemon = await createTestChisaCodeDaemon({
       agentClients: { claude: new ClaudeAgentClient({ logger }) },
       logger,
     });
@@ -87,7 +87,7 @@ describe("daemon E2E (real claude) - thinking effort memory", () => {
 
       await client.sendMessage(
         agent.id,
-        "Remember the code phrase PASEO_MEMORY_56. Reply exactly: ACK_56",
+        "Remember the code phrase CHISACODE_MEMORY_56. Reply exactly: ACK_56",
       );
       const firstFinish = await client.waitForFinish(agent.id, 180_000);
       expect(firstFinish.status).toBe("idle");
@@ -105,7 +105,7 @@ describe("daemon E2E (real claude) - thinking effort memory", () => {
       expect(secondFinish.final?.lastError).toBeUndefined();
 
       const assistantText = await getAssistantText(client, agent.id);
-      expect(compactText(assistantText)).toContain("paseo_memory_56");
+      expect(compactText(assistantText)).toContain("chisacode_memory_56");
     } finally {
       await client.close().catch(() => undefined);
       await daemon.close().catch(() => undefined);

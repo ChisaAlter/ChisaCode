@@ -1,4 +1,4 @@
-import type { AgentSessionConfig } from "@fleurdelys/protocol/agent-types";
+import type { AgentSessionConfig } from "@chisacode/protocol/agent-types";
 
 export function buildWorkspaceDraftAgentConfig(input: {
   provider: AgentSessionConfig["provider"];

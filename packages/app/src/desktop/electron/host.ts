@@ -4,7 +4,7 @@ export function getElectronHost(): DesktopHostBridge | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const host = window.fleurdelysDesktop ?? window.paseoDesktop;
+  const host = window.chisacodeDesktop;
   if (!host || typeof host !== "object") {
     return null;
   }

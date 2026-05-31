@@ -16,7 +16,7 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import { openExternalUrl } from "@/utils/open-external-url";
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
-const CHANGELOG_URL = "https://paseo.sh/changelog";
+const CHANGELOG_URL = "https://chisacode.sh/changelog";
 
 function renderBody(body: UpdateCalloutBody): ReactNode {
   if (body.kind === "installing") return "正在安装并重启...";

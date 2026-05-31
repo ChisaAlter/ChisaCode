@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import type { AgentProvider } from "@fleurdelys/protocol/agent-types";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
 
 const COMMANDS_STALE_TIME = 60_000; // Commands rarely change, cache for 1 minute
 

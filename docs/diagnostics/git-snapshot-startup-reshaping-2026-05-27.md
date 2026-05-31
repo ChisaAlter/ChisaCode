@@ -27,7 +27,7 @@ The remaining `checkout_pr_status_request` path is still present for explicit PR
 - worktree root: `rev-parse --show-toplevel`
 - current branch: `rev-parse --abbrev-ref HEAD`
 - origin remote URL
-- Paseo worktree ownership and stored base ref
+- ChisaCode worktree ownership and stored base ref
 - resolved base ref and best comparison base
 - main repo root
 - branch remote/merge config
@@ -64,7 +64,7 @@ Added deterministic real-home benchmark:
 
 `packages/server/scripts/benchmark-startup-git-real-home.ts`
 
-The script freezes the current Paseo home using the same metadata-copy shape as `scripts/dev-home.sh`: JSON under `agents`, JSON under `projects`, and `config.json`. It then starts an isolated in-process daemon against that frozen home, subscribes to workspaces/agents, records git invocations through `runGitCommand`, and reports elapsed time, git count, max concurrency, CPU, and memory deltas.
+The script freezes the current ChisaCode home using the same metadata-copy shape as `scripts/dev-home.sh`: JSON under `agents`, JSON under `projects`, and `config.json`. It then starts an isolated in-process daemon against that frozen home, subscribes to workspaces/agents, records git invocations through `runGitCommand`, and reports elapsed time, git count, max concurrency, CPU, and memory deltas.
 
 The frozen home used for the comparison contained 22 workspaces.
 

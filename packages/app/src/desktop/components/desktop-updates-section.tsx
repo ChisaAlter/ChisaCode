@@ -9,12 +9,11 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { getCliDaemonStatus, shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { useBuiltInDaemonManagement } from "@/desktop/hooks/use-built-in-daemon-management";
 import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
 import { useDesktopSettings, type DesktopSettings } from "@/desktop/settings/desktop-settings";
-import { resolveAppVersion } from "@/utils/app-version";
+import { useTranslation } from "react-i18next";
 
 type DesktopDaemonSettings = DesktopSettings["daemon"];
 
@@ -40,6 +39,7 @@ function useKeepRunningAfterQuitToggle(args: {
 }
 
 function useDaemonCliStatusModal() {
+  const { t } = useTranslation();
   const [cliStatusOutput, setCliStatusOutput] = useState<string | null>(null);
   const [isCliStatusModalOpen, setIsCliStatusModalOpen] = useState(false);
   const [isLoadingCliStatus, setIsLoadingCliStatus] = useState(false);
@@ -51,12 +51,12 @@ function useDaemonCliStatusModal() {
       setIsCliStatusModalOpen(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setCliStatusOutput(`获取 daemon 状态失败：${message}`);
+      setCliStatusOutput(t("settings.daemon.copyStatusFailed", { message }));
       setIsCliStatusModalOpen(true);
     } finally {
       setIsLoadingCliStatus(false);
     }
-  }, []);
+  }, [t]);
 
   const handleCopyCliStatus = useCallback(() => {
     if (!cliStatusOutput) {
@@ -64,13 +64,13 @@ function useDaemonCliStatusModal() {
     }
     void Clipboard.setStringAsync(cliStatusOutput)
       .then(() => {
-        Alert.alert("已复制", "状态已复制到剪贴板。");
+        Alert.alert(t("common.copied"), t("settings.daemon.copiedStatus"));
         return;
       })
       .catch((error) => {
         console.error("[Settings] Failed to copy daemon status", error);
       });
-  }, [cliStatusOutput]);
+  }, [cliStatusOutput, t]);
 
   const handleCloseCliStatusModal = useCallback(() => setIsCliStatusModalOpen(false), []);
 
@@ -85,6 +85,7 @@ function useDaemonCliStatusModal() {
 }
 
 function useDaemonLogsModal(daemonLogs: { logPath?: string } | null) {
+  const { t } = useTranslation();
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
 
   const handleCopyLogPath = useCallback(() => {
@@ -95,14 +96,14 @@ function useDaemonLogsModal(daemonLogs: { logPath?: string } | null) {
 
     void Clipboard.setStringAsync(logPath)
       .then(() => {
-        Alert.alert("已复制", "日志路径已复制。");
+        Alert.alert(t("common.copied"), t("settings.daemon.copiedLogPath"));
         return;
       })
       .catch((error) => {
         console.error("[Settings] Failed to copy log path", error);
-        Alert.alert("错误", "无法复制日志路径。");
+        Alert.alert(t("common.error"), t("settings.daemon.copyLogPathFailed"));
       });
-  }, [daemonLogs?.logPath]);
+  }, [daemonLogs?.logPath, t]);
 
   const handleOpenLogs = useCallback(() => {
     if (!daemonLogs) {
@@ -123,18 +124,22 @@ interface DaemonLogsModalProps {
 }
 
 function DaemonLogsModal({ visible, onClose, daemonLogs }: DaemonLogsModalProps) {
+  const { t } = useTranslation();
+  const header = useMemo<SheetHeader>(() => ({ title: t("settings.daemon.logsTitle") }), [t]);
   return (
     <AdaptiveModalSheet
       visible={visible}
       onClose={onClose}
-      header={DAEMON_LOGS_HEADER}
+      header={header}
       testID="managed-daemon-logs-dialog"
       snapPoints={LOGS_MODAL_SNAP_POINTS}
     >
       <View style={styles.modalBody}>
-        <Text style={settingsStyles.rowHint}>{daemonLogs?.logPath ?? "日志路径不可用"}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {daemonLogs?.logPath ?? t("settings.daemon.logPathUnavailable")}
+        </Text>
         <Text style={styles.logOutput} selectable>
-          {daemonLogs?.contents?.length ? daemonLogs.contents : "（日志文件为空）"}
+          {daemonLogs?.contents?.length ? daemonLogs.contents : t("settings.daemon.logEmpty")}
         </Text>
       </View>
     </AdaptiveModalSheet>
@@ -154,11 +159,13 @@ function DaemonCliStatusModal({
   cliStatusOutput,
   onCopy,
 }: DaemonCliStatusModalProps) {
+  const { t } = useTranslation();
+  const header = useMemo<SheetHeader>(() => ({ title: t("settings.daemon.statusTitle") }), [t]);
   return (
     <AdaptiveModalSheet
       visible={visible}
       onClose={onClose}
-      header={DAEMON_STATUS_HEADER}
+      header={header}
       testID="daemon-cli-status-dialog"
       snapPoints={CLI_STATUS_MODAL_SNAP_POINTS}
     >
@@ -168,10 +175,10 @@ function DaemonCliStatusModal({
         </Text>
         <View style={styles.modalActions}>
           <Button variant="outline" size="sm" onPress={onClose}>
-            关闭
+            {t("common.close")}
           </Button>
           <Button size="sm" onPress={onCopy}>
-            复制
+            {t("common.copy")}
           </Button>
         </View>
       </View>
@@ -199,6 +206,7 @@ interface DaemonInfoCardProps {
 }
 
 function DaemonInfoCard(props: DaemonInfoCardProps) {
+  const { t } = useTranslation();
   const {
     daemonStatusStateText,
     daemonStatusDetailText,
@@ -222,8 +230,8 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
     <View style={settingsStyles.card}>
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>状态</Text>
-          <Text style={settingsStyles.rowHint}>这里只显示桌面端内置 daemon</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.daemon.status")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.daemon.builtInOnly")}</Text>
         </View>
         <View style={styles.statusValueGroup}>
           <Text style={styles.valueText}>{daemonStatusStateText}</Text>
@@ -232,37 +240,41 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
       </View>
       <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>管理内置 daemon</Text>
-          <Text style={settingsStyles.rowHint}>允许芙露德莉斯启动和停止内置 daemon</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.daemon.manageBuiltIn")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.daemon.manageBuiltInHint")}</Text>
         </View>
         <Switch
           value={!isDaemonManagementPaused}
           onValueChange={handleToggleDaemonManagement}
           disabled={isUpdatingDaemonManagement}
-          accessibilityLabel="管理内置 daemon"
+          accessibilityLabel={t("settings.daemon.manageBuiltIn")}
         />
       </View>
       <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>退出后保持 daemon 运行</Text>
-          <Text style={settingsStyles.rowHint}>退出芙露德莉斯后 daemon 会继续运行</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.daemon.keepRunningAfterQuit")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.daemon.keepRunningAfterQuitHint")}
+          </Text>
         </View>
         <Switch
           value={keepRunningAfterQuit}
           onValueChange={handleToggleKeepRunningAfterQuit}
           disabled={isUpdatingKeepRunningAfterQuit}
-          accessibilityLabel="退出后保持 daemon 运行"
+          accessibilityLabel={t("settings.daemon.keepRunningAfterQuit")}
         />
       </View>
       <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>日志文件</Text>
-          <Text style={settingsStyles.rowHint}>{daemonLogs?.logPath ?? "日志路径不可用"}</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.daemon.logs")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {daemonLogs?.logPath ?? t("settings.daemon.logPathUnavailable")}
+          </Text>
         </View>
         <View style={styles.actionGroup}>
           {daemonLogs?.logPath ? (
             <Button variant="outline" size="sm" leftIcon={copyIcon} onPress={handleCopyLogPath}>
-              复制路径
+              {t("settings.daemon.copyPath")}
             </Button>
           ) : null}
           <Button
@@ -272,14 +284,14 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
             onPress={handleOpenLogs}
             disabled={!daemonLogs}
           >
-            打开日志
+            {t("settings.daemon.openLogs")}
           </Button>
         </View>
       </View>
       <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>完整状态</Text>
-          <Text style={settingsStyles.rowHint}>运行 `paseo daemon status` 并显示输出</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.daemon.fullStatus")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.daemon.fullStatusHint")}</Text>
         </View>
         <Button
           variant="outline"
@@ -288,7 +300,9 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
           onPress={handleRunCliStatus}
           disabled={isLoadingCliStatus}
         >
-          {isLoadingCliStatus ? "加载中..." : "查看状态"}
+          {isLoadingCliStatus
+            ? t("settings.daemon.loadingStatus")
+            : t("settings.daemon.viewStatus")}
         </Button>
       </View>
     </View>
@@ -297,8 +311,8 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
 
 export function LocalDaemonSection() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const showSection = shouldUseDesktopDaemon();
-  const appVersion = resolveAppVersion();
   const { settings, updateSettings, isLoading: isLoadingSettings } = useDesktopSettings();
   const daemonSettings = settings.daemon;
   const updateDaemonSettings = useCallback(
@@ -309,11 +323,12 @@ export function LocalDaemonSection() {
 
   const daemonStatus = data?.status ?? null;
   const daemonLogs = data?.logs ?? null;
-  const daemonVersion = daemonStatus?.version ?? null;
 
-  const daemonVersionMismatch = isVersionMismatch(appVersion, daemonVersion);
   const daemonStatusStateText =
-    statusError ?? (daemonStatus?.status === "running" ? "运行中" : "未运行");
+    statusError ??
+    (daemonStatus?.status === "running"
+      ? t("settings.daemon.running")
+      : t("settings.daemon.notRunning"));
   const daemonStatusDetailText = `PID ${daemonStatus?.pid ? daemonStatus.pid : "—"}`;
   const isDaemonManagementPaused = !daemonSettings.manageBuiltInDaemon;
 
@@ -377,12 +392,12 @@ export function LocalDaemonSection() {
         textStyle={settingsStyles.sectionHeaderLinkText}
         style={settingsStyles.sectionHeaderLink}
         onPress={handleOpenAdvancedSettings}
-        accessibilityLabel="打开高级 daemon 设置"
+        accessibilityLabel={t("settings.daemon.openAdvancedSettings")}
       >
-        高级设置
+        {t("settings.daemon.advancedSettings")}
       </Button>
     ),
-    [advancedSettingsIcon, handleOpenAdvancedSettings],
+    [advancedSettingsIcon, handleOpenAdvancedSettings, t],
   );
 
   if (!showSection) {
@@ -391,7 +406,7 @@ export function LocalDaemonSection() {
 
   return (
     <SettingsSection
-      title="Daemon"
+      title={t("settings.daemon.title")}
       trailing={advancedSettingsButton}
       testID="host-page-daemon-lifecycle-card"
     >
@@ -400,34 +415,24 @@ export function LocalDaemonSection() {
           <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
         </View>
       ) : (
-        <>
-          <DaemonInfoCard
-            daemonStatusStateText={daemonStatusStateText}
-            daemonStatusDetailText={daemonStatusDetailText}
-            isDaemonManagementPaused={isDaemonManagementPaused}
-            copyIcon={copyIcon}
-            fileTextIcon={fileTextIcon}
-            activityIcon={activityIcon}
-            handleToggleDaemonManagement={handleToggleDaemonManagement}
-            isUpdatingDaemonManagement={isUpdatingDaemonManagement}
-            keepRunningAfterQuit={daemonSettings.keepRunningAfterQuit}
-            handleToggleKeepRunningAfterQuit={handleToggleKeepRunningAfterQuit}
-            isUpdatingKeepRunningAfterQuit={isUpdatingKeepRunningAfterQuit}
-            daemonLogs={daemonLogs}
-            handleCopyLogPath={handleCopyLogPath}
-            handleOpenLogs={handleOpenLogs}
-            handleRunCliStatus={handleRunCliStatus}
-            isLoadingCliStatus={isLoadingCliStatus}
-          />
-
-          {daemonVersionMismatch ? (
-            <View style={styles.warningCard}>
-              <Text style={styles.warningText}>
-                {"应用和 daemon 版本不一致。建议将二者更新到相同版本，以获得最佳体验。"}
-              </Text>
-            </View>
-          ) : null}
-        </>
+        <DaemonInfoCard
+          daemonStatusStateText={daemonStatusStateText}
+          daemonStatusDetailText={daemonStatusDetailText}
+          isDaemonManagementPaused={isDaemonManagementPaused}
+          copyIcon={copyIcon}
+          fileTextIcon={fileTextIcon}
+          activityIcon={activityIcon}
+          handleToggleDaemonManagement={handleToggleDaemonManagement}
+          isUpdatingDaemonManagement={isUpdatingDaemonManagement}
+          keepRunningAfterQuit={daemonSettings.keepRunningAfterQuit}
+          handleToggleKeepRunningAfterQuit={handleToggleKeepRunningAfterQuit}
+          isUpdatingKeepRunningAfterQuit={isUpdatingKeepRunningAfterQuit}
+          daemonLogs={daemonLogs}
+          handleCopyLogPath={handleCopyLogPath}
+          handleOpenLogs={handleOpenLogs}
+          handleRunCliStatus={handleRunCliStatus}
+          isLoadingCliStatus={isLoadingCliStatus}
+        />
       )}
 
       <DaemonLogsModal
@@ -446,7 +451,7 @@ export function LocalDaemonSection() {
   );
 }
 
-const ADVANCED_DAEMON_SETTINGS_URL = "https://paseo.sh/docs/configuration";
+const ADVANCED_DAEMON_SETTINGS_URL = "https://chisacode.sh/docs/configuration";
 
 const styles = StyleSheet.create((theme) => ({
   actionGroup: {
@@ -472,19 +477,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
-  warningCard: {
-    marginTop: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.palette.amber[500],
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-  },
-  warningText: {
-    color: theme.colors.palette.amber[500],
-    fontSize: theme.fontSize.xs,
-  },
   modalBody: {
     gap: theme.spacing[3],
     paddingBottom: theme.spacing[2],
@@ -506,5 +498,3 @@ const LOADING_CARD_STYLE = [settingsStyles.card, styles.loadingCard];
 const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
 const LOGS_MODAL_SNAP_POINTS = ["70%", "92%"];
 const CLI_STATUS_MODAL_SNAP_POINTS = ["60%", "85%"];
-const DAEMON_LOGS_HEADER: SheetHeader = { title: "Daemon 日志" };
-const DAEMON_STATUS_HEADER: SheetHeader = { title: "Daemon 状态" };

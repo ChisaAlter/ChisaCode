@@ -3,11 +3,14 @@ import { webContents as allWebContents, type WebContents } from "electron";
 const browserIdsByWebContentsId = new Map<number, string>();
 let workspaceActiveBrowserId: string | null = null;
 
-export function listRegisteredPaseoBrowserIds(): string[] {
+export function listRegisteredChisaCodeBrowserIds(): string[] {
   return Array.from(new Set(browserIdsByWebContentsId.values())).sort();
 }
 
-export function registerPaseoBrowserWebContents(contents: WebContents, browserId: string): void {
+export function registerChisaCodeBrowserWebContents(
+  contents: WebContents,
+  browserId: string,
+): void {
   browserIdsByWebContentsId.set(contents.id, browserId);
   contents.once("destroyed", () => {
     browserIdsByWebContentsId.delete(contents.id);
@@ -17,18 +20,18 @@ export function registerPaseoBrowserWebContents(contents: WebContents, browserId
   });
 }
 
-export function getPaseoBrowserIdForWebContents(contents: WebContents | null): string | null {
+export function getChisaCodeBrowserIdForWebContents(contents: WebContents | null): string | null {
   if (!contents || contents.isDestroyed()) {
     return null;
   }
   return browserIdsByWebContentsId.get(contents.id) ?? null;
 }
 
-export function setWorkspaceActivePaseoBrowserId(browserId: string | null): void {
+export function setWorkspaceActiveChisaCodeBrowserId(browserId: string | null): void {
   workspaceActiveBrowserId = browserId;
 }
 
-export function getPaseoBrowserWebContents(browserId: string): WebContents | null {
+export function getChisaCodeBrowserWebContents(browserId: string): WebContents | null {
   for (const [contentsId, registeredBrowserId] of browserIdsByWebContentsId) {
     if (registeredBrowserId !== browserId) continue;
     const contents = allWebContents.fromId(contentsId);
@@ -39,9 +42,9 @@ export function getPaseoBrowserWebContents(browserId: string): WebContents | nul
   return null;
 }
 
-export function getWorkspaceActivePaseoBrowserWebContents(): WebContents | null {
+export function getWorkspaceActiveChisaCodeBrowserWebContents(): WebContents | null {
   if (!workspaceActiveBrowserId) {
     return null;
   }
-  return getPaseoBrowserWebContents(workspaceActiveBrowserId);
+  return getChisaCodeBrowserWebContents(workspaceActiveBrowserId);
 }

@@ -1,4 +1,4 @@
-import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@fleurdelys/protocol/agent-title-limits";
+import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@chisacode/protocol/agent-title-limits";
 
 const MAX_INITIAL_AGENT_TITLE_CHARS = Math.min(60, MAX_EXPLICIT_AGENT_TITLE_CHARS);
 

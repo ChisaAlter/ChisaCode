@@ -1,10 +1,10 @@
-# Contributing to Paseo
+# Contributing to ChisaCode
 
-Paseo is an opinionated product maintained by one person.
+ChisaCode is an opinionated product maintained by one person.
 
 I read every issue and PR myself, and I am selective about what contributions I accept.
 
-Good ideas still need to fit the shape of the product: a PR can be technically correct and still not belong in Paseo.
+Good ideas still need to fit the shape of the product: a PR can be technically correct and still not belong in ChisaCode.
 
 Core product, design, architecture, and workflow changes are not accepted.
 

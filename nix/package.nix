@@ -19,7 +19,7 @@
 }:
 
 buildNpmPackage rec {
-  pname = "paseo";
+  pname = "chisacode";
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
 
   src = lib.cleanSourceWith {
@@ -43,7 +43,7 @@ buildNpmPackage rec {
       && !(lib.hasSuffix ".e2e.test.ts" baseName)
       && baseName != "node_modules"
       && baseName != ".git"
-      && baseName != ".paseo"
+      && baseName != ".chisacode"
       && baseName != ".DS_Store";
   };
 
@@ -94,38 +94,38 @@ buildNpmPackage rec {
     # assets read at runtime. The trace script is the single source of
     # truth for what the daemon needs at $out — auditable in plain JS, no
     # npm hoisting / .bin / workspace-symlink footguns.
-    mkdir -p $out/lib/paseo
+    mkdir -p $out/lib/chisacode
     node scripts/trace-daemon.mjs > daemon-files.txt
 
     while IFS= read -r path; do
       [ -z "$path" ] && continue
-      mkdir -p "$out/lib/paseo/$(dirname "$path")"
-      cp -a "$path" "$out/lib/paseo/$path"
+      mkdir -p "$out/lib/chisacode/$(dirname "$path")"
+      cp -a "$path" "$out/lib/chisacode/$path"
     done < daemon-files.txt
 
     # Root package.json lets node resolve the workspace layout when the
     # CLI/server bin starts from $out.
-    cp package.json $out/lib/paseo/
+    cp package.json $out/lib/chisacode/
 
     # Create wrapper for the server entry point (for systemd / direct use)
     mkdir -p $out/bin
-    makeWrapper ${nodejs}/bin/node $out/bin/paseo-server \
-      --add-flags "$out/lib/paseo/packages/server/dist/scripts/supervisor-entrypoint.js" \
+    makeWrapper ${nodejs}/bin/node $out/bin/chisacode-server \
+      --add-flags "$out/lib/chisacode/packages/server/dist/scripts/supervisor-entrypoint.js" \
       --set NODE_ENV production
 
     # Create wrapper for the CLI
-    makeWrapper ${nodejs}/bin/node $out/bin/paseo \
-      --add-flags "$out/lib/paseo/packages/cli/dist/index.js" \
-      --set NODE_PATH "$out/lib/paseo/node_modules"
+    makeWrapper ${nodejs}/bin/node $out/bin/chisacode \
+      --add-flags "$out/lib/chisacode/packages/cli/dist/index.js" \
+      --set NODE_PATH "$out/lib/chisacode/node_modules"
 
     runHook postInstall
   '';
 
   meta = {
     description = "Self-hosted daemon for Claude Code, Codex, and OpenCode";
-    homepage = "https://github.com/getpaseo/paseo";
+    homepage = "https://github.com/getchisacode/chisacode";
     license = lib.licenses.agpl3Plus;
-    mainProgram = "paseo";
+    mainProgram = "chisacode";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };
 }

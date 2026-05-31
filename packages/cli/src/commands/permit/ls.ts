@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import type { AgentPermissionRequest } from "@fleurdelys/protocol/agent-types";
-import type { AgentSnapshotPayload } from "@fleurdelys/protocol/messages";
+import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
+import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
 
@@ -58,7 +58,7 @@ export async function runLsCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }

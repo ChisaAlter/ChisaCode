@@ -1,5 +1,5 @@
-import { parseHostPort } from "@fleurdelys/protocol/daemon-endpoints";
-import type { WorkspaceScriptPayload } from "@fleurdelys/protocol/messages";
+import { parseHostPort } from "@chisacode/protocol/daemon-endpoints";
+import type { WorkspaceScriptPayload } from "@chisacode/protocol/messages";
 import type { ActiveConnection } from "@/runtime/host-runtime";
 
 export interface ResolvedWorkspaceScriptLink {

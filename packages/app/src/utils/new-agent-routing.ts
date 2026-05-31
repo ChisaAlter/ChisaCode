@@ -38,9 +38,9 @@ export function resolveSelectedAgentForNewAgent(input: {
   return parseHostAgentRouteFromPathname(input.pathname) ?? parseAgentKey(input.selectedAgentId);
 }
 
-function inferMainRepoRootFromPaseoWorktreePath(cwd: string): string | null {
+function inferMainRepoRootFromChisaCodeWorktreePath(cwd: string): string | null {
   const normalizedPath = cwd.replace(/\\/g, "/");
-  const markerMatch = normalizedPath.match(/\/\.(?:fleurdelys|paseo)\/worktrees/);
+  const markerMatch = normalizedPath.match(/\/\.(?:chisacode|chisacode)\/worktrees/);
   const marker = markerMatch?.[0];
   if (!marker || markerMatch.index === undefined) {
     return null;
@@ -62,12 +62,12 @@ export function resolveNewAgentWorkingDir(
   cwd: string,
   checkout: CheckoutStatusPayload | null,
 ): string {
-  const explicitMainRepoRoot = checkout?.isPaseoOwnedWorktree
+  const explicitMainRepoRoot = checkout?.isChisaCodeOwnedWorktree
     ? checkout.mainRepoRoot?.trim() || null
     : null;
   if (explicitMainRepoRoot) {
     return explicitMainRepoRoot;
   }
 
-  return inferMainRepoRootFromPaseoWorktreePath(cwd) ?? cwd;
+  return inferMainRepoRootFromChisaCodeWorktreePath(cwd) ?? cwd;
 }

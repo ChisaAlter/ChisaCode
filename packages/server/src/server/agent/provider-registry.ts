@@ -44,7 +44,7 @@ import {
   DEV_AGENT_PROVIDER_DEFINITIONS,
   getAgentProviderDefinition,
   type AgentProviderDefinition,
-} from "@fleurdelys/protocol/provider-manifest";
+} from "@chisacode/protocol/provider-manifest";
 
 function isNonEmptyStringArray(value: string[]): value is [string, ...string[]] {
   return value.length > 0;
@@ -69,7 +69,7 @@ export interface ProviderDefinition extends AgentProviderDefinition {
   fetchModes: (options: ListModesOptions) => Promise<AgentMode[]>;
 }
 
-export { IMPORTABLE_PROVIDERS } from "@fleurdelys/protocol/importable-providers";
+export { IMPORTABLE_PROVIDERS } from "@chisacode/protocol/importable-providers";
 
 export interface BuildProviderRegistryOptions {
   runtimeSettings?: AgentProviderRuntimeSettingsMap;

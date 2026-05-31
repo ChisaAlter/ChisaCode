@@ -1,7 +1,7 @@
 {
-  "name": "@fleurdelys/relay",
-  "version": "0.1.87",
-  "description": "Fleurdelys relay for bridging daemon and client connections",
+  "name": "@chisacode/relay",
+  "version": "1.0.0",
+  "description": "ChisaCode relay for bridging daemon and client connections",
   "files": [
     "dist",
     "!dist/**/*.map"

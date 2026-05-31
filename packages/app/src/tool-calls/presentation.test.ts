@@ -1,4 +1,4 @@
-import type { ToolCallDetail } from "@fleurdelys/protocol/agent-types";
+import type { ToolCallDetail } from "@chisacode/protocol/agent-types";
 import { describe, expect, it } from "vitest";
 
 import { buildToolCallPresentation, type ToolCallPresentationIcon } from "./presentation";

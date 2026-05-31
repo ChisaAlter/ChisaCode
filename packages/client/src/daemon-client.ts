@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { CLIENT_CAPS } from "@fleurdelys/protocol/client-capabilities";
+import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 import {
   AgentCreateFailedStatusPayloadSchema,
   AgentCreatedStatusPayloadSchema,
@@ -13,14 +13,14 @@ import {
   SessionInboundMessageSchema,
   type ServerInfoStatusPayload,
   WSOutboundMessageSchema,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import type {
   AgentStreamEventPayload,
   AgentSnapshotPayload,
   ProjectPlacementPayload,
   AgentPermissionResolvedMessage,
   CreateAgentRequestMessage,
-  CreatePaseoWorktreeRequest,
+  CreateChisaCodeWorktreeRequest,
   FileDownloadTokenResponse,
   FileExplorerResponse,
   FetchAgentTimelineResponseMessage,
@@ -47,8 +47,8 @@ import type {
   GitHubSearchResponse,
   GitHubSearchRequest,
   DirectorySuggestionsResponse,
-  PaseoWorktreeListResponse,
-  PaseoWorktreeArchiveResponse,
+  ChisaCodeWorktreeListResponse,
+  ChisaCodeWorktreeArchiveResponse,
   ProjectIconResponse,
   ListAvailableEditorsResponseMessage,
   OpenInEditorResponseMessage,
@@ -78,18 +78,18 @@ import type {
   SessionOutboundMessage,
   SendAgentMessageRequest,
   EditorTargetId,
-  PaseoConfigRaw,
-  PaseoConfigRevision,
-} from "@fleurdelys/protocol/messages";
+  ChisaCodeConfigRaw,
+  ChisaCodeConfigRevision,
+} from "@chisacode/protocol/messages";
 import type {
   AgentPermissionRequest,
   AgentPermissionResponse,
   AgentPersistenceHandle,
   AgentProvider,
   AgentSessionConfig,
-} from "@fleurdelys/protocol/agent-types";
-import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@fleurdelys/protocol/messages";
-import { isRelayClientWebSocketUrl } from "@fleurdelys/protocol/daemon-endpoints";
+} from "@chisacode/protocol/agent-types";
+import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
+import { isRelayClientWebSocketUrl } from "@chisacode/protocol/daemon-endpoints";
 import {
   asUint8Array,
   decodeFileTransferFrame,
@@ -97,7 +97,7 @@ import {
   FileTransferOpcode,
   TerminalStreamOpcode,
   type FileTransferFrame,
-} from "@fleurdelys/protocol/binary-frames/index";
+} from "@chisacode/protocol/binary-frames/index";
 import {
   createRelayE2eeTransportFactory,
   createWebSocketTransportFactory,
@@ -267,8 +267,8 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   labels?: Record<string, string>;
 }
 
-export interface CreatePaseoWorktreeInput extends Pick<
-  CreatePaseoWorktreeRequest,
+export interface CreateChisaCodeWorktreeInput extends Pick<
+  CreateChisaCodeWorktreeRequest,
   | "cwd"
   | "projectId"
   | "worktreeSlug"
@@ -304,11 +304,11 @@ type ValidateBranchPayload = ValidateBranchResponse["payload"];
 type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
 type GitHubSearchPayload = GitHubSearchResponse["payload"];
 type DirectorySuggestionsPayload = DirectorySuggestionsResponse["payload"];
-type PaseoWorktreeListPayload = PaseoWorktreeListResponse["payload"];
-type PaseoWorktreeArchivePayload = PaseoWorktreeArchiveResponse["payload"];
-type CreatePaseoWorktreePayload = Extract<
+type ChisaCodeWorktreeListPayload = ChisaCodeWorktreeListResponse["payload"];
+type ChisaCodeWorktreeArchivePayload = ChisaCodeWorktreeArchiveResponse["payload"];
+type CreateChisaCodeWorktreePayload = Extract<
   SessionOutboundMessage,
-  { type: "create_paseo_worktree_response" }
+  { type: "create_chisacode_worktree_response" }
 >["payload"];
 type FileExplorerPayload = FileExplorerResponse["payload"];
 export type FileExplorerDirectoryPayload = NonNullable<FileExplorerPayload["directory"]>;
@@ -346,8 +346,8 @@ type ListCommandsDraftConfig = Pick<
 >;
 export interface WriteProjectConfigInput {
   repoRoot: string;
-  config: PaseoConfigRaw;
-  expectedRevision: PaseoConfigRevision | null;
+  config: ChisaCodeConfigRaw;
+  expectedRevision: ChisaCodeConfigRevision | null;
   requestId?: string;
 }
 interface ListCommandsOptions {
@@ -979,7 +979,7 @@ export class DaemonClient {
     } else if (this.config.authHeader) {
       headers.Authorization = this.config.authHeader;
     }
-    const protocols = password ? [`paseo.bearer.${password}`] : undefined;
+    const protocols = password ? [`chisacode.bearer.${password}`] : undefined;
 
     try {
       // Reconnect can overlap with browser close/error delivery ordering.
@@ -3109,7 +3109,7 @@ export class DaemonClient {
 
   async stashList(
     cwd: string,
-    options?: { paseoOnly?: boolean },
+    options?: { chisacodeOnly?: boolean },
     requestId?: string,
   ): Promise<StashListPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -3117,54 +3117,54 @@ export class DaemonClient {
       message: {
         type: "stash_list_request",
         cwd,
-        paseoOnly: options?.paseoOnly,
+        chisacodeOnly: options?.chisacodeOnly,
       },
       responseType: "stash_list_response",
       timeout: 10000,
     });
   }
 
-  async getPaseoWorktreeList(
+  async getChisaCodeWorktreeList(
     input: { cwd?: string; repoRoot?: string },
     requestId?: string,
-  ): Promise<PaseoWorktreeListPayload> {
+  ): Promise<ChisaCodeWorktreeListPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "paseo_worktree_list_request",
+        type: "chisacode_worktree_list_request",
         cwd: input.cwd,
         repoRoot: input.repoRoot,
       },
-      responseType: "paseo_worktree_list_response",
+      responseType: "chisacode_worktree_list_response",
       timeout: 60000,
     });
   }
 
-  async archivePaseoWorktree(
+  async archiveChisaCodeWorktree(
     input: { worktreePath?: string; repoRoot?: string; branchName?: string },
     requestId?: string,
-  ): Promise<PaseoWorktreeArchivePayload> {
+  ): Promise<ChisaCodeWorktreeArchivePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "paseo_worktree_archive_request",
+        type: "chisacode_worktree_archive_request",
         worktreePath: input.worktreePath,
         repoRoot: input.repoRoot,
         branchName: input.branchName,
       },
-      responseType: "paseo_worktree_archive_response",
+      responseType: "chisacode_worktree_archive_response",
       timeout: 60000,
     });
   }
 
-  async createPaseoWorktree(
-    input: CreatePaseoWorktreeInput,
+  async createChisaCodeWorktree(
+    input: CreateChisaCodeWorktreeInput,
     requestId?: string,
-  ): Promise<CreatePaseoWorktreePayload> {
+  ): Promise<CreateChisaCodeWorktreePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "create_paseo_worktree_request",
+        type: "create_chisacode_worktree_request",
         cwd: input.cwd,
         ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
         worktreeSlug: input.worktreeSlug,
@@ -3175,7 +3175,7 @@ export class DaemonClient {
         ...(input.action !== undefined ? { action: input.action } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
       },
-      responseType: "create_paseo_worktree_response",
+      responseType: "create_chisacode_worktree_response",
       timeout: 60000,
     });
   }

@@ -1,8 +1,8 @@
 import type { ToolCallTimelineItem } from "./agent-types.js";
 import {
-  getPaseoToolLeafName,
-  isPaseoToolName,
-} from "@fleurdelys/protocol/tool-name-normalization";
+  getChisaCodeToolLeafName,
+  isChisaCodeToolName,
+} from "@chisacode/protocol/tool-name-normalization";
 import { stripCwdPrefix } from "./path-utils.js";
 
 export type ToolCallDisplayInput = Pick<
@@ -36,8 +36,8 @@ function humanizeToolName(name: string): string {
   if (!trimmed) {
     return name;
   }
-  if (isPaseoToolName(trimmed)) {
-    const leaf = getPaseoToolLeafName(trimmed);
+  if (isChisaCodeToolName(trimmed)) {
+    const leaf = getChisaCodeToolLeafName(trimmed);
     if (leaf) {
       return humanizeToolName(leaf);
     }

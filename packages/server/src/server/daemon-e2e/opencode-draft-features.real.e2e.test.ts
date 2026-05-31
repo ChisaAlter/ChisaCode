@@ -9,7 +9,7 @@ import type { PersistedAgentDescriptor } from "../agent/agent-sdk-types.js";
 import { OpenCodeAgentClient } from "../agent/providers/opencode-agent.js";
 import { OpenCodeServerManager } from "../agent/providers/opencode/server-manager.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestChisaCodeDaemon } from "../test-utils/chisacode-daemon.js";
 import { isProviderAvailable } from "./agent-configs.js";
 
 function tmpCwd(): string {
@@ -22,7 +22,7 @@ async function withConnectedOpenCodeDaemon(
   run: (context: { client: DaemonClient }) => Promise<void>,
 ): Promise<void> {
   const logger = pino({ level: "silent" });
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestChisaCodeDaemon({
     agentClients: { opencode: provider },
     logger,
   });

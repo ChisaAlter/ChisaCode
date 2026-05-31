@@ -1,7 +1,7 @@
 import * as React from "react";
 
 export function releaseBase(version: string) {
-  return `https://github.com/getpaseo/paseo/releases/download/v${version}`;
+  return `https://github.com/getchisacode/chisacode/releases/download/v${version}`;
 }
 
 export interface ReleaseAssetInfo {
@@ -14,20 +14,20 @@ export function downloadUrls(release: ReleaseAssetInfo) {
   const { version, windowsX64Asset, windowsArm64Asset } = release;
   const base = releaseBase(version);
   return {
-    macAppleSilicon: `${base}/Paseo-${version}-arm64.dmg`,
-    macIntel: `${base}/Paseo-${version}-x64.dmg`,
-    linuxAppImage: `${base}/Paseo-${version}-x86_64.AppImage`,
-    linuxDeb: `${base}/Paseo-${version}-amd64.deb`,
-    linuxRpm: `${base}/Paseo-${version}-x86_64.rpm`,
-    windowsExeX64: `${base}/${windowsX64Asset ?? `Paseo-Setup-${version}.exe`}`,
+    macAppleSilicon: `${base}/ChisaCode-${version}-arm64.dmg`,
+    macIntel: `${base}/ChisaCode-${version}-x64.dmg`,
+    linuxAppImage: `${base}/ChisaCode-${version}-x86_64.AppImage`,
+    linuxDeb: `${base}/ChisaCode-${version}-amd64.deb`,
+    linuxRpm: `${base}/ChisaCode-${version}-x86_64.rpm`,
+    windowsExeX64: `${base}/${windowsX64Asset ?? `ChisaCode-Setup-${version}.exe`}`,
     windowsExeArm64: windowsArm64Asset ? `${base}/${windowsArm64Asset}` : null,
-    androidApk: `${base}/paseo-v${version}-android.apk`,
+    androidApk: `${base}/chisacode-v${version}-android.apk`,
   };
 }
 
-export const appStoreUrl = "https://apps.apple.com/app/paseo-pocket-engineer/id6758887924";
-export const playStoreUrl = "https://play.google.com/store/apps/details?id=sh.paseo";
-export const webAppUrl = "https://app.paseo.sh";
+export const appStoreUrl = "https://apps.apple.com/app/chisacode-pocket-engineer/id6758887924";
+export const playStoreUrl = "https://play.google.com/store/apps/details?id=sh.chisacode";
+export const webAppUrl = "https://app.chisacode.sh";
 
 type Platform = "mac-silicon" | "mac-intel" | "windows" | "linux";
 

@@ -682,13 +682,13 @@ describe("codex tool-call mapper", () => {
     });
   });
 
-  it("normalizes codex paseo speak mcp calls and extracts spoken text", () => {
+  it("normalizes codex chisacode speak mcp calls and extracts spoken text", () => {
     const item = expectMapped(
       mapCodexToolCallFromThreadItem({
         type: "mcpToolCall",
         id: "codex-speak-thread-1",
         status: "completed",
-        server: "paseo",
+        server: "chisacode",
         tool: "speak",
         arguments: { text: "Voice response from Codex." },
         result: { ok: true },
@@ -703,15 +703,15 @@ describe("codex tool-call mapper", () => {
     });
   });
 
-  it("normalizes codex paseo_voice.speak mcp calls and extracts spoken text", () => {
+  it("normalizes codex chisacode_voice.speak mcp calls and extracts spoken text", () => {
     const item = expectMapped(
       mapCodexToolCallFromThreadItem({
         type: "mcpToolCall",
         id: "codex-speak-thread-2",
         status: "completed",
-        server: "paseo_voice",
+        server: "chisacode_voice",
         tool: "speak",
-        arguments: { text: "Voice response from Codex via paseo_voice." },
+        arguments: { text: "Voice response from Codex via chisacode_voice." },
         result: { ok: true },
       }),
     );
@@ -719,16 +719,16 @@ describe("codex tool-call mapper", () => {
     expect(item.name).toBe("speak");
     expect(item.detail).toEqual({
       type: "unknown",
-      input: "Voice response from Codex via paseo_voice.",
+      input: "Voice response from Codex via chisacode_voice.",
       output: null,
     });
   });
 
-  it("normalizes codex paseo speak tool-call names and extracts spoken text", () => {
+  it("normalizes codex chisacode speak tool-call names and extracts spoken text", () => {
     const item = expectMapped(
       mapCodexToolCallEnvelope({
         callId: "codex-speak-tool-call-1",
-        name: "paseo.speak",
+        name: "chisacode.speak",
         input: { text: "Tool call speech text." },
         output: { ok: true },
       }),

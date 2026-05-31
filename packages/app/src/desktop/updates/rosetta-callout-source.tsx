@@ -10,13 +10,13 @@ import {
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { openExternalUrl } from "@/utils/open-external-url";
 
-const FALLBACK_DOWNLOAD_URL = "https://paseo.sh/download";
+const FALLBACK_DOWNLOAD_URL = "https://chisacode.sh/download";
 
 function RosettaCalloutDescription() {
   return (
     <>
       <SidebarCalloutDescriptionText>
-        You&apos;re running the Intel build of Fleurdelys under Rosetta on Apple Silicon.
+        You&apos;re running the Intel build of ChisaCode under Rosetta on Apple Silicon.
       </SidebarCalloutDescriptionText>
       <SidebarCalloutDescriptionText>
         This causes high CPU usage. Download the Apple Silicon build to fix it.

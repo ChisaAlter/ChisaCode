@@ -33,8 +33,8 @@ describe("Claude SDK env", () => {
     let capturedEnv: Record<string, string | undefined> | undefined;
     const launchContext: AgentLaunchContext = {
       env: {
-        PASEO_AGENT_ID: "00000000-0000-4000-8000-000000000201",
-        PASEO_TEST_FLAG: "launch-value",
+        CHISACODE_AGENT_ID: "00000000-0000-4000-8000-000000000201",
+        CHISACODE_TEST_FLAG: "launch-value",
       },
     };
     const queryFactory = vi.fn(({ options }: ClaudeQueryInput) => {
@@ -80,8 +80,8 @@ describe("Claude SDK env", () => {
     try {
       const result = await session.run("env check");
       expect(result.sessionId).toBe("managed-agent-env-session");
-      expect(capturedEnv?.PASEO_AGENT_ID).toBe(launchContext.env?.PASEO_AGENT_ID);
-      expect(capturedEnv?.PASEO_TEST_FLAG).toBe(launchContext.env?.PASEO_TEST_FLAG);
+      expect(capturedEnv?.CHISACODE_AGENT_ID).toBe(launchContext.env?.CHISACODE_AGENT_ID);
+      expect(capturedEnv?.CHISACODE_TEST_FLAG).toBe(launchContext.env?.CHISACODE_TEST_FLAG);
     } finally {
       await session.close();
     }
@@ -91,8 +91,8 @@ describe("Claude SDK env", () => {
     let capturedEnv: Record<string, string | undefined> | undefined;
     const launchContext: AgentLaunchContext = {
       env: {
-        PASEO_AGENT_ID: "00000000-0000-4000-8000-000000000202",
-        PASEO_TEST_FLAG: "resume-launch-value",
+        CHISACODE_AGENT_ID: "00000000-0000-4000-8000-000000000202",
+        CHISACODE_TEST_FLAG: "resume-launch-value",
       },
     };
     const queryFactory = vi.fn(({ options }: ClaudeQueryInput) => {
@@ -144,8 +144,8 @@ describe("Claude SDK env", () => {
     try {
       const result = await session.run("resume env check");
       expect(result.sessionId).toBe("persisted-session");
-      expect(capturedEnv?.PASEO_AGENT_ID).toBe(launchContext.env?.PASEO_AGENT_ID);
-      expect(capturedEnv?.PASEO_TEST_FLAG).toBe(launchContext.env?.PASEO_TEST_FLAG);
+      expect(capturedEnv?.CHISACODE_AGENT_ID).toBe(launchContext.env?.CHISACODE_AGENT_ID);
+      expect(capturedEnv?.CHISACODE_TEST_FLAG).toBe(launchContext.env?.CHISACODE_TEST_FLAG);
     } finally {
       await session.close();
     }

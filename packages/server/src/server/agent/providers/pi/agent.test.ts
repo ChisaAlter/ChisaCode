@@ -24,7 +24,7 @@ function rewindCapabilities(capabilities: PiRpcAgentSession["capabilities"]) {
 function createConfig(overrides: Partial<AgentSessionConfig> = {}): AgentSessionConfig {
   return {
     provider: "pi",
-    cwd: "/tmp/paseo-pi-rpc-test",
+    cwd: "/tmp/chisacode-pi-rpc-test",
     ...overrides,
   };
 }
@@ -538,7 +538,7 @@ describe("PiRpcAgentSession", () => {
 
     const actualLaunch = pi.recordedLaunches[0]!;
     expect(actualLaunch).toMatchObject({
-      cwd: "/tmp/paseo-pi-rpc-test",
+      cwd: "/tmp/chisacode-pi-rpc-test",
       systemPrompt: "Agent prompt\n\nDaemon prompt",
     });
     expect(actualLaunch.extensionPaths).toHaveLength(1);
@@ -650,7 +650,7 @@ describe("PiRpcAgentClient", () => {
     expect(pi.recordedLaunches[0]).toMatchObject({ cwd: "/workspace/with-extension" });
   });
 
-  test("maps extension, prompt, and skill commands to Paseo slash commands", async () => {
+  test("maps extension, prompt, and skill commands to ChisaCode slash commands", async () => {
     const { pi, session } = await createSession();
     pi.latestSession().commands = [
       { name: "review", description: "Review changes", source: "extension" },
@@ -701,7 +701,7 @@ describe("PiRpcAgentClient", () => {
     const session = await client.createSession(
       createConfig({
         mcpServers: {
-          paseo: {
+          chisacode: {
             type: "http",
             url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
           },
@@ -717,7 +717,7 @@ describe("PiRpcAgentClient", () => {
 
     expect(pi.recordedLaunches).toHaveLength(2);
     expect(pi.recordedLaunches[0]).toMatchObject({
-      cwd: "/tmp/paseo-pi-rpc-test",
+      cwd: "/tmp/chisacode-pi-rpc-test",
       argv: ["pi", "--mode", "rpc"],
     });
     const actualLaunch = pi.recordedLaunches[1]!;
@@ -742,7 +742,7 @@ describe("PiRpcAgentClient", () => {
     };
     expect(injectedConfig).toEqual({
       mcpServers: {
-        paseo: {
+        chisacode: {
           url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
           auth: false,
           oauth: false,
@@ -767,7 +767,7 @@ describe("PiRpcAgentClient", () => {
     const session = await client.createSession(
       createConfig({
         mcpServers: {
-          paseo: {
+          chisacode: {
             type: "http",
             url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
           },

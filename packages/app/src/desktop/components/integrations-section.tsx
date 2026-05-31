@@ -14,30 +14,28 @@ import {
   type SkillsStatus,
 } from "@/desktop/daemon/desktop-daemon";
 import { useCliInstall, useSkillsStatus } from "@/desktop/hooks/use-install-status";
+import { useTranslation } from "react-i18next";
 
-const CLI_DOCS_URL = "https://paseo.sh/docs/cli";
-const SKILLS_DOCS_URL = "https://paseo.sh/docs/skills";
+const CLI_DOCS_URL = "https://chisacode.sh/docs/cli";
+const SKILLS_DOCS_URL = "https://chisacode.sh/docs/skills";
 const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
-const UNINSTALL_MESSAGE =
-  "Removes all Fleurdelys orchestration skills from ~/.agents, ~/.claude, ~/.codex.";
 
 const OP_KIND_ORDER: Record<SkillOp["kind"], number> = { add: 0, update: 1, delete: 2 };
-const OP_KIND_LABEL: Record<SkillOp["kind"], string> = {
-  add: "Add skill",
-  update: "Update skill",
-  delete: "删除技能",
-};
 
-function formatUpdateMessage(ops: readonly SkillOp[]): string {
+function formatUpdateMessage(
+  ops: readonly SkillOp[],
+  labels: Record<SkillOp["kind"], string>,
+): string {
   const sorted = [...ops].sort((a, b) => {
     const kindOrder = OP_KIND_ORDER[a.kind] - OP_KIND_ORDER[b.kind];
     return kindOrder !== 0 ? kindOrder : a.name.localeCompare(b.name);
   });
-  return sorted.map((op) => `${OP_KIND_LABEL[op.kind]} ${op.name}`).join("\n");
+  return sorted.map((op) => `${labels[op.kind]} ${op.name}`).join("\n");
 }
 
 export function IntegrationsSection() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const showSection = shouldUseDesktopDaemon();
   const {
     status: cliStatus,
@@ -77,25 +75,32 @@ export function IntegrationsSection() {
     if (isSkillsWorking) return;
     const ops = skillsStatus?.ops ?? [];
     const confirmed = await confirmDialog({
-      title: "更新芙露德莉斯技能？",
-      message: ops.length > 0 ? formatUpdateMessage(ops) : "Sync bundled skills to your machine.",
-      confirmLabel: "Update",
+      title: t("settings.integrations.updateSkillsTitle"),
+      message:
+        ops.length > 0
+          ? formatUpdateMessage(ops, {
+              add: t("settings.integrations.opAdd"),
+              update: t("settings.integrations.opUpdate"),
+              delete: t("settings.integrations.opDelete"),
+            })
+          : t("settings.integrations.syncBundledSkills"),
+      confirmLabel: t("settings.integrations.update"),
     });
     if (!confirmed) return;
     await updateSkills();
-  }, [isSkillsWorking, skillsStatus, updateSkills]);
+  }, [isSkillsWorking, skillsStatus, updateSkills, t]);
 
   const handleUninstallSkills = useCallback(async () => {
     if (isSkillsWorking) return;
     const confirmed = await confirmDialog({
-      title: "卸载芙露德莉斯技能？",
-      message: UNINSTALL_MESSAGE,
-      confirmLabel: "Uninstall",
+      title: t("settings.integrations.uninstallSkillsTitle"),
+      message: t("settings.integrations.uninstallSkillsMessage"),
+      confirmLabel: t("settings.integrations.uninstall"),
       destructive: true,
     });
     if (!confirmed) return;
     await uninstallSkills();
-  }, [isSkillsWorking, uninstallSkills]);
+  }, [isSkillsWorking, uninstallSkills, t]);
 
   const handleOpenCliDocs = useCallback(() => {
     void openExternalUrl(CLI_DOCS_URL);
@@ -120,9 +125,9 @@ export function IntegrationsSection() {
           textStyle={settingsStyles.sectionHeaderLinkText}
           style={settingsStyles.sectionHeaderLink}
           onPress={handleOpenCliDocs}
-          accessibilityLabel="打开 CLI 文档"
+          accessibilityLabel={t("settings.integrations.openCliDocs")}
         >
-          CLI docs
+          {t("settings.integrations.cliDocs")}
         </Button>
         <Button
           variant="ghost"
@@ -131,13 +136,13 @@ export function IntegrationsSection() {
           textStyle={settingsStyles.sectionHeaderLinkText}
           style={settingsStyles.sectionHeaderLink}
           onPress={handleOpenSkillsDocs}
-          accessibilityLabel="打开技能文档"
+          accessibilityLabel={t("settings.integrations.openSkillsDocs")}
         >
-          Skills docs
+          {t("settings.integrations.skillsDocs")}
         </Button>
       </View>
     ),
-    [arrowIcon, handleOpenCliDocs, handleOpenSkillsDocs],
+    [arrowIcon, handleOpenCliDocs, handleOpenSkillsDocs, t],
   );
 
   if (!showSection) {
@@ -147,20 +152,20 @@ export function IntegrationsSection() {
   const skillsState = skillsStatus?.state ?? null;
 
   return (
-    <SettingsSection title="集成" trailing={trailing}>
+    <SettingsSection title={t("settings.integrations.title")} trailing={trailing}>
       <View style={settingsStyles.card}>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
             <View style={styles.rowTitleRow}>
               <Terminal size={theme.iconSize.md} color={theme.colors.foreground} />
-              <Text style={settingsStyles.rowTitle}>命令行</Text>
+              <Text style={settingsStyles.rowTitle}>{t("settings.integrations.commandLine")}</Text>
             </View>
-            <Text style={settingsStyles.rowHint}>从终端控制智能体并编写自动化脚本</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.integrations.commandLineHint")}</Text>
           </View>
           {cliStatus?.installed ? (
             <View style={styles.installedLabel}>
               <Check size={14} color={theme.colors.foregroundMuted} />
-              <Text style={styles.mutedText}>已安装</Text>
+              <Text style={styles.mutedText}>{t("settings.integrations.installed")}</Text>
             </View>
           ) : (
             <Button
@@ -169,7 +174,9 @@ export function IntegrationsSection() {
               onPress={handleInstallCli}
               disabled={isInstallingCli}
             >
-              {isInstallingCli ? "安装中..." : "安装"}
+              {isInstallingCli
+                ? t("settings.integrations.installing")
+                : t("settings.integrations.install")}
             </Button>
           )}
         </View>
@@ -177,10 +184,14 @@ export function IntegrationsSection() {
           <View style={settingsStyles.rowContent}>
             <View style={styles.rowTitleRow}>
               <Blocks size={theme.iconSize.md} color={theme.colors.foreground} />
-              <Text style={settingsStyles.rowTitle}>编排技能</Text>
+              <Text style={settingsStyles.rowTitle}>
+                {t("settings.integrations.orchestrationSkills")}
+              </Text>
             </View>
             <Text style={settingsStyles.rowHint}>
-              {skillsState === "drift" ? "有可用更新" : "让你的智能体通过 CLI 进行编排"}
+              {skillsState === "drift"
+                ? t("settings.integrations.skillsDriftHint")
+                : t("settings.integrations.skillsUpToDateHint")}
             </Text>
           </View>
           <SkillsActions
@@ -206,16 +217,17 @@ interface SkillsActionsProps {
 
 function SkillsActions({ state, isWorking, onInstall, onUpdate, onUninstall }: SkillsActionsProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
 
   if (state === "up-to-date") {
     return (
       <View style={styles.actionsRow}>
         <View style={styles.installedLabel}>
           <Check size={14} color={theme.colors.foregroundMuted} />
-          <Text style={styles.mutedText}>已安装</Text>
+          <Text style={styles.mutedText}>{t("settings.integrations.installed")}</Text>
         </View>
         <Button variant="outline" size="sm" onPress={onUninstall} disabled={isWorking}>
-          卸载
+          {t("settings.integrations.uninstall")}
         </Button>
       </View>
     );
@@ -225,10 +237,10 @@ function SkillsActions({ state, isWorking, onInstall, onUpdate, onUninstall }: S
     return (
       <View style={styles.actionsRow}>
         <Button variant="outline" size="sm" onPress={onUpdate} disabled={isWorking}>
-          {isWorking ? "处理中..." : "更新"}
+          {isWorking ? t("settings.integrations.updating") : t("settings.integrations.update")}
         </Button>
         <Button variant="outline" size="sm" onPress={onUninstall} disabled={isWorking}>
-          卸载
+          {t("settings.integrations.uninstall")}
         </Button>
       </View>
     );
@@ -236,7 +248,7 @@ function SkillsActions({ state, isWorking, onInstall, onUpdate, onUninstall }: S
 
   return (
     <Button variant="outline" size="sm" onPress={onInstall} disabled={isWorking}>
-      {isWorking ? "安装中..." : "安装"}
+      {isWorking ? t("settings.integrations.installing") : t("settings.integrations.install")}
     </Button>
   );
 }

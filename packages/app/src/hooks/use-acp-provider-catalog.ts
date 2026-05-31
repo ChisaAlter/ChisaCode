@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { MutableDaemonConfigPatch } from "@fleurdelys/protocol/messages";
+import type { MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
 import { ACP_PROVIDER_CATALOG, type AcpProviderCatalogEntry } from "@/data/acp-provider-catalog";
 
 export type AcpProviderCatalogItem = AcpProviderCatalogEntry;

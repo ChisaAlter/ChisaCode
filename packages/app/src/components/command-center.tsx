@@ -17,6 +17,7 @@ import { shortenPath } from "@/utils/shorten-path";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { Shortcut } from "@/components/ui/shortcut";
 import { isNative } from "@/constants/platform";
+import { useTranslation } from "react-i18next";
 
 function agentKey(agent: Pick<AggregatedAgent, "serverId" | "id">): string {
   return `${agent.serverId}:${agent.id}`;
@@ -173,6 +174,7 @@ interface CommandCenterAgentRowContentProps {
 
 function CommandCenterAgentRowContent({ agent }: CommandCenterAgentRowContentProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const titleStyle = useMemo(
     () => [styles.title, { color: theme.colors.foreground }],
     [theme.colors.foreground],
@@ -193,7 +195,7 @@ function CommandCenterAgentRowContent({ agent }: CommandCenterAgentRowContentPro
         </View>
         <View style={styles.textContent}>
           <Text style={titleStyle} numberOfLines={1}>
-            {agent.title || "New agent"}
+            {agent.title || t("workspace.newAgent")}
           </Text>
           <Text style={subtitleStyle} numberOfLines={1}>
             {shortenPath(agent.cwd)} · {formatTimeAgo(agent.lastActivityAt)}
@@ -223,10 +225,11 @@ function AgentItemsSection({
   sectionDividerStyle,
   sectionLabelStyle,
 }: AgentItemsSectionProps) {
+  const { t } = useTranslation();
   return (
     <>
       {actionItemsLength > 0 ? <View style={sectionDividerStyle} /> : null}
-      <Text style={sectionLabelStyle}>智能体</Text>
+      <Text style={sectionLabelStyle}>{t("session.agents")}</Text>
       {agentItems.map((item, index) => {
         const rowIndex = actionItemsLength + index;
         const agent = item.agent;
@@ -249,6 +252,7 @@ function AgentItemsSection({
 
 export function CommandCenter() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const { open, inputRef, query, setQuery, activeIndex, items, handleClose, handleSelectItem } =
     useCommandCenter();
 
@@ -338,7 +342,7 @@ export function CommandCenter() {
               ref={inputRef}
               value={query}
               onChangeText={setQuery}
-              placeholder="Type a command or search agents..."
+              placeholder={t("commandCenter.placeholder")}
               placeholderTextColor={theme.colors.foregroundMuted}
               style={inputStyle}
               autoCapitalize="none"
@@ -355,12 +359,12 @@ export function CommandCenter() {
             showsVerticalScrollIndicator={false}
           >
             {items.length === 0 ? (
-              <Text style={emptyTextStyle}>没有匹配项</Text>
+              <Text style={emptyTextStyle}>{t("commandCenter.noMatches")}</Text>
             ) : (
               <>
                 {actionItems.length > 0 ? (
                   <>
-                    <Text style={sectionLabelStyle}>操作</Text>
+                    <Text style={sectionLabelStyle}>{t("commandCenter.actions")}</Text>
                     {actionItems.map((item, index) => (
                       <CommandCenterActionRow
                         key={`action:${item.action.id}`}

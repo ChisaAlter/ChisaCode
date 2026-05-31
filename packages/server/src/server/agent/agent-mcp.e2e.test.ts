@@ -9,7 +9,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import pino from "pino";
 
 import { withTimeout } from "../../utils/promise-timeout.js";
-import { createPaseoDaemon, type PaseoDaemonConfig } from "../bootstrap.js";
+import { createChisaCodeDaemon, type ChisaCodeDaemonConfig } from "../bootstrap.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
 import type {
   AgentClient,
@@ -108,24 +108,24 @@ async function waitForAgentCompletion(options: {
 
 describe("agent MCP end-to-end (offline)", () => {
   test("create_agent runs initial prompt and affects filesystem", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
-    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-agent-cwd-"));
+    const chisacodeHome = await mkdtemp(path.join(os.tmpdir(), "chisacode-home-"));
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), "chisacode-static-"));
+    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "chisacode-agent-cwd-"));
     const port = await getAvailablePort();
 
-    const daemonConfig: PaseoDaemonConfig = {
+    const daemonConfig: ChisaCodeDaemonConfig = {
       listen: `127.0.0.1:${port}`,
-      paseoHome,
+      chisacodeHome,
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: true,
       staticDir,
       mcpDebug: false,
       agentClients: createTestAgentClients(),
-      agentStoragePath: path.join(paseoHome, "agents"),
+      agentStoragePath: path.join(chisacodeHome, "agents"),
     };
 
-    const daemon = await createPaseoDaemon(daemonConfig, pino({ level: "silent" }));
+    const daemon = await createChisaCodeDaemon(daemonConfig, pino({ level: "silent" }));
     await daemon.start();
 
     const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
@@ -171,42 +171,42 @@ describe("agent MCP end-to-end (offline)", () => {
       }
       await client.close();
       await daemon.stop();
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(chisacodeHome, { recursive: true, force: true });
       await rm(staticDir, { recursive: true, force: true });
       await rm(agentCwd, { recursive: true, force: true });
     }
   }, 30_000);
 
-  test("create_agent auto-injects paseo MCP by default and can be disabled", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
-    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-agent-cwd-"));
+  test("create_agent auto-injects chisacode MCP by default and can be disabled", async () => {
+    const chisacodeHome = await mkdtemp(path.join(os.tmpdir(), "chisacode-home-"));
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), "chisacode-static-"));
+    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "chisacode-agent-cwd-"));
     const port = await getAvailablePort();
 
-    const daemonConfig: PaseoDaemonConfig = {
+    const daemonConfig: ChisaCodeDaemonConfig = {
       listen: `127.0.0.1:${port}`,
-      paseoHome,
+      chisacodeHome,
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: true,
       staticDir,
       mcpDebug: false,
       agentClients: createTestAgentClients(),
-      agentStoragePath: path.join(paseoHome, "agents"),
+      agentStoragePath: path.join(chisacodeHome, "agents"),
     };
 
-    const daemon = await createPaseoDaemon(daemonConfig, pino({ level: "silent" }));
+    const daemon = await createChisaCodeDaemon(daemonConfig, pino({ level: "silent" }));
     await daemon.start();
 
     const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
 
-    const disabledPaseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-home-disabled-"));
-    const disabledStaticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-disabled-"));
-    const disabledAgentCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-agent-cwd-disabled-"));
+    const disabledChisaCodeHome = await mkdtemp(path.join(os.tmpdir(), "chisacode-home-disabled-"));
+    const disabledStaticDir = await mkdtemp(path.join(os.tmpdir(), "chisacode-static-disabled-"));
+    const disabledAgentCwd = await mkdtemp(path.join(os.tmpdir(), "chisacode-agent-cwd-disabled-"));
     const disabledPort = await getAvailablePort();
-    const disabledDaemonConfig: PaseoDaemonConfig = {
+    const disabledDaemonConfig: ChisaCodeDaemonConfig = {
       listen: `127.0.0.1:${disabledPort}`,
-      paseoHome: disabledPaseoHome,
+      chisacodeHome: disabledChisaCodeHome,
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: true,
@@ -214,9 +214,12 @@ describe("agent MCP end-to-end (offline)", () => {
       staticDir: disabledStaticDir,
       mcpDebug: false,
       agentClients: createTestAgentClients(),
-      agentStoragePath: path.join(disabledPaseoHome, "agents"),
+      agentStoragePath: path.join(disabledChisaCodeHome, "agents"),
     };
-    const disabledDaemon = await createPaseoDaemon(disabledDaemonConfig, pino({ level: "silent" }));
+    const disabledDaemon = await createChisaCodeDaemon(
+      disabledDaemonConfig,
+      pino({ level: "silent" }),
+    );
     await disabledDaemon.start();
 
     const disabledClient = await createMcpClient(`http://127.0.0.1:${disabledPort}/mcp/agents`);
@@ -241,7 +244,7 @@ describe("agent MCP end-to-end (offline)", () => {
 
       const injectedAgent = daemon.agentManager.getAgent(agentId!);
       expect(injectedAgent?.config.mcpServers).toMatchObject({
-        paseo: {
+        chisacode: {
           type: "http",
           url: `http://127.0.0.1:${port}/mcp/agents?callerAgentId=${agentId!}`,
         },
@@ -264,7 +267,7 @@ describe("agent MCP end-to-end (offline)", () => {
       expect(disabledAgentId).toBeTruthy();
 
       const disabledAgent = disabledDaemon.agentManager.getAgent(disabledAgentId!);
-      expect(disabledAgent?.config.mcpServers?.paseo).toBeUndefined();
+      expect(disabledAgent?.config.mcpServers?.chisacode).toBeUndefined();
     } finally {
       if (agentId) {
         await client.callTool({ name: "kill_agent", args: { agentId } });
@@ -274,36 +277,36 @@ describe("agent MCP end-to-end (offline)", () => {
       }
       await disabledClient.close();
       await disabledDaemon.stop();
-      await rm(disabledPaseoHome, { recursive: true, force: true });
+      await rm(disabledChisaCodeHome, { recursive: true, force: true });
       await rm(disabledStaticDir, { recursive: true, force: true });
       await rm(disabledAgentCwd, { recursive: true, force: true });
       await client.close();
       await daemon.stop();
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(chisacodeHome, { recursive: true, force: true });
       await rm(staticDir, { recursive: true, force: true });
       await rm(agentCwd, { recursive: true, force: true });
     }
   }, 30_000);
 
   test("create_agent injects a loopback MCP URL when the daemon listens on all interfaces", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
-    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-agent-cwd-"));
+    const chisacodeHome = await mkdtemp(path.join(os.tmpdir(), "chisacode-home-"));
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), "chisacode-static-"));
+    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "chisacode-agent-cwd-"));
     const port = await getAvailablePort();
 
-    const daemonConfig: PaseoDaemonConfig = {
+    const daemonConfig: ChisaCodeDaemonConfig = {
       listen: `0.0.0.0:${port}`,
-      paseoHome,
+      chisacodeHome,
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: true,
       staticDir,
       mcpDebug: false,
       agentClients: createTestAgentClients(),
-      agentStoragePath: path.join(paseoHome, "agents"),
+      agentStoragePath: path.join(chisacodeHome, "agents"),
     };
 
-    const daemon = await createPaseoDaemon(daemonConfig, pino({ level: "silent" }));
+    const daemon = await createChisaCodeDaemon(daemonConfig, pino({ level: "silent" }));
     await daemon.start();
 
     const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
@@ -327,7 +330,7 @@ describe("agent MCP end-to-end (offline)", () => {
 
       const injectedAgent = daemon.agentManager.getAgent(agentId!);
       expect(injectedAgent?.config.mcpServers).toMatchObject({
-        paseo: {
+        chisacode: {
           type: "http",
           url: `http://127.0.0.1:${port}/mcp/agents?callerAgentId=${agentId!}`,
         },
@@ -338,31 +341,31 @@ describe("agent MCP end-to-end (offline)", () => {
       }
       await client.close();
       await daemon.stop();
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(chisacodeHome, { recursive: true, force: true });
       await rm(staticDir, { recursive: true, force: true });
       await rm(agentCwd, { recursive: true, force: true });
     }
   }, 30_000);
 
   test("create_agent with background initialPrompt reflects running state once the first turn starts", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
-    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-agent-cwd-"));
+    const chisacodeHome = await mkdtemp(path.join(os.tmpdir(), "chisacode-home-"));
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), "chisacode-static-"));
+    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "chisacode-agent-cwd-"));
     const port = await getAvailablePort();
 
-    const daemonConfig: PaseoDaemonConfig = {
+    const daemonConfig: ChisaCodeDaemonConfig = {
       listen: `127.0.0.1:${port}`,
-      paseoHome,
+      chisacodeHome,
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: true,
       staticDir,
       mcpDebug: false,
       agentClients: createTestAgentClients(),
-      agentStoragePath: path.join(paseoHome, "agents"),
+      agentStoragePath: path.join(chisacodeHome, "agents"),
     };
 
-    const daemon = await createPaseoDaemon(daemonConfig, pino({ level: "silent" }));
+    const daemon = await createChisaCodeDaemon(daemonConfig, pino({ level: "silent" }));
     await daemon.start();
 
     const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
@@ -398,7 +401,7 @@ describe("agent MCP end-to-end (offline)", () => {
       }
       await client.close();
       await daemon.stop();
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(chisacodeHome, { recursive: true, force: true });
       await rm(staticDir, { recursive: true, force: true });
       await rm(agentCwd, { recursive: true, force: true });
     }
@@ -506,14 +509,14 @@ describe("agent MCP end-to-end (offline)", () => {
       }
     }
 
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
-    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "paseo-agent-cwd-"));
+    const chisacodeHome = await mkdtemp(path.join(os.tmpdir(), "chisacode-home-"));
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), "chisacode-static-"));
+    const agentCwd = await mkdtemp(path.join(os.tmpdir(), "chisacode-agent-cwd-"));
     const port = await getAvailablePort();
 
-    const daemonConfig: PaseoDaemonConfig = {
+    const daemonConfig: ChisaCodeDaemonConfig = {
       listen: `127.0.0.1:${port}`,
-      paseoHome,
+      chisacodeHome,
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: true,
@@ -523,10 +526,10 @@ describe("agent MCP end-to-end (offline)", () => {
         ...createTestAgentClients(),
         codex: new StartTurnFailureClient(),
       },
-      agentStoragePath: path.join(paseoHome, "agents"),
+      agentStoragePath: path.join(chisacodeHome, "agents"),
     };
 
-    const daemon = await createPaseoDaemon(daemonConfig, pino({ level: "silent" }));
+    const daemon = await createChisaCodeDaemon(daemonConfig, pino({ level: "silent" }));
     await daemon.start();
 
     const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
@@ -554,31 +557,31 @@ describe("agent MCP end-to-end (offline)", () => {
     } finally {
       await client.close();
       await daemon.stop();
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(chisacodeHome, { recursive: true, force: true });
       await rm(staticDir, { recursive: true, force: true });
       await rm(agentCwd, { recursive: true, force: true });
     }
   }, 30_000);
 
   test("create_agent with worktree is async and boots terminals only after setup success", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-home-"));
-    const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
-    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-worktree-repo-"));
+    const chisacodeHome = await mkdtemp(path.join(os.tmpdir(), "chisacode-home-"));
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), "chisacode-static-"));
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "chisacode-worktree-repo-"));
     const port = await getAvailablePort();
 
-    const daemonConfig: PaseoDaemonConfig = {
+    const daemonConfig: ChisaCodeDaemonConfig = {
       listen: `127.0.0.1:${port}`,
-      paseoHome,
+      chisacodeHome,
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: true,
       staticDir,
       mcpDebug: false,
       agentClients: createTestAgentClients(),
-      agentStoragePath: path.join(paseoHome, "agents"),
+      agentStoragePath: path.join(chisacodeHome, "agents"),
     };
 
-    const daemon = await createPaseoDaemon(daemonConfig, pino({ level: "silent" }));
+    const daemon = await createChisaCodeDaemon(daemonConfig, pino({ level: "silent" }));
     await daemon.start();
 
     const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
@@ -594,9 +597,9 @@ describe("agent MCP end-to-end (offline)", () => {
       execSync("git -c commit.gpgsign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
 
       const setupCommand =
-        'while [ ! -f "$PASEO_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$PASEO_WORKTREE_PATH/setup-done.txt"';
+        'while [ ! -f "$CHISACODE_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$CHISACODE_WORKTREE_PATH/setup-done.txt"';
       await writeFile(
-        path.join(repoRoot, "paseo.json"),
+        path.join(repoRoot, "chisacode.json"),
         JSON.stringify({
           worktree: {
             setup: [setupCommand],
@@ -610,7 +613,7 @@ describe("agent MCP end-to-end (offline)", () => {
         }),
         "utf8",
       );
-      execSync("git add paseo.json", { cwd: repoRoot, stdio: "pipe" });
+      execSync("git add chisacode.json", { cwd: repoRoot, stdio: "pipe" });
       execSync("git -c commit.gpgsign=false commit -m 'add worktree config'", {
         cwd: repoRoot,
         stdio: "pipe",
@@ -658,7 +661,7 @@ describe("agent MCP end-to-end (offline)", () => {
       }
       await client.close();
       await daemon.stop();
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(chisacodeHome, { recursive: true, force: true });
       await rm(staticDir, { recursive: true, force: true });
       await rm(repoRoot, { recursive: true, force: true });
     }

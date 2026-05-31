@@ -92,8 +92,8 @@ function buildWaitResult(args: {
 
   if (state.status === "timeout") {
     const timeoutMessage = timeoutLabel
-      ? `Agent did not finish within ${timeoutLabel}. Run \`fleurdelys wait ${resolvedAgentId}\` again to keep waiting.`
-      : `Agent wait timed out. Run \`fleurdelys wait ${resolvedAgentId}\` again to keep waiting.`;
+      ? `Agent did not finish within ${timeoutLabel}. Run \`chisacode wait ${resolvedAgentId}\` again to keep waiting.`
+      : `Agent wait timed out. Run \`chisacode wait ${resolvedAgentId}\` again to keep waiting.`;
     return {
       agentId: resolvedAgentId,
       status: "timeout",
@@ -145,7 +145,7 @@ export async function runWaitCommand(
     throw {
       code: "MISSING_AGENT_ID",
       message: "Agent ID is required",
-      details: "Usage: fleurdelys agent wait <id>",
+      details: "Usage: chisacode agent wait <id>",
     } satisfies CommandError;
   }
 
@@ -159,7 +159,7 @@ export async function runWaitCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }

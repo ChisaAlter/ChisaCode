@@ -13,20 +13,20 @@ npm run dev
 
 `scripts/dev.sh` runs the daemon and Expo together via `concurrently`, fronted by [`portless`](https://www.npmjs.com/package/portless) so each service is reachable at a stable name like `https://daemon.localhost` / `https://app.localhost` instead of a fixed port. The underlying TCP ports are ephemeral — never hardcode them. (Windows uses `scripts/dev.ps1`, which still binds the daemon to `localhost:6767` directly.)
 
-### PASEO_HOME
+### CHISACODE_HOME
 
-`PASEO_HOME` is the directory that holds runtime state (agents, sockets, daemon log). Resolution rules:
+`CHISACODE_HOME` is the directory that holds runtime state (agents, sockets, daemon log). Resolution rules:
 
-- The **server itself** (e.g. when launched by the desktop app or `npm run start`) defaults to `~/.paseo` (see `packages/server/src/server/paseo-home.ts`).
-- **`npm run dev` from a git worktree** derives a stable home like `~/.paseo-<worktree-name>` and, on first run, seeds it from `~/.paseo` by copying agent/project JSON metadata and `config.json`. Checkout/worktree directories are not copied.
-- **`npm run dev` from the main checkout** (not a worktree) uses a fresh `mktemp` directory under `$TMPDIR` and removes it on exit. Set `PASEO_HOME` explicitly to keep state across runs.
+- The **server itself** (e.g. when launched by the desktop app or `npm run start`) defaults to `~/.chisacode` (see `packages/server/src/server/chisacode-home.ts`).
+- **`npm run dev` from a git worktree** derives a stable home like `~/.chisacode-<worktree-name>` and, on first run, seeds it from `~/.chisacode` by copying agent/project JSON metadata and `config.json`. Checkout/worktree directories are not copied.
+- **`npm run dev` from the main checkout** (not a worktree) uses a fresh `mktemp` directory under `$TMPDIR` and removes it on exit. Set `CHISACODE_HOME` explicitly to keep state across runs.
 
 Override knobs:
 
 ```bash
-PASEO_HOME=~/.paseo-blue npm run dev          # explicit home
-PASEO_DEV_SEED_HOME=/path/to/home npm run dev # seed from a different source home
-PASEO_DEV_RESET_HOME=1 npm run dev            # clear and reseed the derived worktree home
+CHISACODE_HOME=~/.chisacode-blue npm run dev          # explicit home
+CHISACODE_DEV_SEED_HOME=/path/to/home npm run dev # seed from a different source home
+CHISACODE_DEV_RESET_HOME=1 npm run dev            # clear and reseed the derived worktree home
 ```
 
 ### Daemon endpoints
@@ -41,7 +41,7 @@ In any worktree-style or portless setup, never assume default ports.
 
 `npm run dev:desktop` starts Electron with Chromium remote debugging enabled on
 `http://127.0.0.1:9223` so renderer CPU profiles can be captured through CDP.
-Override the port with `PASEO_ELECTRON_REMOTE_DEBUGGING_PORT` when `9223` is busy.
+Override the port with `CHISACODE_ELECTRON_REMOTE_DEBUGGING_PORT` when `9223` is busy.
 
 ### Desktop macOS compositor watchdog
 
@@ -61,16 +61,16 @@ legitimately stops producing frames then.
 
 ### Daemon logs
 
-Check `$PASEO_HOME/daemon.log` for daemon logs. The default level is `info`; set
-`PASEO_LOG_LEVEL=trace` before launching the daemon when you need full provider,
+Check `$CHISACODE_HOME/daemon.log` for daemon logs. The default level is `info`; set
+`CHISACODE_LOG_LEVEL=trace` before launching the daemon when you need full provider,
 session, and agent-manager traces for stuck-state debugging.
 
 The supervisor rotates `daemon.log`. Persisted `log.file.rotate` settings in
-`$PASEO_HOME/config.json` win first. Without persisted config, the optional
-`PASEO_LOG_ROTATE_SIZE` and `PASEO_LOG_ROTATE_COUNT` env vars override the
+`$CHISACODE_HOME/config.json` win first. Without persisted config, the optional
+`CHISACODE_LOG_ROTATE_SIZE` and `CHISACODE_LOG_ROTATE_COUNT` env vars override the
 defaults. The default rotation is `10m` x `3` files everywhere.
 
-## paseo.json service scripts
+## chisacode.json service scripts
 
 `worktree.setup` and `worktree.teardown` accept either a multiline shell script or an array
 of commands. Both run sequentially.
@@ -78,7 +78,7 @@ of commands. Both run sequentially.
 ```json
 {
   "worktree": {
-    "setup": "npm ci\ncp \"$PASEO_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
+    "setup": "npm ci\ncp \"$CHISACODE_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
     "teardown": "npm run db:drop || true"
   }
 }
@@ -86,13 +86,13 @@ of commands. Both run sequentially.
 
 Every `scripts` entry with `"type": "service"` receives these environment variables:
 
-| Variable                    | Value                                                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `PASEO_SERVICE_<NAME>_URL`  | Proxied daemon URL for a declared peer service. Prefer this for peer discovery; it survives peer restarts.                |
-| `PASEO_SERVICE_<NAME>_PORT` | Raw ephemeral port for a declared peer service. Use only as a bypass escape hatch; it can go stale if that peer restarts. |
-| `PASEO_URL`                 | Self alias for `PASEO_SERVICE_<SELF>_URL`.                                                                                |
-| `PASEO_PORT`                | Self alias for `PASEO_SERVICE_<SELF>_PORT`.                                                                               |
-| `HOST`                      | Bind host for the service process.                                                                                        |
+| Variable                        | Value                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `CHISACODE_SERVICE_<NAME>_URL`  | Proxied daemon URL for a declared peer service. Prefer this for peer discovery; it survives peer restarts.                |
+| `CHISACODE_SERVICE_<NAME>_PORT` | Raw ephemeral port for a declared peer service. Use only as a bypass escape hatch; it can go stale if that peer restarts. |
+| `CHISACODE_URL`                 | Self alias for `CHISACODE_SERVICE_<SELF>_URL`.                                                                            |
+| `CHISACODE_PORT`                | Self alias for `CHISACODE_SERVICE_<SELF>_PORT`.                                                                           |
+| `HOST`                          | Bind host for the service process.                                                                                        |
 
 `<NAME>` is normalized from the script name by uppercasing it, replacing each run of non-`A-Z0-9` characters with `_`, and trimming leading or trailing `_`. For example, `app-server` and `app.server` both normalize to `APP_SERVER`; that collision fails at spawn time with an actionable error.
 
@@ -103,7 +103,7 @@ Every `scripts` entry with `"type": "service"` receives these environment variab
   "scripts": {
     "web": {
       "type": "service",
-      "command": "PORT=$PASEO_PORT npm run dev:web"
+      "command": "PORT=$CHISACODE_PORT npm run dev:web"
     }
   }
 }
@@ -113,7 +113,7 @@ Every `scripts` entry with `"type": "service"` receives these environment variab
 
 Package imports resolve through package exports to compiled `dist/` output, not sibling `src/` files. This is true in local dev and in published packages: the app, daemon, CLI, and SDK consumers should all exercise the same runtime paths.
 
-`npm run dev`, `npm run dev:server`, and `npm run dev:app` build the workspace packages they need once, then keep `@fleurdelys/protocol` and `@fleurdelys/client` fresh with TypeScript watch builds while the daemon or Expo runs. If you change protocol schemas or client code outside those watch workflows, rebuild the producer before trusting runtime behavior.
+`npm run dev`, `npm run dev:server`, and `npm run dev:app` build the workspace packages they need once, then keep `@chisacode/protocol` and `@chisacode/client` fresh with TypeScript watch builds while the daemon or Expo runs. If you change protocol schemas or client code outside those watch workflows, rebuild the producer before trusting runtime behavior.
 
 Use the named root build targets instead of remembering workspace dependency chains:
 
@@ -134,7 +134,7 @@ For tighter loops, you can rebuild a single workspace:
 
 ## CLI reference
 
-Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The globally installed `paseo` binary on macOS is a symlink into the installed Paseo desktop app, not this checkout — use it to drive the desktop's built-in daemon, but use `npm run cli` when you want to talk to the CLI you are editing.
+Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The globally installed `chisacode` binary on macOS is a symlink into the installed ChisaCode desktop app, not this checkout — use it to drive the desktop's built-in daemon, but use `npm run cli` when you want to talk to the CLI you are editing.
 
 ```bash
 npm run cli -- ls -a -g              # List all agents globally
@@ -155,19 +155,19 @@ npm run cli -- --host localhost:7777 ls -a
 Agent data lives at:
 
 ```
-$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json
+$CHISACODE_HOME/agents/{cwd-with-dashes}/{agent-id}.json
 ```
 
 Find an agent by ID:
 
 ```bash
-find $PASEO_HOME/agents -name "{agent-id}.json"
+find $CHISACODE_HOME/agents -name "{agent-id}.json"
 ```
 
 Find by content:
 
 ```bash
-rg -l "some title text" $PASEO_HOME/agents/
+rg -l "some title text" $CHISACODE_HOME/agents/
 ```
 
 ## Provider session files
@@ -195,13 +195,13 @@ Do NOT use browser history (back/forward). Always navigate by clicking UI elemen
 ## App web deploys
 
 `packages/app` exports a single-page Expo web app and deploys the `dist/`
-directory to Cloudflare Pages with `npm run deploy:web --workspace=@fleurdelys/app`.
+directory to Cloudflare Pages with `npm run deploy:web --workspace=@chisacode/app`.
 
 PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so
 Cloudflare serves them from stable root URLs after `expo export`.
 
-Do not add service-worker caching casually. Paseo is a live control surface for
+Do not add service-worker caching casually. ChisaCode is a live control surface for
 agents, and an aggressive service worker can strand installed users on stale web
 code. If offline behavior becomes a product requirement, add it deliberately
 with an update strategy and test the installed-app upgrade path.

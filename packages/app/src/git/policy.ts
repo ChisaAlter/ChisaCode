@@ -5,7 +5,7 @@ import type {
   CheckoutPrMergeMethod,
   CheckoutPrStatusResponse,
   PullRequestMergeable,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 
 export type GitActionId =
   | "commit"
@@ -63,7 +63,7 @@ export interface BuildGitActionsInput {
   pullRequestMergeable: PullRequestMergeable;
   pullRequestGithub: PullRequestGithubStatus | null;
   hasRemote: boolean;
-  isPaseoOwnedWorktree: boolean;
+  isChisaCodeOwnedWorktree: boolean;
   isOnBaseBranch: boolean;
   hasUncommittedChanges: boolean;
   baseRefAvailable: boolean;
@@ -297,9 +297,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
     disabled: input.runtime["archive-worktree"].disabled,
     status: input.runtime["archive-worktree"].status,
     unavailableMessage:
-      input.runtime["archive-worktree"].disabled || input.isPaseoOwnedWorktree
+      input.runtime["archive-worktree"].disabled || input.isChisaCodeOwnedWorktree
         ? undefined
-        : "此工作区不是芙露德莉斯 worktree，无法在这里归档",
+        : "此工作区不是ChisaCode worktree，无法在这里归档",
     icon: input.runtime["archive-worktree"].icon,
     startsGroup: true,
     handler: input.runtime["archive-worktree"].handler,
@@ -312,7 +312,7 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
   if (!input.isOnBaseBranch) {
     secondaryIds.push(...getFeatureActionIds(input));
   }
-  if (input.isPaseoOwnedWorktree) {
+  if (input.isChisaCodeOwnedWorktree) {
     secondaryIds.push("archive-worktree");
   }
 
@@ -324,7 +324,7 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 }
 
 function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
-  if (input.shouldPromoteArchive && input.isPaseoOwnedWorktree) {
+  if (input.shouldPromoteArchive && input.isChisaCodeOwnedWorktree) {
     return "archive-worktree";
   }
   if (input.hasUncommittedChanges) {

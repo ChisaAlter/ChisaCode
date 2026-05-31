@@ -19,7 +19,7 @@ import {
   Settings,
   Star,
 } from "lucide-react-native";
-import type { AgentProvider } from "@fleurdelys/protocol/agent-types";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { Button } from "@/components/ui/button";

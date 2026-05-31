@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
-import { getStructuredAgentResponse, StructuredAgentResponseError } from "@fleurdelys/server";
-import type { AgentSnapshotPayload } from "@fleurdelys/protocol/messages";
+import { getStructuredAgentResponse, StructuredAgentResponseError } from "@chisacode/server";
+import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type {
   CommandOptions,
@@ -261,7 +261,7 @@ function validateRunOptions(prompt: string, options: AgentRunOptions, outputSche
     throw {
       code: "MISSING_PROMPT",
       message: "A prompt is required",
-      details: "Usage: fleurdelys agent run [options] <prompt>",
+      details: "Usage: chisacode agent run [options] <prompt>",
     } satisfies CommandError;
   }
 
@@ -269,7 +269,7 @@ function validateRunOptions(prompt: string, options: AgentRunOptions, outputSche
     throw {
       code: "INVALID_OPTIONS",
       message: "--base can only be used with --worktree",
-      details: "Usage: fleurdelys agent run --worktree <name> --base <branch> <prompt>",
+      details: "Usage: chisacode agent run --worktree <name> --base <branch> <prompt>",
     } satisfies CommandError;
   }
 
@@ -378,7 +378,7 @@ async function connectToDaemonOrThrow(
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     } satisfies CommandError;
   }
 }
@@ -408,7 +408,7 @@ export async function runRunCommand(
         code: "INVALID_THINKING_OPTION",
         message: "--thinking cannot be empty",
         details:
-          'Provide a thinking option ID. Use "fleurdelys provider models <provider> --thinking" to list valid IDs.',
+          'Provide a thinking option ID. Use "chisacode provider models <provider> --thinking" to list valid IDs.',
       };
       throw error;
     }

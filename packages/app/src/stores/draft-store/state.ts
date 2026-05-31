@@ -1,5 +1,5 @@
 import type { AttachmentMetadata, UserComposerAttachment } from "@/attachments/types";
-import { GitHubSearchItemSchema } from "@fleurdelys/protocol/messages";
+import { GitHubSearchItemSchema } from "@chisacode/protocol/messages";
 
 export const DRAFT_STORE_VERSION = 4;
 export const FINALIZED_DRAFT_TTL_MS = 5 * 60 * 1000;

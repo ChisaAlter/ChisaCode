@@ -5,7 +5,7 @@ import path from "node:path";
 import pino from "pino";
 
 import { OpenCodeAgentClient } from "../agent/providers/opencode-agent.js";
-import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestChisaCodeDaemon } from "../test-utils/chisacode-daemon.js";
 import { DaemonClient, type WaitForFinishResult } from "../test-utils/daemon-client.js";
 import { createMessageCollector } from "../test-utils/message-collector.js";
 import { isProviderAvailable } from "./agent-configs.js";
@@ -248,10 +248,10 @@ async function waitForIdleResolvingPermissions(
 
 async function createHarness(): Promise<{
   client: DaemonClient;
-  daemon: Awaited<ReturnType<typeof createTestPaseoDaemon>>;
+  daemon: Awaited<ReturnType<typeof createTestChisaCodeDaemon>>;
 }> {
   const logger = pino({ level: "silent" });
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestChisaCodeDaemon({
     agentClients: { opencode: new OpenCodeAgentClient(logger) },
     logger,
   });

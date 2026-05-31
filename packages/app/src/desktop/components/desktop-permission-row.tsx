@@ -5,6 +5,7 @@ import { Check } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { settingsStyles } from "@/styles/settings";
 import type { DesktopPermissionStatus } from "@/desktop/permissions/desktop-permissions";
+import { useTranslation } from "react-i18next";
 
 export interface DesktopPermissionRowProps {
   title: string;
@@ -30,6 +31,7 @@ export function DesktopPermissionRow({
   onExtraAction,
 }: DesktopPermissionRowProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const state = status?.state ?? "unknown";
   const isGranted = state === "granted";
   const shouldShowDetail =
@@ -54,7 +56,7 @@ export function DesktopPermissionRow({
           <View style={styles.permissionGrantedActions}>
             <View style={styles.permissionStatusPill}>
               <Check size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-              <Text style={styles.permissionStatusText}>已授权</Text>
+              <Text style={styles.permissionStatusText}>{t("settings.permissions.granted")}</Text>
             </View>
             {extraActionLabel && onExtraAction ? (
               <Button
@@ -69,7 +71,9 @@ export function DesktopPermissionRow({
           </View>
         ) : (
           <Button variant="outline" size="sm" onPress={onRequest} disabled={isRequesting}>
-            {isRequesting ? "请求中..." : "请求"}
+            {isRequesting
+              ? t("settings.permissions.requesting")
+              : t("settings.permissions.request")}
           </Button>
         )}
         {shouldShowDetail ? (

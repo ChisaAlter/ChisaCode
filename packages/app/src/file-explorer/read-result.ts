@@ -1,4 +1,4 @@
-import type { FileReadResult } from "@fleurdelys/client/internal/daemon-client";
+import type { FileReadResult } from "@chisacode/client/internal/daemon-client";
 import type { ExplorerFile } from "@/stores/session-store";
 
 export function explorerFileFromReadResult(file: FileReadResult): ExplorerFile {

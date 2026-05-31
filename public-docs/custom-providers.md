@@ -1,13 +1,13 @@
 ---
 title: Custom providers
-description: Configure custom providers, alternative endpoints, profiles, custom binaries, and ACP agents in ~/.paseo/config.json.
+description: Configure custom providers, alternative endpoints, profiles, custom binaries, and ACP agents in ~/.chisacode/config.json.
 nav: Custom providers
 order: 5
 ---
 
 # Custom providers
 
-Everything beyond the [supported providers](/docs/supported-providers) lives under `agents.providers` in `~/.paseo/config.json`. You can:
+Everything beyond the [supported providers](/docs/supported-providers) lives under `agents.providers` in `~/.chisacode/config.json`. You can:
 
 - **Extend** a first-class provider to point at a different API (Z.AI, Alibaba/Qwen, a proxy, a self-hosted endpoint).
 - **Add profiles**, multiple entries against the same underlying provider with different credentials or curated model lists.
@@ -17,7 +17,7 @@ Everything beyond the [supported providers](/docs/supported-providers) lives und
 
 Provider IDs must be lowercase alphanumeric with hyphens (`/^[a-z][a-z0-9-]*$/`). Every custom entry needs `extends` (a first-class provider ID or `"acp"`) and a `label`.
 
-The examples below are a quick tour. The full, up-to-date reference is on GitHub: [docs/custom-providers.md](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md).
+The examples below are a quick tour. The full, up-to-date reference is on GitHub: [docs/custom-providers.md](https://github.com/getchisacode/chisacode/blob/main/docs/custom-providers.md).
 
 ## Extending a first-class provider
 
@@ -132,7 +132,7 @@ Create as many entries as you want against the same first-class provider. Each o
 
 ## ACP providers
 
-Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be added with `extends: "acp"` and a `command`. Paseo spawns the process, sends an `initialize` JSON-RPC request, and the agent reports its capabilities, modes, and models at runtime.
+Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be added with `extends: "acp"` and a `command`. ChisaCode spawns the process, sends an `initialize` JSON-RPC request, and the agent reports its capabilities, modes, and models at runtime.
 
 ```json
 {
@@ -189,4 +189,4 @@ Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be a
 
 ## Full reference
 
-For the complete field reference (`extends`, `label`, `command`, `env`, `models`, `additionalModels`, `disallowedTools`, `enabled`, `order`), model and thinking-option schemas, and deeper examples for each plan, see [docs/custom-providers.md](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md) on GitHub.
+For the complete field reference (`extends`, `label`, `command`, `env`, `models`, `additionalModels`, `disallowedTools`, `enabled`, `order`), model and thinking-option schemas, and deeper examples for each plan, see [docs/custom-providers.md](https://github.com/getchisacode/chisacode/blob/main/docs/custom-providers.md) on GitHub.

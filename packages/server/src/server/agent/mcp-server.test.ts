@@ -18,24 +18,24 @@ import { createProviderSnapshotManagerStub } from "../test-utils/session-stubs.j
 import {
   AgentListItemPayloadSchema,
   AgentSnapshotPayloadSchema,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "../workspace-registry.js";
 import type {
   CreateScheduleInput,
   StoredSchedule,
   UpdateScheduleInput,
-} from "@fleurdelys/protocol/schedule/types";
+} from "@chisacode/protocol/schedule/types";
 import type { ScheduleService } from "../schedule/service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import {
-  createPaseoWorktree as createPaseoWorktreeService,
-  type CreatePaseoWorktreeInput,
-} from "../paseo-worktree-service.js";
-import type { CreatePaseoWorktreeWorkflowFn } from "../worktree-session.js";
+  createChisaCodeWorktree as createChisaCodeWorktreeService,
+  type CreateChisaCodeWorktreeInput,
+} from "../chisacode-worktree-service.js";
+import type { CreateChisaCodeWorktreeWorkflowFn } from "../worktree-session.js";
 import { WorkspaceGitServiceImpl } from "../workspace-git-service.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
-import { PARENT_AGENT_ID_LABEL } from "@fleurdelys/protocol/agent-labels";
+import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
 
 const REPO_CWD = resolvePath("/tmp/repo");
 const TARGET_CWD = resolvePath("/tmp/target");
@@ -513,25 +513,25 @@ function createStoredSchedule(input: CreateScheduleInput): StoredSchedule {
   };
 }
 
-function createPaseoWorktreeForMcpTest(options: {
-  paseoHome: string;
+function createChisaCodeWorktreeForMcpTest(options: {
+  chisacodeHome: string;
   broadcasts: string[];
   createdWorkspaceIds?: string[];
   setupContinuations?: Array<"workspace" | "agent" | undefined>;
   startedAgentSetupIds?: string[];
-}): CreatePaseoWorktreeWorkflowFn {
+}): CreateChisaCodeWorktreeWorkflowFn {
   const projects = new Map<string, PersistedProjectRecord>();
   const workspaces = new Map<string, PersistedWorkspaceRecord>();
   const github = createGitHubServiceStub();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger: createTestLogger(),
-    paseoHome: options.paseoHome,
+    chisacodeHome: options.chisacodeHome,
     deps: { github },
   });
 
   return async (input, serviceOptions) => {
     options.setupContinuations?.push(serviceOptions?.setupContinuation?.kind);
-    const result = await createPaseoWorktreeService(input, {
+    const result = await createChisaCodeWorktreeService(input, {
       github,
       ...(serviceOptions?.resolveDefaultBranch
         ? { resolveDefaultBranch: serviceOptions.resolveDefaultBranch }
@@ -1018,9 +1018,9 @@ describe("create_agent MCP tool", () => {
 
   it("registers and broadcasts a workspace when create_agent creates a worktree", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-worktree-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "chisacode-mcp-worktree-"));
     const repoDir = join(tempDir, "repo");
-    const paseoHome = join(tempDir, ".paseo");
+    const chisacodeHome = join(tempDir, ".chisacode");
     const broadcasts: string[] = [];
     const createdWorkspaceIds: string[] = [];
     const setupContinuations: Array<"workspace" | "agent" | undefined> = [];
@@ -1055,9 +1055,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        paseoHome,
-        createPaseoWorktree: createPaseoWorktreeForMcpTest({
-          paseoHome,
+        chisacodeHome,
+        createChisaCodeWorktree: createChisaCodeWorktreeForMcpTest({
+          chisacodeHome,
           broadcasts,
           createdWorkspaceIds,
           setupContinuations,
@@ -1095,9 +1095,9 @@ describe("create_agent MCP tool", () => {
 
   it("creates a create_agent branch-off worktree without invoking the legacy metadata branch rename", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-worktree-name-context-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "chisacode-mcp-agent-worktree-name-context-"));
     const repoDir = join(tempDir, "repo");
-    const paseoHome = join(tempDir, ".paseo");
+    const chisacodeHome = join(tempDir, ".chisacode");
     const broadcasts: string[] = [];
     const workspaceGitService = {
       getSnapshot: vi.fn(async () => {
@@ -1134,8 +1134,8 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        paseoHome,
-        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts }),
+        chisacodeHome,
+        createChisaCodeWorktree: createChisaCodeWorktreeForMcpTest({ chisacodeHome, broadcasts }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees"
@@ -1172,9 +1172,9 @@ describe("create_agent MCP tool", () => {
 
   it("does not auto-rename a create_agent checkout worktree from the initial prompt", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-agent-checkout-name-context-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "chisacode-mcp-agent-checkout-name-context-"));
     const repoDir = join(tempDir, "repo");
-    const paseoHome = join(tempDir, ".paseo");
+    const chisacodeHome = join(tempDir, ".chisacode");
     const broadcasts: string[] = [];
     const workspaceGitService = {
       getSnapshot: vi.fn(async () => {
@@ -1219,8 +1219,8 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        paseoHome,
-        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts }),
+        chisacodeHome,
+        createChisaCodeWorktree: createChisaCodeWorktreeForMcpTest({ chisacodeHome, broadcasts }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees"
@@ -1255,10 +1255,10 @@ describe("create_agent MCP tool", () => {
   it("passes create_agent GitHub PR worktrees through workspace creation without metadata branch rename", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     const startedAgentSetupIds: string[] = [];
-    const createPaseoWorktree = vi.fn(
+    const createChisaCodeWorktree = vi.fn(
       async (
-        input: CreatePaseoWorktreeInput,
-        options?: Parameters<CreatePaseoWorktreeWorkflowFn>[1],
+        input: CreateChisaCodeWorktreeInput,
+        options?: Parameters<CreateChisaCodeWorktreeWorkflowFn>[1],
       ) => ({
         worktree: {
           branchName: "pr-123",
@@ -1312,7 +1312,7 @@ describe("create_agent MCP tool", () => {
       agentManager,
       agentStorage,
       providerSnapshotManager: createOpenCodeManager().manager,
-      createPaseoWorktree,
+      createChisaCodeWorktree,
       workspaceGitService: workspaceGitService as unknown as Pick<
         WorkspaceGitService,
         "getSnapshot" | "listWorktrees"
@@ -1329,7 +1329,7 @@ describe("create_agent MCP tool", () => {
       background: true,
     });
 
-    expect(createPaseoWorktree).toHaveBeenCalledWith(
+    expect(createChisaCodeWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
         githubPrNumber: 123,
         firstAgentContext: { prompt: "Rename this PR branch from prompt" },
@@ -1350,9 +1350,9 @@ describe("create_agent MCP tool", () => {
 
   it("registers and broadcasts a workspace when create_worktree creates a worktree", async () => {
     const { agentManager, agentStorage } = createTestDeps();
-    const tempDir = await mkdtemp(join(tmpdir(), "paseo-mcp-create-worktree-"));
+    const tempDir = await mkdtemp(join(tmpdir(), "chisacode-mcp-create-worktree-"));
     const repoDir = join(tempDir, "repo");
-    const paseoHome = join(tempDir, ".paseo");
+    const chisacodeHome = join(tempDir, ".chisacode");
     const broadcasts: string[] = [];
     const setupContinuations: Array<"workspace" | "agent" | undefined> = [];
 
@@ -1381,9 +1381,9 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        paseoHome,
-        createPaseoWorktree: createPaseoWorktreeForMcpTest({
-          paseoHome,
+        chisacodeHome,
+        createChisaCodeWorktree: createChisaCodeWorktreeForMcpTest({
+          chisacodeHome,
           broadcasts,
           setupContinuations,
         }),
@@ -1417,10 +1417,10 @@ describe("create_agent MCP tool", () => {
   it("forces a workspace git snapshot refresh when archive_worktree deletes a worktree", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const tempDir = realpathSync.native(
-      await mkdtemp(join(tmpdir(), "paseo-mcp-archive-worktree-")),
+      await mkdtemp(join(tmpdir(), "chisacode-mcp-archive-worktree-")),
     );
     const repoDir = join(tempDir, "repo");
-    const paseoHome = join(tempDir, ".paseo");
+    const chisacodeHome = join(tempDir, ".chisacode");
 
     try {
       execFileSync("git", ["init", repoDir], { stdio: "pipe" });
@@ -1451,8 +1451,11 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        paseoHome,
-        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts: [] }),
+        chisacodeHome,
+        createChisaCodeWorktree: createChisaCodeWorktreeForMcpTest({
+          chisacodeHome,
+          broadcasts: [],
+        }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
@@ -1505,10 +1508,10 @@ describe("create_agent MCP tool", () => {
   it("archives a worktree by slug", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const tempDir = realpathSync.native(
-      await mkdtemp(join(tmpdir(), "paseo-mcp-archive-worktree-slug-")),
+      await mkdtemp(join(tmpdir(), "chisacode-mcp-archive-worktree-slug-")),
     );
     const repoDir = join(tempDir, "repo");
-    const paseoHome = join(tempDir, ".paseo");
+    const chisacodeHome = join(tempDir, ".chisacode");
 
     try {
       execFileSync("git", ["init", repoDir], { stdio: "pipe" });
@@ -1535,8 +1538,11 @@ describe("create_agent MCP tool", () => {
         agentManager,
         agentStorage,
         providerSnapshotManager: createOpenCodeManager().manager,
-        paseoHome,
-        createPaseoWorktree: createPaseoWorktreeForMcpTest({ paseoHome, broadcasts: [] }),
+        chisacodeHome,
+        createChisaCodeWorktree: createChisaCodeWorktreeForMcpTest({
+          chisacodeHome,
+          broadcasts: [],
+        }),
         workspaceGitService: workspaceGitService as unknown as Pick<
           WorkspaceGitService,
           "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
@@ -1584,7 +1590,7 @@ describe("create_agent MCP tool", () => {
       getSnapshot: vi.fn(async () => null),
       listWorktrees: vi.fn(async () => [
         {
-          path: "/tmp/paseo/worktrees/repo/feature",
+          path: "/tmp/chisacode/worktrees/repo/feature",
           branchName: "feature",
           createdAt: "2026-04-12T00:00:00.000Z",
         },
@@ -1609,7 +1615,7 @@ describe("create_agent MCP tool", () => {
     });
     expect(response.structuredContent.worktrees).toEqual([
       {
-        path: "/tmp/paseo/worktrees/repo/feature",
+        path: "/tmp/chisacode/worktrees/repo/feature",
         branchName: "feature",
         createdAt: "2026-04-12T00:00:00.000Z",
       },
@@ -1639,7 +1645,7 @@ describe("create_agent MCP tool", () => {
 
   it("allows caller agents to override cwd and applies caller context labels", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    const baseDir = await mkdtemp(join(tmpdir(), "paseo-mcp-test-"));
+    const baseDir = await mkdtemp(join(tmpdir(), "chisacode-mcp-test-"));
     const subdir = join(baseDir, "subdir");
     await mkdir(subdir, { recursive: true });
     spies.agentManager.getAgent.mockReturnValue({

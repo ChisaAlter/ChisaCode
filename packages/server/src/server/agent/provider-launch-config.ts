@@ -1,6 +1,6 @@
 import { isAbsolute } from "node:path";
 import { executableExists, findExecutable } from "../../utils/executable.js";
-import { createExternalProcessEnv, type ProcessEnvRecord } from "../paseo-env.js";
+import { createExternalProcessEnv, type ProcessEnvRecord } from "../chisacode-env.js";
 export {
   AgentProviderRuntimeSettingsMapSchema,
   ProviderCommandSchema,
@@ -14,7 +14,7 @@ export {
   type ProviderOverrides,
   type ProviderProfileModel,
   type ProviderRuntimeSettings,
-} from "@fleurdelys/protocol/provider-config";
+} from "@chisacode/protocol/provider-config";
 import {
   ProviderOverrideSchema,
   ProviderOverridesSchema,
@@ -23,7 +23,7 @@ import {
   type ProviderOverride,
   type ProviderOverrides,
   type ProviderRuntimeSettings,
-} from "@fleurdelys/protocol/provider-config";
+} from "@chisacode/protocol/provider-config";
 
 export interface ProviderCommandPrefix {
   command: string;
@@ -198,7 +198,7 @@ export function migrateProviderSettings(
 }
 
 // Env vars that indicate a running Claude Code session. If the daemon itself is
-// launched from inside Claude Code (e.g. by a Paseo agent), these leak into
+// launched from inside Claude Code (e.g. by a ChisaCode agent), these leak into
 // child processes and cause "cannot be launched inside another session" errors.
 const PARENT_SESSION_ENV_VARS = [
   "CLAUDECODE",

@@ -51,7 +51,7 @@ export function useCliInstall(): DesktopInstallHookResult {
     onError: (error) => {
       reportError({
         error,
-        message: "Unable to install the Fleurdelys CLI.",
+        message: "Unable to install the ChisaCode CLI.",
         logLabel: "[Integrations] Failed to install CLI",
       });
     },

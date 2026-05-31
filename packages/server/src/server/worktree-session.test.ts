@@ -14,15 +14,15 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import pino, { type Logger } from "pino";
 
 import type { SessionOutboundMessage, WorkspaceDescriptorPayload } from "./messages.js";
-import { archivePaseoWorktree } from "./paseo-worktree-archive-service.js";
+import { archiveChisaCodeWorktree } from "./chisacode-worktree-archive-service.js";
 import {
   buildAgentSessionConfig,
-  createPaseoWorktreeWorkflow,
-  handlePaseoWorktreeArchiveRequest,
-  handlePaseoWorktreeListRequest,
+  createChisaCodeWorktreeWorkflow,
+  handleChisaCodeWorktreeArchiveRequest,
+  handleChisaCodeWorktreeListRequest,
   resolveGitCreateBaseBranch,
   runWorktreeSetupInBackground,
-  handleCreatePaseoWorktreeRequest,
+  handleCreateChisaCodeWorktreeRequest,
   handleWorkspaceSetupStatusRequest,
 } from "./worktree-session.js";
 import {
@@ -37,9 +37,9 @@ import type { AgentStorage, StoredAgentRecord } from "./agent/agent-storage.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "./workspace-registry.js";
 import type { GitHubService } from "../services/github-service.js";
 import {
-  createPaseoWorktree as createPaseoWorktreeService,
-  type CreatePaseoWorktreeFn,
-} from "./paseo-worktree-service.js";
+  createChisaCodeWorktree as createChisaCodeWorktreeService,
+  type CreateChisaCodeWorktreeFn,
+} from "./chisacode-worktree-service.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { isPlatform } from "../test-utils/platform.js";
@@ -50,7 +50,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  paseoHome?: string;
+  chisacodeHome?: string;
 }
 
 function createLegacyWorktreeForTest(
@@ -69,7 +69,7 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    paseoHome: options.paseoHome,
+    chisacodeHome: options.chisacodeHome,
   });
 }
 
@@ -82,8 +82,8 @@ function createLogger(): Logger {
 }
 
 function createWorkflowForRequestTest(options: {
-  paseoHome: string;
-  createPaseoWorktree?: CreatePaseoWorktreeFn;
+  chisacodeHome: string;
+  createChisaCodeWorktree?: CreateChisaCodeWorktreeFn;
   warmWorkspaceGitData?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
   onSetupStarted?: (input: {
     requestCwd: string;
@@ -93,13 +93,14 @@ function createWorkflowForRequestTest(options: {
     shouldBootstrap: boolean;
   }) => void;
 }) {
-  return async (input: Parameters<CreatePaseoWorktreeFn>[0]) => {
-    const createPaseoWorktree =
-      options.createPaseoWorktree ?? createPaseoWorktreeForTest({ paseoHome: options.paseoHome });
-    return createPaseoWorktreeWorkflow(
+  return async (input: Parameters<CreateChisaCodeWorktreeFn>[0]) => {
+    const createChisaCodeWorktree =
+      options.createChisaCodeWorktree ??
+      createChisaCodeWorktreeForTest({ chisacodeHome: options.chisacodeHome });
+    return createChisaCodeWorktreeWorkflow(
       {
-        paseoHome: options.paseoHome,
-        createPaseoWorktree,
+        chisacodeHome: options.chisacodeHome,
+        createChisaCodeWorktree,
         warmWorkspaceGitData: options.warmWorkspaceGitData ?? (async () => {}),
         emitWorkspaceUpdateForCwd: async () => {},
         cacheWorkspaceSetupSnapshot: () => {},
@@ -249,22 +250,22 @@ function createWorkspaceDescriptor(input: {
   };
 }
 
-function createPaseoWorktreeForTest(options: {
-  paseoHome: string;
+function createChisaCodeWorktreeForTest(options: {
+  chisacodeHome: string;
   events?: string[];
-}): CreatePaseoWorktreeFn {
+}): CreateChisaCodeWorktreeFn {
   const projects = new Map<string, PersistedProjectRecord>();
   const workspaces = new Map<string, PersistedWorkspaceRecord>();
   const workspaceGitService = new WorkspaceGitServiceImpl({
     logger: createLogger(),
-    paseoHome: options.paseoHome,
+    chisacodeHome: options.chisacodeHome,
     deps: {
       github: createGitHubServiceStub(),
     },
   });
 
   return (input, serviceOptions) => {
-    return createPaseoWorktreeService(input, {
+    return createChisaCodeWorktreeService(input, {
       github: createGitHubServiceStub(),
       ...(serviceOptions?.resolveDefaultBranch
         ? { resolveDefaultBranch: serviceOptions.resolveDefaultBranch }
@@ -325,13 +326,13 @@ function createManagedAgentForArchive(input: { id: string; cwd: string }): Manag
   };
 }
 
-describe("handlePaseoWorktreeListRequest", () => {
+describe("handleChisaCodeWorktreeListRequest", () => {
   test("lists worktrees through the workspace git service", async () => {
     const emitted: SessionOutboundMessage[] = [];
     const workspaceGitService = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
-          path: "/tmp/paseo-home/worktrees/repo/feature",
+          path: "/tmp/chisacode-home/worktrees/repo/feature",
           createdAt: "2026-04-12T00:00:00.000Z",
           branchName: "feature",
           head: "abc123",
@@ -339,14 +340,14 @@ describe("handlePaseoWorktreeListRequest", () => {
       ]),
     };
 
-    await handlePaseoWorktreeListRequest(
+    await handleChisaCodeWorktreeListRequest(
       {
         emit: (message) => emitted.push(message),
-        paseoHome: "/tmp/paseo-home",
+        chisacodeHome: "/tmp/chisacode-home",
         workspaceGitService: workspaceGitService as unknown as WorkspaceGitService,
       },
       {
-        type: "paseo_worktree_list_request",
+        type: "chisacode_worktree_list_request",
         cwd: "/tmp/repo",
         requestId: "request-worktrees",
       },
@@ -355,11 +356,11 @@ describe("handlePaseoWorktreeListRequest", () => {
     expect(workspaceGitService.listWorktrees).toHaveBeenCalledTimes(1);
     expect(workspaceGitService.listWorktrees).toHaveBeenCalledWith("/tmp/repo");
     expect(emitted).toContainEqual({
-      type: "paseo_worktree_list_response",
+      type: "chisacode_worktree_list_response",
       payload: {
         worktrees: [
           {
-            worktreePath: "/tmp/paseo-home/worktrees/repo/feature",
+            worktreePath: "/tmp/chisacode-home/worktrees/repo/feature",
             createdAt: "2026-04-12T00:00:00.000Z",
             branchName: "feature",
             head: "abc123",
@@ -399,16 +400,16 @@ describe("resolveGitCreateBaseBranch", () => {
 describe("create-agent worktree setup boundary", () => {
   test("agent setup continuation starts setup for the created agent timeline", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const appendedItems: Array<{ name: string; status: string }> = [];
     const liveItems: Array<{ name: string; status: string }> = [];
     const workspaceSetupEvents: SessionOutboundMessage[] = [];
 
     try {
-      const result = await createPaseoWorktreeWorkflow(
+      const result = await createChisaCodeWorktreeWorkflow(
         {
-          paseoHome,
-          createPaseoWorktree: createPaseoWorktreeForTest({ paseoHome }),
+          chisacodeHome,
+          createChisaCodeWorktree: createChisaCodeWorktreeForTest({ chisacodeHome }),
           warmWorkspaceGitData: async () => {},
           emitWorkspaceUpdateForCwd: async () => {},
           cacheWorkspaceSetupSnapshot: () => {},
@@ -426,7 +427,7 @@ describe("create-agent worktree setup boundary", () => {
           cwd: repoDir,
           worktreeSlug: "agent-setup-after-create",
           runSetup: false,
-          paseoHome,
+          chisacodeHome,
         },
         {
           setupContinuation: {
@@ -460,7 +461,7 @@ describe("create-agent worktree setup boundary", () => {
 
       await vi.waitFor(() => {
         expect(appendedItems).toContainEqual({
-          name: "paseo_worktree_setup",
+          name: "chisacode_worktree_setup",
           status: "completed",
         });
       });
@@ -485,7 +486,7 @@ function createWorkspaceArchivingDeps() {
   };
 }
 
-function createGitRepo(options?: { paseoConfig?: Record<string, unknown> }) {
+function createGitRepo(options?: { chisacodeConfig?: Record<string, unknown> }) {
   const tempDir = realpathSync.native(mkdtempSync(path.join(tmpdir(), "worktree-session-test-")));
   const repoDir = path.join(tempDir, "repo");
   mkdirSync(repoDir, { recursive: true });
@@ -493,8 +494,11 @@ function createGitRepo(options?: { paseoConfig?: Record<string, unknown> }) {
   execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "hello\n");
-  if (options?.paseoConfig) {
-    writeFileSync(path.join(repoDir, "paseo.json"), JSON.stringify(options.paseoConfig, null, 2));
+  if (options?.chisacodeConfig) {
+    writeFileSync(
+      path.join(repoDir, "chisacode.json"),
+      JSON.stringify(options.chisacodeConfig, null, 2),
+    );
   }
   execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], {
@@ -544,7 +548,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("emits running then completed snapshots for no-setup workspaces without auto-starting scripts", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      paseoConfig: {
+      chisacodeConfig: {
         scripts: {
           web: {
             command: "npm run dev",
@@ -554,14 +558,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "feature-no-setup",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-no-setup",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -573,7 +577,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        paseoHome,
+        chisacodeHome,
         emitWorkspaceUpdateForCwd,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -646,21 +650,21 @@ describe("runWorktreeSetupInBackground", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    writeFileSync(path.join(repoDir, "paseo.json"), "{ invalid json\n");
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    writeFileSync(path.join(repoDir, "chisacode.json"), "{ invalid json\n");
+    execFileSync("git", ["add", "chisacode.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "broken config"], {
       cwd: repoDir,
       stdio: "pipe",
     });
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "broken-feature",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "broken-feature",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -672,7 +676,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        paseoHome,
+        chisacodeHome,
         emitWorkspaceUpdateForCwd,
         cacheWorkspaceSetupSnapshot: (snapshotWorkspaceId, snapshot) =>
           snapshots.set(snapshotWorkspaceId, snapshot),
@@ -704,12 +708,12 @@ describe("runWorktreeSetupInBackground", () => {
     expect(progressMessages[0]?.payload.error).toBeNull();
     expect(progressMessages[1]?.payload.status).toBe("failed");
     expect(progressMessages[1]?.payload.error).toMatch(
-      /Failed to parse paseo\.json at .*paseo\.json/,
+      /Failed to parse chisacode\.json at .*chisacode\.json/,
     );
     expect(progressMessages[1]?.payload.detail.commands).toEqual([]);
     expect(snapshots.get(workspaceId)).toMatchObject({
       status: "failed",
-      error: expect.stringMatching(/Failed to parse paseo\.json at .*paseo\.json/),
+      error: expect.stringMatching(/Failed to parse chisacode\.json at .*chisacode\.json/),
     });
     expect(archiveWorkspaceRecord).toHaveBeenCalledWith(workspaceId);
     expect(emitWorkspaceUpdateForCwd).toHaveBeenCalledWith(worktreePath);
@@ -720,7 +724,7 @@ describe("runWorktreeSetupInBackground", () => {
     "emits running setup snapshots before completed for real setup commands",
     async () => {
       const { tempDir, repoDir } = createGitRepo({
-        paseoConfig: {
+        chisacodeConfig: {
           worktree: {
             setup: ["sh -c \"printf 'phase-one\\\\n'; sleep 0.1; printf 'phase-two\\\\n'\""],
           },
@@ -728,14 +732,14 @@ describe("runWorktreeSetupInBackground", () => {
       });
       cleanupPaths.push(tempDir);
 
-      const paseoHome = path.join(tempDir, ".paseo");
+      const chisacodeHome = path.join(tempDir, ".chisacode");
       const createdWorktree = await createLegacyWorktreeForTest({
         branchName: "feature-running-setup",
         cwd: repoDir,
         baseBranch: "main",
         worktreeSlug: "feature-running-setup",
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       });
       const worktreePath = createdWorktree.worktreePath;
       const emitted: SessionOutboundMessage[] = [];
@@ -746,7 +750,7 @@ describe("runWorktreeSetupInBackground", () => {
 
       await runWorktreeSetupInBackground(
         {
-          paseoHome,
+          chisacodeHome,
           emitWorkspaceUpdateForCwd,
           cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
             snapshots.set(workspaceId, snapshot),
@@ -838,7 +842,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("emits completed when reusing an existing worktree without bootstrapping or auto-starting scripts", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      paseoConfig: {
+      chisacodeConfig: {
         worktree: {
           setup: ["printf 'ran' > setup-ran.txt"],
         },
@@ -851,14 +855,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const existingWorktree = await createLegacyWorktreeForTest({
       branchName: "reused-worktree",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "reused-worktree",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
 
     const emitted: SessionOutboundMessage[] = [];
@@ -870,7 +874,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        paseoHome,
+        chisacodeHome,
         emitWorkspaceUpdateForCwd,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -932,7 +936,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("keeps setup completed without attempting script launch afterward", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      paseoConfig: {
+      chisacodeConfig: {
         scripts: {
           web: {
             command: "npm run dev",
@@ -942,14 +946,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "feature-service-failure",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-service-failure",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -965,7 +969,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        paseoHome,
+        chisacodeHome,
         emitWorkspaceUpdateForCwd,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -1018,7 +1022,7 @@ describe("runWorktreeSetupInBackground", () => {
 
   test("does not auto-start scripts in socket mode", async () => {
     const { tempDir, repoDir } = createGitRepo({
-      paseoConfig: {
+      chisacodeConfig: {
         scripts: {
           web: {
             command: "npm run dev",
@@ -1028,14 +1032,14 @@ describe("runWorktreeSetupInBackground", () => {
     });
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const createdWorktree = await createLegacyWorktreeForTest({
       branchName: "feature-socket-mode",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "feature-socket-mode",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
     const worktreePath = createdWorktree.worktreePath;
     const emitted: SessionOutboundMessage[] = [];
@@ -1047,7 +1051,7 @@ describe("runWorktreeSetupInBackground", () => {
 
     await runWorktreeSetupInBackground(
       {
-        paseoHome,
+        chisacodeHome,
         emitWorkspaceUpdateForCwd,
         cacheWorkspaceSetupSnapshot: (workspaceId, snapshot) =>
           snapshots.set(workspaceId, snapshot),
@@ -1088,7 +1092,7 @@ describe("runWorktreeSetupInBackground", () => {
           status: "completed",
           detail: {
             type: "worktree_setup",
-            worktreePath: "/repo/.paseo/worktrees/feature-a",
+            worktreePath: "/repo/.chisacode/worktrees/feature-a",
             branchName: "feature-a",
             log: "done",
             commands: [],
@@ -1119,7 +1123,7 @@ describe("runWorktreeSetupInBackground", () => {
           status: "completed",
           detail: {
             type: "worktree_setup",
-            worktreePath: "/repo/.paseo/worktrees/feature-a",
+            worktreePath: "/repo/.chisacode/worktrees/feature-a",
             branchName: "feature-a",
             log: "done",
             commands: [],
@@ -1156,7 +1160,7 @@ describe("runWorktreeSetupInBackground", () => {
   });
 });
 
-describe("handleCreatePaseoWorktreeRequest", () => {
+describe("handleCreateChisaCodeWorktreeRequest", () => {
   const cleanupPaths: string[] = [];
 
   afterEach(() => {
@@ -1171,19 +1175,19 @@ describe("handleCreatePaseoWorktreeRequest", () => {
 
     const emitted: SessionOutboundMessage[] = [];
     const logger = createLogger();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
 
-    await handleCreatePaseoWorktreeRequest(
+    await handleCreateChisaCodeWorktreeRequest(
       {
-        paseoHome,
+        chisacodeHome,
         describeWorkspaceRecord: async (result) =>
           createWorkspaceDescriptor({ workspace: result.workspace, repoDir }),
         emit: (message) => emitted.push(message),
         sessionLogger: logger,
-        createPaseoWorktreeWorkflow: createWorkflowForRequestTest({ paseoHome }),
+        createChisaCodeWorktreeWorkflow: createWorkflowForRequestTest({ chisacodeHome }),
       },
       {
-        type: "create_paseo_worktree_request",
+        type: "create_chisacode_worktree_request",
         requestId: "req-pr-worktree",
         cwd: repoDir,
         worktreeSlug: "review-pr-123",
@@ -1196,8 +1200,10 @@ describe("handleCreatePaseoWorktreeRequest", () => {
     const response = emitted.find(
       (
         message,
-      ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
-        message.type === "create_paseo_worktree_response",
+      ): message is Extract<
+        SessionOutboundMessage,
+        { type: "create_chisacode_worktree_response" }
+      > => message.type === "create_chisacode_worktree_response",
     );
 
     expect(response?.payload.error).toBeNull();
@@ -1228,14 +1234,14 @@ describe("handleCreatePaseoWorktreeRequest", () => {
 
     const result = await buildAgentSessionConfig(
       {
-        paseoHome: path.join(tempDir, ".paseo"),
+        chisacodeHome: path.join(tempDir, ".chisacode"),
         sessionLogger: createLogger(),
         workspaceGitService: {
           resolveRepoRoot: vi.fn(async () => repoDir),
           resolveDefaultBranch: vi.fn(async () => "main"),
         } as unknown as WorkspaceGitService,
-        createPaseoWorktree: createPaseoWorktreeForTest({
-          paseoHome: path.join(tempDir, ".paseo"),
+        createChisaCodeWorktree: createChisaCodeWorktreeForTest({
+          chisacodeHome: path.join(tempDir, ".chisacode"),
           events,
         }),
         checkoutExistingBranch: async () => {
@@ -1273,17 +1279,17 @@ describe("handleCreatePaseoWorktreeRequest", () => {
   test("buildAgentSessionConfig uses the normalized new branch name as the worktree slug fallback", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
 
     const result = await buildAgentSessionConfig(
       {
-        paseoHome,
+        chisacodeHome,
         sessionLogger: createLogger(),
         workspaceGitService: {
           resolveRepoRoot: vi.fn(async () => repoDir),
           resolveDefaultBranch: vi.fn(async () => "main"),
         } as unknown as WorkspaceGitService,
-        createPaseoWorktree: createPaseoWorktreeForTest({ paseoHome }),
+        createChisaCodeWorktree: createChisaCodeWorktreeForTest({ chisacodeHome }),
         checkoutExistingBranch: async () => {
           throw new Error("should not checkout existing branch");
         },
@@ -1306,7 +1312,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
   });
 
   test("buildAgentSessionConfig passes prompt and attachment context into worktree creation", async () => {
-    const createPaseoWorktree = vi.fn(async () => ({
+    const createChisaCodeWorktree = vi.fn(async () => ({
       worktree: {
         branchName: "fix-attached-pr-context",
         worktreePath: "/tmp/worktrees/fix-attached-pr-context",
@@ -1337,7 +1343,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
           mimeType: "application/github-pr",
           number: 123,
           title: "Fix worktree naming",
-          url: "https://github.com/getpaseo/paseo/pull/123",
+          url: "https://github.com/getchisacode/chisacode/pull/123",
           baseRefName: "main",
           headRefName: "fix/worktree-naming",
         },
@@ -1350,7 +1356,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
         workspaceGitService: {
           resolveDefaultBranch: vi.fn(async () => "main"),
         } as unknown as WorkspaceGitService,
-        createPaseoWorktree,
+        createChisaCodeWorktree,
         checkoutExistingBranch: async () => {
           throw new Error("should not checkout existing branch");
         },
@@ -1370,7 +1376,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
       firstAgentContext,
     );
 
-    expect(createPaseoWorktree).toHaveBeenCalledWith(
+    expect(createChisaCodeWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
         firstAgentContext,
       }),
@@ -1383,14 +1389,14 @@ describe("handleCreatePaseoWorktreeRequest", () => {
     const invalidate = vi.fn();
     const createBranchFromBase = vi.fn(async () => {});
     const checkoutExistingBranch = vi.fn(async () => ({ source: "local" as const }));
-    const createPaseoWorktree = vi.fn(async () => {
+    const createChisaCodeWorktree = vi.fn(async () => {
       throw new Error("should not create worktree");
     });
 
     await buildAgentSessionConfig(
       {
         sessionLogger: createLogger(),
-        createPaseoWorktree,
+        createChisaCodeWorktree,
         checkoutExistingBranch,
         createBranchFromBase,
         github: { invalidate },
@@ -1418,7 +1424,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
     await buildAgentSessionConfig(
       {
         sessionLogger: createLogger(),
-        createPaseoWorktree,
+        createChisaCodeWorktree,
         checkoutExistingBranch,
         createBranchFromBase,
         github: { invalidate },
@@ -1436,19 +1442,19 @@ describe("handleCreatePaseoWorktreeRequest", () => {
     expect(invalidate).toHaveBeenCalledWith({ cwd: "/tmp/repo" });
   });
 
-  test("createPaseoWorktreeForTest forwards the default branch resolver for branch-off intents", async () => {
+  test("createChisaCodeWorktreeForTest forwards the default branch resolver for branch-off intents", async () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const resolveDefaultBranch = vi.fn(async () => "main");
 
-    const result = await createPaseoWorktreeForTest({ paseoHome })(
+    const result = await createChisaCodeWorktreeForTest({ chisacodeHome })(
       {
         cwd: repoDir,
         worktreeSlug: "resolver-feature",
         action: "branch-off",
         runSetup: false,
-        paseoHome,
+        chisacodeHome,
       },
       { resolveDefaultBranch },
     );
@@ -1464,22 +1470,22 @@ describe("handleCreatePaseoWorktreeRequest", () => {
   });
 });
 
-describe("handleCreatePaseoWorktreeRequest", () => {
+describe("handleCreateChisaCodeWorktreeRequest", () => {
   test("registers a pending workspace and emits a successful create response", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const emitted: SessionOutboundMessage[] = [];
     const events: string[] = [];
 
     try {
-      await handleCreatePaseoWorktreeRequest(
+      await handleCreateChisaCodeWorktreeRequest(
         {
-          paseoHome,
+          chisacodeHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({
-            paseoHome,
-            createPaseoWorktree: createPaseoWorktreeForTest({ paseoHome, events }),
+          createChisaCodeWorktreeWorkflow: createWorkflowForRequestTest({
+            chisacodeHome,
+            createChisaCodeWorktree: createChisaCodeWorktreeForTest({ chisacodeHome, events }),
           }),
           describeWorkspaceRecord: vi.fn(async (result) => ({
             id: result.workspace.workspaceId,
@@ -1496,7 +1502,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
             gitRuntime: {
               currentBranch: "single-call",
               remoteUrl: null,
-              isPaseoOwnedWorktree: true,
+              isChisaCodeOwnedWorktree: true,
               isDirty: false,
               aheadBehind: null,
               aheadOfOrigin: null,
@@ -1506,7 +1512,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
           })),
         },
         {
-          type: "create_paseo_worktree_request",
+          type: "create_chisacode_worktree_request",
           cwd: repoDir,
           worktreeSlug: "single-call",
           requestId: "req-single-call",
@@ -1517,8 +1523,10 @@ describe("handleCreatePaseoWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
-          message.type === "create_paseo_worktree_response",
+        ): message is Extract<
+          SessionOutboundMessage,
+          { type: "create_chisacode_worktree_response" }
+        > => message.type === "create_chisacode_worktree_response",
       );
       expect(response?.payload.error).toBeNull();
     } finally {
@@ -1528,22 +1536,22 @@ describe("handleCreatePaseoWorktreeRequest", () => {
 
   test("creates the worktree before emitting the response", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const emitted: SessionOutboundMessage[] = [];
     const backgroundWork = vi.fn(async () => {});
     const warmWorkspaceGitData = vi.fn(async () => {});
     let registeredWorktreePath: string | null = null;
 
     try {
-      await handleCreatePaseoWorktreeRequest(
+      await handleCreateChisaCodeWorktreeRequest(
         {
-          paseoHome,
+          chisacodeHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({
-            paseoHome,
-            createPaseoWorktree: async (input) => {
-              const result = await createPaseoWorktreeForTest({ paseoHome })(input);
+          createChisaCodeWorktreeWorkflow: createWorkflowForRequestTest({
+            chisacodeHome,
+            createChisaCodeWorktree: async (input) => {
+              const result = await createChisaCodeWorktreeForTest({ chisacodeHome })(input);
               expect(existsSync(result.worktree.worktreePath)).toBe(true);
               registeredWorktreePath = result.worktree.worktreePath;
               return result;
@@ -1556,7 +1564,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
           ),
         },
         {
-          type: "create_paseo_worktree_request",
+          type: "create_chisacode_worktree_request",
           cwd: repoDir,
           worktreeSlug: "response-after-create",
           requestId: "req-1",
@@ -1566,13 +1574,15 @@ describe("handleCreatePaseoWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
-          message.type === "create_paseo_worktree_response",
+        ): message is Extract<
+          SessionOutboundMessage,
+          { type: "create_chisacode_worktree_response" }
+        > => message.type === "create_chisacode_worktree_response",
       );
       expect(response?.payload.error).toBeNull();
       expect(response?.payload.workspace?.id).toBeTruthy();
       expect(emitted.map((message) => message.type).slice(0, 2)).toEqual([
-        "create_paseo_worktree_response",
+        "create_chisacode_worktree_response",
         "workspace_update",
       ]);
       const workspaceUpdate = emitted[1];
@@ -1613,22 +1623,22 @@ describe("handleCreatePaseoWorktreeRequest", () => {
 
   test("emits a machine-readable error code for invalid worktree intent", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const emitted: SessionOutboundMessage[] = [];
 
     try {
-      await handleCreatePaseoWorktreeRequest(
+      await handleCreateChisaCodeWorktreeRequest(
         {
-          paseoHome,
+          chisacodeHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({ paseoHome }),
+          createChisaCodeWorktreeWorkflow: createWorkflowForRequestTest({ chisacodeHome }),
           describeWorkspaceRecord: vi.fn(async (result) =>
             createWorkspaceDescriptor({ workspace: result.workspace, repoDir }),
           ),
         },
         {
-          type: "create_paseo_worktree_request",
+          type: "create_chisacode_worktree_request",
           cwd: repoDir,
           action: "checkout",
           requestId: "req-missing-target",
@@ -1638,8 +1648,10 @@ describe("handleCreatePaseoWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
-          message.type === "create_paseo_worktree_response",
+        ): message is Extract<
+          SessionOutboundMessage,
+          { type: "create_chisacode_worktree_response" }
+        > => message.type === "create_chisacode_worktree_response",
       );
       expect(response?.payload.workspace).toBeNull();
       expect(response?.payload.error).toBe('action "checkout" requires refName or githubPrNumber');
@@ -1651,22 +1663,22 @@ describe("handleCreatePaseoWorktreeRequest", () => {
 
   test("emits a machine-readable error code for unknown checkout branches", async () => {
     const { tempDir, repoDir } = createGitRepo();
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const emitted: SessionOutboundMessage[] = [];
 
     try {
-      await handleCreatePaseoWorktreeRequest(
+      await handleCreateChisaCodeWorktreeRequest(
         {
-          paseoHome,
+          chisacodeHome,
           sessionLogger: createLogger(),
           emit: (message) => emitted.push(message),
-          createPaseoWorktreeWorkflow: createWorkflowForRequestTest({ paseoHome }),
+          createChisaCodeWorktreeWorkflow: createWorkflowForRequestTest({ chisacodeHome }),
           describeWorkspaceRecord: vi.fn(async (result) =>
             createWorkspaceDescriptor({ workspace: result.workspace, repoDir }),
           ),
         },
         {
-          type: "create_paseo_worktree_request",
+          type: "create_chisacode_worktree_request",
           cwd: repoDir,
           action: "checkout",
           refName: "missing-branch",
@@ -1677,8 +1689,10 @@ describe("handleCreatePaseoWorktreeRequest", () => {
       const response = emitted.find(
         (
           message,
-        ): message is Extract<SessionOutboundMessage, { type: "create_paseo_worktree_response" }> =>
-          message.type === "create_paseo_worktree_response",
+        ): message is Extract<
+          SessionOutboundMessage,
+          { type: "create_chisacode_worktree_response" }
+        > => message.type === "create_chisacode_worktree_response",
       );
       expect(response?.payload.workspace).toBeNull();
       expect(response?.payload.error).toBe("Unknown branch: missing-branch");
@@ -1689,7 +1703,7 @@ describe("handleCreatePaseoWorktreeRequest", () => {
   });
 });
 
-describe("archivePaseoWorktree", () => {
+describe("archiveChisaCodeWorktree", () => {
   const cleanupPaths: string[] = [];
 
   afterEach(() => {
@@ -1713,14 +1727,14 @@ describe("archivePaseoWorktree", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-parallel",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-parallel",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
 
     const teardownStartTimes: Record<string, number> = {};
@@ -1740,9 +1754,9 @@ describe("archivePaseoWorktree", () => {
       teardownEndTimes.__terminals = Date.now();
     });
 
-    const archivedAgents = await archivePaseoWorktree(
+    const archivedAgents = await archiveChisaCodeWorktree(
       {
-        paseoHome,
+        chisacodeHome,
         github: createGitHubServiceStub(),
         agentManager: {
           listAgents: () => [
@@ -1784,14 +1798,14 @@ describe("archivePaseoWorktree", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-marked-during-close",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-marked-during-close",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
     const affectedIds = [created.worktreePath];
     const liveAgent = createManagedAgentForArchive({
@@ -1847,9 +1861,9 @@ describe("archivePaseoWorktree", () => {
       throw new Error("not expected for live agents");
     });
 
-    await handlePaseoWorktreeArchiveRequest(
+    await handleChisaCodeWorktreeArchiveRequest(
       {
-        paseoHome,
+        chisacodeHome,
         github: createGitHubServiceStub(),
         workspaceGitService: {
           getSnapshot: vi.fn(async () => null),
@@ -1883,7 +1897,7 @@ describe("archivePaseoWorktree", () => {
         sessionLogger: createLogger(),
       },
       {
-        type: "paseo_worktree_archive_request",
+        type: "chisacode_worktree_archive_request",
         requestId: "req-archive-marked-during-close",
         worktreePath: created.worktreePath,
         repoRoot: repoDir,
@@ -1926,7 +1940,7 @@ describe("archivePaseoWorktree", () => {
       `emit:${created.worktreePath}`,
     ]);
     expect(
-      emitted.find((message) => message.type === "paseo_worktree_archive_response"),
+      emitted.find((message) => message.type === "chisacode_worktree_archive_response"),
     ).toMatchObject({
       payload: {
         success: true,
@@ -1939,14 +1953,14 @@ describe("archivePaseoWorktree", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-delete-fails",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-delete-fails",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
     const archivingByWorkspaceId = new Map<string, string>();
     const emittedUpdates: Array<{
@@ -1957,9 +1971,9 @@ describe("archivePaseoWorktree", () => {
     const archiveWorkspaceRecord = vi.fn(async () => {});
 
     await expect(
-      archivePaseoWorktree(
+      archiveChisaCodeWorktree(
         {
-          paseoHome,
+          chisacodeHome,
           github: createGitHubServiceStub(),
           workspaceGitService: { getSnapshot: vi.fn(async () => null) },
           agentManager: {
@@ -2000,7 +2014,7 @@ describe("archivePaseoWorktree", () => {
           requestId: "req-archive-delete-fails",
         },
       ),
-    ).rejects.toThrow("cwd or worktreesRoot is required to delete a Paseo worktree");
+    ).rejects.toThrow("cwd or worktreesRoot is required to delete a ChisaCode worktree");
 
     expect(existsSync(created.worktreePath)).toBe(true);
     expect(archiveWorkspaceRecord).not.toHaveBeenCalled();
@@ -2020,23 +2034,23 @@ describe("archivePaseoWorktree", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-terminal-throws",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-terminal-throws",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
 
     const killTerminalsUnderPath = vi.fn(async () => {
       throw new Error("simulated terminal teardown failure");
     });
 
-    await archivePaseoWorktree(
+    await archiveChisaCodeWorktree(
       {
-        paseoHome,
+        chisacodeHome,
         github: createGitHubServiceStub(),
         agentManager: {
           listAgents: () => [],
@@ -2067,22 +2081,22 @@ describe("archivePaseoWorktree", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-refresh",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-refresh",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
     const workspaceGitService = {
       getSnapshot: vi.fn(async () => null),
     };
 
-    await archivePaseoWorktree(
+    await archiveChisaCodeWorktree(
       {
-        paseoHome,
+        chisacodeHome,
         github: createGitHubServiceStub(),
         workspaceGitService: workspaceGitService as unknown as WorkspaceGitService,
         agentManager: {
@@ -2116,14 +2130,14 @@ describe("archivePaseoWorktree", () => {
     const { tempDir, repoDir } = createGitRepo();
     cleanupPaths.push(tempDir);
 
-    const paseoHome = path.join(tempDir, ".paseo");
+    const chisacodeHome = path.join(tempDir, ".chisacode");
     const created = await createLegacyWorktreeForTest({
       branchName: "archive-orphan",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "archive-orphan",
       runSetup: false,
-      paseoHome,
+      chisacodeHome,
     });
 
     // Simulate a prior failed archive that stripped git's admin dir.
@@ -2134,9 +2148,9 @@ describe("archivePaseoWorktree", () => {
     expect(existsSync(created.worktreePath)).toBe(true);
 
     const emitted: SessionOutboundMessage[] = [];
-    await handlePaseoWorktreeArchiveRequest(
+    await handleChisaCodeWorktreeArchiveRequest(
       {
-        paseoHome,
+        chisacodeHome,
         github: createGitHubServiceStub(),
         agentManager: {
           listAgents: () => [],
@@ -2154,7 +2168,7 @@ describe("archivePaseoWorktree", () => {
         sessionLogger: createLogger(),
       },
       {
-        type: "paseo_worktree_archive_request",
+        type: "chisacode_worktree_archive_request",
         requestId: "req-archive-orphan",
         worktreePath: created.worktreePath,
       },
@@ -2163,8 +2177,10 @@ describe("archivePaseoWorktree", () => {
     const response = emitted.find(
       (
         message,
-      ): message is Extract<SessionOutboundMessage, { type: "paseo_worktree_archive_response" }> =>
-        message.type === "paseo_worktree_archive_response",
+      ): message is Extract<
+        SessionOutboundMessage,
+        { type: "chisacode_worktree_archive_response" }
+      > => message.type === "chisacode_worktree_archive_response",
     );
     expect(response?.payload.success).toBe(true);
     expect(response?.payload.error).toBeNull();

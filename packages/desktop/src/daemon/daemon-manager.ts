@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { app, ipcMain, powerMonitor } from "electron";
 import log from "electron-log/main";
-import { resolvePaseoHome, spawnProcess } from "@fleurdelys/server";
+import { resolveChisaCodeHome, spawnProcess } from "@chisacode/server";
 import {
   copyAttachmentFileToManagedStorage,
   deleteManagedAttachmentFile,
@@ -41,8 +41,8 @@ import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.j
 import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
-const DAEMON_PID_FILENAMES = ["fleurdelys.pid", "paseo.pid"] as const;
-const IPC_PREFIXES = ["fleurdelys", "paseo"] as const;
+const DAEMON_PID_FILENAMES = ["chisacode.pid", "chisacode.pid"] as const;
+const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
 const STARTUP_POLL_INTERVAL_MS = 200;
 const STARTUP_POLL_MAX_ATTEMPTS = 150;
 const DETACHED_STARTUP_GRACE_MS = 1200;
@@ -94,16 +94,16 @@ function parseReleaseChannel(
 // Utilities
 // ---------------------------------------------------------------------------
 
-function getPaseoHome(): string {
-  return resolvePaseoHome(process.env);
+function getChisaCodeHome(): string {
+  return resolveChisaCodeHome(process.env);
 }
 
 function logFilePath(): string {
-  return path.join(getPaseoHome(), DAEMON_LOG_FILENAME);
+  return path.join(getChisaCodeHome(), DAEMON_LOG_FILENAME);
 }
 
 function pidFilePath(): string {
-  const home = getPaseoHome();
+  const home = getChisaCodeHome();
   const pidFileName = DAEMON_PID_FILENAMES.find((fileName) =>
     existsSync(path.join(home, fileName)),
   );
@@ -230,7 +230,7 @@ function resolveDesktopAppVersion(): string {
 // ---------------------------------------------------------------------------
 
 export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus> {
-  const home = getPaseoHome();
+  const home = getChisaCodeHome();
 
   try {
     const payload = (await runExternalCliJsonCommand(["daemon", "status", "--json"])) as Record<
@@ -387,7 +387,7 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
     detached: true,
     envMode: "internal",
     env: invocation.env,
-    envOverlay: { PASEO_DESKTOP_MANAGED: "1" },
+    envOverlay: { CHISACODE_DESKTOP_MANAGED: "1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
 

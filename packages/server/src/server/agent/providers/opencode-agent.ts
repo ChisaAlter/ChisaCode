@@ -59,7 +59,7 @@ import {
 } from "../provider-launch-config.js";
 import { withTimeout } from "../../../utils/promise-timeout.js";
 import { execCommand } from "../../../utils/spawn.js";
-import { buildToolCallDisplayModel } from "@fleurdelys/protocol/tool-call-display";
+import { buildToolCallDisplayModel } from "@chisacode/protocol/tool-call-display";
 import { mapOpencodeToolCall } from "./opencode/tool-call-mapper.js";
 import { OpenCodeServerManager } from "./opencode/server-manager.js";
 import {

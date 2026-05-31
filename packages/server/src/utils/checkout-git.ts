@@ -19,12 +19,12 @@ import {
 } from "../services/github-service.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { runGitCommand } from "./run-git-command.js";
-import { isPaseoOwnedWorktreeCwd } from "./worktree.js";
-import { readPaseoWorktreeMetadata } from "./worktree-metadata.js";
+import { isChisaCodeOwnedWorktreeCwd } from "./worktree.js";
+import { readChisaCodeWorktreeMetadata } from "./worktree-metadata.js";
 const READ_ONLY_GIT_ENV = {
   GIT_OPTIONAL_LOCKS: "0",
 } as const;
-const PULL_REQUEST_REMOTE_PREFIXES = ["fleurdelys-pr-", "paseo-pr-"] as const;
+const PULL_REQUEST_REMOTE_PREFIXES = ["chisacode-pr-", "chisacode-pr-"] as const;
 
 function isManagedPullRequestRemote(remoteName: string | null | undefined): remoteName is string {
   return (
@@ -672,7 +672,7 @@ export interface CheckoutStatus {
   isGit: false;
 }
 
-export interface CheckoutStatusGitNonPaseo {
+export interface CheckoutStatusGitNonChisaCode {
   isGit: true;
   repoRoot: string;
   mainRepoRoot: string | null;
@@ -684,10 +684,10 @@ export interface CheckoutStatusGitNonPaseo {
   behindOfOrigin: number | null;
   hasRemote: boolean;
   remoteUrl: string | null;
-  isPaseoOwnedWorktree: false;
+  isChisaCodeOwnedWorktree: false;
 }
 
-export interface CheckoutStatusGitPaseo {
+export interface CheckoutStatusGitChisaCode {
   isGit: true;
   repoRoot: string;
   mainRepoRoot: string;
@@ -699,10 +699,10 @@ export interface CheckoutStatusGitPaseo {
   behindOfOrigin: number | null;
   hasRemote: boolean;
   remoteUrl: string | null;
-  isPaseoOwnedWorktree: true;
+  isChisaCodeOwnedWorktree: true;
 }
 
-export type CheckoutStatusGit = CheckoutStatusGitNonPaseo | CheckoutStatusGitPaseo;
+export type CheckoutStatusGit = CheckoutStatusGitNonChisaCode | CheckoutStatusGitChisaCode;
 
 export type CheckoutStatusResult = CheckoutStatus | CheckoutStatusGit;
 
@@ -730,7 +730,7 @@ export interface MergeFromBaseOptions {
 }
 
 export interface CheckoutContext {
-  paseoHome?: string;
+  chisacodeHome?: string;
   logger?: Pick<Logger, "trace">;
   facts?: CheckoutSnapshotFacts | null;
 }
@@ -746,7 +746,7 @@ export type CheckoutSnapshotFacts =
       remoteUrl: string | null;
       absoluteGitDir: string | null;
       gitCommonDir: string | null;
-      paseoWorktree: PaseoWorktreeForCwd;
+      chisacodeWorktree: ChisaCodeWorktreeForCwd;
       storedBaseRef: string | null;
       resolvedBaseRef: string | null;
       mainRepoRoot: string | null;
@@ -849,10 +849,16 @@ async function getMainRepoRootFromCommonDir(
     envOverlay: READ_ONLY_GIT_ENV,
   });
   const worktrees = parseWorktreeList(worktreeOut);
-  const nonBareNonPaseo = worktrees.filter((wt) => !wt.isBare && !isPaseoWorktreePath(wt.path));
-  const childrenOfBareRepo = nonBareNonPaseo.filter((wt) => isDescendantPath(wt.path, normalized));
+  const nonBareNonChisaCode = worktrees.filter(
+    (wt) => !wt.isBare && !isChisaCodeWorktreePath(wt.path),
+  );
+  const childrenOfBareRepo = nonBareNonChisaCode.filter((wt) =>
+    isDescendantPath(wt.path, normalized),
+  );
   const mainChild = childrenOfBareRepo.find((wt) => basename(wt.path) === "main");
-  return mainChild?.path ?? childrenOfBareRepo[0]?.path ?? nonBareNonPaseo[0]?.path ?? normalized;
+  return (
+    mainChild?.path ?? childrenOfBareRepo[0]?.path ?? nonBareNonChisaCode[0]?.path ?? normalized
+  );
 }
 
 export interface GitWorktreeEntry {
@@ -862,8 +868,8 @@ export interface GitWorktreeEntry {
 }
 
 /** Check whether a path contains a managed worktrees segment (both `/` and `\`). */
-export function isPaseoWorktreePath(p: string): boolean {
-  return /[/\\]\.(?:fleurdelys|paseo)[/\\]worktrees[/\\]/.test(p);
+export function isChisaCodeWorktreePath(p: string): boolean {
+  return /[/\\]\.(?:chisacode|chisacode)[/\\]worktrees[/\\]/.test(p);
 }
 
 /** True when `child` is strictly inside `parent` (handles both `/` and `\`). */
@@ -946,33 +952,35 @@ export async function renameCurrentBranch(
   return { previousBranch, currentBranch };
 }
 
-type PaseoWorktreeForCwd =
-  | { isPaseoOwnedWorktree: false }
-  | { isPaseoOwnedWorktree: true; worktreeRoot: string };
+type ChisaCodeWorktreeForCwd =
+  | { isChisaCodeOwnedWorktree: false }
+  | { isChisaCodeOwnedWorktree: true; worktreeRoot: string };
 
-async function getPaseoWorktreeForCwd(
+async function getChisaCodeWorktreeForCwd(
   cwd: string,
   context?: CheckoutContext,
   knownWorktreeRoot?: string | null,
-): Promise<PaseoWorktreeForCwd> {
+): Promise<ChisaCodeWorktreeForCwd> {
   // Fast-path reject: non-worktree paths do not need expensive ownership checks.
   if (!/[\\/]worktrees[\\/]/.test(cwd)) {
-    return { isPaseoOwnedWorktree: false };
+    return { isChisaCodeOwnedWorktree: false };
   }
 
-  const ownership = await isPaseoOwnedWorktreeCwd(cwd, { paseoHome: context?.paseoHome });
+  const ownership = await isChisaCodeOwnedWorktreeCwd(cwd, {
+    chisacodeHome: context?.chisacodeHome,
+  });
   if (!ownership.allowed) {
-    return { isPaseoOwnedWorktree: false };
+    return { isChisaCodeOwnedWorktree: false };
   }
 
   return {
-    isPaseoOwnedWorktree: true,
+    isChisaCodeOwnedWorktree: true,
     worktreeRoot: knownWorktreeRoot ?? (await getWorktreeRoot(cwd)) ?? cwd,
   };
 }
 
-function readPaseoWorktreeBaseRef(worktreeRoot: string): string | null {
-  return readPaseoWorktreeMetadata(worktreeRoot)?.baseRefName ?? null;
+function readChisaCodeWorktreeBaseRef(worktreeRoot: string): string | null {
+  return readChisaCodeWorktreeMetadata(worktreeRoot)?.baseRefName ?? null;
 }
 
 async function getStoredBaseRefForCwd(
@@ -982,12 +990,12 @@ async function getStoredBaseRefForCwd(
   if (context?.facts?.isGit) {
     return context.facts.storedBaseRef;
   }
-  const paseoWorktree = await getPaseoWorktreeForCwd(cwd, context);
-  if (!paseoWorktree.isPaseoOwnedWorktree) {
+  const chisacodeWorktree = await getChisaCodeWorktreeForCwd(cwd, context);
+  if (!chisacodeWorktree.isChisaCodeOwnedWorktree) {
     return null;
   }
 
-  return readPaseoWorktreeBaseRef(paseoWorktree.worktreeRoot);
+  return readChisaCodeWorktreeBaseRef(chisacodeWorktree.worktreeRoot);
 }
 
 async function getResolvedBaseRefForCwd(
@@ -1420,7 +1428,7 @@ interface CheckoutInspectionContext {
   remoteUrl: string | null;
   absoluteGitDir: string | null;
   gitCommonDir: string | null;
-  paseoWorktree: PaseoWorktreeForCwd;
+  chisacodeWorktree: ChisaCodeWorktreeForCwd;
 }
 
 async function inspectCheckoutContext(
@@ -1433,13 +1441,13 @@ async function inspectCheckoutContext(
       return null;
     }
 
-    const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir, paseoWorktree] =
+    const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir, chisacodeWorktree] =
       await Promise.all([
         getCurrentBranch(cwd),
         getOriginRemoteUrl(cwd),
         resolveAbsoluteGitDir(cwd),
         resolveGitCommonDir(cwd),
-        getPaseoWorktreeForCwd(cwd, context, root),
+        getChisaCodeWorktreeForCwd(cwd, context, root),
       ]);
 
     return {
@@ -1448,7 +1456,7 @@ async function inspectCheckoutContext(
       remoteUrl,
       absoluteGitDir,
       gitCommonDir,
-      paseoWorktree,
+      chisacodeWorktree,
     };
   } catch (error) {
     if (isGitError(error)) {
@@ -1496,8 +1504,8 @@ export async function getCheckoutSnapshotFacts(
     return { isGit: false };
   }
 
-  const storedBaseRef = inspected.paseoWorktree.isPaseoOwnedWorktree
-    ? readPaseoWorktreeBaseRef(inspected.paseoWorktree.worktreeRoot)
+  const storedBaseRef = inspected.chisacodeWorktree.isChisaCodeOwnedWorktree
+    ? readChisaCodeWorktreeBaseRef(inspected.chisacodeWorktree.worktreeRoot)
     : null;
   const resolvedBaseRef = storedBaseRef ?? (await resolveBaseRef(cwd));
   const mainRepoRoot = await getMainRepoRootFromCommonDir(cwd, inspected.gitCommonDir).catch(
@@ -1552,7 +1560,7 @@ export async function getCheckoutSnapshotFacts(
     remoteUrl: inspected.remoteUrl,
     absoluteGitDir: inspected.absoluteGitDir,
     gitCommonDir: inspected.gitCommonDir,
-    paseoWorktree: inspected.paseoWorktree,
+    chisacodeWorktree: inspected.chisacodeWorktree,
     storedBaseRef,
     resolvedBaseRef,
     mainRepoRoot,
@@ -1686,7 +1694,7 @@ export async function getCheckoutStatus(
   const worktreeRoot = facts.worktreeRoot;
   const currentBranch = facts.currentBranch;
   const remoteUrl = facts.remoteUrl;
-  const paseoWorktree = facts.paseoWorktree;
+  const chisacodeWorktree = facts.chisacodeWorktree;
   const isDirty = await isWorkingTreeDirty(cwd, context);
   const hasRemote = remoteUrl !== null;
   const baseRef = facts.resolvedBaseRef;
@@ -1704,7 +1712,7 @@ export async function getCheckoutStatus(
       : Promise.resolve(null),
   ]);
 
-  if (paseoWorktree.isPaseoOwnedWorktree && baseRef) {
+  if (chisacodeWorktree.isChisaCodeOwnedWorktree && baseRef) {
     return {
       isGit: true,
       repoRoot: worktreeRoot,
@@ -1717,7 +1725,7 @@ export async function getCheckoutStatus(
       behindOfOrigin,
       hasRemote,
       remoteUrl,
-      isPaseoOwnedWorktree: true,
+      isChisaCodeOwnedWorktree: true,
     };
   }
 
@@ -1734,7 +1742,7 @@ export async function getCheckoutStatus(
     behindOfOrigin,
     hasRemote,
     remoteUrl,
-    isPaseoOwnedWorktree: false,
+    isChisaCodeOwnedWorktree: false,
   };
 }
 

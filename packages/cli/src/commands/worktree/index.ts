@@ -6,16 +6,16 @@ import { withOutput } from "../../output/index.js";
 import { addJsonAndDaemonHostOptions } from "../../utils/command-options.js";
 
 export function createWorktreeCommand(): Command {
-  const worktree = new Command("worktree").description("Manage Fleurdelys-managed git worktrees");
+  const worktree = new Command("worktree").description("Manage ChisaCode-managed git worktrees");
 
   addJsonAndDaemonHostOptions(
-    worktree.command("ls").description("List Fleurdelys-managed git worktrees"),
+    worktree.command("ls").description("List ChisaCode-managed git worktrees"),
   ).action(withOutput(runLsCommand));
 
   addJsonAndDaemonHostOptions(
     worktree
       .command("create")
-      .description("Create a Fleurdelys-managed git worktree")
+      .description("Create a ChisaCode-managed git worktree")
       .option("--mode <mode>", "Creation mode: branch-off, checkout-branch, or checkout-pr")
       .option("--new-branch <name>", "New branch name (--mode branch-off)")
       .option(

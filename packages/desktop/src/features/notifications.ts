@@ -13,7 +13,7 @@ interface NotificationClickPayload {
 }
 
 const activeNotifications = new Set<Notification>();
-const IPC_PREFIXES = ["fleurdelys", "paseo"] as const;
+const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
 
 function toTrimmedString(value: unknown): string | null {
   if (typeof value !== "string") {

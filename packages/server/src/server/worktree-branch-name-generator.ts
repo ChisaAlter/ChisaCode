@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { FirstAgentContext } from "@fleurdelys/protocol/messages";
+import type { FirstAgentContext } from "@chisacode/protocol/messages";
 import type { AgentManager } from "./agent/agent-manager.js";
 import {
   StructuredAgentFallbackError,

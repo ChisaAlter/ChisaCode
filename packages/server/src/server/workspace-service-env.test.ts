@@ -19,7 +19,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "main",
         daemonPort: 6767,
         daemonListenHost: null,
@@ -30,7 +30,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "main",
         daemonPort: 6767,
         daemonListenHost: "localhost",
@@ -43,7 +43,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "main",
         daemonPort: 6767,
         daemonListenHost: "100.64.0.20",
@@ -56,7 +56,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "main",
         daemonPort: 6767,
         daemonListenHost: null,
@@ -64,10 +64,10 @@ describe("buildWorkspaceServiceEnv", () => {
       }),
     ).toEqual({
       HOST: "127.0.0.1",
-      PASEO_PORT: "5173",
-      PASEO_URL: "http://daemon.paseo.localhost:6767",
-      PASEO_SERVICE_DAEMON_PORT: "5173",
-      PASEO_SERVICE_DAEMON_URL: "http://daemon.paseo.localhost:6767",
+      CHISACODE_PORT: "5173",
+      CHISACODE_URL: "http://daemon.chisacode.localhost:6767",
+      CHISACODE_SERVICE_DAEMON_PORT: "5173",
+      CHISACODE_SERVICE_DAEMON_URL: "http://daemon.chisacode.localhost:6767",
     });
   });
 
@@ -75,7 +75,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "feature-x",
         daemonPort: 6767,
         daemonListenHost: null,
@@ -83,24 +83,24 @@ describe("buildWorkspaceServiceEnv", () => {
       }),
     ).toEqual({
       HOST: "127.0.0.1",
-      PASEO_PORT: "5173",
-      PASEO_URL: "http://daemon.feature-x.paseo.localhost:6767",
-      PASEO_SERVICE_DAEMON_PORT: "5173",
-      PASEO_SERVICE_DAEMON_URL: "http://daemon.feature-x.paseo.localhost:6767",
+      CHISACODE_PORT: "5173",
+      CHISACODE_URL: "http://daemon.feature-x.chisacode.localhost:6767",
+      CHISACODE_SERVICE_DAEMON_PORT: "5173",
+      CHISACODE_SERVICE_DAEMON_URL: "http://daemon.feature-x.chisacode.localhost:6767",
     });
   });
 
-  it("omits PORT while keeping PASEO_PORT", () => {
+  it("omits PORT while keeping CHISACODE_PORT", () => {
     const env = buildWorkspaceServiceEnv({
       scriptName: "daemon",
-      projectSlug: "paseo",
+      projectSlug: "chisacode",
       branchName: "main",
       daemonPort: 6767,
       daemonListenHost: null,
       peers: [{ scriptName: "daemon", port: 5173 }],
     });
 
-    expect(env.PASEO_PORT).toBe("5173");
+    expect(env.CHISACODE_PORT).toBe("5173");
     expect(env).not.toHaveProperty("PORT");
   });
 
@@ -108,7 +108,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "daemon",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "main",
         daemonPort: null,
         daemonListenHost: null,
@@ -116,8 +116,8 @@ describe("buildWorkspaceServiceEnv", () => {
       }),
     ).toEqual({
       HOST: "127.0.0.1",
-      PASEO_PORT: "5173",
-      PASEO_SERVICE_DAEMON_PORT: "5173",
+      CHISACODE_PORT: "5173",
+      CHISACODE_SERVICE_DAEMON_PORT: "5173",
     });
   });
 
@@ -125,7 +125,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(
       buildWorkspaceServiceEnv({
         scriptName: "web",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "feature-x",
         daemonPort: 6767,
         daemonListenHost: null,
@@ -136,12 +136,12 @@ describe("buildWorkspaceServiceEnv", () => {
       }),
     ).toEqual({
       HOST: "127.0.0.1",
-      PASEO_PORT: "5173",
-      PASEO_URL: "http://web.feature-x.paseo.localhost:6767",
-      PASEO_SERVICE_API_PORT: "4000",
-      PASEO_SERVICE_API_URL: "http://api.feature-x.paseo.localhost:6767",
-      PASEO_SERVICE_WEB_PORT: "5173",
-      PASEO_SERVICE_WEB_URL: "http://web.feature-x.paseo.localhost:6767",
+      CHISACODE_PORT: "5173",
+      CHISACODE_URL: "http://web.feature-x.chisacode.localhost:6767",
+      CHISACODE_SERVICE_API_PORT: "4000",
+      CHISACODE_SERVICE_API_URL: "http://api.feature-x.chisacode.localhost:6767",
+      CHISACODE_SERVICE_WEB_PORT: "5173",
+      CHISACODE_SERVICE_WEB_URL: "http://web.feature-x.chisacode.localhost:6767",
     });
   });
 
@@ -149,7 +149,7 @@ describe("buildWorkspaceServiceEnv", () => {
     expect(() =>
       buildWorkspaceServiceEnv({
         scriptName: "app-server",
-        projectSlug: "paseo",
+        projectSlug: "chisacode",
         branchName: "main",
         daemonPort: 6767,
         daemonListenHost: null,

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { AgentSnapshotPayload } from "@fleurdelys/protocol/messages";
+import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
 import { collectMultiple } from "../../utils/command-options.js";
@@ -161,8 +161,8 @@ export function buildAgentLsFetchOptions(
 
 /**
  * Agent ls command semantics:
- * - `fleurdelys agent ls`    → active non-archived agents
- * - `fleurdelys agent ls -a` → include archived agents
+ * - `chisacode agent ls`    → active non-archived agents
+ * - `chisacode agent ls -a` → include archived agents
  */
 export async function runLsCommand(
   options: AgentLsOptions,
@@ -179,7 +179,7 @@ export async function runLsCommand(
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
       details:
-        "Start the daemon with: fleurdelys daemon start\nFor a remote daemon, pass --host <host:port> or set PASEO_HOST.",
+        "Start the daemon with: chisacode daemon start\nFor a remote daemon, pass --host <host:port> or set CHISACODE_HOST.",
     };
     throw error;
   }

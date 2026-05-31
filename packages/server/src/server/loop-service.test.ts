@@ -224,13 +224,13 @@ class ScriptedAgentSession implements AgentSession {
 describe("LoopService", () => {
   const logger = createTestLogger();
   let tmpDir: string;
-  let paseoHome: string;
+  let chisacodeHome: string;
   let workspaceDir: string;
   let storage: AgentStorage;
 
   beforeEach(() => {
     tmpDir = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "loop-service-")));
-    paseoHome = path.join(tmpDir, "paseo-home");
+    chisacodeHome = path.join(tmpDir, "chisacode-home");
     workspaceDir = path.join(tmpDir, "workspace");
     storage = new AgentStorage(path.join(tmpDir, "agents"), logger);
     mkdirSync(workspaceDir, { recursive: true });
@@ -266,7 +266,7 @@ describe("LoopService", () => {
         registry: storage,
         logger,
       });
-      const service = new LoopService({ paseoHome, agentManager: manager, logger });
+      const service = new LoopService({ chisacodeHome, agentManager: manager, logger });
       await service.initialize();
 
       const loop = await service.runLoop({
@@ -291,7 +291,9 @@ describe("LoopService", () => {
       expect(finalLoop.iterations[1]?.status).toBe("succeeded");
       expect(finalLoop.iterations[0]?.verifyChecks[0]?.passed).toBe(false);
       expect(finalLoop.iterations[1]?.verifyChecks[0]?.passed).toBe(true);
-      expect(readFileSync(path.join(paseoHome, "loops", "loops.json"), "utf8")).toContain(loop.id);
+      expect(readFileSync(path.join(chisacodeHome, "loops", "loops.json"), "utf8")).toContain(
+        loop.id,
+      );
     },
   );
 
@@ -317,7 +319,7 @@ describe("LoopService", () => {
       registry: storage,
       logger,
     });
-    const service = new LoopService({ paseoHome, agentManager: manager, logger });
+    const service = new LoopService({ chisacodeHome, agentManager: manager, logger });
     await service.initialize();
 
     const loop = await service.runLoop({
@@ -378,7 +380,7 @@ describe("LoopService", () => {
       archivedAgentIds.push(agentId);
       await archiveAgent(agentId);
     };
-    const service = new LoopService({ paseoHome, agentManager: manager, logger });
+    const service = new LoopService({ chisacodeHome, agentManager: manager, logger });
     await service.initialize();
 
     const loop = await service.runLoop({
@@ -430,7 +432,7 @@ describe("LoopService", () => {
       registry: storage,
       logger,
     });
-    const service = new LoopService({ paseoHome, agentManager: manager, logger });
+    const service = new LoopService({ chisacodeHome, agentManager: manager, logger });
     await service.initialize();
 
     const loop = await service.runLoop({
@@ -472,7 +474,7 @@ describe("LoopService", () => {
       registry: storage,
       logger,
     });
-    const service = new LoopService({ paseoHome, agentManager: manager, logger });
+    const service = new LoopService({ chisacodeHome, agentManager: manager, logger });
     await service.initialize();
 
     const loop = await service.runLoop({
@@ -508,7 +510,7 @@ describe("LoopService", () => {
       registry: storage,
       logger,
     });
-    const service = new LoopService({ paseoHome, agentManager: manager, logger });
+    const service = new LoopService({ chisacodeHome, agentManager: manager, logger });
     await service.initialize();
 
     const loop = await service.runLoop({
@@ -546,7 +548,7 @@ describe("LoopService", () => {
       registry: storage,
       logger,
     });
-    const service = new LoopService({ paseoHome, agentManager: manager, logger });
+    const service = new LoopService({ chisacodeHome, agentManager: manager, logger });
     await service.initialize();
 
     const loop = await service.runLoop({

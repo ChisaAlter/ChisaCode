@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { buildHostRootRoute } from "@/utils/host-routes";
-import { PaseoLogo } from "@/components/icons/paseo-logo";
+import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isWeb, isNative } from "@/constants/platform";
 
@@ -178,8 +178,8 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     [router],
   );
 
-  const handleOpenPaseoSite = useCallback(() => {
-    void openExternalUrl("https://paseo.sh");
+  const handleOpenChisaCodeSite = useCallback(() => {
+    void openExternalUrl("https://chisacode.sh");
   }, []);
 
   const handleOpenSettings = useCallback(() => {
@@ -262,13 +262,13 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         testID="welcome-screen"
       >
         <View style={styles.content}>
-          <PaseoLogo size={96} />
+          <ChisaCodeLogo size={96} />
           <View style={styles.copyBlock}>
-            <Text style={styles.title}>欢迎使用芙露德莉斯</Text>
+            <Text style={styles.title}>欢迎使用ChisaCode</Text>
             <Text style={styles.subtitle}>连接你的电脑即可开始</Text>
             {isNative ? (
-              <Pressable style={styles.setupLink} onPress={handleOpenPaseoSite}>
-                <Text style={styles.setupLinkText}>paseo.sh</Text>
+              <Pressable style={styles.setupLink} onPress={handleOpenChisaCodeSite}>
+                <Text style={styles.setupLinkText}>chisacode.sh</Text>
                 <ExternalLink size={14} color={theme.colors.accent} />
               </Pressable>
             ) : null}

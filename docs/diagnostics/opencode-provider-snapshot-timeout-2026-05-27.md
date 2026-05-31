@@ -6,16 +6,16 @@ The startup timeout is real OpenCode provider snapshot work, not an agent resume
 
 In the dev-style copied-home reproduction, the OpenCode snapshot misses the 30s budget because several expensive things stack:
 
-1. Paseo starts from a copied `PASEO_HOME` containing 4,851 agent records.
+1. ChisaCode starts from a copied `CHISACODE_HOME` containing 4,851 agent records.
 2. Clients ask for provider snapshots for three cwd scopes at almost the same time:
    - `/Users/moboudra`
-   - `/Users/moboudra/dev/paseo`
+   - `/Users/moboudra/dev/chisacode`
    - `/Users/moboudra/dev/blankpage/editor`
 3. Each OpenCode snapshot runs two OpenCode SDK calls:
    - `GET /provider?directory=...` through `client.provider.list()`
    - `GET /agent?directory=...` through `client.app.agents()`
 4. One cold `opencode serve` process is shared by the three cwd scopes. It took 8.562s to become ready.
-5. After OpenCode was listening, Paseo issued six OpenCode HTTP calls concurrently.
+5. After OpenCode was listening, ChisaCode issued six OpenCode HTTP calls concurrently.
 6. The OpenCode `/provider` responses are large: about 3,549,620 decompressed bytes per cwd.
 7. During the same window, the daemon was still doing heavy startup workspace git work. In the exact 18:14:19-18:14:43 window, the daemon log has 292 git spawn/close events.
 8. The `/provider` calls eventually succeeded, but too late: they completed about 32.2s-32.5s after the snapshot fetch started, while the snapshot timeout is 30s.
@@ -23,10 +23,10 @@ In the dev-style copied-home reproduction, the OpenCode snapshot misses the 30s 
 So the root cause is:
 
 ```text
-Cold OpenCode server startup + three concurrent cwd snapshots + large OpenCode /provider responses + daemon startup git contention causes client.provider.list() to complete after Paseo's 30s snapshot budget.
+Cold OpenCode server startup + three concurrent cwd snapshots + large OpenCode /provider responses + daemon startup git contention causes client.provider.list() to complete after ChisaCode's 30s snapshot budget.
 ```
 
-More precise wording: the contention is machine-level process/CPU/filesystem contention created by daemon startup work, especially git work. It is not proven to be an OpenCode internal lock or a Paseo-only event-loop issue. A daemon-free repro with only OpenCode plus an external git storm slowed the same six OpenCode calls from about 1s to about 30s total.
+More precise wording: the contention is machine-level process/CPU/filesystem contention created by daemon startup work, especially git work. It is not proven to be an OpenCode internal lock or a ChisaCode-only event-loop issue. A daemon-free repro with only OpenCode plus an external git storm slowed the same six OpenCode calls from about 1s to about 30s total.
 
 Manual settings refresh works because it runs after startup contention is gone and uses `force: true`, which creates fresh OpenCode runtime/server state. The same OpenCode provider refreshes then complete in about 1.7s-2.2s.
 
@@ -34,7 +34,7 @@ The daemon does not auto-retry error snapshots. A failed provider snapshot is ca
 
 ## Follow-up: Normal Copied-Home Startup Check
 
-I later reran a normal dev-daemon startup against a fresh copy of the same Paseo home metadata and drove the app startup request path:
+I later reran a normal dev-daemon startup against a fresh copy of the same ChisaCode home metadata and drove the app startup request path:
 
 ```text
 fetchWorkspaces
@@ -84,9 +84,9 @@ It does not copy `chat`, `loops`, `schedules`, sockets, pid files, logs, or work
 I ran a separate daemon, not the main daemon:
 
 ```text
-PASEO_HOME=/var/folders/xl/kkk9drfd3ms_t8x7rmy4z6900000gn/T/paseo-devseed.Wms6pi
-PASEO_LISTEN=127.0.0.1:51116
-PASEO_LOG_LEVEL=trace
+CHISACODE_HOME=/var/folders/xl/kkk9drfd3ms_t8x7rmy4z6900000gn/T/chisacode-devseed.Wms6pi
+CHISACODE_LISTEN=127.0.0.1:51116
+CHISACODE_LOG_LEVEL=trace
 ```
 
 Startup facts:
@@ -102,7 +102,7 @@ The probe then connected four client sessions and requested:
 
 - workspaces
 - active agents
-- provider snapshots for home, paseo, and blankpage/editor
+- provider snapshots for home, chisacode, and blankpage/editor
 
 Client-visible result:
 
@@ -110,7 +110,7 @@ Client-visible result:
 18:14:30.263 /Users/moboudra/dev/blankpage/editor opencode error:
   OpenCode app.agents timed out after 10s
 
-18:14:41.687 /Users/moboudra/dev/paseo opencode error:
+18:14:41.687 /Users/moboudra/dev/chisacode opencode error:
   Timed out refreshing OpenCode after 30000ms
 
 18:14:41.688 /Users/moboudra opencode error:
@@ -125,10 +125,10 @@ Availability checks:
 
 ```text
 18:14:10.780 opencode availability start for /Users/moboudra
-18:14:10.787 opencode availability start for /Users/moboudra/dev/paseo
+18:14:10.787 opencode availability start for /Users/moboudra/dev/chisacode
 18:14:10.800 opencode availability start for /Users/moboudra/dev/blankpage/editor
 
-18:14:11.363 paseo availability complete: 576ms
+18:14:11.363 chisacode availability complete: 576ms
 18:14:11.376 home availability complete: 597ms
 18:14:11.391 blankpage availability complete: 591ms
 ```
@@ -143,8 +143,8 @@ OpenCode server acquisition:
 Six SDK calls were then issued:
 
 ```text
-18:14:19.931 GET /provider directory=/Users/moboudra/dev/paseo
-18:14:19.931 GET /agent    directory=/Users/moboudra/dev/paseo
+18:14:19.931 GET /provider directory=/Users/moboudra/dev/chisacode
+18:14:19.931 GET /agent    directory=/Users/moboudra/dev/chisacode
 18:14:19.931 GET /provider directory=/Users/moboudra
 18:14:19.931 GET /agent    directory=/Users/moboudra
 18:14:19.931 GET /provider directory=/Users/moboudra/dev/blankpage/editor
@@ -153,11 +153,11 @@ Six SDK calls were then issued:
 
 Why six:
 
-| Cwd                                    | Why that scope exists                                      | Model call                              | Mode call                         |
-| -------------------------------------- | ---------------------------------------------------------- | --------------------------------------- | --------------------------------- |
-| `/Users/moboudra`                      | home/settings provider snapshot                            | `client.provider.list()` -> `/provider` | `client.app.agents()` -> `/agent` |
-| `/Users/moboudra/dev/paseo`            | workspace-scoped provider snapshot for the Paseo workspace | `client.provider.list()` -> `/provider` | `client.app.agents()` -> `/agent` |
-| `/Users/moboudra/dev/blankpage/editor` | workspace/agent cwd snapshot for blankpage/editor          | `client.provider.list()` -> `/provider` | `client.app.agents()` -> `/agent` |
+| Cwd                                    | Why that scope exists                                          | Model call                              | Mode call                         |
+| -------------------------------------- | -------------------------------------------------------------- | --------------------------------------- | --------------------------------- |
+| `/Users/moboudra`                      | home/settings provider snapshot                                | `client.provider.list()` -> `/provider` | `client.app.agents()` -> `/agent` |
+| `/Users/moboudra/dev/chisacode`        | workspace-scoped provider snapshot for the ChisaCode workspace | `client.provider.list()` -> `/provider` | `client.app.agents()` -> `/agent` |
+| `/Users/moboudra/dev/blankpage/editor` | workspace/agent cwd snapshot for blankpage/editor              | `client.provider.list()` -> `/provider` | `client.app.agents()` -> `/agent` |
 
 Multiple clients can request the same snapshot scope during startup, but non-forced provider loads are deduped by `(cwd, provider)`. Different cwd scopes are separate loads. Three cwd scopes times two OpenCode SDK calls each is the six OpenCode calls in this repro.
 
@@ -167,8 +167,8 @@ Headers arrived before the 30s timeout:
 | ----------- | ------------------------------- | --------------------- |
 | `/provider` | `/Users/moboudra`               | 6.462s                |
 | `/agent`    | `/Users/moboudra`               | 6.681s                |
-| `/agent`    | `/Users/moboudra/dev/paseo`     | 6.681s                |
-| `/provider` | `/Users/moboudra/dev/paseo`     | 8.192s                |
+| `/agent`    | `/Users/moboudra/dev/chisacode` | 6.681s                |
+| `/provider` | `/Users/moboudra/dev/chisacode` | 8.192s                |
 | `/provider` | `/Users/moboudra/dev/blankpage` | 8.654s                |
 | `/agent`    | `/Users/moboudra/dev/blankpage` | 8.649s                |
 
@@ -176,19 +176,19 @@ But body consumption and completion lagged:
 
 ```text
 18:14:29.380 /agent home complete, total app.agents duration 9450ms
-18:14:29.813 /agent paseo complete, total app.agents duration 9883ms
+18:14:29.813 /agent chisacode complete, total app.agents duration 9883ms
 18:14:30.263 /agent blankpage timed out at 10s
 18:14:31.332 /agent blankpage body finally finished, after the 10s app.agents timeout
 
-18:14:41.687 paseo snapshot outer 30s timeout fires
+18:14:41.687 chisacode snapshot outer 30s timeout fires
 18:14:41.688 home snapshot outer 30s timeout fires
 
 18:14:43.593 /provider home completes, provider.list duration 23664ms, total listModels 32218ms
 18:14:43.798 /provider blankpage completes, provider.list duration 23868ms, total listModels 32411ms
-18:14:43.839 /provider paseo completes, provider.list duration 23911ms, total listModels 32476ms
+18:14:43.839 /provider chisacode completes, provider.list duration 23911ms, total listModels 32476ms
 ```
 
-The useful `/provider` results arrived about 1.9s-2.2s after the snapshot manager had already marked home and paseo as failed.
+The useful `/provider` results arrived about 1.9s-2.2s after the snapshot manager had already marked home and chisacode as failed.
 
 ## Why Settings Refresh Works
 
@@ -203,7 +203,7 @@ home refresh:
   models: 409
   modes: 5
 
-/Users/moboudra/dev/paseo refresh:
+/Users/moboudra/dev/chisacode refresh:
   total: 1675ms
   status: ready
   models: 409
@@ -235,8 +235,8 @@ I started a fresh `opencode serve`, waited for stdout `listening on`, then issue
 ```text
 GET /provider?directory=/Users/moboudra
 GET /agent?directory=/Users/moboudra
-GET /provider?directory=/Users/moboudra/dev/paseo
-GET /agent?directory=/Users/moboudra/dev/paseo
+GET /provider?directory=/Users/moboudra/dev/chisacode
+GET /agent?directory=/Users/moboudra/dev/chisacode
 GET /provider?directory=/Users/moboudra/dev/blankpage/editor
 GET /agent?directory=/Users/moboudra/dev/blankpage/editor
 ```
@@ -252,7 +252,7 @@ Three runs:
 Slowest individual call in those runs:
 
 ```text
-/provider /Users/moboudra/dev/paseo: 1270ms total
+/provider /Users/moboudra/dev/chisacode: 1270ms total
 /agent /Users/moboudra/dev/blankpage/editor: 1251ms total
 ```
 
@@ -260,7 +260,7 @@ So six concurrent OpenCode calls alone are not the bug.
 
 ### OpenCode Only Plus External Git Storm, No Daemon
 
-I then ran the same OpenCode-only six-call test while an external shell spawned repeated git commands across the same real workspaces/worktrees. This did not use the Paseo daemon.
+I then ran the same OpenCode-only six-call test while an external shell spawned repeated git commands across the same real workspaces/worktrees. This did not use the ChisaCode daemon.
 
 Result:
 
@@ -276,8 +276,8 @@ Individual calls under the external git storm:
 | ----------- | -------------------------------------- | ------: |
 | `/provider` | `/Users/moboudra`                      | 10684ms |
 | `/agent`    | `/Users/moboudra`                      | 10767ms |
-| `/provider` | `/Users/moboudra/dev/paseo`            | 13220ms |
-| `/agent`    | `/Users/moboudra/dev/paseo`            | 13147ms |
+| `/provider` | `/Users/moboudra/dev/chisacode`        | 13220ms |
+| `/agent`    | `/Users/moboudra/dev/chisacode`        | 13147ms |
 | `/provider` | `/Users/moboudra/dev/blankpage/editor` | 14675ms |
 | `/agent`    | `/Users/moboudra/dev/blankpage/editor` | 15038ms |
 
@@ -324,24 +324,24 @@ Total git commands in the dev-style copied-home daemon log:
 
 Top cwd counts:
 
-| Count | Cwd                                                                                   |
-| ----: | ------------------------------------------------------------------------------------- |
-|    44 | `/Users/moboudra/.paseo/worktrees/1luy0po7/merry-ladybug`                             |
-|    44 | `/Users/moboudra/.paseo/worktrees/1luy0po7/hopeful-eel`                               |
-|    44 | `/Users/moboudra/.paseo/worktrees/1luy0po7/fix-compaction-cancel-loading`             |
-|    44 | `/Users/moboudra/.paseo/worktrees/1luy0po7/fix-archive-worktree-session-history`      |
-|    44 | `/Users/moboudra/.paseo/worktrees/0vpo9h4b/breezy-toad`                               |
-|    36 | `/Users/moboudra/.paseo/worktrees/steering-policy-refactor-detached`                  |
-|    36 | `/Users/moboudra/.paseo/worktrees/1luy0po7/integration-session-mcp-command-stack`     |
-|    36 | `/Users/moboudra/.paseo/worktrees/1luy0po7/fix-provider-diagnostic-binary-resolution` |
-|    36 | `/Users/moboudra/.paseo/worktrees/1luy0po7/feat-voice-runtime-on-demand`              |
-|    36 | `/Users/moboudra/.paseo/worktrees/1luy0po7/feat-find-in-pane`                         |
-|    36 | `/Users/moboudra/.paseo/worktrees/1luy0po7/epic-paseo-client-sdk`                     |
-|    24 | `/Users/moboudra/dev/paseo`                                                           |
-|    24 | `/Users/moboudra/dev/blankpage/editor`                                                |
-|    24 | `/Users/moboudra/dev/faro/main`                                                       |
-|    24 | `/Users/moboudra/dev/konbert/web`                                                     |
-|    24 | `/Users/moboudra/dev/paseo-cloud`                                                     |
+| Count | Cwd                                                                                       |
+| ----: | ----------------------------------------------------------------------------------------- |
+|    44 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/merry-ladybug`                             |
+|    44 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/hopeful-eel`                               |
+|    44 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/fix-compaction-cancel-loading`             |
+|    44 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/fix-archive-worktree-session-history`      |
+|    44 | `/Users/moboudra/.chisacode/worktrees/0vpo9h4b/breezy-toad`                               |
+|    36 | `/Users/moboudra/.chisacode/worktrees/steering-policy-refactor-detached`                  |
+|    36 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/integration-session-mcp-command-stack`     |
+|    36 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/fix-provider-diagnostic-binary-resolution` |
+|    36 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/feat-voice-runtime-on-demand`              |
+|    36 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/feat-find-in-pane`                         |
+|    36 | `/Users/moboudra/.chisacode/worktrees/1luy0po7/epic-chisacode-client-sdk`                 |
+|    24 | `/Users/moboudra/dev/chisacode`                                                           |
+|    24 | `/Users/moboudra/dev/blankpage/editor`                                                    |
+|    24 | `/Users/moboudra/dev/faro/main`                                                           |
+|    24 | `/Users/moboudra/dev/konbert/web`                                                         |
+|    24 | `/Users/moboudra/dev/chisacode-cloud`                                                     |
 
 In the exact OpenCode pressure window, `18:14:19` through `18:14:43`, there were:
 
@@ -365,10 +365,10 @@ The main repeated command shapes were:
 
 ## Original `log.txt` Alignment
 
-The original startup showed the same home and paseo outer timeout shape:
+The original startup showed the same home and chisacode outer timeout shape:
 
 ```text
-16:04:22.466 /Users/moboudra/dev/paseo:
+16:04:22.466 /Users/moboudra/dev/chisacode:
   Timed out refreshing OpenCode after 30000ms
 
 16:04:22.482 /Users/moboudra:

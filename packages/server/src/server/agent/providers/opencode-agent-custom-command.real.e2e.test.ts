@@ -11,10 +11,10 @@ import { createDaemonTestContext, type DaemonTestContext } from "../../test-util
 import { OpenCodeAgentClient } from "./opencode-agent.js";
 import { OpenCodeServerManager } from "./opencode/server-manager.js";
 
-const COMMAND_NAME = "paseo-issue-903-big-pickle";
+const COMMAND_NAME = "chisacode-issue-903-big-pickle";
 const COMMAND_FILE_NAME = `${COMMAND_NAME}.md`;
 const BIG_PICKLE_MODEL = "opencode/big-pickle";
-const EXPECTED_RESPONSE = "PASEO_ISSUE_903_BIG_PICKLE_OK";
+const EXPECTED_RESPONSE = "CHISACODE_ISSUE_903_BIG_PICKLE_OK";
 
 describe("opencode custom command Big Pickle E2E (real)", () => {
   let canRun = false;
@@ -29,7 +29,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
     }
   });
 
-  test("executes a global custom command through Paseo using Big Pickle", async () => {
+  test("executes a global custom command through ChisaCode using Big Pickle", async () => {
     const commandDir = path.join(homedir(), ".config", "opencode", "command");
     const commandFile = path.join(commandDir, COMMAND_FILE_NAME);
     const commandDirExisted = existsSync(commandDir);
@@ -37,7 +37,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
       throw new Error(`Refusing to overwrite existing OpenCode command file: ${commandFile}`);
     }
 
-    const projectDir = await mkdtemp(path.join(tmpdir(), "paseo-opencode-big-pickle-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "chisacode-opencode-big-pickle-"));
     const logger = pino({ level: "silent" });
     let ctx: DaemonTestContext | undefined;
 
@@ -47,7 +47,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
         commandFile,
         [
           "---",
-          "description: Paseo issue 903 Big Pickle custom command",
+          "description: ChisaCode issue 903 Big Pickle custom command",
           "agent: build",
           "---",
           "",
@@ -82,7 +82,7 @@ describe("opencode custom command Big Pickle E2E (real)", () => {
         expect.arrayContaining([
           expect.objectContaining({
             name: COMMAND_NAME,
-            description: "Paseo issue 903 Big Pickle custom command",
+            description: "ChisaCode issue 903 Big Pickle custom command",
           }),
         ]),
       );

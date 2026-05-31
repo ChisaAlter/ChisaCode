@@ -280,11 +280,11 @@ test("fails an auto mode turn when Claude Code uses Vertex", async () => {
 });
 
 test("logs redacted query summary and never leaks sentinel secrets", async () => {
-  const envSecret = "PASEO_ENV_SENTINEL_SECRET";
-  const runtimeSecret = "PASEO_RUNTIME_SENTINEL_SECRET";
-  const systemSecret = "PASEO_SYSTEM_PROMPT_SENTINEL_SECRET";
-  const previousEnv = process.env.PASEO_TEST_SENTINEL_SECRET;
-  process.env.PASEO_TEST_SENTINEL_SECRET = envSecret;
+  const envSecret = "CHISACODE_ENV_SENTINEL_SECRET";
+  const runtimeSecret = "CHISACODE_RUNTIME_SENTINEL_SECRET";
+  const systemSecret = "CHISACODE_SYSTEM_PROMPT_SENTINEL_SECRET";
+  const previousEnv = process.env.CHISACODE_TEST_SENTINEL_SECRET;
+  process.env.CHISACODE_TEST_SENTINEL_SECRET = envSecret;
 
   sdkQueryFactory.mockImplementation(() => {
     let step = 0;
@@ -336,7 +336,7 @@ test("logs redacted query summary and never leaks sentinel secrets", async () =>
     queryFactory: sdkQueryFactory,
     runtimeSettings: {
       env: {
-        PASEO_RUNTIME_SENTINEL_SECRET: runtimeSecret,
+        CHISACODE_RUNTIME_SENTINEL_SECRET: runtimeSecret,
       },
     },
     resolveBinary: async () => "/test/claude/bin",
@@ -369,9 +369,9 @@ test("logs redacted query summary and never leaks sentinel secrets", async () =>
   } finally {
     await session.close();
     if (previousEnv === undefined) {
-      delete process.env.PASEO_TEST_SENTINEL_SECRET;
+      delete process.env.CHISACODE_TEST_SENTINEL_SECRET;
     } else {
-      process.env.PASEO_TEST_SENTINEL_SECRET = previousEnv;
+      process.env.CHISACODE_TEST_SENTINEL_SECRET = previousEnv;
     }
   }
 });

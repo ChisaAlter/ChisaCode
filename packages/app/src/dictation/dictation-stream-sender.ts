@@ -1,5 +1,5 @@
 import { generateMessageId } from "@/types/stream";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 
 export interface DictationStreamSenderParams {
   client: DaemonClient | null;

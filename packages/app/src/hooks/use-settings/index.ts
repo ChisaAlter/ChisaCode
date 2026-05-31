@@ -129,7 +129,7 @@ export function useSettings(): UseSettingsReturn {
       if (updates.theme !== undefined) {
         appUpdates.theme = updates.theme;
       }
-      if (updates.language !== undefined) {
+      if (updates.language !== undefined && !isElectronRuntime()) {
         appUpdates.language = updates.language;
       }
       if (updates.sendBehavior !== undefined) {
@@ -181,6 +181,9 @@ export function useSettings(): UseSettingsReturn {
     settings: {
       ...DEFAULT_APP_SETTINGS,
       ...appSettings.settings,
+      language: isElectronRuntime()
+        ? desktopSettings.settings.language
+        : appSettings.settings.language,
       manageBuiltInDaemon: desktopSettings.settings.daemon.manageBuiltInDaemon,
       releaseChannel: desktopSettings.settings.releaseChannel,
     },

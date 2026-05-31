@@ -1,4 +1,4 @@
-import type { SubscribeTerminalRequest, TerminalState } from "@fleurdelys/protocol/messages";
+import type { SubscribeTerminalRequest, TerminalState } from "@chisacode/protocol/messages";
 import type { TerminalOutputData } from "./terminal-emulator-runtime";
 
 export interface TerminalStreamControllerClient {

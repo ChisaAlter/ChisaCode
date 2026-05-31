@@ -24,7 +24,7 @@ export function createCliParseArgv(input: {
     return invocation;
   }
 
-  const nodeArgv = input.nodeArgv ?? ["fleurdelys", "fleurdelys"];
+  const nodeArgv = input.nodeArgv ?? ["chisacode", "chisacode"];
   const cliArgv = invocation.argv.length === 0 ? ["onboard"] : invocation.argv;
   return [...nodeArgv, ...cliArgv];
 }

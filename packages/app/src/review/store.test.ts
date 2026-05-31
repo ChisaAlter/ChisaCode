@@ -253,7 +253,7 @@ describe("buildReviewAttachmentSnapshot", () => {
       commentCount: 1,
       attachment: {
         type: "review",
-        mimeType: "application/fleurdelys-review",
+        mimeType: "application/chisacode-review",
         cwd: "/repo",
         mode: "base",
         baseRef: "main",

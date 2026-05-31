@@ -7,11 +7,11 @@ import { ArrowLeft, Check, ChevronDown, MoreVertical, Pencil, Plus, X } from "lu
 import { ProjectIconView } from "@/components/project-icon-view";
 import { projectIconToDataUri, useProjectIconQuery } from "@/hooks/use-project-icon-query";
 import type {
-  PaseoConfigRaw,
-  PaseoConfigRevision,
+  ChisaCodeConfigRaw,
+  ChisaCodeConfigRevision,
   ProjectConfigRpcError,
-} from "@fleurdelys/protocol/messages";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+} from "@chisacode/protocol/messages";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -83,11 +83,11 @@ const METADATA_PROMPT_FIELDS: Record<MetadataPromptKey, MetadataPromptField> = {
 };
 
 const WORKTREE_GROUP_INFO = "为此项目创建或清理 worktree 时运行的命令";
-const WORKTREE_DOCS_URL = "https://paseo.sh/docs/worktrees";
+const WORKTREE_DOCS_URL = "https://chisacode.sh/docs/worktrees";
 const WORKTREE_DOCS_TOOLTIP = "查看文档，了解更多细节以及这些命令可用的环境变量";
 const SCRIPTS_GROUP_INFO = "可从此项目中任意智能体启动的长期运行服务和一次性命令";
 const METADATA_GROUP_INFO =
-  "注入到芙露德莉斯元数据生成提示中的项目专属指令，可用于约束分支命名、commit 风格或 PR 格式等团队规范";
+  "注入到ChisaCode元数据生成提示中的项目专属指令，可用于约束分支命名、commit 风格或 PR 格式等团队规范";
 
 const NO_TARGET_MESSAGE = "任何已连接主机上都没有此项目的可编辑副本。";
 
@@ -216,8 +216,8 @@ function ProjectSettingsBody({
   });
 
   const data = readQuery.data;
-  const loadedConfig: PaseoConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
-  const loadedRevision: PaseoConfigRevision | null = data?.ok ? data.revision : null;
+  const loadedConfig: ChisaCodeConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
+  const loadedRevision: ChisaCodeConfigRevision | null = data?.ok ? data.revision : null;
   const readError: ProjectConfigRpcError | null = data && !data.ok ? data.error : null;
 
   const handleReload = useCallback(() => {
@@ -260,8 +260,8 @@ function ProjectSettingsBody({
 
 interface RenderContentInput {
   readQuery: ReturnType<typeof useQuery<ReadProjectConfigData>>;
-  loadedConfig: PaseoConfigRaw | null;
-  loadedRevision: PaseoConfigRevision | null;
+  loadedConfig: ChisaCodeConfigRaw | null;
+  loadedRevision: ChisaCodeConfigRevision | null;
   readError: ProjectConfigRpcError | null;
   selectedHost: ProjectHostEntry;
   queryKey: readonly [string, string, string];
@@ -339,7 +339,7 @@ function renderContent({
   );
 }
 
-function revisionToKey(revision: PaseoConfigRevision | null): string {
+function revisionToKey(revision: ChisaCodeConfigRevision | null): string {
   if (!revision) return "none";
   return `${revision.mtimeMs}-${revision.size}`;
 }
@@ -372,7 +372,7 @@ function resolveReadFailureCopy(input: {
   if (input.kind === "invalid_project_config") {
     return {
       testID: "invalid-callout",
-      title: "无法解析 paseo.json",
+      title: "无法解析 chisacode.json",
       description: "请修复磁盘上的文件，然后重新加载。",
     };
   }
@@ -389,13 +389,13 @@ function resolveReadFailureCopy(input: {
     const detail = errorToDetail(input.error);
     return {
       testID: "read-transport-callout",
-      title: "无法加载 paseo.json",
+      title: "无法加载 chisacode.json",
       description: detail ?? "主机没有响应。",
     };
   }
   return {
     testID: "read-failed-callout",
-    title: "无法加载 paseo.json",
+    title: "无法加载 chisacode.json",
     description: "请重新加载后重试。",
   };
 }
@@ -407,8 +407,8 @@ function errorToDetail(error: unknown): string | null {
 }
 
 interface ProjectConfigFormProps {
-  baseConfig: PaseoConfigRaw;
-  revision: PaseoConfigRevision | null;
+  baseConfig: ChisaCodeConfigRaw;
+  revision: ChisaCodeConfigRevision | null;
   repoRoot: string;
   queryKey: readonly [string, string, string];
   client: DaemonClient;
@@ -432,8 +432,8 @@ function ProjectConfigForm({
 
   const saveMutation = useMutation({
     mutationFn: async (input: {
-      config: PaseoConfigRaw;
-      expectedRevision: PaseoConfigRevision | null;
+      config: ChisaCodeConfigRaw;
+      expectedRevision: ChisaCodeConfigRevision | null;
     }) => {
       return client.writeProjectConfig({
         repoRoot,
@@ -692,7 +692,7 @@ function ProjectConfigForm({
             testID="stale-callout"
             variant="error"
             title="磁盘上的配置已更改"
-            description="保存前请重新加载最新的 paseo.json。"
+            description="保存前请重新加载最新的 chisacode.json。"
           >
             <Button
               testID="stale-callout-action-0"
@@ -711,7 +711,7 @@ function ProjectConfigForm({
           <Alert
             testID="write-failed-callout"
             variant="error"
-            title="无法保存 paseo.json"
+            title="无法保存 chisacode.json"
             description="请重试，或从磁盘重新加载最新版本。"
           >
             <Button
@@ -1200,7 +1200,7 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
           <View style={styles.serviceToggleText}>
             <Text style={styles.serviceToggleLabel}>作为服务运行</Text>
             <Text style={styles.modalHint}>
-              芙露德莉斯会托管该进程，并通过 $PASEO_PORT 分配端口
+              ChisaCode会托管该进程，并通过 $CHISACODE_PORT 分配端口
             </Text>
           </View>
           <Switch

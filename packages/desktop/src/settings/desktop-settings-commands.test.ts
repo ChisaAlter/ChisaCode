@@ -49,6 +49,7 @@ describe("desktop-settings-commands", () => {
     const result = await handlers.migrate_legacy_desktop_settings({
       releaseChannel: "beta",
       manageBuiltInDaemon: false,
+      language: "en",
     });
 
     expect(result).toEqual({
@@ -62,6 +63,7 @@ describe("desktop-settings-commands", () => {
     expect(store.migrateLegacyRendererSettings).toHaveBeenCalledWith({
       releaseChannel: "beta",
       manageBuiltInDaemon: false,
+      language: "en",
     });
   });
 });

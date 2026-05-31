@@ -1,10 +1,9 @@
 {
-  "name": "@fleurdelys/cli",
-  "version": "0.1.87",
-  "description": "Fleurdelys CLI - control your AI coding agents from the command line",
+  "name": "@chisacode/cli",
+  "version": "1.0.0",
+  "description": "ChisaCode CLI - control your AI coding agents from the command line",
   "bin": {
-    "fleurdelys": "bin/fleurdelys",
-    "paseo": "bin/paseo"
+    "chisacode": "bin/chisacode"
   },
   "files": [
     "bin",
@@ -25,10 +24,10 @@
     "test:e2e:lifecycle": "npx tsx tests/e2e/agent-lifecycle.test.ts"
   },
   "dependencies": {
+    "@chisacode/client": "1.0.0",
+    "@chisacode/protocol": "1.0.0",
+    "@chisacode/server": "1.0.0",
     "@clack/prompts": "^1.0.0",
-    "@fleurdelys/client": "0.1.87",
-    "@fleurdelys/protocol": "0.1.87",
-    "@fleurdelys/server": "0.1.87",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "mime-types": "^2.1.35",

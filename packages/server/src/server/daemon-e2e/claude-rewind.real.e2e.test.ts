@@ -6,7 +6,10 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { ClaudeAgentClient } from "../agent/providers/claude/agent.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import {
+  createTestChisaCodeDaemon,
+  type TestChisaCodeDaemon,
+} from "../test-utils/chisacode-daemon.js";
 import { getFullAccessConfig } from "./agent-configs.js";
 import {
   closeRewindSession,
@@ -18,7 +21,7 @@ import {
 
 interface ClaudeRewindHarness {
   client: DaemonClient;
-  daemon: TestPaseoDaemon;
+  daemon: TestChisaCodeDaemon;
 }
 
 interface ClaudeRewindSession {
@@ -130,8 +133,8 @@ function buildTurns(scenario: RewindCase): ClaudeTurnSpec[] {
     const index = (offset + 1) as 1 | 2 | 3;
     return {
       index,
-      promptToken: `PASEO_RW_${prefix}_T${index}`,
-      doneToken: `PASEO_RW_${prefix}_T${index}_DONE`,
+      promptToken: `CHISACODE_RW_${prefix}_T${index}`,
+      doneToken: `CHISACODE_RW_${prefix}_T${index}_DONE`,
       fileName: `turn-${index}.txt`,
       content: `turn ${index} preserved content\n`,
     };
@@ -216,7 +219,7 @@ describe("daemon E2E (real claude) - rewind", () => {
 
   beforeAll(async () => {
     const logger = pino({ level: "silent" });
-    const daemon = await createTestPaseoDaemon({
+    const daemon = await createTestChisaCodeDaemon({
       agentClients: { claude: new ClaudeAgentClient({ logger }) },
       logger,
     });
@@ -304,16 +307,16 @@ describe("daemon E2E (real claude) - rewind", () => {
       await sendClaudeReplyTurn(
         harness,
         session,
-        "PASEO_RW_NO_ROUNDTRIP_T1. Reply exactly: PASEO_RW_NO_ROUNDTRIP_T1_DONE",
+        "CHISACODE_RW_NO_ROUNDTRIP_T1. Reply exactly: CHISACODE_RW_NO_ROUNDTRIP_T1_DONE",
       );
       await sendClaudeReplyTurn(
         harness,
         session,
-        "PASEO_RW_NO_ROUNDTRIP_T2. Reply exactly: PASEO_RW_NO_ROUNDTRIP_T2_DONE",
+        "CHISACODE_RW_NO_ROUNDTRIP_T2. Reply exactly: CHISACODE_RW_NO_ROUNDTRIP_T2_DONE",
       );
 
       const beforeTimeline = await fetchTimelineItems(harness.client, session.agentId);
-      const targetMessageId = userMessageIdForToken(beforeTimeline, "PASEO_RW_NO_ROUNDTRIP_T2");
+      const targetMessageId = userMessageIdForToken(beforeTimeline, "CHISACODE_RW_NO_ROUNDTRIP_T2");
       const sessionIdBeforeRewind = await runtimeSessionId(harness, session);
       expectSessionId(sessionIdBeforeRewind);
 
@@ -325,7 +328,7 @@ describe("daemon E2E (real claude) - rewind", () => {
       await sendClaudeReplyTurn(
         harness,
         session,
-        "PASEO_RW_NO_ROUNDTRIP_T3. Reply exactly: PASEO_RW_NO_ROUNDTRIP_T3_DONE",
+        "CHISACODE_RW_NO_ROUNDTRIP_T3. Reply exactly: CHISACODE_RW_NO_ROUNDTRIP_T3_DONE",
       );
 
       const finalSessionId = await runtimeSessionId(harness, session);

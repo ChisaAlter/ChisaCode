@@ -10,10 +10,10 @@ describe("desktop packaging", () => {
     const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8");
 
     expect(config).toContain(
-      "node_modules/@fleurdelys/server/dist/server/terminal/shell-integration/**/*",
+      "node_modules/@chisacode/server/dist/server/terminal/shell-integration/**/*",
     );
     expect(config).not.toContain(
-      "node_modules/@fleurdelys/server/dist/src/terminal/shell-integration/**/*",
+      "node_modules/@chisacode/server/dist/src/terminal/shell-integration/**/*",
     );
   });
 
@@ -21,13 +21,13 @@ describe("desktop packaging", () => {
     const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8");
 
     expect(config).toContain("!**/*.map");
-    expect(config).toContain("!node_modules/@fleurdelys/*/src/**");
-    expect(config).toContain("!node_modules/@fleurdelys/**/*.test.*");
-    expect(config).toContain("!node_modules/@fleurdelys/**/*.spec.*");
+    expect(config).toContain("!node_modules/@chisacode/*/src/**");
+    expect(config).toContain("!node_modules/@chisacode/**/*.test.*");
+    expect(config).toContain("!node_modules/@chisacode/**/*.spec.*");
   });
 
   // electron-builder packs production dependencies declared in package.json into
-  // app.asar. Runtime code in runtime-paths.ts and bin/paseo dynamically resolves
+  // app.asar. Runtime code in runtime-paths.ts and bin/chisacode dynamically resolves
   // these workspace packages by string, so static analysis (TypeScript, Knip) cannot
   // see the link. If a runtime-required workspace dep is dropped from
   // dependencies, the build still succeeds but ships a broken bundle. This
@@ -38,7 +38,7 @@ describe("desktop packaging", () => {
     };
     const deps = pkg.dependencies ?? {};
 
-    for (const required of ["@fleurdelys/cli", "@fleurdelys/server"]) {
+    for (const required of ["@chisacode/cli", "@chisacode/server"]) {
       expect(deps[required], `${required} must be declared in dependencies`).toBe("*");
     }
   });

@@ -11,6 +11,7 @@ import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import type { Theme } from "@/styles/theme";
+import { useTranslation } from "react-i18next";
 
 export interface WorkspaceTabPresentation {
   key: string;
@@ -181,6 +182,7 @@ export function WorkspaceTabOptionRow({
   onPress,
   trailingAccessory,
 }: WorkspaceTabOptionRowProps): ReactElement {
+  const { t } = useTranslation();
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.optionMainPressable,
@@ -200,7 +202,7 @@ export function WorkspaceTabOptionRow({
         </View>
         <View style={styles.optionContent}>
           <Text numberOfLines={1} style={styles.optionLabel}>
-            {presentation.titleState === "loading" ? "加载中..." : presentation.label}
+            {presentation.titleState === "loading" ? t("common.loading") : presentation.label}
           </Text>
         </View>
       </Pressable>

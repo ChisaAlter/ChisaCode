@@ -31,7 +31,7 @@ export async function connectScheduleClient(
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${resolvedHost}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     } satisfies CommandError;
   }
 }
@@ -91,7 +91,7 @@ function resolveScheduleTarget(args: {
   createNewAgentTarget: () => ScheduleTarget;
 }): ScheduleTarget {
   const { targetValue, hasExplicitNewAgentOption, createNewAgentTarget } = args;
-  const currentAgentId = process.env.PASEO_AGENT_ID?.trim();
+  const currentAgentId = process.env.CHISACODE_AGENT_ID?.trim();
 
   if (!targetValue) {
     if (currentAgentId && !hasExplicitNewAgentOption) {
@@ -116,7 +116,7 @@ function resolveScheduleTarget(args: {
     if (!currentAgentId) {
       throw {
         code: "INVALID_TARGET",
-        message: "--target self requires running inside a Fleurdelys agent",
+        message: "--target self requires running inside a ChisaCode agent",
       } satisfies CommandError;
     }
     return { type: "self", agentId: currentAgentId };

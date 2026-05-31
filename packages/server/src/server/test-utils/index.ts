@@ -1,4 +1,4 @@
-export { createTestPaseoDaemon, type TestPaseoDaemon } from "./paseo-daemon.js";
+export { createTestChisaCodeDaemon, type TestChisaCodeDaemon } from "./chisacode-daemon.js";
 export {
   DaemonClient,
   type DaemonClientConfig,

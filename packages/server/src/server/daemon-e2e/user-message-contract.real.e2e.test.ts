@@ -15,7 +15,10 @@ import type {
   AgentStreamEvent,
 } from "../agent/agent-sdk-types.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import {
+  createTestChisaCodeDaemon,
+  type TestChisaCodeDaemon,
+} from "../test-utils/chisacode-daemon.js";
 import { getFullAccessConfig, isProviderAvailable } from "./agent-configs.js";
 import { fetchTimelineItems } from "./test-utils/rewind-helpers.js";
 
@@ -89,7 +92,7 @@ function collectUserMessageEvents(client: DaemonClient, agentId: string): AgentS
 
 describe.each(CONTRACT_CASES)("daemon E2E (real $provider) - user_message contract", (entry) => {
   let canRun = false;
-  let daemon: TestPaseoDaemon | null = null;
+  let daemon: TestChisaCodeDaemon | null = null;
   let client: DaemonClient | null = null;
   let cwd: string | null = null;
 
@@ -105,7 +108,7 @@ describe.each(CONTRACT_CASES)("daemon E2E (real $provider) - user_message contra
 
     cwd = tmpCwd(entry.provider);
     const logger = pino({ level: "silent" });
-    daemon = await createTestPaseoDaemon({
+    daemon = await createTestChisaCodeDaemon({
       agentClients: { [entry.provider]: entry.createClient(logger) },
       logger,
     });
@@ -135,7 +138,7 @@ describe.each(CONTRACT_CASES)("daemon E2E (real $provider) - user_message contra
         throw new Error(`${entry.title} user-message contract test was not initialized`);
       }
 
-      const prompt = `PASEO_USER_MESSAGE_CONTRACT_${entry.provider.toUpperCase()}. Reply exactly: OK.`;
+      const prompt = `CHISACODE_USER_MESSAGE_CONTRACT_${entry.provider.toUpperCase()}. Reply exactly: OK.`;
       const agent = await client.createAgent({
         cwd,
         title: `${entry.provider}-user-message-contract`,

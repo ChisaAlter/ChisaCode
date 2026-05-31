@@ -7,12 +7,12 @@ export function getLocalBinDir(): string {
 }
 
 export function getCliTargetPath(): string {
-  const filename = process.platform === "win32" ? "fleurdelys.cmd" : "fleurdelys";
+  const filename = process.platform === "win32" ? "chisacode.cmd" : "chisacode";
   return path.join(getLocalBinDir(), filename);
 }
 
 export function getBundledCliShimPath(): string {
-  const cliShimFilename = process.platform === "win32" ? "fleurdelys.cmd" : "fleurdelys";
+  const cliShimFilename = process.platform === "win32" ? "chisacode.cmd" : "chisacode";
 
   if (process.platform === "darwin") {
     const electronExePath = app.getPath("exe");

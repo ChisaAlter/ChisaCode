@@ -7,13 +7,13 @@ import { loadConfig } from "./config.js";
 
 const roots: string[] = [];
 
-async function createPaseoHome(config: unknown): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-config-relay-"));
+async function createChisaCodeHome(config: unknown): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "chisacode-config-relay-"));
   roots.push(root);
-  const paseoHome = path.join(root, ".paseo");
-  await mkdir(paseoHome, { recursive: true });
-  await writeFile(path.join(paseoHome, "config.json"), JSON.stringify(config, null, 2));
-  return paseoHome;
+  const chisacodeHome = path.join(root, ".chisacode");
+  await mkdir(chisacodeHome, { recursive: true });
+  await writeFile(path.join(chisacodeHome, "config.json"), JSON.stringify(config, null, 2));
+  return chisacodeHome;
 }
 
 describe("daemon relay config", () => {
@@ -22,7 +22,7 @@ describe("daemon relay config", () => {
   });
 
   test("loads relay TLS from env, persisted config, and hosted relay fallback", async () => {
-    const persistedHome = await createPaseoHome({
+    const persistedHome = await createChisaCodeHome({
       version: 1,
       daemon: {
         relay: {
@@ -33,7 +33,7 @@ describe("daemon relay config", () => {
     });
     expect(loadConfig(persistedHome, { env: {} }).relayUseTls).toBe(true);
 
-    const envHome = await createPaseoHome({
+    const envHome = await createChisaCodeHome({
       version: 1,
       daemon: {
         relay: {
@@ -42,9 +42,11 @@ describe("daemon relay config", () => {
         },
       },
     });
-    expect(loadConfig(envHome, { env: { PASEO_RELAY_USE_TLS: "true" } }).relayUseTls).toBe(true);
+    expect(loadConfig(envHome, { env: { CHISACODE_RELAY_USE_TLS: "true" } }).relayUseTls).toBe(
+      true,
+    );
 
-    const hostedHome = await createPaseoHome({
+    const hostedHome = await createChisaCodeHome({
       version: 1,
       daemon: { relay: {} },
     });
@@ -52,29 +54,29 @@ describe("daemon relay config", () => {
   });
 
   test("relayPublicUseTls falls back to relayUseTls when unset", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+    const home = await createChisaCodeHome({ version: 1, daemon: { relay: {} } });
     // Default: both true (hosted relay)
     expect(loadConfig(home, { env: {} }).relayPublicUseTls).toBe(true);
   });
 
-  test("PASEO_RELAY_PUBLIC_USE_TLS overrides relayUseTls for public side", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+  test("CHISACODE_RELAY_PUBLIC_USE_TLS overrides relayUseTls for public side", async () => {
+    const home = await createChisaCodeHome({ version: 1, daemon: { relay: {} } });
     const config = loadConfig(home, {
-      env: { PASEO_RELAY_USE_TLS: "false", PASEO_RELAY_PUBLIC_USE_TLS: "true" },
+      env: { CHISACODE_RELAY_USE_TLS: "false", CHISACODE_RELAY_PUBLIC_USE_TLS: "true" },
     });
     expect(config.relayUseTls).toBe(false);
     expect(config.relayPublicUseTls).toBe(true);
   });
 
-  test("relayPublicUseTls falls back to relayUseTls when only PASEO_RELAY_USE_TLS is set", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
-    const config = loadConfig(home, { env: { PASEO_RELAY_USE_TLS: "false" } });
+  test("relayPublicUseTls falls back to relayUseTls when only CHISACODE_RELAY_USE_TLS is set", async () => {
+    const home = await createChisaCodeHome({ version: 1, daemon: { relay: {} } });
+    const config = loadConfig(home, { env: { CHISACODE_RELAY_USE_TLS: "false" } });
     expect(config.relayUseTls).toBe(false);
     expect(config.relayPublicUseTls).toBe(false);
   });
 
   test("persisted publicUseTls overrides relayUseTls fallback", async () => {
-    const home = await createPaseoHome({
+    const home = await createChisaCodeHome({
       version: 1,
       daemon: { relay: { useTls: false, publicUseTls: true } },
     });

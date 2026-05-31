@@ -1,6 +1,6 @@
-import type { FetchRecentProviderSessionEntry } from "@fleurdelys/client/internal/daemon-client";
-import type { AgentProvider } from "@fleurdelys/protocol/agent-types";
-import { IMPORTABLE_PROVIDERS } from "@fleurdelys/protocol/importable-providers";
+import type { FetchRecentProviderSessionEntry } from "@chisacode/client/internal/daemon-client";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
+import { IMPORTABLE_PROVIDERS } from "@chisacode/protocol/importable-providers";
 
 export const IMPORTABLE_PROVIDER_IDS: Set<string> = new Set(IMPORTABLE_PROVIDERS);
 export const PER_PROVIDER_LIMIT = 15;

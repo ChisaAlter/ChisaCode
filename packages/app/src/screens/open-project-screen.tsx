@@ -3,7 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useRouter } from "expo-router";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react-native";
-import { PaseoLogo } from "@/components/icons/paseo-logo";
+import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
 import { CommunityLinks } from "@/components/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
@@ -71,7 +71,7 @@ export function OpenProjectScreen({ serverId }: { serverId: string }) {
       <View style={styles.content}>
         <TitlebarDragRegion />
         <View style={styles.logo}>
-          <PaseoLogo size={52} />
+          <ChisaCodeLogo size={52} />
         </View>
         <View style={styles.tiles}>
           <HomeTile

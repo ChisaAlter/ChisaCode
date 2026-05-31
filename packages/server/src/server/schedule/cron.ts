@@ -1,4 +1,4 @@
-import type { ScheduleCadence } from "@fleurdelys/protocol/schedule/types";
+import type { ScheduleCadence } from "@chisacode/protocol/schedule/types";
 
 interface CronFieldMatcher {
   matches(value: number): boolean;

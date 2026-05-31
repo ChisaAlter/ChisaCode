@@ -1,4 +1,4 @@
-import type { ToolCallDetail } from "@fleurdelys/protocol/agent-types";
+import type { ToolCallDetail } from "@chisacode/protocol/agent-types";
 
 const SHELL_FILE_COMMANDS = new Set([
   "cat",

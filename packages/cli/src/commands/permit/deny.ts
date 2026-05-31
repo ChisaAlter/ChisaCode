@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { AgentPermissionRequest } from "@fleurdelys/protocol/agent-types";
+import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, CommandError } from "../../output/index.js";
 import { permitResponseSchema, type PermissionResponseItem } from "./allow.js";
@@ -27,7 +27,7 @@ export async function runDenyCommand(
       code: "MISSING_ARGUMENT",
       message: "Request ID is required unless --all is specified",
       details:
-        "Usage: fleurdelys permit deny <agent> <req_id> or fleurdelys permit deny <agent> --all",
+        "Usage: chisacode permit deny <agent> <req_id> or chisacode permit deny <agent> --all",
     };
     throw error;
   }
@@ -40,7 +40,7 @@ export async function runDenyCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }
@@ -52,7 +52,7 @@ export async function runDenyCommand(
       const error: CommandError = {
         code: "AGENT_NOT_FOUND",
         message: `Agent not found: ${agentIdOrPrefix}`,
-        details: 'Use "fleurdelys ls" to list available agents',
+        details: 'Use "chisacode ls" to list available agents',
       };
       throw error;
     }

@@ -38,7 +38,7 @@ async function resolveBehavior(url: string): Promise<Exclude<ServiceUrlBehavior,
 
   const result = await askWithCheckbox(`打开 ${url}？`, {
     title: "打开服务 URL",
-    okLabel: "在芙露德莉斯中",
+    okLabel: "在ChisaCode中",
     cancelLabel: "外部浏览器",
     checkboxLabel: "不再询问",
   });

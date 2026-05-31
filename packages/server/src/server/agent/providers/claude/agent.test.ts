@@ -877,13 +877,13 @@ describe("ClaudeAgentSession context window usage", () => {
   });
 
   test("deletes the persisted session jsonl on close when persistSession=false", async () => {
-    const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-persist-"));
+    const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), "chisacode-claude-persist-"));
     const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = tmpConfigDir;
 
     try {
       const sessionId = "session-ephemeral";
-      const cwd = "/tmp/paseo-test-claude";
+      const cwd = "/tmp/chisacode-test-claude";
       const sanitized = cwd.replace(/[\\/._:]/g, "-");
       const projectDir = path.join(tmpConfigDir, "projects", sanitized);
       await fs.mkdir(projectDir, { recursive: true });
@@ -943,13 +943,13 @@ describe("ClaudeAgentSession context window usage", () => {
   });
 
   test("preserves the persisted session jsonl on close when persistSession is undefined", async () => {
-    const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-persist-"));
+    const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), "chisacode-claude-persist-"));
     const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = tmpConfigDir;
 
     try {
       const sessionId = "session-persistent";
-      const cwd = "/tmp/paseo-test-claude";
+      const cwd = "/tmp/chisacode-test-claude";
       const sanitized = cwd.replace(/[\\/._:]/g, "-");
       const projectDir = path.join(tmpConfigDir, "projects", sanitized);
       await fs.mkdir(projectDir, { recursive: true });

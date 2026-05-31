@@ -66,14 +66,14 @@ describe("OpenCode auto_accept feature", () => {
     const { runtime } = mockOpenCodeClient({
       agents: [
         { name: "build", mode: "primary", hidden: false, description: "Build agent" },
-        { name: "paseo-custom", mode: "primary", hidden: false, description: "Custom agent" },
+        { name: "chisacode-custom", mode: "primary", hidden: false, description: "Custom agent" },
       ],
     });
 
     const client = new OpenCodeAgentClient(createTestLogger(), undefined, { runtime });
     const modes = await client.listModes({ cwd: "/tmp/project", force: false });
 
-    expect(modes.map((mode) => mode.id)).toEqual(["build", "plan", "paseo-custom"]);
+    expect(modes.map((mode) => mode.id)).toEqual(["build", "plan", "chisacode-custom"]);
   });
 
   test("lists auto accept as a provider feature", async () => {

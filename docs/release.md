@@ -46,7 +46,7 @@ npm run release:patch
 
 This bumps the version across all workspaces, runs checks, publishes to npm, and pushes the branch + tag. The tag push triggers `Desktop Release`, `Android APK Release`, and `Release Notes Sync` on GitHub Actions. EAS picks up the same tag via the EAS GitHub app and starts the iOS + Android store builds in parallel (see "Mobile builds (EAS)" below) — there is no `release-mobile.yml` in this repo.
 
-**Releases are always patch.** "Release paseo", "release stable", "ship stable", and similar always mean a patch bump from the previous stable. Never bump minor or major to trigger a build, ever — minor and major bumps are reserved for genuinely larger product cuts and require an explicit user instruction with the word "minor" or "major". If you find yourself reaching for `release:minor` to retrigger a failed build, you are doing the wrong thing — push a retry tag instead (see "Fixing a failed release build" below).
+**Releases are always patch.** "Release chisacode", "release stable", "ship stable", and similar always mean a patch bump from the previous stable. Never bump minor or major to trigger a build, ever — minor and major bumps are reserved for genuinely larger product cuts and require an explicit user instruction with the word "minor" or "major". If you find yourself reaching for `release:minor` to retrigger a failed build, you are doing the wrong thing — push a retry tag instead (see "Fixing a failed release build" below).
 
 **Stable means stable.** If the user says "stable" or "ship stable", do not ask whether they want a beta first. They picked stable; treat it as a direct stable release. Only run the beta flow when the user explicitly says "beta".
 
@@ -210,18 +210,18 @@ Once a build is `FINISHED`, EAS auto-submits it to the store: Android via the `s
 
 The user rarely opens the Expo dashboard. A failed EAS build can sit silently until users complain about a stale version. After every stable release, set up a long-delay babysit that re-checks both EAS builds and GitHub Actions for the release tag. If anything is `ERRORED` or `FAILED`, surface it immediately. If everything is `FINISHED`/`SUCCESS`, confirm and stop.
 
-**Use a heartbeat schedule, never a new-agent schedule.** Babysitting fires back into the current conversation as a wake-up prompt — `target: "self"` in `mcp__paseo__create_schedule`. Never use `target: "new-agent"`. A new agent spawns a fresh conversation the user has to find and read; a heartbeat surfaces the build status inline in the conversation that owns the release, where it is impossible to miss. If you find yourself reaching for `new-agent` for a release babysit, you are about to ship a status report into a void.
+**Use a heartbeat schedule, never a new-agent schedule.** Babysitting fires back into the current conversation as a wake-up prompt — `target: "self"` in `mcp__chisacode__create_schedule`. Never use `target: "new-agent"`. A new agent spawns a fresh conversation the user has to find and read; a heartbeat surfaces the build status inline in the conversation that owns the release, where it is impossible to miss. If you find yourself reaching for `new-agent` for a release babysit, you are about to ship a status report into a void.
 
 Pattern:
 
 ```jsonc
-// mcp__paseo__create_schedule arguments
+// mcp__chisacode__create_schedule arguments
 {
   "name": "vX.Y.Z release babysit heartbeat",
   "every": "15m",
   "maxRuns": 8, // covers ~2h of build + store-submission window
   "target": "self", // heartbeat, NOT "new-agent"
-  "cwd": "/path/to/paseo",
+  "cwd": "/path/to/chisacode",
   "prompt": "Heartbeat: check vX.Y.Z release builds. Run gh run list + eas build:list, report concisely; flag any ERRORED/FAILED/CANCELED.",
 }
 ```
@@ -276,7 +276,7 @@ This ensures the checkout ref matches the actual code on `main` with the fix inc
 
 ## Notes
 
-- `version:all:*` bumps root + syncs workspace versions and `@fleurdelys/*` dependency versions
+- `version:all:*` bumps root + syncs workspace versions and `@chisacode/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - `npm run dev:desktop` and `npm run build:desktop` target the Electron desktop package in `packages/desktop`
 - If `release:publish` partially fails, re-run it — npm skips already-published versions
@@ -301,11 +301,11 @@ No prefix (`v`), no extra text. The parser matches the first `## X.Y.Z` line to 
 ## Changelog ownership
 
 - **Only Claude should write changelog entries.**
-- If you are Codex and a stable release needs a changelog entry, launch a Claude agent with Paseo to draft it, then review and commit the result.
+- If you are Codex and a stable release needs a changelog entry, launch a Claude agent with ChisaCode to draft it, then review and commit the result.
 
 ## Changelog voice
 
-The changelog is shown on the Paseo homepage. Write it for **end users**, not developers.
+The changelog is shown on the ChisaCode homepage. Write it for **end users**, not developers.
 
 - **Frame everything from the user's perspective.** Describe what changed in the app, not what changed in the code. Users care that "workspaces load instantly" — not that a component no longer remounts.
 - **Never mention component names, internal modules, or implementation details.** No `WorkingIndicator`, no `accumulatedUsage`, no `reconcileAndEmitWorkspaceUpdates`. Also no "virtualized lists", no "remount", no "memoization", no "debounced", no "fuzzy ranking", no "controlled input", no "uncontrolled input" — these are implementation words masquerading as user-facing copy.
@@ -345,15 +345,15 @@ Every bullet must be scannable at a glance. The changelog is not release documen
 
 Every changelog bullet must credit contributors and link to the PR(s) that delivered the change. This is not one-PR-per-line — a single bullet describes a user-facing change and may reference multiple PRs.
 
-Format: append `([#123](https://github.com/getpaseo/paseo/pull/123) by [@user](https://github.com/user))` at the end of each bullet. For changes spanning multiple PRs or contributors:
+Format: append `([#123](https://github.com/getchisacode/chisacode/pull/123) by [@user](https://github.com/user))` at the end of each bullet. For changes spanning multiple PRs or contributors:
 
 ```markdown
-- Voice mode now works on tablets with proper microphone permissions. ([#210](https://github.com/getpaseo/paseo/pull/210), [#215](https://github.com/getpaseo/paseo/pull/215) by [@alice](https://github.com/alice), [@bob](https://github.com/bob))
+- Voice mode now works on tablets with proper microphone permissions. ([#210](https://github.com/getchisacode/chisacode/pull/210), [#215](https://github.com/getchisacode/chisacode/pull/215) by [@alice](https://github.com/alice), [@bob](https://github.com/bob))
 ```
 
 Rules:
 
-- **Always link the PR number** as `[#N](https://github.com/getpaseo/paseo/pull/N)`.
+- **Always link the PR number** as `[#N](https://github.com/getchisacode/chisacode/pull/N)`.
 - **Always link the contributor's GitHub profile** as `[@user](https://github.com/user)`.
 - **One bullet = one user-facing change**, regardless of how many PRs went into it. Group related PRs on the same bullet.
 - **De-duplicate contributors.** If the same person authored multiple PRs in one bullet, list them once.
@@ -382,7 +382,7 @@ Entries within each section (Added, Improved, Fixed) are ordered by user impact:
 
 Before cutting a **stable** release, run a Codex review of the diff as a last line of defence against shipping bugs. Skip this for betas — the beta itself is the smoke test, and gating each beta on a code review defeats the point of using betas as fast release candidates.
 
-Load the `paseo` skill and launch a **Codex 5.4** agent with a prompt like:
+Load the `chisacode` skill and launch a **Codex 5.4** agent with a prompt like:
 
 > Review the diff between the latest release tag and HEAD. Focus on:
 >

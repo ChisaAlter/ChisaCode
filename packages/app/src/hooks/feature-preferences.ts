@@ -1,4 +1,4 @@
-import type { AgentFeature } from "@fleurdelys/protocol/agent-types";
+import type { AgentFeature } from "@chisacode/protocol/agent-types";
 
 export function pruneFeatureValues(
   featureValues: Record<string, unknown>,

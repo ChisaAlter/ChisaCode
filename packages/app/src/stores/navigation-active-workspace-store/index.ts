@@ -21,7 +21,7 @@ interface NavigateToWorkspaceOptions {
   currentPathname?: string | null;
 }
 
-const LAST_WORKSPACE_SELECTION_STORAGE_KEY = "paseo:last-workspace-route-selection";
+const LAST_WORKSPACE_SELECTION_STORAGE_KEY = "chisacode:last-workspace-route-selection";
 
 const lastWorkspaceSelectionStorage: LastWorkspaceSelectionStorage = {
   read: () => AsyncStorage.getItem(LAST_WORKSPACE_SELECTION_STORAGE_KEY),

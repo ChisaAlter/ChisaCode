@@ -2,4 +2,4 @@ export {
   buildToolCallDisplayModel,
   type ToolCallDisplayInput,
   type ToolCallDisplayModel,
-} from "@fleurdelys/protocol/tool-call-display";
+} from "@chisacode/protocol/tool-call-display";

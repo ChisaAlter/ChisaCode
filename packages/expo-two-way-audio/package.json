@@ -1,6 +1,6 @@
 {
-  "name": "@fleurdelys/expo-two-way-audio",
-  "version": "0.1.87",
+  "name": "@chisacode/expo-two-way-audio",
+  "version": "1.0.0",
   "description": "Native module for two way audio streaming",
   "keywords": [
     "ExpoTwoWayAudio",

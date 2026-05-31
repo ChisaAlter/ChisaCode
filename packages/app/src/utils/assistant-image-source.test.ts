@@ -43,39 +43,39 @@ describe("resolveAssistantImageSource", () => {
   it("falls back to filesystem root for absolute paths outside the workspace", () => {
     expect(
       resolveAssistantImageSource({
-        source: "/tmp/paseo-codex-screenshot.png",
+        source: "/tmp/chisacode-codex-screenshot.png",
         workspaceRoot: "/Users/test/project",
       }),
     ).toEqual({
       kind: "file_rpc",
       cwd: "/",
-      path: "/tmp/paseo-codex-screenshot.png",
+      path: "/tmp/chisacode-codex-screenshot.png",
     });
   });
 
   it("uses the same home-root target as file previews for tilde paths", () => {
     expect(
       resolveAssistantImageSource({
-        source: "~/.paseo/screenshots/output.png",
+        source: "~/.chisacode/screenshots/output.png",
         workspaceRoot: "/Users/test/project",
       }),
     ).toEqual({
       kind: "file_rpc",
       cwd: "~",
-      path: "~/.paseo/screenshots/output.png",
+      path: "~/.chisacode/screenshots/output.png",
     });
   });
 
   it("normalizes file URIs into file RPC requests", () => {
     expect(
       resolveAssistantImageSource({
-        source: "file:///tmp/paseo-codex-screenshot.png",
+        source: "file:///tmp/chisacode-codex-screenshot.png",
         workspaceRoot: "/Users/test/project",
       }),
     ).toEqual({
       kind: "file_rpc",
       cwd: "/",
-      path: "/tmp/paseo-codex-screenshot.png",
+      path: "/tmp/chisacode-codex-screenshot.png",
     });
   });
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DaemonClientConfig } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClientConfig } from "@chisacode/client/internal/daemon-client";
 import type { DaemonConnectionDependencies, DaemonProbeClient } from "./test-daemon-connection";
 
 class FakeDaemonClient implements DaemonProbeClient {
@@ -45,7 +45,7 @@ class FakeDaemonProbe {
     resolveAppVersion: () => null,
     createLocalTransportFactory: () => null,
     buildLocalTransportUrl: ({ transportType, transportPath }) =>
-      `paseo+local://${transportType}?path=${encodeURIComponent(transportPath)}`,
+      `chisacode+local://${transportType}?path=${encodeURIComponent(transportPath)}`,
     createClient: (config) => {
       const client = new FakeDaemonClient(this, config);
       this.createdClients.push(client);
@@ -105,16 +105,18 @@ describe("test-daemon-connection connectToDaemon", () => {
     const { connectToDaemon } = await import("./test-daemon-connection");
     const result = await connectToDaemon(
       {
-        id: "socket:/tmp/paseo.sock",
+        id: "socket:/tmp/chisacode.sock",
         type: "directSocket",
-        path: "/tmp/paseo.sock",
+        path: "/tmp/chisacode.sock",
       },
       undefined,
       probe.deps,
     );
     await result.client.close();
 
-    expect(probe.createdConfigs()[0]?.url).toBe("paseo+local://socket?path=%2Ftmp%2Fpaseo.sock");
+    expect(probe.createdConfigs()[0]?.url).toBe(
+      "chisacode+local://socket?path=%2Ftmp%2Fchisacode.sock",
+    );
   });
 
   it("passes direct TCP connection passwords into the client config", async () => {
@@ -151,9 +153,9 @@ describe("test-daemon-connection connectToDaemon", () => {
 
     const plainResult = await connectToDaemon(
       {
-        id: "relay:relay.paseo.sh:443",
+        id: "relay:relay.chisacode.sh:443",
         type: "relay",
-        relayEndpoint: "relay.paseo.sh:443",
+        relayEndpoint: "relay.chisacode.sh:443",
         useTls: false,
         daemonPublicKeyB64: "pubkey",
       },
@@ -163,7 +165,7 @@ describe("test-daemon-connection connectToDaemon", () => {
     await plainResult.client.close();
 
     expect(probe.createdConfigs()[0]?.url).toMatch(/^wss:\/\/\[::1\]\/ws\?/);
-    expect(probe.createdConfigs()[1]?.url).toMatch(/^ws:\/\/relay\.paseo\.sh:443\/ws\?/);
+    expect(probe.createdConfigs()[1]?.url).toMatch(/^ws:\/\/relay\.chisacode\.sh:443\/ws\?/);
   });
 
   it("surfaces auth rejection as an incorrect password", async () => {

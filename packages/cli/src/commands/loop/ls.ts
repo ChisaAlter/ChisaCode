@@ -58,7 +58,7 @@ export async function runLoopLsCommand(
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     } satisfies CommandError;
   }
 

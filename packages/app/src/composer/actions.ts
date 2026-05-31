@@ -1,4 +1,4 @@
-import type { GitHubSearchItem } from "@fleurdelys/protocol/messages";
+import type { GitHubSearchItem } from "@chisacode/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,

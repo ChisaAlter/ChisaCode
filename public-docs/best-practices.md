@@ -1,13 +1,13 @@
 ---
 title: Best practices
-description: Tips for getting the most out of Paseo and mobile-first agent workflows.
+description: Tips for getting the most out of ChisaCode and mobile-first agent workflows.
 nav: Best practices
 order: 13
 ---
 
 # Best practices
 
-What I've learned from using Paseo daily. Not rules, just patterns that have worked for me.
+What I've learned from using ChisaCode daily. Not rules, just patterns that have worked for me.
 
 ## Agents replace typing, not thinking
 
@@ -27,7 +27,7 @@ Code is cheap with coding agents. I would have never written that CLI before bec
 
 ## Agents are cheap
 
-Don't be shy about running multiple agents. Paseo lets you launch agents in isolated worktrees. Kick one off with voice while walking, then kick off another. They work independently. You get a notification when they're done.
+Don't be shy about running multiple agents. ChisaCode lets you launch agents in isolated worktrees. Kick one off with voice while walking, then kick off another. They work independently. You get a notification when they're done.
 
 ## Use voice extensively
 

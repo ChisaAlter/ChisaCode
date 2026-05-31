@@ -51,8 +51,8 @@ import type {
   AgentMode,
   AgentModelDefinition,
   AgentProvider,
-} from "@fleurdelys/protocol/agent-types";
-import type { AgentProviderDefinition } from "@fleurdelys/protocol/provider-manifest";
+} from "@chisacode/protocol/agent-types";
+import type { AgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
 import {
   getFeatureHighlightColor,
   getFeatureTooltip,

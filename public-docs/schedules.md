@@ -1,6 +1,6 @@
 ---
 title: Schedules
-description: Run Paseo agents on intervals or cron.
+description: Run ChisaCode agents on intervals or cron.
 nav: Schedules
 order: 8
 ---
@@ -32,7 +32,7 @@ Schedules can use interval cadence, like every 30 minutes, or cron cadence, like
 Overnight refactor on Codex:
 
 ```bash
-paseo schedule create \
+chisacode schedule create \
   --every 30m \
   --name overnight-refactor \
   --provider codex/gpt-5.5 \
@@ -45,7 +45,7 @@ paseo schedule create \
 Long build babysitter on Claude:
 
 ```bash
-paseo schedule create \
+chisacode schedule create \
   --every 5m \
   --name build-watch \
   --provider claude/opus-4.7 \
@@ -57,7 +57,7 @@ paseo schedule create \
 Daily GitHub triage on GLM through OpenCode:
 
 ```bash
-paseo schedule create \
+chisacode schedule create \
   --cron "0 14 * * 1-5" \
   --run-now \
   --name github-triage \
@@ -69,7 +69,7 @@ paseo schedule create \
 Heartbeat the current agent:
 
 ```bash
-paseo schedule create \
+chisacode schedule create \
   --every 20m \
   --target self \
   --name heartbeat \
@@ -79,14 +79,14 @@ paseo schedule create \
 ## Managing Schedules
 
 ```bash
-paseo schedule ls
-paseo schedule inspect <id>
-paseo schedule logs <id>
-paseo schedule pause <id>
-paseo schedule resume <id>
-paseo schedule run-once <id>
-paseo schedule update <id> --every 10m --max-runs 6
-paseo schedule delete <id>
+chisacode schedule ls
+chisacode schedule inspect <id>
+chisacode schedule logs <id>
+chisacode schedule pause <id>
+chisacode schedule resume <id>
+chisacode schedule run-once <id>
+chisacode schedule update <id> --every 10m --max-runs 6
+chisacode schedule delete <id>
 ```
 
 Use `--every <duration>` for intervals and `--cron "<expr>"` for 5-field UTC cron. Interval schedules run once immediately by default; pass `--no-run-now` to wait for the first interval. Cron schedules wait for the next matching time; pass `--run-now` to fire once immediately.
@@ -95,4 +95,4 @@ When targeting a remote daemon with `--host`, pass `--cwd`; your local working d
 
 ## MCP
 
-Agents can create and manage schedules through [Paseo MCP](/docs/mcp).
+Agents can create and manage schedules through [ChisaCode MCP](/docs/mcp).

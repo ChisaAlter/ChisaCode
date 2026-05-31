@@ -4,7 +4,7 @@
 
 ### Added
 
-- Permission prompts from OpenCode subagents now surface in Paseo so you can approve or deny them
+- Permission prompts from OpenCode subagents now surface in ChisaCode so you can approve or deny them
 
 ### Fixed
 
@@ -27,7 +27,7 @@
 - Refresh git diffs on demand with a new refresh button
 - Previews can open readable files outside the current workspace
 - Projects without an icon now show a colored icon instead of a grey placeholder
-- Auto-generated agent titles and worktree branch names now use your configured provider fallbacks ([#1219](https://github.com/getpaseo/paseo/pull/1219) by [@mcowger](https://github.com/mcowger))
+- Auto-generated agent titles and worktree branch names now use your configured provider fallbacks ([#1219](https://github.com/getchisacode/chisacode/pull/1219) by [@mcowger](https://github.com/mcowger))
 - Local dictation keeps its speech models out of the daemon, lowering its memory use
 
 ### Fixed
@@ -55,10 +55,10 @@
 
 ### Improved
 
-- Copy an OpenCode resume command to continue the session outside Paseo
+- Copy an OpenCode resume command to continue the session outside ChisaCode
 - Model selector lists every enabled provider, with a Retry button when one fails to load
 - Provider settings are easier to search and manage
-- Other agents connecting to Paseo via MCP see the same providers, models, and modes as the app ([#1198](https://github.com/getpaseo/paseo/pull/1198))
+- Other agents connecting to ChisaCode via MCP see the same providers, models, and modes as the app ([#1198](https://github.com/getchisacode/chisacode/pull/1198))
 - OpenCode Edit tool calls render as inline diffs
 - Typing a slash command shows the best match first
 - Daemon starts faster on workspaces with many git folders
@@ -70,10 +70,10 @@
 
 ### Fixed
 
-- Allow selecting text in the chat on mobile ([#1153](https://github.com/getpaseo/paseo/pull/1153) by [@muzhi1991](https://github.com/muzhi1991))
-- Submitting a Pi question no longer looks like a second prompt opened ([#1188](https://github.com/getpaseo/paseo/pull/1188) by [@yuruiz](https://github.com/yuruiz))
-- Daemon memory leak from unbounded workspace git caches ([#1200](https://github.com/getpaseo/paseo/pull/1200))
-- Provider diagnostics include the command override binary path ([#1191](https://github.com/getpaseo/paseo/pull/1191))
+- Allow selecting text in the chat on mobile ([#1153](https://github.com/getchisacode/chisacode/pull/1153) by [@muzhi1991](https://github.com/muzhi1991))
+- Submitting a Pi question no longer looks like a second prompt opened ([#1188](https://github.com/getchisacode/chisacode/pull/1188) by [@yuruiz](https://github.com/yuruiz))
+- Daemon memory leak from unbounded workspace git caches ([#1200](https://github.com/getchisacode/chisacode/pull/1200))
+- Provider diagnostics include the command override binary path ([#1191](https://github.com/getchisacode/chisacode/pull/1191))
 - OpenCode MCP servers connect correctly when the daemon binds to wildcard addresses
 - Tool calls from MCP servers that return non-spec output no longer fail validation
 
@@ -89,29 +89,29 @@
 
 ### Added
 
-- **Rewind chat or files from any user message** ([#1154](https://github.com/getpaseo/paseo/pull/1154))
-- **See the cumulative cost of an agent session** ([#1163](https://github.com/getpaseo/paseo/pull/1163))
-- **Drop files onto the terminal to insert their paths** ([#1173](https://github.com/getpaseo/paseo/pull/1173))
-- **Tap a file path in the terminal to open it in the workspace preview** ([#1174](https://github.com/getpaseo/paseo/pull/1174))
-- **Approve OpenCode permissions for the whole session** ([#1168](https://github.com/getpaseo/paseo/pull/1168))
-- **Workspace scripts now appear on the mobile header** ([#1093](https://github.com/getpaseo/paseo/pull/1093) by [@ayhanmalkoc](https://github.com/ayhanmalkoc))
+- **Rewind chat or files from any user message** ([#1154](https://github.com/getchisacode/chisacode/pull/1154))
+- **See the cumulative cost of an agent session** ([#1163](https://github.com/getchisacode/chisacode/pull/1163))
+- **Drop files onto the terminal to insert their paths** ([#1173](https://github.com/getchisacode/chisacode/pull/1173))
+- **Tap a file path in the terminal to open it in the workspace preview** ([#1174](https://github.com/getchisacode/chisacode/pull/1174))
+- **Approve OpenCode permissions for the whole session** ([#1168](https://github.com/getchisacode/chisacode/pull/1168))
+- **Workspace scripts now appear on the mobile header** ([#1093](https://github.com/getchisacode/chisacode/pull/1093) by [@ayhanmalkoc](https://github.com/ayhanmalkoc))
 - Devin CLI in the ACP provider catalog (by [@Alcimerio](https://github.com/Alcimerio))
 - OpenCode agents show their mode colors
 
 ### Improved
 
 - Mobile terminal keyboard hides when you open a sidebar
-- Tool activity for read, write, and OpenCode tools renders more consistently ([#1171](https://github.com/getpaseo/paseo/pull/1171))
+- Tool activity for read, write, and OpenCode tools renders more consistently ([#1171](https://github.com/getchisacode/chisacode/pull/1171))
 - Compact workspace header actions are tidier
-- Settings latency readouts are easier to scan ([#1170](https://github.com/getpaseo/paseo/pull/1170))
-- Pull request merge is available as soon as GitHub reports the PR is ready ([#1172](https://github.com/getpaseo/paseo/pull/1172))
+- Settings latency readouts are easier to scan ([#1170](https://github.com/getchisacode/chisacode/pull/1170))
+- Pull request merge is available as soon as GitHub reports the PR is ready ([#1172](https://github.com/getchisacode/chisacode/pull/1172))
 
 ### Fixed
 
 - Mobile slash command autocomplete no longer flickers or mis-layers
-- Interrupting an OpenCode agent returns it to idle instead of showing an error ([#1169](https://github.com/getpaseo/paseo/pull/1169))
-- Provider model selection per workspace is honored ([#1167](https://github.com/getpaseo/paseo/pull/1167))
-- Draft composer keeps the permission mode you selected ([#1175](https://github.com/getpaseo/paseo/pull/1175))
+- Interrupting an OpenCode agent returns it to idle instead of showing an error ([#1169](https://github.com/getchisacode/chisacode/pull/1169))
+- Provider model selection per workspace is honored ([#1167](https://github.com/getchisacode/chisacode/pull/1167))
+- Draft composer keeps the permission mode you selected ([#1175](https://github.com/getchisacode/chisacode/pull/1175))
 - Terminal color queries no longer return malformed replies
 - File links in chat no longer crash when a message contains a bare '%' (by [@Elliotwu-7](https://github.com/Elliotwu-7))
 
@@ -119,13 +119,13 @@
 
 ### Added
 
-- **Paseo can now be installed as a web app from supported browsers** ([#1144](https://github.com/getpaseo/paseo/pull/1144))
-- **Pi extension dialogs now appear as Paseo permission prompts** ([#1134](https://github.com/getpaseo/paseo/pull/1134) by [@yuruiz](https://github.com/yuruiz))
+- **ChisaCode can now be installed as a web app from supported browsers** ([#1144](https://github.com/getchisacode/chisacode/pull/1144))
+- **Pi extension dialogs now appear as ChisaCode permission prompts** ([#1134](https://github.com/getchisacode/chisacode/pull/1134) by [@yuruiz](https://github.com/yuruiz))
 - Added community links and a home button to the sidebar
 
 ### Improved
 
-- **Mobile terminals load faster and restore existing output more smoothly** ([#1147](https://github.com/getpaseo/paseo/pull/1147))
+- **Mobile terminals load faster and restore existing output more smoothly** ([#1147](https://github.com/getchisacode/chisacode/pull/1147))
 - Copying assistant messages preserves formatting
 - Agent metadata fallback failures now log each provider attempt for easier debugging
 
@@ -136,7 +136,7 @@
 - Terminal panes no longer flicker during resize
 - OpenCode MCP servers are injected once instead of being connected twice
 - Import session no longer shows empty sessions
-- Worktree archive status no longer reports false unpushed commits ([#1158](https://github.com/getpaseo/paseo/pull/1158))
+- Worktree archive status no longer reports false unpushed commits ([#1158](https://github.com/getchisacode/chisacode/pull/1158))
 - The `/exit`, `/quit`, and `/q` slash command aliases now show as one row
 - Shortcut chord badges are readable in light mode
 - Segmented controls show their track under every segment
@@ -154,44 +154,44 @@
 
 - **Pi has been revamped with first-class support**
   - Runs through your installed Pi CLI, so your Pi extensions and configuration carry over
-  - Pi agents can call Paseo tools when you have the Pi MCP extension installed
+  - Pi agents can call ChisaCode tools when you have the Pi MCP extension installed
   - Import a Pi session you started in the terminal
   - Copy Pi's resume command from any agent to continue the session in your terminal
   - Windows: Pi sessions match correctly across symlinked and junctioned workspace paths
 - **New home screen with quick tiles for adding a project, importing a session, setting up providers, and pairing a device**
 - **Create an agent directly into a fresh worktree that auto-archives when the run finishes**
 - **Set a custom system prompt that applies to every agent you start**
-- **Rename workspaces, terminals, and agent tabs** ([#531](https://github.com/getpaseo/paseo/pull/531))
-- **DeepSeek TUI in the ACP provider catalog** ([#1096](https://github.com/getpaseo/paseo/pull/1096))
+- **Rename workspaces, terminals, and agent tabs** ([#531](https://github.com/getchisacode/chisacode/pull/531))
+- **DeepSeek TUI in the ACP provider catalog** ([#1096](https://github.com/getchisacode/chisacode/pull/1096))
 - **Kiro CLI in the ACP provider catalog** (by [@huhusmang](https://github.com/huhusmang))
-- Catalog providers show their icons in the model picker ([#1098](https://github.com/getpaseo/paseo/pull/1098))
-- Custom environment variables passed when creating an agent now reach the agent process ([#1112](https://github.com/getpaseo/paseo/pull/1112))
-- NixOS module supports the public TLS option for self-hosted relays ([#1106](https://github.com/getpaseo/paseo/pull/1106) by [@yzx9](https://github.com/yzx9))
+- Catalog providers show their icons in the model picker ([#1098](https://github.com/getchisacode/chisacode/pull/1098))
+- Custom environment variables passed when creating an agent now reach the agent process ([#1112](https://github.com/getchisacode/chisacode/pull/1112))
+- NixOS module supports the public TLS option for self-hosted relays ([#1106](https://github.com/getchisacode/chisacode/pull/1106) by [@yzx9](https://github.com/yzx9))
 
 ### Improved
 
 - **Stale host connections recover automatically without a manual refresh**
-- Paseo opens to the workspace you were on last time you used it ([#1101](https://github.com/getpaseo/paseo/pull/1101))
+- ChisaCode opens to the workspace you were on last time you used it ([#1101](https://github.com/getchisacode/chisacode/pull/1101))
 - Workspaces remember which editor you opened them in
 - Outdated daemons now suggest an upgrade when they receive a command they don't understand
 - Voice mode is hidden while an agent is running
-- Agent file-link tooltips show the full resolved file path ([#1088](https://github.com/getpaseo/paseo/pull/1088))
-- Workspace git status refreshes less aggressively in the background ([#1102](https://github.com/getpaseo/paseo/pull/1102))
+- Agent file-link tooltips show the full resolved file path ([#1088](https://github.com/getchisacode/chisacode/pull/1088))
+- Workspace git status refreshes less aggressively in the background ([#1102](https://github.com/getchisacode/chisacode/pull/1102))
 
 ### Fixed
 
-- macOS desktop no longer freezes after the display wakes from sleep ([#745](https://github.com/getpaseo/paseo/pull/745))
-- Windows: Codex picks up the Microsoft Store install correctly ([#1020](https://github.com/getpaseo/paseo/pull/1020) by [@32r4](https://github.com/32r4))
-- Workspace selection survives a daemon restart ([#1111](https://github.com/getpaseo/paseo/pull/1111))
-- Cursor agents wait for slash commands to load before listing them ([#1099](https://github.com/getpaseo/paseo/pull/1099) by [@chrisbanes](https://github.com/chrisbanes))
+- macOS desktop no longer freezes after the display wakes from sleep ([#745](https://github.com/getchisacode/chisacode/pull/745))
+- Windows: Codex picks up the Microsoft Store install correctly ([#1020](https://github.com/getchisacode/chisacode/pull/1020) by [@32r4](https://github.com/32r4))
+- Workspace selection survives a daemon restart ([#1111](https://github.com/getchisacode/chisacode/pull/1111))
+- Cursor agents wait for slash commands to load before listing them ([#1099](https://github.com/getchisacode/chisacode/pull/1099) by [@chrisbanes](https://github.com/chrisbanes))
 - Codex sub-agents keep running through transient child process errors (by [@xy-plus](https://github.com/xy-plus))
 - iPad terminals send Ctrl+C correctly from a hardware keyboard (by [@samatar26](https://github.com/samatar26))
 - Git filenames with non-ASCII characters render correctly (by [@samatar26](https://github.com/samatar26))
 - Paste shortcuts work on Dvorak keyboard layouts (by [@qin-nz](https://github.com/qin-nz))
 - Claude file links resolve correctly for projects whose paths need SDK encoding
-- Duplicate Claude result text no longer appears in chat ([#1095](https://github.com/getpaseo/paseo/pull/1095))
-- Dynamic UI styles no longer leak CSS rules across the page ([#1103](https://github.com/getpaseo/paseo/pull/1103))
-- Relay handshakes reject sessions that try to change encryption keys mid-flight ([#1037](https://github.com/getpaseo/paseo/pull/1037) by [@joaosa](https://github.com/joaosa))
+- Duplicate Claude result text no longer appears in chat ([#1095](https://github.com/getchisacode/chisacode/pull/1095))
+- Dynamic UI styles no longer leak CSS rules across the page ([#1103](https://github.com/getchisacode/chisacode/pull/1103))
+- Relay handshakes reject sessions that try to change encryption keys mid-flight ([#1037](https://github.com/getchisacode/chisacode/pull/1037) by [@joaosa](https://github.com/joaosa))
 
 ## 0.1.78 - 2026-05-18
 
@@ -212,43 +212,43 @@
 - **Slash commands to end and restart an agent**
 - **Syntax highlighting for code blocks in chat**
 - **Copy button on code blocks in chat**
-- **Configurable terminal scrollback** ([#1021](https://github.com/getpaseo/paseo/pull/1021) by [@32r4](https://github.com/32r4))
+- **Configurable terminal scrollback** ([#1021](https://github.com/getchisacode/chisacode/pull/1021) by [@32r4](https://github.com/32r4))
 - Assistant file links open at a specific line range when one is included
-- Mode icons appear in the agent status menu ([#1059](https://github.com/getpaseo/paseo/pull/1059) by [@32r4](https://github.com/32r4))
-- MCP exposes schedule update, logs, and run-once tools ([#1032](https://github.com/getpaseo/paseo/pull/1032) by [@skevetter](https://github.com/skevetter))
-- Self-hosted relays can use a different TLS setting for the public endpoint ([#1045](https://github.com/getpaseo/paseo/pull/1045) by [@yzx9](https://github.com/yzx9))
+- Mode icons appear in the agent status menu ([#1059](https://github.com/getchisacode/chisacode/pull/1059) by [@32r4](https://github.com/32r4))
+- MCP exposes schedule update, logs, and run-once tools ([#1032](https://github.com/getchisacode/chisacode/pull/1032) by [@skevetter](https://github.com/skevetter))
+- Self-hosted relays can use a different TLS setting for the public endpoint ([#1045](https://github.com/getchisacode/chisacode/pull/1045) by [@yzx9](https://github.com/yzx9))
 
 ### Improved
 
 - User messages now have a distinct bubble fill for clearer chat hierarchy
 - Closing a tab returns to its parent tab
-- Diff rows show the full file path on hover ([#1061](https://github.com/getpaseo/paseo/pull/1061) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
-- The CLI shows the remote daemon host when `ls` cannot connect ([#1043](https://github.com/getpaseo/paseo/pull/1043) by [@mturac](https://github.com/mturac))
-- Nix install of the daemon is smaller ([#966](https://github.com/getpaseo/paseo/pull/966) by [@ixxie](https://github.com/ixxie))
-- Nix install honors home-manager profile paths when inheriting the user PATH ([#1040](https://github.com/getpaseo/paseo/pull/1040) by [@ixxie](https://github.com/ixxie))
+- Diff rows show the full file path on hover ([#1061](https://github.com/getchisacode/chisacode/pull/1061) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
+- The CLI shows the remote daemon host when `ls` cannot connect ([#1043](https://github.com/getchisacode/chisacode/pull/1043) by [@mturac](https://github.com/mturac))
+- Nix install of the daemon is smaller ([#966](https://github.com/getchisacode/chisacode/pull/966) by [@ixxie](https://github.com/ixxie))
+- Nix install honors home-manager profile paths when inheriting the user PATH ([#1040](https://github.com/getchisacode/chisacode/pull/1040) by [@ixxie](https://github.com/ixxie))
 
 ### Fixed
 
 - OpenCode probes no longer create empty sessions
 - OpenCode custom commands no longer hang
 - OpenCode session imports succeed across more environments
-- Native diff rows expand correctly ([#940](https://github.com/getpaseo/paseo/pull/940) by [@bolasblack](https://github.com/bolasblack))
-- Mobile sidebar interactions work correctly on web ([#900](https://github.com/getpaseo/paseo/pull/900) by [@nikuscs](https://github.com/nikuscs))
-- Mobile web drag gestures fire reliably ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
-- Mobile web drag-and-drop activates correctly ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
-- iOS Safari no longer zooms when focusing the composer ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
-- Enter behavior in the mobile web composer is consistent ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- Native diff rows expand correctly ([#940](https://github.com/getchisacode/chisacode/pull/940) by [@bolasblack](https://github.com/bolasblack))
+- Mobile sidebar interactions work correctly on web ([#900](https://github.com/getchisacode/chisacode/pull/900) by [@nikuscs](https://github.com/nikuscs))
+- Mobile web drag gestures fire reliably ([#1048](https://github.com/getchisacode/chisacode/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- Mobile web drag-and-drop activates correctly ([#1048](https://github.com/getchisacode/chisacode/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- iOS Safari no longer zooms when focusing the composer ([#1048](https://github.com/getchisacode/chisacode/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- Enter behavior in the mobile web composer is consistent ([#1048](https://github.com/getchisacode/chisacode/pull/1048) by [@nikuscs](https://github.com/nikuscs))
 - Composer no longer flickers when resizing with long prompts
 - Inline code links in assistant messages open the correct file
-- Host switcher popover is wide enough to show host names ([#981](https://github.com/getpaseo/paseo/pull/981) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
-- Windows: importing existing sessions matches paths correctly ([#1012](https://github.com/getpaseo/paseo/pull/1012) by [@kj1534](https://github.com/kj1534))
+- Host switcher popover is wide enough to show host names ([#981](https://github.com/getchisacode/chisacode/pull/981) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- Windows: importing existing sessions matches paths correctly ([#1012](https://github.com/getchisacode/chisacode/pull/1012) by [@kj1534](https://github.com/kj1534))
 
 ## 0.1.76 - 2026-05-15
 
 ### Added
 
 - **Chat timestamps and turn durations** Every message shows when it was sent, and each turn surfaces how long the agent took
-- **Auto Review permission mode for Claude Code and Codex** Agents stop after each assistant turn for review instead of running unattended ([#928](https://github.com/getpaseo/paseo/pull/928), [#963](https://github.com/getpaseo/paseo/pull/963) by [@bolasblack](https://github.com/bolasblack))
+- **Auto Review permission mode for Claude Code and Codex** Agents stop after each assistant turn for review instead of running unattended ([#928](https://github.com/getchisacode/chisacode/pull/928), [#963](https://github.com/getchisacode/chisacode/pull/963) by [@bolasblack](https://github.com/bolasblack))
 - Surface Codex's context compaction events and the `/compact` command in chat
 - Optional auto-archive for worktrees once their PR merges
 - Paste a GitHub PR or issue URL into the composer to attach it as context
@@ -259,20 +259,20 @@
 - Claude Code now picks up models from `~/.claude/settings.json` so custom model lists show up in the model picker
 - Local Claude Code settings (`.claude/settings.local.json`) apply per workspace
 - Diagnostics for generic ACP providers surface in the model picker
-- Allow setting fast mode for Paseo subagents ([#909](https://github.com/getpaseo/paseo/pull/909), [#910](https://github.com/getpaseo/paseo/pull/910) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- Allow setting fast mode for ChisaCode subagents ([#909](https://github.com/getchisacode/chisacode/pull/909), [#910](https://github.com/getchisacode/chisacode/pull/910) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
 
 ### Improved
 
 - Surface Claude error messages in chat instead of ending the turn silently
 - Workspace checkout picker auto-selects when a single PR is attached
-- New workspace flow honors the currently checked-out branch when branching off ([#909](https://github.com/getpaseo/paseo/pull/908) by [@sbtobb](https://github.com/sbtobb))
-- OpenCode models from console subscription providers now appear in the model picker ([#917](https://github.com/getpaseo/paseo/pull/917) by [@t2o2](https://github.com/t2o2))
-- Cursor model picker reflects the models advertised by the Cursor ACP client ([#958](https://github.com/getpaseo/paseo/pull/958) by [@chrisbanes](https://github.com/chrisbanes))
+- New workspace flow honors the currently checked-out branch when branching off ([#909](https://github.com/getchisacode/chisacode/pull/908) by [@sbtobb](https://github.com/sbtobb))
+- OpenCode models from console subscription providers now appear in the model picker ([#917](https://github.com/getchisacode/chisacode/pull/917) by [@t2o2](https://github.com/t2o2))
+- Cursor model picker reflects the models advertised by the Cursor ACP client ([#958](https://github.com/getchisacode/chisacode/pull/958) by [@chrisbanes](https://github.com/chrisbanes))
 
 ### Fixed
 
-- iPad hardware Enter submits the composer ([#919](https://github.com/getpaseo/paseo/pull/919) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
-- PR status falls back to a non-checks query for fine-grained GitHub tokens ([#932](https://github.com/getpaseo/paseo/pull/932) by [@32r4](https://github.com/32r4))
+- iPad hardware Enter submits the composer ([#919](https://github.com/getchisacode/chisacode/pull/919) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- PR status falls back to a non-checks query for fine-grained GitHub tokens ([#932](https://github.com/getchisacode/chisacode/pull/932) by [@32r4](https://github.com/32r4))
 - ACP errors display as readable text instead of `[object Object]`
 - OpenCode no longer hangs on retry when the upstream provider stalls
 - Worktree ahead count is correct when the upstream branch has been deleted
@@ -287,90 +287,90 @@
 - Relay E2EE reconnects cleanly under racing connect/disconnect
 - Workspace kind stays in sync with project kind after reconfiguration
 - zsh integration files install with usable runtime modes
-- MCP worktree cache refreshes after create and archive ([#911](https://github.com/getpaseo/paseo/pull/911) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- MCP worktree cache refreshes after create and archive ([#911](https://github.com/getchisacode/chisacode/pull/911) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
 
 ## 0.1.75 - 2026-05-12
 
 ### Added
 
-- Set the speech-to-text language used by dictation and voice mode from settings ([#941](https://github.com/getpaseo/paseo/pull/941))
+- Set the speech-to-text language used by dictation and voice mode from settings ([#941](https://github.com/getchisacode/chisacode/pull/941))
 
 ### Fixed
 
-- Codex resume failures now surface as explicit errors instead of leaving the agent silently stuck ([#947](https://github.com/getpaseo/paseo/pull/947))
-- Custom providers extending Codex now route correctly when they set a custom `OPENAI_BASE_URL` ([#915](https://github.com/getpaseo/paseo/pull/915))
-- Fixed Copilot's **Allow All** mode (renamed from Autopilot) ([#935](https://github.com/getpaseo/paseo/pull/935))
-- Desktop: daemon startup no longer fails when a stale PID file is left next to a still-running daemon ([#913](https://github.com/getpaseo/paseo/pull/913) by [@biaoma-ty](https://github.com/biaoma-ty))
-- iPhone HEIC photos now attach correctly from the image picker ([#934](https://github.com/getpaseo/paseo/pull/934))
-- Scheduled agents now archive automatically after each run ([#945](https://github.com/getpaseo/paseo/pull/945))
-- Windows: Codex command summaries trim `pwsh`, `powershell`, or `cmd` wrappers ([#931](https://github.com/getpaseo/paseo/pull/931) by [@32r4](https://github.com/32r4))
-- iPad: settings sidebar and main sidebar respect the top safe area in wide layouts ([#922](https://github.com/getpaseo/paseo/pull/922), [#937](https://github.com/getpaseo/paseo/pull/937) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- Codex resume failures now surface as explicit errors instead of leaving the agent silently stuck ([#947](https://github.com/getchisacode/chisacode/pull/947))
+- Custom providers extending Codex now route correctly when they set a custom `OPENAI_BASE_URL` ([#915](https://github.com/getchisacode/chisacode/pull/915))
+- Fixed Copilot's **Allow All** mode (renamed from Autopilot) ([#935](https://github.com/getchisacode/chisacode/pull/935))
+- Desktop: daemon startup no longer fails when a stale PID file is left next to a still-running daemon ([#913](https://github.com/getchisacode/chisacode/pull/913) by [@biaoma-ty](https://github.com/biaoma-ty))
+- iPhone HEIC photos now attach correctly from the image picker ([#934](https://github.com/getchisacode/chisacode/pull/934))
+- Scheduled agents now archive automatically after each run ([#945](https://github.com/getchisacode/chisacode/pull/945))
+- Windows: Codex command summaries trim `pwsh`, `powershell`, or `cmd` wrappers ([#931](https://github.com/getchisacode/chisacode/pull/931) by [@32r4](https://github.com/32r4))
+- iPad: settings sidebar and main sidebar respect the top safe area in wide layouts ([#922](https://github.com/getchisacode/chisacode/pull/922), [#937](https://github.com/getchisacode/chisacode/pull/937) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
 
 ## 0.1.74 - 2026-05-11
 
 ### Fixed
 
-- **OpenCode agent turns no longer stall** Paseo now follows OpenCode's global event stream, so turns stream reliably without falling back to fragile recovery paths ([#916](https://github.com/getpaseo/paseo/pull/916))
+- **OpenCode agent turns no longer stall** ChisaCode now follows OpenCode's global event stream, so turns stream reliably without falling back to fragile recovery paths ([#916](https://github.com/getchisacode/chisacode/pull/916))
 
 ## 0.1.73 - 2026-05-10
 
 ### Fixed
 
-- **OpenCode agents work again on OpenCode 1.14.42+** ([#895](https://github.com/getpaseo/paseo/pull/895), [#902](https://github.com/getpaseo/paseo/pull/902), [#904](https://github.com/getpaseo/paseo/pull/904) by [@atomlink-ye](https://github.com/atomlink-ye), [@plutofog](https://github.com/plutofog))
-- Web: opening a workspace no longer hangs in browsers without `crypto.randomUUID` ([#858](https://github.com/getpaseo/paseo/pull/858) by [@cokekitten](https://github.com/cokekitten))
-- Codex sub-agent child tool calls now report a final failure state instead of staying as "running" ([#899](https://github.com/getpaseo/paseo/pull/899))
-- Old relay pairing URLs without an explicit TLS flag work again ([#896](https://github.com/getpaseo/paseo/pull/896))
-- macOS: the tab-jump shortcut no longer collides with system shortcuts ([#859](https://github.com/getpaseo/paseo/pull/859) by [@nikuscs](https://github.com/nikuscs))
-- Web: the composer no longer triggers a bottom-sheet keyboard on desktop browsers ([#898](https://github.com/getpaseo/paseo/pull/898) by [@nikuscs](https://github.com/nikuscs))
-- Windows: git operations no longer flash a console window on each invocation ([#897](https://github.com/getpaseo/paseo/pull/897))
-- File explorer no longer follows symlinks outside the workspace root ([#847](https://github.com/getpaseo/paseo/pull/847) by [@joaosa](https://github.com/joaosa))
-- Desktop only opens external URLs via http(s) and mailto schemes ([#845](https://github.com/getpaseo/paseo/pull/845) by [@joaosa](https://github.com/joaosa))
-- MCP debug request logs now redact request bodies ([#842](https://github.com/getpaseo/paseo/pull/842) by [@joaosa](https://github.com/joaosa))
+- **OpenCode agents work again on OpenCode 1.14.42+** ([#895](https://github.com/getchisacode/chisacode/pull/895), [#902](https://github.com/getchisacode/chisacode/pull/902), [#904](https://github.com/getchisacode/chisacode/pull/904) by [@atomlink-ye](https://github.com/atomlink-ye), [@plutofog](https://github.com/plutofog))
+- Web: opening a workspace no longer hangs in browsers without `crypto.randomUUID` ([#858](https://github.com/getchisacode/chisacode/pull/858) by [@cokekitten](https://github.com/cokekitten))
+- Codex sub-agent child tool calls now report a final failure state instead of staying as "running" ([#899](https://github.com/getchisacode/chisacode/pull/899))
+- Old relay pairing URLs without an explicit TLS flag work again ([#896](https://github.com/getchisacode/chisacode/pull/896))
+- macOS: the tab-jump shortcut no longer collides with system shortcuts ([#859](https://github.com/getchisacode/chisacode/pull/859) by [@nikuscs](https://github.com/nikuscs))
+- Web: the composer no longer triggers a bottom-sheet keyboard on desktop browsers ([#898](https://github.com/getchisacode/chisacode/pull/898) by [@nikuscs](https://github.com/nikuscs))
+- Windows: git operations no longer flash a console window on each invocation ([#897](https://github.com/getchisacode/chisacode/pull/897))
+- File explorer no longer follows symlinks outside the workspace root ([#847](https://github.com/getchisacode/chisacode/pull/847) by [@joaosa](https://github.com/joaosa))
+- Desktop only opens external URLs via http(s) and mailto schemes ([#845](https://github.com/getchisacode/chisacode/pull/845) by [@joaosa](https://github.com/joaosa))
+- MCP debug request logs now redact request bodies ([#842](https://github.com/getchisacode/chisacode/pull/842) by [@joaosa](https://github.com/joaosa))
 
 ## 0.1.72 - 2026-05-10
 
 ### Fixed
 
-- **Codex approval prompts no longer hang** Fixes a regression introduced in 0.1.70 where Codex agents would wait forever on command and file approvals — the prompt never reached the app and the agent stayed stuck in "running" ([#866](https://github.com/getpaseo/paseo/pull/866), [#869](https://github.com/getpaseo/paseo/pull/869))
-- **Windows: daemon no longer crashes when Codex emits non-JSON output** Localized stdout lines from the Codex CLI are now ignored instead of taking down the daemon worker ([#866](https://github.com/getpaseo/paseo/pull/866))
-- Drag-and-drop images onto the new workspace screen now works ([#850](https://github.com/getpaseo/paseo/pull/850))
-- Archiving a worktree from the toolbar redirects you immediately instead of leaving you on the dead screen for a beat ([#852](https://github.com/getpaseo/paseo/pull/852))
-- Pi-backed sessions now shut down cleanly when you close them, releasing extension resources on the Pi side ([#863](https://github.com/getpaseo/paseo/pull/863))
+- **Codex approval prompts no longer hang** Fixes a regression introduced in 0.1.70 where Codex agents would wait forever on command and file approvals — the prompt never reached the app and the agent stayed stuck in "running" ([#866](https://github.com/getchisacode/chisacode/pull/866), [#869](https://github.com/getchisacode/chisacode/pull/869))
+- **Windows: daemon no longer crashes when Codex emits non-JSON output** Localized stdout lines from the Codex CLI are now ignored instead of taking down the daemon worker ([#866](https://github.com/getchisacode/chisacode/pull/866))
+- Drag-and-drop images onto the new workspace screen now works ([#850](https://github.com/getchisacode/chisacode/pull/850))
+- Archiving a worktree from the toolbar redirects you immediately instead of leaving you on the dead screen for a beat ([#852](https://github.com/getchisacode/chisacode/pull/852))
+- Pi-backed sessions now shut down cleanly when you close them, releasing extension resources on the Pi side ([#863](https://github.com/getchisacode/chisacode/pull/863))
 
 ## 0.1.71 - 2026-05-09
 
 ### Added
 
-- **Import existing Claude, Codex, and OpenCode sessions** into Paseo — pick up a conversation you started in the terminal and keep going from the app, with the full timeline ([#766](https://github.com/getpaseo/paseo/pull/766), [#833](https://github.com/getpaseo/paseo/pull/833))
-- **Subagents now appear in a collapsible section above the composer** so you can jump into agents your main agent spawned ([#532](https://github.com/getpaseo/paseo/pull/532))
-- Merge a pull request directly from the checkout pane ([#814](https://github.com/getpaseo/paseo/pull/814))
-- Customize the per-project prompts Paseo uses to auto-generate agent titles, branch names, commit messages, and pull request descriptions ([#836](https://github.com/getpaseo/paseo/pull/836))
-- Open an empty workspace without typing a prompt first ([#834](https://github.com/getpaseo/paseo/pull/834))
-- Project settings are now grouped with inline links to the relevant docs ([#837](https://github.com/getpaseo/paseo/pull/837))
+- **Import existing Claude, Codex, and OpenCode sessions** into ChisaCode — pick up a conversation you started in the terminal and keep going from the app, with the full timeline ([#766](https://github.com/getchisacode/chisacode/pull/766), [#833](https://github.com/getchisacode/chisacode/pull/833))
+- **Subagents now appear in a collapsible section above the composer** so you can jump into agents your main agent spawned ([#532](https://github.com/getchisacode/chisacode/pull/532))
+- Merge a pull request directly from the checkout pane ([#814](https://github.com/getchisacode/chisacode/pull/814))
+- Customize the per-project prompts ChisaCode uses to auto-generate agent titles, branch names, commit messages, and pull request descriptions ([#836](https://github.com/getchisacode/chisacode/pull/836))
+- Open an empty workspace without typing a prompt first ([#834](https://github.com/getchisacode/chisacode/pull/834))
+- Project settings are now grouped with inline links to the relevant docs ([#837](https://github.com/getchisacode/chisacode/pull/837))
 - Rich context menu on desktop — copy link, copy image, and spellcheck suggestions
-- Archiving a Codex-backed agent now archives the underlying native Codex thread too ([#827](https://github.com/getpaseo/paseo/pull/827) by [@32r4](https://github.com/32r4))
+- Archiving a Codex-backed agent now archives the underlying native Codex thread too ([#827](https://github.com/getchisacode/chisacode/pull/827) by [@32r4](https://github.com/32r4))
 
 ### Improved
 
-- Opening a workspace auto-focuses the agent that needs your attention ([#828](https://github.com/getpaseo/paseo/pull/828))
+- Opening a workspace auto-focuses the agent that needs your attention ([#828](https://github.com/getchisacode/chisacode/pull/828))
 - An unattended agent that spawns a sub-agent on a different provider via MCP now starts the sub-agent in unattended mode too
 
 ### Fixed
 
-- iOS project picker now submits the typed path ([#831](https://github.com/getpaseo/paseo/pull/831))
-- System messages and chat mentions routed to multiple agents now reach every recipient consistently ([#830](https://github.com/getpaseo/paseo/pull/830))
+- iOS project picker now submits the typed path ([#831](https://github.com/getchisacode/chisacode/pull/831))
+- System messages and chat mentions routed to multiple agents now reach every recipient consistently ([#830](https://github.com/getchisacode/chisacode/pull/830))
 - Clicking a Markdown link in agent output no longer reloads the desktop app on top of opening the link
 - macOS desktop tab-jump shortcuts now use Cmd+Option+1-9, avoiding conflicts with Option-based international keyboard characters such as `@`
 
 ### Security
 
-- Local state files (daemon keypair, stored credentials, persisted config) are now readable only by the owning user ([#825](https://github.com/getpaseo/paseo/pull/825) by [@joaosa](https://github.com/joaosa))
+- Local state files (daemon keypair, stored credentials, persisted config) are now readable only by the owning user ([#825](https://github.com/getchisacode/chisacode/pull/825) by [@joaosa](https://github.com/joaosa))
 
 ## 0.1.70 - 2026-05-08
 
 ### Breaking
 
-- **Claude agents now require `claude` on your PATH** Install Claude Code globally (`npm install -g @anthropic-ai/claude-code`) before running a Claude agent — Paseo no longer ships a bundled fallback binary. Same posture as Codex and OpenCode, and shrinks the desktop install by ~210 MB per platform
+- **Claude agents now require `claude` on your PATH** Install Claude Code globally (`npm install -g @anthropic-ai/claude-code`) before running a Claude agent — ChisaCode no longer ships a bundled fallback binary. Same posture as Codex and OpenCode, and shrinks the desktop install by ~210 MB per platform
 
 ### Added
 
@@ -378,10 +378,10 @@
 - Codex `/goal` slash command — set or update the goal mid-turn while a Codex agent is running
 - Claude's Sonnet 4.6 1M context model is now selectable in the model picker
 - Detect GitHub issue and PR URLs pasted into the composer search
-- `paseo worktree create` CLI command, with parity to the MCP `create_worktree` tool
-- `paseo schedule update` to edit a schedule in place without recreating it
-- `paseo schedule run-once` for cron-style triggers, plus `--mode` on `schedule` and `loop`. Background runs now default to unattended mode
-- Projects settings now lists workspaces from any remote — GitLab, Gitea, Bitbucket, self-hosted, and SSH-style URLs, not just GitHub ([#681](https://github.com/getpaseo/paseo/pull/681) by [@krumpyzoid](https://github.com/krumpyzoid))
+- `chisacode worktree create` CLI command, with parity to the MCP `create_worktree` tool
+- `chisacode schedule update` to edit a schedule in place without recreating it
+- `chisacode schedule run-once` for cron-style triggers, plus `--mode` on `schedule` and `loop`. Background runs now default to unattended mode
+- Projects settings now lists workspaces from any remote — GitLab, Gitea, Bitbucket, self-hosted, and SSH-style URLs, not just GitHub ([#681](https://github.com/getchisacode/chisacode/pull/681) by [@krumpyzoid](https://github.com/krumpyzoid))
 
 ### Improved
 
@@ -399,12 +399,12 @@
 
 - **Claude agent: daemon no longer crashes mid-turn** when the underlying SDK fires a stray control message after the connection has been torn down
 - **Windows:** Terminals start reliably and shut down cleanly without leaving stuck processes behind
-- **Linux:** Workspace file watchers no longer storm with events on busy working trees, fixing CPU spikes on large repos ([#794](https://github.com/getpaseo/paseo/pull/794) by [@312223105](https://github.com/312223105))
-- ACP-based agents launch terminal shell commands reliably ([#793](https://github.com/getpaseo/paseo/pull/793) by [@ebg1223](https://github.com/ebg1223))
-- Checkout shortstat now counts untracked files ([#608](https://github.com/getpaseo/paseo/issues/608), [#762](https://github.com/getpaseo/paseo/pull/762) by [@somus](https://github.com/somus))
-- Relay endpoints on port 443 use TLS automatically ([#774](https://github.com/getpaseo/paseo/pull/774) by [@caoer](https://github.com/caoer))
+- **Linux:** Workspace file watchers no longer storm with events on busy working trees, fixing CPU spikes on large repos ([#794](https://github.com/getchisacode/chisacode/pull/794) by [@312223105](https://github.com/312223105))
+- ACP-based agents launch terminal shell commands reliably ([#793](https://github.com/getchisacode/chisacode/pull/793) by [@ebg1223](https://github.com/ebg1223))
+- Checkout shortstat now counts untracked files ([#608](https://github.com/getchisacode/chisacode/issues/608), [#762](https://github.com/getchisacode/chisacode/pull/762) by [@somus](https://github.com/somus))
+- Relay endpoints on port 443 use TLS automatically ([#774](https://github.com/getchisacode/chisacode/pull/774) by [@caoer](https://github.com/caoer))
 - Desktop CLI passthrough TTY handling — interactive commands now behave correctly when launched from the desktop app
-- The CLI honors the `PASEO_PASSWORD` environment variable for password-protected daemons
+- The CLI honors the `CHISACODE_PASSWORD` environment variable for password-protected daemons
 - Daemon shutdown terminates all child processes cleanly using tree-kill
 - Agent spawn paths handle missing executables and unusual install layouts more reliably
 - OpenCode now forwards provider retry errors instead of silently swallowing them
@@ -417,19 +417,19 @@
 - Browser pane reload focus and devtools handling
 - MCP terminal capture now includes scrollback
 - Worktree branches no longer get renamed when an agent is created against an existing worktree from MCP
-- Creating an agent in a subdirectory of a registered workspace now runs in that subdirectory instead of jumping up to the parent ([#551](https://github.com/getpaseo/paseo/issues/551))
+- Creating an agent in a subdirectory of a registered workspace now runs in that subdirectory instead of jumping up to the parent ([#551](https://github.com/getchisacode/chisacode/issues/551))
 - Non-GitHub project display names are derived from the remote owner/repo instead of the local path
-- Desktop IPC wrapped in shared mutation/query hooks, fixing stale state and intermittent failures ([#761](https://github.com/getpaseo/paseo/issues/761))
-- `paseo schedule create --host` now requires `--cwd` to avoid running schedules in the wrong directory
-- `paseo schedule create --every` runs once immediately by default, then on the configured interval
+- Desktop IPC wrapped in shared mutation/query hooks, fixing stale state and intermittent failures ([#761](https://github.com/getchisacode/chisacode/issues/761))
+- `chisacode schedule create --host` now requires `--cwd` to avoid running schedules in the wrong directory
+- `chisacode schedule create --every` runs once immediately by default, then on the configured interval
 - MCP `create_agent` validates the requested mode and refuses silent cross-provider inheritance
 
 ## 0.1.69 - 2026-05-05
 
 ### Fixed
 
-- Paseo now recovers automatically when an internal daemon process crashes — your agents stay connected instead of getting stuck and you don't have to restart anything
-- Answering an interactive question from a Claude agent now reaches Claude correctly instead of being dropped ([#760](https://github.com/getpaseo/paseo/pull/760) by [@somus](https://github.com/somus))
+- ChisaCode now recovers automatically when an internal daemon process crashes — your agents stay connected instead of getting stuck and you don't have to restart anything
+- Answering an interactive question from a Claude agent now reaches Claude correctly instead of being dropped ([#760](https://github.com/getchisacode/chisacode/pull/760) by [@somus](https://github.com/somus))
 
 ## 0.1.68 - 2026-05-05
 
@@ -459,15 +459,15 @@
 
 ### Added
 
-- **In-app browser** — open a real web browser in any workspace to test your app ([#670](https://github.com/getpaseo/paseo/pull/670) by [@jasonkneen](https://github.com/jasonkneen))
-- Inline review comments in the git diff pane. Tap a line number to start a comment ([#530](https://github.com/getpaseo/paseo/pull/530))
-- Sub-agent activity is now shown for Codex, OpenCode, and Claude ([#672](https://github.com/getpaseo/paseo/pull/672), [#658](https://github.com/getpaseo/paseo/pull/658) by [@thisisryanswift](https://github.com/thisisryanswift))
+- **In-app browser** — open a real web browser in any workspace to test your app ([#670](https://github.com/getchisacode/chisacode/pull/670) by [@jasonkneen](https://github.com/jasonkneen))
+- Inline review comments in the git diff pane. Tap a line number to start a comment ([#530](https://github.com/getchisacode/chisacode/pull/530))
+- Sub-agent activity is now shown for Codex, OpenCode, and Claude ([#672](https://github.com/getchisacode/chisacode/pull/672), [#658](https://github.com/getchisacode/chisacode/pull/658) by [@thisisryanswift](https://github.com/thisisryanswift))
 - Pull and push your branch in one step from the git actions menu in the changes pane
-- Resume existing agent sessions with `paseo import --provider <name> <id>` ([#632](https://github.com/getpaseo/paseo/pull/632))
-- Password authentication and SSL support for daemon connections ([#635](https://github.com/getpaseo/paseo/pull/635))
-- Connect to a daemon via relay using a pairing offer URL from the CLI ([#639](https://github.com/getpaseo/paseo/pull/639))
+- Resume existing agent sessions with `chisacode import --provider <name> <id>` ([#632](https://github.com/getchisacode/chisacode/pull/632))
+- Password authentication and SSL support for daemon connections ([#635](https://github.com/getchisacode/chisacode/pull/635))
+- Connect to a daemon via relay using a pairing offer URL from the CLI ([#639](https://github.com/getchisacode/chisacode/pull/639))
 - **Windows:** Native ARM64 builds are now available
-- Bundled Paseo skills now refresh automatically on desktop app launch
+- Bundled ChisaCode skills now refresh automatically on desktop app launch
 
 ### Improved
 
@@ -479,27 +479,27 @@
 
 ### Fixed
 
-- **Apple Silicon Mac:** The desktop update pipeline now publishes manifests atomically, closing a race that could install the Intel build on Apple Silicon Macs and cause 100%+ renderer CPU usage. Affected users will self-heal — electron-updater's Rosetta detection migrates back to arm64 on the next update poll ([#555](https://github.com/getpaseo/paseo/issues/555))
-- **Linux:** `.deb` and `.rpm` packages now show as `Paseo` in the dock and process list instead of `Paseo.bin`. `--no-sandbox` is now scoped to AppImage only, matching VS Code's sandbox handling ([#602](https://github.com/getpaseo/paseo/issues/602))
-- **Windows:** Git diff commands no longer break on paths with special characters ([#629](https://github.com/getpaseo/paseo/pull/629))
-- Cursor CLI and other ACP custom providers launch reliably ([#628](https://github.com/getpaseo/paseo/pull/628))
-- Daemon stays up when WebSocket clients disconnect mid-stream, and crashes now write a fatal log entry instead of disappearing silently ([#613](https://github.com/getpaseo/paseo/pull/613) by [@yuruiz](https://github.com/yuruiz))
-- Long agent timelines reconnect cleanly over the relay instead of looping through disconnects while catching up ([#657](https://github.com/getpaseo/paseo/pull/657) by [@fireblue](https://github.com/fireblue))
+- **Apple Silicon Mac:** The desktop update pipeline now publishes manifests atomically, closing a race that could install the Intel build on Apple Silicon Macs and cause 100%+ renderer CPU usage. Affected users will self-heal — electron-updater's Rosetta detection migrates back to arm64 on the next update poll ([#555](https://github.com/getchisacode/chisacode/issues/555))
+- **Linux:** `.deb` and `.rpm` packages now show as `ChisaCode` in the dock and process list instead of `ChisaCode.bin`. `--no-sandbox` is now scoped to AppImage only, matching VS Code's sandbox handling ([#602](https://github.com/getchisacode/chisacode/issues/602))
+- **Windows:** Git diff commands no longer break on paths with special characters ([#629](https://github.com/getchisacode/chisacode/pull/629))
+- Cursor CLI and other ACP custom providers launch reliably ([#628](https://github.com/getchisacode/chisacode/pull/628))
+- Daemon stays up when WebSocket clients disconnect mid-stream, and crashes now write a fatal log entry instead of disappearing silently ([#613](https://github.com/getchisacode/chisacode/pull/613) by [@yuruiz](https://github.com/yuruiz))
+- Long agent timelines reconnect cleanly over the relay instead of looping through disconnects while catching up ([#657](https://github.com/getchisacode/chisacode/pull/657) by [@fireblue](https://github.com/fireblue))
 - Agent timelines refresh with smaller catch-up requests when you reopen an agent
 - Terminal snapshots flush reliably before clients reconnect
 - Workspace reconnects avoid unnecessary refresh work when the focused workspace is already current
 - Voice dictation keeps recording when the agent tab loses focus
-- OpenCode mode picker now lists agents available in every mode ([#606](https://github.com/getpaseo/paseo/pull/606) by [@thisisryanswift](https://github.com/thisisryanswift))
+- OpenCode mode picker now lists agents available in every mode ([#606](https://github.com/getchisacode/chisacode/pull/606) by [@thisisryanswift](https://github.com/thisisryanswift))
 - Codex plan approval panels no longer duplicate
 - Imported agents display the correct title immediately
 - OpenCode surfaces invalid mode/model errors instead of hanging
-- Archived worktrees stay hidden without flashing back into the list ([#640](https://github.com/getpaseo/paseo/pull/640))
+- Archived worktrees stay hidden without flashing back into the list ([#640](https://github.com/getchisacode/chisacode/pull/640))
 - Web dropdown menus no longer resize unexpectedly
 - The visible changes pane keeps in sync with the working tree diff
 - Tool detail rows on the timeline are selectable again
-- `paseo.json` parse errors in setup, teardown, and terminal actions now surface a clear error instead of failing silently
+- `chisacode.json` parse errors in setup, teardown, and terminal actions now surface a clear error instead of failing silently
 - Diff gutter line numbers were shifted one row out of alignment in some cases on web
-- Streamed agent output reconciles cleanly when the timeline hydrates mid-turn ([#663](https://github.com/getpaseo/paseo/pull/663))
+- Streamed agent output reconciles cleanly when the timeline hydrates mid-turn ([#663](https://github.com/getchisacode/chisacode/pull/663))
 - Images in assistant messages show a loading spinner while they load and an "Image unavailable" fallback if they fail, instead of a blank space
 - Isolated bottom sheet modals close and re-open without getting stuck
 
@@ -507,42 +507,42 @@
 
 ### Added
 
-- OpenCode now has a Full Access mode that auto-approves tool calls ([#595](https://github.com/getpaseo/paseo/pull/595) by [@tmih06](https://github.com/tmih06))
-- OpenCode supports executable slash commands ([#597](https://github.com/getpaseo/paseo/pull/597) by [@tmih06](https://github.com/tmih06))
+- OpenCode now has a Full Access mode that auto-approves tool calls ([#595](https://github.com/getchisacode/chisacode/pull/595) by [@tmih06](https://github.com/tmih06))
+- OpenCode supports executable slash commands ([#597](https://github.com/getchisacode/chisacode/pull/597) by [@tmih06](https://github.com/tmih06))
 
 ### Improved
 
-- `@`-mention stays responsive on very large projects ([#600](https://github.com/getpaseo/paseo/pull/600) by [@yuruiz](https://github.com/yuruiz))
+- `@`-mention stays responsive on very large projects ([#600](https://github.com/getchisacode/chisacode/pull/600) by [@yuruiz](https://github.com/yuruiz))
 
 ### Fixed
 
-- Workspaces still load when `paseo.json` has a parse error
+- Workspaces still load when `chisacode.json` has a parse error
 
 ## 0.1.63 - 2026-04-28
 
 ### Added
 
-- Project settings page with a built-in `paseo.json` editor
+- Project settings page with a built-in `chisacode.json` editor
 - Cold start restores your last open workspace
 - Tool call badges have a button to open the referenced file directly
-- Open the current branch on GitHub from a workspace's open menu ([#583](https://github.com/getpaseo/paseo/pull/583) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
+- Open the current branch on GitHub from a workspace's open menu ([#583](https://github.com/getchisacode/chisacode/pull/583) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
 - Enable or disable providers from Settings without editing config files
-- Paseo prompts you to configure a worktree setup script when one is missing
+- ChisaCode prompts you to configure a worktree setup script when one is missing
 - Choose whether the daemon shuts down when you close the desktop app
 
 ### Improved
 
 - Provider settings and model selection have been redesigned
-- Voice mode transcription endpoint is configurable for OpenAI-compatible providers ([#570](https://github.com/getpaseo/paseo/pull/570) by [@yuruiz](https://github.com/yuruiz))
+- Voice mode transcription endpoint is configurable for OpenAI-compatible providers ([#570](https://github.com/getchisacode/chisacode/pull/570) by [@yuruiz](https://github.com/yuruiz))
 - Adding a project no longer waits for GitHub PR status to load
 - Startup splash screen is cleaner — just the logo with a subtle shimmer
-- `paseo.json` setup and teardown accept a single command string, not just an array
+- `chisacode.json` setup and teardown accept a single command string, not just an array
 - Archiving a worktree is instant instead of waiting for the backend to confirm
 - Agent timelines and git diff lists no longer jump around while loading or streaming
 
 ### Fixed
 
-- `paseo loop run` and `paseo run` now respect the `--provider` and `--model` flags ([#594](https://github.com/getpaseo/paseo/pull/594) by [@VincenzoRocchi](https://github.com/VincenzoRocchi))
+- `chisacode loop run` and `chisacode run` now respect the `--provider` and `--model` flags ([#594](https://github.com/getchisacode/chisacode/pull/594) by [@VincenzoRocchi](https://github.com/VincenzoRocchi))
 - Pi provider shows up when only DeepSeek or other non-OpenAI/Anthropic/OpenRouter API keys are set
 - Custom models from `additionalModels` and `profileModels` are honored when picking a default for new agents
 - File preview line numbers stay on one line past line 99
@@ -575,15 +575,15 @@
 ### Fixed
 
 - Pull request status resolves correctly for PRs opened from forks
-- Installing the paseo CLI from the macOS desktop app now works in packaged builds
+- Installing the chisacode CLI from the macOS desktop app now works in packaged builds
 - Agents launched from the desktop app no longer inherit Electron-only environment variables
 
 ## 0.1.61 - 2026-04-23
 
 ### Added
 
-- `additionalModels` option in provider config lets you add or relabel models without replacing the full list — entries merge with runtime-discovered models (ACP) or your static `models` list. See the [Providers docs](https://paseo.sh/docs/providers)
-- New [Providers docs page](https://paseo.sh/docs/providers) covering first-class providers and every custom provider config pattern in one place
+- `additionalModels` option in provider config lets you add or relabel models without replacing the full list — entries merge with runtime-discovered models (ACP) or your static `models` list. See the [Providers docs](https://chisacode.sh/docs/providers)
+- New [Providers docs page](https://chisacode.sh/docs/providers) covering first-class providers and every custom provider config pattern in one place
 
 ### Improved
 
@@ -595,7 +595,7 @@
 
 ### Added
 
-- Scripts and services per worktree — define named commands in `paseo.json`, and long-running services get supervised with their own ports and nice proxy URLs like `http://web.my-app.localhost:6767`. See the [worktrees guide](https://paseo.sh/docs/worktrees)
+- Scripts and services per worktree — define named commands in `chisacode.json`, and long-running services get supervised with their own ports and nice proxy URLs like `http://web.my-app.localhost:6767`. See the [worktrees guide](https://chisacode.sh/docs/worktrees)
 - Launch scripts and services for a worktree directly from the workspace header
 - New Setup tab in every workspace showing setup, teardown, and script progress live
 - GitHub checks and PR reviews in the explorer sidebar, with a hover card for the full breakdown
@@ -620,7 +620,7 @@
 - Keyboard shortcuts keep working while Settings is open
 - Escape reliably interrupts the active agent
 - Checking out a pull request from a fork lands on an owner-prefixed branch so multiple forks don't collide
-- `paseo ls` defaults to active agents; pass `-a` to include archived
+- `chisacode ls` defaults to active agents; pass `-a` to include archived
 - GitHub branch and PR picker loads faster — queries are deferred until the picker opens
 
 ### Fixed
@@ -630,7 +630,7 @@
 - Replacing a running agent cleans up the previous one without leaving it behind
 - Agent notifications no longer get swallowed by a backgrounded focused client
 - Removed workspace folders disappear from the workspace list again
-- Codex keeps fast mode after you approve a plan ([#526](https://github.com/getpaseo/paseo/pull/526) by [@therainisme](https://github.com/therainisme))
+- Codex keeps fast mode after you approve a plan ([#526](https://github.com/getchisacode/chisacode/pull/526) by [@therainisme](https://github.com/therainisme))
 - Workspace tab focus is preserved across page refreshes
 - Settings screen no longer pushes its header down with extra spacing
 - Branch switcher title no longer overflows on narrow rows
@@ -654,27 +654,27 @@
 
 ### Added
 
-- Markdown files render as formatted markdown in the file pane ([#427](https://github.com/getpaseo/paseo/pull/427) by [@aaronflorey](https://github.com/aaronflorey))
+- Markdown files render as formatted markdown in the file pane ([#427](https://github.com/getchisacode/chisacode/pull/427) by [@aaronflorey](https://github.com/aaronflorey))
 - Cmd+L (Ctrl+L on Windows/Linux) focuses the agent message input
-- Provider models refresh on a freshness TTL; Settings shows last-updated time and any fetch errors ([#426](https://github.com/getpaseo/paseo/pull/426))
+- Provider models refresh on a freshness TTL; Settings shows last-updated time and any fetch errors ([#426](https://github.com/getchisacode/chisacode/pull/426))
 - `disallowedTools` option in provider config to block specific tools from an agent
 
 ### Improved
 
-- Windows: agents launch reliably from npm `.cmd` shims, paths with spaces, and JSON config args — fixes `spawn EINVAL` startup errors ([#454](https://github.com/getpaseo/paseo/pull/454))
-- OpenCode permission prompts include the requesting tool's context ([#398](https://github.com/getpaseo/paseo/pull/398) by [@aaronflorey](https://github.com/aaronflorey))
-- OpenCode todo and compaction events render in the timeline ([#429](https://github.com/getpaseo/paseo/pull/429) by [@aaronflorey](https://github.com/aaronflorey))
-- OpenCode sessions archive cleanly when closed ([#408](https://github.com/getpaseo/paseo/pull/408) by [@aaronflorey](https://github.com/aaronflorey))
-- OpenCode slash commands recover from SSE timeouts ([#407](https://github.com/getpaseo/paseo/pull/407) by [@aaronflorey](https://github.com/aaronflorey))
-- Paseo MCP tools work against archived agents, matching the CLI ([#423](https://github.com/getpaseo/paseo/pull/423))
-- Native scrollbars match the active theme across all web views ([#399](https://github.com/getpaseo/paseo/pull/399) by [@ethersh](https://github.com/ethersh))
+- Windows: agents launch reliably from npm `.cmd` shims, paths with spaces, and JSON config args — fixes `spawn EINVAL` startup errors ([#454](https://github.com/getchisacode/chisacode/pull/454))
+- OpenCode permission prompts include the requesting tool's context ([#398](https://github.com/getchisacode/chisacode/pull/398) by [@aaronflorey](https://github.com/aaronflorey))
+- OpenCode todo and compaction events render in the timeline ([#429](https://github.com/getchisacode/chisacode/pull/429) by [@aaronflorey](https://github.com/aaronflorey))
+- OpenCode sessions archive cleanly when closed ([#408](https://github.com/getchisacode/chisacode/pull/408) by [@aaronflorey](https://github.com/aaronflorey))
+- OpenCode slash commands recover from SSE timeouts ([#407](https://github.com/getchisacode/chisacode/pull/407) by [@aaronflorey](https://github.com/aaronflorey))
+- ChisaCode MCP tools work against archived agents, matching the CLI ([#423](https://github.com/getchisacode/chisacode/pull/423))
+- Native scrollbars match the active theme across all web views ([#399](https://github.com/getchisacode/chisacode/pull/399) by [@ethersh](https://github.com/ethersh))
 
 ### Fixed
 
-- Code file previews can be selected and copied on iOS ([#447](https://github.com/getpaseo/paseo/pull/447) by [@muzhi1991](https://github.com/muzhi1991))
-- File preview no longer shows stale content when reopening the same file ([#411](https://github.com/getpaseo/paseo/pull/411) by [@muzhi1991](https://github.com/muzhi1991))
-- File explorer reinitialises when the client reconnects after a page refresh ([#442](https://github.com/getpaseo/paseo/pull/442) by [@1996fanrui](https://github.com/1996fanrui))
-- Generic ACP providers no longer receive duplicated command arguments ([#444](https://github.com/getpaseo/paseo/pull/444) by [@edvardchen](https://github.com/edvardchen))
+- Code file previews can be selected and copied on iOS ([#447](https://github.com/getchisacode/chisacode/pull/447) by [@muzhi1991](https://github.com/muzhi1991))
+- File preview no longer shows stale content when reopening the same file ([#411](https://github.com/getchisacode/chisacode/pull/411) by [@muzhi1991](https://github.com/muzhi1991))
+- File explorer reinitialises when the client reconnects after a page refresh ([#442](https://github.com/getchisacode/chisacode/pull/442) by [@1996fanrui](https://github.com/1996fanrui))
+- Generic ACP providers no longer receive duplicated command arguments ([#444](https://github.com/getchisacode/chisacode/pull/444) by [@edvardchen](https://github.com/edvardchen))
 - Workspace headers no longer show a branch icon for non-git workspaces
 - Branch switcher layout is stable on mobile
 - Model names no longer truncate mid-word in the picker rows
@@ -692,8 +692,8 @@
 
 ### Added
 
-- Provider profiles — define custom providers in your Paseo config that appear alongside built-ins. Override a built-in's binary, env, or models, or create entirely new providers. See the [configuration guide](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md)
-- ACP agent support — add any ACP-compatible agent to Paseo with `extends: "acp"` in your provider config. No code changes needed
+- Provider profiles — define custom providers in your ChisaCode config that appear alongside built-ins. Override a built-in's binary, env, or models, or create entirely new providers. See the [configuration guide](https://github.com/getchisacode/chisacode/blob/main/docs/custom-providers.md)
+- ACP agent support — add any ACP-compatible agent to ChisaCode with `extends: "acp"` in your provider config. No code changes needed
 - Choose provider and model when creating scheduled agents
 - Max reasoning effort option for Opus 4.6 models
 - Cmd+, (Ctrl+, on Windows/Linux) opens settings
@@ -721,8 +721,8 @@
 
 ### Improved
 
-- Paseo tools are no longer injected into agents by default — opt in from Settings when you need agent-to-agent orchestration
-- Agent provider and mode are now resolved server-side, so CLI commands like `paseo run` use consistent defaults without client-side lookups
+- ChisaCode tools are no longer injected into agents by default — opt in from Settings when you need agent-to-agent orchestration
+- Agent provider and mode are now resolved server-side, so CLI commands like `chisacode run` use consistent defaults without client-side lookups
 
 ### Fixed
 
@@ -734,10 +734,10 @@
 
 ### Added
 
-- Agents get Paseo tools automatically — every new agent gets access to terminals, schedules, worktrees, and other agents through MCP. Toggle it off in Settings under "Inject Paseo tools"
+- Agents get ChisaCode tools automatically — every new agent gets access to terminals, schedules, worktrees, and other agents through MCP. Toggle it off in Settings under "Inject ChisaCode tools"
 - Git pull — pull remote changes directly from the workspace header. Promoted to the primary action when your branch is behind origin
 - Child agent notifications — parent agents are automatically notified when a child agent finishes, errors, or needs permission approval
-- Agent reload — `paseo agent reload` restarts an agent's underlying process from the CLI
+- Agent reload — `chisacode agent reload` restarts an agent's underlying process from the CLI
 - Middle-click to close tabs on desktop
 - Keyboard shortcut to cycle themes
 
@@ -746,7 +746,7 @@
 - Unavailable git actions now explain why in a toast instead of being silently greyed out
 - Streaming markdown on mobile renders significantly faster
 - Sidebar, branch switcher, and agent panel no longer re-render unnecessarily — noticeable on large workspaces
-- Paseo tool calls in agent timelines show the Paseo logo and human-readable names
+- ChisaCode tool calls in agent timelines show the ChisaCode logo and human-readable names
 - Relay and pairing URLs are stripped from daemon logs
 
 ### Fixed
@@ -797,7 +797,7 @@
 ### Added
 
 - Context window meter — see how much of the context window your agent has used, with color thresholds at 70% and 90%. Works with Claude Code, Codex, and OpenCode
-- Open in editor — jump from any workspace straight into Cursor, VS Code, Zed, or your file manager. Paseo remembers your choice
+- Open in editor — jump from any workspace straight into Cursor, VS Code, Zed, or your file manager. ChisaCode remembers your choice
 - Side-by-side diffs — toggle between unified and split-column diff views, with a whitespace visibility option
 - Spoken messages — when using voice mode, agent speech now appears as regular messages in the conversation instead of raw tool output
 - Plan actions — plan cards now show the actions your agent supports (e.g. "Implement", "Deny") instead of generic accept/reject buttons
@@ -847,7 +847,7 @@
 
 ### Fixed
 
-- Desktop app now resolves the user's full login shell environment at startup, fixing tools like `codex`, `node`, `bun`, and `direnv` not being found when Paseo is launched from Finder or Dock. Terminals spawned by Paseo now inherit the same PATH and environment variables as a normal terminal session. Approach adapted from VS Code's battle-tested shell environment resolution
+- Desktop app now resolves the user's full login shell environment at startup, fixing tools like `codex`, `node`, `bun`, and `direnv` not being found when ChisaCode is launched from Finder or Dock. Terminals spawned by ChisaCode now inherit the same PATH and environment variables as a normal terminal session. Approach adapted from VS Code's battle-tested shell environment resolution
 - Input field on running agent screens now correctly receives keyboard focus
 - Mobile model selector alignment and sizing
 
@@ -875,14 +875,14 @@
 
 - Pi (pi.dev) agent provider — connect Pi as a new agent type with thinking levels and tool call support
 - Copilot agent provider re-enabled after ACP compatibility fixes
-- `paseo .` and `paseo <path>` open the desktop app with the given project, similar to `code .`
+- `chisacode .` and `chisacode <path>` open the desktop app with the given project, similar to `code .`
 - Provider-declared features system — providers can expose dynamic toggles and selects that the app renders automatically. First consumer: Codex fast mode
 - Codex plan mode — start agents in plan-only mode with a dedicated plan card UI for reviewing proposed changes before execution
 - OpenCode custom agents and slash commands — user-defined agents from opencode.json now appear in the mode picker, and slash commands accept optional arguments
-- Desktop Integrations settings — install the Paseo CLI and orchestration skills directly from the app without touching the terminal
+- Desktop Integrations settings — install the ChisaCode CLI and orchestration skills directly from the app without touching the terminal
 - Daemon status dialog in desktop settings for quick health checks
 - Auto-restart daemon on version mismatch — the desktop app detects when the running daemon is outdated and restarts it automatically
-- Setup hint and paseo.sh link on the mobile welcome screen so new App Store users know what to do next
+- Setup hint and chisacode.sh link on the mobile welcome screen so new App Store users know what to do next
 
 ### Improved
 
@@ -983,7 +983,7 @@
 
 ### Added
 
-- **Terminal management from the CLI** — new `paseo terminal` command group lets you list, create, and interact with workspace terminals without leaving your terminal
+- **Terminal management from the CLI** — new `chisacode terminal` command group lets you list, create, and interact with workspace terminals without leaving your terminal
 - **Material file icons in the explorer** — the file explorer tree now shows language-specific icons (TypeScript, JSON, Markdown, etc.) so you can spot files at a glance
 
 ### Fixed
@@ -1042,8 +1042,8 @@
 
 ### Added
 
-- Added `paseo archive` as a top-level alias for `paseo agent archive`
-- Added the `PASEO_AGENT_ID` environment variable for Claude and Codex agents
+- Added `chisacode archive` as a top-level alias for `chisacode agent archive`
+- Added the `CHISACODE_AGENT_ID` environment variable for Claude and Codex agents
 - Added a redesigned command autocomplete with a detail card and dropdown styling
 - Linked Android download surfaces to the Google Play Store
 
@@ -1058,7 +1058,7 @@
 
 ### Fixed
 
-- Fixed `paseo send --no-wait` not taking effect
+- Fixed `chisacode send --no-wait` not taking effect
 - Fixed stale abort results contaminating replacement turns after an interrupt
 - Fixed Claude interrupt handling and autonomous wake reliability
 - Fixed nested Claude Code session detection and provider availability checks
@@ -1181,7 +1181,7 @@
 
 ### Improved
 
-- Improved desktop runtime behavior on Windows by suppressing console windows and defaulting app data to `~/.paseo`
+- Improved desktop runtime behavior on Windows by suppressing console windows and defaulting app data to `~/.chisacode`
 - Added a Discord link to the website navigation
 
 ### Fixed
@@ -1286,11 +1286,11 @@
 
 ### Added
 
-- Update the Paseo desktop app and local daemon directly from Settings
+- Update the ChisaCode desktop app and local daemon directly from Settings
 - Microphone and notification permission controls in Settings
 - Thinking/reasoning mode — agents can use extended thinking when the provider supports it
 - Autonomous run mode — let agents keep working without manual approval at each step
-- `paseo wait` now shows a snapshot of recent agent activity while you wait
+- `chisacode wait` now shows a snapshot of recent agent activity while you wait
 
 ### Improved
 

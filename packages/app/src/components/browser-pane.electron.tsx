@@ -199,14 +199,14 @@ function ignoreWebviewJavaScriptError() {}
 function destroyWebviewSelector(webview: ElectronWebview): void {
   void executeWebviewJavaScript(
     webview,
-    "if(window.__paseoSelector) window.__paseoSelector.destroy();",
+    "if(window.__chisacodeSelector) window.__chisacodeSelector.destroy();",
   ).catch(ignoreWebviewJavaScriptError);
 }
 
 function clearWebviewSelector(webview: ElectronWebview): void {
   void executeWebviewJavaScript(
     webview,
-    "if(window.__paseoSelector) window.__paseoSelector.destroy(); window.__paseoSelectorResult = null;",
+    "if(window.__chisacodeSelector) window.__chisacodeSelector.destroy(); window.__chisacodeSelectorResult = null;",
   ).catch(ignoreWebviewJavaScriptError);
 }
 
@@ -245,7 +245,7 @@ function startSelectorResultPolling(input: {
       try {
         const raw = await executeWebviewJavaScript(
           webview,
-          "JSON.stringify(window.__paseoSelectorResult || null)",
+          "JSON.stringify(window.__chisacodeSelectorResult || null)",
         );
         const result = typeof raw === "string" ? JSON.parse(raw) : null;
         if (!result) {
@@ -253,7 +253,7 @@ function startSelectorResultPolling(input: {
         }
         window.clearInterval(poll);
         onDone();
-        await executeWebviewJavaScript(webview, "window.__paseoSelectorResult = null;");
+        await executeWebviewJavaScript(webview, "window.__chisacodeSelectorResult = null;");
         if (!result.__cancelled) {
           onSelection(result as BrowserElementSelection);
         }
@@ -387,7 +387,7 @@ export function BrowserPane({
     const initialUnsafeNavigationMessage = getUnsafeNavigationMessage(initialUrlRef.current);
     const webview = document.createElement("webview") as ElectronWebview;
     webviewRef.current = webview;
-    webview.setAttribute("partition", `persist:paseo-browser-${browserId}`);
+    webview.setAttribute("partition", `persist:chisacode-browser-${browserId}`);
     webview.setAttribute("allowpopups", "true");
     webview.setAttribute("spellcheck", "false");
     webview.setAttribute("autosize", "on");
@@ -662,24 +662,24 @@ export function BrowserPane({
 
     const js = `
       (function() {
-        if (window.__paseoSelector) { window.__paseoSelector.destroy(); }
+        if (window.__chisacodeSelector) { window.__chisacodeSelector.destroy(); }
         var overlay = null;
         var style = document.createElement('style');
         style.textContent = [
-          '.__paseo-hover { outline: 2px solid #3b82f6 !important; outline-offset: 2px !important; cursor: crosshair !important; }',
-          '.__paseo-select-mode, .__paseo-select-mode * { cursor: crosshair !important; pointer-events: auto !important; user-select: none !important; }',
-          '.__paseo-select-mode *, .__paseo-select-mode *::before, .__paseo-select-mode *::after { animation: none !important; transition: none !important; }',
-          '.__paseo-select-mode a, .__paseo-select-mode button, .__paseo-select-mode input, .__paseo-select-mode select, .__paseo-select-mode textarea, .__paseo-select-mode [role="button"], .__paseo-select-mode [onclick] { pointer-events: none !important; }',
-          '.__paseo-select-mode iframe, .__paseo-select-mode video, .__paseo-select-mode audio { pointer-events: none !important; }',
+          '.__chisacode-hover { outline: 2px solid #3b82f6 !important; outline-offset: 2px !important; cursor: crosshair !important; }',
+          '.__chisacode-select-mode, .__chisacode-select-mode * { cursor: crosshair !important; pointer-events: auto !important; user-select: none !important; }',
+          '.__chisacode-select-mode *, .__chisacode-select-mode *::before, .__chisacode-select-mode *::after { animation: none !important; transition: none !important; }',
+          '.__chisacode-select-mode a, .__chisacode-select-mode button, .__chisacode-select-mode input, .__chisacode-select-mode select, .__chisacode-select-mode textarea, .__chisacode-select-mode [role="button"], .__chisacode-select-mode [onclick] { pointer-events: none !important; }',
+          '.__chisacode-select-mode iframe, .__chisacode-select-mode video, .__chisacode-select-mode audio { pointer-events: none !important; }',
         ].join('\\n');
         document.head.appendChild(style);
-        document.documentElement.classList.add('__paseo-select-mode');
+        document.documentElement.classList.add('__chisacode-select-mode');
         var last = null;
         function onMove(e) {
           e.preventDefault();
           e.stopPropagation();
-          if (last) last.classList.remove('__paseo-hover');
-          e.target.classList.add('__paseo-hover');
+          if (last) last.classList.remove('__chisacode-hover');
+          e.target.classList.add('__chisacode-hover');
           last = e.target;
         }
         function buildSelector(el) {
@@ -756,7 +756,7 @@ export function BrowserPane({
           e.stopPropagation();
           e.stopImmediatePropagation();
           var el = e.target;
-          if (last) last.classList.remove('__paseo-hover');
+          if (last) last.classList.remove('__chisacode-hover');
           var attrs = {};
           for (var i = 0; i < el.attributes.length; i++) {
             attrs[el.attributes[i].name] = el.attributes[i].value;
@@ -776,10 +776,10 @@ export function BrowserPane({
             children: getChildSummary(el, 8)
           };
           destroy();
-          window.__paseoSelectorResult = result;
+          window.__chisacodeSelectorResult = result;
         }
         function onKey(e) {
-          if (e.key === 'Escape') { destroy(); window.__paseoSelectorResult = { __cancelled: true }; }
+          if (e.key === 'Escape') { destroy(); window.__chisacodeSelectorResult = { __cancelled: true }; }
         }
         function blockEvent(e) {
           e.preventDefault();
@@ -798,10 +798,10 @@ export function BrowserPane({
           document.removeEventListener('touchend', blockEvent, true);
           document.removeEventListener('focus', blockEvent, true);
           document.removeEventListener('submit', blockEvent, true);
-          document.documentElement.classList.remove('__paseo-select-mode');
-          if (last) last.classList.remove('__paseo-hover');
+          document.documentElement.classList.remove('__chisacode-select-mode');
+          if (last) last.classList.remove('__chisacode-hover');
           style.remove();
-          window.__paseoSelector = null;
+          window.__chisacodeSelector = null;
         }
         document.addEventListener('mousemove', onMove, true);
         document.addEventListener('click', onClick, true);
@@ -814,7 +814,7 @@ export function BrowserPane({
         document.addEventListener('touchend', blockEvent, true);
         document.addEventListener('focus', blockEvent, true);
         document.addEventListener('submit', blockEvent, true);
-        window.__paseoSelector = { destroy: destroy };
+        window.__chisacodeSelector = { destroy: destroy };
       })()
     `;
 

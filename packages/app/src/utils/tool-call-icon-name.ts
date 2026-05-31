@@ -1,7 +1,7 @@
-import type { ToolCallDetail, ToolCallIconName } from "@fleurdelys/protocol/agent-types";
-import { isPaseoToolName } from "@fleurdelys/protocol/tool-name-normalization";
+import type { ToolCallDetail, ToolCallIconName } from "@chisacode/protocol/agent-types";
+import { isChisaCodeToolName } from "@chisacode/protocol/tool-name-normalization";
 
-export type ToolCallIcon = ToolCallIconName | "paseo";
+export type ToolCallIcon = ToolCallIconName | "chisacode";
 
 const TOOL_DETAIL_ICON_NAMES: Record<ToolCallDetail["type"], ToolCallIcon> = {
   shell: "square_terminal",
@@ -31,8 +31,8 @@ export function resolveToolCallIconName(toolName: string, detail?: ToolCallDetai
   if (lowerName === "speak") {
     return "mic_vocal";
   }
-  if (isPaseoToolName(lowerName)) {
-    return "paseo";
+  if (isChisaCodeToolName(lowerName)) {
+    return "chisacode";
   }
   if (lowerName === "task") {
     return "bot";

@@ -2,7 +2,7 @@ import startEntry from "@tanstack/react-start/server-entry";
 import { getDoc } from "~/docs";
 import { buildLlmsTxt } from "~/llms";
 
-const CANONICAL_HOST = "paseo.sh";
+const CANONICAL_HOST = "chisacode.sh";
 
 type FetchArgs = Parameters<typeof startEntry.fetch>;
 

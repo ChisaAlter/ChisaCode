@@ -15,7 +15,7 @@ import {
   type PackageInfo,
 } from "./package-paths.js";
 
-const SERVER_PACKAGE_NAME = "@fleurdelys/server";
+const SERVER_PACKAGE_NAME = "@chisacode/server";
 
 const esmRequire = createRequire(__filename);
 
@@ -45,7 +45,7 @@ export function resolveDaemonRunnerEntrypoint(): NodeEntrypointSpec {
         filePath: path.join(
           resolvePackagedAsarPath(),
           "node_modules",
-          "@fleurdelys",
+          "@chisacode",
           "server",
           "dist",
           "scripts",

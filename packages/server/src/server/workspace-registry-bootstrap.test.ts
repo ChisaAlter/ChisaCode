@@ -16,7 +16,7 @@ const ARCHIVED_PROJECT = path.resolve("/tmp/archived-project");
 
 describe("bootstrapWorkspaceRegistries", () => {
   let tmpDir: string;
-  let paseoHome: string;
+  let chisacodeHome: string;
   let agentStorage: AgentStorage;
   let projectRegistry: FileBackedProjectRegistry;
   let workspaceRegistry: FileBackedWorkspaceRegistry;
@@ -25,14 +25,14 @@ describe("bootstrapWorkspaceRegistries", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "workspace-bootstrap-"));
-    paseoHome = path.join(tmpDir, ".paseo");
-    agentStorage = new AgentStorage(path.join(paseoHome, "agents"), logger);
+    chisacodeHome = path.join(tmpDir, ".chisacode");
+    agentStorage = new AgentStorage(path.join(chisacodeHome, "agents"), logger);
     projectRegistry = new FileBackedProjectRegistry(
-      path.join(paseoHome, "projects", "projects.json"),
+      path.join(chisacodeHome, "projects", "projects.json"),
       logger,
     );
     workspaceRegistry = new FileBackedWorkspaceRegistry(
-      path.join(paseoHome, "projects", "workspaces.json"),
+      path.join(chisacodeHome, "projects", "workspaces.json"),
       logger,
     );
     workspaceGitService = createNoopWorkspaceGitService();
@@ -97,7 +97,7 @@ describe("bootstrapWorkspaceRegistries", () => {
     });
 
     await bootstrapWorkspaceRegistries({
-      paseoHome,
+      chisacodeHome,
       agentStorage,
       projectRegistry,
       workspaceRegistry,
@@ -161,7 +161,7 @@ describe("bootstrapWorkspaceRegistries", () => {
     });
 
     await bootstrapWorkspaceRegistries({
-      paseoHome,
+      chisacodeHome,
       agentStorage,
       projectRegistry,
       workspaceRegistry,

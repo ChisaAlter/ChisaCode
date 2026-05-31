@@ -21,6 +21,7 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import type { Agent } from "@/stores/session-store";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
+import { useTranslation } from "react-i18next";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -36,6 +37,8 @@ interface AgentListProps {
 type FlatListItem =
   | { type: "header"; key: string; title: string }
   | { type: "agent"; key: string; agent: AggregatedAgent };
+
+type DateSectionKey = "today" | "yesterday" | "thisWeek" | "thisMonth" | "older";
 
 function buildHistoricalAgentDetail(agent: AggregatedAgent): Agent {
   return {
@@ -94,7 +97,7 @@ function rememberArchivedAgentDetail(agent: AggregatedAgent) {
   });
 }
 
-function deriveDateSectionLabel(lastActivityAt: Date): string {
+function deriveDateSectionKey(lastActivityAt: Date): DateSectionKey {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
@@ -105,21 +108,21 @@ function deriveDateSectionLabel(lastActivityAt: Date): string {
   );
 
   if (activityStart.getTime() >= todayStart.getTime()) {
-    return "今天";
+    return "today";
   }
   if (activityStart.getTime() >= yesterdayStart.getTime()) {
-    return "昨天";
+    return "yesterday";
   }
 
   const diffTime = todayStart.getTime() - activityStart.getTime();
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   if (diffDays <= 7) {
-    return "本周";
+    return "thisWeek";
   }
   if (diffDays <= 30) {
-    return "本月";
+    return "thisMonth";
   }
-  return "更早";
+  return "older";
 }
 
 function formatStatusLabel(status: AggregatedAgent["status"]): string {
@@ -188,10 +191,13 @@ function SessionRow({
   onLongPress: (agent: AggregatedAgent) => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const timeAgo = formatTimeAgo(agent.lastActivityAt);
   const agentKey = `${agent.serverId}:${agent.id}`;
   const isSelected = selectedAgentId === agentKey;
-  const statusLabel = formatStatusLabel(agent.status);
+  const statusLabel = t(`session.status.${agent.status}`, {
+    defaultValue: formatStatusLabel(agent.status),
+  });
   const projectPath = shortenPath(agent.cwd);
   const ProviderIcon = getProviderIcon(agent.provider);
 
@@ -231,14 +237,19 @@ function SessionRow({
             <ProviderIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
           </View>
           <Text style={sessionTitleStyle} numberOfLines={1}>
-            {agent.title || "新会话"}
+            {agent.title || t("session.newSession")}
           </Text>
-          {agent.archivedAt ? <SessionBadge label="已归档" icon={archivedIcon} /> : null}
+          {agent.archivedAt ? (
+            <SessionBadge label={t("session.archived")} icon={archivedIcon} />
+          ) : null}
           {(agent.pendingPermissionCount ?? 0) > 0 ? (
-            <SessionBadge label={`${agent.pendingPermissionCount} 个待处理`} tone="warning" />
+            <SessionBadge
+              label={t("session.pendingCount", { count: agent.pendingPermissionCount ?? 0 })}
+              tone="warning"
+            />
           ) : null}
           {!isMobile && showAttentionIndicator && agent.requiresAttention ? (
-            <SessionBadge label="需要处理" tone="danger" />
+            <SessionBadge label={t("session.needsAttention")} tone="danger" />
           ) : null}
         </View>
         {isMobile && (
@@ -272,7 +283,7 @@ function SessionRow({
       )}
       {isMobile && showAttentionIndicator && agent.requiresAttention ? (
         <View style={styles.rowTrailing}>
-          <SessionBadge label="需要处理" tone="danger" />
+          <SessionBadge label={t("session.needsAttention")} tone="danger" />
         </View>
       ) : null}
     </Pressable>
@@ -289,6 +300,7 @@ export function AgentList({
   showAttentionIndicator = true,
 }: AgentListProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [actionAgent, setActionAgent] = useState<AggregatedAgent | null>(null);
   const isMobile = useIsCompactFormFactor();
@@ -354,28 +366,32 @@ export function AgentList({
   }, [actionAgent, actionClient, archiveAgent]);
 
   const flatItems = useMemo((): FlatListItem[] => {
-    const order = ["今天", "昨天", "本周", "本月", "更早"] as const;
-    const buckets = new Map<string, AggregatedAgent[]>();
+    const order: DateSectionKey[] = ["today", "yesterday", "thisWeek", "thisMonth", "older"];
+    const buckets = new Map<DateSectionKey, AggregatedAgent[]>();
     for (const agent of agents) {
-      const label = deriveDateSectionLabel(agent.lastActivityAt);
-      const existing = buckets.get(label) ?? [];
+      const sectionKey = deriveDateSectionKey(agent.lastActivityAt);
+      const existing = buckets.get(sectionKey) ?? [];
       existing.push(agent);
-      buckets.set(label, existing);
+      buckets.set(sectionKey, existing);
     }
 
     const result: FlatListItem[] = [];
-    for (const label of order) {
-      const data = buckets.get(label);
+    for (const sectionKey of order) {
+      const data = buckets.get(sectionKey);
       if (!data || data.length === 0) {
         continue;
       }
-      result.push({ type: "header", key: `header:${label}`, title: label });
+      result.push({
+        type: "header",
+        key: `header:${sectionKey}`,
+        title: t(`session.dateSections.${sectionKey}`),
+      });
       for (const agent of data) {
         result.push({ type: "agent", key: `${agent.serverId}:${agent.id}`, agent });
       }
     }
     return result;
-  }, [agents]);
+  }, [agents, t]);
 
   const renderItem: ListRenderItem<FlatListItem> = useCallback(
     ({ item }) => {
@@ -453,7 +469,9 @@ export function AgentList({
           <View style={sheetContainerStyle}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>
-              {isActionDaemonUnavailable ? "主机离线" : "这个智能体仍在运行。归档会停止它。"}
+              {isActionDaemonUnavailable
+                ? t("session.hostOffline")
+                : t("session.stillRunningArchiveWarning")}
             </Text>
             <View style={styles.sheetButtonRow}>
               <Pressable
@@ -461,7 +479,7 @@ export function AgentList({
                 onPress={handleCloseActionSheet}
                 testID="agent-action-cancel"
               >
-                <Text style={styles.sheetCancelText}>取消</Text>
+                <Text style={styles.sheetCancelText}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable
                 disabled={isActionDaemonUnavailable}
@@ -469,7 +487,7 @@ export function AgentList({
                 onPress={handleArchiveAgent}
                 testID="agent-action-archive"
               >
-                <Text style={sheetArchiveTextStyle}>归档</Text>
+                <Text style={sheetArchiveTextStyle}>{t("common.archive")}</Text>
               </Pressable>
             </View>
           </View>

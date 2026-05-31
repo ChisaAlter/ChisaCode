@@ -9,7 +9,7 @@ import {
   type StreamItem,
   type UserMessageImageAttachment,
 } from "@/types/stream";
-import type { AgentAttachment } from "@fleurdelys/protocol/messages";
+import type { AgentAttachment } from "@chisacode/protocol/messages";
 
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
 

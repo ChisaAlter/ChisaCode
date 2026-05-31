@@ -1,16 +1,16 @@
 import type { Logger } from "pino";
 
-import { PARENT_AGENT_ID_LABEL } from "@fleurdelys/protocol/agent-labels";
+import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
-import type { CreatePaseoWorktreeInput } from "../../paseo-worktree-service.js";
+import type { CreateChisaCodeWorktreeInput } from "../../chisacode-worktree-service.js";
 import { expandUserPath, resolvePathFromBase } from "../../path-utils.js";
 import { toWorktreeRequestError } from "../../worktree-errors.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import type {
   AgentWorktreeSetupContinuation,
-  CreatePaseoWorktreeSetupContinuationInput,
-  CreatePaseoWorktreeWorkflowFn,
-  CreatePaseoWorktreeWorkflowResult,
+  CreateChisaCodeWorktreeSetupContinuationInput,
+  CreateChisaCodeWorktreeWorkflowFn,
+  CreateChisaCodeWorktreeWorkflowResult,
 } from "../../worktree-session.js";
 import type { AgentAttachment, FirstAgentContext, GitSetupOptions } from "../../messages.js";
 import type { AgentManager, ManagedAgent } from "../agent-manager.js";
@@ -45,7 +45,7 @@ interface CreateAgentCommandDependencies {
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   logger: Logger;
-  paseoHome?: string;
+  chisacodeHome?: string;
   workspaceGitService?: Pick<
     WorkspaceGitService,
     "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
@@ -53,7 +53,7 @@ interface CreateAgentCommandDependencies {
   terminalManager?: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   daemonConfig?: StructuredGenerationDaemonConfig | null;
-  createPaseoWorktree?: CreatePaseoWorktreeWorkflowFn;
+  createChisaCodeWorktree?: CreateChisaCodeWorktreeWorkflowFn;
 }
 
 export interface CreateAgentFromSessionInput {
@@ -303,7 +303,7 @@ async function sendInitialPrompt(
     },
     initialPrompt: resolved.metadataInitialPrompt,
     explicitTitle: resolved.explicitTitle,
-    paseoHome: dependencies.paseoHome,
+    chisacodeHome: dependencies.chisacodeHome,
     logger: dependencies.logger,
   });
 
@@ -416,9 +416,9 @@ async function resolveMcpCwd(params: {
       githubPrNumber: worktree.githubPrNumber,
       ...(params.initialPrompt ? { firstAgentContext: { prompt: params.initialPrompt } } : {}),
       runSetup: false,
-      paseoHome: dependencies.paseoHome,
+      chisacodeHome: dependencies.chisacodeHome,
     },
-    createPaseoWorktree: dependencies.createPaseoWorktree,
+    createChisaCodeWorktree: dependencies.createChisaCodeWorktree,
     resolveDefaultBranch: baseBranch ? async () => baseBranch : undefined,
     setupContinuation: {
       kind: "agent",
@@ -445,20 +445,20 @@ async function resolveMcpCwd(params: {
 }
 
 interface CreateMcpWorktreeOptions {
-  input: CreatePaseoWorktreeInput;
-  createPaseoWorktree: CreatePaseoWorktreeWorkflowFn | undefined;
+  input: CreateChisaCodeWorktreeInput;
+  createChisaCodeWorktree: CreateChisaCodeWorktreeWorkflowFn | undefined;
   resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-  setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
+  setupContinuation?: CreateChisaCodeWorktreeSetupContinuationInput;
 }
 
 async function createMcpWorktree(
   options: CreateMcpWorktreeOptions,
-): Promise<CreatePaseoWorktreeWorkflowResult> {
+): Promise<CreateChisaCodeWorktreeWorkflowResult> {
   try {
-    if (!options.createPaseoWorktree) {
-      throw new Error("Paseo worktree service is not configured");
+    if (!options.createChisaCodeWorktree) {
+      throw new Error("ChisaCode worktree service is not configured");
     }
-    return await options.createPaseoWorktree(options.input, {
+    return await options.createChisaCodeWorktree(options.input, {
       ...(options.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
         : {}),

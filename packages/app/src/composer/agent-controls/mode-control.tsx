@@ -28,11 +28,11 @@ import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { formatAgentModeLabel } from "@/composer/agent-controls/utils";
-import type { AgentMode, AgentProvider } from "@fleurdelys/protocol/agent-types";
+import type { AgentMode, AgentProvider } from "@chisacode/protocol/agent-types";
 import {
   getModeVisuals,
   type AgentProviderDefinition,
-} from "@fleurdelys/protocol/provider-manifest";
+} from "@chisacode/protocol/provider-manifest";
 
 export type AgentModeControlPlacement = "toolbar" | "footer";
 

@@ -3,7 +3,7 @@ import type {
   UserComposerAttachment,
   WorkspaceComposerAttachment,
 } from "@/attachments/types";
-import type { AgentAttachment } from "@fleurdelys/protocol/messages";
+import type { AgentAttachment } from "@chisacode/protocol/messages";
 
 export function isWorkspaceAttachment(
   attachment: ComposerAttachment | undefined,

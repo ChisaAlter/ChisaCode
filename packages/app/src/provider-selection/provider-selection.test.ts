@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AgentModelDefinition, ProviderSnapshotEntry } from "@fleurdelys/protocol/agent-types";
-import type { AgentProviderDefinition } from "@fleurdelys/protocol/provider-manifest";
+import type { AgentModelDefinition, ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
+import type { AgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
 import {
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,

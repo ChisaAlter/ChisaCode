@@ -1,10 +1,10 @@
-import type { SubscribeTerminalRequest } from "@fleurdelys/protocol/messages";
+import type { SubscribeTerminalRequest } from "@chisacode/protocol/messages";
 import {
   TerminalStreamOpcode,
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
-} from "@fleurdelys/protocol/binary-frames/index";
-import { renderTerminalSnapshotToAnsi } from "@fleurdelys/protocol/terminal-snapshot";
+} from "@chisacode/protocol/binary-frames/index";
+import { renderTerminalSnapshotToAnsi } from "@chisacode/protocol/terminal-snapshot";
 import type { TerminalStateSnapshot, TerminalStateSnapshotOptions } from "./terminal.js";
 
 export const MAX_TERMINAL_OUTPUT_FRAME_BYTES = 256 * 1024;

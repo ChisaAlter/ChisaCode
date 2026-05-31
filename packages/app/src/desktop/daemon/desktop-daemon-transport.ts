@@ -1,15 +1,15 @@
 import type {
   DaemonTransport,
   DaemonTransportFactory,
-} from "@fleurdelys/client/internal/daemon-client";
+} from "@chisacode/client/internal/daemon-client";
 import type { LocalTransportTarget } from "./desktop-daemon";
 import {
   defaultLocalDaemonTransportRpc,
   type LocalDaemonTransportRpc,
 } from "./local-daemon-transport-rpc";
 
-const LOCAL_TRANSPORT_SCHEME = "fleurdelys+local:";
-const LEGACY_LOCAL_TRANSPORT_SCHEME = "paseo+local:";
+const LOCAL_TRANSPORT_SCHEME = "chisacode+local:";
+const LEGACY_LOCAL_TRANSPORT_SCHEME = "chisacode+local:";
 
 function encodeBinaryToBase64(data: Uint8Array | ArrayBuffer): string {
   const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;

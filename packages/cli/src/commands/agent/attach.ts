@@ -7,9 +7,9 @@ export function addAttachOptions(cmd: Command): Command {
 }
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import { fetchProjectedTimelineItems } from "../../utils/timeline.js";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
-import type { AgentTimelineItem } from "@fleurdelys/protocol/agent-types";
-import type { AgentStreamEventPayload, AgentStreamMessage } from "@fleurdelys/protocol/messages";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { AgentTimelineItem } from "@chisacode/protocol/agent-types";
+import type { AgentStreamEventPayload, AgentStreamMessage } from "@chisacode/protocol/messages";
 
 export interface AgentAttachOptions {
   host?: string;
@@ -106,7 +106,7 @@ export async function runAttachCommand(
 
   if (!id) {
     console.error("Error: Agent ID required");
-    console.error("Usage: fleurdelys attach <id>");
+    console.error("Usage: chisacode attach <id>");
     process.exit(1);
   }
 
@@ -116,7 +116,7 @@ export async function runAttachCommand(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Error: Cannot connect to daemon at ${host}: ${message}`);
-    console.error("Start the daemon with: fleurdelys daemon start");
+    console.error("Start the daemon with: chisacode daemon start");
     process.exit(1);
   }
 
@@ -124,7 +124,7 @@ export async function runAttachCommand(
     const fetchResult = await client.fetchAgent(id);
     if (!fetchResult) {
       console.error(`Error: No agent found matching: ${id}`);
-      console.error("Use `fleurdelys ls` to list available agents");
+      console.error("Use `chisacode ls` to list available agents");
       await client.close();
       process.exit(1);
     }

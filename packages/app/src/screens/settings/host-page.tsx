@@ -382,7 +382,7 @@ function DaemonSection({ host, isLocalDaemon }: { host: HostProfile; isLocalDaem
   return (
     <>
       <SettingsSection title="Daemon 设置">
-        <InjectPaseoToolsCard serverId={host.serverId} />
+        <InjectChisaCodeToolsCard serverId={host.serverId} />
         <AppendSystemPromptCard serverId={host.serverId} />
       </SettingsSection>
       {isLocalDaemon ? (
@@ -453,7 +453,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       return;
     }
     if (!isHostConnected()) {
-      Alert.alert("主机离线", "此主机已离线。芙露德莉斯会自动重连，请等待它恢复在线后再重启。");
+      Alert.alert("主机离线", "此主机已离线。ChisaCode会自动重连，请等待它恢复在线后再重启。");
       return;
     }
 
@@ -473,7 +473,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
             console.error(`[HostPage] Failed to restart daemon ${host.label}`, error);
             if (!isMountedRef.current) return;
             setIsRestarting(false);
-            Alert.alert("错误", "发送重启请求失败。芙露德莉斯会自动重连，请在主机显示在线后重试。");
+            Alert.alert("错误", "发送重启请求失败。ChisaCode会自动重连，请在主机显示在线后重试。");
           });
         void waitForDaemonRestart();
         return;
@@ -511,7 +511,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
   );
 }
 
-function InjectPaseoToolsCard({ serverId }: { serverId: string }) {
+function InjectChisaCodeToolsCard({ serverId }: { serverId: string }) {
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
 
@@ -532,13 +532,13 @@ function InjectPaseoToolsCard({ serverId }: { serverId: string }) {
     <View style={settingsStyles.card} testID="host-page-inject-mcp-card">
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>启用芙露德莉斯工具</Text>
+          <Text style={settingsStyles.rowTitle}>启用ChisaCode工具</Text>
           <Text style={settingsStyles.rowHint}>智能体将能够管理 worktree、智能体和计划任务</Text>
         </View>
         <Switch
           value={config?.mcp.injectIntoAgents !== false}
           onValueChange={handleValueChange}
-          accessibilityLabel="注入芙露德莉斯工具"
+          accessibilityLabel="注入ChisaCode工具"
         />
       </View>
     </View>

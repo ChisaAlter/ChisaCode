@@ -1,4 +1,4 @@
-import type { AgentAttentionReason } from "@fleurdelys/protocol/agent-attention-notification";
+import type { AgentAttentionReason } from "@chisacode/protocol/agent-attention-notification";
 
 export const PRESENCE_THRESHOLD_MS = 180_000;
 

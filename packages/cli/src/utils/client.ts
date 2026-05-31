@@ -1,17 +1,17 @@
 import { existsSync, readFileSync } from "node:fs";
-import { loadConfig, resolvePaseoHome } from "@fleurdelys/server";
+import { loadConfig, resolveChisaCodeHome } from "@chisacode/server";
 import {
   buildDaemonWebSocketUrl,
   buildRelayWebSocketUrl,
   normalizeHostPort,
   parseConnectionUri,
   shouldUseTlsForDefaultHostedRelay,
-} from "@fleurdelys/protocol/daemon-endpoints";
+} from "@chisacode/protocol/daemon-endpoints";
 import {
   parseConnectionOfferFromUrl,
   type ConnectionOffer,
-} from "@fleurdelys/protocol/connection-offer";
-import { DaemonClient, type WebSocketLike } from "@fleurdelys/client/internal/daemon-client";
+} from "@chisacode/protocol/connection-offer";
+import { DaemonClient, type WebSocketLike } from "@chisacode/client/internal/daemon-client";
 import path from "node:path";
 import { WebSocket } from "ws";
 import { getOrCreateCliClientId } from "./client-id.js";
@@ -24,7 +24,7 @@ export interface ConnectOptions {
 
 const DEFAULT_HOST = "localhost:6767";
 const DEFAULT_TIMEOUT = 15000;
-const PID_FILENAMES = ["fleurdelys.pid", "paseo.pid"] as const;
+const PID_FILENAMES = ["chisacode.pid", "chisacode.pid"] as const;
 
 type DaemonTarget =
   | {
@@ -107,13 +107,15 @@ function isTcpDaemonHost(host: string | null): host is string {
   return host !== null && !isIpcDaemonHost(host);
 }
 
-function readPidSocketTarget(paseoHome: string): string | null {
-  const pidFileName = PID_FILENAMES.find((fileName) => existsSync(path.join(paseoHome, fileName)));
+function readPidSocketTarget(chisacodeHome: string): string | null {
+  const pidFileName = PID_FILENAMES.find((fileName) =>
+    existsSync(path.join(chisacodeHome, fileName)),
+  );
   if (!pidFileName) {
     return null;
   }
 
-  const pidPath = path.join(paseoHome, pidFileName);
+  const pidPath = path.join(chisacodeHome, pidFileName);
   if (!existsSync(pidPath)) {
     return null;
   }
@@ -131,24 +133,30 @@ function readPidSocketTarget(paseoHome: string): string | null {
   }
 }
 
-function resolveConfiguredIpcDaemonHost(env: NodeJS.ProcessEnv, paseoHome: string): string | null {
-  const directEnvHost = normalizeDaemonHost(env.FLEURDELYS_LISTEN ?? env.PASEO_LISTEN ?? "");
+function resolveConfiguredIpcDaemonHost(
+  env: NodeJS.ProcessEnv,
+  chisacodeHome: string,
+): string | null {
+  const directEnvHost = normalizeDaemonHost(env.CHISACODE_LISTEN ?? env.CHISACODE_LISTEN ?? "");
   if (isIpcDaemonHost(directEnvHost)) {
     return directEnvHost;
   }
 
-  const pidHost = normalizeDaemonHost(readPidSocketTarget(paseoHome) ?? "");
+  const pidHost = normalizeDaemonHost(readPidSocketTarget(chisacodeHome) ?? "");
   if (isIpcDaemonHost(pidHost)) {
     return pidHost;
   }
 
-  const config = loadConfig(paseoHome, { env });
+  const config = loadConfig(chisacodeHome, { env });
   const configuredHost = normalizeDaemonHost(config.listen);
   return isIpcDaemonHost(configuredHost) ? configuredHost : null;
 }
 
-function resolveConfiguredTcpDaemonHost(env: NodeJS.ProcessEnv, paseoHome: string): string | null {
-  const configuredHost = normalizeDaemonHost(loadConfig(paseoHome, { env }).listen);
+function resolveConfiguredTcpDaemonHost(
+  env: NodeJS.ProcessEnv,
+  chisacodeHome: string,
+): string | null {
+  const configuredHost = normalizeDaemonHost(loadConfig(chisacodeHome, { env }).listen);
   if (!isTcpDaemonHost(configuredHost)) {
     return null;
   }
@@ -156,13 +164,13 @@ function resolveConfiguredTcpDaemonHost(env: NodeJS.ProcessEnv, paseoHome: strin
 }
 
 export function resolveDefaultDaemonHosts(env: NodeJS.ProcessEnv = process.env): string[] {
-  const paseoHome = resolvePaseoHome(env);
+  const chisacodeHome = resolveChisaCodeHome(env);
   const candidates: string[] = [];
-  const configuredIpcHost = resolveConfiguredIpcDaemonHost(env, paseoHome);
+  const configuredIpcHost = resolveConfiguredIpcDaemonHost(env, chisacodeHome);
   if (configuredIpcHost) {
     candidates.push(configuredIpcHost);
   }
-  const configuredTcpHost = resolveConfiguredTcpDaemonHost(env, paseoHome);
+  const configuredTcpHost = resolveConfiguredTcpDaemonHost(env, chisacodeHome);
   if (configuredTcpHost) {
     candidates.push(configuredTcpHost);
   }
@@ -171,7 +179,7 @@ export function resolveDefaultDaemonHosts(env: NodeJS.ProcessEnv = process.env):
 }
 
 function resolveDaemonHostCandidates(options?: ConnectOptions): string[] {
-  const explicitHost = options?.host ?? process.env.FLEURDELYS_HOST ?? process.env.PASEO_HOST;
+  const explicitHost = options?.host ?? process.env.CHISACODE_HOST ?? process.env.CHISACODE_HOST;
   if (explicitHost) {
     return [explicitHost];
   }
@@ -227,7 +235,7 @@ export function resolveDaemonPassword(host: string): string | undefined {
     const fromUri = parseConnectionUri(trimmed).password;
     if (fromUri) return fromUri;
   }
-  const fromEnv = process.env.FLEURDELYS_PASSWORD ?? process.env.PASEO_PASSWORD;
+  const fromEnv = process.env.CHISACODE_PASSWORD ?? process.env.CHISACODE_PASSWORD;
   return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
 }
 
@@ -339,7 +347,7 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
   const clientId = await getOrCreateCliClientId();
   const nodeWebSocketFactory = createNodeWebSocketFactory();
 
-  const explicitHost = options?.host ?? process.env.PASEO_HOST;
+  const explicitHost = options?.host ?? process.env.CHISACODE_HOST;
   const offer = parseHostOfferOrNull(explicitHost);
   if (offer) {
     return connectViaRelayOffer(offer, clientId, timeout, nodeWebSocketFactory);
@@ -350,7 +358,7 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
   async function tryNext(index: number, lastError: unknown): Promise<DaemonClient> {
     if (index >= hosts.length) {
       if (lastError instanceof Error) throw lastError;
-      throw new Error(`Unable to connect to Fleurdelys daemon via ${hosts.join(", ")}`);
+      throw new Error(`Unable to connect to ChisaCode daemon via ${hosts.join(", ")}`);
     }
     const host = hosts[index];
     const password = resolveDaemonPassword(host);

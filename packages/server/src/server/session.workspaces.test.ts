@@ -9,7 +9,7 @@ import type {
   AgentSnapshotPayload,
   EditorTargetDescriptorPayload,
   SessionOutboundMessage,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import type {
@@ -102,7 +102,7 @@ interface SessionTestAccess {
   forwardAgentUpdate(...args: unknown[]): Promise<unknown>;
   handleArchiveAgentRequest(agentId: string, requestId: string): Promise<unknown>;
   handleMessage(message: unknown): Promise<unknown>;
-  handleCreatePaseoWorktreeRequest(params: unknown): Promise<unknown>;
+  handleCreateChisaCodeWorktreeRequest(params: unknown): Promise<unknown>;
   listAgentPayloads(...args: unknown[]): Promise<unknown[]>;
   listFetchWorkspacesEntries(params: unknown): Promise<ListFetchResult>;
   listFetchAgentsEntries(params: unknown): Promise<ListFetchResult>;
@@ -127,7 +127,7 @@ interface SessionTestAccess {
   filterEditorsForClient(...args: unknown[]): unknown;
   openEditorTarget(input: { editorId: string; path: string }): Promise<unknown>;
   resolveAvailableEditorTargets(...args: unknown[]): Promise<unknown>;
-  paseoHome: string;
+  chisacodeHome: string;
   terminalManager: {
     killTerminal(id: string): unknown;
   } | null;
@@ -291,7 +291,7 @@ function createWorkspaceRuntimeSnapshot(
       mainRepoRoot: null,
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -454,7 +454,7 @@ function createSessionForWorkspaceTests(
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      chisacodeHome: "/tmp/chisacode-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -519,7 +519,7 @@ function createSessionForWorkspaceTests(
 }
 
 test("create_agent_request keeps requested child cwd when grouped under an existing parent workspace", async () => {
-  const workdir = mkdtempSync(path.join(tmpdir(), "paseo-create-agent-cwd-"));
+  const workdir = mkdtempSync(path.join(tmpdir(), "chisacode-create-agent-cwd-"));
   try {
     const parent = path.join(workdir, "parent");
     const child = path.join(parent, "child");
@@ -555,7 +555,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
         currentBranch: "main",
         remoteUrl: null,
         worktreeRoot: parent,
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       }),
     });
@@ -591,7 +591,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
         logger: asSessionLogger(logger),
         downloadTokenStore: asDownloadTokenStore(),
         pushTokenStore: asPushTokenStore(),
-        paseoHome: path.join(workdir, "paseo-home"),
+        chisacodeHome: path.join(workdir, "chisacode-home"),
         agentManager,
         agentStorage,
         projectRegistry,
@@ -706,7 +706,7 @@ test("unsupported persisted agents are excluded from active lists but preserved 
 });
 
 test("workspace reconciliation reports archived workspaces to subscribed clients", async () => {
-  const missingCwd = path.join(tmpdir(), `paseo-missing-workspace-${Date.now()}`);
+  const missingCwd = path.join(tmpdir(), `chisacode-missing-workspace-${Date.now()}`);
   rmSync(missingCwd, { recursive: true, force: true });
   const projects = new Map([
     [
@@ -912,7 +912,7 @@ test("archive emits an authoritative agent_update upsert for subscribed clients"
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      chisacodeHome: "/tmp/chisacode-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -1083,7 +1083,7 @@ test("close_items_request archives agents and kills terminals in one batch", asy
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      chisacodeHome: "/tmp/chisacode-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -1255,7 +1255,7 @@ test("close_items_request archives stored agents that are not currently loaded",
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      chisacodeHome: "/tmp/chisacode-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -1417,7 +1417,7 @@ test("close_items_request continues after an archive failure", async () => {
       logger: asSessionLogger(sessionLogger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      chisacodeHome: "/tmp/chisacode-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -2156,7 +2156,7 @@ test("fetch_agent_request still resolves archived historical agents", async () =
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -2212,7 +2212,7 @@ test("git branch workspace uses branch as canonical name", async () => {
       currentBranch: "feature/name-from-server",
       remoteUrl: "https://github.com/acme/repo-branch.git",
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -2322,7 +2322,7 @@ test("workspace update stream keeps persisted workspace visible after agents sto
       logger: asSessionLogger(logger),
       downloadTokenStore: asDownloadTokenStore(),
       pushTokenStore: asPushTokenStore(),
-      paseoHome: "/tmp/paseo-test",
+      chisacodeHome: "/tmp/chisacode-test",
       agentManager: asAgentManager({
         subscribe: () => () => {},
         listAgents: () => [],
@@ -2446,11 +2446,11 @@ test("workspace update stream keeps persisted workspace visible after agents sto
   });
 });
 
-test("create paseo worktree request returns a registered workspace descriptor", async () => {
+test("create chisacode worktree request returns a registered workspace descriptor", async () => {
   const emitted: SessionOutboundMessage[] = [];
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "session-worktree-test-")));
   const repoDir = path.join(tempDir, "repo");
-  const paseoHome = path.join(tempDir, "paseo-home");
+  const chisacodeHome = path.join(tempDir, "chisacode-home");
   mkdirSync(repoDir, { recursive: true });
   execFileSync("git", ["init", "-b", "main"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["config", "user.email", "test@test.com"], {
@@ -2472,7 +2472,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
           repoRoot: repoDir,
           currentBranch: "main",
           remoteUrl: null,
-          isPaseoOwnedWorktree: false,
+          isChisaCodeOwnedWorktree: false,
           mainRepoRoot: null,
         },
       });
@@ -2484,7 +2484,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
           repoRoot: cwd,
           currentBranch: "worktree-123",
           remoteUrl: null,
-          isPaseoOwnedWorktree: true,
+          isChisaCodeOwnedWorktree: true,
           mainRepoRoot: repoDir,
         },
       });
@@ -2495,7 +2495,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
         repoRoot: cwd,
         currentBranch: "main",
         remoteUrl: null,
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       },
     });
@@ -2508,7 +2508,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
 
   const workspaces = new Map();
   const projects = new Map();
-  session.paseoHome = paseoHome;
+  session.chisacodeHome = chisacodeHome;
   session.workspaceRegistry.get = async (workspaceId: string) =>
     workspaces.get(workspaceId) ?? null;
   session.workspaceRegistry.list = async () => Array.from(workspaces.values());
@@ -2528,8 +2528,8 @@ test("create paseo worktree request returns a registered workspace descriptor", 
     if (isSessionOutboundMessage(message)) emitted.push(message);
   };
   try {
-    await session.handleCreatePaseoWorktreeRequest({
-      type: "create_paseo_worktree_request",
+    await session.handleCreateChisaCodeWorktreeRequest({
+      type: "create_chisacode_worktree_request",
       cwd: repoDir,
       worktreeSlug: "worktree-123",
       requestId: "req-worktree",
@@ -2538,7 +2538,7 @@ test("create paseo worktree request returns a registered workspace descriptor", 
     rmSync(tempDir, { recursive: true, force: true });
   }
 
-  const response = findByType(emitted, "create_paseo_worktree_response");
+  const response = findByType(emitted, "create_chisacode_worktree_response");
 
   expect(response?.payload.error).toBeNull();
   expect(response?.payload.workspace).toMatchObject({
@@ -2666,7 +2666,7 @@ test("open_project_request registers a workspace before any agent exists", async
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -2718,7 +2718,7 @@ test("import_agent_request registers a workspace for a never-seen cwd", async ()
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -2813,7 +2813,7 @@ test("open_project_response returns immediately even when the GitHub fetch is sl
     currentBranch: "main",
     remoteUrl: "https://github.com/acme/slow.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isChisaCodeOwnedWorktree: false,
     mainRepoRoot: null,
   });
   let resolveSnapshot: (snapshot: WorkspaceGitRuntimeSnapshot) => void = () => {};
@@ -2879,7 +2879,7 @@ test("open_project_request emits a workspace_update with githubRuntime once the 
     currentBranch: "main",
     remoteUrl: "https://github.com/acme/repo.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isChisaCodeOwnedWorktree: false,
     mainRepoRoot: null,
   });
   session.workspaceGitService.peekSnapshot = () => peeked.value;
@@ -2942,7 +2942,7 @@ test("open_project_request does not match a new child directory to an existing p
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
   const home = path.resolve("/Users/moboudra");
-  const worktree = path.join(home, ".paseo", "worktrees", "project-config-lifecycle-textarea");
+  const worktree = path.join(home, ".chisacode", "worktrees", "project-config-lifecycle-textarea");
 
   projects.set(
     home,
@@ -3006,7 +3006,7 @@ test("open_project_request does not unarchive an archived parent workspace for a
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
   const home = path.resolve("/Users/moboudra");
-  const worktree = path.join(home, ".paseo", "worktrees", "project-config-lifecycle-textarea");
+  const worktree = path.join(home, ".chisacode", "worktrees", "project-config-lifecycle-textarea");
   const archivedAt = "2026-04-24T08:00:00.000Z";
 
   projects.set(
@@ -3073,15 +3073,15 @@ test("open_project_request reclassifies an archived directory workspace when git
   const session = createSessionForWorkspaceTests();
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
-  const repoRoot = path.resolve("/Users/moboudra/dev/paseo");
+  const repoRoot = path.resolve("/Users/moboudra/dev/chisacode");
   const cwd = path.join(
     path.resolve("/Users/moboudra"),
-    ".paseo",
+    ".chisacode",
     "worktrees",
     "orchestrate",
     "desktop-daemon-settings",
   );
-  const remoteProjectId = "remote:github.com/getpaseo/paseo";
+  const remoteProjectId = "remote:github.com/getchisacode/chisacode";
   const archivedAt = "2026-04-24T09:48:36.168Z";
 
   projects.set(
@@ -3132,9 +3132,9 @@ test("open_project_request reclassifies an archived directory workspace when git
     cwd,
     isGit: true,
     currentBranch: "feature/desktop-daemon-settings",
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:getchisacode/chisacode.git",
     worktreeRoot: cwd,
-    isPaseoOwnedWorktree: false,
+    isChisaCodeOwnedWorktree: false,
     mainRepoRoot: repoRoot,
   });
   session.workspaceGitService.getSnapshot = async () =>
@@ -3143,8 +3143,8 @@ test("open_project_request reclassifies an archived directory workspace when git
         isGit: true,
         repoRoot: cwd,
         currentBranch: "feature/desktop-daemon-settings",
-        remoteUrl: "git@github.com:getpaseo/paseo.git",
-        isPaseoOwnedWorktree: false,
+        remoteUrl: "git@github.com:getchisacode/chisacode.git",
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: repoRoot,
       },
     });
@@ -3171,10 +3171,10 @@ test("open_project_request reclassifies an active directory workspace when git m
   const session = createSessionForWorkspaceTests();
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
-  const repoRoot = path.resolve("/Users/moboudra/dev/paseo");
+  const repoRoot = path.resolve("/Users/moboudra/dev/chisacode");
   const cwd = path.join(
     path.resolve("/Users/moboudra"),
-    ".paseo",
+    ".chisacode",
     "worktrees",
     "orchestrate",
     "desktop-daemon-settings",
@@ -3197,7 +3197,7 @@ test("open_project_request reclassifies an active directory workspace when git m
       projectId: repoRoot,
       rootPath: repoRoot,
       kind: "git",
-      displayName: "paseo",
+      displayName: "chisacode",
       createdAt: "2026-04-24T09:40:00.000Z",
       updatedAt: "2026-04-24T09:40:00.000Z",
     }),
@@ -3249,9 +3249,9 @@ test("open_project_request reclassifies an active directory workspace when git m
     cwd: requestedCwd,
     isGit: true,
     currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:getchisacode/chisacode.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isChisaCodeOwnedWorktree: false,
     mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
   });
   session.workspaceGitService.getSnapshot = async (requestedCwd: string) =>
@@ -3260,8 +3260,8 @@ test("open_project_request reclassifies an active directory workspace when git m
         isGit: true,
         repoRoot: requestedCwd,
         currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-        remoteUrl: "git@github.com:getpaseo/paseo.git",
-        isPaseoOwnedWorktree: false,
+        remoteUrl: "git@github.com:getchisacode/chisacode.git",
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
       },
     });
@@ -3287,10 +3287,10 @@ test("open_project_request groups a plain git worktree under an existing repo pr
   const session = createSessionForWorkspaceTests();
   const projects = new Map<string, ReturnType<typeof createPersistedProjectRecord>>();
   const workspaces = new Map<string, ReturnType<typeof createPersistedWorkspaceRecord>>();
-  const repoRoot = path.resolve("/Users/moboudra/dev/paseo");
+  const repoRoot = path.resolve("/Users/moboudra/dev/chisacode");
   const cwd = path.join(
     path.resolve("/Users/moboudra"),
-    ".paseo",
+    ".chisacode",
     "worktrees",
     "orchestrate",
     "desktop-daemon-settings",
@@ -3302,7 +3302,7 @@ test("open_project_request groups a plain git worktree under an existing repo pr
       projectId: repoRoot,
       rootPath: repoRoot,
       kind: "git",
-      displayName: "paseo",
+      displayName: "chisacode",
       createdAt: "2026-04-24T09:46:43.146Z",
       updatedAt: "2026-04-24T09:46:43.146Z",
     }),
@@ -3342,9 +3342,9 @@ test("open_project_request groups a plain git worktree under an existing repo pr
     cwd: requestedCwd,
     isGit: true,
     currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:getchisacode/chisacode.git",
     worktreeRoot: requestedCwd,
-    isPaseoOwnedWorktree: false,
+    isChisaCodeOwnedWorktree: false,
     mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
   });
   session.workspaceGitService.getSnapshot = async (requestedCwd: string) =>
@@ -3353,8 +3353,8 @@ test("open_project_request groups a plain git worktree under an existing repo pr
         isGit: true,
         repoRoot: requestedCwd,
         currentBranch: requestedCwd === repoRoot ? "main" : "feature/desktop-daemon-settings",
-        remoteUrl: "git@github.com:getpaseo/paseo.git",
-        isPaseoOwnedWorktree: false,
+        remoteUrl: "git@github.com:getchisacode/chisacode.git",
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: requestedCwd === repoRoot ? null : repoRoot,
       },
     });
@@ -3474,7 +3474,7 @@ test.skip("open_project_request collapses a git subdirectory onto the repo root 
       currentBranch: "main",
       remoteUrl: null,
       worktreeRoot: repoRoot,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -3681,7 +3681,7 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
 
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "session-workspace-reconcile-")));
   const mainWorkspaceId = path.join(tempDir, "inkwell");
-  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".paseo", "worktrees", "feature-a");
+  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".chisacode", "worktrees", "feature-a");
   const localProjectId = mainWorkspaceId;
   const remoteProjectId = "remote:github.com/zimakki/inkwell";
 
@@ -3751,7 +3751,7 @@ test.skip("opening a new worktree reconciles older local workspaces into the rem
       currentBranch: cwd === mainWorkspaceId ? "main" : "feature-a",
       remoteUrl: "https://github.com/zimakki/inkwell.git",
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: cwd !== mainWorkspaceId,
+      isChisaCodeOwnedWorktree: cwd !== mainWorkspaceId,
       mainRepoRoot: cwd === mainWorkspaceId ? null : mainWorkspaceId,
     },
   });
@@ -3791,7 +3791,7 @@ test.skip("fetch_workspaces_request reconciles remote URL changes for existing w
 
   const tempDir = realpathSync(mkdtempSync(path.join(tmpdir(), "session-workspace-fetch-")));
   const mainWorkspaceId = path.join(tempDir, "inkwell");
-  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".paseo", "worktrees", "feature-a");
+  const worktreeWorkspaceId = path.join(mainWorkspaceId, ".chisacode", "worktrees", "feature-a");
   const oldProjectId = "remote:github.com/old-owner/inkwell";
   const newProjectId = "remote:github.com/new-owner/inkwell";
 
@@ -3857,7 +3857,7 @@ test.skip("fetch_workspaces_request reconciles remote URL changes for existing w
       currentBranch: cwd === mainWorkspaceId ? "main" : "feature-a",
       remoteUrl: "https://github.com/new-owner/inkwell.git",
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: cwd !== mainWorkspaceId,
+      isChisaCodeOwnedWorktree: cwd !== mainWorkspaceId,
       mainRepoRoot: cwd === mainWorkspaceId ? null : mainWorkspaceId,
     },
   });
@@ -3958,7 +3958,7 @@ test.skip("reconcile archives stale subdirectory workspace records when collapsi
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
       worktreeRoot: repoRoot,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -4203,7 +4203,7 @@ test("fetch_workspaces_response reads runtime fields from passive workspace git 
       currentBranch: runtimeSnapshot.git.currentBranch,
       remoteUrl: runtimeSnapshot.git.remoteUrl,
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });
@@ -4224,7 +4224,7 @@ test("fetch_workspaces_response reads runtime fields from passive workspace git 
       gitRuntime: {
         currentBranch: "runtime-branch",
         remoteUrl: "https://github.com/acme/repo.git",
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         isDirty: true,
         aheadBehind: { ahead: 3, behind: 1 },
         aheadOfOrigin: 3,
@@ -4375,7 +4375,7 @@ test("workspace_update includes updated runtime fields", async () => {
       currentBranch: runtimeSnapshot.git.currentBranch,
       remoteUrl: runtimeSnapshot.git.remoteUrl,
       worktreeRoot: cwd,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   });

@@ -1,19 +1,19 @@
 ---
 title: Security
-description: "Security model for Paseo: architecture overview, connection methods, relay encryption, and best practices."
+description: "Security model for ChisaCode: architecture overview, connection methods, relay encryption, and best practices."
 nav: Security
 order: 12
 ---
 
 # Security
 
-Paseo follows a client-server architecture, similar to Docker. The daemon runs on your machine and manages your coding agents. Clients (the mobile app, CLI, or web interface) connect to the daemon to monitor and control those agents.
+ChisaCode follows a client-server architecture, similar to Docker. The daemon runs on your machine and manages your coding agents. Clients (the mobile app, CLI, or web interface) connect to the daemon to monitor and control those agents.
 
-Your code never leaves your machine. Paseo is a local-first tool that connects directly to your development environment.
+Your code never leaves your machine. ChisaCode is a local-first tool that connects directly to your development environment.
 
 ## Architecture
 
-The Paseo daemon can run anywhere you want to execute agents: your laptop, a Mac Mini, a VPS, or a Docker container. The daemon listens for connections and manages agent lifecycles.
+The ChisaCode daemon can run anywhere you want to execute agents: your laptop, a Mac Mini, a VPS, or a Docker container. The daemon listens for connections and manages agent lifecycles.
 
 Clients connect to the daemon over WebSocket. There are two ways to establish this connection:
 
@@ -28,7 +28,7 @@ The relay is the simplest way to connect from your phone. It requires no VPN set
 
 ### How it works
 
-1. The daemon generates a persistent ECDH keypair and stores it in `$PASEO_HOME/daemon-keypair.json`
+1. The daemon generates a persistent ECDH keypair and stores it in `$CHISACODE_HOME/daemon-keypair.json`
 2. When you scan the QR code or click the pairing link, your phone receives the daemon's public key
 3. Your phone sends a handshake message with its own public key. The daemon will not accept any commands until this handshake completes.
 4. Both sides perform a Curve25519 ECDH key exchange to derive a shared key. All subsequent
@@ -68,7 +68,7 @@ To set this up:
 1. Install Tailscale on your machine and phone and join them to the same [tailnet](https://tailscale.com/kb/1136/tailnet)
 2. Configure the daemon to listen on your Tailscale IP (e.g., `100.x.y.z:6767`)
 3. Add your Tailscale hostname to `hostnames` and `cors.allowedOrigins`
-4. Add the daemon as a direct connection in the Paseo app using the Tailscale address
+4. Add the daemon as a direct connection in the ChisaCode app using the Tailscale address
 
 ### Binding to 0.0.0.0
 
@@ -78,7 +78,7 @@ To set this up:
 
 **CORS is not a complete security boundary.** It controls which browser origins can make requests, but does not prevent a malicious website from resolving its domain to your local machine (DNS rebinding).
 
-Paseo uses a host allowlist to validate the `Host` header on incoming requests. Requests with unrecognized hosts are rejected.
+ChisaCode uses a host allowlist to validate the `Host` header on incoming requests. Requests with unrecognized hosts are rejected.
 
 Configure via `daemon.hostnames` in `config.json`:
 
@@ -109,13 +109,13 @@ We still recommend the relay for mobile access, it combines authentication with 
 
 ## Agent authentication
 
-Paseo wraps agent CLIs (Claude Code, Codex, OpenCode) but does not manage their authentication. Each agent provider handles its own credentials:
+ChisaCode wraps agent CLIs (Claude Code, Codex, OpenCode) but does not manage their authentication. Each agent provider handles its own credentials:
 
 - **Claude Code**, authenticates via Anthropic's OAuth flow, stored in `~/.claude/`
 - **Codex**, uses your OpenAI API key or OAuth session
 - **OpenCode**, configured via provider-specific API keys
 
-Paseo never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
+ChisaCode never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
 
 ## Recommendations
 

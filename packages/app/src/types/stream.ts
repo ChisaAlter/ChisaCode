@@ -1,5 +1,5 @@
-import type { AgentProvider, ToolCallDetail } from "@fleurdelys/protocol/agent-types";
-import type { AgentAttachment, AgentStreamEventPayload } from "@fleurdelys/protocol/messages";
+import type { AgentProvider, ToolCallDetail } from "@chisacode/protocol/agent-types";
+import type { AgentAttachment, AgentStreamEventPayload } from "@chisacode/protocol/messages";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";

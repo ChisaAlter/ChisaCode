@@ -25,8 +25,8 @@ import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
 import { formatTimeAgo } from "@/utils/time";
 import { compareMatchScores, scoreTextFields } from "@/utils/score-match";
-import type { AgentModelDefinition, AgentProvider } from "@fleurdelys/protocol/agent-types";
-import type { ProviderProfileModel } from "@fleurdelys/protocol/provider-config";
+import type { AgentModelDefinition, AgentProvider } from "@chisacode/protocol/agent-types";
+import type { ProviderProfileModel } from "@chisacode/protocol/provider-config";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;

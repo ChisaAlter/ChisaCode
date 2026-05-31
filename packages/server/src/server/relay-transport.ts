@@ -7,8 +7,8 @@ import {
   type EncryptedChannel,
   type Transport as RelayTransport,
   type KeyPair,
-} from "@fleurdelys/relay/e2ee";
-import { buildRelayWebSocketUrl } from "@fleurdelys/protocol/daemon-endpoints";
+} from "@chisacode/relay/e2ee";
+import { buildRelayWebSocketUrl } from "@chisacode/protocol/daemon-endpoints";
 import type { ExternalSocketMetadata } from "./websocket-server.js";
 
 interface RelayTransportOptions {

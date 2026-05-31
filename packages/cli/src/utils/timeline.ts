@@ -1,5 +1,5 @@
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
-import type { AgentTimelineItem } from "@fleurdelys/protocol/agent-types";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { AgentTimelineItem } from "@chisacode/protocol/agent-types";
 
 interface FetchProjectedTimelineItemsInput {
   client: DaemonClient;

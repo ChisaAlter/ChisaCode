@@ -1,4 +1,4 @@
-import type { SubscribeTerminalRequest } from "@fleurdelys/protocol/messages";
+import type { SubscribeTerminalRequest } from "@chisacode/protocol/messages";
 
 export const TERMINAL_VISIBLE_RESTORE_SCROLLBACK_LINES = 200;
 

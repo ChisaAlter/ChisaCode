@@ -102,7 +102,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
 const CODEX_PROVIDER = "codex" as const;
-const CODEX_IMAGE_ATTACHMENT_DIR = "paseo-attachments";
+const CODEX_IMAGE_ATTACHMENT_DIR = "chisacode-attachments";
 const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
 const CODEX_TOOL_THREAD_ITEM_TYPES = new Set([
   "commandExecution",
@@ -2814,8 +2814,8 @@ function buildCodexAppServerInitializeParams(): {
 } {
   return {
     clientInfo: {
-      name: "paseo",
-      title: "Paseo",
+      name: "chisacode",
+      title: "ChisaCode",
       version: "0.0.0",
     },
     capabilities: {

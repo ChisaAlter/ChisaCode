@@ -1,13 +1,13 @@
 ---
-title: Paseo MCP
-description: Paseo MCP tools injected into agents.
-nav: Paseo MCP
+title: ChisaCode MCP
+description: ChisaCode MCP tools injected into agents.
+nav: ChisaCode MCP
 order: 7
 ---
 
-# Paseo MCP
+# ChisaCode MCP
 
-Paseo can inject these MCP tools into every new agent it launches. Turn on **Inject Paseo tools** in host settings, or set `daemon.mcp.injectIntoAgents` to `true`.
+ChisaCode can inject these MCP tools into every new agent it launches. Turn on **Inject ChisaCode tools** in host settings, or set `daemon.mcp.injectIntoAgents` to `true`.
 
 The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may need a reload.
 
@@ -60,11 +60,11 @@ The MCP server itself is controlled by `daemon.mcp.enabled`. Existing agents may
 
 ### Worktrees
 
-| Tool               | Function                                                                      |
-| ------------------ | ----------------------------------------------------------------------------- |
-| `list_worktrees`   | List Paseo-managed git worktrees for a repository.                            |
-| `create_worktree`  | Create a Paseo-managed git worktree from a branch, base branch, or GitHub PR. |
-| `archive_worktree` | Delete a Paseo-managed git worktree.                                          |
+| Tool               | Function                                                                          |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `list_worktrees`   | List ChisaCode-managed git worktrees for a repository.                            |
+| `create_worktree`  | Create a ChisaCode-managed git worktree from a branch, base branch, or GitHub PR. |
+| `archive_worktree` | Delete a ChisaCode-managed git worktree.                                          |
 
 ### Permissions
 

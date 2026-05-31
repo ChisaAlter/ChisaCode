@@ -19,7 +19,7 @@ import type {
   FetchRecentProviderSessionsRequestMessage,
   ImportAgentRequestMessageSchema,
   RecentProviderSessionDescriptorPayload,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import { createRealpathAwarePathMatcher } from "../../utils/path.js";
 
@@ -65,7 +65,7 @@ export interface ImportProviderSessionInput {
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   providerSnapshotManager?: Pick<ProviderSnapshotManager, "listProviders">;
   daemonConfig?: StructuredGenerationDaemonConfig | null;
-  paseoHome?: string;
+  chisacodeHome?: string;
   logger: Logger;
   deps?: {
     scheduleAgentMetadataGeneration?: typeof scheduleAgentMetadataGeneration;
@@ -185,7 +185,7 @@ export async function importProviderSession(
     workspaceGitService: input.workspaceGitService,
     providerSnapshotManager: input.providerSnapshotManager,
     daemonConfig: input.daemonConfig,
-    paseoHome: input.paseoHome,
+    chisacodeHome: input.chisacodeHome,
     logger: input.logger,
     scheduleAgentMetadataGeneration:
       input.deps?.scheduleAgentMetadataGeneration ?? scheduleAgentMetadataGeneration,
@@ -220,7 +220,7 @@ async function applyImportedAgentTitle(input: {
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   providerSnapshotManager?: Pick<ProviderSnapshotManager, "listProviders">;
   daemonConfig?: StructuredGenerationDaemonConfig | null;
-  paseoHome?: string;
+  chisacodeHome?: string;
   logger: Logger;
   scheduleAgentMetadataGeneration: typeof scheduleAgentMetadataGeneration;
 }): Promise<void> {
@@ -254,7 +254,7 @@ async function applyImportedAgentTitle(input: {
     },
     initialPrompt,
     explicitTitle,
-    paseoHome: input.paseoHome,
+    chisacodeHome: input.chisacodeHome,
     logger: input.logger,
   });
 }

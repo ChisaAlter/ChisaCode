@@ -17,8 +17,8 @@ import type { DOMProps } from "expo/dom";
 import { useDOMImperativeHandle, type DOMImperativeFactory } from "expo/dom";
 import "@xterm/xterm/css/xterm.css";
 import type { ITheme } from "@xterm/xterm";
-import type { TerminalState } from "@fleurdelys/protocol/messages";
-import type { TerminalInputModeState } from "@fleurdelys/protocol/terminal-input-mode";
+import type { TerminalState } from "@chisacode/protocol/messages";
+import type { TerminalInputModeState } from "@chisacode/protocol/terminal-input-mode";
 import type { PendingTerminalModifiers } from "../utils/terminal-keys";
 import {
   TerminalEmulatorRuntime,
@@ -729,7 +729,7 @@ export default function TerminalEmulator({
   const handleTravelDurationMs =
     isDraggingScrollbar || isScrollActive ? 0 : SCROLLBAR_HANDLE_TRAVEL_DURATION_MS;
   const showTerminalContextMenu = useCallback(() => {
-    const showContextMenu = window.paseoDesktop?.menu?.showContextMenu;
+    const showContextMenu = window.chisacodeDesktop?.menu?.showContextMenu;
     if (typeof showContextMenu !== "function") {
       return;
     }

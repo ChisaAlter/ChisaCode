@@ -1,5 +1,5 @@
-import { readPaseoConfigJson } from "./paseo-config-file.js";
-import { PaseoConfigSchema } from "@fleurdelys/protocol/paseo-config-schema";
+import { readChisaCodeConfigJson } from "./chisacode-config-file.js";
+import { ChisaCodeConfigSchema } from "@chisacode/protocol/chisacode-config-schema";
 import { wrapWithUserInstructions } from "./wrap-user-instructions.js";
 
 export type MetadataConfigKey = "agentTitle" | "branchName" | "commitMessage" | "pullRequest";
@@ -33,8 +33,8 @@ async function readProjectMetadataInstructions(
   }
   try {
     const repoRoot = await options.workspaceGitService.resolveRepoRoot(options.cwd);
-    const json = readPaseoConfigJson(repoRoot);
-    const config = PaseoConfigSchema.parse(json);
+    const json = readChisaCodeConfigJson(repoRoot);
+    const config = ChisaCodeConfigSchema.parse(json);
     return config.metadataGeneration?.[options.configKey]?.instructions;
   } catch {
     return undefined;

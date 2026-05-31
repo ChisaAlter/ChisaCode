@@ -8,9 +8,9 @@ import {
 } from "./archive-if-safe.js";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
 
-const CWD = "/tmp/paseo/worktrees/repo/branch";
-const PASEO_HOME = "/tmp/paseo";
-const WORKTREES_ROOT = "/tmp/paseo/worktrees/repo";
+const CWD = "/tmp/chisacode/worktrees/repo/branch";
+const CHISACODE_HOME = "/tmp/chisacode";
+const WORKTREES_ROOT = "/tmp/chisacode/worktrees/repo";
 
 function createPullRequest(
   overrides?: Partial<NonNullable<WorkspaceGitRuntimeSnapshot["github"]["pullRequest"]>>,
@@ -38,7 +38,7 @@ function createSnapshot(overrides?: {
       mainRepoRoot: "/tmp/repo",
       currentBranch: "feature",
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: true,
+      isChisaCodeOwnedWorktree: true,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -71,8 +71,8 @@ function createLogger(): Logger {
 function createHarness(overrides?: {
   autoArchiveAfterMerge?: boolean;
   getSnapshot?: () => Promise<WorkspaceGitRuntimeSnapshot | null>;
-  isPaseoOwnedWorktreeCwd?: ArchiveIfSafeDependencies["isPaseoOwnedWorktreeCwd"];
-  archivePaseoWorktree?: ArchiveIfSafeDependencies["archivePaseoWorktree"];
+  isChisaCodeOwnedWorktreeCwd?: ArchiveIfSafeDependencies["isChisaCodeOwnedWorktreeCwd"];
+  archiveChisaCodeWorktree?: ArchiveIfSafeDependencies["archiveChisaCodeWorktree"];
 }) {
   const getConfig = vi.fn(() => ({
     autoArchiveAfterMerge: overrides?.autoArchiveAfterMerge ?? true,
@@ -84,7 +84,7 @@ function createHarness(overrides?: {
     getSnapshot,
   } as unknown as AutoArchiveArchiveOptions["workspaceGitService"];
   const options: AutoArchiveArchiveOptions = {
-    paseoHome: PASEO_HOME,
+    chisacodeHome: CHISACODE_HOME,
     daemonConfigStore: {
       get: getConfig,
     } as unknown as AutoArchiveArchiveOptions["daemonConfigStore"],
@@ -98,21 +98,21 @@ function createHarness(overrides?: {
     clearWorkspaceArchiving: vi.fn(),
     emitWorkspaceUpdatesForWorkspaceIds: vi.fn(),
   };
-  const archivePaseoWorktree = vi.fn(
-    overrides?.archivePaseoWorktree ?? (async () => undefined),
-  ) as unknown as ArchiveIfSafeDependencies["archivePaseoWorktree"];
-  const isPaseoOwnedWorktreeCwd = vi.fn(
-    overrides?.isPaseoOwnedWorktreeCwd ??
+  const archiveChisaCodeWorktree = vi.fn(
+    overrides?.archiveChisaCodeWorktree ?? (async () => undefined),
+  ) as unknown as ArchiveIfSafeDependencies["archiveChisaCodeWorktree"];
+  const isChisaCodeOwnedWorktreeCwd = vi.fn(
+    overrides?.isChisaCodeOwnedWorktreeCwd ??
       (async () => ({
         allowed: true,
         repoRoot: "/tmp/repo",
         worktreeRoot: WORKTREES_ROOT,
         worktreePath: CWD,
       })),
-  ) as unknown as ArchiveIfSafeDependencies["isPaseoOwnedWorktreeCwd"];
+  ) as unknown as ArchiveIfSafeDependencies["isChisaCodeOwnedWorktreeCwd"];
   const deps: ArchiveIfSafeDependencies = {
-    archivePaseoWorktree,
-    isPaseoOwnedWorktreeCwd,
+    archiveChisaCodeWorktree,
+    isChisaCodeOwnedWorktreeCwd,
     killTerminalsUnderPath: vi.fn(),
     isPathWithinRoot: vi.fn(() => true),
   };
@@ -161,7 +161,7 @@ describe("archiveIfSafe", () => {
 
     expect(harness.getConfig).not.toHaveBeenCalled();
     expect(harness.getSnapshot).not.toHaveBeenCalled();
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
   test("does nothing when auto-archive-after-merge is disabled", async () => {
@@ -171,7 +171,7 @@ describe("archiveIfSafe", () => {
 
     expect(harness.getConfig).toHaveBeenCalledTimes(1);
     expect(harness.getSnapshot).not.toHaveBeenCalled();
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
   test("does nothing when the cwd already has an archive in flight", async () => {
@@ -181,7 +181,7 @@ describe("archiveIfSafe", () => {
     await runArchiveIfSafe(harness);
 
     expect(harness.getSnapshot).not.toHaveBeenCalled();
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
     expect(harness.inFlight.has(CWD)).toBe(true);
   });
 
@@ -198,7 +198,7 @@ describe("archiveIfSafe", () => {
       { err: expect.any(Error), cwd: CWD },
       "Failed to read snapshot for auto-archive; skipping",
     );
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
     expect(harness.inFlight.has(CWD)).toBe(false);
   });
 
@@ -207,8 +207,8 @@ describe("archiveIfSafe", () => {
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.isPaseoOwnedWorktreeCwd).not.toHaveBeenCalled();
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.isChisaCodeOwnedWorktreeCwd).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
   test("does nothing when the worktree is dirty", async () => {
@@ -218,8 +218,8 @@ describe("archiveIfSafe", () => {
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.isPaseoOwnedWorktreeCwd).not.toHaveBeenCalled();
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.isChisaCodeOwnedWorktreeCwd).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
   test("does nothing when the worktree is ahead of origin", async () => {
@@ -229,26 +229,26 @@ describe("archiveIfSafe", () => {
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.isPaseoOwnedWorktreeCwd).not.toHaveBeenCalled();
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.isChisaCodeOwnedWorktreeCwd).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
-  test("does nothing when the cwd is not a Paseo-owned worktree", async () => {
+  test("does nothing when the cwd is not a ChisaCode-owned worktree", async () => {
     const harness = createHarness({
-      isPaseoOwnedWorktreeCwd: async () => ({ allowed: false, worktreePath: CWD }),
+      isChisaCodeOwnedWorktreeCwd: async () => ({ allowed: false, worktreePath: CWD }),
     });
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.isPaseoOwnedWorktreeCwd).toHaveBeenCalledWith(CWD, {
-      paseoHome: PASEO_HOME,
+    expect(harness.deps.isChisaCodeOwnedWorktreeCwd).toHaveBeenCalledWith(CWD, {
+      chisacodeHome: CHISACODE_HOME,
     });
-    expect(harness.deps.archivePaseoWorktree).not.toHaveBeenCalled();
+    expect(harness.deps.archiveChisaCodeWorktree).not.toHaveBeenCalled();
   });
 
   test("logs and does not throw when archiving fails", async () => {
     const harness = createHarness({
-      archivePaseoWorktree: async () => {
+      archiveChisaCodeWorktree: async () => {
         throw new Error("archive failed");
       },
     });
@@ -262,15 +262,15 @@ describe("archiveIfSafe", () => {
     expect(harness.inFlight.has(CWD)).toBe(false);
   });
 
-  test("archives a clean Paseo-owned worktree after merge", async () => {
+  test("archives a clean ChisaCode-owned worktree after merge", async () => {
     const harness = createHarness();
 
     await runArchiveIfSafe(harness);
 
-    expect(harness.deps.archivePaseoWorktree).toHaveBeenCalledTimes(1);
-    expect(harness.deps.archivePaseoWorktree).toHaveBeenCalledWith(
+    expect(harness.deps.archiveChisaCodeWorktree).toHaveBeenCalledTimes(1);
+    expect(harness.deps.archiveChisaCodeWorktree).toHaveBeenCalledWith(
       expect.objectContaining({
-        paseoHome: PASEO_HOME,
+        chisacodeHome: CHISACODE_HOME,
         workspaceGitService: harness.options.workspaceGitService,
       }),
       {

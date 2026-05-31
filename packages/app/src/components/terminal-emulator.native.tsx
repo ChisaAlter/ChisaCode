@@ -18,8 +18,8 @@ import {
 } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import type { ITheme } from "@xterm/xterm";
-import type { TerminalState } from "@fleurdelys/protocol/messages";
-import type { TerminalInputModeState } from "@fleurdelys/protocol/terminal-input-mode";
+import type { TerminalState } from "@chisacode/protocol/messages";
+import type { TerminalInputModeState } from "@chisacode/protocol/terminal-input-mode";
 import type { TerminalOutputData } from "../terminal/runtime/terminal-emulator-runtime";
 import type {
   TerminalLocalFileLinkSource,
@@ -307,7 +307,7 @@ export default function TerminalEmulator({
     for (const message of pending) {
       const payload = serializeForInjectedJavaScript(message);
       webViewRef.current.injectJavaScript(
-        `window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ && window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
+        `window.__CHISACODE_TERMINAL_WEBVIEW_RECEIVE__ && window.__CHISACODE_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
       );
     }
   }, []);
@@ -319,7 +319,7 @@ export default function TerminalEmulator({
     }
     const payload = serializeForInjectedJavaScript(message);
     webViewRef.current.injectJavaScript(
-      `window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ && window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
+      `window.__CHISACODE_TERMINAL_WEBVIEW_RECEIVE__ && window.__CHISACODE_TERMINAL_WEBVIEW_RECEIVE__(${payload}); true;`,
     );
   }, []);
 
@@ -351,7 +351,7 @@ export default function TerminalEmulator({
       },
       blur: () => {
         webViewRef.current?.injectJavaScript(
-          "window.__PASEO_TERMINAL_WEBVIEW_BLUR__ && window.__PASEO_TERMINAL_WEBVIEW_BLUR__(); true;",
+          "window.__CHISACODE_TERMINAL_WEBVIEW_BLUR__ && window.__CHISACODE_TERMINAL_WEBVIEW_BLUR__(); true;",
         );
         Keyboard.dismiss();
       },

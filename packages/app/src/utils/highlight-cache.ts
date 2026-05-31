@@ -1,4 +1,4 @@
-import { highlightCode, type HighlightToken } from "@fleurdelys/highlight";
+import { highlightCode, type HighlightToken } from "@chisacode/highlight";
 
 // Shared, theme-independent tokenization + cache for syntax highlighting.
 // Used by markdown code blocks, file preview, and tool-call detail blocks

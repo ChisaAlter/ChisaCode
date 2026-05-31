@@ -1,4 +1,4 @@
-import { highlightCode, isLanguageSupported, type HighlightToken } from "@fleurdelys/highlight";
+import { highlightCode, isLanguageSupported, type HighlightToken } from "@chisacode/highlight";
 
 export interface DiffLine {
   type: "add" | "remove" | "context" | "header";

@@ -4,8 +4,8 @@ import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
   type TerminalStreamFrame,
-} from "@fleurdelys/protocol/binary-frames/index";
-import type { TerminalInput, TerminalState } from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/binary-frames/index";
+import type { TerminalInput, TerminalState } from "@chisacode/protocol/messages";
 
 export type TerminalStreamEvent =
   | { terminalId: string; type: "output"; data: Uint8Array }

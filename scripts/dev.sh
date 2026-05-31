@@ -6,19 +6,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$SCRIPT_DIR/../node_modules/.bin:$PATH"
 
 source "$SCRIPT_DIR/dev-home.sh"
-configure_dev_paseo_home
+configure_dev_chisacode_home
 
 # Share speech models with the main install to avoid duplicate downloads
-if [ -z "${PASEO_LOCAL_MODELS_DIR}" ]; then
-  export PASEO_LOCAL_MODELS_DIR="$HOME/.paseo/models/local-speech"
-  mkdir -p "$PASEO_LOCAL_MODELS_DIR"
+if [ -z "${CHISACODE_LOCAL_MODELS_DIR}" ]; then
+  export CHISACODE_LOCAL_MODELS_DIR="$HOME/.chisacode/models/local-speech"
+  mkdir -p "$CHISACODE_LOCAL_MODELS_DIR"
 fi
 
 echo "══════════════════════════════════════════════════════"
-echo "  Paseo Dev"
+echo "  ChisaCode Dev"
 echo "══════════════════════════════════════════════════════"
-echo "  Home:    ${PASEO_HOME}"
-echo "  Models:  ${PASEO_LOCAL_MODELS_DIR}"
+echo "  Home:    ${CHISACODE_HOME}"
+echo "  Models:  ${CHISACODE_LOCAL_MODELS_DIR}"
 echo "══════════════════════════════════════════════════════"
 
 # Configure the daemon for the Portless app origin and let the app bootstrap
@@ -28,7 +28,7 @@ DAEMON_ENDPOINT="$(portless get daemon | sed -E 's#^https?://##')"
 # Allow any origin in dev so Electron on random ports and Portless URLs all work.
 # SECURITY: wildcard CORS is unsafe in production — only acceptable here because
 # the daemon binds to localhost and this script is never used for production.
-export PASEO_CORS_ORIGINS="*"
+export CHISACODE_CORS_ORIGINS="*"
 
 # Run both with concurrently
 # BROWSER=none prevents auto-opening browser
@@ -36,5 +36,5 @@ export PASEO_CORS_ORIGINS="*"
 concurrently \
   --names "daemon,metro" \
   --prefix-colors "cyan,magenta" \
-  "portless run --name daemon sh -c 'PASEO_LISTEN=0.0.0.0:\$PORT exec ./scripts/dev-daemon.sh'" \
+  "portless run --name daemon sh -c 'CHISACODE_LISTEN=0.0.0.0:\$PORT exec ./scripts/dev-daemon.sh'" \
   "cd packages/app && BROWSER=none APP_VARIANT=development EXPO_PUBLIC_LOCAL_DAEMON='${DAEMON_ENDPOINT}' portless run --name app npx expo start"

@@ -1,7 +1,7 @@
 import equal from "fast-deep-equal";
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { AgentDirectoryEntry } from "@/types/agent-directory";
 import {
   appendOptimisticUserMessageToStream,
@@ -11,7 +11,7 @@ import {
 } from "@/types/stream";
 import type { PendingPermission } from "@/types/shared";
 import type { ComposerAttachment } from "@/attachments/types";
-import type { AgentLifecycleStatus } from "@fleurdelys/protocol/agent-lifecycle";
+import type { AgentLifecycleStatus } from "@chisacode/protocol/agent-lifecycle";
 import type {
   AgentPermissionRequest,
   AgentFeature,
@@ -20,13 +20,13 @@ import type {
   AgentCapabilityFlags,
   AgentUsage,
   AgentPersistenceHandle,
-} from "@fleurdelys/protocol/agent-types";
+} from "@chisacode/protocol/agent-types";
 import type {
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
   ServerCapabilities,
   WorkspaceDescriptorPayload,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-execution";
 import {

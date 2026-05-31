@@ -43,7 +43,7 @@ for (const workspacePath of workspacePaths) {
     changed = true;
   }
 
-  if (pkg.name === "@fleurdelys/desktop") {
+  if (pkg.name === "@chisacode/desktop") {
     for (const [field, value] of Object.entries(sharedMetadata)) {
       const currentValue = JSON.stringify(pkg[field]);
       const nextValue = JSON.stringify(value);
@@ -66,7 +66,7 @@ for (const workspacePath of workspacePaths) {
     }
 
     for (const name of Object.keys(deps)) {
-      if (!name.startsWith("@fleurdelys/")) {
+      if (!name.startsWith("@chisacode/")) {
         continue;
       }
       if (name === pkg.name) {

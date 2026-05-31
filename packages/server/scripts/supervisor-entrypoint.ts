@@ -7,13 +7,13 @@ import {
   releasePidLock,
   updatePidLock,
 } from "../src/server/pid-lock.js";
-import { resolvePaseoHome } from "../src/server/paseo-home.js";
+import { resolveChisaCodeHome } from "../src/server/chisacode-home.js";
 import { loadPersistedConfig } from "../src/server/persisted-config.js";
 import { runSupervisor } from "./supervisor.js";
 import { resolveSupervisorLogFile } from "./supervisor-log-config.js";
 import { applySherpaLoaderEnv } from "../src/server/speech/providers/local/sherpa/sherpa-runtime-env.js";
 
-process.title = "Paseo Supervisor";
+process.title = "ChisaCode Supervisor";
 
 interface DaemonRunnerConfig {
   devMode: boolean;
@@ -69,9 +69,9 @@ function resolveWorkerExecArgv(workerEntry: string, devMode: boolean): string[] 
     "--heapsnapshot-near-heap-limit=3",
     "--max-old-space-size=3072",
     "--report-on-fatalerror",
-    "--report-directory=/tmp/paseo-reports",
+    "--report-directory=/tmp/chisacode-reports",
   ];
-  const inspectArg = process.env.PASEO_NODE_INSPECT ?? "--inspect";
+  const inspectArg = process.env.CHISACODE_NODE_INSPECT ?? "--inspect";
   if (inspectArg !== "0" && inspectArg !== "false" && inspectArg !== "off") {
     devArgs.push(inspectArg);
   }
@@ -79,7 +79,7 @@ function resolveWorkerExecArgv(workerEntry: string, devMode: boolean): string[] 
 }
 
 function resolvePackagedNodeEntrypointRunnerPath(currentScriptPath: string): string | null {
-  const packageMarker = `${path.sep}node_modules${path.sep}@fleurdelys${path.sep}server${path.sep}`;
+  const packageMarker = `${path.sep}node_modules${path.sep}@chisacode${path.sep}server${path.sep}`;
   const markerIndex = currentScriptPath.lastIndexOf(packageMarker);
   if (markerIndex === -1) {
     return null;
@@ -102,12 +102,12 @@ async function main(): Promise<void> {
 
   applySherpaLoaderEnv(workerEnv);
 
-  const paseoHome = resolvePaseoHome(workerEnv);
-  const persistedConfig = loadPersistedConfig(paseoHome);
-  const supervisorLogFile = resolveSupervisorLogFile(paseoHome, persistedConfig, workerEnv);
+  const chisacodeHome = resolveChisaCodeHome(workerEnv);
+  const persistedConfig = loadPersistedConfig(chisacodeHome);
+  const supervisorLogFile = resolveSupervisorLogFile(chisacodeHome, persistedConfig, workerEnv);
 
   try {
-    await acquirePidLock(paseoHome, null, {
+    await acquirePidLock(chisacodeHome, null, {
       ownerPid: process.pid,
     });
   } catch (error) {
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
       return;
     }
     lockReleased = true;
-    await releasePidLock(paseoHome, {
+    await releasePidLock(chisacodeHome, {
       ownerPid: process.pid,
     });
   };
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
     restartOnCrash: true,
     logFile: supervisorLogFile,
     onWorkerReady: async ({ listen }) => {
-      await updatePidLock(paseoHome, { listen }, { ownerPid: process.pid });
+      await updatePidLock(chisacodeHome, { listen }, { ownerPid: process.pid });
     },
     onSupervisorExit: releaseLock,
   });

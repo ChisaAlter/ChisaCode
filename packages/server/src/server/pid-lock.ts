@@ -43,20 +43,8 @@ function isPidRunning(pid: number): boolean {
   }
 }
 
-function getPidFilePath(paseoHome: string): string {
-  return join(paseoHome, "fleurdelys.pid");
-}
-
-function getLegacyPidFilePath(paseoHome: string): string {
-  return join(paseoHome, "paseo.pid");
-}
-
-function getReadablePidFilePath(paseoHome: string): string {
-  const pidPath = getPidFilePath(paseoHome);
-  if (existsSync(pidPath)) {
-    return pidPath;
-  }
-  return getLegacyPidFilePath(paseoHome);
+function getPidFilePath(chisacodeHome: string): string {
+  return join(chisacodeHome, "chisacode.pid");
 }
 
 function resolveOwnerPid(ownerPid?: number): number {
@@ -67,22 +55,21 @@ function resolveOwnerPid(ownerPid?: number): number {
 }
 
 export async function acquirePidLock(
-  paseoHome: string,
+  chisacodeHome: string,
   listen: string | null,
   options?: { ownerPid?: number },
 ): Promise<void> {
-  const pidPath = getPidFilePath(paseoHome);
-  const existingPidPath = getReadablePidFilePath(paseoHome);
+  const pidPath = getPidFilePath(chisacodeHome);
 
-  // Ensure paseoHome directory exists
-  if (!existsSync(paseoHome)) {
-    await mkdir(paseoHome, { recursive: true });
+  // Ensure chisacodeHome directory exists
+  if (!existsSync(chisacodeHome)) {
+    await mkdir(chisacodeHome, { recursive: true });
   }
 
   // Try to read existing lock
   let existingLock: PidLockInfo | null = null;
   try {
-    const content = await readFile(existingPidPath, "utf-8");
+    const content = await readFile(pidPath, "utf-8");
     existingLock = parsePidLockInfo(JSON.parse(content));
   } catch {
     // No existing lock or invalid JSON - that's fine
@@ -97,12 +84,12 @@ export async function acquirePidLock(
       }
 
       throw new PidLockError(
-        `Another Paseo daemon is already running (PID ${existingLock.pid}, started ${existingLock.startedAt})`,
+        `Another ChisaCode daemon is already running (PID ${existingLock.pid}, started ${existingLock.startedAt})`,
         existingLock,
       );
     }
     // Stale lock - remove it
-    await unlink(existingPidPath).catch(() => {});
+    await unlink(pidPath).catch(() => {});
   }
 
   // Create new lock with exclusive flag
@@ -112,7 +99,7 @@ export async function acquirePidLock(
     hostname: hostname(),
     uid: process.getuid?.() ?? 0,
     listen,
-    ...(process.env.PASEO_DESKTOP_MANAGED === "1" ? { desktopManaged: true } : {}),
+    ...(process.env.CHISACODE_DESKTOP_MANAGED === "1" ? { desktopManaged: true } : {}),
   };
 
   let fd;
@@ -128,7 +115,7 @@ export async function acquirePidLock(
         const raceLock = parsePidLockInfo(JSON.parse(content));
         if (raceLock) {
           throw new PidLockError(
-            `Another Paseo daemon is already running (PID ${raceLock.pid})`,
+            `Another ChisaCode daemon is already running (PID ${raceLock.pid})`,
             raceLock,
           );
         }
@@ -145,11 +132,11 @@ export async function acquirePidLock(
 }
 
 export async function updatePidLock(
-  paseoHome: string,
+  chisacodeHome: string,
   patch: { listen: string },
   options?: { ownerPid?: number },
 ): Promise<void> {
-  const pidPath = getPidFilePath(paseoHome);
+  const pidPath = getPidFilePath(chisacodeHome);
   const lockOwnerPid = resolveOwnerPid(options?.ownerPid);
   const content = await readFile(pidPath, "utf-8");
   const existingLock = parsePidLockInfo(JSON.parse(content));
@@ -176,10 +163,10 @@ export async function updatePidLock(
 }
 
 export async function releasePidLock(
-  paseoHome: string,
+  chisacodeHome: string,
   options?: { ownerPid?: number },
 ): Promise<void> {
-  const pidPath = getPidFilePath(paseoHome);
+  const pidPath = getPidFilePath(chisacodeHome);
   const lockOwnerPid = resolveOwnerPid(options?.ownerPid);
   try {
     // Only remove if it's our lock
@@ -193,8 +180,8 @@ export async function releasePidLock(
   }
 }
 
-export async function getPidLockInfo(paseoHome: string): Promise<PidLockInfo | null> {
-  const pidPath = getReadablePidFilePath(paseoHome);
+export async function getPidLockInfo(chisacodeHome: string): Promise<PidLockInfo | null> {
+  const pidPath = getPidFilePath(chisacodeHome);
   try {
     const content = await readFile(pidPath, "utf-8");
     return parsePidLockInfo(JSON.parse(content));
@@ -204,9 +191,9 @@ export async function getPidLockInfo(paseoHome: string): Promise<PidLockInfo | n
 }
 
 export async function isLocked(
-  paseoHome: string,
+  chisacodeHome: string,
 ): Promise<{ locked: boolean; info?: PidLockInfo }> {
-  const info = await getPidLockInfo(paseoHome);
+  const info = await getPidLockInfo(chisacodeHome);
   if (!info) {
     return { locked: false };
   }

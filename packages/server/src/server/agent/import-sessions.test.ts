@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentManager, ManagedAgent } from "./agent-manager.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent-storage.js";
-import type { FetchRecentProviderSessionsRequestMessage } from "@fleurdelys/protocol/messages";
+import type { FetchRecentProviderSessionsRequestMessage } from "@chisacode/protocol/messages";
 import type { AgentTimelineItem, PersistedAgentDescriptor } from "./agent-sdk-types.js";
 import {
   ImportSessionsRequestError,
@@ -283,7 +283,7 @@ test("listImportableProviderSessions filters out metadata generation sessions", 
 });
 
 test("listImportableProviderSessions keeps realpath-equivalent cwd matches", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "paseo-import-cwd-"));
+  const root = mkdtempSync(path.join(tmpdir(), "chisacode-import-cwd-"));
   const realCwd = path.join(root, "real-project");
   const linkedCwd = path.join(root, "linked-project");
   mkdirSync(realCwd, { recursive: true });

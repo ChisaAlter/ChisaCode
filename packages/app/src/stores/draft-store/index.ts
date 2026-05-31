@@ -363,7 +363,7 @@ export const useDraftStore = create<DraftStore>()(
       },
     }),
     {
-      name: "paseo-drafts",
+      name: "chisacode-drafts",
       version: DRAFT_STORE_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persistedState) => {

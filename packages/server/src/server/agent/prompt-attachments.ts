@@ -1,4 +1,4 @@
-import type { AgentAttachment } from "@fleurdelys/protocol/messages";
+import type { AgentAttachment } from "@chisacode/protocol/messages";
 
 const REVIEW_LINE_MARKERS = { add: "+", remove: "-", context: " " } as const;
 
@@ -28,7 +28,7 @@ export function renderPromptAttachmentAsText(attachment: AgentAttachment): strin
       return attachment.text;
     }
     case "review": {
-      const lines = [`Paseo review attachment (${attachment.mode})`, `CWD: ${attachment.cwd}`];
+      const lines = [`ChisaCode review attachment (${attachment.mode})`, `CWD: ${attachment.cwd}`];
       if (attachment.baseRef) {
         lines.push(`Base: ${attachment.baseRef}`);
       }

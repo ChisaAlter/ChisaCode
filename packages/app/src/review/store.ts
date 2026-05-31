@@ -19,13 +19,13 @@ import {
 } from "@/review/state";
 import { generateMessageId } from "@/types/stream";
 import { buildNumberedDiffHunks, type NumberedDiffLine } from "@/utils/diff-layout";
-import type { AgentAttachment } from "@fleurdelys/protocol/messages";
+import type { AgentAttachment } from "@chisacode/protocol/messages";
 
 export type { ReviewDraftComment, ReviewDraftMode, ReviewDraftSide } from "@/review/state";
 
 const STORE_VERSION = 1;
 const CONTEXT_RADIUS = 3;
-const REVIEW_ATTACHMENT_MIME_TYPE = "application/fleurdelys-review";
+const REVIEW_ATTACHMENT_MIME_TYPE = "application/chisacode-review";
 const EMPTY_REVIEW_DRAFT_COMMENTS: ReviewDraftComment[] = [];
 
 type ReviewAttachment = Extract<AgentAttachment, { type: "review" }>;
@@ -157,7 +157,7 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
       },
     }),
     {
-      name: "@paseo:review-draft-store",
+      name: "@chisacode:review-draft-store",
       version: STORE_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => serializeReviewDraftState(state),

@@ -3,19 +3,19 @@ import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import { WebSocket } from "ws";
-import { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import {
   WSOutboundMessageSchema,
   type TerminalState,
   type WSOutboundMessage,
-} from "@fleurdelys/protocol/messages";
+} from "@chisacode/protocol/messages";
 import {
   decodeTerminalSnapshotPayload,
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
   type TerminalStreamFrame,
-} from "@fleurdelys/protocol/terminal-stream-protocol";
+} from "@chisacode/protocol/terminal-stream-protocol";
 import { createDaemonTestContext, type DaemonTestContext } from "../test-utils/index.js";
 
 type RawSessionEnvelope = Extract<WSOutboundMessage, { type: "session" }>;

@@ -1,4 +1,4 @@
-import type { CreateTerminalResponse, ListTerminalsResponse } from "@fleurdelys/protocol/messages";
+import type { CreateTerminalResponse, ListTerminalsResponse } from "@chisacode/protocol/messages";
 import { upsertTerminalListEntry } from "@/utils/terminal-list";
 
 export const TERMINALS_QUERY_STALE_TIME = 5_000;

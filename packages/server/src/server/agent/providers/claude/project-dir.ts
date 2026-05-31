@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 // Verbatim port of the Claude Agent SDK's project-directory encoding so
-// paseo computes the same `~/.claude/projects/<dir>` path the SDK does.
+// chisacode computes the same `~/.claude/projects/<dir>` path the SDK does.
 // The SDK ships only as a precompiled bundle; grep the JS source at
 // node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs for `function f1`,
 // `function i4`, `function tB`, `S0=200`.

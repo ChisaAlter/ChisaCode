@@ -3,10 +3,10 @@ import type {
   ScriptStatusUpdateMessage,
   SessionOutboundMessage,
   WorkspaceScriptPayload,
-} from "@fleurdelys/protocol/messages";
-import type { PaseoConfig } from "@fleurdelys/protocol/paseo-config-schema";
+} from "@chisacode/protocol/messages";
+import type { ChisaCodeConfig } from "@chisacode/protocol/chisacode-config-schema";
 import { buildScriptHostname } from "../utils/script-hostname.js";
-import { getScriptConfigs, isServiceScript, readPaseoConfig } from "../utils/worktree.js";
+import { getScriptConfigs, isServiceScript, readChisaCodeConfig } from "../utils/worktree.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import type { ScriptHealthEntry, ScriptHealthState } from "./script-health-monitor.js";
 import type { ScriptRouteStore } from "./script-proxy.js";
@@ -19,7 +19,7 @@ interface SessionEmitter {
 interface BuildWorkspaceScriptPayloadsOptions {
   workspaceId: string;
   workspaceDirectory: string;
-  paseoConfig: PaseoConfig | null;
+  chisacodeConfig: ChisaCodeConfig | null;
   routeStore: ScriptRouteStore;
   runtimeStore: WorkspaceScriptRuntimeStore;
   daemonPort: number | null;
@@ -30,17 +30,17 @@ interface BuildWorkspaceScriptPayloadsOptions {
   resolveHealth?: (hostname: string) => ScriptHealthState | null;
 }
 
-export function readPaseoConfigForProjection(
+export function readChisaCodeConfigForProjection(
   workspaceDirectory: string,
   logger: Logger,
-): PaseoConfig | null {
-  const result = readPaseoConfig(workspaceDirectory);
+): ChisaCodeConfig | null {
+  const result = readChisaCodeConfig(workspaceDirectory);
   if (result.ok) {
     return result.config;
   }
   logger.warn(
     { configPath: result.configPath, workspaceDirectory, err: result.error },
-    "Failed to parse paseo.json; treating workspace as having no scripts",
+    "Failed to parse chisacode.json; treating workspace as having no scripts",
   );
   return null;
 }
@@ -154,7 +154,7 @@ export function buildWorkspaceScriptPayloads(
   const workspaceDirectory = options.workspaceDirectory;
   const projectSlug = options.gitMetadata?.projectSlug ?? deriveProjectSlug(workspaceDirectory);
   const branchName = options.gitMetadata?.currentBranch ?? null;
-  const scriptConfigs = getScriptConfigs(options.paseoConfig);
+  const scriptConfigs = getScriptConfigs(options.chisacodeConfig);
   const runtimeEntries = new Map(
     options.runtimeStore
       .listForWorkspace(workspaceId)
@@ -235,7 +235,7 @@ export function createScriptStatusEmitter({
       const projected = buildWorkspaceScriptPayloads({
         workspaceId,
         workspaceDirectory,
-        paseoConfig: readPaseoConfigForProjection(workspaceDirectory, logger),
+        chisacodeConfig: readChisaCodeConfigForProjection(workspaceDirectory, logger),
         routeStore,
         runtimeStore,
         daemonPort: resolvedDaemonPort,

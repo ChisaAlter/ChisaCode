@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { homedir } from "node:os";
 import { basename, join, sep } from "node:path";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
 
@@ -27,16 +27,16 @@ function extractWorktreeName(path: string): string {
   return basename(path);
 }
 
-export function resolvePaseoHomePath(): string {
-  return process.env.FLEURDELYS_HOME ?? process.env.PASEO_HOME ?? join(homedir(), ".fleurdelys");
+export function resolveChisaCodeHomePath(): string {
+  return process.env.CHISACODE_HOME ?? process.env.CHISACODE_HOME ?? join(homedir(), ".chisacode");
 }
 
-export function resolvePaseoWorktreesDir(): string {
-  return join(resolvePaseoHomePath(), "worktrees");
+export function resolveChisaCodeWorktreesDir(): string {
+  return join(resolveChisaCodeHomePath(), "worktrees");
 }
 
 function isAgentInManagedWorktree(agentCwd: string): boolean {
-  const worktreesDir = resolvePaseoWorktreesDir();
+  const worktreesDir = resolveChisaCodeWorktreesDir();
   return agentCwd === worktreesDir || agentCwd.startsWith(worktreesDir + sep);
 }
 
@@ -71,7 +71,7 @@ export async function runLsCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: fleurdelys daemon start",
+      details: "Start the daemon with: chisacode daemon start",
     };
     throw error;
   }
@@ -81,7 +81,7 @@ export async function runLsCommand(
     const agents = agentsPayload.entries.map((entry) => entry.agent);
 
     // Get worktree list from daemon
-    const response = await client.getPaseoWorktreeList({});
+    const response = await client.getChisaCodeWorktreeList({});
 
     await client.close();
 

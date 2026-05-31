@@ -1,4 +1,4 @@
-import type { AgentFeature, AgentModelDefinition } from "@fleurdelys/protocol/agent-types";
+import type { AgentFeature, AgentModelDefinition } from "@chisacode/protocol/agent-types";
 
 export type ExplainedAgentControl = "mode" | "model" | "thinking";
 export type FeatureHighlightColor = "blue" | "default" | "green" | "yellow";

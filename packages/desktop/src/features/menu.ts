@@ -1,5 +1,5 @@
 import { app, Menu, BrowserWindow, ipcMain } from "electron";
-import { getWorkspaceActivePaseoBrowserWebContents } from "./browser-webviews.js";
+import { getWorkspaceActiveChisaCodeBrowserWebContents } from "./browser-webviews.js";
 import { translateDesktop, type DesktopTranslationKey } from "../i18n.js";
 import type { AppLanguage } from "../settings/desktop-settings.js";
 
@@ -9,7 +9,7 @@ interface ShowContextMenuInput {
 }
 
 let applicationMenuLanguage: AppLanguage = "zh-CN";
-const IPC_PREFIXES = ["fleurdelys", "paseo"] as const;
+const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
 
 function withBrowserWindow(
   callback: (win: BrowserWindow) => void,
@@ -21,7 +21,7 @@ function withBrowserWindow(
 }
 
 function getReloadTargetBrowserWebContents(): Electron.WebContents | null {
-  return getWorkspaceActivePaseoBrowserWebContents();
+  return getWorkspaceActiveChisaCodeBrowserWebContents();
 }
 
 function reloadFocusedContentsOrWindow(win: BrowserWindow, options?: { ignoreCache?: boolean }) {

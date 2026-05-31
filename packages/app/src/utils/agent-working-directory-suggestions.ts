@@ -4,7 +4,7 @@ export interface AgentWorkingDirectorySource {
   lastActivityAt?: Date | null;
 }
 
-const MANAGED_WORKTREE_PATH_PATTERN = /(^|\/)\.(?:fleurdelys|paseo)\/worktrees(\/|$)/;
+const MANAGED_WORKTREE_PATH_PATTERN = /(^|\/)\.(?:chisacode|chisacode)\/worktrees(\/|$)/;
 
 export function collectAgentWorkingDirectorySuggestions(
   sources: Iterable<AgentWorkingDirectorySource>,
@@ -16,7 +16,7 @@ export function collectAgentWorkingDirectorySuggestions(
     if (!cwd) {
       continue;
     }
-    if (isPaseoOwnedWorktreePath(cwd)) {
+    if (isChisaCodeOwnedWorktreePath(cwd)) {
       continue;
     }
 
@@ -38,7 +38,7 @@ export function collectAgentWorkingDirectorySuggestions(
     .map(([cwd]) => cwd);
 }
 
-function isPaseoOwnedWorktreePath(cwd: string): boolean {
+function isChisaCodeOwnedWorktreePath(cwd: string): boolean {
   return MANAGED_WORKTREE_PATH_PATTERN.test(cwd.replace(/\\/g, "/"));
 }
 

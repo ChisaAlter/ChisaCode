@@ -8,12 +8,12 @@ import type { StructuredAgentGenerationWithFallbackOptions } from "./agent/agent
 import {
   attemptFirstAgentBranchAutoName,
   type AttemptFirstAgentBranchAutoNameResult,
-} from "./paseo-worktree-service.js";
+} from "./chisacode-worktree-service.js";
 import { createNoopWorkspaceGitService } from "./test-utils/workspace-git-service-stub.js";
 import { generateBranchNameFromFirstAgentContext } from "./worktree-branch-name-generator.js";
 import {
-  writePaseoWorktreeFirstAgentBranchAutoNameMetadata,
-  writePaseoWorktreeMetadata,
+  writeChisaCodeWorktreeFirstAgentBranchAutoNameMetadata,
+  writeChisaCodeWorktreeMetadata,
 } from "../utils/worktree-metadata.js";
 
 const cleanupPaths: string[] = [];
@@ -155,9 +155,9 @@ describe("generateBranchNameFromFirstAgentContext", () => {
   });
 
   test.each([
-    ["paseo.json missing", undefined],
-    ["paseo.json exists but invalid JSON", "{ nope"],
-    ["paseo.json valid but missing metadataGeneration", {}],
+    ["chisacode.json missing", undefined],
+    ["chisacode.json exists but invalid JSON", "{ nope"],
+    ["chisacode.json valid but missing metadataGeneration", {}],
     [
       "metadataGeneration exists but missing branchName",
       { metadataGeneration: { agentTitle: { instructions: "Use mb/." } } },
@@ -204,11 +204,11 @@ describe("generateBranchNameFromFirstAgentContext", () => {
   });
 
   test("keeps the branch slug validator fallback when instructions are present", async () => {
-    const repoRoot = createTempDir("paseo-branch-config-");
-    const worktreeRoot = createTempDir("paseo-branch-worktree-");
+    const repoRoot = createTempDir("chisacode-branch-config-");
+    const worktreeRoot = createTempDir("chisacode-branch-worktree-");
     mkdirSync(path.join(worktreeRoot, ".git"));
-    writePaseoWorktreeMetadata(worktreeRoot, { baseRefName: "main" });
-    writePaseoWorktreeFirstAgentBranchAutoNameMetadata(worktreeRoot, {
+    writeChisaCodeWorktreeMetadata(worktreeRoot, { baseRefName: "main" });
+    writeChisaCodeWorktreeFirstAgentBranchAutoNameMetadata(worktreeRoot, {
       placeholderBranchName: "dazzling-yak",
     });
     writeConfig(repoRoot, {
@@ -248,9 +248,9 @@ describe("generateBranchNameFromFirstAgentContext", () => {
 });
 
 async function generateBranchPromptWithConfig(config: unknown): Promise<{ prompt: string }> {
-  const repoRoot = createTempDir("paseo-branch-config-");
+  const repoRoot = createTempDir("chisacode-branch-config-");
   if (typeof config === "string") {
-    writeFileSync(path.join(repoRoot, "paseo.json"), config);
+    writeFileSync(path.join(repoRoot, "chisacode.json"), config);
   } else if (config !== undefined) {
     writeConfig(repoRoot, config);
   }
@@ -280,5 +280,5 @@ function createTempDir(prefix: string): string {
 }
 
 function writeConfig(repoRoot: string, config: unknown): void {
-  writeFileSync(path.join(repoRoot, "paseo.json"), `${JSON.stringify(config)}\n`);
+  writeFileSync(path.join(repoRoot, "chisacode.json"), `${JSON.stringify(config)}\n`);
 }

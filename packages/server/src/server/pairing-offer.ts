@@ -12,7 +12,7 @@ export interface LocalPairingOffer {
 }
 
 export async function generateLocalPairingOffer(args: {
-  paseoHome: string;
+  chisacodeHome: string;
   relayEnabled?: boolean;
   relayEndpoint?: string;
   relayPublicEndpoint?: string;
@@ -31,13 +31,13 @@ export async function generateLocalPairingOffer(args: {
     };
   }
 
-  const relayEndpoint = args.relayEndpoint ?? "relay.paseo.sh:443";
+  const relayEndpoint = args.relayEndpoint ?? "relay.chisacode.sh:443";
   const relayPublicEndpoint = args.relayPublicEndpoint ?? relayEndpoint;
-  const relayUseTls = args.relayUseTls ?? relayEndpoint === "relay.paseo.sh:443";
+  const relayUseTls = args.relayUseTls ?? relayEndpoint === "relay.chisacode.sh:443";
   const relayPublicUseTls = args.relayPublicUseTls ?? relayUseTls;
-  const appBaseUrl = args.appBaseUrl ?? "https://app.paseo.sh";
-  const serverId = getOrCreateServerId(args.paseoHome, { logger: args.logger });
-  const daemonKeyPair = await loadOrCreateDaemonKeyPair(args.paseoHome, args.logger);
+  const appBaseUrl = args.appBaseUrl ?? "https://app.chisacode.sh";
+  const serverId = getOrCreateServerId(args.chisacodeHome, { logger: args.logger });
+  const daemonKeyPair = await loadOrCreateDaemonKeyPair(args.chisacodeHome, args.logger);
   const offer = await createConnectionOfferV2({
     serverId,
     daemonPublicKeyB64: daemonKeyPair.publicKeyB64,

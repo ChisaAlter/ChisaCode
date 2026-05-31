@@ -2,10 +2,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
 
-export const APP_SETTINGS_KEY = "@fleurdelys:app-settings";
+export const APP_SETTINGS_KEY = "@chisacode:app-settings";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
-const LEGACY_APP_SETTINGS_KEY = "@paseo:app-settings";
-const LEGACY_SETTINGS_KEY = "@paseo:settings";
+const LEGACY_APP_SETTINGS_KEY = "@chisacode:app-settings";
+const LEGACY_SETTINGS_KEY = "@chisacode:settings";
 
 export type SendBehavior = "interrupt" | "queue";
 export type ReleaseChannel = "stable" | "beta";
@@ -138,6 +138,7 @@ export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Setti
   return {
     ...DEFAULT_APP_SETTINGS,
     ...appSettings,
+    language: desktopSettings.language,
     manageBuiltInDaemon: desktopSettings.daemon.manageBuiltInDaemon,
     releaseChannel: desktopSettings.releaseChannel,
   };
@@ -194,6 +195,7 @@ export function parseTerminalScrollbackLines(value: unknown): number | null {
 async function loadLegacyDesktopSettingsFromStorage(storage: KeyValueStorage): Promise<{
   manageBuiltInDaemon?: boolean;
   releaseChannel?: ReleaseChannel;
+  language?: AppLanguage;
 } | null> {
   const stored = await loadRendererSettingsPayload(storage);
   if (!stored) {

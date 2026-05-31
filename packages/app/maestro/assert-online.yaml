@@ -1,8 +1,8 @@
-appId: sh.paseo
+appId: sh.chisacode
 ---
 - runFlow:
     when:
-      visible: "Open in.*Paseo.*\\?"
+      visible: "Open in.*ChisaCode.*\\?"
     commands:
       - tapOn: "Open"
 

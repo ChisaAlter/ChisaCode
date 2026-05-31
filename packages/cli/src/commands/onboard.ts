@@ -8,9 +8,9 @@ import {
   loadPersistedConfig,
   type CliConfigOverrides,
   type PersistedConfig,
-} from "@fleurdelys/server";
+} from "@chisacode/server";
 import {
-  resolveLocalPaseoHome,
+  resolveLocalChisaCodeHome,
   resolveLocalDaemonState,
   resolveTcpHostFromListen,
   startLocalDaemonDetached,
@@ -99,8 +99,8 @@ function toCliOverrides(options: OnboardOptions): CliConfigOverrides {
   return cliOverrides;
 }
 
-function savePersistedConfig(paseoHome: string, config: OnboardPersistedConfig): void {
-  const configPath = path.join(paseoHome, "config.json");
+function savePersistedConfig(chisacodeHome: string, config: OnboardPersistedConfig): void {
+  const configPath = path.join(chisacodeHome, "config.json");
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
@@ -280,22 +280,22 @@ async function waitForDaemonReady(args: {
   return poll({ lastStatus: "", lastPrintedAt: 0 });
 }
 
-function printNextSteps(pairingUrl: string | null, paseoHome: string, richUi: boolean): void {
-  const daemonLogPath = path.join(paseoHome, "daemon.log");
+function printNextSteps(pairingUrl: string | null, chisacodeHome: string, richUi: boolean): void {
+  const daemonLogPath = path.join(chisacodeHome, "daemon.log");
   const nextStepsLines = [
     pairingUrl
-      ? "1. Open Fleurdelys and scan the QR code above, or paste the pairing link."
-      : "1. Open Fleurdelys and connect to your daemon.",
-    "2. Web app: https://app.paseo.sh",
-    "3. Desktop app: https://github.com/getpaseo/paseo/releases/latest",
-    "4. Docs: https://paseo.sh/docs",
-    '5. Example: fleurdelys run --output-schema schema.json "extract fields"',
+      ? "1. Open ChisaCode and scan the QR code above, or paste the pairing link."
+      : "1. Open ChisaCode and connect to your daemon.",
+    "2. Web app: https://app.chisacode.sh",
+    "3. Desktop app: https://github.com/getchisacode/chisacode/releases/latest",
+    "4. Docs: https://chisacode.sh/docs",
+    '5. Example: chisacode run --output-schema schema.json "extract fields"',
   ];
   const quickReferenceLines = [
-    "1. fleurdelys --help",
-    "2. fleurdelys ls",
-    '3. fleurdelys run "your prompt"',
-    "4. fleurdelys status",
+    "1. chisacode --help",
+    "2. chisacode ls",
+    '3. chisacode run "your prompt"',
+    "4. chisacode status",
     `5. Daemon logs: ${daemonLogPath}`,
   ];
 
@@ -322,7 +322,7 @@ export function onboardCommand(): Command {
     .description("Run first-time setup, start daemon, and print pairing instructions")
     .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
     .option("--port <port>", "Port to listen on (default: 6767)")
-    .option("--home <path>", "Fleurdelys home directory (default: ~/.paseo)")
+    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
     .option("--no-relay", "Disable relay connection")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
     .option(
@@ -341,10 +341,10 @@ export function onboardCommand(): Command {
 }
 
 async function resolveAndPersistVoice(
-  paseoHome: string,
+  chisacodeHome: string,
   options: OnboardOptions,
 ): Promise<boolean> {
-  let persisted = loadPersistedConfig(paseoHome) as OnboardPersistedConfig;
+  let persisted = loadPersistedConfig(chisacodeHome) as OnboardPersistedConfig;
   const persistedVoiceSelection = resolvePersistedVoiceSelection(persisted);
   const shouldPrompt = options.voice === "ask" || options.voice === undefined;
   let voiceEnabled: boolean;
@@ -366,7 +366,7 @@ async function resolveAndPersistVoice(
   }
 
   persisted = applyVoiceSelection(persisted, voiceEnabled);
-  savePersistedConfig(paseoHome, persisted);
+  savePersistedConfig(chisacodeHome, persisted);
   return voiceEnabled;
 }
 
@@ -439,7 +439,7 @@ async function waitForDaemonReadyWithUi(args: {
 export async function runOnboard(options: OnboardOptions): Promise<void> {
   const richUi = process.stdin.isTTY && process.stdout.isTTY;
   if (richUi) {
-    intro("Welcome to Fleurdelys");
+    intro("Welcome to ChisaCode");
   }
 
   if (options.listen && options.port) {
@@ -456,13 +456,13 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     process.exit(1);
   }
 
-  const paseoHome = resolveLocalPaseoHome(options.home);
+  const chisacodeHome = resolveLocalChisaCodeHome(options.home);
   if (richUi) {
-    renderNote(paseoHome, "Fleurdelys home");
+    renderNote(chisacodeHome, "ChisaCode home");
   }
 
-  const voiceEnabled = await resolveAndPersistVoice(paseoHome, options);
-  const config = loadConfig(paseoHome, { cli: toCliOverrides(options) });
+  const voiceEnabled = await resolveAndPersistVoice(chisacodeHome, options);
+  const config = loadConfig(chisacodeHome, { cli: toCliOverrides(options) });
 
   log.message(
     voiceEnabled
@@ -472,22 +472,22 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   await ensureDaemonStarted(options, richUi);
   await waitForDaemonReadyWithUi({
-    home: options.home ?? paseoHome,
+    home: options.home ?? chisacodeHome,
     timeoutMs,
     richUi,
   });
 
   if (config.relayEnabled === false) {
     log.warn("Relay is disabled; pairing offer is unavailable for this daemon.");
-    printNextSteps(null, paseoHome, richUi);
+    printNextSteps(null, chisacodeHome, richUi);
     if (richUi) {
-      outro("Fleurdelys daemon is running.");
+      outro("ChisaCode daemon is running.");
     }
     return;
   }
 
   const pairing = await generateLocalPairingOffer({
-    paseoHome,
+    chisacodeHome,
     relayEnabled: config.relayEnabled,
     relayEndpoint: config.relayEndpoint,
     relayPublicEndpoint: config.relayPublicEndpoint,
@@ -499,9 +499,9 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   if (!pairing.url) {
     log.warn("Relay pairing URL is unavailable for this daemon configuration.");
-    printNextSteps(null, paseoHome, richUi);
+    printNextSteps(null, chisacodeHome, richUi);
     if (richUi) {
-      outro("Fleurdelys daemon is running.");
+      outro("ChisaCode daemon is running.");
     }
     return;
   }
@@ -511,8 +511,8 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     "Scan to pair",
   );
   renderNote(pairing.url, "Pairing link");
-  printNextSteps(pairing.url, paseoHome, richUi);
+  printNextSteps(pairing.url, chisacodeHome, richUi);
   if (richUi) {
-    outro("Fleurdelys is ready!");
+    outro("ChisaCode is ready!");
   }
 }

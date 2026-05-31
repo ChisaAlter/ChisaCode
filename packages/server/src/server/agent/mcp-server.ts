@@ -31,14 +31,14 @@ import { ensureAgentLoaded } from "./agent-loading.js";
 import { isStoredAgentProviderAvailable } from "../persistence-hooks.js";
 import {
   killTerminalsUnderPath,
-  type ArchivePaseoWorktreeDependencies,
-} from "../paseo-worktree-archive-service.js";
+  type ArchiveChisaCodeWorktreeDependencies,
+} from "../chisacode-worktree-archive-service.js";
 import { WaitForAgentTracker } from "./wait-for-agent-tracker.js";
 import { createAgentCommand } from "./create-agent/create.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "../voice-types.js";
 import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../path-utils.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
-import type { CreatePaseoWorktreeWorkflowFn } from "../worktree-session.js";
+import type { CreateChisaCodeWorktreeWorkflowFn } from "../worktree-session.js";
 import type { ScheduleService } from "../schedule/service.js";
 import {
   ScheduleRunSchema,
@@ -46,7 +46,7 @@ import {
   StoredScheduleSchema,
   type ScheduleCadence,
   type UpdateScheduleInput,
-} from "@fleurdelys/protocol/schedule/types";
+} from "@chisacode/protocol/schedule/types";
 import { resolveSnapshotCwd, type ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import {
   AgentModelSchema,
@@ -74,11 +74,11 @@ import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import { WorktreeRequestError } from "../worktree-errors.js";
 import {
-  archivePaseoWorktreeCommand,
-  type ArchivePaseoWorktreeCommandDependencies,
-  createPaseoWorktreeCommand,
-  type CreatePaseoWorktreeCommandInput,
-  listPaseoWorktreesCommand,
+  archiveChisaCodeWorktreeCommand,
+  type ArchiveChisaCodeWorktreeCommandDependencies,
+  createChisaCodeWorktreeCommand,
+  type CreateChisaCodeWorktreeCommandInput,
+  listChisaCodeWorktreesCommand,
 } from "../worktree/commands.js";
 
 export interface AgentMcpServerOptions {
@@ -93,12 +93,12 @@ export interface AgentMcpServerOptions {
     WorkspaceGitService,
     "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
   >;
-  archiveWorkspaceRecord?: ArchivePaseoWorktreeDependencies["archiveWorkspaceRecord"];
-  emitWorkspaceUpdatesForWorkspaceIds?: ArchivePaseoWorktreeDependencies["emitWorkspaceUpdatesForWorkspaceIds"];
-  markWorkspaceArchiving?: ArchivePaseoWorktreeDependencies["markWorkspaceArchiving"];
-  clearWorkspaceArchiving?: ArchivePaseoWorktreeDependencies["clearWorkspaceArchiving"];
-  createPaseoWorktree?: CreatePaseoWorktreeWorkflowFn;
-  paseoHome?: string;
+  archiveWorkspaceRecord?: ArchiveChisaCodeWorktreeDependencies["archiveWorkspaceRecord"];
+  emitWorkspaceUpdatesForWorkspaceIds?: ArchiveChisaCodeWorktreeDependencies["emitWorkspaceUpdatesForWorkspaceIds"];
+  markWorkspaceArchiving?: ArchiveChisaCodeWorktreeDependencies["markWorkspaceArchiving"];
+  clearWorkspaceArchiving?: ArchiveChisaCodeWorktreeDependencies["clearWorkspaceArchiving"];
+  createChisaCodeWorktree?: CreateChisaCodeWorktreeWorkflowFn;
+  chisacodeHome?: string;
   /**
    * ID of the agent that is connecting to this MCP server.
    * Used for cwd/mode inheritance when agents spawn child agents.
@@ -863,11 +863,11 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
           agentManager,
           agentStorage,
           logger: childLogger,
-          paseoHome: options.paseoHome,
+          chisacodeHome: options.chisacodeHome,
           workspaceGitService: options.workspaceGitService,
           terminalManager,
           providerSnapshotManager,
-          createPaseoWorktree: options.createPaseoWorktree,
+          createChisaCodeWorktree: options.createChisaCodeWorktree,
         },
         {
           kind: "mcp",
@@ -1985,7 +1985,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     "list_worktrees",
     {
       title: "List worktrees",
-      description: "List Paseo-managed git worktrees for a repository.",
+      description: "List ChisaCode-managed git worktrees for a repository.",
       inputSchema: {
         cwd: z
           .string()
@@ -2001,7 +2001,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       if (!options.workspaceGitService) {
         throw new Error("WorkspaceGitService is required to list worktrees");
       }
-      const worktrees = await listPaseoWorktreesCommand(
+      const worktrees = await listChisaCodeWorktreesCommand(
         { workspaceGitService: options.workspaceGitService },
         {
           cwd: resolvedCwd,
@@ -2021,7 +2021,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     {
       title: "Create worktree",
       description:
-        "Create a Paseo-managed git worktree. Branch off a new branch, check out an existing branch, or check out a GitHub PR.",
+        "Create a ChisaCode-managed git worktree. Branch off a new branch, check out an existing branch, or check out a GitHub PR.",
       inputSchema: {
         cwd: z.string().optional().describe("Repository directory. Defaults to the agent's cwd."),
         target: z
@@ -2059,10 +2059,10 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     },
     async ({ cwd, target }) => {
       const repoRoot = resolveScopedCwd(cwd, { required: true });
-      const commandResult = await createPaseoWorktreeCommand(
+      const commandResult = await createChisaCodeWorktreeCommand(
         {
-          paseoHome: options.paseoHome,
-          createPaseoWorktreeWorkflow: options.createPaseoWorktree,
+          chisacodeHome: options.chisacodeHome,
+          createChisaCodeWorktreeWorkflow: options.createChisaCodeWorktree,
         },
         createMcpWorktreeCommandInput(repoRoot, target),
       );
@@ -2089,7 +2089,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     "archive_worktree",
     {
       title: "Archive worktree",
-      description: "Delete a Paseo-managed git worktree.",
+      description: "Delete a ChisaCode-managed git worktree.",
       inputSchema: {
         cwd: z
           .string()
@@ -2112,7 +2112,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       }
       const repoRoot = await options.workspaceGitService.resolveRepoRoot(resolvedCwd);
 
-      const result = await archivePaseoWorktreeCommand(
+      const result = await archiveChisaCodeWorktreeCommand(
         archiveWorktreeDependencies(options, {
           agentManager,
           agentStorage,
@@ -2303,7 +2303,7 @@ interface ArchiveWorktreeCommandContext {
 function archiveWorktreeDependencies(
   options: AgentMcpServerOptions,
   context: ArchiveWorktreeCommandContext,
-): ArchivePaseoWorktreeCommandDependencies {
+): ArchiveChisaCodeWorktreeCommandDependencies {
   if (!options.github) {
     throw new Error("GitHub service is required to archive worktrees");
   }
@@ -2323,7 +2323,7 @@ function archiveWorktreeDependencies(
     throw new Error("Workspace archiving clearer is required to archive worktrees");
   }
   return {
-    paseoHome: options.paseoHome,
+    chisacodeHome: options.chisacodeHome,
     github: options.github,
     workspaceGitService: options.workspaceGitService,
     agentManager: context.agentManager,
@@ -2350,7 +2350,7 @@ function archiveWorktreeDependencies(
 function createMcpWorktreeCommandInput(
   repoRoot: string,
   target: McpCreateWorktreeTarget,
-): CreatePaseoWorktreeCommandInput {
+): CreateChisaCodeWorktreeCommandInput {
   const base = { cwd: repoRoot } as const;
   switch (target.mode) {
     case "branch-off":

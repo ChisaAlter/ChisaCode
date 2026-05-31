@@ -3,35 +3,38 @@
 import assert from "node:assert";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { resolvePaseoHomePath, resolvePaseoWorktreesDir } from "../src/commands/worktree/ls.js";
+import {
+  resolveChisaCodeHomePath,
+  resolveChisaCodeWorktreesDir,
+} from "../src/commands/worktree/ls.js";
 
 console.log("=== Worktree LS Path Helper Tests ===\n");
 
-const originalPaseoHome = process.env.PASEO_HOME;
+const originalChisaCodeHome = process.env.CHISACODE_HOME;
 
 try {
   {
-    console.log("Test 1: resolves explicit PASEO_HOME when set");
-    process.env.PASEO_HOME = "/tmp/paseo-explicit-home";
+    console.log("Test 1: resolves explicit CHISACODE_HOME when set");
+    process.env.CHISACODE_HOME = "/tmp/chisacode-explicit-home";
 
-    assert.strictEqual(resolvePaseoHomePath(), "/tmp/paseo-explicit-home");
-    assert.strictEqual(resolvePaseoWorktreesDir(), "/tmp/paseo-explicit-home/worktrees");
-    console.log("\u2713 explicit PASEO_HOME is respected\n");
+    assert.strictEqual(resolveChisaCodeHomePath(), "/tmp/chisacode-explicit-home");
+    assert.strictEqual(resolveChisaCodeWorktreesDir(), "/tmp/chisacode-explicit-home/worktrees");
+    console.log("\u2713 explicit CHISACODE_HOME is respected\n");
   }
 
   {
-    console.log("Test 2: falls back to homedir/.paseo when PASEO_HOME is unset");
-    delete process.env.PASEO_HOME;
+    console.log("Test 2: falls back to homedir/.chisacode when CHISACODE_HOME is unset");
+    delete process.env.CHISACODE_HOME;
 
-    assert.strictEqual(resolvePaseoHomePath(), join(homedir(), ".paseo"));
-    assert.strictEqual(resolvePaseoWorktreesDir(), join(homedir(), ".paseo", "worktrees"));
+    assert.strictEqual(resolveChisaCodeHomePath(), join(homedir(), ".chisacode"));
+    assert.strictEqual(resolveChisaCodeWorktreesDir(), join(homedir(), ".chisacode", "worktrees"));
     console.log("\u2713 fallback home path is derived from os.homedir()\n");
   }
 } finally {
-  if (originalPaseoHome === undefined) {
-    delete process.env.PASEO_HOME;
+  if (originalChisaCodeHome === undefined) {
+    delete process.env.CHISACODE_HOME;
   } else {
-    process.env.PASEO_HOME = originalPaseoHome;
+    process.env.CHISACODE_HOME = originalChisaCodeHome;
   }
 }
 

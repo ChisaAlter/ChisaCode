@@ -5,8 +5,8 @@ import type {
   EditorTargetDescriptorPayload,
   EditorTargetId,
   KnownEditorTargetId,
-} from "@fleurdelys/protocol/messages";
-import { createExternalProcessEnv } from "./paseo-env.js";
+} from "@chisacode/protocol/messages";
+import { createExternalProcessEnv } from "./chisacode-env.js";
 import { findExecutable } from "../utils/executable.js";
 import { spawnProcess } from "../utils/spawn.js";
 

@@ -3,8 +3,8 @@ import type {
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@fleurdelys/protocol/agent-types";
-import type { AgentProviderDefinition } from "@fleurdelys/protocol/provider-manifest";
+} from "@chisacode/protocol/agent-types";
+import type { AgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { buildFavoriteModelKey, type FavoriteModelRow } from "@/hooks/use-form-preferences";
 import { compareMatchScores, scoreTextFields } from "@/utils/score-match";

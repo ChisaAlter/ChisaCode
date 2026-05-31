@@ -19,12 +19,13 @@ import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit
 import type {
   CreateAgentRequestOptions,
   DaemonClient,
-} from "@fleurdelys/client/internal/daemon-client";
+} from "@chisacode/client/internal/daemon-client";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { requireWorkspaceExecutionAuthority } from "@/utils/workspace-execution";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
+import { useTranslation } from "react-i18next";
 
 function toProjectIconDataUri(icon: { mimeType: string; data: string } | null): string | null {
   if (!icon) {
@@ -88,7 +89,7 @@ async function callWorkspaceCreation({
   input: { cwd: string };
 }) {
   if (creationMethod === "create_worktree") {
-    return connectedClient.createPaseoWorktree({
+    return connectedClient.createChisaCodeWorktree({
       cwd: input.cwd,
       worktreeSlug: createNameId(),
     });
@@ -140,6 +141,7 @@ function buildCreateAgentOptions({
 }
 
 export function WorkspaceSetupDialog() {
+  const { t } = useTranslation();
   const toast = useToast();
   const pendingWorkspaceSetup = useWorkspaceSetupStore((state) => state.pendingWorkspaceSetup);
   const clearWorkspaceSetup = useWorkspaceSetupStore((state) => state.clearWorkspaceSetup);
@@ -392,8 +394,8 @@ export function WorkspaceSetupDialog() {
   );
 
   const sheetHeader = useMemo<SheetHeader>(
-    () => ({ title: "创建工作区", subtitle: subtitleContent }),
-    [subtitleContent],
+    () => ({ title: t("workspace.createWorkspace"), subtitle: subtitleContent }),
+    [subtitleContent, t],
   );
 
   if (!pendingWorkspaceSetup || !sourceDirectory) {

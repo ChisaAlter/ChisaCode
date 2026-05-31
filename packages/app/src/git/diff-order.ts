@@ -1,4 +1,4 @@
-import type { SubscribeCheckoutDiffResponse } from "@fleurdelys/protocol/messages";
+import type { SubscribeCheckoutDiffResponse } from "@chisacode/protocol/messages";
 
 type ParsedDiffFile = SubscribeCheckoutDiffResponse["payload"]["files"][number];
 

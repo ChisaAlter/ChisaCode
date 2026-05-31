@@ -1,29 +1,29 @@
 import { join } from "node:path";
 
-import { getPaseoWorktreesRoot, isPaseoOwnedWorktreeCwd } from "../../utils/worktree.js";
+import { getChisaCodeWorktreesRoot, isChisaCodeOwnedWorktreeCwd } from "../../utils/worktree.js";
 import {
-  archivePaseoWorktree,
-  type ArchivePaseoWorktreeDependencies,
-} from "../paseo-worktree-archive-service.js";
+  archiveChisaCodeWorktree,
+  type ArchiveChisaCodeWorktreeDependencies,
+} from "../chisacode-worktree-archive-service.js";
 import type {
-  CreatePaseoWorktreeInput,
-  CreatePaseoWorktreeResult,
-} from "../paseo-worktree-service.js";
+  CreateChisaCodeWorktreeInput,
+  CreateChisaCodeWorktreeResult,
+} from "../chisacode-worktree-service.js";
 import { toWorktreeWireError, type WorktreeWireError } from "../worktree-errors.js";
 import type { WorkspaceGitService, WorkspaceGitWorktreeInfo } from "../workspace-git-service.js";
 
-export interface ListPaseoWorktreesCommandDependencies {
+export interface ListChisaCodeWorktreesCommandDependencies {
   workspaceGitService: Pick<WorkspaceGitService, "listWorktrees">;
 }
 
-export interface ListPaseoWorktreesCommandInput {
+export interface ListChisaCodeWorktreesCommandInput {
   cwd: string;
   reason?: string;
 }
 
-export async function listPaseoWorktreesCommand(
-  dependencies: ListPaseoWorktreesCommandDependencies,
-  input: ListPaseoWorktreesCommandInput,
+export async function listChisaCodeWorktreesCommand(
+  dependencies: ListChisaCodeWorktreesCommandDependencies,
+  input: ListChisaCodeWorktreesCommandInput,
 ): Promise<WorkspaceGitWorktreeInfo[]> {
   if (input.reason) {
     return dependencies.workspaceGitService.listWorktrees(input.cwd, { reason: input.reason });
@@ -31,25 +31,25 @@ export async function listPaseoWorktreesCommand(
   return dependencies.workspaceGitService.listWorktrees(input.cwd);
 }
 
-type CreatePaseoWorktreeWorkflow<Result extends CreatePaseoWorktreeResult> = (
-  input: CreatePaseoWorktreeInput,
+type CreateChisaCodeWorktreeWorkflow<Result extends CreateChisaCodeWorktreeResult> = (
+  input: CreateChisaCodeWorktreeInput,
 ) => Promise<Result>;
 
-export interface CreatePaseoWorktreeCommandDependencies<
-  Result extends CreatePaseoWorktreeResult = CreatePaseoWorktreeResult,
+export interface CreateChisaCodeWorktreeCommandDependencies<
+  Result extends CreateChisaCodeWorktreeResult = CreateChisaCodeWorktreeResult,
 > {
-  paseoHome?: string;
-  createPaseoWorktreeWorkflow?: CreatePaseoWorktreeWorkflow<Result>;
+  chisacodeHome?: string;
+  createChisaCodeWorktreeWorkflow?: CreateChisaCodeWorktreeWorkflow<Result>;
 }
 
-export type CreatePaseoWorktreeCommandInput = Omit<
-  CreatePaseoWorktreeInput,
-  "paseoHome" | "runSetup"
+export type CreateChisaCodeWorktreeCommandInput = Omit<
+  CreateChisaCodeWorktreeInput,
+  "chisacodeHome" | "runSetup"
 > & {
-  paseoHome?: string;
+  chisacodeHome?: string;
 };
 
-export type CreatePaseoWorktreeCommandResult<Result extends CreatePaseoWorktreeResult> =
+export type CreateChisaCodeWorktreeCommandResult<Result extends CreateChisaCodeWorktreeResult> =
   | {
       ok: true;
       createdWorktree: Result;
@@ -60,19 +60,19 @@ export type CreatePaseoWorktreeCommandResult<Result extends CreatePaseoWorktreeR
       cause: unknown;
     };
 
-export async function createPaseoWorktreeCommand<Result extends CreatePaseoWorktreeResult>(
-  dependencies: CreatePaseoWorktreeCommandDependencies<Result>,
-  input: CreatePaseoWorktreeCommandInput,
-): Promise<CreatePaseoWorktreeCommandResult<Result>> {
+export async function createChisaCodeWorktreeCommand<Result extends CreateChisaCodeWorktreeResult>(
+  dependencies: CreateChisaCodeWorktreeCommandDependencies<Result>,
+  input: CreateChisaCodeWorktreeCommandInput,
+): Promise<CreateChisaCodeWorktreeCommandResult<Result>> {
   try {
-    if (!dependencies.createPaseoWorktreeWorkflow) {
-      throw new Error("Paseo worktree service is not configured");
+    if (!dependencies.createChisaCodeWorktreeWorkflow) {
+      throw new Error("ChisaCode worktree service is not configured");
     }
 
-    const createdWorktree = await dependencies.createPaseoWorktreeWorkflow({
+    const createdWorktree = await dependencies.createChisaCodeWorktreeWorkflow({
       ...input,
       runSetup: false,
-      paseoHome: input.paseoHome ?? dependencies.paseoHome,
+      chisacodeHome: input.chisacodeHome ?? dependencies.chisacodeHome,
     });
     return { ok: true, createdWorktree };
   } catch (error) {
@@ -84,14 +84,14 @@ export async function createPaseoWorktreeCommand<Result extends CreatePaseoWorkt
   }
 }
 
-export interface ArchivePaseoWorktreeCommandDependencies extends Omit<
-  ArchivePaseoWorktreeDependencies,
+export interface ArchiveChisaCodeWorktreeCommandDependencies extends Omit<
+  ArchiveChisaCodeWorktreeDependencies,
   "workspaceGitService"
 > {
   workspaceGitService: Pick<WorkspaceGitService, "getSnapshot" | "listWorktrees">;
 }
 
-export interface ArchivePaseoWorktreeCommandInput {
+export interface ArchiveChisaCodeWorktreeCommandInput {
   requestId: string;
   repoRoot?: string | null;
   worktreePath?: string;
@@ -99,7 +99,7 @@ export interface ArchivePaseoWorktreeCommandInput {
   branchName?: string;
 }
 
-export type ArchivePaseoWorktreeCommandResult =
+export type ArchiveChisaCodeWorktreeCommandResult =
   | {
       ok: true;
       removedAgents: string[];
@@ -111,26 +111,26 @@ export type ArchivePaseoWorktreeCommandResult =
       removedAgents: [];
     };
 
-export async function archivePaseoWorktreeCommand(
-  dependencies: ArchivePaseoWorktreeCommandDependencies,
-  input: ArchivePaseoWorktreeCommandInput,
-): Promise<ArchivePaseoWorktreeCommandResult> {
+export async function archiveChisaCodeWorktreeCommand(
+  dependencies: ArchiveChisaCodeWorktreeCommandDependencies,
+  input: ArchiveChisaCodeWorktreeCommandInput,
+): Promise<ArchiveChisaCodeWorktreeCommandResult> {
   const resolvedTarget = await resolveArchiveTarget(dependencies, input);
-  const ownership = await isPaseoOwnedWorktreeCwd(resolvedTarget.targetPath, {
-    paseoHome: dependencies.paseoHome,
+  const ownership = await isChisaCodeOwnedWorktreeCwd(resolvedTarget.targetPath, {
+    chisacodeHome: dependencies.chisacodeHome,
   });
 
   if (!ownership.allowed) {
     return {
       ok: false,
       code: "NOT_ALLOWED",
-      message: "Worktree is not a Paseo-owned worktree",
+      message: "Worktree is not a ChisaCode-owned worktree",
       removedAgents: [],
     };
   }
 
   const repoRoot = ownership.repoRoot ?? resolvedTarget.repoRoot ?? null;
-  const removedAgents = await archivePaseoWorktree(dependencies, {
+  const removedAgents = await archiveChisaCodeWorktree(dependencies, {
     targetPath: resolvedTarget.targetPath,
     repoRoot,
     worktreesRoot: ownership.worktreeRoot,
@@ -149,8 +149,8 @@ interface ResolvedArchiveTarget {
 }
 
 async function resolveArchiveTarget(
-  dependencies: ArchivePaseoWorktreeCommandDependencies,
-  input: ArchivePaseoWorktreeCommandInput,
+  dependencies: ArchiveChisaCodeWorktreeCommandDependencies,
+  input: ArchiveChisaCodeWorktreeCommandInput,
 ): Promise<ResolvedArchiveTarget> {
   const repoRoot = input.repoRoot ?? null;
   if (input.worktreePath) {
@@ -171,7 +171,7 @@ async function resolveArchiveTarget(
     const worktrees = await dependencies.workspaceGitService.listWorktrees(repoRoot);
     const match = worktrees.find((entry) => entry.branchName === input.branchName);
     if (!match) {
-      throw new Error(`Paseo worktree not found for branch ${input.branchName}`);
+      throw new Error(`ChisaCode worktree not found for branch ${input.branchName}`);
     }
     return { targetPath: match.path, repoRoot };
   }
@@ -180,10 +180,10 @@ async function resolveArchiveTarget(
 }
 
 async function resolveWorktreeSlugPath(
-  dependencies: ArchivePaseoWorktreeCommandDependencies,
+  dependencies: ArchiveChisaCodeWorktreeCommandDependencies,
   repoRoot: string,
   worktreeSlug: string,
 ): Promise<string> {
-  const worktreesRoot = await getPaseoWorktreesRoot(repoRoot, dependencies.paseoHome);
+  const worktreesRoot = await getChisaCodeWorktreesRoot(repoRoot, dependencies.chisacodeHome);
   return join(worktreesRoot, worktreeSlug);
 }

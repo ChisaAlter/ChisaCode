@@ -7,27 +7,27 @@ order: 7
 
 # Git worktrees
 
-Each agent runs in its own git worktree, a separate directory on a separate branch, so parallel agents never step on each other. You configure setup, scripts, and long-running services through a `paseo.json` file at your repo root.
+Each agent runs in its own git worktree, a separate directory on a separate branch, so parallel agents never step on each other. You configure setup, scripts, and long-running services through a `chisacode.json` file at your repo root.
 
 ## Layout and workflow
 
-Worktrees live under `$PASEO_HOME/worktrees/`, grouped by a hash of the source checkout path. Each worktree gets a random slug; the branch name is chosen when you first launch an agent.
+Worktrees live under `$CHISACODE_HOME/worktrees/`, grouped by a hash of the source checkout path. Each worktree gets a random slug; the branch name is chosen when you first launch an agent.
 
 ```
-~/.paseo/worktrees/
+~/.chisacode/worktrees/
 └── 1vnnm9k3/               # hash of source checkout path
     ├── tidy-fox/           # worktree slug (branch set on first agent)
     └── bold-owl/
 ```
 
-1. Create a worktree, Paseo runs your setup hooks
+1. Create a worktree, ChisaCode runs your setup hooks
 2. Launch an agent, a branch is created or assigned
 3. Review the diff against the base branch
 4. Merge or archive, archive runs teardown and removes the directory
 
-## paseo.json
+## chisacode.json
 
-Drop a `paseo.json` in your repo root. Paseo reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply.
+Drop a `chisacode.json` in your repo root. ChisaCode reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply.
 
 ```json
 {
@@ -49,7 +49,7 @@ Drop a `paseo.json` in your repo root. Paseo reads it from the committed version
 ```json
 {
   "worktree": {
-    "setup": "npm ci\ncp \"$PASEO_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
+    "setup": "npm ci\ncp \"$CHISACODE_SOURCE_CHECKOUT_PATH/.env\" .env\nnpm run db:migrate",
     "teardown": "npm run db:drop || true"
   }
 }
@@ -57,11 +57,11 @@ Drop a `paseo.json` in your repo root. Paseo reads it from the committed version
 
 Both fields accept a multiline shell script or an array of commands; commands run sequentially either way.
 
-Commands run with the worktree as `cwd`. Use `$PASEO_SOURCE_CHECKOUT_PATH` to reach files in the original checkout (untracked config, local caches, etc).
+Commands run with the worktree as `cwd`. Use `$CHISACODE_SOURCE_CHECKOUT_PATH` to reach files in the original checkout (untracked config, local caches, etc).
 
 ## Scripts and services
 
-`scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and Paseo supervises it as a long-running process, assigns it a port, and routes HTTP traffic to it through the daemon's reverse proxy.
+`scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and ChisaCode supervises it as a long-running process, assigns it a port, and routes HTTP traffic to it through the daemon's reverse proxy.
 
 ### Plain scripts
 
@@ -82,18 +82,18 @@ Commands run with the worktree as `cwd`. Use `$PASEO_SOURCE_CHECKOUT_PATH` to re
   "scripts": {
     "web": {
       "type": "service",
-      "command": "npm run dev -- --port $PASEO_PORT",
+      "command": "npm run dev -- --port $CHISACODE_PORT",
       "port": 3000
     },
     "api": {
       "type": "service",
-      "command": "npm run api -- --port $PASEO_PORT"
+      "command": "npm run api -- --port $CHISACODE_PORT"
     }
   }
 }
 ```
 
-Omit `port` to let Paseo auto-assign one. Bind your process to `$PASEO_PORT` rather than hard-coding, each worktree gets a distinct port so multiple copies of the same service coexist.
+Omit `port` to let ChisaCode auto-assign one. Bind your process to `$CHISACODE_PORT` rather than hard-coding, each worktree gets a distinct port so multiple copies of the same service coexist.
 
 ### Reverse proxy
 
@@ -113,15 +113,15 @@ http://<script>.<project>.localhost:<daemon-port>
 Services launched from the same workspace see each other's ports and proxy URLs. Given `web` and `api` above, each process gets:
 
 ```
-PASEO_PORT=3000                         # this service's port
-PASEO_URL=http://web.my-app.localhost:6767  # this service's proxy URL
-PASEO_SERVICE_API_PORT=51732
-PASEO_SERVICE_API_URL=http://api.my-app.localhost:6767
-PASEO_SERVICE_WEB_PORT=3000
-PASEO_SERVICE_WEB_URL=http://web.my-app.localhost:6767
+CHISACODE_PORT=3000                         # this service's port
+CHISACODE_URL=http://web.my-app.localhost:6767  # this service's proxy URL
+CHISACODE_SERVICE_API_PORT=51732
+CHISACODE_SERVICE_API_URL=http://api.my-app.localhost:6767
+CHISACODE_SERVICE_WEB_PORT=3000
+CHISACODE_SERVICE_WEB_URL=http://web.my-app.localhost:6767
 ```
 
-Script names are upper-cased and non-alphanumerics become `_`. Point your frontend at `$PASEO_SERVICE_API_URL` instead of hard-coding a port.
+Script names are upper-cased and non-alphanumerics become `_`. Point your frontend at `$CHISACODE_SERVICE_API_URL` instead of hard-coding a port.
 
 ## Terminals
 
@@ -142,22 +142,22 @@ Open terminals automatically when a worktree is created. Useful for tailing logs
 
 Setup, teardown, scripts, and services all see:
 
-- `$PASEO_SOURCE_CHECKOUT_PATH`, the original repo root
-- `$PASEO_WORKTREE_PATH`, the worktree directory
-- `$PASEO_BRANCH_NAME`, the worktree's branch
-- `$PASEO_WORKTREE_PORT`, legacy per-worktree port (prefer `$PASEO_PORT` inside services)
+- `$CHISACODE_SOURCE_CHECKOUT_PATH`, the original repo root
+- `$CHISACODE_WORKTREE_PATH`, the worktree directory
+- `$CHISACODE_BRANCH_NAME`, the worktree's branch
+- `$CHISACODE_WORKTREE_PORT`, legacy per-worktree port (prefer `$CHISACODE_PORT` inside services)
 
 Services additionally get:
 
-- `$PASEO_PORT`, this service's assigned port
-- `$PASEO_URL`, this service's proxy URL
-- `$PASEO_SERVICE_<NAME>_PORT` / `_URL`, peer service ports and URLs
+- `$CHISACODE_PORT`, this service's assigned port
+- `$CHISACODE_URL`, this service's proxy URL
+- `$CHISACODE_SERVICE_<NAME>_PORT` / `_URL`, peer service ports and URLs
 - `$HOST`, `127.0.0.1` for local-only daemons, `0.0.0.0` when the daemon binds all interfaces
 
 ## CLI
 
 ```bash
-paseo run --worktree feature-auth --base main "implement auth"
-paseo worktree ls
-paseo worktree archive feature-auth
+chisacode run --worktree feature-auth --base main "implement auth"
+chisacode worktree ls
+chisacode worktree archive feature-auth
 ```

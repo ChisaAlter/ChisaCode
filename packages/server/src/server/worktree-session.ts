@@ -37,15 +37,15 @@ import {
 } from "../utils/worktree.js";
 import { toCheckoutError } from "./checkout-git-utils.js";
 import type {
-  CreatePaseoWorktreeInput,
-  CreatePaseoWorktreeResult,
-} from "./paseo-worktree-service.js";
-import type { ArchivePaseoWorktreeDependencies } from "./paseo-worktree-archive-service.js";
+  CreateChisaCodeWorktreeInput,
+  CreateChisaCodeWorktreeResult,
+} from "./chisacode-worktree-service.js";
+import type { ArchiveChisaCodeWorktreeDependencies } from "./chisacode-worktree-archive-service.js";
 import { toWorktreeWireError } from "./worktree-errors.js";
 import {
-  archivePaseoWorktreeCommand,
-  createPaseoWorktreeCommand,
-  listPaseoWorktreesCommand,
+  archiveChisaCodeWorktreeCommand,
+  createChisaCodeWorktreeCommand,
+  listChisaCodeWorktreesCommand,
 } from "./worktree/commands.js";
 
 const SAFE_GIT_REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
@@ -74,16 +74,16 @@ type AgentWorktreeSetupTimelineWriter = (input: {
 }) => Promise<boolean>;
 
 interface BuildAgentSessionConfigDependencies {
-  paseoHome?: string;
+  chisacodeHome?: string;
   sessionLogger: Logger;
   workspaceGitService?: WorkspaceGitService;
-  createPaseoWorktree: (
-    input: CreatePaseoWorktreeInput,
+  createChisaCodeWorktree: (
+    input: CreateChisaCodeWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-      setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
+      setupContinuation?: CreateChisaCodeWorktreeSetupContinuationInput;
     },
-  ) => Promise<CreatePaseoWorktreeWorkflowResult>;
+  ) => Promise<CreateChisaCodeWorktreeWorkflowResult>;
   checkoutExistingBranch: (cwd: string, branch: string) => Promise<CheckoutExistingBranchResult>;
   createBranchFromBase: (params: {
     cwd: string;
@@ -93,8 +93,8 @@ interface BuildAgentSessionConfigDependencies {
   github?: Pick<GitHubService, "invalidate">;
 }
 
-interface CreatePaseoWorktreeInBackgroundDependencies {
-  paseoHome?: string;
+interface CreateChisaCodeWorktreeInBackgroundDependencies {
+  chisacodeHome?: string;
   emitWorkspaceUpdateForCwd: (cwd: string, options?: { dedupeGitState?: boolean }) => Promise<void>;
   cacheWorkspaceSetupSnapshot: (workspaceId: string, snapshot: WorkspaceSetupSnapshot) => void;
   emit: EmitSessionMessage;
@@ -108,13 +108,13 @@ interface CreatePaseoWorktreeInBackgroundDependencies {
   onScriptsChanged: ((workspaceId: string, workspaceDirectory: string) => void) | null;
 }
 
-interface CreatePaseoWorktreeWorkflowDependencies extends CreatePaseoWorktreeInBackgroundDependencies {
-  createPaseoWorktree: (
-    input: CreatePaseoWorktreeInput,
+interface CreateChisaCodeWorktreeWorkflowDependencies extends CreateChisaCodeWorktreeInBackgroundDependencies {
+  createChisaCodeWorktree: (
+    input: CreateChisaCodeWorktreeInput,
     options?: {
       resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
     },
-  ) => Promise<CreatePaseoWorktreeResult>;
+  ) => Promise<CreateChisaCodeWorktreeResult>;
   warmWorkspaceGitData: (workspace: PersistedWorkspaceRecord) => Promise<void>;
   autoNameWorkspaceBranchForFirstAgent?: (input: {
     workspace: PersistedWorkspaceRecord;
@@ -130,7 +130,7 @@ interface AgentWorktreeSetupContinuationInput {
   logger: Logger;
 }
 
-export type CreatePaseoWorktreeSetupContinuationInput =
+export type CreateChisaCodeWorktreeSetupContinuationInput =
   | { kind: "workspace" }
   | AgentWorktreeSetupContinuationInput;
 
@@ -139,37 +139,37 @@ export interface AgentWorktreeSetupContinuation {
   startAfterAgentCreate: (input: { agentId: string }) => void;
 }
 
-export type CreatePaseoWorktreeWorkflowResult = CreatePaseoWorktreeResult & {
+export type CreateChisaCodeWorktreeWorkflowResult = CreateChisaCodeWorktreeResult & {
   setupContinuation?: AgentWorktreeSetupContinuation;
 };
 
-export type CreatePaseoWorktreeWorkflowFn = (
-  input: CreatePaseoWorktreeInput,
+export type CreateChisaCodeWorktreeWorkflowFn = (
+  input: CreateChisaCodeWorktreeInput,
   options?: {
     resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-    setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
+    setupContinuation?: CreateChisaCodeWorktreeSetupContinuationInput;
   },
-) => Promise<CreatePaseoWorktreeWorkflowResult>;
+) => Promise<CreateChisaCodeWorktreeWorkflowResult>;
 
 interface HandleWorkspaceSetupStatusRequestDependencies {
   emit: EmitSessionMessage;
   workspaceSetupSnapshots: ReadonlyMap<string, WorkspaceSetupSnapshot>;
 }
 
-interface HandleCreatePaseoWorktreeRequestDependencies {
-  paseoHome?: string;
+interface HandleCreateChisaCodeWorktreeRequestDependencies {
+  chisacodeHome?: string;
   describeWorkspaceRecord: (
-    result: CreatePaseoWorktreeResult,
+    result: CreateChisaCodeWorktreeResult,
   ) => Promise<WorkspaceDescriptorPayload>;
   emit: EmitSessionMessage;
   sessionLogger: Logger;
-  createPaseoWorktreeWorkflow: (
-    input: CreatePaseoWorktreeInput,
-  ) => Promise<CreatePaseoWorktreeWorkflowResult>;
+  createChisaCodeWorktreeWorkflow: (
+    input: CreateChisaCodeWorktreeInput,
+  ) => Promise<CreateChisaCodeWorktreeWorkflowResult>;
 }
 
 function normalizeFirstAgentContext(
-  request: Extract<SessionInboundMessage, { type: "create_paseo_worktree_request" }>,
+  request: Extract<SessionInboundMessage, { type: "create_chisacode_worktree_request" }>,
 ): FirstAgentContext | undefined {
   if (request.firstAgentContext) {
     return request.firstAgentContext;
@@ -214,7 +214,7 @@ export async function buildAgentSessionConfig(
       "Creating worktree through createWorktreeCore",
     );
 
-    const createdWorktree = await dependencies.createPaseoWorktree(
+    const createdWorktree = await dependencies.createChisaCodeWorktree(
       {
         cwd,
         worktreeSlug: normalized.worktreeSlug,
@@ -223,7 +223,7 @@ export async function buildAgentSessionConfig(
         githubPrNumber: normalized.githubPrNumber,
         firstAgentContext,
         runSetup: false,
-        paseoHome: dependencies.paseoHome,
+        chisacodeHome: dependencies.chisacodeHome,
       },
       {
         resolveDefaultBranch: normalized.baseBranch
@@ -232,7 +232,7 @@ export async function buildAgentSessionConfig(
               resolveGitCreateBaseBranch(
                 repoRoot,
                 dependencies.workspaceGitService,
-                dependencies.paseoHome,
+                dependencies.chisacodeHome,
               ),
       },
     );
@@ -244,7 +244,7 @@ export async function buildAgentSessionConfig(
       (await resolveGitCreateBaseBranch(
         cwd,
         dependencies.workspaceGitService,
-        dependencies.paseoHome,
+        dependencies.chisacodeHome,
       ));
     await dependencies.createBranchFromBase({
       cwd,
@@ -364,7 +364,7 @@ export function assertSafeGitRef(ref: string, label: string): void {
 export async function resolveGitCreateBaseBranch(
   cwd: string,
   workspaceGitService?: WorkspaceGitService,
-  _paseoHome?: string,
+  _chisacodeHome?: string,
 ): Promise<string> {
   if (!workspaceGitService) {
     throw new Error("WorkspaceGitService is required to resolve the repository root");
@@ -373,19 +373,19 @@ export async function resolveGitCreateBaseBranch(
   return workspaceGitService.resolveDefaultBranch(cwd);
 }
 
-export async function handlePaseoWorktreeListRequest(
+export async function handleChisaCodeWorktreeListRequest(
   dependencies: {
     emit: EmitSessionMessage;
-    paseoHome?: string;
+    chisacodeHome?: string;
     workspaceGitService: WorkspaceGitService;
   },
-  msg: Extract<SessionInboundMessage, { type: "paseo_worktree_list_request" }>,
+  msg: Extract<SessionInboundMessage, { type: "chisacode_worktree_list_request" }>,
 ): Promise<void> {
   const { requestId } = msg;
   const cwd = msg.repoRoot ?? msg.cwd;
   if (!cwd) {
     dependencies.emit({
-      type: "paseo_worktree_list_response",
+      type: "chisacode_worktree_list_response",
       payload: {
         worktrees: [],
         error: { code: "UNKNOWN", message: "cwd or repoRoot is required" },
@@ -396,12 +396,12 @@ export async function handlePaseoWorktreeListRequest(
   }
 
   try {
-    const worktrees = await listPaseoWorktreesCommand(
+    const worktrees = await listChisaCodeWorktreesCommand(
       { workspaceGitService: dependencies.workspaceGitService },
       { cwd },
     );
     dependencies.emit({
-      type: "paseo_worktree_list_response",
+      type: "chisacode_worktree_list_response",
       payload: {
         worktrees: worktrees.map((entry) => ({
           worktreePath: entry.path,
@@ -415,7 +415,7 @@ export async function handlePaseoWorktreeListRequest(
     });
   } catch (error) {
     dependencies.emit({
-      type: "paseo_worktree_list_response",
+      type: "chisacode_worktree_list_response",
       payload: {
         worktrees: [],
         error: toCheckoutError(error),
@@ -425,21 +425,21 @@ export async function handlePaseoWorktreeListRequest(
   }
 }
 
-export async function handlePaseoWorktreeArchiveRequest(
+export async function handleChisaCodeWorktreeArchiveRequest(
   dependencies: Omit<
-    ArchivePaseoWorktreeDependencies,
+    ArchiveChisaCodeWorktreeDependencies,
     "emitWorkspaceUpdatesForWorkspaceIds" | "workspaceGitService"
   > & {
     emit: EmitSessionMessage;
     workspaceGitService: Pick<WorkspaceGitService, "getSnapshot" | "listWorktrees">;
     emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds: Iterable<string>) => Promise<void>;
   },
-  msg: Extract<SessionInboundMessage, { type: "paseo_worktree_archive_request" }>,
+  msg: Extract<SessionInboundMessage, { type: "chisacode_worktree_archive_request" }>,
 ): Promise<void> {
   const { requestId } = msg;
 
   try {
-    const result = await archivePaseoWorktreeCommand(dependencies, {
+    const result = await archiveChisaCodeWorktreeCommand(dependencies, {
       requestId,
       worktreePath: msg.worktreePath,
       repoRoot: msg.repoRoot,
@@ -447,7 +447,7 @@ export async function handlePaseoWorktreeArchiveRequest(
     });
     if (!result.ok) {
       dependencies.emit({
-        type: "paseo_worktree_archive_response",
+        type: "chisacode_worktree_archive_response",
         payload: {
           success: false,
           removedAgents: result.removedAgents,
@@ -462,7 +462,7 @@ export async function handlePaseoWorktreeArchiveRequest(
     }
 
     dependencies.emit({
-      type: "paseo_worktree_archive_response",
+      type: "chisacode_worktree_archive_response",
       payload: {
         success: true,
         removedAgents: result.removedAgents,
@@ -472,7 +472,7 @@ export async function handlePaseoWorktreeArchiveRequest(
     });
   } catch (error) {
     dependencies.emit({
-      type: "paseo_worktree_archive_response",
+      type: "chisacode_worktree_archive_response",
       payload: {
         success: false,
         removedAgents: [],
@@ -483,15 +483,15 @@ export async function handlePaseoWorktreeArchiveRequest(
   }
 }
 
-export async function handleCreatePaseoWorktreeRequest(
-  dependencies: HandleCreatePaseoWorktreeRequestDependencies,
-  request: Extract<SessionInboundMessage, { type: "create_paseo_worktree_request" }>,
+export async function handleCreateChisaCodeWorktreeRequest(
+  dependencies: HandleCreateChisaCodeWorktreeRequestDependencies,
+  request: Extract<SessionInboundMessage, { type: "create_chisacode_worktree_request" }>,
 ): Promise<void> {
   try {
-    const commandResult = await createPaseoWorktreeCommand(
+    const commandResult = await createChisaCodeWorktreeCommand(
       {
-        paseoHome: dependencies.paseoHome,
-        createPaseoWorktreeWorkflow: dependencies.createPaseoWorktreeWorkflow,
+        chisacodeHome: dependencies.chisacodeHome,
+        createChisaCodeWorktreeWorkflow: dependencies.createChisaCodeWorktreeWorkflow,
       },
       {
         cwd: request.cwd,
@@ -510,7 +510,7 @@ export async function handleCreatePaseoWorktreeRequest(
         "Failed to create worktree",
       );
       dependencies.emit({
-        type: "create_paseo_worktree_response",
+        type: "create_chisacode_worktree_response",
         payload: {
           workspace: null,
           error: commandResult.error.message,
@@ -525,7 +525,7 @@ export async function handleCreatePaseoWorktreeRequest(
     const createdWorktree = commandResult.createdWorktree;
     const descriptor = await dependencies.describeWorkspaceRecord(createdWorktree);
     dependencies.emit({
-      type: "create_paseo_worktree_response",
+      type: "create_chisacode_worktree_response",
       payload: {
         workspace: descriptor,
         error: null,
@@ -547,7 +547,7 @@ export async function handleCreatePaseoWorktreeRequest(
       "Failed to create worktree",
     );
     dependencies.emit({
-      type: "create_paseo_worktree_response",
+      type: "create_chisacode_worktree_response",
       payload: {
         workspace: null,
         error: wireError.message,
@@ -559,19 +559,19 @@ export async function handleCreatePaseoWorktreeRequest(
   }
 }
 
-export async function createPaseoWorktreeWorkflow(
-  dependencies: CreatePaseoWorktreeWorkflowDependencies,
-  input: CreatePaseoWorktreeInput,
+export async function createChisaCodeWorktreeWorkflow(
+  dependencies: CreateChisaCodeWorktreeWorkflowDependencies,
+  input: CreateChisaCodeWorktreeInput,
   options?: {
     resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
-    setupContinuation?: CreatePaseoWorktreeSetupContinuationInput;
+    setupContinuation?: CreateChisaCodeWorktreeSetupContinuationInput;
   },
-): Promise<CreatePaseoWorktreeWorkflowResult> {
-  const createdWorktree = await dependencies.createPaseoWorktree(
+): Promise<CreateChisaCodeWorktreeWorkflowResult> {
+  const createdWorktree = await dependencies.createChisaCodeWorktree(
     {
       ...input,
       runSetup: false,
-      paseoHome: input.paseoHome ?? dependencies.paseoHome,
+      chisacodeHome: input.chisacodeHome ?? dependencies.chisacodeHome,
     },
     options?.resolveDefaultBranch
       ? { resolveDefaultBranch: options.resolveDefaultBranch }
@@ -649,7 +649,7 @@ export async function handleWorkspaceSetupStatusRequest(
 }
 
 export async function runWorktreeSetupInBackground(
-  dependencies: CreatePaseoWorktreeInBackgroundDependencies,
+  dependencies: CreateChisaCodeWorktreeInBackgroundDependencies,
   options: {
     requestCwd: string;
     repoRoot: string;

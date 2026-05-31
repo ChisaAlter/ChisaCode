@@ -1,5 +1,5 @@
-import type { AgentStreamEventPayload } from "@fleurdelys/protocol/messages";
-import type { AgentLifecycleStatus } from "@fleurdelys/protocol/agent-lifecycle";
+import type { AgentStreamEventPayload } from "@chisacode/protocol/messages";
+import type { AgentLifecycleStatus } from "@chisacode/protocol/agent-lifecycle";
 import type { Agent } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { StreamItem, UserMessageItem } from "@/types/stream";

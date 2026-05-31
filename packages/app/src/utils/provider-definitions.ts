@@ -1,10 +1,10 @@
-import type { ProviderSnapshotEntry } from "@fleurdelys/protocol/agent-types";
+import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import {
   type AgentModeColorTier,
   type AgentModeIcon,
   type AgentProviderDefinition,
   type AgentProviderModeDefinition,
-} from "@fleurdelys/protocol/provider-manifest";
+} from "@chisacode/protocol/provider-manifest";
 
 function buildProviderModes(entry: ProviderSnapshotEntry): AgentProviderModeDefinition[] {
   const entryModes = entry.modes ?? [];

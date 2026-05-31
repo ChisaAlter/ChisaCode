@@ -4,15 +4,15 @@ import { filterAndRankCommandAutocompleteEntries } from "./agent-command-autocom
 
 describe("filterAndRankCommandAutocompleteEntries", () => {
   const entries = [
-    { source: "provider" as const, command: { name: "paseo-committee" } },
+    { source: "provider" as const, command: { name: "chisacode-committee" } },
     { source: "provider" as const, command: { name: "commit" } },
-    { source: "provider" as const, command: { name: "paseo-advisor" } },
+    { source: "provider" as const, command: { name: "chisacode-advisor" } },
   ];
 
   it("ranks command-name prefixes above later word-boundary partial matches", () => {
     const result = filterAndRankCommandAutocompleteEntries(entries, "comm");
 
-    expect(result.map((entry) => entry.command.name)).toEqual(["commit", "paseo-committee"]);
+    expect(result.map((entry) => entry.command.name)).toEqual(["commit", "chisacode-committee"]);
   });
 
   it("matches client command aliases", () => {

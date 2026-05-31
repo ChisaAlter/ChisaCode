@@ -1,13 +1,13 @@
 ---
 title: Supported providers
-description: Every coding agent Paseo can launch, natively supported providers and the ACP catalog.
+description: Every coding agent ChisaCode can launch, natively supported providers and the ACP catalog.
 nav: Supported providers
 order: 4
 ---
 
 # Supported providers
 
-For the concept and how Paseo manages providers, see [Providers](/docs/providers). To add or configure your own, see [Custom providers](/docs/custom-providers).
+For the concept and how ChisaCode manages providers, see [Providers](/docs/providers). To add or configure your own, see [Custom providers](/docs/custom-providers).
 
 ## Native support
 

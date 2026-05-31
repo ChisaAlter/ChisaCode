@@ -36,7 +36,7 @@ describe("persistence hooks", () => {
         thinkingOptionId: "minimal",
         systemPrompt: "Use speak first.",
         mcpServers: {
-          paseo: {
+          chisacode: {
             type: "stdio",
             command: "node",
             args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],
@@ -52,7 +52,7 @@ describe("persistence hooks", () => {
       thinkingOptionId: "minimal",
       systemPrompt: "Use speak first.",
       mcpServers: {
-        paseo: {
+        chisacode: {
           type: "stdio",
           command: "node",
           args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],
@@ -70,7 +70,7 @@ describe("persistence hooks", () => {
         model: "gpt-5.4-mini",
         systemPrompt: "Confirm and speak first.",
         mcpServers: {
-          paseo: {
+          chisacode: {
             type: "stdio",
             command: "node",
             args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],
@@ -86,7 +86,7 @@ describe("persistence hooks", () => {
       model: "gpt-5.4-mini",
       systemPrompt: "Confirm and speak first.",
       mcpServers: {
-        paseo: {
+        chisacode: {
           type: "stdio",
           command: "node",
           args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],

@@ -1,6 +1,6 @@
 {
-  "name": "@fleurdelys/app",
-  "version": "0.1.87",
+  "name": "@chisacode/app",
+  "version": "1.0.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -26,17 +26,17 @@
     "test:e2e:ui": "playwright test --ui",
     "build": "npm run build:web",
     "build:web": "npm --prefix ../.. run build:app-deps && expo export --platform web",
-    "deploy:web": "npm run build:web && wrangler pages deploy dist --project-name paseo-app --branch main",
+    "deploy:web": "npm run build:web && wrangler pages deploy dist --project-name chisacode-app --branch main",
     "build:terminal-webview": "node ./scripts/build-terminal-webview-html.mjs"
   },
   "dependencies": {
+    "@chisacode/client": "*",
+    "@chisacode/expo-two-way-audio": "*",
+    "@chisacode/highlight": "*",
+    "@chisacode/protocol": "*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@fleurdelys/client": "*",
-    "@fleurdelys/expo-two-way-audio": "*",
-    "@fleurdelys/highlight": "*",
-    "@fleurdelys/protocol": "*",
     "@floating-ui/react-native": "^0.10.7",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@gorhom/portal": "^1.0.14",

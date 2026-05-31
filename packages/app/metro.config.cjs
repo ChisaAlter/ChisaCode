@@ -7,7 +7,7 @@ const projectRoot = __dirname;
 const appNodeModulesRoot = path.resolve(projectRoot, "node_modules");
 const appSrcRoot = path.resolve(projectRoot, "src");
 const relaySrcRoot = path.resolve(projectRoot, "../relay/src");
-const customWebPlatform = (process.env.PASEO_WEB_PLATFORM ?? "")
+const customWebPlatform = (process.env.CHISACODE_WEB_PLATFORM ?? "")
   .trim()
   .replace(/^\./, "")
   .toLowerCase();

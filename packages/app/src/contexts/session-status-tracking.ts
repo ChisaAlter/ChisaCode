@@ -1,4 +1,4 @@
-import type { AgentLifecycleStatus } from "@fleurdelys/protocol/agent-lifecycle";
+import type { AgentLifecycleStatus } from "@chisacode/protocol/agent-lifecycle";
 import type { Agent } from "@/stores/session-store";
 
 export function reconcilePreviousAgentStatuses(

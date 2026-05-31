@@ -1,19 +1,19 @@
 # Data Model
 
-Paseo uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
+ChisaCode uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
 
-All server-side stores live under `$PASEO_HOME` (defaults to `~/.paseo`).
+All server-side stores live under `$CHISACODE_HOME` (defaults to `~/.chisacode`).
 
 ---
 
 ## Directory layout
 
 ```
-$PASEO_HOME/
+$CHISACODE_HOME/
 ├── config.json                          # Daemon configuration
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
-├── paseo.pid                            # Daemon PID lock file
+├── chisacode.pid                            # Daemon PID lock file
 ├── daemon.log                           # Default log file (path configurable)
 ├── agents/
 │   └── {sanitized-cwd}/
@@ -36,33 +36,33 @@ The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` b
 
 ## 1. Agent Record
 
-**Path:** `$PASEO_HOME/agents/{project-dir}/{agentId}.json`
+**Path:** `$CHISACODE_HOME/agents/{project-dir}/{agentId}.json`
 
 Each agent is stored as a separate JSON file, grouped by project directory.
 
-| Field                | Type                                     | Description                                                                                                                                                               |
-| -------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                 | `string`                                 | UUID, primary key                                                                                                                                                         |
-| `provider`           | `string`                                 | Agent provider (`"claude"`, `"codex"`, `"opencode"`, etc.)                                                                                                                |
-| `cwd`                | `string`                                 | Working directory the agent operates in                                                                                                                                   |
-| `createdAt`          | `string` (ISO 8601)                      | Creation timestamp                                                                                                                                                        |
-| `updatedAt`          | `string` (ISO 8601)                      | Last update timestamp                                                                                                                                                     |
-| `lastActivityAt`     | `string?` (ISO 8601)                     | Last activity timestamp                                                                                                                                                   |
-| `lastUserMessageAt`  | `string?` (ISO 8601)                     | Last user message timestamp                                                                                                                                               |
-| `title`              | `string?`                                | User-visible title                                                                                                                                                        |
-| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). `paseo.parent-agent-id` set automatically when launched via the `create_agent` MCP tool — see [agent-lifecycle.md](./agent-lifecycle.md) |
-| `lastStatus`         | `AgentStatus`                            | One of: `"initializing"`, `"idle"`, `"running"`, `"error"`, `"closed"`                                                                                                    |
-| `lastModeId`         | `string?`                                | Last active mode ID                                                                                                                                                       |
-| `config`             | `SerializableConfig?`                    | Agent session configuration (see below)                                                                                                                                   |
-| `runtimeInfo`        | `RuntimeInfo?`                           | Live runtime state (see below)                                                                                                                                            |
-| `features`           | `AgentFeature[]?`                        | Provider-reported features (toggles/selects)                                                                                                                              |
-| `persistence`        | `PersistenceHandle?`                     | Handle for resuming sessions                                                                                                                                              |
-| `lastError`          | `string?` (nullable)                     | Last error message, if any                                                                                                                                                |
-| `requiresAttention`  | `boolean?`                               | Whether the agent needs user attention                                                                                                                                    |
-| `attentionReason`    | `"finished" \| "error" \| "permission"?` | Why attention is needed                                                                                                                                                   |
-| `attentionTimestamp` | `string?` (ISO 8601)                     | When attention was flagged                                                                                                                                                |
-| `internal`           | `boolean?`                               | Whether this is a system-internal agent (loop workers, etc.)                                                                                                              |
-| `archivedAt`         | `string?` (ISO 8601)                     | Soft-delete timestamp                                                                                                                                                     |
+| Field                | Type                                     | Description                                                                                                                                                                   |
+| -------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | `string`                                 | UUID, primary key                                                                                                                                                             |
+| `provider`           | `string`                                 | Agent provider (`"claude"`, `"codex"`, `"opencode"`, etc.)                                                                                                                    |
+| `cwd`                | `string`                                 | Working directory the agent operates in                                                                                                                                       |
+| `createdAt`          | `string` (ISO 8601)                      | Creation timestamp                                                                                                                                                            |
+| `updatedAt`          | `string` (ISO 8601)                      | Last update timestamp                                                                                                                                                         |
+| `lastActivityAt`     | `string?` (ISO 8601)                     | Last activity timestamp                                                                                                                                                       |
+| `lastUserMessageAt`  | `string?` (ISO 8601)                     | Last user message timestamp                                                                                                                                                   |
+| `title`              | `string?`                                | User-visible title                                                                                                                                                            |
+| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). `chisacode.parent-agent-id` set automatically when launched via the `create_agent` MCP tool — see [agent-lifecycle.md](./agent-lifecycle.md) |
+| `lastStatus`         | `AgentStatus`                            | One of: `"initializing"`, `"idle"`, `"running"`, `"error"`, `"closed"`                                                                                                        |
+| `lastModeId`         | `string?`                                | Last active mode ID                                                                                                                                                           |
+| `config`             | `SerializableConfig?`                    | Agent session configuration (see below)                                                                                                                                       |
+| `runtimeInfo`        | `RuntimeInfo?`                           | Live runtime state (see below)                                                                                                                                                |
+| `features`           | `AgentFeature[]?`                        | Provider-reported features (toggles/selects)                                                                                                                                  |
+| `persistence`        | `PersistenceHandle?`                     | Handle for resuming sessions                                                                                                                                                  |
+| `lastError`          | `string?` (nullable)                     | Last error message, if any                                                                                                                                                    |
+| `requiresAttention`  | `boolean?`                               | Whether the agent needs user attention                                                                                                                                        |
+| `attentionReason`    | `"finished" \| "error" \| "permission"?` | Why attention is needed                                                                                                                                                       |
+| `attentionTimestamp` | `string?` (ISO 8601)                     | When attention was flagged                                                                                                                                                    |
+| `internal`           | `boolean?`                               | Whether this is a system-internal agent (loop workers, etc.)                                                                                                                  |
+| `archivedAt`         | `string?` (ISO 8601)                     | Soft-delete timestamp                                                                                                                                                         |
 
 ### Nested: SerializableConfig
 
@@ -128,7 +128,7 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 
 ## 2. Daemon Configuration
 
-**Path:** `$PASEO_HOME/config.json`
+**Path:** `$CHISACODE_HOME/config.json`
 
 Single file, validated with `PersistedConfigSchema`.
 
@@ -174,7 +174,7 @@ Single file, validated with `PersistedConfigSchema`.
 
 All fields are optional with sensible defaults.
 
-`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then Paseo falls through to dynamically discovered defaults and finally the current selection when available.
+`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then ChisaCode falls through to dynamically discovered defaults and finally the current selection when available.
 
 Local speech model ids are intentionally narrow: STT uses `parakeet-tdt-0.6b-v2-int8`, TTS uses `kokoro-en-v0_19`, and turn detection uses the bundled Silero VAD model.
 
@@ -182,7 +182,7 @@ Local speech model ids are intentionally narrow: STT uses `parakeet-tdt-0.6b-v2-
 
 ## 3. Schedule
 
-**Path:** `$PASEO_HOME/schedules/{id}.json`
+**Path:** `$CHISACODE_HOME/schedules/{id}.json`
 
 One file per schedule. ID is 8 hex characters. Writes are direct (not atomic).
 
@@ -230,7 +230,7 @@ One file per schedule. ID is 8 hex characters. Writes are direct (not atomic).
 
 ## 4. Chat
 
-**Path:** `$PASEO_HOME/chat/rooms.json`
+**Path:** `$CHISACODE_HOME/chat/rooms.json`
 
 Single file containing all rooms and messages.
 
@@ -267,7 +267,7 @@ Single file containing all rooms and messages.
 
 ## 5. Loop
 
-**Path:** `$PASEO_HOME/loops/loops.json`
+**Path:** `$CHISACODE_HOME/loops/loops.json`
 
 Single file containing an array of all loop records. Writes are direct (not atomic) and serialized through an in-memory queue. On daemon startup any record with `status: "running"` is recovered as `"stopped"` with an interruption log entry.
 
@@ -356,7 +356,7 @@ Single file containing an array of all loop records. Writes are direct (not atom
 
 ## 6. Project Registry
 
-**Path:** `$PASEO_HOME/projects/projects.json`
+**Path:** `$CHISACODE_HOME/projects/projects.json`
 
 Array of project records.
 
@@ -379,7 +379,7 @@ emptied duplicate.
 
 ## 7. Workspace Registry
 
-**Path:** `$PASEO_HOME/projects/workspaces.json`
+**Path:** `$CHISACODE_HOME/projects/workspaces.json`
 
 Array of workspace records. A workspace is a specific working directory within a project.
 
@@ -398,7 +398,7 @@ Array of workspace records. A workspace is a specific working directory within a
 
 ## 8. Push Token Store
 
-**Path:** `$PASEO_HOME/push-tokens.json`
+**Path:** `$CHISACODE_HOME/push-tokens.json`
 
 ```json
 {
@@ -412,14 +412,14 @@ Simple set of Expo push notification tokens. Loaded with permissive parsing (fil
 
 ## 9. Daemon meta files
 
-These small files are not validated as full Zod schemas but are persisted under `$PASEO_HOME` for daemon identity and runtime coordination.
+These small files are not validated as full Zod schemas but are persisted under `$CHISACODE_HOME` for daemon identity and runtime coordination.
 
-| Path                  | Format                                                         | Notes                                                                             |
-| --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$PASEO_HOME` daemon ID. Overridable via `PASEO_SERVER_ID` env.        |
-| `daemon-keypair.json` | `{ v: 2, publicKeyB64, secretKeyB64 }` (libsodium box keypair) | E2EE relay identity. Written with mode `0600`. Regenerated if file is unreadable. |
-| `paseo.pid`           | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$PASEO_HOME`.                         |
-| `daemon.log`          | Pino log output                                                | Default location; path/rotation configurable via `log.file` in `config.json`.     |
+| Path                  | Format                                                         | Notes                                                                              |
+| --------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$CHISACODE_HOME` daemon ID. Overridable via `CHISACODE_SERVER_ID` env. |
+| `daemon-keypair.json` | `{ v: 2, publicKeyB64, secretKeyB64 }` (libsodium box keypair) | E2EE relay identity. Written with mode `0600`. Regenerated if file is unreadable.  |
+| `chisacode.pid`       | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$CHISACODE_HOME`.                      |
+| `daemon.log`          | Pino log output                                                | Default location; path/rotation configurable via `log.file` in `config.json`.      |
 
 ---
 
@@ -429,7 +429,7 @@ These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the dae
 
 ### Draft Store
 
-**AsyncStorage key:** `paseo-drafts` (version 2)
+**AsyncStorage key:** `chisacode-drafts` (version 2)
 
 ```typescript
 {
@@ -445,7 +445,7 @@ These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the dae
 
 ### Attachment Store (Web)
 
-**IndexedDB database:** `paseo-attachment-bytes`, object store: `attachments`
+**IndexedDB database:** `chisacode-attachment-bytes`, object store: `attachments`
 
 Stores binary attachment blobs keyed by attachment ID.
 

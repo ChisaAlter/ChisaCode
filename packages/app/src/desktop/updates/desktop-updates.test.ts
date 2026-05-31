@@ -50,10 +50,13 @@ describe("desktop-updates helpers", () => {
     const { parseLocalDaemonVersionResult } = await loadModuleForPlatform("web");
 
     expect(
-      parseLocalDaemonVersionResult({ version: null, error: "paseo command not found in PATH" }),
+      parseLocalDaemonVersionResult({
+        version: null,
+        error: "chisacode command not found in PATH",
+      }),
     ).toEqual({
       version: null,
-      error: "paseo command not found in PATH",
+      error: "chisacode command not found in PATH",
     });
   });
 
@@ -115,7 +118,7 @@ describe("desktop-updates helpers", () => {
     const { buildMacAppleSiliconDownloadUrl } = await loadModuleForPlatform("web");
 
     expect(buildMacAppleSiliconDownloadUrl("v0.1.64")).toBe(
-      "https://github.com/getpaseo/paseo/releases/download/v0.1.64/Paseo-0.1.64-arm64.dmg",
+      "https://github.com/getchisacode/chisacode/releases/download/v0.1.64/ChisaCode-0.1.64-arm64.dmg",
     );
     expect(buildMacAppleSiliconDownloadUrl(null)).toBeNull();
   });

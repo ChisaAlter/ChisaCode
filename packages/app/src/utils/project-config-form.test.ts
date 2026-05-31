@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PaseoConfigRawSchema } from "@fleurdelys/protocol/paseo-config-schema";
-import type { PaseoConfigRaw } from "@fleurdelys/protocol/messages";
+import { ChisaCodeConfigRawSchema } from "@chisacode/protocol/chisacode-config-schema";
+import type { ChisaCodeConfigRaw } from "@chisacode/protocol/messages";
 import { applyDraftToConfig, configToDraft, type ProjectConfigDraft } from "./project-config-form";
 
 function emptyDraft(): ProjectConfigDraft {
@@ -68,7 +68,7 @@ describe("configToDraft", () => {
 
 describe("applyDraftToConfig", () => {
   it("preserves the original string kind when editing an existing setup field", () => {
-    const base: PaseoConfigRaw = { worktree: { setup: "npm install" } };
+    const base: ChisaCodeConfigRaw = { worktree: { setup: "npm install" } };
     const draft = configToDraft(base);
     draft.setupText = "npm install\nnpm run prepare";
     const next = applyDraftToConfig({ draft, base });
@@ -76,7 +76,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("preserves the original array kind when editing an existing teardown field", () => {
-    const base: PaseoConfigRaw = {
+    const base: ChisaCodeConfigRaw = {
       worktree: { teardown: ["docker compose down"] },
     };
     const draft = configToDraft(base);
@@ -86,7 +86,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("writes a string for a newly added lifecycle field with one non-empty line", () => {
-    const base: PaseoConfigRaw = {};
+    const base: ChisaCodeConfigRaw = {};
     const draft = configToDraft(base);
     draft.setupText = "npm install";
     const next = applyDraftToConfig({ draft, base });
@@ -94,7 +94,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("writes an array for a newly added lifecycle field with multiple non-empty lines", () => {
-    const base: PaseoConfigRaw = {};
+    const base: ChisaCodeConfigRaw = {};
     const draft = configToDraft(base);
     draft.setupText = "npm install\nnpm run prepare";
     const next = applyDraftToConfig({ draft, base });
@@ -102,7 +102,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("omits a lifecycle field whose draft text is empty", () => {
-    const base: PaseoConfigRaw = { worktree: { setup: "npm install" } };
+    const base: ChisaCodeConfigRaw = { worktree: { setup: "npm install" } };
     const draft = configToDraft(base);
     draft.setupText = "";
     const next = applyDraftToConfig({ draft, base });
@@ -110,7 +110,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("preserves unknown top-level, worktree, and script entry fields on round-trip", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       worktree: {
         setup: "npm install",
         terminals: [{ name: "dev", command: "npm run dev" }],
@@ -140,7 +140,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("preserves all scripts on round-trip, including ones never edited in this session", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       scripts: {
         dev: { type: "long-running", command: "npm run dev", port: 3000, customDevField: "keep" },
         build: { command: ["npm", "run", "build"], customBuildField: { nested: 1 } },
@@ -174,7 +174,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("normalizes script command text into the original command kind", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       scripts: {
         build: { command: ["npm", "run", "build"] },
       },
@@ -188,7 +188,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("parses script port as a number when numeric and writes string for non-numeric input", () => {
-    const base = PaseoConfigRawSchema.parse({});
+    const base = ChisaCodeConfigRawSchema.parse({});
     const draft = configToDraft(base);
     draft.scripts = [
       {
@@ -247,7 +247,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("writes only metadata prompt entries with non-empty text", () => {
-    const base: PaseoConfigRaw = {};
+    const base: ChisaCodeConfigRaw = {};
     const draft = configToDraft(base);
     draft.metadataPrompts.agentTitle = "Use mb/.";
     draft.metadataPrompts.commitMessage = "Conventional commits.";
@@ -259,7 +259,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("drops the metadataGeneration field when all prompts are empty", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       metadataGeneration: {
         agentTitle: { instructions: "Use mb/." },
       },
@@ -271,7 +271,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("preserves unknown sibling fields inside metadataGeneration on round-trip", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       metadataGeneration: {
         agentTitle: { instructions: "Use mb/." },
         futureField: 42,
@@ -286,7 +286,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("preserves unknown fields inside a metadata prompt entry on round-trip", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       metadataGeneration: {
         agentTitle: { instructions: "Use mb/.", model: "haiku" },
       },
@@ -299,7 +299,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("clears instructions but preserves unknown sibling fields when text becomes empty", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       metadataGeneration: {
         agentTitle: { instructions: "Use mb/.", model: "haiku" },
       },
@@ -312,7 +312,7 @@ describe("applyDraftToConfig", () => {
   });
 
   it("drops scripts with an empty name and removes scripts no longer present in the draft", () => {
-    const base = PaseoConfigRawSchema.parse({
+    const base = ChisaCodeConfigRawSchema.parse({
       scripts: {
         dev: { command: "npm run dev" },
         build: { command: "npm run build" },

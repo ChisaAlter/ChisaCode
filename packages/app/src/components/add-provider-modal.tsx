@@ -18,6 +18,7 @@ import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { useTranslation } from "react-i18next";
 
 interface AddProviderModalProps {
   serverId: string;
@@ -30,7 +31,6 @@ type InstallState = "installed" | "available";
 const FLEX_ONE_STYLE = { flex: 1 } as const;
 const ACTION_BUTTON_STYLE = { width: 92 } as const;
 const MODAL_SNAP_POINTS = ["78%", "92%"];
-const ADD_PROVIDER_HEADER: SheetHeader = { title: "添加 provider" };
 const SEARCH_ICON_SIZE = 16;
 const PROVIDER_FALLBACK_ICON_SIZE = 20;
 const PROVIDER_REMOTE_ICON_SIZE = 24;
@@ -69,12 +69,13 @@ interface ProviderCatalogRowProps {
 }
 
 function ProviderCatalogRow({ entry, state, installing, onInstall }: ProviderCatalogRowProps) {
+  const { t } = useTranslation();
   const isAvailable = state === "available";
-  let actionLabel = "Add";
+  let actionLabel = t("providers.addAction");
   if (installing) {
-    actionLabel = "Adding";
+    actionLabel = t("providers.addingAction");
   } else if (state === "installed") {
-    actionLabel = "Installed";
+    actionLabel = t("providers.installed");
   }
 
   const handleInstall = useCallback(() => {
@@ -113,12 +114,12 @@ function ProviderCatalogRow({ entry, state, installing, onInstall }: ProviderCat
         </Text>
         <Pressable
           accessibilityRole="link"
-          accessibilityLabel={`${entry.title} install instructions`}
+          accessibilityLabel={`${entry.title} ${t("providers.installInstructions")}`}
           onPress={handleOpenInstallLink}
           style={styles.installLink}
         >
           <Text style={styles.installLinkText} numberOfLines={1}>
-            Install instructions
+            {t("providers.installInstructions")}
           </Text>
           <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
         </Pressable>
@@ -139,6 +140,7 @@ function ProviderCatalogRow({ entry, state, installing, onInstall }: ProviderCat
 }
 
 export function AddProviderModal({ serverId, visible, onClose }: AddProviderModalProps) {
+  const { t } = useTranslation();
   const { entries } = useAcpProviderCatalog();
   const { entries: providerEntries, refresh } = useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
@@ -160,6 +162,10 @@ export function AddProviderModal({ serverId, visible, onClose }: AddProviderModa
     () => entries.filter((entry) => matchesSearch(entry, search)),
     [entries, search],
   );
+  const addProviderHeader = useMemo<SheetHeader>(
+    () => ({ title: t("providers.addProvider") }),
+    [t],
+  );
 
   const handleInstall = useCallback(
     async (entry: AcpProviderCatalogItem) => {
@@ -172,19 +178,19 @@ export function AddProviderModal({ serverId, visible, onClose }: AddProviderModa
         handleClose();
       } catch (installError) {
         Alert.alert(
-          "Unable to install provider",
+          t("providers.unableToInstall"),
           installError instanceof Error ? installError.message : String(installError),
         );
       } finally {
         setInstallingProviderId((current) => (current === entry.id ? null : current));
       }
     },
-    [installingProviderId, handleClose, patchConfig, refresh],
+    [installingProviderId, handleClose, patchConfig, refresh, t],
   );
 
   return (
     <AdaptiveModalSheet
-      header={ADD_PROVIDER_HEADER}
+      header={addProviderHeader}
       visible={visible}
       onClose={handleClose}
       desktopMaxWidth={680}
@@ -197,12 +203,12 @@ export function AddProviderModal({ serverId, visible, onClose }: AddProviderModa
         </View>
         <AdaptiveTextInput
           testID="provider-catalog-search"
-          accessibilityLabel="搜索 provider"
+          accessibilityLabel={t("providers.search")}
           initialValue={search}
           resetKey={`provider-catalog-search-${searchResetKey}`}
           value={search}
           onChangeText={setSearch}
-          placeholder="搜索 Provider"
+          placeholder={t("providers.search")}
           style={styles.searchInput}
           autoCapitalize="none"
           autoCorrect={false}
@@ -211,7 +217,7 @@ export function AddProviderModal({ serverId, visible, onClose }: AddProviderModa
 
       {filteredEntries.length === 0 ? (
         <View style={styles.stateBox}>
-          <Text style={styles.stateText}>未找到提供商</Text>
+          <Text style={styles.stateText}>{t("providers.noProvidersFound")}</Text>
         </View>
       ) : null}
 
@@ -231,7 +237,7 @@ export function AddProviderModal({ serverId, visible, onClose }: AddProviderModa
 
       <View style={styles.actions}>
         <Button style={FLEX_ONE_STYLE} variant="secondary" onPress={handleClose}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </View>
     </AdaptiveModalSheet>

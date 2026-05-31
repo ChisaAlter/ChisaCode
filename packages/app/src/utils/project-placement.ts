@@ -1,4 +1,4 @@
-import type { ProjectPlacementPayload } from "@fleurdelys/protocol/messages";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import { deriveProjectKey, deriveProjectName } from "@/utils/agent-grouping";
 
 function normalizeWorkingDirectory(cwd: string): string {
@@ -19,7 +19,7 @@ export function deriveProjectPlacementFromCwd(cwd: string): ProjectPlacementPayl
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: null,
     },
   };

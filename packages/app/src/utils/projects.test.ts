@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProjectPlacementPayload } from "@fleurdelys/protocol/messages";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { buildProjects } from "./projects";
 
@@ -19,7 +19,7 @@ function placement(input: {
       currentBranch: "main",
       remoteUrl: input.remoteUrl,
       worktreeRoot: input.cwd,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       mainRepoRoot: input.mainRepoRoot ?? null,
     },
   };
@@ -49,7 +49,7 @@ function workspace(input: {
     gitRuntime: {
       currentBranch: "main",
       remoteUrl: input.remoteUrl ?? input.project?.checkout.remoteUrl ?? null,
-      isPaseoOwnedWorktree: false,
+      isChisaCodeOwnedWorktree: false,
       isDirty: false,
       aheadBehind: null,
       aheadOfOrigin: null,

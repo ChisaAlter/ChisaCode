@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
-import type { ToolCallDetail } from "@fleurdelys/protocol/agent-types";
+import type { ToolCallDetail } from "@chisacode/protocol/agent-types";
 import { hasMeaningfulToolCallDetail, isPendingToolCallDetail } from "./tool-call-detail-state";
 
 describe("tool-call detail state", () => {

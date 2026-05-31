@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import type { CommandOptions, ListResult, OutputSchema } from "../../output/index.js";
-import type { ProviderSnapshotEntry } from "@fleurdelys/protocol/agent-types";
-import { AGENT_PROVIDER_DEFINITIONS } from "@fleurdelys/protocol/provider-manifest";
+import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
+import { AGENT_PROVIDER_DEFINITIONS } from "@chisacode/protocol/provider-manifest";
 import { tryConnectToDaemon } from "../../utils/client.js";
 
 export interface ProviderListItem {

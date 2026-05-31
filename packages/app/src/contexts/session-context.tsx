@@ -20,18 +20,18 @@ import {
   planTimelineCatchUpAfter,
   planTimelineCatchUpFollowUp,
 } from "@/timeline/timeline-sync-plan";
-import type { AgentAttachment, SessionOutboundMessage } from "@fleurdelys/protocol/messages";
-import { parseServerInfoStatusPayload } from "@fleurdelys/protocol/messages";
+import type { AgentAttachment, SessionOutboundMessage } from "@chisacode/protocol/messages";
+import { parseServerInfoStatusPayload } from "@chisacode/protocol/messages";
 import {
   buildAgentAttentionNotificationPayload,
   type AgentAttentionNotificationPayload,
   type NotificationPermissionRequest,
-} from "@fleurdelys/protocol/agent-attention-notification";
-import type { AgentLifecycleStatus } from "@fleurdelys/protocol/agent-lifecycle";
-import type { DaemonClient } from "@fleurdelys/client/internal/daemon-client";
-import type { AgentSessionConfig } from "@fleurdelys/protocol/agent-types";
-import type { GitSetupOptions } from "@fleurdelys/protocol/messages";
-import type { AgentPermissionResponse } from "@fleurdelys/protocol/agent-types";
+} from "@chisacode/protocol/agent-attention-notification";
+import type { AgentLifecycleStatus } from "@chisacode/protocol/agent-lifecycle";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { AgentSessionConfig } from "@chisacode/protocol/agent-types";
+import type { GitSetupOptions } from "@chisacode/protocol/messages";
+import type { AgentPermissionResponse } from "@chisacode/protocol/agent-types";
 import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useVoiceAudioEngineOptional, useVoiceRuntimeOptional } from "@/contexts/voice-context";
 import type { AudioPlaybackSource } from "@/voice/audio-engine-types";

@@ -6,7 +6,7 @@ import {
   type ConnectionState,
   type FetchAgentsEntry,
   type FetchAgentsOptions,
-} from "@fleurdelys/client/internal/daemon-client";
+} from "@chisacode/client/internal/daemon-client";
 import {
   connectionFromListen,
   normalizeStoredHostProfile,
@@ -23,7 +23,7 @@ import {
   shouldUseTlsForDefaultHostedRelay,
 } from "@/utils/daemon-endpoints";
 import { resolveAppVersion } from "@/utils/app-version";
-import { ConnectionOfferSchema, type ConnectionOffer } from "@fleurdelys/protocol/connection-offer";
+import { ConnectionOfferSchema, type ConnectionOffer } from "@chisacode/protocol/connection-offer";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";
@@ -1199,12 +1199,12 @@ export class HostRuntimeController {
   }
 }
 
-const REGISTRY_STORAGE_KEY = "@fleurdelys:daemon-registry";
-const LEGACY_REGISTRY_STORAGE_KEY = "@paseo:daemon-registry";
+const REGISTRY_STORAGE_KEY = "@chisacode:daemon-registry";
+const LEGACY_REGISTRY_STORAGE_KEY = "@chisacode:daemon-registry";
 const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6767";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
-const E2E_STORAGE_KEY = "@fleurdelys:e2e";
-const LEGACY_E2E_STORAGE_KEY = "@paseo:e2e";
+const E2E_STORAGE_KEY = "@chisacode:e2e";
+const LEGACY_E2E_STORAGE_KEY = "@chisacode:e2e";
 
 function readConfiguredLocalDaemonOverride(): string | null {
   const value = process.env.EXPO_PUBLIC_LOCAL_DAEMON?.trim();
@@ -1977,7 +1977,7 @@ export class HostRuntimeStore {
 }
 
 let singletonHostRuntimeStore: HostRuntimeStore | null = null;
-const HOST_RUNTIME_STORE_GLOBAL_KEY = "__paseoHostRuntimeStore";
+const HOST_RUNTIME_STORE_GLOBAL_KEY = "__chisacodeHostRuntimeStore";
 
 type HostRuntimeGlobal = typeof globalThis & {
   [HOST_RUNTIME_STORE_GLOBAL_KEY]?: HostRuntimeStore;

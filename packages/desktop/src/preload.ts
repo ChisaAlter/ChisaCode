@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 type EventHandler = (payload: unknown) => void;
 
-function createDesktopBridge(channelPrefix: "fleurdelys" | "paseo") {
+function createDesktopBridge(channelPrefix: "chisacode") {
   const channel = (name: string) => `${channelPrefix}:${name}`;
 
   return {
@@ -81,5 +81,4 @@ function createDesktopBridge(channelPrefix: "fleurdelys" | "paseo") {
   };
 }
 
-contextBridge.exposeInMainWorld("fleurdelysDesktop", createDesktopBridge("fleurdelys"));
-contextBridge.exposeInMainWorld("paseoDesktop", createDesktopBridge("paseo"));
+contextBridge.exposeInMainWorld("chisacodeDesktop", createDesktopBridge("chisacode"));

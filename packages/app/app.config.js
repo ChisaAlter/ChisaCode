@@ -3,7 +3,9 @@ const path = require("node:path");
 const pkg = require("./package.json");
 const appVariant = process.env.APP_VARIANT ?? "production";
 const parsedPatchVersion = Number.parseInt(pkg.version.split(".")[2] ?? "1", 10);
-const androidVersionCode = Number.isFinite(parsedPatchVersion) ? parsedPatchVersion : 1;
+const androidVersionCode = Number.isFinite(parsedPatchVersion)
+  ? Math.max(parsedPatchVersion, 1)
+  : 1;
 
 function resolveSecretFile(params) {
   const fromEnv = process.env[params.envKey];
@@ -21,8 +23,8 @@ function resolveSecretFile(params) {
 
 const variants = {
   production: {
-    name: "芙露德莉斯",
-    packageId: "sh.paseo",
+    name: "ChisaCode",
+    packageId: "sh.chisacode",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_PROD",
       fallbackRelativePath: "./.secrets/google-services.prod.json",
@@ -33,8 +35,8 @@ const variants = {
     }),
   },
   development: {
-    name: "芙露德莉斯 Debug",
-    packageId: "sh.paseo.debug",
+    name: "ChisaCode Debug",
+    packageId: "sh.chisacode.debug",
     googleServicesFile: resolveSecretFile({
       envKey: "GOOGLE_SERVICES_FILE_DEBUG",
       fallbackRelativePath: "./.secrets/google-services.debug.json",
@@ -51,11 +53,11 @@ const variant = variants[appVariant] ?? variants.production;
 export default {
   expo: {
     name: variant.name,
-    slug: "voice-mobile",
+    slug: "chisacode",
     version: pkg.version,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "paseo",
+    scheme: "chisacode",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     runtimeVersion: {
@@ -67,7 +69,7 @@ export default {
     ios: {
       supportsTablet: true,
       infoPlist: {
-        NSMicrophoneUsageDescription: "芙露德莉斯需要使用麦克风来进行语音命令。",
+        NSMicrophoneUsageDescription: "ChisaCode需要使用麦克风来进行语音命令。",
         ITSAppUsesNonExemptEncryption: false,
       },
       bundleIdentifier: variant.packageId,
@@ -154,6 +156,6 @@ export default {
         projectId: "0e7f65ce-0367-46c8-a238-2b65963d235a",
       },
     },
-    owner: "getpaseo",
+    owner: "getchisacode",
   },
 };

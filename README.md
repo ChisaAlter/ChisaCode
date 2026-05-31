@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Fleurdelys logo">
+  <img src="packages/website/public/logo.svg" width="64" height="64" alt="ChisaCode logo">
 </p>
 
-<h1 align="center">Fleurdelys</h1>
+<h1 align="center">ChisaCode</h1>
 
-<p align="center"><strong>芙露德莉斯</strong></p>
+<p align="center"><strong>ChisaCode</strong></p>
 
 <p align="center">
-  <a href="https://github.com/getpaseo/paseo/stargazers">
-    <img src="https://img.shields.io/github/stars/getpaseo/paseo?style=flat&logo=github" alt="GitHub stars">
+  <a href="https://github.com/getchisacode/chisacode/stargazers">
+    <img src="https://img.shields.io/github/stars/getchisacode/chisacode?style=flat&logo=github" alt="GitHub stars">
   </a>
-  <a href="https://github.com/getpaseo/paseo/releases">
-    <img src="https://img.shields.io/github/v/release/getpaseo/paseo?style=flat&logo=github" alt="GitHub release">
+  <a href="https://github.com/getchisacode/chisacode/releases">
+    <img src="https://img.shields.io/github/v/release/getchisacode/chisacode?style=flat&logo=github" alt="GitHub release">
   </a>
   <a href="https://x.com/moboudra">
     <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
@@ -19,7 +19,7 @@
   <a href="https://discord.gg/jz8T2uahpH">
     <img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord">
   </a>
-  <a href="https://www.reddit.com/r/PaseoAI/">
+  <a href="https://www.reddit.com/r/ChisaCodeAI/">
     <img src="https://img.shields.io/badge/Reddit-555?logo=reddit" alt="Reddit">
   </a>
 </p>
@@ -27,11 +27,11 @@
 <p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
 
 <p align="center">
-  <img src="https://paseo.sh/hero-mockup.png" alt="Fleurdelys app screenshot" width="100%">
+  <img src="https://chisacode.sh/hero-mockup.png" alt="ChisaCode app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="https://paseo.sh/mobile-mockup.png" alt="Fleurdelys mobile app" width="100%">
+  <img src="https://chisacode.sh/mobile-mockup.png" alt="ChisaCode mobile app" width="100%">
 </p>
 
 ---
@@ -42,11 +42,11 @@ Run agents in parallel on your own machines. Ship from your phone or your desk.
 - **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
 - **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
 - **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
-- **Privacy-first:** Fleurdelys doesn't have any telemetry, tracking, or forced log-ins.
+- **Privacy-first:** ChisaCode doesn't have any telemetry, tracking, or forced log-ins.
 
 ## Getting Started
 
-Fleurdelys runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
+ChisaCode runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
 
 ### Prerequisites
 
@@ -60,69 +60,69 @@ You need at least one agent CLI installed and configured with your credentials:
 
 ### Desktop app (recommended)
 
-Download it from [paseo.sh/download](https://paseo.sh/download) or the [GitHub releases page](https://github.com/getpaseo/paseo/releases). Open the app and the daemon starts automatically. Nothing else to install.
+Download it from [chisacode.sh/download](https://chisacode.sh/download) or the [GitHub releases page](https://github.com/getchisacode/chisacode/releases). Open the app and the daemon starts automatically. Nothing else to install.
 
 To connect from your phone, scan the QR code shown in Settings.
 
 ### CLI / headless
 
-Install the CLI and start Fleurdelys:
+Install the CLI and start ChisaCode:
 
 ```bash
-npm install -g @fleurdelys/cli
-paseo
+npm install -g @chisacode/cli
+chisacode
 ```
 
 This shows a QR code in the terminal. Connect from any client. This path is useful for servers and remote machines.
 
 For full setup and configuration, see:
 
-- [Docs](https://paseo.sh/docs)
-- [Configuration reference](https://paseo.sh/docs/configuration)
+- [Docs](https://chisacode.sh/docs)
+- [Configuration reference](https://chisacode.sh/docs/configuration)
 
 ## CLI
 
 Everything you can do in the app, you can do from the terminal.
 
 ```bash
-paseo run --provider claude/opus-4.6 "implement user authentication"
-paseo run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
+chisacode run --provider claude/opus-4.6 "implement user authentication"
+chisacode run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
 
-paseo ls                           # list running agents
-paseo attach abc123                # stream live output
-paseo send abc123 "also add tests" # follow-up task
+chisacode ls                           # list running agents
+chisacode attach abc123                # stream live output
+chisacode send abc123 "also add tests" # follow-up task
 
 # run on a remote daemon
-paseo --host workstation.local:6767 run "run the full test suite"
+chisacode --host workstation.local:6767 run "run the full test suite"
 ```
 
-See the [full CLI reference](https://paseo.sh/docs/cli) for more.
+See the [full CLI reference](https://chisacode.sh/docs/cli) for more.
 
 ## Skills
 
-Skills teach your agent to use Fleurdelys to orchestrate other agents.
+Skills teach your agent to use ChisaCode to orchestrate other agents.
 
 ```bash
-npx skills add getpaseo/paseo
+npx skills add getchisacode/chisacode
 ```
 
 Then use them in any agent conversation:
 
-- `/paseo-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
-- `/paseo-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
-- `/paseo-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
-- `/paseo-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
+- `/chisacode-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
+- `/chisacode-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
+- `/chisacode-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
+- `/chisacode-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
 
 ## Development
 
 Quick monorepo package map:
 
-- `packages/server`: Fleurdelys daemon (agent process orchestration, WebSocket API, MCP server)
+- `packages/server`: ChisaCode daemon (agent process orchestration, WebSocket API, MCP server)
 - `packages/app`: Expo client (iOS, Android, web)
-- `packages/cli`: `paseo` CLI for daemon and agent workflows
+- `packages/cli`: `chisacode` CLI for daemon and agent workflows
 - `packages/desktop`: Electron desktop app
 - `packages/relay`: Relay package for remote connectivity
-- `packages/website`: Marketing site and documentation (`paseo.sh`)
+- `packages/website`: Marketing site and documentation (`chisacode.sh`)
 
 Common commands:
 
@@ -145,17 +145,17 @@ npm run typecheck
 
 ## Community
 
-- [paseo-relay](https://github.com/zenghongtu/paseo-relay) — self-hosted relay in Go
+- [chisacode-relay](https://github.com/zenghongtu/chisacode-relay) — self-hosted relay in Go
 
 ### Self-hosted relay TLS
 
 Self-hosted relays use `ws://` unless TLS is opted in. For a relay behind nginx on 443, start the daemon with:
 
 ```bash
-PASEO_RELAY_ENDPOINT=127.0.0.1:8080 \
-PASEO_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
-PASEO_RELAY_USE_TLS=true \
-paseo daemon start
+CHISACODE_RELAY_ENDPOINT=127.0.0.1:8080 \
+CHISACODE_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
+CHISACODE_RELAY_USE_TLS=true \
+chisacode daemon start
 ```
 
 Equivalent config:
@@ -196,11 +196,11 @@ server {
 ---
 
 <p align="center">
-  <a href="https://star-history.com/#getpaseo/paseo&Date">
+  <a href="https://star-history.com/#getchisacode/chisacode&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=getpaseo/paseo&type=Date&theme=dark">
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=getpaseo/paseo&type=Date">
-      <img src="https://api.star-history.com/svg?repos=getpaseo/paseo&type=Date" alt="Star history chart for getpaseo/paseo" width="600" style="max-width: 100%;">
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date&theme=dark">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date">
+      <img src="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date" alt="Star history chart for getchisacode/chisacode" width="600" style="max-width: 100%;">
     </picture>
   </a>
 </p>

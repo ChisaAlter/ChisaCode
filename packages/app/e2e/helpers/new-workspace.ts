@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import type { DaemonClient as InternalDaemonClient } from "@fleurdelys/client/internal/daemon-client";
+import type { DaemonClient as InternalDaemonClient } from "@chisacode/client/internal/daemon-client";
 import { decodeWorkspaceIdFromPathSegment } from "@/utils/host-routes";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { daemonWsRoutePattern } from "./daemon-port";
@@ -7,11 +7,11 @@ import { expectWorkspaceHeader, workspaceLabelFromPath } from "./workspace-ui";
 
 type NewWorkspaceDaemonClient = Pick<
   InternalDaemonClient,
-  | "archivePaseoWorktree"
+  | "archiveChisaCodeWorktree"
   | "archiveWorkspace"
   | "close"
   | "connect"
-  | "createPaseoWorktree"
+  | "createChisaCodeWorktree"
   | "openProject"
 >;
 
@@ -68,7 +68,7 @@ export async function archiveWorkspaceFromDaemon(
   client: NewWorkspaceDaemonClient,
   workspaceId: string,
 ): Promise<void> {
-  const payload = await client.archivePaseoWorktree({ worktreePath: workspaceId });
+  const payload = await client.archiveChisaCodeWorktree({ worktreePath: workspaceId });
   if (payload.error) {
     throw new Error(payload.error.message);
   }
@@ -94,7 +94,7 @@ export async function createWorktreeViaDaemon(
   client: NewWorkspaceDaemonClient,
   input: { cwd: string; slug: string },
 ): Promise<OpenedProject> {
-  const payload = await client.createPaseoWorktree({
+  const payload = await client.createChisaCodeWorktree({
     cwd: input.cwd,
     worktreeSlug: input.slug,
   });

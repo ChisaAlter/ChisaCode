@@ -34,11 +34,11 @@ import { registerOpenerHandlers } from "./features/opener.js";
 import { setupApplicationMenu } from "./features/menu.js";
 import { translateDesktop } from "./i18n.js";
 import {
-  getPaseoBrowserIdForWebContents,
-  getPaseoBrowserWebContents,
-  listRegisteredPaseoBrowserIds,
-  registerPaseoBrowserWebContents,
-  setWorkspaceActivePaseoBrowserId,
+  getChisaCodeBrowserIdForWebContents,
+  getChisaCodeBrowserWebContents,
+  listRegisteredChisaCodeBrowserIds,
+  registerChisaCodeBrowserWebContents,
+  setWorkspaceActiveChisaCodeBrowserId,
 } from "./features/browser-webviews.js";
 import { parseOpenProjectPathFromArgv } from "./open-project-routing.js";
 import { getDesktopSettingsStore } from "./settings/desktop-settings-electron.js";
@@ -53,11 +53,11 @@ import {
 import { runDesktopStartup } from "./desktop-startup.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
-const APP_SCHEMES = ["fleurdelys", "paseo"] as const;
+const APP_SCHEMES = ["chisacode", "chisacode"] as const;
 const APP_SCHEME = APP_SCHEMES[0];
-const PASEO_DEBUG = process.env.PASEO_DEBUG === "1";
-const DISABLE_SINGLE_INSTANCE_LOCK = process.env.PASEO_DISABLE_SINGLE_INSTANCE_LOCK === "1";
-const APP_NAME = process.env.PASEO_TEST_APP_NAME?.trim() || "Fleurdelys";
+const CHISACODE_DEBUG = process.env.CHISACODE_DEBUG === "1";
+const DISABLE_SINGLE_INSTANCE_LOCK = process.env.CHISACODE_DISABLE_SINGLE_INSTANCE_LOCK === "1";
+const APP_NAME = process.env.CHISACODE_TEST_APP_NAME?.trim() || "ChisaCode";
 
 function isAllowedBrowserWebviewUrl(value: string | undefined): boolean {
   if (!value) {
@@ -81,9 +81,9 @@ function preventUnsafeBrowserWebviewNavigation(
     event.preventDefault();
   }
 }
-const IPC_PREFIXES = ["fleurdelys", "paseo"] as const;
+const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
 
-const FORWARDED_PASEO_SHORTCUT_KEYS = new Set([
+const FORWARDED_CHISACODE_SHORTCUT_KEYS = new Set([
   "b",
   "e",
   "w",
@@ -108,12 +108,12 @@ const FORWARDED_PASEO_SHORTCUT_KEYS = new Set([
   "arrowup",
   "arrowdown",
 ]);
-const DESKTOP_SMOKE_ENV = "PASEO_DESKTOP_SMOKE";
-const DESKTOP_SMOKE_STOP_REQUEST = "paseo-smoke-stop";
+const DESKTOP_SMOKE_ENV = "CHISACODE_DESKTOP_SMOKE";
+const DESKTOP_SMOKE_STOP_REQUEST = "chisacode-smoke-stop";
 app.setName(APP_NAME);
 
 function getBrowserIdFromWebviewPartition(partition: string | undefined): string | null {
-  const prefix = "persist:paseo-browser-";
+  const prefix = "persist:chisacode-browser-";
   if (!partition?.startsWith(prefix)) {
     return null;
   }
@@ -137,14 +137,14 @@ function isBrowserLocationInput(input: Electron.Input): boolean {
   return (input.meta || input.control) && input.key.toLowerCase() === "l";
 }
 
-function isForwardablePaseoShortcutInput(input: Electron.Input): boolean {
+function isForwardableChisaCodeShortcutInput(input: Electron.Input): boolean {
   if (input.type !== "keyDown") {
     return false;
   }
   if (!input.meta && !input.control) {
     return false;
   }
-  return FORWARDED_PASEO_SHORTCUT_KEYS.has(input.key.toLowerCase());
+  return FORWARDED_CHISACODE_SHORTCUT_KEYS.has(input.key.toLowerCase());
 }
 
 async function showBrowserWebviewContextMenu(
@@ -165,7 +165,7 @@ async function showBrowserWebviewContextMenu(
             click: () => {
               log.info("[browser-devtools] inspect-element.request", {
                 webContentsId: contents.id,
-                browserId: getPaseoBrowserIdForWebContents(contents),
+                browserId: getChisaCodeBrowserIdForWebContents(contents),
                 x: params.x,
                 y: params.y,
                 isDevToolsOpened: contents.isDevToolsOpened(),
@@ -186,7 +186,7 @@ async function showBrowserWebviewContextMenu(
 // In dev mode, detect git worktrees and isolate each instance so multiple
 // Electron windows can run side-by-side (separate userData = separate lock).
 let devWorktreeName: string | null = null;
-const forcedUserDataDir = process.env.PASEO_ELECTRON_USER_DATA_DIR?.trim();
+const forcedUserDataDir = process.env.CHISACODE_ELECTRON_USER_DATA_DIR?.trim();
 if (forcedUserDataDir) {
   app.setPath("userData", forcedUserDataDir);
   log.info("[dev-user-data] forced userData dir:", forcedUserDataDir);
@@ -198,7 +198,7 @@ if (forcedUserDataDir) {
       windowsHide: true,
     }).trim();
     devWorktreeName = path.basename(topLevel);
-    // Main checkout (e.g. "paseo") gets default userData — only worktrees diverge.
+    // Main checkout (e.g. "chisacode") gets default userData — only worktrees diverge.
     const commonDir = path.resolve(
       topLevel,
       execFileSync("git", ["rev-parse", "--git-common-dir"], {
@@ -210,7 +210,7 @@ if (forcedUserDataDir) {
     );
     const isWorktree = path.resolve(topLevel, ".git") !== commonDir;
     if (isWorktree) {
-      app.setPath("userData", path.join(app.getPath("appData"), `Fleurdelys-${devWorktreeName}`));
+      app.setPath("userData", path.join(app.getPath("appData"), `ChisaCode-${devWorktreeName}`));
       log.info("[worktree] isolated userData for worktree:", devWorktreeName);
     } else {
       devWorktreeName = null;
@@ -227,10 +227,10 @@ if (process.platform === "linux" && process.env.APPIMAGE) {
   app.commandLine.appendSwitch("no-sandbox");
 }
 
-// Allow users to pass Chromium flags via PASEO_ELECTRON_FLAGS for debugging
+// Allow users to pass Chromium flags via CHISACODE_ELECTRON_FLAGS for debugging
 // rendering issues (e.g. "--disable-gpu --ozone-platform=x11").
 // Must run before app.whenReady().
-const electronFlags = process.env.PASEO_ELECTRON_FLAGS?.trim();
+const electronFlags = process.env.CHISACODE_ELECTRON_FLAGS?.trim();
 if (electronFlags) {
   for (const token of electronFlags.split(/\s+/)) {
     const [key, ...rest] = token.replace(/^--/, "").split("=");
@@ -244,7 +244,7 @@ let pendingOpenProjectPath = parseOpenProjectPathFromArgv({
   isDefaultApp: process.defaultApp,
 });
 
-if (PASEO_DEBUG) {
+if (CHISACODE_DEBUG) {
   log.info("[open-project] argv:", process.argv);
   log.info("[open-project] isDefaultApp:", process.defaultApp);
   log.info("[open-project] pendingOpenProjectPath:", pendingOpenProjectPath);
@@ -274,7 +274,7 @@ for (const prefix of IPC_PREFIXES) {
 }
 
 function handleSetWorkspaceActiveBrowser(_event: unknown, browserId: unknown): void {
-  setWorkspaceActivePaseoBrowserId(typeof browserId === "string" ? browserId : null);
+  setWorkspaceActiveChisaCodeBrowserId(typeof browserId === "string" ? browserId : null);
 }
 
 for (const prefix of IPC_PREFIXES) {
@@ -287,18 +287,18 @@ function handleOpenBrowserDevtools(_event: unknown, browserId: unknown) {
       ok: false,
       reason: "invalid-browser-id",
       browserId,
-      registeredBrowserIds: listRegisteredPaseoBrowserIds(),
+      registeredBrowserIds: listRegisteredChisaCodeBrowserIds(),
     };
     log.warn("[browser-devtools] open-devtools.invalid", result);
     return result;
   }
-  const contents = getPaseoBrowserWebContents(browserId);
+  const contents = getChisaCodeBrowserWebContents(browserId);
   if (!contents) {
     const result = {
       ok: false,
       reason: "browser-webcontents-not-found",
       browserId,
-      registeredBrowserIds: listRegisteredPaseoBrowserIds(),
+      registeredBrowserIds: listRegisteredChisaCodeBrowserIds(),
     };
     log.warn("[browser-devtools] open-devtools.not-found", result);
     return result;
@@ -308,7 +308,7 @@ function handleOpenBrowserDevtools(_event: unknown, browserId: unknown) {
     webContentsId: contents.id,
     isDestroyed: contents.isDestroyed(),
     isDevToolsOpened: contents.isDevToolsOpened(),
-    registeredBrowserIds: listRegisteredPaseoBrowserIds(),
+    registeredBrowserIds: listRegisteredChisaCodeBrowserIds(),
   });
   contents.openDevTools({ mode: "detach" });
   const result = {
@@ -330,7 +330,7 @@ async function handleClearBrowserPartition(_event: unknown, browserId: unknown):
   if (typeof browserId !== "string" || browserId.trim().length === 0) {
     return;
   }
-  const partition = `persist:paseo-browser-${browserId}`;
+  const partition = `persist:chisacode-browser-${browserId}`;
   await session.fromPartition(partition).clearStorageData();
 }
 
@@ -462,11 +462,11 @@ async function createMainWindow(): Promise<void> {
   mainWindow.webContents.on("did-attach-webview", (_event, contents) => {
     const browserId = pendingBrowserWebviewIds.shift() ?? null;
     if (browserId) {
-      registerPaseoBrowserWebContents(contents, browserId);
+      registerChisaCodeBrowserWebContents(contents, browserId);
       log.info("[browser-webview] registered", {
         browserId,
         webContentsId: contents.id,
-        registeredBrowserIds: listRegisteredPaseoBrowserIds(),
+        registeredBrowserIds: listRegisteredChisaCodeBrowserIds(),
       });
     }
     contents.on("before-input-event", (event, input) => {
@@ -481,14 +481,14 @@ async function createMainWindow(): Promise<void> {
       }
       if (isBrowserLocationInput(input)) {
         event.preventDefault();
-        const focusedBrowserId = getPaseoBrowserIdForWebContents(contents);
+        const focusedBrowserId = getChisaCodeBrowserIdForWebContents(contents);
         sendRendererEvent(mainWindow.webContents, "browser-shortcut", {
           action: "focus-url",
           ...(focusedBrowserId ? { browserId: focusedBrowserId } : {}),
         });
         return;
       }
-      if (isForwardablePaseoShortcutInput(input)) {
+      if (isForwardableChisaCodeShortcutInput(input)) {
         event.preventDefault();
         sendRendererEvent(mainWindow.webContents, "browser-forwarded-key", {
           key: input.key,
@@ -556,7 +556,7 @@ function sendOpenProjectEvent(win: BrowserWindow, projectPath: string): void {
 
 function setupSingleInstanceLock(): boolean {
   if (DISABLE_SINGLE_INSTANCE_LOCK) {
-    log.info("[single-instance] disabled by PASEO_DISABLE_SINGLE_INSTANCE_LOCK");
+    log.info("[single-instance] disabled by CHISACODE_DISABLE_SINGLE_INSTANCE_LOCK");
     return true;
   }
 
@@ -613,7 +613,7 @@ async function runDesktopSmokeIfRequested(): Promise<boolean> {
   const handlers = createDaemonCommandHandlers();
   const startStatus = await handlers.start_desktop_daemon();
   process.stdout.write(
-    `[paseo-smoke] ${JSON.stringify({
+    `[chisacode-smoke] ${JSON.stringify({
       type: "desktop-daemon-smoke-started",
       status: startStatus,
     })}\n`,
@@ -623,7 +623,7 @@ async function runDesktopSmokeIfRequested(): Promise<boolean> {
 
   const stopStatus = await handlers.stop_desktop_daemon();
   process.stdout.write(
-    `[paseo-smoke] ${JSON.stringify({
+    `[chisacode-smoke] ${JSON.stringify({
       type: "desktop-daemon-smoke-stopped",
       stopStatus,
     })}\n`,

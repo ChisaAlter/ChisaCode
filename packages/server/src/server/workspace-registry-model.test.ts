@@ -100,7 +100,7 @@ describe("deriveWorkspaceId", () => {
         currentBranch: "main",
         remoteUrl: "https://github.com/acme/repo.git",
         worktreeRoot: "/tmp/repo",
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       }),
     ).toBe("/tmp/repo");
@@ -116,7 +116,7 @@ describe("deriveWorkspaceId", () => {
         currentBranch: "main",
         remoteUrl: null,
         worktreeRoot: `--path-format=absolute\n${cwd}`,
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       }),
     ).toBe(normalizeWorkspaceId(cwd));
@@ -132,7 +132,7 @@ describe("deriveWorkspaceId", () => {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: null,
       }),
     ).toBe(normalizeWorkspaceId("/tmp/repo/scratch"));
@@ -149,7 +149,7 @@ describe("git worktree grouping", () => {
         currentBranch: "feature/plain",
         remoteUrl: "https://github.com/acme/repo.git",
         worktreeRoot: "/tmp/repo-feature",
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: "/tmp/repo",
       },
     });
@@ -176,7 +176,7 @@ describe("git worktree grouping", () => {
           currentBranch: "feature/plain",
           remoteUrl: "https://github.com/acme/repo.git",
           worktreeRoot: "/tmp/repo-feature",
-          isPaseoOwnedWorktree: false,
+          isChisaCodeOwnedWorktree: false,
           mainRepoRoot: "/tmp/repo",
         },
       }),
@@ -191,7 +191,7 @@ describe("git worktree grouping", () => {
         currentBranch: "feature/plain",
         remoteUrl: "https://github.com/acme/repo.git",
         worktreeRoot: "/tmp/repo-feature",
-        isPaseoOwnedWorktree: false,
+        isChisaCodeOwnedWorktree: false,
         mainRepoRoot: "/tmp/repo",
       }),
     ).toBe("worktree");

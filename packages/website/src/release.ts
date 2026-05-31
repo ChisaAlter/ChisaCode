@@ -13,9 +13,9 @@ interface GitHubRelease {
 }
 
 const REQUIRED_ASSET_PATTERNS = [
-  /Paseo-.*-arm64\.dmg$/, // Mac Apple Silicon
-  /Paseo-.*-x86_64\.AppImage$/, // Linux AppImage
-  /Paseo-Setup-.*\.exe$/, // Windows (any arch)
+  /ChisaCode-.*-arm64\.dmg$/, // Mac Apple Silicon
+  /ChisaCode-.*-x86_64\.AppImage$/, // Linux AppImage
+  /ChisaCode-Setup-.*\.exe$/, // Windows (any arch)
 ];
 
 function hasRequiredAssets(release: GitHubRelease): boolean {
@@ -25,11 +25,11 @@ function hasRequiredAssets(release: GitHubRelease): boolean {
 }
 
 function pickWindowsAssets(assets: GitHubAsset[]) {
-  const x64Suffixed = assets.find((a) => /Paseo-Setup-.*-x64\.exe$/.test(a.name));
-  const arm64 = assets.find((a) => /Paseo-Setup-.*-arm64\.exe$/.test(a.name));
+  const x64Suffixed = assets.find((a) => /ChisaCode-Setup-.*-x64\.exe$/.test(a.name));
+  const arm64 = assets.find((a) => /ChisaCode-Setup-.*-arm64\.exe$/.test(a.name));
   const legacy = assets.find(
     (a) =>
-      /Paseo-Setup-.*\.exe$/.test(a.name) &&
+      /ChisaCode-Setup-.*\.exe$/.test(a.name) &&
       !a.name.endsWith("-x64.exe") &&
       !a.name.endsWith("-arm64.exe"),
   );
@@ -49,14 +49,15 @@ interface ReleaseInfo {
   windowsArm64Asset: string | null;
 }
 
-const GITHUB_RELEASES_URL = "https://api.github.com/repos/getpaseo/paseo/releases?per_page=10";
+const GITHUB_RELEASES_URL =
+  "https://api.github.com/repos/getchisacode/chisacode/releases?per_page=10";
 const RELEASE_CACHE_KEY = "github-release:v1";
 
 async function fetchLatestReadyRelease(): Promise<ReleaseInfo> {
   const res = await fetch(GITHUB_RELEASES_URL, {
     headers: {
       Accept: "application/vnd.github+json",
-      "User-Agent": "paseo-website",
+      "User-Agent": "chisacode-website",
     },
     cf: {
       cacheEverything: true,
@@ -86,11 +87,11 @@ function isReleaseInfo(value: unknown): value is ReleaseInfo {
     (typeof record.windowsX64Asset === "string" || record.windowsX64Asset === null) &&
     (typeof record.windowsArm64Asset === "string" || record.windowsArm64Asset === null) &&
     (record.windowsX64Asset === null ||
-      new RegExp(`^Paseo-Setup-${record.version.replaceAll(".", "\\.")}(?:-x64)?\\.exe$`).test(
+      new RegExp(`^ChisaCode-Setup-${record.version.replaceAll(".", "\\.")}(?:-x64)?\\.exe$`).test(
         record.windowsX64Asset,
       )) &&
     (record.windowsArm64Asset === null ||
-      new RegExp(`^Paseo-Setup-${record.version.replaceAll(".", "\\.")}-arm64\\.exe$`).test(
+      new RegExp(`^ChisaCode-Setup-${record.version.replaceAll(".", "\\.")}-arm64\\.exe$`).test(
         record.windowsArm64Asset,
       ))
   );

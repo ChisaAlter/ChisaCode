@@ -1,4 +1,4 @@
-import type { AgentProvider } from "@fleurdelys/protocol/agent-types";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import {
   buildDeterministicWorkspaceTabId,
   normalizeWorkspaceDraftTabSetup,
