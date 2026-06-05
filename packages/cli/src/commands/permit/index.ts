@@ -4,33 +4,34 @@ import { runAllowCommand } from "./allow.js";
 import { runDenyCommand } from "./deny.js";
 import { withOutput } from "../../output/index.js";
 import { addJsonAndDaemonHostOptions } from "../../utils/command-options.js";
+import { tCli } from "../../i18n.js";
 
 export function createPermitCommand(): Command {
-  const permit = new Command("permit").description("Manage permission requests");
+  const permit = new Command("permit").description(tCli("permit.description"));
 
   addJsonAndDaemonHostOptions(
-    permit.command("ls").description("List all pending permissions"),
+    permit.command("ls").description(tCli("permit.ls.description")),
   ).action(withOutput(runLsCommand));
 
   addJsonAndDaemonHostOptions(
     permit
       .command("allow")
-      .description("Allow a permission request")
-      .argument("<agent>", "Agent ID (or prefix)")
-      .argument("[req_id]", "Permission request ID (optional if --all)")
-      .option("--all", "Allow all pending permissions for this agent")
-      .option("--input <json>", "Modified input parameters (JSON)"),
+      .description(tCli("permit.allow.description"))
+      .argument("<agent>", tCli("permit.agent"))
+      .argument("[req_id]", tCli("permit.request"))
+      .option("--all", tCli("permit.allowAll"))
+      .option("--input <json>", tCli("permit.input")),
   ).action(withOutput(runAllowCommand));
 
   addJsonAndDaemonHostOptions(
     permit
       .command("deny")
-      .description("Deny a permission request")
-      .argument("<agent>", "Agent ID (or prefix)")
-      .argument("[req_id]", "Permission request ID (optional if --all)")
-      .option("--all", "Deny all pending permissions for this agent")
-      .option("--message <msg>", "Denial reason message")
-      .option("--interrupt", "Stop agent after denial"),
+      .description(tCli("permit.deny.description"))
+      .argument("<agent>", tCli("permit.agent"))
+      .argument("[req_id]", tCli("permit.request"))
+      .option("--all", tCli("permit.denyAll"))
+      .option("--message <msg>", tCli("permit.message"))
+      .option("--interrupt", tCli("permit.interrupt")),
   ).action(withOutput(runDenyCommand));
 
   return permit;

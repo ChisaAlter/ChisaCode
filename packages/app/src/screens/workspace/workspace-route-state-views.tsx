@@ -1,10 +1,10 @@
 import { Text, View } from "react-native";
 import { ArrowLeftToLine, RotateCw, Settings } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatConnectionStatus } from "@/utils/daemons";
 import type { WorkspaceRouteState } from "@/screens/workspace/workspace-route-state";
 
 interface WorkspaceRouteStateActions {
@@ -43,24 +43,33 @@ export function renderWorkspaceRouteGate(input: {
 
 function getWorkspaceHostStateTitle(
   state: Extract<WorkspaceRouteState, { kind: "unreachable" }>,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   if (state.connectionStatus === "connecting" || state.connectionStatus === "idle") {
-    return "正在连接";
+    return t("workspace.routeState.connecting");
   }
   if (state.connectionStatus === "offline") {
-    return `${state.hostName} 已离线`;
+    return t("workspace.routeState.hostOffline", { host: state.hostName });
   }
-  return `无法连接 ${state.hostName}`;
+  return t("workspace.routeState.unableToConnect", { host: state.hostName });
+}
+
+function formatRouteConnectionStatus(
+  status: Extract<WorkspaceRouteState, { kind: "unreachable" }>["connectionStatus"],
+  t: (key: string) => string,
+): string {
+  return t(`workspace.routeState.status.${status}`);
 }
 
 function WorkspaceConnecting({ hostName }: { hostName: string }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
 
   return (
     <View style={styles.emptyState}>
       <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
       <View style={styles.textStack}>
-        <Text style={styles.title}>正在加载工作区</Text>
+        <Text style={styles.title}>{t("workspace.routeState.loadingWorkspace")}</Text>
         <Text style={styles.description}>{hostName}</Text>
       </View>
     </View>
@@ -77,6 +86,7 @@ function WorkspaceUnreachable({
   onManageHost: () => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const canRetry = state.connectionStatus === "offline" || state.connectionStatus === "error";
 
   return (
@@ -85,11 +95,13 @@ function WorkspaceUnreachable({
         <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
       ) : null}
       <View style={styles.textStack}>
-        <Text style={styles.title}>{getWorkspaceHostStateTitle(state)}</Text>
+        <Text style={styles.title}>{getWorkspaceHostStateTitle(state, t)}</Text>
         <Text style={styles.description}>
           {state.connectionStatus === "connecting" || state.connectionStatus === "idle"
             ? state.hostName
-            : `主机状态：${formatConnectionStatus(state.connectionStatus)}`}
+            : t("workspace.routeState.hostStatus", {
+                status: formatRouteConnectionStatus(state.connectionStatus, t),
+              })}
         </Text>
         {state.lastError ? (
           <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -107,10 +119,10 @@ function WorkspaceUnreachable({
       {canRetry ? (
         <View style={styles.actions}>
           <Button size="sm" variant="default" leftIcon={RotateCw} onPress={onRetry}>
-            重试
+            {t("common.retry")}
           </Button>
           <Button size="sm" variant="outline" leftIcon={Settings} onPress={onManageHost}>
-            管理主机
+            {t("workspace.routeState.manageHost")}
           </Button>
         </View>
       ) : null}
@@ -119,15 +131,16 @@ function WorkspaceUnreachable({
 }
 
 function WorkspaceMissing({ hostName, onDismiss }: { hostName: string; onDismiss: () => void }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.emptyState}>
       <View style={styles.textStack}>
-        <Text style={styles.title}>找不到工作区</Text>
+        <Text style={styles.title}>{t("workspace.routeState.missingWorkspace")}</Text>
         <Text style={styles.description}>{hostName}</Text>
       </View>
       <View style={styles.actions}>
         <Button size="sm" variant="default" leftIcon={ArrowLeftToLine} onPress={onDismiss}>
-          返回
+          {t("common.back")}
         </Button>
       </View>
     </View>

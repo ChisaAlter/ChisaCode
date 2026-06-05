@@ -49,6 +49,7 @@ import { ClaudeIcon } from "~/components/mockup";
 import { FAQItem } from "~/components/faq-item";
 import { SiteFooter } from "~/components/site-footer";
 import { SiteHeader } from "~/components/site-header";
+import { useWebsiteI18n } from "~/i18n";
 import "~/styles.css";
 
 interface LandingPageProps {
@@ -185,6 +186,7 @@ function FeatureSection({
 }
 
 function MultiProviderSection() {
+  const { t } = useWebsiteI18n();
   const providers = [
     { name: "Claude Code", icon: <ClaudeIcon size={28} /> },
     { name: "Codex", icon: <CodexIcon className="w-7 h-7" /> },
@@ -194,10 +196,7 @@ function MultiProviderSection() {
   ];
 
   return (
-    <FeatureSection
-      title="Use the best agent for the job"
-      description="Run multiple providers from a single interface. ChisaCode runs the native agent harness as you'd normally run it, with your skills, config and MCP servers intact."
-    >
+    <FeatureSection title={t("landing.bestAgent")} description={t("landing.bestAgentDescription")}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {providers.slice(0, 3).map((p) => (
           <div
@@ -223,7 +222,9 @@ function MultiProviderSection() {
           href="/agents"
           className="flex items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-4 text-white/50 hover:text-white/80 hover:border-white/20 hover:bg-white/[0.03] transition-colors"
         >
-          <span className="font-medium">+{ADDITIONAL_AGENT_COUNT} more</span>
+          <span className="font-medium">
+            {t("landing.more", { count: ADDITIONAL_AGENT_COUNT })}
+          </span>
         </a>
       </div>
     </FeatureSection>
@@ -848,6 +849,7 @@ function LocalVoiceSection() {
 }
 
 function GetStarted() {
+  const { t } = useWebsiteI18n();
   return (
     <div className="pt-10">
       <div className="flex flex-row flex-wrap gap-3">
@@ -902,7 +904,7 @@ function GetStarted() {
           href="/agents"
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          +{ADDITIONAL_AGENT_COUNT} more
+          {t("landing.more", { count: ADDITIONAL_AGENT_COUNT })}
         </a>
       </div>
     </div>
@@ -1414,13 +1416,14 @@ function CLITabButton({
 }
 
 function CLISection() {
+  const { t } = useWebsiteI18n();
   const [activeIndex, setActiveIndex] = React.useState(0);
   const active = cliExamples[activeIndex];
 
   return (
     <FeatureSection
-      title="Fully scriptable"
-      description="Everything you can do in the app, you can do from the terminal."
+      title={t("landing.fullyScriptable")}
+      description={t("landing.fullyScriptableDescription")}
     >
       <div className="flex flex-wrap gap-2">
         {cliExamples.map((example, i) => (
@@ -1462,6 +1465,7 @@ function CLISection() {
 }
 
 function FAQ() {
+  const { t } = useWebsiteI18n();
   return (
     <motion.div
       initial={FADE_IN_UP}
@@ -1470,7 +1474,7 @@ function FAQ() {
       transition={EASE_OUT_05}
       className="space-y-6"
     >
-      <h2 className="text-3xl font-medium">FAQ</h2>
+      <h2 className="text-3xl font-medium">{t("landing.faq")}</h2>
       <div className="space-y-6">
         <FAQItem question="Is this free?">
           Yes. ChisaCode is free and open source. You need Claude Code, Codex, Copilot, OpenCode, or

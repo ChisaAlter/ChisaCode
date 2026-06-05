@@ -25,7 +25,7 @@ const DB_VERSION = 1;
 function ensureIndexedDb(): IDBFactory {
   const idb = globalThis.indexedDB;
   if (!idb) {
-    throw new Error("IndexedDB is unavailable in this runtime.");
+    throw new Error("当前运行环境不支持 IndexedDB。");
   }
   return idb;
 }
@@ -46,7 +46,7 @@ function openAttachmentDb(dbName = DB_NAME): Promise<IDBDatabase> {
     });
 
     request.addEventListener("error", () => {
-      reject(request.error ?? new Error("Failed to open attachment IndexedDB."));
+      reject(request.error ?? new Error("无法打开附件 IndexedDB。"));
     });
   });
 }
@@ -66,11 +66,11 @@ function runTx<T>(
     });
 
     request.addEventListener("error", () => {
-      reject(request.error ?? new Error("IndexedDB transaction request failed."));
+      reject(request.error ?? new Error("IndexedDB 事务请求失败。"));
     });
 
     transaction.addEventListener("error", () => {
-      reject(transaction.error ?? new Error("IndexedDB transaction failed."));
+      reject(transaction.error ?? new Error("IndexedDB 事务失败。"));
     });
   });
 }
@@ -121,7 +121,7 @@ async function loadBlob(db: IDBDatabase, id: string): Promise<Blob> {
     store.get(id),
   );
   if (!record?.blob) {
-    throw new Error(`Attachment ${id} was not found in IndexedDB.`);
+    throw new Error(`IndexedDB 中找不到附件 ${id}。`);
   }
   return record.blob;
 }
@@ -206,9 +206,7 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
           const cursorRequest = store.openCursor();
 
           cursorRequest.addEventListener("error", () => {
-            reject(
-              cursorRequest.error ?? new Error("Failed to iterate IndexedDB attachment store."),
-            );
+            reject(cursorRequest.error ?? new Error("遍历 IndexedDB 附件存储失败。"));
           });
 
           cursorRequest.addEventListener("success", () => {
@@ -226,7 +224,7 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
           });
 
           tx.addEventListener("error", () => {
-            reject(tx.error ?? new Error("Failed to garbage collect IndexedDB attachments."));
+            reject(tx.error ?? new Error("清理 IndexedDB 附件失败。"));
           });
         });
       } finally {

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import ReactMarkdown from "react-markdown";
 import { getPost, formatDate } from "~/posts";
 import { pageMeta } from "~/meta";
+import { useWebsiteI18n } from "~/i18n";
 
 export const Route = createFileRoute("/blog/$")({
   head: ({ params }) => {
@@ -32,12 +33,13 @@ const markdownComponents = {
 };
 
 function BlogPost() {
+  const { t } = useWebsiteI18n();
   const { _splat } = Route.useParams();
   const slug = _splat ?? "";
   const post = getPost(slug);
 
   if (!post) {
-    return <p className="text-muted-foreground">Post not found.</p>;
+    return <p className="text-muted-foreground">{t("blog.notFound")}</p>;
   }
 
   return (
@@ -51,8 +53,12 @@ function BlogPost() {
             rel="nofollow noopener noreferrer"
             className="flex items-center gap-3 text-foreground hover:text-primary transition-colors"
           >
-            <img src="/9viSwGkz_400x400.jpg" alt="Mo Boudra" className="size-6 rounded-full" />
-            <span className="font-medium">Mo Boudra</span>
+            <img
+              src="/9viSwGkz_400x400.jpg"
+              alt={t("blog.author")}
+              className="size-6 rounded-full"
+            />
+            <span className="font-medium">{t("blog.author")}</span>
           </a>
           <span>·</span>
           <span className="tabular-nums">{formatDate(new Date(post.frontmatter.date))}</span>

@@ -7,6 +7,7 @@ import type {
   SingleResult,
 } from "../../output/index.js";
 import type { LoopDaemonClient, LoopRecord } from "./types.js";
+import { tCli } from "../../i18n.js";
 
 interface LoopStopRow {
   id: string;
@@ -26,7 +27,7 @@ export const loopStopSchema: OutputSchema<LoopStopRow> = {
 };
 
 export function addLoopStopOptions(command: Command): Command {
-  return command.description("Stop a running loop").argument("<id>", "Loop ID");
+  return command.description(tCli("loop.stop.description")).argument("<id>", tCli("loop.id"));
 }
 
 function toRow(loop: LoopRecord): LoopStopRow {

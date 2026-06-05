@@ -3,6 +3,7 @@ import { CursorFieldProvider } from "~/components/butterfly";
 import { SiteFooter } from "~/components/site-footer";
 import { SiteHeader } from "~/components/site-header";
 import { AGENT_PAGES } from "~/data/agent-pages";
+import { useWebsiteI18n } from "~/i18n";
 import { pageMeta } from "~/meta";
 import "~/styles.css";
 
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/agents")({
 });
 
 function AgentsPage() {
+  const { language, t } = useWebsiteI18n();
   return (
     <CursorFieldProvider>
       <div className="bg-background">
@@ -25,13 +27,8 @@ function AgentsPage() {
             <SiteHeader />
           </nav>
           <header className="space-y-4 max-w-2xl">
-            <h1 className="text-3xl md:text-5xl font-medium tracking-tight">
-              Every agent ChisaCode supports
-            </h1>
-            <p className="text-white/70 text-lg leading-relaxed">
-              ChisaCode runs the native CLI for {AGENT_PAGES.length} coding agents — your skills,
-              your config, your MCP servers, all intact. Drive any of them from your phone.
-            </p>
+            <h1 className="text-3xl md:text-5xl font-medium tracking-tight">{t("agents.title")}</h1>
+            <p className="text-white/70 text-lg leading-relaxed">{t("agents.subtitle")}</p>
           </header>
         </div>
 
@@ -44,17 +41,21 @@ function AgentsPage() {
                 className="block rounded-xl border border-white/10 bg-white/[0.02] p-5 hover:border-white/20 hover:bg-white/[0.04] transition-colors"
               >
                 <h2 className="font-medium text-white">{agent.name}</h2>
-                <p className="mt-1 text-sm text-white/60 leading-relaxed">{agent.subtitle}</p>
+                <p className="mt-1 text-sm text-white/60 leading-relaxed">
+                  {language === "zh-CN"
+                    ? t("agents.agentSubtitle", { name: agent.name })
+                    : agent.subtitle}
+                </p>
               </Link>
             ))}
           </div>
 
           <p className="mt-10 text-sm text-white/50">
-            Want to add another?{" "}
+            {t("agents.customProvidersPrefix")}{" "}
             <a href="/docs/custom-providers" className="underline hover:text-white/80">
-              Configure any ACP-compatible agent
+              {t("agents.customProvidersLink")}
             </a>{" "}
-            in <code className="font-mono text-white/60">~/.chisacode/config.json</code>.
+            {t("agents.customProvidersSuffix")}
           </p>
         </main>
 

@@ -8,25 +8,43 @@ export interface WorktreeArchiveRisk {
 
 export interface WorktreeArchiveConfirmationInput extends WorktreeArchiveRisk {
   worktreeName: string;
+  copy: WorktreeArchiveWarningCopy;
 }
 
-function formatDiffStat(diffStat: WorktreeArchiveRisk["diffStat"]): string | null {
+export interface WorktreeArchiveWarningCopy {
+  addedLines: (count: number) => string;
+  deletedLines: (count: number) => string;
+  uncommittedChanges: string;
+  uncommittedChangesWithStat: (diffStat: string) => string;
+  unpushedCommits: (count: number) => string;
+  archiveTitle: (worktreeName: string) => string;
+  archiveConfirm: string;
+  cancel: string;
+}
+
+function formatDiffStat(
+  diffStat: WorktreeArchiveRisk["diffStat"],
+  copy: WorktreeArchiveWarningCopy,
+): string | null {
   if (!diffStat) {
     return null;
   }
 
   const parts: string[] = [];
   if (diffStat.additions > 0) {
-    parts.push(`新增 ${diffStat.additions} 行`);
+    parts.push(copy.addedLines(diffStat.additions));
   }
   if (diffStat.deletions > 0) {
-    parts.push(`删除 ${diffStat.deletions} 行`);
+    parts.push(copy.deletedLines(diffStat.deletions));
   }
 
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
-export function buildWorktreeArchiveRiskReasons(input: WorktreeArchiveRisk): string[] {
+export function buildWorktreeArchiveRiskReasons(
+  input: WorktreeArchiveRisk,
+  copy: WorktreeArchiveWarningCopy,
+): string[] {
   const reasons: string[] = [];
   const diffStat = input.diffStat;
   const hasDiffStatChanges = diffStat ? diffStat.additions > 0 || diffStat.deletions > 0 : false;
@@ -34,13 +52,15 @@ export function buildWorktreeArchiveRiskReasons(input: WorktreeArchiveRisk): str
     input.isDirty === true || (input.isDirty == null && hasDiffStatChanges);
 
   if (hasUncommittedChanges) {
-    const diffStatLabel = formatDiffStat(diffStat);
-    reasons.push(diffStatLabel ? `未提交的更改（${diffStatLabel}）` : "未提交的更改");
+    const diffStatLabel = formatDiffStat(diffStat, copy);
+    reasons.push(
+      diffStatLabel ? copy.uncommittedChangesWithStat(diffStatLabel) : copy.uncommittedChanges,
+    );
   }
 
   if ((input.aheadOfOrigin ?? 0) > 0) {
     const aheadOfOrigin = input.aheadOfOrigin ?? 0;
-    reasons.push(`${aheadOfOrigin} 个未推送提交`);
+    reasons.push(copy.unpushedCommits(aheadOfOrigin));
   }
 
   return reasons;
@@ -49,7 +69,7 @@ export function buildWorktreeArchiveRiskReasons(input: WorktreeArchiveRisk): str
 export function buildWorktreeArchiveConfirmationMessage(
   input: WorktreeArchiveConfirmationInput,
 ): string | null {
-  const reasons = buildWorktreeArchiveRiskReasons(input);
+  const reasons = buildWorktreeArchiveRiskReasons(input, input.copy);
   if (reasons.length === 0) {
     return null;
   }
@@ -66,10 +86,10 @@ export async function confirmRiskyWorktreeArchive(
   }
 
   return await confirmDialog({
-    title: `归档“${input.worktreeName}”？`,
+    title: input.copy.archiveTitle(input.worktreeName),
     message,
-    confirmLabel: "归档",
-    cancelLabel: "取消",
+    confirmLabel: input.copy.archiveConfirm,
+    cancelLabel: input.copy.cancel,
     destructive: true,
   });
 }

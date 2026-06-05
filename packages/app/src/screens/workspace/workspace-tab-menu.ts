@@ -35,6 +35,7 @@ interface BuildWorkspaceTabMenuEntriesInput {
   index: number;
   tabCount: number;
   menuTestIDBase: string;
+  copy?: Partial<WorkspaceTabMenuCopy>;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
@@ -49,6 +50,7 @@ interface BuildWorkspaceDesktopTabActionsInput {
   tab: WorkspaceTabDescriptor;
   index: number;
   tabCount: number;
+  copy?: Partial<WorkspaceTabMenuCopy>;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
@@ -65,12 +67,50 @@ export interface WorkspaceDesktopTabActions {
   closeButtonTestId: string;
 }
 
-function buildCloseBeforeLabel(surface: WorkspaceTabMenuSurface): string {
-  return surface === "mobile" ? "关闭上方标签页" : "关闭左侧标签页";
+export interface WorkspaceTabMenuCopy {
+  copyResumeCommand: string;
+  copyAgentId: string;
+  rename: string;
+  closeTabsAbove: string;
+  closeTabsBelow: string;
+  closeTabsLeft: string;
+  closeTabsRight: string;
+  closeOtherTabs: string;
+  reloadAgent: string;
+  reloadAgentTooltip: string;
+  close: string;
 }
 
-function buildCloseAfterLabel(surface: WorkspaceTabMenuSurface): string {
-  return surface === "mobile" ? "关闭下方标签页" : "关闭右侧标签页";
+const DEFAULT_WORKSPACE_TAB_MENU_COPY: WorkspaceTabMenuCopy = {
+  copyResumeCommand: "Copy resume command",
+  copyAgentId: "Copy agent id",
+  rename: "Rename",
+  closeTabsAbove: "Close tabs above",
+  closeTabsBelow: "Close tabs below",
+  closeTabsLeft: "Close to the left",
+  closeTabsRight: "Close to the right",
+  closeOtherTabs: "Close other tabs",
+  reloadAgent: "Reload agent",
+  reloadAgentTooltip: "Reload agent to update skills, MCPs or login status.",
+  close: "Close",
+};
+
+function resolveWorkspaceTabMenuCopy(copy?: Partial<WorkspaceTabMenuCopy>): WorkspaceTabMenuCopy {
+  return { ...DEFAULT_WORKSPACE_TAB_MENU_COPY, ...copy };
+}
+
+function buildCloseBeforeLabel(
+  surface: WorkspaceTabMenuSurface,
+  copy: WorkspaceTabMenuCopy,
+): string {
+  return surface === "mobile" ? copy.closeTabsAbove : copy.closeTabsLeft;
+}
+
+function buildCloseAfterLabel(
+  surface: WorkspaceTabMenuSurface,
+  copy: WorkspaceTabMenuCopy,
+): string {
+  return surface === "mobile" ? copy.closeTabsBelow : copy.closeTabsRight;
 }
 
 function buildCloseBeforeTestIDSuffix(surface: WorkspaceTabMenuSurface): string {
@@ -109,6 +149,7 @@ export function buildWorkspaceTabMenuEntries(
     index,
     tabCount,
     menuTestIDBase,
+    copy: inputCopy,
     onCopyResumeCommand,
     onCopyAgentId,
     onReloadAgent,
@@ -121,6 +162,7 @@ export function buildWorkspaceTabMenuEntries(
   const isFirstTab = index === 0;
   const isLastTab = index === tabCount - 1;
   const isOnlyTab = tabCount <= 1;
+  const copy = resolveWorkspaceTabMenuCopy(inputCopy);
   const entries: WorkspaceTabMenuEntry[] = [];
 
   if (tab.target.kind === "agent") {
@@ -128,7 +170,7 @@ export function buildWorkspaceTabMenuEntries(
     entries.push({
       kind: "item",
       key: "copy-resume-command",
-      label: "复制恢复命令",
+      label: copy.copyResumeCommand,
       icon: "copy",
       testID: `${menuTestIDBase}-copy-resume-command`,
       onSelect: () => {
@@ -138,7 +180,7 @@ export function buildWorkspaceTabMenuEntries(
     entries.push({
       kind: "item",
       key: "copy-agent-id",
-      label: "复制智能体 ID",
+      label: copy.copyAgentId,
       icon: "copy",
       hint: agentId.slice(0, 7),
       testID: `${menuTestIDBase}-copy-agent-id`,
@@ -152,7 +194,7 @@ export function buildWorkspaceTabMenuEntries(
     entries.push({
       kind: "item",
       key: "rename",
-      label: "重命名",
+      label: copy.rename,
       icon: "pencil",
       testID: `${menuTestIDBase}-rename`,
       onSelect: () => {
@@ -168,7 +210,7 @@ export function buildWorkspaceTabMenuEntries(
   entries.push({
     kind: "item",
     key: "close-before",
-    label: buildCloseBeforeLabel(surface),
+    label: buildCloseBeforeLabel(surface, copy),
     icon: "arrow-left-to-line",
     disabled: isFirstTab,
     testID: `${menuTestIDBase}-${buildCloseBeforeTestIDSuffix(surface)}`,
@@ -179,7 +221,7 @@ export function buildWorkspaceTabMenuEntries(
   entries.push({
     kind: "item",
     key: "close-after",
-    label: buildCloseAfterLabel(surface),
+    label: buildCloseAfterLabel(surface, copy),
     icon: "arrow-right-to-line",
     disabled: isLastTab,
     testID: `${menuTestIDBase}-${buildCloseAfterTestIDSuffix(surface)}`,
@@ -190,7 +232,7 @@ export function buildWorkspaceTabMenuEntries(
   entries.push({
     kind: "item",
     key: "close-others",
-    label: "关闭其他标签页",
+    label: copy.closeOtherTabs,
     icon: "copy-x",
     disabled: isOnlyTab,
     testID: `${menuTestIDBase}-close-others`,
@@ -203,9 +245,9 @@ export function buildWorkspaceTabMenuEntries(
     entries.push({
       kind: "item",
       key: "reload-agent",
-      label: "重新加载智能体",
+      label: copy.reloadAgent,
       icon: "rotate-cw",
-      tooltip: "重新加载智能体以更新技能、MCP 或登录状态。",
+      tooltip: copy.reloadAgentTooltip,
       testID: `${menuTestIDBase}-reload-agent`,
       onSelect: () => {
         void onReloadAgent(agentId);
@@ -215,7 +257,7 @@ export function buildWorkspaceTabMenuEntries(
   entries.push({
     kind: "item",
     key: "close",
-    label: "关闭",
+    label: copy.close,
     icon: "x",
     testID: `${menuTestIDBase}-close`,
     onSelect: () => {
@@ -238,6 +280,7 @@ export function buildWorkspaceDesktopTabActions(
       index: input.index,
       tabCount: input.tabCount,
       menuTestIDBase: contextMenuTestId,
+      copy: input.copy,
       onCopyResumeCommand: input.onCopyResumeCommand,
       onCopyAgentId: input.onCopyAgentId,
       onReloadAgent: input.onReloadAgent,

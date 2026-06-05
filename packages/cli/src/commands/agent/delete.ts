@@ -2,13 +2,14 @@ import type { Command } from "commander";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import { isSameOrDescendantPath } from "../../utils/paths.js";
+import { tCli } from "../../i18n.js";
 
 export function addDeleteOptions(cmd: Command): Command {
   return cmd
-    .description("Delete an agent (interrupt if running, then hard-delete)")
-    .argument("[id]", "Agent ID (or prefix) - optional if --all or --cwd specified")
-    .option("--all", "Delete all agents")
-    .option("--cwd <path>", "Delete all agents in directory");
+    .description(tCli("agent.delete.description"))
+    .argument("[id]", tCli("agent.idOptional"))
+    .option("--all", tCli("agent.delete.all"))
+    .option("--cwd <path>", tCli("agent.delete.cwd"));
 }
 import type {
   CommandOptions,

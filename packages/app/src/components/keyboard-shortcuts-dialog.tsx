@@ -1,32 +1,104 @@
 import { useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { buildKeyboardShortcutHelpSections } from "@/keyboard/keyboard-shortcuts";
+import {
+  buildKeyboardShortcutHelpSections,
+  type KeyboardShortcutHelpCopy,
+  type ShortcutSectionId,
+} from "@/keyboard/keyboard-shortcuts";
 
 const SNAP_POINTS: string[] = ["70%", "92%"];
-const SHORTCUTS_HEADER: SheetHeader = { title: "Shortcuts" };
+const SHORTCUT_SECTION_IDS: ShortcutSectionId[] = [
+  "navigation",
+  "tabs-panes",
+  "projects",
+  "panels",
+  "agent-input",
+];
+const SHORTCUT_LABEL_IDS = [
+  "new-agent",
+  "new-worktree",
+  "archive-worktree",
+  "workspace-tab-new",
+  "workspace-tab-close-current",
+  "workspace-jump-index",
+  "workspace-tab-jump-index",
+  "workspace-jump-previous",
+  "workspace-jump-next",
+  "workspace-tab-jump-previous",
+  "workspace-tab-jump-next",
+  "workspace-pane-split-right",
+  "workspace-pane-split-down",
+  "workspace-pane-focus-left",
+  "workspace-pane-focus-right",
+  "workspace-pane-focus-up",
+  "workspace-pane-focus-down",
+  "workspace-pane-move-left",
+  "workspace-pane-move-right",
+  "workspace-pane-move-up",
+  "workspace-pane-move-down",
+  "workspace-pane-close",
+  "terminal-new",
+  "command-center-toggle",
+  "show-shortcuts",
+  "toggle-left-sidebar",
+  "toggle-right-sidebar",
+  "toggle-both-sidebars",
+  "settings-toggle",
+  "focus-mode-toggle",
+  "theme-cycle",
+  "message-input-focus",
+  "voice-mode-toggle",
+  "dictation-toggle",
+  "agent-interrupt",
+  "message-send",
+  "message-queue",
+  "voice-mode-mute-toggle",
+];
 
 export function KeyboardShortcutsDialog() {
+  const { t } = useTranslation();
   const open = useKeyboardShortcutsStore((s) => s.shortcutsDialogOpen);
   const setOpen = useKeyboardShortcutsStore((s) => s.setShortcutsDialogOpen);
 
   const isMac = getShortcutOs() === "mac";
   const isDesktopApp = getIsElectronRuntime();
-  const sections = useMemo(
-    () => buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp }),
-    [isDesktopApp, isMac],
+  const copy = useMemo<KeyboardShortcutHelpCopy>(
+    () => ({
+      sectionTitles: SHORTCUT_SECTION_IDS.reduce(
+        (acc, id) => {
+          acc[id] = t(`shortcuts.sections.${id}`);
+          return acc;
+        },
+        {} as Record<ShortcutSectionId, string>,
+      ),
+      labels: SHORTCUT_LABEL_IDS.reduce<Record<string, string>>((acc, id) => {
+        acc[id] = t(`shortcuts.labels.${id}`);
+        return acc;
+      }, {}),
+      notes: {
+        "show-shortcuts": t("shortcuts.notes.show-shortcuts"),
+      },
+    }),
+    [t],
   );
+  const sections = useMemo(
+    () => buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp }, undefined, copy),
+    [copy, isDesktopApp, isMac],
+  );
+  const header = useMemo<SheetHeader>(() => ({ title: t("shortcuts.title") }), [t]);
 
   const handleClose = useCallback(() => setOpen(false), [setOpen]);
 
   return (
     <AdaptiveModalSheet
-      header={SHORTCUTS_HEADER}
+      header={header}
       visible={open}
       onClose={handleClose}
       testID="keyboard-shortcuts-dialog"

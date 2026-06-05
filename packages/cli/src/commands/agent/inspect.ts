@@ -3,11 +3,10 @@ import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 export function addInspectOptions(cmd: Command): Command {
-  return cmd
-    .description("Show detailed information about an agent")
-    .argument("<id>", "Agent ID (or prefix)");
+  return cmd.description(tCli("agent.inspect.description")).argument("<id>", tCli("agent.id"));
 }
 
 /** Agent inspect data for display (matches CLI spec format) */

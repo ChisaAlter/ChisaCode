@@ -3,6 +3,7 @@ import { useCallback, useState, type FormEvent } from "react";
 import { submitCloudSignup, type CloudSignupInput } from "~/cloud-signup";
 import { FAQItem } from "~/components/faq-item";
 import { SiteShell } from "~/components/site-shell";
+import { useWebsiteI18n } from "~/i18n";
 import { pageMeta } from "~/meta";
 
 export const Route = createFileRoute("/cloud")({
@@ -21,13 +22,12 @@ const INPUT_CLASS =
 type Status = "idle" | "submitting" | "success" | "error";
 
 function Cloud() {
+  const { t } = useWebsiteI18n();
+
   return (
     <SiteShell>
-      <h1 className="text-3xl font-medium mb-3">ChisaCode Cloud</h1>
-      <p className="text-white/70 leading-relaxed mb-10">
-        For using ChisaCode across machines, with a team, or inside a company. Looking for design
-        partners.
-      </p>
+      <h1 className="text-3xl font-medium mb-3">{t("cloud.title")}</h1>
+      <p className="text-white/70 leading-relaxed mb-10">{t("cloud.subtitle")}</p>
 
       <div className="space-y-20">
         <SignupForm />
@@ -38,38 +38,42 @@ function Cloud() {
 }
 
 function SignupForm() {
+  const { t } = useWebsiteI18n();
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setStatus("submitting");
-    setError(null);
+  const handleSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setStatus("submitting");
+      setError(null);
 
-    const form = new FormData(event.currentTarget);
-    const data: CloudSignupInput = {
-      email: String(form.get("email") ?? ""),
-      name: form.get("name") ? String(form.get("name")) : undefined,
-      company: form.get("company") ? String(form.get("company")) : undefined,
-      role: form.get("role") ? String(form.get("role")) : undefined,
-      message: String(form.get("message") ?? ""),
-      honeypot: form.get("website") ? String(form.get("website")) : "",
-    };
+      const form = new FormData(event.currentTarget);
+      const data: CloudSignupInput = {
+        email: String(form.get("email") ?? ""),
+        name: form.get("name") ? String(form.get("name")) : undefined,
+        company: form.get("company") ? String(form.get("company")) : undefined,
+        role: form.get("role") ? String(form.get("role")) : undefined,
+        message: String(form.get("message") ?? ""),
+        honeypot: form.get("website") ? String(form.get("website")) : "",
+      };
 
-    try {
-      await submitCloudSignup({ data });
-      setStatus("success");
-    } catch (err) {
-      setStatus("error");
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    }
-  }, []);
+      try {
+        await submitCloudSignup({ data });
+        setStatus("success");
+      } catch (err) {
+        setStatus("error");
+        setError(err instanceof Error ? err.message : t("cloud.formError"));
+      }
+    },
+    [t],
+  );
 
   if (status === "success") {
     return (
       <section className="space-y-3">
         <p className="text-white/70">
-          Got it. I&apos;ll be in touch. If you don&apos;t hear back within a week, ping me on{" "}
+          {t("cloud.successPrefix")}{" "}
           <a
             href="https://discord.gg/jz8T2uahpH"
             target="_blank"
@@ -78,7 +82,7 @@ function SignupForm() {
           >
             Discord
           </a>
-          .
+          {t("cloud.successSuffix")}
         </p>
       </section>
     );
@@ -89,16 +93,16 @@ function SignupForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <Field label="Email" required>
+        <Field label={t("cloud.email")} required>
           <input type="email" name="email" required autoComplete="email" className={INPUT_CLASS} />
         </Field>
-        <Field label="Name">
+        <Field label={t("cloud.name")}>
           <input type="text" name="name" autoComplete="name" className={INPUT_CLASS} />
         </Field>
-        <Field label="Company">
+        <Field label={t("cloud.company")}>
           <input type="text" name="company" autoComplete="organization" className={INPUT_CLASS} />
         </Field>
-        <Field label="Role">
+        <Field label={t("cloud.role")}>
           <input
             type="text"
             name="role"
@@ -108,12 +112,12 @@ function SignupForm() {
         </Field>
       </div>
 
-      <Field label="Message" required>
+      <Field label={t("cloud.message")} required>
         <textarea
           name="message"
           required
           rows={5}
-          placeholder="A bit about you and what you'd want from ChisaCode Cloud."
+          placeholder={t("cloud.messagePlaceholder")}
           className={`${INPUT_CLASS} resize-y`}
         />
       </Field>
@@ -129,9 +133,7 @@ function SignupForm() {
 
       {error && (
         <p className="text-sm text-red-400">
-          {error === "webhook not configured"
-            ? "The form isn't wired up yet. Try Discord for now."
-            : "Something went wrong. Try again or DM me on Discord."}
+          {error === "webhook not configured" ? t("cloud.formNotConfigured") : t("cloud.formError")}
         </p>
       )}
 
@@ -141,17 +143,17 @@ function SignupForm() {
           disabled={submitting}
           className="rounded-md bg-white text-black px-4 py-2 text-sm font-medium hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {submitting ? "Sending…" : "Send"}
+          {submitting ? t("cloud.sending") : t("cloud.send")}
         </button>
         <p className="text-sm text-white/50">
-          Or{" "}
+          {t("cloud.or")}{" "}
           <a
             href="https://discord.gg/jz8T2uahpH"
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:text-white/80"
           >
-            DM me on Discord
+            {t("cloud.dmDiscord")}
           </a>
           .
         </p>
@@ -181,35 +183,18 @@ function Field({
 }
 
 function FaqSection() {
+  const { t } = useWebsiteI18n();
+
   return (
     <section className="space-y-6">
-      <h2 className="text-3xl font-medium">FAQ</h2>
+      <h2 className="text-3xl font-medium">{t("cloud.faq")}</h2>
       <div className="space-y-6">
-        <FAQItem question="What is ChisaCode Cloud?">
-          An optional layer on top of ChisaCode for running daemons across machines, syncing config
-          between them, and using ChisaCode with a team or company. Think shared runners,
-          permissions, audit, managed daemons, and org controls.
-        </FAQItem>
-        <FAQItem question="Will ChisaCode stay free and open source?">
-          Yes. The whole stack stays free and open source: app, daemon, CLI, protocols, and the
-          Cloud control plane. Managed Cloud is the optional paid layer for people who don&apos;t
-          want to host it themselves.
-        </FAQItem>
-        <FAQItem question="Self-hosted or managed?">
-          Both. The control plane will live in the ChisaCode monorepo so you can host it yourself.
-          Managed is for people and teams who don&apos;t want to.
-        </FAQItem>
-        <FAQItem question="Does my code go through ChisaCode?">
-          No. Daemons run on your machines and talk to agent providers directly. Cloud handles
-          registration, config sync, permissions, and orchestration. Code and model traffic stay on
-          your machines.
-        </FAQItem>
-        <FAQItem question="When will it be available?">
-          Early access for design partners now. No public date. The app and daemon come first.
-        </FAQItem>
-        <FAQItem question="How does pricing work?">
-          Not set yet. Design partners help shape it.
-        </FAQItem>
+        <FAQItem question={t("cloud.whatQuestion")}>{t("cloud.whatAnswer")}</FAQItem>
+        <FAQItem question={t("cloud.openSourceQuestion")}>{t("cloud.openSourceAnswer")}</FAQItem>
+        <FAQItem question={t("cloud.hostedQuestion")}>{t("cloud.hostedAnswer")}</FAQItem>
+        <FAQItem question={t("cloud.codeQuestion")}>{t("cloud.codeAnswer")}</FAQItem>
+        <FAQItem question={t("cloud.availableQuestion")}>{t("cloud.availableAnswer")}</FAQItem>
+        <FAQItem question={t("cloud.pricingQuestion")}>{t("cloud.pricingAnswer")}</FAQItem>
       </div>
     </section>
   );

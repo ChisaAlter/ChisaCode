@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Link } from "lucide-react-native";
 import type { HostProfile } from "@/types/host-connection";
@@ -12,7 +13,6 @@ import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adapt
 import { Button } from "@/components/ui/button";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
-const PAIR_LINK_HEADER: SheetHeader = { title: "粘贴配对链接" };
 
 const styles = StyleSheet.create((theme) => ({
   helper: {
@@ -61,6 +61,7 @@ export interface PairLinkModalProps {
 
 export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkModalProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const daemons = useHosts();
   const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
   const isMobile = useIsCompactFormFactor();
@@ -69,6 +70,7 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
   const inputRef = useRef<TextInput>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const header = useMemo<SheetHeader>(() => ({ title: t("pairing.pasteLink") }), [t]);
 
   const clearInput = useCallback(() => {
     offerUrlRef.current = "";
@@ -98,11 +100,11 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
     if (isSaving) return;
     const raw = offerUrlRef.current.trim();
     if (!raw) {
-      setErrorMessage("请粘贴配对链接（.../#offer=...）");
+      setErrorMessage(t("pairing.emptyLink"));
       return;
     }
     if (!raw.includes("#offer=")) {
-      setErrorMessage("链接必须包含 #offer=...");
+      setErrorMessage(t("pairing.missingOffer"));
       return;
     }
 
@@ -111,15 +113,15 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
         const idx = raw.indexOf("#offer=");
         const encoded = raw.slice(idx + "#offer=".length).trim();
         if (!encoded) {
-          throw new Error("配对信息为空");
+          throw new Error(t("pairing.emptyOffer"));
         }
         const payload = decodeOfferFragmentPayload(encoded);
         return ConnectionOfferSchema.parse(payload);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "配对链接无效";
+        const message = error instanceof Error ? error.message : t("pairing.invalidLink");
         setErrorMessage(message);
         if (!isMobile) {
-          Alert.alert("配对失败", message);
+          Alert.alert(t("pairing.pairFailed"), message);
         }
         return null;
       }
@@ -150,15 +152,15 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
       onSaved?.({ profile, serverId: parsedOffer.serverId, hostname, isNewHost });
       handleClose();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "无法配对主机";
+      const message = error instanceof Error ? error.message : t("pairing.unableToPairHost");
       setErrorMessage(message);
       if (!isMobile) {
-        Alert.alert("配对失败", message);
+        Alert.alert(t("pairing.pairFailed"), message);
       }
     } finally {
       setIsSaving(false);
     }
-  }, [daemons, handleClose, isMobile, isSaving, onSaved, upsertDaemonFromOfferUrl]);
+  }, [daemons, handleClose, isMobile, isSaving, onSaved, t, upsertDaemonFromOfferUrl]);
 
   const handleChangeOfferUrl = useCallback((next: string) => {
     offerUrlRef.current = next;
@@ -170,20 +172,20 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
 
   return (
     <AdaptiveModalSheet
-      header={PAIR_LINK_HEADER}
+      header={header}
       visible={visible}
       onClose={handleClose}
       testID="pair-link-modal"
     >
-      <Text style={styles.helper}>粘贴来自服务器的配对链接。</Text>
+      <Text style={styles.helper}>{t("pairing.pasteLinkHelper")}</Text>
 
       <View style={styles.field}>
-        <Text style={styles.label}>配对链接</Text>
+        <Text style={styles.label}>{t("pairing.pairingLink")}</Text>
         <AdaptiveTextInput
           ref={inputRef}
           testID="pair-link-input"
           nativeID="pair-link-input"
-          accessibilityLabel="配对链接"
+          accessibilityLabel={t("pairing.pairingLink")}
           onChangeText={handleChangeOfferUrl}
           placeholder="https://app.chisacode.sh/#offer=..."
           placeholderTextColor={theme.colors.foregroundMuted}
@@ -204,9 +206,9 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
           disabled={isSaving}
           testID="pair-link-cancel"
           accessibilityRole="button"
-          accessibilityLabel="取消"
+          accessibilityLabel={t("common.cancel")}
         >
-          取消
+          {t("common.cancel")}
         </Button>
         <Button
           style={FLEX_ONE_STYLE}
@@ -215,10 +217,10 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
           disabled={isSaving}
           testID="pair-link-submit"
           accessibilityRole="button"
-          accessibilityLabel="配对"
+          accessibilityLabel={t("pairing.pair")}
           leftIcon={pairIcon}
         >
-          {isSaving ? "配对中..." : "配对"}
+          {isSaving ? t("pairing.pairingAction") : t("pairing.pair")}
         </Button>
       </View>
     </AdaptiveModalSheet>

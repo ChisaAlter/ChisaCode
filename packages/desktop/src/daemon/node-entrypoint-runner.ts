@@ -3,10 +3,10 @@ import { pathToFileURL } from "node:url";
 export async function main(): Promise<void> {
   const [argvMode, entryPath, ...args] = process.argv.slice(2);
   if (argvMode !== "bare" && argvMode !== "node-script") {
-    throw new Error(`Unsupported node entrypoint argv mode: ${argvMode ?? "<missing>"}`);
+    throw new Error(`不支持的 node entrypoint argv 模式：${argvMode ?? "<missing>"}`);
   }
   if (!entryPath) {
-    throw new Error("Missing node entrypoint path.");
+    throw new Error("缺少 node entrypoint 路径。");
   }
 
   process.argv =

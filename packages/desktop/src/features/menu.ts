@@ -9,7 +9,7 @@ interface ShowContextMenuInput {
 }
 
 let applicationMenuLanguage: AppLanguage = "zh-CN";
-const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
+const IPC_PREFIXES = ["chisacode"] as const;
 
 function withBrowserWindow(
   callback: (win: BrowserWindow) => void,

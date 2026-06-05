@@ -3,6 +3,7 @@ import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, CommandError } from "../../output/index.js";
 import { permitResponseSchema, type PermissionResponseItem } from "./allow.js";
+import { tCli } from "../../i18n.js";
 
 export type PermitDenyResult = ListResult<PermissionResponseItem>;
 
@@ -25,9 +26,8 @@ export async function runDenyCommand(
   if (!options.all && !reqId) {
     const error: CommandError = {
       code: "MISSING_ARGUMENT",
-      message: "Request ID is required unless --all is specified",
-      details:
-        "Usage: chisacode permit deny <agent> <req_id> or chisacode permit deny <agent> --all",
+      message: tCli("permit.error.requestRequired"),
+      details: tCli("permit.error.denyUsage"),
     };
     throw error;
   }
@@ -39,8 +39,8 @@ export async function runDenyCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
-      message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: chisacode daemon start",
+      message: tCli("permit.error.connect", { host, message }),
+      details: tCli("permit.error.startDaemon"),
     };
     throw error;
   }
@@ -51,8 +51,8 @@ export async function runDenyCommand(
       await client.close();
       const error: CommandError = {
         code: "AGENT_NOT_FOUND",
-        message: `Agent not found: ${agentIdOrPrefix}`,
-        details: 'Use "chisacode ls" to list available agents',
+        message: tCli("permit.error.agentNotFound", { agent: agentIdOrPrefix }),
+        details: tCli("permit.error.listAgentsHint"),
       };
       throw error;
     }
@@ -65,7 +65,7 @@ export async function runDenyCommand(
       await client.close();
       const error: CommandError = {
         code: "NO_PENDING_PERMISSIONS",
-        message: `No pending permissions for agent ${agent.id.slice(0, 7)}`,
+        message: tCli("permit.error.noPending", { agent: agent.id.slice(0, 7) }),
       };
       throw error;
     }
@@ -81,8 +81,10 @@ export async function runDenyCommand(
         await client.close();
         const error: CommandError = {
           code: "PERMISSION_NOT_FOUND",
-          message: `Permission request not found: ${reqId}`,
-          details: `Available requests: ${pendingPermissions.map((p) => p.id.slice(0, 8)).join(", ")}`,
+          message: tCli("permit.error.requestNotFound", { request: reqId }),
+          details: tCli("permit.error.availableRequests", {
+            requests: pendingPermissions.map((p) => p.id.slice(0, 8)).join(", "),
+          }),
         };
         throw error;
       }
@@ -123,7 +125,7 @@ export async function runDenyCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "DENY_PERMISSION_FAILED",
-      message: `Failed to deny permission: ${message}`,
+      message: tCli("permit.error.denyFailed", { message }),
     };
     throw error;
   }

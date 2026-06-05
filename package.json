@@ -59,6 +59,7 @@
     "format:files": "oxfmt",
     "format:check": "oxfmt --check .",
     "format:check:files": "oxfmt --check",
+    "audit:localization": "node scripts/audit-localization.mjs",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "knip": "knip",

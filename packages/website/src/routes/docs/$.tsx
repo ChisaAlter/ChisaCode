@@ -3,6 +3,7 @@ import { DocsMarkdown } from "~/components/docs-markdown";
 import { DocsMarkdownActions } from "~/components/docs-markdown-actions";
 import { DocsSourceFooter } from "~/components/docs-source-footer";
 import { getDoc } from "~/docs";
+import { useWebsiteI18n } from "~/i18n";
 import { pageMeta } from "~/meta";
 
 export const Route = createFileRoute("/docs/$")({
@@ -23,10 +24,11 @@ function DocsPage() {
 }
 
 function RenderedDoc({ slug }: { slug: string }) {
+  const { t } = useWebsiteI18n();
   const doc = getDoc(slug);
 
   if (!doc) {
-    return <p className="text-muted-foreground">Doc not found.</p>;
+    return <p className="text-muted-foreground">{t("docs.notFound")}</p>;
   }
 
   return (

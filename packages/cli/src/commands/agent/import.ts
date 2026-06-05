@@ -4,6 +4,7 @@ import { collectMultiple } from "../../utils/command-options.js";
 import type { CommandError, CommandOptions, SingleResult } from "../../output/index.js";
 import { agentRunSchema, type AgentRunResult } from "./run.js";
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
+import { tCli } from "../../i18n.js";
 
 const IMPORT_PROVIDER_LIST = ["claude", "codex", "opencode", "pi", "acp"] as const;
 const IMPORT_PROVIDERS = new Set<string>(IMPORT_PROVIDER_LIST);
@@ -11,10 +12,13 @@ const IMPORT_PROVIDER_HELP = IMPORT_PROVIDER_LIST.join(", ");
 
 export function addImportOptions(cmd: Command): Command {
   return cmd
-    .description("Import an existing provider session as a ChisaCode agent")
-    .argument("<id>", "Provider session/thread ID to import")
-    .requiredOption("--provider <provider>", `Agent provider: ${IMPORT_PROVIDER_HELP}`)
-    .option("--cwd <path>", "Working directory for providers that require it")
+    .description(tCli("agent.import.description"))
+    .argument("<id>", tCli("agent.import.id"))
+    .requiredOption(
+      "--provider <provider>",
+      tCli("agent.import.provider", { providers: IMPORT_PROVIDER_HELP }),
+    )
+    .option("--cwd <path>", tCli("agent.import.cwd"))
     .option(
       "--label <key=value>",
       "Add label(s) to the agent (can be used multiple times)",

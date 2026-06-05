@@ -4,6 +4,7 @@ import { basename, join, sep } from "node:path";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 /** Worktree list item for display */
 export interface WorktreeListItem {
@@ -70,8 +71,8 @@ export async function runLsCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
-      message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: chisacode daemon start",
+      message: tCli("worktree.error.connect", { host, message }),
+      details: tCli("worktree.error.startDaemon"),
     };
     throw error;
   }
@@ -88,7 +89,7 @@ export async function runLsCommand(
     if (response.error) {
       const error: CommandError = {
         code: "WORKTREE_LIST_FAILED",
-        message: `Failed to list worktrees: ${response.error.message}`,
+        message: tCli("worktree.error.listFailed", { message: response.error.message }),
       };
       throw error;
     }
@@ -124,7 +125,7 @@ export async function runLsCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "WORKTREE_LIST_FAILED",
-      message: `Failed to list worktrees: ${message}`,
+      message: tCli("worktree.error.listFailed", { message }),
     };
     throw error;
   }

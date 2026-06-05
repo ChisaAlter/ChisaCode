@@ -1,4 +1,5 @@
 import { resolveSubmissionReadiness } from "@/provider-selection/provider-selection";
+import type { ProviderSelectionCopy } from "@/provider-selection/provider-selection";
 
 export interface WorkspaceDraftAutoSubmitConfig {
   provider: string;
@@ -18,6 +19,7 @@ export function validateDraftSubmission(input: {
   autoSubmitConfig: WorkspaceDraftAutoSubmitConfig | null;
   workspaceDirectory: string | null;
   hasClient: boolean;
+  copy?: ProviderSelectionCopy;
 }): string | null {
   const {
     text,
@@ -40,6 +42,7 @@ export function validateDraftSubmission(input: {
     autoSubmitConfig,
     workspaceDirectory,
     hasClient,
+    copy: input.copy,
   });
   return readiness.ok ? null : (readiness.reason ?? null);
 }

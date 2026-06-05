@@ -3,6 +3,7 @@ import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 /** Permission list item for display */
 export interface PermissionListItem {
@@ -57,8 +58,8 @@ export async function runLsCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
-      message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: chisacode daemon start",
+      message: tCli("permit.error.connect", { host, message }),
+      details: tCli("permit.error.startDaemon"),
     };
     throw error;
   }
@@ -88,7 +89,7 @@ export async function runLsCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "LIST_PERMISSIONS_FAILED",
-      message: `Failed to list permissions: ${message}`,
+      message: tCli("permit.error.listFailed", { message }),
     };
     throw error;
   }

@@ -53,7 +53,7 @@ import {
 import { runDesktopStartup } from "./desktop-startup.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
-const APP_SCHEMES = ["chisacode", "chisacode"] as const;
+const APP_SCHEMES = ["chisacode"] as const;
 const APP_SCHEME = APP_SCHEMES[0];
 const CHISACODE_DEBUG = process.env.CHISACODE_DEBUG === "1";
 const DISABLE_SINGLE_INSTANCE_LOCK = process.env.CHISACODE_DISABLE_SINGLE_INSTANCE_LOCK === "1";
@@ -81,7 +81,7 @@ function preventUnsafeBrowserWebviewNavigation(
     event.preventDefault();
   }
 }
-const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
+const IPC_PREFIXES = ["chisacode"] as const;
 
 const FORWARDED_CHISACODE_SHORTCUT_KEYS = new Set([
   "b",

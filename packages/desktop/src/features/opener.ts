@@ -1,7 +1,9 @@
 import { shell, ipcMain } from "electron";
+import { translateDesktop } from "../i18n.js";
+import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 
 const ALLOWED_EXTERNAL_URL_PROTOCOLS = new Set(["http:", "https:"]);
-const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
+const IPC_PREFIXES = ["chisacode"] as const;
 
 export function isAllowedExternalUrl(value: unknown): value is string {
   if (typeof value !== "string") {
@@ -18,8 +20,9 @@ export function isAllowedExternalUrl(value: unknown): value is string {
 
 export function registerOpenerHandlers(): void {
   const openUrl = async (_event: Electron.IpcMainInvokeEvent, url: unknown) => {
+    const language = (await getDesktopSettingsStore().get()).language;
     if (!isAllowedExternalUrl(url)) {
-      throw new Error("不支持的外部 URL");
+      throw new Error(translateDesktop(language, "opener.unsupportedExternalUrl"));
     }
     await shell.openExternal(url);
   };

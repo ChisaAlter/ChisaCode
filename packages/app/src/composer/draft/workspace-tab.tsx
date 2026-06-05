@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
@@ -304,6 +305,7 @@ export function WorkspaceDraftAgentTab({
   onOpenWorkspaceFile,
   onOpenImportSheet,
 }: WorkspaceDraftAgentTabProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -431,6 +433,15 @@ export function WorkspaceDraftAgentTab({
         autoSubmitConfig,
         workspaceDirectory: draftWorkingDirectory,
         hasClient: Boolean(client),
+        copy: {
+          initialPromptRequired: t("providerSelection.initialPromptRequired"),
+          noProviders: t("providerSelection.noProviders"),
+          modelRequired: t("providerSelection.modelRequired"),
+          modelLoading: t("providerSelection.modelLoading"),
+          providerNoModels: t("providerSelection.providerNoModels"),
+          workspaceDirectoryMissing: t("providerSelection.workspaceDirectoryMissing"),
+          hostDisconnected: t("providerSelection.hostDisconnected"),
+        },
       }),
     onBeforeSubmit: () => {
       void composerState.persistFormPreferences();

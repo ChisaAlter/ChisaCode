@@ -49,7 +49,7 @@ function externalCliFailureMessage(
     return stderr;
   }
 
-  return `CLI command failed with exit code ${exitCode}${stdout.length > 0 ? `\nstdout: ${stdout.slice(0, 200)}` : ""}`;
+  return `CLI 命令失败，退出码 ${exitCode}${stdout.length > 0 ? `\nstdout: ${stdout.slice(0, 200)}` : ""}`;
 }
 
 export async function runExternalCliTextCommand(args: string[]): Promise<string> {
@@ -91,7 +91,7 @@ export async function runExternalCliJsonCommand(args: string[]): Promise<unknown
   const stdout = result.stdout.trim();
   if (stdout.length === 0) {
     log.warn("[desktop external-cli]", "CLI command produced no output", { args });
-    throw new Error("CLI command did not produce JSON output.");
+    throw new Error("CLI 命令未输出 JSON。");
   }
 
   const jsonStart = stdout.search(/[{[]/);
@@ -100,14 +100,14 @@ export async function runExternalCliJsonCommand(args: string[]): Promise<unknown
       args,
       stdout: stdout.slice(0, 500),
     });
-    throw new Error(`CLI command output contained no JSON. Output: ${stdout.slice(0, 200)}`);
+    throw new Error(`CLI 命令输出中没有 JSON。输出：${stdout.slice(0, 200)}`);
   }
 
   try {
     return JSON.parse(stdout.slice(jsonStart)) as unknown;
   } catch (error) {
     throw new Error(
-      `CLI command returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      `CLI 命令返回了无效 JSON：${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
     );
   }

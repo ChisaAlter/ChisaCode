@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 /** Permission response item for display */
 export interface PermissionResponseItem {
@@ -58,8 +59,10 @@ export async function runAllowCommand(
     } catch (err) {
       const error: CommandError = {
         code: "INVALID_JSON",
-        message: `Invalid JSON for --input: ${err instanceof Error ? err.message : String(err)}`,
-        details: 'Provide valid JSON, e.g., --input \'{"key": "value"}\'',
+        message: tCli("permit.error.invalidJson", {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+        details: tCli("permit.error.validJsonHint"),
       };
       throw error;
     }
@@ -72,8 +75,8 @@ export async function runAllowCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
-      message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: chisacode daemon start",
+      message: tCli("permit.error.connect", { host, message }),
+      details: tCli("permit.error.startDaemon"),
     };
     throw error;
   }
@@ -84,8 +87,8 @@ export async function runAllowCommand(
       await client.close();
       const error: CommandError = {
         code: "AGENT_NOT_FOUND",
-        message: `Agent not found: ${agentIdOrPrefix}`,
-        details: 'Use "chisacode ls" to list available agents',
+        message: tCli("permit.error.agentNotFound", { agent: agentIdOrPrefix }),
+        details: tCli("permit.error.listAgentsHint"),
       };
       throw error;
     }
@@ -98,7 +101,7 @@ export async function runAllowCommand(
       await client.close();
       const error: CommandError = {
         code: "NO_PENDING_PERMISSIONS",
-        message: `No pending permissions for agent ${agent.id.slice(0, 7)}`,
+        message: tCli("permit.error.noPending", { agent: agent.id.slice(0, 7) }),
       };
       throw error;
     }
@@ -116,8 +119,10 @@ export async function runAllowCommand(
         await client.close();
         const error: CommandError = {
           code: "PERMISSION_NOT_FOUND",
-          message: `Permission request not found: ${reqId}`,
-          details: `Available requests: ${pendingPermissions.map((p) => p.id.slice(0, 8)).join(", ")}`,
+          message: tCli("permit.error.requestNotFound", { request: reqId }),
+          details: tCli("permit.error.availableRequests", {
+            requests: pendingPermissions.map((p) => p.id.slice(0, 8)).join(", "),
+          }),
         };
         throw error;
       }
@@ -157,7 +162,7 @@ export async function runAllowCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "ALLOW_PERMISSION_FAILED",
-      message: `Failed to allow permission: ${message}`,
+      message: tCli("permit.error.allowFailed", { message }),
     };
     throw error;
   }

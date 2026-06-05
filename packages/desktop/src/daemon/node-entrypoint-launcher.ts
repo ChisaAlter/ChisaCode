@@ -41,7 +41,7 @@ export function createNodeEntrypointInvocation(
 
   if (input.isPackaged) {
     if (!input.packagedRunnerPath) {
-      throw new Error("Packaged node entrypoint runner is required for desktop launches.");
+      throw new Error("桌面端启动需要 packaged node entrypoint runner。");
     }
 
     return {

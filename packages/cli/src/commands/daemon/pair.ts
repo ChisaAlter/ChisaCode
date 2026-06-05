@@ -4,6 +4,7 @@ import { generateLocalPairingOffer, loadConfig, resolveChisaCodeHome } from "@ch
 import { tryConnectToDaemon } from "../../utils/client.js";
 import { resolveLocalDaemonState, resolveTcpHostFromListen } from "./local-daemon.js";
 import { addJsonOption } from "../../utils/command-options.js";
+import { tCli } from "../../i18n.js";
 
 interface PairOptions {
   home?: string;
@@ -11,8 +12,8 @@ interface PairOptions {
 }
 
 export function pairCommand(): Command {
-  return addJsonOption(new Command("pair").description("Print the daemon pairing QR code and link"))
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
+  return addJsonOption(new Command("pair").description(tCli("daemon.pair.description")))
+    .option("--home <path>", tCli("option.home"))
     .action(async (_options: PairOptions, command: Command) => {
       await runPairCommand(command.optsWithGlobals());
     });
@@ -73,8 +74,8 @@ function outputPairingResult(
   options: PairOptions,
 ): void {
   if (!pairing.relayEnabled || !pairing.url) {
-    console.error(chalk.red("Relay pairing is disabled for this daemon config."));
-    console.error(chalk.yellow("Enable relay and run this command again."));
+    console.error(chalk.red(tCli("onboard.relayDisabled")));
+    console.error(chalk.yellow(tCli("onboard.relayUrlUnavailable")));
     process.exit(1);
   }
 
@@ -94,5 +95,5 @@ function outputPairingResult(
   }
 
   const qrBlock = pairing.qr ? `${pairing.qr}\n` : "";
-  process.stdout.write(`\nScan to pair:\n${qrBlock}${pairing.url}\n`);
+  process.stdout.write(`\n${tCli("onboard.scan")}:\n${qrBlock}${pairing.url}\n`);
 }

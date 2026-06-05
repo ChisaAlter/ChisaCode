@@ -27,7 +27,7 @@ export function workspaceAttachmentToSubmitAttachment(
     return {
       type: "text",
       mimeType: "text/plain",
-      title: `Browser element · ${attachment.attachment.tag}`,
+      title: `浏览器元素 · ${attachment.attachment.tag}`,
       text: attachment.attachment.formatted,
     };
   }

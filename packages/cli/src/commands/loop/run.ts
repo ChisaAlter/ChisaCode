@@ -10,6 +10,7 @@ import { collectMultiple } from "../../utils/command-options.js";
 import { parseDuration } from "../../utils/duration.js";
 import { resolveProviderAndModel } from "../../utils/provider-model.js";
 import type { LoopDaemonClient, LoopRecord, LoopRunInput } from "./types.js";
+import { tCli } from "../../i18n.js";
 
 export interface LoopRunRow {
   id: string;
@@ -46,29 +47,29 @@ export const loopRunSchema: OutputSchema<LoopRunRow> = {
 
 export function addLoopRunOptions(command: Command): Command {
   return command
-    .description("Start a loop")
-    .argument("<prompt>", "Prompt for each fresh worker iteration")
-    .option("--provider <provider>", "Default provider for worker and verifier agents")
-    .option("--model <model>", "Default model for worker and verifier agents")
+    .description(tCli("loop.run.description"))
+    .argument("<prompt>", tCli("loop.run.prompt"))
+    .option("--provider <provider>", tCli("loop.run.provider"))
+    .option("--model <model>", tCli("loop.run.model"))
     .option(
       "--mode <mode>",
       "Provider-specific mode for the worker agent (e.g. claude bypassPermissions, opencode build)",
     )
-    .option("--verify-provider <provider>", "Provider for the verifier agent")
-    .option("--verify-model <model>", "Model for the verifier agent")
-    .option("--verify-mode <mode>", "Provider-specific mode for the verifier agent")
-    .option("--verify <prompt>", "Verifier agent prompt")
+    .option("--verify-provider <provider>", tCli("loop.run.verifyProvider"))
+    .option("--verify-model <model>", tCli("loop.run.verifyModel"))
+    .option("--verify-mode <mode>", tCli("loop.run.verifyMode"))
+    .option("--verify <prompt>", tCli("loop.run.verify"))
     .option(
       "--verify-check <command>",
       "Shell command that must exit 0 (repeatable)",
       collectMultiple,
       [],
     )
-    .option("--archive", "Archive worker and verifier agents after each iteration")
-    .option("--name <name>", "Optional loop name")
-    .option("--sleep <duration>", "Delay between iterations (for example: 30s, 5m)")
-    .option("--max-iterations <n>", "Maximum number of iterations")
-    .option("--max-time <duration>", "Maximum total runtime (for example: 1h, 30m)");
+    .option("--archive", tCli("loop.run.archive"))
+    .option("--name <name>", tCli("loop.run.name"))
+    .option("--sleep <duration>", tCli("loop.run.sleep"))
+    .option("--max-iterations <n>", tCli("loop.run.maxIterations"))
+    .option("--max-time <duration>", tCli("loop.run.maxTime"));
 }
 
 function toRow(loop: LoopRecord): LoopRunRow {

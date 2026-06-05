@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
 import {
   checkDesktopAppUpdate,
   formatVersionWithPrefix,
@@ -36,6 +37,28 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
   const { settings: desktopSettings } = useDesktopSettings();
   const releaseChannel = desktopSettings.releaseChannel;
   const reportError = useDesktopIpcErrorReporter();
+  const { t } = useTranslation();
+  const statusCopy = useMemo(
+    () => ({
+      checking: t("desktopUpdates.status.checking"),
+      installing: t("desktopUpdates.status.installing"),
+      upToDate: t("desktopUpdates.status.upToDate"),
+      pending: t("desktopUpdates.status.pending"),
+      availableWithVersion: (versionLabel: string) =>
+        t("desktopUpdates.status.availableWithVersion", { versionLabel }),
+      availableGeneric: t("desktopUpdates.status.availableGeneric"),
+      installed: t("desktopUpdates.status.installed"),
+      error: t("desktopUpdates.status.error"),
+      idle: t("desktopUpdates.status.idle"),
+    }),
+    [t],
+  );
+  const updaterCopy = useMemo(
+    () => ({
+      installReportError: t("desktopUpdates.status.installReportError"),
+    }),
+    [t],
+  );
 
   const updater = useMemo(
     () =>
@@ -46,8 +69,9 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
         },
         now: () => Date.now(),
         reportInstallError: reportError,
+        copy: updaterCopy,
       }),
-    [reportError],
+    [reportError, updaterCopy],
   );
 
   const snapshot = useSyncExternalStore(
@@ -102,6 +126,7 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
       availableUpdate: snapshot.availableUpdate,
       installMessage: snapshot.installMessage,
       formatVersion: formatVersionWithPrefix,
+      copy: statusCopy,
     }),
     availableUpdate: snapshot.availableUpdate,
     errorMessage: snapshot.errorMessage,

@@ -7,6 +7,7 @@ import type {
   OutputSchema,
   CommandError,
 } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 export interface AgentReloadResult {
   agentId: string;
@@ -24,9 +25,7 @@ export const reloadSchema: OutputSchema<AgentReloadResult> = {
 };
 
 export function addReloadOptions(cmd: Command): Command {
-  return cmd
-    .description("Reload an agent (restarts the underlying process)")
-    .argument("<id>", "Agent ID, prefix, or name");
+  return cmd.description(tCli("agent.reload.description")).argument("<id>", tCli("agent.idName"));
 }
 
 export interface AgentReloadOptions extends CommandOptions {

@@ -5,6 +5,7 @@ import { tryConnectToDaemon } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema } from "../../output/index.js";
 import { resolveLocalDaemonState, resolveTcpHostFromListen } from "./local-daemon.js";
 import { resolveNodePathFromPid } from "./runtime-toolchain.js";
+import { tCli } from "../../i18n.js";
 
 interface ProviderBinaryStatus {
   label: string;
@@ -84,24 +85,28 @@ function createStatusSchema(status: DaemonStatus): OutputSchema<StatusRow> {
   return {
     idField: "key",
     columns: [
-      { header: "KEY", field: "key" },
+      { header: tCli("daemon.status.key"), field: "key" },
       {
-        header: "VALUE",
+        header: tCli("daemon.status.value"),
         field: "value",
         color: (_, item) => {
-          if (item.key === "Local Daemon") {
+          if (item.key === tCli("daemon.status.localDaemon")) {
             if (item.value === "running") return "green";
             if (item.value === "unresponsive") return "yellow";
             return "red";
           }
-          if (item.key === "Connected Daemon") {
+          if (item.key === tCli("daemon.status.connectedDaemon")) {
             if (item.value === "reachable") return "green";
             if (item.value === "not_probed") return "yellow";
             return "red";
           }
           if (item.key.startsWith("  ")) {
-            if (item.value === "not found" || item.value === "not found (daemon)") return "red";
-            if (item.value.endsWith("(--version failed)")) return "yellow";
+            if (
+              item.value === tCli("daemon.status.notFound") ||
+              item.value === tCli("daemon.status.notFoundDaemon")
+            )
+              return "red";
+            if (item.value.endsWith(`(${tCli("daemon.status.versionFailed")})`)) return "yellow";
             return "green";
           }
           return undefined;
@@ -114,52 +119,58 @@ function createStatusSchema(status: DaemonStatus): OutputSchema<StatusRow> {
 
 function toStatusRows(status: DaemonStatus): StatusRow[] {
   const rows: StatusRow[] = [
-    { key: "Server ID", value: status.serverId ?? "-" },
-    { key: "Local Daemon", value: status.localDaemon },
-    { key: "Connected Daemon", value: status.connectedDaemon },
-    { key: "Home", value: status.home },
-    { key: "Listen", value: status.listen },
-    { key: "Relay", value: status.relay },
-    { key: "Hostname", value: status.hostname ?? "-" },
-    { key: "PID", value: status.pid === null ? "-" : String(status.pid) },
-    { key: "Started", value: status.startedAt ?? "-" },
-    { key: "Owner", value: status.owner ?? "-" },
-    { key: "Logs", value: status.logPath },
-    { key: "Daemon Node", value: status.daemonNode },
-    { key: "CLI Node", value: status.cliNode },
-    { key: "CLI", value: status.cliVersion },
-    { key: "Daemon Version", value: status.daemonVersion ?? "-" },
+    { key: tCli("daemon.status.serverId"), value: status.serverId ?? "-" },
+    { key: tCli("daemon.status.localDaemon"), value: status.localDaemon },
+    { key: tCli("daemon.status.connectedDaemon"), value: status.connectedDaemon },
+    { key: tCli("daemon.status.home"), value: status.home },
+    { key: tCli("daemon.status.listen"), value: status.listen },
+    { key: tCli("daemon.status.relay"), value: status.relay },
+    { key: tCli("daemon.status.hostname"), value: status.hostname ?? "-" },
+    { key: tCli("daemon.status.pid"), value: status.pid === null ? "-" : String(status.pid) },
+    { key: tCli("daemon.status.started"), value: status.startedAt ?? "-" },
+    { key: tCli("daemon.status.owner"), value: status.owner ?? "-" },
+    { key: tCli("daemon.status.logs"), value: status.logPath },
+    { key: tCli("daemon.status.daemonNode"), value: status.daemonNode },
+    { key: tCli("daemon.status.cliNode"), value: status.cliNode },
+    { key: tCli("daemon.status.cli"), value: status.cliVersion },
+    { key: tCli("daemon.status.daemonVersion"), value: status.daemonVersion ?? "-" },
   ];
 
   if (status.runningAgents !== null && status.idleAgents !== null) {
     rows.push({
-      key: "Agents",
-      value: `${status.runningAgents} running, ${status.idleAgents} idle`,
+      key: tCli("daemon.status.agents"),
+      value: tCli("daemon.status.agentsCount", {
+        running: status.runningAgents,
+        idle: status.idleAgents,
+      }),
     });
   } else {
     rows.push({
-      key: "Agents",
-      value: "Unavailable (daemon API not reachable)",
+      key: tCli("daemon.status.agents"),
+      value: tCli("daemon.status.agentsUnavailable"),
     });
   }
 
   if (status.note) {
-    rows.push({ key: "Note", value: status.note });
+    rows.push({ key: tCli("daemon.status.note"), value: status.note });
   }
 
   rows.push({ key: "", value: "" });
-  rows.push({ key: "Providers", value: "" });
+  rows.push({ key: tCli("daemon.status.providers"), value: "" });
   for (const provider of status.providers) {
     if (provider.source === "daemon") {
       if (!provider.path) {
-        rows.push({ key: `  ${provider.label}`, value: "not found (daemon)" });
+        rows.push({ key: `  ${provider.label}`, value: tCli("daemon.status.notFoundDaemon") });
       } else {
         rows.push({ key: `  ${provider.label}`, value: `${provider.path} (daemon)` });
       }
     } else if (!provider.path) {
-      rows.push({ key: `  ${provider.label}`, value: "not found" });
+      rows.push({ key: `  ${provider.label}`, value: tCli("daemon.status.notFound") });
     } else if (!provider.version) {
-      rows.push({ key: `  ${provider.label}`, value: `${provider.path} (--version failed)` });
+      rows.push({
+        key: `  ${provider.label}`,
+        value: `${provider.path} (${tCli("daemon.status.versionFailed")})`,
+      });
     } else {
       rows.push({ key: `  ${provider.label}`, value: `${provider.path} (${provider.version})` });
     }
@@ -232,7 +243,7 @@ async function probeDaemonOverWebsocket(args: {
       return {
         connectedDaemon: "unreachable",
         localDaemonOverride: "unresponsive",
-        note: `Local daemon PID is running but websocket at ${host} is not reachable`,
+        note: tCli("daemon.status.note.pidUnreachable", { host }),
       };
     }
     return { connectedDaemon: "unreachable" };
@@ -271,11 +282,11 @@ async function probeDaemonOverWebsocket(args: {
         daemonVersion,
         runningAgents,
         idleAgents,
-        daemonNodeOverride: "unknown (API reachable, PID unresolved)",
+        daemonNodeOverride: tCli("daemon.status.daemonNodeUnknownApi"),
         daemonProviders,
         note: state.pidInfo
-          ? `Connected daemon is reachable at ${host} even though local daemon PID ${state.pidInfo.pid} is stale`
-          : `Connected daemon is reachable at ${host} but no local daemon PID file was found`,
+          ? tCli("daemon.status.note.staleReachable", { host, pid: state.pidInfo.pid })
+          : tCli("daemon.status.note.noPidReachable", { host }),
       };
     }
 
@@ -292,8 +303,8 @@ async function probeDaemonOverWebsocket(args: {
       daemonVersion,
       localDaemonOverride: state.running ? "unresponsive" : undefined,
       note: state.running
-        ? `Local daemon PID is running but API requests to ${host} failed`
-        : `Connected daemon websocket is reachable at ${host} but fetch_agents failed`,
+        ? tCli("daemon.status.note.apiFailed", { host })
+        : tCli("daemon.status.note.fetchFailed", { host }),
     };
   } finally {
     await client.close().catch(() => {});
@@ -332,7 +343,9 @@ function resolveServerIdSafely(home: string): { serverId: string | null; error: 
   } catch (error) {
     return {
       serverId: null,
-      error: `serverId unavailable: ${shortenMessage(normalizeError(error))}`,
+      error: tCli("daemon.status.note.serverId", {
+        message: shortenMessage(normalizeError(error)),
+      }),
     };
   }
 }
@@ -341,13 +354,18 @@ async function resolveDaemonNodeLabel(
   state: ReturnType<typeof resolveLocalDaemonState>,
 ): Promise<string> {
   if (!state.running) return "-";
-  if (!state.pidInfo?.pid) return "unknown (no PID available)";
+  if (!state.pidInfo?.pid) return tCli("daemon.status.daemonNodeUnknownNoPid");
   const fromPid = await resolveNodePathFromPid(state.pidInfo.pid);
-  return fromPid.nodePath ?? `unknown (${fromPid.error ?? "could not resolve from PID"})`;
+  return (
+    fromPid.nodePath ??
+    tCli("daemon.status.daemonNodeUnknownError", {
+      message: fromPid.error ?? "could not resolve from PID",
+    })
+  );
 }
 
 function formatRelayStatus(state: ReturnType<typeof resolveLocalDaemonState>): string {
-  if (!state.relayEnabled) return "disabled";
+  if (!state.relayEnabled) return tCli("daemon.status.relayDisabled");
   const scheme = state.relayPublicUseTls ? "wss" : "ws";
   return `${scheme}://${state.relayEndpoint}`;
 }
@@ -375,7 +393,7 @@ export async function runStatusCommand(
 
   if (!state.running && state.stalePidFile && state.pidInfo) {
     localDaemon = "stale_pid";
-    note = `Stale PID file found for PID ${state.pidInfo.pid}`;
+    note = tCli("daemon.status.note.stalePid", { pid: state.pidInfo.pid });
   }
 
   if (host) {
@@ -401,7 +419,7 @@ export async function runStatusCommand(
       note,
     }));
   } else {
-    note = appendNote(note, "Daemon is configured for unix socket listen; API probe skipped");
+    note = appendNote(note, tCli("daemon.status.note.unixSkipped"));
   }
 
   const cliVersion = resolveCliVersion();

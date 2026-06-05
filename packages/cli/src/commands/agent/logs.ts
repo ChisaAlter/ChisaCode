@@ -6,15 +6,16 @@ import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { AgentTimelineItem } from "@chisacode/protocol/agent-types";
 import type { AgentStreamMessage } from "@chisacode/protocol/messages";
 import { curateAgentActivity } from "@chisacode/server";
+import { tCli } from "../../i18n.js";
 
 export function addLogsOptions(cmd: Command): Command {
   return cmd
-    .description("View agent activity/timeline")
-    .argument("<id>", "Agent ID (or prefix)")
-    .option("-f, --follow", "Follow log output (streaming)")
-    .option("--tail <n>", "Show last n entries")
-    .option("--filter <type>", "Filter by event type (tools, text, errors, permissions)")
-    .option("--since <time>", "Show logs since timestamp");
+    .description(tCli("agent.logs.description"))
+    .argument("<id>", tCli("agent.id"))
+    .option("-f, --follow", tCli("agent.logs.follow"))
+    .option("--tail <n>", tCli("agent.logs.tail"))
+    .option("--filter <type>", tCli("agent.logs.filter"))
+    .option("--since <time>", tCli("agent.logs.since"));
 }
 
 export interface AgentLogsOptions extends CommandOptions {

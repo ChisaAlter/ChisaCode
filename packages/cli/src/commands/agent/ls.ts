@@ -4,6 +4,7 @@ import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
 import { collectMultiple } from "../../utils/command-options.js";
 import { isSameOrDescendantPath } from "../../utils/paths.js";
+import { tCli } from "../../i18n.js";
 
 type FetchAgentsOptions = NonNullable<
   Parameters<Awaited<ReturnType<typeof connectToDaemon>>["fetchAgents"]>[0]
@@ -11,16 +12,16 @@ type FetchAgentsOptions = NonNullable<
 
 export function addLsOptions(cmd: Command): Command {
   return cmd
-    .description("List agents. By default excludes archived agents.")
-    .option("-a, --all", "Include archived agents")
-    .option("-g, --global", "Legacy no-op (kept for compatibility)")
+    .description(tCli("agent.ls.description"))
+    .option("-a, --all", tCli("agent.ls.all"))
+    .option("-g, --global", tCli("agent.ls.global"))
     .option(
       "--label <key=value>",
       "Filter by label (can be used multiple times)",
       collectMultiple,
       [],
     )
-    .option("--thinking <id>", "Filter by thinking option ID");
+    .option("--thinking <id>", tCli("agent.ls.thinking"));
 }
 
 /** Agent list item for display */

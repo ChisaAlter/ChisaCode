@@ -165,10 +165,10 @@ export class DictationStreamSender {
   async finish(finalSeq: number): Promise<DictationFinishResult> {
     const client = this.client;
     if (!client) {
-      throw new Error("Daemon client unavailable");
+      throw new Error("daemon client 不可用");
     }
     if (!client.isConnected) {
-      throw new Error("Daemon client is disconnected");
+      throw new Error("daemon client 已断开连接");
     }
 
     if (!this.dictationId) {
@@ -180,7 +180,7 @@ export class DictationStreamSender {
 
     const dictationId = this.dictationId;
     if (!dictationId || !this.streamReady) {
-      throw new Error("Failed to start dictation stream");
+      throw new Error("无法启动听写流");
     }
 
     this.flush();

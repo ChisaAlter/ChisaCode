@@ -7,6 +7,7 @@ import type {
   OutputSchema,
   CommandError,
 } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 /** Result type for agent archive command */
 export interface AgentArchiveResult {
@@ -27,9 +28,9 @@ export const archiveSchema: OutputSchema<AgentArchiveResult> = {
 
 export function addArchiveOptions(cmd: Command): Command {
   return cmd
-    .description("Archive an agent (soft-delete)")
-    .argument("<id>", "Agent ID, prefix, or name")
-    .option("--force", "Force archive running agent (interrupts active run first)");
+    .description(tCli("agent.archive.description"))
+    .argument("<id>", tCli("agent.idName"))
+    .option("--force", tCli("agent.archive.force"));
 }
 
 export interface AgentArchiveOptions extends CommandOptions {

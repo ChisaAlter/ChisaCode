@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useReducer, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react-native";
 import type { HostProfile } from "@/types/host-connection";
@@ -15,7 +16,6 @@ import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adapt
 import { Button } from "@/components/ui/button";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
-const DIRECT_CONNECTION_HEADER: SheetHeader = { title: "直接连接" };
 
 interface DirectConnectionDraft {
   host: string;
@@ -29,6 +29,21 @@ interface PreparedDirectConnection {
   endpoint: string;
   useTls: boolean;
   password?: string;
+}
+
+interface DirectConnectionCopy {
+  hostRequired: string;
+  invalidPort: string;
+  noMoreDetails: string;
+  unableToConnectTitle: (endpoint: string) => string;
+  incorrectPassword: string;
+  passwordRequired: string;
+  timedOut: string;
+  connectionRefused: string;
+  hostNotFound: string;
+  hostUnreachable: string;
+  tlsError: string;
+  unableToConnect: string;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -128,14 +143,17 @@ function isIpv6Host(host: string): boolean {
   return host.includes(":") && !host.startsWith("[") && !host.endsWith("]");
 }
 
-function buildConnectionUriFromDraft(draft: DirectConnectionDraft): string {
+function buildConnectionUriFromDraft(
+  draft: DirectConnectionDraft,
+  copy: Pick<DirectConnectionCopy, "hostRequired" | "invalidPort">,
+): string {
   const host = draft.host.trim();
   const port = Number(draft.port.trim());
   if (!host) {
-    throw new Error("请输入主机地址");
+    throw new Error(copy.hostRequired);
   }
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("端口必须在 1 到 65535 之间");
+    throw new Error(copy.invalidPort);
   }
 
   return serializeConnectionUriForStorage({
@@ -147,8 +165,11 @@ function buildConnectionUriFromDraft(draft: DirectConnectionDraft): string {
   });
 }
 
-function prepareDirectConnection(draft: DirectConnectionDraft): PreparedDirectConnection {
-  const parsed = parseConnectionUri(buildConnectionUriFromDraft(draft));
+function prepareDirectConnection(
+  draft: DirectConnectionDraft,
+  copy: Pick<DirectConnectionCopy, "hostRequired" | "invalidPort">,
+): PreparedDirectConnection {
+  const parsed = parseConnectionUri(buildConnectionUriFromDraft(draft, copy));
   const endpoint = parsed.isIpv6
     ? `[${parsed.host}]:${parsed.port}`
     : `${parsed.host}:${parsed.port}`;
@@ -178,7 +199,10 @@ function normalizeTransportMessage(message: string | null | undefined): string |
   return trimmed;
 }
 
-function formatTechnicalTransportDetails(details: (string | null)[]): string | null {
+function formatTechnicalTransportDetails(
+  details: (string | null)[],
+  noMoreDetails: string,
+): string | null {
   const unique = Array.from(
     new Set(
       details
@@ -197,7 +221,7 @@ function formatTechnicalTransportDetails(details: (string | null)[]): string | n
   });
 
   if (allGeneric) {
-    return `${unique[0]}（没有更多详情）`;
+    return `${unique[0]}（${noMoreDetails}）`;
   }
 
   return unique.join(" — ");
@@ -206,13 +230,14 @@ function formatTechnicalTransportDetails(details: (string | null)[]): string | n
 function buildConnectionFailureCopy(
   endpoint: string,
   error: unknown,
+  copy: DirectConnectionCopy,
 ): { title: string; detail: string | null; raw: string | null } {
-  const title = `无法连接到 ${endpoint}。`;
+  const title = copy.unableToConnectTitle(endpoint);
 
   const raw = (() => {
     if (error instanceof DaemonConnectionTestError) {
       return (
-        formatTechnicalTransportDetails([error.reason, error.lastError]) ??
+        formatTechnicalTransportDetails([error.reason, error.lastError], copy.noMoreDetails) ??
         normalizeTransportMessage(error.message)
       );
     }
@@ -226,27 +251,27 @@ function buildConnectionFailureCopy(
   let detail: string | null = null;
 
   if (raw === "Incorrect password" || raw === "Password required") {
-    detail = raw === "Incorrect password" ? "密码不正确。" : "需要密码。";
+    detail = raw === "Incorrect password" ? copy.incorrectPassword : copy.passwordRequired;
   } else if (rawLower.includes("timed out")) {
-    detail = "连接超时。请检查主机、端口和网络。";
+    detail = copy.timedOut;
   } else if (
     rawLower.includes("econnrefused") ||
     rawLower.includes("connection refused") ||
     rawLower.includes("err_connection_refused")
   ) {
-    detail = "连接被拒绝。请确认服务器是否正在该地址运行。";
+    detail = copy.connectionRefused;
   } else if (rawLower.includes("enotfound") || rawLower.includes("not found")) {
-    detail = "找不到主机。请检查主机名后重试。";
+    detail = copy.hostNotFound;
   } else if (rawLower.includes("ehostunreach") || rawLower.includes("host is unreachable")) {
-    detail = "主机不可达。请检查网络和防火墙。";
+    detail = copy.hostUnreachable;
   } else if (
     rawLower.includes("certificate") ||
     rawLower.includes("tls") ||
     rawLower.includes("ssl")
   ) {
-    detail = "TLS 错误。直接连接只有在 daemon 前面有 TLS 终止层时才使用 SSL。";
+    detail = copy.tlsError;
   } else {
-    detail = "无法连接。请检查主机、端口，并确认 daemon 可访问。";
+    detail = copy.unableToConnect;
   }
 
   return { title, detail, raw };
@@ -266,6 +291,7 @@ export interface AddHostModalProps {
 
 export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostModalProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const daemons = useHosts();
   const { probeAndUpsertDirectConnection } = useHostMutations();
   const isMobile = useIsCompactFormFactor();
@@ -280,6 +306,24 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [advancedUri, setAdvancedUri] = useState("");
   const [inputResetKey, bumpInputResetKey] = useReducer((key: number) => key + 1, 0);
+  const header = useMemo<SheetHeader>(() => ({ title: t("host.directConnection") }), [t]);
+  const connectionCopy = useMemo<DirectConnectionCopy>(
+    () => ({
+      hostRequired: t("host.hostRequired"),
+      invalidPort: t("host.invalidPort"),
+      noMoreDetails: t("host.noMoreDetails"),
+      unableToConnectTitle: (endpoint) => t("host.unableToConnectTitle", { endpoint }),
+      incorrectPassword: t("host.incorrectPassword"),
+      passwordRequired: t("host.passwordRequired"),
+      timedOut: t("host.timedOut"),
+      connectionRefused: t("host.connectionRefused"),
+      hostNotFound: t("host.hostNotFound"),
+      hostUnreachable: t("host.hostUnreachable"),
+      tlsError: t("host.tlsError"),
+      unableToConnect: t("host.unableToConnect"),
+    }),
+    [t],
+  );
 
   const clearInput = useCallback(() => {
     setHost("");
@@ -327,9 +371,9 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
 
     let connection: PreparedDirectConnection;
     try {
-      connection = prepareDirectConnection({ host, port, useTls, password });
+      connection = prepareDirectConnection({ host, port, useTls, password }, connectionCopy);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "连接信息无效";
+      const message = error instanceof Error ? error.message : t("host.invalidConnectionInfo");
       setErrorMessage(message);
       return;
     }
@@ -348,10 +392,14 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       onSaved?.({ profile, serverId, hostname, isNewHost });
       handleClose();
     } catch (error) {
-      const { title, detail, raw: rawDetail } = buildConnectionFailureCopy(connection.uri, error);
+      const {
+        title,
+        detail,
+        raw: rawDetail,
+      } = buildConnectionFailureCopy(connection.uri, error, connectionCopy);
       let combined: string;
       if (rawDetail && detail && rawDetail !== detail) {
-        combined = `${title}\n${detail}\n详情：${rawDetail}`;
+        combined = `${title}\n${detail}\n${t("host.details", { detail: rawDetail })}`;
       } else if (detail) {
         combined = `${title}\n${detail}`;
       } else {
@@ -359,13 +407,14 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       }
       setErrorMessage(combined);
       if (!isMobile) {
-        Alert.alert("连接失败", combined);
+        Alert.alert(t("host.connectionFailed"), combined);
       }
     } finally {
       setIsSaving(false);
     }
   }, [
     daemons,
+    connectionCopy,
     handleClose,
     host,
     isMobile,
@@ -374,6 +423,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     password,
     port,
     probeAndUpsertDirectConnection,
+    t,
     useTls,
   ]);
 
@@ -397,7 +447,9 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   const handleToggleAdvanced = useCallback(() => {
     if (!isAdvancedOpen) {
       try {
-        setAdvancedUri(buildConnectionUriFromDraft({ host, port, useTls, password }));
+        setAdvancedUri(
+          buildConnectionUriFromDraft({ host, port, useTls, password }, connectionCopy),
+        );
       } catch {
         setAdvancedUri("");
       }
@@ -418,27 +470,27 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       setErrorMessage("");
     }
     setIsAdvancedOpen(false);
-  }, [advancedUri, host, isAdvancedOpen, password, port, useTls]);
+  }, [advancedUri, connectionCopy, host, isAdvancedOpen, password, port, useTls]);
 
   const AdvancedIcon = isAdvancedOpen ? ChevronDown : ChevronRight;
   const PasswordIcon = isPasswordVisible ? EyeOff : Eye;
 
   return (
     <AdaptiveModalSheet
-      header={DIRECT_CONNECTION_HEADER}
+      header={header}
       visible={visible}
       onClose={handleClose}
       testID="add-host-modal"
     >
-      <Text style={styles.helper}>输入ChisaCode服务器地址。</Text>
+      <Text style={styles.helper}>{t("host.enterServerAddress")}</Text>
 
       <View style={styles.portRow}>
         <View style={hostFieldStyle}>
-          <Text style={styles.label}>主机</Text>
+          <Text style={styles.label}>{t("host.host")}</Text>
           <AdaptiveTextInput
             testID="direct-host-input"
             nativeID="direct-host-input"
-            accessibilityLabel="主机"
+            accessibilityLabel={t("host.host")}
             initialValue={host}
             resetKey={`direct-host-${inputResetKey}`}
             value={host}
@@ -454,11 +506,11 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
           />
         </View>
         <View style={portFieldStyle}>
-          <Text style={styles.label}>端口</Text>
+          <Text style={styles.label}>{t("host.port")}</Text>
           <AdaptiveTextInput
             testID="direct-port-input"
             nativeID="direct-port-input"
-            accessibilityLabel="端口"
+            accessibilityLabel={t("host.port")}
             initialValue={port}
             resetKey={`direct-port-${inputResetKey}`}
             value={port}
@@ -481,7 +533,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         onPress={handleToggleUseTls}
         disabled={isSaving}
         accessibilityRole="checkbox"
-        accessibilityLabel="使用 SSL"
+        accessibilityLabel={t("host.useSsl")}
         accessibilityState={useTlsAccessibilityState}
         testID="direct-ssl-toggle"
       >
@@ -492,21 +544,21 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             </View>
           ) : null}
         </View>
-        <Text style={styles.label}>使用 SSL</Text>
+        <Text style={styles.label}>{t("host.useSsl")}</Text>
       </Pressable>
 
       <View style={styles.field}>
-        <Text style={styles.label}>密码</Text>
+        <Text style={styles.label}>{t("host.password")}</Text>
         <View style={styles.passwordRow}>
           <AdaptiveTextInput
             testID="direct-password-input"
             nativeID="direct-password-input"
-            accessibilityLabel="密码"
+            accessibilityLabel={t("host.password")}
             initialValue={password}
             resetKey={`direct-password-${inputResetKey}`}
             value={password}
             onChangeText={setPassword}
-            placeholder="可选"
+            placeholder={t("host.optional")}
             placeholderTextColor={theme.colors.foregroundMuted}
             style={passwordInputStyle}
             autoCapitalize="none"
@@ -521,7 +573,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             onPress={handleTogglePasswordVisibility}
             disabled={isSaving}
             accessibilityRole="button"
-            accessibilityLabel={isPasswordVisible ? "隐藏密码" : "显示密码"}
+            accessibilityLabel={isPasswordVisible ? t("host.hidePassword") : t("host.showPassword")}
             testID="direct-password-visibility-toggle"
           >
             <PasswordIcon size={18} color={theme.colors.foregroundMuted} />
@@ -535,17 +587,19 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
           onPress={handleToggleAdvanced}
           disabled={isSaving}
           accessibilityRole="button"
-          accessibilityLabel={isAdvancedOpen ? "隐藏高级选项" : "显示高级选项"}
+          accessibilityLabel={
+            isAdvancedOpen ? t("host.hideAdvancedOptions") : t("host.showAdvancedOptions")
+          }
           testID="direct-host-advanced-toggle"
         >
           <AdvancedIcon size={16} color={theme.colors.foregroundMuted} />
-          <Text style={styles.advancedText}>高级</Text>
+          <Text style={styles.advancedText}>{t("host.advanced")}</Text>
         </Pressable>
         {isAdvancedOpen ? (
           <AdaptiveTextInput
             testID="direct-host-uri-input"
             nativeID="direct-host-uri-input"
-            accessibilityLabel="连接 URI"
+            accessibilityLabel={t("host.connectionUri")}
             initialValue={advancedUri}
             resetKey={`direct-host-uri-${inputResetKey}`}
             value={advancedUri}
@@ -571,7 +625,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
           onPress={handleCancel}
           disabled={isSaving}
         >
-          取消
+          {t("common.cancel")}
         </Button>
         <Button
           style={FLEX_ONE_STYLE}
@@ -581,7 +635,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
           leftIcon={connectIcon}
           testID="direct-host-submit"
         >
-          {isSaving ? "连接中..." : "连接"}
+          {isSaving ? t("host.connecting") : t("host.connect")}
         </Button>
       </View>
     </AdaptiveModalSheet>

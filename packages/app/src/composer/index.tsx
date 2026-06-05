@@ -30,6 +30,7 @@ import {
   Paperclip,
 } from "lucide-react-native";
 import Animated from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
 import {
   AgentControls,
@@ -140,8 +141,12 @@ function resolveIsDesktopWebBreakpoint(isMobile: boolean): boolean {
   return isWeb && !isMobile;
 }
 
-function resolveMessagePlaceholder(isDesktopWebBreakpoint: boolean): string {
-  return isDesktopWebBreakpoint ? DESKTOP_MESSAGE_PLACEHOLDER : MOBILE_MESSAGE_PLACEHOLDER;
+function resolveMessagePlaceholder(input: {
+  isDesktopWebBreakpoint: boolean;
+  desktop: string;
+  mobile: string;
+}): string {
+  return input.isDesktopWebBreakpoint ? input.desktop : input.mobile;
 }
 
 function resolveGithubSearchEnabled(
@@ -454,6 +459,7 @@ interface QueuedMessageRowProps {
 }
 
 function QueuedMessageRow({ item, onEdit, onSendNow }: QueuedMessageRowProps) {
+  const { t } = useTranslation();
   const handleEdit = useCallback(() => {
     onEdit(item.id);
   }, [onEdit, item.id]);
@@ -469,7 +475,7 @@ function QueuedMessageRow({ item, onEdit, onSendNow }: QueuedMessageRowProps) {
         <Pressable
           onPress={handleEdit}
           style={styles.queueActionButton}
-          accessibilityLabel="编辑排队消息"
+          accessibilityLabel={t("composer.editQueuedMessage")}
           accessibilityRole="button"
         >
           <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
@@ -477,7 +483,7 @@ function QueuedMessageRow({ item, onEdit, onSendNow }: QueuedMessageRowProps) {
         <Pressable
           onPress={handleSendNow}
           style={QUEUE_SEND_BUTTON_STYLE}
-          accessibilityLabel="立即发送排队消息"
+          accessibilityLabel={t("composer.sendQueuedMessageNow")}
           accessibilityRole="button"
         >
           <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
@@ -511,6 +517,7 @@ function ImageAttachmentPill({
   onOpen,
   onRemove,
 }: ImageAttachmentPillProps) {
+  const { t } = useTranslation();
   const handleOpen = useCallback(() => {
     onOpen(attachment);
   }, [onOpen, attachment]);
@@ -522,8 +529,8 @@ function ImageAttachmentPill({
       testID="composer-image-attachment-pill"
       onOpen={handleOpen}
       onRemove={handleRemove}
-      openAccessibilityLabel="打开图片附件"
-      removeAccessibilityLabel="移除图片附件"
+      openAccessibilityLabel={t("composer.openImageAttachment")}
+      removeAccessibilityLabel={t("composer.removeImageAttachment")}
       disabled={disabled}
     >
       <ImageAttachmentThumbnail image={attachment.metadata} />
@@ -670,8 +677,6 @@ interface ComposerProps {
 }
 
 const EMPTY_ARRAY: readonly QueuedMessage[] = [];
-const DESKTOP_MESSAGE_PLACEHOLDER = "给智能体发消息，可用 @files、/commands 和 /skills";
-const MOBILE_MESSAGE_PLACEHOLDER = "输入消息，@files，/commands";
 const StableMessageInput = memo(MessageInput);
 
 function resolveContextWindowValues(
@@ -701,7 +706,10 @@ function ComposerCancelButton({
   isCancellingAgent,
   agentInterruptKeys,
 }: ComposerCancelButtonProps) {
-  const accessibilityLabel = isCancellingAgent ? "正在取消智能体" : "停止智能体";
+  const { t } = useTranslation();
+  const accessibilityLabel = isCancellingAgent
+    ? t("composer.cancellingAgent")
+    : t("composer.stopAgent");
   const icon = isCancellingAgent ? (
     <ActivityIndicator size="small" color="white" />
   ) : (
@@ -721,7 +729,7 @@ function ComposerCancelButton({
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
         <View style={styles.tooltipRow}>
-          <Text style={styles.tooltipText}>打断</Text>
+          <Text style={styles.tooltipText}>{t("composer.interrupt")}</Text>
           {shortcutNode}
         </View>
       </TooltipContent>
@@ -797,6 +805,7 @@ function ComposerVoiceModeButton({
   realtimeVoiceButtonStyle,
   voiceToggleKeys,
 }: ComposerVoiceModeButtonProps) {
+  const { t } = useTranslation();
   const shortcutNode = voiceToggleKeys ? <Shortcut chord={voiceToggleKeys} /> : null;
   const renderTriggerContent = useCallback(
     ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => {
@@ -813,7 +822,7 @@ function ComposerVoiceModeButton({
       <TooltipTrigger
         onPress={handleToggleRealtimeVoice}
         disabled={!isConnected || isVoiceSwitching}
-        accessibilityLabel="启用语音模式"
+        accessibilityLabel={t("composer.enableVoiceMode")}
         accessibilityRole="button"
         style={realtimeVoiceButtonStyle}
       >
@@ -821,7 +830,7 @@ function ComposerVoiceModeButton({
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
         <View style={styles.tooltipRow}>
-          <Text style={styles.tooltipText}>语音模式</Text>
+          <Text style={styles.tooltipText}>{t("composer.voiceMode")}</Text>
           {shortcutNode}
         </View>
       </TooltipContent>
@@ -863,6 +872,7 @@ export function Composer({
   footer,
   externalKeyboardShift,
 }: ComposerProps) {
+  const { t } = useTranslation();
   const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -894,7 +904,11 @@ export function Composer({
 
   const isMobile = useIsCompactFormFactor();
   const isDesktopWebBreakpoint = resolveIsDesktopWebBreakpoint(isMobile);
-  const messagePlaceholder = resolveMessagePlaceholder(isDesktopWebBreakpoint);
+  const messagePlaceholder = resolveMessagePlaceholder({
+    isDesktopWebBreakpoint,
+    desktop: t("composer.desktopPlaceholder"),
+    mobile: t("composer.mobilePlaceholder"),
+  });
   const userInput = value;
   const setUserInput = onChangeText;
   const {
@@ -1501,7 +1515,7 @@ export function Composer({
     () => [
       {
         id: "image",
-        label: "添加图片",
+        label: t("composer.addImage"),
         icon: <ThemedPaperclip size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
         onSelect: () => {
           void handlePickImage();
@@ -1509,14 +1523,14 @@ export function Composer({
       },
       {
         id: "github",
-        label: "添加 issue 或 PR",
+        label: t("composer.addIssueOrPr"),
         icon: <ThemedGithub size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
         onSelect: () => {
           setIsGithubPickerOpen(true);
         },
       },
     ],
-    [handlePickImage],
+    [handlePickImage, t],
   );
 
   const handleToggleGithubItem = useCallback(
@@ -1632,7 +1646,9 @@ export function Composer({
     () => (sendError ? <Text style={styles.sendErrorText}>{sendError}</Text> : null),
     [sendError],
   );
-  const githubEmptyText = githubSearchResultsQuery.isFetching ? "搜索中..." : "未找到结果。";
+  const githubEmptyText = githubSearchResultsQuery.isFetching
+    ? t("workspace.searching")
+    : t("composer.noGithubResults");
   const autocompleteVisible = autocomplete.isVisible && isPaneFocused;
 
   return (
@@ -1703,8 +1719,8 @@ export function Composer({
               onSelect={noop}
               keepOpenOnSelect
               searchable
-              searchPlaceholder="搜索 issue 和 PR..."
-              title="添加 issue 或 PR"
+              searchPlaceholder={t("composer.searchIssuesAndPrs")}
+              title={t("composer.addIssueOrPr")}
               open={isGithubPickerOpen}
               onOpenChange={handleGithubPickerOpenChange}
               onSearchQueryChange={setGithubSearchQuery}

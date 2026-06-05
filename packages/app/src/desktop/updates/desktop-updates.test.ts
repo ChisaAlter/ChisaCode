@@ -65,12 +65,12 @@ describe("desktop-updates helpers", () => {
 
     expect(parseLocalDaemonVersionResult(null)).toEqual({
       version: null,
-      error: "Unexpected response from version check.",
+      error: "版本检查返回了意外响应。",
     });
 
     expect(parseLocalDaemonVersionResult("not an object")).toEqual({
       version: null,
-      error: "Unexpected response from version check.",
+      error: "版本检查返回了意外响应。",
     });
   });
 

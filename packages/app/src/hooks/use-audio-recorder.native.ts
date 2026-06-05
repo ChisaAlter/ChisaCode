@@ -177,9 +177,7 @@ export function useAudioRecorder(config?: AudioCaptureConfig) {
       attemptGuardRef.current.assertCurrent(attemptId);
 
       if (!permissionResponse.granted) {
-        throw new Error(
-          "Microphone permission denied. Please enable microphone access in your device settings.",
-        );
+        throw new Error("麦克风权限被拒绝。请在设备设置中启用麦克风访问。");
       }
 
       // Configure audio mode for recording

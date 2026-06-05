@@ -26,7 +26,7 @@ export function resolveExternalCliEntrypoint(): NodeEntrypointSpec {
   if (app.isPackaged) {
     return {
       entryPath: assertPathExists({
-        label: "Bundled external CLI entrypoint",
+        label: "内置外部 CLI 入口",
         filePath: path.join(
           resolvePackagedAsarPath(),
           "node_modules",
@@ -51,7 +51,7 @@ export function resolveExternalCliEntrypoint(): NodeEntrypointSpec {
 
   return {
     entryPath: assertPathExists({
-      label: "External CLI source entrypoint",
+      label: "外部 CLI 源码入口",
       filePath: path.join(cliRoot, "src", "index.ts"),
     }),
     execArgv: ["--import", "tsx"],
@@ -61,7 +61,7 @@ export function resolveExternalCliEntrypoint(): NodeEntrypointSpec {
 export function resolvePassthroughCliEntrypoint(): string {
   if (app.isPackaged) {
     return assertPathExists({
-      label: "Bundled passthrough CLI entrypoint",
+      label: "内置透传 CLI 入口",
       filePath: path.join(
         resolvePackagedAsarPath(),
         "node_modules",
@@ -74,7 +74,7 @@ export function resolvePassthroughCliEntrypoint(): string {
   }
 
   return assertPathExists({
-    label: "Passthrough CLI entrypoint",
+    label: "透传 CLI 入口",
     filePath: esmRequire.resolve(CLI_RUN_ENTRY),
   });
 }

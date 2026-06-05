@@ -19,9 +19,9 @@ import { useSessionStore } from "@/stores/session-store";
 import { Archive } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
-import type { Agent } from "@/stores/session-store";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useTranslation } from "react-i18next";
+import { rememberArchivedAgentDetail } from "@/utils/agent-history-navigation";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -39,63 +39,6 @@ type FlatListItem =
   | { type: "agent"; key: string; agent: AggregatedAgent };
 
 type DateSectionKey = "today" | "yesterday" | "thisWeek" | "thisMonth" | "older";
-
-function buildHistoricalAgentDetail(agent: AggregatedAgent): Agent {
-  return {
-    serverId: agent.serverId,
-    id: agent.id,
-    provider: agent.provider,
-    status: agent.status,
-    createdAt: agent.createdAt,
-    updatedAt: agent.lastActivityAt,
-    lastUserMessageAt: null,
-    lastActivityAt: agent.lastActivityAt,
-    capabilities: {
-      supportsStreaming: false,
-      supportsSessionPersistence: false,
-      supportsDynamicModes: false,
-      supportsMcpServers: false,
-      supportsReasoningStream: false,
-      supportsToolInvocations: false,
-    },
-    currentModeId: null,
-    availableModes: [],
-    pendingPermissions: [],
-    persistence: null,
-    runtimeInfo: {
-      provider: agent.provider,
-      sessionId: null,
-    },
-    title: agent.title,
-    cwd: agent.cwd,
-    model: null,
-    thinkingOptionId: null,
-    requiresAttention: agent.requiresAttention,
-    attentionReason: agent.attentionReason,
-    attentionTimestamp: agent.attentionTimestamp,
-    archivedAt: agent.archivedAt,
-    labels: agent.labels,
-    parentAgentId: null,
-  };
-}
-
-function rememberArchivedAgentDetail(agent: AggregatedAgent) {
-  if (!agent.archivedAt) {
-    return;
-  }
-
-  useSessionStore.getState().setAgentDetails(agent.serverId, (previous) => {
-    const existing = previous.get(agent.id);
-    const next = new Map(previous);
-    next.set(agent.id, {
-      ...buildHistoricalAgentDetail(agent),
-      ...existing,
-      archivedAt: existing?.archivedAt ?? agent.archivedAt,
-      cwd: existing?.cwd ?? agent.cwd,
-    });
-    return next;
-  });
-}
 
 function deriveDateSectionKey(lastActivityAt: Date): DateSectionKey {
   const now = new Date();

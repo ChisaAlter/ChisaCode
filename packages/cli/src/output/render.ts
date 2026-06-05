@@ -10,6 +10,7 @@ import type { AnyCommandResult, CommandError, OutputOptions } from "./types.js";
 import { renderTable } from "./table.js";
 import { renderJson } from "./json.js";
 import { renderYaml } from "./yaml.js";
+import { tCli } from "../i18n.js";
 import { renderQuiet } from "./quiet.js";
 
 /** Default output options */
@@ -92,7 +93,8 @@ export function renderError(error: CommandError, options: Partial<OutputOptions>
   }
 
   // Table/default format: human-readable error
-  const prefix = opts.noColor ? "Error: " : chalk.red("Error: ");
+  const prefixText = tCli("error.prefix");
+  const prefix = opts.noColor ? prefixText : chalk.red(prefixText);
   const message = error.message;
 
   if (error.details && typeof error.details === "string") {

@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { type Doc, getDocs } from "~/docs";
+import { useWebsiteI18n } from "~/i18n";
 import "~/styles.css";
 
 export const Route = createFileRoute("/docs")({
@@ -22,16 +23,12 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const GROUP_LABELS: Record<string, string> = {
-  alternatives: "Alternatives",
-};
-
 function groupKey(doc: Doc): string | null {
   const idx = doc.slug.indexOf("/");
   return idx === -1 ? null : doc.slug.slice(0, idx);
 }
 
-function buildNavigation(): NavGroup[] {
+function buildNavigation(t: ReturnType<typeof useWebsiteI18n>["t"]): NavGroup[] {
   const groups = new Map<string | null, NavItem[]>();
   for (const doc of getDocs()) {
     const key = groupKey(doc);
@@ -43,13 +40,14 @@ function buildNavigation(): NavGroup[] {
   if (groups.has(null)) ordered.push({ name: null, items: groups.get(null)! });
   for (const [key, items] of groups) {
     if (key === null) continue;
-    ordered.push({ name: GROUP_LABELS[key] ?? key, items });
+    ordered.push({ name: key === "alternatives" ? t("docs.alternatives") : key, items });
   }
   return ordered;
 }
 
 function DocsLayout() {
-  const groups = buildNavigation();
+  const { t } = useWebsiteI18n();
+  const groups = buildNavigation(t);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const toggleMobileNav = useCallback(() => setMobileNavOpen((v) => !v), []);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
@@ -60,13 +58,13 @@ function DocsLayout() {
       <header className="md:hidden sticky top-0 z-50 bg-background border-b border-border">
         <div className="flex items-center justify-between p-4">
           <Link to="/" className="flex items-center gap-3">
-            <img src="/logo.svg" alt="ChisaCode" className="w-6 h-6" />
+            <img src="/logo.png" alt="ChisaCode" className="w-6 h-6 rounded-md" />
             <span className="text-lg font-medium">ChisaCode</span>
           </Link>
           <button
             type="button"
             onClick={toggleMobileNav}
-            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-label={mobileNavOpen ? t("docs.closeMenu") : t("docs.openMenu")}
             aria-expanded={mobileNavOpen}
             className="-mr-2 p-2 text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -102,7 +100,7 @@ function DocsLayout() {
         {/* Desktop sidebar */}
         <aside className="hidden md:flex md:flex-col w-56 shrink-0 border-r border-border p-6 sticky top-0 h-screen">
           <Link to="/" className="flex items-center gap-3 mb-8 shrink-0">
-            <img src="/logo.svg" alt="ChisaCode" className="w-6 h-6" />
+            <img src="/logo.png" alt="ChisaCode" className="w-6 h-6 rounded-md" />
             <span className="text-lg font-medium">ChisaCode</span>
           </Link>
           <nav className="flex-1 min-h-0 overflow-y-auto -ml-3 -mr-3 pr-3 space-y-4">

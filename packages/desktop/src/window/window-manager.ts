@@ -12,7 +12,7 @@ import {
 import { translateDesktop } from "../i18n.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 
-const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
+const IPC_PREFIXES = ["chisacode"] as const;
 
 export function readBadgeCount(input: unknown): number {
   if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0) {

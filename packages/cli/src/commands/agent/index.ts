@@ -19,9 +19,10 @@ import {
   addJsonAndDaemonHostOptions,
   collectMultiple,
 } from "../../utils/command-options.js";
+import { tCli } from "../../i18n.js";
 
 export function createAgentCommand(): Command {
-  const agent = new Command("agent").description("Manage agents (advanced operations)");
+  const agent = new Command("agent").description(tCli("agent.description"));
 
   // Primary agent commands (same as top-level)
   addJsonAndDaemonHostOptions(addLsOptions(agent.command("ls"))).action(withOutput(runLsCommand));
@@ -62,10 +63,10 @@ export function createAgentCommand(): Command {
   addJsonAndDaemonHostOptions(
     agent
       .command("mode")
-      .description("Change an agent's operational mode")
-      .argument("<id>", "Agent ID (or prefix)")
-      .argument("[mode]", "Mode to set (required unless --list)")
-      .option("--list", "List available modes for this agent"),
+      .description(tCli("agent.mode.description"))
+      .argument("<id>", tCli("agent.id"))
+      .argument("[mode]", tCli("agent.mode.value"))
+      .option("--list", tCli("agent.mode.list")),
   ).action(withOutput(runModeCommand));
 
   addJsonAndDaemonHostOptions(addArchiveOptions(agent.command("archive"))).action(
@@ -79,15 +80,10 @@ export function createAgentCommand(): Command {
   addJsonAndDaemonHostOptions(
     agent
       .command("update")
-      .description("Update an agent's metadata")
-      .argument("<id>", "Agent ID (or prefix)")
-      .option("--name <name>", "Update the agent's display name")
-      .option(
-        "--label <label>",
-        "Add/set label(s) on the agent (can be used multiple times or comma-separated)",
-        collectMultiple,
-        [],
-      ),
+      .description(tCli("agent.update.description"))
+      .argument("<id>", tCli("agent.id"))
+      .option("--name <name>", tCli("agent.update.name"))
+      .option("--label <label>", tCli("agent.update.label"), collectMultiple, []),
   ).action(withOutput(runUpdateCommand));
 
   return agent;

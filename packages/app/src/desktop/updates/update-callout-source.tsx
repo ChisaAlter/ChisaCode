@@ -1,5 +1,6 @@
 import { Gift } from "lucide-react-native";
 import { type ReactNode, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useUnistyles } from "react-native-unistyles";
 import {
   type SidebarCalloutAction,
@@ -18,10 +19,18 @@ import { openExternalUrl } from "@/utils/open-external-url";
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const CHANGELOG_URL = "https://chisacode.sh/changelog";
 
-function renderBody(body: UpdateCalloutBody): ReactNode {
-  if (body.kind === "installing") return "正在安装并重启...";
+function renderBody(
+  body: UpdateCalloutBody,
+  copy: {
+    installingBody: string;
+    availableWithVersion: (versionLabel: string) => string;
+    availableGeneric: string;
+    stopsAgentsAndTerminals: string;
+  },
+): ReactNode {
+  if (body.kind === "installing") return copy.installingBody;
   if (body.kind === "error") return body.message;
-  return <UpdateAvailableDescription versionLabel={body.versionLabel ?? undefined} />;
+  return <UpdateAvailableDescription versionLabel={body.versionLabel ?? undefined} copy={copy} />;
 }
 
 function materializeActions(
@@ -39,6 +48,7 @@ function materializeActions(
 export function UpdateCalloutSource() {
   const callouts = useSidebarCallouts();
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const {
     isDesktopApp,
     status,
@@ -76,12 +86,28 @@ export function UpdateCalloutSource() {
   }, [isDesktopApp, checkForUpdates]);
 
   useEffect(() => {
+    const copy = {
+      installingTitle: t("desktopUpdates.callout.installingTitle"),
+      failedTitle: t("desktopUpdates.callout.failedTitle"),
+      availableTitle: t("desktopUpdates.callout.availableTitle"),
+      fallbackError: t("desktopUpdates.callout.fallbackError"),
+      changelog: t("desktopUpdates.callout.changelog"),
+      retry: t("desktopUpdates.callout.retry"),
+      installingAction: t("desktopUpdates.callout.installingAction"),
+      installAndRestart: t("desktopUpdates.callout.installAndRestart"),
+      installingBody: t("desktopUpdates.callout.installingBody"),
+      availableWithVersion: (versionLabel: string) =>
+        t("desktopUpdates.callout.availableWithVersion", { versionLabel }),
+      availableGeneric: t("desktopUpdates.callout.availableGeneric"),
+      stopsAgentsAndTerminals: t("desktopUpdates.callout.stopsAgentsAndTerminals"),
+    };
     const descriptor = resolveUpdateCalloutDescriptor({
       isDesktopApp,
       status,
       isInstalling,
       availableUpdate,
       errorMessage,
+      copy,
     });
     if (!descriptor) return;
 
@@ -90,7 +116,7 @@ export function UpdateCalloutSource() {
       dismissalKey: descriptor.dismissalKey,
       priority: descriptor.priority,
       title: descriptor.title,
-      description: renderBody(descriptor.body),
+      description: renderBody(descriptor.body, copy),
       icon: descriptor.showGiftIcon ? (
         <Gift size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
       ) : undefined,
@@ -112,6 +138,7 @@ export function UpdateCalloutSource() {
     openChangelog,
     retry,
     status,
+    t,
     theme.colors.foregroundMuted,
     theme.iconSize.sm,
   ]);
@@ -119,15 +146,23 @@ export function UpdateCalloutSource() {
   return null;
 }
 
-function UpdateAvailableDescription({ versionLabel }: { versionLabel?: string }) {
+function UpdateAvailableDescription({
+  versionLabel,
+  copy,
+}: {
+  versionLabel?: string;
+  copy: {
+    availableWithVersion: (versionLabel: string) => string;
+    availableGeneric: string;
+    stopsAgentsAndTerminals: string;
+  };
+}) {
   return (
     <>
       <SidebarCalloutDescriptionText>
-        {versionLabel ? `${versionLabel} 已可安装。` : "新版本已可安装。"}
+        {versionLabel ? copy.availableWithVersion(versionLabel) : copy.availableGeneric}
       </SidebarCalloutDescriptionText>
-      <SidebarCalloutDescriptionText>
-        升级应用会停止正在运行的智能体并关闭终端会话。
-      </SidebarCalloutDescriptionText>
+      <SidebarCalloutDescriptionText>{copy.stopsAgentsAndTerminals}</SidebarCalloutDescriptionText>
     </>
   );
 }

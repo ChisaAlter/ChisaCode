@@ -7,7 +7,7 @@ export interface PackageInfo {
 
 export function assertPathExists(input: { label: string; filePath: string }): string {
   if (!existsSync(input.filePath)) {
-    throw new Error(`${input.label} is missing at ${input.filePath}`);
+    throw new Error(`${input.label} 缺失：${input.filePath}`);
   }
 
   return input.filePath;
@@ -43,7 +43,7 @@ export function findPackageRootFromResolvedPath(input: {
     currentDir = parent;
   }
 
-  throw new Error(`Unable to resolve ${input.packageName} package root`);
+  throw new Error(`无法解析 ${input.packageName} package root`);
 }
 
 export function resolvePackagedAsarPath(): string {

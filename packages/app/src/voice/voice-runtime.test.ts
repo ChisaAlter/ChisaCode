@@ -426,7 +426,7 @@ describe("voice runtime", () => {
   it("returns an explicit not-ready error when the adapter is missing", async () => {
     const { runtime } = createRuntime();
     await expect(runtime.startVoice("server-1", "agent-1")).rejects.toThrow(
-      "Voice runtime is not ready for host server-1",
+      "主机 server-1 的语音运行时尚未就绪",
     );
   });
 

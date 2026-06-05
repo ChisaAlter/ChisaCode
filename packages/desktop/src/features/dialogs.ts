@@ -26,7 +26,7 @@ interface DialogHandlerOptions {
   getLanguage?: () => AppLanguage | Promise<AppLanguage>;
 }
 
-const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
+const IPC_PREFIXES = ["chisacode"] as const;
 
 function resolveDialogType(kind: AskOptions["kind"]): "warning" | "error" | "question" {
   if (kind === "warning") return "warning";

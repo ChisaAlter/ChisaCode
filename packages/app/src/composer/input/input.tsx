@@ -814,6 +814,7 @@ interface ToggleRealtimeVoiceContext {
   isAgentRunning: boolean;
   handleStopRealtimeVoice: () => Promise<unknown> | void;
   toast: { error: (msg: string) => void };
+  interruptBeforeVoiceModeMessage: string;
 }
 
 function toggleRealtimeVoiceImpl(ctx: ToggleRealtimeVoiceContext): void {
@@ -826,7 +827,7 @@ function toggleRealtimeVoiceImpl(ctx: ToggleRealtimeVoiceContext): void {
     return;
   }
   if (ctx.isAgentRunning) {
-    ctx.toast.error("请先打断智能体，再开始语音模式");
+    ctx.toast.error(ctx.interruptBeforeVoiceModeMessage);
     return;
   }
   void ctx.voice.startVoice(ctx.voiceServerId, ctx.voiceAgentId).catch((error) => {
@@ -1471,6 +1472,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         isAgentRunning,
         handleStopRealtimeVoice,
         toast,
+        interruptBeforeVoiceModeMessage: t("composer.interruptBeforeVoiceMode"),
       });
     }, [
       disabled,
@@ -1478,6 +1480,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       isAgentRunning,
       isConnected,
       toast,
+      t,
       voice,
       voiceAgentId,
       voiceServerId,

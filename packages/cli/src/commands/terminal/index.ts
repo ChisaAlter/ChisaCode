@@ -6,53 +6,54 @@ import { runCreateCommand } from "./create.js";
 import { runKillCommand } from "./kill.js";
 import { runLsCommand } from "./ls.js";
 import { runSendKeysCommand } from "./send-keys.js";
+import { tCli } from "../../i18n.js";
 
 export function createTerminalCommand(): Command {
-  const terminal = new Command("terminal").description("Manage workspace terminals");
+  const terminal = new Command("terminal").description(tCli("terminal.description"));
 
   addJsonAndDaemonHostOptions(
     terminal
       .command("ls")
-      .description("List terminals")
-      .option("--all", "List terminals across all workspaces")
-      .option("--cwd <path>", "Workspace directory"),
+      .description(tCli("terminal.ls.description"))
+      .option("--all", tCli("terminal.ls.all"))
+      .option("--cwd <path>", tCli("terminal.cwd")),
   ).action(withOutput(runLsCommand));
 
   addJsonAndDaemonHostOptions(
     terminal
       .command("create")
-      .description("Create a terminal")
-      .option("--cwd <path>", "Workspace directory")
-      .option("--name <name>", "Terminal name"),
+      .description(tCli("terminal.create.description"))
+      .option("--cwd <path>", tCli("terminal.cwd"))
+      .option("--name <name>", tCli("terminal.name")),
   ).action(withOutput(runCreateCommand));
 
   addJsonAndDaemonHostOptions(
     terminal
       .command("kill")
-      .description("Kill a terminal")
-      .argument("<terminal-id>", "Terminal ID, ID prefix, or name"),
+      .description(tCli("terminal.kill.description"))
+      .argument("<terminal-id>", tCli("terminal.id")),
   ).action(withOutput(runKillCommand));
 
   addDaemonHostOption(
     terminal
       .command("capture")
-      .description("Capture terminal output")
-      .argument("<terminal-id>", "Terminal ID, ID prefix, or name")
-      .option("--start <n>", "Capture start line")
-      .option("--end <n>", "Capture end line")
-      .option("-S, --scrollback", "Capture from the beginning of scrollback")
-      .option("--ansi", "Preserve ANSI escape codes")
-      .option("--json", "Output in JSON format"),
+      .description(tCli("terminal.capture.description"))
+      .argument("<terminal-id>", tCli("terminal.id"))
+      .option("--start <n>", tCli("terminal.capture.start"))
+      .option("--end <n>", tCli("terminal.capture.end"))
+      .option("-S, --scrollback", tCli("terminal.capture.scrollback"))
+      .option("--ansi", tCli("terminal.capture.ansi"))
+      .option("--json", tCli("option.json")),
   ).action(runCaptureCommand);
 
   addDaemonHostOption(
     terminal
       .command("send-keys")
-      .description("Send keys to a terminal")
-      .argument("<terminal-id>", "Terminal ID, ID prefix, or name")
-      .argument("<keys...>", "Keys to send")
-      .option("-l, --literal", "Send raw keys without interpreting special tokens")
-      .option("--json", "Output in JSON format"),
+      .description(tCli("terminal.send.description"))
+      .argument("<terminal-id>", tCli("terminal.id"))
+      .argument("<keys...>", tCli("terminal.keys"))
+      .option("-l, --literal", tCli("terminal.literal"))
+      .option("--json", tCli("option.json")),
   ).action(runSendKeysCommand);
 
   return terminal;

@@ -109,7 +109,7 @@ export function upsertHostConnectionInProfiles(input: {
 }): HostProfile[] {
   const serverId = input.serverId.trim();
   if (!serverId) {
-    throw new Error("serverId is required");
+    throw new Error("serverId 不能为空");
   }
 
   const now = input.now ?? new Date().toISOString();

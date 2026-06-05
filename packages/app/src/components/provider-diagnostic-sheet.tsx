@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import {
   AdaptiveModalSheet,
   AdaptiveTextInput,
@@ -74,6 +75,7 @@ function CustomModelRow({
   onDelete: (modelId: string) => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const handleDelete = useCallback(() => onDelete(model.id), [model.id, onDelete]);
   const deleteButtonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -99,7 +101,7 @@ function CustomModelRow({
         hitSlop={8}
         style={deleteButtonStyle}
         accessibilityRole="button"
-        accessibilityLabel={`Remove ${model.id}`}
+        accessibilityLabel={t("providerDiagnostics.removeModel", { model: model.id })}
       >
         <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
       </Pressable>
@@ -138,6 +140,7 @@ function AddCustomModelSubSheet({
   refresh: (providers?: AgentProvider[]) => Promise<void>;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -171,12 +174,15 @@ function AddCustomModelSubSheet({
       .then(() => refresh([provider]))
       .then(() => onClose())
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "保存 model 失败");
+        setError(err instanceof Error ? err.message : t("providerDiagnostics.saveModelFailed"));
       })
       .finally(() => setSaving(false));
-  }, [additionalModels, canAdd, onClose, patchConfig, provider, refresh, trimmed]);
+  }, [additionalModels, canAdd, onClose, patchConfig, provider, refresh, t, trimmed]);
 
-  const header = useMemo<SheetHeader>(() => ({ title: "添加自定义 model" }), []);
+  const header = useMemo<SheetHeader>(
+    () => ({ title: t("providerDiagnostics.addCustomModel") }),
+    [t],
+  );
 
   return (
     <AdaptiveModalSheet
@@ -187,7 +193,7 @@ function AddCustomModelSubSheet({
       snapPoints={ADD_SNAP_POINTS}
     >
       <View style={sheetStyles.formGroup}>
-        <Text style={sheetStyles.formLabel}>模型 ID</Text>
+        <Text style={sheetStyles.formLabel}>{t("providerDiagnostics.modelId")}</Text>
         <AdaptiveTextInput
           initialValue={input}
           resetKey={`add-custom-${visible}`}
@@ -205,10 +211,10 @@ function AddCustomModelSubSheet({
         {error ? <Text style={sheetStyles.errorText}>{error}</Text> : null}
         <View style={sheetStyles.formActions}>
           <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button variant="default" size="sm" onPress={handleAdd} disabled={!canAdd || saving}>
-            {saving ? "添加中..." : "添加"}
+            {saving ? t("providerDiagnostics.adding") : t("providerDiagnostics.add")}
           </Button>
         </View>
       </View>
@@ -228,6 +234,7 @@ function DiagnosticSubSheet({
   onClose: () => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -239,11 +246,11 @@ function DiagnosticSubSheet({
       const result = await client.getProviderDiagnostic(provider);
       setDiagnostic(result.diagnostic);
     } catch (err) {
-      setDiagnostic(err instanceof Error ? err.message : "获取诊断信息失败");
+      setDiagnostic(err instanceof Error ? err.message : t("providerDiagnostics.diagnosticFailed"));
     } finally {
       setLoading(false);
     }
-  }, [client, provider]);
+  }, [client, provider, t]);
 
   useEffect(() => {
     if (visible) {
@@ -268,7 +275,7 @@ function DiagnosticSubSheet({
 
   const header = useMemo<SheetHeader>(
     () => ({
-      title: "诊断",
+      title: t("providerDiagnostics.diagnostic"),
       actions: (
         <Pressable
           onPress={handleRefreshPress}
@@ -276,7 +283,11 @@ function DiagnosticSubSheet({
           hitSlop={8}
           style={refreshButtonStyle}
           accessibilityRole="button"
-          accessibilityLabel={loading ? "正在刷新诊断信息" : "刷新诊断信息"}
+          accessibilityLabel={
+            loading
+              ? t("providerDiagnostics.refreshingDiagnostic")
+              : t("providerDiagnostics.refreshDiagnostic")
+          }
         >
           {loading ? (
             <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
@@ -290,6 +301,7 @@ function DiagnosticSubSheet({
       handleRefreshPress,
       loading,
       refreshButtonStyle,
+      t,
       theme.colors.foregroundMuted,
       theme.iconSize.sm,
     ],
@@ -300,7 +312,7 @@ function DiagnosticSubSheet({
     body = (
       <View style={sheetStyles.codeBlockLoading}>
         <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
-        <Text style={sheetStyles.mutedText}>Running diagnostic…</Text>
+        <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.loadingDiagnostic")}</Text>
       </View>
     );
   } else if (diagnostic) {
@@ -316,7 +328,7 @@ function DiagnosticSubSheet({
   } else {
     body = (
       <View style={sheetStyles.codeBlockLoading}>
-        <Text style={sheetStyles.mutedText}>暂无诊断信息</Text>
+        <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.noDiagnostic")}</Text>
       </View>
     );
   }
@@ -350,6 +362,7 @@ interface ProviderModalBodyProps {
 }
 
 function ProviderModalBody(props: ProviderModalBodyProps) {
+  const { t } = useTranslation();
   const {
     discoveredCount,
     additionalCount,
@@ -369,7 +382,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
     return (
       <View style={sheetStyles.emptyState}>
         <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
-        <Text style={sheetStyles.mutedText}>正在加载模型...</Text>
+        <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.loadingModels")}</Text>
       </View>
     );
   }
@@ -379,7 +392,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
         <AlertTriangle size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
         <Text style={sheetStyles.mutedText}>{providerErrorMessage}</Text>
         <Button variant="default" size="sm" onPress={onRefresh} disabled={modelsRefreshing}>
-          {modelsRefreshing ? "重试中..." : "重试"}
+          {modelsRefreshing ? t("modelSelector.retrying") : t("common.retry")}
         </Button>
       </View>
     );
@@ -387,14 +400,14 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
   if (filteredDiscovered.length === 0 && filteredCustom.length === 0 && searchActive) {
     return (
       <View style={sheetStyles.emptyState}>
-        <Text style={sheetStyles.mutedText}>没有匹配搜索条件的模型</Text>
+        <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.noSearchMatches")}</Text>
       </View>
     );
   }
   if (discoveredCount === 0 && additionalCount === 0) {
     return (
       <View style={sheetStyles.emptyState}>
-        <Text style={sheetStyles.mutedText}>未检测到模型</Text>
+        <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.noModels")}</Text>
       </View>
     );
   }
@@ -402,7 +415,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
     <>
       {filteredDiscovered.length > 0 ? (
         <View style={sheetStyles.section}>
-          <SectionHeader title="Discovered" count={filteredDiscovered.length} />
+          <SectionHeader title={t("providers.discovered")} count={filteredDiscovered.length} />
           <View style={settingsStyles.card}>
             {filteredDiscovered.map((model) => (
               <DiscoveredModelRow key={model.id} model={model} />
@@ -412,7 +425,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
       ) : null}
       {filteredCustom.length > 0 ? (
         <View style={sheetStyles.section}>
-          <SectionHeader title="Custom models" count={filteredCustom.length} />
+          <SectionHeader title={t("providers.customModels")} count={filteredCustom.length} />
           <View style={settingsStyles.card}>
             {filteredCustom.map((model) => (
               <CustomModelRow
@@ -436,6 +449,7 @@ export function ProviderDiagnosticSheet({
   serverId,
 }: ProviderDiagnosticSheetProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
@@ -454,7 +468,9 @@ export function ProviderDiagnosticSheet({
   );
   const providerSnapshotRefreshing = providerEntry?.status === "loading";
   const providerErrorMessage =
-    providerEntry?.status === "error" ? (providerEntry.error ?? "Unknown error") : null;
+    providerEntry?.status === "error"
+      ? (providerEntry.error ?? t("modelSelector.unknownError"))
+      : null;
   const modelsRefreshing = isRefreshing || providerSnapshotRefreshing;
 
   const stableDiscoveredRef = useRef<AgentModelDefinition[]>([]);
@@ -469,7 +485,7 @@ export function ProviderDiagnosticSheet({
   const [clockTick, setClockTick] = useState(0);
   useEffect(() => {
     if (!visible) return;
-    const id = setInterval(() => setClockTick((t) => t + 1), 10_000);
+    const id = setInterval(() => setClockTick((tick) => tick + 1), 10_000);
     return () => clearInterval(id);
   }, [visible]);
   const fetchedAtLabel = useMemo(() => {
@@ -528,24 +544,24 @@ export function ProviderDiagnosticSheet({
       title: providerLabel,
       search: {
         onChange: setQuery,
-        placeholder: "搜索模型",
+        placeholder: t("providerDiagnostics.searchModels"),
         testID: "provider-settings-search",
       },
     }),
-    [providerLabel],
+    [providerLabel, t],
   );
 
   const footer = (
     <>
       <Text style={sheetStyles.footerMeta} numberOfLines={1}>
-        {fetchedAtLabel ? `Updated ${fetchedAtLabel}` : ""}
+        {fetchedAtLabel ? t("providerDiagnostics.updated", { time: fetchedAtLabel }) : ""}
       </Text>
       <View style={sheetStyles.footerActions}>
         <Button variant="secondary" size="sm" leftIcon={Plus} onPress={handleOpenAddSheet}>
-          Add model
+          {t("providerDiagnostics.addModel")}
         </Button>
         <Button variant="secondary" size="sm" leftIcon={FileText} onPress={handleOpenDiagSheet}>
-          Diagnostic
+          {t("providerDiagnostics.diagnostic")}
         </Button>
         <Button
           variant="default"
@@ -554,7 +570,9 @@ export function ProviderDiagnosticSheet({
           onPress={handleRefreshModels}
           disabled={modelsRefreshing}
         >
-          {modelsRefreshing ? "Refreshing…" : "Refresh"}
+          {modelsRefreshing
+            ? t("providerDiagnostics.refreshing")
+            : t("providerDiagnostics.refresh")}
         </Button>
       </View>
     </>

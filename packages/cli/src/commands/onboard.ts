@@ -18,6 +18,7 @@ import {
   type DaemonStartOptions,
 } from "./daemon/local-daemon.js";
 import { tryConnectToDaemon } from "../utils/client.js";
+import { tCli } from "../i18n.js";
 
 interface OnboardOptions extends DaemonStartOptions {
   timeout?: string;
@@ -147,19 +148,19 @@ async function resolveVoiceSelection(mode: OnboardOptions["voice"]): Promise<boo
   }
 
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    log.message("Non-interactive terminal detected; voice setup defaults to disabled.");
+    log.message(tCli("onboard.voice.nonInteractive"));
     return false;
   }
 
   const answer = await confirm({
-    message: "Enable voice features? (downloads local STT/TTS models in background)",
-    active: "Yes",
-    inactive: "No",
+    message: tCli("onboard.voice.prompt"),
+    active: tCli("onboard.voice.yes"),
+    inactive: tCli("onboard.voice.no"),
     initialValue: false,
   });
 
   if (isCancel(answer)) {
-    throw new OnboardCancelledError("Onboarding cancelled by user.");
+    throw new OnboardCancelledError(tCli("onboard.cancelled"));
   }
 
   return answer;
@@ -194,9 +195,9 @@ function parseDownloadProgress(logTail: string): DownloadProgress | null {
 function renderProgressLine(progress: DownloadProgress): string {
   const modelSuffix = progress.modelId ? ` (${progress.modelId})` : "";
   if (progress.pct === null) {
-    return `Downloading speech model${modelSuffix}...`;
+    return tCli("onboard.downloadSpeech", { model: modelSuffix });
   }
-  return `Downloading speech model${modelSuffix}: ${progress.pct}%`;
+  return tCli("onboard.downloadSpeechPct", { model: modelSuffix, pct: progress.pct });
 }
 
 type ProbeResult = { kind: "ready"; listen: string; host: string | null } | { kind: "pending" };
@@ -236,7 +237,7 @@ function announceProgress(
 ): ProgressState {
   const progress = parseDownloadProgress(tailDaemonLog(home, 120) ?? "");
   const progressLine = progress ? renderProgressLine(progress) : null;
-  const statusMessage = progressLine ?? "Waiting for daemon to become ready...";
+  const statusMessage = progressLine ?? tCli("onboard.waiting");
 
   if (statusMessage !== state.lastStatus) {
     onStatus?.(statusMessage);
@@ -266,8 +267,8 @@ async function waitForDaemonReady(args: {
       const recentLogs = tailDaemonLog(args.home, 60);
       throw new Error(
         [
-          `Timed out after ${Math.ceil(args.timeoutMs / 1000)}s waiting for daemon readiness.`,
-          recentLogs ? `Recent daemon logs:\n${recentLogs}` : null,
+          tCli("onboard.waitTimeout", { seconds: Math.ceil(args.timeoutMs / 1000) }),
+          recentLogs ? tCli("onboard.recentLogs", { logs: recentLogs }) : null,
         ]
           .filter(Boolean)
           .join("\n\n"),
@@ -283,55 +284,50 @@ async function waitForDaemonReady(args: {
 function printNextSteps(pairingUrl: string | null, chisacodeHome: string, richUi: boolean): void {
   const daemonLogPath = path.join(chisacodeHome, "daemon.log");
   const nextStepsLines = [
-    pairingUrl
-      ? "1. Open ChisaCode and scan the QR code above, or paste the pairing link."
-      : "1. Open ChisaCode and connect to your daemon.",
-    "2. Web app: https://app.chisacode.sh",
-    "3. Desktop app: https://github.com/getchisacode/chisacode/releases/latest",
-    "4. Docs: https://chisacode.sh/docs",
-    '5. Example: chisacode run --output-schema schema.json "extract fields"',
+    pairingUrl ? tCli("onboard.nextPair") : tCli("onboard.nextConnect"),
+    tCli("onboard.webApp"),
+    tCli("onboard.desktopApp"),
+    tCli("onboard.docs"),
+    tCli("onboard.example"),
   ];
   const quickReferenceLines = [
     "1. chisacode --help",
     "2. chisacode ls",
     '3. chisacode run "your prompt"',
     "4. chisacode status",
-    `5. Daemon logs: ${daemonLogPath}`,
+    tCli("onboard.daemonLogs", { path: daemonLogPath }),
   ];
 
   if (!richUi) {
     console.log("");
-    console.log("Next steps:");
+    console.log(tCli("onboard.nextSteps") + ":");
     for (const line of nextStepsLines) {
       console.log(line);
     }
     console.log("");
-    console.log("CLI quick reference:");
+    console.log(tCli("onboard.quickReference") + ":");
     for (const line of quickReferenceLines) {
       console.log(line);
     }
     return;
   }
 
-  renderNote(nextStepsLines.join("\n"), "Next steps");
-  renderNote(quickReferenceLines.join("\n"), "CLI quick reference");
+  renderNote(nextStepsLines.join("\n"), tCli("onboard.nextSteps"));
+  renderNote(quickReferenceLines.join("\n"), tCli("onboard.quickReference"));
 }
 
 export function onboardCommand(): Command {
   return new Command("onboard")
-    .description("Run first-time setup, start daemon, and print pairing instructions")
-    .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
-    .option("--port <port>", "Port to listen on (default: 6767)")
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
-    .option("--no-relay", "Disable relay connection")
-    .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
-    .option(
-      "--hostnames <hosts>",
-      'Daemon hostnames (comma-separated, e.g. "myhost,.example.com" or "true" for any)',
-    )
+    .description(tCli("onboard.description"))
+    .option("--listen <listen>", tCli("daemon.option.listen"))
+    .option("--port <port>", tCli("daemon.option.port"))
+    .option("--home <path>", tCli("option.home"))
+    .option("--no-relay", tCli("daemon.option.noRelay"))
+    .option("--no-mcp", tCli("daemon.option.noMcp"))
+    .option("--hostnames <hosts>", tCli("option.hostnames"))
     .addOption(new Option("--allowed-hosts <hosts>").hideHelp())
-    .option("--timeout <seconds>", "Max time to wait for daemon readiness (default: 600)")
-    .option("--voice <mode>", "Voice setup mode: ask, enable, disable", "ask")
+    .option("--timeout <seconds>", tCli("onboard.option.timeout"))
+    .option("--voice <mode>", tCli("onboard.option.voice"), "ask")
     .action(async (options: RawOnboardOptions) => {
       await runOnboard({
         ...options,
@@ -355,14 +351,18 @@ async function resolveAndPersistVoice(
         : await resolveVoiceSelection(options.voice);
   } catch (error) {
     if (error instanceof OnboardCancelledError) {
-      cancel("Onboarding cancelled.");
+      cancel(tCli("onboard.cancelled"));
       process.exit(0);
     }
     throw error;
   }
 
   if (shouldPrompt && persistedVoiceSelection !== null) {
-    log.message(`Using saved voice setup from config (${voiceEnabled ? "enabled" : "disabled"}).`);
+    log.message(
+      tCli("onboard.savedVoice", {
+        state: voiceEnabled ? tCli("onboard.enabled") : tCli("onboard.disabled"),
+      }),
+    );
   }
 
   persisted = applyVoiceSelection(persisted, voiceEnabled);
@@ -373,24 +373,24 @@ async function resolveAndPersistVoice(
 async function ensureDaemonStarted(options: OnboardOptions, richUi: boolean): Promise<void> {
   const stateBeforeStart = resolveLocalDaemonState({ home: options.home });
   if (stateBeforeStart.running) {
-    log.message(`Daemon already running (PID ${stateBeforeStart.pidInfo?.pid ?? "unknown"}).`);
+    log.message(tCli("onboard.daemonAlready", { pid: stateBeforeStart.pidInfo?.pid ?? "unknown" }));
     return;
   }
 
   const startSpinner = richUi ? spinner() : null;
   try {
     if (startSpinner) {
-      startSpinner.start("Starting daemon...");
+      startSpinner.start(tCli("onboard.starting"));
     } else {
-      log.message("Starting daemon...");
+      log.message(tCli("onboard.starting"));
     }
     const startup = await startLocalDaemonDetached(options);
     if (startSpinner) {
-      startSpinner.stop(`Daemon started (PID ${startup.pid ?? "unknown"})`);
+      startSpinner.stop(tCli("onboard.started", { pid: startup.pid ?? "unknown" }));
     } else {
-      log.message(`Daemon started (PID ${startup.pid ?? "unknown"})`);
+      log.message(tCli("onboard.started", { pid: startup.pid ?? "unknown" }));
     }
-    log.message(`Logs: ${startup.logPath}`);
+    log.message(tCli("daemon.start.logs", { path: startup.logPath }));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (startSpinner) {
@@ -410,9 +410,9 @@ async function waitForDaemonReadyWithUi(args: {
   const readySpinner = args.richUi ? spinner() : null;
   try {
     if (readySpinner) {
-      readySpinner.start("Waiting for daemon to become ready...");
+      readySpinner.start(tCli("onboard.waiting"));
     } else {
-      log.message("Waiting for daemon to become ready...");
+      log.message(tCli("onboard.waiting"));
     }
     const readyState = await waitForDaemonReady({
       home: args.home,
@@ -420,9 +420,9 @@ async function waitForDaemonReadyWithUi(args: {
       onStatus: readySpinner ? (message) => readySpinner.message(message) : undefined,
     });
     if (readySpinner) {
-      readySpinner.stop(`Daemon ready on ${readyState.listen}`);
+      readySpinner.stop(tCli("onboard.ready", { listen: readyState.listen }));
     } else {
-      log.message(`Daemon ready on ${readyState.listen}`);
+      log.message(tCli("onboard.ready", { listen: readyState.listen }));
     }
     return readyState;
   } catch (error) {
@@ -439,11 +439,11 @@ async function waitForDaemonReadyWithUi(args: {
 export async function runOnboard(options: OnboardOptions): Promise<void> {
   const richUi = process.stdin.isTTY && process.stdout.isTTY;
   if (richUi) {
-    intro("Welcome to ChisaCode");
+    intro(tCli("onboard.welcome"));
   }
 
   if (options.listen && options.port) {
-    cancel("Cannot use --listen and --port together");
+    cancel(tCli("daemon.error.listenPort"));
     process.exit(1);
   }
 
@@ -464,11 +464,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   const voiceEnabled = await resolveAndPersistVoice(chisacodeHome, options);
   const config = loadConfig(chisacodeHome, { cli: toCliOverrides(options) });
 
-  log.message(
-    voiceEnabled
-      ? "Voice features enabled. Local speech models will be downloaded automatically if missing."
-      : "Voice features disabled. Local speech models will not be downloaded.",
-  );
+  log.message(voiceEnabled ? tCli("onboard.voiceEnabled") : tCli("onboard.voiceDisabled"));
 
   await ensureDaemonStarted(options, richUi);
   await waitForDaemonReadyWithUi({
@@ -478,10 +474,10 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   });
 
   if (config.relayEnabled === false) {
-    log.warn("Relay is disabled; pairing offer is unavailable for this daemon.");
+    log.warn(tCli("onboard.relayDisabled"));
     printNextSteps(null, chisacodeHome, richUi);
     if (richUi) {
-      outro("ChisaCode daemon is running.");
+      outro(tCli("onboard.daemonRunning"));
     }
     return;
   }
@@ -498,21 +494,18 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   });
 
   if (!pairing.url) {
-    log.warn("Relay pairing URL is unavailable for this daemon configuration.");
+    log.warn(tCli("onboard.relayUrlUnavailable"));
     printNextSteps(null, chisacodeHome, richUi);
     if (richUi) {
-      outro("ChisaCode daemon is running.");
+      outro(tCli("onboard.daemonRunning"));
     }
     return;
   }
 
-  renderNote(
-    pairing.qr ?? "QR is unavailable in this terminal. Use the pairing link below.",
-    "Scan to pair",
-  );
-  renderNote(pairing.url, "Pairing link");
+  renderNote(pairing.qr ?? tCli("onboard.qrUnavailable"), tCli("onboard.scan"));
+  renderNote(pairing.url, tCli("onboard.pairingLink"));
   printNextSteps(pairing.url, chisacodeHome, richUi);
   if (richUi) {
-    outro("ChisaCode is ready!");
+    outro(tCli("onboard.readyOutro"));
   }
 }

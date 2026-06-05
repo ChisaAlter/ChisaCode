@@ -15,6 +15,7 @@ import type {
   SingleResult,
 } from "../../output/index.js";
 import { resolveLocalChisaCodeHome } from "./local-daemon.js";
+import { tCli } from "../../i18n.js";
 
 const CONFIG_FILENAME = "config.json";
 
@@ -35,16 +36,16 @@ export interface SetPasswordOptions {
 const setPasswordResultSchema: OutputSchema<SetPasswordResult> = {
   idField: "action",
   columns: [
-    { header: "STATUS", field: "action", color: () => "green" },
-    { header: "CONFIG", field: "configPath" },
-    { header: "RESTART", field: "restartCommand" },
+    { header: tCli("daemon.table.status"), field: "action", color: () => "green" },
+    { header: tCli("daemon.table.config"), field: "configPath" },
+    { header: tCli("daemon.table.restart"), field: "restartCommand" },
   ],
   renderHuman: (result, options: OutputOptions) => {
     const data = result.data as SetPasswordResult;
     const rows = [
-      `Password written to ${data.configPath}`,
-      "Restart the daemon for the change to take effect.",
-      `Run: ${data.restartCommand}`,
+      tCli("daemon.password.written", { path: data.configPath }),
+      tCli("daemon.password.restartHint"),
+      tCli("daemon.password.run", { command: data.restartCommand }),
     ];
     if (options.format === "table") {
       return rows.join("\n");
@@ -58,20 +59,20 @@ function createCommandError(code: string, message: string, details?: string): Co
 }
 
 async function promptForPassword(promptPassword: PromptPassword): Promise<string> {
-  const first = await promptPassword("New daemon password");
+  const first = await promptPassword(tCli("daemon.password.promptNew"));
   if (isCancel(first)) {
-    throw createCommandError("PASSWORD_CANCELLED", "Password update cancelled");
+    throw createCommandError("PASSWORD_CANCELLED", tCli("daemon.password.cancelled"));
   }
   if (typeof first !== "string" || first.length === 0) {
-    throw createCommandError("PASSWORD_REQUIRED", "Password cannot be empty");
+    throw createCommandError("PASSWORD_REQUIRED", tCli("daemon.password.required"));
   }
 
-  const second = await promptPassword("Confirm daemon password");
+  const second = await promptPassword(tCli("daemon.password.promptConfirm"));
   if (isCancel(second)) {
-    throw createCommandError("PASSWORD_CANCELLED", "Password update cancelled");
+    throw createCommandError("PASSWORD_CANCELLED", tCli("daemon.password.cancelled"));
   }
   if (first !== second) {
-    throw createCommandError("PASSWORD_MISMATCH", "Passwords do not match");
+    throw createCommandError("PASSWORD_MISMATCH", tCli("daemon.password.mismatch"));
   }
 
   return first;
@@ -97,11 +98,16 @@ export async function setDaemonPasswordInConfig(
 
   savePersistedConfig(chisacodeHome, nextConfig);
 
+  const restartCommand = "chisacode daemon restart";
   return {
     action: "password_set",
     configPath,
-    restartCommand: "chisacode daemon restart",
-    message: `Password written to ${configPath}\nRestart the daemon for the change to take effect.\nRun: chisacode daemon restart`,
+    restartCommand,
+    message: [
+      tCli("daemon.password.written", { path: configPath }),
+      tCli("daemon.password.restartHint"),
+      tCli("daemon.password.run", { command: restartCommand }),
+    ].join("\n"),
   };
 }
 

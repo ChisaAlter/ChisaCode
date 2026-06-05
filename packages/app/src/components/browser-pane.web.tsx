@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 interface BrowserPaneProps {
   browserId: string;
@@ -13,6 +14,7 @@ interface BrowserPaneProps {
 
 export function BrowserPane({ browserId }: BrowserPaneProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const titleStyle = useMemo(
     () => [styles.title, { color: theme.colors.foreground }],
     [theme.colors.foreground],
@@ -24,8 +26,8 @@ export function BrowserPane({ browserId }: BrowserPaneProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={titleStyle}>浏览器仅支持桌面端</Text>
-      <Text style={subtitleStyle}>在 Electron 中打开此工作区即可使用内置浏览器。</Text>
+      <Text style={titleStyle}>{t("browser.desktopOnlyTitle")}</Text>
+      <Text style={subtitleStyle}>{t("browser.desktopOnlyBody")}</Text>
       <Text style={subtitleStyle}>浏览器会话 {browserId}</Text>
     </View>
   );

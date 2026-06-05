@@ -64,7 +64,7 @@ export function shouldShowDesktopUpdateSection(): boolean {
 
 export function parseLocalDaemonVersionResult(raw: unknown): LocalDaemonVersionResult {
   if (!isRecord(raw)) {
-    return { version: null, error: "Unexpected response from version check." };
+    return { version: null, error: "版本检查返回了意外响应。" };
   }
 
   return {
@@ -104,7 +104,7 @@ export async function checkDesktopAppUpdate({
 }): Promise<DesktopAppUpdateCheckResult> {
   const result = await invokeDesktopCommand<unknown>("check_app_update", { releaseChannel });
   if (!isRecord(result)) {
-    throw new Error("Unexpected response while checking desktop updates.");
+    throw new Error("检查桌面端更新时返回了意外响应。");
   }
 
   return {
@@ -124,20 +124,20 @@ export async function installDesktopAppUpdate({
 }): Promise<DesktopAppUpdateInstallResult> {
   const result = await invokeDesktopCommand<unknown>("install_app_update", { releaseChannel });
   if (!isRecord(result)) {
-    throw new Error("Unexpected response while installing desktop update.");
+    throw new Error("安装桌面端更新时返回了意外响应。");
   }
 
   return {
     installed: result.installed === true,
     version: toStringOrNull(result.version),
-    message: toStringOrNull(result.message) ?? "Update completed.",
+    message: toStringOrNull(result.message) ?? "更新已完成。",
   };
 }
 
 export async function runLocalDaemonUpdate(): Promise<LocalDaemonUpdateResult> {
   const result = await invokeDesktopCommand<unknown>("run_local_daemon_update");
   if (!isRecord(result)) {
-    throw new Error("Unexpected response while updating local daemon.");
+    throw new Error("更新本地 daemon 时返回了意外响应。");
   }
 
   return {

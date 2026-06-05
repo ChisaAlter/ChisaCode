@@ -470,10 +470,7 @@ function AppContainer({
       <CommandCenter />
       <ProjectPickerModal />
       <ProviderSettingsHost />
-      <WorkspaceShortcutTargetsSubscriber
-        enabled={keyboardShortcutsEnabled}
-        serverId={activeServerId}
-      />
+      <WorkspaceShortcutTargetsSubscriber enabled={false} serverId={activeServerId} />
       <WorkspaceSetupDialog />
       <KeyboardShortcutsDialog />
       <QuittingOverlay />

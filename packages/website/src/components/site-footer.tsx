@@ -1,35 +1,37 @@
 import { appStoreUrl, playStoreUrl, webAppUrl } from "~/downloads";
+import { useWebsiteI18n } from "~/i18n";
 
 interface SiteFooterProps {
   width?: "default" | "prose";
 }
 
 export function SiteFooter({ width = "default" }: SiteFooterProps) {
+  const { t } = useWebsiteI18n();
   const widthClasses =
     width === "prose" ? "max-w-prose p-6 md:p-12 md:pt-0" : "max-w-5xl p-6 md:p-20 md:pt-0";
   return (
     <footer className={`${widthClasses} mx-auto`}>
       <div className="border-t border-white/10 pt-8 pb-4 grid grid-cols-2 sm:grid-cols-4 gap-8 text-sm">
         <div className="space-y-3">
-          <p className="text-white/60 font-medium">Product</p>
+          <p className="text-white/60 font-medium">{t("footer.product")}</p>
           <div className="space-y-2">
             <a
               href="/blog"
               className="block text-muted-foreground hover:text-foreground transition-colors"
             >
-              Blog
+              {t("nav.blog")}
             </a>
             <a
               href="/docs"
               className="block text-muted-foreground hover:text-foreground transition-colors"
             >
-              Docs
+              {t("nav.docs")}
             </a>
             <a
               href="/changelog"
               className="block text-muted-foreground hover:text-foreground transition-colors"
             >
-              Changelog
+              {t("nav.changelog")}
             </a>
             <a
               href="/docs/cli"
@@ -41,12 +43,12 @@ export function SiteFooter({ width = "default" }: SiteFooterProps) {
               href="/privacy"
               className="block text-muted-foreground hover:text-foreground transition-colors"
             >
-              Privacy
+              {t("footer.privacy")}
             </a>
           </div>
         </div>
         <div className="space-y-3">
-          <p className="text-white/60 font-medium">Agents</p>
+          <p className="text-white/60 font-medium">{t("footer.agents")}</p>
           <div className="space-y-2">
             <a
               href="/claude-code"
@@ -70,12 +72,12 @@ export function SiteFooter({ width = "default" }: SiteFooterProps) {
               href="/agents"
               className="block text-muted-foreground hover:text-foreground transition-colors"
             >
-              All providers
+              {t("footer.allProviders")}
             </a>
           </div>
         </div>
         <div className="space-y-3">
-          <p className="text-white/60 font-medium">Community</p>
+          <p className="text-white/60 font-medium">{t("footer.community")}</p>
           <div className="space-y-2">
             <a
               href="https://discord.gg/jz8T2uahpH"
@@ -104,7 +106,7 @@ export function SiteFooter({ width = "default" }: SiteFooterProps) {
           </div>
         </div>
         <div className="space-y-3">
-          <p className="text-white/60 font-medium">Download</p>
+          <p className="text-white/60 font-medium">{t("footer.download")}</p>
           <div className="space-y-2">
             <a
               href={appStoreUrl}
@@ -136,7 +138,7 @@ export function SiteFooter({ width = "default" }: SiteFooterProps) {
               rel="noopener noreferrer"
               className="block text-muted-foreground hover:text-foreground transition-colors"
             >
-              Web App
+              {t("footer.webApp")}
             </a>
           </div>
         </div>

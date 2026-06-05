@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getPosts, formatDate } from "~/posts";
 import { pageMeta } from "~/meta";
+import { useWebsiteI18n } from "~/i18n";
 
 interface BlogSearch {
   drafts?: true;
@@ -30,6 +31,7 @@ interface PostRowProps {
 
 function PostRow({ slug, title, date, draft }: PostRowProps) {
   const params = useMemo(() => ({ _splat: slug }), [slug]);
+  const { t } = useWebsiteI18n();
   return (
     <div className="flex flex-col-reverse items-start md:flex-row md:items-center gap-x-4">
       <span className="text-lg text-muted-foreground tabular-nums">
@@ -42,7 +44,9 @@ function PostRow({ slug, title, date, draft }: PostRowProps) {
       >
         {title}
         {draft && (
-          <span className="ml-2 text-xs px-2 py-1 bg-primary/20 text-primary rounded">DRAFT</span>
+          <span className="ml-2 text-xs px-2 py-1 bg-primary/20 text-primary rounded">
+            {t("blog.draft")}
+          </span>
         )}
       </Link>
     </div>
@@ -50,6 +54,7 @@ function PostRow({ slug, title, date, draft }: PostRowProps) {
 }
 
 function BlogIndex() {
+  const { t } = useWebsiteI18n();
   const { drafts } = Route.useSearch();
   const posts = getPosts(drafts === true);
 
@@ -57,7 +62,7 @@ function BlogIndex() {
     <div>
       {drafts && (
         <div className="mb-6 p-4 bg-primary/10 rounded border-l-4 border-primary">
-          <p className="text-sm text-foreground/80">Showing draft posts</p>
+          <p className="text-sm text-foreground/80">{t("blog.showingDrafts")}</p>
         </div>
       )}
       <div className="space-y-2">
@@ -70,7 +75,7 @@ function BlogIndex() {
             draft={frontmatter.draft}
           />
         ))}
-        {posts.length === 0 && <p className="text-muted-foreground">No posts yet.</p>}
+        {posts.length === 0 && <p className="text-muted-foreground">{t("blog.empty")}</p>}
       </div>
     </div>
   );

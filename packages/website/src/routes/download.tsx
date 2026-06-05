@@ -14,6 +14,7 @@ import {
   TerminalIcon,
   GlobeIcon,
 } from "~/downloads";
+import { useWebsiteI18n } from "~/i18n";
 import { useRelease } from "~/routes/__root";
 import "~/styles.css";
 
@@ -29,22 +30,23 @@ export const Route = createFileRoute("/download")({
 
 function Download() {
   const release = useRelease();
+  const { t } = useWebsiteI18n();
   const { version } = release;
   const urls = downloadUrls(release);
 
   return (
     <SiteShell>
-      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2">Download</h1>
+      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2">
+        {t("download.title")}
+      </h1>
       <p className="text-muted-foreground mb-10">v{version}</p>
 
       {/* Desktop */}
       <section className="rounded-xl border border-border bg-card/40 p-6 md:p-8 mb-6">
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h2 className="text-2xl font-semibold">Desktop</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Recommended, bundles everything you need
-            </p>
+            <h2 className="text-2xl font-semibold">{t("download.desktop")}</h2>
+            <p className="text-sm text-muted-foreground mt-1">{t("download.desktopDescription")}</p>
           </div>
           <MonitorIcon className="h-5 w-5 text-muted-foreground mt-1.5" />
         </div>
@@ -80,7 +82,7 @@ function Download() {
             <div className="flex flex-wrap gap-2">
               <DownloadPill
                 href={urls.windowsExeX64}
-                label={urls.windowsExeArm64 ? "Intel / x64" : "Download"}
+                label={urls.windowsExeArm64 ? "Intel / x64" : t("download.download")}
               />
               {urls.windowsExeArm64 && <DownloadPill href={urls.windowsExeArm64} label="ARM64" />}
             </div>
@@ -104,7 +106,7 @@ function Download() {
       {/* Mobile */}
       <section className="rounded-xl border border-border bg-card/40 p-6 md:p-8 mb-6">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-semibold">Mobile</h2>
+          <h2 className="text-2xl font-semibold">{t("download.mobile")}</h2>
           <PhoneIcon className="h-5 w-5 text-muted-foreground" />
         </div>
 
@@ -138,10 +140,8 @@ function Download() {
       <section className="rounded-xl border border-border bg-card/40 p-6 md:p-8 mb-6">
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h2 className="text-2xl font-semibold">Web</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Connect to a server from any browser
-            </p>
+            <h2 className="text-2xl font-semibold">{t("download.web")}</h2>
+            <p className="text-sm text-muted-foreground mt-1">{t("download.webDescription")}</p>
           </div>
           <GlobeIcon className="h-5 w-5 text-muted-foreground mt-1.5" />
         </div>
@@ -150,10 +150,10 @@ function Download() {
           <div className="flex flex-col gap-3 py-5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <GlobeIcon className="h-5 w-5 text-foreground" />
-              <span className="font-medium">Web App</span>
+              <span className="font-medium">{t("download.webApp")}</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              <DownloadPill href={webAppUrl} label="Open" external />
+              <DownloadPill href={webAppUrl} label={t("download.open")} external />
             </div>
           </div>
         </div>
@@ -163,10 +163,8 @@ function Download() {
       <section className="rounded-xl border border-border bg-card/40 p-6 md:p-8">
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h2 className="text-2xl font-semibold">Server</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Run the ChisaCode server anywhere, connect from any client
-            </p>
+            <h2 className="text-2xl font-semibold">{t("download.server")}</h2>
+            <p className="text-sm text-muted-foreground mt-1">{t("download.serverDescription")}</p>
           </div>
           <TerminalIcon className="h-5 w-5 text-muted-foreground mt-1.5" />
         </div>
@@ -191,7 +189,7 @@ function Download() {
       </section>
 
       <p className="text-center text-xs text-muted-foreground mt-8">
-        All releases are available on{" "}
+        {t("download.allReleasesPrefix")}{" "}
         <a
           href="https://github.com/getchisacode/chisacode/releases"
           target="_blank"
@@ -200,7 +198,7 @@ function Download() {
         >
           GitHub
         </a>
-        .
+        {t("download.allReleasesSuffix")}
       </p>
     </SiteShell>
   );

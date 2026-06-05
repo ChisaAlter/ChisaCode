@@ -1,10 +1,16 @@
 import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveChisaCodeHome } from "@chisacode/server";
+import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings.js";
+import { translateDesktop, type DesktopTranslationKey } from "../i18n.js";
 
 const ATTACHMENTS_DIRNAME = "desktop-attachments";
 const ATTACHMENT_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const EXTENSION_PATTERN = /^\.[A-Za-z0-9]{1,16}$/;
+
+function t(key: DesktopTranslationKey): string {
+  return translateDesktop(DEFAULT_DESKTOP_SETTINGS.language, key);
+}
 
 interface AttachmentFileResult {
   path: string;
@@ -23,11 +29,11 @@ async function ensureAttachmentsDir(): Promise<string> {
 
 function normalizeAttachmentId(value: unknown): string {
   if (typeof value !== "string") {
-    throw new Error("附件 ID 不能为空。");
+    throw new Error(t("attachment.idRequired"));
   }
   const normalized = value.trim();
   if (!ATTACHMENT_ID_PATTERN.test(normalized)) {
-    throw new Error(`Invalid attachment id: ${value}`);
+    throw new Error(t("attachment.idInvalid"));
   }
   return normalized;
 }
@@ -37,11 +43,11 @@ function normalizeExtension(value: unknown): string {
     return ".bin";
   }
   if (typeof value !== "string") {
-    throw new Error("附件扩展名必须是字符串。");
+    throw new Error(t("attachment.extensionString"));
   }
   const normalized = value.trim().toLowerCase();
   if (!EXTENSION_PATTERN.test(normalized)) {
-    throw new Error(`Invalid attachment extension: ${value}`);
+    throw new Error(t("attachment.extensionInvalid"));
   }
   return normalized;
 }
@@ -58,12 +64,12 @@ async function buildManagedAttachmentPath(input: {
 
 function resolveManagedAttachmentPath(inputPath: unknown): string {
   if (typeof inputPath !== "string" || inputPath.trim().length === 0) {
-    throw new Error("附件路径不能为空。");
+    throw new Error(t("attachment.pathRequired"));
   }
   const resolvedDir = `${path.resolve(attachmentsDirPath())}${path.sep}`;
   const resolvedPath = path.resolve(inputPath.trim());
   if (!resolvedPath.startsWith(resolvedDir)) {
-    throw new Error("附件路径必须在桌面端管理的存储范围内。");
+    throw new Error(t("attachment.pathOutsideManagedStorage"));
   }
   return resolvedPath;
 }
@@ -75,7 +81,7 @@ export async function writeAttachmentBase64(input: {
 }): Promise<AttachmentFileResult> {
   const base64 = typeof input.base64 === "string" ? input.base64.trim() : "";
   if (base64.length === 0) {
-    throw new Error("附件 base64 数据不能为空。");
+    throw new Error(t("attachment.base64Required"));
   }
 
   const targetPath = await buildManagedAttachmentPath({
@@ -100,7 +106,7 @@ function normalizeBytes(value: unknown): Uint8Array {
   if (Array.isArray(value)) {
     return Uint8Array.from(value);
   }
-  throw new Error("附件字节数据不能为空。");
+  throw new Error(t("attachment.bytesRequired"));
 }
 
 export async function writeAttachmentBytes(input: {
@@ -127,7 +133,7 @@ export async function copyAttachmentFileToManagedStorage(input: {
   extension?: unknown;
 }): Promise<AttachmentFileResult> {
   if (typeof input.sourcePath !== "string" || input.sourcePath.trim().length === 0) {
-    throw new Error("附件源路径不能为空。");
+    throw new Error(t("attachment.sourcePathRequired"));
   }
 
   const sourcePath = path.resolve(input.sourcePath.trim());

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SiteShell } from "~/components/site-shell";
+import { useWebsiteI18n } from "~/i18n";
 import { pageMeta } from "~/meta";
 
 export const Route = createFileRoute("/privacy")({
@@ -13,69 +14,51 @@ export const Route = createFileRoute("/privacy")({
 });
 
 function Privacy() {
+  const { t } = useWebsiteI18n();
+
   return (
     <SiteShell>
-      <h1 className="text-3xl font-medium mb-8">Privacy Policy</h1>
+      <h1 className="text-3xl font-medium mb-8">{t("privacy.title")}</h1>
 
       <div className="space-y-6 text-white/70 leading-relaxed">
-        <p>
-          ChisaCode is a self-hosted tool for managing coding agents. Your code and data stay on
-          your machine.
-        </p>
+        <p>{t("privacy.intro")}</p>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-medium text-white">What we collect</h2>
-          <p>Nothing. ChisaCode runs on your machine and doesn&apos;t send us any data.</p>
+          <h2 className="text-xl font-medium text-white">{t("privacy.collectTitle")}</h2>
+          <p>{t("privacy.collectBody")}</p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-medium text-white">The relay server</h2>
-          <p>
-            If you use the optional encrypted relay to connect your phone to your daemon, the relay
-            sees:
-          </p>
+          <h2 className="text-xl font-medium text-white">{t("privacy.relayTitle")}</h2>
+          <p>{t("privacy.relayIntro")}</p>
           <ul className="list-disc list-inside space-y-1 ml-4">
-            <li>IP addresses and connection timing</li>
-            <li>Message sizes</li>
-            <li>Session IDs</li>
+            <li>{t("privacy.relayIp")}</li>
+            <li>{t("privacy.relaySizes")}</li>
+            <li>{t("privacy.relaySessionIds")}</li>
           </ul>
-          <p>
-            All messages between your phone and daemon are end-to-end encrypted with
-            XSalsa20-Poly1305. The relay cannot read your messages, see your code, or decrypt your
-            traffic.
-          </p>
+          <p>{t("privacy.relayBody")}</p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-medium text-white">Analytics and tracking</h2>
-          <p>
-            We don&apos;t use analytics, tracking pixels, cookies, or ads. The app doesn&apos;t
-            phone home.
-          </p>
+          <h2 className="text-xl font-medium text-white">{t("privacy.analyticsTitle")}</h2>
+          <p>{t("privacy.analyticsBody")}</p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-medium text-white">Third-party services</h2>
-          <p>
-            ChisaCode wraps agent providers like Claude Code, Codex, and OpenCode. Those tools
-            communicate with their own APIs (Anthropic, OpenAI, etc.) using your credentials.
-            ChisaCode doesn&apos;t manage or intercept those API calls.
-          </p>
-          <p>
-            If you use voice features with cloud providers (OpenAI speech), your voice data is sent
-            to those services according to their privacy policies.
-          </p>
+          <h2 className="text-xl font-medium text-white">{t("privacy.thirdPartyTitle")}</h2>
+          <p>{t("privacy.thirdPartyBody1")}</p>
+          <p>{t("privacy.thirdPartyBody2")}</p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-medium text-white">We don&apos;t sell your data</h2>
-          <p>We don&apos;t have your data to sell. ChisaCode is self-hosted and local-first.</p>
+          <h2 className="text-xl font-medium text-white">{t("privacy.noSellTitle")}</h2>
+          <p>{t("privacy.noSellBody")}</p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-medium text-white">Questions</h2>
+          <h2 className="text-xl font-medium text-white">{t("privacy.questionsTitle")}</h2>
           <p>
-            If you have questions about privacy, open an issue on{" "}
+            {t("privacy.questionsBodyPrefix")}{" "}
             <a
               href="https://github.com/getchisacode/chisacode"
               target="_blank"
@@ -84,11 +67,11 @@ function Privacy() {
             >
               GitHub
             </a>
-            .
+            {t("privacy.questionsBodySuffix")}
           </p>
         </section>
 
-        <p className="text-sm text-white/50 pt-6">Last updated: February 2025</p>
+        <p className="text-sm text-white/50 pt-6">{t("privacy.updated")}</p>
       </div>
     </SiteShell>
   );

@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import type { EditorTargetDescriptorPayload } from "@chisacode/protocol/messages";
 import { EditorAppIcon } from "@/components/icons/editor-app-icons";
 import { GitHubIcon } from "@/components/icons/github-icon";
@@ -82,6 +83,7 @@ export function WorkspaceOpenInEditorButton({
   cwd,
   hideLabels,
 }: WorkspaceOpenInEditorButtonProps) {
+  const { t } = useTranslation();
   const toast = useToast();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -129,7 +131,7 @@ export function WorkspaceOpenInEditorButton({
         requiresLocalDaemon: true,
         onOpen: async () => {
           if (!client) {
-            throw new Error("Host is not connected");
+            throw new Error(t("workspace.screen.hostDisconnected"));
           }
           const payload = await client.openInEditor(cwd, editor.id);
           if (payload.error) {
@@ -137,7 +139,7 @@ export function WorkspaceOpenInEditorButton({
           }
         },
       })),
-    [availableEditors, client, cwd],
+    [availableEditors, client, cwd, t],
   );
 
   const githubTarget = useMemo<OpenTarget | null>(() => {
@@ -181,7 +183,7 @@ export function WorkspaceOpenInEditorButton({
   const openMutation = useMutation({
     mutationFn: (target: OpenTarget) => Promise.resolve(target.onOpen()),
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Failed to open workspace");
+      toast.error(error instanceof Error ? error.message : t("workspace.openWorkspaceFailed"));
     },
   });
 
@@ -229,7 +231,7 @@ export function WorkspaceOpenInEditorButton({
           onPress={handlePrimaryPress}
           disabled={openMutation.isPending}
           accessibilityRole="button"
-          accessibilityLabel={`在 ${primaryOption.label} 中打开工作区`}
+          accessibilityLabel={t("workspace.openInEditor", { editor: primaryOption.label })}
         >
           {openMutation.isPending ? (
             <ThemedActivityIndicator
@@ -240,7 +242,7 @@ export function WorkspaceOpenInEditorButton({
           ) : (
             <View style={styles.splitButtonContent}>
               {primaryOption.icon}
-              {!hideLabels && <Text style={styles.splitButtonText}>打开</Text>}
+              {!hideLabels && <Text style={styles.splitButtonText}>{t("workspace.open")}</Text>}
             </View>
           )}
         </Pressable>
@@ -250,7 +252,7 @@ export function WorkspaceOpenInEditorButton({
               testID="workspace-open-in-editor-caret"
               style={caretTriggerStyle}
               accessibilityRole="button"
-              accessibilityLabel="选择编辑器"
+              accessibilityLabel={t("workspace.selectEditor")}
             >
               <ThemedChevronDown size={16} uniProps={mutedColorMapping} />
             </DropdownMenuTrigger>

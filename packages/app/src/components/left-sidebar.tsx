@@ -32,6 +32,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
@@ -40,13 +41,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
+import { useAgentHistory } from "@/hooks/use-agent-history";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { useSidebarShortcutModel } from "@/hooks/use-sidebar-shortcut-model";
-import {
-  type SidebarProjectEntry,
-  useSidebarWorkspacesList,
-} from "@/hooks/use-sidebar-workspaces-list";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import {
   MAX_SIDEBAR_WIDTH,
@@ -65,11 +62,10 @@ import {
 } from "@/utils/host-routes";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
-import { SidebarWorkspaceList } from "./sidebar-workspace-list";
+import { SidebarSessionList } from "./sidebar-session-list";
 
 const MIN_CHAT_WIDTH = 400;
 
-type SidebarShortcutModel = ReturnType<typeof useSidebarShortcutModel>;
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 
 interface LeftSidebarProps {
@@ -85,14 +81,15 @@ interface SidebarSharedProps {
   hostTriggerRef: RefObject<View | null>;
   isHostPickerOpen: boolean;
   setIsHostPickerOpen: Dispatch<SetStateAction<boolean>>;
-  projects: SidebarProjectEntry[];
+  agents: ReturnType<typeof useAgentHistory>["agents"];
+  selectedAgentId?: string;
   isInitialLoad: boolean;
   isRevalidating: boolean;
+  isLoadingMore: boolean;
   isManualRefresh: boolean;
-  collapsedProjectKeys: SidebarShortcutModel["collapsedProjectKeys"];
-  shortcutIndexByWorkspaceKey: SidebarShortcutModel["shortcutIndexByWorkspaceKey"];
-  toggleProjectCollapsed: SidebarShortcutModel["toggleProjectCollapsed"];
+  hasMore: boolean;
   handleRefresh: () => void;
+  handleLoadMore: () => void;
   handleHostSelect: (nextServerId: string) => void;
   handleOpenProject: () => void;
   handleHome: () => void;
@@ -119,11 +116,7 @@ interface DesktopSidebarProps extends SidebarSharedProps {
   handleViewMore: () => void;
 }
 
-export const LeftSidebar = memo(function LeftSidebar({
-  selectedAgentId: _selectedAgentId,
-}: LeftSidebarProps) {
-  void _selectedAgentId;
-
+export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSidebarProps) {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isCompactLayout = useIsCompactFormFactor();
@@ -185,12 +178,11 @@ export const LeftSidebar = memo(function LeftSidebar({
   const hostTriggerRef = useRef<View | null>(null);
   const [isHostPickerOpen, setIsHostPickerOpen] = useState(false);
 
-  const { projects, isInitialLoad, isRevalidating, refreshAll } = useSidebarWorkspacesList({
-    serverId: activeServerId,
-    enabled: isCompactLayout || isOpen,
-  });
-  const { collapsedProjectKeys, shortcutIndexByWorkspaceKey, toggleProjectCollapsed } =
-    useSidebarShortcutModel({ projects, isInitialLoad });
+  const { agents, isInitialLoad, isRevalidating, isLoadingMore, hasMore, refreshAll, loadMore } =
+    useAgentHistory({
+      serverId: activeServerId,
+      enabled: isCompactLayout || isOpen,
+    });
 
   const [isManualRefresh, setIsManualRefresh] = useState(false);
 
@@ -198,6 +190,10 @@ export const LeftSidebar = memo(function LeftSidebar({
     setIsManualRefresh(true);
     refreshAll();
   }, [refreshAll]);
+
+  const handleLoadMore = useCallback(() => {
+    loadMore();
+  }, [loadMore]);
 
   useEffect(() => {
     if (!isRevalidating && isManualRefresh) {
@@ -264,14 +260,15 @@ export const LeftSidebar = memo(function LeftSidebar({
     hostTriggerRef,
     isHostPickerOpen,
     setIsHostPickerOpen,
-    projects,
+    agents,
+    selectedAgentId,
     isInitialLoad,
     isRevalidating,
+    isLoadingMore,
     isManualRefresh,
-    collapsedProjectKeys,
-    shortcutIndexByWorkspaceKey,
-    toggleProjectCollapsed,
+    hasMore,
     handleRefresh,
+    handleLoadMore,
     handleHostSelect,
     renderHostOption,
   };
@@ -446,6 +443,7 @@ function SidebarFooter({
   handleHome: () => void;
   handleSettings: () => void;
 }) {
+  const { t } = useTranslation();
   const newAgentKeys = useShortcutKeys("new-agent");
   return (
     <View style={styles.sidebarFooter}>
@@ -494,7 +492,7 @@ function SidebarFooter({
         onSelect={handleHostSelect}
         renderOption={renderHostOption}
         searchable={false}
-        title="Switch host"
+        title={t("host.switchHost")}
         searchPlaceholder="搜索主机..."
         desktopMinWidth={280}
         open={isHostPickerOpen}
@@ -514,14 +512,15 @@ function MobileSidebar({
   hostTriggerRef,
   isHostPickerOpen,
   setIsHostPickerOpen,
-  projects,
+  agents,
+  selectedAgentId,
   isInitialLoad,
   isRevalidating,
+  isLoadingMore,
   isManualRefresh,
-  collapsedProjectKeys,
-  shortcutIndexByWorkspaceKey,
-  toggleProjectCollapsed,
+  hasMore,
   handleRefresh,
+  handleLoadMore,
   handleHostSelect,
   renderHostOption,
   handleOpenProject,
@@ -570,7 +569,7 @@ function MobileSidebar({
     windowWidth,
   ]);
 
-  const handleWorkspacePress = useCallback(() => {
+  const handleAgentPress = useCallback(() => {
     closeToAgent();
   }, [closeToAgent]);
 
@@ -728,17 +727,17 @@ function MobileSidebar({
             {isInitialLoad ? (
               <SidebarAgentListSkeleton />
             ) : (
-              <SidebarWorkspaceList
+              <SidebarSessionList
                 serverId={activeServerId}
-                collapsedProjectKeys={collapsedProjectKeys}
-                onToggleProjectCollapsed={toggleProjectCollapsed}
-                shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-                projects={projects}
+                agents={agents}
+                selectedAgentId={selectedAgentId}
                 isRefreshing={isManualRefresh && isRevalidating}
                 onRefresh={handleRefresh}
-                onWorkspacePress={handleWorkspacePress}
+                hasMore={hasMore}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={handleLoadMore}
+                onAgentPress={handleAgentPress}
                 onAddProject={handleOpenProject}
-                parentGestureRef={closeGestureRef}
               />
             )}
 
@@ -773,14 +772,15 @@ function DesktopSidebar({
   hostTriggerRef,
   isHostPickerOpen,
   setIsHostPickerOpen,
-  projects,
+  agents,
+  selectedAgentId,
   isInitialLoad,
   isRevalidating,
+  isLoadingMore,
   isManualRefresh,
-  collapsedProjectKeys,
-  shortcutIndexByWorkspaceKey,
-  toggleProjectCollapsed,
+  hasMore,
   handleRefresh,
+  handleLoadMore,
   handleHostSelect,
   renderHostOption,
   handleOpenProject,
@@ -872,14 +872,15 @@ function DesktopSidebar({
         {isInitialLoad ? (
           <SidebarAgentListSkeleton />
         ) : (
-          <SidebarWorkspaceList
+          <SidebarSessionList
             serverId={activeServerId}
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
-            shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            projects={projects}
+            agents={agents}
+            selectedAgentId={selectedAgentId}
             isRefreshing={isManualRefresh && isRevalidating}
             onRefresh={handleRefresh}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={handleLoadMore}
             onAddProject={handleOpenProject}
           />
         )}

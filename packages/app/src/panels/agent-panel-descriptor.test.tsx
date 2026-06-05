@@ -5,12 +5,18 @@ function TestIcon() {
   return null;
 }
 
+const COPY = {
+  newAgent: "New Agent",
+  creatingAgent: "Creating agent",
+};
+
 describe("buildDraftPanelDescriptor", () => {
   it("uses the initial prompt title and running loader bucket during create", () => {
     const descriptor = buildDraftPanelDescriptor({
       isCreating: true,
       pendingPrompt: "Build the dashboard",
       icon: TestIcon,
+      copy: COPY,
     });
 
     expect(descriptor).toMatchObject({
@@ -26,13 +32,18 @@ describe("buildDraftPanelDescriptor", () => {
       isCreating: true,
       pendingPrompt: "   ",
       icon: TestIcon,
+      copy: COPY,
     });
 
     expect(descriptor.label).toBe("New Agent");
   });
 
   it("keeps ordinary draft tabs labeled as new agents", () => {
-    const descriptor = buildDraftPanelDescriptor({ isCreating: false, icon: TestIcon });
+    const descriptor = buildDraftPanelDescriptor({
+      isCreating: false,
+      icon: TestIcon,
+      copy: COPY,
+    });
 
     expect(descriptor).toMatchObject({
       label: "New Agent",

@@ -5,6 +5,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -147,13 +148,14 @@ function buildChatAgentFromState(
 function renderChatAgentNonReadyView(args: {
   viewState: AgentScreenViewState;
   effectiveAgent: AgentScreenAgent | null;
+  copy: { notFound: string; loadFailed: string };
 }): React.ReactElement | null {
-  const { viewState, effectiveAgent } = args;
+  const { copy, viewState, effectiveAgent } = args;
   if (viewState.tag === "not_found") {
     return (
       <View style={styles.container} testID="agent-not-found">
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>找不到智能体</Text>
+          <Text style={styles.errorText}>{copy.notFound}</Text>
         </View>
       </View>
     );
@@ -162,7 +164,7 @@ function renderChatAgentNonReadyView(args: {
     return (
       <View style={styles.container} testID="agent-load-error">
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>加载智能体失败</Text>
+          <Text style={styles.errorText}>{copy.loadFailed}</Text>
           <Text style={styles.statusText}>{viewState.message}</Text>
         </View>
       </View>
@@ -369,6 +371,7 @@ export function useDraftPanelDescriptor(
   target: { kind: "draft"; draftId: string },
   context: { serverId: string },
 ) {
+  const { t } = useTranslation();
   const createDescriptorState = useCreateFlowStore(
     useShallow((state) => {
       const pending = state.pendingByDraftId[target.draftId];
@@ -388,6 +391,10 @@ export function useDraftPanelDescriptor(
   return buildDraftPanelDescriptor({
     ...createDescriptorState,
     icon: SquarePen,
+    copy: {
+      newAgent: t("panels.agent.newAgent"),
+      creatingAgent: t("panels.agent.creatingAgent"),
+    },
   });
 }
 
@@ -503,6 +510,7 @@ function AgentPanelBody({
   connectionStatus: HostRuntimeConnectionStatus;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
+  const { t } = useTranslation();
   const { isArchivingAgent: _isArchivingAgent } = useArchiveAgent();
   const hasSession = useSessionStore((state) => Boolean(state.sessions[serverId]));
   const projectPlacement = useStoreWithEqualityFn(
@@ -573,7 +581,7 @@ function AgentPanelBody({
         if (!result) {
           setLookupState({
             tag: "not_found",
-            message: `Agent not found: ${agentId}`,
+            message: `找不到智能体：${agentId}`,
           });
           return;
         }
@@ -599,7 +607,7 @@ function AgentPanelBody({
     return (
       <View style={styles.container} testID="agent-not-found">
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>找不到智能体</Text>
+          <Text style={styles.errorText}>{t("panels.agent.notFound")}</Text>
         </View>
       </View>
     );
@@ -609,7 +617,7 @@ function AgentPanelBody({
     return (
       <View style={styles.container} testID="agent-load-error">
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>加载智能体失败</Text>
+          <Text style={styles.errorText}>{t("panels.agent.loadFailed")}</Text>
           <Text style={styles.statusText}>{lookupState.message}</Text>
         </View>
       </View>
@@ -668,6 +676,7 @@ function ChatAgentContent({
   connectionStatus: HostRuntimeConnectionStatus;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
+  const { t } = useTranslation();
   const panelToast = useToastHost();
   const { isArchivingAgent } = useArchiveAgent();
   const streamViewRef = useRef<AgentStreamViewHandle>(null);
@@ -795,12 +804,12 @@ function ChatAgentContent({
     }
     if (!reconnectToastArmedRef.current) {
       reconnectToastArmedRef.current = true;
-      panelToast.api.show("Reconnecting...", {
+      panelToast.api.show(t("connection.reconnecting"), {
         durationMs: null,
         testID: "agent-reconnecting-toast",
       });
     }
-  }, [connectionStatus, panelToast]);
+  }, [connectionStatus, panelToast, t]);
 
   useEffect(() => {
     if (!isPaneFocused || !agentId || !isConnected || !hasSession) {
@@ -970,7 +979,7 @@ function ChatAgentContent({
           if (!result) {
             setMissingAgentState({
               kind: "not_found",
-              message: `Agent not found: ${agentId}`,
+              message: `找不到智能体：${agentId}`,
             });
             return;
           }
@@ -1012,6 +1021,10 @@ function ChatAgentContent({
   const nonReadyView = renderChatAgentNonReadyView({
     viewState,
     effectiveAgent,
+    copy: {
+      notFound: t("panels.agent.notFound"),
+      loadFailed: t("panels.agent.loadFailed"),
+    },
   });
   if (nonReadyView) return nonReadyView;
   invariant(agentId, "agent id is defined when agent content is ready");
@@ -1089,6 +1102,7 @@ function ChatAgentReadyContent({
   attentionController: ReturnType<typeof useAgentAttentionClear>;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
+  const { t } = useTranslation();
   const agentInputDraft = useAgentInputDraft({
     draftKey: buildDraftStoreKey({
       serverId,
@@ -1149,8 +1163,8 @@ function ChatAgentReadyContent({
         {isArchivingCurrentAgent ? (
           <View style={styles.archivingOverlay} testID="agent-archiving-overlay">
             <ThemedActivityIndicator size="large" uniProps={foregroundColorMapping} />
-            <Text style={styles.archivingTitle}>正在归档智能体...</Text>
-            <Text style={styles.archivingSubtitle}>请稍候，正在归档此智能体。</Text>
+            <Text style={styles.archivingTitle}>{t("panels.agent.archivingTitle")}</Text>
+            <Text style={styles.archivingSubtitle}>{t("panels.agent.archivingSubtitle")}</Text>
           </View>
         ) : null}
       </View>
@@ -1358,7 +1372,7 @@ function ActiveAgentComposer({
     async (command: ClientSlashCommand) => {
       const agent = resolveChatAgentFromSession(useSessionStore.getState(), serverId, agentId);
       if (!agent) {
-        throw new Error("Agent not found");
+        throw new Error("找不到智能体");
       }
 
       const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
@@ -1454,16 +1468,15 @@ function AgentSessionUnavailableState({
   lastError: string | null;
   isUnknownDaemon?: boolean;
 }) {
+  const { t } = useTranslation();
   if (isUnknownDaemon) {
     return (
       <View style={styles.container}>
         <View style={styles.centerState}>
           <Text style={styles.errorText}>
-            Cannot open this agent because {serverLabel} is not configured on this device.
+            {t("panels.agent.unknownDaemonTitle", { host: serverLabel })}
           </Text>
-          <Text style={styles.statusText}>
-            Add the host in Settings or open an agent on a configured server to continue.
-          </Text>
+          <Text style={styles.statusText}>{t("panels.agent.unknownDaemonBody")}</Text>
         </View>
       </View>
     );
@@ -1480,21 +1493,21 @@ function AgentSessionUnavailableState({
             <ActivityIndicator size="large" />
             <Text style={styles.loadingText}>
               {isPreparingSession
-                ? `Preparing ${serverLabel} session...`
-                : `Connecting to ${serverLabel}...`}
+                ? t("connection.preparingSession", { host: serverLabel })
+                : t("connection.connectingTo", { host: serverLabel })}
             </Text>
             <Text style={styles.statusText}>
               {isPreparingSession
-                ? "We will show this agent in a moment."
-                : "We will show this agent once the host is online."}
+                ? t("connection.preparingSessionHint")
+                : t("connection.connectingHint")}
             </Text>
           </>
         ) : (
           <>
-            <Text style={styles.offlineTitle}>Reconnecting to {serverLabel}...</Text>
-            <Text style={styles.offlineDescription}>
-              We will show this agent again as soon as the host is reachable.
+            <Text style={styles.offlineTitle}>
+              {t("connection.reconnectingTo", { host: serverLabel })}
             </Text>
+            <Text style={styles.offlineDescription}>{t("connection.reconnectingHint")}</Text>
             {lastError ? <Text style={styles.offlineDetails}>{lastError}</Text> : null}
           </>
         )}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { createContext, useContext } from "react";
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { WebsiteI18nProvider } from "~/i18n";
 import { getLatestRelease } from "~/release";
 import { getStarCount } from "~/stars";
 
@@ -51,8 +52,8 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/favicon.svg" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "apple-touch-icon", href: "/logo.png" },
     ],
   }),
   component: RootComponent,
@@ -63,9 +64,11 @@ function RootComponent() {
   return (
     <ReleaseCtx value={data}>
       <StarsCtx value={data}>
-        <RootDocument>
-          <Outlet />
-        </RootDocument>
+        <WebsiteI18nProvider>
+          <RootDocument>
+            <Outlet />
+          </RootDocument>
+        </WebsiteI18nProvider>
       </StarsCtx>
     </ReleaseCtx>
   );
@@ -73,7 +76,7 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <head>
         <HeadContent />
         <script async src="https://plausible.io/js/pa-cKNUoWbeH_Iksb2fh82s3.js" />

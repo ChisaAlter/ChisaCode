@@ -75,6 +75,75 @@ export interface BuildGitActionsInput {
   shouldPromoteArchive: boolean;
   shipDefault: "merge" | "pr";
   runtime: Record<GitActionId, GitActionRuntimeState>;
+  copy: GitActionCopy;
+}
+
+export interface GitActionCopy {
+  commit: string;
+  committing: string;
+  committed: string;
+  pull: string;
+  pulling: string;
+  pulled: string;
+  push: string;
+  pushing: string;
+  pushed: string;
+  pullAndPush: string;
+  pullingAndPushing: string;
+  pulledAndPushed: string;
+  mergeLocally: string;
+  merging: string;
+  merged: string;
+  updateFrom: (baseRefLabel: string) => string;
+  updating: string;
+  updated: string;
+  archiveWorktree: string;
+  archiving: string;
+  archived: string;
+  viewPr: string;
+  createPr: string;
+  creatingPr: string;
+  prCreated: string;
+  squashAndMerge: string;
+  createMergeCommit: string;
+  rebaseAndMerge: string;
+  mergingPr: string;
+  prMerged: string;
+  enableAutoMergeSquash: string;
+  enableAutoMergeMerge: string;
+  enableAutoMergeRebase: string;
+  enablingAutoMerge: string;
+  autoMergeEnabled: string;
+  disablingAutoMerge: string;
+  autoMergeDisabled: string;
+  unavailableArchiveNotOwned: string;
+  unavailableGithubViewPr: string;
+  unavailableAutoMergeDisable: string;
+  unavailablePullNoRemote: string;
+  unavailablePullLocalChanges: string;
+  unavailablePullUpToDate: string;
+  unavailablePushNoRemote: string;
+  unavailablePushBehind: string;
+  unavailablePushNothingNew: string;
+  unavailablePullPushNoRemote: string;
+  unavailablePullPushLocalChanges: string;
+  unavailablePullPushInSync: string;
+  unavailableCreatePrGithub: string;
+  unavailableCreatePrNoCommits: string;
+  unavailableMergeNoBase: string;
+  unavailableMergeLocalChanges: string;
+  unavailableMergeNothingNew: string;
+  unavailableUpdateNoBase: string;
+  unavailableUpdateLocalChanges: string;
+  unavailableUpdateUpToDate: (baseRefLabel: string) => string;
+  unavailableMergePrGithub: string;
+  unavailableMergePrMissing: string;
+  unavailableMergePrDraft: string;
+  unavailableMergePrMerged: string;
+  unavailableMergePrClosed: string;
+  unavailableMergePrConflicts: string;
+  unavailableMergePrQueue: string;
+  unavailableMergePrNotReady: string;
 }
 
 type PullRequestActionId = Extract<
@@ -108,7 +177,6 @@ interface PullRequestActionModel {
 interface PullRequestDirectMergeActionModel {
   readonly id: PullRequestDirectMergeActionId;
   readonly role: "direct";
-  readonly label: string;
   readonly method: CheckoutPrMergeMethod;
   readonly startsGroup: boolean;
 }
@@ -116,7 +184,6 @@ interface PullRequestDirectMergeActionModel {
 interface PullRequestAutoMergeEnableActionModel {
   readonly id: PullRequestAutoMergeEnableActionId;
   readonly role: "auto";
-  readonly label: string;
   readonly method: CheckoutPrMergeMethod;
   readonly startsGroup: boolean;
 }
@@ -125,21 +192,18 @@ const PULL_REQUEST_DIRECT_MERGE_ACTION_MODELS = [
   {
     id: "merge-pr-squash",
     role: "direct",
-    label: "Squash and merge",
     method: "squash",
     startsGroup: true,
   },
   {
     id: "merge-pr-merge",
     role: "direct",
-    label: "创建合并提交",
     method: "merge",
     startsGroup: false,
   },
   {
     id: "merge-pr-rebase",
     role: "direct",
-    label: "Rebase and merge",
     method: "rebase",
     startsGroup: false,
   },
@@ -149,21 +213,18 @@ const PULL_REQUEST_AUTO_MERGE_ENABLE_ACTION_MODELS = [
   {
     id: "enable-pr-auto-merge-squash",
     role: "auto",
-    label: "Enable auto-merge with squash",
     method: "squash",
     startsGroup: true,
   },
   {
     id: "enable-pr-auto-merge-merge",
     role: "auto",
-    label: "Enable auto-merge with merge commit",
     method: "merge",
     startsGroup: false,
   },
   {
     id: "enable-pr-auto-merge-rebase",
     role: "auto",
-    label: "Enable auto-merge with rebase",
     method: "rebase",
     startsGroup: false,
   },
@@ -204,9 +265,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 
   allActions.set("commit", {
     id: "commit",
-    label: "Commit",
-    pendingLabel: "Committing...",
-    successLabel: "Committed",
+    label: input.copy.commit,
+    pendingLabel: input.copy.committing,
+    successLabel: input.copy.committed,
     disabled: input.runtime.commit.disabled,
     status: input.runtime.commit.status,
     icon: input.runtime.commit.icon,
@@ -216,9 +277,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 
   allActions.set("pull", {
     id: "pull",
-    label: "Pull",
-    pendingLabel: "Pulling...",
-    successLabel: "Pulled",
+    label: input.copy.pull,
+    pendingLabel: input.copy.pulling,
+    successLabel: input.copy.pulled,
     disabled: input.runtime.pull.disabled,
     status: input.runtime.pull.status,
     unavailableMessage: input.runtime.pull.disabled ? undefined : getPullUnavailableMessage(input),
@@ -229,9 +290,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 
   allActions.set("push", {
     id: "push",
-    label: "Push",
-    pendingLabel: "Pushing...",
-    successLabel: "Pushed",
+    label: input.copy.push,
+    pendingLabel: input.copy.pushing,
+    successLabel: input.copy.pushed,
     disabled: input.runtime.push.disabled,
     status: input.runtime.push.status,
     unavailableMessage: input.runtime.push.disabled ? undefined : getPushUnavailableMessage(input),
@@ -242,9 +303,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 
   allActions.set("pull-and-push", {
     id: "pull-and-push",
-    label: "Pull and push",
-    pendingLabel: "Pulling and pushing...",
-    successLabel: "Pulled and pushed",
+    label: input.copy.pullAndPush,
+    pendingLabel: input.copy.pullingAndPushing,
+    successLabel: input.copy.pulledAndPushed,
     disabled: input.runtime["pull-and-push"].disabled,
     status: input.runtime["pull-and-push"].status,
     unavailableMessage: input.runtime["pull-and-push"].disabled
@@ -261,9 +322,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 
   allActions.set("merge-branch", {
     id: "merge-branch",
-    label: "Merge locally",
-    pendingLabel: "Merging...",
-    successLabel: "Merged",
+    label: input.copy.mergeLocally,
+    pendingLabel: input.copy.merging,
+    successLabel: input.copy.merged,
     disabled: input.runtime["merge-branch"].disabled,
     status: input.runtime["merge-branch"].status,
     unavailableMessage: input.runtime["merge-branch"].disabled
@@ -276,9 +337,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 
   allActions.set("merge-from-base", {
     id: "merge-from-base",
-    label: `Update from ${input.baseRefLabel}`,
-    pendingLabel: "Updating...",
-    successLabel: "Updated",
+    label: input.copy.updateFrom(input.baseRefLabel),
+    pendingLabel: input.copy.updating,
+    successLabel: input.copy.updated,
     disabled: input.runtime["merge-from-base"].disabled,
     status: input.runtime["merge-from-base"].status,
     unavailableMessage: input.runtime["merge-from-base"].disabled
@@ -291,15 +352,15 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
 
   allActions.set("archive-worktree", {
     id: "archive-worktree",
-    label: "归档 worktree",
-    pendingLabel: "正在归档...",
-    successLabel: "已归档",
+    label: input.copy.archiveWorktree,
+    pendingLabel: input.copy.archiving,
+    successLabel: input.copy.archived,
     disabled: input.runtime["archive-worktree"].disabled,
     status: input.runtime["archive-worktree"].status,
     unavailableMessage:
       input.runtime["archive-worktree"].disabled || input.isChisaCodeOwnedWorktree
         ? undefined
-        : "此工作区不是ChisaCode worktree，无法在这里归档",
+        : input.copy.unavailableArchiveNotOwned,
     icon: input.runtime["archive-worktree"].icon,
     startsGroup: true,
     handler: input.runtime["archive-worktree"].handler,
@@ -396,15 +457,15 @@ function buildPrAction(input: BuildGitActionsInput): GitAction {
   if (input.hasPullRequest && input.pullRequestUrl) {
     return {
       id: "pr",
-      label: "View PR",
-      pendingLabel: "View PR",
-      successLabel: "View PR",
+      label: input.copy.viewPr,
+      pendingLabel: input.copy.viewPr,
+      successLabel: input.copy.viewPr,
       disabled: input.runtime.pr.disabled,
       status: input.runtime.pr.status,
       unavailableMessage:
         input.runtime.pr.disabled || input.githubFeaturesEnabled
           ? undefined
-          : "GitHub 尚未连接，现在无法查看 PR",
+          : input.copy.unavailableGithubViewPr,
       icon: input.runtime.pr.icon,
       startsGroup: false,
       handler: input.runtime.pr.handler,
@@ -413,9 +474,9 @@ function buildPrAction(input: BuildGitActionsInput): GitAction {
 
   return {
     id: "pr",
-    label: "创建 PR",
-    pendingLabel: "正在创建 PR...",
-    successLabel: "PR 已创建",
+    label: input.copy.createPr,
+    pendingLabel: input.copy.creatingPr,
+    successLabel: input.copy.prCreated,
     disabled: input.runtime.pr.disabled,
     status: input.runtime.pr.status,
     unavailableMessage: input.runtime.pr.disabled
@@ -435,9 +496,9 @@ function buildDirectPullRequestMergeAction(
   const unavailableMessage = getMergePrUnavailableMessage(input);
   return {
     id: model.id,
-    label: model.label,
-    pendingLabel: "Merging PR...",
-    successLabel: "PR merged",
+    label: getDirectPullRequestMergeLabel(input.copy, model.method),
+    pendingLabel: input.copy.mergingPr,
+    successLabel: input.copy.prMerged,
     disabled: runtime.disabled || shouldDisableMergePrAction(input),
     status: runtime.status,
     unavailableMessage: runtime.disabled ? undefined : unavailableMessage,
@@ -454,9 +515,9 @@ function buildEnablePullRequestAutoMergeAction(
   const runtime = input.runtime[model.id];
   return {
     id: model.id,
-    label: model.label,
-    pendingLabel: "Enabling auto-merge...",
-    successLabel: "Auto-merge enabled",
+    label: getEnablePullRequestAutoMergeLabel(input.copy, model.method),
+    pendingLabel: input.copy.enablingAutoMerge,
+    successLabel: input.copy.autoMergeEnabled,
     disabled: runtime.disabled,
     status: runtime.status,
     icon: runtime.icon,
@@ -470,12 +531,12 @@ function buildDisablePullRequestAutoMergeAction(input: BuildGitActionsInput): Gi
   const unavailableMessage =
     input.pullRequestGithub?.viewerCanDisableAutoMerge === true
       ? undefined
-      : "Auto-merge is enabled, but this account can't disable it";
+      : input.copy.unavailableAutoMergeDisable;
   return {
     id: "disable-pr-auto-merge",
-    label: "Auto-merge enabled",
-    pendingLabel: "Disabling auto-merge...",
-    successLabel: "Auto-merge disabled",
+    label: input.copy.autoMergeEnabled,
+    pendingLabel: input.copy.disablingAutoMerge,
+    successLabel: input.copy.autoMergeDisabled,
     disabled: runtime.disabled || input.pullRequestGithub?.viewerCanDisableAutoMerge !== true,
     status: runtime.status,
     unavailableMessage: runtime.disabled ? undefined : unavailableMessage,
@@ -483,6 +544,24 @@ function buildDisablePullRequestAutoMergeAction(input: BuildGitActionsInput): Gi
     startsGroup: true,
     handler: runtime.handler,
   };
+}
+
+function getDirectPullRequestMergeLabel(
+  copy: GitActionCopy,
+  method: CheckoutPrMergeMethod,
+): string {
+  if (method === "merge") return copy.createMergeCommit;
+  if (method === "rebase") return copy.rebaseAndMerge;
+  return copy.squashAndMerge;
+}
+
+function getEnablePullRequestAutoMergeLabel(
+  copy: GitActionCopy,
+  method: CheckoutPrMergeMethod,
+): string {
+  if (method === "merge") return copy.enableAutoMergeMerge;
+  if (method === "rebase") return copy.enableAutoMergeRebase;
+  return copy.enableAutoMergeSquash;
 }
 
 function canPull(input: BuildGitActionsInput): boolean {
@@ -559,106 +638,106 @@ function canEnablePrAutoMerge(input: BuildGitActionsInput): boolean {
 
 function getPullUnavailableMessage(input: BuildGitActionsInput): string | undefined {
   if (!input.hasRemote) {
-    return "Pull isn't available here because this branch is not connected to a remote yet";
+    return input.copy.unavailablePullNoRemote;
   }
   if (input.hasUncommittedChanges) {
-    return "Pull isn't available while you have local changes so commit or stash them first";
+    return input.copy.unavailablePullLocalChanges;
   }
   if (input.behindOfOrigin === 0) {
-    return "Pull isn't available because this branch is already up to date";
+    return input.copy.unavailablePullUpToDate;
   }
   return undefined;
 }
 
 function getPushUnavailableMessage(input: BuildGitActionsInput): string | undefined {
   if (!input.hasRemote) {
-    return "Push isn't available here because this branch is not connected to a remote yet";
+    return input.copy.unavailablePushNoRemote;
   }
   if (input.behindOfOrigin > 0) {
-    return "Push isn't available yet because there are newer changes to bring in first";
+    return input.copy.unavailablePushBehind;
   }
   if (input.aheadOfOrigin === 0) {
-    return "Push isn't available because there is nothing new to send";
+    return input.copy.unavailablePushNothingNew;
   }
   return undefined;
 }
 
 function getPullAndPushUnavailableMessage(input: BuildGitActionsInput): string | undefined {
   if (!input.hasRemote) {
-    return "Pull and push isn't available here because this branch is not connected to a remote yet";
+    return input.copy.unavailablePullPushNoRemote;
   }
   if (input.hasUncommittedChanges) {
-    return "Pull and push isn't available while you have local changes so commit or stash them first";
+    return input.copy.unavailablePullPushLocalChanges;
   }
   if (input.behindOfOrigin === 0 && input.aheadOfOrigin === 0) {
-    return "Pull and push isn't available because this branch is already in sync";
+    return input.copy.unavailablePullPushInSync;
   }
   return undefined;
 }
 
 function getCreatePrUnavailableMessage(input: BuildGitActionsInput): string | undefined {
   if (!input.githubFeaturesEnabled) {
-    return "GitHub 尚未连接，现在无法创建 PR";
+    return input.copy.unavailableCreatePrGithub;
   }
   if (input.aheadCount === 0) {
-    return "此分支还没有新提交，无法创建 PR";
+    return input.copy.unavailableCreatePrNoCommits;
   }
   return undefined;
 }
 
 function getMergeBranchUnavailableMessage(input: BuildGitActionsInput): string | undefined {
   if (!input.baseRefAvailable) {
-    return "Merge isn't available because we couldn't determine the base branch";
+    return input.copy.unavailableMergeNoBase;
   }
   if (input.hasUncommittedChanges) {
-    return "Merge isn't available while you have local changes so commit or stash them first";
+    return input.copy.unavailableMergeLocalChanges;
   }
   if (input.aheadCount === 0) {
-    return "Merge isn't available because this branch doesn't have anything new to merge yet";
+    return input.copy.unavailableMergeNothingNew;
   }
   return undefined;
 }
 
 function getMergeFromBaseUnavailableMessage(input: BuildGitActionsInput): string | undefined {
   if (!input.baseRefAvailable) {
-    return "Update isn't available because we couldn't determine the base branch";
+    return input.copy.unavailableUpdateNoBase;
   }
   if (input.hasUncommittedChanges) {
-    return "Update isn't available while you have local changes so commit or stash them first";
+    return input.copy.unavailableUpdateLocalChanges;
   }
   if (input.behindBaseCount === 0) {
-    return `Update isn't available because this branch is already up to date with ${input.baseRefLabel}`;
+    return input.copy.unavailableUpdateUpToDate(input.baseRefLabel);
   }
   return undefined;
 }
 
 function getMergePrUnavailableMessage(input: BuildGitActionsInput): string | undefined {
   if (!input.githubFeaturesEnabled) {
-    return "Merge PR isn't available right now because GitHub isn't connected";
+    return input.copy.unavailableMergePrGithub;
   }
   if (!input.hasPullRequest) {
-    return "Merge PR isn't available because there isn't a pull request yet";
+    return input.copy.unavailableMergePrMissing;
   }
   if (input.pullRequestIsDraft) {
-    return "Merge PR isn't available because the pull request is still a draft";
+    return input.copy.unavailableMergePrDraft;
   }
   if (input.pullRequestIsMerged) {
-    return "Merge PR isn't available because the pull request is already merged";
+    return input.copy.unavailableMergePrMerged;
   }
   if (input.pullRequestState === "closed") {
-    return "Merge PR isn't available because the pull request is closed";
+    return input.copy.unavailableMergePrClosed;
   }
   if (input.pullRequestMergeable === "CONFLICTING") {
-    return "Merge PR isn't available because the pull request has conflicts";
+    return input.copy.unavailableMergePrConflicts;
   }
   if (!hasPullRequestGithubFacts(input.pullRequestGithub)) {
     return undefined;
   }
   if (input.pullRequestGithub?.isMergeQueueEnabled || input.pullRequestGithub?.isInMergeQueue) {
-    return "Merge PR isn't available here because this repository uses a merge queue";
+    return input.copy.unavailableMergePrQueue;
   }
   if (!GITHUB_DIRECT_MERGE_STATE_ALLOWLIST.has(input.pullRequestGithub?.mergeStateStatus ?? "")) {
-    return "Merge PR isn't available until GitHub reports the pull request is ready to merge";
+    return input.copy.unavailableMergePrNotReady;
   }
   return undefined;
 }

@@ -2,6 +2,7 @@ import { Command } from "commander";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import { isSameOrDescendantPath } from "../../utils/paths.js";
+import { tCli } from "../../i18n.js";
 import type {
   CommandOptions,
   SingleResult,
@@ -24,10 +25,10 @@ export const stopSchema: OutputSchema<StopResult> = {
 
 export function addStopOptions(cmd: Command): Command {
   return cmd
-    .description("Interrupt an agent if it is running (no-op for idle agents)")
-    .argument("[id]", "Agent ID (or prefix) - optional if --all or --cwd specified")
-    .option("--all", "Stop all agents")
-    .option("--cwd <path>", "Stop all agents in directory");
+    .description(tCli("agent.stop.description"))
+    .argument("[id]", tCli("agent.idOptional"))
+    .option("--all", tCli("agent.stop.all"))
+    .option("--cwd <path>", tCli("agent.stop.cwd"));
 }
 
 export interface AgentStopOptions extends CommandOptions {

@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, CommandError, OutputSchema, ListResult } from "../../output/index.js";
 import type { LoopDaemonClient, LoopListItem } from "./types.js";
+import { tCli } from "../../i18n.js";
 
 interface LoopListRow {
   id: string;
@@ -27,7 +28,7 @@ export const loopLsSchema: OutputSchema<LoopListRow> = {
 };
 
 export function addLoopLsOptions(command: Command): Command {
-  return command.description("List loops");
+  return command.description(tCli("loop.ls.description"));
 }
 
 function toRow(loop: LoopListItem): LoopListRow {

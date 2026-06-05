@@ -16,17 +16,17 @@ export function normalizeMimeType(input: string | undefined | null): string {
 export function parseDataUrl(dataUrl: string): { mimeType: string; base64: string } {
   const match = /^data:([^,]*),([\s\S]+)$/i.exec(dataUrl.trim());
   if (!match) {
-    throw new Error("Malformed data URL for attachment.");
+    throw new Error("附件 data URL 格式不正确。");
   }
   const metadata = match[1] ?? "";
   const base64 = match[2]?.replace(/\s/g, "");
   const [mimeTypeRaw, ...parameters] = metadata.split(";").map((part) => part.trim());
   const isBase64 = parameters.some((part) => part.toLowerCase() === "base64");
   if (!isBase64) {
-    throw new Error("Attachment data URL is not base64 encoded.");
+    throw new Error("附件 data URL 不是 base64 编码。");
   }
   if (!base64) {
-    throw new Error("Attachment data URL is missing base64 payload.");
+    throw new Error("附件 data URL 缺少 base64 内容。");
   }
   return {
     mimeType: normalizeMimeType(mimeTypeRaw),
@@ -100,18 +100,18 @@ export async function blobToBase64(blob: Blob): Promise<string> {
     const reader = new FileReader();
     reader.addEventListener("load", () => {
       if (typeof reader.result !== "string") {
-        reject(new Error("Unexpected FileReader result while encoding attachment."));
+        reject(new Error("编码附件时 FileReader 返回了意外结果。"));
         return;
       }
       const payload = reader.result.split(",", 2)[1];
       if (!payload) {
-        reject(new Error("Attachment FileReader result did not contain base64 payload."));
+        reject(new Error("FileReader 结果中没有附件 base64 内容。"));
         return;
       }
       resolve(payload);
     });
     reader.addEventListener("error", () => {
-      reject(reader.error ?? new Error("Failed to read attachment blob."));
+      reject(reader.error ?? new Error("无法读取附件 blob。"));
     });
     reader.readAsDataURL(blob);
   });

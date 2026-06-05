@@ -7,6 +7,7 @@ import { runSetPasswordCommand } from "./set-password.js";
 import { pairCommand } from "./pair.js";
 import { withOutput } from "../../output/index.js";
 import { addJsonOption } from "../../utils/command-options.js";
+import { tCli } from "../../i18n.js";
 
 function resolveHostnamesOption(hostnames: unknown, allowedHosts: unknown): string | undefined {
   if (typeof hostnames === "string") return hostnames;
@@ -15,38 +16,32 @@ function resolveHostnamesOption(hostnames: unknown, allowedHosts: unknown): stri
 }
 
 export function createDaemonCommand(): Command {
-  const daemon = new Command("daemon").description("Manage the ChisaCode daemon");
+  const daemon = new Command("daemon").description(tCli("daemon.description"));
 
   daemon.addCommand(startCommand());
   daemon.addCommand(pairCommand());
 
-  addJsonOption(daemon.command("status").description("Show local daemon status"))
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
+  addJsonOption(daemon.command("status").description(tCli("daemon.status.description")))
+    .option("--home <path>", tCli("option.home"))
     .action(withOutput(runStatusCommand));
 
-  addJsonOption(daemon.command("stop").description("Stop the local daemon"))
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
-    .option("--timeout <seconds>", "Wait timeout before failing (default: 15)")
-    .option("--force", "Send SIGKILL if graceful stop times out")
-    .option("--kill-timeout <seconds>", "Wait after SIGKILL before failing (default: 3)")
+  addJsonOption(daemon.command("stop").description(tCli("daemon.stop.description")))
+    .option("--home <path>", tCli("option.home"))
+    .option("--timeout <seconds>", tCli("daemon.option.timeoutStop"))
+    .option("--force", tCli("option.forceKill"))
+    .option("--kill-timeout <seconds>", tCli("daemon.option.killTimeout"))
     .action(withOutput(runStopCommand));
 
-  addJsonOption(daemon.command("restart").description("Restart the local daemon"))
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
-    .option("--timeout <seconds>", "Wait timeout before force step (default: 15)")
-    .option("--force", "Send SIGKILL if graceful stop times out")
-    .option(
-      "--listen <listen>",
-      "Listen target for restarted daemon (host:port, port, or unix socket)",
-    )
-    .option("--port <port>", "Port for restarted daemon listen target")
-    .option("--no-relay", "Disable relay on restarted daemon")
-    .option("--no-mcp", "Disable Agent MCP on restarted daemon")
-    .option("--no-inject-mcp", "Disable auto-injecting the ChisaCode MCP into created agents")
-    .option(
-      "--hostnames <hosts>",
-      'Daemon hostnames (comma-separated, e.g. "myhost,.example.com" or "true" for any)',
-    )
+  addJsonOption(daemon.command("restart").description(tCli("daemon.restart.description")))
+    .option("--home <path>", tCli("option.home"))
+    .option("--timeout <seconds>", tCli("option.timeoutForce"))
+    .option("--force", tCli("option.forceKill"))
+    .option("--listen <listen>", tCli("option.listenRestart"))
+    .option("--port <port>", tCli("option.portRestart"))
+    .option("--no-relay", tCli("option.noRelayRestart"))
+    .option("--no-mcp", tCli("option.noMcpRestart"))
+    .option("--no-inject-mcp", tCli("daemon.option.noInjectMcp"))
+    .option("--hostnames <hosts>", tCli("option.hostnames"))
     .addOption(new Option("--allowed-hosts <hosts>").hideHelp())
     .action(
       withOutput((...args) => {
@@ -61,12 +56,8 @@ export function createDaemonCommand(): Command {
       }),
     );
 
-  addJsonOption(
-    daemon
-      .command("set-password")
-      .description("Prompt for and save a hashed daemon password to config.json"),
-  )
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
+  addJsonOption(daemon.command("set-password").description(tCli("daemon.setPassword.description")))
+    .option("--home <path>", tCli("option.home"))
     .action(withOutput(runSetPasswordCommand));
 
   return daemon;

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import invariant from "tiny-invariant";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Fonts } from "@/constants/theme";
 import { usePaneContext } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
@@ -25,6 +26,7 @@ function useSetupPanelDescriptor(
   target: { kind: "setup"; workspaceId: string },
   context: { serverId: string; workspaceId: string },
 ): PanelDescriptor {
+  const { t } = useTranslation();
   const key = buildWorkspaceTabPersistenceKey({
     serverId: context.serverId,
     workspaceId: target.workspaceId,
@@ -33,8 +35,8 @@ function useSetupPanelDescriptor(
 
   if (snapshot?.status === "completed") {
     return {
-      label: "设置",
-      subtitle: "设置已完成",
+      label: t("panels.setup.title"),
+      subtitle: t("panels.setup.completed"),
       titleState: "ready",
       icon: CheckCircle2,
       statusBucket: null,
@@ -43,8 +45,8 @@ function useSetupPanelDescriptor(
 
   if (snapshot?.status === "failed") {
     return {
-      label: "设置",
-      subtitle: "设置失败",
+      label: t("panels.setup.title"),
+      subtitle: t("panels.setup.failed"),
       titleState: "ready",
       icon: CircleAlert,
       statusBucket: null,
@@ -52,8 +54,8 @@ function useSetupPanelDescriptor(
   }
 
   return {
-    label: "设置",
-    subtitle: "workspace 设置",
+    label: t("panels.setup.title"),
+    subtitle: t("panels.setup.workspaceSetup"),
     titleState: "ready",
     icon: SquareTerminal,
     statusBucket: snapshot?.status === "running" ? "running" : null,
@@ -108,11 +110,14 @@ function resolveAutoExpandIndex(commands: { index: number; status: string }[]): 
   return null;
 }
 
-function resolveSetupStatusLabel(status: string | undefined): string {
-  if (status === "running") return "运行中";
-  if (status === "completed") return "已完成";
-  if (status === "failed") return "失败";
-  return "等待设置输出";
+function resolveSetupStatusLabel(
+  status: string | undefined,
+  copy: { running: string; completed: string; failed: string; waiting: string },
+): string {
+  if (status === "running") return copy.running;
+  if (status === "completed") return copy.completed;
+  if (status === "failed") return copy.failed;
+  return copy.waiting;
 }
 
 function resolveCommandLog(
@@ -150,6 +155,7 @@ function buildCommandRowState(args: BuildCommandRowPropsArgs) {
 }
 
 function SetupPanel() {
+  const { t } = useTranslation();
   const { serverId, target } = usePaneContext();
   invariant(target.kind === "setup", "SetupPanel requires setup target");
 
@@ -214,7 +220,12 @@ function SetupPanel() {
   }, []);
 
   const autoExpandIndex = resolveAutoExpandIndex(commands);
-  const statusLabel = resolveSetupStatusLabel(snapshot?.status);
+  const statusLabel = resolveSetupStatusLabel(snapshot?.status, {
+    running: t("panels.setup.running"),
+    completed: t("panels.setup.completed"),
+    failed: t("panels.setup.failed"),
+    waiting: t("panels.setup.waiting"),
+  });
 
   return (
     <ScrollView
@@ -230,7 +241,7 @@ function SetupPanel() {
       {isWaiting ? (
         <View style={styles.waitingContainer}>
           <ThemedActivityIndicator size="large" uniProps={foregroundMutedColorMapping} />
-          <Text style={styles.waitingText}>正在设置工作区...</Text>
+          <Text style={styles.waitingText}>{t("panels.setup.waitingTitle")}</Text>
         </View>
       ) : null}
       {!isWaiting && hasNoSetupCommands ? (
@@ -238,9 +249,9 @@ function SetupPanel() {
           <Text
             style={styles.emptyText}
             accessible
-            accessibilityLabel="此 workspace 没有运行设置命令"
+            accessibilityLabel={t("panels.setup.noCommandsLabel")}
           >
-            此 workspace 没有运行设置命令。
+            {t("panels.setup.noCommands")}
           </Text>
         </View>
       ) : null}
@@ -303,6 +314,7 @@ function SetupCommandRow({
   errorMessage,
   onToggle,
 }: SetupCommandRowProps) {
+  const { t } = useTranslation();
   const handlePress = useCallback(() => {
     if (!isExpandable) return;
     onToggle(command.index, isAutoExpanded);
@@ -348,7 +360,7 @@ function SetupCommandRow({
               showsVerticalScrollIndicator
               testID="workspace-setup-log"
               accessible
-              accessibilityLabel="工作区设置日志"
+              accessibilityLabel={t("panels.setup.logLabel")}
             >
               <Text selectable style={styles.logText}>
                 {processedLog}
@@ -359,9 +371,9 @@ function SetupCommandRow({
               style={styles.logScrollContent}
               testID="workspace-setup-log"
               accessible
-              accessibilityLabel="工作区设置日志"
+              accessibilityLabel={t("panels.setup.logLabel")}
             >
-              <Text style={styles.emptyLogText}>暂无输出</Text>
+              <Text style={styles.emptyLogText}>{t("panels.setup.noOutput")}</Text>
             </View>
           )}
           {hasError && errorMessage ? (
@@ -394,6 +406,7 @@ function SetupCommandChevron({ showDetail }: { showDetail: boolean }) {
 }
 
 function StandaloneLogView({ commands, log }: { commands: SetupCommand[]; log: string }) {
+  const { t } = useTranslation();
   if (commands.length !== 0 || log.trim().length === 0) return null;
   return (
     <ScrollView
@@ -402,7 +415,7 @@ function StandaloneLogView({ commands, log }: { commands: SetupCommand[]; log: s
       showsVerticalScrollIndicator
       testID="workspace-setup-log"
       accessible
-      accessibilityLabel="工作区设置日志"
+      accessibilityLabel={t("panels.setup.logLabel")}
     >
       <Text selectable style={styles.logText}>
         {log}

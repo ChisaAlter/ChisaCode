@@ -1,7 +1,89 @@
 import { describe, expect, it } from "vitest";
 import { CheckoutPrStatusSchema } from "@chisacode/protocol/messages";
 
-import { buildGitActions, type BuildGitActionsInput } from "./policy";
+import { buildGitActions, type BuildGitActionsInput, type GitActionCopy } from "./policy";
+
+const COPY: GitActionCopy = {
+  commit: "Commit",
+  committing: "Committing...",
+  committed: "Committed",
+  pull: "Pull",
+  pulling: "Pulling...",
+  pulled: "Pulled",
+  push: "Push",
+  pushing: "Pushing...",
+  pushed: "Pushed",
+  pullAndPush: "Pull and push",
+  pullingAndPushing: "Pulling and pushing...",
+  pulledAndPushed: "Pulled and pushed",
+  mergeLocally: "Merge locally",
+  merging: "Merging...",
+  merged: "Merged",
+  updateFrom: (baseRefLabel) => `Update from ${baseRefLabel}`,
+  updating: "Updating...",
+  updated: "Updated",
+  archiveWorktree: "Archive worktree",
+  archiving: "Archiving...",
+  archived: "Archived",
+  viewPr: "View PR",
+  createPr: "Create PR",
+  creatingPr: "Creating PR...",
+  prCreated: "PR created",
+  squashAndMerge: "Squash and merge",
+  createMergeCommit: "Create a merge commit",
+  rebaseAndMerge: "Rebase and merge",
+  mergingPr: "Merging PR...",
+  prMerged: "PR merged",
+  enableAutoMergeSquash: "Enable auto-merge with squash",
+  enableAutoMergeMerge: "Enable auto-merge with merge commit",
+  enableAutoMergeRebase: "Enable auto-merge with rebase",
+  enablingAutoMerge: "Enabling auto-merge...",
+  autoMergeEnabled: "Auto-merge enabled",
+  disablingAutoMerge: "Disabling auto-merge...",
+  autoMergeDisabled: "Auto-merge disabled",
+  unavailableArchiveNotOwned:
+    "This workspace is not a ChisaCode worktree, so it cannot be archived here",
+  unavailableGithubViewPr: "GitHub is not connected, so the PR cannot be viewed right now",
+  unavailableAutoMergeDisable: "Auto-merge is enabled, but this account can't disable it",
+  unavailablePullNoRemote:
+    "Pull isn't available here because this branch is not connected to a remote yet",
+  unavailablePullLocalChanges:
+    "Pull isn't available while you have local changes so commit or stash them first",
+  unavailablePullUpToDate: "Pull isn't available because this branch is already up to date",
+  unavailablePushNoRemote:
+    "Push isn't available here because this branch is not connected to a remote yet",
+  unavailablePushBehind:
+    "Push isn't available yet because there are newer changes to bring in first",
+  unavailablePushNothingNew: "Push isn't available because there is nothing new to send",
+  unavailablePullPushNoRemote:
+    "Pull and push isn't available here because this branch is not connected to a remote yet",
+  unavailablePullPushLocalChanges:
+    "Pull and push isn't available while you have local changes so commit or stash them first",
+  unavailablePullPushInSync: "Pull and push isn't available because this branch is already in sync",
+  unavailableCreatePrGithub: "GitHub is not connected, so the PR cannot be created right now",
+  unavailableCreatePrNoCommits:
+    "This branch does not have new commits yet, so a PR cannot be created",
+  unavailableMergeNoBase: "Merge isn't available because we couldn't determine the base branch",
+  unavailableMergeLocalChanges:
+    "Merge isn't available while you have local changes so commit or stash them first",
+  unavailableMergeNothingNew:
+    "Merge isn't available because this branch doesn't have anything new to merge yet",
+  unavailableUpdateNoBase: "Update isn't available because we couldn't determine the base branch",
+  unavailableUpdateLocalChanges:
+    "Update isn't available while you have local changes so commit or stash them first",
+  unavailableUpdateUpToDate: (baseRefLabel) =>
+    `Update isn't available because this branch is already up to date with ${baseRefLabel}`,
+  unavailableMergePrGithub: "Merge PR isn't available right now because GitHub isn't connected",
+  unavailableMergePrMissing: "Merge PR isn't available because there isn't a pull request yet",
+  unavailableMergePrDraft: "Merge PR isn't available because the pull request is still a draft",
+  unavailableMergePrMerged: "Merge PR isn't available because the pull request is already merged",
+  unavailableMergePrClosed: "Merge PR isn't available because the pull request is closed",
+  unavailableMergePrConflicts: "Merge PR isn't available because the pull request has conflicts",
+  unavailableMergePrQueue:
+    "Merge PR isn't available here because this repository uses a merge queue",
+  unavailableMergePrNotReady:
+    "Merge PR isn't available until GitHub reports the pull request is ready to merge",
+};
 
 function githubStatus(
   overrides: Partial<NonNullable<BuildGitActionsInput["pullRequestGithub"]>> = {},
@@ -50,6 +132,7 @@ function createInput(overrides: Partial<BuildGitActionsInput> = {}): BuildGitAct
     behindOfOrigin: 0,
     shouldPromoteArchive: false,
     shipDefault: "merge",
+    copy: COPY,
     runtime: {
       commit: {
         disabled: false,

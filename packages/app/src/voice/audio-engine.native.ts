@@ -123,7 +123,7 @@ export function createAudioEngine(
     }
     const success = await native.initialize();
     if (!success) {
-      throw new Error("expo-two-way-audio: native initialize() returned false");
+      throw new Error("expo-two-way-audio：原生 initialize() 返回 false");
     }
     refs.initialized = true;
   }
@@ -134,9 +134,7 @@ export function createAudioEngine(
       permission = await native.requestMicrophonePermissionsAsync().catch(() => null);
     }
     if (!permission?.granted) {
-      throw new Error(
-        "Microphone permission is required to capture audio. Please enable microphone access in system settings.",
-      );
+      throw new Error("采集音频需要麦克风权限。请在系统设置中启用麦克风访问。");
     }
   }
 

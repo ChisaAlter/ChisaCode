@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LandingPage } from "~/components/landing-page";
+import { useWebsiteI18n } from "~/i18n";
 import { pageMeta } from "~/meta";
 
 export const Route = createFileRoute("/")({
@@ -13,16 +14,17 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  const { t } = useWebsiteI18n();
   return (
     <LandingPage
       title={
         <>
-          Orchestrate coding agents
+          {t("home.titleLine1")}
           <br />
-          from your desk and your phone
+          {t("home.titleLine2")}
         </>
       }
-      subtitle="Run any coding agent from your phone, desktop, or terminal. Self-hosted, multi-provider, open source."
+      subtitle={t("home.subtitle")}
     />
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { ComboboxOption } from "@/components/ui/combobox";
@@ -35,13 +36,14 @@ export function useBranchSwitcher({
   toast,
   queryClient,
 }: UseBranchSwitcherInput): UseBranchSwitcherResult {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
   const branchSuggestionsQuery = useQuery({
     queryKey: ["branchSuggestions", normalizedServerId, normalizedWorkspaceId],
     queryFn: async () => {
       if (!client) {
-        throw new Error("Daemon client unavailable");
+        throw new Error(t("git.daemonClientUnavailable"));
       }
       const payload = await client.getBranchSuggestions({
         cwd: normalizedWorkspaceId,
@@ -85,34 +87,34 @@ export function useBranchSwitcher({
         const targetStash = stashPayload.entries.find((e) => e.branch === branchId);
         if (!targetStash) return;
         const shouldRestore = await confirmDialog({
-          title: "恢复暂存的更改？",
-          message: "此分支有来自上次会话的暂存更改。是否要恢复它们？",
-          confirmLabel: "恢复",
-          cancelLabel: "稍后",
+          title: t("git.restoreStashedChangesTitle"),
+          message: t("git.restoreStashedChangesMessage"),
+          confirmLabel: t("git.restore"),
+          cancelLabel: t("git.later"),
         });
         if (!shouldRestore) return;
         const popPayload = await client.stashPop(normalizedWorkspaceId, targetStash.index);
         if (popPayload.error) {
           toast.error(popPayload.error.message);
         } else {
-          toast.show("暂存的更改已恢复");
+          toast.show(t("git.stashedChangesRestored"));
         }
         await invalidateStashAndCheckout();
       } catch {
         // Non-critical — user can still restore on next branch switch
       }
     },
-    [client, invalidateStashAndCheckout, normalizedWorkspaceId, toast],
+    [client, invalidateStashAndCheckout, normalizedWorkspaceId, t, toast],
   );
 
   const stashAndSwitch = useCallback(
     async (branchId: string) => {
       if (!client) return;
       const shouldStash = await confirmDialog({
-        title: "未提交的更改",
-        message: "你有未提交的更改。切换分支前要暂存它们吗？",
-        confirmLabel: "暂存并切换",
-        cancelLabel: "取消",
+        title: t("git.uncommittedChangesTitle"),
+        message: t("git.stashBeforeSwitchMessage"),
+        confirmLabel: t("git.stashAndSwitch"),
+        cancelLabel: t("common.cancel"),
       });
       if (!shouldStash) return;
 
@@ -132,10 +134,10 @@ export function useBranchSwitcher({
         }
         await invalidateStashAndCheckout();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to stash changes");
+        toast.error(err instanceof Error ? err.message : t("git.failedToStashChanges"));
       }
     },
-    [client, currentBranchName, invalidateStashAndCheckout, normalizedWorkspaceId, toast],
+    [client, currentBranchName, invalidateStashAndCheckout, normalizedWorkspaceId, t, toast],
   );
 
   const handleBranchSelect = useCallback(
@@ -159,7 +161,7 @@ export function useBranchSwitcher({
           await invalidateStashAndCheckout();
           await maybeRestoreStashForBranch(branchId);
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : "Failed to switch branch");
+          toast.error(err instanceof Error ? err.message : t("git.failedToSwitchBranch"));
         }
       })();
     },
@@ -170,6 +172,7 @@ export function useBranchSwitcher({
       maybeRestoreStashForBranch,
       normalizedWorkspaceId,
       stashAndSwitch,
+      t,
       toast,
     ],
   );

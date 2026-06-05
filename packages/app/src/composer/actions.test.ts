@@ -435,7 +435,7 @@ describe("dispatchComposerAgentMessage", () => {
       {
         type: "text",
         mimeType: "text/plain",
-        title: "Browser element · button",
+        title: "浏览器元素 · button",
         text: browserElement.attachment.formatted,
       },
     ]);

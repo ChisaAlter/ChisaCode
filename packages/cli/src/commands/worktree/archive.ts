@@ -8,6 +8,7 @@ import type {
   OutputSchema,
   CommandError,
 } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 /** Result type for worktree archive command */
 export interface WorktreeArchiveResult {
@@ -46,8 +47,8 @@ export async function runArchiveCommand(
   if (!nameArg || nameArg.trim().length === 0) {
     const error: CommandError = {
       code: "MISSING_WORKTREE_NAME",
-      message: "Worktree name is required",
-      details: "Usage: chisacode worktree archive <name>",
+      message: tCli("worktree.error.nameRequired"),
+      details: tCli("worktree.error.archiveUsage"),
     };
     throw error;
   }
@@ -59,8 +60,8 @@ export async function runArchiveCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
-      message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: chisacode daemon start",
+      message: tCli("worktree.error.connect", { host, message }),
+      details: tCli("worktree.error.startDaemon"),
     };
     throw error;
   }
@@ -72,7 +73,7 @@ export async function runArchiveCommand(
     if (listResponse.error) {
       const error: CommandError = {
         code: "WORKTREE_LIST_FAILED",
-        message: `Failed to list worktrees: ${listResponse.error.message}`,
+        message: tCli("worktree.error.listFailed", { message: listResponse.error.message }),
       };
       throw error;
     }
@@ -86,8 +87,8 @@ export async function runArchiveCommand(
     if (!worktree) {
       const error: CommandError = {
         code: "WORKTREE_NOT_FOUND",
-        message: `Worktree not found: ${nameArg}`,
-        details: 'Use "chisacode worktree ls" to list available worktrees',
+        message: tCli("worktree.error.notFound", { name: nameArg }),
+        details: tCli("worktree.error.listHint"),
       };
       throw error;
     }
@@ -102,7 +103,7 @@ export async function runArchiveCommand(
     if (response.error) {
       const error: CommandError = {
         code: "WORKTREE_ARCHIVE_FAILED",
-        message: `Failed to archive worktree: ${response.error.message}`,
+        message: tCli("worktree.error.archiveFailed", { message: response.error.message }),
       };
       throw error;
     }
@@ -129,7 +130,7 @@ export async function runArchiveCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "WORKTREE_ARCHIVE_FAILED",
-      message: `Failed to archive worktree: ${message}`,
+      message: tCli("worktree.error.archiveFailed", { message }),
     };
     throw error;
   }

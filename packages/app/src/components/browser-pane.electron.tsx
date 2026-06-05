@@ -10,6 +10,7 @@ import {
 import { Pressable, Text, TextInput, View } from "react-native";
 import { ArrowLeft, ArrowRight, MousePointer2, PencilRuler, RotateCw } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import {
   buildWorkspaceAttachmentScopeKey,
   useWorkspaceAttachments,
@@ -283,6 +284,7 @@ export function BrowserPane({
   onFocusPane?: () => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const browser = useBrowserStore((state) => state.browsersById[browserId] ?? null);
   const updateBrowser = useBrowserStore((state) => state.updateBrowser);
   const webviewRef = useRef<ElectronWebview | null>(null);
@@ -929,8 +931,8 @@ export function BrowserPane({
   if (!isElectronRuntime()) {
     return (
       <View style={styles.unavailableState}>
-        <Text style={titleStyle}>浏览器仅支持桌面端</Text>
-        <Text style={subtitleStyle}>在 Electron 中打开此工作区即可使用内置浏览器。</Text>
+        <Text style={titleStyle}>{t("browser.desktopOnlyTitle")}</Text>
+        <Text style={subtitleStyle}>{t("browser.desktopOnlyBody")}</Text>
       </View>
     );
   }
@@ -941,7 +943,7 @@ export function BrowserPane({
         <View style={styles.chromeLeft}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="后退"
+            accessibilityLabel={t("browser.back")}
             disabled={!browser?.canGoBack}
             onPress={handleBack}
             style={backIconButtonStyle}
@@ -950,7 +952,7 @@ export function BrowserPane({
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="前进"
+            accessibilityLabel={t("browser.forward")}
             disabled={!browser?.canGoForward}
             onPress={handleForward}
             style={forwardIconButtonStyle}
@@ -959,7 +961,7 @@ export function BrowserPane({
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={browser?.isLoading ? "停止加载" : "刷新"}
+            accessibilityLabel={browser?.isLoading ? t("browser.stopLoading") : t("browser.reload")}
             onPress={handleRefresh}
             style={baseIconButtonStyle}
           >
@@ -968,13 +970,13 @@ export function BrowserPane({
         </View>
         <View style={styles.urlBarWrap}>
           <TextInput
-            accessibilityLabel="浏览器 URL"
+            accessibilityLabel={t("browser.urlLabel")}
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={setDraftUrl}
             onFocus={handleUrlBarFocus}
             onSubmitEditing={handleNavigateDraftUrl}
-            placeholder="输入 URL"
+            placeholder={t("browser.urlPlaceholder")}
             placeholderTextColor={theme.colors.foregroundMuted}
             ref={urlInputRef}
             style={urlInputStyle}
@@ -986,7 +988,7 @@ export function BrowserPane({
             <>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="打开浏览器开发者工具"
+                accessibilityLabel={t("browser.openDevTools")}
                 onPress={handleOpenDevTools}
                 style={baseIconButtonStyle}
               >

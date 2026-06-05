@@ -21,7 +21,15 @@ export type SidebarProjectRowModel =
   | SidebarProjectSectionRowModel;
 
 export function isSidebarProjectFlattened(project: SidebarProjectEntry): boolean {
-  return project.workspaces.length === 1 && project.projectKind !== "git";
+  if (project.workspaces.length !== 1) {
+    return false;
+  }
+
+  if (project.projectKind !== "git") {
+    return true;
+  }
+
+  return project.workspaces[0]?.workspaceKind === "local_checkout";
 }
 
 export function buildSidebarProjectRowModel(input: {

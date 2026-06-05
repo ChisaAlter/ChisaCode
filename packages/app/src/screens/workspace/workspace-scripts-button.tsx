@@ -19,6 +19,7 @@ import { isNative } from "@/constants/platform";
 import { openServiceUrl } from "@/utils/open-service-url";
 import { resolveWorkspaceScriptLink } from "@/utils/workspace-script-links";
 import type { Theme } from "@/styles/theme";
+import { useTranslation } from "react-i18next";
 
 type ScriptActionIcon = "start" | "view";
 
@@ -257,6 +258,7 @@ function ScriptRow({
   onViewTerminal,
   onOpenUrlInBrowserTab,
 }: ScriptRowProps): ReactElement {
+  const { t } = useTranslation();
   const isRunning = script.lifecycle === "running";
   const isService = (script.type ?? "service") === "service";
   const exitCode = script.exitCode ?? null;
@@ -312,7 +314,7 @@ function ScriptRow({
         accessibilityLabel={`View ${script.scriptName} terminal`}
         testID={`workspace-scripts-view-${script.scriptName}`}
         icon="view"
-        label="View"
+        label={t("workspace.view")}
         onPress={handleView}
       />
     );
@@ -323,7 +325,7 @@ function ScriptRow({
         testID={`workspace-scripts-start-${script.scriptName}`}
         disabled={isStartPending}
         icon="start"
-        label="Run"
+        label={t("workspace.run")}
         onPress={handleRun}
       />
     );
@@ -372,6 +374,7 @@ export function WorkspaceScriptsButton({
   hideLabels,
   presentation = "split",
 }: WorkspaceScriptsButtonProps): ReactElement | null {
+  const { t } = useTranslation();
   const toast = useToast();
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const activeConnection = useHostRuntimeSnapshot(serverId)?.activeConnection ?? null;
@@ -380,7 +383,7 @@ export function WorkspaceScriptsButton({
   const startScriptMutation = useMutation({
     mutationFn: async (scriptName: string) => {
       if (!client) {
-        throw new Error("Daemon client not available");
+        throw new Error(t("workspace.scriptsDaemonUnavailable"));
       }
       const result = await client.startWorkspaceScript(workspaceId, scriptName);
       if (result.error) {
@@ -389,9 +392,14 @@ export function WorkspaceScriptsButton({
       return result;
     },
     onError: (error, scriptName) => {
-      toast.show(error instanceof Error ? error.message : `Failed to start ${scriptName}`, {
-        variant: "error",
-      });
+      toast.show(
+        error instanceof Error
+          ? error.message
+          : t("workspace.startScriptFailed", { script: scriptName }),
+        {
+          variant: "error",
+        },
+      );
     },
     onSuccess: (result) => {
       if (result.terminalId) {
@@ -432,7 +440,7 @@ export function WorkspaceScriptsButton({
             testID="workspace-scripts-button"
             style={triggerStyle}
             accessibilityRole="button"
-            accessibilityLabel="工作区脚本"
+            accessibilityLabel={t("workspace.scripts")}
           >
             <View style={styles.splitButtonContent}>
               <ThemedPlay
@@ -440,7 +448,7 @@ export function WorkspaceScriptsButton({
                 uniProps={triggerPlayMapping}
                 {...triggerPlayProps}
               />
-              {!hideLabels && <Text style={styles.splitButtonText}>脚本</Text>}
+              {!hideLabels && <Text style={styles.splitButtonText}>{t("workspace.scripts")}</Text>}
               {presentation === "split" ? (
                 <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
               ) : null}

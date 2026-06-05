@@ -8,61 +8,62 @@ import { runDeleteCommand } from "./delete.js";
 import { runPostCommand } from "./post.js";
 import { runReadCommand } from "./read.js";
 import { runWaitCommand } from "./wait.js";
+import { tCli } from "../../i18n.js";
 
 export function createChatCommand(): Command {
-  const chat = new Command("chat").description("Manage chat rooms for agent coordination");
+  const chat = new Command("chat").description(tCli("chat.description"));
 
   addJsonAndDaemonHostOptions(
     chat
       .command("create")
-      .description("Create a chat room")
-      .argument("<name>", "Room name (must be unique)")
-      .option("--purpose <text>", "Room purpose/description"),
+      .description(tCli("chat.create.description"))
+      .argument("<name>", tCli("chat.roomName"))
+      .option("--purpose <text>", tCli("chat.purpose")),
   ).action(withOutput(runCreateCommand));
 
-  addJsonAndDaemonHostOptions(chat.command("ls").description("List chat rooms")).action(
+  addJsonAndDaemonHostOptions(chat.command("ls").description(tCli("chat.ls.description"))).action(
     withOutput(runLsCommand),
   );
 
   addJsonAndDaemonHostOptions(
     chat
       .command("inspect")
-      .description("Inspect a chat room")
-      .argument("<name-or-id>", "Room name or ID"),
+      .description(tCli("chat.inspect.description"))
+      .argument("<name-or-id>", tCli("chat.roomId")),
   ).action(withOutput(runInspectCommand));
 
   addJsonAndDaemonHostOptions(
     chat
       .command("delete")
-      .description("Delete a chat room")
-      .argument("<name-or-id>", "Room name or ID"),
+      .description(tCli("chat.delete.description"))
+      .argument("<name-or-id>", tCli("chat.roomId")),
   ).action(withOutput(runDeleteCommand));
 
   addJsonAndDaemonHostOptions(
     chat
       .command("post")
-      .description("Post a chat message")
-      .argument("<name-or-id>", "Room name or ID")
-      .argument("<message>", "Message body")
-      .option("--reply-to <msg-id>", "Reply to a specific message ID"),
+      .description(tCli("chat.post.description"))
+      .argument("<name-or-id>", tCli("chat.roomId"))
+      .argument("<message>", tCli("chat.message"))
+      .option("--reply-to <msg-id>", tCli("chat.replyTo")),
   ).action(withOutput(runPostCommand));
 
   addJsonAndDaemonHostOptions(
     chat
       .command("read")
-      .description("Read chat messages")
-      .argument("<name-or-id>", "Room name or ID")
-      .option("--limit <n>", "Maximum number of messages to return")
-      .option("--since <duration-or-timestamp>", "Filter by relative duration or ISO timestamp")
-      .option("--agent <agent-id>", "Filter by author agent ID"),
+      .description(tCli("chat.read.description"))
+      .argument("<name-or-id>", tCli("chat.roomId"))
+      .option("--limit <n>", tCli("chat.limit"))
+      .option("--since <duration-or-timestamp>", tCli("chat.since"))
+      .option("--agent <agent-id>", tCli("chat.agent")),
   ).action(withOutput(runReadCommand));
 
   addJsonAndDaemonHostOptions(
     chat
       .command("wait")
-      .description("Wait for new chat messages")
-      .argument("<name-or-id>", "Room name or ID")
-      .option("--timeout <duration>", "Maximum wait time"),
+      .description(tCli("chat.wait.description"))
+      .argument("<name-or-id>", tCli("chat.roomId"))
+      .option("--timeout <duration>", tCli("chat.timeout")),
   ).action(withOutput(runWaitCommand));
 
   return chat;

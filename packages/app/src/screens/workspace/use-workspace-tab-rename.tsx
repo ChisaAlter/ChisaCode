@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { type QueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { ListTerminalsResponse } from "@chisacode/protocol/messages";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
@@ -31,6 +32,7 @@ export function useWorkspaceTabRename(
   input: UseWorkspaceTabRenameInput,
 ): UseWorkspaceTabRenameResult {
   const { client, normalizedServerId, queryClient, terminalsData, terminalsQueryKey } = input;
+  const { t } = useTranslation();
   const [renamingTab, setRenamingTab] = useState<RenamingTabState | null>(null);
 
   const handleRenameTab = useCallback(
@@ -57,7 +59,7 @@ export function useWorkspaceTabRename(
     async (nextTitle: string) => {
       if (!renamingTab) return;
       if (!client) {
-        throw new Error("Host is not connected");
+        throw new Error(t("workspace.screen.hostDisconnected"));
       }
       const trimmed = nextTitle.trim();
       if (renamingTab.kind === "terminal") {
@@ -66,7 +68,7 @@ export function useWorkspaceTabRename(
           title: trimmed,
         });
         if (!result.success) {
-          throw new Error(result.error ?? "Failed to rename terminal");
+          throw new Error(result.error ?? t("workspace.screen.renameTerminalFailed"));
         }
         void queryClient.invalidateQueries({ queryKey: terminalsQueryKey });
         return;
@@ -79,7 +81,7 @@ export function useWorkspaceTabRename(
         queryKey: ["allAgents", normalizedServerId],
       });
     },
-    [client, normalizedServerId, queryClient, renamingTab, terminalsQueryKey],
+    [client, normalizedServerId, queryClient, renamingTab, t, terminalsQueryKey],
   );
 
   const handleRenameModalClose = useCallback(() => {
@@ -105,7 +107,11 @@ export function WorkspaceTabRenameModal({
   onClose,
   onSubmit,
 }: WorkspaceTabRenameModalProps) {
-  const title = renamingTab?.kind === "terminal" ? "Rename terminal" : "Rename agent";
+  const { t } = useTranslation();
+  const title =
+    renamingTab?.kind === "terminal"
+      ? t("workspace.screen.renameTerminal")
+      : t("workspace.screen.renameAgent");
   const initialValue = renamingTab?.currentTitle ?? "";
   const testID = renamingTab
     ? `workspace-tab-rename-modal-${renamingTab.kind}-${renamingTab.id}`
@@ -115,7 +121,7 @@ export function WorkspaceTabRenameModal({
       visible={renamingTab !== null}
       title={title}
       initialValue={initialValue}
-      submitLabel="Rename"
+      submitLabel={t("workspace.screen.rename")}
       maxLength={200}
       onClose={onClose}
       onSubmit={onSubmit}

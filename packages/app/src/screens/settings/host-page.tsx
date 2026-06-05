@@ -30,7 +30,7 @@ import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons
 import { formatLatency } from "@/utils/latency";
 
 const RESTART_CONFIRMATION_MESSAGE =
-  "这会重启 daemon。正在运行的智能体会继续执行，应用会自动重新连接。";
+  "这会重启主机服务。正在运行的智能体会继续执行，应用会自动重新连接。";
 
 function formatHostConnectionLabel(connection: HostConnection): string {
   if (connection.type === "relay") {
@@ -381,7 +381,7 @@ function ConnectionRow({
 function DaemonSection({ host, isLocalDaemon }: { host: HostProfile; isLocalDaemon: boolean }) {
   return (
     <>
-      <SettingsSection title="Daemon 设置">
+      <SettingsSection title="主机服务设置">
         <InjectChisaCodeToolsCard serverId={host.serverId} />
         <AppendSystemPromptCard serverId={host.serverId} />
       </SettingsSection>
@@ -493,8 +493,8 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
     <View style={settingsStyles.card} testID="host-page-restart-card">
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>重启 daemon</Text>
-          <Text style={settingsStyles.rowHint}>重启 daemon 进程。应用会自动重新连接</Text>
+          <Text style={settingsStyles.rowTitle}>重启主机服务</Text>
+          <Text style={settingsStyles.rowHint}>重启主机服务进程。应用会自动重新连接</Text>
         </View>
         <Button
           variant="outline"
@@ -532,7 +532,7 @@ function InjectChisaCodeToolsCard({ serverId }: { serverId: string }) {
     <View style={settingsStyles.card} testID="host-page-inject-mcp-card">
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>启用ChisaCode工具</Text>
+          <Text style={settingsStyles.rowTitle}>启用 ChisaCode 工具</Text>
           <Text style={settingsStyles.rowHint}>智能体将能够管理 worktree、智能体和计划任务</Text>
         </View>
         <Switch

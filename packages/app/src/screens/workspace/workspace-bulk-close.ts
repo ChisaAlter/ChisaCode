@@ -21,6 +21,31 @@ interface CloseBulkWorkspaceTabsInput {
   warn?: (message: string, payload: object) => void;
 }
 
+export interface BulkCloseConfirmationCopy {
+  allKinds: (input: { agentCount: number; terminalCount: number; otherCount: number }) => string;
+  agentsAndTerminals: (input: { agentCount: number; terminalCount: number }) => string;
+  terminalsAndOthers: (input: { terminalCount: number; otherCount: number }) => string;
+  agentsAndOthers: (input: { agentCount: number; otherCount: number }) => string;
+  terminalsOnly: (input: { terminalCount: number }) => string;
+  othersOnly: (input: { otherCount: number }) => string;
+  agentsOnly: (input: { agentCount: number }) => string;
+}
+
+const DEFAULT_BULK_CLOSE_CONFIRMATION_COPY: BulkCloseConfirmationCopy = {
+  allKinds: ({ agentCount, terminalCount, otherCount }) =>
+    `This will archive ${agentCount} agent(s), close ${terminalCount} terminal(s), and close ${otherCount} tab(s). Any running process in a closed terminal will be stopped immediately.`,
+  agentsAndTerminals: ({ agentCount, terminalCount }) =>
+    `This will archive ${agentCount} agent(s) and close ${terminalCount} terminal(s). Any running process in a closed terminal will be stopped immediately.`,
+  terminalsAndOthers: ({ terminalCount, otherCount }) =>
+    `This will close ${terminalCount} terminal(s) and ${otherCount} tab(s). Any running process in a closed terminal will be stopped immediately.`,
+  agentsAndOthers: ({ agentCount, otherCount }) =>
+    `This will archive ${agentCount} agent(s) and close ${otherCount} tab(s).`,
+  terminalsOnly: ({ terminalCount }) =>
+    `This will close ${terminalCount} terminal(s). Any running process in a closed terminal will be stopped immediately.`,
+  othersOnly: ({ otherCount }) => `This will close ${otherCount} tab(s).`,
+  agentsOnly: ({ agentCount }) => `This will archive ${agentCount} agent(s).`,
+};
+
 export function classifyBulkClosableTabs(tabs: WorkspaceTabDescriptor[]): BulkClosableTabGroups {
   const groups: BulkClosableTabGroups = {
     agentTabs: [],
@@ -43,27 +68,43 @@ export function classifyBulkClosableTabs(tabs: WorkspaceTabDescriptor[]): BulkCl
   return groups;
 }
 
-export function buildBulkCloseConfirmationMessage(input: BulkClosableTabGroups): string {
+export function buildBulkCloseConfirmationMessage(
+  input: BulkClosableTabGroups,
+  copy: BulkCloseConfirmationCopy = DEFAULT_BULK_CLOSE_CONFIRMATION_COPY,
+): string {
   const { agentTabs, terminalTabs, otherTabs } = input;
   if (agentTabs.length > 0 && terminalTabs.length > 0 && otherTabs.length > 0) {
-    return `这会归档 ${agentTabs.length} 个智能体、关闭 ${terminalTabs.length} 个终端，并关闭 ${otherTabs.length} 个标签页。已关闭终端中正在运行的进程会立即停止。`;
+    return copy.allKinds({
+      agentCount: agentTabs.length,
+      terminalCount: terminalTabs.length,
+      otherCount: otherTabs.length,
+    });
   }
   if (agentTabs.length > 0 && terminalTabs.length > 0) {
-    return `这会归档 ${agentTabs.length} 个智能体并关闭 ${terminalTabs.length} 个终端。已关闭终端中正在运行的进程会立即停止。`;
+    return copy.agentsAndTerminals({
+      agentCount: agentTabs.length,
+      terminalCount: terminalTabs.length,
+    });
   }
   if (terminalTabs.length > 0 && otherTabs.length > 0) {
-    return `这会关闭 ${terminalTabs.length} 个终端和 ${otherTabs.length} 个标签页。已关闭终端中正在运行的进程会立即停止。`;
+    return copy.terminalsAndOthers({
+      terminalCount: terminalTabs.length,
+      otherCount: otherTabs.length,
+    });
   }
   if (agentTabs.length > 0 && otherTabs.length > 0) {
-    return `这会归档 ${agentTabs.length} 个智能体并关闭 ${otherTabs.length} 个标签页。`;
+    return copy.agentsAndOthers({
+      agentCount: agentTabs.length,
+      otherCount: otherTabs.length,
+    });
   }
   if (terminalTabs.length > 0) {
-    return `这会关闭 ${terminalTabs.length} 个终端。已关闭终端中正在运行的进程会立即停止。`;
+    return copy.terminalsOnly({ terminalCount: terminalTabs.length });
   }
   if (otherTabs.length > 0) {
-    return `这会关闭 ${otherTabs.length} 个标签页。`;
+    return copy.othersOnly({ otherCount: otherTabs.length });
   }
-  return `这会归档 ${agentTabs.length} 个智能体。`;
+  return copy.agentsOnly({ agentCount: agentTabs.length });
 }
 
 export async function closeBulkWorkspaceTabs(input: CloseBulkWorkspaceTabsInput): Promise<void> {

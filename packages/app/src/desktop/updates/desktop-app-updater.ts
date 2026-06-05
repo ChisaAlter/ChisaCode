@@ -45,6 +45,23 @@ export interface DesktopAppUpdaterDeps {
   port: DesktopAppUpdaterPort;
   now(): number;
   reportInstallError?(report: DesktopAppUpdaterErrorReport): void;
+  copy: DesktopAppUpdaterCopy;
+}
+
+export interface DesktopAppUpdaterCopy {
+  installReportError: string;
+}
+
+export interface DesktopAppUpdateStatusCopy {
+  checking: string;
+  installing: string;
+  upToDate: string;
+  pending: string;
+  availableWithVersion: (versionLabel: string) => string;
+  availableGeneric: string;
+  installed: string;
+  error: string;
+  idle: string;
 }
 
 export interface DesktopAppUpdater {
@@ -103,41 +120,42 @@ export function formatStatusText(input: {
   availableUpdate: DesktopAppUpdateCheckResult | null;
   installMessage: string | null;
   formatVersion: (version: string | null | undefined) => string;
+  copy: DesktopAppUpdateStatusCopy;
 }): string {
-  const { status, availableUpdate, installMessage, formatVersion } = input;
+  const { status, availableUpdate, installMessage, formatVersion, copy } = input;
 
   if (status === "checking") {
-    return "正在检查应用更新...";
+    return copy.checking;
   }
 
   if (status === "installing") {
-    return "正在安装应用更新...";
+    return copy.installing;
   }
 
   if (status === "up-to-date") {
-    return "应用已是最新版本。";
+    return copy.upToDate;
   }
 
   if (status === "pending") {
-    return "更新准备好后会通知你。";
+    return copy.pending;
   }
 
   if (status === "available") {
     if (availableUpdate?.latestVersion) {
-      return `更新已就绪：${formatVersion(availableUpdate.latestVersion)}`;
+      return copy.availableWithVersion(formatVersion(availableUpdate.latestVersion));
     }
-    return "应用更新已可安装。";
+    return copy.availableGeneric;
   }
 
   if (status === "installed") {
-    return installMessage ?? "应用更新已安装，需要重启。";
+    return installMessage ?? copy.installed;
   }
 
   if (status === "error") {
-    return "应用更新失败。";
+    return copy.error;
   }
 
-  return "尚未检查更新状态。";
+  return copy.idle;
 }
 
 export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopAppUpdater {
@@ -248,7 +266,7 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
       const message = getErrorMessage(error);
       deps.reportInstallError?.({
         error,
-        message: "无法安装桌面应用更新。",
+        message: deps.copy.installReportError,
         logLabel: "[DesktopUpdater] Failed to install app update",
       });
       commit({

@@ -1880,7 +1880,7 @@ export class HostRuntimeStore {
     const snapshot = controller.getSnapshot();
     const client = controller.getClient();
     if (!client || snapshot.connectionStatus !== "online") {
-      throw new Error(`Host ${input.serverId} is not connected`);
+      throw new Error(`主机 ${input.serverId} 未连接`);
     }
 
     controller.markAgentDirectorySyncLoading();

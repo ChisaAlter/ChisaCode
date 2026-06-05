@@ -1,11 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { QrCode, Link2, ClipboardPaste } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "./adaptive-modal-sheet";
 import { isNative } from "@/constants/platform";
-
-const ADD_CONNECTION_HEADER: SheetHeader = { title: "添加连接" };
 
 const styles = StyleSheet.create((theme) => ({
   option: {
@@ -49,6 +48,8 @@ export function AddHostMethodModal({
   onPasteLink,
 }: AddHostMethodModalProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const header = useMemo<SheetHeader>(() => ({ title: t("host.addConnection") }), [t]);
 
   const handleDirect = useCallback(() => {
     onDirectConnection();
@@ -64,7 +65,7 @@ export function AddHostMethodModal({
 
   return (
     <AdaptiveModalSheet
-      header={ADD_CONNECTION_HEADER}
+      header={header}
       visible={visible}
       onClose={onClose}
       testID="add-host-method-modal"
@@ -73,13 +74,13 @@ export function AddHostMethodModal({
         style={styles.option}
         onPress={handleDirect}
         accessibilityRole="button"
-        accessibilityLabel="直接连接"
+        accessibilityLabel={t("host.directConnection")}
         testID="add-host-method-direct"
       >
         <Link2 size={18} color={theme.colors.foreground} />
         <View style={styles.optionBody}>
-          <Text style={styles.optionText}>直接连接</Text>
-          <Text style={styles.optionSubtext}>本地网络或 VPN。</Text>
+          <Text style={styles.optionText}>{t("host.directConnection")}</Text>
+          <Text style={styles.optionSubtext}>{t("host.localNetworkOrVpn")}</Text>
         </View>
       </Pressable>
 
@@ -88,12 +89,12 @@ export function AddHostMethodModal({
           style={styles.option}
           onPress={handleScan}
           accessibilityRole="button"
-          accessibilityLabel="扫描二维码"
+          accessibilityLabel={t("host.scanQr")}
         >
           <QrCode size={18} color={theme.colors.foreground} />
           <View style={styles.optionBody}>
-            <Text style={styles.optionText}>扫描二维码</Text>
-            <Text style={styles.optionSubtext}>加密中继连接。</Text>
+            <Text style={styles.optionText}>{t("host.scanQr")}</Text>
+            <Text style={styles.optionSubtext}>{t("host.encryptedRelayConnection")}</Text>
           </View>
         </Pressable>
       ) : null}
@@ -102,13 +103,13 @@ export function AddHostMethodModal({
         style={styles.option}
         onPress={handlePaste}
         accessibilityRole="button"
-        accessibilityLabel="粘贴配对链接"
+        accessibilityLabel={t("host.pastePairingLink")}
         testID="add-host-method-pair-link"
       >
         <ClipboardPaste size={18} color={theme.colors.foreground} />
         <View style={styles.optionBody}>
-          <Text style={styles.optionText}>粘贴配对链接</Text>
-          <Text style={styles.optionSubtext}>加密中继连接。</Text>
+          <Text style={styles.optionText}>{t("host.pastePairingLink")}</Text>
+          <Text style={styles.optionSubtext}>{t("host.encryptedRelayConnection")}</Text>
         </View>
       </Pressable>
     </AdaptiveModalSheet>

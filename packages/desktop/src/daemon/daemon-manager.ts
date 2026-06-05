@@ -39,10 +39,11 @@ import {
 import type { DesktopSettings } from "../settings/desktop-settings.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
+import { translateDesktop } from "../i18n.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
 const DAEMON_PID_FILENAMES = ["chisacode.pid", "chisacode.pid"] as const;
-const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
+const IPC_PREFIXES = ["chisacode"] as const;
 const STARTUP_POLL_INTERVAL_MS = 200;
 const STARTUP_POLL_MAX_ATTEMPTS = 150;
 const DETACHED_STARTUP_GRACE_MS = 1200;
@@ -294,7 +295,7 @@ function shouldRestartForVersion(current: DesktopDaemonStatus): boolean {
 
 function assertBuiltInDaemonManagementEnabled(settings: DesktopSettings): void {
   if (!settings.daemon.manageBuiltInDaemon) {
-    throw new Error("内置 daemon 管理已禁用。");
+    throw new Error(translateDesktop(settings.language, "daemon.manageBuiltInDisabled"));
   }
 }
 
@@ -492,7 +493,8 @@ async function getDaemonPairing(): Promise<DesktopPairingOffer> {
   try {
     const payload = await runExternalCliJsonCommand(["daemon", "pair", "--json"]);
     if (!isRecord(payload)) {
-      throw new Error("daemon 配对响应不是对象。");
+      const language = (await getDesktopSettingsStore().get()).language;
+      throw new Error(translateDesktop(language, "daemon.pairingResponseInvalid"));
     }
 
     return {
@@ -511,12 +513,13 @@ async function getDaemonPairing(): Promise<DesktopPairingOffer> {
 
 async function getLocalDaemonVersion(): Promise<{ version: string | null; error: string | null }> {
   const status = await resolveDesktopDaemonStatus();
+  const language = (await getDesktopSettingsStore().get()).language;
   if (status.status !== "running") {
-    return { version: null, error: "daemon 未运行。" };
+    return { version: null, error: translateDesktop(language, "daemon.notRunning") };
   }
   return {
     version: status.version,
-    error: status.version ? null : "正在运行的 daemon 未报告版本。",
+    error: status.version ? null : translateDesktop(language, "daemon.versionMissing"),
   };
 }
 
@@ -607,7 +610,7 @@ export function registerDaemonManager(): void {
       async (_event, command: string, args?: Record<string, unknown>) => {
         const handler = handlers[command];
         if (!handler) {
-          throw new Error(`Unknown desktop command: ${command}`);
+          throw new Error(`未知桌面命令：${command}`);
         }
         return await handler(args);
       },

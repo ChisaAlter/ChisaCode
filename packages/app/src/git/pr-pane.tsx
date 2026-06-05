@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   ChevronRight,
@@ -34,6 +35,7 @@ function activityPressableStyle({ hovered }: { hovered?: boolean }) {
 }
 
 export function PrPane({ data }: { data: PrPaneData }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const [checksOpen, setChecksOpen] = useState(true);
   const [reviewsOpen, setReviewsOpen] = useState(true);
@@ -117,7 +119,7 @@ export function PrPane({ data }: { data: PrPaneData }) {
       <View style={styles.divider} />
 
       <Section
-        title="Checks"
+        title={t("pullRequest.checks")}
         open={checksOpen}
         onToggle={handleToggleChecks}
         summary={
@@ -151,7 +153,7 @@ export function PrPane({ data }: { data: PrPaneData }) {
       <View style={styles.divider} />
 
       <Section
-        title="Reviews"
+        title={t("pullRequest.reviews")}
         open={reviewsOpen}
         onToggle={handleToggleReviews}
         summary={

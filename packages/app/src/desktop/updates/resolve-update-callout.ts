@@ -32,6 +32,18 @@ export interface ResolveUpdateCalloutInput {
   isInstalling: boolean;
   availableUpdate: { latestVersion?: string | null } | null;
   errorMessage: string | null;
+  copy: UpdateCalloutCopy;
+}
+
+export interface UpdateCalloutCopy {
+  installingTitle: string;
+  failedTitle: string;
+  availableTitle: string;
+  fallbackError: string;
+  changelog: string;
+  retry: string;
+  installingAction: string;
+  installAndRestart: string;
 }
 
 function formatVersionLabel(latestVersion: string | null | undefined): string | null {
@@ -57,23 +69,25 @@ export function resolveUpdateCalloutDescriptor(
   let title: string;
   let body: UpdateCalloutBody;
   if (isInstalling) {
-    title = "正在安装更新";
+    title = input.copy.installingTitle;
     body = { kind: "installing" };
   } else if (isError) {
-    title = "更新失败";
-    body = { kind: "error", message: input.errorMessage ?? "出了点问题。" };
+    title = input.copy.failedTitle;
+    body = { kind: "error", message: input.errorMessage ?? input.copy.fallbackError };
   } else {
-    title = "有可用更新";
+    title = input.copy.availableTitle;
     body = { kind: "available", versionLabel: formatVersionLabel(latestVersion) };
   }
 
-  const actions: UpdateCalloutActionDescriptor[] = [{ role: "changelog", label: "更新内容" }];
+  const actions: UpdateCalloutActionDescriptor[] = [
+    { role: "changelog", label: input.copy.changelog },
+  ];
   if (isError) {
-    actions.push({ role: "retry", label: "重试", variant: "primary" });
+    actions.push({ role: "retry", label: input.copy.retry, variant: "primary" });
   } else {
     actions.push({
       role: "install",
-      label: isInstalling ? "安装中..." : "安装并重启",
+      label: isInstalling ? input.copy.installingAction : input.copy.installAndRestart,
       variant: "primary",
       disabled: isInstalling,
     });

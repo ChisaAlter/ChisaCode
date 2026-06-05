@@ -24,6 +24,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   BottomSheetScrollView,
@@ -1260,9 +1261,9 @@ export function Combobox({
   renderOption,
   onSearchQueryChange,
   searchable = true,
-  placeholder = "搜索...",
+  placeholder,
   searchPlaceholder,
-  emptyText = "No options match your search.",
+  emptyText,
   allowCustomValue = false,
   customValuePrefix = "Use",
   customValueDescription,
@@ -1283,7 +1284,10 @@ export function Combobox({
   children,
 }: ComboboxProps): ReactElement | null {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
+  const resolvedPlaceholder = placeholder ?? t("combobox.placeholder");
+  const resolvedEmptyText = emptyText ?? t("combobox.empty");
   const titleColor = theme.colors.foreground;
   const effectiveOptionsPosition = resolveEffectiveOptionsPosition(isMobile, optionsPosition);
   const isDesktopAboveSearch = resolveIsDesktopAboveSearch(isMobile, effectiveOptionsPosition);
@@ -1545,7 +1549,7 @@ export function Combobox({
     [],
   );
 
-  const effectiveSearchPlaceholder = searchPlaceholder ?? placeholder;
+  const effectiveSearchPlaceholder = searchPlaceholder ?? resolvedPlaceholder;
   const hasChildren = Boolean(children);
 
   if (isMobile) {
@@ -1572,7 +1576,7 @@ export function Combobox({
         orderedVisibleOptions={orderedVisibleOptions}
         value={value}
         activeIndex={activeIndex}
-        emptyText={emptyText}
+        emptyText={resolvedEmptyText}
         handleSelect={handleSelect}
         renderOption={renderOption}
       >
@@ -1605,7 +1609,7 @@ export function Combobox({
       orderedVisibleOptions={orderedVisibleOptions}
       value={value}
       activeIndex={activeIndex}
-      emptyText={emptyText}
+      emptyText={resolvedEmptyText}
       handleSelect={handleSelect}
       renderOption={renderOption}
       hasChildren={hasChildren}

@@ -31,6 +31,7 @@ import {
   addJsonOption,
 } from "./utils/command-options.js";
 import { resolveCliVersion } from "./version.js";
+import { tCli } from "./i18n.js";
 
 const VERSION = resolveCliVersion();
 
@@ -45,14 +46,14 @@ export function createCli(): Command {
 
   program
     .name("chisacode")
-    .description("ChisaCode CLI - control your AI coding agents from the command line")
-    .version(VERSION, "-v, --version", "output the version number")
+    .description(tCli("cli.description"))
+    .version(VERSION, "-v, --version", tCli("cli.version"))
     // Global output options
-    .option("-o, --format <format>", "output format: table, json, yaml", "table")
-    .option("--json", "output in JSON format (alias for --format json)")
-    .option("-q, --quiet", "minimal output (IDs only)")
-    .option("--no-headers", "omit table headers")
-    .option("--no-color", "disable colored output");
+    .option("-o, --format <format>", tCli("cli.format"), "table")
+    .option("--json", tCli("cli.json"))
+    .option("-q, --quiet", tCli("cli.quiet"))
+    .option("--no-headers", tCli("cli.noHeaders"))
+    .option("--no-color", tCli("cli.noColor"));
 
   // Primary agent commands (top-level)
   addJsonAndDaemonHostOptions(addLsOptions(program.command("ls"))).action(withOutput(runLsCommand));
@@ -97,33 +98,19 @@ export function createCli(): Command {
   program.addCommand(onboardCommand());
   program.addCommand(daemonStartCommand());
 
-  addJsonOption(
-    program
-      .command("status")
-      .description('Show local daemon status (alias for "chisacode daemon status")'),
-  )
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
+  addJsonOption(program.command("status").description(tCli("cli.statusAlias")))
+    .option("--home <path>", tCli("option.home"))
     .action(withOutput(runDaemonStatusCommand));
 
-  addJsonOption(
-    program
-      .command("restart")
-      .description('Restart local daemon (alias for "chisacode daemon restart")'),
-  )
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
-    .option("--timeout <seconds>", "Wait timeout before force step (default: 15)")
-    .option("--force", "Send SIGKILL if graceful stop times out")
-    .option(
-      "--listen <listen>",
-      "Listen target for restarted daemon (host:port, port, or unix socket)",
-    )
-    .option("--port <port>", "Port for restarted daemon listen target")
-    .option("--no-relay", "Disable relay on restarted daemon")
-    .option("--no-mcp", "Disable Agent MCP on restarted daemon")
-    .option(
-      "--hostnames <hosts>",
-      'Daemon hostnames (comma-separated, e.g. "myhost,.example.com" or "true" for any)',
-    )
+  addJsonOption(program.command("restart").description(tCli("cli.restartAlias")))
+    .option("--home <path>", tCli("option.home"))
+    .option("--timeout <seconds>", tCli("option.timeoutForce"))
+    .option("--force", tCli("option.forceKill"))
+    .option("--listen <listen>", tCli("option.listenRestart"))
+    .option("--port <port>", tCli("option.portRestart"))
+    .option("--no-relay", tCli("option.noRelayRestart"))
+    .option("--no-mcp", tCli("option.noMcpRestart"))
+    .option("--hostnames <hosts>", tCli("option.hostnames"))
     .addOption(new Option("--allowed-hosts <hosts>").hideHelp())
     .action(
       withOutput((...args) => {

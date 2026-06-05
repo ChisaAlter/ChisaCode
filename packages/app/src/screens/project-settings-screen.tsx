@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, MoreVertical, Pencil, Plus, X } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { projectIconToDataUri, useProjectIconQuery } from "@/hooks/use-project-icon-query";
 import type {
@@ -49,51 +50,43 @@ const SCRIPT_SERVICE_TYPE = "service";
 const ICON_SIZE = 14;
 
 interface MetadataPromptField {
-  title: string;
-  placeholder: string;
+  titleKey: string;
+  placeholderKey: string;
   sectionTestID: string;
   inputTestID: string;
 }
 
 const METADATA_PROMPT_FIELDS: Record<MetadataPromptKey, MetadataPromptField> = {
   agentTitle: {
-    title: "智能体标题",
-    placeholder: "使用祈使句，标题控制在 40 个字符以内",
+    titleKey: "projectSettings.metadata.agentTitle",
+    placeholderKey: "projectSettings.metadata.agentTitlePlaceholder",
     sectionTestID: "metadata-prompt-agent-title-section",
     inputTestID: "metadata-prompt-agent-title-input",
   },
   branchName: {
-    title: "分支名称",
-    placeholder: "分支使用 feat/ 或 fix/ 前缀，个人分支使用 mb/",
+    titleKey: "projectSettings.metadata.branchName",
+    placeholderKey: "projectSettings.metadata.branchNamePlaceholder",
     sectionTestID: "metadata-prompt-branch-name-section",
     inputTestID: "metadata-prompt-branch-name-input",
   },
   commitMessage: {
-    title: "Commit 消息",
-    placeholder: "使用带 scope 的 Conventional Commits",
+    titleKey: "projectSettings.metadata.commitMessage",
+    placeholderKey: "projectSettings.metadata.commitMessagePlaceholder",
     sectionTestID: "metadata-prompt-commit-message-section",
     inputTestID: "metadata-prompt-commit-message-input",
   },
   pullRequest: {
-    title: "Pull request",
-    placeholder: "开头写一段摘要，并包含 Test plan 部分",
+    titleKey: "projectSettings.metadata.pullRequest",
+    placeholderKey: "projectSettings.metadata.pullRequestPlaceholder",
     sectionTestID: "metadata-prompt-pull-request-section",
     inputTestID: "metadata-prompt-pull-request-input",
   },
 };
 
-const WORKTREE_GROUP_INFO = "为此项目创建或清理 worktree 时运行的命令";
 const WORKTREE_DOCS_URL = "https://chisacode.sh/docs/worktrees";
-const WORKTREE_DOCS_TOOLTIP = "查看文档，了解更多细节以及这些命令可用的环境变量";
-const SCRIPTS_GROUP_INFO = "可从此项目中任意智能体启动的长期运行服务和一次性命令";
-const METADATA_GROUP_INFO =
-  "注入到ChisaCode元数据生成提示中的项目专属指令，可用于约束分支命名、commit 风格或 PR 格式等团队规范";
-
-const NO_TARGET_MESSAGE = "任何已连接主机上都没有此项目的可编辑副本。";
-
-const HOST_SWITCHER_LABEL = "切换主机";
 
 type ReadProjectConfigData = Awaited<ReturnType<DaemonClient["readProjectConfig"]>>;
+type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export interface ProjectSettingsScreenProps {
   projectKey: string;
@@ -155,34 +148,36 @@ function navigateBackToProjects() {
 }
 
 function NoEditableTarget() {
+  const { t } = useTranslation();
   return (
     <View style={styles.noTargetContainer}>
       <BackToProjectsButton />
-      <Text style={styles.noTargetText}>{NO_TARGET_MESSAGE}</Text>
+      <Text style={styles.noTargetText}>{t("projectSettings.noEditableTarget")}</Text>
       <Button
         testID="project-settings-back-button"
         onPress={navigateBackToProjects}
         variant="secondary"
         size="md"
       >
-        返回项目
+        {t("projectSettings.backToProjects")}
       </Button>
     </View>
   );
 }
 
 function BackToProjectsButton() {
+  const { t } = useTranslation();
   return (
     <Button
       testID="project-settings-back-link"
-      accessibilityLabel="返回项目"
+      accessibilityLabel={t("projectSettings.backToProjects")}
       onPress={navigateBackToProjects}
       variant="ghost"
       size="sm"
       leftIcon={ArrowLeft}
       style={styles.backButton}
     >
-      返回项目
+      {t("projectSettings.backToProjects")}
     </Button>
   );
 }
@@ -352,51 +347,58 @@ interface ReadFailureCalloutProps {
 }
 
 function ReadFailureCallout({ kind, error, onReload, hasMultipleHosts }: ReadFailureCalloutProps) {
-  const { testID, title, description } = resolveReadFailureCopy({ kind, error, hasMultipleHosts });
+  const { t } = useTranslation();
+  const { testID, title, description } = resolveReadFailureCopy(
+    { kind, error, hasMultipleHosts },
+    t,
+  );
   return (
     <View style={styles.errorBlock}>
       <Alert testID={testID} variant="error" title={title} description={description}>
         <Button testID={`${testID}-action-0`} onPress={onReload} variant="outline" size="sm">
-          重新加载
+          {t("projectSettings.reload")}
         </Button>
       </Alert>
     </View>
   );
 }
 
-function resolveReadFailureCopy(input: {
-  kind: ReadFailureCalloutProps["kind"];
-  error: unknown;
-  hasMultipleHosts: boolean;
-}): { testID: string; title: string; description: string } {
+function resolveReadFailureCopy(
+  input: {
+    kind: ReadFailureCalloutProps["kind"];
+    error: unknown;
+    hasMultipleHosts: boolean;
+  },
+  t: Translate,
+): { testID: string; title: string; description: string } {
   if (input.kind === "invalid_project_config") {
     return {
       testID: "invalid-callout",
-      title: "无法解析 chisacode.json",
-      description: "请修复磁盘上的文件，然后重新加载。",
+      title: t("projectSettings.invalidConfigTitle"),
+      description: t("projectSettings.invalidConfigDescription"),
     };
   }
   if (input.kind === "project_not_found") {
     return {
       testID: "project-not-found-callout",
-      title: "此主机没有这个项目",
+      title: t("projectSettings.projectNotFoundTitle"),
       description: input.hasMultipleHosts
-        ? "请在上方切换到其他主机，或重新加载。"
-        : "所选主机没有此项目的记录。",
+        ? t("projectSettings.projectNotFoundMultipleHosts")
+        : t("projectSettings.projectNotFoundSingleHost"),
     };
   }
   if (input.kind === "transport") {
     const detail = errorToDetail(input.error);
     return {
       testID: "read-transport-callout",
-      title: "无法加载 chisacode.json",
-      description: detail ?? "主机没有响应。",
+      title: t("projectSettings.readFailedTitle"),
+      description: detail ?? t("projectSettings.hostNoResponse"),
     };
   }
   return {
     testID: "read-failed-callout",
-    title: "无法加载 chisacode.json",
-    description: "请重新加载后重试。",
+    title: t("projectSettings.readFailedTitle"),
+    description: t("projectSettings.readFailedRetry"),
   };
 }
 
@@ -423,6 +425,7 @@ function ProjectConfigForm({
   client,
   onReload,
 }: ProjectConfigFormProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -452,7 +455,7 @@ function ProjectConfigForm({
         });
         setWriteError(null);
         queryClient.invalidateQueries({ queryKey: ["projects"] });
-        toast.show("项目已保存", { variant: "success" });
+        toast.show(t("projectSettings.saved"), { variant: "success" });
       } else {
         setWriteError(result.error);
       }
@@ -495,10 +498,12 @@ function ProjectConfigForm({
   const handleRemoveScript = useCallback(
     async (script: ProjectScriptDraft) => {
       const ok = await confirmDialog({
-        title: "移除脚本？",
-        message: `要移除 ${script.name || "此脚本"} 吗？`,
-        confirmLabel: "移除",
-        cancelLabel: "取消",
+        title: t("projectSettings.removeScriptTitle"),
+        message: t("projectSettings.removeScriptMessage", {
+          script: script.name || t("projectSettings.unnamedScript"),
+        }),
+        confirmLabel: t("common.remove"),
+        cancelLabel: t("common.cancel"),
         destructive: true,
       });
       if (!ok) return;
@@ -507,7 +512,7 @@ function ProjectConfigForm({
         scripts: d.scripts.filter((entry) => entry.id !== script.id),
       }));
     },
-    [updateDraft],
+    [t, updateDraft],
   );
 
   const handleEditScript = useCallback((script: ProjectScriptDraft) => {
@@ -569,8 +574,15 @@ function ProjectConfigForm({
   const editingScript = draft.scripts.find((entry) => entry.id === editingScriptId);
 
   const hasInvalidScripts = useMemo(
-    () => draft.scripts.some((script) => validateScript(script).hasErrors),
-    [draft.scripts],
+    () =>
+      draft.scripts.some(
+        (script) =>
+          validateScript(script, {
+            nameRequired: t("projectSettings.scriptNameRequired"),
+            commandRequired: t("projectSettings.scriptCommandRequired"),
+          }).hasErrors,
+      ),
+    [draft.scripts, t],
   );
 
   const scriptsTrailing = useMemo(
@@ -580,36 +592,36 @@ function ProjectConfigForm({
         hitSlop={8}
         style={settingsStyles.sectionHeaderLink}
         accessibilityRole="button"
-        accessibilityLabel="添加脚本"
+        accessibilityLabel={t("projectSettings.addScript")}
         testID="scripts-add-button"
       >
         <Plus size={ICON_SIZE} color={styles.iconColor.color} />
       </Pressable>
     ),
-    [handleAddScript],
+    [handleAddScript, t],
   );
 
   const setupDocsLink = useMemo(
     () => (
       <ExternalLink
         href={WORKTREE_DOCS_URL}
-        label="文档"
-        tooltip={WORKTREE_DOCS_TOOLTIP}
+        label={t("projectSettings.docs")}
+        tooltip={t("projectSettings.worktreeDocsTooltip")}
         testID="worktree-setup-docs-link"
       />
     ),
-    [],
+    [t],
   );
   const teardownDocsLink = useMemo(
     () => (
       <ExternalLink
         href={WORKTREE_DOCS_URL}
-        label="文档"
-        tooltip={WORKTREE_DOCS_TOOLTIP}
+        label={t("projectSettings.docs")}
+        tooltip={t("projectSettings.worktreeDocsTooltip")}
         testID="worktree-teardown-docs-link"
       />
     ),
-    [],
+    [t],
   );
 
   const isStale = writeError?.code === "stale_project_config";
@@ -619,14 +631,18 @@ function ProjectConfigForm({
   return (
     <View>
       <SettingsGroup
-        title="Worktree 生命周期钩子"
-        info={WORKTREE_GROUP_INFO}
+        title={t("projectSettings.worktreeGroupTitle")}
+        info={t("projectSettings.worktreeGroupInfo")}
         testID="worktree-group"
       >
-        <SettingsSection title="设置" testID="worktree-setup-section" trailing={setupDocsLink}>
+        <SettingsSection
+          title={t("projectSettings.setup")}
+          testID="worktree-setup-section"
+          trailing={setupDocsLink}
+        >
           <SettingsTextAreaCard
             testID="worktree-setup-input"
-            accessibilityLabel="Worktree 设置命令"
+            accessibilityLabel={t("projectSettings.worktreeSetupCommand")}
             value={draft.setupText}
             onChangeText={handleSetupChange}
             placeholder="npm install"
@@ -634,14 +650,14 @@ function ProjectConfigForm({
         </SettingsSection>
 
         <SettingsSection
-          title="清理"
+          title={t("projectSettings.cleanup")}
           testID="worktree-teardown-section"
           trailing={teardownDocsLink}
           flush
         >
           <SettingsTextAreaCard
             testID="worktree-teardown-input"
-            accessibilityLabel="Worktree 清理命令"
+            accessibilityLabel={t("projectSettings.worktreeCleanupCommand")}
             value={draft.teardownText}
             onChangeText={handleTeardownChange}
             placeholder="docker compose down"
@@ -650,15 +666,15 @@ function ProjectConfigForm({
       </SettingsGroup>
 
       <SettingsGroup
-        title="脚本"
-        info={SCRIPTS_GROUP_INFO}
+        title={t("projectSettings.scripts")}
+        info={t("projectSettings.scriptsGroupInfo")}
         trailing={scriptsTrailing}
         testID="scripts-group"
       >
         <View style={settingsStyles.card} testID="scripts-list">
           {draft.scripts.length === 0 ? (
             <View style={settingsStyles.row}>
-              <Text style={styles.emptyScripts}>还没有脚本。</Text>
+              <Text style={styles.emptyScripts}>{t("projectSettings.noScripts")}</Text>
             </View>
           ) : (
             draft.scripts.map((script, index) => (
@@ -674,7 +690,11 @@ function ProjectConfigForm({
         </View>
       </SettingsGroup>
 
-      <SettingsGroup title="元数据生成" info={METADATA_GROUP_INFO} testID="metadata-group">
+      <SettingsGroup
+        title={t("projectSettings.metadataGroupTitle")}
+        info={t("projectSettings.metadataGroupInfo")}
+        testID="metadata-group"
+      >
         {METADATA_PROMPT_KEYS.map((key, index) => (
           <MetadataPromptSection
             key={key}
@@ -691,8 +711,8 @@ function ProjectConfigForm({
           <Alert
             testID="stale-callout"
             variant="error"
-            title="磁盘上的配置已更改"
-            description="保存前请重新加载最新的 chisacode.json。"
+            title={t("projectSettings.staleTitle")}
+            description={t("projectSettings.staleDescription")}
           >
             <Button
               testID="stale-callout-action-0"
@@ -700,7 +720,7 @@ function ProjectConfigForm({
               variant="outline"
               size="sm"
             >
-              重新加载
+              {t("projectSettings.reload")}
             </Button>
           </Alert>
         </View>
@@ -711,8 +731,8 @@ function ProjectConfigForm({
           <Alert
             testID="write-failed-callout"
             variant="error"
-            title="无法保存 chisacode.json"
-            description="请重试，或从磁盘重新加载最新版本。"
+            title={t("projectSettings.writeFailedTitle")}
+            description={t("projectSettings.writeFailedDescription")}
           >
             <Button
               testID="write-failed-callout-action-0"
@@ -720,7 +740,7 @@ function ProjectConfigForm({
               variant="outline"
               size="sm"
             >
-              重试
+              {t("common.retry")}
             </Button>
             <Button
               testID="write-failed-callout-action-1"
@@ -728,7 +748,7 @@ function ProjectConfigForm({
               variant="outline"
               size="sm"
             >
-              重新加载
+              {t("projectSettings.reload")}
             </Button>
           </Alert>
         </View>
@@ -737,14 +757,14 @@ function ProjectConfigForm({
       <View style={styles.footer}>
         <Button
           testID="save-button"
-          accessibilityLabel="保存项目配置"
+          accessibilityLabel={t("projectSettings.saveProjectConfig")}
           variant="default"
           size="md"
           disabled={saveDisabled}
           loading={saveMutation.isPending}
           onPress={handleSave}
         >
-          {saveMutation.isPending ? "保存中..." : "保存"}
+          {saveMutation.isPending ? t("projectSettings.saving") : t("common.save")}
         </Button>
       </View>
 
@@ -770,6 +790,7 @@ interface ProjectNameEditorProps {
 }
 
 function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -780,10 +801,10 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       setIsEditing(false);
-      toast.show("项目已重命名", { variant: "success" });
+      toast.show(t("projectSettings.renamed"), { variant: "success" });
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : "无法重命名项目";
+      const message = error instanceof Error ? error.message : t("projectSettings.renameFailed");
       toast.show(message, { variant: "error" });
     },
   });
@@ -820,7 +841,7 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
         </Text>
         <Pressable
           testID="project-name-edit-button"
-          accessibilityLabel="重命名项目"
+          accessibilityLabel={t("projectSettings.renameProject")}
           onPress={handleStartEdit}
           hitSlop={8}
           style={styles.nameEditorIconButton}
@@ -830,13 +851,13 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
         {project.projectCustomName ? (
           <Pressable
             testID="project-name-reset-button"
-            accessibilityLabel="将项目名称重置为默认值"
+            accessibilityLabel={t("projectSettings.resetProjectName")}
             onPress={handleReset}
             disabled={renameMutation.isPending}
             hitSlop={8}
             style={styles.nameEditorResetButton}
           >
-            <Text style={styles.nameEditorResetText}>重置</Text>
+            <Text style={styles.nameEditorResetText}>{t("projectSettings.reset")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -847,7 +868,7 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
     <View style={styles.nameEditorRow}>
       <TextInput
         testID="project-name-input"
-        accessibilityLabel="项目名称"
+        accessibilityLabel={t("projectSettings.projectName")}
         value={value}
         onChangeText={setValue}
         placeholder={project.projectName}
@@ -860,7 +881,7 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
       />
       <Pressable
         testID="project-name-save-button"
-        accessibilityLabel="保存项目名称"
+        accessibilityLabel={t("projectSettings.saveProjectName")}
         onPress={handleSave}
         disabled={renameMutation.isPending}
         hitSlop={8}
@@ -870,7 +891,7 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
       </Pressable>
       <Pressable
         testID="project-name-cancel-button"
-        accessibilityLabel="取消重命名"
+        accessibilityLabel={t("projectSettings.cancelRename")}
         onPress={handleCancel}
         disabled={renameMutation.isPending}
         hitSlop={8}
@@ -944,10 +965,11 @@ interface HostPickerProps {
 }
 
 function HostPicker({ hosts, selectedHost, onSelectHost }: HostPickerProps) {
+  const { t } = useTranslation();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        accessibilityLabel={HOST_SWITCHER_LABEL}
+        accessibilityLabel={t("projectSettings.hostSwitcher")}
         testID="host-picker"
         style={styles.hostIndicator}
       >
@@ -1001,19 +1023,20 @@ interface MetadataPromptSectionProps {
 }
 
 function MetadataPromptSection({ promptKey, value, onChange, flush }: MetadataPromptSectionProps) {
+  const { t } = useTranslation();
   const meta = METADATA_PROMPT_FIELDS[promptKey];
   const handleChange = useCallback(
     (text: string) => onChange(promptKey, text),
     [onChange, promptKey],
   );
   return (
-    <SettingsSection title={meta.title} testID={meta.sectionTestID} flush={flush}>
+    <SettingsSection title={t(meta.titleKey)} testID={meta.sectionTestID} flush={flush}>
       <SettingsTextAreaCard
         testID={meta.inputTestID}
-        accessibilityLabel={meta.title}
+        accessibilityLabel={t(meta.titleKey)}
         value={value}
         onChangeText={handleChange}
-        placeholder={meta.placeholder}
+        placeholder={t(meta.placeholderKey)}
       />
     </SettingsSection>
   );
@@ -1027,6 +1050,7 @@ interface ScriptRowProps {
 }
 
 function ScriptRow({ script, isFirst, onEdit, onRemove }: ScriptRowProps) {
+  const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(script), [onEdit, script]);
   const handleRemove = useCallback(() => onRemove(script), [onRemove, script]);
   const rowStyle = isFirst ? styles.scriptRow : styles.scriptRowWithBorder;
@@ -1035,7 +1059,7 @@ function ScriptRow({ script, isFirst, onEdit, onRemove }: ScriptRowProps) {
     <View style={rowStyle} testID={`script-row-${script.id}`}>
       <Pressable style={styles.scriptRowMain} onPress={handleEdit}>
         <Text style={settingsStyles.rowTitle} numberOfLines={1}>
-          {script.name || "未命名脚本"}
+          {script.name || t("projectSettings.unnamedScriptRow")}
         </Text>
         <Text style={settingsStyles.rowHint} numberOfLines={1}>
           {scriptHint(script)}
@@ -1043,7 +1067,7 @@ function ScriptRow({ script, isFirst, onEdit, onRemove }: ScriptRowProps) {
       </Pressable>
       <DropdownMenu>
         <DropdownMenuTrigger
-          accessibilityLabel="打开脚本菜单"
+          accessibilityLabel={t("projectSettings.openScriptMenu")}
           testID={`script-row-menu-${script.id}`}
           style={styles.scriptKebab}
         >
@@ -1051,14 +1075,14 @@ function ScriptRow({ script, isFirst, onEdit, onRemove }: ScriptRowProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" minWidth={160}>
           <DropdownMenuItem testID={`script-action-${script.id}-edit`} onSelect={handleEdit}>
-            编辑
+            {t("projectSettings.edit")}
           </DropdownMenuItem>
           <DropdownMenuItem
             testID={`script-action-${script.id}-remove`}
             destructive
             onSelect={handleRemove}
           >
-            移除
+            {t("common.remove")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -1080,9 +1104,12 @@ interface ScriptValidation {
   commandError: string | null;
 }
 
-function validateScript(script: ProjectScriptDraft): ScriptValidation {
-  const nameError = script.name.trim().length === 0 ? "Name is required" : null;
-  const commandError = script.commandText.trim().length === 0 ? "Command is required" : null;
+function validateScript(
+  script: ProjectScriptDraft,
+  copy: { nameRequired: string; commandRequired: string },
+): ScriptValidation {
+  const nameError = script.name.trim().length === 0 ? copy.nameRequired : null;
+  const commandError = script.commandText.trim().length === 0 ? copy.commandRequired : null;
   return {
     hasErrors: Boolean(nameError || commandError),
     nameError,
@@ -1106,6 +1133,7 @@ const ALL_TOUCHED: ScriptFieldsTouched = { name: true, command: true };
 const NONE_TOUCHED: ScriptFieldsTouched = { name: false, command: false };
 
 function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModalProps) {
+  const { t } = useTranslation();
   const [touched, setTouched] = useState<ScriptFieldsTouched>(NONE_TOUCHED);
 
   useEffect(() => {
@@ -1132,7 +1160,10 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
   const handleNameBlur = useCallback(() => markTouched("name"), [markTouched]);
   const handleCommandBlur = useCallback(() => markTouched("command"), [markTouched]);
 
-  const validation = validateScript(script);
+  const validation = validateScript(script, {
+    nameRequired: t("projectSettings.scriptNameRequired"),
+    commandRequired: t("projectSettings.scriptCommandRequired"),
+  });
 
   const handleSavePress = useCallback(() => {
     if (validation.hasErrors) {
@@ -1146,8 +1177,12 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
   const showCommandError = touched.command && validation.commandError;
   const isService = script.type === SCRIPT_SERVICE_TYPE;
   const sheetHeader = useMemo<SheetHeader>(
-    () => ({ title: script.name ? `Edit ${script.name}` : "New script" }),
-    [script.name],
+    () => ({
+      title: script.name
+        ? t("projectSettings.editScriptTitle", { script: script.name })
+        : t("projectSettings.newScriptTitle"),
+    }),
+    [script.name, t],
   );
 
   return (
@@ -1159,10 +1194,10 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
       desktopMaxWidth={560}
     >
       <View style={styles.modalSection}>
-        <Text style={styles.modalLabel}>名称</Text>
+        <Text style={styles.modalLabel}>{t("projectSettings.name")}</Text>
         <TextInput
           testID="script-edit-name"
-          accessibilityLabel="脚本名称"
+          accessibilityLabel={t("projectSettings.scriptName")}
           value={script.name}
           onChangeText={handleNameChange}
           onBlur={handleNameBlur}
@@ -1177,10 +1212,10 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
         ) : null}
       </View>
       <View style={styles.modalSection}>
-        <Text style={styles.modalLabel}>命令</Text>
+        <Text style={styles.modalLabel}>{t("projectSettings.command")}</Text>
         <TextInput
           testID="script-edit-command"
-          accessibilityLabel="脚本命令"
+          accessibilityLabel={t("projectSettings.scriptCommand")}
           multiline
           value={script.commandText}
           onChangeText={handleCommandChange}
@@ -1198,25 +1233,23 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
       <View style={styles.modalSection}>
         <View style={styles.serviceToggleRow}>
           <View style={styles.serviceToggleText}>
-            <Text style={styles.serviceToggleLabel}>作为服务运行</Text>
-            <Text style={styles.modalHint}>
-              ChisaCode会托管该进程，并通过 $CHISACODE_PORT 分配端口
-            </Text>
+            <Text style={styles.serviceToggleLabel}>{t("projectSettings.runAsService")}</Text>
+            <Text style={styles.modalHint}>{t("projectSettings.runAsServiceHint")}</Text>
           </View>
           <Switch
             value={isService}
             onValueChange={handleServiceToggle}
-            accessibilityLabel="作为服务运行"
+            accessibilityLabel={t("projectSettings.runAsService")}
             testID="script-edit-service-toggle"
           />
         </View>
       </View>
       <View style={styles.modalFooter}>
         <Button onPress={onCancel} variant="ghost" size="md" testID="script-edit-cancel">
-          取消
+          {t("common.cancel")}
         </Button>
         <Button onPress={handleSavePress} variant="default" size="md" testID="script-edit-save">
-          保存
+          {t("common.save")}
         </Button>
       </View>
     </AdaptiveModalSheet>

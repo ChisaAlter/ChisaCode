@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { AgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
 import type {
   AgentMode,
@@ -159,6 +160,7 @@ async function persistProviderPreferences(input: {
 }
 
 export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAgentFormStateResult {
+  const { t } = useTranslation();
   const {
     initialServerId = null,
     initialValues,
@@ -245,8 +247,13 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
     [snapshotEntries],
   );
   const snapshotModelSelectorProviders = useMemo(
-    () => buildSelectableProviderSelectorProviders(snapshotEntries),
-    [snapshotEntries],
+    () =>
+      buildSelectableProviderSelectorProviders(snapshotEntries, {
+        defaultModelLabel: t("modelSelector.defaultModel"),
+        unavailable: t("modelSelector.unavailable"),
+        unknownError: t("modelSelector.unknownError"),
+      }),
+    [snapshotEntries, t],
   );
   const snapshotSelectedEntry = useMemo(
     () =>

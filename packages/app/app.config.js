@@ -79,7 +79,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        backgroundColor: "#000000",
+        backgroundColor: "#160709",
         foregroundImage: "./assets/images/android-icon-foreground.png",
       },
       edgeToEdgeEnabled: true,
@@ -129,7 +129,7 @@ export default {
         "expo-notifications",
         {
           icon: "./assets/images/notification-icon.png",
-          color: "#20744A",
+          color: "#ff5365",
         },
       ],
       "expo-audio",

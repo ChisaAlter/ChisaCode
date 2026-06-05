@@ -11,6 +11,7 @@ import type {
   OutputSchema,
   CommandError,
 } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 interface RestartResult {
   action: "restarted";
@@ -23,13 +24,13 @@ const restartResultSchema: OutputSchema<RestartResult> = {
   idField: "action",
   columns: [
     {
-      header: "STATUS",
+      header: tCli("daemon.table.status"),
       field: "action",
       color: () => "green",
     },
-    { header: "HOME", field: "home" },
-    { header: "PID", field: "pid" },
-    { header: "MESSAGE", field: "message" },
+    { header: tCli("daemon.table.home"), field: "home" },
+    { header: tCli("daemon.table.pid"), field: "pid" },
+    { header: tCli("daemon.table.message"), field: "message" },
   ],
 };
 
@@ -44,8 +45,8 @@ function parseTimeoutMs(raw: unknown): number {
   if (!Number.isFinite(seconds) || seconds <= 0) {
     const error: CommandError = {
       code: "INVALID_TIMEOUT",
-      message: `Invalid timeout value: ${raw}`,
-      details: "Timeout must be a positive number of seconds",
+      message: tCli("daemon.error.invalidTimeout", { label: "timeout", value: raw }),
+      details: tCli("daemon.error.positiveSeconds", { label: "timeout" }),
     };
     throw error;
   }
@@ -67,7 +68,7 @@ function toStartOptions(options: CommandOptions): DaemonStartOptions {
   if (startOptions.listen && startOptions.port) {
     const error: CommandError = {
       code: "INVALID_OPTIONS",
-      message: "Cannot use --listen and --port together",
+      message: tCli("daemon.restart.invalidOptions"),
     };
     throw error;
   }
@@ -106,8 +107,10 @@ export async function runRestartCommand(
     }
 
     const startup = await startLocalDaemonDetached(startOptions);
-    const before = stopResult.pid === null ? "not running" : `PID ${stopResult.pid}`;
-    const after = startup.pid === null ? "unknown PID" : `PID ${startup.pid}`;
+    const before =
+      stopResult.pid === null ? tCli("daemon.restart.before.notRunning") : `PID ${stopResult.pid}`;
+    const after =
+      startup.pid === null ? tCli("daemon.restart.after.unknownPid") : `PID ${startup.pid}`;
 
     return {
       type: "single",
@@ -115,7 +118,7 @@ export async function runRestartCommand(
         action: "restarted",
         home: stopResult.home,
         pid: startup.pid === null ? "-" : String(startup.pid),
-        message: `Local daemon restarted (${before} -> ${after})`,
+        message: tCli("daemon.restart.message", { before, after }),
       },
       schema: restartResultSchema,
     };
@@ -123,7 +126,7 @@ export async function runRestartCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "RESTART_FAILED",
-      message: `Failed to restart local daemon: ${message}`,
+      message: tCli("daemon.restart.failed", { message }),
     };
     throw error;
   }

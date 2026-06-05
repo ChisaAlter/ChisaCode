@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandError, CommandOptions } from "../../output/index.js";
 import type { LoopDaemonClient, LoopLogEntry } from "./types.js";
+import { tCli } from "../../i18n.js";
 
 export interface LoopLogsOptions extends CommandOptions {
   pollInterval?: string;
@@ -9,9 +10,9 @@ export interface LoopLogsOptions extends CommandOptions {
 
 export function addLoopLogsOptions(command: Command): Command {
   return command
-    .description("Stream loop logs")
-    .argument("<id>", "Loop ID")
-    .option("--poll-interval <ms>", "Polling interval in milliseconds", "1000");
+    .description(tCli("loop.logs.description"))
+    .argument("<id>", tCli("loop.id"))
+    .option("--poll-interval <ms>", tCli("loop.logs.pollInterval"), "1000");
 }
 
 function parsePollInterval(value: string): number {

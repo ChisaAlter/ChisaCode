@@ -41,7 +41,7 @@ export function resolveDaemonRunnerEntrypoint(): NodeEntrypointSpec {
   if (app.isPackaged) {
     return {
       entryPath: assertPathExists({
-        label: "Bundled daemon runner",
+        label: "内置 daemon runner",
         filePath: path.join(
           resolvePackagedAsarPath(),
           "node_modules",
@@ -67,7 +67,7 @@ export function resolveDaemonRunnerEntrypoint(): NodeEntrypointSpec {
 
   return {
     entryPath: assertPathExists({
-      label: "Daemon runner source",
+      label: "daemon runner 源文件",
       filePath: path.join(serverPackage.root, "scripts", "supervisor-entrypoint.ts"),
     }),
     execArgv: ["--import", "tsx"],
@@ -109,7 +109,7 @@ export function createNodeEntrypointInvocation(input: {
     isPackaged: app.isPackaged,
     packagedRunnerPath: app.isPackaged
       ? assertPathExists({
-          label: "Bundled node entrypoint runner",
+          label: "内置 node entrypoint runner",
           filePath: resolvePackagedNodeEntrypointRunnerPath(),
         })
       : null,

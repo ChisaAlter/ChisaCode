@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { SidebarCalloutDescriptionText } from "@/components/sidebar-callout";
 import { getIsElectronMac } from "@/constants/platform";
 import { useSidebarCallouts } from "@/contexts/sidebar-callout-context";
@@ -13,19 +14,21 @@ import { openExternalUrl } from "@/utils/open-external-url";
 const FALLBACK_DOWNLOAD_URL = "https://chisacode.sh/download";
 
 function RosettaCalloutDescription() {
+  const { t } = useTranslation();
   return (
     <>
       <SidebarCalloutDescriptionText>
-        You&apos;re running the Intel build of ChisaCode under Rosetta on Apple Silicon.
+        {t("desktop.rosetta.descriptionIntel")}
       </SidebarCalloutDescriptionText>
       <SidebarCalloutDescriptionText>
-        This causes high CPU usage. Download the Apple Silicon build to fix it.
+        {t("desktop.rosetta.descriptionCpu")}
       </SidebarCalloutDescriptionText>
     </>
   );
 }
 
 export function RosettaCalloutSource() {
+  const { t } = useTranslation();
   const callouts = useSidebarCallouts();
   const [runtimeInfo, setRuntimeInfo] = useState<DesktopRuntimeInfo | null>(null);
   const isElectronMac = getIsElectronMac();
@@ -67,20 +70,20 @@ export function RosettaCalloutSource() {
     return callouts.show({
       id: "desktop-rosetta-warning",
       priority: 300,
-      title: "Download the Apple Silicon build",
+      title: t("desktop.rosetta.title"),
       description: <RosettaCalloutDescription />,
       variant: "error",
       dismissible: false,
       actions: [
         {
-          label: "Download",
+          label: t("desktop.rosetta.download"),
           onPress: openDownload,
           variant: "primary",
         },
       ],
       testID: "rosetta-callout",
     });
-  }, [callouts, isElectronMac, openDownload, runtimeInfo]);
+  }, [callouts, isElectronMac, openDownload, runtimeInfo, t]);
 
   return null;
 }

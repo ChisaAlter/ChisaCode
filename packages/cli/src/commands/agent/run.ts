@@ -14,35 +14,25 @@ import { lookup } from "mime-types";
 import { parseDuration } from "../../utils/duration.js";
 import { collectMultiple } from "../../utils/command-options.js";
 import { resolveProviderAndModel } from "../../utils/provider-model.js";
+import { tCli } from "../../i18n.js";
 
 export { resolveProviderAndModel } from "../../utils/provider-model.js";
 
 export function addRunOptions(cmd: Command): Command {
   return cmd
-    .description("Create and start an agent with a task")
-    .argument("<prompt>", "The task/prompt for the agent")
-    .option("-d, --detach", "Run in background (detached)")
-    .option("--title <title>", "Assign a title to the agent")
+    .description(tCli("agent.run.description"))
+    .argument("<prompt>", tCli("agent.run.prompt"))
+    .option("-d, --detach", tCli("agent.run.detach"))
+    .option("--title <title>", tCli("agent.run.title"))
     .addOption(new Option("--name <name>", "Hidden alias for --title").hideHelp())
-    .option(
-      "--provider <provider>",
-      "Agent provider, or provider/model (e.g. codex or codex/gpt-5.4)",
-    )
-    .option(
-      "--model <model>",
-      "Model to use (e.g., claude-sonnet-4-20250514, claude-3-5-haiku-20241022)",
-    )
-    .option("--thinking <id>", "Thinking option ID to use for this run")
-    .option("--mode <mode>", "Provider-specific mode (e.g., plan, default, bypass)")
-    .option("--worktree <name>", "Create agent in a new git worktree")
-    .option("--base <branch>", "Base branch for worktree (default: current branch)")
-    .option(
-      "--image <path>",
-      "Attach image(s) to the initial prompt (can be used multiple times)",
-      collectMultiple,
-      [],
-    )
-    .option("--cwd <path>", "Working directory (default: current)")
+    .option("--provider <provider>", tCli("agent.run.provider"))
+    .option("--model <model>", tCli("agent.run.model"))
+    .option("--thinking <id>", tCli("agent.run.thinking"))
+    .option("--mode <mode>", tCli("agent.run.mode"))
+    .option("--worktree <name>", tCli("agent.run.worktree"))
+    .option("--base <branch>", tCli("agent.run.base"))
+    .option("--image <path>", tCli("agent.send.image"), collectMultiple, [])
+    .option("--cwd <path>", tCli("agent.run.cwd"))
     .option(
       "--env <key=value>",
       "Set environment variable(s) for the agent process (can be used multiple times)",

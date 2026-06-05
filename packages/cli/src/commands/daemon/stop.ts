@@ -10,6 +10,7 @@ import type {
   OutputSchema,
   CommandError,
 } from "../../output/index.js";
+import { tCli } from "../../i18n.js";
 
 interface StopResult {
   action: "stopped" | "not_running";
@@ -23,13 +24,13 @@ const stopResultSchema: OutputSchema<StopResult> = {
   idField: "action",
   columns: [
     {
-      header: "STATUS",
+      header: tCli("daemon.table.status"),
       field: "action",
       color: (value) => (value === "stopped" ? "green" : "yellow"),
     },
-    { header: "HOME", field: "home" },
-    { header: "PID", field: "pid" },
-    { header: "MESSAGE", field: "message" },
+    { header: tCli("daemon.table.home"), field: "home" },
+    { header: tCli("daemon.table.pid"), field: "pid" },
+    { header: tCli("daemon.table.message"), field: "message" },
   ],
 };
 
@@ -44,8 +45,8 @@ function parseSecondsOption(raw: unknown, fallbackMs: number, label: string): nu
   if (!Number.isFinite(seconds) || seconds <= 0) {
     const error: CommandError = {
       code: "INVALID_TIMEOUT",
-      message: `Invalid ${label} value: ${raw}`,
-      details: `${label} must be a positive number of seconds`,
+      message: tCli("daemon.error.invalidTimeout", { label, value: raw }),
+      details: tCli("daemon.error.positiveSeconds", { label }),
     };
     throw error;
   }
@@ -83,7 +84,7 @@ export async function runStopCommand(
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {
       code: "STOP_FAILED",
-      message: `Failed to stop local daemon: ${message}`,
+      message: tCli("daemon.stop.failed", { message }),
     };
     throw error;
   }

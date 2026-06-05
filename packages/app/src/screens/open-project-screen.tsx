@@ -4,7 +4,6 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useRouter } from "expo-router";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react-native";
 import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
-import { CommunityLinks } from "@/components/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { usePanelStore } from "@/stores/panel-store";
@@ -91,7 +90,7 @@ export function OpenProjectScreen({ serverId }: { serverId: string }) {
           />
           <HomeTile
             icon={Plug}
-            title="设置 Provider"
+            title="设置模型与工具"
             description="配置 Claude Code、Codex 等"
             onPress={handleOpenProviders}
             testID="open-project-setup-providers"
@@ -100,15 +99,12 @@ export function OpenProjectScreen({ serverId }: { serverId: string }) {
             <HomeTile
               icon={Smartphone}
               title="配对设备"
-              description="将手机连接到这个 daemon"
+              description="将手机连接到这台主机服务"
               onPress={handleOpenPairDevice}
               testID="open-project-pair-device"
             />
           ) : null}
         </View>
-      </View>
-      <View style={styles.communityRow}>
-        <CommunityLinks />
       </View>
       <PairDeviceModal
         visible={isPairDeviceOpen}
@@ -230,18 +226,5 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     lineHeight: 18,
-  },
-  communityRow: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: {
-      xs: HEADER_INNER_HEIGHT_MOBILE + HEADER_TOP_PADDING_MOBILE + theme.spacing[2],
-      md: HEADER_INNER_HEIGHT + theme.spacing[2],
-    },
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 0,
   },
 }));

@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
@@ -14,6 +15,7 @@ interface UseImageAttachmentPickerResult {
 }
 
 export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
+  const { t } = useTranslation();
   const [mediaPermission, requestMediaPermission] = ImagePicker.useMediaLibraryPermissions();
   const isPickingRef = useRef(false);
 
@@ -30,15 +32,12 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
     }
 
     if (!currentPermission?.granted) {
-      Alert.alert(
-        "Permission required",
-        "Please allow access to your photo library to attach images.",
-      );
+      Alert.alert(t("files.permissionRequired"), t("files.photoLibraryPermission"));
       return false;
     }
 
     return true;
-  }, [mediaPermission, requestMediaPermission]);
+  }, [mediaPermission, requestMediaPermission, t]);
 
   const pickImages = useCallback(async () => {
     if (isPickingRef.current) {
@@ -83,12 +82,12 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
       return await normalizePickedImageAssets(result.assets);
     } catch (error) {
       console.error("[ImageAttachmentPicker] Failed to pick image:", error);
-      Alert.alert("错误", "选择图片失败");
+      Alert.alert(t("common.error"), t("files.pickImageFailed"));
       return null;
     } finally {
       isPickingRef.current = false;
     }
-  }, [ensurePermission]);
+  }, [ensurePermission, t]);
 
   return { pickImages };
 }

@@ -5,13 +5,17 @@ export function buildDraftPanelDescriptor(input: {
   isCreating: boolean;
   pendingPrompt?: string | null;
   icon: ComponentType<PanelIconProps>;
+  copy: {
+    newAgent: string;
+    creatingAgent: string;
+  };
 }): PanelDescriptor {
-  const { icon, isCreating, pendingPrompt } = input;
-  const creatingLabel = pendingPrompt?.trim() || "新智能体";
+  const { copy, icon, isCreating, pendingPrompt } = input;
+  const creatingLabel = pendingPrompt?.trim() || copy.newAgent;
   if (isCreating) {
     return {
       label: creatingLabel,
-      subtitle: "正在创建智能体",
+      subtitle: copy.creatingAgent,
       titleState: "ready",
       icon,
       statusBucket: "running",
@@ -19,8 +23,8 @@ export function buildDraftPanelDescriptor(input: {
   }
 
   return {
-    label: "新智能体",
-    subtitle: "新智能体",
+    label: copy.newAgent,
+    subtitle: copy.newAgent,
     titleState: "ready",
     icon,
     statusBucket: null,

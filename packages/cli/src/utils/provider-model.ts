@@ -1,4 +1,5 @@
 import type { CommandError } from "../output/index.js";
+import { tCli } from "../i18n.js";
 
 export interface ResolveProviderAndModelOptions {
   provider?: string;
@@ -20,9 +21,8 @@ export function resolveProviderAndModel(
   if (!providerInput) {
     const error: CommandError = {
       code: "MISSING_PROVIDER",
-      message: "Provider is required",
-      details:
-        "Pass --provider <provider> or --provider <provider>/<model>. Use `chisacode provider ls` to see providers and `chisacode provider models <provider>` to see models.",
+      message: tCli("providerModel.missingProvider"),
+      details: tCli("providerModel.missingProviderDetails"),
     };
     throw error;
   }
@@ -30,7 +30,7 @@ export function resolveProviderAndModel(
   if (options.model !== undefined && !modelInput) {
     const error: CommandError = {
       code: "INVALID_MODEL",
-      message: "--model cannot be empty",
+      message: tCli("providerModel.emptyModel"),
     };
     throw error;
   }
@@ -48,8 +48,8 @@ export function resolveProviderAndModel(
   if (!provider || !modelFromProvider) {
     const error: CommandError = {
       code: "INVALID_PROVIDER",
-      message: "Invalid --provider value",
-      details: "Use --provider <provider> or --provider <provider>/<model>",
+      message: tCli("providerModel.invalidProvider"),
+      details: tCli("providerModel.invalidProviderDetails"),
     };
     throw error;
   }
@@ -57,8 +57,11 @@ export function resolveProviderAndModel(
   if (modelInput && modelInput !== modelFromProvider) {
     const error: CommandError = {
       code: "CONFLICTING_MODEL_OPTIONS",
-      message: "Conflicting model values provided",
-      details: `--provider specifies model ${modelFromProvider}, but --model specifies ${modelInput}`,
+      message: tCli("providerModel.conflictingModel"),
+      details: tCli("providerModel.conflictingModelDetails", {
+        providerModel: modelFromProvider,
+        model: modelInput,
+      }),
     };
     throw error;
   }

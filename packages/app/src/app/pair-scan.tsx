@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { BarcodeScanningResult, BarcodeSettings } from "expo-camera";
+import { useTranslation } from "react-i18next";
 import { useHostMutations } from "@/runtime/host-runtime";
 import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
@@ -120,6 +121,7 @@ function extractOfferUrlFromScan(result: BarcodeScanningResult): string | null {
 
 export default function PairScanScreen() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -190,13 +192,13 @@ export default function PairScanScreen() {
         navigateToPairedHost(profile.serverId);
       } catch (error) {
         lastScannedRef.current = null;
-        const message = error instanceof Error ? error.message : "Unable to pair host";
-        Alert.alert("错误", message);
+        const message = error instanceof Error ? error.message : t("pairing.unableToPairHost");
+        Alert.alert(t("common.error"), message);
       } finally {
         setIsPairing(false);
       }
     },
-    [isPairing, navigateToPairedHost, upsertDaemonFromOfferUrl],
+    [isPairing, navigateToPairedHost, t, upsertDaemonFromOfferUrl],
   );
 
   const handleRouterBack = useCallback(() => router.back(), [router]);
@@ -216,13 +218,13 @@ export default function PairScanScreen() {
   if (isWeb) {
     return (
       <View style={styles.container}>
-        <BackHeader title="扫描二维码" onBack={handleRouterBack} />
+        <BackHeader title={t("pairing.scanQr")} onBack={handleRouterBack} />
         <View style={bodyStyle}>
           <View style={styles.permissionCard}>
-            <Text style={styles.permissionTitle}>网页端不可用</Text>
-            <Text style={styles.permissionBody}>网页版不支持扫描二维码。请改用“粘贴链接”。</Text>
+            <Text style={styles.permissionTitle}>{t("pairing.webUnavailableTitle")}</Text>
+            <Text style={styles.permissionBody}>{t("pairing.webUnavailableBody")}</Text>
             <Pressable style={styles.permissionButton} onPress={closeToSource}>
-              <Text style={styles.permissionButtonText}>返回设置</Text>
+              <Text style={styles.permissionButtonText}>{t("pairing.returnToSettings")}</Text>
             </Pressable>
           </View>
         </View>
@@ -234,17 +236,15 @@ export default function PairScanScreen() {
 
   return (
     <View style={styles.container}>
-      <BackHeader title="扫描二维码" onBack={closeToSource} />
+      <BackHeader title={t("pairing.scanQr")} onBack={closeToSource} />
 
       <View style={bodyStyle}>
         {!granted ? (
           <View style={styles.permissionCard}>
-            <Text style={styles.permissionTitle}>相机权限</Text>
-            <Text style={styles.permissionBody}>
-              允许访问相机，以扫描 daemon 提供的配对二维码。
-            </Text>
+            <Text style={styles.permissionTitle}>{t("pairing.cameraPermissionTitle")}</Text>
+            <Text style={styles.permissionBody}>{t("pairing.cameraPermissionBody")}</Text>
             <Pressable style={styles.permissionButton} onPress={handleRequestPermission}>
-              <Text style={styles.permissionButtonText}>授予权限</Text>
+              <Text style={styles.permissionButtonText}>{t("pairing.grantPermission")}</Text>
             </Pressable>
           </View>
         ) : (
@@ -262,7 +262,7 @@ export default function PairScanScreen() {
                 <View style={CORNER_BL_STYLE} />
                 <View style={CORNER_BR_STYLE} />
               </View>
-              {isPairing ? <Text style={helperTextStyle}>正在配对...</Text> : null}
+              {isPairing ? <Text style={helperTextStyle}>{t("pairing.pairing")}</Text> : null}
             </View>
           </View>
         )}

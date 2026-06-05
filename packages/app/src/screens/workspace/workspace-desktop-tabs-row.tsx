@@ -16,6 +16,7 @@ import {
   type LayoutChangeEvent,
   type PressableStateCallbackType,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import {
   CopyX,
   ArrowLeftToLine,
@@ -174,20 +175,28 @@ interface WorkspaceDesktopTabsRowProps {
   showPaneSplitActions?: boolean;
 }
 
-function getFallbackTabLabel(tab: WorkspaceTabDescriptor): string {
+function getFallbackTabLabel(
+  tab: WorkspaceTabDescriptor,
+  labels: {
+    newAgent: string;
+    setup: string;
+    terminal: string;
+    agent: string;
+  },
+): string {
   if (tab.target.kind === "draft") {
-    return "新建智能体";
+    return labels.newAgent;
   }
   if (tab.target.kind === "setup") {
-    return "设置";
+    return labels.setup;
   }
   if (tab.target.kind === "terminal") {
-    return "终端";
+    return labels.terminal;
   }
   if (tab.target.kind === "file") {
     return tab.target.path.split("/").findLast(Boolean) ?? tab.target.path;
   }
-  return "智能体";
+  return labels.agent;
 }
 
 function useMiddleClickClose(onClose: () => void) {
@@ -491,6 +500,16 @@ export function WorkspaceDesktopTabsRow({
   tabDropPreviewIndex = null,
   showPaneSplitActions = true,
 }: WorkspaceDesktopTabsRowProps) {
+  const { t } = useTranslation();
+  const fallbackTabLabels = useMemo(
+    () => ({
+      newAgent: t("workspace.newAgent"),
+      setup: t("workspace.setup"),
+      terminal: t("terminal.title"),
+      agent: t("session.agent"),
+    }),
+    [t],
+  );
   const newTabKeys = useShortcutKeys("workspace-tab-new");
   const newTerminalKeys = useShortcutKeys("workspace-terminal-new");
   const splitRightKeys = useShortcutKeys("workspace-pane-split-right");
@@ -526,10 +545,10 @@ export function WorkspaceDesktopTabsRow({
   const tabLabelLengths = useMemo(
     () =>
       tabs.map((tab) => {
-        const label = getFallbackTabLabel(tab.tab);
+        const label = getFallbackTabLabel(tab.tab, fallbackTabLabels);
         return label.length;
       }),
-    [tabs],
+    [fallbackTabLabels, tabs],
   );
 
   const { layout } = useWorkspaceTabLayout({
@@ -688,14 +707,14 @@ export function WorkspaceDesktopTabsRow({
             testID="workspace-new-agent-tab"
             onPress={handleCreateAgentTab}
             accessibilityRole="button"
-            accessibilityLabel="新建智能体标签页"
+            accessibilityLabel={t("workspace.desktopTabs.newAgentTab")}
             style={newTabActionButtonStyle}
           >
             <ThemedSquarePen size={14} uniProps={mutedColorMapping} />
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
             <View style={styles.newTabTooltipRow}>
-              <Text style={styles.newTabTooltipText}>新建智能体标签页</Text>
+              <Text style={styles.newTabTooltipText}>{t("workspace.desktopTabs.newAgentTab")}</Text>
               {newTabKeys ? (
                 <Shortcut chord={newTabKeys} style={styles.newTabTooltipShortcut} />
               ) : null}
@@ -709,7 +728,9 @@ export function WorkspaceDesktopTabsRow({
             disabled={terminalDisabled}
             accessibilityRole="button"
             accessibilityLabel={
-              isWaitingOnTerminalReadiness ? "正在准备终端标签页" : "新建终端标签页"
+              isWaitingOnTerminalReadiness
+                ? t("workspace.desktopTabs.preparingTerminalTab")
+                : t("workspace.desktopTabs.newTerminalTab")
             }
             style={newTerminalActionButtonStyle}
           >
@@ -718,7 +739,9 @@ export function WorkspaceDesktopTabsRow({
           <TooltipContent side="bottom" align="center" offset={8}>
             <View style={styles.newTabTooltipRow}>
               <Text style={styles.newTabTooltipText}>
-                {isWaitingOnTerminalReadiness ? "正在准备终端..." : "新建终端标签页"}
+                {isWaitingOnTerminalReadiness
+                  ? t("workspace.desktopTabs.preparingTerminal")
+                  : t("workspace.desktopTabs.newTerminalTab")}
               </Text>
               {newTerminalKeys ? (
                 <Shortcut chord={newTerminalKeys} style={styles.newTabTooltipShortcut} />
@@ -732,14 +755,16 @@ export function WorkspaceDesktopTabsRow({
               testID="workspace-new-browser"
               onPress={handleCreateBrowser}
               accessibilityRole="button"
-              accessibilityLabel="新建浏览器标签页"
+              accessibilityLabel={t("workspace.desktopTabs.newBrowserTab")}
               style={newTabActionButtonStyle}
             >
               <ThemedGlobe size={14} uniProps={mutedColorMapping} />
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center" offset={8}>
               <View style={styles.newTabTooltipRow}>
-                <Text style={styles.newTabTooltipText}>新建浏览器标签页</Text>
+                <Text style={styles.newTabTooltipText}>
+                  {t("workspace.desktopTabs.newBrowserTab")}
+                </Text>
               </View>
             </TooltipContent>
           </Tooltip>
@@ -750,14 +775,16 @@ export function WorkspaceDesktopTabsRow({
               <TooltipTrigger
                 onPress={onSplitRight}
                 accessibilityRole="button"
-                accessibilityLabel="向右拆分窗格"
+                accessibilityLabel={t("workspace.desktopTabs.splitPaneRight")}
                 style={newTabActionButtonStyle}
               >
                 <ThemedColumns2 size={14} uniProps={mutedColorMapping} />
               </TooltipTrigger>
               <TooltipContent side="bottom" align="center" offset={8}>
                 <View style={styles.newTabTooltipRow}>
-                  <Text style={styles.newTabTooltipText}>向右拆分窗格</Text>
+                  <Text style={styles.newTabTooltipText}>
+                    {t("workspace.desktopTabs.splitPaneRight")}
+                  </Text>
                   {splitRightKeys ? (
                     <Shortcut chord={splitRightKeys} style={styles.newTabTooltipShortcut} />
                   ) : null}
@@ -768,14 +795,16 @@ export function WorkspaceDesktopTabsRow({
               <TooltipTrigger
                 onPress={onSplitDown}
                 accessibilityRole="button"
-                accessibilityLabel="向下拆分窗格"
+                accessibilityLabel={t("workspace.desktopTabs.splitPaneDown")}
                 style={newTabActionButtonStyle}
               >
                 <ThemedRows2 size={14} uniProps={mutedColorMapping} />
               </TooltipTrigger>
               <TooltipContent side="bottom" align="center" offset={8}>
                 <View style={styles.newTabTooltipRow}>
-                  <Text style={styles.newTabTooltipText}>向下拆分窗格</Text>
+                  <Text style={styles.newTabTooltipText}>
+                    {t("workspace.desktopTabs.splitPaneDown")}
+                  </Text>
                   {splitDownKeys ? (
                     <Shortcut chord={splitDownKeys} style={styles.newTabTooltipShortcut} />
                   ) : null}
@@ -840,12 +869,30 @@ function ResolvedDesktopTabChip({
   showDropIndicatorBefore: boolean;
   showDropIndicatorAfter: boolean;
 }) {
+  const { t } = useTranslation();
+  const tabMenuCopy = useMemo(
+    () => ({
+      copyResumeCommand: t("workspace.tabMenu.copyResumeCommand"),
+      copyAgentId: t("workspace.tabMenu.copyAgentId"),
+      rename: t("workspace.tabMenu.rename"),
+      closeTabsAbove: t("workspace.tabMenu.closeTabsAbove"),
+      closeTabsBelow: t("workspace.tabMenu.closeTabsBelow"),
+      closeTabsLeft: t("workspace.tabMenu.closeTabsLeft"),
+      closeTabsRight: t("workspace.tabMenu.closeTabsRight"),
+      closeOtherTabs: t("workspace.tabMenu.closeOtherTabs"),
+      reloadAgent: t("workspace.tabMenu.reloadAgent"),
+      reloadAgentTooltip: t("workspace.tabMenu.reloadAgentTooltip"),
+      close: t("workspace.tabMenu.close"),
+    }),
+    [t],
+  );
   const resolvedTab = useMemo(
     () =>
       buildWorkspaceDesktopTabActions({
         tab: item.tab,
         index,
         tabCount,
+        copy: tabMenuCopy,
         onCopyResumeCommand,
         onCopyAgentId,
         onReloadAgent,
@@ -867,6 +914,7 @@ function ResolvedDesktopTabChip({
       onReloadAgent,
       onRenameTab,
       tabCount,
+      tabMenuCopy,
     ],
   );
 
@@ -878,7 +926,9 @@ function ResolvedDesktopTabChip({
     >
       {(presentation) => {
         const tooltipLabel =
-          presentation.titleState === "loading" ? "正在加载智能体标题" : presentation.label;
+          presentation.titleState === "loading"
+            ? t("workspace.desktopTabs.loadingAgentTitle")
+            : presentation.label;
 
         return (
           <View style={styles.tabSlot}>

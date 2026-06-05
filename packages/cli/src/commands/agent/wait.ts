@@ -8,6 +8,7 @@ import type {
 } from "../../output/index.js";
 import { fetchAgentTimelineItems, formatAgentActivityTranscript } from "./logs.js";
 import { parseDuration } from "../../utils/duration.js";
+import { tCli } from "../../i18n.js";
 
 /** Result type for agent wait command */
 export interface AgentWaitResult {
@@ -129,9 +130,9 @@ function buildWaitResult(args: {
 
 export function addWaitOptions(cmd: Command): Command {
   return cmd
-    .description("Wait for an agent to become idle")
-    .argument("<id>", "Agent ID (or prefix)")
-    .option("--timeout <seconds>", "Maximum wait time (default: no limit)");
+    .description(tCli("agent.wait.description"))
+    .argument("<id>", tCli("agent.id"))
+    .option("--timeout <seconds>", tCli("agent.wait.timeout"));
 }
 
 export async function runWaitCommand(

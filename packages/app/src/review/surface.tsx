@@ -12,6 +12,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Shortcut } from "@/components/ui/shortcut";
 import { isWeb } from "@/constants/platform";
@@ -430,6 +431,7 @@ function CommentRow({
   onDeleteComment: (id: string) => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
 
   const handleEdit = useCallback(
     () => onEditComment(reviewTarget, comment),
@@ -449,7 +451,7 @@ function CommentRow({
       <View style={styles.commentActions}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="编辑评论"
+          accessibilityLabel={t("review.editComment")}
           testID={`review-comment-edit-${comment.id}`}
           hitSlop={SMALL_ACTION_HIT_SLOP}
           onPress={handleEdit}
@@ -459,7 +461,7 @@ function CommentRow({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="删除评论"
+          accessibilityLabel={t("review.deleteComment")}
           testID={`review-comment-delete-${comment.id}`}
           hitSlop={SMALL_ACTION_HIT_SLOP}
           onPress={handleDelete}
@@ -500,6 +502,7 @@ export function InlineReviewEditor({
   testID?: string;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const inputRef = useRef<TextInput | null>(null);
   const focus = useWorkspaceFocusRestoration();
   const canShowKeyboardHints = useCanShowReviewKeyboardHints();
@@ -574,9 +577,9 @@ export function InlineReviewEditor({
     <View style={styles.editorBlock} testID={testID}>
       <TextInput
         ref={inputRef}
-        accessibilityLabel="评论内容"
+        accessibilityLabel={t("review.commentBody")}
         testID={testID ? `${testID}-input` : undefined}
-        placeholder="发表评论"
+        placeholder={t("review.commentPlaceholder")}
         placeholderTextColor={theme.colors.foregroundMuted}
         multiline
         value={body}
@@ -587,7 +590,7 @@ export function InlineReviewEditor({
       />
       <View style={styles.editorActions}>
         <Button
-          accessibilityLabel="取消评论"
+          accessibilityLabel={t("review.cancelComment")}
           testID={testID ? `${testID}-cancel` : undefined}
           hitSlop={SMALL_ACTION_HIT_SLOP}
           onPress={onCancel}
@@ -595,10 +598,10 @@ export function InlineReviewEditor({
           size="xs"
           trailing={cancelShortcut}
         >
-          取消
+          {t("common.cancel")}
         </Button>
         <Button
-          accessibilityLabel="保存评论"
+          accessibilityLabel={t("review.saveComment")}
           testID={testID ? `${testID}-save` : undefined}
           hitSlop={SMALL_ACTION_HIT_SLOP}
           disabled={!canSave}
@@ -607,7 +610,7 @@ export function InlineReviewEditor({
           size="xs"
           trailing={saveShortcut}
         >
-          评论
+          {t("review.comment")}
         </Button>
       </View>
     </View>

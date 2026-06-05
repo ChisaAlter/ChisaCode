@@ -1,9 +1,8 @@
 import type { Command } from "commander";
+import { tCli } from "../../i18n.js";
 
 export function addAttachOptions(cmd: Command): Command {
-  return cmd
-    .description("Attach to a running agent's output stream")
-    .argument("<id>", "Agent ID (or prefix)");
+  return cmd.description(tCli("agent.attach.description")).argument("<id>", tCli("agent.id"));
 }
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import { fetchProjectedTimelineItems } from "../../utils/timeline.js";

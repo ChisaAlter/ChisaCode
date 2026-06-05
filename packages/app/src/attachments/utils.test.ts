@@ -33,7 +33,7 @@ describe("parseDataUrl", () => {
 
   it("rejects non-base64 data URLs", () => {
     expect(() => parseDataUrl("data:image/png,not-base64")).toThrow(
-      "Attachment data URL is not base64 encoded.",
+      "附件 data URL 不是 base64 编码。",
     );
   });
 });

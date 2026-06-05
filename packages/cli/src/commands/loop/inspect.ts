@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, CommandError, OutputSchema, ListResult } from "../../output/index.js";
 import type { LoopDaemonClient, LoopRecord } from "./types.js";
+import { tCli } from "../../i18n.js";
 
 interface InspectRow {
   key: string;
@@ -11,7 +12,7 @@ interface InspectRow {
 export interface LoopInspectOptions extends CommandOptions {}
 
 export function addLoopInspectOptions(command: Command): Command {
-  return command.description("Show loop details and iteration history").argument("<id>", "Loop ID");
+  return command.description(tCli("loop.inspect.description")).argument("<id>", tCli("loop.id"));
 }
 
 function createInspectSchema(loop: LoopRecord): OutputSchema<InspectRow> {

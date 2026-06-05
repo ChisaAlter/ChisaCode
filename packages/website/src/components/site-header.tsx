@@ -1,12 +1,19 @@
 import "~/styles.css";
+import { useCallback } from "react";
+import { useWebsiteI18n } from "~/i18n";
 import { useStars } from "~/routes/__root";
 
 export function SiteHeader() {
   const { stars } = useStars();
+  const { language, setLanguage, t } = useWebsiteI18n();
+  const nextLanguage = language === "zh-CN" ? "en" : "zh-CN";
+  const handleToggleLanguage = useCallback(() => {
+    setLanguage(nextLanguage);
+  }, [nextLanguage, setLanguage]);
   return (
     <header className="flex flex-col items-center gap-4 md:flex-row md:justify-between">
       <a href="/" className="flex items-center gap-3">
-        <img src="/logo.svg" alt="ChisaCode" className="w-6 h-6" />
+        <img src="/logo.png" alt="ChisaCode" className="w-6 h-6 rounded-md" />
         <span className="text-lg font-medium">ChisaCode</span>
       </a>
       <div className="flex flex-wrap items-center justify-center gap-4">
@@ -14,26 +21,34 @@ export function SiteHeader() {
           href="/blog"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Blog
+          {t("nav.blog")}
         </a>
         <a
           href="/docs"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Docs
+          {t("nav.docs")}
         </a>
         <a
           href="/changelog"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Changelog
+          {t("nav.changelog")}
         </a>
         <a
           href="/download"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Download
+          {t("nav.download")}
         </a>
+        <button
+          type="button"
+          onClick={handleToggleLanguage}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={t("nav.language")}
+        >
+          {language === "zh-CN" ? "EN" : "中文"}
+        </button>
         <a
           href="https://discord.gg/jz8T2uahpH"
           target="_blank"

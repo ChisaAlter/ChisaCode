@@ -6,9 +6,10 @@ import { addLoopLsOptions, runLoopLsCommand } from "./ls.js";
 import { addLoopInspectOptions, runLoopInspectCommand } from "./inspect.js";
 import { addLoopLogsOptions, runLoopLogsCommand } from "./logs.js";
 import { addLoopStopOptions, runLoopStopCommand } from "./stop.js";
+import { tCli } from "../../i18n.js";
 
 export function createLoopCommand(): Command {
-  const loop = new Command("loop").description("Run iterative worker loops");
+  const loop = new Command("loop").description(tCli("loop.description"));
 
   addJsonAndDaemonHostOptions(addLoopRunOptions(loop.command("run"))).action(
     withOutput(runLoopRunCommand),

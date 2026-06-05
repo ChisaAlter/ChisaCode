@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDesktopAppUpdater,
   formatStatusText,
+  type DesktopAppUpdateStatusCopy,
   type DesktopAppUpdater,
   type DesktopAppUpdaterErrorReport,
 } from "./desktop-app-updater";
@@ -11,6 +12,22 @@ import {
   createFakeDesktopAppUpdaterPort,
   type FakeDesktopAppUpdaterPort,
 } from "./test-utils/fake-desktop-app-updater-port";
+
+const UPDATER_COPY = {
+  installReportError: "Unable to install the desktop app update.",
+};
+
+const STATUS_COPY: DesktopAppUpdateStatusCopy = {
+  checking: "Checking for app updates...",
+  installing: "Installing app update...",
+  upToDate: "App is up to date.",
+  pending: "We'll let you know when the update is ready.",
+  availableWithVersion: (versionLabel) => `Update ready: ${versionLabel}`,
+  availableGeneric: "An app update is ready to install.",
+  installed: "App update installed. Restart required.",
+  error: "App update failed.",
+  idle: "Update status has not been checked yet.",
+};
 
 function createUpdater(
   overrides: {
@@ -28,6 +45,7 @@ function createUpdater(
   const updater = createDesktopAppUpdater({
     port,
     now: overrides.now ?? (() => 1_700_000_000_000),
+    copy: UPDATER_COPY,
     reportInstallError:
       overrides.reportInstallError ??
       ((report) => {
@@ -234,6 +252,7 @@ describe("formatStatusText", () => {
         availableUpdate: buildFakeCheckResult({ latestVersion: "1.2.3" }),
         installMessage: null,
         formatVersion,
+        copy: STATUS_COPY,
       }),
     ).toBe("Update ready: v1.2.3");
   });
@@ -245,6 +264,7 @@ describe("formatStatusText", () => {
         availableUpdate: null,
         installMessage: null,
         formatVersion,
+        copy: STATUS_COPY,
       }),
     ).toBe("An app update is ready to install.");
   });
@@ -256,6 +276,7 @@ describe("formatStatusText", () => {
         availableUpdate: null,
         installMessage: "Restart now",
         formatVersion,
+        copy: STATUS_COPY,
       }),
     ).toBe("Restart now");
   });

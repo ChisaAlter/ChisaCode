@@ -21,6 +21,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -155,6 +156,7 @@ function renderStreamItemWithTurnFooter(input: {
 function renderListEmptyComponent(input: {
   renderModel: AgentStreamRenderModel;
   emptyStateStyle: StyleProp<ViewStyle>;
+  emptyText: string;
 }): ReactNode {
   if (
     input.renderModel.boundary.hasVirtualizedHistory ||
@@ -168,7 +170,7 @@ function renderListEmptyComponent(input: {
 
   return (
     <View style={input.emptyStateStyle}>
-      <Text style={stylesheet.emptyStateText}>开始和这个智能体聊天...</Text>
+      <Text style={stylesheet.emptyStateText}>{input.emptyText}</Text>
     </View>
   );
 }
@@ -231,6 +233,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     },
     ref,
   ) {
+    const { t } = useTranslation();
     const viewportRef = useRef<StreamViewportHandle | null>(null);
     const isMobile = useIsCompactFormFactor();
     const streamRenderStrategy = useMemo(
@@ -623,8 +626,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const emptyStateStyle = useMemo(() => [stylesheet.emptyState, stylesheet.contentWrapper], []);
     const listEmptyComponent = useMemo(
-      () => renderListEmptyComponent({ renderModel, emptyStateStyle }),
-      [renderModel, emptyStateStyle],
+      () =>
+        renderListEmptyComponent({
+          renderModel,
+          emptyStateStyle,
+          emptyText: t("session.startChat"),
+        }),
+      [emptyStateStyle, renderModel, t],
     );
 
     const { boundary, auxiliary } = renderModel;
@@ -731,7 +739,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                   style={stylesheet.scrollToBottomButton}
                   onPress={scrollToBottom}
                   accessibilityRole="button"
-                  accessibilityLabel="滚动到底部"
+                  accessibilityLabel={t("stream.scrollToBottom")}
                   testID="scroll-to-bottom-button"
                 >
                   <ChevronDown size={24} color={stylesheet.scrollToBottomIcon.color} />
@@ -831,11 +839,14 @@ function PermissionRequestCard({
   permission: PendingPermission;
   client: DaemonClient | null;
 }) {
+  const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
 
   const { request } = permission;
   const isPlanRequest = request.kind === "plan";
-  const title = isPlanRequest ? "计划" : (request.title ?? request.name ?? "需要权限");
+  const title = isPlanRequest
+    ? t("plan.title")
+    : (request.title ?? request.name ?? t("permissions.required"));
   const description = request.description ?? "";
   const resolvedToolCallDetail = useMemo(
     () =>
@@ -856,19 +867,19 @@ function PermissionRequestCard({
     return [
       {
         id: "reject",
-        label: "拒绝",
+        label: t("permissions.reject"),
         behavior: "deny",
         variant: "danger",
         intent: "dismiss",
       },
       {
         id: "accept",
-        label: isPlanRequest ? "执行" : "接受",
+        label: isPlanRequest ? t("permissions.execute") : t("permissions.accept"),
         behavior: "allow",
         variant: "primary",
       },
     ];
-  }, [isPlanRequest, request]);
+  }, [isPlanRequest, request, t]);
 
   const planMarkdown = useMemo(() => {
     if (!request) {
@@ -893,7 +904,7 @@ function PermissionRequestCard({
       response: AgentPermissionResponse;
     }) => {
       if (!client) {
-        throw new Error("daemon client 不可用");
+        throw new Error(t("permissions.daemonClientUnavailable"));
       }
       return client.respondToPermissionAndWait(
         input.agentId,
@@ -940,10 +951,10 @@ function PermissionRequestCard({
       handleResponse({
         behavior: "deny",
         selectedActionId: action.id,
-        message: "用户已拒绝",
+        message: t("permissions.deniedByUser"),
       });
     },
-    [handleResponse],
+    [handleResponse, t],
   );
 
   const optionsContainerStyle = useMemo(
@@ -967,7 +978,7 @@ function PermissionRequestCard({
   const footer = (
     <>
       <Text testID="permission-request-question" style={permissionStyles.question}>
-        你想怎么处理？
+        {t("permissions.question")}
       </Text>
 
       <View style={optionsContainerStyle}>
@@ -1019,7 +1030,7 @@ function PermissionRequestCard({
 
       {planMarkdown ? (
         <PlanCard
-          title="建议计划"
+          title={t("plan.suggested")}
           text={planMarkdown}
           testID="permission-plan-card"
           disableOuterSpacing

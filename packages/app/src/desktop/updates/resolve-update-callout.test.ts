@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveUpdateCalloutDescriptor,
+  type UpdateCalloutCopy,
   type ResolveUpdateCalloutInput,
 } from "./resolve-update-callout";
+
+const COPY: UpdateCalloutCopy = {
+  installingTitle: "Installing update",
+  failedTitle: "Update failed",
+  availableTitle: "Update available",
+  fallbackError: "Something went wrong.",
+  changelog: "What's new",
+  retry: "Retry",
+  installingAction: "Installing...",
+  installAndRestart: "Install & restart",
+};
 
 function input(overrides: Partial<ResolveUpdateCalloutInput> = {}): ResolveUpdateCalloutInput {
   return {
@@ -11,6 +23,7 @@ function input(overrides: Partial<ResolveUpdateCalloutInput> = {}): ResolveUpdat
     isInstalling: false,
     availableUpdate: { latestVersion: "1.2.3" },
     errorMessage: null,
+    copy: COPY,
     ...overrides,
   };
 }

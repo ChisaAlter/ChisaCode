@@ -20,6 +20,7 @@ import {
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
 import { isNative, isWeb } from "@/constants/platform";
+import { useTranslation } from "react-i18next";
 
 // Horizontal indent token shared by the sheet header (title, back arrow,
 // leading icon, search input icon) and any row primitive rendered inside the
@@ -301,6 +302,7 @@ export function SheetHeaderView({
   testID?: string;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const titleStyle = useMemo(
     () => [styles.title, { color: theme.colors.foreground }],
     [theme.colors.foreground],
@@ -344,7 +346,11 @@ export function SheetHeaderView({
         </View>
         {header.actions ? <View style={styles.headerActions}>{header.actions}</View> : null}
         {showCloseButton ? (
-          <Pressable accessibilityLabel="关闭" style={styles.closeButton} onPress={onClose}>
+          <Pressable
+            accessibilityLabel={t("common.close")}
+            style={styles.closeButton}
+            onPress={onClose}
+          >
             {({ pressed }) => (
               <X
                 size={16}
@@ -360,7 +366,7 @@ export function SheetHeaderView({
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
             style={SEARCH_INPUT_STYLE}
-            placeholder={search.placeholder ?? "搜索"}
+            placeholder={search.placeholder ?? t("common.search")}
             resetKey={search.resetKey}
             onChangeText={handleSearchChange}
             autoCapitalize="none"
@@ -376,6 +382,7 @@ export function SheetHeaderView({
 
 export function InlineHeaderView({ header }: { header: SheetHeader }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const back = header.back;
   const handleBackPress = back?.onPress;
   const hasInlineRow = Boolean(handleBackPress || header.leading || header.actions);
@@ -414,7 +421,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
             style={SEARCH_INPUT_STYLE}
-            placeholder={header.search.placeholder ?? "搜索"}
+            placeholder={header.search.placeholder ?? t("common.search")}
             resetKey={header.search.resetKey}
             onChangeText={header.search.onChange}
             autoCapitalize="none"
@@ -457,6 +464,7 @@ export function AdaptiveModalSheet({
   scrollable = true,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const resolvedSnapPoints = useMemo(() => snapPoints ?? ["65%", "90%"], [snapPoints]);
   const handleIndicatorStyle = useMemo(
@@ -540,7 +548,11 @@ export function AdaptiveModalSheet({
 
   const desktopContent = (
     <View style={styles.desktopOverlay} testID={testID}>
-      <Pressable accessibilityLabel="Dismiss" style={ABSOLUTE_FILL_STYLE} onPress={onClose} />
+      <Pressable
+        accessibilityLabel={t("common.dismiss")}
+        style={ABSOLUTE_FILL_STYLE}
+        onPress={onClose}
+      />
       <View style={desktopCardStyle}>
         {onFilesDropped ? (
           <FileDropZone onFilesDropped={onFilesDropped}>{cardInner}</FileDropZone>

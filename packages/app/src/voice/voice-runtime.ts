@@ -712,10 +712,10 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     async startVoice(serverId, agentId) {
       const session = sessions.get(serverId);
       if (!session) {
-        throw new Error(`Voice runtime is not ready for host ${serverId}`);
+        throw new Error(`主机 ${serverId} 的语音运行时尚未就绪`);
       }
       if (!session.connected) {
-        throw new Error(`Host ${serverId} is not connected`);
+        throw new Error(`主机 ${serverId} 未连接`);
       }
 
       const serverInfo = deps.getServerInfo(serverId);

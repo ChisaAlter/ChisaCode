@@ -42,7 +42,7 @@ async function importPassthroughCliRunner(): Promise<PassthroughCliRunner> {
     runCli?: unknown;
   };
   if (typeof imported.runCli !== "function") {
-    throw new Error(`Passthrough CLI entrypoint did not export runCli: ${entrypoint}`);
+    throw new Error(`透传 CLI 入口未导出 runCli：${entrypoint}`);
   }
   return imported.runCli as PassthroughCliRunner;
 }

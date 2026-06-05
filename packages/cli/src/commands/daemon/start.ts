@@ -6,6 +6,7 @@ import {
   type DaemonStartOptions as StartOptions,
 } from "./local-daemon.js";
 import { getErrorMessage } from "../../utils/errors.js";
+import { tCli } from "../../i18n.js";
 
 export type { DaemonStartOptions as StartOptions } from "./local-daemon.js";
 
@@ -15,19 +16,16 @@ type RawStartCommandOptions = StartOptions & {
 
 export function startCommand(): Command {
   return new Command("start")
-    .description("Start the local ChisaCode daemon")
-    .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
-    .option("--port <port>", "Port to listen on (default: 6767)")
-    .option("--home <path>", "ChisaCode home directory (default: ~/.chisacode)")
-    .option("--foreground", "Run in foreground (don't daemonize)")
-    .option("--no-relay", "Disable relay connection")
-    .option("--relay-use-tls", "Use wss:// for the relay connection and pairing offers")
-    .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
-    .option("--no-inject-mcp", "Disable auto-injecting the ChisaCode MCP into created agents")
-    .option(
-      "--hostnames <hosts>",
-      'Daemon hostnames (comma-separated, e.g. "myhost,.example.com" or "true" for any)',
-    )
+    .description(tCli("daemon.start.description"))
+    .option("--listen <listen>", tCli("daemon.option.listen"))
+    .option("--port <port>", tCli("daemon.option.port"))
+    .option("--home <path>", tCli("option.home"))
+    .option("--foreground", tCli("daemon.option.foreground"))
+    .option("--no-relay", tCli("daemon.option.noRelay"))
+    .option("--relay-use-tls", tCli("daemon.option.relayTls"))
+    .option("--no-mcp", tCli("daemon.option.noMcp"))
+    .option("--no-inject-mcp", tCli("daemon.option.noInjectMcp"))
+    .option("--hostnames <hosts>", tCli("option.hostnames"))
     .addOption(new Option("--allowed-hosts <hosts>").hideHelp())
     .action(async (options: RawStartCommandOptions) => {
       await runStart({
@@ -39,15 +37,15 @@ export function startCommand(): Command {
 
 export async function runStart(options: StartOptions): Promise<void> {
   if (options.listen && options.port) {
-    console.error(chalk.red("Cannot use --listen and --port together"));
+    console.error(chalk.red(tCli("daemon.error.listenPort")));
     process.exit(1);
   }
 
   if (!options.foreground) {
     try {
       const startup = await startLocalDaemonDetached(options);
-      console.log(chalk.green(`Daemon starting in background (PID ${startup.pid ?? "unknown"}).`));
-      console.log(chalk.dim(`Logs: ${startup.logPath}`));
+      console.log(chalk.green(tCli("daemon.start.background", { pid: startup.pid ?? "unknown" })));
+      console.log(chalk.dim(tCli("daemon.start.logs", { path: startup.logPath })));
     } catch (err) {
       exitWithError(getErrorMessage(err));
     }
@@ -58,7 +56,7 @@ export async function runStart(options: StartOptions): Promise<void> {
     process.exit(status);
   } catch (err) {
     const message = getErrorMessage(err);
-    exitWithError(`Failed to start daemon: ${message}`);
+    exitWithError(tCli("daemon.start.failed", { message }));
   }
 }
 

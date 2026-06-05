@@ -169,7 +169,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
     if (!webNavigator) {
       return status({
         state: "unavailable",
-        detail: "Navigator is unavailable in this environment.",
+        detail: "当前环境中 Navigator 不可用。",
       });
     }
 
@@ -180,24 +180,24 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
         if (result?.state === "granted") {
           return status({
             state: "granted",
-            detail: "Microphone access is granted.",
+            detail: "麦克风访问已授权。",
           });
         }
         if (result?.state === "denied") {
           return status({
             state: "denied",
-            detail: "Microphone access is denied in system settings.",
+            detail: "系统设置中已拒绝麦克风访问。",
           });
         }
         if (result?.state === "prompt") {
           return status({
             state: "prompt",
-            detail: "Microphone permission has not been granted yet.",
+            detail: "尚未授予麦克风权限。",
           });
         }
         return status({
           state: "unknown",
-          detail: `Unexpected microphone permission state: ${result?.state ?? "unknown"}`,
+          detail: `意外的麦克风权限状态：${result?.state ?? "unknown"}`,
         });
       } catch (error) {
         if (isPermissionsQueryRuntimeUnsupported(error)) {
@@ -208,7 +208,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
         }
         return status({
           state: "unknown",
-          detail: `Failed to query microphone status: ${getErrorMessage(error)}`,
+          detail: `查询麦克风状态失败：${getErrorMessage(error)}`,
         });
       }
     }
@@ -216,7 +216,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
     if (typeof webNavigator.mediaDevices?.getUserMedia !== "function") {
       return status({
         state: "unavailable",
-        detail: "Microphone capture is unavailable in this environment.",
+        detail: "当前环境中麦克风采集不可用。",
       });
     }
 
@@ -230,7 +230,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
     if (!env.isWeb) {
       return status({
         state: "unavailable",
-        detail: "Desktop notification requests are only available on web runtime.",
+        detail: "桌面通知请求仅在 Web 运行时可用。",
       });
     }
 
@@ -245,14 +245,14 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
       } catch (error) {
         return status({
           state: "unknown",
-          detail: `Failed to request notification permission: ${getErrorMessage(error)}`,
+          detail: `请求通知权限失败：${getErrorMessage(error)}`,
         });
       }
     }
 
     return status({
       state: "unavailable",
-      detail: "Web Notification API requestPermission() is unavailable.",
+      detail: "Web Notification API requestPermission() 不可用。",
     });
   }
 
@@ -260,7 +260,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
     if (!env.isWeb) {
       return status({
         state: "unavailable",
-        detail: "Desktop microphone requests are only available on web runtime.",
+        detail: "桌面麦克风请求仅在 Web 运行时可用。",
       });
     }
 
@@ -268,7 +268,7 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
     if (!webNavigator || typeof webNavigator.mediaDevices?.getUserMedia !== "function") {
       return status({
         state: "unavailable",
-        detail: "Microphone capture API is unavailable in this environment.",
+        detail: "当前环境中麦克风采集 API 不可用。",
       });
     }
 
@@ -286,18 +286,18 @@ export function createDesktopPermissions(env: DesktopPermissionEnvironment): Des
       if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
         return status({
           state: "denied",
-          detail: "Microphone permission was denied by the user or system.",
+          detail: "用户或系统已拒绝麦克风权限。",
         });
       }
       if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
         return status({
           state: "unavailable",
-          detail: "No microphone device was found.",
+          detail: "未找到麦克风设备。",
         });
       }
       return status({
         state: "unknown",
-        detail: `Failed to request microphone permission: ${getErrorMessage(error)}`,
+        detail: `请求麦克风权限失败：${getErrorMessage(error)}`,
       });
     }
   }

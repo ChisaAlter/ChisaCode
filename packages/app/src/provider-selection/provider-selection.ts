@@ -22,6 +22,22 @@ export interface ProviderSelectorProvider {
   modelSelection: ProviderModelSelection;
 }
 
+export interface ProviderSelectionCopy {
+  defaultModelLabel?: string;
+  selectModel?: string;
+  loading?: string;
+  error?: string;
+  unavailable?: string;
+  unknownError?: string;
+  initialPromptRequired?: string;
+  noProviders?: string;
+  modelRequired?: string;
+  modelLoading?: string;
+  providerNoModels?: string;
+  workspaceDirectoryMissing?: string;
+  hostDisconnected?: string;
+}
+
 export interface ProviderSelectionState {
   provider: AgentProvider | null;
   modelId: string;
@@ -34,6 +50,26 @@ export interface ProviderSelectionState {
 export interface ProviderSelectionReadiness {
   ok: boolean;
   reason?: string;
+}
+
+const DEFAULT_PROVIDER_SELECTION_COPY: Required<ProviderSelectionCopy> = {
+  defaultModelLabel: "Default",
+  selectModel: "Select model",
+  loading: "Loading...",
+  error: "Error",
+  unavailable: "Unavailable",
+  unknownError: "Unknown error",
+  initialPromptRequired: "Enter an initial prompt",
+  noProviders: "The selected host has no available providers",
+  modelRequired: "Select a model",
+  modelLoading: "Model defaults are still loading",
+  providerNoModels: "No model is available for the selected provider",
+  workspaceDirectoryMissing: "Workspace directory not found",
+  hostDisconnected: "Host is not connected",
+};
+
+function resolveProviderSelectionCopy(copy?: ProviderSelectionCopy) {
+  return { ...DEFAULT_PROVIDER_SELECTION_COPY, ...copy };
 }
 
 function buildModelRows(
@@ -55,13 +91,15 @@ function buildModelRows(
 function buildSyntheticDefaultRow(
   provider: string,
   providerLabel: string,
+  copy?: ProviderSelectionCopy,
 ): ProviderSelectionModelRow {
+  const labels = resolveProviderSelectionCopy(copy);
   return {
     favoriteKey: buildFavoriteModelKey({ provider, modelId: "" }),
     provider,
     providerLabel,
     modelId: "",
-    modelLabel: "默认",
+    modelLabel: labels.defaultModelLabel,
     description: undefined,
     isDefault: true,
   };
@@ -71,12 +109,13 @@ function buildModelSelection(
   provider: string,
   providerLabel: string,
   models: AgentModelDefinition[] | null,
+  copy?: ProviderSelectionCopy,
 ): ProviderModelSelection {
   if (models === null) {
     return { kind: "loading" };
   }
   if (models.length === 0) {
-    return { kind: "models", rows: [buildSyntheticDefaultRow(provider, providerLabel)] };
+    return { kind: "models", rows: [buildSyntheticDefaultRow(provider, providerLabel, copy)] };
   }
   return { kind: "models", rows: buildModelRows(provider, providerLabel, models) };
 }
@@ -84,25 +123,29 @@ function buildModelSelection(
 function buildEntryModelSelection(
   entry: ProviderSnapshotEntry,
   label: string,
+  copy?: ProviderSelectionCopy,
 ): ProviderModelSelection {
   if ((entry.models?.length ?? 0) > 0) {
-    return buildModelSelection(entry.provider, label, entry.models ?? null);
+    return buildModelSelection(entry.provider, label, entry.models ?? null, copy);
   }
   if (entry.status === "ready") {
-    return buildModelSelection(entry.provider, label, entry.models ?? null);
+    return buildModelSelection(entry.provider, label, entry.models ?? null, copy);
   }
   if (entry.status === "loading") {
     return { kind: "loading" };
   }
+  const labels = resolveProviderSelectionCopy(copy);
   return {
     kind: "error",
-    message: entry.error ?? (entry.status === "unavailable" ? "不可用" : "未知错误"),
+    message:
+      entry.error ?? (entry.status === "unavailable" ? labels.unavailable : labels.unknownError),
   };
 }
 
 export function buildProviderSelectorProviders(input: {
   providerDefinitions: AgentProviderDefinition[];
   modelsByProvider: Map<string, AgentModelDefinition[]>;
+  copy?: ProviderSelectionCopy;
 }): ProviderSelectorProvider[] {
   return input.providerDefinitions.map((definition) => ({
     id: definition.id,
@@ -113,12 +156,14 @@ export function buildProviderSelectorProviders(input: {
       input.modelsByProvider.has(definition.id)
         ? (input.modelsByProvider.get(definition.id) ?? [])
         : null,
+      input.copy,
     ),
   }));
 }
 
 export function buildSelectableProviderSelectorProviders(
   entries: ProviderSnapshotEntry[] | undefined,
+  copy?: ProviderSelectionCopy,
 ): ProviderSelectorProvider[] {
   return (entries ?? [])
     .filter((entry) => entry.enabled)
@@ -127,7 +172,7 @@ export function buildSelectableProviderSelectorProviders(
       return {
         id: entry.provider,
         label,
-        modelSelection: buildEntryModelSelection(entry, label),
+        modelSelection: buildEntryModelSelection(entry, label, copy),
       };
     });
 }
@@ -149,24 +194,26 @@ export function resolveSelectedModelLabel(input: {
   selectedProvider: string;
   selectedModel: string;
   isLoading: boolean;
+  copy?: ProviderSelectionCopy;
 }): string {
+  const labels = resolveProviderSelectionCopy(input.copy);
   const selectedProvider = input.selectedProvider.trim();
   if (!selectedProvider) {
-    return "选择模型";
+    return labels.selectModel;
   }
 
   const provider = input.providers.find((entry) => entry.id === selectedProvider);
   if (!provider) {
-    return input.isLoading ? "加载中..." : "选择模型";
+    return input.isLoading ? labels.loading : labels.selectModel;
   }
   if (provider.modelSelection.kind === "loading") {
-    return "加载中...";
+    return labels.loading;
   }
   if (provider.modelSelection.kind === "error") {
-    return "错误";
+    return labels.error;
   }
   if (provider.modelSelection.kind !== "models") {
-    return "选择模型";
+    return labels.selectModel;
   }
 
   const model = provider.modelSelection.rows.find((entry) => entry.modelId === input.selectedModel);
@@ -175,7 +222,7 @@ export function resolveSelectedModelLabel(input: {
     model?.modelLabel ??
     defaultModel?.modelLabel ??
     provider.modelSelection.rows[0]?.modelLabel ??
-    "选择模型"
+    labels.selectModel
   );
 }
 
@@ -278,28 +325,30 @@ export function resolveSubmissionReadiness(input: {
   autoSubmitConfig: { provider: string; model: string | null } | null;
   workspaceDirectory: string | null;
   hasClient: boolean;
+  copy?: ProviderSelectionCopy;
 }): ProviderSelectionReadiness {
+  const labels = resolveProviderSelectionCopy(input.copy);
   if (!input.allowsEmptyAutoSubmit && !input.text.trim()) {
-    return { ok: false, reason: "请输入初始提示词" };
+    return { ok: false, reason: labels.initialPromptRequired };
   }
   if (input.providerCount === 0) {
-    return { ok: false, reason: "所选主机没有可用 Provider" };
+    return { ok: false, reason: labels.noProviders };
   }
   if (!(input.autoSubmitConfig?.provider ?? input.selection.provider)) {
-    return { ok: false, reason: "请选择模型" };
+    return { ok: false, reason: labels.modelRequired };
   }
   if (input.selection.isModelLoading) {
-    return { ok: false, reason: "模型默认值仍在加载" };
+    return { ok: false, reason: labels.modelLoading };
   }
   const hasSelectedModel = Boolean(input.autoSubmitConfig?.model ?? input.selection.modelId);
   if (!hasSelectedModel && input.selection.availableModels.length > 0) {
-    return { ok: false, reason: "所选 Provider 没有可用模型" };
+    return { ok: false, reason: labels.providerNoModels };
   }
   if (!input.workspaceDirectory) {
-    return { ok: false, reason: "找不到工作区目录" };
+    return { ok: false, reason: labels.workspaceDirectoryMissing };
   }
   if (!input.hasClient) {
-    return { ok: false, reason: "主机未连接" };
+    return { ok: false, reason: labels.hostDisconnected };
   }
   return { ok: true };
 }

@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { File, Folder } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
 import { getAutocompleteScrollOffset } from "./autocomplete-utils";
 
@@ -122,11 +123,14 @@ export function Autocomplete({
   onSelect,
   isLoading = false,
   errorMessage,
-  loadingText = "加载中...",
-  emptyText = "未找到结果",
+  loadingText,
+  emptyText,
   maxHeight = 220,
 }: AutocompleteProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const resolvedLoadingText = loadingText ?? t("common.loading");
+  const resolvedEmptyText = emptyText ?? t("autocomplete.empty");
   const scrollRef = useRef<ScrollView>(null);
   const rowLayoutsRef = useRef<Map<number, { top: number; height: number }>>(new Map());
   const viewportHeightRef = useRef(0);
@@ -213,7 +217,7 @@ export function Autocomplete({
     return (
       <View style={containerStyle}>
         <View style={styles.emptyItem}>
-          <Text style={styles.emptyText}>{loadingText}</Text>
+          <Text style={styles.emptyText}>{resolvedLoadingText}</Text>
         </View>
       </View>
     );
@@ -233,7 +237,7 @@ export function Autocomplete({
     return (
       <View style={containerStyle}>
         <View style={styles.emptyItem}>
-          <Text style={styles.emptyText}>{emptyText}</Text>
+          <Text style={styles.emptyText}>{resolvedEmptyText}</Text>
         </View>
       </View>
     );

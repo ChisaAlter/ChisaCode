@@ -30,6 +30,7 @@ import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isWeb } from "@/constants/platform";
+import { useTranslation } from "react-i18next";
 
 const MIN_CHAT_WIDTH = 400;
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
@@ -407,6 +408,7 @@ function SidebarContent({
   onOpenFile,
 }: SidebarContentProps) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const padding = useWindowControlsPadding("explorerSidebar");
   const canQueryPullRequest = isGit && Boolean(workspaceRoot);
   const prPane = usePrPaneData({
@@ -437,7 +439,7 @@ function SidebarContent({
             <ExplorerTabButton
               tab="changes"
               active={resolvedTab === "changes"}
-              label="Changes"
+              label={t("git.changes")}
               onTabPress={onTabPress}
               testID="explorer-tab-changes"
             />
@@ -445,7 +447,7 @@ function SidebarContent({
           <ExplorerTabButton
             tab="files"
             active={resolvedTab === "files"}
-            label="Files"
+            label={t("git.files")}
             onTabPress={onTabPress}
             testID="explorer-tab-files"
           />

@@ -7,6 +7,7 @@
 import type { Command } from "commander";
 import type { AnyCommandResult, CommandError, OutputOptions } from "./types.js";
 import { render, renderError, toCommandError, defaultOutputOptions } from "./render.js";
+import { tCli } from "../i18n.js";
 
 /** Options that include output settings from global options */
 export interface CommandOptions extends Partial<OutputOptions> {
@@ -27,8 +28,8 @@ function normalizeFormat(raw: unknown): OutputOptions["format"] {
 
   const error: CommandError = {
     code: "INVALID_FORMAT",
-    message: `Unsupported output format: ${String(raw)}`,
-    details: "Supported formats: table, json, yaml",
+    message: tCli("error.unsupportedFormat", { format: String(raw) }),
+    details: tCli("error.supportedFormats"),
   };
   throw error;
 }

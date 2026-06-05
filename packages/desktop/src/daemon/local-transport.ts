@@ -23,7 +23,7 @@ interface Session {
 }
 
 const WS_ENDPOINT_PATH = "/ws";
-const IPC_PREFIXES = ["chisacode", "chisacode"] as const;
+const IPC_PREFIXES = ["chisacode"] as const;
 
 let nextSessionId = 0;
 const sessions = new Map<string, Session>();
@@ -64,7 +64,7 @@ function decodeTransportMessage(input: { text?: string; binaryBase64?: string })
     return Buffer.from(input.binaryBase64, "base64");
   }
 
-  throw new Error("Local transport send requires text or binary payload.");
+  throw new Error("本地 transport 发送需要文本或二进制 payload。");
 }
 
 export function openLocalTransportSession(target: TransportTarget): Promise<string> {
@@ -124,9 +124,7 @@ export function openLocalTransportSession(target: TransportTarget): Promise<stri
       sessions.delete(sessionId);
 
       if (!openSettled) {
-        finalizeOpenFailure(
-          `${describeTransportTarget(target)} closed before the session became ready.`,
-        );
+        finalizeOpenFailure(`${describeTransportTarget(target)} 在会话就绪前已关闭。`);
         return;
       }
 
@@ -142,9 +140,7 @@ export function openLocalTransportSession(target: TransportTarget): Promise<stri
 
     ws.on("error", (err: Error) => {
       if (!openSettled) {
-        finalizeOpenFailure(
-          `Failed to connect to ${describeTransportTarget(target)}: ${err.message}`,
-        );
+        finalizeOpenFailure(`连接 ${describeTransportTarget(target)} 失败：${err.message}`);
         return;
       }
 
@@ -164,14 +160,12 @@ export async function sendLocalTransportMessage(input: {
 }): Promise<void> {
   const session = sessions.get(input.sessionId);
   if (!session) {
-    throw new Error(`Local transport session not found: ${input.sessionId}`);
+    throw new Error(`找不到本地 transport 会话：${input.sessionId}`);
   }
 
   if (session.state !== "open" || session.ws.readyState !== WebSocket.OPEN) {
     throw new Error(
-      session.state === "opening"
-        ? "Local transport session is not open yet."
-        : "Local transport session is closed.",
+      session.state === "opening" ? "本地 transport 会话尚未打开。" : "本地 transport 会话已关闭。",
     );
   }
 

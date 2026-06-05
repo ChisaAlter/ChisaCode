@@ -130,7 +130,7 @@ export function createAudioEngine(
 
     const AudioContextCtor = getAudioContextCtor();
     if (!AudioContextCtor) {
-      throw new Error("AudioContext unavailable");
+      throw new Error("AudioContext 不可用");
     }
 
     const context = new AudioContextCtor();
@@ -151,7 +151,7 @@ export function createAudioEngine(
 
     const AudioContextCtor = getAudioContextCtor();
     if (!AudioContextCtor) {
-      throw new Error("AudioContext unavailable");
+      throw new Error("AudioContext 不可用");
     }
 
     const context = new AudioContextCtor();
@@ -292,12 +292,10 @@ export function createAudioEngine(
       const isDesktopApp = isElectronRuntime();
 
       if (missingNavigator) {
-        throw new Error("Microphone capture is not supported in this environment");
+        throw new Error("当前环境不支持麦克风采集");
       }
       if (!secureContext && !isDesktopApp) {
-        throw new Error(
-          `Microphone access requires HTTPS or localhost. Current origin: ${currentOrigin}`,
-        );
+        throw new Error(`麦克风访问需要 HTTPS 或 localhost。当前来源：${currentOrigin}`);
       }
 
       try {
