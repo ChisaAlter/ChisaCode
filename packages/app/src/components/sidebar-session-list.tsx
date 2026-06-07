@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -7,6 +7,8 @@ import {
   View,
   type GestureResponderEvent,
   type PressableStateCallbackType,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Archive, Copy, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react-native";
@@ -38,7 +40,11 @@ import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { rememberArchivedAgentDetail } from "@/utils/agent-history-navigation";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
-import { groupAgentsForSidebar } from "@/utils/sidebar-session-groups";
+import {
+  PINNED_SIDEBAR_SESSION_GROUP_KEY,
+  groupAgentsForSidebar,
+  type SidebarSessionGroup,
+} from "@/utils/sidebar-session-groups";
 import { formatTimeAgo } from "@/utils/time";
 
 const SIDEBAR_PINNED_LABEL = "chisacode.sidebarPinned";
@@ -163,6 +169,7 @@ function SidebarSessionRow({
   const toast = useToast();
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
+  const agentActionKey = getAgentActionKey(agent);
   const ProviderIcon = getProviderIcon(agent.provider);
   const isSelected = selectedAgentId === `${agent.serverId}:${agent.id}`;
   const isPinned = isSidebarAgentPinned(agent);
@@ -170,19 +177,43 @@ function SidebarSessionRow({
   const statusLabel = formatStatusLabel(agent.status, t);
   const timeLabel = formatTimeAgo(agent.lastActivityAt);
   const showQuickActions = isHovered || isPinned;
+  const rowBaseStyle = isCompact ? styles.row : styles.desktopRow;
+  const rowHoveredStyle = isCompact ? styles.rowHovered : styles.desktopRowHovered;
+  const rowSelectedStyle = isCompact ? styles.rowSelected : styles.desktopRowSelected;
+  const rowPressedStyle = isCompact ? styles.rowPressed : styles.desktopRowPressed;
+  const rowLeadingStyle = isCompact ? styles.rowLeading : styles.desktopRowLeading;
+  const rowContentStyle = isCompact ? styles.rowContent : styles.desktopRowContent;
+  const rowTitleStyle = isCompact ? styles.rowTitle : styles.desktopRowTitle;
+  const rowTitleSelectedStyle = isCompact
+    ? styles.rowTitleSelected
+    : styles.desktopRowTitleSelected;
+  const rowMetaLineStyle = isCompact ? styles.rowMetaLine : styles.desktopRowMetaLine;
+  const rowQuickActionsStyle = isCompact ? styles.rowQuickActions : styles.desktopRowQuickActions;
+  const rowQuickButtonStyle = isCompact ? styles.rowQuickButton : styles.desktopRowQuickButton;
+  const rowQuickButtonActiveStyle = isCompact
+    ? styles.rowQuickButtonActive
+    : styles.desktopRowQuickButtonActive;
+  const rowQuickButtonPressedStyle = isCompact
+    ? styles.rowQuickButtonPressed
+    : styles.desktopRowQuickButtonPressed;
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.row,
-      isSelected && styles.rowSelected,
-      Boolean(hovered) && styles.rowHovered,
-      pressed && styles.rowPressed,
+      rowBaseStyle,
+      Boolean(hovered) && rowHoveredStyle,
+      isSelected && rowSelectedStyle,
+      pressed && rowPressedStyle,
     ],
-    [isSelected],
+    [isSelected, rowBaseStyle, rowHoveredStyle, rowPressedStyle, rowSelectedStyle],
   );
   const titleStyle = useMemo(
-    () => [styles.rowTitle, isSelected && styles.rowTitleSelected],
-    [isSelected],
+    () => [rowTitleStyle, isSelected && rowTitleSelectedStyle],
+    [isSelected, rowTitleSelectedStyle, rowTitleStyle],
   );
+  const rowIconColor = isSelected ? theme.colors.foreground : theme.colors.foregroundMuted;
+
+  useEffect(() => {
+    setIsHovered(false);
+  }, [agentActionKey]);
 
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -265,33 +296,35 @@ function SidebarSessionRow({
   );
   const quickButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.rowQuickButton,
-      (Boolean(hovered) || pressed) && styles.rowQuickButtonActive,
-      pressed && styles.rowQuickButtonPressed,
+      rowQuickButtonStyle,
+      (Boolean(hovered) || pressed) && rowQuickButtonActiveStyle,
+      pressed && rowQuickButtonPressedStyle,
     ],
-    [],
+    [rowQuickButtonActiveStyle, rowQuickButtonPressedStyle, rowQuickButtonStyle],
   );
   const quickActionsStyle = useMemo(
-    () => [styles.rowQuickActions, !showQuickActions && styles.rowQuickHidden],
-    [showQuickActions],
+    () => [rowQuickActionsStyle, !showQuickActions && styles.rowQuickHidden],
+    [rowQuickActionsStyle, showQuickActions],
   );
 
   const rowMainContent = (
     <>
-      <View style={styles.rowLeading}>
-        <ProviderIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      <View style={rowLeadingStyle}>
+        <ProviderIcon size={theme.iconSize.sm} color={rowIconColor} />
       </View>
-      <View style={styles.rowContent}>
+      <View style={rowContentStyle}>
         <View style={styles.rowTitleLine}>
           <Text style={titleStyle} numberOfLines={1}>
             {agent.title || t("session.newSession")}
           </Text>
-          {isPinned ? <Pin size={theme.fontSize.xs} color={theme.colors.foregroundMuted} /> : null}
+          {isCompact && isPinned ? (
+            <Pin size={theme.fontSize.xs} color={theme.colors.foregroundMuted} />
+          ) : null}
           {agent.archivedAt ? (
             <Archive size={theme.fontSize.xs} color={theme.colors.foregroundMuted} />
           ) : null}
         </View>
-        <View style={styles.rowMetaLine}>
+        <View style={rowMetaLineStyle}>
           <Text style={styles.rowMeta} numberOfLines={1}>
             {statusLabel}
           </Text>
@@ -392,11 +425,9 @@ function SidebarSessionRow({
         style={quickButtonStyle}
         onPress={handleQuickPin}
         disabled={isPinning}
+        pointerEvents={isPinning ? "none" : "auto"}
       >
-        <Pin
-          size={theme.iconSize.sm}
-          color={isPinned ? theme.colors.accent : theme.colors.foregroundMuted}
-        />
+        <Pin size={theme.iconSize.sm} color={isPinned ? theme.colors.accent : rowIconColor} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -437,12 +468,12 @@ function SidebarSessionRow({
           style={rowStyle}
           onPress={handlePress}
           testID={`sidebar-session-${agent.serverId}-${agent.id}`}
-            accessibilityRole="button"
-            accessibilityLabel={agent.title || t("session.newSession")}
-          >
-            {rowMainContent}
-            {rowTrailingContent}
-          </ContextMenuTrigger>
+          accessibilityRole="button"
+          accessibilityLabel={agent.title || t("session.newSession")}
+        >
+          {rowMainContent}
+          {rowTrailingContent}
+        </ContextMenuTrigger>
       </View>
       <ContextMenuContent
         align="start"
@@ -512,9 +543,18 @@ export function SidebarSessionList({
     () =>
       groupAgentsForSidebar(visibleAgents, {
         unknownWorkspaceLabel: t("sidebar.unknownWorkspace"),
+        pinnedGroupLabel: t("sidebar.pinnedSessions"),
         isPinnedAgent: isSidebarAgentPinned,
       }),
     [t, visibleAgents],
+  );
+  const pinnedGroup = useMemo(
+    () => groups.find((group) => group.key === PINNED_SIDEBAR_SESSION_GROUP_KEY) ?? null,
+    [groups],
+  );
+  const workspaceGroups = useMemo(
+    () => groups.filter((group) => group.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY),
+    [groups],
   );
   const refreshControl = useMemo(
     () =>
@@ -544,7 +584,8 @@ export function SidebarSessionList({
         return;
       }
       const actionKey = getAgentActionKey(agent);
-      const nextPinned = !isSidebarAgentPinned(agent);
+      const wasPinned = isSidebarAgentPinned(agent);
+      const nextPinned = !wasPinned;
       const labels = { [SIDEBAR_PINNED_LABEL]: nextPinned ? "true" : "false" };
       setPinningAgentKey(actionKey);
       updateAgentLabelsInStore({
@@ -560,11 +601,11 @@ export function SidebarSessionList({
           updateAgentLabelsInStore({
             serverId: agent.serverId,
             agentId: agent.id,
-            labels: { [SIDEBAR_PINNED_LABEL]: isSidebarAgentPinned(agent) ? "true" : "false" },
+            labels: { [SIDEBAR_PINNED_LABEL]: wasPinned ? "true" : "false" },
           });
           toast.error(error instanceof Error ? error.message : t("sidebar.pinSessionFailed"));
         } finally {
-          setPinningAgentKey(null);
+          setPinningAgentKey((currentKey) => (currentKey === actionKey ? null : currentKey));
         }
       })();
     },
@@ -690,36 +731,42 @@ export function SidebarSessionList({
     );
   }
 
+  const renderSessionGroup = (
+    group: SidebarSessionGroup,
+    groupStyle: StyleProp<ViewStyle> = styles.group,
+  ) => (
+    <View key={group.key} style={groupStyle} testID={`sidebar-session-group-${group.key}`}>
+      <Text style={styles.groupTitle} numberOfLines={1}>
+        {group.label}
+      </Text>
+      <View style={styles.groupRows}>
+        {group.agents.map((agent) => (
+          <SidebarSessionRow
+            key={`${agent.serverId}:${agent.id}`}
+            agent={agent}
+            selectedAgentId={selectedAgentId}
+            onAgentPress={onAgentPress}
+            onTogglePin={handleTogglePin}
+            onRename={handleRename}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            isPinning={pinningAgentKey === getAgentActionKey(agent)}
+            isArchiving={isArchivingAgent({ serverId: agent.serverId, agentId: agent.id })}
+            isDeleting={deletingAgentKey === getAgentActionKey(agent)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       refreshControl={refreshControl}
     >
-      {groups.map((group) => (
-        <View key={group.key} style={styles.group}>
-          <Text style={styles.groupTitle} numberOfLines={1}>
-            {group.label}
-          </Text>
-          <View style={styles.groupRows}>
-            {group.agents.map((agent) => (
-              <SidebarSessionRow
-                key={`${agent.serverId}:${agent.id}`}
-                agent={agent}
-                selectedAgentId={selectedAgentId}
-                onAgentPress={onAgentPress}
-                onTogglePin={handleTogglePin}
-                onRename={handleRename}
-                onArchive={handleArchive}
-                onDelete={handleDelete}
-                isPinning={pinningAgentKey === getAgentActionKey(agent)}
-                isArchiving={isArchivingAgent({ serverId: agent.serverId, agentId: agent.id })}
-                isDeleting={deletingAgentKey === getAgentActionKey(agent)}
-              />
-            ))}
-          </View>
-        </View>
-      ))}
+      {pinnedGroup ? renderSessionGroup(pinnedGroup, styles.pinnedGroup) : null}
+      {workspaceGroups.map((group) => renderSessionGroup(group))}
       {hasMore ? (
         <Button
           variant="ghost"
@@ -743,22 +790,30 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   scrollContent: {
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[4],
+    paddingTop: theme.spacing[1],
+    paddingBottom: theme.spacing[3],
   },
   group: {
     marginHorizontal: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+  },
+  pinnedGroup: {
+    marginHorizontal: theme.spacing[2],
     marginBottom: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   groupTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    fontWeight: theme.fontWeight.normal,
+    paddingHorizontal: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[1],
   },
   groupRows: {
-    gap: theme.spacing[1],
+    gap: 0,
   },
   row: {
     minHeight: 48,
@@ -776,14 +831,41 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.85,
   },
   rowSelected: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface3,
   },
   rowLeading: {
     width: 18,
     alignItems: "center",
     justifyContent: "center",
   },
+  desktopRow: {
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+  },
+  desktopRowHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  desktopRowPressed: {
+    opacity: 0.9,
+  },
+  desktopRowSelected: {
+    backgroundColor: theme.colors.surface3,
+  },
+  desktopRowLeading: {
+    width: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   rowContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopRowContent: {
     flex: 1,
     minWidth: 0,
   },
@@ -822,6 +904,27 @@ const styles = StyleSheet.create((theme) => ({
   rowQuickButtonPressed: {
     opacity: 0.85,
   },
+  desktopRowQuickActions: {
+    width: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 0,
+    flexShrink: 0,
+  },
+  desktopRowQuickButton: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.sm,
+  },
+  desktopRowQuickButtonActive: {
+    backgroundColor: theme.colors.surface2,
+  },
+  desktopRowQuickButtonPressed: {
+    opacity: 0.9,
+  },
   rowTitleLine: {
     minWidth: 0,
     flexDirection: "row",
@@ -837,6 +940,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowTitleSelected: {
     color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.medium,
+  },
+  desktopRowTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  desktopRowTitleSelected: {
+    color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.medium,
   },
   rowMetaLine: {
     flexDirection: "row",
@@ -844,6 +959,12 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     gap: theme.spacing[1],
     marginTop: theme.spacing[1],
+  },
+  desktopRowMetaLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+    gap: theme.spacing[1],
   },
   rowMeta: {
     color: theme.colors.foregroundMuted,

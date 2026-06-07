@@ -373,16 +373,22 @@ function FooterIconButton({
   accessibilityLabel,
   icon: Icon,
   theme,
+  variant = "mobile",
 }: {
   onPress: () => void;
   testID: string;
   accessibilityLabel: string;
   icon: typeof FolderPlus;
   theme: SidebarTheme;
+  variant?: "mobile" | "desktop";
 }) {
+  const buttonStyle = useMemo(
+    () => [styles.footerIconButton, variant === "desktop" && styles.desktopFooterIconButton],
+    [variant],
+  );
   return (
     <Pressable
-      style={styles.footerIconButton}
+      style={buttonStyle}
       testID={testID}
       nativeID={testID}
       collapsable={false}
@@ -428,6 +434,7 @@ function SidebarFooter({
   handleOpenProject,
   handleHome,
   handleSettings,
+  variant = "mobile",
 }: {
   theme: SidebarTheme;
   activeServerId: string | null;
@@ -442,11 +449,20 @@ function SidebarFooter({
   handleOpenProject: () => void;
   handleHome: () => void;
   handleSettings: () => void;
+  variant?: "mobile" | "desktop";
 }) {
   const { t } = useTranslation();
   const newAgentKeys = useShortcutKeys("new-agent");
+  const footerStyle = useMemo(
+    () => [styles.sidebarFooter, variant === "desktop" && styles.desktopSidebarFooter],
+    [variant],
+  );
+  const iconRowStyle = useMemo(
+    () => [styles.footerIconRow, variant === "desktop" && styles.desktopFooterIconRow],
+    [variant],
+  );
   return (
-    <View style={styles.sidebarFooter}>
+    <View style={footerStyle}>
       <View style={styles.footerHostSlot}>
         <HostPickerTrigger
           triggerRef={hostTriggerRef}
@@ -456,7 +472,7 @@ function SidebarFooter({
           activeHostLabel={activeHostLabel}
         />
       </View>
-      <View style={styles.footerIconRow}>
+      <View style={iconRowStyle}>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <FooterIconButton
@@ -465,6 +481,7 @@ function SidebarFooter({
               accessibilityLabel="添加项目"
               icon={FolderPlus}
               theme={theme}
+              variant={variant}
             />
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
@@ -477,6 +494,7 @@ function SidebarFooter({
           accessibilityLabel="首页"
           icon={Home}
           theme={theme}
+          variant={variant}
         />
         <FooterIconButton
           onPress={handleSettings}
@@ -484,6 +502,7 @@ function SidebarFooter({
           accessibilityLabel="设置"
           icon={Settings}
           theme={theme}
+          variant={variant}
         />
       </View>
       <Combobox
@@ -857,16 +876,18 @@ function DesktopSidebar({
   return (
     <Animated.View style={desktopSidebarStyle}>
       <View style={desktopSidebarBorderStyle}>
-        <View style={styles.sidebarDragArea}>
+        <View style={styles.desktopSidebarDragArea}>
           <TitlebarDragRegion />
           {padding.top > 0 ? <View style={paddingTopSpacerStyle} /> : null}
-          <SidebarHeaderRow
-            icon={MessagesSquare}
-            label="会话"
-            onPress={handleViewMore}
-            isActive={isSessionsActive}
-            testID="sidebar-sessions"
-          />
+          <View style={styles.desktopHeaderRow}>
+            <SidebarHeaderRow
+              icon={MessagesSquare}
+              label="会话"
+              onPress={handleViewMore}
+              isActive={isSessionsActive}
+              testID="sidebar-sessions"
+            />
+          </View>
         </View>
 
         {isInitialLoad ? (
@@ -901,6 +922,7 @@ function DesktopSidebar({
           handleOpenProject={handleOpenProject}
           handleHome={handleHome}
           handleSettings={handleSettings}
+          variant="desktop"
         />
 
         {/* Resize handle - absolutely positioned over right border */}
@@ -951,8 +973,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopSidebarBorder: {
     borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceSidebar,
+    borderRightColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface0,
   },
   resizeHandle: {
     position: "absolute",
@@ -964,6 +986,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarDragArea: {
     position: "relative",
+  },
+  desktopSidebarDragArea: {
+    position: "relative",
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderAccent,
+  },
+  desktopHeaderRow: {
+    marginHorizontal: theme.spacing[1],
+    overflow: "hidden",
+    borderRadius: theme.borderRadius.md,
   },
   hostTrigger: {
     flexDirection: "row",
@@ -998,6 +1030,11 @@ const styles = StyleSheet.create((theme) => ({
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
   },
+  desktopSidebarFooter: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderTopColor: theme.colors.borderAccent,
+  },
   footerHostSlot: {
     flexGrow: 0,
     flexShrink: 1,
@@ -1010,6 +1047,9 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     flexShrink: 0,
   },
+  desktopFooterIconRow: {
+    gap: theme.spacing[1],
+  },
   footerIconButton: {
     width: 28,
     height: 28,
@@ -1017,6 +1057,10 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[1],
+  },
+  desktopFooterIconButton: {
+    width: 26,
+    height: 26,
   },
   hostPickerList: {
     gap: theme.spacing[2],

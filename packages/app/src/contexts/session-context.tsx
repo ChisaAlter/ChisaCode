@@ -1,7 +1,7 @@
 import { useRef, ReactNode, useCallback, useEffect } from "react";
 import { Buffer } from "buffer";
 import { AppState } from "react-native";
-import { useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useClientActivity } from "@/hooks/use-client-activity";
 import { usePushTokenRegistration } from "@/hooks/use-push-token-registration";
 import { clearArchiveAgentPending } from "@/hooks/use-archive-agent";
@@ -68,6 +68,7 @@ import {
 import { isNative } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
+import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -184,6 +185,19 @@ type WorkspaceSetupProgressPayload = Extract<
 
 const getAgentIdFromUpdate = (update: AgentUpdatePayload): string =>
   update.kind === "remove" ? update.agentId : update.agent.id;
+
+function invalidateAgentListQueries(queryClient: QueryClient, serverId: string): void {
+  void queryClient.invalidateQueries({ queryKey: agentHistoryQueryKey(serverId) });
+  void queryClient.invalidateQueries({ queryKey: ["sidebarAgentsList", serverId] });
+  void queryClient.invalidateQueries({ queryKey: ["allAgents", serverId] });
+}
+
+function refetchAgentListQueries(queryClient: QueryClient, serverId: string): void {
+  invalidateAgentListQueries(queryClient, serverId);
+  void queryClient.refetchQueries({ queryKey: agentHistoryQueryKey(serverId), type: "active" });
+  void queryClient.refetchQueries({ queryKey: ["sidebarAgentsList", serverId], type: "active" });
+  void queryClient.refetchQueries({ queryKey: ["allAgents", serverId], type: "active" });
+}
 
 // ---------------------------------------------------------------------------
 // Module-level pending agent updates buffer (scoped by serverId)
@@ -974,6 +988,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
   const applyAgentUpdatePayload = useCallback(
     (update: AgentUpdatePayload) => {
+      invalidateAgentListQueries(queryClient, serverId);
       if (update.kind === "remove") {
         const agentId = update.agentId;
         previousAgentStatusRef.current.delete(agentId);
@@ -1843,8 +1858,9 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         ...(worktreeName ? { worktreeName } : {}),
         ...(requestId ? { requestId } : {}),
       });
+      refetchAgentListQueries(queryClient, serverId);
     },
-    [client],
+    [client, queryClient, serverId],
   );
 
   const _setAgentMode = useCallback(

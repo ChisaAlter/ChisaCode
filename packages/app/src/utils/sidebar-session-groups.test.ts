@@ -6,7 +6,12 @@ import {
   normalizeAgentCwdGroupKey,
 } from "@/utils/sidebar-session-groups";
 
-function agent(input: { id: string; cwd: string | null; updatedAt: string }): AggregatedAgent {
+function agent(input: {
+  id: string;
+  cwd: string | null;
+  updatedAt: string;
+  pinned?: boolean;
+}): AggregatedAgent {
   return {
     id: input.id,
     serverId: "server-1",
@@ -22,7 +27,7 @@ function agent(input: { id: string; cwd: string | null; updatedAt: string }): Ag
     attentionTimestamp: null,
     archivedAt: null,
     createdAt: new Date(input.updatedAt),
-    labels: {},
+    labels: input.pinned ? { "chisacode.sidebarPinned": "true" } : {},
   };
 }
 
@@ -52,5 +57,33 @@ describe("sidebar session groups", () => {
 
     expect(groups.map((group) => group.label)).toEqual(["b", "a"]);
     expect(groups[1]?.agents.map((entry) => entry.id)).toEqual(["new-a", "old-a"]);
+  });
+
+  it("extracts pinned sessions into a global top group", () => {
+    const groups = groupAgentsForSidebar(
+      [
+        agent({ id: "new-a", cwd: "C:\\ai\\a", updatedAt: "2026-01-03T00:00:00.000Z" }),
+        agent({
+          id: "pinned-b",
+          cwd: "C:\\ai\\b",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          pinned: true,
+        }),
+        agent({
+          id: "pinned-a",
+          cwd: "C:\\ai\\a",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+          pinned: true,
+        }),
+      ],
+      {
+        pinnedGroupLabel: "置顶",
+        isPinnedAgent: (entry) => entry.labels["chisacode.sidebarPinned"] === "true",
+      },
+    );
+
+    expect(groups.map((group) => group.label)).toEqual(["置顶", "a"]);
+    expect(groups[0]?.agents.map((entry) => entry.id)).toEqual(["pinned-a", "pinned-b"]);
+    expect(groups[1]?.agents.map((entry) => entry.id)).toEqual(["new-a"]);
   });
 });

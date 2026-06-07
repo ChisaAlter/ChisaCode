@@ -7,6 +7,8 @@ export interface SidebarSessionGroup {
   newestActivityAt: Date;
 }
 
+export const PINNED_SIDEBAR_SESSION_GROUP_KEY = "__pinned__";
+
 const WINDOWS_DRIVE_PREFIX = /^[a-z]:/i;
 const WINDOWS_SEPARATOR = "\\";
 const POSIX_SEPARATOR = "/";
@@ -53,14 +55,22 @@ export function groupAgentsForSidebar(
   agents: AggregatedAgent[],
   options?: {
     unknownWorkspaceLabel?: string;
+    pinnedGroupLabel?: string;
     isPinnedAgent?: (agent: AggregatedAgent) => boolean;
   },
 ): SidebarSessionGroup[] {
   const groups = new Map<string, SidebarSessionGroup>();
   const unknownWorkspaceLabel = options?.unknownWorkspaceLabel ?? "Unknown workspace";
+  const pinnedGroupLabel = options?.pinnedGroupLabel ?? "Pinned";
   const isPinnedAgent = options?.isPinnedAgent ?? (() => false);
+  const pinnedAgents: AggregatedAgent[] = [];
 
   for (const agent of agents) {
+    if (isPinnedAgent(agent)) {
+      pinnedAgents.push(agent);
+      continue;
+    }
+
     const key = normalizeAgentCwdGroupKey(agent.cwd);
     const existing = groups.get(key);
     if (existing) {
@@ -79,28 +89,33 @@ export function groupAgentsForSidebar(
     });
   }
 
-  return Array.from(groups.values())
+  const groupedAgents = Array.from(groups.values())
     .map((group) => ({
       key: group.key,
       label: group.label,
       newestActivityAt: group.newestActivityAt,
-      agents: group.agents
-        .slice()
-        .sort((left, right) => {
-          const leftPinned = isPinnedAgent(left);
-          const rightPinned = isPinnedAgent(right);
-          if (leftPinned !== rightPinned) {
-            return leftPinned ? -1 : 1;
-          }
-          return right.lastActivityAt.getTime() - left.lastActivityAt.getTime();
-        }),
+      agents: group.agents.slice().sort((left, right) => {
+        return right.lastActivityAt.getTime() - left.lastActivityAt.getTime();
+      }),
     }))
     .sort((left, right) => {
-      const leftPinned = left.agents.some(isPinnedAgent);
-      const rightPinned = right.agents.some(isPinnedAgent);
-      if (leftPinned !== rightPinned) {
-        return leftPinned ? -1 : 1;
-      }
       return right.newestActivityAt.getTime() - left.newestActivityAt.getTime();
     });
+
+  if (pinnedAgents.length === 0) {
+    return groupedAgents;
+  }
+
+  const sortedPinnedAgents = pinnedAgents
+    .slice()
+    .sort((left, right) => right.lastActivityAt.getTime() - left.lastActivityAt.getTime());
+  return [
+    {
+      key: PINNED_SIDEBAR_SESSION_GROUP_KEY,
+      label: pinnedGroupLabel,
+      agents: sortedPinnedAgents,
+      newestActivityAt: sortedPinnedAgents[0]?.lastActivityAt ?? new Date(0),
+    },
+    ...groupedAgents,
+  ];
 }

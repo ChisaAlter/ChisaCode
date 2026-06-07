@@ -26,6 +26,10 @@ import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
 import { formatTimeAgo } from "@/utils/time";
 import { compareMatchScores, scoreTextFields } from "@/utils/score-match";
+import {
+  buildAddCustomModelToProviderPatch,
+  buildDeleteCustomModelFromProviderPatch,
+} from "@/screens/settings/custom-models";
 import type { AgentModelDefinition, AgentProvider } from "@chisacode/protocol/agent-types";
 import type { ProviderProfileModel } from "@chisacode/protocol/provider-config";
 
@@ -164,20 +168,20 @@ function AddCustomModelSubSheet({
     if (!canAdd) return;
     setError(null);
     setSaving(true);
-    void patchConfig({
-      providers: {
-        [provider]: {
-          additionalModels: [...additionalModels, { id: trimmed, label: trimmed }],
-        },
-      },
-    })
+    void patchConfig(
+      buildAddCustomModelToProviderPatch({
+        currentProviders: config?.providers,
+        providerId: provider,
+        id: trimmed,
+      }),
+    )
       .then(() => refresh([provider]))
       .then(() => onClose())
       .catch((err) => {
         setError(err instanceof Error ? err.message : t("providerDiagnostics.saveModelFailed"));
       })
       .finally(() => setSaving(false));
-  }, [additionalModels, canAdd, onClose, patchConfig, provider, refresh, t, trimmed]);
+  }, [canAdd, config?.providers, onClose, patchConfig, provider, refresh, t, trimmed]);
 
   const header = useMemo<SheetHeader>(
     () => ({ title: t("providerDiagnostics.addCustomModel") }),
@@ -524,19 +528,19 @@ export function ProviderDiagnosticSheet({
   const handleDeleteCustom = useCallback(
     (modelId: string) => {
       setDeletingModelId(modelId);
-      void patchConfig({
-        providers: {
-          [provider]: {
-            additionalModels: additionalModels.filter((model) => model.id !== modelId),
-          },
-        },
-      })
+      void patchConfig(
+        buildDeleteCustomModelFromProviderPatch({
+          currentProviders: config?.providers,
+          providerId: provider,
+          id: modelId,
+        }),
+      )
         .then(() => refresh([provider]))
         .finally(() => {
           setDeletingModelId((current) => (current === modelId ? null : current));
         });
     },
-    [additionalModels, patchConfig, provider, refresh],
+    [config?.providers, patchConfig, provider, refresh],
   );
 
   const sheetHeader = useMemo<SheetHeader>(

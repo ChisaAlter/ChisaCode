@@ -10,7 +10,16 @@ import {
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "@react-navigation/native";
-import { ActivityIndicator, BackHandler, Keyboard, Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  BackHandler,
+  Keyboard,
+  Pressable,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -23,8 +32,13 @@ import {
   Copy,
   Ellipsis,
   EllipsisVertical,
+  GitBranch,
+  GitPullRequest,
   Globe,
+  HardDrive,
   Import as ImportIcon,
+  Link2,
+  ListTree,
   PanelRight,
   Pencil,
   RotateCw,
@@ -34,7 +48,6 @@ import {
   X,
 } from "lucide-react-native";
 import { GestureDetector } from "react-native-gesture-handler";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
@@ -44,7 +57,6 @@ import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
-import { Shortcut } from "@/components/ui/shortcut";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
   DropdownMenu,
@@ -53,7 +65,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   FloatingPanelPortalHost,
   FloatingPanelPortalHostNameProvider,
@@ -70,7 +81,8 @@ import { useToast } from "@/contexts/toast-context";
 import { useExplorerOpenGesture } from "@/hooks/use-explorer-open-gesture";
 import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
 import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
-import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
+import { useSessionStore, type Agent, type WorkspaceDescriptor } from "@/stores/session-store";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import {
   buildWorkspaceTabPersistenceKey,
   collectAllTabs,
@@ -168,7 +180,6 @@ import { findAdjacentPane } from "@/utils/split-navigation";
 import { isAbsolutePath } from "@/utils/path";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
-import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { canCreateWorkspaceTerminal } from "@/screens/workspace/terminals/state";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
@@ -210,7 +221,14 @@ const ThemedGlobe = withUnistyles(Globe);
 const ThemedImport = withUnistyles(ImportIcon);
 const ThemedSettings = withUnistyles(Settings);
 const ThemedPanelRight = withUnistyles(PanelRight);
+const ThemedGitBranch = withUnistyles(GitBranch);
+const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+const ThemedHardDrive = withUnistyles(HardDrive);
+const ThemedLink2 = withUnistyles(Link2);
+const ThemedListTree = withUnistyles(ListTree);
 const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
+
+const WORKSPACE_ENVIRONMENT_PANEL_WIDTH = 300;
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -1014,6 +1032,7 @@ interface WorkspaceHeaderTitleBarProps {
   title: string;
   subtitle: string;
   showSubtitle: boolean;
+  activeTab: WorkspaceTabDescriptor | null;
   currentBranchName: string | null;
   isGitCheckout: boolean;
   normalizedServerId: string;
@@ -1048,6 +1067,7 @@ function WorkspaceHeaderTitleBar({
   title,
   subtitle,
   showSubtitle,
+  activeTab,
   currentBranchName,
   isGitCheckout,
   normalizedServerId,
@@ -1084,14 +1104,23 @@ function WorkspaceHeaderTitleBar({
         </View>
       ) : (
         <View style={styles.headerTitleTextGroup}>
-          <BranchSwitcher
-            currentBranchName={currentBranchName}
-            title={title}
-            serverId={normalizedServerId}
-            workspaceId={normalizedWorkspaceId}
-            isGitCheckout={isGitCheckout}
-          />
-          {showSubtitle ? (
+          {isMobile ? (
+            <BranchSwitcher
+              currentBranchName={currentBranchName}
+              title={title}
+              serverId={normalizedServerId}
+              workspaceId={normalizedWorkspaceId}
+              isGitCheckout={isGitCheckout}
+            />
+          ) : (
+            <DesktopWorkspaceHeaderTitle
+              activeTab={activeTab}
+              fallbackTitle={title}
+              serverId={normalizedServerId}
+              workspaceId={normalizedWorkspaceId}
+            />
+          )}
+          {isMobile && showSubtitle ? (
             <Text
               testID="workspace-header-subtitle"
               style={styles.headerProjectTitle}
@@ -1140,6 +1169,475 @@ function WorkspaceHeaderTitleBar({
         ) : null}
       </View>
     </View>
+  );
+}
+
+function DesktopWorkspaceHeaderTitle({
+  activeTab,
+  fallbackTitle,
+  serverId,
+  workspaceId,
+}: {
+  activeTab: WorkspaceTabDescriptor | null;
+  fallbackTitle: string;
+  serverId: string;
+  workspaceId: string;
+}) {
+  const { t } = useTranslation();
+
+  if (!activeTab) {
+    return (
+      <View style={styles.desktopHeaderTitleRow}>
+        <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
+          {fallbackTitle}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <WorkspaceTabPresentationResolver tab={activeTab} serverId={serverId} workspaceId={workspaceId}>
+      {(presentation) => (
+        <View style={styles.desktopHeaderTitleRow}>
+          <WorkspaceTabIcon presentation={presentation} active />
+          <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
+            {presentation.titleState === "loading"
+              ? t("workspace.screen.loading")
+              : presentation.label}
+          </Text>
+        </View>
+      )}
+    </WorkspaceTabPresentationResolver>
+  );
+}
+
+interface WorkspaceEnvironmentPanelProps {
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  isGitCheckout: boolean;
+  isLocalDaemon: boolean;
+  diffStat: WorkspaceDescriptor["diffStat"];
+  sourceLabel: string | null;
+  activeAgent: Agent | null;
+  workspaceStatus: WorkspaceDescriptor["status"] | null;
+  onOpenChanges: () => void;
+  onCopyResumeCommand: (agentId: string) => void;
+}
+
+type EnvironmentIconName =
+  | "changes"
+  | "location"
+  | "locality"
+  | "branch"
+  | "pr"
+  | "source"
+  | "task";
+
+function WorkspaceEnvironmentPanel({
+  serverId,
+  cwd,
+  currentBranchName,
+  isGitCheckout,
+  isLocalDaemon,
+  diffStat,
+  sourceLabel,
+  activeAgent,
+  workspaceStatus,
+  onOpenChanges,
+  onCopyResumeCommand,
+}: WorkspaceEnvironmentPanelProps) {
+  const { t } = useTranslation();
+  const locationLabel = isLocalDaemon
+    ? t("workspace.environment.local")
+    : t("workspace.environment.remote");
+  const changesValue = diffStat ? (
+    <DiffStat additions={diffStat.additions} deletions={diffStat.deletions} />
+  ) : (
+    <Text style={styles.environmentValueText}>0</Text>
+  );
+
+  return (
+    <View style={styles.environmentPanel} testID="workspace-environment-panel">
+      <Text style={styles.environmentPanelTitle}>{t("workspace.environment.title")}</Text>
+      <EnvironmentActionRow
+        icon="changes"
+        label={t("workspace.environment.changes")}
+        onPress={onOpenChanges}
+      >
+        {changesValue}
+      </EnvironmentActionRow>
+      <EnvironmentDisplayRow icon="location" label={t("workspace.environment.openLocation")}>
+        <WorkspaceOpenInEditorButton serverId={serverId} cwd={cwd} hideLabels />
+      </EnvironmentDisplayRow>
+      <EnvironmentDisplayRow icon="locality" label={locationLabel} />
+      {isGitCheckout ? (
+        <>
+          <EnvironmentDisplayRow
+            icon="branch"
+            label={currentBranchName ?? t("workspace.environment.branch")}
+          />
+          <EnvironmentDisplayRow icon="pr" label={t("workspace.environment.checkingPullRequest")} />
+          <EnvironmentDisplayRow label={t("workspace.environment.commitOrPush")}>
+            <WorkspaceGitActions serverId={serverId} cwd={cwd} hideLabels />
+          </EnvironmentDisplayRow>
+        </>
+      ) : null}
+      <View style={styles.environmentDivider} />
+      <EnvironmentDisplayRow icon="source" label={t("workspace.environment.source")}>
+        <Text style={styles.environmentValueText} numberOfLines={1}>
+          {sourceLabel ?? t("workspace.environment.noSource")}
+        </Text>
+      </EnvironmentDisplayRow>
+      <View style={styles.environmentDivider} />
+      <WorkspaceTaskStatusPanel
+        activeAgent={activeAgent}
+        workspaceStatus={workspaceStatus}
+        onCopyResumeCommand={onCopyResumeCommand}
+      />
+    </View>
+  );
+}
+
+function WorkspaceTaskStatusPanel({
+  activeAgent,
+  workspaceStatus,
+  onCopyResumeCommand,
+}: {
+  activeAgent: Agent | null;
+  workspaceStatus: WorkspaceDescriptor["status"] | null;
+  onCopyResumeCommand: (agentId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const statusLabel = activeAgent
+    ? t(`workspace.environment.agentStatus.${activeAgent.status}`)
+    : t(`workspace.environment.workspaceStatus.${workspaceStatus ?? "unknown"}`);
+  const canResume = Boolean(
+    activeAgent?.runtimeInfo?.sessionId ?? activeAgent?.persistence?.sessionId,
+  );
+  const handleResumePress = useCallback(() => {
+    if (!activeAgent) {
+      return;
+    }
+    onCopyResumeCommand(activeAgent.id);
+  }, [activeAgent, onCopyResumeCommand]);
+  const resumeActionStyle = useCallback(
+    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
+      styles.environmentTaskAction,
+      (Boolean(hovered) || Boolean(pressed)) && canResume && styles.environmentTaskActionHovered,
+      !canResume && styles.environmentTaskActionDisabled,
+    ],
+    [canResume],
+  );
+
+  return (
+    <View style={styles.environmentTaskSection}>
+      <EnvironmentDisplayRow icon="task" label={t("workspace.environment.task")}>
+        <Text style={styles.environmentValueText} numberOfLines={1}>
+          {statusLabel}
+        </Text>
+      </EnvironmentDisplayRow>
+      {activeAgent ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("workspace.environment.resume")}
+          disabled={!canResume}
+          onPress={handleResumePress}
+          style={resumeActionStyle}
+          testID="workspace-environment-resume"
+        >
+          <Text style={styles.environmentTaskActionText}>{t("workspace.environment.resume")}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function EnvironmentActionRow({
+  icon,
+  label,
+  children,
+  onPress,
+}: {
+  icon?: EnvironmentIconName;
+  label: string;
+  children?: ReactNode;
+  onPress: () => void;
+}) {
+  const rowStyle = useCallback(
+    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
+      styles.environmentRow,
+      (Boolean(hovered) || Boolean(pressed)) && styles.environmentRowHovered,
+    ],
+    [],
+  );
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={rowStyle}
+      testID="workspace-environment-changes"
+    >
+      <EnvironmentRowContent icon={icon} label={label}>
+        {children}
+      </EnvironmentRowContent>
+    </Pressable>
+  );
+}
+
+function EnvironmentDisplayRow({
+  icon,
+  label,
+  children,
+}: {
+  icon?: EnvironmentIconName;
+  label: string;
+  children?: ReactNode;
+}) {
+  return (
+    <View style={styles.environmentRow}>
+      <EnvironmentRowContent icon={icon} label={label}>
+        {children}
+      </EnvironmentRowContent>
+    </View>
+  );
+}
+
+function EnvironmentRowContent({
+  icon,
+  label,
+  children,
+}: {
+  icon?: EnvironmentIconName;
+  label: string;
+  children?: ReactNode;
+}) {
+  return (
+    <>
+      <View style={styles.environmentRowLeading}>
+        {icon ? (
+          <View style={styles.environmentIcon}>
+            <EnvironmentIcon name={icon} />
+          </View>
+        ) : null}
+        <Text style={styles.environmentRowLabel} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      {children ? <View style={styles.environmentRowTrailing}>{children}</View> : null}
+    </>
+  );
+}
+
+function EnvironmentIcon({ name }: { name: EnvironmentIconName }) {
+  if (name === "changes") {
+    return <ThemedSourceControlPanelIcon size={15} uniProps={mutedColorMapping} />;
+  }
+  if (name === "location") {
+    return <ThemedHardDrive size={15} uniProps={mutedColorMapping} />;
+  }
+  if (name === "locality") {
+    return <ThemedPanelRight size={15} uniProps={mutedColorMapping} />;
+  }
+  if (name === "branch") {
+    return <ThemedGitBranch size={15} uniProps={mutedColorMapping} />;
+  }
+  if (name === "pr") {
+    return <ThemedGitPullRequest size={15} uniProps={mutedColorMapping} />;
+  }
+  if (name === "task") {
+    return <ThemedSquareTerminal size={15} uniProps={mutedColorMapping} />;
+  }
+  return <ThemedLink2 size={15} uniProps={mutedColorMapping} />;
+}
+
+function WorkspaceHeaderRightControls({
+  isMobile,
+  isGitCheckout,
+  isExplorerOpen,
+  canToggleExplorer,
+  isEnvironmentPanelVisible,
+  canShowEnvironmentPanel,
+  explorerToggleAccessibilityState,
+  onToggleExplorer,
+  onToggleEnvironmentPanel,
+}: {
+  isMobile: boolean;
+  isGitCheckout: boolean;
+  isExplorerOpen: boolean;
+  canToggleExplorer: boolean;
+  isEnvironmentPanelVisible: boolean;
+  canShowEnvironmentPanel: boolean;
+  explorerToggleAccessibilityState: { expanded: boolean };
+  onToggleExplorer: () => void;
+  onToggleEnvironmentPanel: () => void;
+}) {
+  const { t } = useTranslation();
+  const environmentToggleAccessibilityState = useMemo(
+    () => ({ expanded: isEnvironmentPanelVisible }),
+    [isEnvironmentPanelVisible],
+  );
+  const environmentToggleLabel = isEnvironmentPanelVisible
+    ? t("workspace.environment.hidePanel")
+    : t("workspace.environment.showPanel");
+
+  const explorerButton = (
+    <HeaderToggleButton
+      testID="workspace-explorer-toggle"
+      onPress={onToggleExplorer}
+      tooltipLabel={t("workspace.screen.toggleExplorer")}
+      tooltipKeys={EXPLORER_TOGGLE_KEYS}
+      tooltipSide="left"
+      style={styles.headerActionButton}
+      disabled={!canToggleExplorer}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={
+        isExplorerOpen ? t("workspace.screen.closeExplorer") : t("workspace.screen.openExplorer")
+      }
+      accessibilityState={explorerToggleAccessibilityState}
+    >
+      {({ hovered }) => {
+        const colorMapping = isExplorerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
+        return isGitCheckout ? (
+          <ThemedSourceControlPanelIcon
+            size={20}
+            uniProps={colorMapping}
+            {...sourceControlPanelStrokeWidth15}
+          />
+        ) : (
+          <ThemedPanelRight size={20} uniProps={colorMapping} />
+        );
+      }}
+    </HeaderToggleButton>
+  );
+
+  if (isMobile) {
+    return <View style={styles.headerRight}>{explorerButton}</View>;
+  }
+
+  return (
+    <View style={styles.headerRight}>
+      <HeaderToggleButton
+        testID="workspace-environment-toggle"
+        onPress={onToggleEnvironmentPanel}
+        tooltipLabel={environmentToggleLabel}
+        tooltipKeys={ENVIRONMENT_TOGGLE_KEYS}
+        tooltipSide="left"
+        style={styles.headerActionButton}
+        disabled={!canShowEnvironmentPanel}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={environmentToggleLabel}
+        accessibilityState={environmentToggleAccessibilityState}
+      >
+        {({ hovered }) => {
+          const colorMapping =
+            isEnvironmentPanelVisible || hovered ? foregroundColorMapping : mutedColorMapping;
+          return <ThemedListTree size={20} uniProps={colorMapping} />;
+        }}
+      </HeaderToggleButton>
+      {explorerButton}
+    </View>
+  );
+}
+
+function WorkspaceEnvironmentPanelRail({
+  visible,
+  serverId,
+  workspaceDirectory,
+  currentBranchName,
+  isGitCheckout,
+  isLocalDaemon,
+  diffStat,
+  sourceLabel,
+  activeAgent,
+  workspaceStatus,
+  onOpenChanges,
+  onCopyResumeCommand,
+  style,
+}: {
+  visible: boolean;
+  serverId: string;
+  workspaceDirectory: string | null;
+  currentBranchName: string | null;
+  isGitCheckout: boolean;
+  isLocalDaemon: boolean;
+  diffStat: WorkspaceDescriptor["diffStat"];
+  sourceLabel: string | null;
+  activeAgent: Agent | null;
+  workspaceStatus: WorkspaceDescriptor["status"] | null;
+  onOpenChanges: () => void;
+  onCopyResumeCommand: (agentId: string) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const containerStyle = useMemo(() => [styles.environmentRail, style], [style]);
+
+  if (!visible || !workspaceDirectory) {
+    return null;
+  }
+
+  return (
+    <View style={containerStyle}>
+      <WorkspaceEnvironmentPanel
+        serverId={serverId}
+        cwd={workspaceDirectory}
+        currentBranchName={currentBranchName}
+        isGitCheckout={isGitCheckout}
+        isLocalDaemon={isLocalDaemon}
+        diffStat={diffStat}
+        sourceLabel={sourceLabel}
+        activeAgent={activeAgent}
+        workspaceStatus={workspaceStatus}
+        onOpenChanges={onOpenChanges}
+        onCopyResumeCommand={onCopyResumeCommand}
+      />
+    </View>
+  );
+}
+
+function getEnvironmentExplorerTab(checkout: ExplorerCheckoutContext): "changes" | "files" {
+  return checkout.isGit ? "changes" : "files";
+}
+
+function getWorkspaceEnvironmentSourceLabel(
+  workspace: WorkspaceDescriptor | null | undefined,
+): string | null {
+  const label = workspace?.projectDisplayName ?? workspace?.projectRootPath;
+  const normalized = label?.trim();
+  return normalized ? normalized : null;
+}
+
+function getWorkspaceEnvironmentStatus(
+  workspace: WorkspaceDescriptor | null | undefined,
+): WorkspaceDescriptor["status"] | null {
+  return workspace?.status ?? null;
+}
+
+function useEnvironmentPanelAgent(serverId: string, agentId: string | null): Agent | null {
+  return useSessionStore((state) => {
+    if (!agentId) {
+      return null;
+    }
+    return state.sessions[serverId]?.agents?.get(agentId) ?? null;
+  });
+}
+
+function shouldShowWorkspaceEnvironmentRail(input: {
+  isMobile: boolean;
+  showScreenHeader: boolean;
+  isEnvironmentPanelVisible: boolean;
+  workspaceDirectory: string | null;
+  showExplorerSidebar: boolean;
+}): boolean {
+  return (
+    !input.isMobile &&
+    input.showScreenHeader &&
+    input.isEnvironmentPanelVisible &&
+    Boolean(input.workspaceDirectory) &&
+    !input.showExplorerSidebar
   );
 }
 
@@ -1555,10 +2053,10 @@ function WorkspaceScreenContent({
   isRouteFocused,
 }: WorkspaceScreenContentProps) {
   const { t } = useTranslation();
-  const _insets = useSafeAreaInsets();
   const toast = useToast();
   const isMobile = useIsCompactFormFactor();
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
+  const [isEnvironmentPanelVisible, setIsEnvironmentPanelVisible] = useState(true);
 
   const normalizedServerId = useMemo(() => trimNonEmpty(decodeSegment(serverId)) ?? "", [serverId]);
 
@@ -1721,7 +2219,9 @@ function WorkspaceScreenContent({
   const toggleFileExplorerForCheckout = usePanelStore(
     (state) => state.toggleFileExplorerForCheckout,
   );
+  const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const isLocalDaemon = useIsLocalDaemon(normalizedServerId);
 
   const activeExplorerCheckout = useMemo<ExplorerCheckoutContext | null>(() => {
     if (!normalizedServerId || !workspaceDirectory) {
@@ -1754,18 +2254,36 @@ function WorkspaceScreenContent({
     });
   }, [activeExplorerCheckout, isMobile, toggleFileExplorerForCheckout]);
 
-  const hasDiffStat = useMemo(() => Boolean(workspaceDescriptor?.diffStat), [workspaceDescriptor]);
-  const explorerToggleStyle = useCallback(
-    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.sourceControlButton,
-      hasDiffStat && styles.sourceControlButtonWithStats,
-      (Boolean(hovered) || Boolean(pressed) || isExplorerOpen) && styles.sourceControlButtonHovered,
-    ],
-    [hasDiffStat, isExplorerOpen],
-  );
+  const handleToggleEnvironmentPanel = useCallback(() => {
+    setIsEnvironmentPanelVisible((visible) => !visible);
+  }, []);
+
+  const handleOpenEnvironmentChanges = useCallback(() => {
+    if (!activeExplorerCheckout) {
+      return;
+    }
+    setExplorerTabForCheckout({
+      ...activeExplorerCheckout,
+      tab: getEnvironmentExplorerTab(activeExplorerCheckout),
+    });
+    openFileExplorerForCheckout({
+      isCompact: isMobile,
+      checkout: activeExplorerCheckout,
+    });
+    setIsEnvironmentPanelVisible(false);
+  }, [activeExplorerCheckout, isMobile, openFileExplorerForCheckout, setExplorerTabForCheckout]);
+
   const explorerToggleAccessibilityState = useMemo(
     () => ({ expanded: isExplorerOpen }),
     [isExplorerOpen],
+  );
+  const environmentSourceLabel = useMemo(
+    () => getWorkspaceEnvironmentSourceLabel(workspaceDescriptor),
+    [workspaceDescriptor],
+  );
+  const environmentWorkspaceStatus = useMemo(
+    () => getWorkspaceEnvironmentStatus(workspaceDescriptor),
+    [workspaceDescriptor],
   );
 
   const explorerOpenGesture = useExplorerOpenGesture({
@@ -1828,8 +2346,6 @@ function WorkspaceScreenContent({
   );
   const pendingByDraftId = useCreateFlowStore((state) => state.pendingByDraftId);
   const { closingTabIds, closeTab } = useCloseTabs();
-  const { onLayout: onHeaderLayout, isBelow: showCompactButtonLabels } =
-    useContainerWidthBelow(700);
   const closeWorkspaceTabWithCleanup = useCallback(
     function closeWorkspaceTabWithCleanup(input: {
       tabId: string;
@@ -1870,6 +2386,7 @@ function WorkspaceScreenContent({
     }
     return target.agentId;
   }, [focusedPaneTabState.activeTab]);
+  const environmentPanelAgent = useEnvironmentPanelAgent(normalizedServerId, focusedPaneAgentId);
 
   useEffect(() => {
     if (!isRouteFocused) {
@@ -3159,158 +3676,31 @@ function WorkspaceScreenContent({
     workspaceKey: persistenceKey,
   });
 
-  const headerRight = useMemo(
-    () => (
-      <View style={styles.headerRight}>
-        {!isMobile && workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
-          <WorkspaceScriptsButton
-            serverId={normalizedServerId}
-            workspaceId={normalizedWorkspaceId}
-            scripts={workspaceDescriptor.scripts}
-            liveTerminalIds={liveTerminalIds}
-            onScriptTerminalStarted={handleScriptTerminalStarted}
-            onViewTerminal={handleViewScriptTerminal}
-            onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
-            hideLabels={showCompactButtonLabels}
-          />
-        ) : null}
-        {!isMobile ? (
-          <WorkspaceOpenInEditorButton
-            serverId={normalizedServerId}
-            cwd={normalizedWorkspaceId}
-            hideLabels={showCompactButtonLabels}
-          />
-        ) : null}
-        {!isMobile && isGitCheckout ? (
-          <>
-            <WorkspaceGitActions
-              serverId={normalizedServerId}
-              cwd={normalizedWorkspaceId}
-              hideLabels={showCompactButtonLabels}
-            />
-            <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-              <TooltipTrigger asChild>
-                <Pressable
-                  testID="workspace-explorer-toggle"
-                  onPress={handleToggleExplorer}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    isExplorerOpen
-                      ? t("workspace.screen.closeExplorer")
-                      : t("workspace.screen.openExplorer")
-                  }
-                  accessibilityState={explorerToggleAccessibilityState}
-                  style={explorerToggleStyle}
-                >
-                  {({ hovered, pressed }) => {
-                    const active = isExplorerOpen || hovered || pressed;
-                    const colorMapping = active ? foregroundColorMapping : mutedColorMapping;
-                    return (
-                      <>
-                        <ThemedSourceControlPanelIcon size={16} uniProps={colorMapping} />
-                        {workspaceDescriptor?.diffStat ? (
-                          <DiffStat
-                            additions={workspaceDescriptor.diffStat.additions}
-                            deletions={workspaceDescriptor.diffStat.deletions}
-                          />
-                        ) : null}
-                      </>
-                    );
-                  }}
-                </Pressable>
-              </TooltipTrigger>
-              <TooltipContent
-                testID="workspace-explorer-toggle-tooltip"
-                side="left"
-                align="center"
-                offset={8}
-              >
-                <View style={styles.explorerTooltipRow}>
-                  <Text style={styles.explorerTooltipText}>
-                    {t("workspace.screen.toggleExplorer")}
-                  </Text>
-                  <Shortcut keys={EXPLORER_TOGGLE_KEYS} style={styles.explorerTooltipShortcut} />
-                </View>
-              </TooltipContent>
-            </Tooltip>
-          </>
-        ) : null}
-        {!isMobile && !isGitCheckout ? (
-          <HeaderToggleButton
-            testID="workspace-explorer-toggle"
-            onPress={handleToggleExplorer}
-            tooltipLabel={t("workspace.screen.toggleExplorer")}
-            tooltipKeys={EXPLORER_TOGGLE_KEYS}
-            tooltipSide="left"
-            style={styles.compactHeaderActionButton}
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={
-              isExplorerOpen
-                ? t("workspace.screen.closeExplorer")
-                : t("workspace.screen.openExplorer")
-            }
-            accessibilityState={explorerToggleAccessibilityState}
-          >
-            {({ hovered }) => {
-              const colorMapping =
-                isExplorerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
-              return <ThemedPanelRight size={16} uniProps={colorMapping} />;
-            }}
-          </HeaderToggleButton>
-        ) : null}
-        {isMobile ? (
-          <HeaderToggleButton
-            testID="workspace-explorer-toggle"
-            onPress={handleToggleExplorer}
-            tooltipLabel={t("workspace.screen.toggleExplorer")}
-            tooltipKeys={EXPLORER_TOGGLE_KEYS}
-            tooltipSide="left"
-            style={styles.headerActionButton}
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={
-              isExplorerOpen
-                ? t("workspace.screen.closeExplorer")
-                : t("workspace.screen.openExplorer")
-            }
-            accessibilityState={explorerToggleAccessibilityState}
-          >
-            {({ hovered }) => {
-              const colorMapping =
-                isExplorerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
-              return isGitCheckout ? (
-                <ThemedSourceControlPanelIcon
-                  size={20}
-                  uniProps={colorMapping}
-                  {...sourceControlPanelStrokeWidth15}
-                />
-              ) : (
-                <ThemedPanelRight size={20} uniProps={colorMapping} />
-              );
-            }}
-          </HeaderToggleButton>
-        ) : null}
-      </View>
-    ),
-    [
-      isMobile,
-      workspaceDescriptor,
-      normalizedServerId,
-      normalizedWorkspaceId,
-      liveTerminalIds,
-      handleScriptTerminalStarted,
-      handleViewScriptTerminal,
-      handleOpenUrlInBrowserTab,
-      showCompactButtonLabels,
-      isGitCheckout,
-      handleToggleExplorer,
-      isExplorerOpen,
-      explorerToggleAccessibilityState,
-      explorerToggleStyle,
-      t,
-    ],
-  );
+  const headerRight = useMemo(() => {
+    return (
+      <WorkspaceHeaderRightControls
+        isMobile={isMobile}
+        isGitCheckout={isGitCheckout}
+        isExplorerOpen={isExplorerOpen}
+        canToggleExplorer={Boolean(activeExplorerCheckout)}
+        isEnvironmentPanelVisible={isEnvironmentPanelVisible}
+        canShowEnvironmentPanel={Boolean(workspaceDirectory)}
+        explorerToggleAccessibilityState={explorerToggleAccessibilityState}
+        onToggleExplorer={handleToggleExplorer}
+        onToggleEnvironmentPanel={handleToggleEnvironmentPanel}
+      />
+    );
+  }, [
+    activeExplorerCheckout,
+    isMobile,
+    isGitCheckout,
+    handleToggleExplorer,
+    handleToggleEnvironmentPanel,
+    isEnvironmentPanelVisible,
+    isExplorerOpen,
+    explorerToggleAccessibilityState,
+    workspaceDirectory,
+  ]);
 
   const showScreenHeader = useMemo(
     () => shouldShowWorkspaceScreenHeader({ isFocusModeEnabled, isMobile }),
@@ -3319,6 +3709,23 @@ function WorkspaceScreenContent({
   const showExplorerSidebar = useMemo(
     () => shouldShowWorkspaceExplorerSidebar({ isRouteFocused, isFocusModeEnabled, isMobile }),
     [isRouteFocused, isFocusModeEnabled, isMobile],
+  );
+  const environmentRailVisible = useMemo(
+    () =>
+      shouldShowWorkspaceEnvironmentRail({
+        isMobile,
+        showScreenHeader,
+        isEnvironmentPanelVisible,
+        workspaceDirectory,
+        showExplorerSidebar,
+      }),
+    [
+      isMobile,
+      showScreenHeader,
+      isEnvironmentPanelVisible,
+      workspaceDirectory,
+      showExplorerSidebar,
+    ],
   );
   const createTerminalDisabled = useMemo(
     () => createTerminalMutation.isPending || pendingTerminalCreateInput !== null,
@@ -3409,12 +3816,10 @@ function WorkspaceScreenContent({
     handleReorderTabsInPane,
     renderSplitPaneEmptyState,
   ]);
-
   const workspaceCenterColumn = (
     <View style={styles.centerColumn}>
       {showScreenHeader && (
         <ScreenHeader
-          onRowLayout={onHeaderLayout}
           left={
             <>
               <SidebarMenuToggle />
@@ -3423,6 +3828,7 @@ function WorkspaceScreenContent({
                 title={workspaceHeaderTitle}
                 subtitle={workspaceHeaderSubtitle}
                 showSubtitle={shouldShowWorkspaceHeaderSubtitle}
+                activeTab={activeTabDescriptor}
                 currentBranchName={currentBranchName}
                 isGitCheckout={isGitCheckout}
                 normalizedServerId={normalizedServerId}
@@ -3541,6 +3947,22 @@ function WorkspaceScreenContent({
 
             <FloatingPanelPortalHost name={workspaceFloatingPanelPortalHostName} />
 
+            <WorkspaceEnvironmentPanelRail
+              visible={environmentRailVisible}
+              serverId={normalizedServerId}
+              workspaceDirectory={workspaceDirectory}
+              currentBranchName={currentBranchName}
+              isGitCheckout={isGitCheckout}
+              isLocalDaemon={isLocalDaemon}
+              diffStat={workspaceDescriptor?.diffStat ?? null}
+              sourceLabel={environmentSourceLabel}
+              activeAgent={environmentPanelAgent}
+              workspaceStatus={environmentWorkspaceStatus}
+              onOpenChanges={handleOpenEnvironmentChanges}
+              onCopyResumeCommand={handleCopyResumeCommand}
+              style={!isMobile ? styles.environmentRailFloating : undefined}
+            />
+
             {showExplorerSidebar && workspaceDirectory ? (
               <ExplorerSidebar
                 serverId={normalizedServerId}
@@ -3586,7 +4008,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   centerColumn: {
     flex: 1,
+    minWidth: 0,
     minHeight: 0,
+    position: "relative",
   },
   headerTitle: {
     fontSize: theme.fontSize.base,
@@ -3630,6 +4054,14 @@ const styles = StyleSheet.create((theme) => ({
       xs: 0,
       md: theme.spacing[2],
     },
+  },
+  desktopHeaderTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    minWidth: 0,
+    flexShrink: 1,
+    maxWidth: 360,
   },
   headerProjectTitle: {
     color: theme.colors.foregroundMuted,
@@ -3678,22 +4110,113 @@ const styles = StyleSheet.create((theme) => ({
       md: theme.spacing[2],
     },
   },
-  sourceControlButton: {
+  environmentPanel: {
+    width: WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
+    maxWidth: 320,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface0,
+    gap: theme.spacing[1],
+  },
+  environmentRail: {
+    width: WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
+    flexShrink: 0,
+  },
+  environmentRailFloating: {
+    position: "absolute",
+    top: theme.spacing[3],
+    right: theme.spacing[3],
+    zIndex: 20,
+    shadowColor: "#000000",
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  environmentPanelTitle: {
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  environmentRow: {
+    minHeight: 28,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[1],
-    paddingVertical: theme.spacing[1],
-    minHeight: Math.ceil(theme.fontSize.sm * 1.5) + theme.spacing[1] * 2,
-    minWidth: Math.ceil(theme.fontSize.sm * 1.5) + theme.spacing[1] * 2,
+  },
+  environmentRowHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  environmentRowLeading: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  environmentIcon: {
+    width: 18,
+    alignItems: "center",
+  },
+  environmentRowLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  environmentRowTrailing: {
+    minWidth: 0,
+    flexShrink: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  environmentValueText: {
+    maxWidth: 130,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  environmentDivider: {
+    height: theme.borderWidth[1],
+    backgroundColor: theme.colors.border,
+    marginHorizontal: theme.spacing[2],
+    marginVertical: theme.spacing[2],
+  },
+  environmentTaskSection: {
+    gap: theme.spacing[1],
+  },
+  environmentTaskAction: {
+    alignSelf: "flex-start",
+    marginLeft: theme.spacing[2],
+    marginTop: theme.spacing[1],
+    minHeight: 26,
+    paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  sourceControlButtonWithStats: {
-    paddingHorizontal: theme.spacing[3],
-  },
-  sourceControlButtonHovered: {
+  environmentTaskActionHovered: {
     backgroundColor: theme.colors.surface2,
+  },
+  environmentTaskActionDisabled: {
+    opacity: 0.5,
+  },
+  environmentTaskActionText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
   },
   newTabActions: {
     flexDirection: "row",
@@ -3723,16 +4246,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   newTabTooltipShortcut: {},
-  explorerTooltipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  explorerTooltipText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.popoverForeground,
-  },
-  explorerTooltipShortcut: {},
   mobileTabsRow: {
     backgroundColor: theme.colors.surface0,
     borderBottomWidth: theme.borderWidth[1],
@@ -3900,3 +4413,4 @@ const containerWithWorkspaceBackgroundStyle = [
 ];
 
 const EXPLORER_TOGGLE_KEYS: ShortcutKey[] = ["mod", "E"];
+const ENVIRONMENT_TOGGLE_KEYS: ShortcutKey[] = [];

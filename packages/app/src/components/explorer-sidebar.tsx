@@ -357,6 +357,7 @@ export function ExplorerSidebar({
 interface ExplorerTabButtonProps {
   tab: ExplorerTab;
   active: boolean;
+  isMobile: boolean;
   label?: string;
   onTabPress: (tab: ExplorerTab) => void;
   testID: string;
@@ -366,14 +367,29 @@ interface ExplorerTabButtonProps {
 function ExplorerTabButton({
   tab,
   active,
+  isMobile,
   label,
   onTabPress,
   testID,
   children,
 }: ExplorerTabButtonProps) {
   const handlePress = useCallback(() => onTabPress(tab), [onTabPress, tab]);
-  const tabStyle = useMemo(() => [styles.tab, active && styles.tabActive], [active]);
-  const tabTextStyle = useMemo(() => [styles.tabText, active && styles.tabTextActive], [active]);
+  const tabStyle = useMemo(
+    () => [
+      styles.tab,
+      !isMobile && styles.desktopTab,
+      active && (isMobile ? styles.tabActive : styles.desktopTabActive),
+    ],
+    [active, isMobile],
+  );
+  const tabTextStyle = useMemo(
+    () => [
+      styles.tabText,
+      !isMobile && styles.desktopTabText,
+      active && (isMobile ? styles.tabTextActive : styles.desktopTabTextActive),
+    ],
+    [active, isMobile],
+  );
   return (
     <Pressable testID={testID} style={tabStyle} onPress={handlePress}>
       {children}
@@ -393,6 +409,67 @@ interface SidebarContentProps {
   isMobile: boolean;
   isOpen: boolean;
   onOpenFile?: (filePath: string) => void;
+}
+
+function ExplorerSidebarTabs({
+  isGit,
+  isMobile,
+  hasPullRequest,
+  resolvedTab,
+  prTabLabel,
+  onTabPress,
+}: {
+  isGit: boolean;
+  isMobile: boolean;
+  hasPullRequest: boolean;
+  resolvedTab: ExplorerTab;
+  prTabLabel: string;
+  onTabPress: (tab: ExplorerTab) => void;
+}) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const tabsContainerStyle = useMemo(
+    () => [styles.tabsContainer, !isMobile && styles.desktopTabsContainer],
+    [isMobile],
+  );
+
+  return (
+    <View style={tabsContainerStyle}>
+      {isGit && (
+        <ExplorerTabButton
+          tab="changes"
+          active={resolvedTab === "changes"}
+          isMobile={isMobile}
+          label={t("git.changes")}
+          onTabPress={onTabPress}
+          testID="explorer-tab-changes"
+        />
+      )}
+      <ExplorerTabButton
+        tab="files"
+        active={resolvedTab === "files"}
+        isMobile={isMobile}
+        label={t("git.files")}
+        onTabPress={onTabPress}
+        testID="explorer-tab-files"
+      />
+      {isGit && hasPullRequest && (
+        <ExplorerTabButton
+          tab="pr"
+          active={resolvedTab === "pr"}
+          isMobile={isMobile}
+          label={prTabLabel}
+          onTabPress={onTabPress}
+          testID="explorer-tab-pr"
+        >
+          <GitHubIcon
+            size={13}
+            color={resolvedTab === "pr" ? theme.colors.foreground : theme.colors.foregroundMuted}
+          />
+        </ExplorerTabButton>
+      )}
+    </View>
+  );
 }
 
 function SidebarContent({
@@ -425,8 +502,16 @@ function SidebarContent({
   const prTabLabel = prPane.prNumber === null ? "" : `#${prPane.prNumber}`;
 
   const headerStyle = useMemo(
-    () => [styles.header, { paddingRight: padding.right }],
-    [padding.right],
+    () => [styles.header, !isMobile && styles.desktopHeader, { paddingRight: padding.right }],
+    [isMobile, padding.right],
+  );
+  const closeButtonStyle = useMemo(
+    () => [styles.closeButton, !isMobile && styles.desktopCloseButton],
+    [isMobile],
+  );
+  const contentAreaStyle = useMemo(
+    () => [styles.contentArea, !isMobile && styles.desktopContentArea],
+    [isMobile],
   );
 
   return (
@@ -434,51 +519,32 @@ function SidebarContent({
       {/* Header with tabs and close button */}
       <View style={headerStyle} testID="explorer-header">
         <TitlebarDragRegion />
-        <View style={styles.tabsContainer}>
-          {isGit && (
-            <ExplorerTabButton
-              tab="changes"
-              active={resolvedTab === "changes"}
-              label={t("git.changes")}
-              onTabPress={onTabPress}
-              testID="explorer-tab-changes"
-            />
-          )}
-          <ExplorerTabButton
-            tab="files"
-            active={resolvedTab === "files"}
-            label={t("git.files")}
-            onTabPress={onTabPress}
-            testID="explorer-tab-files"
-          />
-          {isGit && hasPullRequest && (
-            <ExplorerTabButton
-              tab="pr"
-              active={resolvedTab === "pr"}
-              label={prTabLabel}
-              onTabPress={onTabPress}
-              testID="explorer-tab-pr"
-            >
-              <GitHubIcon
-                size={13}
-                color={
-                  resolvedTab === "pr" ? theme.colors.foreground : theme.colors.foregroundMuted
-                }
-              />
-            </ExplorerTabButton>
-          )}
-        </View>
+        <ExplorerSidebarTabs
+          isGit={isGit}
+          isMobile={isMobile}
+          hasPullRequest={hasPullRequest}
+          resolvedTab={resolvedTab}
+          prTabLabel={prTabLabel}
+          onTabPress={onTabPress}
+        />
         <View style={styles.headerRightSection}>
-          {isMobile && (
-            <Pressable onPress={onClose} style={styles.closeButton}>
-              <X size={18} color={theme.colors.foregroundMuted} />
-            </Pressable>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              isMobile
+                ? t("workspace.screen.closeExplorer")
+                : t("workspace.screen.collapseExplorer")
+            }
+            onPress={onClose}
+            style={closeButtonStyle}
+          >
+            <X size={isMobile ? 18 : 16} color={theme.colors.foregroundMuted} />
+          </Pressable>
         </View>
       </View>
 
       {/* Content based on active tab */}
-      <View style={styles.contentArea} testID="explorer-content-area">
+      <View style={contentAreaStyle} testID="explorer-content-area">
         {resolvedTab === "changes" && (
           <GitDiffPane
             serverId={serverId}
@@ -551,9 +617,19 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
+  desktopHeader: {
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSidebar,
+    paddingLeft: theme.spacing[2],
+  },
   tabsContainer: {
     flexDirection: "row",
     gap: theme.spacing[1],
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  desktopTabsContainer: {
+    gap: 0,
   },
   tab: {
     flexDirection: "row",
@@ -563,7 +639,17 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
   },
+  desktopTab: {
+    minHeight: 30,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    gap: theme.spacing[1],
+  },
   tabActive: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  desktopTabActive: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   tabText: {
@@ -571,8 +657,15 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
+  desktopTabText: {
+    fontSize: theme.fontSize.xs,
+  },
   tabTextActive: {
     color: theme.colors.foreground,
+  },
+  desktopTabTextActive: {
+    color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.medium,
   },
   tabTextMuted: {
     opacity: 0.8,
@@ -586,9 +679,19 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
   },
+  desktopCloseButton: {
+    width: 26,
+    height: 26,
+    padding: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   contentArea: {
     flex: 1,
     minHeight: 0,
+  },
+  desktopContentArea: {
+    backgroundColor: theme.colors.surfaceSidebar,
   },
 }));
 

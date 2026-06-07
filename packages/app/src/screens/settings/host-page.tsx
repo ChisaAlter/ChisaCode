@@ -20,6 +20,7 @@ import {
   useHostRuntimeSnapshot,
   useHosts,
 } from "@/runtime/host-runtime";
+import { CustomModelsSection } from "@/screens/settings/custom-models-section";
 import { ProvidersSection } from "@/screens/settings/providers-section";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
@@ -170,6 +171,8 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
       <DaemonSection host={host} isLocalDaemon={isLocalDaemon} />
 
       <ProvidersSection serverId={serverId} />
+
+      <CustomModelsSection serverId={serverId} />
 
       <RemoveHostSection host={host} onRemoved={onHostRemoved} />
     </View>
