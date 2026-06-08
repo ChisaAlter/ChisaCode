@@ -137,6 +137,8 @@ const DEFAULT_SHORTCUT_HELP_COPY: KeyboardShortcutHelpCopy = {
     "workspace-pane-move-tab-down": "向下移动标签页",
     "workspace-pane-close": "关闭面板",
     "workspace-terminal-new": "新建终端",
+    "workspace-dock-git-open": "打开 Git 工作台",
+    "workspace-dock-browser-open": "打开浏览器上下文",
     "toggle-command-center": "打开/关闭命令中心",
     "show-shortcuts": "显示键盘快捷键",
     "toggle-left-sidebar": "打开/关闭左侧边栏",
@@ -648,6 +650,56 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "panels",
       label: "New terminal",
       keys: ["mod", "shift", "T"],
+    },
+  },
+
+  // --- Workspace dock ---
+  {
+    id: "workspace-dock-git-open-cmd-shift-g-mac",
+    action: "workspace.dock.git.open",
+    combo: "Cmd+Shift+G",
+    when: { mac: true, desktop: true, commandCenter: false },
+    help: {
+      id: "workspace-dock-git-open",
+      section: "panels",
+      label: "Open Git workbench",
+      keys: ["mod", "shift", "G"],
+    },
+  },
+  {
+    id: "workspace-dock-git-open-ctrl-shift-g-non-mac",
+    action: "workspace.dock.git.open",
+    combo: "Ctrl+Shift+G",
+    when: { mac: false, desktop: true, terminal: false, commandCenter: false },
+    help: {
+      id: "workspace-dock-git-open",
+      section: "panels",
+      label: "Open Git workbench",
+      keys: ["mod", "shift", "G"],
+    },
+  },
+  {
+    id: "workspace-dock-browser-open-cmd-shift-b-mac",
+    action: "workspace.dock.browser.open",
+    combo: "Cmd+Shift+B",
+    when: { mac: true, desktop: true, commandCenter: false },
+    help: {
+      id: "workspace-dock-browser-open",
+      section: "panels",
+      label: "Open browser context",
+      keys: ["mod", "shift", "B"],
+    },
+  },
+  {
+    id: "workspace-dock-browser-open-ctrl-shift-b-non-mac",
+    action: "workspace.dock.browser.open",
+    combo: "Ctrl+Shift+B",
+    when: { mac: false, desktop: true, terminal: false, commandCenter: false },
+    help: {
+      id: "workspace-dock-browser-open",
+      section: "panels",
+      label: "Open browser context",
+      keys: ["mod", "shift", "B"],
     },
   },
 

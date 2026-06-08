@@ -849,6 +849,39 @@ describe("stream reducer canonical tool calls", () => {
 });
 
 describe("turn lifecycle events", () => {
+  it("materializes turn changes timeline items", () => {
+    const timestamp = new Date("2025-01-01T11:59:00Z");
+    const state = reduceStreamUpdate(
+      [],
+      {
+        type: "timeline",
+        provider: "codex",
+        item: {
+          type: "turn_changes",
+          changeSummary: "Updated workspace dock behavior",
+          changedFiles: [
+            { path: "packages/app/src/screens/workspace/workspace-screen.tsx", additions: 12 },
+            { path: "packages/app/src/types/stream.ts", deletions: 2 },
+          ],
+          checkpointRef: "checkpoint-1",
+        },
+      },
+      timestamp,
+    );
+
+    const item = state[0];
+    assert.equal(item?.kind, "turn_changes");
+    if (!item || item.kind !== "turn_changes") {
+      throw new Error("Turn changes item missing");
+    }
+    assert.equal(item.changeSummary, "Updated workspace dock behavior");
+    assert.deepEqual(item.changedFiles, [
+      { path: "packages/app/src/screens/workspace/workspace-screen.tsx", additions: 12 },
+      { path: "packages/app/src/types/stream.ts", deletions: 2 },
+    ]);
+    assert.equal(item.checkpointRef, "checkpoint-1");
+  });
+
   it("finalizes active stream items without adding timeline rows", () => {
     const startedAt = new Date("2025-01-01T12:00:00Z");
     const completedAt = new Date("2025-01-01T12:00:05Z");

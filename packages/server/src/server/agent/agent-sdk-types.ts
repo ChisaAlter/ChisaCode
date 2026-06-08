@@ -349,7 +349,13 @@ export type AgentTimelineItem =
   | ToolCallTimelineItem
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
-  | CompactionTimelineItem;
+  | CompactionTimelineItem
+  | {
+      type: "turn_changes";
+      changeSummary: string;
+      changedFiles: { path: string; additions?: number; deletions?: number }[];
+      checkpointRef?: string;
+    };
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

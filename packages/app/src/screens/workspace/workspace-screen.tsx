@@ -198,13 +198,25 @@ import {
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
-import type { TodoEntry } from "@/types/stream";
+import type { TodoEntry, TurnChangesItem, StreamItem } from "@/types/stream";
 import {
   buildPullRequestLabel,
   buildTodoProgressSummary,
   findLatestTodoItems,
   type WorkspacePullRequestRuntime,
 } from "@/screens/workspace/workspace-environment-panel-model";
+import {
+  buildBrowserContextSummary,
+  buildGitWorkbenchSummary,
+  resolveDockStateAfterAction,
+  resolveDockTabAvailability,
+  resolveWorkspacePaneCommand,
+  type BrowserContextSummary,
+  type GitWorkbenchSummary,
+  type WorkspacePaneCommand,
+  type WorkspaceEnvironmentDockState,
+  type WorkspaceEnvironmentDockTab,
+} from "@/screens/workspace/workspace-environment-dock-model";
 
 const WORKSPACE_SETUP_AUTO_OPEN_WINDOW_MS = 30_000;
 const WORKSPACE_FLOATING_PANEL_PORTAL_HOST_PREFIX = "workspace-floating-panels";
@@ -261,6 +273,8 @@ const MENU_NEW_BROWSER_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping
 const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedColorMapping} />;
 const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedColorMapping} />;
 const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedColorMapping} />;
+const MENU_GIT_DOCK_ICON = <ThemedSourceControlPanelIcon size={16} uniProps={mutedColorMapping} />;
+const MENU_BROWSER_CONTEXT_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
 const GATED_WORKSPACE_HEADER_LEFT = <SidebarMenuToggle />;
 
 interface WorkspaceScreenProps {
@@ -305,6 +319,19 @@ function useSyncWorkspaceActiveBrowser(input: {
     }
     void getDesktopHost()?.browser?.setWorkspaceActiveBrowser?.(desktopActiveBrowserId);
   }, [desktopActiveBrowserId]);
+}
+
+function useWorkspaceBrowserContextSummary(input: {
+  workspaceLayout: WorkspaceLayout | null;
+}): BrowserContextSummary | null {
+  const focusedBrowserId = useMemo(
+    () => getFocusedBrowserId(input.workspaceLayout),
+    [input.workspaceLayout],
+  );
+  const browser = useBrowserStore((state) =>
+    focusedBrowserId ? (state.browsersById[focusedBrowserId] ?? null) : null,
+  );
+  return useMemo(() => buildBrowserContextSummary({ browser }), [browser]);
 }
 
 interface WorkspaceTabFallbackLabels {
@@ -917,9 +944,13 @@ interface WorkspaceHeaderMenuProps {
   menuImportIcon: ReactElement;
   menuCopyIcon: ReactElement;
   menuSettingsIcon: ReactElement;
+  menuGitDockIcon: ReactElement;
+  menuBrowserContextIcon: ReactElement;
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
+  onOpenGitDock: () => void;
+  onOpenBrowserContextDock: () => void;
   onOpenImportSheet: () => void;
   onCopyWorkspacePath: () => void;
   onCopyBranchName: () => void;
@@ -954,9 +985,13 @@ function WorkspaceHeaderMenu({
   menuImportIcon,
   menuCopyIcon,
   menuSettingsIcon,
+  menuGitDockIcon,
+  menuBrowserContextIcon,
   onCreateDraftTab,
   onCreateTerminal,
   onCreateBrowser,
+  onOpenGitDock,
+  onOpenBrowserContextDock,
   onOpenImportSheet,
   onCopyWorkspacePath,
   onCopyBranchName,
@@ -1004,6 +1039,25 @@ function WorkspaceHeaderMenu({
           >
             {t("workspace.newBrowserTab")}
           </DropdownMenuItem>
+        ) : null}
+        {!isMobile ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              testID="workspace-header-open-git-dock"
+              leading={menuGitDockIcon}
+              onSelect={onOpenGitDock}
+            >
+              {t("workspace.openGitDock")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              testID="workspace-header-open-browser-context-dock"
+              leading={menuBrowserContextIcon}
+              onSelect={onOpenBrowserContextDock}
+            >
+              {t("workspace.openBrowserContextDock")}
+            </DropdownMenuItem>
+          </>
         ) : null}
         <DropdownMenuItem
           testID="workspace-header-import-agent"
@@ -1070,9 +1124,13 @@ interface WorkspaceHeaderTitleBarProps {
   menuImportIcon: ReactElement;
   menuCopyIcon: ReactElement;
   menuSettingsIcon: ReactElement;
+  menuGitDockIcon: ReactElement;
+  menuBrowserContextIcon: ReactElement;
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
+  onOpenGitDock: () => void;
+  onOpenBrowserContextDock: () => void;
   onOpenImportSheet: () => void;
   onCopyWorkspacePath: () => void;
   onCopyBranchName: () => void;
@@ -1105,9 +1163,13 @@ function WorkspaceHeaderTitleBar({
   menuImportIcon,
   menuCopyIcon,
   menuSettingsIcon,
+  menuGitDockIcon,
+  menuBrowserContextIcon,
   onCreateDraftTab,
   onCreateTerminal,
   onCreateBrowser,
+  onOpenGitDock,
+  onOpenBrowserContextDock,
   onOpenImportSheet,
   onCopyWorkspacePath,
   onCopyBranchName,
@@ -1166,9 +1228,13 @@ function WorkspaceHeaderTitleBar({
           menuImportIcon={menuImportIcon}
           menuCopyIcon={menuCopyIcon}
           menuSettingsIcon={menuSettingsIcon}
+          menuGitDockIcon={menuGitDockIcon}
+          menuBrowserContextIcon={menuBrowserContextIcon}
           onCreateDraftTab={onCreateDraftTab}
           onCreateTerminal={onCreateTerminal}
           onCreateBrowser={onCreateBrowser}
+          onOpenGitDock={onOpenGitDock}
+          onOpenBrowserContextDock={onOpenBrowserContextDock}
           onOpenImportSheet={onOpenImportSheet}
           onCopyWorkspacePath={onCopyWorkspacePath}
           onCopyBranchName={onCopyBranchName}
@@ -1239,11 +1305,15 @@ interface WorkspaceEnvironmentPanelProps {
   isLocalDaemon: boolean;
   diffStat: WorkspaceDescriptor["diffStat"];
   githubRuntime: WorkspaceDescriptor["githubRuntime"];
+  browserContext: BrowserContextSummary | null;
+  dockState: WorkspaceEnvironmentDockState;
   sourceLabel: string | null;
   activeAgent: Agent | null;
   workspaceStatus: WorkspaceDescriptor["status"] | null;
   subagents: SubagentRow[];
   todoItems: TodoEntry[] | null;
+  latestTurnChanges: TurnChangesItem | null;
+  onSelectDockTab: (tab: WorkspaceEnvironmentDockTab) => void;
   onOpenChanges: () => void;
   onOpenSubagent: (agentId: string) => void;
   onCopyResumeCommand: (agentId: string) => void;
@@ -1254,6 +1324,7 @@ type EnvironmentIconName =
   | "location"
   | "locality"
   | "branch"
+  | "browser"
   | "pr"
   | "source"
   | "subagents"
@@ -1268,73 +1339,84 @@ function WorkspaceEnvironmentPanel({
   isLocalDaemon,
   diffStat,
   githubRuntime,
+  browserContext,
+  dockState,
   sourceLabel,
   activeAgent,
   workspaceStatus,
   subagents,
   todoItems,
+  latestTurnChanges,
+  onSelectDockTab,
   onOpenChanges,
   onOpenSubagent,
   onCopyResumeCommand,
 }: WorkspaceEnvironmentPanelProps) {
   const { t } = useTranslation();
-  const [envExpanded, setEnvExpanded] = useState(true);
   const [sourceExpanded, setSourceExpanded] = useState(true);
-  const handleToggleEnv = useCallback(() => setEnvExpanded((v) => !v), []);
   const handleToggleSource = useCallback(() => setSourceExpanded((v) => !v), []);
   const locationLabel = isLocalDaemon
     ? t("workspace.environment.local")
     : t("workspace.environment.remote");
-  const changesValue = diffStat ? (
-    <DiffStat additions={diffStat.additions} deletions={diffStat.deletions} />
-  ) : (
-    <Text style={styles.environmentValueText}>0</Text>
-  );
   const hasSubagents = subagents.length > 0;
   const hasTodos = Boolean(todoItems?.length);
+  const gitSummary = useMemo(
+    () =>
+      buildGitWorkbenchSummary({
+        isGitCheckout,
+        branchName: currentBranchName,
+        diffStat,
+        pullRequest: githubRuntime?.pullRequest ?? null,
+      }),
+    [currentBranchName, diffStat, githubRuntime?.pullRequest, isGitCheckout],
+  );
+  const availableDockTabs = useMemo(
+    () =>
+      resolveDockTabAvailability({
+        hasPullRequest: Boolean(githubRuntime?.pullRequest),
+        hasTasks: hasTodos,
+        hasSubagents,
+        hasBrowserContext: Boolean(browserContext),
+      }),
+    [browserContext, githubRuntime?.pullRequest, hasSubagents, hasTodos],
+  );
+  const effectiveActiveTab = availableDockTabs.includes(dockState.activeTab)
+    ? dockState.activeTab
+    : "git-summary";
 
   return (
     <View style={styles.environmentPanel} testID="workspace-environment-panel">
-      <EnvironmentSectionHeader
-        icon="changes"
-        label={t("workspace.environment.title")}
-        expanded={envExpanded}
-        onPress={handleToggleEnv}
-      >
-        {changesValue}
-      </EnvironmentSectionHeader>
-      {envExpanded ? (
-        <View style={styles.environmentSectionBody}>
-          <EnvironmentActionRow
-            icon="changes"
-            label={t("workspace.environment.changes")}
-            onPress={onOpenChanges}
-            testID="workspace-environment-changes"
-          >
-            {changesValue}
-          </EnvironmentActionRow>
-          <EnvironmentDisplayRow icon="location" label={t("workspace.environment.openLocation")}>
-            <WorkspaceOpenInEditorButton serverId={serverId} cwd={cwd} hideLabels />
-          </EnvironmentDisplayRow>
-          <EnvironmentDisplayRow icon="locality" label={locationLabel} />
-          {isGitCheckout ? (
-            <>
-              <EnvironmentDisplayRow
-                icon="branch"
-                label={currentBranchName ?? t("workspace.environment.branch")}
-              />
-              <WorkspacePullRequestRow githubRuntime={githubRuntime} />
-              <EnvironmentDisplayRow label={t("workspace.environment.commitOrPush")}>
-                <WorkspaceGitActions serverId={serverId} cwd={cwd} hideLabels />
-              </EnvironmentDisplayRow>
-            </>
-          ) : null}
-        </View>
+      <WorkspaceEnvironmentDockTabs
+        activeTab={effectiveActiveTab}
+        tabs={availableDockTabs}
+        onSelectTab={onSelectDockTab}
+      />
+      {effectiveActiveTab === "git-summary" ? (
+        <WorkspaceGitSummaryDockPane
+          serverId={serverId}
+          cwd={cwd}
+          isGitCheckout={isGitCheckout}
+          locationLabel={locationLabel}
+          gitSummary={gitSummary}
+          diffStat={diffStat}
+          latestTurnChanges={latestTurnChanges}
+          onOpenChanges={onOpenChanges}
+        />
       ) : null}
-      {hasSubagents ? (
-        <WorkspaceSubagentsSection rows={subagents} onOpenSubagent={onOpenSubagent} />
+      {effectiveActiveTab === "pull-request" ? (
+        <WorkspacePullRequestDockPane githubRuntime={githubRuntime} />
       ) : null}
-      {hasTodos ? <WorkspaceTodoProgressSection items={todoItems} /> : null}
+      {effectiveActiveTab === "tasks" ? <WorkspaceTodoProgressSection items={todoItems} /> : null}
+      {effectiveActiveTab === "subagents" ? (
+        <WorkspaceSubagentsSection
+          rows={subagents}
+          onOpenSubagent={onOpenSubagent}
+          expandedDefault
+        />
+      ) : null}
+      {effectiveActiveTab === "browser-context" ? (
+        <WorkspaceBrowserContextDockPane browserContext={browserContext} />
+      ) : null}
       <WorkspaceSourceSection
         sourceLabel={sourceLabel}
         expanded={sourceExpanded}
@@ -1346,6 +1428,202 @@ function WorkspaceEnvironmentPanel({
         workspaceStatus={workspaceStatus}
         onCopyResumeCommand={onCopyResumeCommand}
       />
+    </View>
+  );
+}
+
+function WorkspaceEnvironmentDockTabs({
+  tabs,
+  activeTab,
+  onSelectTab,
+}: {
+  tabs: WorkspaceEnvironmentDockTab[];
+  activeTab: WorkspaceEnvironmentDockTab;
+  onSelectTab: (tab: WorkspaceEnvironmentDockTab) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.environmentDockTabs} testID="workspace-environment-dock-tabs">
+      {tabs.map((tab) => {
+        const active = tab === activeTab;
+        return (
+          <WorkspaceEnvironmentDockTabButton
+            key={tab}
+            tab={tab}
+            active={active}
+            label={t(`workspace.environment.dockTabs.${tab}`)}
+            onSelectTab={onSelectTab}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+function WorkspaceEnvironmentDockTabButton({
+  tab,
+  active,
+  label,
+  onSelectTab,
+}: {
+  tab: WorkspaceEnvironmentDockTab;
+  active: boolean;
+  label: string;
+  onSelectTab: (tab: WorkspaceEnvironmentDockTab) => void;
+}) {
+  const accessibilityState = useMemo(() => ({ selected: active }), [active]);
+  const handlePress = useCallback(() => onSelectTab(tab), [onSelectTab, tab]);
+  const tabStyle = useCallback(
+    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
+      styles.environmentDockTab,
+      active && styles.environmentDockTabActive,
+      (hovered || pressed) && !active && styles.environmentDockTabHovered,
+    ],
+    [active],
+  );
+  const textStyle = useMemo(
+    () => [styles.environmentDockTabText, active && styles.environmentDockTabTextActive],
+    [active],
+  );
+
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityLabel={label}
+      accessibilityState={accessibilityState}
+      onPress={handlePress}
+      style={tabStyle}
+      testID={`workspace-environment-dock-tab-${tab}`}
+    >
+      <EnvironmentIcon name={resolveDockTabIcon(tab)} />
+      <Text style={textStyle} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function WorkspaceGitSummaryDockPane({
+  serverId,
+  cwd,
+  isGitCheckout,
+  locationLabel,
+  gitSummary,
+  diffStat,
+  latestTurnChanges,
+  onOpenChanges,
+}: {
+  serverId: string;
+  cwd: string;
+  isGitCheckout: boolean;
+  locationLabel: string;
+  gitSummary: GitWorkbenchSummary;
+  diffStat: WorkspaceDescriptor["diffStat"];
+  latestTurnChanges: TurnChangesItem | null;
+  onOpenChanges: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.environmentSectionBody} testID="workspace-environment-git-summary">
+      <EnvironmentActionRow
+        icon="changes"
+        label={t("workspace.environment.changes")}
+        onPress={onOpenChanges}
+        testID="workspace-environment-changes"
+      >
+        <WorkspaceEnvironmentDiffStat diffStat={diffStat} />
+      </EnvironmentActionRow>
+      <EnvironmentDisplayRow icon="location" label={t("workspace.environment.openLocation")}>
+        <WorkspaceOpenInEditorButton serverId={serverId} cwd={cwd} hideLabels />
+      </EnvironmentDisplayRow>
+      {latestTurnChanges ? (
+        <EnvironmentActionRow
+          icon="changes"
+          label={t("workspace.environment.recentChanges")}
+          onPress={onOpenChanges}
+          testID="workspace-environment-recent-turn-changes"
+        >
+          <Text style={styles.environmentValueText} numberOfLines={1}>
+            {latestTurnChanges.changeSummary}
+          </Text>
+        </EnvironmentActionRow>
+      ) : null}
+      <EnvironmentDisplayRow icon="locality" label={locationLabel}>
+        <EnvironmentPill
+          label={t(`workspace.environment.gitState.${gitSummary.state}`)}
+          tone={gitSummary.state === "dirty" ? "warning" : "success"}
+        />
+      </EnvironmentDisplayRow>
+      {isGitCheckout ? (
+        <>
+          <EnvironmentDisplayRow
+            icon="branch"
+            label={gitSummary.branchLabel ?? t("workspace.environment.branch")}
+          />
+          <EnvironmentDisplayRow icon="changes" label={t("workspace.environment.changedLines")}>
+            <Text style={styles.environmentValueText} numberOfLines={1}>
+              {gitSummary.changeCount}
+            </Text>
+          </EnvironmentDisplayRow>
+          <EnvironmentDisplayRow label={t("workspace.environment.commitOrPush")}>
+            <WorkspaceGitActions serverId={serverId} cwd={cwd} hideLabels />
+          </EnvironmentDisplayRow>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function WorkspaceEnvironmentDiffStat({ diffStat }: { diffStat: WorkspaceDescriptor["diffStat"] }) {
+  if (!diffStat) {
+    return <Text style={styles.environmentValueText}>0</Text>;
+  }
+  return <DiffStat additions={diffStat.additions} deletions={diffStat.deletions} />;
+}
+
+function WorkspacePullRequestDockPane({
+  githubRuntime,
+}: {
+  githubRuntime: WorkspaceDescriptor["githubRuntime"];
+}) {
+  return (
+    <View style={styles.environmentSectionBody} testID="workspace-environment-pr-pane">
+      <WorkspacePullRequestRow githubRuntime={githubRuntime} />
+    </View>
+  );
+}
+
+function WorkspaceBrowserContextDockPane({
+  browserContext,
+}: {
+  browserContext: BrowserContextSummary | null;
+}) {
+  const { t } = useTranslation();
+  if (!browserContext) {
+    return (
+      <View style={styles.environmentSectionBody} testID="workspace-environment-browser-context">
+        <EnvironmentDisplayRow icon="browser" label={t("workspace.environment.noBrowserContext")} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.environmentSectionBody} testID="workspace-environment-browser-context">
+      <EnvironmentDisplayRow icon="browser" label={browserContext.title}>
+        <EnvironmentPill
+          label={
+            browserContext.isLoading
+              ? t("workspace.environment.browserLoading")
+              : t("workspace.environment.browserReady")
+          }
+          tone={browserContext.isLoading ? "warning" : "success"}
+        />
+      </EnvironmentDisplayRow>
+      <EnvironmentDisplayRow icon="location" label={browserContext.subtitle}>
+        <Text style={styles.environmentValueText} numberOfLines={1}>
+          {browserContext.url}
+        </Text>
+      </EnvironmentDisplayRow>
     </View>
   );
 }
@@ -1476,12 +1754,14 @@ function resolveEnvironmentPillStyle(tone: "success" | "warning" | "danger") {
 function WorkspaceSubagentsSection({
   rows,
   onOpenSubagent,
+  expandedDefault = false,
 }: {
   rows: SubagentRow[];
   onOpenSubagent: (agentId: string) => void;
+  expandedDefault?: boolean;
 }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(expandedDefault);
   const handleToggle = useCallback(() => setExpanded((current) => !current), []);
   const visibleRows = useMemo(() => rows.slice(0, ENVIRONMENT_SUBAGENT_ROW_LIMIT), [rows]);
   const hiddenCount = Math.max(0, rows.length - visibleRows.length);
@@ -1861,6 +2141,9 @@ function EnvironmentIcon({ name }: { name: EnvironmentIconName }) {
   if (name === "branch") {
     return <ThemedGitBranch size={15} uniProps={mutedColorMapping} />;
   }
+  if (name === "browser") {
+    return <ThemedGlobe size={15} uniProps={mutedColorMapping} />;
+  }
   if (name === "pr") {
     return <ThemedGitPullRequest size={15} uniProps={mutedColorMapping} />;
   }
@@ -1874,6 +2157,22 @@ function EnvironmentIcon({ name }: { name: EnvironmentIconName }) {
     return <ThemedListTodo size={15} uniProps={mutedColorMapping} />;
   }
   return <ThemedLink2 size={15} uniProps={mutedColorMapping} />;
+}
+
+function resolveDockTabIcon(tab: WorkspaceEnvironmentDockTab): EnvironmentIconName {
+  if (tab === "pull-request") {
+    return "pr";
+  }
+  if (tab === "tasks") {
+    return "todo";
+  }
+  if (tab === "subagents") {
+    return "subagents";
+  }
+  if (tab === "browser-context") {
+    return "browser";
+  }
+  return "changes";
 }
 
 function WorkspaceHeaderRightControls({
@@ -1976,11 +2275,15 @@ function WorkspaceEnvironmentPanelRail({
   isLocalDaemon,
   diffStat,
   githubRuntime,
+  browserContext,
+  dockState,
   sourceLabel,
   activeAgent,
   workspaceStatus,
   subagents,
   todoItems,
+  latestTurnChanges,
+  onSelectDockTab,
   onOpenChanges,
   onOpenSubagent,
   onCopyResumeCommand,
@@ -1994,11 +2297,15 @@ function WorkspaceEnvironmentPanelRail({
   isLocalDaemon: boolean;
   diffStat: WorkspaceDescriptor["diffStat"];
   githubRuntime: WorkspaceDescriptor["githubRuntime"];
+  browserContext: BrowserContextSummary | null;
+  dockState: WorkspaceEnvironmentDockState;
   sourceLabel: string | null;
   activeAgent: Agent | null;
   workspaceStatus: WorkspaceDescriptor["status"] | null;
   subagents: SubagentRow[];
   todoItems: TodoEntry[] | null;
+  latestTurnChanges: TurnChangesItem | null;
+  onSelectDockTab: (tab: WorkspaceEnvironmentDockTab) => void;
   onOpenChanges: () => void;
   onOpenSubagent: (agentId: string) => void;
   onCopyResumeCommand: (agentId: string) => void;
@@ -2020,11 +2327,15 @@ function WorkspaceEnvironmentPanelRail({
         isLocalDaemon={isLocalDaemon}
         diffStat={diffStat}
         githubRuntime={githubRuntime}
+        browserContext={browserContext}
+        dockState={dockState}
         sourceLabel={sourceLabel}
         activeAgent={activeAgent}
         workspaceStatus={workspaceStatus}
         subagents={subagents}
         todoItems={todoItems}
+        latestTurnChanges={latestTurnChanges}
+        onSelectDockTab={onSelectDockTab}
         onOpenChanges={onOpenChanges}
         onOpenSubagent={onOpenSubagent}
         onCopyResumeCommand={onCopyResumeCommand}
@@ -2073,6 +2384,35 @@ function useEnvironmentPanelTodoItems(
       head: session?.agentStreamHead.get(agentId),
       tail: session?.agentStreamTail.get(agentId),
     });
+  });
+}
+
+function findLatestTurnChanges(items: readonly StreamItem[] | null | undefined) {
+  if (!items) {
+    return null;
+  }
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item?.kind === "turn_changes") {
+      return item;
+    }
+  }
+  return null;
+}
+
+function useEnvironmentPanelTurnChanges(
+  serverId: string,
+  agentId: string | null,
+): TurnChangesItem | null {
+  return useSessionStore((state) => {
+    if (!agentId) {
+      return null;
+    }
+    const session = state.sessions[serverId];
+    return (
+      findLatestTurnChanges(session?.agentStreamHead.get(agentId)) ??
+      findLatestTurnChanges(session?.agentStreamTail.get(agentId))
+    );
   });
 }
 
@@ -2513,6 +2853,10 @@ function WorkspaceScreenContent({
   const isMobile = useIsCompactFormFactor();
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const [isEnvironmentPanelVisible, setIsEnvironmentPanelVisible] = useState(true);
+  const [environmentDockState, setEnvironmentDockState] = useState<WorkspaceEnvironmentDockState>({
+    open: true,
+    activeTab: "git-summary",
+  });
 
   const normalizedServerId = useMemo(() => trimNonEmpty(decodeSegment(serverId)) ?? "", [serverId]);
 
@@ -2675,6 +3019,7 @@ function WorkspaceScreenContent({
   const toggleFileExplorerForCheckout = usePanelStore(
     (state) => state.toggleFileExplorerForCheckout,
   );
+  const closeDesktopFileExplorer = usePanelStore((state) => state.closeDesktopFileExplorer);
   const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
   const isLocalDaemon = useIsLocalDaemon(normalizedServerId);
@@ -2711,7 +3056,13 @@ function WorkspaceScreenContent({
   }, [activeExplorerCheckout, isMobile, toggleFileExplorerForCheckout]);
 
   const handleToggleEnvironmentPanel = useCallback(() => {
-    setIsEnvironmentPanelVisible((visible) => !visible);
+    setIsEnvironmentPanelVisible((visible) => {
+      const nextVisible = !visible;
+      if (nextVisible) {
+        setEnvironmentDockState((state) => ({ ...state, open: true }));
+      }
+      return nextVisible;
+    });
   }, []);
 
   const handleOpenEnvironmentChanges = useCallback(() => {
@@ -2777,6 +3128,7 @@ function WorkspaceScreenContent({
     [workspaceLayout],
   );
   useSyncWorkspaceActiveBrowser({ workspaceLayout, isRouteFocused });
+  const environmentBrowserContext = useWorkspaceBrowserContextSummary({ workspaceLayout });
   const openWorkspaceTabInBackground = useWorkspaceLayoutStore(
     (state) => state.openTabInBackground,
   );
@@ -2848,6 +3200,10 @@ function WorkspaceScreenContent({
     parentAgentId: focusedPaneAgentId ?? "",
   });
   const environmentTodoItems = useEnvironmentPanelTodoItems(normalizedServerId, focusedPaneAgentId);
+  const environmentTurnChanges = useEnvironmentPanelTurnChanges(
+    normalizedServerId,
+    focusedPaneAgentId,
+  );
 
   useEffect(() => {
     if (!isRouteFocused) {
@@ -3328,6 +3684,145 @@ function WorkspaceScreenContent({
     [handleCreateDraftTab, persistenceKey, splitWorkspacePaneEmpty],
   );
 
+  const handleOpenWorkspaceDockPane = useCallback(
+    (pane: WorkspaceEnvironmentDockTab) => {
+      setEnvironmentDockState((state) =>
+        resolveDockStateAfterAction(state, { type: "openDockPane", pane }),
+      );
+      setIsEnvironmentPanelVisible(true);
+      if (!isMobile) {
+        closeDesktopFileExplorer();
+      }
+    },
+    [closeDesktopFileExplorer, isMobile],
+  );
+
+  const handleApplyWorkspaceDockCommand = useCallback(
+    (
+      command: Extract<
+        WorkspacePaneCommand,
+        { type: "openDockPane" | "toggleDockPane" | "openGitSummary" }
+      >,
+    ) => {
+      let nextOpen = true;
+      setEnvironmentDockState((state) => {
+        const nextState = resolveDockStateAfterAction(state, command);
+        nextOpen = nextState.open;
+        return nextState;
+      });
+      setIsEnvironmentPanelVisible(nextOpen);
+      if (nextOpen && !isMobile) {
+        closeDesktopFileExplorer();
+      }
+    },
+    [closeDesktopFileExplorer, isMobile],
+  );
+
+  const handleOpenTargetInPanePlacement = useCallback(
+    (
+      targetKind: Extract<WorkspacePaneCommand, { type: "openTarget" }>["targetKind"],
+      placement: "current" | "new-tab" | "right" | "down",
+    ) => {
+      if (targetKind === "diff") {
+        handleOpenEnvironmentChanges();
+        return;
+      }
+      if (targetKind === "pull-request") {
+        handleOpenWorkspaceDockPane("pull-request");
+        return;
+      }
+      if (targetKind !== "browser" && targetKind !== "terminal") {
+        return;
+      }
+
+      if (!persistenceKey) {
+        return;
+      }
+
+      let targetPaneId: string | undefined;
+      if (placement === "right" || placement === "down") {
+        const focusedPane = focusedPaneTabState.pane;
+        if (!focusedPane) {
+          return;
+        }
+        const paneId = splitWorkspacePaneEmpty(persistenceKey, {
+          targetPaneId: focusedPane.id,
+          position: placement === "right" ? "right" : "bottom",
+        });
+        if (!paneId) {
+          return;
+        }
+        targetPaneId = paneId;
+      }
+
+      if (targetKind === "terminal") {
+        handleCreateTerminal(targetPaneId ? { paneId: targetPaneId } : undefined);
+        return;
+      }
+
+      if (!getIsElectron()) {
+        return;
+      }
+      const { browserId } = createWorkspaceBrowser();
+      const target = { kind: "browser" as const, browserId };
+      if (targetPaneId) {
+        focusWorkspacePane(persistenceKey, targetPaneId);
+      }
+      if (placement === "new-tab") {
+        openWorkspaceTabInBackground(persistenceKey, target);
+        return;
+      }
+      openWorkspaceTabFocused(persistenceKey, target);
+    },
+    [
+      focusedPaneTabState.pane,
+      focusWorkspacePane,
+      handleCreateTerminal,
+      handleOpenEnvironmentChanges,
+      handleOpenWorkspaceDockPane,
+      openWorkspaceTabFocused,
+      openWorkspaceTabInBackground,
+      persistenceKey,
+      splitWorkspacePaneEmpty,
+    ],
+  );
+
+  const handleExecuteWorkspacePaneCommand = useCallback(
+    (command: WorkspacePaneCommand) => {
+      if (
+        command.type === "openDockPane" ||
+        command.type === "toggleDockPane" ||
+        command.type === "openGitSummary"
+      ) {
+        handleApplyWorkspaceDockCommand(command);
+        return;
+      }
+      if (command.type === "moveTabToDock") {
+        return;
+      }
+      const resolution = resolveWorkspacePaneCommand(command);
+      if (resolution.placement === "dock") {
+        handleOpenWorkspaceDockPane(resolution.dockPane);
+        return;
+      }
+      handleOpenTargetInPanePlacement(resolution.targetKind, resolution.placement);
+    },
+    [handleApplyWorkspaceDockCommand, handleOpenTargetInPanePlacement, handleOpenWorkspaceDockPane],
+  );
+  const handleOpenGitDock = useCallback(() => {
+    handleExecuteWorkspacePaneCommand({ type: "openGitSummary" });
+  }, [handleExecuteWorkspacePaneCommand]);
+  const handleOpenBrowserContextDock = useCallback(() => {
+    handleExecuteWorkspacePaneCommand({
+      type: "openTarget",
+      targetKind: "browser",
+      placement: "dock",
+    });
+  }, [handleExecuteWorkspacePaneCommand]);
+  const handleOpenPullRequestDock = useCallback(() => {
+    handleOpenWorkspaceDockPane("pull-request");
+  }, [handleOpenWorkspaceDockPane]);
+
   const killTerminalAsync = killTerminalMutation.mutateAsync;
 
   const handleCloseTerminalTab = useCallback(
@@ -3784,6 +4279,25 @@ function WorkspaceScreenContent({
     [handleToggleExplorer],
   );
 
+  const handleWorkspaceDockAction = useCallback(
+    (action: KeyboardActionDefinition): boolean => {
+      if (action.id === "workspace.dock.git.open") {
+        handleOpenGitDock();
+        return true;
+      }
+      if (action.id === "workspace.dock.browser.open") {
+        handleOpenBrowserContextDock();
+        return true;
+      }
+      if (action.id === "workspace.dock.pr.open") {
+        handleOpenPullRequestDock();
+        return true;
+      }
+      return false;
+    },
+    [handleOpenBrowserContextDock, handleOpenGitDock, handleOpenPullRequestDock],
+  );
+
   const handleWorkspacePaneAction = useCallback(
     (action: KeyboardActionDefinition): boolean => {
       if (!persistenceKey || !workspaceLayout) {
@@ -3897,6 +4411,19 @@ function WorkspaceScreenContent({
     priority: 100,
     isActive: () => true,
     handle: handleWorkspacePaneAction,
+  });
+
+  useKeyboardActionHandler({
+    handlerId: `workspace-dock-actions:${normalizedServerId}:${normalizedWorkspaceId}`,
+    actions: [
+      "workspace.dock.git.open",
+      "workspace.dock.browser.open",
+      "workspace.dock.pr.open",
+    ] as const,
+    enabled: Boolean(isRouteFocused && normalizedServerId && normalizedWorkspaceId),
+    priority: 100,
+    isActive: () => true,
+    handle: handleWorkspaceDockAction,
   });
 
   useKeyboardActionHandler({
@@ -4302,9 +4829,13 @@ function WorkspaceScreenContent({
                 menuImportIcon={MENU_IMPORT_ICON}
                 menuCopyIcon={menuCopyIcon}
                 menuSettingsIcon={menuSettingsIcon}
+                menuGitDockIcon={MENU_GIT_DOCK_ICON}
+                menuBrowserContextIcon={MENU_BROWSER_CONTEXT_ICON}
                 onCreateDraftTab={handleCreateDraftTab}
                 onCreateTerminal={handleCreateTerminal}
                 onCreateBrowser={handleCreateBrowserTab}
+                onOpenGitDock={handleOpenGitDock}
+                onOpenBrowserContextDock={handleOpenBrowserContextDock}
                 onOpenImportSheet={openImportSheet}
                 onCopyWorkspacePath={handleCopyWorkspacePath}
                 onCopyBranchName={handleCopyBranchName}
@@ -4412,11 +4943,15 @@ function WorkspaceScreenContent({
               isLocalDaemon={isLocalDaemon}
               diffStat={workspaceDescriptor?.diffStat ?? null}
               githubRuntime={workspaceDescriptor?.githubRuntime}
+              browserContext={environmentBrowserContext}
+              dockState={environmentDockState}
               sourceLabel={environmentSourceLabel}
               activeAgent={environmentPanelAgent}
               workspaceStatus={environmentWorkspaceStatus}
               subagents={environmentSubagents}
               todoItems={environmentTodoItems}
+              latestTurnChanges={environmentTurnChanges}
+              onSelectDockTab={handleOpenWorkspaceDockPane}
               onOpenChanges={handleOpenEnvironmentChanges}
               onOpenSubagent={handleOpenEnvironmentSubagent}
               onCopyResumeCommand={handleCopyResumeCommand}
@@ -4572,6 +5107,39 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentPanel: {
     gap: theme.spacing[2],
+  },
+  environmentDockTabs: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[1],
+    paddingBottom: theme.spacing[1],
+  },
+  environmentDockTab: {
+    minHeight: 30,
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[1],
+  },
+  environmentDockTabActive: {
+    backgroundColor: theme.colors.surface2,
+  },
+  environmentDockTabHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  environmentDockTabText: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  environmentDockTabTextActive: {
+    color: theme.colors.foreground,
   },
   environmentRail: {
     width: WORKSPACE_ENVIRONMENT_PANEL_WIDTH,

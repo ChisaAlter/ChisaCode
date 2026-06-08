@@ -559,6 +559,18 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, z.ZodT
       trigger: z.enum(["auto", "manual"]).optional(),
       preTokens: z.number().optional(),
     }),
+    z.object({
+      type: z.literal("turn_changes"),
+      changeSummary: z.string(),
+      changedFiles: z.array(
+        z.object({
+          path: z.string(),
+          additions: z.number().optional(),
+          deletions: z.number().optional(),
+        }),
+      ),
+      checkpointRef: z.string().optional(),
+    }),
   ]);
 
 export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [

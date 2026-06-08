@@ -225,6 +225,18 @@ describe("keyboard-shortcuts", () => {
       action: "command-center.toggle",
     },
     {
+      name: "matches Cmd+Shift+G to open Git dock on macOS desktop",
+      event: { key: "G", code: "KeyG", metaKey: true, shiftKey: true },
+      context: { isMac: true, isDesktop: true },
+      action: "workspace.dock.git.open",
+    },
+    {
+      name: "matches Ctrl+Shift+B to open browser dock on non-mac desktop",
+      event: { key: "B", code: "KeyB", ctrlKey: true, shiftKey: true },
+      context: { isMac: false, isDesktop: true },
+      action: "workspace.dock.browser.open",
+    },
+    {
       name: "matches Cmd+Backslash to split pane right on macOS",
       event: { key: "\\", code: "Backslash", metaKey: true },
       context: { isMac: true },
