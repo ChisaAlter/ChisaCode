@@ -50,7 +50,8 @@ export type StreamItem =
   | ToolCallItem
   | TodoListItem
   | ActivityLogItem
-  | CompactionItem;
+  | CompactionItem
+  | TurnChangesItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -153,6 +154,21 @@ export interface CompactionItem {
   status: "loading" | "completed";
   trigger?: "auto" | "manual";
   preTokens?: number;
+}
+
+export interface ChangedFileEntry {
+  path: string;
+  additions?: number;
+  deletions?: number;
+}
+
+export interface TurnChangesItem {
+  kind: "turn_changes";
+  id: string;
+  timestamp: Date;
+  changeSummary: string;
+  changedFiles: ChangedFileEntry[];
+  checkpointRef?: string;
 }
 
 export interface TodoEntry {
@@ -786,6 +802,22 @@ function reduceTimelineEvent(
     }
     case "compaction":
       return finalizeActiveThoughts(reduceTimelineCompaction(state, item, timestamp));
+    case "turn_changes": {
+      const finalizedState = finalizeActiveThoughts(state);
+      const turnChangesItem = {
+        kind: "turn_changes",
+        id: createUniqueTimelineId(finalizedState, "turn_changes", item.changeSummary, timestamp),
+        timestamp,
+        changeSummary: item.changeSummary,
+        changedFiles: item.changedFiles.map((f) => ({
+          path: f.path,
+          ...(f.additions != null ? { additions: f.additions } : {}),
+          ...(f.deletions != null ? { deletions: f.deletions } : {}),
+        })),
+        ...(item.checkpointRef ? { checkpointRef: item.checkpointRef } : {}),
+      } as TurnChangesItem;
+      return [...finalizedState, turnChangesItem];
+    }
     default:
       return state;
   }
@@ -883,6 +915,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "todo_list";
     case "error":
       return "activity_log";
+    case "turn_changes":
+      return "turn_changes";
     default:
       return null;
   }

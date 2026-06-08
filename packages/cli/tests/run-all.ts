@@ -130,7 +130,10 @@ async function writeJsonSummary({
 console.log("🧪 ChisaCode CLI E2E Test Runner\n");
 console.log("=".repeat(50));
 
-type TestEntry = { kind: "script" | "vitest"; file: string };
+interface TestEntry {
+  kind: "script" | "vitest";
+  file: string;
+}
 
 async function collectTestFiles(dir: string, baseDir = dir): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });

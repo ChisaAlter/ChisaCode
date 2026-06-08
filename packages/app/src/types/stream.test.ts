@@ -99,6 +99,18 @@ function todoTimeline(items: { text: string; completed: boolean }[]): AgentStrea
   };
 }
 
+function turnChangesTimeline(changeSummary: string): AgentStreamEventPayload {
+  return {
+    type: "timeline",
+    provider: "codex",
+    item: {
+      type: "turn_changes",
+      changeSummary,
+      changedFiles: [{ path: "packages/app/src/types/stream.ts", additions: 1 }],
+    },
+  };
+}
+
 function findToolByCallId(state: StreamItem[], callId: string): AgentToolCallItem | undefined {
   return state.find(
     (item): item is AgentToolCallItem =>
@@ -849,6 +861,91 @@ describe("stream reducer canonical tool calls", () => {
 });
 
 describe("turn lifecycle events", () => {
+  it("materializes turn changes timeline items", () => {
+    const timestamp = new Date("2025-01-01T11:59:00Z");
+    const state = reduceStreamUpdate(
+      [],
+      {
+        type: "timeline",
+        provider: "codex",
+        item: {
+          type: "turn_changes",
+          changeSummary: "Updated workspace dock behavior",
+          changedFiles: [
+            { path: "packages/app/src/screens/workspace/workspace-screen.tsx", additions: 12 },
+            { path: "packages/app/src/types/stream.ts", deletions: 2 },
+          ],
+          checkpointRef: "checkpoint-1",
+        },
+      },
+      timestamp,
+    );
+
+    const item = state[0];
+    assert.equal(item?.kind, "turn_changes");
+    if (!item || item.kind !== "turn_changes") {
+      throw new Error("Turn changes item missing");
+    }
+    assert.equal(item.changeSummary, "Updated workspace dock behavior");
+    assert.deepEqual(item.changedFiles, [
+      { path: "packages/app/src/screens/workspace/workspace-screen.tsx", additions: 12 },
+      { path: "packages/app/src/types/stream.ts", deletions: 2 },
+    ]);
+    assert.equal(item.checkpointRef, "checkpoint-1");
+  });
+
+  it("flushes active assistant head before appending turn changes to tail", () => {
+    const assistant: StreamItem = {
+      kind: "assistant_message",
+      id: "assistant-head",
+      text: "Working",
+      timestamp: new Date("2025-01-01T11:58:59Z"),
+    };
+
+    const result = applyStreamEvent({
+      tail: [],
+      head: [assistant],
+      event: turnChangesTimeline("Updated workspace dock behavior"),
+      timestamp: new Date("2025-01-01T11:59:00Z"),
+      source: "live",
+    });
+
+    assert.deepStrictEqual(result.head, []);
+    assert.deepStrictEqual(
+      result.tail.map((item) => item.kind),
+      ["assistant_message", "turn_changes"],
+    );
+    assert.strictEqual(result.tail[0]?.id, "assistant-head");
+    assert.strictEqual(
+      result.tail[1]?.kind === "turn_changes" ? result.tail[1].changeSummary : null,
+      "Updated workspace dock behavior",
+    );
+  });
+
+  it("marks active reasoning ready before appending turn changes", () => {
+    const state = reduceStreamUpdate(
+      [
+        {
+          kind: "thought",
+          id: "thought-1",
+          text: "Inspecting changes",
+          timestamp: new Date("2025-01-01T11:58:59Z"),
+          status: "loading",
+        },
+      ],
+      turnChangesTimeline("Updated stream handling"),
+      new Date("2025-01-01T11:59:00Z"),
+    );
+
+    assert.deepStrictEqual(
+      state.map((item) => item.kind),
+      ["thought", "turn_changes"],
+    );
+    const thought = state[0];
+    invariant(thought?.kind === "thought");
+    assert.strictEqual(thought.status, "ready");
+  });
+
   it("finalizes active stream items without adding timeline rows", () => {
     const startedAt = new Date("2025-01-01T12:00:00Z");
     const completedAt = new Date("2025-01-01T12:00:05Z");

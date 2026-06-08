@@ -24,6 +24,9 @@ export type KeyboardActionId =
   | "workspace.pane.move-tab.up"
   | "workspace.pane.move-tab.down"
   | "workspace.pane.close"
+  | "workspace.dock.git.open"
+  | "workspace.dock.browser.open"
+  | "workspace.dock.pr.open"
   | "workspace.terminal.new"
   | "workspace.changes.open"
   | "workspace.environment.toggle"
@@ -56,6 +59,9 @@ export type KeyboardActionDefinition =
   | { id: "workspace.pane.move-tab.up"; scope: KeyboardActionScope }
   | { id: "workspace.pane.move-tab.down"; scope: KeyboardActionScope }
   | { id: "workspace.pane.close"; scope: KeyboardActionScope }
+  | { id: "workspace.dock.git.open"; scope: KeyboardActionScope }
+  | { id: "workspace.dock.browser.open"; scope: KeyboardActionScope }
+  | { id: "workspace.dock.pr.open"; scope: KeyboardActionScope }
   | { id: "workspace.terminal.new"; scope: KeyboardActionScope }
   | { id: "workspace.changes.open"; scope: KeyboardActionScope }
   | { id: "workspace.environment.toggle"; scope: KeyboardActionScope }
