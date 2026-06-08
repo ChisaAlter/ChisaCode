@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { deriveProjectDisplayName, deriveRemoteProjectKey, groupAgents } from "./agent-grouping";
+import {
+  deriveDateGroup,
+  deriveProjectDisplayName,
+  deriveRemoteProjectKey,
+  groupAgents,
+  parseRepoNameFromRemoteUrl,
+  parseRepoShortNameFromRemoteUrl,
+} from "./agent-grouping";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 
 function makeAgent(overrides: Partial<AggregatedAgent> = {}): AggregatedAgent {
@@ -30,6 +37,18 @@ describe("deriveRemoteProjectKey", () => {
   it("includes host for non-GitHub remotes", () => {
     const gitlab = "git@gitlab.example.com:group/repo.git";
     expect(deriveRemoteProjectKey(gitlab)).toBe("remote:gitlab.example.com/group/repo");
+  });
+
+  it("normalizes GitHub path casing for stable grouping", () => {
+    expect(deriveRemoteProjectKey("https://github.com/Owner/Repo.git")).toBe(
+      "remote:github.com/owner/repo",
+    );
+  });
+
+  it("ignores query and hash suffixes when deriving remote keys", () => {
+    expect(deriveRemoteProjectKey("git@gitlab.example.com:group/repo.git?ref=main#readme")).toBe(
+      "remote:gitlab.example.com/group/repo",
+    );
   });
 });
 
@@ -62,6 +81,27 @@ describe("deriveProjectDisplayName", () => {
   });
 });
 
+describe("repo name parsing", () => {
+  it("strips query, hash, and .git suffix from repo display names", () => {
+    expect(parseRepoNameFromRemoteUrl("https://github.com/Owner/Repo.git?ref=main#readme")).toBe(
+      "Owner/Repo",
+    );
+    expect(parseRepoNameFromRemoteUrl("git@github.com:Owner/Repo.git?ref=main#readme")).toBe(
+      "Owner/Repo",
+    );
+  });
+
+  it("derives short repo names from cleaned remote URLs", () => {
+    expect(parseRepoShortNameFromRemoteUrl("https://github.com/Owner/Repo.git/")).toBe("Repo");
+  });
+});
+
+describe("deriveDateGroup", () => {
+  it("places invalid activity dates in the oldest bucket", () => {
+    expect(deriveDateGroup(new Date(Number.NaN))).toBe("更早");
+  });
+});
+
 describe("groupAgents", () => {
   it("groups active agents by remote URL when available", () => {
     const agents = [
@@ -88,5 +128,25 @@ describe("groupAgents", () => {
     });
 
     expect(activeGroups).toHaveLength(2);
+  });
+
+  it("does not treat invalid activity timestamps as recently active", () => {
+    const { activeGroups, inactiveGroups } = groupAgents([
+      makeAgent({
+        id: "invalid",
+        status: "closed",
+        lastActivityAt: new Date(Number.NaN),
+      }),
+      makeAgent({
+        id: "old",
+        status: "closed",
+        lastActivityAt: new Date("2020-01-01T00:00:00.000Z"),
+      }),
+    ]);
+
+    expect(activeGroups).toHaveLength(0);
+    expect(
+      inactiveGroups.find((group) => group.label === "更早")?.agents.map((agent) => agent.id),
+    ).toEqual(["old", "invalid"]);
   });
 });

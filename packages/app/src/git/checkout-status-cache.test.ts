@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { CheckoutStatusUpdate } from "@chisacode/protocol/messages";
-import { checkoutStatusQueryKey } from "@/git/query-keys";
+import { checkoutStatusQueryKey, normalizeCheckoutCwd } from "@/git/query-keys";
 import {
   applyCheckoutStatusUpdate,
   type CheckoutStatusPayload,
@@ -42,6 +42,11 @@ function createQueryClient(): QueryClient {
 }
 
 describe("peekOrFetchCheckoutStatus", () => {
+  it("normalizes checkout cwd cache keys", () => {
+    expect(normalizeCheckoutCwd(" C:\\repo\\ ")).toBe("C:/repo");
+    expect(normalizeCheckoutCwd("/repo/")).toBe("/repo");
+  });
+
   it("fetches from the client and writes the result to the cache on a cold read", async () => {
     const queryClient = createQueryClient();
     const fetched = checkoutStatus({ requestId: "cold-read" });
@@ -63,6 +68,25 @@ describe("peekOrFetchCheckoutStatus", () => {
     };
 
     const result = await peekOrFetchCheckoutStatus({ queryClient, client, serverId, cwd });
+
+    expect(result).toEqual(cached);
+    expect(client.getCheckoutStatus).not.toHaveBeenCalled();
+  });
+
+  it("returns cached snapshots across equivalent cwd spellings", async () => {
+    const queryClient = createQueryClient();
+    const cached = checkoutStatus({ requestId: "cached-normalized" });
+    queryClient.setQueryData(checkoutStatusQueryKey(serverId, "/repo"), cached);
+    const client = {
+      getCheckoutStatus: vi.fn(async () => checkoutStatus({ requestId: "uncached" })),
+    };
+
+    const result = await peekOrFetchCheckoutStatus({
+      queryClient,
+      client,
+      serverId,
+      cwd: "/repo/",
+    });
 
     expect(result).toEqual(cached);
     expect(client.getCheckoutStatus).not.toHaveBeenCalled();
@@ -120,5 +144,24 @@ describe("applyCheckoutStatusUpdate", () => {
     expect(queryClient.getQueryData(checkoutStatusQueryKey(serverId, otherCwd))).toEqual(
       otherCached,
     );
+  });
+
+  it("applies updates across equivalent cwd spellings", () => {
+    const queryClient = createQueryClient();
+    const pushed = checkoutStatus({
+      cwd: "C:\\repo\\",
+      repoRoot: "C:\\repo\\",
+      requestId: "server-push-normalized",
+      currentBranch: "feature",
+    });
+
+    applyCheckoutStatusUpdate({
+      queryClient,
+      serverId,
+      cwd: "C:/repo",
+      message: checkoutStatusUpdate(pushed),
+    });
+
+    expect(queryClient.getQueryData(checkoutStatusQueryKey(serverId, "C:/repo"))).toEqual(pushed);
   });
 });

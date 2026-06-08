@@ -1,5 +1,15 @@
 import { router, usePathname } from "expo-router";
-import { FolderPlus, Home, MessagesSquare, Settings, X } from "lucide-react-native";
+import {
+  FolderPlus,
+  GitCompare,
+  Home,
+  MessageSquareText,
+  MessagesSquare,
+  PanelLeftClose,
+  Settings,
+  SquareTerminal,
+  X,
+} from "lucide-react-native";
 import {
   type Dispatch,
   memo,
@@ -24,6 +34,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  createAnimatedComponent,
   Extrapolation,
   interpolate,
   runOnJS,
@@ -44,6 +55,7 @@ import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import {
   MAX_SIDEBAR_WIDTH,
@@ -55,16 +67,28 @@ import { resolveActiveHost } from "@/utils/active-host";
 import { formatConnectionStatus } from "@/utils/daemons";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import {
+  buildMobileSidebarQuickActionButtons,
+  buildMobileSidebarQuickActionModel,
+  resolveMobileSidebarQuickActionAgentLabel,
+  resolveMobileSidebarQuickActionAgentTarget,
+  selectMobileSidebarQuickActionAgent,
+  type MobileSidebarQuickActionButtonModel,
+  type MobileSidebarQuickActionId,
+} from "@/utils/mobile-sidebar-quick-actions";
+import { getMobileSidebarWidth } from "@/utils/sidebar-animation-state";
+import {
   buildHostOpenProjectRoute,
   buildHostSessionsRoute,
   buildSettingsRoute,
   mapPathnameToServer,
 } from "@/utils/host-routes";
+import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarSessionList } from "./sidebar-session-list";
 
 const MIN_CHAT_WIDTH = 400;
+const AnimatedPressable = createAnimatedComponent(Pressable);
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 
@@ -382,8 +406,12 @@ function FooterIconButton({
   theme: SidebarTheme;
   variant?: "mobile" | "desktop";
 }) {
-  const buttonStyle = useMemo(
-    () => [styles.footerIconButton, variant === "desktop" && styles.desktopFooterIconButton],
+  const buttonStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.footerIconButton,
+      variant === "desktop" && styles.desktopFooterIconButton,
+      (hovered || pressed) && styles.footerIconButtonHovered,
+    ],
     [variant],
   );
   return (
@@ -412,9 +440,10 @@ function AddProjectTooltipContent({
 }: {
   newAgentKeys: ReturnType<typeof useShortcutKeys>;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.tooltipRow}>
-      <Text style={styles.tooltipText}>添加项目</Text>
+      <Text style={styles.tooltipText}>{t("sidebar.addProject")}</Text>
       {newAgentKeys ? <Shortcut chord={newAgentKeys} /> : null}
     </View>
   );
@@ -478,7 +507,7 @@ function SidebarFooter({
             <FooterIconButton
               onPress={handleOpenProject}
               testID="sidebar-add-project"
-              accessibilityLabel="添加项目"
+              accessibilityLabel={t("sidebar.addProject")}
               icon={FolderPlus}
               theme={theme}
               variant={variant}
@@ -491,7 +520,7 @@ function SidebarFooter({
         <FooterIconButton
           onPress={handleHome}
           testID="sidebar-home"
-          accessibilityLabel="首页"
+          accessibilityLabel={t("sidebar.home")}
           icon={Home}
           theme={theme}
           variant={variant}
@@ -499,7 +528,7 @@ function SidebarFooter({
         <FooterIconButton
           onPress={handleSettings}
           testID="sidebar-settings"
-          accessibilityLabel="设置"
+          accessibilityLabel={t("sidebar.settings")}
           icon={Settings}
           theme={theme}
           variant={variant}
@@ -512,13 +541,176 @@ function SidebarFooter({
         renderOption={renderHostOption}
         searchable={false}
         title={t("host.switchHost")}
-        searchPlaceholder="搜索主机..."
+        searchPlaceholder={t("sidebar.searchHosts")}
         desktopMinWidth={280}
         open={isHostPickerOpen}
         onOpenChange={setIsHostPickerOpen}
         anchorRef={hostTriggerRef}
       />
     </View>
+  );
+}
+
+function MobileSidebarQuickActions({
+  agent,
+  buttons,
+  theme,
+  onOpenAgent,
+  onViewChanges,
+  onOpenTerminal,
+  onViewMore,
+  onClose,
+}: {
+  agent: SidebarSharedProps["agents"][number] | null;
+  buttons: MobileSidebarQuickActionButtonModel[];
+  theme: SidebarTheme;
+  onOpenAgent: () => void;
+  onViewChanges: () => void;
+  onOpenTerminal: () => void;
+  onViewMore: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!agent) {
+    return null;
+  }
+  const agentLabel = resolveMobileSidebarQuickActionAgentLabel(agent);
+  const actions = {
+    resume: {
+      icon: MessageSquareText,
+      label: t("sidebar.resumeSession"),
+      accessibilityLabel: t("sidebar.resumeSessionLabel", { title: agentLabel }),
+      testID: "mobile-sidebar-quick-resume",
+      onPress: onOpenAgent,
+    },
+    changes: {
+      icon: GitCompare,
+      label: t("sidebar.viewChanges"),
+      accessibilityLabel: t("sidebar.viewChangesLabel", { title: agentLabel }),
+      testID: "mobile-sidebar-quick-changes",
+      onPress: onViewChanges,
+    },
+    terminal: {
+      icon: SquareTerminal,
+      label: t("sidebar.openTerminal"),
+      accessibilityLabel: t("sidebar.openTerminalLabel", { title: agentLabel }),
+      testID: "mobile-sidebar-quick-terminal",
+      onPress: onOpenTerminal,
+    },
+    sessions: {
+      icon: MessagesSquare,
+      label: t("sidebar.allSessions"),
+      accessibilityLabel: t("sidebar.allSessionsLabel", { title: agentLabel }),
+      testID: "mobile-sidebar-quick-sessions",
+      onPress: onViewMore,
+    },
+    close: {
+      icon: PanelLeftClose,
+      label: t("sidebar.closeSidebar"),
+      accessibilityLabel: t("sidebar.closeSidebar"),
+      testID: "mobile-sidebar-quick-close",
+      onPress: onClose,
+    },
+  } satisfies Record<
+    MobileSidebarQuickActionId,
+    {
+      icon: typeof FolderPlus;
+      label: string;
+      accessibilityLabel: string;
+      testID: string;
+      onPress: () => void;
+    }
+  >;
+
+  return (
+    <View style={styles.mobileQuickActions} testID="mobile-sidebar-quick-actions">
+      <View style={styles.mobileQuickActionsTextGroup}>
+        <Text style={styles.mobileQuickActionsLabel}>{t("sidebar.currentFocus")}</Text>
+        <Text style={styles.mobileQuickActionsTitle} numberOfLines={1}>
+          {agentLabel}
+        </Text>
+      </View>
+      <View style={styles.mobileQuickActionsButtons}>
+        {buttons.map((button) => {
+          const action = actions[button.id];
+          return (
+            <MobileQuickActionButton
+              key={button.id}
+              icon={action.icon}
+              label={action.label}
+              accessibilityLabel={action.accessibilityLabel}
+              testID={action.testID}
+              theme={theme}
+              variant={button.variant}
+              onPress={action.onPress}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function MobileQuickActionButton({
+  icon: Icon,
+  label,
+  accessibilityLabel,
+  testID,
+  theme,
+  variant = "secondary",
+  onPress,
+}: {
+  icon: typeof FolderPlus;
+  label: string;
+  accessibilityLabel?: string;
+  testID: string;
+  theme: SidebarTheme;
+  variant?: "primary" | "secondary";
+  onPress: () => void;
+}) {
+  const resolveIconColor = useCallback(
+    (hovered?: boolean, pressed?: boolean) =>
+      variant === "primary" || hovered || pressed
+        ? theme.colors.foreground
+        : theme.colors.foregroundMuted,
+    [theme.colors.foreground, theme.colors.foregroundMuted, variant],
+  );
+  const buttonStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.mobileQuickActionButton,
+      variant === "primary" && styles.mobileQuickActionPrimaryButton,
+      variant === "secondary" && styles.mobileQuickActionSecondaryButton,
+      (hovered || pressed) && styles.mobileQuickActionButtonHovered,
+    ],
+    [variant],
+  );
+  const textStyle = useMemo(
+    () => [
+      styles.mobileQuickActionText,
+      variant === "primary" && styles.mobileQuickActionPrimaryText,
+    ],
+    [variant],
+  );
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      onPress={onPress}
+      style={buttonStyle}
+      testID={testID}
+    >
+      {({ hovered, pressed }) => (
+        <>
+          <View style={styles.mobileQuickActionIcon}>
+            <Icon size={theme.iconSize.sm} color={resolveIconColor(hovered, pressed)} />
+          </View>
+          <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
+            {label}
+          </Text>
+        </>
+      )}
+    </Pressable>
   );
 }
 
@@ -551,6 +743,7 @@ function MobileSidebar({
   closeToAgent,
   handleViewMoreNavigate,
 }: MobileSidebarProps) {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const isSessionsActive = pathname.includes("/sessions");
   const {
@@ -563,6 +756,7 @@ function MobileSidebar({
     gestureAnimatingRef,
     closeGestureRef,
   } = useSidebarAnimation();
+  const mobileSidebarWidth = useMemo(() => getMobileSidebarWidth(windowWidth), [windowWidth]);
   const closeTouchStartX = useSharedValue(0);
   const closeTouchStartY = useSharedValue(0);
 
@@ -575,7 +769,7 @@ function MobileSidebar({
     if (!activeServerId) {
       return;
     }
-    translateX.value = -windowWidth;
+    translateX.value = -mobileSidebarWidth;
     backdropOpacity.value = 0;
     closeToAgent();
     handleViewMoreNavigate();
@@ -585,12 +779,88 @@ function MobileSidebar({
     closeToAgent,
     handleViewMoreNavigate,
     translateX,
-    windowWidth,
+    mobileSidebarWidth,
   ]);
 
   const handleAgentPress = useCallback(() => {
     closeToAgent();
   }, [closeToAgent]);
+  const quickActionAgent = useMemo(() => {
+    return selectMobileSidebarQuickActionAgent(agents, selectedAgentId, activeServerId);
+  }, [activeServerId, agents, selectedAgentId]);
+  const quickActionAgentTarget = useMemo(
+    () => resolveMobileSidebarQuickActionAgentTarget(quickActionAgent),
+    [quickActionAgent],
+  );
+  const quickActionWorkspaceId = useResolveWorkspaceIdByCwd(
+    quickActionAgentTarget?.serverId ?? activeServerId,
+    quickActionAgent?.cwd,
+  );
+  const quickActionProjectKind = useWorkspaceFields(
+    quickActionAgentTarget?.serverId ?? activeServerId,
+    quickActionWorkspaceId,
+    (workspace) => workspace.projectKind,
+  );
+  const quickActionModel = useMemo(
+    () =>
+      buildMobileSidebarQuickActionModel({
+        serverId: quickActionAgentTarget?.serverId ?? activeServerId,
+        workspaceId: quickActionWorkspaceId,
+        projectKind: quickActionProjectKind,
+      }),
+    [
+      activeServerId,
+      quickActionAgentTarget?.serverId,
+      quickActionProjectKind,
+      quickActionWorkspaceId,
+    ],
+  );
+  const handleOpenQuickAgent = useCallback(() => {
+    if (!quickActionAgentTarget) {
+      return;
+    }
+    translateX.value = -mobileSidebarWidth;
+    backdropOpacity.value = 0;
+    closeToAgent();
+    navigateToAgent({
+      serverId: quickActionAgentTarget.serverId,
+      agentId: quickActionAgentTarget.agentId,
+      pin: true,
+    });
+  }, [backdropOpacity, closeToAgent, mobileSidebarWidth, quickActionAgentTarget, translateX]);
+  const handleOpenQuickRoute = useCallback(
+    (route: string | null) => {
+      if (!route) {
+        return;
+      }
+      translateX.value = -mobileSidebarWidth;
+      backdropOpacity.value = 0;
+      closeToAgent();
+      router.push(route as never);
+    },
+    [backdropOpacity, closeToAgent, mobileSidebarWidth, translateX],
+  );
+  const handleViewQuickChanges = useCallback(() => {
+    handleOpenQuickRoute(quickActionModel.changesRoute);
+  }, [handleOpenQuickRoute, quickActionModel.changesRoute]);
+  const handleOpenQuickTerminal = useCallback(() => {
+    handleOpenQuickRoute(quickActionModel.terminalRoute);
+  }, [handleOpenQuickRoute, quickActionModel.terminalRoute]);
+  const quickActionButtons = useMemo(
+    () =>
+      buildMobileSidebarQuickActionButtons({
+        hasAgentTarget: quickActionAgentTarget !== null,
+        changesRoute: quickActionModel.changesRoute,
+        terminalRoute: quickActionModel.terminalRoute,
+        canViewSessions: activeServerId !== null,
+      }),
+    [
+      activeServerId,
+      quickActionAgentTarget,
+      quickActionModel.changesRoute,
+      quickActionModel.terminalRoute,
+    ],
+  );
 
   const closeGesture = useMemo(
     () =>
@@ -634,18 +904,19 @@ function MobileSidebar({
           isGesturing.value = true;
         })
         .onUpdate((event) => {
-          const newTranslateX = Math.min(0, Math.max(-windowWidth, event.translationX));
+          const newTranslateX = Math.min(0, Math.max(-mobileSidebarWidth, event.translationX));
           translateX.value = newTranslateX;
           backdropOpacity.value = interpolate(
             newTranslateX,
-            [-windowWidth, 0],
+            [-mobileSidebarWidth, 0],
             [0, 1],
             Extrapolation.CLAMP,
           );
         })
         .onEnd((event) => {
           isGesturing.value = false;
-          const shouldClose = event.translationX < -windowWidth / 3 || event.velocityX < -500;
+          const shouldClose =
+            event.translationX < -mobileSidebarWidth / 3 || event.velocityX < -500;
           if (shouldClose) {
             animateToClose();
             runOnJS(handleCloseFromGesture)();
@@ -662,7 +933,7 @@ function MobileSidebar({
       closeTouchStartX,
       closeTouchStartY,
       isGesturing,
-      windowWidth,
+      mobileSidebarWidth,
       translateX,
       backdropOpacity,
       animateToClose,
@@ -672,8 +943,12 @@ function MobileSidebar({
   );
 
   const mobileSidebarInsetStyle = useMemo(
-    () => ({ width: windowWidth, paddingTop: insetsTop, paddingBottom: insetsBottom }),
-    [windowWidth, insetsTop, insetsBottom],
+    () => ({
+      width: mobileSidebarWidth,
+      paddingTop: insetsTop,
+      paddingBottom: insetsBottom,
+    }),
+    [mobileSidebarWidth, insetsTop, insetsBottom],
   );
 
   const hostStatusDotStyle = useMemo(
@@ -711,14 +986,22 @@ function MobileSidebar({
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={overlayPointerEvents}>
-      <Animated.View style={backdropStyle} />
+      <AnimatedPressable
+        accessible={isOpen}
+        accessibilityRole="button"
+        accessibilityLabel={t("sidebar.closeSidebar")}
+        importantForAccessibility={isOpen ? "auto" : "no-hide-descendants"}
+        onPress={closeToAgent}
+        style={backdropStyle}
+        testID="mobile-sidebar-backdrop"
+      />
 
       <GestureDetector gesture={closeGesture} touchAction="pan-y">
         <Animated.View style={mobileSidebarStyle} pointerEvents="auto">
           <View style={styles.sidebarContent} pointerEvents="auto">
             <SidebarHeaderRow
               icon={MessagesSquare}
-              label="会话"
+              label={t("sidebar.sessions")}
               onPress={handleViewMore}
               isActive={isSessionsActive}
               testID="sidebar-sessions"
@@ -730,7 +1013,7 @@ function MobileSidebar({
               nativeID="sidebar-close"
               accessible
               accessibilityRole="button"
-              accessibilityLabel="关闭侧边栏"
+              accessibilityLabel={t("sidebar.closeSidebar")}
               hitSlop={8}
             >
               {({ hovered, pressed }) => (
@@ -742,6 +1025,17 @@ function MobileSidebar({
                 />
               )}
             </Pressable>
+
+            <MobileSidebarQuickActions
+              agent={quickActionAgent}
+              buttons={quickActionButtons}
+              theme={theme}
+              onOpenAgent={handleOpenQuickAgent}
+              onViewChanges={handleViewQuickChanges}
+              onOpenTerminal={handleOpenQuickTerminal}
+              onViewMore={handleViewMore}
+              onClose={closeToAgent}
+            />
 
             {isInitialLoad ? (
               <SidebarAgentListSkeleton />
@@ -809,6 +1103,7 @@ function DesktopSidebar({
   isOpen,
   handleViewMore,
 }: DesktopSidebarProps) {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const isSessionsActive = pathname.includes("/sessions");
   const padding = useWindowControlsPadding("sidebar");
@@ -861,7 +1156,7 @@ function DesktopSidebar({
     [resizeAnimatedStyle],
   );
   const desktopSidebarBorderStyle = useMemo(
-    () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
+    () => [styles.desktopSidebarBorder, { flex: 1, marginTop: insetsTop + 8 }],
     [insetsTop],
   );
   const resizeHandleStyle = useMemo(
@@ -882,7 +1177,7 @@ function DesktopSidebar({
           <View style={styles.desktopHeaderRow}>
             <SidebarHeaderRow
               icon={MessagesSquare}
-              label="会话"
+              label={t("sidebar.sessions")}
               onPress={handleViewMore}
               isActive={isSessionsActive}
               testID="sidebar-sessions"
@@ -948,9 +1243,14 @@ const staticStyles = RNStyleSheet.create({
     left: 0,
     bottom: 0,
     overflow: "hidden" as const,
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
   },
   desktopSidebar: {
     position: "relative" as const,
+    paddingLeft: 8,
+    paddingRight: 8,
+    paddingBottom: 8,
   },
 });
 
@@ -971,10 +1271,88 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surfaceSidebar,
   },
-  desktopSidebarBorder: {
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.borderAccent,
+  mobileQuickActions: {
+    marginHorizontal: theme.spacing[3],
+    marginBottom: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.xl,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
+    gap: theme.spacing[2],
+    ...theme.shadow.sm,
+  },
+  mobileQuickActionsTextGroup: {
+    minWidth: 0,
+    paddingRight: theme.spacing[8],
+    gap: 1,
+  },
+  mobileQuickActionsLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+  },
+  mobileQuickActionsTitle: {
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  mobileQuickActionsButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
+  mobileQuickActionButton: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
+  },
+  mobileQuickActionPrimaryButton: {
+    flexBasis: "100%",
+    flexGrow: 1,
+    minWidth: 0,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface2,
+    ...theme.shadow.sm,
+  },
+  mobileQuickActionSecondaryButton: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 64,
+  },
+  mobileQuickActionButtonHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  mobileQuickActionIcon: {
+    flexShrink: 0,
+  },
+  mobileQuickActionText: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+  },
+  mobileQuickActionPrimaryText: {
+    fontSize: theme.fontSize.sm,
+  },
+  desktopSidebarBorder: {
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface0,
+    overflow: "hidden",
+    ...theme.shadow.md,
   },
   resizeHandle: {
     position: "absolute",
@@ -989,13 +1367,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopSidebarDragArea: {
     position: "relative",
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderAccent,
+    marginHorizontal: theme.spacing[2],
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
   },
   desktopHeaderRow: {
-    marginHorizontal: theme.spacing[1],
     overflow: "hidden",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
   },
   hostTrigger: {
     flexDirection: "row",
@@ -1003,9 +1383,10 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "flex-start",
     gap: theme.spacing[2],
     minWidth: 0,
+    minHeight: 28,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.md,
   },
   hostTriggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1033,7 +1414,11 @@ const styles = StyleSheet.create((theme) => ({
   desktopSidebarFooter: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    borderTopColor: theme.colors.borderAccent,
+    marginHorizontal: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+    borderTopWidth: 0,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
   },
   footerHostSlot: {
     flexGrow: 0,
@@ -1057,6 +1442,10 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+  },
+  footerIconButtonHovered: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   desktopFooterIconButton: {
     width: 26,

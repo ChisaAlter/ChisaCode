@@ -31,7 +31,7 @@ export interface PrPaneData {
   title: string;
   state: PrState;
   url: string;
-  reviewDecision: "approved" | "changes_requested" | "pending";
+  reviewDecision: "approved" | "changes_requested" | "pending" | null;
   awaitingReviewers: string[];
   checks: PrPaneCheck[];
   activity: PrPaneActivity[];
@@ -68,12 +68,15 @@ export function mapPrPaneData(
 
   const timelineMatchesStatus = timeline?.prNumber === number;
 
+  const state = derivePrState(status);
+
   return {
     number,
     title: status.title,
-    state: derivePrState(status),
+    state,
     url: status.url,
-    reviewDecision: mapReviewDecision(status.reviewDecision),
+    reviewDecision:
+      state === "merged" || state === "closed" ? null : mapReviewDecision(status.reviewDecision),
     // Requested reviewers are intentionally unwired until the server exposes them.
     awaitingReviewers: [],
     checks: (status.checks ?? []).flatMap(mapCheck),
@@ -88,6 +91,9 @@ export function deriveAvatarColor(login: string): string {
 }
 
 export function formatAge(createdAtMs: number, nowMs = Date.now()): string {
+  if (!Number.isFinite(createdAtMs) || !Number.isFinite(nowMs)) {
+    return "just now";
+  }
   const elapsedMs = Math.max(0, nowMs - createdAtMs);
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
 
@@ -229,13 +235,13 @@ function hashLogin(login: string): number {
 export function getStateLabel(state: PrState): string {
   if (state === "draft") return "Draft";
   if (state === "merged") return "Merged";
-  if (state === "closed") return "已关闭";
-  return "开启";
+  if (state === "closed") return "Closed";
+  return "Open";
 }
 
 export function getActivityVerb(item: Pick<PrPaneActivity, "kind" | "reviewState">): string {
   if (item.kind === "comment") return "Commented";
   if (item.reviewState === "approved") return "Approved";
-  if (item.reviewState === "changes_requested") return "要求修改";
+  if (item.reviewState === "changes_requested") return "Requested changes";
   return "Reviewed";
 }

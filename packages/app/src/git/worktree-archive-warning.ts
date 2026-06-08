@@ -26,19 +26,38 @@ function formatDiffStat(
   diffStat: WorktreeArchiveRisk["diffStat"],
   copy: WorktreeArchiveWarningCopy,
 ): string | null {
-  if (!diffStat) {
+  const normalizedDiffStat = normalizeDiffStat(diffStat);
+  if (!normalizedDiffStat) {
     return null;
   }
 
   const parts: string[] = [];
-  if (diffStat.additions > 0) {
-    parts.push(copy.addedLines(diffStat.additions));
+  if (normalizedDiffStat.additions > 0) {
+    parts.push(copy.addedLines(normalizedDiffStat.additions));
   }
-  if (diffStat.deletions > 0) {
-    parts.push(copy.deletedLines(diffStat.deletions));
+  if (normalizedDiffStat.deletions > 0) {
+    parts.push(copy.deletedLines(normalizedDiffStat.deletions));
   }
 
   return parts.length > 0 ? parts.join(", ") : null;
+}
+
+function normalizePositiveCount(value: number | null | undefined): number {
+  if (!Number.isFinite(value) || (value ?? 0) <= 0) {
+    return 0;
+  }
+  return Math.floor(value ?? 0);
+}
+
+function normalizeDiffStat(
+  diffStat: WorktreeArchiveRisk["diffStat"],
+): { additions: number; deletions: number } | null {
+  if (!diffStat) {
+    return null;
+  }
+  const additions = normalizePositiveCount(diffStat.additions);
+  const deletions = normalizePositiveCount(diffStat.deletions);
+  return additions > 0 || deletions > 0 ? { additions, deletions } : null;
 }
 
 export function buildWorktreeArchiveRiskReasons(
@@ -46,8 +65,8 @@ export function buildWorktreeArchiveRiskReasons(
   copy: WorktreeArchiveWarningCopy,
 ): string[] {
   const reasons: string[] = [];
-  const diffStat = input.diffStat;
-  const hasDiffStatChanges = diffStat ? diffStat.additions > 0 || diffStat.deletions > 0 : false;
+  const diffStat = normalizeDiffStat(input.diffStat);
+  const hasDiffStatChanges = diffStat !== null;
   const hasUncommittedChanges =
     input.isDirty === true || (input.isDirty == null && hasDiffStatChanges);
 
@@ -58,8 +77,8 @@ export function buildWorktreeArchiveRiskReasons(
     );
   }
 
-  if ((input.aheadOfOrigin ?? 0) > 0) {
-    const aheadOfOrigin = input.aheadOfOrigin ?? 0;
+  const aheadOfOrigin = normalizePositiveCount(input.aheadOfOrigin);
+  if (aheadOfOrigin > 0) {
     reasons.push(copy.unpushedCommits(aheadOfOrigin));
   }
 

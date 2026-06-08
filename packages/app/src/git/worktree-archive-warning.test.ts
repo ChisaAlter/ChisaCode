@@ -56,12 +56,61 @@ describe("worktree archive warning", () => {
     ).toEqual(["Uncommitted changes (4 added lines)"]);
   });
 
+  it("normalizes invalid diff stats before deciding dirty fallback", () => {
+    expect(
+      buildWorktreeArchiveRiskReasons(
+        {
+          isDirty: undefined,
+          aheadOfOrigin: 0,
+          diffStat: { additions: Number.NaN, deletions: Number.POSITIVE_INFINITY },
+        },
+        COPY,
+      ),
+    ).toEqual([]);
+  });
+
+  it("floors fractional diff stats in archive copy", () => {
+    expect(
+      buildWorktreeArchiveRiskReasons(
+        {
+          isDirty: true,
+          aheadOfOrigin: 0,
+          diffStat: { additions: 3.9, deletions: 1.2 },
+        },
+        COPY,
+      ),
+    ).toEqual(["Uncommitted changes (3 added lines, 1 deleted line)"]);
+  });
+
   it("explains unpushed commits", () => {
     expect(
       buildWorktreeArchiveRiskReasons(
         {
           isDirty: false,
           aheadOfOrigin: 2,
+          diffStat: null,
+        },
+        COPY,
+      ),
+    ).toEqual(["2 unpushed commits"]);
+  });
+
+  it("normalizes invalid and fractional ahead counts", () => {
+    expect(
+      buildWorktreeArchiveRiskReasons(
+        {
+          isDirty: false,
+          aheadOfOrigin: Number.NaN,
+          diffStat: null,
+        },
+        COPY,
+      ),
+    ).toEqual([]);
+    expect(
+      buildWorktreeArchiveRiskReasons(
+        {
+          isDirty: false,
+          aheadOfOrigin: 2.8,
           diffStat: null,
         },
         COPY,

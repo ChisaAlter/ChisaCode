@@ -103,6 +103,8 @@ function isLegacyPathLikeWorkspaceValue(value: string): boolean {
 export type WorkspaceOpenIntent =
   | { kind: "agent"; agentId: string }
   | { kind: "terminal"; terminalId: string }
+  | { kind: "terminal-new" }
+  | { kind: "changes" }
   | { kind: "file"; path: string }
   | { kind: "draft"; draftId: string }
   | { kind: "setup"; workspaceId: string };
@@ -115,12 +117,20 @@ export function parseWorkspaceOpenIntent(
     return null;
   }
 
+  const fixedIntent = normalized.toLowerCase();
+  if (fixedIntent === "changes") {
+    return { kind: "changes" };
+  }
+  if (fixedIntent === "terminal") {
+    return { kind: "terminal-new" };
+  }
+
   const separator = normalized.indexOf(":");
   if (separator <= 0 || separator >= normalized.length - 1) {
     return null;
   }
 
-  const kind = normalized.slice(0, separator);
+  const kind = normalized.slice(0, separator).trim().toLowerCase();
   const payload = trimNonEmpty(normalized.slice(separator + 1));
   if (!payload) {
     return null;
@@ -130,7 +140,16 @@ export function parseWorkspaceOpenIntent(
     return { kind: "agent", agentId: payload };
   }
   if (kind === "terminal") {
+    if (payload.toLowerCase() === "new") {
+      return { kind: "terminal-new" };
+    }
     return { kind: "terminal", terminalId: payload };
+  }
+  if (kind === "changes") {
+    if (payload.toLowerCase() !== "review") {
+      return null;
+    }
+    return { kind: "changes" };
   }
   if (kind === "draft") {
     return { kind: "draft", draftId: payload };
@@ -151,6 +170,10 @@ export function parseWorkspaceOpenIntent(
   }
 
   return null;
+}
+
+export function isWorkspaceScreenOpenIntent(intent: WorkspaceOpenIntent): boolean {
+  return intent.kind === "changes" || intent.kind === "terminal-new";
 }
 
 export function parseHostWorkspaceOpenIntentFromPathname(
@@ -361,16 +384,19 @@ export function buildHostNewWorkspaceRoute(
   options?: { displayName?: string; projectId?: string },
 ) {
   const base = buildHostRootRoute(serverId);
-  if (base === "/") {
+  const normalizedSourceDirectory = trimNonEmpty(sourceDirectory);
+  if (base === "/" || !normalizedSourceDirectory) {
     return "/" as const;
   }
   const params = new URLSearchParams();
-  params.set("dir", sourceDirectory);
-  if (options?.displayName) {
-    params.set("name", options.displayName);
+  params.set("dir", normalizedSourceDirectory);
+  const displayName = trimNonEmpty(options?.displayName);
+  const projectId = trimNonEmpty(options?.projectId);
+  if (displayName) {
+    params.set("name", displayName);
   }
-  if (options?.projectId) {
-    params.set("projectId", options.projectId);
+  if (projectId) {
+    params.set("projectId", projectId);
   }
   return `${base}/new?${params.toString()}` as const;
 }

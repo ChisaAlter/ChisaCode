@@ -5,10 +5,19 @@ interface CheckoutQueryIdentity {
   cwd: string;
 }
 
-type CheckoutQueryKey = readonly unknown[];
+type CheckoutQueryKey = readonly [string, string, string, ...unknown[]];
+
+export function normalizeCheckoutCwd(value: string): string {
+  const normalized = value.trim().replace(/\\/g, "/");
+  if (normalized === "/") {
+    return normalized;
+  }
+  const withoutTrailingSlash = normalized.replace(/\/+$/, "");
+  return withoutTrailingSlash.length > 0 ? withoutTrailingSlash : normalized;
+}
 
 export function checkoutStatusQueryKey(serverId: string, cwd: string) {
-  return ["checkoutStatus", serverId, cwd] as const;
+  return ["checkoutStatus", serverId, normalizeCheckoutCwd(cwd)] as const;
 }
 
 export function checkoutDiffQueryKey(
@@ -18,11 +27,18 @@ export function checkoutDiffQueryKey(
   baseRef?: string,
   ignoreWhitespace?: boolean,
 ) {
-  return ["checkoutDiff", serverId, cwd, mode, baseRef ?? "", ignoreWhitespace === true] as const;
+  return [
+    "checkoutDiff",
+    serverId,
+    normalizeCheckoutCwd(cwd),
+    mode,
+    baseRef ?? "",
+    ignoreWhitespace === true,
+  ] as const;
 }
 
 export function checkoutPrStatusQueryKey(serverId: string, cwd: string) {
-  return ["checkoutPrStatus", serverId, cwd] as const;
+  return ["checkoutPrStatus", serverId, normalizeCheckoutCwd(cwd)] as const;
 }
 
 export function prPaneTimelineQueryKey({
@@ -34,7 +50,7 @@ export function prPaneTimelineQueryKey({
   cwd: string;
   prNumber: number | null;
 }) {
-  return ["prPaneTimeline", serverId, cwd, prNumber] as const;
+  return ["prPaneTimeline", serverId, normalizeCheckoutCwd(cwd), prNumber] as const;
 }
 
 export async function invalidateCheckoutGitQueriesForClient(
@@ -67,7 +83,7 @@ function checkoutQueryPredicate(
       isCheckoutQueryKey(key) &&
       key[0] === queryKind &&
       key[1] === identity.serverId &&
-      key[2] === identity.cwd
+      normalizeCheckoutCwd(key[2]) === normalizeCheckoutCwd(identity.cwd)
     );
   };
 }

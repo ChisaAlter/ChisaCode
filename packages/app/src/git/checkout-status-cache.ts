@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { CheckoutStatusResponse, CheckoutStatusUpdate } from "@chisacode/protocol/messages";
-import { checkoutStatusQueryKey } from "@/git/query-keys";
+import { checkoutStatusQueryKey, normalizeCheckoutCwd } from "@/git/query-keys";
 
 export type CheckoutStatusPayload = CheckoutStatusResponse["payload"];
 
@@ -19,7 +19,8 @@ export async function peekOrFetchCheckoutStatus({
   serverId: string;
   cwd: string;
 }): Promise<CheckoutStatusPayload> {
-  const queryKey = checkoutStatusQueryKey(serverId, cwd);
+  const normalizedCwd = normalizeCheckoutCwd(cwd);
+  const queryKey = checkoutStatusQueryKey(serverId, normalizedCwd);
   const cached = queryClient.getQueryData<CheckoutStatusPayload>(queryKey);
   if (cached) {
     return cached;
@@ -41,8 +42,9 @@ export function applyCheckoutStatusUpdate({
   cwd: string;
   message: CheckoutStatusUpdate;
 }): void {
-  if (message.payload.cwd !== cwd) {
+  const normalizedCwd = normalizeCheckoutCwd(cwd);
+  if (normalizeCheckoutCwd(message.payload.cwd) !== normalizedCwd) {
     return;
   }
-  queryClient.setQueryData(checkoutStatusQueryKey(serverId, cwd), message.payload);
+  queryClient.setQueryData(checkoutStatusQueryKey(serverId, normalizedCwd), message.payload);
 }

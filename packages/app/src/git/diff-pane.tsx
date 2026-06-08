@@ -114,6 +114,7 @@ import {
   useInlineReviewController,
   type InlineReviewActions,
 } from "@/review";
+import { buildReviewSummaryModel, type ReviewSummaryModel } from "@/git/review-summary";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -1240,6 +1241,56 @@ interface DiffRefreshButtonProps {
   onPress: () => void;
 }
 
+function ReviewSummaryBand({
+  model,
+  diffModeLabel,
+  gitActions,
+}: {
+  model: ReviewSummaryModel;
+  diffModeLabel: string;
+  gitActions: ReturnType<typeof useGitActions>["gitActions"];
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.reviewSummaryBand} testID="changes-review-summary">
+      <View style={styles.reviewSummaryTextGroup}>
+        <Text style={styles.reviewSummaryTitle}>{t("git.reviewMode")}</Text>
+        <Text style={styles.reviewSummaryDescription} numberOfLines={1}>
+          {t("git.reviewSummary", {
+            count: model.changedFileCount,
+            additions: model.additions,
+            deletions: model.deletions,
+            mode: diffModeLabel,
+          })}
+        </Text>
+      </View>
+      <View style={styles.reviewSummaryMeta}>
+        {model.pullRequestLabel ? (
+          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
+            {model.pullRequestLabel}
+          </Text>
+        ) : null}
+        {model.pullRequestTerminalState ? (
+          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
+            {t(`git.reviewPullRequestState.${model.pullRequestTerminalState}`)}
+          </Text>
+        ) : null}
+        {model.checksStatus ? (
+          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
+            {t(`git.reviewChecksStatus.${model.checksStatus}`)}
+          </Text>
+        ) : null}
+        {model.reviewDecision ? (
+          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
+            {t(`git.reviewDecision.${model.reviewDecision}`)}
+          </Text>
+        ) : null}
+        <GitActionsSplitButton gitActions={gitActions} hideLabels />
+      </View>
+    </View>
+  );
+}
+
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const refreshIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -1527,6 +1578,14 @@ function shouldEnableCheckoutDiff(input: { paneEnabled: boolean; isGit: boolean 
   return input.paneEnabled && input.isGit;
 }
 
+function shouldShowReviewSummaryBand(input: {
+  isGit: boolean;
+  hasChanges: boolean;
+  pullRequestLabel: string | null;
+}): boolean {
+  return input.isGit && (input.hasChanges || input.pullRequestLabel !== null);
+}
+
 export function GitDiffPane({
   serverId,
   workspaceId,
@@ -1737,7 +1796,11 @@ export function GitDiffPane({
     setWorkspaceAttachments,
     workspaceAttachmentScopeKey,
   ]);
-  const { githubFeaturesEnabled, payloadError: prPayloadError } = useCheckoutPrStatusQuery({
+  const {
+    status: pullRequestStatus,
+    githubFeaturesEnabled,
+    payloadError: prPayloadError,
+  } = useCheckoutPrStatusQuery({
     serverId,
     cwd,
     enabled: isGit,
@@ -2039,6 +2102,15 @@ export function GitDiffPane({
   const hasChanges = files.length > 0;
   const diffErrorMessage = diffPayloadError?.message ?? null;
   const prErrorMessage = computePrErrorMessage(githubFeaturesEnabled, prPayloadError);
+  const reviewSummaryModel = useMemo(
+    () => buildReviewSummaryModel({ files, pullRequestStatus }),
+    [files, pullRequestStatus],
+  );
+  const shouldShowReviewSummary = shouldShowReviewSummaryBand({
+    isGit,
+    hasChanges,
+    pullRequestLabel: reviewSummaryModel.pullRequestLabel,
+  });
   const baseRefLabel = useMemo(() => computeBaseRefLabel(baseRef), [baseRef]);
   const iconColor = theme.colors.foregroundMuted;
   const gitActionsIcons = useMemo(
@@ -2187,6 +2259,13 @@ export function GitDiffPane({
       ) : null}
 
       {prErrorMessage ? <Text style={styles.actionErrorText}>{prErrorMessage}</Text> : null}
+      {shouldShowReviewSummary ? (
+        <ReviewSummaryBand
+          model={reviewSummaryModel}
+          diffModeLabel={diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
+          gitActions={gitActions}
+        />
+      ) : null}
 
       <View style={styles.diffContainer}>
         {bodyContent}
@@ -2343,6 +2422,57 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[1],
     fontSize: theme.fontSize.xs,
     color: theme.colors.destructive,
+  },
+  reviewSummaryBand: {
+    marginHorizontal: theme.spacing[3],
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.xl,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    flexDirection: {
+      xs: "column",
+      md: "row",
+    },
+    alignItems: {
+      xs: "stretch",
+      md: "center",
+    },
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
+  reviewSummaryTextGroup: {
+    minWidth: 0,
+    flex: 1,
+    gap: 1,
+  },
+  reviewSummaryTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  reviewSummaryDescription: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+  },
+  reviewSummaryMeta: {
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
+  reviewSummaryMetaText: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
   },
   diffContainer: {
     flex: 1,

@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { __private__ } from "./use-all-agents-list";
 import type { Agent } from "@/stores/session-store";
+
+vi.mock("@/runtime/host-runtime", () => ({
+  getHostRuntimeStore: () => ({
+    refreshAgentDirectory: vi.fn(),
+  }),
+  useHostRuntimeConnectionStatus: () => "offline",
+  useHostRuntimeIsDirectoryLoading: () => false,
+  useHosts: () => [],
+}));
 
 const AGENT_TIMESTAMP = new Date("2026-03-08T10:00:00.000Z");
 
@@ -79,5 +88,25 @@ describe("useAllAgentsList", () => {
 
     expect(result.map((agent) => agent.id)).toEqual(["visible", "archived"]);
     expect(result[1]?.archivedAt).toEqual(archivedAgent.archivedAt);
+  });
+
+  it("keeps sorting stable when an agent has an invalid activity timestamp", () => {
+    const invalidAgent = makeAgent({
+      id: "invalid",
+      lastActivityAt: new Date(Number.NaN),
+    });
+    const recentAgent = makeAgent({
+      id: "recent",
+      lastActivityAt: new Date("2026-03-08T12:00:00.000Z"),
+    });
+
+    const result = __private__.buildAllAgentsList({
+      agents: [invalidAgent, recentAgent],
+      serverId: "server-1",
+      serverLabel: "Local",
+      includeArchived: false,
+    });
+
+    expect(result.map((agent) => agent.id)).toEqual(["recent", "invalid"]);
   });
 });

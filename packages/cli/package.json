@@ -20,6 +20,7 @@
     "typecheck": "tsgo --noEmit",
     "test": "npm run test:local",
     "test:local": "tsx tests/run-all.ts",
+    "test:vitest": "vitest run src/**/*.test.ts tests/e2e/**/*.test.ts",
     "test:e2e": "npm run test:local",
     "test:e2e:lifecycle": "npx tsx tests/e2e/agent-lifecycle.test.ts"
   },

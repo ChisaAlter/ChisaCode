@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHostAgentDetailRoute,
+  buildHostNewWorkspaceRoute,
   buildHostRootRoute,
   buildHostWorkspaceOpenRoute,
   buildHostWorkspaceRoute,
@@ -10,6 +11,7 @@ import {
   decodeWorkspaceIdFromPathSegment,
   encodeFilePathForPathSegment,
   encodeWorkspaceIdForPathSegment,
+  isWorkspaceScreenOpenIntent,
   parseHostAgentRouteFromPathname,
   parseHostWorkspaceOpenIntentFromPathname,
   parseHostWorkspaceRouteFromPathname,
@@ -38,7 +40,7 @@ describe("workspace route parsing", () => {
 
   it("decodes non-canonical base64url workspace IDs used by older links", () => {
     expect(decodeWorkspaceIdFromPathSegment("L1VzZXJzL21vYm91ZHJhL2Rldi9wYXNlby")).toBe(
-      "/Users/moboudra/dev/chisacode",
+      "/Users/moboudra/dev/paseo",
     );
   });
 
@@ -89,10 +91,33 @@ describe("workspace route parsing", () => {
       kind: "agent",
       agentId: "agent-1",
     });
+    expect(parseWorkspaceOpenIntent("Agent:Agent-Case")).toEqual({
+      kind: "agent",
+      agentId: "Agent-Case",
+    });
     expect(parseWorkspaceOpenIntent("terminal:term-1")).toEqual({
       kind: "terminal",
       terminalId: "term-1",
     });
+    expect(parseWorkspaceOpenIntent("terminal:new")).toEqual({
+      kind: "terminal-new",
+    });
+    expect(parseWorkspaceOpenIntent("terminal:NEW")).toEqual({
+      kind: "terminal-new",
+    });
+    expect(parseWorkspaceOpenIntent(" terminal ")).toEqual({
+      kind: "terminal-new",
+    });
+    expect(parseWorkspaceOpenIntent("changes:review")).toEqual({
+      kind: "changes",
+    });
+    expect(parseWorkspaceOpenIntent("Changes:Review")).toEqual({
+      kind: "changes",
+    });
+    expect(parseWorkspaceOpenIntent(" changes ")).toEqual({
+      kind: "changes",
+    });
+    expect(parseWorkspaceOpenIntent("changes:unknown")).toBeNull();
     expect(parseWorkspaceOpenIntent("draft:new")).toEqual({
       kind: "draft",
       draftId: "new",
@@ -107,6 +132,13 @@ describe("workspace route parsing", () => {
     });
   });
 
+  it("classifies workspace screen-level open intents", () => {
+    expect(isWorkspaceScreenOpenIntent({ kind: "changes" })).toBe(true);
+    expect(isWorkspaceScreenOpenIntent({ kind: "terminal-new" })).toBe(true);
+    expect(isWorkspaceScreenOpenIntent({ kind: "agent", agentId: "agent-1" })).toBe(false);
+    expect(isWorkspaceScreenOpenIntent({ kind: "draft", draftId: "new" })).toBe(false);
+  });
+
   it("uses the plain workspace route when workspace context is provided", () => {
     expect(buildHostAgentDetailRoute("local", "agent-1", "164")).toBe(
       "/h/local/workspace/164?open=agent%3Aagent-1",
@@ -117,6 +149,23 @@ describe("workspace route parsing", () => {
     expect(buildHostWorkspaceOpenRoute("local", "164", "draft:new")).toBe(
       "/h/local/workspace/164?open=draft%3Anew",
     );
+  });
+
+  it("trims optional new-workspace query params", () => {
+    expect(
+      buildHostNewWorkspaceRoute("local", "/repo", {
+        displayName: "  Repo  ",
+        projectId: "   ",
+      }),
+    ).toBe("/h/local/new?dir=%2Frepo&name=Repo");
+  });
+
+  it("requires a non-empty new-workspace source directory", () => {
+    expect(buildHostNewWorkspaceRoute("local", "   ")).toBe("/");
+  });
+
+  it("trims the new-workspace source directory", () => {
+    expect(buildHostNewWorkspaceRoute("local", "  /repo  ")).toBe("/h/local/new?dir=%2Frepo");
   });
 
   it("round-trips URL-safe IDs through encode/decode", () => {

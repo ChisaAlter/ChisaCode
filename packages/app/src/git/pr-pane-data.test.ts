@@ -194,6 +194,27 @@ describe("mapPrPaneData", () => {
     expect(data?.activity.map((item) => item.author)).toEqual(["alice", "bob"]);
   });
 
+  it("uses a stable age label when timeline timestamps are invalid", () => {
+    const data = mapPrPaneData(
+      baseStatus,
+      timeline({
+        items: [
+          {
+            id: "comment-invalid-time",
+            kind: "comment",
+            author: "alice",
+            body: "Timestamp was malformed upstream.",
+            createdAt: Number.NaN,
+            url: "https://example.com/comment-invalid-time",
+          },
+        ],
+      }),
+      Date.UTC(2026, 0, 1, 12, 0, 0),
+    );
+
+    expect(data?.activity[0]?.age).toBe("just now");
+  });
+
   it("filters empty commented reviews but keeps blocking review states", () => {
     const data = mapPrPaneData(
       baseStatus,
@@ -306,6 +327,27 @@ describe("mapPrPaneData", () => {
     ).toBe("pending");
   });
 
+  it("clears stale review decisions after the pull request reaches a terminal state", () => {
+    expect(
+      mapPrPaneData(
+        status({
+          isMerged: true,
+          reviewDecision: "changes_requested",
+        }),
+        baseTimeline,
+      )?.reviewDecision,
+    ).toBeNull();
+    expect(
+      mapPrPaneData(
+        status({
+          state: "closed",
+          reviewDecision: "pending",
+        }),
+        baseTimeline,
+      )?.reviewDecision,
+    ).toBeNull();
+  });
+
   it("leaves awaiting reviewers intentionally unwired", () => {
     expect(mapPrPaneData(baseStatus, baseTimeline)?.awaitingReviewers).toEqual([]);
   });
@@ -362,6 +404,11 @@ describe("formatAge", () => {
     expect(formatAge(now - 3 * 24 * 60 * 60_000, now)).toBe("3d ago");
     expect(formatAge(now - 90 * 24 * 60 * 60_000, now)).toBe("3mo ago");
     expect(formatAge(now - 365 * 24 * 60 * 60_000, now)).toBe("1y ago");
+  });
+
+  it("keeps invalid PR pane age inputs readable", () => {
+    expect(formatAge(Number.NaN, Date.UTC(2026, 0, 1, 12, 0, 0))).toBe("just now");
+    expect(formatAge(Date.UTC(2026, 0, 1, 12, 0, 0), Number.NaN)).toBe("just now");
   });
 });
 

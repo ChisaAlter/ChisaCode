@@ -51,6 +51,23 @@ export function getAgentCwdGroupLabel(
   return parts.at(-1) ?? cleaned;
 }
 
+function getActivityTime(value: Date): number {
+  const time = value.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isNewerActivity(left: Date, right: Date): boolean {
+  return getActivityTime(left) > getActivityTime(right);
+}
+
+function compareActivityDatesDescending(left: Date, right: Date): number {
+  return getActivityTime(right) - getActivityTime(left);
+}
+
+function compareAgentsByActivityDescending(left: AggregatedAgent, right: AggregatedAgent): number {
+  return compareActivityDatesDescending(left.lastActivityAt, right.lastActivityAt);
+}
+
 export function groupAgentsForSidebar(
   agents: AggregatedAgent[],
   options?: {
@@ -75,7 +92,7 @@ export function groupAgentsForSidebar(
     const existing = groups.get(key);
     if (existing) {
       existing.agents.push(agent);
-      if (agent.lastActivityAt.getTime() > existing.newestActivityAt.getTime()) {
+      if (isNewerActivity(agent.lastActivityAt, existing.newestActivityAt)) {
         existing.newestActivityAt = agent.lastActivityAt;
       }
       continue;
@@ -94,21 +111,17 @@ export function groupAgentsForSidebar(
       key: group.key,
       label: group.label,
       newestActivityAt: group.newestActivityAt,
-      agents: group.agents.slice().sort((left, right) => {
-        return right.lastActivityAt.getTime() - left.lastActivityAt.getTime();
-      }),
+      agents: group.agents.slice().sort(compareAgentsByActivityDescending),
     }))
     .sort((left, right) => {
-      return right.newestActivityAt.getTime() - left.newestActivityAt.getTime();
+      return compareActivityDatesDescending(left.newestActivityAt, right.newestActivityAt);
     });
 
   if (pinnedAgents.length === 0) {
     return groupedAgents;
   }
 
-  const sortedPinnedAgents = pinnedAgents
-    .slice()
-    .sort((left, right) => right.lastActivityAt.getTime() - left.lastActivityAt.getTime());
+  const sortedPinnedAgents = pinnedAgents.slice().sort(compareAgentsByActivityDescending);
   return [
     {
       key: PINNED_SIDEBAR_SESSION_GROUP_KEY,

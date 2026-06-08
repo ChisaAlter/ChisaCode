@@ -493,10 +493,12 @@ const styles = StyleSheet.create((theme) => ({
   splitButton: {
     flexDirection: "row",
     alignItems: "stretch",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
     overflow: "hidden",
+    backgroundColor: theme.colors.surface1,
+    ...theme.shadow.sm,
   },
   ghostButtonFrame: {
     flexDirection: "row",
@@ -594,7 +596,9 @@ const styles = StyleSheet.create((theme) => ({
   exitBadge: {
     paddingHorizontal: theme.spacing[1.5],
     paddingVertical: 1,
-    borderRadius: 2,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface2,
   },
   exitBadgeText: {

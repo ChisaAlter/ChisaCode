@@ -131,6 +131,26 @@ Test suites in this repo are heavy. Running them in bulk freezes the machine, es
 - For full-suite confidence, push to CI and check GitHub Actions.
 - Never run the full Playwright E2E suite locally — defer whole-suite verification to CI. Targeted Playwright specs are allowed when you changed or need to prove that specific flow.
 
+### Chain entrypoints
+
+Use these entrypoints when a change affects desktop or Android user flows across
+package boundaries:
+
+- `npm run test:desktop-chain` — builds the server stack, runs protocol/client
+  tests, desktop package tests, and the desktop-critical Playwright specs.
+- `npm run test:android-chain` — runs the Android Maestro chain wrapper. It
+  assumes a development Android build, a connected emulator/device, and an
+  isolated daemon reachable at `127.0.0.1:6767`.
+- `npm run test:audit` — checks test debt counts against
+  `scripts/test-audit-baseline.json`. New `vi.mock`, `vi.spyOn`, unconditional
+  skips, conditional skips, fixed waits, weak assertions, and direct
+  `process.env` mutations fail CI unless the baseline is intentionally updated.
+
+The CLI test runner discovers both legacy executable scripts in
+`packages/cli/tests/*.test.ts` and Vitest files in `packages/cli/tests/e2e/` and
+`packages/cli/src/`. Use `npx tsx packages/cli/tests/run-all.ts --list-tests` to
+verify discovery without building or running the suite.
+
 ## Agent authentication in tests
 
 Agent providers handle their own auth. Do not add auth checks, environment variable gates, or conditional skips to tests. If auth fails, report it.

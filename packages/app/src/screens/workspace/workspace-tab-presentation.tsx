@@ -267,7 +267,9 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[1],
     paddingVertical: theme.spacing[1],
-    borderRadius: 0,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderColor: "transparent",
     marginHorizontal: theme.spacing[1],
     marginBottom: theme.spacing[1],
   },
@@ -281,7 +283,9 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
   },
   optionRowActive: {
+    borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
+    ...theme.shadow.sm,
   },
   optionLeadingSlot: {
     width: 16,

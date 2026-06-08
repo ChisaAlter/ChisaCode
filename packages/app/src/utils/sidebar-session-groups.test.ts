@@ -86,4 +86,39 @@ describe("sidebar session groups", () => {
     expect(groups[0]?.agents.map((entry) => entry.id)).toEqual(["pinned-a", "pinned-b"]);
     expect(groups[1]?.agents.map((entry) => entry.id)).toEqual(["new-a"]);
   });
+
+  it("keeps group and agent sorting stable with invalid activity timestamps", () => {
+    const groups = groupAgentsForSidebar([
+      agent({ id: "invalid-a", cwd: "C:\\ai\\a", updatedAt: "invalid-date" }),
+      agent({ id: "valid-a", cwd: "C:\\ai\\a", updatedAt: "2026-01-02T00:00:00.000Z" }),
+      agent({ id: "valid-b", cwd: "C:\\ai\\b", updatedAt: "2026-01-03T00:00:00.000Z" }),
+    ]);
+
+    expect(groups.map((group) => group.label)).toEqual(["b", "a"]);
+    expect(groups[1]?.agents.map((entry) => entry.id)).toEqual(["valid-a", "invalid-a"]);
+  });
+
+  it("keeps pinned agent sorting stable with invalid activity timestamps", () => {
+    const groups = groupAgentsForSidebar(
+      [
+        agent({
+          id: "pinned-invalid",
+          cwd: "C:\\ai\\a",
+          updatedAt: "invalid-date",
+          pinned: true,
+        }),
+        agent({
+          id: "pinned-valid",
+          cwd: "C:\\ai\\a",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+          pinned: true,
+        }),
+      ],
+      {
+        isPinnedAgent: (entry) => entry.labels["chisacode.sidebarPinned"] === "true",
+      },
+    );
+
+    expect(groups[0]?.agents.map((entry) => entry.id)).toEqual(["pinned-valid", "pinned-invalid"]);
+  });
 });

@@ -765,11 +765,20 @@ export function DropdownMenuItem({
     ],
     [selected, selectedVariant],
   );
+  const accessibilityState = useMemo(
+    () => ({
+      busy: isPending,
+      disabled: isDisabled,
+      selected,
+    }),
+    [isDisabled, isPending, selected],
+  );
 
   const content = (
     <Pressable
       testID={testID}
       accessibilityRole="button"
+      accessibilityState={accessibilityState}
       disabled={isDisabled}
       onPress={handleItemPress}
       style={itemPressableStyle}

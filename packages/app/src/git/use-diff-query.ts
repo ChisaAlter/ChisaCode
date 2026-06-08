@@ -1,9 +1,10 @@
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo } from "react";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import type { SubscribeCheckoutDiffResponse } from "@chisacode/protocol/messages";
 import { orderCheckoutDiffFiles } from "@/git/diff-order";
+import { normalizeCheckoutDiffCompare } from "@/git/diff-query-options";
 import { checkoutDiffQueryKey } from "@/git/query-keys";
+import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 
 interface UseCheckoutDiffQueryOptions {
   serverId: string;
@@ -20,21 +21,6 @@ export type ParsedDiffFile = CheckoutDiffQueryPayload["files"][number];
 export type DiffHunk = ParsedDiffFile["hunks"][number];
 export type DiffLine = DiffHunk["lines"][number];
 export type HighlightToken = NonNullable<DiffLine["tokens"]>[number];
-
-function normalizeCheckoutDiffCompare(compare: {
-  mode: "uncommitted" | "base";
-  baseRef?: string;
-  ignoreWhitespace?: boolean;
-}): { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean } {
-  const ignoreWhitespace = compare.ignoreWhitespace === true;
-  if (compare.mode === "uncommitted") {
-    return { mode: "uncommitted", ignoreWhitespace };
-  }
-  const trimmedBaseRef = compare.baseRef?.trim();
-  return trimmedBaseRef
-    ? { mode: "base", baseRef: trimmedBaseRef, ignoreWhitespace }
-    : { mode: "base", ignoreWhitespace };
-}
 
 export function useCheckoutDiffQuery({
   serverId,
@@ -56,8 +42,8 @@ export function useCheckoutDiffQuery({
   const compareBaseRef = normalizedCompare.baseRef;
   const compareIgnoreWhitespace = normalizedCompare.ignoreWhitespace;
   const queryKey = useMemo(
-    () => checkoutDiffQueryKey(serverId, cwd, mode, baseRef, compareIgnoreWhitespace),
-    [serverId, cwd, mode, baseRef, compareIgnoreWhitespace],
+    () => checkoutDiffQueryKey(serverId, cwd, compareMode, compareBaseRef, compareIgnoreWhitespace),
+    [serverId, cwd, compareMode, compareBaseRef, compareIgnoreWhitespace],
   );
 
   const query = useQuery<CheckoutDiffQueryPayload>({

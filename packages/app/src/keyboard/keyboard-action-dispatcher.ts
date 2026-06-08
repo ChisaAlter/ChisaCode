@@ -25,6 +25,9 @@ export type KeyboardActionId =
   | "workspace.pane.move-tab.down"
   | "workspace.pane.close"
   | "workspace.terminal.new"
+  | "workspace.changes.open"
+  | "workspace.environment.toggle"
+  | "workspace.resume.copy"
   | "sidebar.toggle.right"
   | "worktree.new"
   | "worktree.archive";
@@ -54,6 +57,9 @@ export type KeyboardActionDefinition =
   | { id: "workspace.pane.move-tab.down"; scope: KeyboardActionScope }
   | { id: "workspace.pane.close"; scope: KeyboardActionScope }
   | { id: "workspace.terminal.new"; scope: KeyboardActionScope }
+  | { id: "workspace.changes.open"; scope: KeyboardActionScope }
+  | { id: "workspace.environment.toggle"; scope: KeyboardActionScope }
+  | { id: "workspace.resume.copy"; scope: KeyboardActionScope }
   | { id: "sidebar.toggle.right"; scope: KeyboardActionScope }
   | { id: "worktree.new"; scope: KeyboardActionScope }
   | { id: "worktree.archive"; scope: KeyboardActionScope };

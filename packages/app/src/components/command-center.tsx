@@ -8,7 +8,16 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Home, Plus, Settings } from "lucide-react-native";
+import {
+  Bot,
+  GitCompare,
+  Home,
+  MessagesSquare,
+  PanelRight,
+  Plus,
+  Settings,
+  TerminalSquare,
+} from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useCommandCenter } from "@/hooks/use-command-center";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
@@ -25,6 +34,7 @@ function agentKey(agent: Pick<AggregatedAgent, "serverId" | "id">): string {
 
 interface CommandCenterRowProps {
   active: boolean;
+  accessibilityLabel?: string;
   children: ReactNode;
   onPress: () => void;
   registerRow: (el: View | null) => void;
@@ -32,24 +42,29 @@ interface CommandCenterRowProps {
 
 const CommandCenterRow = memo(function CommandCenterRow({
   active,
+  accessibilityLabel,
   children,
   onPress,
   registerRow,
 }: CommandCenterRowProps) {
-  const { theme } = useUnistyles();
-
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
-      (Boolean(hovered) || pressed || active) && {
-        backgroundColor: theme.colors.surface1,
-      },
+      (Boolean(hovered) || pressed || active) && styles.rowActive,
     ],
-    [active, theme.colors.surface1],
+    [active],
   );
+  const accessibilityState = useMemo(() => ({ selected: active }), [active]);
 
   return (
-    <Pressable ref={registerRow} style={pressableStyle} onPress={onPress}>
+    <Pressable
+      ref={registerRow}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={accessibilityState}
+      style={pressableStyle}
+      onPress={onPress}
+    >
       {children}
     </Pressable>
   );
@@ -58,6 +73,7 @@ const CommandCenterRow = memo(function CommandCenterRow({
 interface CommandCenterRowContainerProps {
   rowIndex: number;
   active: boolean;
+  accessibilityLabel?: string;
   rowRefs: React.MutableRefObject<Map<number, View>>;
   onPress: () => void;
   children: ReactNode;
@@ -66,6 +82,7 @@ interface CommandCenterRowContainerProps {
 function CommandCenterRowContainer({
   rowIndex,
   active,
+  accessibilityLabel,
   rowRefs,
   onPress,
   children,
@@ -78,7 +95,12 @@ function CommandCenterRowContainer({
     [rowRefs, rowIndex],
   );
   return (
-    <CommandCenterRow active={active} registerRow={registerRow} onPress={onPress}>
+    <CommandCenterRow
+      active={active}
+      accessibilityLabel={accessibilityLabel}
+      registerRow={registerRow}
+      onPress={onPress}
+    >
       {children}
     </CommandCenterRow>
   );
@@ -109,25 +131,51 @@ function CommandCenterActionRow({
     actionIcon = <Settings size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
   } else if (action.icon === "home") {
     actionIcon = <Home size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+  } else if (action.icon === "sessions") {
+    actionIcon = (
+      <MessagesSquare size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />
+    );
+  } else if (action.icon === "changes") {
+    actionIcon = <GitCompare size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+  } else if (action.icon === "environment") {
+    actionIcon = <PanelRight size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
+  } else if (action.icon === "terminal") {
+    actionIcon = (
+      <TerminalSquare size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />
+    );
+  } else if (action.icon === "agent") {
+    actionIcon = <Bot size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />;
   }
   const titleStyle = useMemo(
     () => [styles.title, { color: theme.colors.foreground }],
     [theme.colors.foreground],
   );
+  const subtitleStyle = useMemo(
+    () => [styles.subtitle, { color: theme.colors.foregroundMuted }],
+    [theme.colors.foregroundMuted],
+  );
+  const iconSlotStyle = useMemo(() => [styles.iconSlot, active && styles.iconSlotActive], [active]);
+  const accessibilityLabel = action.subtitle ? `${action.title}, ${action.subtitle}` : action.title;
   return (
     <CommandCenterRowContainer
       rowIndex={rowIndex}
       active={active}
+      accessibilityLabel={accessibilityLabel}
       rowRefs={rowRefs}
       onPress={handlePress}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowMain}>
-          {actionIcon ? <View style={styles.iconSlot}>{actionIcon}</View> : null}
+          {actionIcon ? <View style={iconSlotStyle}>{actionIcon}</View> : null}
           <View style={styles.textContent}>
             <Text style={titleStyle} numberOfLines={1}>
               {action.title}
             </Text>
+            {action.subtitle ? (
+              <Text style={subtitleStyle} numberOfLines={1}>
+                {action.subtitle}
+              </Text>
+            ) : null}
           </View>
         </View>
         {action.shortcutKeys ? (
@@ -155,11 +203,17 @@ function CommandCenterAgentRow({
   item,
   children,
 }: CommandCenterAgentRowProps) {
+  const { t } = useTranslation();
   const handlePress = useCallback(() => onSelect(item), [onSelect, item]);
+  const accessibilityLabel = useMemo(() => {
+    const title = item.agent.title || t("workspace.newAgent");
+    return `${title}, ${shortenPath(item.agent.cwd)}, ${formatTimeAgo(item.agent.lastActivityAt)}`;
+  }, [item.agent.cwd, item.agent.lastActivityAt, item.agent.title, t]);
   return (
     <CommandCenterRowContainer
       rowIndex={rowIndex}
       active={active}
+      accessibilityLabel={accessibilityLabel}
       rowRefs={rowRefs}
       onPress={handlePress}
     >
@@ -344,6 +398,7 @@ export function CommandCenter() {
               onChangeText={setQuery}
               placeholder={t("commandCenter.placeholder")}
               placeholderTextColor={theme.colors.foregroundMuted}
+              accessibilityLabel={t("commandCenter.searchLabel")}
               style={inputStyle}
               autoCapitalize="none"
               autoCorrect={false}
@@ -413,15 +468,16 @@ const styles = StyleSheet.create((theme) => ({
     width: 640,
     maxWidth: "92%",
     maxHeight: "80%",
-    borderWidth: 1,
-    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderRadius: theme.borderRadius.xl,
     overflow: "hidden",
     ...theme.shadow.lg,
   },
   header: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
-    borderBottomWidth: 1,
+    borderBottomWidth: theme.borderWidth[1],
+    backgroundColor: theme.colors.surface1,
   },
   input: {
     fontSize: theme.fontSize.lg,
@@ -432,10 +488,11 @@ const styles = StyleSheet.create((theme) => ({
     flexGrow: 0,
   },
   resultsContent: {
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[2],
   },
   sectionLabel: {
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
     paddingTop: 0,
     paddingBottom: theme.spacing[2],
     fontSize: theme.fontSize.xs,
@@ -446,8 +503,17 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[2],
   },
   row: {
-    paddingHorizontal: theme.spacing[4],
+    marginHorizontal: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
+    borderWidth: theme.borderWidth[1],
+    borderColor: "transparent",
+    borderRadius: theme.borderRadius.lg,
+  },
+  rowActive: {
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
+    ...theme.shadow.sm,
   },
   rowContent: {
     flexDirection: "row",
@@ -463,10 +529,15 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   iconSlot: {
-    width: 16,
-    height: 20,
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface2,
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconSlotActive: {
+    backgroundColor: theme.colors.surface3,
   },
   textContent: {
     flex: 1,

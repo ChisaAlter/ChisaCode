@@ -203,7 +203,52 @@ describe("sendOsNotification", () => {
     expect(clicked.clickListeners).toHaveLength(1);
     clicked.clickListeners[0]?.({} as Event);
 
+    expect(globalThis.focus).toHaveBeenCalledTimes(1);
     expect(assign).toHaveBeenCalledWith("/h/srv%20with%20space/agent/agent%2F1");
+  });
+
+  it("continues fallback navigation when window focus throws", async () => {
+    const created: MockNotificationInstance[] = [];
+
+    class MockNotification implements MockNotificationInstance {
+      static permission = "granted";
+      static requestPermission = vi.fn(async () => "granted");
+      clickListeners: Array<(event: Event) => void> = [];
+      close = vi.fn();
+
+      constructor(
+        public title: string,
+        public options?: MockNotificationOptions,
+      ) {
+        created.push(this);
+      }
+
+      addEventListener(event: string, listener: (event: Event) => void): void {
+        if (event === "click") {
+          this.clickListeners.push(listener);
+        }
+      }
+    }
+
+    const assign = vi.fn();
+
+    (globalThis as { Notification?: unknown }).Notification = MockNotification;
+    (globalThis as { dispatchEvent?: unknown }).dispatchEvent = vi.fn(() => true);
+    (globalThis as { focus?: unknown }).focus = vi.fn(() => {
+      throw new Error("focus blocked");
+    });
+    (globalThis as { location?: unknown }).location = { assign };
+
+    const { sendOsNotification } = await loadModuleForPlatform("web");
+
+    await sendOsNotification({
+      title: "Agent finished",
+      data: { serverId: "srv-1", agentId: "agent-1" },
+    });
+
+    created[0]?.clickListeners[0]?.({} as Event);
+
+    expect(assign).toHaveBeenCalledWith("/h/srv-1/agent/agent-1");
   });
 
   it("returns false when the Notification API is unavailable", async () => {
@@ -253,6 +298,42 @@ describe("sendOsNotification", () => {
     });
 
     expect(sent).toBe(true);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.clickListeners).toHaveLength(0);
+  });
+
+  it("does not attach a click handler for workspace data without a server id", async () => {
+    const created: MockNotificationInstance[] = [];
+
+    class MockNotification implements MockNotificationInstance {
+      static permission = "granted";
+      static requestPermission = vi.fn(async () => "granted");
+      clickListeners: Array<(event: Event) => void> = [];
+      close = vi.fn();
+
+      constructor(
+        public title: string,
+        public options?: MockNotificationOptions,
+      ) {
+        created.push(this);
+      }
+
+      addEventListener(event: string, listener: (event: Event) => void): void {
+        if (event === "click") {
+          this.clickListeners.push(listener);
+        }
+      }
+    }
+
+    (globalThis as { Notification?: unknown }).Notification = MockNotification;
+
+    const { sendOsNotification } = await loadModuleForPlatform("web");
+
+    await sendOsNotification({
+      title: "Workspace updated",
+      data: { workspaceId: "ws-main" },
+    });
+
     expect(created).toHaveLength(1);
     expect(created[0]?.clickListeners).toHaveLength(0);
   });

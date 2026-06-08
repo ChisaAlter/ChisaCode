@@ -224,10 +224,12 @@ const styles = StyleSheet.create((theme) => ({
   splitButton: {
     flexDirection: "row",
     alignItems: "stretch",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
     overflow: "hidden",
+    ...theme.shadow.sm,
   },
   splitButtonPrimary: {
     paddingHorizontal: theme.spacing[3],
@@ -265,7 +267,7 @@ const styles = StyleSheet.create((theme) => ({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
   },
   overflowMenuButton: {
     marginRight: -theme.spacing[2],

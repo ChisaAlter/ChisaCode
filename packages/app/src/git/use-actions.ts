@@ -131,6 +131,7 @@ function deriveGitActionsState(args: DeriveGitActionsStateArgs): DerivedGitActio
 interface UseGitActionsInput {
   serverId: string;
   cwd: string;
+  enabled?: boolean;
   icons: {
     commit: ReactElement;
     pull: ReactElement;
@@ -153,30 +154,65 @@ interface UseGitActionsResult {
   isGit: boolean;
 }
 
-export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): UseGitActionsResult {
-  const toast = useToast();
-  const { t } = useTranslation();
-  const [postShipArchiveSuggested, setPostShipArchiveSuggested] = useState(false);
-  const [shipDefault, setShipDefault] = useState<"merge" | "pr">("merge");
-
-  const { status, isLoading: isStatusLoading } = useCheckoutStatusQuery({ serverId, cwd });
+function useGitActionStatusInputs(input: { serverId: string; cwd: string; enabled: boolean }) {
+  const { status, isLoading: isStatusLoading } = useCheckoutStatusQuery({
+    serverId: input.serverId,
+    cwd: input.cwd,
+    enabled: input.enabled,
+  });
   const gitStatus = status && status.isGit ? status : null;
   const isGit = Boolean(gitStatus);
   const notGit = status !== null && !status.isGit && !status.error;
   const baseRef = gitStatus?.baseRef ?? undefined;
-
-  const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
-
   const { status: prStatus, githubFeaturesEnabled } = useCheckoutPrStatusQuery({
-    serverId,
-    cwd,
-    enabled: isGit,
+    serverId: input.serverId,
+    cwd: input.cwd,
+    enabled: input.enabled && isGit,
   });
   const baseRefLabel = useMemo(() => formatBaseRefLabel(baseRef), [baseRef]);
   const branchLabel = resolveBranchLabel({
     currentBranch: gitStatus?.currentBranch,
     notGit,
   });
+
+  return {
+    status,
+    gitStatus,
+    isGit,
+    baseRef,
+    prStatus,
+    githubFeaturesEnabled,
+    baseRefLabel,
+    branchLabel,
+    isStatusLoading,
+  };
+}
+
+export function useGitActions({
+  serverId,
+  cwd,
+  enabled = true,
+  icons,
+}: UseGitActionsInput): UseGitActionsResult {
+  const toast = useToast();
+  const { t } = useTranslation();
+  const [postShipArchiveSuggested, setPostShipArchiveSuggested] = useState(false);
+  const [shipDefault, setShipDefault] = useState<"merge" | "pr">("merge");
+
+  const {
+    status,
+    gitStatus,
+    isGit,
+    baseRef,
+    prStatus,
+    githubFeaturesEnabled,
+    baseRefLabel,
+    branchLabel,
+    isStatusLoading,
+  } = useGitActionStatusInputs({ serverId, cwd, enabled });
+
+  const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
+
   const worktreeArchiveCopy = useMemo(
     () => ({
       addedLines: (count: number) => t("git.archiveAddedLines", { count }),

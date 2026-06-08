@@ -2,34 +2,68 @@ import { useMemo } from "react";
 import { View, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
-type StatusBadgeVariant = "success" | "error" | "muted";
+type StatusBadgeVariant = "success" | "warning" | "error" | "muted";
 
 interface StatusBadgeProps {
   label: string;
   variant?: StatusBadgeVariant;
+  accessibilityLabel?: string;
 }
 
-export function StatusBadge({ label, variant = "muted" }: StatusBadgeProps) {
+function normalizeStatusBadgeLabel(label: string): string {
+  const trimmed = label.trim();
+  return trimmed.length > 0 ? trimmed : "Status";
+}
+
+function normalizeOptionalStatusBadgeLabel(label: string | null | undefined): string | null {
+  if (typeof label !== "string") {
+    return null;
+  }
+  const trimmed = label.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeStatusBadgeVariant(variant: StatusBadgeVariant): StatusBadgeVariant {
+  if (variant === "success" || variant === "warning" || variant === "error") {
+    return variant;
+  }
+  return "muted";
+}
+
+export function StatusBadge({ label, variant = "muted", accessibilityLabel }: StatusBadgeProps) {
+  const displayLabel = normalizeStatusBadgeLabel(label);
+  const normalizedVariant = normalizeStatusBadgeVariant(variant);
+  const normalizedAccessibilityLabel =
+    normalizeOptionalStatusBadgeLabel(accessibilityLabel) ?? displayLabel;
   const pillStyle = useMemo(
     () => [
       styles.pill,
-      variant === "success" && styles.pillSuccess,
-      variant === "error" && styles.pillError,
+      normalizedVariant === "success" && styles.pillSuccess,
+      normalizedVariant === "warning" && styles.pillWarning,
+      normalizedVariant === "error" && styles.pillError,
     ],
-    [variant],
+    [normalizedVariant],
   );
   const textStyle = useMemo(
     () => [
       styles.pillText,
-      variant === "success" && styles.pillTextSuccess,
-      variant === "error" && styles.pillTextError,
+      normalizedVariant === "success" && styles.pillTextSuccess,
+      normalizedVariant === "warning" && styles.pillTextWarning,
+      normalizedVariant === "error" && styles.pillTextError,
     ],
-    [variant],
+    [normalizedVariant],
   );
 
   return (
-    <View style={pillStyle}>
-      <Text style={textStyle}>{label}</Text>
+    <View
+      accessible
+      accessibilityLabel={normalizedAccessibilityLabel}
+      accessibilityRole="text"
+      style={pillStyle}
+    >
+      <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
+        {displayLabel}
+      </Text>
     </View>
   );
 }
@@ -38,30 +72,42 @@ const styles = StyleSheet.create((theme) => ({
   pill: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
+    maxWidth: "100%",
     borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface3,
-    paddingHorizontal: theme.spacing[2],
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface2,
+    paddingHorizontal: theme.spacing[3],
     paddingVertical: 3,
+    ...theme.shadow.sm,
   },
   pillSuccess: {
-    backgroundColor: theme.colors.palette.green[900],
-    borderColor: theme.colors.palette.green[800],
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderColor: "rgba(34, 197, 94, 0.22)",
+  },
+  pillWarning: {
+    backgroundColor: "rgba(245, 158, 11, 0.1)",
+    borderColor: "rgba(245, 158, 11, 0.22)",
   },
   pillError: {
-    backgroundColor: theme.colors.palette.red[900],
-    borderColor: theme.colors.palette.red[800],
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderColor: "rgba(239, 68, 68, 0.22)",
   },
   pillText: {
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
   pillTextSuccess: {
-    color: theme.colors.palette.green[400],
+    color: theme.colors.statusSuccess,
+  },
+  pillTextWarning: {
+    color: theme.colors.statusWarning,
   },
   pillTextError: {
-    color: theme.colors.palette.red[500],
+    color: theme.colors.statusDanger,
   },
 }));

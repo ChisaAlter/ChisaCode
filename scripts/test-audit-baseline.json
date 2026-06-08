@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "description": "Baseline for test debt audit. CI fails only when counts rise above this file.",
+  "counts": {
+    "moduleMock": 169,
+    "spyOn": 42,
+    "unconditionalSkip": 11,
+    "conditionalSkip": 103,
+    "fixedWait": 351,
+    "weakAssertion": 299,
+    "processEnvMutation": 133
+  }
+}

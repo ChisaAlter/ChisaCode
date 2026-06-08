@@ -13,13 +13,23 @@ const { theme, startWorkspaceScriptMock } = vi.hoisted(() => {
   const hoistedTheme = {
     spacing: { 1: 4, 1.5: 6, 2: 8, 3: 12 },
     borderWidth: { 1: 1 },
-    borderRadius: { md: 6, lg: 8 },
+    borderRadius: { md: 6, lg: 8, xl: 12, full: 999 },
+    shadow: {
+      sm: {
+        shadowColor: "rgba(0, 0, 0, 0.25)",
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 2,
+      },
+    },
     fontSize: { xs: 11, sm: 13 },
     fontWeight: { normal: "400", medium: "500" },
     colors: {
       foreground: "#fff",
       foregroundMuted: "#aaa",
+      surface1: "#1a1a1a",
       surface2: "#222",
+      border: "#333",
       borderAccent: "#444",
       palette: {
         blue: { 500: "#0a84ff" },
@@ -80,6 +90,21 @@ vi.mock("@/stores/session-store", () => ({
 
 vi.mock("@/contexts/toast-context", () => ({
   useToast: () => ({ show: vi.fn(), error: vi.fn() }),
+}));
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, string>) => {
+      const translations: Record<string, string> = {
+        "workspace.run": "Run",
+        "workspace.scripts": "Scripts",
+        "workspace.scriptsDaemonUnavailable": "Scripts unavailable",
+        "workspace.startScriptFailed": `Failed to start ${params?.script ?? "script"}`,
+        "workspace.view": "View",
+      };
+      return translations[key] ?? key;
+    },
+  }),
 }));
 
 vi.mock("@/utils/open-external-url", () => ({

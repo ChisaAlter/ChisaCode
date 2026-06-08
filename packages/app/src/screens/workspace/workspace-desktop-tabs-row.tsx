@@ -308,6 +308,8 @@ function TabChip({
   const tabChipStyle = useCallback(
     () => [
       styles.tab,
+      isHighlighted && styles.tabHighlighted,
+      isActive && styles.tabActive,
       isWeb && isDragging && ({ cursor: "grabbing" } as object),
       {
         minWidth: resolvedTabWidth,
@@ -315,7 +317,7 @@ function TabChip({
         maxWidth: resolvedTabWidth,
       },
     ],
-    [isDragging, resolvedTabWidth],
+    [isActive, isDragging, isHighlighted, resolvedTabWidth],
   );
 
   const handleTabHoverIn = useCallback(() => {
@@ -964,12 +966,17 @@ const styles = StyleSheet.create((theme) => ({
   tabsContainer: {
     minWidth: 0,
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    marginHorizontal: theme.spacing[2],
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.xl,
     backgroundColor: theme.colors.surface0,
     flexDirection: "row",
     alignItems: "center",
-    overflow: "visible",
+    overflow: "hidden",
+    ...theme.shadow.sm,
   },
   tabsScroll: {
     minWidth: 0,
@@ -982,22 +989,34 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabsContent: {
     flexDirection: "row",
-    alignItems: "stretch",
+    alignItems: "center",
+    paddingLeft: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    gap: theme.spacing[1],
   },
   tabsActions: {
     flexDirection: "row",
     alignItems: "center",
+    gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
   },
   tab: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
     userSelect: "none",
+  },
+  tabHighlighted: {
+    backgroundColor: theme.colors.surface2,
+  },
+  tabActive: {
+    backgroundColor: theme.colors.surface0,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    ...theme.shadow.sm,
   },
   tabSlot: {
     position: "relative",
@@ -1017,9 +1036,10 @@ const styles = StyleSheet.create((theme) => ({
   tabFocusIndicator: {
     position: "absolute",
     top: 0,
-    left: 0,
-    right: 0,
+    left: theme.spacing[2],
+    right: theme.spacing[2],
     height: 2,
+    borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.accent,
   },
   tabFocusIndicatorUnfocused: {
@@ -1083,9 +1103,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface3,
   },
   newTabActionButton: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1094,6 +1116,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   newTabActionButtonHovered: {
     backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.borderAccent,
   },
   newTabTooltipText: {
     color: theme.colors.foreground,

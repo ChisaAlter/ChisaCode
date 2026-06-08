@@ -12,6 +12,7 @@ import { WorkspaceScreen } from "@/screens/workspace/workspace-screen";
 import { useWorkspaceLayoutStoreHydrated } from "@/stores/workspace-layout-store";
 import {
   decodeWorkspaceIdFromPathSegment,
+  isWorkspaceScreenOpenIntent,
   parseWorkspaceOpenIntent,
   type WorkspaceOpenIntent,
 } from "@/utils/host-routes";
@@ -29,7 +30,10 @@ function getParamValue(value: string | string[] | undefined): string {
   return "";
 }
 
-function getOpenIntentTarget(openIntent: WorkspaceOpenIntent): WorkspaceTabTarget {
+function getOpenIntentTarget(openIntent: WorkspaceOpenIntent): WorkspaceTabTarget | null {
+  if (openIntent.kind === "changes" || openIntent.kind === "terminal-new") {
+    return null;
+  }
   if (openIntent.kind === "agent") {
     return { kind: "agent", agentId: openIntent.agentId };
   }
@@ -117,13 +121,20 @@ function HostWorkspaceRouteContent() {
     consumedIntentRef.current = consumptionKey;
 
     const openIntent = parseWorkspaceOpenIntent(openValue);
+    if (openIntent && isWorkspaceScreenOpenIntent(openIntent)) {
+      setIntentConsumed(true);
+      return;
+    }
     if (openIntent) {
-      prepareWorkspaceTab({
-        serverId,
-        workspaceId,
-        target: getOpenIntentTarget(openIntent),
-        pin: openIntent.kind === "agent",
-      });
+      const target = getOpenIntentTarget(openIntent);
+      if (target) {
+        prepareWorkspaceTab({
+          serverId,
+          workspaceId,
+          target,
+          pin: openIntent.kind === "agent",
+        });
+      }
     }
 
     // Expo Router's replace ignores query-param-only changes (findDivergentState
@@ -145,7 +156,11 @@ function HostWorkspaceRouteContent() {
     workspaceId,
   ]);
 
-  if (openValue && (!intentConsumed || !hasHydratedWorkspaceLayoutStore)) {
+  const openIntent = parseWorkspaceOpenIntent(openValue);
+  const shouldWaitForRouteIntent =
+    openValue && (!openIntent || !isWorkspaceScreenOpenIntent(openIntent));
+
+  if (shouldWaitForRouteIntent && (!intentConsumed || !hasHydratedWorkspaceLayoutStore)) {
     return null;
   }
 

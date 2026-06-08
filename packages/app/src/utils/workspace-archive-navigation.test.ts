@@ -79,20 +79,46 @@ describe("buildWorkspaceArchiveRedirectRoute", () => {
       }),
     ).toBe("/h/server-1/new?dir=%2Fnotes&name=Project&projectId=notes");
   });
+
+  it("falls back to workspace directory when project root is blank", () => {
+    const workspaces = [
+      workspace({
+        id: "feature",
+        projectRootPath: "   ",
+        workspaceDirectory: "/repo/.chisacode/worktrees/feature",
+      }),
+    ];
+
+    expect(
+      buildWorkspaceArchiveRedirectRoute({
+        serverId: "server-1",
+        archivedWorkspaceId: "feature",
+        workspaces,
+      }),
+    ).toBe(
+      "/h/server-1/new?dir=%2Frepo%2F.chisacode%2Fworktrees%2Ffeature&name=Project&projectId=project-1",
+    );
+  });
 });
 
 function createFakeRouter(workspaces: WorkspaceDescriptor[]): {
   deps: RedirectIfArchivingActiveWorkspaceDeps;
   routes: Href[];
+  readServerIds: string[];
 } {
   const routes: Href[] = [];
+  const readServerIds: string[] = [];
   return {
     routes,
+    readServerIds,
     deps: {
       navigateToRoute: (route) => {
         routes.push(route);
       },
-      readWorkspaces: () => workspaces,
+      readWorkspaces: (serverId) => {
+        readServerIds.push(serverId);
+        return workspaces;
+      },
     },
   };
 }
@@ -135,6 +161,26 @@ describe("redirectIfArchivingActiveWorkspace", () => {
       ),
     ).toBe(true);
 
+    expect(routes).toEqual(["/h/server-1/new?dir=%2Frepo&name=Project&projectId=project-1"]);
+  });
+
+  it("normalizes active workspace selection before deciding whether to redirect", () => {
+    const { deps, routes, readServerIds } = createFakeRouter([
+      workspace({ id: "feature", name: "feature" }),
+    ]);
+
+    expect(
+      redirectIfArchivingActiveWorkspace(
+        {
+          serverId: " server-1 ",
+          workspaceId: " feature ",
+          activeWorkspaceSelection: { serverId: "server-1", workspaceId: "feature" },
+        },
+        deps,
+      ),
+    ).toBe(true);
+
+    expect(readServerIds).toEqual(["server-1"]);
     expect(routes).toEqual(["/h/server-1/new?dir=%2Frepo&name=Project&projectId=project-1"]);
   });
 });

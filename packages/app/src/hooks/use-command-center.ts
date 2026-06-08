@@ -11,6 +11,11 @@ import {
   takeCommandCenterFocusRestoreElement,
 } from "@/utils/command-center-focus-restore";
 import { buildHostOpenProjectRoute, buildSettingsRoute } from "@/utils/host-routes";
+import {
+  buildHostSessionsRoute,
+  buildHostWorkspaceOpenRoute,
+  parseHostWorkspaceRouteFromPathname,
+} from "@/utils/host-routes";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { chordStringToShortcutKeys } from "@/keyboard/shortcut-string";
 import { getBindingIdForAction, getDefaultKeysForAction } from "@/keyboard/keyboard-shortcuts";
@@ -21,90 +26,20 @@ import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { focusWithRetries } from "@/utils/web-focus";
 import { useActiveServerId } from "@/hooks/use-active-server-id";
 import { useTranslation } from "react-i18next";
+import {
+  buildCommandCenterActionItems,
+  type CommandCenterActionItem,
+} from "@/hooks/command-center-actions";
+import {
+  compareCommandCenterAgents,
+  matchesCommandCenterAgent,
+  resolveCommandCenterAgentTarget,
+} from "@/hooks/command-center-agents";
+import { useWorkspaceFields } from "@/stores/session-store-hooks";
+import { isWeb } from "@/constants/platform";
 
 const EMPTY_AGENTS: AggregatedAgent[] = [];
-const EMPTY_ACTION_ITEMS: CommandCenterActionItem[] = [];
 const EMPTY_COMMAND_CENTER_ITEMS: CommandCenterItem[] = [];
-
-function isMatch(agent: AggregatedAgent, query: string): boolean {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  const title = (agent.title ?? "New agent").toLowerCase();
-  const cwd = agent.cwd.toLowerCase();
-  return title.includes(q) || cwd.includes(q);
-}
-
-function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
-  const leftNeedsInput = (left.pendingPermissionCount ?? 0) > 0 ? 1 : 0;
-  const rightNeedsInput = (right.pendingPermissionCount ?? 0) > 0 ? 1 : 0;
-  if (leftNeedsInput !== rightNeedsInput) return rightNeedsInput - leftNeedsInput;
-
-  const leftAttention = left.requiresAttention ? 1 : 0;
-  const rightAttention = right.requiresAttention ? 1 : 0;
-  if (leftAttention !== rightAttention) return rightAttention - leftAttention;
-
-  const leftRunning = left.status === "running" ? 1 : 0;
-  const rightRunning = right.status === "running" ? 1 : 0;
-  if (leftRunning !== rightRunning) return rightRunning - leftRunning;
-
-  return right.lastActivityAt.getTime() - left.lastActivityAt.getTime();
-}
-
-interface CommandCenterActionDefinition {
-  id: string;
-  titleKey: string;
-  icon?: "plus" | "settings" | "home";
-  actionId?: string;
-  keywords: string[];
-  routeKind: "settings" | "home" | "none";
-}
-
-const COMMAND_CENTER_ACTIONS: readonly CommandCenterActionDefinition[] = [
-  {
-    id: "new-agent",
-    titleKey: "workspace.openProject",
-    icon: "plus",
-    actionId: "new-agent",
-    keywords: ["open", "project", "folder", "workspace", "repo"],
-    routeKind: "none",
-  },
-  {
-    id: "home",
-    titleKey: "commandCenter.home",
-    icon: "home",
-    keywords: ["home", "start", "import", "session", "pair", "device", "providers"],
-    routeKind: "home",
-  },
-  {
-    id: "settings",
-    titleKey: "settings.title",
-    icon: "settings",
-    keywords: ["settings", "preferences", "config", "configuration"],
-    routeKind: "settings",
-  },
-];
-
-function matchesActionQuery(
-  query: string,
-  action: CommandCenterActionDefinition,
-  title: string,
-): boolean {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return true;
-  if (title.toLowerCase().includes(normalized)) {
-    return true;
-  }
-  return action.keywords.some((keyword) => keyword.includes(normalized));
-}
-
-export interface CommandCenterActionItem {
-  kind: "action";
-  id: string;
-  title: string;
-  icon?: "plus" | "settings" | "home";
-  route?: Href;
-  shortcutKeys?: ShortcutKey[][];
-}
 
 export type CommandCenterItem =
   | {
@@ -150,6 +85,10 @@ export function useCommandCenter() {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const activeServerId = open ? routeActiveServerId : null;
+  const currentWorkspaceRoute = useMemo(
+    () => (open ? parseHostWorkspaceRouteFromPathname(pathname) : null),
+    [open, pathname],
+  );
 
   const { agents } = useAllAgentsList({
     serverId: activeServerId,
@@ -159,8 +98,8 @@ export function useCommandCenter() {
     if (!open || agents.length === 0) {
       return EMPTY_AGENTS;
     }
-    const filtered = agents.filter((agent) => isMatch(agent, query));
-    filtered.sort(sortAgents);
+    const filtered = agents.filter((agent) => matchesCommandCenterAgent(agent, query));
+    filtered.sort(compareCommandCenterAgents);
     return filtered;
   }, [agents, open, query]);
 
@@ -173,27 +112,57 @@ export function useCommandCenter() {
     return buildHostOpenProjectRoute(routeActiveServerId) as Href;
   }, [routeActiveServerId]);
 
+  const sessionsRoute = useMemo<Href | undefined>(() => {
+    if (!routeActiveServerId) return undefined;
+    return buildHostSessionsRoute(routeActiveServerId) as Href;
+  }, [routeActiveServerId]);
+
+  const currentWorkspaceDraftRoute = useMemo<Href | undefined>(() => {
+    if (!currentWorkspaceRoute) return undefined;
+    return buildHostWorkspaceOpenRoute(
+      currentWorkspaceRoute.serverId,
+      currentWorkspaceRoute.workspaceId,
+      "draft:new",
+    ) as Href;
+  }, [currentWorkspaceRoute]);
+  const currentWorkspaceKind = useWorkspaceFields(
+    currentWorkspaceRoute?.serverId ?? null,
+    currentWorkspaceRoute?.workspaceId ?? null,
+    (workspace) => workspace.workspaceKind,
+  );
+  const currentProjectKind = useWorkspaceFields(
+    currentWorkspaceRoute?.serverId ?? null,
+    currentWorkspaceRoute?.workspaceId ?? null,
+    (workspace) => workspace.projectKind,
+  );
+
   const actionItems = useMemo(() => {
-    if (!open) {
-      return EMPTY_ACTION_ITEMS;
-    }
-    return COMMAND_CENTER_ACTIONS.filter((action) => {
-      if (action.routeKind === "home" && !homeRoute) return false;
-      return matchesActionQuery(query, action, t(action.titleKey));
-    }).map<CommandCenterActionItem>((action) => {
-      let route: Href | undefined;
-      if (action.routeKind === "settings") route = settingsRoute;
-      else if (action.routeKind === "home") route = homeRoute;
-      return {
-        kind: "action",
-        id: action.id,
-        title: t(action.titleKey),
-        icon: action.icon,
-        route,
-        shortcutKeys: resolveActionShortcutKeys(action.actionId, overrides),
-      };
+    return buildCommandCenterActionItems({
+      open,
+      query,
+      currentWorkspaceRoute,
+      currentWorkspaceKind,
+      currentProjectKind,
+      currentWorkspaceDraftRoute: currentWorkspaceDraftRoute as string | undefined,
+      homeRoute: homeRoute as string | undefined,
+      sessionsRoute: sessionsRoute as string | undefined,
+      settingsRoute: settingsRoute as string,
+      t,
+      resolveShortcutKeys: (actionId) => resolveActionShortcutKeys(actionId, overrides),
     });
-  }, [open, query, settingsRoute, homeRoute, overrides, t]);
+  }, [
+    currentWorkspaceRoute,
+    currentWorkspaceKind,
+    currentProjectKind,
+    currentWorkspaceDraftRoute,
+    homeRoute,
+    open,
+    overrides,
+    query,
+    sessionsRoute,
+    settingsRoute,
+    t,
+  ]);
 
   const items = useMemo(() => {
     if (!open) {
@@ -221,14 +190,18 @@ export function useCommandCenter() {
 
   const handleSelectAgent = useCallback(
     (agent: AggregatedAgent) => {
+      const target = resolveCommandCenterAgentTarget(agent);
+      if (!target) {
+        return;
+      }
       didNavigateRef.current = true;
 
       // Don't restore focus back to the prior element after we navigate.
       clearCommandCenterFocusRestoreElement();
       setOpen(false);
       navigateToAgent({
-        serverId: agent.serverId,
-        agentId: agent.id,
+        serverId: target.serverId,
+        agentId: target.agentId,
         currentPathname: pathname,
       });
     },
@@ -245,11 +218,19 @@ export function useCommandCenter() {
         void openProjectPicker();
         return;
       }
+      if (action.dispatchAction) {
+        didNavigateRef.current = true;
+        keyboardActionDispatcher.dispatch({
+          id: action.dispatchAction,
+          scope: action.dispatchAction.startsWith("worktree.") ? "sidebar" : "workspace",
+        });
+        return;
+      }
       if (!action.route) {
         return;
       }
       didNavigateRef.current = true;
-      router.push(action.route);
+      router.push(action.route as Href);
     },
     [openProjectPicker, setOpen],
   );
@@ -289,7 +270,7 @@ export function useCommandCenter() {
       setQuery("");
       setActiveIndex(0);
 
-      if (prevOpen && !didNavigateRef.current) {
+      if (isWeb && prevOpen && !didNavigateRef.current) {
         const el = takeCommandCenterFocusRestoreElement();
         const isFocused = () =>
           Boolean(el) && typeof document !== "undefined" && document.activeElement === el;
@@ -312,10 +293,12 @@ export function useCommandCenter() {
 
     didNavigateRef.current = false;
 
-    const id = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
-    return () => clearTimeout(id);
+    if (isWeb) {
+      const id = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(id);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -326,7 +309,7 @@ export function useCommandCenter() {
   }, [activeIndex, items.length, open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isWeb || !open) return;
 
     const handler = (event: KeyboardEvent) => {
       const currentItems = itemsRef.current;

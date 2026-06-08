@@ -6,11 +6,19 @@ import {
   checkoutStatusQueryKey,
   invalidateCheckoutGitQueriesForClient,
   prPaneTimelineQueryKey,
+  normalizeCheckoutCwd,
 } from "@/git/query-keys";
 
 describe("checkout query keys", () => {
   const serverId = "server-1";
   const cwd = "/tmp/repo";
+
+  it("normalizes checkout cwd segments in query keys", () => {
+    expect(normalizeCheckoutCwd(" C:\\tmp\\repo\\ ")).toBe("C:/tmp/repo");
+    expect(checkoutStatusQueryKey(serverId, "/tmp/repo/")).toEqual(
+      checkoutStatusQueryKey(serverId, "/tmp/repo"),
+    );
+  });
 
   it("invalidates every query for a checkout without touching other checkouts", async () => {
     const queryClient = new QueryClient();
@@ -55,6 +63,32 @@ describe("checkout query keys", () => {
       queryClient.getQueryState(
         prPaneTimelineQueryKey({ serverId, cwd: "/tmp/other", prNumber: 12 }),
       )?.isInvalidated,
+    ).toBe(false);
+
+    queryClient.clear();
+  });
+
+  it("invalidates equivalent cwd spellings for checkout scoped queries", async () => {
+    const queryClient = new QueryClient();
+
+    queryClient.setQueryData(checkoutDiffQueryKey(serverId, "C:/tmp/repo", "uncommitted"), {
+      files: [],
+    });
+    queryClient.setQueryData(checkoutPrStatusQueryKey(serverId, "C:/tmp/other"), {
+      status: { number: 12 },
+    });
+
+    await invalidateCheckoutGitQueriesForClient(queryClient, {
+      serverId,
+      cwd: "C:\\tmp\\repo\\",
+    });
+
+    expect(
+      queryClient.getQueryState(checkoutDiffQueryKey(serverId, "C:/tmp/repo", "uncommitted"))
+        ?.isInvalidated,
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState(checkoutPrStatusQueryKey(serverId, "C:/tmp/other"))?.isInvalidated,
     ).toBe(false);
 
     queryClient.clear();

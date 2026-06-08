@@ -40,8 +40,12 @@ function buildHistoricalAgentDetail(agent: AggregatedAgent): Agent {
   };
 }
 
+function isValidArchivedAt(value: Date | null | undefined): value is Date {
+  return value instanceof Date && Number.isFinite(value.getTime());
+}
+
 export function rememberArchivedAgentDetail(agent: AggregatedAgent): void {
-  if (!agent.archivedAt) {
+  if (!isValidArchivedAt(agent.archivedAt)) {
     return;
   }
 
@@ -57,3 +61,7 @@ export function rememberArchivedAgentDetail(agent: AggregatedAgent): void {
     return next;
   });
 }
+
+export const __private__ = {
+  isValidArchivedAt,
+};

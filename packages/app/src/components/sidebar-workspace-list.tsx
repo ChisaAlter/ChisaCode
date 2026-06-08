@@ -2953,8 +2953,11 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   kebabButton: {
-    padding: 2,
-    borderRadius: 4,
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.lg,
     marginLeft: 2,
   },
   kebabButtonHovered: {

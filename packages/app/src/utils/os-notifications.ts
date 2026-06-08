@@ -99,7 +99,7 @@ export async function ensureOsNotificationPermission(): Promise<boolean> {
 
 function hasNotificationClickTarget(data: Record<string, unknown> | undefined): boolean {
   const target = resolveNotificationTarget(data);
-  return target.serverId !== null || target.agentId !== null || target.workspaceId !== null;
+  return target.serverId !== null;
 }
 
 function getWebNotificationIconUrl(): string | undefined {
@@ -137,6 +137,11 @@ function dispatchWebNotificationClick(detail: WebNotificationClickDetail): boole
 
 function fallbackNavigateToNotificationTarget(data: Record<string, unknown> | undefined): void {
   const route = buildNotificationRoute(data);
+  try {
+    (globalThis as { focus?: () => void }).focus?.();
+  } catch {
+    // Some runtimes disallow programmatic focus from notification callbacks.
+  }
   const location = (globalThis as { location?: { assign?: (url: string) => void; href?: string } })
     .location;
   if (!location) {

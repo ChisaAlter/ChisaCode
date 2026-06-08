@@ -62,10 +62,15 @@ function buildAllAgentsList(params: {
     if (!leftRunning && rightRunning) {
       return 1;
     }
-    return right.lastActivityAt.getTime() - left.lastActivityAt.getTime();
+    return getActivityTime(right) - getActivityTime(left);
   });
 
   return list;
+}
+
+function getActivityTime(agent: AggregatedAgent): number {
+  const value = agent.lastActivityAt.getTime();
+  return Number.isFinite(value) ? value : 0;
 }
 
 export function useAllAgentsList(options?: {

@@ -31,6 +31,7 @@ import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isWeb } from "@/constants/platform";
 import { useTranslation } from "react-i18next";
+import { getMobileSidebarWidth } from "@/utils/sidebar-animation-state";
 
 const MIN_CHAT_WIDTH = 400;
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
@@ -93,6 +94,7 @@ export function ExplorerSidebar({
     gestureAnimatingRef,
     closeGestureRef,
   } = useExplorerSidebarAnimation();
+  const mobileSidebarWidth = useMemo(() => getMobileSidebarWidth(windowWidth), [windowWidth]);
 
   // For resize drag, track the starting width
   const startWidthRef = useRef(explorerWidth);
@@ -179,19 +181,19 @@ export function ExplorerSidebar({
         })
         .onUpdate((event) => {
           // Right sidebar: swipe right to close (positive translationX)
-          const newTranslateX = Math.max(0, Math.min(windowWidth, event.translationX));
+          const newTranslateX = Math.max(0, Math.min(mobileSidebarWidth, event.translationX));
           translateX.value = newTranslateX;
-          const progress = 1 - newTranslateX / windowWidth;
+          const progress = 1 - newTranslateX / mobileSidebarWidth;
           backdropOpacity.value = Math.max(0, Math.min(1, progress));
         })
         .onEnd((event) => {
           isGesturing.value = false;
-          const shouldClose = event.translationX > windowWidth / 3 || event.velocityX > 500;
+          const shouldClose = event.translationX > mobileSidebarWidth / 3 || event.velocityX > 500;
           runOnJS(logExplorerSidebar)("closeGestureEnd", {
             translationX: event.translationX,
             velocityX: event.velocityX,
             shouldClose,
-            windowWidth,
+            windowWidth: mobileSidebarWidth,
           });
           if (shouldClose) {
             animateToClose();
@@ -205,7 +207,7 @@ export function ExplorerSidebar({
         }),
     [
       enableSidebarCloseGesture,
-      windowWidth,
+      mobileSidebarWidth,
       translateX,
       backdropOpacity,
       animateToOpen,
@@ -265,7 +267,7 @@ export function ExplorerSidebar({
     () => [
       explorerStaticStyles.mobileSidebar,
       {
-        width: windowWidth,
+        width: mobileSidebarWidth,
         paddingTop: insets.top,
         backgroundColor: theme.colors.surfaceSidebar,
       },
@@ -273,7 +275,7 @@ export function ExplorerSidebar({
       mobileKeyboardInsetStyle,
     ],
     [
-      windowWidth,
+      mobileSidebarWidth,
       insets.top,
       theme.colors.surfaceSidebar,
       sidebarAnimatedStyle,
@@ -281,7 +283,11 @@ export function ExplorerSidebar({
     ],
   );
   const desktopSidebarStyle = useMemo(
-    () => [explorerStaticStyles.desktopSidebar, resizeAnimatedStyle, { paddingTop: insets.top }],
+    () => [
+      explorerStaticStyles.desktopSidebar,
+      resizeAnimatedStyle,
+      { paddingTop: insets.top + 8 },
+    ],
     [resizeAnimatedStyle, insets.top],
   );
 
@@ -582,17 +588,24 @@ const explorerStaticStyles = RNStyleSheet.create({
     right: 0,
     bottom: 0,
     overflow: "hidden" as const,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
   },
   desktopSidebar: {
     position: "relative" as const,
+    paddingRight: 8,
+    paddingBottom: 8,
   },
 });
 
 const styles = StyleSheet.create((theme) => ({
   desktopSidebarBorder: {
-    borderLeftWidth: 1,
-    borderLeftColor: theme.colors.border,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.xl,
     backgroundColor: theme.colors.surfaceSidebar,
+    overflow: "hidden",
+    ...theme.shadow.md,
   },
   resizeHandle: {
     position: "absolute",
@@ -614,12 +627,14 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: theme.spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    marginHorizontal: theme.spacing[2],
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
   },
   desktopHeader: {
-    borderBottomColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceSidebar,
+    backgroundColor: theme.colors.surface1,
     paddingLeft: theme.spacing[2],
   },
   tabsContainer: {

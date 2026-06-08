@@ -58,7 +58,7 @@ export function deriveRemoteProjectKey(remoteUrl: string | null): string | null 
     return null;
   }
 
-  let cleanedPath = path.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  let cleanedPath = cleanRemotePath(path);
   if (cleanedPath.endsWith(".git")) {
     cleanedPath = cleanedPath.slice(0, -4);
   }
@@ -74,10 +74,18 @@ export function deriveRemoteProjectKey(remoteUrl: string | null): string | null 
   // GitHub normalization: treat github.com as a special "well-known" host to
   // match the intended UX: group by repo even across different local worktrees.
   if (cleanedHost === "github.com") {
-    return `remote:github.com/${cleanedPath}`;
+    return `remote:github.com/${cleanedPath.toLowerCase()}`;
   }
 
   return `remote:${cleanedHost}/${cleanedPath}`;
+}
+
+function cleanRemotePath(path: string): string {
+  return path
+    .trim()
+    .replace(/[?#].*$/, "")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
 }
 
 /**
@@ -92,13 +100,13 @@ export function parseRepoNameFromRemoteUrl(remoteUrl: string | null): string | n
     return null;
   }
 
-  let cleaned = remoteUrl;
+  let cleaned = remoteUrl.trim();
 
   // Handle SSH format: git@github.com:owner/repo.git
   if (cleaned.startsWith("git@")) {
     const colonIdx = cleaned.indexOf(":");
     if (colonIdx !== -1) {
-      cleaned = cleaned.slice(colonIdx + 1);
+      cleaned = cleanRemotePath(cleaned.slice(colonIdx + 1));
     }
   }
   // Handle HTTPS format: https://github.com/owner/repo.git
@@ -108,9 +116,11 @@ export function parseRepoNameFromRemoteUrl(remoteUrl: string | null): string | n
       // Remove host (e.g., github.com/)
       const slashIdx = urlPath.indexOf("/");
       if (slashIdx !== -1) {
-        cleaned = urlPath.slice(slashIdx + 1);
+        cleaned = cleanRemotePath(urlPath.slice(slashIdx + 1));
       }
     }
+  } else {
+    cleaned = cleanRemotePath(cleaned);
   }
 
   // Remove .git suffix
@@ -194,6 +204,9 @@ export function deriveProjectDisplayName(input: {
  * Determines the date group label for an agent based on lastActivityAt.
  */
 export function deriveDateGroup(lastActivityAt: Date): string {
+  if (!Number.isFinite(lastActivityAt.getTime())) {
+    return "更早";
+  }
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
@@ -281,7 +294,8 @@ function partitionAgentsByActivity(
       continue;
     }
 
-    const isRecentlyActive = now - agent.lastActivityAt.getTime() < ACTIVE_GRACE_PERIOD_MS;
+    const activityTime = getAgentActivityTime(agent);
+    const isRecentlyActive = activityTime > 0 && now - activityTime < ACTIVE_GRACE_PERIOD_MS;
     if (isAgentTrulyActive(agent) || isRecentlyActive) {
       activeAgents.push(agent);
     } else {
@@ -318,8 +332,13 @@ function buildProjectActivityMap(
   return projectMap;
 }
 
+function getAgentActivityTime(agent: AggregatedAgent): number {
+  const value = agent.lastActivityAt.getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
 function byLastActivityDescending(a: AggregatedAgent, b: AggregatedAgent): number {
-  return b.lastActivityAt.getTime() - a.lastActivityAt.getTime();
+  return getAgentActivityTime(b) - getAgentActivityTime(a);
 }
 
 function buildActiveProjectGroups(projectMap: Map<string, ProjectActivityBucket>): ProjectGroup[] {
@@ -342,8 +361,8 @@ function buildActiveProjectGroups(projectMap: Map<string, ProjectActivityBucket>
   }
 
   activeGroups.sort((a, b) => {
-    const aRecent = a.agents[0]?.lastActivityAt.getTime() ?? 0;
-    const bRecent = b.agents[0]?.lastActivityAt.getTime() ?? 0;
+    const aRecent = a.agents[0] ? getAgentActivityTime(a.agents[0]) : 0;
+    const bRecent = b.agents[0] ? getAgentActivityTime(b.agents[0]) : 0;
     return bRecent - aRecent;
   });
 

@@ -16,6 +16,7 @@ export const CHECKOUT_STATUS_STALE_TIME = 15_000;
 interface UseCheckoutStatusQueryOptions {
   serverId: string;
   cwd: string;
+  enabled?: boolean;
 }
 
 function fetchCheckoutStatus(
@@ -25,20 +26,24 @@ function fetchCheckoutStatus(
   return client.getCheckoutStatus(cwd);
 }
 
-export function useCheckoutStatusQuery({ serverId, cwd }: UseCheckoutStatusQueryOptions) {
+export function useCheckoutStatusQuery({
+  serverId,
+  cwd,
+  enabled = true,
+}: UseCheckoutStatusQueryOptions) {
   const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
 
   useEffect(() => {
-    if (!client || !isConnected || !cwd) {
+    if (!enabled || !client || !isConnected || !cwd) {
       return;
     }
 
     return client.on("checkout_status_update", (message) => {
       applyCheckoutStatusUpdate({ queryClient, serverId, cwd, message });
     });
-  }, [client, isConnected, cwd, queryClient, serverId]);
+  }, [client, enabled, isConnected, cwd, queryClient, serverId]);
 
   const query = useQuery({
     queryKey: checkoutStatusQueryKey(serverId, cwd),
@@ -48,7 +53,7 @@ export function useCheckoutStatusQuery({ serverId, cwd }: UseCheckoutStatusQuery
       }
       return await peekOrFetchCheckoutStatus({ queryClient, client, serverId, cwd });
     },
-    enabled: !!client && isConnected && !!cwd,
+    enabled: enabled && !!client && isConnected && !!cwd,
     staleTime: Infinity,
     refetchOnMount: false,
     refetchOnReconnect: false,

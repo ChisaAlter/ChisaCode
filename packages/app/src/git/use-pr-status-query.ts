@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import type { CheckoutPrStatusResponse } from "@chisacode/protocol/messages";
 import { checkoutPrStatusQueryKey } from "@/git/query-keys";
+import { applyCheckoutPrStatusUpdate, type CheckoutPrStatusPayload } from "@/git/pr-status-cache";
+import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 
 interface UseCheckoutPrStatusQueryOptions {
   serverId: string;
@@ -10,7 +10,7 @@ interface UseCheckoutPrStatusQueryOptions {
   enabled?: boolean;
 }
 
-export type CheckoutPrStatusPayload = CheckoutPrStatusResponse["payload"];
+export { applyCheckoutPrStatusUpdate, type CheckoutPrStatusPayload } from "@/git/pr-status-cache";
 
 export interface PrHint {
   url: string;
@@ -89,11 +89,7 @@ export function useCheckoutPrStatusQuery({
     }
 
     return client.on("checkout_status_update", (message) => {
-      const prStatus = message.payload.prStatus;
-      if (!prStatus || prStatus.cwd !== cwd) {
-        return;
-      }
-      queryClient.setQueryData(checkoutPrStatusQueryKey(serverId, cwd), prStatus);
+      applyCheckoutPrStatusUpdate({ queryClient, serverId, cwd, message });
     });
   }, [client, isConnected, cwd, queryClient, serverId]);
 
@@ -138,11 +134,7 @@ export function useWorkspacePrHint({
     }
 
     return client.on("checkout_status_update", (message) => {
-      const prStatus = message.payload.prStatus;
-      if (!prStatus || prStatus.cwd !== cwd) {
-        return;
-      }
-      queryClient.setQueryData(checkoutPrStatusQueryKey(serverId, cwd), prStatus);
+      applyCheckoutPrStatusUpdate({ queryClient, serverId, cwd, message });
     });
   }, [client, isConnected, cwd, queryClient, serverId]);
 

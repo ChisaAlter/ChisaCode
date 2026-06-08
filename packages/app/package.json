@@ -22,6 +22,7 @@
     "test": "vitest run",
     "test:browser": "vitest run --project browser",
     "test:e2e": "playwright test --project='Desktop Chrome'",
+    "test:e2e:desktop-chain": "playwright test --project='Desktop Chrome' e2e/desktop-updates.spec.ts e2e/workspace-open-in-editor.spec.ts e2e/terminal-protocol-query.spec.ts",
     "test:e2e:real": "playwright test --project=real-provider",
     "test:e2e:ui": "playwright test --ui",
     "build": "npm run build:web",

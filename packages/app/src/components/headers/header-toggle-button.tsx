@@ -74,7 +74,11 @@ export const headerIconSlotStyle = StyleSheet.create((theme) => ({
       xs: theme.spacing[3],
       md: theme.spacing[2],
     },
-    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface0,
+    ...theme.shadow.sm,
   },
 }));
 

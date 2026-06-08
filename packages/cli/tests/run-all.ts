@@ -12,7 +12,7 @@ import { spawn } from "child_process";
 import { $ } from "zx";
 import { mkdtemp, readdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
-import { join, dirname, delimiter } from "path";
+import { join, dirname, delimiter, relative, sep } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -52,8 +52,13 @@ if (shardIndexRaw < 1 || shardIndexRaw > shardTotal) {
 const shardIndex = shardIndexRaw - 1;
 
 let jsonOutputPath: string | null = null;
+let listTestsOnly = false;
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
+  if (arg === "--list-tests") {
+    listTestsOnly = true;
+    continue;
+  }
   if (arg === "--json-output") {
     const value = args[i + 1];
     if (!value) {
@@ -125,9 +130,40 @@ async function writeJsonSummary({
 console.log("🧪 ChisaCode CLI E2E Test Runner\n");
 console.log("=".repeat(50));
 
-// Discover all test files
-const files = await readdir(__dirname);
-const allTestFiles = files.filter((f) => f.match(/^\d{2}-.*\.test\.ts$/)).sort();
+type TestEntry = { kind: "script" | "vitest"; file: string };
+
+async function collectTestFiles(dir: string, baseDir = dir): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "helpers") continue;
+      files.push(...(await collectTestFiles(entryPath, baseDir)));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(".test.ts")) {
+      files.push(relative(baseDir, entryPath).split(sep).join("/"));
+    }
+  }
+  return files;
+}
+
+// Discover CLI test files. Legacy numbered files are executable scripts; nested
+// tests and package-local src tests use Vitest.
+const discoveredTestFiles = await collectTestFiles(__dirname);
+const discoveredSrcTestFiles = await collectTestFiles(join(repoRoot, "packages/cli/src"));
+const allScriptTestFiles = discoveredTestFiles
+  .filter((f) => f.match(/^\d{2}-.*\.test\.ts$/))
+  .sort();
+const allVitestTestFiles = [
+  ...discoveredTestFiles.filter((f) => f.startsWith("e2e/")),
+  ...discoveredSrcTestFiles.map((file) => `src/${file}`),
+].sort();
+const allTestFiles: TestEntry[] = [
+  ...allScriptTestFiles.map((file) => ({ kind: "script" as const, file })),
+  ...allVitestTestFiles.map((file) => ({ kind: "vitest" as const, file })),
+];
 
 // Naive `index % shardTotal` round-robin clusters slow tests by accident
 // because their numeric prefixes (05, 06, 11, 13, 14) align with the stride.
@@ -141,10 +177,13 @@ const KNOWN_HEAVY_TESTS = new Set([
   "11-agent-wait.test.ts",
   "13-permit-allow-deny.test.ts",
   "14-worktree.test.ts",
+  "e2e/agent-lifecycle.test.ts",
+  "e2e/agent-send.test.ts",
+  "e2e/permissions.test.ts",
 ]);
-const heavyFiles = allTestFiles.filter((f) => KNOWN_HEAVY_TESTS.has(f));
-const otherFiles = allTestFiles.filter((f) => !KNOWN_HEAVY_TESTS.has(f));
-const shardBuckets: string[][] = Array.from({ length: shardTotal }, () => []);
+const heavyFiles = allTestFiles.filter((f) => KNOWN_HEAVY_TESTS.has(f.file));
+const otherFiles = allTestFiles.filter((f) => !KNOWN_HEAVY_TESTS.has(f.file));
+const shardBuckets: TestEntry[][] = Array.from({ length: shardTotal }, () => []);
 heavyFiles.forEach((f, i) => {
   shardBuckets[i % shardTotal].push(f);
 });
@@ -169,9 +208,13 @@ console.log(
   `Shard ${shardIndex + 1}/${shardTotal}: ${testFiles.length} of ${allTestFiles.length} test file(s):\n`,
 );
 for (const file of testFiles) {
-  console.log(`  - ${file}`);
+  console.log(`  - ${file.kind}: ${file.file}`);
 }
 console.log();
+
+if (listTestsOnly) {
+  process.exit(0);
+}
 
 let passed = 0;
 let failed = 0;
@@ -191,15 +234,19 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-async function runSingleTest(testFile: string): Promise<TestOutcome> {
-  const testPath = join(__dirname, testFile);
-  const testName = testFile.replace(/\.test\.ts$/, "");
+async function runSingleTest(testFile: TestEntry): Promise<TestOutcome> {
+  const testPath =
+    testFile.kind === "script"
+      ? join(__dirname, testFile.file)
+      : join(repoRoot, "packages/cli", testFile.file);
+  const testName = testFile.file.replace(/\.test\.ts$/, "");
   const startedAt = Date.now();
   const npmCache = await mkdtemp(join(tmpdir(), "chisacode-cli-test-npm-cache-"));
 
   try {
     return await new Promise<TestOutcome>((resolve) => {
-      const proc = spawn("npx", ["tsx", testPath], {
+      const command = testFile.kind === "script" ? ["tsx", testPath] : ["vitest", "run", testPath];
+      const proc = spawn("npx", command, {
         env: {
           ...process.env,
           PATH: [rootNodeModulesBin, process.env.PATH].filter(Boolean).join(delimiter),
@@ -288,7 +335,7 @@ async function worker(): Promise<void> {
     const testFile = queue.shift();
     if (!testFile) return;
     const outcome = await runSingleTest(testFile);
-    const test = testFile.replace(/\.test\.ts$/, "");
+    const test = testFile.file.replace(/\.test\.ts$/, "");
     timings.push({ test, durationMs: outcome.durationMs, status: outcome.status });
     if (outcome.status === "passed") {
       passed++;

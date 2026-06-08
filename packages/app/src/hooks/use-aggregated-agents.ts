@@ -4,6 +4,7 @@ import { useSessionStore } from "@/stores/session-store";
 import type { AgentDirectoryEntry } from "@/types/agent-directory";
 import type { Agent } from "@/stores/session-store";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import type { HostRuntimeAgentDirectoryStatus } from "@/runtime/host-runtime";
 
 export interface AggregatedAgent extends AgentDirectoryEntry {
   serverId: string;
@@ -16,6 +17,90 @@ export interface AggregatedAgentsResult {
   isInitialLoad: boolean;
   isRevalidating: boolean;
   refreshAll: () => void;
+}
+
+interface AggregatedHostInfo {
+  serverId: string;
+  label: string;
+  agentDirectoryStatus?: HostRuntimeAgentDirectoryStatus;
+}
+
+function toAggregatedAgent(input: {
+  agent: Agent;
+  serverId: string;
+  serverLabel: string;
+}): AggregatedAgent {
+  return {
+    id: input.agent.id,
+    serverId: input.serverId,
+    serverLabel: input.serverLabel,
+    title: input.agent.title ?? null,
+    status: input.agent.status,
+    lastActivityAt: input.agent.lastActivityAt,
+    cwd: input.agent.cwd,
+    provider: input.agent.provider,
+    pendingPermissionCount: input.agent.pendingPermissions.length,
+    requiresAttention: input.agent.requiresAttention,
+    attentionReason: input.agent.attentionReason,
+    attentionTimestamp: input.agent.attentionTimestamp,
+    archivedAt: input.agent.archivedAt,
+    createdAt: input.agent.createdAt,
+    labels: input.agent.labels,
+  };
+}
+
+function getActivityTime(agent: AggregatedAgent): number {
+  const value = agent.lastActivityAt.getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function compareAggregatedAgents(left: AggregatedAgent, right: AggregatedAgent): number {
+  const leftRunning = left.status === "running";
+  const rightRunning = right.status === "running";
+  if (leftRunning && !rightRunning) {
+    return -1;
+  }
+  if (!leftRunning && rightRunning) {
+    return 1;
+  }
+  return getActivityTime(right) - getActivityTime(left);
+}
+
+function buildAggregatedAgentsResult(input: {
+  hosts: readonly AggregatedHostInfo[];
+  sessionAgents: Record<string, Map<string, Agent> | undefined>;
+  includeArchived: boolean;
+}): Pick<AggregatedAgentsResult, "agents" | "isLoading" | "isInitialLoad" | "isRevalidating"> {
+  const allAgents: AggregatedAgent[] = [];
+  const serverLabelById = new Map(input.hosts.map((host) => [host.serverId, host.label] as const));
+
+  for (const [serverId, agents] of Object.entries(input.sessionAgents)) {
+    if (!agents || agents.size === 0) {
+      continue;
+    }
+    const serverLabel = serverLabelById.get(serverId) ?? serverId;
+    for (const agent of agents.values()) {
+      if (!input.includeArchived && agent.archivedAt) {
+        continue;
+      }
+      allAgents.push(toAggregatedAgent({ agent, serverId, serverLabel }));
+    }
+  }
+
+  allAgents.sort(compareAggregatedAgents);
+
+  const hasAnyData = allAgents.length > 0;
+  const isLoading = input.hosts.some((host) => {
+    const status = host.agentDirectoryStatus ?? "initial_loading";
+    return status === "initial_loading" || status === "revalidating";
+  });
+
+  return {
+    agents: allAgents,
+    isLoading,
+    isInitialLoad: isLoading && !hasAnyData,
+    isRevalidating: isLoading && hasAnyData,
+  };
 }
 
 export function useAggregatedAgents(options?: {
@@ -47,75 +132,15 @@ export function useAggregatedAgents(options?: {
   const result = useMemo(() => {
     // runtimeVersion is referenced so the memo recomputes when runtime state changes.
     void runtimeVersion;
-    const allAgents: AggregatedAgent[] = [];
-    const serverLabelById = new Map(
-      daemons.map((daemon) => [daemon.serverId, daemon.label] as const),
-    );
-
-    // Derive agent directory from all sessions
-    for (const [serverId, agents] of Object.entries(sessionAgents)) {
-      if (!agents || agents.size === 0) {
-        continue;
-      }
-      const serverLabel = serverLabelById.get(serverId) ?? serverId;
-      for (const agent of agents.values()) {
-        if (!includeArchived && agent.archivedAt) {
-          continue;
-        }
-        const nextAgent: AggregatedAgent = {
-          id: agent.id,
-          serverId,
-          serverLabel,
-          title: agent.title ?? null,
-          status: agent.status,
-          lastActivityAt: agent.lastActivityAt,
-          cwd: agent.cwd,
-          provider: agent.provider,
-          pendingPermissionCount: agent.pendingPermissions.length,
-          requiresAttention: agent.requiresAttention,
-          attentionReason: agent.attentionReason,
-          attentionTimestamp: agent.attentionTimestamp,
-          archivedAt: agent.archivedAt,
-          createdAt: agent.createdAt,
-          labels: agent.labels,
-        };
-        allAgents.push(nextAgent);
-      }
-    }
-
-    // Sort by: running agents first, then by most recent activity
-    allAgents.sort((left, right) => {
-      const leftRunning = left.status === "running";
-      const rightRunning = right.status === "running";
-      if (leftRunning && !rightRunning) {
-        return -1;
-      }
-      if (!leftRunning && rightRunning) {
-        return 1;
-      }
-      const leftTime = left.lastActivityAt.getTime();
-      const rightTime = right.lastActivityAt.getTime();
-      return rightTime - leftTime;
+    return buildAggregatedAgentsResult({
+      hosts: daemons.map((daemon) => ({
+        serverId: daemon.serverId,
+        label: daemon.label,
+        agentDirectoryStatus: runtime.getSnapshot(daemon.serverId)?.agentDirectoryStatus,
+      })),
+      sessionAgents,
+      includeArchived,
     });
-
-    // Check if we have any cached data
-    const hasAnyData = allAgents.length > 0;
-
-    // Align list loading with the runtime directory-sync machine.
-    const isLoading = daemons.some((daemon) => {
-      const status =
-        runtime.getSnapshot(daemon.serverId)?.agentDirectoryStatus ?? "initial_loading";
-      return status === "initial_loading" || status === "revalidating";
-    });
-    const isInitialLoad = isLoading && !hasAnyData;
-    const isRevalidating = isLoading && hasAnyData;
-
-    return {
-      agents: allAgents,
-      isLoading,
-      isInitialLoad,
-      isRevalidating,
-    };
   }, [daemons, includeArchived, runtime, runtimeVersion, sessionAgents]);
 
   return {
@@ -123,3 +148,9 @@ export function useAggregatedAgents(options?: {
     refreshAll,
   };
 }
+
+export const __private__ = {
+  buildAggregatedAgentsResult,
+  compareAggregatedAgents,
+  toAggregatedAgent,
+};

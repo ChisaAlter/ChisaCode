@@ -29,13 +29,39 @@ type LeftIcon =
 
 const ICON_SIZE: Record<ButtonSize, number> = { xs: 12, sm: 14, md: 16, lg: 20 };
 
+function normalizeGeneratedAccessibilityLabel(value: string | number): string | undefined {
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeButtonVariant(variant: ButtonVariant): ButtonVariant {
+  if (
+    variant === "default" ||
+    variant === "secondary" ||
+    variant === "outline" ||
+    variant === "ghost" ||
+    variant === "destructive"
+  ) {
+    return variant;
+  }
+  return "secondary";
+}
+
+function normalizeButtonSize(size: ButtonSize): ButtonSize {
+  if (size === "xs" || size === "sm" || size === "md" || size === "lg") {
+    return size;
+  }
+  return "md";
+}
+
 const styles = StyleSheet.create((theme) => ({
   base: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    minHeight: 36,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     borderColor: "transparent",
   },
@@ -47,12 +73,12 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 28,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
   },
   sm: {
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
   },
   lg: {
     paddingVertical: theme.spacing[4],
@@ -62,22 +88,30 @@ const styles = StyleSheet.create((theme) => ({
   default: {
     backgroundColor: theme.colors.accent,
     borderColor: theme.colors.accent,
+    ...theme.shadow.sm,
   },
   secondary: {
-    backgroundColor: theme.colors.surface3,
-    borderColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.borderAccent,
+    ...theme.shadow.sm,
   },
   outline: {
     backgroundColor: "transparent",
     borderColor: theme.colors.borderAccent,
+    ...theme.shadow.sm,
   },
   ghost: {
     backgroundColor: "transparent",
     borderColor: "transparent",
   },
+  ghostHovered: {
+    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.borderAccent,
+  },
   destructive: {
     backgroundColor: theme.colors.destructive,
     borderColor: theme.colors.destructive,
+    ...theme.shadow.sm,
   },
   pressed: {
     opacity: 0.85,
@@ -86,6 +120,8 @@ const styles = StyleSheet.create((theme) => ({
     opacity: theme.opacity[50],
   },
   text: {
+    minWidth: 0,
+    flexShrink: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
@@ -117,6 +153,7 @@ export function Button({
   textStyle,
   disabled,
   loading = false,
+  accessibilityLabel,
   accessibilityRole,
   ...props
 }: PropsWithChildren<
@@ -133,31 +170,33 @@ export function Button({
   const [hovered, setHovered] = useState(false);
   const { theme } = useUnistyles();
   const isDisabled = disabled || loading;
+  const normalizedVariant = normalizeButtonVariant(variant);
+  const normalizedSize = normalizeButtonSize(size);
 
   let variantStyle: ViewStyle;
-  if (variant === "default") {
+  if (normalizedVariant === "default") {
     variantStyle = styles.default;
-  } else if (variant === "secondary") {
+  } else if (normalizedVariant === "secondary") {
     variantStyle = styles.secondary;
-  } else if (variant === "outline") {
+  } else if (normalizedVariant === "outline") {
     variantStyle = styles.outline;
-  } else if (variant === "ghost") {
+  } else if (normalizedVariant === "ghost") {
     variantStyle = styles.ghost;
   } else {
     variantStyle = styles.destructive;
   }
 
   let sizeStyle: ViewStyle;
-  if (size === "xs") {
+  if (normalizedSize === "xs") {
     sizeStyle = styles.xs;
-  } else if (size === "sm") {
+  } else if (normalizedSize === "sm") {
     sizeStyle = styles.sm;
-  } else if (size === "lg") {
+  } else if (normalizedSize === "lg") {
     sizeStyle = styles.lg;
   } else {
     sizeStyle = styles.md;
   }
-  const isGhostHovered = hovered && variant === "ghost";
+  const isGhostHovered = hovered && normalizedVariant === "ghost";
 
   const handleHoverIn = useCallback(() => setHovered(true), []);
   const handleHoverOut = useCallback(() => setHovered(false), []);
@@ -167,36 +206,46 @@ export function Button({
       styles.base,
       sizeStyle,
       variantStyle,
+      hovered && normalizedVariant === "ghost" ? styles.ghostHovered : null,
       pressed ? styles.pressed : null,
       isDisabled ? styles.disabled : null,
       style,
     ],
-    [sizeStyle, variantStyle, isDisabled, style],
+    [sizeStyle, variantStyle, hovered, normalizedVariant, isDisabled, style],
   );
 
   const resolvedTextStyle = useMemo(
     () => [
       styles.text,
-      size === "xs" ? styles.textXs : null,
-      variant === "default" ? styles.textDefault : null,
-      variant === "destructive" ? styles.textDestructive : null,
-      variant === "ghost" ? styles.textGhost : null,
+      normalizedSize === "xs" ? styles.textXs : null,
+      normalizedVariant === "default" ? styles.textDefault : null,
+      normalizedVariant === "destructive" ? styles.textDestructive : null,
+      normalizedVariant === "ghost" ? styles.textGhost : null,
       textStyle,
       isGhostHovered ? styles.textGhostHovered : null,
     ],
-    [size, variant, textStyle, isGhostHovered],
+    [normalizedSize, normalizedVariant, textStyle, isGhostHovered],
   );
 
   const accessibilityState = useMemo(
     () => ({ disabled: isDisabled, busy: loading }),
     [isDisabled, loading],
   );
+  const explicitAccessibilityLabel =
+    typeof accessibilityLabel === "string"
+      ? normalizeGeneratedAccessibilityLabel(accessibilityLabel)
+      : undefined;
+  const generatedAccessibilityLabel =
+    typeof children === "string" || typeof children === "number"
+      ? normalizeGeneratedAccessibilityLabel(children)
+      : undefined;
+  const resolvedAccessibilityLabel = explicitAccessibilityLabel ?? generatedAccessibilityLabel;
 
   function resolveIconColor(): string {
-    if (variant === "default") {
+    if (normalizedVariant === "default") {
       return theme.colors.accentForeground;
     }
-    if (variant === "ghost") {
+    if (normalizedVariant === "ghost") {
       return isGhostHovered ? theme.colors.foreground : theme.colors.foregroundMuted;
     }
     return theme.colors.foreground;
@@ -219,7 +268,7 @@ export function Button({
     }
 
     const color = resolveIconColor();
-    const iconSize = ICON_SIZE[size];
+    const iconSize = ICON_SIZE[normalizedSize];
 
     // Render function
     if (
@@ -242,6 +291,7 @@ export function Button({
   return (
     <Pressable
       {...props}
+      accessibilityLabel={resolvedAccessibilityLabel}
       accessibilityRole={accessibilityRole ?? "button"}
       accessibilityState={accessibilityState}
       disabled={isDisabled}
@@ -250,7 +300,11 @@ export function Button({
       style={pressableStyle}
     >
       {renderIcon()}
-      {children != null ? <Text style={resolvedTextStyle}>{children}</Text> : null}
+      {children != null ? (
+        <Text style={resolvedTextStyle} numberOfLines={1} ellipsizeMode="tail">
+          {children}
+        </Text>
+      ) : null}
       {trailing}
     </Pressable>
   );

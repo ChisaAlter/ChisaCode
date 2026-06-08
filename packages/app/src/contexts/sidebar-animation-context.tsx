@@ -15,6 +15,7 @@ import { isNative } from "@/constants/platform";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import {
   getLeftSidebarAnimationTargets,
+  getMobileSidebarWidth,
   shouldSyncSidebarAnimation,
 } from "@/utils/sidebar-animation-state";
 
@@ -37,13 +38,14 @@ const SidebarAnimationContext = createContext<SidebarAnimationContextValue | nul
 
 export function SidebarAnimationProvider({ children }: { children: ReactNode }) {
   const { width: windowWidth } = useWindowDimensions();
+  const sidebarWidth = getMobileSidebarWidth(windowWidth);
   const isCompactLayout = useIsCompactFormFactor();
   const isOpen = usePanelStore((state) =>
     selectIsAgentListOpen(state, { isCompact: isCompactLayout }),
   );
 
   // Initialize based on current state
-  const initialTargets = getLeftSidebarAnimationTargets({ isOpen, windowWidth });
+  const initialTargets = getLeftSidebarAnimationTargets({ isOpen, windowWidth, sidebarWidth });
   const translateX = useSharedValue(initialTargets.translateX);
   const backdropOpacity = useSharedValue(initialTargets.backdropOpacity);
   const isGesturing = useSharedValue(false);
@@ -89,7 +91,7 @@ export function SidebarAnimationProvider({ children }: { children: ReactNode }) 
       return;
     }
 
-    const targets = getLeftSidebarAnimationTargets({ isOpen, windowWidth });
+    const targets = getLeftSidebarAnimationTargets({ isOpen, windowWidth, sidebarWidth });
 
     if (previousIsOpen !== isOpen) {
       translateX.value = withTiming(targets.translateX, {
@@ -105,7 +107,15 @@ export function SidebarAnimationProvider({ children }: { children: ReactNode }) 
 
     translateX.value = targets.translateX;
     backdropOpacity.value = targets.backdropOpacity;
-  }, [isOpen, translateX, backdropOpacity, windowWidth, isGesturing, isCompactLayout]);
+  }, [
+    isOpen,
+    translateX,
+    backdropOpacity,
+    windowWidth,
+    sidebarWidth,
+    isGesturing,
+    isCompactLayout,
+  ]);
 
   const animateToOpen = useCallback(() => {
     "worklet";
@@ -121,7 +131,7 @@ export function SidebarAnimationProvider({ children }: { children: ReactNode }) 
 
   const animateToClose = useCallback(() => {
     "worklet";
-    translateX.value = withTiming(-windowWidth, {
+    translateX.value = withTiming(-sidebarWidth, {
       duration: ANIMATION_DURATION,
       easing: ANIMATION_EASING,
     });
@@ -129,7 +139,7 @@ export function SidebarAnimationProvider({ children }: { children: ReactNode }) 
       duration: ANIMATION_DURATION,
       easing: ANIMATION_EASING,
     });
-  }, [translateX, backdropOpacity, windowWidth]);
+  }, [translateX, backdropOpacity, sidebarWidth]);
 
   const value = useMemo<SidebarAnimationContextValue>(
     () => ({

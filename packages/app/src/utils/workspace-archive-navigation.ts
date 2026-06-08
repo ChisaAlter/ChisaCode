@@ -3,6 +3,14 @@ import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { buildHostNewWorkspaceRoute, buildHostRootRoute } from "@/utils/host-routes";
 import { resolveWorkspaceRouteId } from "@/utils/workspace-execution";
 
+function trimNonEmpty(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function buildWorkspaceArchiveRedirectRoute(input: {
   serverId: string;
   archivedWorkspaceId: string;
@@ -17,8 +25,12 @@ export function buildWorkspaceArchiveRedirectRoute(input: {
 
   const archivedWorkspace =
     Array.from(input.workspaces).find((workspace) => workspace.id === archivedWorkspaceId) ?? null;
+  if (!archivedWorkspace) {
+    return buildHostRootRoute(input.serverId);
+  }
   const sourceDirectory =
-    archivedWorkspace?.projectRootPath || archivedWorkspace?.workspaceDirectory;
+    trimNonEmpty(archivedWorkspace?.projectRootPath) ??
+    trimNonEmpty(archivedWorkspace?.workspaceDirectory);
   if (!sourceDirectory) {
     return buildHostRootRoute(input.serverId);
   }
