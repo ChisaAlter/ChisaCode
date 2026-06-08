@@ -54,6 +54,28 @@ interface LayoutSegmentInput {
   boundaryBelowItem: StreamItem | null;
 }
 
+function isVisibleLayoutItem(item: StreamItem | null | undefined): item is StreamItem {
+  return item != null && item.kind !== "turn_changes";
+}
+
+function findLatestVisibleItemIndex(input: {
+  strategy: StreamStrategy;
+  items: StreamItem[];
+}): number | null {
+  const startIndex = input.strategy.getLatestItemIndex(input.items);
+  if (startIndex === null) {
+    return null;
+  }
+
+  const step = startIndex === 0 ? 1 : -1;
+  for (let index = startIndex; index >= 0 && index < input.items.length; index += step) {
+    if (isVisibleLayoutItem(input.items[index])) {
+      return index;
+    }
+  }
+  return null;
+}
+
 function createTurnFooterHost(input: {
   item: StreamItem;
   items: StreamItem[];
@@ -74,7 +96,10 @@ function resolveAuxiliaryTurnFooter(input: StreamLayoutInput): TurnFooterHost | 
   }
 
   const footerItems = input.liveHead.length > 0 ? input.liveHead : input.history;
-  const startIndex = input.strategy.getLatestItemIndex(footerItems);
+  const startIndex = findLatestVisibleItemIndex({
+    strategy: input.strategy,
+    items: footerItems,
+  });
   if (startIndex === null) {
     return null;
   }
@@ -141,11 +166,18 @@ function getSegmentNeighbor(input: {
   boundaryIndex: number | null;
   boundaryItem: StreamItem | null;
 }): StreamItem | null {
-  const neighbor = input.strategy.getNeighborItem(input.items, input.index, input.relation);
-  if (neighbor) {
-    return neighbor;
+  for (
+    let neighborIndex = input.strategy.getNeighborIndex(input.index, input.relation);
+    neighborIndex >= 0 && neighborIndex < input.items.length;
+    neighborIndex = input.strategy.getNeighborIndex(neighborIndex, input.relation)
+  ) {
+    const neighbor = input.items[neighborIndex];
+    if (isVisibleLayoutItem(neighbor)) {
+      return neighbor;
+    }
   }
-  if (input.index === input.boundaryIndex) {
+
+  if (input.index === input.boundaryIndex && isVisibleLayoutItem(input.boundaryItem)) {
     return input.boundaryItem;
   }
   return null;

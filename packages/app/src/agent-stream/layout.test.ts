@@ -64,6 +64,16 @@ function thought(id: string, seed: number): Extract<StreamItem, { kind: "thought
   };
 }
 
+function turnChanges(id: string, seed: number): Extract<StreamItem, { kind: "turn_changes" }> {
+  return {
+    kind: "turn_changes",
+    id,
+    timestamp: timestamp(seed),
+    changeSummary: "Updated workspace dock behavior",
+    changedFiles: [{ path: "packages/app/src/agent-stream/layout.ts", additions: 1 }],
+  };
+}
+
 function timingFor(...ids: string[]): Map<string, TurnTiming> {
   const timing = {
     startedAt: timestamp(1),
@@ -216,6 +226,38 @@ describe("layoutStream", () => {
 
     expect(assistantRow.completedFooter?.itemId).toBe(assistant.id);
     expect(assistantRow.frameOrder).toBe("content-then-footer");
+  });
+
+  it.each(["web", "android"] as const)(
+    "ignores invisible turn changes when placing the latest assistant footer on %s",
+    (platform) => {
+      const assistant = assistantMessage("a1", 2);
+      const layout = layoutFor({
+        platform,
+        tail: [userMessage("u1", 1), assistant, turnChanges("changes-1", 3)],
+        timingIds: [assistant.id],
+      });
+      const assistantRow = findLayoutItem(layout, assistant.id);
+
+      expect(footerOwners(layout)).toEqual([assistant.id]);
+      expect(assistantRow.belowItem).toBeNull();
+    },
+  );
+
+  it("ignores invisible turn changes between an assistant and the next user message", () => {
+    const assistant = assistantMessage("a1", 2);
+    const layout = layoutFor({
+      platform: "web",
+      tail: [userMessage("u1", 1), assistant, turnChanges("changes-1", 3), userMessage("u2", 4)],
+      timingIds: [assistant.id],
+    });
+    const assistantRow = findLayoutItem(layout, assistant.id);
+    const userRow = findLayoutItem(layout, "u2");
+
+    expect(assistantRow.completedFooter?.itemId).toBe(assistant.id);
+    expect(assistantRow.belowItem?.id).toBe("u2");
+    expect(userRow.aboveItem?.id).toBe(assistant.id);
+    expect(userRow.isFirstInUserGroup).toBe(true);
   });
 
   it("compacts assistant block spacing across the history and live-head boundary", () => {

@@ -803,9 +803,10 @@ function reduceTimelineEvent(
     case "compaction":
       return finalizeActiveThoughts(reduceTimelineCompaction(state, item, timestamp));
     case "turn_changes": {
+      const finalizedState = finalizeActiveThoughts(state);
       const turnChangesItem = {
         kind: "turn_changes",
-        id: createUniqueTimelineId(state, "turn_changes", item.changeSummary, timestamp),
+        id: createUniqueTimelineId(finalizedState, "turn_changes", item.changeSummary, timestamp),
         timestamp,
         changeSummary: item.changeSummary,
         changedFiles: item.changedFiles.map((f) => ({
@@ -815,7 +816,7 @@ function reduceTimelineEvent(
         })),
         ...(item.checkpointRef ? { checkpointRef: item.checkpointRef } : {}),
       } as TurnChangesItem;
-      return [...state, turnChangesItem];
+      return [...finalizedState, turnChangesItem];
     }
     default:
       return state;
@@ -914,6 +915,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "todo_list";
     case "error":
       return "activity_log";
+    case "turn_changes":
+      return "turn_changes";
     default:
       return null;
   }

@@ -198,7 +198,7 @@ import {
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
-import type { TodoEntry, TurnChangesItem, StreamItem } from "@/types/stream";
+import type { TodoEntry, TurnChangesItem } from "@/types/stream";
 import {
   buildPullRequestLabel,
   buildTodoProgressSummary,
@@ -208,6 +208,8 @@ import {
 import {
   buildBrowserContextSummary,
   buildGitWorkbenchSummary,
+  findLatestTurnChanges,
+  isWorkspaceDockCommandAvailable,
   resolveDockStateAfterAction,
   resolveDockTabAvailability,
   resolveWorkspacePaneCommand,
@@ -946,6 +948,7 @@ interface WorkspaceHeaderMenuProps {
   menuSettingsIcon: ReactElement;
   menuGitDockIcon: ReactElement;
   menuBrowserContextIcon: ReactElement;
+  browserContextDockDisabled: boolean;
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
@@ -987,6 +990,7 @@ function WorkspaceHeaderMenu({
   menuSettingsIcon,
   menuGitDockIcon,
   menuBrowserContextIcon,
+  browserContextDockDisabled,
   onCreateDraftTab,
   onCreateTerminal,
   onCreateBrowser,
@@ -1053,6 +1057,11 @@ function WorkspaceHeaderMenu({
             <DropdownMenuItem
               testID="workspace-header-open-browser-context-dock"
               leading={menuBrowserContextIcon}
+              disabled={browserContextDockDisabled}
+              description={
+                browserContextDockDisabled ? t("workspace.noBrowserContextDock") : undefined
+              }
+              tooltip={browserContextDockDisabled ? t("workspace.noBrowserContextDock") : undefined}
               onSelect={onOpenBrowserContextDock}
             >
               {t("workspace.openBrowserContextDock")}
@@ -1126,6 +1135,7 @@ interface WorkspaceHeaderTitleBarProps {
   menuSettingsIcon: ReactElement;
   menuGitDockIcon: ReactElement;
   menuBrowserContextIcon: ReactElement;
+  browserContextDockDisabled: boolean;
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
@@ -1165,6 +1175,7 @@ function WorkspaceHeaderTitleBar({
   menuSettingsIcon,
   menuGitDockIcon,
   menuBrowserContextIcon,
+  browserContextDockDisabled,
   onCreateDraftTab,
   onCreateTerminal,
   onCreateBrowser,
@@ -1230,6 +1241,7 @@ function WorkspaceHeaderTitleBar({
           menuSettingsIcon={menuSettingsIcon}
           menuGitDockIcon={menuGitDockIcon}
           menuBrowserContextIcon={menuBrowserContextIcon}
+          browserContextDockDisabled={browserContextDockDisabled}
           onCreateDraftTab={onCreateDraftTab}
           onCreateTerminal={onCreateTerminal}
           onCreateBrowser={onCreateBrowser}
@@ -2387,19 +2399,6 @@ function useEnvironmentPanelTodoItems(
   });
 }
 
-function findLatestTurnChanges(items: readonly StreamItem[] | null | undefined) {
-  if (!items) {
-    return null;
-  }
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index];
-    if (item?.kind === "turn_changes") {
-      return item;
-    }
-  }
-  return null;
-}
-
 function useEnvironmentPanelTurnChanges(
   serverId: string,
   agentId: string | null,
@@ -2409,10 +2408,10 @@ function useEnvironmentPanelTurnChanges(
       return null;
     }
     const session = state.sessions[serverId];
-    return (
-      findLatestTurnChanges(session?.agentStreamHead.get(agentId)) ??
-      findLatestTurnChanges(session?.agentStreamTail.get(agentId))
-    );
+    return findLatestTurnChanges({
+      head: session?.agentStreamHead.get(agentId),
+      tail: session?.agentStreamTail.get(agentId),
+    });
   });
 }
 
@@ -3129,6 +3128,8 @@ function WorkspaceScreenContent({
   );
   useSyncWorkspaceActiveBrowser({ workspaceLayout, isRouteFocused });
   const environmentBrowserContext = useWorkspaceBrowserContextSummary({ workspaceLayout });
+  const hasEnvironmentBrowserContext = environmentBrowserContext !== null;
+  const hasEnvironmentPullRequest = Boolean(workspaceDescriptor?.githubRuntime?.pullRequest);
   const openWorkspaceTabInBackground = useWorkspaceLayoutStore(
     (state) => state.openTabInBackground,
   );
@@ -3813,15 +3814,21 @@ function WorkspaceScreenContent({
     handleExecuteWorkspacePaneCommand({ type: "openGitSummary" });
   }, [handleExecuteWorkspacePaneCommand]);
   const handleOpenBrowserContextDock = useCallback(() => {
+    if (!hasEnvironmentBrowserContext) {
+      return;
+    }
     handleExecuteWorkspacePaneCommand({
       type: "openTarget",
       targetKind: "browser",
       placement: "dock",
     });
-  }, [handleExecuteWorkspacePaneCommand]);
+  }, [handleExecuteWorkspacePaneCommand, hasEnvironmentBrowserContext]);
   const handleOpenPullRequestDock = useCallback(() => {
+    if (!hasEnvironmentPullRequest) {
+      return;
+    }
     handleOpenWorkspaceDockPane("pull-request");
-  }, [handleOpenWorkspaceDockPane]);
+  }, [handleOpenWorkspaceDockPane, hasEnvironmentPullRequest]);
 
   const killTerminalAsync = killTerminalMutation.mutateAsync;
 
@@ -4286,16 +4293,44 @@ function WorkspaceScreenContent({
         return true;
       }
       if (action.id === "workspace.dock.browser.open") {
+        if (
+          !isWorkspaceDockCommandAvailable({
+            command: {
+              type: "openTarget",
+              targetKind: "browser",
+              placement: "dock",
+            },
+            hasBrowserContext: hasEnvironmentBrowserContext,
+            hasPullRequest: hasEnvironmentPullRequest,
+          })
+        ) {
+          return false;
+        }
         handleOpenBrowserContextDock();
         return true;
       }
       if (action.id === "workspace.dock.pr.open") {
+        if (
+          !isWorkspaceDockCommandAvailable({
+            command: { type: "openDockPane", pane: "pull-request" },
+            hasBrowserContext: hasEnvironmentBrowserContext,
+            hasPullRequest: hasEnvironmentPullRequest,
+          })
+        ) {
+          return false;
+        }
         handleOpenPullRequestDock();
         return true;
       }
       return false;
     },
-    [handleOpenBrowserContextDock, handleOpenGitDock, handleOpenPullRequestDock],
+    [
+      handleOpenBrowserContextDock,
+      handleOpenGitDock,
+      handleOpenPullRequestDock,
+      hasEnvironmentBrowserContext,
+      hasEnvironmentPullRequest,
+    ],
   );
 
   const handleWorkspacePaneAction = useCallback(
@@ -4831,6 +4866,7 @@ function WorkspaceScreenContent({
                 menuSettingsIcon={menuSettingsIcon}
                 menuGitDockIcon={MENU_GIT_DOCK_ICON}
                 menuBrowserContextIcon={MENU_BROWSER_CONTEXT_ICON}
+                browserContextDockDisabled={!hasEnvironmentBrowserContext}
                 onCreateDraftTab={handleCreateDraftTab}
                 onCreateTerminal={handleCreateTerminal}
                 onCreateBrowser={handleCreateBrowserTab}

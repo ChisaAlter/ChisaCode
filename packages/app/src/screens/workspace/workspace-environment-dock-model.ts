@@ -1,4 +1,5 @@
 import type { WorkspaceDescriptor } from "@/stores/session-store";
+import type { StreamItem, TurnChangesItem } from "@/types/stream";
 
 export type WorkspaceEnvironmentDockTab =
   | "git-summary"
@@ -51,6 +52,12 @@ export interface BrowserContextSummary {
   subtitle: string;
   url: string;
   isLoading: boolean;
+}
+
+export interface WorkspaceDockCommandAvailabilityInput {
+  command: WorkspacePaneCommand;
+  hasBrowserContext: boolean;
+  hasPullRequest: boolean;
 }
 
 interface PullRequestLike {
@@ -140,6 +147,38 @@ export function buildBrowserContextSummary(input: {
   };
 }
 
+export function findLatestTurnChanges(input: {
+  head?: readonly StreamItem[] | null;
+  tail?: readonly StreamItem[] | null;
+}): TurnChangesItem | null {
+  const latestHead = findLatestTurnChangesItem(input.head);
+  const latestTail = findLatestTurnChangesItem(input.tail);
+
+  if (!latestHead) {
+    return latestTail;
+  }
+  if (!latestTail) {
+    return latestHead;
+  }
+  return latestHead.timestamp.getTime() >= latestTail.timestamp.getTime() ? latestHead : latestTail;
+}
+
+export function isWorkspaceDockCommandAvailable(
+  input: WorkspaceDockCommandAvailabilityInput,
+): boolean {
+  const resolution = resolveWorkspacePaneCommand(input.command);
+  if (resolution.placement !== "dock") {
+    return true;
+  }
+  if (resolution.dockPane === "browser-context") {
+    return input.hasBrowserContext;
+  }
+  if (resolution.dockPane === "pull-request") {
+    return input.hasPullRequest;
+  }
+  return true;
+}
+
 export function resolveWorkspacePaneCommand(
   command: WorkspacePaneCommand,
 ): WorkspacePaneCommandResolution {
@@ -160,6 +199,25 @@ export function resolveWorkspacePaneCommand(
     return { placement: "dock", dockPane: resolveDockPaneForTargetKind(command.targetKind) };
   }
   return { placement: command.placement, targetKind: command.targetKind };
+}
+
+function findLatestTurnChangesItem(
+  items: readonly StreamItem[] | null | undefined,
+): TurnChangesItem | null {
+  let latest: TurnChangesItem | null = null;
+  if (!items) {
+    return latest;
+  }
+
+  for (const item of items) {
+    if (item.kind !== "turn_changes") {
+      continue;
+    }
+    if (!latest || item.timestamp.getTime() >= latest.timestamp.getTime()) {
+      latest = item;
+    }
+  }
+  return latest;
 }
 
 function buildPullRequestSummaryLabel(pullRequest: PullRequestLike): string {

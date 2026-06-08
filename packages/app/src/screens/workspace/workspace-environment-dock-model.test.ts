@@ -1,12 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBrowserContextSummary,
+  findLatestTurnChanges,
   buildGitWorkbenchSummary,
+  isWorkspaceDockCommandAvailable,
   resolveDockStateAfterAction,
   resolveDockTabAvailability,
   resolveWorkspacePaneCommand,
   type WorkspaceEnvironmentDockState,
 } from "./workspace-environment-dock-model";
+import type { StreamItem } from "@/types/stream";
+
+function turnChanges(
+  id: string,
+  timestamp: string,
+  changeSummary: string,
+): Extract<StreamItem, { kind: "turn_changes" }> {
+  return {
+    kind: "turn_changes",
+    id,
+    timestamp: new Date(timestamp),
+    changeSummary,
+    changedFiles: [{ path: "packages/app/src/screens/workspace/workspace-screen.tsx" }],
+  };
+}
 
 describe("resolveDockStateAfterAction", () => {
   const openGitState: WorkspaceEnvironmentDockState = {
@@ -183,5 +200,44 @@ describe("resolveWorkspacePaneCommand", () => {
       placement: "dock",
       dockPane: "pull-request",
     });
+  });
+});
+
+describe("findLatestTurnChanges", () => {
+  it("returns null when neither stream segment has turn changes", () => {
+    expect(findLatestTurnChanges({ head: [], tail: [] })).toBeNull();
+  });
+
+  it("returns the newest turn changes across head and tail", () => {
+    const olderHead = turnChanges("changes-head", "2025-01-01T11:59:00Z", "Older head changes");
+    const newerTail = turnChanges("changes-tail", "2025-01-01T12:00:00Z", "Newer tail changes");
+
+    expect(findLatestTurnChanges({ head: [olderHead], tail: [newerTail] })).toBe(newerTail);
+  });
+});
+
+describe("isWorkspaceDockCommandAvailable", () => {
+  it("keeps browser dock commands unavailable without focused browser context", () => {
+    expect(
+      isWorkspaceDockCommandAvailable({
+        command: {
+          type: "openTarget",
+          targetKind: "browser",
+          placement: "dock",
+        },
+        hasBrowserContext: false,
+        hasPullRequest: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps git dock commands available without optional context", () => {
+    expect(
+      isWorkspaceDockCommandAvailable({
+        command: { type: "openGitSummary" },
+        hasBrowserContext: false,
+        hasPullRequest: false,
+      }),
+    ).toBe(true);
   });
 });
