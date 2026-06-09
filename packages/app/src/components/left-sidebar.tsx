@@ -744,8 +744,6 @@ function MobileSidebar({
   handleViewMoreNavigate,
 }: MobileSidebarProps) {
   const { t } = useTranslation();
-  const pathname = usePathname();
-  const isSessionsActive = pathname.includes("/sessions");
   const {
     translateX,
     backdropOpacity,
@@ -1003,7 +1001,7 @@ function MobileSidebar({
               icon={MessagesSquare}
               label={t("sidebar.sessions")}
               onPress={handleViewMore}
-              isActive={isSessionsActive}
+              isActive={false}
               testID="sidebar-sessions"
             />
             <Pressable
@@ -1104,8 +1102,6 @@ function DesktopSidebar({
   handleViewMore,
 }: DesktopSidebarProps) {
   const { t } = useTranslation();
-  const pathname = usePathname();
-  const isSessionsActive = pathname.includes("/sessions");
   const padding = useWindowControlsPadding("sidebar");
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
@@ -1179,7 +1175,7 @@ function DesktopSidebar({
               icon={MessagesSquare}
               label={t("sidebar.sessions")}
               onPress={handleViewMore}
-              isActive={isSessionsActive}
+              isActive={false}
               testID="sidebar-sessions"
             />
           </View>
@@ -1367,15 +1363,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopSidebarDragArea: {
     position: "relative",
-    marginHorizontal: theme.spacing[2],
-    marginTop: theme.spacing[2],
+    marginHorizontal: 0,
+    marginTop: 0,
     marginBottom: theme.spacing[1],
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
   },
   desktopHeaderRow: {
     overflow: "hidden",
-    borderRadius: theme.borderRadius.lg,
   },
   hostTrigger: {
     flexDirection: "row",
@@ -1412,13 +1405,14 @@ const styles = StyleSheet.create((theme) => ({
     borderTopColor: theme.colors.border,
   },
   desktopSidebarFooter: {
-    paddingHorizontal: theme.spacing[3],
+    paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     marginHorizontal: theme.spacing[2],
     marginBottom: theme.spacing[2],
-    borderTopWidth: 0,
+    borderTopWidth: theme.borderWidth[1],
+    borderTopColor: theme.colors.border,
     borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: "transparent",
   },
   footerHostSlot: {
     flexGrow: 0,

@@ -25,7 +25,6 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGlobalSearchParams, useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { DiffStat } from "@/components/diff-stat";
 import {
   CopyX,
   ArrowLeftToLine,
@@ -69,8 +68,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import {
   FloatingPanelPortalHost,
   FloatingPanelPortalHostNameProvider,
@@ -78,11 +75,7 @@ import {
 import { ExplorerSidebar } from "@/components/explorer-sidebar";
 import { SplitContainer } from "@/components/split-container";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
-import { WorkspaceGitActions } from "@/git/workspace-actions";
 import { useGitActions } from "@/git/use-actions";
-import type { GitAction } from "@/git/policy";
-import { getProviderIcon } from "@/components/provider-icons";
-import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { ExplorerSidebarAnimationProvider } from "@/contexts/explorer-sidebar-animation-context";
@@ -123,7 +116,6 @@ import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-works
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { checkoutStatusQueryKey } from "@/git/query-keys";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { openExternalUrl } from "@/utils/open-external-url";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { createWorkspaceBrowser, useBrowserStore } from "@/stores/browser-store";
@@ -145,10 +137,6 @@ import {
   useWorkspaceTabRename,
   WorkspaceTabRenameModal,
 } from "@/screens/workspace/use-workspace-tab-rename";
-import {
-  WorkspaceDesktopTabsRow,
-  type WorkspaceDesktopTabRowItem,
-} from "@/screens/workspace/workspace-desktop-tabs-row";
 import {
   buildWorkspaceTabMenuEntries,
   type WorkspaceTabMenuEntry,
@@ -187,10 +175,6 @@ import {
 } from "@/screens/workspace/workspace-bulk-close";
 import { resolveCloseAgentTabPolicy } from "@/subagents";
 import { useSubagentsForParent, type SubagentRow } from "@/subagents/select";
-import {
-  buildSubagentRowPresentationData,
-  formatHeaderLabel,
-} from "@/subagents/track-presentation";
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { isAbsolutePath } from "@/utils/path";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
@@ -211,32 +195,19 @@ import {
 import type { TodoEntry, TurnChangesItem } from "@/types/stream";
 import {
   buildWorkspaceActivityItems,
-  buildWorkspacePullRequestPills,
-  buildWorkspaceReviewCalloutModel,
-  buildWorkspaceStatusStripAccessibilityLabel,
   buildWorkspaceStatusStripModel,
-  buildPullRequestLabel,
-  buildTodoProgressSummary,
   findLatestTodoItems,
   shouldEnableWorkspaceReviewArchiveAction,
   type WorkspaceActivityItem,
-  type WorkspacePullRequestRuntime,
-  type WorkspaceReviewCalloutModel,
-  type WorkspaceStatusStripItem,
-  type WorkspaceStatusStripModel,
-  type WorkspaceStatusStripTone,
 } from "@/screens/workspace/workspace-environment-panel-model";
 import { resolveWorkspaceScreenOpenIntentAction } from "@/screens/workspace/workspace-open-intent";
 import {
   buildBrowserContextSummary,
-  buildGitWorkbenchSummary,
   findLatestTurnChanges,
   isWorkspaceDockCommandAvailable,
   resolveDockStateAfterAction,
-  resolveDockTabAvailability,
   resolveWorkspacePaneCommand,
   type BrowserContextSummary,
-  type GitWorkbenchSummary,
   type WorkspacePaneCommand,
   type WorkspaceEnvironmentDockState,
   type WorkspaceEnvironmentDockTab,
@@ -299,8 +270,7 @@ const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
 
 const WORKSPACE_ENVIRONMENT_PANEL_WIDTH = 300;
 const WORKSPACE_ENVIRONMENT_PANEL_SAFE_GAP = 48;
-const ENVIRONMENT_SUBAGENT_ROW_LIMIT = 5;
-const ENVIRONMENT_TODO_ROW_LIMIT = 6;
+const WORKSPACE_FLOATING_PANEL_TOP_OFFSET = 56;
 
 type WorkspaceEnvironmentPanelMode = "auto" | "forced-open" | "forced-closed";
 
@@ -547,8 +517,6 @@ function WorkspaceDocumentTitleEffect({
 
   return null;
 }
-
-function noop() {}
 
 function mobileTabMenuTriggerStyle({ open, pressed }: { open?: boolean; pressed?: boolean }) {
   return [
@@ -1409,929 +1377,80 @@ type EnvironmentIconName =
   | "todo";
 
 function WorkspaceEnvironmentPanel({
-  serverId,
-  cwd,
   currentBranchName,
-  isGitCheckout,
   isLocalDaemon,
   diffStat,
-  githubRuntime,
-  browserContext,
-  dockState,
   sourceLabel,
-  taskTitle,
-  activityItems,
-  activeAgent,
-  workspaceStatus,
-  subagents,
-  todoItems,
-  latestTurnChanges,
-  onSelectDockTab,
   onOpenChanges,
-  onOpenSubagent,
-  onCopyResumeCommand,
 }: WorkspaceEnvironmentPanelProps) {
   const { t } = useTranslation();
-  const [sourceExpanded, setSourceExpanded] = useState(true);
-  const handleToggleSource = useCallback(() => setSourceExpanded((v) => !v), []);
   const locationLabel = isLocalDaemon
     ? t("workspace.environment.local")
     : t("workspace.environment.remote");
-  const hasSubagents = subagents.length > 0;
-  const hasTodos = Boolean(todoItems?.length);
-  const gitSummary = useMemo(
-    () =>
-      buildGitWorkbenchSummary({
-        isGitCheckout,
-        branchName: currentBranchName,
-        diffStat,
-        pullRequest: githubRuntime?.pullRequest ?? null,
-      }),
-    [currentBranchName, diffStat, githubRuntime?.pullRequest, isGitCheckout],
-  );
-  const availableDockTabs = useMemo(
-    () =>
-      resolveDockTabAvailability({
-        hasPullRequest: Boolean(githubRuntime?.pullRequest),
-        hasTasks: hasTodos,
-        hasSubagents,
-        hasBrowserContext: Boolean(browserContext),
-      }),
-    [browserContext, githubRuntime?.pullRequest, hasSubagents, hasTodos],
-  );
-  const effectiveActiveTab = availableDockTabs.includes(dockState.activeTab)
-    ? dockState.activeTab
-    : "git-summary";
 
   return (
     <View style={styles.environmentPanel} testID="workspace-environment-panel">
-      <WorkspaceEnvironmentDockTabs
-        activeTab={effectiveActiveTab}
-        tabs={availableDockTabs}
-        onSelectTab={onSelectDockTab}
-      />
-      {effectiveActiveTab === "git-summary" ? (
-        <WorkspaceGitSummaryDockPane
-          serverId={serverId}
-          cwd={cwd}
-          isGitCheckout={isGitCheckout}
-          locationLabel={locationLabel}
-          gitSummary={gitSummary}
-          diffStat={diffStat}
-          latestTurnChanges={latestTurnChanges}
-          onOpenChanges={onOpenChanges}
-        />
-      ) : null}
-      {effectiveActiveTab === "pull-request" ? (
-        <WorkspacePullRequestDockPane githubRuntime={githubRuntime} />
-      ) : null}
-      {effectiveActiveTab === "tasks" ? <WorkspaceTodoProgressSection items={todoItems} /> : null}
-      {effectiveActiveTab === "subagents" ? (
-        <WorkspaceSubagentsSection
-          rows={subagents}
-          onOpenSubagent={onOpenSubagent}
-          expandedDefault
-        />
-      ) : null}
-      {effectiveActiveTab === "browser-context" ? (
-        <WorkspaceBrowserContextDockPane browserContext={browserContext} />
-      ) : null}
-      <WorkspaceSourceSection
-        sourceLabel={sourceLabel}
-        expanded={sourceExpanded}
-        onToggle={handleToggleSource}
-      />
-      <WorkspaceActivitySection taskTitle={taskTitle} items={activityItems} />
-      <View style={styles.environmentDivider} />
-      <WorkspaceTaskStatusPanel
-        activeAgent={activeAgent}
-        workspaceStatus={workspaceStatus}
-        onCopyResumeCommand={onCopyResumeCommand}
-      />
-    </View>
-  );
-}
-
-function WorkspaceStatusStrip({
-  model,
-  onOpenEnvironment,
-}: {
-  model: WorkspaceStatusStripModel | null;
-  onOpenEnvironment: () => void;
-}) {
-  const { t } = useTranslation();
-  const handlePress = useCallback(() => onOpenEnvironment(), [onOpenEnvironment]);
-  const rowStyle = useCallback(
-    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.workspaceStatusStrip,
-      model?.hasActionableState && styles.workspaceStatusStripActionable,
-      (Boolean(hovered) || Boolean(pressed)) && styles.workspaceStatusStripHovered,
-    ],
-    [model?.hasActionableState],
-  );
-
-  if (!model || model.items.length === 0) {
-    return null;
-  }
-  const accessibilityLabel = buildWorkspaceStatusStripAccessibilityLabel({
-    actionLabel: t("workspace.statusStrip.openEnvironment"),
-    taskTitle: model.taskTitle,
-    itemLabels: model.items.map((item) => resolveWorkspaceModelLabel(t, item)),
-  });
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={handlePress}
-      style={rowStyle}
-      testID="workspace-status-strip"
-    >
-      <View style={styles.workspaceStatusStripTitleGroup}>
-        <Text style={styles.workspaceStatusStripEyebrow}>
-          {t("workspace.statusStrip.currentTask")}
-        </Text>
-        <Text style={styles.workspaceStatusStripTitle} numberOfLines={1}>
-          {model.taskTitle}
-        </Text>
-      </View>
-      <View style={styles.workspaceStatusStripItems}>
-        {model.items.map((item) => (
-          <WorkspaceStatusBadge key={item.key} item={item} />
-        ))}
-      </View>
-    </Pressable>
-  );
-}
-
-function WorkspaceStatusBadge({ item }: { item: WorkspaceStatusStripItem }) {
-  const { t } = useTranslation();
-  return (
-    <StatusBadge
-      label={resolveWorkspaceModelLabel(t, item).trim() || item.label}
-      variant={mapStatusStripToneToBadge(item.tone)}
-    />
-  );
-}
-
-function WorkspaceReviewCallout({
-  model,
-  pullRequestUrl,
-  activeAgentId,
-  archiveAction,
-  onViewChanges,
-  onCopyResumeCommand,
-  onOpenEnvironment,
-}: {
-  model: WorkspaceReviewCalloutModel | null;
-  pullRequestUrl: string | null;
-  activeAgentId: string | null;
-  archiveAction: GitAction | null;
-  onViewChanges: () => void;
-  onCopyResumeCommand: (agentId: string) => void;
-  onOpenEnvironment: () => void;
-}) {
-  const { t } = useTranslation();
-  const handleOpenPullRequest = useCallback(() => {
-    if (!pullRequestUrl) {
-      return;
-    }
-    void openExternalUrl(pullRequestUrl);
-  }, [pullRequestUrl]);
-  const handleCopyResume = useCallback(() => {
-    if (!activeAgentId) {
-      return;
-    }
-    onCopyResumeCommand(activeAgentId);
-  }, [activeAgentId, onCopyResumeCommand]);
-  const handleArchiveWorkspace = useCallback(() => {
-    archiveAction?.handler();
-  }, [archiveAction]);
-
-  if (!model) {
-    return null;
-  }
-
-  const description =
-    model.descriptionParts.length > 0
-      ? model.descriptionParts.map((part) => resolveWorkspaceModelLabel(t, part)).join(" · ")
-      : model.description || t("workspace.reviewCallout.description");
-  const viewChangesVariant = model.showViewChanges ? "default" : "outline";
-  const openPullRequestVariant = !model.showViewChanges ? "default" : "outline";
-
-  return (
-    <View style={styles.workspaceReviewCallout} testID="workspace-review-callout">
-      <View style={styles.workspaceReviewCalloutTextGroup}>
-        <Text style={styles.workspaceReviewCalloutTitle}>{t(model.titleKey)}</Text>
-        <Text style={styles.workspaceReviewCalloutDescription} numberOfLines={2}>
-          {description}
-        </Text>
-      </View>
-      <View style={styles.workspaceReviewCalloutActions}>
-        {model.showViewChanges ? (
-          <Button variant={viewChangesVariant} size="xs" onPress={onViewChanges}>
-            {t("workspace.reviewCallout.viewChanges")}
-          </Button>
-        ) : null}
-        {model.showOpenPullRequest && pullRequestUrl ? (
-          <Button variant={openPullRequestVariant} size="xs" onPress={handleOpenPullRequest}>
-            {t("workspace.reviewCallout.openPullRequest")}
-          </Button>
-        ) : null}
-        {model.showCopyResume && activeAgentId ? (
-          <Button variant="ghost" size="xs" onPress={handleCopyResume}>
-            {t("workspace.reviewCallout.copyResume")}
-          </Button>
-        ) : null}
-        {archiveAction && !archiveAction.disabled ? (
-          <Button variant="ghost" size="xs" onPress={handleArchiveWorkspace}>
-            {t("workspace.reviewCallout.archive")}
-          </Button>
-        ) : null}
-        <Button variant="ghost" size="xs" onPress={onOpenEnvironment}>
-          {t("workspace.reviewCallout.review")}
-        </Button>
-      </View>
-    </View>
-  );
-}
-
-function WorkspaceEnvironmentDockTabs({
-  tabs,
-  activeTab,
-  onSelectTab,
-}: {
-  tabs: WorkspaceEnvironmentDockTab[];
-  activeTab: WorkspaceEnvironmentDockTab;
-  onSelectTab: (tab: WorkspaceEnvironmentDockTab) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.environmentDockTabs} testID="workspace-environment-dock-tabs">
-      {tabs.map((tab) => {
-        const active = tab === activeTab;
-        return (
-          <WorkspaceEnvironmentDockTabButton
-            key={tab}
-            tab={tab}
-            active={active}
-            label={t(`workspace.environment.dockTabs.${tab}`)}
-            onSelectTab={onSelectTab}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
-function WorkspaceEnvironmentDockTabButton({
-  tab,
-  active,
-  label,
-  onSelectTab,
-}: {
-  tab: WorkspaceEnvironmentDockTab;
-  active: boolean;
-  label: string;
-  onSelectTab: (tab: WorkspaceEnvironmentDockTab) => void;
-}) {
-  const accessibilityState = useMemo(() => ({ selected: active }), [active]);
-  const handlePress = useCallback(() => onSelectTab(tab), [onSelectTab, tab]);
-  const tabStyle = useCallback(
-    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.environmentDockTab,
-      active && styles.environmentDockTabActive,
-      (hovered || pressed) && !active && styles.environmentDockTabHovered,
-    ],
-    [active],
-  );
-  const textStyle = useMemo(
-    () => [styles.environmentDockTabText, active && styles.environmentDockTabTextActive],
-    [active],
-  );
-
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityLabel={label}
-      accessibilityState={accessibilityState}
-      onPress={handlePress}
-      style={tabStyle}
-      testID={`workspace-environment-dock-tab-${tab}`}
-    >
-      <EnvironmentIcon name={resolveDockTabIcon(tab)} />
-      <Text style={textStyle} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function WorkspaceGitSummaryDockPane({
-  serverId,
-  cwd,
-  isGitCheckout,
-  locationLabel,
-  gitSummary,
-  diffStat,
-  latestTurnChanges,
-  onOpenChanges,
-}: {
-  serverId: string;
-  cwd: string;
-  isGitCheckout: boolean;
-  locationLabel: string;
-  gitSummary: GitWorkbenchSummary;
-  diffStat: WorkspaceDescriptor["diffStat"];
-  latestTurnChanges: TurnChangesItem | null;
-  onOpenChanges: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.environmentSectionBody} testID="workspace-environment-git-summary">
-      <EnvironmentActionRow
-        icon="changes"
-        label={t("workspace.environment.changes")}
-        onPress={onOpenChanges}
-        testID="workspace-environment-changes"
-      >
-        <WorkspaceEnvironmentDiffStat diffStat={diffStat} />
-      </EnvironmentActionRow>
-      <EnvironmentDisplayRow icon="location" label={t("workspace.environment.openLocation")}>
-        <WorkspaceOpenInEditorButton serverId={serverId} cwd={cwd} hideLabels />
-      </EnvironmentDisplayRow>
-      {latestTurnChanges ? (
-        <EnvironmentActionRow
-          icon="changes"
-          label={t("workspace.environment.recentChanges")}
-          onPress={onOpenChanges}
-          testID="workspace-environment-recent-turn-changes"
-        >
-          <Text style={styles.environmentValueText} numberOfLines={1}>
-            {latestTurnChanges.changeSummary}
+      <View style={styles.environmentInspectorCard}>
+        <View style={styles.environmentInspectorCardHeader}>
+          <Text style={styles.environmentInspectorCardTitle}>
+            {t("workspace.environment.title")}
           </Text>
-        </EnvironmentActionRow>
-      ) : null}
-      <EnvironmentDisplayRow icon="locality" label={locationLabel}>
-        <EnvironmentPill
-          label={t(`workspace.environment.gitState.${gitSummary.state}`)}
-          tone={gitSummary.state === "dirty" ? "warning" : "success"}
-        />
-      </EnvironmentDisplayRow>
-      {isGitCheckout ? (
-        <>
+          <ThemedSettings size={16} uniProps={mutedColorMapping} />
+        </View>
+        <View style={styles.environmentInspectorRows}>
+          <EnvironmentActionRow
+            icon="changes"
+            label={t("workspace.environment.changes")}
+            onPress={onOpenChanges}
+            testID="workspace-environment-changes"
+          >
+            <WorkspaceEnvironmentInlineDiffStat diffStat={diffStat} />
+          </EnvironmentActionRow>
+          <EnvironmentDisplayRow icon="location" label={locationLabel}>
+            <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
+          </EnvironmentDisplayRow>
           <EnvironmentDisplayRow
             icon="branch"
-            label={gitSummary.branchLabel ?? t("workspace.environment.branch")}
-          />
-          <EnvironmentDisplayRow icon="changes" label={t("workspace.environment.changedLines")}>
-            <Text style={styles.environmentValueText} numberOfLines={1}>
-              {gitSummary.changeCount}
-            </Text>
+            label={currentBranchName ?? t("workspace.environment.branch")}
+          >
+            <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
           </EnvironmentDisplayRow>
-          <EnvironmentDisplayRow label={t("workspace.environment.commitOrPush")}>
-            <WorkspaceGitActions serverId={serverId} cwd={cwd} hideLabels />
-          </EnvironmentDisplayRow>
-        </>
-      ) : null}
-    </View>
-  );
-}
-
-function WorkspaceEnvironmentDiffStat({ diffStat }: { diffStat: WorkspaceDescriptor["diffStat"] }) {
-  if (!diffStat) {
-    return <Text style={styles.environmentValueText}>0</Text>;
-  }
-  return <DiffStat additions={diffStat.additions} deletions={diffStat.deletions} />;
-}
-
-function WorkspacePullRequestDockPane({
-  githubRuntime,
-}: {
-  githubRuntime: WorkspaceDescriptor["githubRuntime"];
-}) {
-  return (
-    <View style={styles.environmentSectionBody} testID="workspace-environment-pr-pane">
-      <WorkspacePullRequestRow githubRuntime={githubRuntime} />
-    </View>
-  );
-}
-
-function WorkspaceBrowserContextDockPane({
-  browserContext,
-}: {
-  browserContext: BrowserContextSummary | null;
-}) {
-  const { t } = useTranslation();
-  if (!browserContext) {
-    return (
-      <View style={styles.environmentSectionBody} testID="workspace-environment-browser-context">
-        <EnvironmentDisplayRow icon="browser" label={t("workspace.environment.noBrowserContext")} />
+          <EnvironmentDisplayRow icon="changes" label={t("workspace.environment.commitOrPush")} />
+        </View>
+        <View style={styles.environmentCardDivider} />
+        <WorkspaceSourceSection sourceLabel={sourceLabel} />
       </View>
-    );
-  }
-
-  return (
-    <View style={styles.environmentSectionBody} testID="workspace-environment-browser-context">
-      <EnvironmentDisplayRow icon="browser" label={browserContext.title}>
-        <EnvironmentPill
-          label={
-            browserContext.isLoading
-              ? t("workspace.environment.browserLoading")
-              : t("workspace.environment.browserReady")
-          }
-          tone={browserContext.isLoading ? "warning" : "success"}
-        />
-      </EnvironmentDisplayRow>
-      <EnvironmentDisplayRow icon="location" label={browserContext.subtitle}>
-        <Text style={styles.environmentValueText} numberOfLines={1}>
-          {browserContext.url}
-        </Text>
-      </EnvironmentDisplayRow>
+      <View style={styles.environmentOutlineCard}>
+        <Text style={styles.environmentOutlineText}>{t("workspace.environment.outline")}</Text>
+        <ThemedChevronRight size={16} uniProps={mutedColorMapping} />
+      </View>
     </View>
   );
 }
 
-function WorkspaceActivitySection({
-  taskTitle,
-  items,
-}: {
-  taskTitle: string | null;
-  items: WorkspaceActivityItem[];
-}) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(true);
-  const handleToggle = useCallback(() => setExpanded((current) => !current), []);
-
-  if (!taskTitle && items.length === 0) {
-    return null;
-  }
-
-  return (
-    <View style={styles.environmentSection} testID="workspace-environment-activity">
-      <EnvironmentSectionHeader
-        icon="task"
-        label={t("workspace.environment.currentTask")}
-        expanded={expanded}
-        onPress={handleToggle}
-      >
-        {taskTitle ? (
-          <Text style={styles.environmentValueText} numberOfLines={1}>
-            {taskTitle}
-          </Text>
-        ) : null}
-      </EnvironmentSectionHeader>
-      {expanded ? (
-        <View style={styles.environmentSectionBody}>
-          {items.length > 0 ? (
-            <>
-              <Text style={styles.environmentActivityLabel}>
-                {t("workspace.environment.recentActivity")}
-              </Text>
-              {items.map((item) => (
-                <WorkspaceActivityRow key={item.key} item={item} />
-              ))}
-            </>
-          ) : (
-            <Text style={styles.environmentMoreText}>
-              {t("workspace.environment.noRecentActivity")}
-            </Text>
-          )}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function WorkspaceActivityRow({ item }: { item: WorkspaceActivityItem }) {
-  const { t } = useTranslation();
-  const dotStyle = useMemo(
-    () => [styles.environmentStatusDot, resolveActivityToneStyle(item.tone)],
-    [item.tone],
-  );
-
-  return (
-    <View style={styles.environmentNestedRow}>
-      <View style={dotStyle} />
-      <Text style={styles.environmentNestedRowText} numberOfLines={2}>
-        {resolveWorkspaceModelLabel(t, item)}
-      </Text>
-    </View>
-  );
-}
-
-function resolveWorkspaceModelLabel(
-  t: ReturnType<typeof useTranslation>["t"],
-  item: { label: string; labelKey?: string; labelParams?: Record<string, number | string> },
-): string {
-  if (!item.labelKey) {
-    return item.label;
-  }
-  return t(item.labelKey, item.labelParams ?? {});
-}
-
-function WorkspacePullRequestRow({
-  githubRuntime,
-}: {
-  githubRuntime: WorkspaceDescriptor["githubRuntime"];
-}) {
-  const { t } = useTranslation();
-  const pullRequest = githubRuntime?.pullRequest ?? null;
-  const handleOpenPullRequest = useCallback(() => {
-    if (!pullRequest?.url) {
-      return;
-    }
-    void openExternalUrl(pullRequest.url);
-  }, [pullRequest?.url]);
-
-  if (pullRequest) {
-    return (
-      <EnvironmentActionRow
-        icon="pr"
-        label={buildPullRequestLabel(pullRequest)}
-        onPress={handleOpenPullRequest}
-        testID="workspace-environment-pr"
-      >
-        <PullRequestStatusPills pullRequest={pullRequest} />
-      </EnvironmentActionRow>
-    );
-  }
-
-  if (githubRuntime?.error) {
-    return (
-      <EnvironmentDisplayRow icon="pr" label={t("workspace.environment.pullRequestUnavailable")}>
-        <Text style={styles.environmentValueText} numberOfLines={1}>
-          {githubRuntime.error.message}
-        </Text>
-      </EnvironmentDisplayRow>
-    );
-  }
-
-  if (githubRuntime) {
-    return <EnvironmentDisplayRow icon="pr" label={t("workspace.environment.noPullRequest")} />;
-  }
-
-  return <EnvironmentDisplayRow icon="pr" label={t("workspace.environment.checkingPullRequest")} />;
-}
-
-function PullRequestStatusPills({ pullRequest }: { pullRequest: WorkspacePullRequestRuntime }) {
-  const { t } = useTranslation();
-  const pills = buildWorkspacePullRequestPills(pullRequest);
-
-  if (pills.length === 0) {
-    return null;
-  }
-
-  return (
-    <View style={styles.environmentPillRow}>
-      {pills.map((pill) => (
-        <EnvironmentPill key={pill.key} label={t(pill.labelKey)} tone={pill.tone} />
-      ))}
-    </View>
-  );
-}
-
-function EnvironmentPill({ label, tone }: { label: string; tone: WorkspaceStatusStripTone }) {
-  const toneStyle = resolveEnvironmentPillStyle(tone);
-  const pillStyle = useMemo(() => [styles.environmentPill, toneStyle], [toneStyle]);
-  return (
-    <View style={pillStyle}>
-      <Text style={styles.environmentPillText} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function resolveEnvironmentPillStyle(tone: WorkspaceStatusStripTone) {
-  if (tone === "success") {
-    return styles.environmentPillSuccess;
-  }
-  if (tone === "danger") {
-    return styles.environmentPillDanger;
-  }
-  return styles.environmentPillWarning;
-}
-
-function mapStatusStripToneToBadge(tone: WorkspaceStatusStripTone) {
-  if (tone === "success") {
-    return "success";
-  }
-  if (tone === "warning") {
-    return "warning";
-  }
-  if (tone === "danger") {
-    return "error";
-  }
-  return "muted";
-}
-
-function resolveActivityToneStyle(tone: WorkspaceStatusStripTone) {
-  if (tone === "success") {
-    return styles.environmentStatusDotAttention;
-  }
-  if (tone === "warning") {
-    return styles.environmentStatusDotNeedsInput;
-  }
-  if (tone === "danger") {
-    return styles.environmentStatusDotFailed;
-  }
-  return styles.environmentStatusDotDone;
-}
-
-function WorkspaceSubagentsSection({
-  rows,
-  onOpenSubagent,
-  expandedDefault = false,
-}: {
-  rows: SubagentRow[];
-  onOpenSubagent: (agentId: string) => void;
-  expandedDefault?: boolean;
-}) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(expandedDefault);
-  const handleToggle = useCallback(() => setExpanded((current) => !current), []);
-  const visibleRows = useMemo(() => rows.slice(0, ENVIRONMENT_SUBAGENT_ROW_LIMIT), [rows]);
-  const hiddenCount = Math.max(0, rows.length - visibleRows.length);
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  return (
-    <View style={styles.environmentSection} testID="workspace-environment-subagents">
-      <EnvironmentSectionHeader
-        icon="subagents"
-        label={formatHeaderLabel(rows)}
-        expanded={expanded}
-        onPress={handleToggle}
-      />
-      {expanded ? (
-        <View style={styles.environmentSectionBody}>
-          {visibleRows.map((row) => (
-            <WorkspaceSubagentPanelRow key={row.id} row={row} onOpenSubagent={onOpenSubagent} />
-          ))}
-          {hiddenCount > 0 ? (
-            <Text style={styles.environmentMoreText}>
-              {t("workspace.environment.moreSubagents", { count: hiddenCount })}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function WorkspaceSubagentPanelRow({
-  row,
-  onOpenSubagent,
-}: {
-  row: SubagentRow;
-  onOpenSubagent: (agentId: string) => void;
-}) {
-  const { t } = useTranslation();
-  const presentation = useMemo(
-    () => ({ ...buildSubagentRowPresentationData(row), icon: getProviderIcon(row.provider) }),
-    [row],
-  );
-  const displayLabel =
-    presentation.titleState === "loading" ? t("common.loading") : presentation.label;
-  const handlePress = useCallback(() => onOpenSubagent(row.id), [onOpenSubagent, row.id]);
-  const rowStyle = useCallback(
-    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.environmentNestedRow,
-      (Boolean(hovered) || Boolean(pressed)) && styles.environmentRowHovered,
-    ],
-    [],
-  );
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={displayLabel}
-      onPress={handlePress}
-      style={rowStyle}
-      testID={`workspace-environment-subagent-${row.id}`}
-    >
-      <WorkspaceTabIcon presentation={presentation} />
-      <Text style={styles.environmentNestedRowText} numberOfLines={1}>
-        {displayLabel}
-      </Text>
-      <EnvironmentStatusDot bucket={presentation.statusBucket} />
-    </Pressable>
-  );
-}
-
-function EnvironmentStatusDot({
-  bucket,
-}: {
-  bucket: ReturnType<typeof buildSubagentRowPresentationData>["statusBucket"];
-}) {
-  const bucketStyle = resolveEnvironmentStatusDotStyle(bucket);
-  const dotStyle = useMemo(() => [styles.environmentStatusDot, bucketStyle], [bucketStyle]);
-  return <View style={dotStyle} />;
-}
-
-function resolveEnvironmentStatusDotStyle(
-  bucket: ReturnType<typeof buildSubagentRowPresentationData>["statusBucket"],
-) {
-  if (bucket === "needs_input") {
-    return styles.environmentStatusDotNeedsInput;
-  }
-  if (bucket === "failed") {
-    return styles.environmentStatusDotFailed;
-  }
-  if (bucket === "running") {
-    return styles.environmentStatusDotRunning;
-  }
-  if (bucket === "attention") {
-    return styles.environmentStatusDotAttention;
-  }
-  return styles.environmentStatusDotDone;
-}
-
-function WorkspaceTodoProgressSection({ items }: { items: TodoEntry[] | null }) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(true);
-  const summary = useMemo(
-    () => buildTodoProgressSummary(items, ENVIRONMENT_TODO_ROW_LIMIT),
-    [items],
-  );
-  const handleToggle = useCallback(() => setExpanded((current) => !current), []);
-
-  if (!summary) {
-    return null;
-  }
-
-  return (
-    <View style={styles.environmentSection} testID="workspace-environment-todos">
-      <EnvironmentSectionHeader
-        icon="todo"
-        label={t("workspace.environment.tasks")}
-        expanded={expanded}
-        onPress={handleToggle}
-      >
-        <Text style={styles.environmentValueText} numberOfLines={1}>
-          {t("workspace.environment.taskProgress", {
-            completed: summary.completedCount,
-            total: summary.totalCount,
-          })}
-        </Text>
-      </EnvironmentSectionHeader>
-      {expanded ? (
-        <View style={styles.environmentSectionBody}>
-          {summary.visibleItems.map((item, index) => (
-            <EnvironmentTodoRow key={item.text} item={item} index={index} />
-          ))}
-          {summary.hiddenCount > 0 ? (
-            <Text style={styles.environmentMoreText}>
-              {t("workspace.environment.moreTasks", { count: summary.hiddenCount })}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function EnvironmentTodoRow({ item, index }: { item: TodoEntry; index: number }) {
-  const textStyle = useMemo(
-    () => [styles.environmentNestedRowText, item.completed && styles.environmentTodoTextComplete],
-    [item.completed],
-  );
-  const numberStyle = useMemo(
-    () => [styles.environmentTodoNumber, item.completed && styles.environmentTodoNumberComplete],
-    [item.completed],
-  );
-
-  return (
-    <View style={styles.environmentNestedRow}>
-      <Text style={numberStyle}>{index + 1}</Text>
-      <Text style={textStyle} numberOfLines={2}>
-        {item.text}
-      </Text>
-    </View>
-  );
-}
-
-function EnvironmentSectionHeader({
-  icon,
-  label,
-  expanded,
-  children,
-  onPress,
-}: {
-  icon: EnvironmentIconName;
-  label: string;
-  expanded: boolean;
-  children?: ReactNode;
-  onPress: () => void;
-}) {
-  const rowStyle = useCallback(
-    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.environmentRow,
-      (Boolean(hovered) || Boolean(pressed)) && styles.environmentRowHovered,
-    ],
-    [],
-  );
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={rowStyle}
-    >
-      <EnvironmentRowContent icon={icon} label={label}>
-        <View style={styles.environmentSectionHeaderTrailing}>
-          {children}
-          {expanded ? (
-            <ThemedChevronDown size={13} uniProps={mutedColorMapping} />
-          ) : (
-            <ThemedChevronRight size={13} uniProps={mutedColorMapping} />
-          )}
-        </View>
-      </EnvironmentRowContent>
-    </Pressable>
-  );
-}
-
-function WorkspaceSourceSection({
-  sourceLabel,
-  expanded,
-  onToggle,
-}: {
-  sourceLabel: string | null;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
+function WorkspaceSourceSection({ sourceLabel }: { sourceLabel: string | null }) {
   const { t } = useTranslation();
   return (
     <View style={styles.environmentSection} testID="workspace-environment-source">
-      <EnvironmentSectionHeader
-        icon="source"
-        label={t("workspace.environment.source")}
-        expanded={expanded}
-        onPress={onToggle}
-      >
-        <Text style={styles.environmentValueText} numberOfLines={1}>
-          {sourceLabel ?? t("workspace.environment.noSource")}
-        </Text>
-      </EnvironmentSectionHeader>
+      <Text style={styles.environmentSourceTitle}>{t("workspace.environment.source")}</Text>
+      <Text style={styles.environmentSourceEmpty} numberOfLines={1}>
+        {sourceLabel ?? t("workspace.environment.noSource")}
+      </Text>
     </View>
   );
 }
 
-function WorkspaceTaskStatusPanel({
-  activeAgent,
-  workspaceStatus,
-  onCopyResumeCommand,
+function WorkspaceEnvironmentInlineDiffStat({
+  diffStat,
 }: {
-  activeAgent: Agent | null;
-  workspaceStatus: WorkspaceDescriptor["status"] | null;
-  onCopyResumeCommand: (agentId: string) => void;
+  diffStat: WorkspaceDescriptor["diffStat"];
 }) {
-  const { t } = useTranslation();
-  const statusLabel = activeAgent
-    ? t(`workspace.environment.agentStatus.${activeAgent.status}`)
-    : t(`workspace.environment.workspaceStatus.${workspaceStatus ?? "unknown"}`);
-  const canResume = Boolean(
-    activeAgent?.runtimeInfo?.sessionId ?? activeAgent?.persistence?.sessionId,
-  );
-  const handleResumePress = useCallback(() => {
-    if (!activeAgent) {
-      return;
-    }
-    onCopyResumeCommand(activeAgent.id);
-  }, [activeAgent, onCopyResumeCommand]);
-  const resumeActionStyle = useCallback(
-    ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.environmentTaskAction,
-      (Boolean(hovered) || Boolean(pressed)) && canResume && styles.environmentTaskActionHovered,
-      !canResume && styles.environmentTaskActionDisabled,
-    ],
-    [canResume],
-  );
-
+  const additions = diffStat?.additions ?? 0;
+  const deletions = diffStat?.deletions ?? 0;
   return (
-    <View style={styles.environmentTaskSection}>
-      <EnvironmentDisplayRow icon="task" label={t("workspace.environment.task")}>
-        <Text style={styles.environmentValueText} numberOfLines={1}>
-          {statusLabel}
-        </Text>
-      </EnvironmentDisplayRow>
-      {activeAgent ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.environment.resume")}
-          disabled={!canResume}
-          onPress={handleResumePress}
-          style={resumeActionStyle}
-          testID="workspace-environment-resume"
-        >
-          <Text style={styles.environmentTaskActionText}>{t("workspace.environment.resume")}</Text>
-        </Pressable>
-      ) : null}
+    <View style={styles.environmentInlineDiffStat}>
+      <Text style={styles.environmentInlineDiffAddition}>+{additions}</Text>
+      <Text style={styles.environmentInlineDiffDeletion}>-{deletions}</Text>
     </View>
   );
 }
@@ -2445,22 +1564,6 @@ function EnvironmentIcon({ name }: { name: EnvironmentIconName }) {
     return <ThemedListTodo size={15} uniProps={mutedColorMapping} />;
   }
   return <ThemedLink2 size={15} uniProps={mutedColorMapping} />;
-}
-
-function resolveDockTabIcon(tab: WorkspaceEnvironmentDockTab): EnvironmentIconName {
-  if (tab === "pull-request") {
-    return "pr";
-  }
-  if (tab === "tasks") {
-    return "todo";
-  }
-  if (tab === "subagents") {
-    return "subagents";
-  }
-  if (tab === "browser-context") {
-    return "browser";
-  }
-  return "changes";
 }
 
 function WorkspaceHeaderRightControls({
@@ -2613,8 +1716,9 @@ function WorkspaceEnvironmentPanelRail({
     <View style={styles.environmentRail}>
       <View style={styles.environmentCardHeader}>
         <View style={styles.environmentCardHeaderTitle}>
-          <EnvironmentIcon name="changes" />
-          <Text style={styles.environmentCardHeaderText}>{t("workspace.environment.title")}</Text>
+          <Text style={styles.environmentCardHeaderText}>
+            {t("workspace.environment.panelTitle")}
+          </Text>
         </View>
         <HeaderToggleButton
           testID="workspace-environment-card-close"
@@ -3466,26 +2570,6 @@ function WorkspaceScreenContent({
     });
     setEnvironmentPanelMode("forced-closed");
   }, [activeExplorerCheckout, isMobile, openFileExplorerForCheckout, setExplorerTabForCheckout]);
-  const handleOpenWorkspaceStatus = useCallback(() => {
-    if (isMobile) {
-      handleOpenEnvironmentChanges();
-      return;
-    }
-    setEnvironmentPanelMode("forced-open");
-    setEnvironmentDockState((state) => ({ ...state, open: true }));
-    if (isExplorerOpen && activeExplorerCheckout) {
-      toggleFileExplorerForCheckout({
-        isCompact: false,
-        checkout: activeExplorerCheckout,
-      });
-    }
-  }, [
-    activeExplorerCheckout,
-    handleOpenEnvironmentChanges,
-    isExplorerOpen,
-    isMobile,
-    toggleFileExplorerForCheckout,
-  ]);
 
   const explorerToggleAccessibilityState = useMemo(
     () => ({ expanded: isExplorerOpen }),
@@ -3619,14 +2703,6 @@ function WorkspaceScreenContent({
       }),
     [currentBranchName, environmentPanelAgent, environmentTodoItems, workspaceDescriptor],
   );
-  const workspaceReviewCalloutModel = useMemo(
-    () =>
-      buildWorkspaceReviewCalloutModel({
-        activeAgent: environmentPanelAgent,
-        workspace: workspaceDescriptor,
-      }),
-    [environmentPanelAgent, workspaceDescriptor],
-  );
   const workspaceActivityItems = useMemo(
     () =>
       buildWorkspaceActivityItems({
@@ -3636,7 +2712,6 @@ function WorkspaceScreenContent({
       }),
     [currentBranchName, environmentPanelAgent, workspaceDescriptor],
   );
-  const workspacePullRequestUrl = workspaceDescriptor?.githubRuntime?.pullRequest?.url ?? null;
   const environmentPanelAgentId = environmentPanelAgent?.id ?? null;
   const workspaceReviewArchiveAction = useMemo(() => {
     if (
@@ -5030,10 +4105,6 @@ function WorkspaceScreenContent({
 
   const activeTabDescriptor = useMemo(() => activeTab?.descriptor ?? null, [activeTab]);
   const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
-  const shouldRenderDesktopPaneFallback = useMemo(
-    () => !isMobile && !canRenderDesktopPaneSplits,
-    [isMobile, canRenderDesktopPaneSplits],
-  );
   useEffect(() => {
     if (!isRouteFocused || isNative || typeof document === "undefined" || activeTabDescriptor) {
       return;
@@ -5153,17 +4224,6 @@ function WorkspaceScreenContent({
     [buildPaneContentModel],
   );
 
-  const desktopTabRowItems = useMemo<WorkspaceDesktopTabRowItem[]>(
-    () =>
-      tabs.map((tab) => ({
-        tab,
-        isActive: tab.tabId === activeTabDescriptor?.tabId,
-        isCloseHovered: hoveredCloseTabKey === tab.key,
-        isClosingTab: closingTabIds.has(tab.tabId),
-      })),
-    [activeTabDescriptor?.tabId, closingTabIds, hoveredCloseTabKey, tabs],
-  );
-
   const handleFocusPane = useStableEvent(function handleFocusPane(paneId: string) {
     if (!persistenceKey || paneFocusSuppressedRef.current) {
       return;
@@ -5213,19 +4273,6 @@ function WorkspaceScreenContent({
       reorderWorkspaceTabsInPane(persistenceKey, paneId, tabIds);
     },
     [persistenceKey, reorderWorkspaceTabsInPane],
-  );
-
-  const handleReorderTabsInFocusedPane = useCallback(
-    (nextTabs: WorkspaceTabDescriptor[]) => {
-      if (!focusedPaneId) {
-        return;
-      }
-      handleReorderTabsInPane(
-        focusedPaneId,
-        nextTabs.map((tab) => tab.tabId),
-      );
-    },
-    [focusedPaneId, handleReorderTabsInPane],
   );
 
   const renderSplitPaneEmptyState = useCallback(
@@ -5308,7 +4355,6 @@ function WorkspaceScreenContent({
     [createTerminalMutation.isPending, pendingTerminalCreateInput],
   );
   const showCreateBrowserTab = getIsElectron();
-  const focusedPaneIdOrUndefined = useMemo(() => focusedPaneId ?? undefined, [focusedPaneId]);
   const desktopFocusModeEnabled = useMemo(
     () => isFocusModeEnabled && !isMobile,
     [isFocusModeEnabled, isMobile],
@@ -5356,6 +4402,7 @@ function WorkspaceScreenContent({
         onResizeSplit={handleResizePaneSplit}
         onReorderTabsInPane={handleReorderTabsInPane}
         renderPaneEmptyState={renderSplitPaneEmptyState}
+        topRightControls={headerRight}
       />
     );
   }, [
@@ -5391,54 +4438,57 @@ function WorkspaceScreenContent({
     handleResizePaneSplit,
     handleReorderTabsInPane,
     renderSplitPaneEmptyState,
+    headerRight,
   ]);
   const workspaceCenterColumn = (
     <View style={styles.centerColumn}>
-      {showScreenHeader && (
+      {showScreenHeader && isMobile && (
         <ScreenHeader
           left={
-            <>
-              <SidebarMenuToggle />
-              <WorkspaceHeaderTitleBar
-                isLoading={isWorkspaceHeaderLoading}
-                title={workspaceHeaderTitle}
-                subtitle={workspaceHeaderSubtitle}
-                showSubtitle={shouldShowWorkspaceHeaderSubtitle}
-                activeTab={activeTabDescriptor}
-                currentBranchName={currentBranchName}
-                isGitCheckout={isGitCheckout}
-                normalizedServerId={normalizedServerId}
-                normalizedWorkspaceId={normalizedWorkspaceId}
-                workspaceScripts={workspaceScripts}
-                liveTerminalIds={liveTerminalIds}
-                showWorkspaceSetup={showWorkspaceSetup}
-                showCreateBrowserTab={showCreateBrowserTab}
-                isMobile={isMobile}
-                createTerminalDisabled={createTerminalDisabled}
-                importAgentDisabled={!canOpenImportSheet}
-                menuNewAgentIcon={menuNewAgentIcon}
-                menuNewTerminalIcon={menuNewTerminalIcon}
-                menuNewBrowserIcon={MENU_NEW_BROWSER_ICON}
-                menuImportIcon={MENU_IMPORT_ICON}
-                menuCopyIcon={menuCopyIcon}
-                menuSettingsIcon={menuSettingsIcon}
-                menuGitDockIcon={MENU_GIT_DOCK_ICON}
-                menuBrowserContextIcon={MENU_BROWSER_CONTEXT_ICON}
-                browserContextDockDisabled={!hasEnvironmentBrowserContext}
-                onCreateDraftTab={handleCreateDraftTab}
-                onCreateTerminal={handleCreateTerminal}
-                onCreateBrowser={handleCreateBrowserTab}
-                onOpenGitDock={handleOpenGitDock}
-                onOpenBrowserContextDock={handleOpenBrowserContextDock}
-                onOpenImportSheet={openImportSheet}
-                onCopyWorkspacePath={handleCopyWorkspacePath}
-                onCopyBranchName={handleCopyBranchName}
-                onOpenSetupTab={handleOpenSetupTab}
-                onScriptTerminalStarted={handleScriptTerminalStarted}
-                onViewScriptTerminal={handleViewScriptTerminal}
-                onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
-              />
-            </>
+            isMobile ? (
+              <>
+                <SidebarMenuToggle />
+                <WorkspaceHeaderTitleBar
+                  isLoading={isWorkspaceHeaderLoading}
+                  title={workspaceHeaderTitle}
+                  subtitle={workspaceHeaderSubtitle}
+                  showSubtitle={shouldShowWorkspaceHeaderSubtitle}
+                  activeTab={activeTabDescriptor}
+                  currentBranchName={currentBranchName}
+                  isGitCheckout={isGitCheckout}
+                  normalizedServerId={normalizedServerId}
+                  normalizedWorkspaceId={normalizedWorkspaceId}
+                  workspaceScripts={workspaceScripts}
+                  liveTerminalIds={liveTerminalIds}
+                  showWorkspaceSetup={showWorkspaceSetup}
+                  showCreateBrowserTab={showCreateBrowserTab}
+                  isMobile={isMobile}
+                  createTerminalDisabled={createTerminalDisabled}
+                  importAgentDisabled={!canOpenImportSheet}
+                  menuNewAgentIcon={menuNewAgentIcon}
+                  menuNewTerminalIcon={menuNewTerminalIcon}
+                  menuNewBrowserIcon={MENU_NEW_BROWSER_ICON}
+                  menuImportIcon={MENU_IMPORT_ICON}
+                  menuCopyIcon={menuCopyIcon}
+                  menuSettingsIcon={menuSettingsIcon}
+                  menuGitDockIcon={MENU_GIT_DOCK_ICON}
+                  menuBrowserContextIcon={MENU_BROWSER_CONTEXT_ICON}
+                  browserContextDockDisabled={!hasEnvironmentBrowserContext}
+                  onCreateDraftTab={handleCreateDraftTab}
+                  onCreateTerminal={handleCreateTerminal}
+                  onCreateBrowser={handleCreateBrowserTab}
+                  onOpenGitDock={handleOpenGitDock}
+                  onOpenBrowserContextDock={handleOpenBrowserContextDock}
+                  onOpenImportSheet={openImportSheet}
+                  onCopyWorkspacePath={handleCopyWorkspacePath}
+                  onCopyBranchName={handleCopyBranchName}
+                  onOpenSetupTab={handleOpenSetupTab}
+                  onScriptTerminalStarted={handleScriptTerminalStarted}
+                  onViewScriptTerminal={handleViewScriptTerminal}
+                  onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
+                />
+              </>
+            ) : null
           }
           right={headerRight}
         />
@@ -5465,52 +4515,7 @@ function WorkspaceScreenContent({
         />
       ) : null}
 
-      {shouldRenderDesktopPaneFallback ? (
-        <WorkspaceDesktopTabsRow
-          paneId={focusedPaneIdOrUndefined}
-          isFocused={isRouteFocused}
-          tabs={desktopTabRowItems}
-          normalizedServerId={normalizedServerId}
-          normalizedWorkspaceId={normalizedWorkspaceId}
-          setHoveredTabKey={setHoveredTabKey}
-          setHoveredCloseTabKey={setHoveredCloseTabKey}
-          onNavigateTab={navigateToTabId}
-          onCloseTab={handleCloseTabById}
-          onCopyResumeCommand={handleCopyResumeCommand}
-          onCopyAgentId={handleCopyAgentId}
-          onReloadAgent={handleReloadAgent}
-          onRenameTab={handleRenameTab}
-          onCloseTabsToLeft={handleCloseTabsToLeft}
-          onCloseTabsToRight={handleCloseTabsToRight}
-          onCloseOtherTabs={handleCloseOtherTabs}
-          onCreateDraftTab={handleCreateDraftTab}
-          onCreateTerminalTab={handleCreateTerminal}
-          onCreateBrowserTab={handleCreateBrowserTab}
-          showCreateBrowserTab={showCreateBrowserTab}
-          disableCreateTerminal={createTerminalMutation.isPending}
-          isWaitingOnTerminalReadiness={pendingTerminalCreateInput !== null}
-          onReorderTabs={handleReorderTabsInFocusedPane}
-          onSplitRight={noop}
-          onSplitDown={noop}
-          showPaneSplitActions={false}
-        />
-      ) : null}
-
-      <WorkspaceStatusStrip
-        model={workspaceStatusStripModel}
-        onOpenEnvironment={handleOpenWorkspaceStatus}
-      />
-
       <View style={styles.centerContent} onLayout={handleCenterContentLayout}>
-        <WorkspaceReviewCallout
-          model={workspaceReviewCalloutModel}
-          pullRequestUrl={workspacePullRequestUrl}
-          activeAgentId={environmentPanelAgentId}
-          archiveAction={workspaceReviewArchiveAction}
-          onViewChanges={handleOpenEnvironmentChanges}
-          onCopyResumeCommand={handleCopyResumeCommand}
-          onOpenEnvironment={handleOpenWorkspaceStatus}
-        />
         {isMobile ? (
           <GestureDetector
             gesture={explorerOpenGesture}
@@ -5521,31 +4526,6 @@ function WorkspaceScreenContent({
         ) : (
           <View style={desktopContentStyle}>{desktopContent}</View>
         )}
-        <WorkspaceEnvironmentPanelRail
-          visible={environmentRailVisible}
-          serverId={normalizedServerId}
-          workspaceDirectory={workspaceDirectory}
-          currentBranchName={currentBranchName}
-          isGitCheckout={isGitCheckout}
-          isLocalDaemon={isLocalDaemon}
-          diffStat={workspaceDescriptor?.diffStat ?? null}
-          githubRuntime={workspaceDescriptor?.githubRuntime}
-          browserContext={environmentBrowserContext}
-          dockState={environmentDockState}
-          sourceLabel={environmentSourceLabel}
-          taskTitle={workspaceStatusStripModel.taskTitle}
-          activityItems={workspaceActivityItems}
-          activeAgent={environmentPanelAgent}
-          workspaceStatus={environmentWorkspaceStatus}
-          subagents={environmentSubagents}
-          todoItems={environmentTodoItems}
-          latestTurnChanges={environmentTurnChanges}
-          onSelectDockTab={handleOpenWorkspaceDockPane}
-          onOpenChanges={handleOpenEnvironmentChanges}
-          onOpenSubagent={handleOpenEnvironmentSubagent}
-          onCopyResumeCommand={handleCopyResumeCommand}
-          onClose={handleToggleEnvironmentPanel}
-        />
       </View>
     </View>
   );
@@ -5566,6 +4546,32 @@ function WorkspaceScreenContent({
             </FloatingPanelPortalHostNameProvider>
 
             <FloatingPanelPortalHost name={workspaceFloatingPanelPortalHostName} />
+
+            <WorkspaceEnvironmentPanelRail
+              visible={environmentRailVisible}
+              serverId={normalizedServerId}
+              workspaceDirectory={workspaceDirectory}
+              currentBranchName={currentBranchName}
+              isGitCheckout={isGitCheckout}
+              isLocalDaemon={isLocalDaemon}
+              diffStat={workspaceDescriptor?.diffStat ?? null}
+              githubRuntime={workspaceDescriptor?.githubRuntime}
+              browserContext={environmentBrowserContext}
+              dockState={environmentDockState}
+              sourceLabel={environmentSourceLabel}
+              taskTitle={workspaceStatusStripModel.taskTitle}
+              activityItems={workspaceActivityItems}
+              activeAgent={environmentPanelAgent}
+              workspaceStatus={environmentWorkspaceStatus}
+              subagents={environmentSubagents}
+              todoItems={environmentTodoItems}
+              latestTurnChanges={environmentTurnChanges}
+              onSelectDockTab={handleOpenWorkspaceDockPane}
+              onOpenChanges={handleOpenEnvironmentChanges}
+              onOpenSubagent={handleOpenEnvironmentSubagent}
+              onCopyResumeCommand={handleCopyResumeCommand}
+              onClose={handleToggleEnvironmentPanel}
+            />
 
             {showExplorerSidebar && workspaceDirectory ? (
               <ExplorerSidebar
@@ -5714,126 +4720,9 @@ const styles = StyleSheet.create((theme) => ({
       md: theme.spacing[2],
     },
   },
-  workspaceStatusStrip: {
-    minHeight: 42,
-    marginHorizontal: {
-      xs: theme.spacing[2],
-      md: theme.spacing[3],
-    },
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[1],
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-    flexDirection: {
-      xs: "column",
-      md: "row",
-    },
-    alignItems: {
-      xs: "stretch",
-      md: "center",
-    },
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-    ...theme.shadow.sm,
-  },
-  workspaceStatusStripHovered: {
-    backgroundColor: theme.colors.surface1,
-    borderColor: theme.colors.borderAccent,
-  },
-  workspaceStatusStripActionable: {
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
-    ...theme.shadow.md,
-  },
-  workspaceStatusStripTitleGroup: {
-    minWidth: 0,
-    flexShrink: 1,
-    flex: 1,
-    gap: 1,
-  },
-  workspaceStatusStripEyebrow: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-  },
-  workspaceStatusStripTitle: {
-    minWidth: 0,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  workspaceStatusStripItems: {
-    minWidth: 0,
-    flexShrink: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: {
-      xs: "flex-start",
-      md: "flex-end",
-    },
-    flexWrap: "wrap",
-    gap: theme.spacing[1],
-  },
-  workspaceReviewCallout: {
-    marginHorizontal: {
-      xs: theme.spacing[2],
-      md: theme.spacing[3],
-    },
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[1],
-    zIndex: 20,
-    paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface0,
-    flexDirection: {
-      xs: "column",
-      md: "row",
-    },
-    alignItems: {
-      xs: "stretch",
-      md: "center",
-    },
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    ...theme.shadow.md,
-  },
-  workspaceReviewCalloutTextGroup: {
-    minWidth: 0,
-    flexShrink: 1,
-    flex: 1,
-    gap: theme.spacing[1],
-  },
-  workspaceReviewCalloutTitle: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  workspaceReviewCalloutDescription: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-  },
-  workspaceReviewCalloutActions: {
-    minWidth: 0,
-    flexShrink: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: {
-      xs: "flex-start",
-      md: "flex-end",
-    },
-    flexWrap: "wrap",
-    gap: theme.spacing[2],
-  },
   environmentPanel: {
-    gap: theme.spacing[1],
+    flex: 1,
+    gap: theme.spacing[3],
   },
   environmentDockTabs: {
     flexDirection: "row",
@@ -5869,25 +4758,19 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   environmentRail: {
-    position: "absolute",
-    top: theme.spacing[3],
-    right: theme.spacing[4],
     width: WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
-    maxHeight: "76%",
-    zIndex: 30,
-    backgroundColor: theme.colors.surface0,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.xl,
-    overflow: "hidden",
-    ...theme.shadow.md,
+    flexShrink: 0,
+    minHeight: 0,
+    paddingTop: WORKSPACE_FLOATING_PANEL_TOP_OFFSET,
+    paddingRight: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+    paddingLeft: theme.spacing[2],
+    backgroundColor: "transparent",
   },
   environmentCardHeader: {
-    minHeight: 40,
-    paddingVertical: theme.spacing[2],
-    paddingRight: theme.spacing[2],
-    paddingLeft: theme.spacing[3],
-    backgroundColor: theme.colors.surface1,
+    minHeight: 38,
+    paddingRight: theme.spacing[1],
+    paddingLeft: theme.spacing[1],
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -5919,17 +4802,36 @@ const styles = StyleSheet.create((theme) => ({
     maxHeight: "100%",
   },
   environmentRailScrollContent: {
+    flexGrow: 1,
     paddingTop: theme.spacing[2],
-    paddingRight: theme.spacing[3],
-    paddingBottom: theme.spacing[3],
-    paddingLeft: theme.spacing[3],
-  },
-  environmentPanelTitle: {
-    paddingHorizontal: theme.spacing[2],
+    paddingRight: 0,
     paddingBottom: theme.spacing[2],
+    paddingLeft: 0,
+  },
+  environmentInspectorCard: {
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.xl,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    ...theme.shadow.sm,
+  },
+  environmentInspectorCardHeader: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
+  environmentInspectorCardTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+  },
+  environmentInspectorRows: {
+    gap: theme.spacing[1],
+    paddingTop: theme.spacing[2],
   },
   environmentRow: {
     minHeight: 30,
@@ -5975,11 +4877,32 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textAlign: "right",
   },
+  environmentInlineDiffStat: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: theme.spacing[2],
+  },
+  environmentInlineDiffAddition: {
+    color: theme.colors.palette.green[500],
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  environmentInlineDiffDeletion: {
+    color: theme.colors.palette.red[500],
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
   environmentDivider: {
     height: theme.borderWidth[1],
     backgroundColor: theme.colors.border,
     marginHorizontal: theme.spacing[2],
     marginVertical: theme.spacing[2],
+  },
+  environmentCardDivider: {
+    height: theme.borderWidth[1],
+    backgroundColor: theme.colors.border,
+    marginVertical: theme.spacing[3],
   },
   environmentTaskSection: {
     gap: theme.spacing[1],
@@ -6010,6 +4933,36 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentSection: {
     gap: theme.spacing[1],
+  },
+  environmentSourceTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  environmentSourceEmpty: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+    paddingTop: theme.spacing[2],
+  },
+  environmentOutlineCard: {
+    marginTop: "auto",
+    minHeight: 54,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.xl,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+    ...theme.shadow.sm,
+  },
+  environmentOutlineText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
   },
   environmentSectionHeaderTrailing: {
     flexDirection: "row",

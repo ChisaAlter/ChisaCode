@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type ReactNode,
   type SetStateAction,
 } from "react";
 import {
@@ -173,6 +174,7 @@ interface WorkspaceDesktopTabsRowProps {
   activeDragTabId?: string | null;
   tabDropPreviewIndex?: number | null;
   showPaneSplitActions?: boolean;
+  trailingControls?: ReactNode;
 }
 
 function getFallbackTabLabel(
@@ -255,7 +257,6 @@ function TabChip({
   tab,
   isActive,
   isDragging,
-  isFocused,
   resolvedTabWidth,
   showLabel,
   showCloseButton,
@@ -273,7 +274,6 @@ function TabChip({
   tab: WorkspaceTabDescriptor;
   isActive: boolean;
   isDragging: boolean;
-  isFocused: boolean;
   resolvedTabWidth: number;
   showLabel: boolean;
   showCloseButton: boolean;
@@ -366,10 +366,6 @@ function TabChip({
   );
 
   const tabAccessibilityState = useMemo(() => ({ selected: isActive }), [isActive]);
-  const tabFocusIndicatorStyle = useMemo(
-    () => [styles.tabFocusIndicator, !isFocused && styles.tabFocusIndicatorUnfocused],
-    [isFocused],
-  );
   const tabLabelSkeletonStyle = useMemo(
     () => [styles.tabLabelSkeleton, showCloseButton && styles.tabLabelSkeletonWithCloseButton],
     [showCloseButton],
@@ -404,7 +400,6 @@ function TabChip({
               accessibilityState={tabAccessibilityState}
               aria-selected={isActive}
             >
-              {isActive && <View style={tabFocusIndicatorStyle} />}
               <TabHandleContent
                 presentation={presentation}
                 isHighlighted={isHighlighted}
@@ -473,7 +468,6 @@ function TabChip({
 
 export function WorkspaceDesktopTabsRow({
   paneId,
-  isFocused = false,
   tabs,
   normalizedServerId,
   normalizedWorkspaceId,
@@ -501,6 +495,7 @@ export function WorkspaceDesktopTabsRow({
   activeDragTabId = null,
   tabDropPreviewIndex = null,
   showPaneSplitActions = true,
+  trailingControls = null,
 }: WorkspaceDesktopTabsRowProps) {
   const { t } = useTranslation();
   const fallbackTabLabels = useMemo(
@@ -618,7 +613,6 @@ export function WorkspaceDesktopTabsRow({
         <ResolvedDesktopTabChip
           key={`${item.tab.key}:${item.tab.kind}`}
           item={item}
-          isFocused={isFocused}
           isDragging={isActive}
           index={index}
           tabCount={tabs.length}
@@ -646,7 +640,6 @@ export function WorkspaceDesktopTabsRow({
     },
     [
       activeDragTabId,
-      isFocused,
       layout.closeButtonPolicy,
       layout.items,
       normalizedServerId,
@@ -815,6 +808,7 @@ export function WorkspaceDesktopTabsRow({
             </Tooltip>
           </>
         ) : null}
+        {trailingControls}
       </View>
     </View>
   );
@@ -822,7 +816,6 @@ export function WorkspaceDesktopTabsRow({
 
 function ResolvedDesktopTabChip({
   item,
-  isFocused,
   isDragging,
   index,
   tabCount,
@@ -847,7 +840,6 @@ function ResolvedDesktopTabChip({
   showDropIndicatorAfter,
 }: {
   item: WorkspaceDesktopTabRowItem;
-  isFocused: boolean;
   isDragging: boolean;
   index: number;
   tabCount: number;
@@ -939,7 +931,6 @@ function ResolvedDesktopTabChip({
               tab={item.tab}
               isActive={item.isActive}
               isDragging={isDragging}
-              isFocused={isFocused}
               resolvedTabWidth={resolvedTabWidth}
               showLabel={showLabel}
               showCloseButton={showCloseButton}
@@ -1032,18 +1023,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabIcon: {
     flexShrink: 0,
-  },
-  tabFocusIndicator: {
-    position: "absolute",
-    top: 0,
-    left: theme.spacing[2],
-    right: theme.spacing[2],
-    height: 2,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.accent,
-  },
-  tabFocusIndicatorUnfocused: {
-    backgroundColor: theme.colors.borderAccent,
   },
   tabDropIndicator: {
     position: "absolute",

@@ -113,6 +113,7 @@ interface SplitContainerProps {
   onReorderTabsInPane: (paneId: string, tabIds: string[]) => void;
   renderPaneEmptyState?: () => ReactNode;
   focusModeEnabled?: boolean;
+  topRightControls?: ReactNode;
 }
 
 interface WorkspaceTabDragData {
@@ -380,6 +381,7 @@ export function SplitContainer({
   onReorderTabsInPane,
   renderPaneEmptyState = () => null,
   focusModeEnabled,
+  topRightControls = null,
 }: SplitContainerProps) {
   const [activeDragTabId, setActiveDragTabId] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<SplitDropZoneHover | null>(null);
@@ -598,6 +600,7 @@ export function SplitContainer({
         showDropZones={activeDragTabId !== null}
         dropPreview={dropPreview}
         tabDropPreview={tabDropPreview}
+        topRightControls={topRightControls}
       />
       <DragOverlay dropAnimation={null}>
         {activeDragTabId ? (
@@ -738,6 +741,7 @@ function SplitNodeView({
   showDropZones,
   dropPreview,
   tabDropPreview,
+  topRightControls,
 }: SplitNodeViewProps) {
   const groupId = node.kind === "group" ? node.group.id : null;
   const groupDirection = node.kind === "group" ? node.group.direction : null;
@@ -790,6 +794,7 @@ function SplitNodeView({
         showDropZones={showDropZones}
         dropPreview={dropPreview}
         tabDropPreview={tabDropPreview}
+        topRightControls={topRightControls}
       />
     );
   }
@@ -837,6 +842,7 @@ function SplitNodeView({
               showDropZones={showDropZones}
               dropPreview={dropPreview}
               tabDropPreview={tabDropPreview}
+              topRightControls={topRightControls}
             />
           </SplitGroupChild>
           {index < node.group.children.length - 1 ? (
@@ -888,6 +894,7 @@ function SplitPaneView({
   showDropZones,
   dropPreview,
   tabDropPreview,
+  topRightControls,
 }: SplitPaneViewProps) {
   const { theme: _theme } = useUnistyles();
   const paneRef = useRef<View | null>(null);
@@ -990,9 +997,13 @@ function SplitPaneView({
     [onSplitPaneEmpty, paneId],
   );
   const paneTabsStyle = useMemo(
-    () => [styles.paneTabs, { paddingLeft: padding.left, paddingRight: padding.right }],
-    [padding.left, padding.right],
+    () => [
+      styles.paneTabs,
+      { paddingTop: padding.top, paddingLeft: padding.left, paddingRight: padding.right },
+    ],
+    [padding.left, padding.right, padding.top],
   );
+  const paneTopRightControls = isFocused ? topRightControls : null;
 
   return (
     <View ref={paneRef} collapsable={false} style={styles.pane}>
@@ -1027,6 +1038,7 @@ function SplitPaneView({
           tabDropPreviewIndex={
             tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
           }
+          trailingControls={paneTopRightControls}
         />
       </View>
 

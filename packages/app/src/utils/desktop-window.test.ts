@@ -39,4 +39,36 @@ describe("resolveWindowControlsPadding", () => {
       top: 0,
     });
   });
+
+  it("keeps desktop workspace tab rows below the window controls", () => {
+    expect(
+      resolveWindowControlsPadding({
+        role: "tabRow",
+        rawPadding,
+        sidebarClosed: false,
+        explorerOpen: false,
+        focusModeEnabled: false,
+      }),
+    ).toEqual({
+      left: 0,
+      right: 0,
+      top: 28,
+    });
+  });
+
+  it("offsets the explorer sidebar from Windows caption buttons", () => {
+    expect(
+      resolveWindowControlsPadding({
+        role: "explorerSidebar",
+        rawPadding,
+        sidebarClosed: false,
+        explorerOpen: true,
+        focusModeEnabled: false,
+      }),
+    ).toEqual({
+      left: 0,
+      right: 48,
+      top: 28,
+    });
+  });
 });

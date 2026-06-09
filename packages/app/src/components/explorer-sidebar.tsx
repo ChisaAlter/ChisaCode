@@ -63,6 +63,7 @@ export function ExplorerSidebar({
   const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
   const setExplorerWidth = usePanelStore((state) => state.setExplorerWidth);
   const { width: viewportWidth } = useWindowDimensions();
+  const desktopWindowControlsPadding = useWindowControlsPadding("explorerSidebar");
   const closeTouchStartX = useSharedValue(0);
   const closeTouchStartY = useSharedValue(0);
 
@@ -286,9 +287,9 @@ export function ExplorerSidebar({
     () => [
       explorerStaticStyles.desktopSidebar,
       resizeAnimatedStyle,
-      { paddingTop: insets.top + 8 },
+      { paddingTop: insets.top + desktopWindowControlsPadding.top + 8 },
     ],
-    [resizeAnimatedStyle, insets.top],
+    [resizeAnimatedStyle, insets.top, desktopWindowControlsPadding.top],
   );
 
   // Mobile: full-screen overlay with gesture.
@@ -508,8 +509,15 @@ function SidebarContent({
   const prTabLabel = prPane.prNumber === null ? "" : `#${prPane.prNumber}`;
 
   const headerStyle = useMemo(
-    () => [styles.header, !isMobile && styles.desktopHeader, { paddingRight: padding.right }],
-    [isMobile, padding.right],
+    () => [
+      styles.header,
+      !isMobile && styles.desktopHeader,
+      {
+        marginTop: theme.spacing[2],
+        paddingRight: padding.right,
+      },
+    ],
+    [isMobile, padding.right, theme.spacing],
   );
   const closeButtonStyle = useMemo(
     () => [styles.closeButton, !isMobile && styles.desktopCloseButton],
