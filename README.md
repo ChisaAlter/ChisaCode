@@ -18,14 +18,6 @@
 
 <p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
 
-<p align="center">
-  <img src="packages/website/public/hero-mockup.png" alt="ChisaCode app screenshot" width="100%">
-</p>
-
-<p align="center">
-  <img src="packages/website/public/mobile-mockup.png" alt="ChisaCode mobile app" width="100%">
-</p>
-
 ---
 
 Run agents in parallel on your own machines. Ship from your phone or your desk.

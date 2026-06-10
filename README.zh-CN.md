@@ -16,14 +16,6 @@
   <a href="README.md">English README</a>
 </p>
 
-<p align="center">
-  <img src="packages/website/public/hero-mockup.png" alt="ChisaCode 桌面端界面截图" width="100%">
-</p>
-
-<p align="center">
-  <img src="packages/website/public/mobile-mockup.png" alt="ChisaCode 手机端界面截图" width="100%">
-</p>
-
 ---
 
 ChisaCode 是一个本地优先的 AI 编程工作台。它在你的电脑上启动一个 daemon，
