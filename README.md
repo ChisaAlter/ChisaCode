@@ -1,37 +1,29 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="ChisaCode logo">
+  <img src="packages/desktop/assets/128x128@2x.png" width="72" height="72" alt="ChisaCode icon">
 </p>
 
 <h1 align="center">ChisaCode</h1>
 
 <p align="center"><strong>ChisaCode</strong></p>
 
+> Languages: **English** | [简体中文](README.zh-CN.md)
+
 <p align="center">
-  <a href="https://github.com/getchisacode/chisacode/stargazers">
-    <img src="https://img.shields.io/github/stars/getchisacode/chisacode?style=flat&logo=github" alt="GitHub stars">
-  </a>
-  <a href="https://github.com/getchisacode/chisacode/releases">
-    <img src="https://img.shields.io/github/v/release/getchisacode/chisacode?style=flat&logo=github" alt="GitHub release">
-  </a>
-  <a href="https://x.com/moboudra">
-    <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
-  </a>
-  <a href="https://discord.gg/jz8T2uahpH">
-    <img src="https://img.shields.io/badge/Discord-555?logo=discord" alt="Discord">
-  </a>
-  <a href="https://www.reddit.com/r/ChisaCodeAI/">
-    <img src="https://img.shields.io/badge/Reddit-555?logo=reddit" alt="Reddit">
-  </a>
+  <a href="https://github.com/ChisaAlter/ChisaCode/releases">Releases</a>
+  ·
+  <a href="https://github.com/ChisaAlter/ChisaCode/actions/workflows/ci.yml">CI</a>
+  ·
+  <a href="README.zh-CN.md">中文文档</a>
 </p>
 
 <p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
 
 <p align="center">
-  <img src="https://chisacode.sh/hero-mockup.png" alt="ChisaCode app screenshot" width="100%">
+  <img src="packages/website/public/hero-mockup.png" alt="ChisaCode app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="https://chisacode.sh/mobile-mockup.png" alt="ChisaCode mobile app" width="100%">
+  <img src="packages/website/public/mobile-mockup.png" alt="ChisaCode mobile app" width="100%">
 </p>
 
 ---
