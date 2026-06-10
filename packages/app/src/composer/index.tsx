@@ -1749,12 +1749,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContainer: {
     position: "relative",
     minHeight: FOOTER_HEIGHT,
-    marginHorizontal: "auto",
-    alignItems: "center",
+    alignItems: "flex-start",
     width: "100%",
     overflow: "visible",
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[4],
+    paddingLeft: 14,
+    paddingRight: 14,
+    paddingBottom: 14,
   },
   inputAreaLocked: {
     opacity: 0.6,
@@ -1766,14 +1766,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   footer: {
     width: "100%",
-    paddingHorizontal: theme.spacing[4],
+    paddingLeft: 14,
+    paddingRight: 14,
     // Negative margin pulls the footer up against the input area's paddingBottom.
     // On mobile, leave a 3px gap (no token sits below spacing[1]); desktop keeps more.
     marginTop: {
       xs: -(theme.spacing[4] - 3),
       md: -theme.spacing[3],
     },
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   footerContent: {
     width: "100%",

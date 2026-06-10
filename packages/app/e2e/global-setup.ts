@@ -191,6 +191,38 @@ let chisacodeHome: string | null = null;
 let fakeToolBinDir: string | null = null;
 let relayProcess: ChildProcess | null = null;
 
+function spawnNpx(args: string[], options: Parameters<typeof spawn>[2]): ChildProcess {
+  if (process.platform === "win32") {
+    return spawn("cmd.exe", ["/d", "/s", "/c", "npx", ...args], options);
+  }
+  return spawn("npx", args, options);
+}
+
+function resolvePathCommand(command: string): string {
+  const lookupCommand = process.platform === "win32" ? "where.exe" : "which";
+  const candidates = execFileSync(lookupCommand, [command], { encoding: "utf8" })
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (process.platform === "win32") {
+    return (
+      candidates.find((candidate) => /\.(cmd|exe)$/i.test(candidate)) ?? candidates[0] ?? command
+    );
+  }
+  return candidates[0] ?? command;
+}
+
+function spawnResolvedCommand(
+  command: string,
+  args: string[],
+  options: Parameters<typeof spawn>[2],
+): ChildProcess {
+  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(command)) {
+    return spawn("cmd.exe", ["/d", "/s", "/c", command, ...args], options);
+  }
+  return spawn(command, args, options);
+}
+
 function resolveOptionalChisaCodeHomeEnv(value: string | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) {
@@ -556,8 +588,7 @@ async function startRelay(excludedPorts: Set<number>): Promise<number> {
     const buffer = createLineBuffer();
     const state: RelayStreamState = { failureLine: null, readyForSelectedPort: false };
 
-    relayProcess = spawn(
-      "npx",
+    relayProcess = spawnNpx(
       ["wrangler", "dev", "--local", "--ip", "127.0.0.1", "--port", String(relayPort)],
       {
         cwd: relayDir,
@@ -589,7 +620,7 @@ async function startRelay(excludedPorts: Set<number>): Promise<number> {
 
 function startMetro(metroPort: number, buffer: ReturnType<typeof createLineBuffer>): ChildProcess {
   const appDir = path.resolve(__dirname, "..");
-  const child = spawn("npx", ["expo", "start", "--web", "--port", String(metroPort)], {
+  const child = spawnNpx(["expo", "start", "--web", "--port", String(metroPort)], {
     cwd: appDir,
     env: {
       ...process.env,
@@ -637,10 +668,10 @@ interface DaemonSpawnArgs {
 
 function startDaemon(args: DaemonSpawnArgs): ChildProcess {
   const serverDir = path.resolve(__dirname, "../../..", "packages/server");
-  const tsxBin = execSync("which tsx").toString().trim();
+  const tsxBin = resolvePathCommand("tsx");
   const { openAiUsable, localModelsDir } = args.dictation;
 
-  const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
+  const child = spawnResolvedCommand(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
     cwd: serverDir,
     env: {
       ...process.env,

@@ -35,11 +35,13 @@ import {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   createAnimatedComponent,
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -58,6 +60,7 @@ import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import {
+  DEFAULT_SIDEBAR_WIDTH,
   MAX_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
   selectIsAgentListOpen,
@@ -65,7 +68,7 @@ import {
 } from "@/stores/panel-store";
 import { resolveActiveHost } from "@/utils/active-host";
 import { formatConnectionStatus } from "@/utils/daemons";
-import { useWindowControlsPadding } from "@/utils/desktop-window";
+import { getAgentCwdGroupLabel } from "@/utils/sidebar-session-groups";
 import {
   buildMobileSidebarQuickActionButtons,
   buildMobileSidebarQuickActionModel,
@@ -84,10 +87,15 @@ import {
 } from "@/utils/host-routes";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
-import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarSessionList } from "./sidebar-session-list";
 
 const MIN_CHAT_WIDTH = 400;
+const DESKTOP_AUTO_HIDE_SIDEBAR_WIDTH = 1180;
+const DESKTOP_SIDEBAR_GAP = 12;
+const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
+  duration: 180,
+  easing: Easing.out(Easing.cubic),
+};
 const AnimatedPressable = createAnimatedComponent(Pressable);
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
@@ -142,6 +150,7 @@ interface DesktopSidebarProps extends SidebarSharedProps {
 
 export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSidebarProps) {
   const { theme } = useUnistyles();
+  const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isCompactLayout = useIsCompactFormFactor();
   const isOpen = usePanelStore((state) =>
@@ -296,6 +305,10 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     handleHostSelect,
     renderHostOption,
   };
+
+  if (!isCompactLayout && viewportWidth < DESKTOP_AUTO_HIDE_SIDEBAR_WIDTH) {
+    return null;
+  }
 
   if (isCompactLayout) {
     return (
@@ -981,7 +994,6 @@ function MobileSidebar({
     ],
     [mobileSidebarInsetStyle, sidebarAnimatedStyle, theme.colors.surfaceSidebar],
   );
-
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={overlayPointerEvents}>
       <AnimatedPressable
@@ -1097,34 +1109,49 @@ function DesktopSidebar({
   handleOpenProject,
   handleHome,
   handleSettings,
-  insetsTop,
   isOpen,
   handleViewMore,
 }: DesktopSidebarProps) {
   const { t } = useTranslation();
-  const padding = useWindowControlsPadding("sidebar");
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
+  const desktopSidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   const { width: viewportWidth } = useWindowDimensions();
   const hostStatusDotStyle = useMemo(
     () => [styles.hostStatusDot, { backgroundColor: activeHostStatusColor }],
     [activeHostStatusColor],
   );
+  const workspaceLabel = useMemo(() => {
+    const selectedAgent =
+      selectedAgentId !== undefined
+        ? agents.find((agent) => selectedAgentId === `${agent.serverId}:${agent.id}`)
+        : undefined;
+    const fallbackAgent = agents.find((agent) => !agent.archivedAt);
+    return getAgentCwdGroupLabel((selectedAgent ?? fallbackAgent)?.cwd, activeHostLabel);
+  }, [activeHostLabel, agents, selectedAgentId]);
 
-  const startWidthRef = useRef(sidebarWidth);
-  const resizeWidth = useSharedValue(sidebarWidth);
+  const startWidthRef = useRef(desktopSidebarWidth);
+  const resizeWidth = useSharedValue(desktopSidebarWidth);
+  const openProgress = useSharedValue(isOpen ? 1 : 0);
 
   useEffect(() => {
-    resizeWidth.value = sidebarWidth;
-  }, [sidebarWidth, resizeWidth]);
+    if (sidebarWidth !== desktopSidebarWidth) {
+      setSidebarWidth(desktopSidebarWidth);
+    }
+    resizeWidth.value = withTiming(
+      isOpen ? desktopSidebarWidth : 0,
+      DESKTOP_SIDEBAR_ANIMATION_CONFIG,
+    );
+    openProgress.value = withTiming(isOpen ? 1 : 0, DESKTOP_SIDEBAR_ANIMATION_CONFIG);
+  }, [desktopSidebarWidth, isOpen, openProgress, resizeWidth, setSidebarWidth, sidebarWidth]);
 
   const resizeGesture = useMemo(
     () =>
       Gesture.Pan()
         .hitSlop({ left: 8, right: 8, top: 0, bottom: 0 })
         .onStart(() => {
-          startWidthRef.current = sidebarWidth;
-          resizeWidth.value = sidebarWidth;
+          startWidthRef.current = desktopSidebarWidth;
+          resizeWidth.value = desktopSidebarWidth;
         })
         .onUpdate((event) => {
           // Dragging right (positive translationX) increases width
@@ -1139,37 +1166,38 @@ function DesktopSidebar({
         .onEnd(() => {
           runOnJS(setSidebarWidth)(resizeWidth.value);
         }),
-    [sidebarWidth, resizeWidth, setSidebarWidth, viewportWidth],
+    [desktopSidebarWidth, resizeWidth, setSidebarWidth, viewportWidth],
   );
 
   const resizeAnimatedStyle = useAnimatedStyle(() => ({
     width: resizeWidth.value,
+    marginRight: DESKTOP_SIDEBAR_GAP * openProgress.value,
+    opacity: openProgress.value,
   }));
 
-  const paddingTopSpacerStyle = useMemo(() => ({ height: padding.top }), [padding.top]);
   const desktopSidebarStyle = useMemo(
     () => [staticStyles.desktopSidebar, resizeAnimatedStyle],
     [resizeAnimatedStyle],
   );
-  const desktopSidebarBorderStyle = useMemo(
-    () => [styles.desktopSidebarBorder, { flex: 1, marginTop: insetsTop + 8 }],
-    [insetsTop],
-  );
+  const desktopSidebarBorderStyle = useMemo(() => [styles.desktopSidebarBorder, { flex: 1 }], []);
   const resizeHandleStyle = useMemo(
     () => [styles.resizeHandle, isWeb && ({ cursor: "col-resize" } as object)],
     [],
   );
-
-  if (!isOpen) {
-    return null;
-  }
+  const sidebarHeaderTrailing = useMemo(
+    () => <PanelLeftClose size={theme.iconSize.md} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.md],
+  );
 
   return (
-    <Animated.View style={desktopSidebarStyle}>
+    <Animated.View
+      style={desktopSidebarStyle}
+      testID="desktop-left-sidebar"
+      pointerEvents={isOpen ? "auto" : "none"}
+    >
       <View style={desktopSidebarBorderStyle}>
         <View style={styles.desktopSidebarDragArea}>
           <TitlebarDragRegion />
-          {padding.top > 0 ? <View style={paddingTopSpacerStyle} /> : null}
           <View style={styles.desktopHeaderRow}>
             <SidebarHeaderRow
               icon={MessagesSquare}
@@ -1177,7 +1205,13 @@ function DesktopSidebar({
               onPress={handleViewMore}
               isActive={false}
               testID="sidebar-sessions"
+              trailing={sidebarHeaderTrailing}
             />
+          </View>
+          <View style={styles.desktopWorkspaceLabelRow}>
+            <Text style={styles.desktopWorkspaceLabel} numberOfLines={1}>
+              {workspaceLabel}
+            </Text>
           </View>
         </View>
 
@@ -1194,10 +1228,9 @@ function DesktopSidebar({
             isLoadingMore={isLoadingMore}
             onLoadMore={handleLoadMore}
             onAddProject={handleOpenProject}
+            showGroupTitles={false}
           />
         )}
-
-        <SidebarCalloutSlot />
 
         <SidebarFooter
           theme={theme}
@@ -1244,9 +1277,6 @@ const staticStyles = RNStyleSheet.create({
   },
   desktopSidebar: {
     position: "relative" as const,
-    paddingLeft: 8,
-    paddingRight: 8,
-    paddingBottom: 8,
   },
 });
 
@@ -1344,11 +1374,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopSidebarBorder: {
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.xl,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     backgroundColor: theme.colors.surface0,
     overflow: "hidden",
-    ...theme.shadow.md,
+    ...theme.shadow.sm,
   },
   resizeHandle: {
     position: "absolute",
@@ -1365,10 +1395,23 @@ const styles = StyleSheet.create((theme) => ({
     position: "relative",
     marginHorizontal: 0,
     marginTop: 0,
-    marginBottom: theme.spacing[1],
+    marginBottom: 0,
   },
   desktopHeaderRow: {
+    height: 54,
+    justifyContent: "center",
     overflow: "hidden",
+  },
+  desktopWorkspaceLabelRow: {
+    height: 41,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing[6],
+  },
+  desktopWorkspaceLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
   },
   hostTrigger: {
     flexDirection: "row",
@@ -1405,13 +1448,15 @@ const styles = StyleSheet.create((theme) => ({
     borderTopColor: theme.colors.border,
   },
   desktopSidebarFooter: {
-    paddingHorizontal: theme.spacing[2],
+    height: 54,
+    paddingLeft: 18,
+    paddingRight: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    marginHorizontal: theme.spacing[2],
-    marginBottom: theme.spacing[2],
+    marginHorizontal: 0,
+    marginBottom: 0,
     borderTopWidth: theme.borderWidth[1],
     borderTopColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 0,
     backgroundColor: "transparent",
   },
   footerHostSlot: {
@@ -1427,7 +1472,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopFooterIconRow: {
-    gap: theme.spacing[1],
+    gap: 6,
   },
   footerIconButton: {
     width: 28,
@@ -1442,8 +1487,8 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   desktopFooterIconButton: {
-    width: 26,
-    height: 26,
+    width: 32,
+    height: 32,
   },
   hostPickerList: {
     gap: theme.spacing[2],

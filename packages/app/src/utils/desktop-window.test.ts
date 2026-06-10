@@ -40,7 +40,7 @@ describe("resolveWindowControlsPadding", () => {
     });
   });
 
-  it("keeps desktop workspace tab rows below the window controls", () => {
+  it("keeps desktop workspace tab rows in the content row", () => {
     expect(
       resolveWindowControlsPadding({
         role: "tabRow",
@@ -52,7 +52,23 @@ describe("resolveWindowControlsPadding", () => {
     ).toEqual({
       left: 0,
       right: 0,
-      top: 28,
+      top: 0,
+    });
+  });
+
+  it("only reserves horizontal window controls space for tab rows in focus mode", () => {
+    expect(
+      resolveWindowControlsPadding({
+        role: "tabRow",
+        rawPadding,
+        sidebarClosed: true,
+        explorerOpen: false,
+        focusModeEnabled: true,
+      }),
+    ).toEqual({
+      left: 80,
+      right: 48,
+      top: 0,
     });
   });
 

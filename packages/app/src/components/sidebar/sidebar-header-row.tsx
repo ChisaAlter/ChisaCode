@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
@@ -12,6 +12,7 @@ interface SidebarHeaderRowProps {
   testID?: string;
   nativeID?: string;
   accessibilityLabel?: string;
+  trailing?: ReactNode;
 }
 
 /**
@@ -28,6 +29,7 @@ export function SidebarHeaderRow({
   testID,
   nativeID,
   accessibilityLabel,
+  trailing,
 }: SidebarHeaderRowProps) {
   const { theme } = useUnistyles();
 
@@ -45,8 +47,11 @@ export function SidebarHeaderRow({
       const iconColor = isHighlighted ? theme.colors.foreground : theme.colors.foregroundMuted;
       return (
         <>
-          <Icon size={theme.iconSize.md} color={iconColor} />
-          <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
+          <View style={styles.titleGroup}>
+            <Icon size={theme.iconSize.md} color={iconColor} />
+            <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
+          </View>
+          {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
         </>
       );
     },
@@ -57,6 +62,7 @@ export function SidebarHeaderRow({
       theme.colors.foreground,
       theme.colors.foregroundMuted,
       theme.iconSize.md,
+      trailing,
     ],
   );
 
@@ -106,10 +112,22 @@ const styles = StyleSheet.create((theme) => ({
   button: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.lg,
+  },
+  titleGroup: {
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  trailing: {
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   buttonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,

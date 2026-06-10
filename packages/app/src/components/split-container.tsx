@@ -114,6 +114,7 @@ interface SplitContainerProps {
   renderPaneEmptyState?: () => ReactNode;
   focusModeEnabled?: boolean;
   topRightControls?: ReactNode;
+  paneContentRightInset?: number;
 }
 
 interface WorkspaceTabDragData {
@@ -155,6 +156,7 @@ interface SplitNodeViewProps extends Omit<SplitContainerProps, "layout" | "onMov
   showDropZones: boolean;
   dropPreview: SplitDropZoneHover | null;
   tabDropPreview: TabDropPreview | null;
+  paneContentRightInsetPaneIds: ReadonlySet<string>;
 }
 
 interface SplitPaneViewProps extends Omit<
@@ -382,6 +384,7 @@ export function SplitContainer({
   renderPaneEmptyState = () => null,
   focusModeEnabled,
   topRightControls = null,
+  paneContentRightInset = 0,
 }: SplitContainerProps) {
   const [activeDragTabId, setActiveDragTabId] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<SplitDropZoneHover | null>(null);
@@ -411,6 +414,10 @@ export function SplitContainer({
     return { kind: "pane" as const, pane: focusedPane };
   }, [focusModeEnabled, layout.root, layout.focusedPaneId, panesById]);
   const renderRoot = useMemo(() => wrapRootPaneForStableMount(effectiveRoot), [effectiveRoot]);
+  const paneContentRightInsetPaneIds = useMemo(
+    () => (paneContentRightInset > 0 ? collectRightEdgePaneIds(renderRoot) : EMPTY_PANE_ID_SET),
+    [paneContentRightInset, renderRoot],
+  );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = asWorkspaceTabDragData(event.active.data.current);
@@ -601,6 +608,8 @@ export function SplitContainer({
         dropPreview={dropPreview}
         tabDropPreview={tabDropPreview}
         topRightControls={topRightControls}
+        paneContentRightInset={paneContentRightInset}
+        paneContentRightInsetPaneIds={paneContentRightInsetPaneIds}
       />
       <DragOverlay dropAnimation={null}>
         {activeDragTabId ? (
@@ -742,6 +751,8 @@ function SplitNodeView({
   dropPreview,
   tabDropPreview,
   topRightControls,
+  paneContentRightInset,
+  paneContentRightInsetPaneIds,
 }: SplitNodeViewProps) {
   const groupId = node.kind === "group" ? node.group.id : null;
   const groupDirection = node.kind === "group" ? node.group.direction : null;
@@ -795,6 +806,8 @@ function SplitNodeView({
         dropPreview={dropPreview}
         tabDropPreview={tabDropPreview}
         topRightControls={topRightControls}
+        paneContentRightInset={paneContentRightInset}
+        paneContentRightInsetPaneIds={paneContentRightInsetPaneIds}
       />
     );
   }
@@ -843,6 +856,8 @@ function SplitNodeView({
               dropPreview={dropPreview}
               tabDropPreview={tabDropPreview}
               topRightControls={topRightControls}
+              paneContentRightInset={paneContentRightInset}
+              paneContentRightInsetPaneIds={paneContentRightInsetPaneIds}
             />
           </SplitGroupChild>
           {index < node.group.children.length - 1 ? (
@@ -895,6 +910,8 @@ function SplitPaneView({
   dropPreview,
   tabDropPreview,
   topRightControls,
+  paneContentRightInset = 0,
+  paneContentRightInsetPaneIds,
 }: SplitPaneViewProps) {
   const { theme: _theme } = useUnistyles();
   const paneRef = useRef<View | null>(null);
@@ -1004,6 +1021,16 @@ function SplitPaneView({
     [padding.left, padding.right, padding.top],
   );
   const paneTopRightControls = isFocused ? topRightControls : null;
+  const effectivePaneContentRightInset = paneContentRightInsetPaneIds.has(pane.id)
+    ? paneContentRightInset
+    : 0;
+  const paneContentStyle = useMemo(
+    () => [
+      styles.paneContent,
+      effectivePaneContentRightInset > 0 ? { paddingRight: effectivePaneContentRightInset } : null,
+    ],
+    [effectivePaneContentRightInset],
+  );
 
   return (
     <View ref={paneRef} collapsable={false} style={styles.pane}>
@@ -1042,7 +1069,7 @@ function SplitPaneView({
         />
       </View>
 
-      <View style={styles.paneContent}>
+      <View style={paneContentStyle}>
         {mountedPaneTabIds.length > 0
           ? mountedPaneTabIds.map((tabId) => {
               const tabDescriptor = tabDescriptorMap.get(tabId);
@@ -1083,6 +1110,37 @@ function collectPanesById(node: SplitNode): Map<string, SplitPane> {
   }
   visit(node);
   return next;
+}
+
+const EMPTY_PANE_ID_SET = new Set<string>();
+
+function collectRightEdgePaneIds(node: SplitNode): ReadonlySet<string> {
+  const paneIds = new Set<string>();
+  collectRightEdgePaneIdsInNode(node, paneIds);
+  return paneIds;
+}
+
+function collectRightEdgePaneIdsInNode(node: SplitNode, paneIds: Set<string>): void {
+  if (node.kind === "pane") {
+    paneIds.add(node.pane.id);
+    return;
+  }
+
+  if (node.group.children.length === 0) {
+    return;
+  }
+
+  if (node.group.direction === "horizontal") {
+    const lastChild = node.group.children[node.group.children.length - 1];
+    if (lastChild) {
+      collectRightEdgePaneIdsInNode(lastChild, paneIds);
+    }
+    return;
+  }
+
+  for (const child of node.group.children) {
+    collectRightEdgePaneIdsInNode(child, paneIds);
+  }
 }
 
 function getNodeKey(node: SplitNode): string {
@@ -1130,18 +1188,22 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
     overflow: "hidden",
+    backgroundColor: theme.colors.surface0,
   },
   paneTabs: {
     position: "relative",
     minWidth: 0,
+    zIndex: 30,
+    backgroundColor: theme.colors.surface0,
   },
   paneContent: {
     position: "relative",
     flex: 1,
     minWidth: 0,
     minHeight: 0,
+    backgroundColor: theme.colors.surface0,
+    overflow: "hidden",
   },
   dragOverlayChip: {
     flexDirection: "row",

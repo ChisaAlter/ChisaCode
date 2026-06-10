@@ -165,7 +165,7 @@ export function resolveWindowControlsPadding(input: {
     return {
       left: input.sidebarClosed && input.focusModeEnabled ? input.rawPadding.left : 0,
       right: input.focusModeEnabled && !input.explorerOpen ? input.rawPadding.right : 0,
-      top: input.rawPadding.top,
+      top: 0,
     };
   }
 

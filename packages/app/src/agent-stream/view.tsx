@@ -1054,7 +1054,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   contentWrapper: {
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
-    alignSelf: "center",
+    alignSelf: "flex-start",
     paddingHorizontal: theme.spacing[2],
   },
   listContentContainer: {
@@ -1075,7 +1075,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   streamItemWrapper: {
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
-    alignSelf: "center",
+    alignSelf: "flex-start",
     paddingHorizontal: theme.spacing[2],
   },
   emptyState: {

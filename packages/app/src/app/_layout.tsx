@@ -7,6 +7,7 @@ import * as Notifications from "expo-notifications";
 import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import {
   createContext,
+  type CSSProperties,
   type ReactNode,
   useCallback,
   useContext,
@@ -89,6 +90,7 @@ import {
 } from "@/utils/host-routes";
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { useWindowControlsPadding } from "@/utils/desktop-window";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -378,7 +380,6 @@ function QueryProvider({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
-const rowStyle = { flex: 1, flexDirection: "row" } as const;
 const flexStyle = { flex: 1 } as const;
 const MOBILE_WEB_EDGE_SWIPE_WIDTH = 32;
 const MOBILE_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
@@ -441,6 +442,20 @@ function AppContainer({
   // global concerns like keyboard shortcuts. Split those out so settings (and
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
   const keyboardShortcutsEnabled = chromeEnabled || pathname.startsWith("/settings");
+  const windowControlsPadding = useWindowControlsPadding("sidebar");
+  const surfaceStyle = useMemo(
+    () => [
+      layoutStyles.surfaceFill,
+      !isCompactLayout && windowControlsPadding.top > 0
+        ? { paddingTop: windowControlsPadding.top }
+        : null,
+    ],
+    [isCompactLayout, windowControlsPadding.top],
+  );
+  const appRowStyle = useMemo(
+    () => [layoutStyles.appRow, !isCompactLayout && layoutStyles.desktopAppRow],
+    [isCompactLayout],
+  );
 
   useKeyboardShortcuts({
     enabled: keyboardShortcutsEnabled,
@@ -454,12 +469,13 @@ function AppContainer({
   useActiveWorktreeNewAction();
 
   const content = (
-    <View style={layoutStyles.surfaceFill}>
-      <View style={rowStyle}>
+    <View style={surfaceStyle}>
+      <DesktopTitlebarDragStrip />
+      <View style={appRowStyle}>
         {!isCompactLayout && chromeEnabled && !isFocusModeEnabled && (
           <LeftSidebar selectedAgentId={selectedAgentId} />
         )}
-        <View style={flexStyle}>{children}</View>
+        <View style={layoutStyles.appContent}>{children}</View>
       </View>
       <FloatingPanelPortalHost />
       {isCompactLayout && chromeEnabled && <LeftSidebar selectedAgentId={selectedAgentId} />}
@@ -482,6 +498,27 @@ function AppContainer({
   }
 
   return <MobileGestureWrapper chromeEnabled={chromeEnabled}>{content}</MobileGestureWrapper>;
+}
+
+function DesktopTitlebarDragStrip() {
+  const padding = useWindowControlsPadding("explorerSidebar");
+  const stripStyle = useMemo<CSSProperties>(
+    () => ({
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: padding.right,
+      height: padding.top,
+      WebkitAppRegion: "drag",
+    }),
+    [padding.right, padding.top],
+  );
+
+  if (isNative || !getIsElectronRuntime() || padding.top <= 0) {
+    return null;
+  }
+
+  return <div style={stripStyle} />;
 }
 
 function MobileGestureWrapper({
@@ -938,6 +975,20 @@ export default function RootLayout() {
 const layoutStyles = StyleSheet.create((theme) => ({
   surfaceFill: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    position: "relative",
+    backgroundColor: theme.colors.surfaceWorkspace,
+  },
+  appRow: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  desktopAppRow: {
+    padding: 8,
+    backgroundColor: theme.colors.surfaceWorkspace,
+  },
+  appContent: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
   },
 }));

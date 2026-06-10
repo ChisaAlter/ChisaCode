@@ -53,6 +53,7 @@ interface SidebarSessionListProps {
   agents: AggregatedAgent[];
   serverId: string | null;
   selectedAgentId?: string;
+  showGroupTitles?: boolean;
   isRefreshing?: boolean;
   isLoadingMore?: boolean;
   hasMore?: boolean;
@@ -353,94 +354,105 @@ function SidebarSessionRow({
     </>
   );
 
-  const rowTrailingContent = isCompact ? (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        testID={`sidebar-session-menu-${agent.serverId}-${agent.id}`}
-        accessibilityLabel={t("sidebar.sessionActions")}
-        style={menuButtonStyle}
-      >
-        <MoreHorizontal size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={220}>
-        <DropdownMenuItem
-          testID={`sidebar-session-toggle-pin-${agent.serverId}-${agent.id}`}
-          onSelect={handleTogglePin}
-          status={isPinning ? "pending" : "idle"}
-          leading={pinLeading}
+  let rowTrailingContent: React.ReactNode;
+  if (isCompact) {
+    rowTrailingContent = (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          testID={`sidebar-session-menu-${agent.serverId}-${agent.id}`}
+          accessibilityLabel={t("sidebar.sessionActions")}
+          style={menuButtonStyle}
         >
-          {isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID={`sidebar-session-archive-${agent.serverId}-${agent.id}`}
-          onSelect={handleArchive}
-          disabled={Boolean(agent.archivedAt)}
-          status={isArchiving ? "pending" : "idle"}
-          pendingLabel={t("sidebar.archiving")}
-          destructive={!agent.archivedAt}
-          leading={archiveLeading}
+          <MoreHorizontal size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" width={220}>
+          <DropdownMenuItem
+            testID={`sidebar-session-toggle-pin-${agent.serverId}-${agent.id}`}
+            onSelect={handleTogglePin}
+            status={isPinning ? "pending" : "idle"}
+            leading={pinLeading}
+          >
+            {isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            testID={`sidebar-session-archive-${agent.serverId}-${agent.id}`}
+            onSelect={handleArchive}
+            disabled={Boolean(agent.archivedAt)}
+            status={isArchiving ? "pending" : "idle"}
+            pendingLabel={t("sidebar.archiving")}
+            destructive={!agent.archivedAt}
+            leading={archiveLeading}
+          >
+            {agent.archivedAt ? t("session.archived") : t("sidebar.archive")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            testID={`sidebar-session-copy-path-${agent.serverId}-${agent.id}`}
+            onSelect={handleCopyPath}
+            disabled={!agent.cwd}
+            leading={copyLeading}
+          >
+            {t("sidebar.copyPath")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            testID={`sidebar-session-copy-agent-id-${agent.serverId}-${agent.id}`}
+            onSelect={handleCopyAgentId}
+            leading={copyLeading}
+          >
+            {t("workspace.tabMenu.copyAgentId")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            testID={`sidebar-session-rename-${agent.serverId}-${agent.id}`}
+            onSelect={handleRename}
+            leading={renameLeading}
+          >
+            {t("workspace.screen.rename")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            testID={`sidebar-session-delete-${agent.serverId}-${agent.id}`}
+            onSelect={handleDelete}
+            status={isDeleting ? "pending" : "idle"}
+            pendingLabel={t("sidebar.deletingSession")}
+            destructive
+            leading={deleteLeading}
+          >
+            {t("sidebar.deleteSession")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  } else if (isSelected && !showQuickActions) {
+    rowTrailingContent = (
+      <View style={styles.desktopSelectedStatusSlot}>
+        <View style={styles.desktopSelectedStatusDot} />
+      </View>
+    );
+  } else {
+    rowTrailingContent = (
+      <View pointerEvents={showQuickActions ? "auto" : "none"} style={quickActionsStyle}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
+          testID={`sidebar-session-quick-pin-${agent.serverId}-${agent.id}`}
+          style={quickButtonStyle}
+          onPress={handleQuickPin}
+          disabled={isPinning}
+          pointerEvents={isPinning ? "none" : "auto"}
         >
-          {agent.archivedAt ? t("session.archived") : t("sidebar.archive")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID={`sidebar-session-copy-path-${agent.serverId}-${agent.id}`}
-          onSelect={handleCopyPath}
-          disabled={!agent.cwd}
-          leading={copyLeading}
+          <Pin size={theme.iconSize.sm} color={isPinned ? theme.colors.accent : rowIconColor} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("sidebar.archive")}
+          testID={`sidebar-session-quick-archive-${agent.serverId}-${agent.id}`}
+          style={quickButtonStyle}
+          onPress={handleQuickArchive}
+          disabled={isArchiving || Boolean(agent.archivedAt)}
         >
-          {t("sidebar.copyPath")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID={`sidebar-session-copy-agent-id-${agent.serverId}-${agent.id}`}
-          onSelect={handleCopyAgentId}
-          leading={copyLeading}
-        >
-          {t("workspace.tabMenu.copyAgentId")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID={`sidebar-session-rename-${agent.serverId}-${agent.id}`}
-          onSelect={handleRename}
-          leading={renameLeading}
-        >
-          {t("workspace.screen.rename")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID={`sidebar-session-delete-${agent.serverId}-${agent.id}`}
-          onSelect={handleDelete}
-          status={isDeleting ? "pending" : "idle"}
-          pendingLabel={t("sidebar.deletingSession")}
-          destructive
-          leading={deleteLeading}
-        >
-          {t("sidebar.deleteSession")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  ) : (
-    <View pointerEvents={showQuickActions ? "auto" : "none"} style={quickActionsStyle}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
-        testID={`sidebar-session-quick-pin-${agent.serverId}-${agent.id}`}
-        style={quickButtonStyle}
-        onPress={handleQuickPin}
-        disabled={isPinning}
-        pointerEvents={isPinning ? "none" : "auto"}
-      >
-        <Pin size={theme.iconSize.sm} color={isPinned ? theme.colors.accent : rowIconColor} />
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("sidebar.archive")}
-        testID={`sidebar-session-quick-archive-${agent.serverId}-${agent.id}`}
-        style={quickButtonStyle}
-        onPress={handleQuickArchive}
-        disabled={isArchiving || Boolean(agent.archivedAt)}
-      >
-        <Archive size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
-    </View>
-  );
+          <Archive size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </Pressable>
+      </View>
+    );
+  }
 
   if (isCompact) {
     return (
@@ -522,6 +534,7 @@ export function SidebarSessionList({
   agents,
   serverId,
   selectedAgentId,
+  showGroupTitles = true,
   isRefreshing = false,
   isLoadingMore = false,
   hasMore = false,
@@ -539,6 +552,14 @@ export function SidebarSessionList({
   const [pinningAgentKey, setPinningAgentKey] = useState<string | null>(null);
   const [deletingAgentKey, setDeletingAgentKey] = useState<string | null>(null);
   const visibleAgents = useMemo(() => agents.filter((agent) => !agent.archivedAt), [agents]);
+  const resolvedSelectedAgentId = useMemo(() => {
+    if (selectedAgentId) {
+      return selectedAgentId;
+    }
+    return visibleAgents.length === 1
+      ? `${visibleAgents[0].serverId}:${visibleAgents[0].id}`
+      : undefined;
+  }, [selectedAgentId, visibleAgents]);
   const groups = useMemo(
     () =>
       groupAgentsForSidebar(visibleAgents, {
@@ -736,15 +757,17 @@ export function SidebarSessionList({
     groupStyle: StyleProp<ViewStyle> = styles.group,
   ) => (
     <View key={group.key} style={groupStyle} testID={`sidebar-session-group-${group.key}`}>
-      <Text style={styles.groupTitle} numberOfLines={1}>
-        {group.label}
-      </Text>
+      {showGroupTitles ? (
+        <Text style={styles.groupTitle} numberOfLines={1}>
+          {group.label}
+        </Text>
+      ) : null}
       <View style={styles.groupRows}>
         {group.agents.map((agent) => (
           <SidebarSessionRow
             key={`${agent.serverId}:${agent.id}`}
             agent={agent}
-            selectedAgentId={selectedAgentId}
+            selectedAgentId={resolvedSelectedAgentId}
             onAgentPress={onAgentPress}
             onTogglePin={handleTogglePin}
             onRename={handleRename}
@@ -765,7 +788,9 @@ export function SidebarSessionList({
       contentContainerStyle={styles.scrollContent}
       refreshControl={refreshControl}
     >
-      {pinnedGroup ? renderSessionGroup(pinnedGroup, styles.pinnedGroup) : null}
+      {pinnedGroup
+        ? renderSessionGroup(pinnedGroup, showGroupTitles ? styles.pinnedGroup : styles.group)
+        : null}
       {workspaceGroups.map((group) => renderSessionGroup(group))}
       {hasMore ? (
         <Button
@@ -790,11 +815,12 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   scrollContent: {
-    paddingTop: theme.spacing[1],
-    paddingBottom: theme.spacing[3],
+    paddingTop: theme.spacing[2],
+    paddingRight: theme.spacing[3],
+    paddingBottom: theme.spacing[4],
+    paddingLeft: theme.spacing[3],
   },
   group: {
-    marginHorizontal: theme.spacing[2],
     marginBottom: theme.spacing[2],
   },
   pinnedGroup: {
@@ -806,11 +832,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   groupTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
-    paddingHorizontal: theme.spacing[2],
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    paddingTop: theme.spacing[1],
+    paddingBottom: theme.spacing[3],
   },
   groupRows: {
     gap: 0,
@@ -839,25 +865,26 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   desktopRow: {
-    minHeight: 36,
+    minHeight: 70,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    gap: 10,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: theme.colors.surface1,
   },
   desktopRowHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: "#f0f1f3",
   },
   desktopRowPressed: {
     opacity: 0.9,
   },
   desktopRowSelected: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: "#f0f1f3",
   },
   desktopRowLeading: {
-    width: 16,
+    width: 20,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -912,6 +939,18 @@ const styles = StyleSheet.create((theme) => ({
     gap: 0,
     flexShrink: 0,
   },
+  desktopSelectedStatusSlot: {
+    width: 12,
+    flexShrink: 0,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  desktopSelectedStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.palette.green[400],
+  },
   desktopRowQuickButton: {
     width: 22,
     height: 22,
@@ -946,12 +985,12 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 15,
     fontWeight: theme.fontWeight.normal,
   },
   desktopRowTitleSelected: {
     color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: theme.fontWeight.semibold,
   },
   rowMetaLine: {
     flexDirection: "row",
@@ -965,6 +1004,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     minWidth: 0,
     gap: theme.spacing[1],
+    marginTop: 3,
   },
   rowMeta: {
     color: theme.colors.foregroundMuted,

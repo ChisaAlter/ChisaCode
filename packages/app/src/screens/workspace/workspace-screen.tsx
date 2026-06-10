@@ -17,10 +17,8 @@ import {
   type LayoutChangeEvent,
   Pressable,
   ScrollView,
-  type StyleProp,
   Text,
   View,
-  type ViewStyle,
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGlobalSearchParams, useRouter, type Href } from "expo-router";
@@ -179,6 +177,7 @@ import { findAdjacentPane } from "@/utils/split-navigation";
 import { isAbsolutePath } from "@/utils/path";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
+import { useWindowControlsPadding } from "@/utils/desktop-window";
 import {
   buildHostRootRoute,
   buildHostWorkspaceRoute,
@@ -269,7 +268,8 @@ const ThemedListTree = withUnistyles(ListTree);
 const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
 
 const WORKSPACE_ENVIRONMENT_PANEL_WIDTH = 300;
-const WORKSPACE_ENVIRONMENT_PANEL_SAFE_GAP = 48;
+const WORKSPACE_ENVIRONMENT_PANEL_SAFE_GAP = 44;
+const WORKSPACE_ENVIRONMENT_PANEL_MIN_CONTENT_WIDTH = 1008;
 const WORKSPACE_FLOATING_PANEL_TOP_OFFSET = 56;
 
 type WorkspaceEnvironmentPanelMode = "auto" | "forced-open" | "forced-closed";
@@ -1342,7 +1342,7 @@ function DesktopWorkspaceHeaderTitle({
 
 interface WorkspaceEnvironmentPanelProps {
   serverId: string;
-  cwd: string;
+  cwd: string | null;
   currentBranchName: string | null;
   isGitCheckout: boolean;
   isLocalDaemon: boolean;
@@ -1380,6 +1380,7 @@ function WorkspaceEnvironmentPanel({
   currentBranchName,
   isLocalDaemon,
   diffStat,
+  browserContext,
   sourceLabel,
   onOpenChanges,
 }: WorkspaceEnvironmentPanelProps) {
@@ -1418,11 +1419,23 @@ function WorkspaceEnvironmentPanel({
           <EnvironmentDisplayRow icon="changes" label={t("workspace.environment.commitOrPush")} />
         </View>
         <View style={styles.environmentCardDivider} />
+        <View style={styles.environmentSection}>
+          <EnvironmentDisplayRow icon="task" label={t("workspace.environment.progress")}>
+            <ThemedChevronRight size={14} uniProps={mutedColorMapping} />
+          </EnvironmentDisplayRow>
+        </View>
+        <View style={styles.environmentCardDivider} />
+        <View style={styles.environmentSection} testID="workspace-environment-browser">
+          <Text style={styles.environmentSourceTitle}>
+            {t("workspace.environment.dockTabs.browser-context")}
+          </Text>
+          <EnvironmentDisplayRow
+            icon="browser"
+            label={browserContext?.title ?? t("workspace.environment.noBrowserContext")}
+          />
+        </View>
+        <View style={styles.environmentCardDivider} />
         <WorkspaceSourceSection sourceLabel={sourceLabel} />
-      </View>
-      <View style={styles.environmentOutlineCard}>
-        <Text style={styles.environmentOutlineText}>{t("workspace.environment.outline")}</Text>
-        <ThemedChevronRight size={16} uniProps={mutedColorMapping} />
       </View>
     </View>
   );
@@ -1652,7 +1665,6 @@ function WorkspaceHeaderRightControls({
           return <ThemedListTree size={20} uniProps={colorMapping} />;
         }}
       </HeaderToggleButton>
-      {explorerButton}
     </View>
   );
 }
@@ -1680,7 +1692,6 @@ function WorkspaceEnvironmentPanelRail({
   onOpenChanges,
   onOpenSubagent,
   onCopyResumeCommand,
-  onClose,
 }: {
   visible: boolean;
   serverId: string;
@@ -1704,39 +1715,22 @@ function WorkspaceEnvironmentPanelRail({
   onOpenChanges: () => void;
   onOpenSubagent: (agentId: string) => void;
   onCopyResumeCommand: (agentId: string) => void;
-  onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const tabRowPadding = useWindowControlsPadding("tabRow");
+  const environmentRailStyle = useMemo(
+    () => [
+      styles.environmentRail,
+      { top: tabRowPadding.top + WORKSPACE_FLOATING_PANEL_TOP_OFFSET + 14 },
+    ],
+    [tabRowPadding.top],
+  );
 
-  if (!visible || !workspaceDirectory) {
+  if (!visible) {
     return null;
   }
 
   return (
-    <View style={styles.environmentRail}>
-      <View style={styles.environmentCardHeader}>
-        <View style={styles.environmentCardHeaderTitle}>
-          <Text style={styles.environmentCardHeaderText}>
-            {t("workspace.environment.panelTitle")}
-          </Text>
-        </View>
-        <HeaderToggleButton
-          testID="workspace-environment-card-close"
-          onPress={onClose}
-          tooltipLabel={t("workspace.environment.hideFloatingPanel")}
-          tooltipKeys={ENVIRONMENT_TOGGLE_KEYS}
-          tooltipSide="left"
-          style={styles.environmentCardCloseButton}
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
-        >
-          {({ hovered }) => {
-            const colorMapping = hovered ? foregroundColorMapping : mutedColorMapping;
-            return <ThemedX size={14} uniProps={colorMapping} />;
-          }}
-        </HeaderToggleButton>
-      </View>
+    <View style={environmentRailStyle} testID="workspace-environment-rail">
       <ScrollView
         style={styles.environmentRailScroll}
         contentContainerStyle={styles.environmentRailScrollContent}
@@ -1831,18 +1825,10 @@ function useEnvironmentPanelTurnChanges(
 
 function shouldShowWorkspaceEnvironmentRail(input: {
   isMobile: boolean;
-  showScreenHeader: boolean;
   isEnvironmentPanelVisible: boolean;
   workspaceDirectory: string | null;
-  isExplorerOpen: boolean;
 }): boolean {
-  return (
-    !input.isMobile &&
-    input.showScreenHeader &&
-    input.isEnvironmentPanelVisible &&
-    Boolean(input.workspaceDirectory) &&
-    !input.isExplorerOpen
-  );
+  return !input.isMobile && input.isEnvironmentPanelVisible;
 }
 
 type PaneDirection = "left" | "right" | "up" | "down";
@@ -2493,42 +2479,36 @@ function WorkspaceScreenContent({
     });
   }, [activeExplorerCheckout, isMobile, toggleFileExplorerForCheckout]);
 
-  const workspaceContentMaxWidth = useMemo(() => {
-    if (!centerContentSize || isMobile) {
-      return null;
-    }
-    return Math.max(0, Math.min(centerContentSize.width, centerContentSize.height));
-  }, [centerContentSize, isMobile]);
-
-  const workspaceContentFrameStyle = useMemo<StyleProp<ViewStyle>>(() => {
-    if (!workspaceContentMaxWidth) {
-      return null;
-    }
-    return {
-      width: "100%",
-      maxWidth: workspaceContentMaxWidth,
-      alignSelf: "flex-start",
-    };
-  }, [workspaceContentMaxWidth]);
-  const desktopContentStyle = useMemo<StyleProp<ViewStyle>>(
-    () => [styles.content, workspaceContentFrameStyle],
-    [workspaceContentFrameStyle],
-  );
+  const desktopContentStyle = styles.content;
 
   const hasEnoughSpaceForEnvironmentPanel = useMemo(() => {
-    if (!centerContentSize || workspaceContentMaxWidth === null) {
+    if (!centerContentSize) {
       return true;
     }
     return (
-      centerContentSize.width - workspaceContentMaxWidth >=
-      WORKSPACE_ENVIRONMENT_PANEL_WIDTH + WORKSPACE_ENVIRONMENT_PANEL_SAFE_GAP
+      centerContentSize.width >=
+      WORKSPACE_ENVIRONMENT_PANEL_WIDTH +
+        WORKSPACE_ENVIRONMENT_PANEL_SAFE_GAP +
+        WORKSPACE_ENVIRONMENT_PANEL_MIN_CONTENT_WIDTH
     );
-  }, [centerContentSize, workspaceContentMaxWidth]);
+  }, [centerContentSize]);
+  const previousHasEnoughSpaceForEnvironmentPanelRef = useRef(hasEnoughSpaceForEnvironmentPanel);
   const wantsEnvironmentPanelVisible =
     environmentPanelMode === "forced-open" ||
     (environmentPanelMode === "auto" && hasEnoughSpaceForEnvironmentPanel);
-  const isEnvironmentPanelVisible =
-    wantsEnvironmentPanelVisible && Boolean(workspaceDirectory) && !isExplorerOpen;
+  const isEnvironmentPanelVisible = wantsEnvironmentPanelVisible;
+
+  useEffect(() => {
+    const wasEnough = previousHasEnoughSpaceForEnvironmentPanelRef.current;
+    previousHasEnoughSpaceForEnvironmentPanelRef.current = hasEnoughSpaceForEnvironmentPanel;
+    if (
+      !wasEnough &&
+      hasEnoughSpaceForEnvironmentPanel &&
+      environmentPanelMode === "forced-closed"
+    ) {
+      setEnvironmentPanelMode("auto");
+    }
+  }, [environmentPanelMode, hasEnoughSpaceForEnvironmentPanel]);
 
   const handleCenterContentLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -4343,12 +4323,10 @@ function WorkspaceScreenContent({
     () =>
       shouldShowWorkspaceEnvironmentRail({
         isMobile,
-        showScreenHeader,
         isEnvironmentPanelVisible,
         workspaceDirectory,
-        isExplorerOpen,
       }),
-    [isMobile, showScreenHeader, isEnvironmentPanelVisible, workspaceDirectory, isExplorerOpen],
+    [isMobile, isEnvironmentPanelVisible, workspaceDirectory],
   );
   const createTerminalDisabled = useMemo(
     () => createTerminalMutation.isPending || pendingTerminalCreateInput !== null,
@@ -4515,7 +4493,11 @@ function WorkspaceScreenContent({
         />
       ) : null}
 
-      <View style={styles.centerContent} onLayout={handleCenterContentLayout}>
+      <View
+        style={styles.centerContent}
+        testID="workspace-main-panel"
+        onLayout={handleCenterContentLayout}
+      >
         {isMobile ? (
           <GestureDetector
             gesture={explorerOpenGesture}
@@ -4526,6 +4508,32 @@ function WorkspaceScreenContent({
         ) : (
           <View style={desktopContentStyle}>{desktopContent}</View>
         )}
+        {!isMobile ? (
+          <WorkspaceEnvironmentPanelRail
+            visible={environmentRailVisible}
+            serverId={normalizedServerId}
+            workspaceDirectory={workspaceDirectory}
+            currentBranchName={currentBranchName}
+            isGitCheckout={isGitCheckout}
+            isLocalDaemon={isLocalDaemon}
+            diffStat={workspaceDescriptor?.diffStat ?? null}
+            githubRuntime={workspaceDescriptor?.githubRuntime}
+            browserContext={environmentBrowserContext}
+            dockState={environmentDockState}
+            sourceLabel={environmentSourceLabel}
+            taskTitle={workspaceStatusStripModel.taskTitle}
+            activityItems={workspaceActivityItems}
+            activeAgent={environmentPanelAgent}
+            workspaceStatus={environmentWorkspaceStatus}
+            subagents={environmentSubagents}
+            todoItems={environmentTodoItems}
+            latestTurnChanges={environmentTurnChanges}
+            onSelectDockTab={handleOpenWorkspaceDockPane}
+            onOpenChanges={handleOpenEnvironmentChanges}
+            onOpenSubagent={handleOpenEnvironmentSubagent}
+            onCopyResumeCommand={handleCopyResumeCommand}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -4546,32 +4554,6 @@ function WorkspaceScreenContent({
             </FloatingPanelPortalHostNameProvider>
 
             <FloatingPanelPortalHost name={workspaceFloatingPanelPortalHostName} />
-
-            <WorkspaceEnvironmentPanelRail
-              visible={environmentRailVisible}
-              serverId={normalizedServerId}
-              workspaceDirectory={workspaceDirectory}
-              currentBranchName={currentBranchName}
-              isGitCheckout={isGitCheckout}
-              isLocalDaemon={isLocalDaemon}
-              diffStat={workspaceDescriptor?.diffStat ?? null}
-              githubRuntime={workspaceDescriptor?.githubRuntime}
-              browserContext={environmentBrowserContext}
-              dockState={environmentDockState}
-              sourceLabel={environmentSourceLabel}
-              taskTitle={workspaceStatusStripModel.taskTitle}
-              activityItems={workspaceActivityItems}
-              activeAgent={environmentPanelAgent}
-              workspaceStatus={environmentWorkspaceStatus}
-              subagents={environmentSubagents}
-              todoItems={environmentTodoItems}
-              latestTurnChanges={environmentTurnChanges}
-              onSelectDockTab={handleOpenWorkspaceDockPane}
-              onOpenChanges={handleOpenEnvironmentChanges}
-              onOpenSubagent={handleOpenEnvironmentSubagent}
-              onCopyResumeCommand={handleCopyResumeCommand}
-              onClose={handleToggleEnvironmentPanel}
-            />
 
             {showExplorerSidebar && workspaceDirectory ? (
               <ExplorerSidebar
@@ -4613,8 +4595,11 @@ const styles = StyleSheet.create((theme) => ({
   threePaneRow: {
     flex: 1,
     minHeight: 0,
+    position: "relative",
     flexDirection: "row",
     alignItems: "stretch",
+    gap: 12,
+    backgroundColor: "transparent",
   },
   centerColumn: {
     flex: 1,
@@ -4700,9 +4685,12 @@ const styles = StyleSheet.create((theme) => ({
     },
   },
   headerActionButton: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.xl,
+    width: 34,
+    height: 34,
+    padding: 0,
+    borderRadius: theme.borderRadius.lg,
+    alignItems: "center",
+    justifyContent: "center",
   },
   compactHeaderActionButton: {
     width: theme.spacing[8],
@@ -4722,7 +4710,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentPanel: {
     flex: 1,
-    gap: theme.spacing[3],
   },
   environmentDockTabs: {
     flexDirection: "row",
@@ -4758,14 +4745,13 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   environmentRail: {
+    position: "absolute",
+    right: 16,
+    bottom: 14,
     width: WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
-    flexShrink: 0,
     minHeight: 0,
-    paddingTop: WORKSPACE_FLOATING_PANEL_TOP_OFFSET,
-    paddingRight: theme.spacing[3],
-    paddingBottom: theme.spacing[3],
-    paddingLeft: theme.spacing[2],
     backgroundColor: "transparent",
+    zIndex: 5,
   },
   environmentCardHeader: {
     minHeight: 38,
@@ -4802,20 +4788,18 @@ const styles = StyleSheet.create((theme) => ({
     maxHeight: "100%",
   },
   environmentRailScrollContent: {
-    flexGrow: 1,
-    paddingTop: theme.spacing[2],
-    paddingRight: 0,
-    paddingBottom: theme.spacing[2],
-    paddingLeft: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   environmentInspectorCard: {
+    overflow: "hidden",
     paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
+    paddingHorizontal: 0,
+    borderRadius: 18,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
-    ...theme.shadow.sm,
+    ...theme.shadow.lg,
   },
   environmentInspectorCardHeader: {
     minHeight: 28,
@@ -4823,15 +4807,17 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
   },
   environmentInspectorCardTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
   },
   environmentInspectorRows: {
     gap: theme.spacing[1],
     paddingTop: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
   },
   environmentRow: {
     minHeight: 30,
@@ -4903,6 +4889,7 @@ const styles = StyleSheet.create((theme) => ({
     height: theme.borderWidth[1],
     backgroundColor: theme.colors.border,
     marginVertical: theme.spacing[3],
+    marginHorizontal: theme.spacing[4],
   },
   environmentTaskSection: {
     gap: theme.spacing[1],
@@ -4933,17 +4920,19 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentSection: {
     gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
   },
   environmentSourceTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
   },
   environmentSourceEmpty: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
-    paddingTop: theme.spacing[2],
+    paddingTop: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
   },
   environmentOutlineCard: {
     marginTop: "auto",
@@ -5202,6 +5191,12 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     position: "relative",
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    overflow: "hidden",
+    ...theme.shadow.lg,
   },
   tab: {
     paddingHorizontal: theme.spacing[3],

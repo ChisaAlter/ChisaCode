@@ -8,7 +8,7 @@ import { getServerId } from "./server-id";
 import { waitForTabBar } from "./launcher";
 
 function composerInput(page: Page) {
-  return page.getByRole("textbox", { name: "Message agent..." }).first();
+  return page.getByRole("textbox", { name: /^(Message agent\.\.\.|给智能体发消息.*)$/ }).first();
 }
 
 export function composerLocator(page: Page) {

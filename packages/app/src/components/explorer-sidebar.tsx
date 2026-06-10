@@ -8,7 +8,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
-import Animated, { useAnimatedStyle, useSharedValue, runOnJS } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  runOnJS,
+  withTiming,
+} from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { X } from "lucide-react-native";
@@ -34,6 +40,10 @@ import { useTranslation } from "react-i18next";
 import { getMobileSidebarWidth } from "@/utils/sidebar-animation-state";
 
 const MIN_CHAT_WIDTH = 400;
+const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
+  duration: 180,
+  easing: Easing.out(Easing.cubic),
+};
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
 
 interface ExplorerSidebarProps {
@@ -100,6 +110,7 @@ export function ExplorerSidebar({
   // For resize drag, track the starting width
   const startWidthRef = useRef(explorerWidth);
   const resizeWidth = useSharedValue(explorerWidth);
+  const desktopOpenProgress = useSharedValue(isOpen ? 1 : 0);
 
   const handleClose = useCallback(
     (reason: string) => {
@@ -247,6 +258,16 @@ export function ExplorerSidebar({
     [isMobile, explorerWidth, resizeWidth, setExplorerWidth, viewportWidth],
   );
 
+  useEffect(() => {
+    if (isMobile) {
+      resizeWidth.value = explorerWidth;
+      desktopOpenProgress.value = isOpen ? 1 : 0;
+      return;
+    }
+    resizeWidth.value = explorerWidth;
+    desktopOpenProgress.value = withTiming(isOpen ? 1 : 0, DESKTOP_SIDEBAR_ANIMATION_CONFIG);
+  }, [desktopOpenProgress, explorerWidth, isMobile, isOpen, resizeWidth]);
+
   const sidebarAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
   }));
@@ -258,6 +279,8 @@ export function ExplorerSidebar({
 
   const resizeAnimatedStyle = useAnimatedStyle(() => ({
     width: resizeWidth.value,
+    opacity: desktopOpenProgress.value,
+    transform: [{ translateX: (1 - desktopOpenProgress.value) * (resizeWidth.value + 16) }],
   }));
 
   const backdropCombinedStyle = useMemo(
@@ -331,13 +354,8 @@ export function ExplorerSidebar({
     );
   }
 
-  // Desktop: fixed width sidebar with resize handle
-  if (!isOpen) {
-    return null;
-  }
-
   return (
-    <Animated.View style={desktopSidebarStyle}>
+    <Animated.View style={desktopSidebarStyle} pointerEvents={isOpen ? "auto" : "none"}>
       <View style={DESKTOP_SIDEBAR_BORDER_STYLE}>
         {/* Resize handle - absolutely positioned over left border */}
         <GestureDetector gesture={resizeGesture}>
@@ -600,7 +618,11 @@ const explorerStaticStyles = RNStyleSheet.create({
     borderBottomLeftRadius: 16,
   },
   desktopSidebar: {
-    position: "relative" as const,
+    position: "absolute" as const,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 20,
     paddingRight: 8,
     paddingBottom: 8,
   },
