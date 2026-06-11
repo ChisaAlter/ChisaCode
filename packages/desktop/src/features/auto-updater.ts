@@ -75,6 +75,8 @@ export function bucketFromStagingUserId(stagingUserId: string): number {
   return UUID.parse(stagingUserId).readUInt32BE(12) / 0x100000000;
 }
 
+let inMemoryStagingUserId: string | null = null;
+
 export async function resolveStagingUserId(filePath: string): Promise<string> {
   try {
     const id = (await readFile(filePath, "utf8")).trim();
@@ -87,7 +89,12 @@ export async function resolveStagingUserId(filePath: string): Promise<string> {
     }
   }
 
+  if (inMemoryStagingUserId != null) {
+    return inMemoryStagingUserId;
+  }
+
   const id = UUID.v5(randomBytes(4096), UUID.OID);
+  inMemoryStagingUserId = id;
 
   try {
     await mkdir(path.dirname(filePath), { recursive: true });
@@ -172,6 +179,7 @@ function configureAutoUpdater(releaseChannel: AppReleaseChannel): void {
 
   autoUpdater.on("error", (error) => {
     downloading = false;
+    cachedUpdateInfo = null;
     console.error("[auto-updater] Updater event failed:", error);
   });
 }
@@ -307,6 +315,14 @@ export async function downloadAndInstallUpdate(
     };
   }
 
+  if (downloading) {
+    return {
+      installed: false,
+      version: currentVersion,
+      message: t("updater.preparing"),
+    };
+  }
+
   configureAutoUpdater(releaseChannel);
 
   const readyVersion = cachedUpdateInfo.version;
@@ -316,14 +332,6 @@ export async function downloadAndInstallUpdate(
       installed: true,
       version: readyVersion,
       message: t("updater.downloadedRestart"),
-    };
-  }
-
-  if (downloading) {
-    return {
-      installed: false,
-      version: currentVersion,
-      message: t("updater.preparing"),
     };
   }
 

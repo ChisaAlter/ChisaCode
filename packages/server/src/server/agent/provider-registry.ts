@@ -31,24 +31,17 @@ import type {
 } from "./provider-launch-config.js";
 import { ClaudeAgentClient } from "./providers/claude/agent.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
-import { CopilotACPAgentClient } from "./providers/copilot-acp-agent.js";
-import { CursorACPAgentClient } from "./providers/cursor-acp-agent.js";
-import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
+import { KimiCodeAgentClient } from "./providers/kimi-code-agent.js";
 import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { MockLoadTestAgentClient } from "./providers/mock-load-test-agent.js";
 import { MockSlowProviderClient } from "./providers/mock-slow-provider.js";
 import {
   AGENT_PROVIDER_DEFINITIONS,
-  BUILTIN_PROVIDER_IDS,
   DEV_AGENT_PROVIDER_DEFINITIONS,
   getAgentProviderDefinition,
   type AgentProviderDefinition,
 } from "@chisacode/protocol/provider-manifest";
-
-function isNonEmptyStringArray(value: string[]): value is [string, ...string[]] {
-  return value.length > 0;
-}
 
 export type { AgentProviderDefinition };
 
@@ -117,39 +110,20 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       workspaceGitService: options?.workspaceGitService,
       customProvider: options?.customProvider,
     }),
-  copilot: (logger, runtimeSettings) =>
-    new CopilotACPAgentClient({
-      logger,
-      runtimeSettings,
-    }),
-  cursor: (logger, runtimeSettings) =>
-    new CursorACPAgentClient({
-      logger,
-      command: getCursorACPCommand(runtimeSettings),
-      env: runtimeSettings?.env,
-    }),
   opencode: (logger, runtimeSettings) => new OpenCodeAgentClient(logger, runtimeSettings),
   pi: (logger, runtimeSettings) =>
     new PiRpcAgentClient({
       logger,
       runtimeSettings,
     }),
+  kimi: (logger, runtimeSettings) =>
+    new KimiCodeAgentClient({
+      logger,
+      runtimeSettings,
+    }),
   mock: (logger) => new MockLoadTestAgentClient(logger),
   "mock-slow": () => new MockSlowProviderClient(),
 };
-
-function getCursorACPCommand(
-  runtimeSettings: ProviderRuntimeSettings | undefined,
-): [string, ...string[]] {
-  if (
-    runtimeSettings?.command?.mode === "replace" &&
-    isNonEmptyStringArray(runtimeSettings.command.argv)
-  ) {
-    return runtimeSettings.command.argv;
-  }
-
-  return ["cursor-agent", "acp"];
-}
 
 function getProviderClientFactory(provider: string): ProviderClientFactory {
   const factory = PROVIDER_CLIENT_FACTORIES[provider];
@@ -212,23 +186,6 @@ function applyOverrideToDefinition(
     ...definition,
     label: override.label ?? definition.label,
     description: override.description ?? definition.description,
-  };
-}
-
-function createDerivedDefinition(
-  providerId: string,
-  baseDefinition: AgentProviderDefinition,
-  override: ProviderOverride,
-): AgentProviderDefinition {
-  if (!override.label) {
-    throw new Error(`Custom provider '${providerId}' requires a label`);
-  }
-
-  return {
-    ...baseDefinition,
-    id: providerId,
-    label: override.label,
-    description: override.description ?? baseDefinition.description,
   };
 }
 
@@ -536,99 +493,6 @@ function buildResolvedBuiltinProviders(
   return resolvedProviders;
 }
 
-function addDerivedProviders(
-  resolvedProviders: Map<string, ResolvedProvider>,
-  providerOverrides: Record<string, ProviderOverride>,
-): void {
-  for (const [providerId, override] of Object.entries(providerOverrides)) {
-    if (resolvedProviders.has(providerId) || BUILTIN_PROVIDER_IDS.includes(providerId)) {
-      continue;
-    }
-
-    if (!override.extends) {
-      throw new Error(`Custom provider '${providerId}' requires an extends value`);
-    }
-
-    if (override.extends === "acp") {
-      if (!override.command || !isNonEmptyStringArray(override.command)) {
-        throw new Error(`ACP provider '${providerId}' requires a command`);
-      }
-      // Capture command in const for closure - TypeScript can't track type refinement inside closures
-      const command = override.command;
-
-      resolvedProviders.set(providerId, {
-        definition: createDerivedDefinition(
-          providerId,
-          {
-            id: providerId,
-            label: override.label ?? providerId,
-            description: override.description ?? "Custom ACP provider",
-            defaultModeId: null,
-            modes: [],
-          },
-          override,
-        ),
-        runtimeSettings: toRuntimeSettings(override),
-        profileModels: override.models ?? [],
-        additionalModels: override.additionalModels ?? [],
-        profileModelsAreAdditive: false,
-        enabled: override.enabled !== false,
-        derivedFromProviderId: null,
-        createBaseClient: (logger) =>
-          providerId === "cursor"
-            ? new CursorACPAgentClient({
-                logger,
-                command,
-                env: override.env,
-                providerId,
-                label: override.label ?? providerId,
-              })
-            : new GenericACPAgentClient({
-                logger,
-                command,
-                env: override.env,
-                providerId,
-                label: override.label ?? providerId,
-              }),
-      });
-      continue;
-    }
-
-    const baseProviderId = override.extends;
-    const baseProvider = resolvedProviders.get(baseProviderId);
-    if (!baseProvider) {
-      throw new Error(
-        `Custom provider '${providerId}' extends unknown provider '${baseProviderId}'`,
-      );
-    }
-
-    const mergedRuntimeSettings = mergeRuntimeSettings(
-      baseProvider.runtimeSettings,
-      toRuntimeSettings(override),
-    );
-    const baseDefinition = baseProvider.definition;
-    const baseFactory = getProviderClientFactory(baseProviderId);
-
-    resolvedProviders.set(providerId, {
-      definition: createDerivedDefinition(providerId, baseDefinition, override),
-      runtimeSettings: mergedRuntimeSettings,
-      profileModels: override.models ?? [],
-      additionalModels: override.additionalModels ?? [],
-      profileModelsAreAdditive: false,
-      enabled: override.enabled !== false,
-      derivedFromProviderId: baseProviderId,
-      createBaseClient: (logger) =>
-        baseFactory(logger, mergedRuntimeSettings, {
-          customProvider: {
-            id: providerId,
-            label: override.label ?? providerId,
-            extends: baseProviderId,
-          },
-        }),
-    });
-  }
-}
-
 export function buildProviderRegistry(
   logger: Logger,
   options?: BuildProviderRegistryOptions,
@@ -643,8 +507,6 @@ export function buildProviderRegistry(
     },
     options?.isDev === true,
   );
-  addDerivedProviders(resolvedProviders, providerOverrides);
-
   return Object.fromEntries(
     [...resolvedProviders.entries()].map(([provider, resolved]) => [
       provider,

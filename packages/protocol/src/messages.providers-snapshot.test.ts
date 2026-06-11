@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   GetProvidersSnapshotResponseMessageSchema,
+  ProviderToolingActionRequestMessageSchema,
+  ProviderToolingActionResponseMessageSchema,
   ProviderSnapshotEntrySchema,
   ProvidersSnapshotUpdateMessageSchema,
 } from "./messages.js";
@@ -69,6 +71,55 @@ describe("provider snapshot message schemas", () => {
         defaultThinkingOptionId: "max",
       },
     ]);
+  });
+
+  test("preserves provider tooling metadata on snapshot entries", () => {
+    const parsed = ProviderSnapshotEntrySchema.parse({
+      provider: "kimi",
+      status: "ready",
+      installedVersion: "0.14.0",
+      latestVersion: "0.14.0",
+      versionStatus: "current",
+      packageName: "@moonshot-ai/kimi-code",
+      checkedAt: "2026-06-10T00:00:00.000Z",
+      installAvailable: false,
+      updateAvailable: false,
+    });
+
+    expect(parsed).toMatchObject({
+      installedVersion: "0.14.0",
+      latestVersion: "0.14.0",
+      versionStatus: "current",
+      packageName: "@moonshot-ai/kimi-code",
+      installAvailable: false,
+      updateAvailable: false,
+    });
+  });
+
+  test("parses provider tooling action request and response messages", () => {
+    expect(
+      ProviderToolingActionRequestMessageSchema.parse({
+        type: "provider.tooling.run.request",
+        provider: "codex",
+        action: "update",
+        requestId: "req-tooling",
+      }).action,
+    ).toBe("update");
+
+    const response = ProviderToolingActionResponseMessageSchema.parse({
+      type: "provider.tooling.run.response",
+      payload: {
+        provider: "codex",
+        action: "update",
+        exitCode: 0,
+        stdout: "updated",
+        stderr: "",
+        success: true,
+        requestId: "req-tooling",
+      },
+    });
+
+    expect(response.payload.success).toBe(true);
   });
 
   test("defaults missing enabled state in providers snapshot response entries", () => {

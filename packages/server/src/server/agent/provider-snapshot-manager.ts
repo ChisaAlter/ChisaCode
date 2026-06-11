@@ -24,6 +24,12 @@ import {
   shutdownAgentClients,
   type ProviderDefinition,
 } from "./provider-registry.js";
+import {
+  getProviderToolingInfo,
+  runProviderToolingAction,
+  type ProviderToolingAction,
+  type ProviderToolingActionResult,
+} from "./provider-tooling.js";
 import { applyMutableProviderConfigToOverrides } from "../daemon-config-store.js";
 import type { MutableDaemonConfig } from "../daemon-config-store.js";
 
@@ -321,6 +327,18 @@ export class ProviderSnapshotManager {
     return { provider, diagnostic };
   }
 
+  async runProviderToolingAction(
+    provider: AgentProvider,
+    action: ProviderToolingAction,
+  ): Promise<ProviderToolingActionResult> {
+    if (!this.hasProvider(provider)) {
+      throw new Error(`Provider ${provider} is not configured`);
+    }
+    const result = await runProviderToolingAction(provider, action);
+    await this.refreshSettingsSnapshot({ providers: [provider] });
+    return result;
+  }
+
   applyMutableProviderConfig(
     mutableProviders: MutableDaemonConfig["providers"] | undefined,
   ): AgentManagerProviderState {
@@ -577,18 +595,21 @@ export class ProviderSnapshotManager {
       description: definition.description,
       defaultModeId: definition.defaultModeId,
     };
-    const setEntry = (entry: ProviderSnapshotEntry) => {
+    const setEntry = async (entry: ProviderSnapshotEntry) => {
       if (!this.isCurrentProviderLoad(cwd, provider, load)) {
         return false;
       }
-      snapshot.set(provider, entry);
+      snapshot.set(provider, {
+        ...entry,
+        ...(await this.resolveToolingMetadata(provider)),
+      });
       this.emitChange(cwd);
       return true;
     };
 
     try {
       if (!definition.enabled) {
-        setEntry({ ...base, status: "unavailable", enabled: false });
+        await setEntry({ ...base, status: "unavailable", enabled: false });
         return;
       }
 
@@ -599,7 +620,7 @@ export class ProviderSnapshotManager {
         `Timed out checking ${definition.label} availability after ${this.refreshTimeoutMs}ms`,
       );
       if (!available) {
-        setEntry({ ...base, status: "unavailable", enabled: true });
+        await setEntry({ ...base, status: "unavailable", enabled: true });
         return;
       }
 
@@ -612,7 +633,7 @@ export class ProviderSnapshotManager {
         `Timed out refreshing ${definition.label} after ${this.refreshTimeoutMs}ms`,
       );
 
-      setEntry({
+      await setEntry({
         ...base,
         status: "ready",
         enabled: true,
@@ -621,7 +642,7 @@ export class ProviderSnapshotManager {
         fetchedAt: new Date().toISOString(),
       });
     } catch (error) {
-      const emitted = setEntry({
+      const emitted = await setEntry({
         ...base,
         status: "error",
         enabled: true,
@@ -630,6 +651,17 @@ export class ProviderSnapshotManager {
       if (emitted) {
         this.logger.warn({ err: error, provider, cwd }, "Failed to refresh provider snapshot");
       }
+    }
+  }
+
+  private async resolveToolingMetadata(
+    provider: AgentProvider,
+  ): Promise<Partial<ProviderSnapshotEntry>> {
+    try {
+      return (await getProviderToolingInfo(provider)) ?? {};
+    } catch (error) {
+      this.logger.warn({ err: error, provider }, "Failed to resolve provider tooling metadata");
+      return {};
     }
   }
 

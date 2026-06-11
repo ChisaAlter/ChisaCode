@@ -143,10 +143,6 @@ vi.mock("@/stores/provider-settings-store", () => ({
     selector({ open: openProviderSettingsMock }),
 }));
 
-vi.mock("@/components/add-provider-modal", () => ({
-  AddProviderModal: () => null,
-}));
-
 vi.mock("@/hooks/use-providers-snapshot", () => ({
   useProvidersSnapshot: () => ({
     entries: snapshotState.entries,

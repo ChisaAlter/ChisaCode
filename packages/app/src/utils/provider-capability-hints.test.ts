@@ -37,10 +37,6 @@ describe("getProviderCapabilityHints", () => {
     expect(supportedIds("workspace/claude_code")).toContain("mcp");
   });
 
-  it("does not match provider aliases inside unrelated words", () => {
-    expect(supportedIds("cursorless")).toEqual(["resume", "permissions", "sandbox", "headless"]);
-  });
-
   it("uses defaults for blank provider ids", () => {
     expect(getProviderCapabilityHints(null)).toEqual(getProviderCapabilityHints(""));
     expect(supportedIds("   ")).toEqual(["resume", "permissions", "sandbox", "headless"]);

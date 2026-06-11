@@ -30,7 +30,11 @@ import {
   buildAddCustomModelToProviderPatch,
   buildDeleteCustomModelFromProviderPatch,
 } from "@/screens/settings/custom-models";
-import type { AgentModelDefinition, AgentProvider } from "@chisacode/protocol/agent-types";
+import type {
+  AgentModelDefinition,
+  AgentProvider,
+  ProviderSnapshotEntry,
+} from "@chisacode/protocol/agent-types";
 import type { ProviderProfileModel } from "@chisacode/protocol/provider-config";
 
 interface ProviderDiagnosticSheetProps {
@@ -125,6 +129,84 @@ function SectionHeader({ title, count, hint }: { title: string; count?: number; 
           <Text style={settingsStyles.sectionHeaderTitle}>·</Text>
         ) : null}
         {hint ? <Text style={settingsStyles.sectionHeaderTitle}>{hint}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+function ProviderInstallationSection({
+  providerEntry,
+  modelsRefreshing,
+  clientAvailable,
+  toolingAction,
+  toolingOutput,
+  onInstall,
+  onUpdate,
+}: {
+  providerEntry: ProviderSnapshotEntry | undefined;
+  modelsRefreshing: boolean;
+  clientAvailable: boolean;
+  toolingAction: "install" | "update" | null;
+  toolingOutput: string | null;
+  onInstall: () => void;
+  onUpdate: () => void;
+}) {
+  const { t } = useTranslation();
+  const installDisabled = toolingAction !== null || modelsRefreshing || !clientAvailable;
+  const canInstall =
+    providerEntry?.installAvailable === true || providerEntry?.status === "unavailable";
+  const canUpdate = providerEntry?.updateAvailable === true;
+
+  return (
+    <View style={sheetStyles.section}>
+      <SectionHeader
+        title={t("providerDiagnostics.installation")}
+        hint={providerEntry?.packageName}
+      />
+      <View style={settingsStyles.card}>
+        <View style={sheetStyles.toolingRow}>
+          <View style={sheetStyles.toolingTextColumn}>
+            <Text style={sheetStyles.modelTitle} numberOfLines={1}>
+              {providerEntry?.installedVersion
+                ? t("providerDiagnostics.installedVersion", {
+                    version: providerEntry.installedVersion,
+                  })
+                : t("providerDiagnostics.notInstalled")}
+            </Text>
+            <Text style={sheetStyles.monoHint} numberOfLines={1}>
+              {providerEntry?.latestVersion
+                ? t("providerDiagnostics.latestVersion", {
+                    version: providerEntry.latestVersion,
+                  })
+                : t("providerDiagnostics.latestUnknown")}
+            </Text>
+          </View>
+          <View style={sheetStyles.toolingActions}>
+            <Button
+              variant={canInstall ? "default" : "secondary"}
+              size="sm"
+              disabled={!canInstall || installDisabled}
+              loading={toolingAction === "install"}
+              onPress={onInstall}
+            >
+              {t("providerDiagnostics.install")}
+            </Button>
+            <Button
+              variant={canUpdate ? "default" : "secondary"}
+              size="sm"
+              disabled={!canUpdate || installDisabled}
+              loading={toolingAction === "update"}
+              onPress={onUpdate}
+            >
+              {t("providerDiagnostics.update")}
+            </Button>
+          </View>
+        </View>
+        {toolingOutput ? (
+          <Text style={sheetStyles.toolingOutput} selectable>
+            {toolingOutput}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -446,6 +528,74 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
   );
 }
 
+function useProviderTooling(
+  client: ReturnType<typeof useHostRuntimeClient>,
+  provider: string,
+  refresh: (providers?: AgentProvider[]) => Promise<void>,
+) {
+  const { t } = useTranslation();
+  const [toolingAction, setToolingAction] = useState<"install" | "update" | null>(null);
+  const [toolingOutput, setToolingOutput] = useState<string | null>(null);
+
+  const runAction = useCallback(
+    (action: "install" | "update") => {
+      if (!client || toolingAction) return;
+      setToolingAction(action);
+      setToolingOutput(null);
+      void client
+        .runProviderToolingAction(provider, action)
+        .then((result) => {
+          const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+          setToolingOutput(
+            output ||
+              (result.success
+                ? t("providerDiagnostics.toolingSucceeded")
+                : t("providerDiagnostics.toolingFailed")),
+          );
+          return refresh([provider]);
+        })
+        .catch((error) => {
+          setToolingOutput(error instanceof Error ? error.message : String(error));
+        })
+        .finally(() => {
+          setToolingAction(null);
+        });
+    },
+    [client, provider, refresh, t, toolingAction],
+  );
+
+  const handleRunInstall = useCallback(() => runAction("install"), [runAction]);
+  const handleRunUpdate = useCallback(() => runAction("update"), [runAction]);
+
+  return { toolingAction, toolingOutput, handleRunInstall, handleRunUpdate };
+}
+
+function useDiscoveredModels(providerEntry: { models?: AgentModelDefinition[] } | undefined) {
+  const stableDiscoveredRef = useRef<AgentModelDefinition[]>([]);
+  if (providerEntry?.models && providerEntry.models.length > 0) {
+    stableDiscoveredRef.current = providerEntry.models;
+  }
+  const discoveredModels =
+    providerEntry?.models && providerEntry.models.length > 0
+      ? providerEntry.models
+      : stableDiscoveredRef.current;
+  return discoveredModels;
+}
+
+function useFetchedAtLabel(fetchedAt: string | undefined, visible: boolean) {
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    const id = setInterval(() => setClockTick((tick) => tick + 1), 10_000);
+    return () => clearInterval(id);
+  }, [visible]);
+  return useMemo(() => {
+    if (!fetchedAt) return null;
+    void clockTick;
+    return formatTimeAgo(new Date(fetchedAt));
+  }, [fetchedAt, clockTick]);
+}
+
 export function ProviderDiagnosticSheet({
   provider,
   visible,
@@ -454,6 +604,7 @@ export function ProviderDiagnosticSheet({
 }: ProviderDiagnosticSheetProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const client = useHostRuntimeClient(serverId);
   const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
@@ -477,26 +628,13 @@ export function ProviderDiagnosticSheet({
       : null;
   const modelsRefreshing = isRefreshing || providerSnapshotRefreshing;
 
-  const stableDiscoveredRef = useRef<AgentModelDefinition[]>([]);
-  if (providerEntry?.models && providerEntry.models.length > 0) {
-    stableDiscoveredRef.current = providerEntry.models;
-  }
-  const discoveredModels =
-    providerEntry?.models && providerEntry.models.length > 0
-      ? providerEntry.models
-      : stableDiscoveredRef.current;
-
-  const [clockTick, setClockTick] = useState(0);
-  useEffect(() => {
-    if (!visible) return;
-    const id = setInterval(() => setClockTick((tick) => tick + 1), 10_000);
-    return () => clearInterval(id);
-  }, [visible]);
-  const fetchedAtLabel = useMemo(() => {
-    if (!providerEntry?.fetchedAt) return null;
-    void clockTick;
-    return formatTimeAgo(new Date(providerEntry.fetchedAt));
-  }, [providerEntry?.fetchedAt, clockTick]);
+  const discoveredModels = useDiscoveredModels(providerEntry);
+  const fetchedAtLabel = useFetchedAtLabel(providerEntry?.fetchedAt, visible);
+  const { toolingAction, toolingOutput, handleRunInstall, handleRunUpdate } = useProviderTooling(
+    client,
+    provider,
+    refresh,
+  );
 
   useEffect(() => {
     if (!visible) {
@@ -591,6 +729,15 @@ export function ProviderDiagnosticSheet({
         footer={footer}
         snapPoints={MAIN_SNAP_POINTS}
       >
+        <ProviderInstallationSection
+          providerEntry={providerEntry}
+          modelsRefreshing={modelsRefreshing}
+          clientAvailable={Boolean(client)}
+          toolingAction={toolingAction}
+          toolingOutput={toolingOutput}
+          onInstall={handleRunInstall}
+          onUpdate={handleRunUpdate}
+        />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}
@@ -698,6 +845,30 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
   modelRowFiller: {
     flex: 1,
+  },
+  toolingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    padding: theme.spacing[3],
+  },
+  toolingTextColumn: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  toolingActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  toolingOutput: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    color: theme.colors.foregroundMuted,
+    fontFamily: Fonts.mono,
+    fontSize: theme.fontSize.xs,
+    padding: theme.spacing[3],
   },
   emptyState: {
     paddingVertical: theme.spacing[8],

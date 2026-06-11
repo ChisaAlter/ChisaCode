@@ -5,9 +5,9 @@ import { z } from "zod";
 import {
   AgentProviderRuntimeSettingsMapSchema,
   migrateProviderSettings,
-  ProviderOverridesSchema,
+  ProviderOverrideSchema,
 } from "./agent/provider-launch-config.js";
-import type { AgentProviderRuntimeSettingsMap } from "./agent/provider-launch-config.js";
+import type { ProviderOverride } from "./agent/provider-launch-config.js";
 import { ensurePrivateFile, writePrivateFileSync } from "./private-files.js";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
@@ -145,7 +145,8 @@ const AgentMetadataGenerationSchema = z
   })
   .strict();
 
-const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi"] as const;
+const BUILTIN_PROVIDER_IDS = ["claude", "codex", "opencode", "pi", "kimi"] as const;
+const PersistedProviderOverridesSchema = z.record(ProviderOverrideSchema);
 
 function isLegacyProviderEntry(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -250,7 +251,9 @@ export const PersistedConfigSchema = z
     providers: ProvidersSchema.optional(),
     agents: z
       .object({
-        providers: z.preprocess(normalizeAgentProviders, ProviderOverridesSchema).optional(),
+        providers: z
+          .preprocess(normalizeAgentProviders, PersistedProviderOverridesSchema)
+          .optional(),
         metadataGeneration: AgentMetadataGenerationSchema.optional(),
       })
       .strict()
@@ -271,7 +274,7 @@ type PersistedConfigSchemaOutput = z.infer<typeof PersistedConfigSchema>;
 
 export type PersistedConfig = Omit<PersistedConfigSchemaOutput, "agents"> & {
   agents?: Omit<NonNullable<PersistedConfigSchemaOutput["agents"]>, "providers"> & {
-    providers?: AgentProviderRuntimeSettingsMap;
+    providers?: Record<string, ProviderOverride>;
   };
 };
 

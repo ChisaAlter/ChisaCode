@@ -2,17 +2,16 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
-import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useHostRuntimeIsConnected, useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
-import { AddProviderModal } from "@/components/add-provider-modal";
 import { getProviderIcon } from "@/components/provider-icons";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
-import { ChevronRight, Plus } from "lucide-react-native";
+import { ChevronRight, Download, RefreshCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
@@ -25,26 +24,37 @@ interface ProviderStatus {
   tone: StatusTone;
   label: string;
   modelCount: number | null;
+  versionLabel: string | null;
 }
 
 function getProviderStatus(
   status: string,
   enabled: boolean,
   modelCount: number,
+  installedVersion: string | null | undefined,
   t: TFunction,
 ): ProviderStatus {
-  if (!enabled) return { tone: "muted", label: t("providers.disabled"), modelCount: null };
+  let versionLabel: string | null = null;
+  if (installedVersion) {
+    versionLabel = `v${installedVersion}`;
+  } else if (status === "unavailable") {
+    versionLabel = t("providers.notInstalled");
+  }
+  if (!enabled)
+    return { tone: "muted", label: t("providers.disabled"), modelCount: null, versionLabel };
   if (status === "loading")
-    return { tone: "loading", label: t("providers.loading"), modelCount: null };
-  if (status === "error") return { tone: "danger", label: t("providers.error"), modelCount: null };
+    return { tone: "loading", label: t("providers.loading"), modelCount: null, versionLabel };
+  if (status === "error")
+    return { tone: "danger", label: t("providers.error"), modelCount: null, versionLabel };
   if (status === "ready") {
     return {
       tone: "success",
       label: t("providers.ready"),
       modelCount: modelCount > 0 ? modelCount : null,
+      versionLabel,
     };
   }
-  return { tone: "warning", label: t("providers.missing"), modelCount: null };
+  return { tone: "warning", label: t("providers.missing"), modelCount: null, versionLabel };
 }
 
 interface ProviderRowProps {
@@ -53,6 +63,7 @@ interface ProviderRowProps {
   enabled: boolean;
   isToggling: boolean;
   isFirst: boolean;
+  serverId: string;
   onPress: (providerId: string) => void;
   onToggleEnabled: (providerId: string, enabled: boolean) => void;
 }
@@ -63,11 +74,14 @@ function ProviderRow({
   enabled,
   isToggling,
   isFirst,
+  serverId,
   onPress,
   onToggleEnabled,
 }: ProviderRowProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const client = useHostRuntimeClient(serverId);
+  const [toolingAction, setToolingAction] = useState<"install" | "update" | null>(null);
   const ProviderIcon = getProviderIcon(def.id);
   const providerError =
     enabled &&
@@ -77,7 +91,13 @@ function ProviderRow({
       ? entry.error.trim()
       : null;
   const modelCount = entry.models?.length ?? 0;
-  const providerStatus = getProviderStatus(entry.status, enabled, modelCount, t);
+  const providerStatus = getProviderStatus(
+    entry.status,
+    enabled,
+    modelCount,
+    entry.installedVersion,
+    t,
+  );
 
   const handlePress = useCallback(() => {
     onPress(def.id);
@@ -87,6 +107,34 @@ function ProviderRow({
       onToggleEnabled(def.id, value);
     },
     [def.id, onToggleEnabled],
+  );
+  const handleRunToolingAction = useCallback(
+    (action: "install" | "update") => {
+      if (!client || toolingAction) return;
+      setToolingAction(action);
+      void client
+        .runProviderToolingAction(def.id, action)
+        .then(() => {
+          return;
+        })
+        .catch(() => {
+          return;
+        })
+        .finally(() => {
+          setToolingAction(null);
+        });
+    },
+    [client, def.id, toolingAction],
+  );
+  const canInstall = entry.installAvailable === true || entry.status === "unavailable";
+  const canUpdate = entry.updateAvailable === true;
+  const handleInstall = useCallback(
+    () => handleRunToolingAction("install"),
+    [handleRunToolingAction],
+  );
+  const handleUpdate = useCallback(
+    () => handleRunToolingAction("update"),
+    [handleRunToolingAction],
   );
   const rowStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -128,6 +176,38 @@ function ProviderRow({
                 </Text>
               ) : null}
             </View>
+          </View>
+          <View style={styles.actionsRow}>
+            {canInstall && !canUpdate ? (
+              <Pressable
+                onPress={handleInstall}
+                disabled={toolingAction !== null}
+                accessibilityLabel={t("providers.install")}
+                style={styles.actionButton}
+              >
+                {toolingAction === "install" ? (
+                  <LoadingSpinner size={14} color={theme.colors.accent} />
+                ) : (
+                  <Download size={14} color={theme.colors.accent} />
+                )}
+                <Text style={styles.actionLabel}>{t("providers.install")}</Text>
+              </Pressable>
+            ) : null}
+            {canUpdate ? (
+              <Pressable
+                onPress={handleUpdate}
+                disabled={toolingAction !== null}
+                accessibilityLabel={t("providers.update")}
+                style={styles.actionButton}
+              >
+                {toolingAction === "update" ? (
+                  <LoadingSpinner size={14} color={theme.colors.accent} />
+                ) : (
+                  <RefreshCw size={14} color={theme.colors.accent} />
+                )}
+                <Text style={styles.actionLabel}>{t("providers.update")}</Text>
+              </Pressable>
+            ) : null}
           </View>
           <Switch
             value={enabled}
@@ -178,6 +258,12 @@ function StatusIndicator({ status }: { status: ProviderStatus }) {
           </Text>
         </>
       ) : null}
+      {status.versionLabel ? (
+        <>
+          <Text style={styles.separator}>·</Text>
+          <Text style={styles.statusLabel}>{status.versionLabel}</Text>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -187,13 +273,11 @@ export interface ProvidersSectionProps {
 }
 
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { entries, isLoading } = useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
   const openProviderSettings = useProviderSettingsStore((state) => state.open);
-  const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
 
   const providerDefinitions = useMemo(() => buildProviderDefinitions(entries), [entries]);
@@ -205,8 +289,6 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     },
     [openProviderSettings, serverId],
   );
-  const handleOpenAddProvider = useCallback(() => setIsAddProviderOpen(true), []);
-  const handleCloseAddProvider = useCallback(() => setIsAddProviderOpen(false), []);
   const handleToggleEnabled = useCallback(
     async (providerId: string, enabled: boolean) => {
       setPendingProviderId(providerId);
@@ -224,77 +306,44 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     [patchConfig, t],
   );
 
-  const headerActions = useMemo(
-    () =>
-      hasServer && isConnected ? (
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={handleOpenAddProvider}
-            hitSlop={8}
-            style={settingsStyles.sectionHeaderLink}
-            accessibilityRole="button"
-            accessibilityLabel={t("providers.add")}
-            testID="add-provider-button"
-          >
-            <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-            <Text style={settingsStyles.sectionHeaderLinkText}>{t("providers.add")}</Text>
-          </Pressable>
-        </View>
-      ) : undefined,
-    [
-      hasServer,
-      isConnected,
-      handleOpenAddProvider,
-      theme.iconSize.sm,
-      theme.colors.foregroundMuted,
-      t,
-    ],
-  );
-
   return (
-    <>
-      <SettingsSection
-        title={t("providers.title")}
-        trailing={headerActions}
-        testID="host-page-providers-card"
-        style={styles.sectionSpacing}
-      >
-        {!hasServer || !isConnected ? (
-          <View style={EMPTY_CARD_STYLE}>
-            <Text style={styles.emptyText}>{t("providers.connectToView")}</Text>
-          </View>
-        ) : null}
-        {hasServer && isConnected && isLoading ? (
-          <View style={EMPTY_CARD_STYLE}>
-            <Text style={styles.emptyText}>{t("common.loading")}</Text>
-          </View>
-        ) : null}
-        {hasServer && isConnected && !isLoading && providerDefinitions.length > 0 ? (
-          <View style={settingsStyles.card}>
-            {providerDefinitions.map((def, index) => {
-              const entry = entries?.find((candidate) => candidate.provider === def.id);
-              if (!entry) return null;
-              return (
-                <ProviderRow
-                  key={def.id}
-                  def={def}
-                  entry={entry}
-                  enabled={entry.enabled ?? true}
-                  isToggling={pendingProviderId === def.id}
-                  isFirst={index === 0}
-                  onPress={handleOpenProviderSettings}
-                  onToggleEnabled={handleToggleEnabled}
-                />
-              );
-            })}
-          </View>
-        ) : null}
-      </SettingsSection>
-
-      {hasServer && isConnected && isAddProviderOpen ? (
-        <AddProviderModal serverId={serverId} visible onClose={handleCloseAddProvider} />
+    <SettingsSection
+      title={t("providers.title")}
+      testID="host-page-providers-card"
+      style={styles.sectionSpacing}
+    >
+      {!hasServer || !isConnected ? (
+        <View style={EMPTY_CARD_STYLE}>
+          <Text style={styles.emptyText}>{t("providers.connectToView")}</Text>
+        </View>
       ) : null}
-    </>
+      {hasServer && isConnected && isLoading ? (
+        <View style={EMPTY_CARD_STYLE}>
+          <Text style={styles.emptyText}>{t("common.loading")}</Text>
+        </View>
+      ) : null}
+      {hasServer && isConnected && !isLoading && providerDefinitions.length > 0 ? (
+        <View style={settingsStyles.card}>
+          {providerDefinitions.map((def, index) => {
+            const entry = entries?.find((candidate) => candidate.provider === def.id);
+            if (!entry) return null;
+            return (
+              <ProviderRow
+                key={def.id}
+                def={def}
+                entry={entry}
+                enabled={entry.enabled ?? true}
+                isToggling={pendingProviderId === def.id}
+                isFirst={index === 0}
+                serverId={serverId}
+                onPress={handleOpenProviderSettings}
+                onToggleEnabled={handleToggleEnabled}
+              />
+            );
+          })}
+        </View>
+      ) : null}
+    </SettingsSection>
   );
 }
 
@@ -362,6 +411,24 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.palette.red[300],
     fontSize: theme.fontSize.xs,
     marginTop: theme.spacing[1],
+  },
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface2,
+  },
+  actionLabel: {
+    color: theme.colors.accent,
+    fontSize: theme.fontSize.xs,
   },
 }));
 

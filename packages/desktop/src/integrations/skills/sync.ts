@@ -30,7 +30,9 @@ export async function listFilesRecursive(rootDir: string): Promise<string[]> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
+      if (entry.isSymbolicLink()) {
+        continue;
+      } else if (entry.isDirectory()) {
         await walk(full);
       } else if (entry.isFile()) {
         out.push(path.relative(rootDir, full));
@@ -46,6 +48,13 @@ async function syncDirectoryFiles(srcDir: string, dstDir: string): Promise<numbe
   let changed = 0;
   for (const rel of files) {
     if (await writeFileIfChanged(path.join(srcDir, rel), path.join(dstDir, rel))) {
+      changed++;
+    }
+  }
+  const dstFiles = await listFilesRecursive(dstDir);
+  for (const rel of dstFiles) {
+    if (!files.includes(rel)) {
+      await fs.rm(path.join(dstDir, rel));
       changed++;
     }
   }

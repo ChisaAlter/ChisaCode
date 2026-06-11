@@ -63,6 +63,7 @@ import type {
   GetProvidersSnapshotResponseMessage,
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
+  ProviderToolingActionResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   AgentRewindResponseMessage,
@@ -329,6 +330,7 @@ type ListAvailableProvidersPayload = ListAvailableProvidersResponse["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
+type ProviderToolingActionPayload = ProviderToolingActionResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type ReadProjectConfigPayload = Extract<
@@ -3538,6 +3540,23 @@ export class DaemonClient {
       },
       responseType: "provider_diagnostic_response",
       timeout: 30000,
+    });
+  }
+
+  async runProviderToolingAction(
+    provider: AgentProvider,
+    action: "install" | "update",
+    options?: { requestId?: string },
+  ): Promise<ProviderToolingActionPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.tooling.run.request",
+        provider,
+        action,
+      },
+      responseType: "provider.tooling.run.response",
+      timeout: 120000,
     });
   }
 

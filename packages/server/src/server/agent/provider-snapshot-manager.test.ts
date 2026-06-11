@@ -10,6 +10,28 @@ import type {
 } from "./agent-sdk-types.js";
 import { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 
+const providerToolingMock = vi.hoisted(() => ({
+  getProviderToolingInfo: vi.fn(async (provider: string) => ({
+    packageName: `${provider}-package`,
+    installedVersion: null,
+    latestVersion: null,
+    versionStatus: "not_installed" as const,
+    checkedAt: "2026-06-10T00:00:00.000Z",
+    installAvailable: true,
+    updateAvailable: false,
+  })),
+  runProviderToolingAction: vi.fn(async (provider: string, action: "install" | "update") => ({
+    provider,
+    action,
+    exitCode: 0,
+    stdout: "ok",
+    stderr: "",
+    success: true,
+  })),
+}));
+
+vi.mock("./provider-tooling.js", () => providerToolingMock);
+
 const TEST_CAPABILITIES = {
   supportsStreaming: false,
   supportsSessionPersistence: false,
@@ -49,13 +71,13 @@ describe("ProviderSnapshotManager public surface", () => {
     const manager = new ProviderSnapshotManager({ logger: createTestLogger() });
     try {
       const ids = manager.listRegisteredProviderIds();
-      expect(ids).toEqual(expect.arrayContaining(["claude", "codex", "opencode", "copilot", "pi"]));
+      expect(ids).toEqual(["claude", "codex", "opencode", "pi", "kimi"]);
     } finally {
       manager.destroy();
     }
   });
 
-  test("hasProvider reflects the built-in set and providerOverrides additions", () => {
+  test("hasProvider ignores non-whitelist providerOverrides additions", () => {
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
       providerOverrides: {
@@ -64,22 +86,22 @@ describe("ProviderSnapshotManager public surface", () => {
     });
     try {
       expect(manager.hasProvider("claude")).toBe(true);
-      expect(manager.hasProvider("zai-claude")).toBe(true);
+      expect(manager.hasProvider("zai-claude")).toBe(false);
       expect(manager.hasProvider("not-a-provider" as AgentProvider)).toBe(false);
     } finally {
       manager.destroy();
     }
   });
 
-  test("getProviderLabel returns the override label when provided", () => {
+  test("getProviderLabel returns built-in override labels only", () => {
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
       providerOverrides: {
-        "qwen-codex": { extends: "codex", label: "Qwen Code", enabled: true },
+        codex: { label: "Qwen Code", enabled: true },
       },
     });
     try {
-      expect(manager.getProviderLabel("qwen-codex")).toBe("Qwen Code");
+      expect(manager.getProviderLabel("codex")).toBe("Qwen Code");
       expect(manager.getProviderLabel("claude")).toBe("Claude");
     } finally {
       manager.destroy();
@@ -107,9 +129,9 @@ describe("ProviderSnapshotManager public surface", () => {
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
       extraClients: {
         codex: createExtraClient("codex", { isAvailable, listModels: fetchModels }),
@@ -132,9 +154,9 @@ describe("ProviderSnapshotManager public surface", () => {
       logger: createTestLogger(),
       providerOverrides: {
         claude: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
       extraClients: { codex: createExtraClient("codex", { isAvailable }) },
     });
@@ -158,15 +180,15 @@ describe("ProviderSnapshotManager public surface", () => {
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     try {
       const entries = await manager.listProviders({ cwd: "/tmp/project", wait: true });
       const providers = entries.map((entry) => entry.provider).sort();
-      expect(providers).toEqual(["claude", "codex", "copilot", "opencode", "pi"]);
+      expect(providers).toEqual(["claude", "codex", "kimi", "opencode", "pi"]);
       for (const entry of entries) {
         expect(entry.enabled).toBe(false);
         expect(entry.status).toBe("unavailable");
@@ -312,27 +334,27 @@ describe("ProviderSnapshotManager public surface", () => {
 });
 
 describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
-  test("adds a derived provider and includes it in subsequent reads", async () => {
+  test("applyMutableProviderConfig ignores non-whitelist provider additions", async () => {
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     try {
-      expect(manager.hasProvider("zai-claude")).toBe(false);
+      expect(manager.hasProvider("zai-claude" as AgentProvider)).toBe(false);
 
       const state = manager.applyMutableProviderConfig({
         "zai-claude": { extends: "claude", label: "ZAI", enabled: true },
       });
 
-      expect(manager.hasProvider("zai-claude")).toBe(true);
-      expect(state.providerDefinitions["zai-claude"]).toMatchObject({ enabled: true });
-      expect(manager.listRegisteredProviderIds()).toContain("zai-claude");
+      expect(manager.hasProvider("zai-claude" as AgentProvider)).toBe(false);
+      expect(state.providerDefinitions["zai-claude" as AgentProvider]).toBeUndefined();
+      expect(manager.listRegisteredProviderIds()).not.toContain("zai-claude" as AgentProvider);
     } finally {
       manager.destroy();
     }
@@ -344,21 +366,21 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
       providerOverrides: {
         claude: { enabled: true },
         codex: { enabled: true },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     try {
       const before = manager.getAgentManagerProviderState();
-      expect(before.providerDefinitions.copilot).toMatchObject({ enabled: false });
-      expect(before.clients.copilot).toBeUndefined();
+      expect(before.providerDefinitions.kimi).toMatchObject({ enabled: false });
+      expect(before.clients.kimi).toBeUndefined();
 
       const state = manager.applyMutableProviderConfig({ codex: { enabled: false } });
       expect(state.providerDefinitions.codex).toMatchObject({ enabled: false });
       expect(state.clients.codex).toBeUndefined();
-      expect(state.providerDefinitions.copilot).toMatchObject({ enabled: false });
-      expect(state.clients.copilot).toBeUndefined();
+      expect(state.providerDefinitions.kimi).toMatchObject({ enabled: false });
+      expect(state.clients.kimi).toBeUndefined();
     } finally {
       manager.destroy();
     }
@@ -370,9 +392,9 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     try {
@@ -388,7 +410,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
 
       listener.mockClear();
       manager.applyMutableProviderConfig({
-        "zai-claude": { extends: "claude", label: "ZAI", enabled: true },
+        kimi: { enabled: true },
       });
 
       const cwds = listener.mock.calls.map((call) => call[1]).sort();
@@ -406,9 +428,9 @@ describe("ProviderSnapshotManager lifecycle", () => {
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     try {
@@ -433,9 +455,9 @@ describe("ProviderSnapshotManager lifecycle", () => {
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     const listener = vi.fn();
@@ -456,9 +478,9 @@ describe("ProviderSnapshotManager cwd routing", () => {
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     try {
@@ -479,9 +501,9 @@ describe("ProviderSnapshotManager cwd routing", () => {
       providerOverrides: {
         claude: { enabled: false },
         codex: { enabled: false },
-        copilot: { enabled: false },
         opencode: { enabled: false },
         pi: { enabled: false },
+        kimi: { enabled: false },
       },
     });
     try {

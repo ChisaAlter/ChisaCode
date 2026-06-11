@@ -236,6 +236,13 @@ export const ProviderSnapshotEntrySchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   defaultModeId: z.string().nullable().optional(),
+  installedVersion: z.string().nullable().optional(),
+  latestVersion: z.string().nullable().optional(),
+  versionStatus: z.enum(["unknown", "not-installed", "current", "outdated"]).optional(),
+  packageName: z.string().optional(),
+  checkedAt: z.string().optional(),
+  installAvailable: z.boolean().optional(),
+  updateAvailable: z.boolean().optional(),
 });
 
 const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z.object({
@@ -1166,6 +1173,13 @@ export const ProviderDiagnosticRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const ProviderToolingActionRequestMessageSchema = z.object({
+  type: z.literal("provider.tooling.run.request"),
+  provider: AgentProviderSchema,
+  action: z.enum(["install", "update"]),
+  requestId: z.string(),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("resume_agent_request"),
   handle: AgentPersistenceHandleSchema,
@@ -1903,6 +1917,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   GetProvidersSnapshotRequestMessageSchema,
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
+  ProviderToolingActionRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
@@ -3528,6 +3543,19 @@ export const ProviderDiagnosticResponseMessageSchema = z.object({
   }),
 });
 
+export const ProviderToolingActionResponseMessageSchema = z.object({
+  type: z.literal("provider.tooling.run.response"),
+  payload: z.object({
+    provider: AgentProviderSchema,
+    action: z.enum(["install", "update"]),
+    exitCode: z.number().nullable(),
+    stdout: z.string(),
+    stderr: z.string(),
+    success: z.boolean(),
+    requestId: z.string(),
+  }),
+});
+
 const AgentSlashCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -3766,6 +3794,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProvidersSnapshotUpdateMessageSchema,
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
+  ProviderToolingActionResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -3890,6 +3919,9 @@ export type RefreshProvidersSnapshotResponseMessage = z.infer<
 export type ProviderDiagnosticResponseMessage = z.infer<
   typeof ProviderDiagnosticResponseMessageSchema
 >;
+export type ProviderToolingActionResponseMessage = z.infer<
+  typeof ProviderToolingActionResponseMessageSchema
+>;
 export type ChatCreateResponse = z.infer<typeof ChatCreateResponseSchema>;
 export type ChatListResponse = z.infer<typeof ChatListResponseSchema>;
 export type ChatInspectResponse = z.infer<typeof ChatInspectResponseSchema>;
@@ -3952,6 +3984,9 @@ export type RefreshProvidersSnapshotRequestMessage = z.infer<
 >;
 export type ProviderDiagnosticRequestMessage = z.infer<
   typeof ProviderDiagnosticRequestMessageSchema
+>;
+export type ProviderToolingActionRequestMessage = z.infer<
+  typeof ProviderToolingActionRequestMessageSchema
 >;
 export type ChatCreateRequest = z.infer<typeof ChatCreateRequestSchema>;
 export type ChatListRequest = z.infer<typeof ChatListRequestSchema>;

@@ -30,8 +30,6 @@ const mockState = vi.hoisted(() => {
     reset() {
       this.constructorArgs.claude = [];
       this.constructorArgs.codex = [];
-      this.constructorArgs.copilot = [];
-      this.constructorArgs.cursor = [];
       this.constructorArgs.pi = [];
       this.constructorArgs.genericAcp = [];
       this.isCommandAvailable.mockReset();
@@ -111,56 +109,6 @@ vi.mock("./providers/codex-app-server-agent.js", () => ({
     constructor(_logger: unknown, runtimeSettings?: unknown) {
       this.runtimeSettings = runtimeSettings;
       mockState.constructorArgs.codex.push({ runtimeSettings });
-    }
-
-    async createSession(): Promise<never> {
-      throw new Error("not implemented");
-    }
-
-    async resumeSession(): Promise<never> {
-      throw new Error("not implemented");
-    }
-
-    async listModels(): Promise<AgentModelDefinition[]> {
-      return mockState.runtimeModels.get(this.provider) ?? [];
-    }
-
-    async listModes(): Promise<[]> {
-      return [];
-    }
-
-    async isAvailable(): Promise<boolean> {
-      const command: { mode?: string; argv?: string[] } | undefined =
-        typeof this.runtimeSettings === "object" && this.runtimeSettings !== null
-          ? Reflect.get(this.runtimeSettings, "command")
-          : undefined;
-      if (command?.mode === "replace") {
-        const { isCommandAvailable } = await import("../../utils/executable.js");
-        return await isCommandAvailable(command.argv?.[0] ?? "");
-      }
-      return true;
-    }
-  },
-}));
-
-vi.mock("./providers/copilot-acp-agent.js", () => ({
-  CopilotACPAgentClient: class CopilotACPAgentClient {
-    readonly capabilities = {
-      supportsStreaming: true,
-      supportsSessionPersistence: true,
-      supportsDynamicModes: true,
-      supportsMcpServers: true,
-      supportsReasoningStream: true,
-      supportsToolInvocations: true,
-    };
-    readonly provider = "copilot";
-    readonly runtimeSettings?: unknown;
-
-    constructor(options: { runtimeSettings?: unknown }) {
-      this.runtimeSettings = options.runtimeSettings;
-      mockState.constructorArgs.copilot.push({
-        runtimeSettings: options.runtimeSettings,
-      });
     }
 
     async createSession(): Promise<never> {
@@ -462,38 +410,6 @@ test("new provider extending acp uses GenericACPAgentClient", () => {
       label: "My Agent",
     },
   ]);
-});
-
-test("cursor provider extending acp uses CursorACPAgentClient", () => {
-  const registry = buildProviderRegistry(logger, {
-    providerOverrides: {
-      cursor: {
-        extends: "acp",
-        label: "Cursor",
-        command: ["cursor-agent", "acp"],
-        env: {
-          CURSOR_AGENT_LOG: "debug",
-        },
-      },
-    },
-  });
-
-  expect(registry.cursor.createClient(logger).provider).toBe("cursor");
-  expect(mockState.constructorArgs.cursor).toEqual([
-    {
-      command: ["cursor-agent", "acp"],
-      env: {
-        CURSOR_AGENT_LOG: "debug",
-      },
-    },
-    {
-      command: ["cursor-agent", "acp"],
-      env: {
-        CURSOR_AGENT_LOG: "debug",
-      },
-    },
-  ]);
-  expect(mockState.constructorArgs.genericAcp).toEqual([]);
 });
 
 test('extends: "acp" without command throws', () => {

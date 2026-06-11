@@ -19,7 +19,7 @@ interface TransportEventPayload {
 interface Session {
   id: string;
   ws: WebSocket;
-  state: "opening" | "open" | "closing" | "closed";
+  state: "opening" | "open" | "closing" | "closed" | "error";
 }
 
 const WS_ENDPOINT_PATH = "/ws";
@@ -93,7 +93,26 @@ export function openLocalTransportSession(target: TransportTarget): Promise<stri
       reject(new Error(message));
     };
 
+    const OPEN_TIMEOUT_MS = 30000;
+    const openTimeout = setTimeout(() => {
+      if (openSettled) {
+        return;
+      }
+
+      openSettled = true;
+      session.state = "error";
+      sessions.delete(sessionId);
+      ws.terminate();
+      emitTransportEvent({
+        sessionId,
+        kind: "error",
+        error: `连接 ${describeTransportTarget(target)} 超时`,
+      });
+      reject(new Error(`连接 ${describeTransportTarget(target)} 超时`));
+    }, OPEN_TIMEOUT_MS);
+
     ws.once("open", () => {
+      clearTimeout(openTimeout);
       openSettled = true;
       session.state = "open";
       resolve(sessionId);
@@ -119,6 +138,7 @@ export function openLocalTransportSession(target: TransportTarget): Promise<stri
     });
 
     ws.on("close", (code: number, reason?: Buffer | string) => {
+      clearTimeout(openTimeout);
       const shouldEmitClose = session.state === "open" || session.state === "closing";
       session.state = "closed";
       sessions.delete(sessionId);
@@ -139,6 +159,7 @@ export function openLocalTransportSession(target: TransportTarget): Promise<stri
     });
 
     ws.on("error", (err: Error) => {
+      clearTimeout(openTimeout);
       if (!openSettled) {
         finalizeOpenFailure(`连接 ${describeTransportTarget(target)} 失败：${err.message}`);
         return;
@@ -187,6 +208,7 @@ export function closeLocalTransportSession(sessionId: string): void {
 
   try {
     if (session.ws.readyState === WebSocket.CONNECTING) {
+      emitTransportEvent({ sessionId, kind: "close", code: 1006, reason: "" });
       session.state = "closed";
       session.ws.terminate();
     } else {

@@ -39,9 +39,10 @@ export async function installCli(): Promise<InstallStatus> {
     // Generate a thin .cmd trampoline that delegates to the bundled shim.
     // Only the app install path is baked in — internal details (asar layout,
     // entrypoint scripts) live in the bundled shim and update with the app.
+    const escapedShimPath = shimPath.replace(/[)&]/g, "^$&");
     const cmdContent = [
       "@echo off",
-      `set "BUNDLED_CLI=${shimPath}"`,
+      `set "BUNDLED_CLI=${escapedShimPath}"`,
       `if not exist "%BUNDLED_CLI%" (`,
       `  echo ChisaCode CLI not found at %BUNDLED_CLI% - is ChisaCode installed? 1>&2`,
       `  exit /b 1`,
@@ -52,7 +53,13 @@ export async function installCli(): Promise<InstallStatus> {
     await fs.writeFile(targetPath, cmdContent, "utf-8");
   } else {
     if (await pathOrSymlinkExists(targetPath)) {
-      await fs.unlink(targetPath);
+      try {
+        await fs.unlink(targetPath);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw e;
+        }
+      }
     }
     await fs.symlink(installSourcePath, targetPath);
   }

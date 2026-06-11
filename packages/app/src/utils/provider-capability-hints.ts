@@ -49,19 +49,6 @@ const PROVIDER_HINT_OVERRIDES: Record<
   opencode: {
     mcp: true,
   },
-  goose: {
-    mcp: true,
-    subagents: true,
-  },
-  cline: {
-    permissions: true,
-    mcp: true,
-    headless: false,
-  },
-  cursor: {
-    sandbox: false,
-    headless: false,
-  },
 };
 
 const PROVIDER_HINT_ALIASES: Record<string, readonly string[]> = {

@@ -120,7 +120,18 @@ export function registerNotificationHandlers(): void {
       activeNotifications.delete(notification);
     });
 
-    notification.show();
+    const cleanupTimeout = setTimeout(() => {
+      activeNotifications.delete(notification);
+    }, 30_000);
+
+    try {
+      notification.show();
+    } catch {
+      clearTimeout(cleanupTimeout);
+      activeNotifications.delete(notification);
+      return false;
+    }
+
     return true;
   };
 

@@ -2141,6 +2141,8 @@ export class Session {
         return this.handleRefreshProvidersSnapshotRequest(msg);
       case "provider_diagnostic_request":
         return this.handleProviderDiagnosticRequest(msg);
+      case "provider.tooling.run.request":
+        return this.handleProviderToolingActionRequest(msg);
       default:
         return undefined;
     }
@@ -3941,6 +3943,39 @@ export class Session {
           requestType: msg.type,
           error: `Failed to get provider diagnostic: ${err.message}`,
           code: "provider_diagnostic_failed",
+        },
+      });
+    }
+  }
+
+  private async handleProviderToolingActionRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.tooling.run.request" }>,
+  ): Promise<void> {
+    try {
+      const result = await this.providerSnapshotManager.runProviderToolingAction(
+        msg.provider,
+        msg.action,
+      );
+      this.emit({
+        type: "provider.tooling.run.response",
+        payload: {
+          ...result,
+          requestId: msg.requestId,
+        },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.sessionLogger.error(
+        { err, provider: msg.provider, action: msg.action },
+        `Failed to run provider tooling action for ${msg.provider}`,
+      );
+      this.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Failed to ${msg.action} provider: ${err.message}`,
+          code: "provider_tooling_action_failed",
         },
       });
     }

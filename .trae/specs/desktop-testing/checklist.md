@@ -1,0 +1,20 @@
+- [x] daemon-manager.ts: `DAEMON_PID_FILENAMES` 无重复元素
+- [x] daemon-manager.ts: `open_local_daemon_transport` / `close_local_daemon_transport` 的类型安全
+- [x] daemon-manager.ts: `isProcessRunning` 对 `EPERM` 正确处理
+- [x] local-transport.ts: CONNECTING 状态 terminate 后 renderer 收到 close 事件
+- [x] local-transport.ts: session 有超时清理机制
+- [x] auto-updater.ts: `downloading` 标志防止并发下载
+- [x] auto-updater.ts: `resolveStagingUserId` 写入失败时行为稳定
+- [x] auto-updater.ts: 下载出错后 `cachedUpdateInfo` 正确重置
+- [x] login-shell-env.ts: `process.execPath` 含特殊字符时安全
+- [x] login-shell-env.ts: `spawnSync` 被信号终止时有日志记录
+- [x] notifications.ts: `activeNotifications` 无泄漏
+- [x] dialogs.ts: 无 `getFocusedWindow()!` 非空断言
+- [x] cli-install/install.ts: Windows `.cmd` 脚本正确转义特殊字符
+- [x] cli-install/install.ts: 无 TOCTOU race
+- [x] skills/sync.ts: 符号链接不导致无限递归
+- [x] skills/sync.ts: 同步后目标端无残留旧文件
+- [x] desktop 包 typecheck 通过
+- [x] desktop 包 lint 通过
+- [x] desktop 包测试通过
+- [x] 全仓库 typecheck 通过

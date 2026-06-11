@@ -34,14 +34,19 @@ function resolveDialogType(kind: AskOptions["kind"]): "warning" | "error" | "que
   return "question";
 }
 
+function getFocusedWindowSafe(): BrowserWindow | null {
+  return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+}
+
 export function registerDialogHandlers(handlerOptions: DialogHandlerOptions = {}): void {
   const getLanguage = async () => (await handlerOptions.getLanguage?.()) ?? "zh-CN";
 
   const ask = async (event: Electron.IpcMainInvokeEvent, message: string, options?: AskOptions) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = BrowserWindow.fromWebContents(event.sender) ?? getFocusedWindowSafe();
+    if (!win) return false;
     const language = await getLanguage();
     const t = (key: DesktopTranslationKey) => translateDesktop(language, key);
-    const result = await dialog.showMessageBox(win ?? BrowserWindow.getFocusedWindow()!, {
+    const result = await dialog.showMessageBox(win, {
       type: resolveDialogType(options?.kind),
       title: options?.title ?? t("dialog.confirm"),
       message,
@@ -57,10 +62,11 @@ export function registerDialogHandlers(handlerOptions: DialogHandlerOptions = {}
     message: string,
     options: AskWithCheckboxOptions,
   ) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = BrowserWindow.fromWebContents(event.sender) ?? getFocusedWindowSafe();
+    if (!win) return { confirmed: false, dontAskAgain: false };
     const language = await getLanguage();
     const t = (key: DesktopTranslationKey) => translateDesktop(language, key);
-    const result = await dialog.showMessageBox(win ?? BrowserWindow.getFocusedWindow()!, {
+    const result = await dialog.showMessageBox(win, {
       type: resolveDialogType(options.kind),
       title: options.title ?? t("dialog.confirm"),
       message,
@@ -77,13 +83,14 @@ export function registerDialogHandlers(handlerOptions: DialogHandlerOptions = {}
   };
 
   const open = async (event: Electron.IpcMainInvokeEvent, options?: OpenOptions) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
+    const win = BrowserWindow.fromWebContents(event.sender) ?? getFocusedWindowSafe();
+    if (!win) return null;
     const properties: Electron.OpenDialogOptions["properties"] = [];
     if (options?.directory) properties.push("openDirectory");
     if (options?.multiple) properties.push("multiSelections");
     if (!options?.directory) properties.push("openFile");
 
-    const result = await dialog.showOpenDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+    const result = await dialog.showOpenDialog(win, {
       title: options?.title,
       defaultPath: options?.defaultPath,
       properties,

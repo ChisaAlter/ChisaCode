@@ -211,31 +211,6 @@ export async function serveJson(page: Page, url: string, body: unknown): Promise
   });
 }
 
-export async function openAddProviderModal(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Add provider", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Search providers" })).toBeVisible();
-}
-
-export async function findAcpCatalogProvider(page: Page, providerName: string): Promise<void> {
-  await page.getByRole("textbox", { name: "Search providers" }).fill(providerName);
-  await expect(page.getByText(providerName, { exact: true })).toBeVisible();
-}
-
-export async function installAcpCatalogProvider(page: Page, providerName: string): Promise<void> {
-  await findAcpCatalogProvider(page, providerName);
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Search providers" })).toHaveCount(0);
-}
-
-export async function expectProviderInstalledInSettings(
-  page: Page,
-  providerName: string,
-): Promise<void> {
-  await expect(
-    page.getByRole("button", { name: `${providerName} provider details`, exact: true }),
-  ).toBeVisible();
-}
-
 export async function expectHostNoLocalOnlyRows(page: Page): Promise<void> {
   await expect(page.getByTestId("host-page-pair-device-row")).toHaveCount(0);
   await expect(page.getByTestId("host-page-daemon-lifecycle-card")).toHaveCount(0);

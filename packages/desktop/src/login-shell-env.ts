@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { userInfo } from "node:os";
 import { basename } from "node:path";
 
-const RESOLVE_TIMEOUT_MS = 10_000;
+const RESOLVE_TIMEOUT_MS = 5_000;
 
 function getSystemShell(): string {
   const shell = process.env.SHELL;
@@ -36,17 +36,19 @@ function resolveShellEnv(): Record<string, string> | undefined {
   let command: string;
   let shellArgs: string[];
 
+  const execPath = process.execPath.replace(/'/g, "'\\''");
+
   if (/^(?:pwsh|powershell)(?:-preview)?$/.test(name)) {
-    command = `& '${process.execPath}' -p '''${mark}'' + JSON.stringify(process.env) + ''${mark}'''`;
+    command = `& '${execPath}' -p '''${mark}'' + JSON.stringify(process.env) + ''${mark}'''`;
     shellArgs = ["-Login", "-Command"];
   } else if (name === "nu") {
-    command = `^'${process.execPath}' -p '"${mark}" + JSON.stringify(process.env) + "${mark}"'`;
+    command = `^'${execPath}' -p '"${mark}" + JSON.stringify(process.env) + "${mark}"'`;
     shellArgs = ["-i", "-l", "-c"];
   } else if (name === "xonsh") {
     command = `import os, json; print("${mark}", json.dumps(dict(os.environ)), "${mark}")`;
     shellArgs = ["-i", "-l", "-c"];
   } else {
-    command = `'${process.execPath}' -p '"${mark}" + JSON.stringify(process.env) + "${mark}"'`;
+    command = `'${execPath}' -p '"${mark}" + JSON.stringify(process.env) + "${mark}"'`;
     if (name === "tcsh" || name === "csh") {
       shellArgs = ["-ic"];
     } else {
@@ -71,6 +73,10 @@ function resolveShellEnv(): Record<string, string> | undefined {
   });
 
   if (result.status !== 0 && result.status !== null) return undefined;
+  if (result.status === null) {
+    console.error("[login-shell-env] Shell env resolution terminated by signal");
+    return undefined;
+  }
   if (!result.stdout) return undefined;
 
   const match = regex.exec(result.stdout);

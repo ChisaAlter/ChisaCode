@@ -92,6 +92,13 @@ export interface ProviderSnapshotEntry {
   label?: string;
   description?: string;
   defaultModeId?: string | null;
+  installedVersion?: string | null;
+  latestVersion?: string | null;
+  versionStatus?: "unknown" | "not-installed" | "current" | "outdated";
+  packageName?: string;
+  checkedAt?: string;
+  installAvailable?: boolean;
+  updateAvailable?: boolean;
 }
 
 export interface AgentCreateConfigParent {

@@ -142,7 +142,7 @@ function isProcessRunning(pid: number): boolean {
     return true;
   } catch (err) {
     if (typeof err === "object" && err !== null && "code" in err && err.code === "EPERM") {
-      return true;
+      return false;
     }
     return false;
   }
@@ -560,19 +560,34 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     delete_attachment_file: (args) => deleteManagedAttachmentFile(args ?? {}),
     garbage_collect_attachment_files: (args) => garbageCollectManagedAttachmentFiles(args ?? {}),
     open_local_daemon_transport: async (args) => {
+      if (
+        !isRecord(args) ||
+        typeof args.transportPath !== "string" ||
+        (args.transportType !== "socket" && args.transportType !== "pipe")
+      ) {
+        throw new Error("Invalid arguments for open_local_daemon_transport");
+      }
       const target = args as { transportType: "socket" | "pipe"; transportPath: string };
       return await openLocalTransportSession(target);
     },
     send_local_daemon_transport_message: async (args) => {
+      if (
+        !isRecord(args) ||
+        typeof args.sessionId !== "string" ||
+        (args.text !== undefined && typeof args.text !== "string") ||
+        (args.binaryBase64 !== undefined && typeof args.binaryBase64 !== "string")
+      ) {
+        throw new Error("Invalid arguments for send_local_daemon_transport_message");
+      }
       await sendLocalTransportMessage(
         args as { sessionId: string; text?: string; binaryBase64?: string },
       );
     },
     close_local_daemon_transport: (args) => {
-      const sessionId =
-        typeof args === "object" && args !== null && "sessionId" in args
-          ? (args as { sessionId: string }).sessionId
-          : "";
+      if (!isRecord(args) || typeof args.sessionId !== "string") {
+        throw new Error("Invalid arguments for close_local_daemon_transport");
+      }
+      const sessionId = args.sessionId;
       if (sessionId) closeLocalTransportSession(sessionId);
     },
     check_app_update: async (args) => {

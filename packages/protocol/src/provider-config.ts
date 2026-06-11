@@ -70,14 +70,14 @@ export const ProviderOverrideSchema = z
   })
   .strict();
 
-const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi"] as const;
+const BUILTIN_PROVIDER_IDS = ["claude", "codex", "opencode", "pi", "kimi"] as const;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
 export const ProviderOverridesSchema = z
   .record(ProviderOverrideSchema)
   .superRefine((providers, ctx) => {
     const builtinProviderIdSet = new Set<string>(BUILTIN_PROVIDER_IDS);
-    const validExtendsValues = new Set<string>([...BUILTIN_PROVIDER_IDS, "acp"]);
+    const validExtendsValues = new Set<string>(BUILTIN_PROVIDER_IDS);
 
     for (const [providerId, provider] of Object.entries(providers)) {
       if (!PROVIDER_ID_PATTERN.test(providerId)) {
@@ -113,11 +113,11 @@ export const ProviderOverridesSchema = z
         });
       }
 
-      if (provider.extends === "acp" && !provider.command) {
+      if (provider.extends === "acp") {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: [providerId, "command"],
-          message: `Provider "${providerId}" extending "acp" must declare command.`,
+          path: [providerId, "extends"],
+          message: `Provider "${providerId}" extends unsupported provider "acp".`,
         });
       }
     }

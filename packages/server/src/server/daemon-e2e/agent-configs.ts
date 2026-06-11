@@ -40,14 +40,6 @@ export const agentConfigs = {
       ask: "auto",
     },
   },
-  copilot: {
-    provider: "copilot",
-    model: "claude-haiku-4.5",
-    modes: {
-      full: "allow-all",
-      ask: "https://agentclientprotocol.com/protocol/session-modes#agent",
-    },
-  },
   opencode: {
     provider: "opencode",
     model: "opencode/big-pickle",

@@ -12,6 +12,7 @@ import type {
   MutableDaemonConfig,
   MutableDaemonConfigPatch,
   ProviderDiagnosticResponseMessage,
+  ProviderToolingActionResponseMessage,
   ProjectPlacementPayload,
   RefreshProvidersSnapshotResponseMessage,
   SendAgentMessageRequest,
@@ -272,6 +273,7 @@ export type ChisaCodeProviderSnapshotUpdate = Extract<
 >["payload"];
 export type ChisaCodeProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
 export type ChisaCodeProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
+export type ChisaCodeProviderToolingActionResult = ProviderToolingActionResponseMessage["payload"];
 
 export interface ChisaCodeProviderListOptions {
   cwd?: string;
@@ -288,7 +290,8 @@ export interface ChisaCodeProviderActions {
   codex(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   claude(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   opencode(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
-  copilot(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  pi(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  kimi(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   config(
     provider: ChisaCodeAgentProvider,
     input?: ChisaCodeProviderConfigInput,
@@ -312,6 +315,11 @@ export interface ChisaCodeProviderActions {
     provider: ChisaCodeAgentProvider,
     options?: { requestId?: string },
   ): Promise<ChisaCodeProviderDiagnosticResult>;
+  toolingAction(
+    provider: ChisaCodeAgentProvider,
+    action: "install" | "update",
+    options?: { requestId?: string },
+  ): Promise<ChisaCodeProviderToolingActionResult>;
   subscribe(handler: (update: ChisaCodeProviderSnapshotUpdate) => void): () => void;
 }
 
@@ -385,7 +393,8 @@ export function createChisaCodeClient(config: ChisaCodeClientConfig): ChisaCodeC
       codex: (input) => providerConfig("codex", input),
       claude: (input) => providerConfig("claude", input),
       opencode: (input) => providerConfig("opencode", input),
-      copilot: (input) => providerConfig("copilot", input),
+      pi: (input) => providerConfig("pi", input),
+      kimi: (input) => providerConfig("kimi", input),
       config: (provider, input) => providerConfig(provider, input),
       listModels: (provider, options) => daemonClient.listProviderModels(provider, options),
       listModes: (provider, options) => daemonClient.listProviderModes(provider, options),
@@ -395,6 +404,8 @@ export function createChisaCodeClient(config: ChisaCodeClientConfig): ChisaCodeC
       snapshot: (options) => daemonClient.getProvidersSnapshot(options),
       refresh: (options) => daemonClient.refreshProvidersSnapshot(options),
       diagnostic: (provider, options) => daemonClient.getProviderDiagnostic(provider, options),
+      toolingAction: (provider, action, options) =>
+        daemonClient.runProviderToolingAction(provider, action, options),
       subscribe: (handler) =>
         daemonClient.on("providers_snapshot_update", (message) => {
           handler(message.payload);
