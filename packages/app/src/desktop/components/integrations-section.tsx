@@ -1,11 +1,13 @@
-import { useCallback, useMemo } from "react";
-import { Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { ArrowUpRight, Terminal, Blocks, Check } from "lucide-react-native";
+import { ArrowUpRight, Terminal, Blocks, Check, Download } from "lucide-react-native";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { getProviderIcon } from "@/components/provider-icons";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
@@ -14,13 +16,33 @@ import {
   type SkillsStatus,
 } from "@/desktop/daemon/desktop-daemon";
 import { useCliInstall, useSkillsStatus } from "@/desktop/hooks/use-install-status";
+import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import {
+  getAcpProviderCatalog,
+  type AcpProviderCatalogItem,
+} from "@/hooks/use-acp-provider-catalog";
 import { useTranslation } from "react-i18next";
+import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 
 const CLI_DOCS_URL = "https://chisacode.sh/docs/cli";
 const SKILLS_DOCS_URL = "https://chisacode.sh/docs/skills";
 const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
 
 const OP_KIND_ORDER: Record<SkillOp["kind"], number> = { add: 0, update: 1, delete: 2 };
+
+export type AgentToolAction = "check" | "install" | "update" | "reinstall";
+type AgentToolStatus = "checking" | "not-installed" | "current" | "outdated" | "unknown";
+type AgentToolVersionValue = string | "not-installed" | "not-checked" | "unknown";
+
+export interface AgentToolVersionView {
+  currentVersion: AgentToolVersionValue;
+  latestVersion: AgentToolVersionValue;
+  status: AgentToolStatus;
+  actions: AgentToolAction[];
+  checkedAt: string | null;
+}
 
 function formatUpdateMessage(
   ops: readonly SkillOp[],
@@ -152,58 +174,65 @@ export function IntegrationsSection() {
   const skillsState = skillsStatus?.state ?? null;
 
   return (
-    <SettingsSection title={t("settings.integrations.title")} trailing={trailing}>
-      <View style={settingsStyles.card}>
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <View style={styles.rowTitleRow}>
-              <Terminal size={theme.iconSize.md} color={theme.colors.foreground} />
-              <Text style={settingsStyles.rowTitle}>{t("settings.integrations.commandLine")}</Text>
-            </View>
-            <Text style={settingsStyles.rowHint}>{t("settings.integrations.commandLineHint")}</Text>
-          </View>
-          {cliStatus?.installed ? (
-            <View style={styles.installedLabel}>
-              <Check size={14} color={theme.colors.foregroundMuted} />
-              <Text style={styles.mutedText}>{t("settings.integrations.installed")}</Text>
-            </View>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onPress={handleInstallCli}
-              disabled={isInstallingCli}
-            >
-              {isInstallingCli
-                ? t("settings.integrations.installing")
-                : t("settings.integrations.install")}
-            </Button>
-          )}
-        </View>
-        <View style={ROW_WITH_BORDER_STYLE}>
-          <View style={settingsStyles.rowContent}>
-            <View style={styles.rowTitleRow}>
-              <Blocks size={theme.iconSize.md} color={theme.colors.foreground} />
-              <Text style={settingsStyles.rowTitle}>
-                {t("settings.integrations.orchestrationSkills")}
+    <>
+      <SettingsSection title={t("settings.integrations.title")} trailing={trailing}>
+        <View style={settingsStyles.card}>
+          <View style={settingsStyles.row}>
+            <View style={settingsStyles.rowContent}>
+              <View style={styles.rowTitleRow}>
+                <Terminal size={theme.iconSize.md} color={theme.colors.foreground} />
+                <Text style={settingsStyles.rowTitle}>
+                  {t("settings.integrations.commandLine")}
+                </Text>
+              </View>
+              <Text style={settingsStyles.rowHint}>
+                {t("settings.integrations.commandLineHint")}
               </Text>
             </View>
-            <Text style={settingsStyles.rowHint}>
-              {skillsState === "drift"
-                ? t("settings.integrations.skillsDriftHint")
-                : t("settings.integrations.skillsUpToDateHint")}
-            </Text>
+            {cliStatus?.installed ? (
+              <View style={styles.installedLabel}>
+                <Check size={14} color={theme.colors.foregroundMuted} />
+                <Text style={styles.mutedText}>{t("settings.integrations.installed")}</Text>
+              </View>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onPress={handleInstallCli}
+                disabled={isInstallingCli}
+              >
+                {isInstallingCli
+                  ? t("settings.integrations.installing")
+                  : t("settings.integrations.install")}
+              </Button>
+            )}
           </View>
-          <SkillsActions
-            state={skillsState}
-            isWorking={isSkillsWorking}
-            onInstall={handleInstallSkills}
-            onUpdate={handleUpdateSkills}
-            onUninstall={handleUninstallSkills}
-          />
+          <View style={ROW_WITH_BORDER_STYLE}>
+            <View style={settingsStyles.rowContent}>
+              <View style={styles.rowTitleRow}>
+                <Blocks size={theme.iconSize.md} color={theme.colors.foreground} />
+                <Text style={settingsStyles.rowTitle}>
+                  {t("settings.integrations.orchestrationSkills")}
+                </Text>
+              </View>
+              <Text style={settingsStyles.rowHint}>
+                {skillsState === "drift"
+                  ? t("settings.integrations.skillsDriftHint")
+                  : t("settings.integrations.skillsUpToDateHint")}
+              </Text>
+            </View>
+            <SkillsActions
+              state={skillsState}
+              isWorking={isSkillsWorking}
+              onInstall={handleInstallSkills}
+              onUpdate={handleUpdateSkills}
+              onUninstall={handleUninstallSkills}
+            />
+          </View>
         </View>
-      </View>
-    </SettingsSection>
+      </SettingsSection>
+      <AgentToolsSection />
+    </>
   );
 }
 
@@ -253,6 +282,316 @@ function SkillsActions({ state, isWorking, onInstall, onUpdate, onUninstall }: S
   );
 }
 
+function cleanVersion(version: string | null | undefined): string | null {
+  const trimmed = version?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+function hasInstalledVersion(entry: ProviderSnapshotEntry): boolean {
+  return cleanVersion(entry.installedVersion) !== null;
+}
+
+export function getAgentToolVersionView(
+  entry: ProviderSnapshotEntry | undefined,
+): AgentToolVersionView {
+  if (!entry) {
+    return {
+      currentVersion: "unknown",
+      latestVersion: "not-checked",
+      status: "checking",
+      actions: ["check"],
+      checkedAt: null,
+    };
+  }
+
+  const installedVersion = cleanVersion(entry.installedVersion);
+  const latestVersion = cleanVersion(entry.latestVersion);
+  const resolvedLatestVersion =
+    latestVersion ?? (installedVersion !== null || entry.checkedAt ? "unknown" : "not-checked");
+  const isNotInstalled =
+    entry.status === "unavailable" ||
+    entry.versionStatus === "not-installed" ||
+    (entry.installAvailable === true && installedVersion === null);
+
+  if (isNotInstalled) {
+    return {
+      currentVersion: "not-installed",
+      latestVersion: resolvedLatestVersion,
+      status: "not-installed",
+      actions: ["check", "install"],
+      checkedAt: entry.checkedAt ?? null,
+    };
+  }
+
+  if (entry.versionStatus === "outdated" || entry.updateAvailable === true) {
+    return {
+      currentVersion: installedVersion ?? "unknown",
+      latestVersion: resolvedLatestVersion,
+      status: "outdated",
+      actions: ["check", "update", "reinstall"],
+      checkedAt: entry.checkedAt ?? null,
+    };
+  }
+
+  if (entry.versionStatus === "current") {
+    return {
+      currentVersion: installedVersion ?? "unknown",
+      latestVersion: resolvedLatestVersion,
+      status: "current",
+      actions: ["check", "reinstall"],
+      checkedAt: entry.checkedAt ?? null,
+    };
+  }
+
+  return {
+    currentVersion: installedVersion ?? "unknown",
+    latestVersion: resolvedLatestVersion,
+    status: "unknown",
+    actions: ["check", hasInstalledVersion(entry) ? "reinstall" : "install"],
+    checkedAt: entry.checkedAt ?? null,
+  };
+}
+
+function formatAgentToolVersion(
+  version: AgentToolVersionValue,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (version === "not-installed") return t("providers.notInstalled");
+  if (version === "not-checked") return t("settings.integrations.versionNotChecked");
+  if (version === "unknown") return t("settings.integrations.versionUnknown");
+  return version.startsWith("v") ? version : `v${version}`;
+}
+
+function getAgentToolStatusLabel(
+  status: AgentToolStatus,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  switch (status) {
+    case "checking":
+      return t("settings.integrations.checkingLatestVersion");
+    case "not-installed":
+      return t("providers.notInstalled");
+    case "current":
+      return t("settings.integrations.versionCurrent");
+    case "outdated":
+      return t("settings.integrations.versionOutdated");
+    case "unknown":
+      return t("settings.integrations.versionUnknown");
+  }
+}
+
+function formatCheckedAt(
+  checkedAt: string | null,
+  t: ReturnType<typeof useTranslation>["t"],
+): string | null {
+  if (!checkedAt) return null;
+  const date = new Date(checkedAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return t("settings.integrations.checkedAt", {
+    time: date.toLocaleString(),
+  });
+}
+
+interface AgentToolRowProps {
+  catalogEntry: AcpProviderCatalogItem;
+  providerEntry: ProviderSnapshotEntry | undefined;
+  isFirst: boolean;
+  isWorking: boolean;
+  onCheck: (providerId: string) => void;
+  onToolingAction: (providerId: string, action: "install" | "update") => void;
+}
+
+function AgentToolRow({
+  catalogEntry,
+  providerEntry,
+  isFirst,
+  isWorking,
+  onCheck,
+  onToolingAction,
+}: AgentToolRowProps) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const ProviderIcon = getProviderIcon(catalogEntry.id);
+  const versionView = getAgentToolVersionView(providerEntry);
+  const rowStyle = useMemo(
+    () => [settingsStyles.row, !isFirst && settingsStyles.rowBorder],
+    [isFirst],
+  );
+  const status = getAgentToolStatusLabel(versionView.status, t);
+  const currentVersion = formatAgentToolVersion(versionView.currentVersion, t);
+  const latestVersion = formatAgentToolVersion(versionView.latestVersion, t);
+  const checkedAt = formatCheckedAt(versionView.checkedAt, t);
+  const hasAction = useCallback(
+    (action: AgentToolAction) => versionView.actions.includes(action),
+    [versionView.actions],
+  );
+  const handleCheck = useCallback(() => onCheck(catalogEntry.id), [catalogEntry.id, onCheck]);
+  const handleInstall = useCallback(
+    () => onToolingAction(catalogEntry.id, "install"),
+    [catalogEntry.id, onToolingAction],
+  );
+  const handleUpdate = useCallback(
+    () => onToolingAction(catalogEntry.id, "update"),
+    [catalogEntry.id, onToolingAction],
+  );
+  const downloadIcon = useMemo(
+    () => <Download size={14} color={theme.colors.foreground} />,
+    [theme.colors.foreground],
+  );
+
+  return (
+    <View style={rowStyle} accessibilityLabel={`${catalogEntry.title} agent tool`}>
+      <View style={settingsStyles.rowContent}>
+        <View style={styles.rowTitleRow}>
+          <ProviderIcon size={theme.iconSize.md} color={theme.colors.foreground} />
+          <Text style={settingsStyles.rowTitle}>{catalogEntry.title}</Text>
+        </View>
+        <View style={styles.versionColumn}>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.integrations.currentVersion", { version: currentVersion })}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.integrations.latestVersion", { version: latestVersion })}
+          </Text>
+          <Text style={styles.statusText}>{status}</Text>
+          {checkedAt ? <Text style={styles.checkedAtText}>{checkedAt}</Text> : null}
+        </View>
+      </View>
+      <View style={styles.actionsRow}>
+        {isWorking ? <LoadingSpinner size={14} color={theme.colors.foregroundMuted} /> : null}
+        <Button
+          variant="outline"
+          size="sm"
+          onPress={handleCheck}
+          disabled={isWorking}
+          accessibilityLabel={t("settings.integrations.checkAgentLatestVersion", {
+            provider: catalogEntry.title,
+          })}
+        >
+          {t("settings.integrations.checkLatestVersion")}
+        </Button>
+        {hasAction("update") ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={handleUpdate}
+            disabled={isWorking}
+            accessibilityLabel={t("settings.integrations.updateAgentTool", {
+              provider: catalogEntry.title,
+            })}
+          >
+            {t("providers.update")}
+          </Button>
+        ) : null}
+        {hasAction("install") ? (
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={downloadIcon}
+            onPress={handleInstall}
+            disabled={isWorking}
+            accessibilityLabel={t("settings.integrations.installAgentTool", {
+              provider: catalogEntry.title,
+            })}
+          >
+            {t("providers.install")}
+          </Button>
+        ) : null}
+        {hasAction("reinstall") ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={handleInstall}
+            disabled={isWorking}
+            accessibilityLabel={t("settings.integrations.reinstallAgentTool", {
+              provider: catalogEntry.title,
+            })}
+          >
+            {t("settings.integrations.reinstall")}
+          </Button>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function AgentToolsSection() {
+  const { t } = useTranslation();
+  const localServerId = useLocalDaemonServerId();
+  const client = useHostRuntimeClient(localServerId ?? "");
+  const isConnected = useHostRuntimeIsConnected(localServerId ?? "");
+  const { entries, refresh } = useProvidersSnapshot(localServerId, {
+    enabled: Boolean(localServerId),
+  });
+  const [workingProviderId, setWorkingProviderId] = useState<string | null>(null);
+  const [checkingProviderId, setCheckingProviderId] = useState<string | null>(null);
+  const catalogEntries = useMemo(() => getAcpProviderCatalog(), []);
+  const entryByProvider = useMemo(
+    () => new Map((entries ?? []).map((entry) => [entry.provider, entry])),
+    [entries],
+  );
+  const handleCheck = useCallback(
+    (providerId: string) => {
+      if (checkingProviderId || workingProviderId) return;
+      setCheckingProviderId(providerId);
+      void refresh([providerId]).finally(() => {
+        setCheckingProviderId((current) => (current === providerId ? null : current));
+      });
+    },
+    [checkingProviderId, refresh, workingProviderId],
+  );
+  const handleToolingAction = useCallback(
+    (providerId: string, action: "install" | "update") => {
+      if (!client || workingProviderId || checkingProviderId) return;
+      setWorkingProviderId(providerId);
+      void client
+        .runProviderToolingAction(providerId, action)
+        .then((result) => {
+          if (!result.success) {
+            Alert.alert(t("providers.installFailed"), result.stderr || result.stdout);
+          }
+          return refresh([providerId]);
+        })
+        .catch((error) => {
+          Alert.alert(
+            t("providers.installFailed"),
+            error instanceof Error ? error.message : String(error),
+          );
+        })
+        .finally(() => {
+          setWorkingProviderId((current) => (current === providerId ? null : current));
+        });
+    },
+    [checkingProviderId, client, refresh, t, workingProviderId],
+  );
+
+  return (
+    <SettingsSection title={t("settings.integrations.agentTools")}>
+      {!localServerId || !isConnected ? (
+        <View style={EMPTY_CARD_STYLE}>
+          <Text style={styles.emptyText}>{t("settings.integrations.connectLocalDaemon")}</Text>
+        </View>
+      ) : (
+        <View style={settingsStyles.card}>
+          {catalogEntries.map((catalogEntry, index) => (
+            <AgentToolRow
+              key={catalogEntry.id}
+              catalogEntry={catalogEntry}
+              providerEntry={entryByProvider.get(catalogEntry.id)}
+              isFirst={index === 0}
+              isWorking={
+                workingProviderId === catalogEntry.id || checkingProviderId === catalogEntry.id
+              }
+              onCheck={handleCheck}
+              onToolingAction={handleToolingAction}
+            />
+          ))}
+        </View>
+      )}
+    </SettingsSection>
+  );
+}
+
 const styles = StyleSheet.create((theme) => ({
   headerLinks: {
     flexDirection: "row",
@@ -276,6 +615,29 @@ const styles = StyleSheet.create((theme) => ({
   actionsRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
     gap: theme.spacing[2],
   },
+  versionColumn: {
+    gap: theme.spacing[1],
+  },
+  statusText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.xs,
+  },
+  checkedAtText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  emptyCard: {
+    padding: theme.spacing[4],
+    alignItems: "center",
+  },
+  emptyText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
 }));
+
+const EMPTY_CARD_STYLE = [settingsStyles.card, styles.emptyCard];

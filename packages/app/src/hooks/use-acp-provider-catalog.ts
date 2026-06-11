@@ -1,19 +1,11 @@
+import { useCallback, useState } from "react";
 import type { MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
-
-export interface AcpProviderCatalogEntry {
-  id: string;
-  title: string;
-  description: string;
-  version: string;
-  installLink: string;
-  command: readonly [string, ...string[]];
-  env?: Readonly<Record<string, string>>;
-}
+import { ACP_PROVIDER_CATALOG, type AcpProviderCatalogEntry } from "@/data/acp-provider-catalog";
 
 export type AcpProviderCatalogItem = AcpProviderCatalogEntry;
 
 export function getAcpProviderCatalog(): AcpProviderCatalogItem[] {
-  return [];
+  return ACP_PROVIDER_CATALOG;
 }
 
 export function buildAcpProviderConfigPatch(
@@ -22,7 +14,7 @@ export function buildAcpProviderConfigPatch(
   return {
     providers: {
       [entry.id]: {
-        extends: "acp",
+        enabled: true,
         label: entry.title,
         description: entry.description,
         command: [...entry.command],
@@ -33,10 +25,9 @@ export function buildAcpProviderConfigPatch(
 }
 
 export function useAcpProviderCatalog() {
-  return {
-    entries: [] as AcpProviderCatalogItem[],
-    loading: false,
-    error: null,
-    refetch: async () => [],
-  };
+  const [entries] = useState<AcpProviderCatalogItem[]>(ACP_PROVIDER_CATALOG);
+
+  const refetch = useCallback(async () => entries, [entries]);
+
+  return { entries, loading: false, error: null, refetch };
 }
