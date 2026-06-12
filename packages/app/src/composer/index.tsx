@@ -105,6 +105,7 @@ import { useGithubSearchQuery } from "@/git/use-github-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
+import { buildAgentStateSelector } from "@/composer/agent-state-selector";
 
 type QueuedMessage = QueuedComposerMessage;
 
@@ -179,17 +180,6 @@ function buildRealtimeVoiceButtonStyle(
   );
 }
 
-function buildAgentStateSelector(serverId: string, agentId: string) {
-  return (state: ReturnType<typeof useSessionStore.getState>) => {
-    const agent = state.sessions[serverId]?.agents?.get(agentId) ?? null;
-    return {
-      status: agent?.status ?? null,
-      contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
-      contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
-      totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
-    };
-  };
-}
 
 function renderContextWindowMeter(
   contextWindowMaxTokens: number | null,
