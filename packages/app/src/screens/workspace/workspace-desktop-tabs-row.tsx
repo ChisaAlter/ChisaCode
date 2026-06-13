@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TITLEBAR_NO_DRAG_VIEW_STYLE } from "@/components/desktop/titlebar-drag-region";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
@@ -708,7 +709,11 @@ export function WorkspaceDesktopTabsRow({
           </TooltipContent>
         </Tooltip>
       </ScrollView>
-      <View style={styles.tabsActions} onLayout={handleTabsActionsLayout}>
+      <View
+        testID="workspace-tabs-actions"
+        style={TABS_ACTIONS_STYLE}
+        onLayout={handleTabsActionsLayout}
+      >
         <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
           <TooltipTrigger
             testID="workspace-new-agent-tab"
@@ -952,6 +957,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   tabsActions: {
+    position: "relative",
+    zIndex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
@@ -1098,6 +1105,8 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
   },
 }));
+
+const TABS_ACTIONS_STYLE = [styles.tabsActions, TITLEBAR_NO_DRAG_VIEW_STYLE];
 
 const TAB_DROP_INDICATOR_BEFORE_STYLE = [styles.tabDropIndicator, styles.tabDropIndicatorBefore];
 const TAB_DROP_INDICATOR_AFTER_STYLE = [styles.tabDropIndicator, styles.tabDropIndicatorAfter];

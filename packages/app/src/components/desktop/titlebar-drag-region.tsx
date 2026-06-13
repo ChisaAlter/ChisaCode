@@ -1,5 +1,6 @@
 import { getIsElectronRuntime } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
+import type { ViewStyle } from "react-native";
 
 /**
  * VS Code-style titlebar drag region for Electron.
@@ -36,6 +37,13 @@ const TOP_RESIZER_STYLE: React.CSSProperties = {
   // @ts-expect-error — WebkitAppRegion is not in CSSProperties
   WebkitAppRegion: "no-drag",
 };
+
+export const TITLEBAR_NO_DRAG_REGION_STYLE: React.CSSProperties = {
+  // @ts-expect-error — WebkitAppRegion is not in CSSProperties
+  WebkitAppRegion: "no-drag",
+};
+
+export const TITLEBAR_NO_DRAG_VIEW_STYLE = TITLEBAR_NO_DRAG_REGION_STYLE as unknown as ViewStyle;
 
 /**
  * Static drag overlay and top-edge resizer. Returns null on non-Electron.

@@ -1,8 +1,14 @@
+import { execFile } from "node:child_process";
 import { open, readFile, unlink, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { hostname } from "node:os";
+import { promisify } from "node:util";
 import { z } from "zod";
+
+const execFileAsync = promisify(execFile);
+const PID_START_TIME_TOLERANCE_MS = 60_000;
+const DEFAULT_LINUX_CLOCK_TICKS_PER_SECOND = 100;
 
 export const pidLockInfoSchema = z.object({
   pid: z.number(),
@@ -43,6 +49,112 @@ function isPidRunning(pid: number): boolean {
   }
 }
 
+async function getWindowsProcessStartedAtMs(pid: number): Promise<number | null> {
+  try {
+    const command = [
+      "$ErrorActionPreference = 'Stop';",
+      `$process = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}";`,
+      "if ($null -eq $process) { exit 2 }",
+      "$process.CreationDate.ToUniversalTime().ToString('o')",
+    ].join(" ");
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", command],
+      { encoding: "utf8", timeout: 2_000, windowsHide: true },
+    );
+    const startedAtMs = Date.parse(stdout.trim());
+    return Number.isFinite(startedAtMs) ? startedAtMs : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseLinuxProcStatStartTicks(stat: string): number | null {
+  const commandEndIndex = stat.lastIndexOf(")");
+  if (commandEndIndex === -1) return null;
+  const fields = stat
+    .slice(commandEndIndex + 2)
+    .trim()
+    .split(/\s+/);
+  const startTicks = Number(fields[19]);
+  return Number.isFinite(startTicks) ? startTicks : null;
+}
+
+async function getLinuxBootTimeMs(): Promise<number | null> {
+  try {
+    const procStat = await readFile("/proc/stat", "utf8");
+    const bootTimeLine = procStat.split("\n").find((line) => line.startsWith("btime "));
+    const bootTimeSeconds = Number(bootTimeLine?.slice("btime ".length).trim());
+    return Number.isFinite(bootTimeSeconds) ? bootTimeSeconds * 1_000 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getLinuxClockTicksPerSecond(): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync("getconf", ["CLK_TCK"], {
+      encoding: "utf8",
+      timeout: 2_000,
+    });
+    const ticksPerSecond = Number(stdout.trim());
+    return Number.isFinite(ticksPerSecond) && ticksPerSecond > 0
+      ? ticksPerSecond
+      : DEFAULT_LINUX_CLOCK_TICKS_PER_SECOND;
+  } catch {
+    return DEFAULT_LINUX_CLOCK_TICKS_PER_SECOND;
+  }
+}
+
+async function getLinuxProcessStartedAtMs(pid: number): Promise<number | null> {
+  try {
+    const stat = await readFile(`/proc/${pid}/stat`, "utf8");
+    const startTicks = parseLinuxProcStatStartTicks(stat);
+    const bootTimeMs = await getLinuxBootTimeMs();
+    if (startTicks === null || bootTimeMs === null) return null;
+    const ticksPerSecond = await getLinuxClockTicksPerSecond();
+    return bootTimeMs + (startTicks / ticksPerSecond) * 1_000;
+  } catch {
+    return null;
+  }
+}
+
+async function getPosixProcessStartedAtMs(pid: number): Promise<number | null> {
+  try {
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "etimes="], {
+      encoding: "utf8",
+      timeout: 2_000,
+      env: { ...process.env, LC_ALL: "C" },
+    });
+    const elapsedSeconds = Number(stdout.trim());
+    return Number.isFinite(elapsedSeconds) ? Date.now() - elapsedSeconds * 1_000 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getProcessStartedAtMs(pid: number): Promise<number | null> {
+  if (process.platform === "win32") {
+    return await getWindowsProcessStartedAtMs(pid);
+  }
+  if (process.platform === "linux") {
+    return await getLinuxProcessStartedAtMs(pid);
+  }
+  return await getPosixProcessStartedAtMs(pid);
+}
+
+async function isPidLockOwnerRunning(lock: PidLockInfo): Promise<boolean> {
+  if (!isPidRunning(lock.pid)) return false;
+
+  const lockStartedAtMs = Date.parse(lock.startedAt);
+  const processStartedAtMs = await getProcessStartedAtMs(lock.pid);
+  if (!Number.isFinite(lockStartedAtMs) || processStartedAtMs === null) {
+    return true;
+  }
+
+  return Math.abs(processStartedAtMs - lockStartedAtMs) <= PID_START_TIME_TOLERANCE_MS;
+}
+
 function getPidFilePath(chisacodeHome: string): string {
   return join(chisacodeHome, "chisacode.pid");
 }
@@ -78,7 +190,7 @@ export async function acquirePidLock(
   // Check if existing lock is stale
   const lockOwnerPid = resolveOwnerPid(options?.ownerPid);
   if (existingLock) {
-    if (isPidRunning(existingLock.pid)) {
+    if (await isPidLockOwnerRunning(existingLock)) {
       if (existingLock.pid === lockOwnerPid) {
         return;
       }
@@ -197,7 +309,7 @@ export async function isLocked(
   if (!info) {
     return { locked: false };
   }
-  if (!isPidRunning(info.pid)) {
+  if (!(await isPidLockOwnerRunning(info))) {
     return { locked: false, info };
   }
   return { locked: true, info };

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -6,6 +6,38 @@ import { describe, expect, test } from "vitest";
 import { acquirePidLock, getPidLockInfo, releasePidLock, updatePidLock } from "./pid-lock.js";
 
 describe("pid-lock ownership", () => {
+  test("reclaims lock when the recorded pid was reused by another process", async () => {
+    const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-pid-lock-reused-"));
+    const ownerPid = process.pid + 10_000;
+
+    try {
+      await writeFile(
+        join(chisacodeHome, "chisacode.pid"),
+        JSON.stringify({
+          pid: process.pid,
+          startedAt: "2000-01-01T00:00:00.000Z",
+          hostname: "old-host",
+          uid: 0,
+          listen: "127.0.0.1:6767",
+        }),
+      );
+
+      await (
+        acquirePidLock as unknown as (
+          home: string,
+          sockPath: string | null,
+          options: { ownerPid: number },
+        ) => Promise<void>
+      )(chisacodeHome, null, { ownerPid });
+
+      const lock = await getPidLockInfo(chisacodeHome);
+      expect(lock?.pid).toBe(ownerPid);
+      expect(lock?.listen).toBeNull();
+    } finally {
+      await rm(chisacodeHome, { recursive: true, force: true });
+    }
+  });
+
   test("writes and releases lock for explicit owner pid", async () => {
     const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-pid-lock-owner-"));
     const ownerPid = process.pid + 10_000;

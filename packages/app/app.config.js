@@ -106,6 +106,7 @@ export default {
       searchPaths: ["../../node_modules", "./node_modules"],
     },
     plugins: [
+      "./plugins/with-android-export-embed-cli",
       "expo-router",
       [
         "expo-camera",

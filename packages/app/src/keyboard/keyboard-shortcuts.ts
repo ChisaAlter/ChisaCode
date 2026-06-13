@@ -493,7 +493,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
 
-  // --- Pane management (mac only) ---
+  // --- Pane management ---
   {
     id: "workspace-pane-split-right-cmd-backslash",
     action: "workspace.pane.split.right",
@@ -507,10 +507,34 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
   {
+    id: "workspace-pane-split-right-ctrl-backslash-non-mac",
+    action: "workspace.pane.split.right",
+    combo: "Ctrl+\\",
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "workspace-pane-split-right",
+      section: "tabs-panes",
+      label: "Split pane right",
+      keys: ["mod", "\\"],
+    },
+  },
+  {
     id: "workspace-pane-split-down-cmd-shift-backslash",
     action: "workspace.pane.split.down",
     combo: "Cmd+Shift+\\",
     when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-pane-split-down",
+      section: "tabs-panes",
+      label: "Split pane down",
+      keys: ["mod", "shift", "\\"],
+    },
+  },
+  {
+    id: "workspace-pane-split-down-ctrl-shift-backslash-non-mac",
+    action: "workspace.pane.split.down",
+    combo: "Ctrl+Shift+\\",
+    when: { mac: false, commandCenter: false, terminal: false },
     help: {
       id: "workspace-pane-split-down",
       section: "tabs-panes",
