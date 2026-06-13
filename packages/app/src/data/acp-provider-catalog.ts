@@ -34,6 +34,14 @@ export const ACP_PROVIDER_CATALOG: AcpProviderCatalogEntry[] = [
     command: ["opencode"],
   },
   {
+    id: "mimocode",
+    title: "MiMoCode",
+    description: "Xiaomi's OpenCode-compatible coding agent",
+    version: "latest",
+    installLink: "https://github.com/XiaomiMiMo/MiMo-Code",
+    command: ["mimo"],
+  },
+  {
     id: "pi",
     title: "Pi",
     description: "Minimal terminal-based coding agent with multi-provider LLM support",

@@ -25,7 +25,7 @@ Your code never leaves your machine. ChisaCode is local-first.
       ┌────────────┼────────────┬────────────┬────────────┐
       │            │            │            │            │
 ┌─────▼─────┐ ┌───▼────┐ ┌──────▼─────┐ ┌────▼─────┐ ┌────▼────┐
-│  Claude   │ │ Codex  │ │  Copilot   │ │ OpenCode │ │   Pi    │
+│  Claude   │ │ Codex  │ │  Copilot   │ │ OpenCode │ │MiMoCode│ │   Pi    │
 │  Agent    │ │ Agent  │ │   Agent    │ │  Agent   │ │ Agent   │
 │  SDK      │ │ Server │ │    ACP     │ │          │ │         │
 └───────────┘ └────────┘ └────────────┘ └──────────┘ └─────────┘
@@ -132,10 +132,6 @@ Electron wrapper for macOS, Linux, and Windows.
 - Native file access for workspace integration
 - Same WebSocket client as mobile app
 
-### `packages/website` — Marketing site
-
-TanStack Router + Cloudflare Workers. Serves chisacode.sh.
-
 ## WebSocket protocol
 
 All clients speak the same WebSocket protocol over a single connection that mixes JSON text frames and a small binary framing for terminal streams. Schemas live in `packages/protocol/src/messages.ts`.
@@ -230,7 +226,7 @@ initializing → idle ⇄ running
 
 Each provider implements the `AgentClient` interface in `agent/agent-sdk-types.ts`. Provider implementations live in `agent/providers/`.
 
-The built-in, user-facing providers are Claude Code, Codex, Copilot, OpenCode, and Pi. Additional adapters exist in the same directory for ACP-compatible agents and internal use:
+The built-in, user-facing providers are Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi. Additional adapters exist in the same directory for ACP-compatible agents and internal use:
 
 | Provider           | Wraps                                | Session format                                     |
 | ------------------ | ------------------------------------ | -------------------------------------------------- |
@@ -238,6 +234,7 @@ The built-in, user-facing providers are Claude Code, Codex, Copilot, OpenCode, a
 | Codex              | Codex AppServer (`codex-app-server`) | `~/.codex/sessions/{date}/rollout-{ts}-{id}.jsonl` |
 | Copilot            | GitHub Copilot via ACP               | Provider-managed                                   |
 | OpenCode           | OpenCode server / CLI                | Provider-managed                                   |
+| MiMoCode           | MiMoCode server / CLI                | Provider-managed                                   |
 | Cursor             | ACP wrapper (`acp-agent`)            | Provider-managed                                   |
 | Generic ACP        | ACP wrapper                          | Provider-managed                                   |
 | Pi                 | Local Pi RPC process                 | Provider-managed                                   |

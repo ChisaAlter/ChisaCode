@@ -32,8 +32,9 @@ import type {
 import { ClaudeAgentClient } from "./providers/claude/agent.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
 import { KimiCodeAgentClient } from "./providers/kimi-code-agent.js";
-import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
+import { MimoCodeAgentClient, OpenCodeAgentClient } from "./providers/opencode-agent.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
+import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
 import { MockLoadTestAgentClient } from "./providers/mock-load-test-agent.js";
 import { MockSlowProviderClient } from "./providers/mock-slow-provider.js";
 import {
@@ -111,6 +112,7 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       customProvider: options?.customProvider,
     }),
   opencode: (logger, runtimeSettings) => new OpenCodeAgentClient(logger, runtimeSettings),
+  mimocode: (logger, runtimeSettings) => new MimoCodeAgentClient(logger, runtimeSettings),
   pi: (logger, runtimeSettings) =>
     new PiRpcAgentClient({
       logger,
@@ -397,7 +399,9 @@ function createRegistryEntry(
   provider: AgentProvider,
   resolved: ResolvedProvider,
 ): ProviderDefinition {
-  const modelClient = resolved.createBaseClient(logger);
+  const shouldCreateMetadataClientEagerly = resolved.definition.id !== "kimi";
+  const modelClient = shouldCreateMetadataClientEagerly ? resolved.createBaseClient(logger) : null;
+  const getModelClient = () => modelClient ?? resolved.createBaseClient(logger);
 
   return {
     ...resolved.definition,
@@ -405,23 +409,22 @@ function createRegistryEntry(
     derivedFromProviderId: resolved.derivedFromProviderId,
     createClient: (providerLogger: Logger) =>
       createResolvedProviderClient(providerLogger, provider, resolved),
-    resolveCreateConfig: modelClient.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
+    resolveCreateConfig: modelClient?.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
     isCreateConfigUnattended:
-      modelClient.isCreateConfigUnattended ?? isDefaultAgentCreateConfigUnattended,
+      modelClient?.isCreateConfigUnattended ?? isDefaultAgentCreateConfigUnattended,
     fetchModels: async (options: ListModelsOptions) =>
       mergeModels(
         provider,
         resolved.profileModels,
         resolved.additionalModels,
-        await modelClient.listModels(options),
+        await getModelClient().listModels(options),
         {
           profileModelsAreAdditive: resolved.profileModelsAreAdditive,
         },
       ),
     fetchModes: async (options: ListModesOptions) => {
-      const modes = modelClient.listModes
-        ? await modelClient.listModes(options)
-        : resolved.definition.modes;
+      const client = getModelClient();
+      const modes = client.listModes ? await client.listModes(options) : resolved.definition.modes;
       return modes.map((mode) => {
         if (mode.icon && mode.colorTier) return mode;
         const definitionMode = resolved.definition.modes.find((d) => d.id === mode.id);
@@ -493,6 +496,134 @@ function buildResolvedBuiltinProviders(
   return resolvedProviders;
 }
 
+function requireCustomProviderLabel(providerId: string, override: ProviderOverride): string {
+  const label = override.label?.trim();
+  if (!label) {
+    throw new Error(`Custom provider '${providerId}' requires a label`);
+  }
+  return label;
+}
+
+function requireCustomProviderExtends(providerId: string, override: ProviderOverride): string {
+  const extendsProvider = override.extends?.trim();
+  if (!extendsProvider) {
+    throw new Error(`Custom provider '${providerId}' requires extends`);
+  }
+  return extendsProvider;
+}
+
+function requireAcpCommand(providerId: string, override: ProviderOverride): [string, ...string[]] {
+  const command = override.command;
+  if (!command || command.length === 0) {
+    throw new Error(`ACP provider '${providerId}' requires a command`);
+  }
+  return command as [string, ...string[]];
+}
+
+function buildCustomAcpDefinition(
+  providerId: string,
+  override: ProviderOverride,
+  label: string,
+): AgentProviderDefinition {
+  return {
+    id: providerId,
+    label,
+    description: override.description ?? "Custom ACP agent provider",
+    defaultModeId: null,
+    modes: [],
+  };
+}
+
+function buildDerivedProviderDefinition(
+  providerId: string,
+  baseDefinition: AgentProviderDefinition,
+  override: ProviderOverride,
+  label: string,
+): AgentProviderDefinition {
+  return {
+    ...baseDefinition,
+    id: providerId,
+    label,
+    description: override.description ?? baseDefinition.description,
+  };
+}
+
+function addResolvedCustomProviders(
+  resolvedProviders: Map<string, ResolvedProvider>,
+  providerOverrides: Record<string, ProviderOverride>,
+  runtimeSettings: AgentProviderRuntimeSettingsMap | undefined,
+  options: Pick<BuildProviderRegistryOptions, "workspaceGitService">,
+): void {
+  for (const [providerId, override] of Object.entries(providerOverrides)) {
+    if (resolvedProviders.has(providerId) || !override.extends) {
+      continue;
+    }
+
+    const label = requireCustomProviderLabel(providerId, override);
+    const extendsProvider = requireCustomProviderExtends(providerId, override);
+    const overrideRuntimeSettings = mergeRuntimeSettings(
+      runtimeSettings?.[providerId],
+      toRuntimeSettings(override),
+    );
+
+    if (extendsProvider === "acp") {
+      const command = requireAcpCommand(providerId, override);
+      resolvedProviders.set(providerId, {
+        definition: buildCustomAcpDefinition(providerId, override, label),
+        runtimeSettings: overrideRuntimeSettings,
+        profileModels: override.models ?? [],
+        additionalModels: override.additionalModels ?? [],
+        profileModelsAreAdditive: false,
+        enabled: override.enabled !== false,
+        derivedFromProviderId: null,
+        createBaseClient: (logger) =>
+          new GenericACPAgentClient({
+            logger,
+            command,
+            env: overrideRuntimeSettings?.env,
+            providerId,
+            label,
+          }),
+      });
+      continue;
+    }
+
+    const baseResolved = resolvedProviders.get(extendsProvider);
+    if (!baseResolved) {
+      throw new Error(`Provider '${providerId}' extends unknown provider '${extendsProvider}'`);
+    }
+    const factory = getProviderClientFactory(extendsProvider);
+    const mergedRuntimeSettings = mergeRuntimeSettings(
+      baseResolved.runtimeSettings,
+      overrideRuntimeSettings,
+    );
+
+    resolvedProviders.set(providerId, {
+      definition: buildDerivedProviderDefinition(
+        providerId,
+        baseResolved.definition,
+        override,
+        label,
+      ),
+      runtimeSettings: mergedRuntimeSettings,
+      profileModels: override.models ?? [],
+      additionalModels: override.additionalModels ?? [],
+      profileModelsAreAdditive: false,
+      enabled: override.enabled !== false,
+      derivedFromProviderId: extendsProvider,
+      createBaseClient: (logger) =>
+        factory(logger, mergedRuntimeSettings, {
+          workspaceGitService: options.workspaceGitService,
+          customProvider: {
+            id: providerId,
+            label,
+            extends: extendsProvider,
+          },
+        }),
+    });
+  }
+}
+
 export function buildProviderRegistry(
   logger: Logger,
   options?: BuildProviderRegistryOptions,
@@ -507,6 +638,9 @@ export function buildProviderRegistry(
     },
     options?.isDev === true,
   );
+  addResolvedCustomProviders(resolvedProviders, providerOverrides, runtimeSettings, {
+    workspaceGitService: options?.workspaceGitService,
+  });
   return Object.fromEntries(
     [...resolvedProviders.entries()].map(([provider, resolved]) => [
       provider,

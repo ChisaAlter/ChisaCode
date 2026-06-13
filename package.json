@@ -29,7 +29,6 @@
     "packages/server",
     "packages/app",
     "packages/relay",
-    "packages/website",
     "packages/desktop",
     "packages/cli"
   ],
@@ -39,7 +38,6 @@
     "dev:server": "npm run build:server-deps && concurrently --kill-others --names protocol,client,server --prefix-colors yellow,blue,cyan \"npm run watch:protocol\" \"npm run watch:client\" \"npm run dev:server:raw\"",
     "dev:server:raw": "npm run dev --workspace=@chisacode/server",
     "dev:app": "npm run start --workspace=@chisacode/app",
-    "dev:website": "npm run dev --workspace=@chisacode/website",
     "postinstall": "node scripts/postinstall-patches.mjs",
     "prepare": "lefthook install --force",
     "build": "npm run build --workspaces --if-present",

@@ -2,7 +2,7 @@
 
 ChisaCode is a mobile app for monitoring and controlling your local AI coding agents from anywhere. Your dev environment, in your pocket. Connects directly to your actual development environment — your code stays on your machine.
 
-**Supported agents:** Claude Code, Codex, GitHub Copilot, OpenCode, and Pi.
+**Supported agents:** Claude Code, Codex, GitHub Copilot, OpenCode, MiMoCode, and Pi.
 
 ## Repository map
 
@@ -13,7 +13,6 @@ This is an npm workspace monorepo:
 - `packages/cli` — Docker-style CLI (`chisacode run/ls/logs/wait`)
 - `packages/relay` — E2E encrypted relay for remote access
 - `packages/desktop` — Electron desktop wrapper
-- `packages/website` — Marketing site (chisacode.sh)
 
 ## Docs
 

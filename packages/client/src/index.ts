@@ -290,6 +290,7 @@ export interface ChisaCodeProviderActions {
   codex(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   claude(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   opencode(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
+  mimocode(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   pi(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   kimi(input?: ChisaCodeProviderConfigInput): ChisaCodeProviderConfig;
   config(
@@ -393,6 +394,7 @@ export function createChisaCodeClient(config: ChisaCodeClientConfig): ChisaCodeC
       codex: (input) => providerConfig("codex", input),
       claude: (input) => providerConfig("claude", input),
       opencode: (input) => providerConfig("opencode", input),
+      mimocode: (input) => providerConfig("mimocode", input),
       pi: (input) => providerConfig("pi", input),
       kimi: (input) => providerConfig("kimi", input),
       config: (provider, input) => providerConfig(provider, input),

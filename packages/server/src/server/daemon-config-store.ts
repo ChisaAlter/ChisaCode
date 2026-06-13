@@ -15,7 +15,7 @@ type MutableDaemonConfig = import("@chisacode/protocol/messages").MutableDaemonC
 type MutableDaemonConfigPatch = import("@chisacode/protocol/messages").MutableDaemonConfigPatch;
 type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOverride;
 
-const MUTABLE_PROVIDER_IDS = new Set(["claude", "codex", "opencode", "pi", "kimi"]);
+const MUTABLE_PROVIDER_IDS = new Set(["claude", "codex", "opencode", "mimocode", "pi", "kimi"]);
 
 interface LoggerLike {
   child(bindings: Record<string, unknown>): LoggerLike;
@@ -74,7 +74,14 @@ export function applyMutableProviderConfigToOverrides(
 
   const nextOverrides: Record<string, ProviderOverride> = { ...baseOverrides };
   for (const [providerId, providerConfig] of Object.entries(mutableProviders ?? {})) {
-    if (!MUTABLE_PROVIDER_IDS.has(providerId)) {
+    const existingOverride = nextOverrides[providerId];
+    const isKnownCustomProvider = existingOverride?.extends !== undefined;
+    const declaresCustomProvider = typeof providerConfig.extends === "string";
+    if (
+      !MUTABLE_PROVIDER_IDS.has(providerId) &&
+      !isKnownCustomProvider &&
+      !declaresCustomProvider
+    ) {
       continue;
     }
     nextOverrides[providerId] = {

@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:f
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-// In CI we often install a single workspace (e.g. server/relay/website). Only apply patches
+// In CI we often install a single workspace (e.g. server/relay). Only apply patches
 // when the patched dependency is actually present.
 const patchedPackages = [
   {

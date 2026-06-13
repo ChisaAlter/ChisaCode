@@ -18,8 +18,6 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Buffer } from "buffer";
 import {
   ArrowLeft,
-  Sun,
-  Moon,
   Monitor,
   ChevronDown,
   Settings,
@@ -46,7 +44,7 @@ import {
   type ServiceUrlBehavior,
   type Settings as EffectiveSettings,
 } from "@/hooks/use-settings";
-import { THEME_SWATCHES } from "@/styles/theme";
+import { THEME_PREVIEWS, type ThemeName } from "@/styles/theme";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -139,31 +137,62 @@ function ThemeIcon({
   size: number;
   color: string;
 }) {
-  switch (theme) {
-    case "light":
-      return <Sun size={size} color={color} />;
-    case "dark":
-      return <Moon size={size} color={color} />;
-    case "auto":
-      return <Monitor size={size} color={color} />;
-    default:
-      return <ThemeSwatch color={THEME_SWATCHES[theme]} size={size} />;
-  }
+  return theme === "auto" ? (
+    <Monitor size={size} color={color} />
+  ) : (
+    <ThemePreview theme={theme} width={size + 12} height={size} />
+  );
 }
 
-function ThemeSwatch({ color, size }: { color: string; size: number }) {
-  const swatchStyle = useMemo(
+function ThemePreview({
+  theme,
+  width,
+  height,
+}: {
+  theme: ThemeName;
+  width: number;
+  height: number;
+}) {
+  const preview = THEME_PREVIEWS[theme];
+  const previewStyle = useMemo(
     () => ({
-      width: size,
-      height: size,
-      borderRadius: size / 2,
-      backgroundColor: color,
+      width,
+      height,
+      borderRadius: 4,
+      backgroundColor: preview.surface,
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.15)",
+      borderColor: preview.border,
+      overflow: "hidden" as const,
     }),
-    [color, size],
+    [height, preview.border, preview.surface, width],
   );
-  return <View style={swatchStyle} />;
+  const lineStyle = useMemo(
+    () => ({
+      height: 1,
+      backgroundColor: preview.line,
+      marginHorizontal: 3,
+      marginTop: 3,
+    }),
+    [preview.line],
+  );
+  const accentStyle = useMemo(
+    () => ({
+      position: "absolute" as const,
+      top: 0,
+      bottom: 0,
+      left: 0,
+      width: 4,
+      backgroundColor: preview.accent,
+    }),
+    [preview.accent],
+  );
+  return (
+    <View style={previewStyle}>
+      <View style={accentStyle} />
+      <View style={lineStyle} />
+      <View style={lineStyle} />
+    </View>
+  );
 }
 
 function themeTriggerStyle({ pressed }: PressableStateCallbackType) {
@@ -204,7 +233,7 @@ interface GeneralSectionProps {
 interface ThemeMenuItemProps {
   themeValue: AppSettings["theme"];
   selected: boolean;
-  iconSize: number;
+  previewHeight: number;
   iconColor: string;
   label: string;
   onChange: (theme: AppSettings["theme"]) => void;
@@ -213,7 +242,7 @@ interface ThemeMenuItemProps {
 function ThemeMenuItem({
   themeValue,
   selected,
-  iconSize,
+  previewHeight,
   iconColor,
   label,
   onChange,
@@ -222,8 +251,8 @@ function ThemeMenuItem({
     onChange(themeValue);
   }, [onChange, themeValue]);
   const leading = useMemo(
-    () => <ThemeIcon theme={themeValue} size={iconSize} color={iconColor} />,
-    [themeValue, iconSize, iconColor],
+    () => <ThemeIcon theme={themeValue} size={previewHeight} color={iconColor} />,
+    [themeValue, previewHeight, iconColor],
   );
   return (
     <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
@@ -286,6 +315,7 @@ function GeneralSection({
   const { t } = useTranslation();
   const iconSize = theme.iconSize.md;
   const iconColor = theme.colors.foregroundMuted;
+  const themePreviewHeight = 18;
   const [terminalScrollbackValue, setTerminalScrollbackValue] = useState(
     String(settings.terminalScrollbackLines),
   );
@@ -339,19 +369,19 @@ function GeneralSection({
                   key={themeValue}
                   themeValue={themeValue}
                   selected={settings.theme === themeValue}
-                  iconSize={iconSize}
+                  previewHeight={themePreviewHeight}
                   iconColor={iconColor}
                   label={t(`settings.general.theme.options.${themeValue}`)}
                   onChange={handleThemeChange}
                 />
               ))}
               <DropdownMenuSeparator />
-              {(["zinc", "midnight", "claude", "ghostty"] as const).map((themeValue) => (
+              {(["zinc", "midnight", "claude", "ghostty", "chisaki"] as const).map((themeValue) => (
                 <ThemeMenuItem
                   key={themeValue}
                   themeValue={themeValue}
                   selected={settings.theme === themeValue}
-                  iconSize={iconSize}
+                  previewHeight={themePreviewHeight}
                   iconColor={iconColor}
                   label={t(`settings.general.theme.options.${themeValue}`)}
                   onChange={handleThemeChange}
@@ -1385,11 +1415,13 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+    minHeight: 36,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface2,
   },
   themeTriggerText: {
     color: theme.colors.foreground,
@@ -1402,8 +1434,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     textAlign: "right",

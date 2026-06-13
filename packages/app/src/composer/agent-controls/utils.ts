@@ -6,11 +6,11 @@ export type FeatureHighlightColor = "blue" | "default" | "green" | "yellow";
 export function getAgentControlHint(selector: ExplainedAgentControl): string {
   switch (selector) {
     case "thinking":
-      return "Thinking mode";
+      return "推理强度";
     case "model":
-      return "Change model";
+      return "切换模型";
     case "mode":
-      return "Change permission mode";
+      return "切换权限模式";
     default:
       throw new Error("unreachable");
   }
@@ -28,6 +28,19 @@ export function getFeatureTooltip(feature: Pick<AgentFeature, "label" | "tooltip
   return feature.tooltip ?? feature.label;
 }
 
+export function formatAgentFeatureLabel(feature: Pick<AgentFeature, "id" | "label">): string {
+  switch (feature.id) {
+    case "plan_mode":
+      return "计划模式";
+    case "fast_mode":
+      return "快速模式";
+    case "auto_accept":
+      return "自动接受";
+    default:
+      return feature.label;
+  }
+}
+
 export function getFeatureHighlightColor(featureId: string): FeatureHighlightColor {
   switch (featureId) {
     case "fast_mode":
@@ -39,6 +52,26 @@ export function getFeatureHighlightColor(featureId: string): FeatureHighlightCol
     default:
       return "default";
   }
+}
+
+export interface AgentFeatureMenuItemDescriptor {
+  id: string;
+  label: string;
+  selected: boolean;
+}
+
+export function buildToggleFeatureMenuItems(
+  features: AgentFeature[] | undefined,
+): AgentFeatureMenuItemDescriptor[] {
+  return (features ?? [])
+    .filter((feature): feature is Extract<AgentFeature, { type: "toggle" }> => {
+      return feature.type === "toggle" && feature.id === "plan_mode";
+    })
+    .map((feature) => ({
+      id: feature.id,
+      label: formatAgentFeatureLabel(feature),
+      selected: feature.value,
+    }));
 }
 
 interface ControlLabelInput {
@@ -69,17 +102,55 @@ function formatControlLabel(option: ControlLabelInput, splitHyphen: boolean): st
   return sentenceCase(splitCompactLabel(rawLabel, splitHyphen));
 }
 
+function compactLabel(value: string): string {
+  return value.replace(/[\s_-]+/g, "").toLowerCase();
+}
+
+const AGENT_MODE_LABELS: Record<string, string> = {
+  acceptedits: "接受文件编辑",
+  alwaysask: "每次询问",
+  auto: "默认权限",
+  automode: "自动模式",
+  autoreview: "自动审核",
+  build: "构建",
+  bypass: "跳过权限",
+  bypasspermissions: "跳过权限",
+  default: "每次询问",
+  defaultpermissions: "默认权限",
+  fullaccess: "完全访问",
+  loadtest: "负载测试",
+  plan: "计划模式",
+  planmode: "计划模式",
+};
+
+const THINKING_OPTION_LABELS: Record<string, string> = {
+  extrahigh: "超高",
+  high: "高",
+  low: "低",
+  medium: "中",
+  none: "无",
+  thinkhard: "深度思考",
+  xhigh: "超高",
+};
+
 export function formatAgentModeLabel(mode: ControlLabelInput): string {
+  const rawLabel = (mode.label ?? mode.id).trim();
+  const localizedLabel =
+    AGENT_MODE_LABELS[compactLabel(rawLabel)] ?? AGENT_MODE_LABELS[compactLabel(mode.id)];
+  if (localizedLabel) {
+    return localizedLabel;
+  }
+
   return formatControlLabel(mode, mode.label == null);
 }
 
 export function formatThinkingOptionLabel(option: ControlLabelInput): string {
   const rawLabel = (option.label ?? option.id).trim();
-  const compactId = option.id.replace(/[\s_-]+/g, "").toLowerCase();
-  const compactLabel = rawLabel.replace(/[\s_-]+/g, "").toLowerCase();
-
-  if (compactId === "xhigh" || compactLabel === "xhigh") {
-    return "Extra high";
+  const localizedLabel =
+    THINKING_OPTION_LABELS[compactLabel(rawLabel)] ??
+    THINKING_OPTION_LABELS[compactLabel(option.id)];
+  if (localizedLabel) {
+    return localizedLabel;
   }
 
   return formatControlLabel(option, true);
@@ -146,8 +217,7 @@ function resolveModelDisplay(
 ): { activeModelId: string | null; displayModel: string } {
   return {
     activeModelId: selectedModel?.id ?? preferredModelId ?? null,
-    displayModel:
-      selectedModel?.label ?? preferredModelId ?? fallbackModel?.label ?? "Unknown model",
+    displayModel: selectedModel?.label ?? preferredModelId ?? fallbackModel?.label ?? "未知模型",
   };
 }
 
@@ -163,7 +233,7 @@ function resolveThinkingDisplay(
     return formatThinkingOptionLabel({ id: selectedThinkingId });
   }
 
-  return "Unknown";
+  return "未知";
 }
 
 export function resolveAgentModelSelection(input: {

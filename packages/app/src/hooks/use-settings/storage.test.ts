@@ -82,6 +82,18 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.language).toBe("en");
   });
 
+  it("loads the chisaki theme from app settings", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "chisaki" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.theme).toBe("chisaki");
+  });
+
   it("normalizes terminal scrollback lines from storage", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({

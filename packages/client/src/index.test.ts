@@ -757,6 +757,10 @@ test("provider config builders shape existing create-agent config fields", async
   } satisfies ChisaCodeProviderConfig;
 
   expect(provider).toEqual(expectedProviderConfig);
+  expect(client.providers.mimocode({ modeId: "build" })).toEqual({
+    provider: "mimocode",
+    modeId: "build",
+  });
 
   const createdAgent = createAgent({
     model: "gpt-5.4",

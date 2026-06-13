@@ -14,6 +14,26 @@ import {
 const OPENCODE_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5_000;
 const OPENCODE_SERVER_FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
 
+export interface OpenCodeLikeProviderConfig {
+  providerId: string;
+  label: string;
+  binary: string;
+  serveArgs: (port: string) => string[];
+  rotateServerOnForceRefresh: boolean;
+  ignoreSystemEnvForDedicatedServer: boolean;
+  installUrl: string;
+}
+
+const DEFAULT_OPENCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
+  providerId: "opencode",
+  label: "OpenCode",
+  binary: "opencode",
+  serveArgs: (port) => ["serve", "--port", port],
+  rotateServerOnForceRefresh: true,
+  ignoreSystemEnvForDedicatedServer: false,
+  installUrl: "https://github.com/opencode-ai/opencode",
+};
+
 export interface OpenCodeServerAcquisition {
   server: { port: number; url: string };
   release: () => void;
@@ -36,7 +56,7 @@ export interface OpenCodeServerGeneration {
 }
 
 export class OpenCodeServerManager implements OpenCodeServerManagerLike {
-  private static instance: OpenCodeServerManager | null = null;
+  private static instances = new Map<string, OpenCodeServerManager>();
   private static exitHandlerRegistered = false;
   private currentServer: OpenCodeServerGeneration | null = null;
   private retiredServers = new Set<OpenCodeServerGeneration>();
@@ -45,31 +65,45 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
   private readonly logger: Logger;
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly runtimeSettingsKey: string;
+  private readonly providerConfig: OpenCodeLikeProviderConfig;
 
-  private constructor(logger: Logger, runtimeSettings?: ProviderRuntimeSettings) {
+  private constructor(
+    logger: Logger,
+    runtimeSettings?: ProviderRuntimeSettings,
+    providerConfig: OpenCodeLikeProviderConfig = DEFAULT_OPENCODE_PROVIDER_CONFIG,
+  ) {
     this.logger = logger;
     this.runtimeSettings = runtimeSettings;
+    this.providerConfig = providerConfig;
     this.runtimeSettingsKey = JSON.stringify(runtimeSettings ?? {});
   }
 
   static getInstance(
     logger: Logger,
     runtimeSettings?: ProviderRuntimeSettings,
+    providerConfig: OpenCodeLikeProviderConfig = DEFAULT_OPENCODE_PROVIDER_CONFIG,
   ): OpenCodeServerManager {
+    const instanceKey = JSON.stringify({
+      providerId: providerConfig.providerId,
+      runtimeSettings: runtimeSettings ?? {},
+    });
     const nextSettingsKey = JSON.stringify(runtimeSettings ?? {});
-    if (!OpenCodeServerManager.instance) {
-      OpenCodeServerManager.instance = new OpenCodeServerManager(logger, runtimeSettings);
+    let instance = OpenCodeServerManager.instances.get(instanceKey);
+    if (!instance) {
+      instance = new OpenCodeServerManager(logger, runtimeSettings, providerConfig);
+      OpenCodeServerManager.instances.set(instanceKey, instance);
       OpenCodeServerManager.registerExitHandler();
-    } else if (OpenCodeServerManager.instance.runtimeSettingsKey !== nextSettingsKey) {
+    } else if (instance.runtimeSettingsKey !== nextSettingsKey) {
       logger.warn(
         {
-          existingRuntimeSettings: OpenCodeServerManager.instance.runtimeSettingsKey,
+          providerId: providerConfig.providerId,
+          existingRuntimeSettings: instance.runtimeSettingsKey,
           requestedRuntimeSettings: nextSettingsKey,
         },
-        "OpenCode server manager already initialized with different runtime settings",
+        "OpenCode-like server manager already initialized with different runtime settings",
       );
     }
-    return OpenCodeServerManager.instance;
+    return instance;
   }
 
   private static registerExitHandler(): void {
@@ -79,8 +113,9 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     OpenCodeServerManager.exitHandlerRegistered = true;
 
     const cleanup = () => {
-      const instance = OpenCodeServerManager.instance;
-      void instance?.shutdown();
+      for (const instance of OpenCodeServerManager.instances.values()) {
+        void instance.shutdown();
+      }
     };
 
     process.on("exit", cleanup);
@@ -98,14 +133,15 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     force: boolean;
     env?: Record<string, string>;
   }): Promise<OpenCodeServerAcquisition> {
-    if (options.env) {
+    if (hasDedicatedServerEnv(options.env, this.providerConfig)) {
       const server = await this.startDedicatedServer(options.env);
       return this.acquireServer(server);
     }
 
-    const server = options.force
-      ? await this.getForcedRefreshServer()
-      : await this.getCurrentServer();
+    const server =
+      options.force && this.providerConfig.rotateServerOnForceRefresh
+        ? await this.getForcedRefreshServer()
+        : await this.getCurrentServer();
     return this.acquireServer(server);
   }
 
@@ -191,15 +227,14 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
   private async startServer(launchEnv?: Record<string, string>): Promise<OpenCodeServerGeneration> {
     const port = await findAvailablePort();
     const url = `http://127.0.0.1:${port}`;
-    const launchPrefix = await resolveProviderCommandPrefix(
-      this.runtimeSettings?.command,
-      resolveOpenCodeBinary,
+    const launchPrefix = await resolveProviderCommandPrefix(this.runtimeSettings?.command, () =>
+      resolveOpenCodeBinary(this.providerConfig),
     );
 
     return new Promise((resolve, reject) => {
       const serverProcess = spawnProcess(
         launchPrefix.command,
-        [...launchPrefix.args, "serve", "--port", String(port)],
+        [...launchPrefix.args, ...this.providerConfig.serveArgs(String(port))],
         {
           detached: process.platform !== "win32",
           stdio: ["ignore", "pipe", "pipe"],
@@ -235,7 +270,11 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
       };
       const timeout = setTimeout(() => {
         if (!started) {
-          reject(new Error(buildStartupErrorMessage("OpenCode server startup timeout")));
+          reject(
+            new Error(
+              buildStartupErrorMessage(`${this.providerConfig.label} server startup timeout`),
+            ),
+          );
         }
       }, 30_000);
 
@@ -270,7 +309,13 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
       serverProcess.on("exit", (code) => {
         if (!started) {
           clearTimeout(timeout);
-          reject(new Error(buildStartupErrorMessage(`OpenCode server exited with code ${code}`)));
+          reject(
+            new Error(
+              buildStartupErrorMessage(
+                `${this.providerConfig.label} server exited with code ${code}`,
+              ),
+            ),
+          );
         }
         if (this.currentServer?.process === serverProcess) {
           this.currentServer = null;
@@ -329,13 +374,30 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
   }
 }
 
-async function resolveOpenCodeBinary(): Promise<string> {
-  const found = await findExecutable("opencode");
+function hasDedicatedServerEnv(
+  env: Record<string, string> | undefined,
+  config: OpenCodeLikeProviderConfig,
+): env is Record<string, string> {
+  if (env === undefined) {
+    return false;
+  }
+  const keys = Object.keys(env);
+  if (keys.length === 0) {
+    return false;
+  }
+  if (!config.ignoreSystemEnvForDedicatedServer) {
+    return true;
+  }
+  return keys.some((key) => key !== "CHISACODE_AGENT_ID");
+}
+
+async function resolveOpenCodeBinary(config: OpenCodeLikeProviderConfig): Promise<string> {
+  const found = await findExecutable(config.binary);
   if (found) {
     return found;
   }
   throw new Error(
-    "OpenCode binary not found. Install OpenCode (https://github.com/opencode-ai/opencode) and ensure it is available in your shell PATH.",
+    `${config.label} binary not found. Install ${config.label} (${config.installUrl}) and ensure '${config.binary}' is available in your shell PATH.`,
   );
 }
 

@@ -7,7 +7,14 @@ import {
   type ComponentType,
   type ReactElement,
 } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import {
+  Pressable,
+  Text,
+  View,
+  type PressableStateCallbackType,
+  type StyleProp,
+  type TextStyle,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/shallow";
@@ -62,6 +69,7 @@ interface ModeComboboxOptionProps {
   provider: string;
   providerDefinitions: AgentProviderDefinition[];
   iconColor: string;
+  labelStyle?: StyleProp<TextStyle>;
 }
 
 function ModeComboboxOption({
@@ -72,6 +80,7 @@ function ModeComboboxOption({
   provider,
   providerDefinitions,
   iconColor,
+  labelStyle,
 }: ModeComboboxOptionProps) {
   const visuals = getModeVisuals(provider, option.id, providerDefinitions);
   const IconComponent = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
@@ -86,6 +95,7 @@ function ModeComboboxOption({
       active={active}
       onPress={onPress}
       leadingSlot={leadingSlot}
+      labelStyle={labelStyle}
     />
   );
 }
@@ -126,8 +136,11 @@ function AgentModeControlView({
     ? getModeVisuals(provider, selectedMode.id, providerDefinitions)
     : undefined;
   const Icon = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
-  const iconColor = theme.colors.foregroundMuted;
+  const isFullAccessMode = selectedMode?.id === "full-access";
+  const fullAccessColor = theme.colors.palette.orange[600];
+  const iconColor = isFullAccessMode ? fullAccessColor : theme.colors.foregroundMuted;
   const selectedModeLabel = selectedMode ? formatAgentModeLabel(selectedMode) : "";
+  const fullAccessLabelStyle = useMemo(() => ({ color: fullAccessColor }), [fullAccessColor]);
 
   const allOptions = useMemo<ComboboxOption[]>(
     () => modeOptions.map((m) => ({ id: m.id, label: formatAgentModeLabel(m) })),
@@ -167,10 +180,11 @@ function AgentModeControlView({
         onPress={args.onPress}
         provider={provider}
         providerDefinitions={providerDefinitions}
-        iconColor={theme.colors.foreground}
+        iconColor={args.option.id === "full-access" ? fullAccessColor : theme.colors.foreground}
+        labelStyle={args.option.id === "full-access" ? fullAccessLabelStyle : undefined}
       />
     ),
-    [provider, providerDefinitions, theme.colors.foreground],
+    [fullAccessColor, fullAccessLabelStyle, provider, providerDefinitions, theme.colors.foreground],
   );
 
   const pressableStyle = useCallback(
@@ -183,7 +197,10 @@ function AgentModeControlView({
     [open, disabled],
   );
 
-  const labelStyle = styles.chipLabel;
+  const labelStyle = useMemo(
+    () => [styles.chipLabel, isFullAccessMode && { color: fullAccessColor }],
+    [fullAccessColor, isFullAccessMode],
+  );
 
   const sheetHeader = useMemo<SheetHeader>(
     () => ({

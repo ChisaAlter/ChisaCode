@@ -62,6 +62,7 @@ import { execCommand } from "../../../utils/spawn.js";
 import { buildToolCallDisplayModel } from "@chisacode/protocol/tool-call-display";
 import { mapOpencodeToolCall } from "./opencode/tool-call-mapper.js";
 import { OpenCodeServerManager } from "./opencode/server-manager.js";
+import type { OpenCodeLikeProviderConfig } from "./opencode/server-manager.js";
 import {
   formatDiagnosticStatus,
   formatProviderDiagnostic,
@@ -90,6 +91,26 @@ const OPENCODE_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindConversation: false,
   supportsRewindFiles: false,
   supportsRewindBoth: true,
+};
+
+const OPENCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
+  providerId: "opencode",
+  label: "OpenCode",
+  binary: "opencode",
+  serveArgs: (port) => ["serve", "--port", port],
+  rotateServerOnForceRefresh: true,
+  ignoreSystemEnvForDedicatedServer: false,
+  installUrl: "https://github.com/opencode-ai/opencode",
+};
+
+const MIMOCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
+  providerId: "mimocode",
+  label: "MiMoCode",
+  binary: "mimo",
+  serveArgs: (port) => ["serve", "--port", port],
+  rotateServerOnForceRefresh: false,
+  ignoreSystemEnvForDedicatedServer: true,
+  installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
 };
 
 const OPENCODE_BUILD_MODE_ID = "build";
@@ -1172,7 +1193,7 @@ export const __openCodeInternals = {
   },
 };
 
-interface OpenCodeAgentClientDeps {
+export interface OpenCodeAgentClientDeps {
   runtime?: OpenCodeRuntime;
 }
 
@@ -1208,19 +1229,22 @@ export class OpenCodeAgentClient implements AgentClient {
   private readonly runtime: OpenCodeRuntime;
   private readonly logger: Logger;
   private readonly runtimeSettings?: ProviderRuntimeSettings;
+  private readonly providerConfig: OpenCodeLikeProviderConfig;
   private readonly modelContextWindows = new Map<string, number>();
 
   constructor(
     logger: Logger,
     runtimeSettings?: ProviderRuntimeSettings,
     deps: OpenCodeAgentClientDeps = {},
+    providerConfig: OpenCodeLikeProviderConfig = OPENCODE_PROVIDER_CONFIG,
   ) {
-    this.logger = logger.child({ module: "agent", provider: "opencode" });
+    this.providerConfig = providerConfig;
+    this.logger = logger.child({ module: "agent", provider: providerConfig.providerId });
     this.runtimeSettings = runtimeSettings;
     this.runtime =
       deps.runtime ??
       new ProductionOpenCodeRuntime(
-        OpenCodeServerManager.getInstance(this.logger, runtimeSettings),
+        OpenCodeServerManager.getInstance(this.logger, runtimeSettings, providerConfig),
       );
   }
 
@@ -1244,16 +1268,20 @@ export class OpenCodeAgentClient implements AgentClient {
       const response = await withTimeout(
         client.session.create({ directory: openCodeConfig.cwd }),
         10_000,
-        "OpenCode session.create timed out after 10s",
+        `${this.providerConfig.label} session.create timed out after 10s`,
       );
 
       if (response.error) {
-        throw new Error(`Failed to create OpenCode session: ${JSON.stringify(response.error)}`);
+        throw new Error(
+          `Failed to create ${this.providerConfig.label} session: ${JSON.stringify(
+            response.error,
+          )}`,
+        );
       }
 
       const session = response.data;
       if (!session) {
-        throw new Error("OpenCode session creation returned no data");
+        throw new Error(`${this.providerConfig.label} session creation returned no data`);
       }
 
       await this.populateModelContextWindowCache(client, openCodeConfig.cwd);
@@ -1332,11 +1360,17 @@ export class OpenCodeAgentClient implements AgentClient {
       const response = await withTimeout(
         client.provider.list({ directory: options.cwd }),
         OPENCODE_PROVIDER_LIST_TIMEOUT_MS,
-        `OpenCode provider.list timed out after ${OPENCODE_PROVIDER_LIST_TIMEOUT_MS / 1000}s - server may not be authenticated or connected to any providers`,
+        `${this.providerConfig.label} provider.list timed out after ${
+          OPENCODE_PROVIDER_LIST_TIMEOUT_MS / 1000
+        }s - server may not be authenticated or connected to any providers`,
       );
 
       if (response.error) {
-        throw new Error(`Failed to fetch OpenCode providers: ${JSON.stringify(response.error)}`);
+        throw new Error(
+          `Failed to fetch ${this.providerConfig.label} providers: ${JSON.stringify(
+            response.error,
+          )}`,
+        );
       }
 
       const providers = response.data;
@@ -1355,9 +1389,9 @@ export class OpenCodeAgentClient implements AgentClient {
       // Fail fast if no providers are accessible at all
       if (!providers.all.some(isAccessible)) {
         throw new Error(
-          "OpenCode has no connected providers. Please authenticate with at least one provider " +
+          `${this.providerConfig.label} has no connected providers. Please authenticate with at least one provider ` +
             "(e.g., openai, anthropic), set appropriate environment variables (e.g., OPENAI_API_KEY), " +
-            "or log in to OpenCode Go via the console.",
+            `or log in to ${this.providerConfig.label} via the console.`,
         );
       }
 
@@ -1397,7 +1431,7 @@ export class OpenCodeAgentClient implements AgentClient {
       const response = await withTimeout(
         client.app.agents({ directory }),
         10_000,
-        "OpenCode app.agents timed out after 10s",
+        `${this.providerConfig.label} app.agents timed out after 10s`,
       );
 
       if (response.error || !response.data) {
@@ -1454,7 +1488,7 @@ export class OpenCodeAgentClient implements AgentClient {
   async isAvailable(): Promise<boolean> {
     const launch = await resolveProviderLaunch({
       commandConfig: this.runtimeSettings?.command,
-      defaultBinary: "opencode",
+      defaultBinary: this.providerConfig.binary,
     });
     const availability = await checkProviderLaunchAvailable(launch);
     return availability.available;
@@ -1468,7 +1502,7 @@ export class OpenCodeAgentClient implements AgentClient {
     try {
       const launch = await resolveProviderLaunch({
         commandConfig: this.runtimeSettings?.command,
-        defaultBinary: "opencode",
+        defaultBinary: this.providerConfig.binary,
       });
       const availability = await checkProviderLaunchAvailable(launch);
       const available = availability.available;
@@ -1529,7 +1563,7 @@ export class OpenCodeAgentClient implements AgentClient {
       }
 
       return {
-        diagnostic: formatProviderDiagnostic("OpenCode", [
+        diagnostic: formatProviderDiagnostic(this.providerConfig.label, [
           ...(await buildBinaryDiagnosticRows(launch, availability)),
           { label: "Server", value: serverStatus },
           { label: "Auth", value: authValue },
@@ -1539,7 +1573,7 @@ export class OpenCodeAgentClient implements AgentClient {
       };
     } catch (error) {
       return {
-        diagnostic: formatProviderDiagnosticError("OpenCode", error),
+        diagnostic: formatProviderDiagnosticError(this.providerConfig.label, error),
       };
     }
   }
@@ -1564,6 +1598,16 @@ export class OpenCodeAgentClient implements AgentClient {
     for (const [modelLookupKey, contextWindowMaxTokens] of lookup.entries()) {
       this.modelContextWindows.set(modelLookupKey, contextWindowMaxTokens);
     }
+  }
+}
+
+export class MimoCodeAgentClient extends OpenCodeAgentClient {
+  constructor(
+    logger: Logger,
+    runtimeSettings?: ProviderRuntimeSettings,
+    deps: OpenCodeAgentClientDeps = {},
+  ) {
+    super(logger, runtimeSettings, deps, MIMOCODE_PROVIDER_CONFIG);
   }
 }
 

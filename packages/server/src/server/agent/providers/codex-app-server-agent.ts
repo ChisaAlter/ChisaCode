@@ -2836,6 +2836,12 @@ function normalizeOpenAICompatibleBaseUrl(value: string): string | null {
   return `${withoutTrailingSlashes}/v1`;
 }
 
+function resolveOpenAIWireApi(
+  runtimeSettings: ProviderRuntimeSettings | undefined,
+): "responses" | "chat" {
+  return runtimeSettings?.env?.OPENAI_WIRE_API === "chat" ? "chat" : "responses";
+}
+
 function buildCodexCustomProviderConfig(
   runtimeSettings: ProviderRuntimeSettings | undefined,
   customProvider: CodexAppServerAgentDeps["customProvider"],
@@ -2854,7 +2860,7 @@ function buildCodexCustomProviderConfig(
   const providerConfig: Record<string, unknown> = {
     name: customProvider.label,
     base_url: normalizedBaseUrl,
-    wire_api: "responses",
+    wire_api: resolveOpenAIWireApi(runtimeSettings),
   };
   if (runtimeSettings?.env?.OPENAI_API_KEY?.trim()) {
     providerConfig.env_key = "OPENAI_API_KEY";

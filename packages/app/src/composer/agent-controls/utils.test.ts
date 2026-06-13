@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildToggleFeatureMenuItems,
   formatAgentModeLabel,
   getFeatureHighlightColor,
   getFeatureTooltip,
@@ -9,11 +10,39 @@ import {
   resolveAgentModelSelection,
 } from "./utils";
 
+describe("buildToggleFeatureMenuItems", () => {
+  it("maps plan mode into a menu descriptor and excludes other features", () => {
+    expect(
+      buildToggleFeatureMenuItems([
+        {
+          id: "plan_mode",
+          type: "toggle",
+          label: "Plan",
+          value: false,
+        },
+        {
+          id: "fast_mode",
+          type: "toggle",
+          label: "Fast",
+          value: true,
+        },
+        {
+          id: "profile",
+          type: "select",
+          label: "配置",
+          value: "default",
+          options: [{ id: "default", label: "默认" }],
+        },
+      ]),
+    ).toEqual([{ id: "plan_mode", label: "计划模式", selected: false }]);
+  });
+});
+
 describe("getAgentControlHint", () => {
   it("explains what each editable agent control does", () => {
-    expect(getAgentControlHint("thinking")).toBe("Thinking mode");
-    expect(getAgentControlHint("model")).toBe("Change model");
-    expect(getAgentControlHint("mode")).toBe("Change permission mode");
+    expect(getAgentControlHint("thinking")).toBe("推理强度");
+    expect(getAgentControlHint("model")).toBe("切换模型");
+    expect(getAgentControlHint("mode")).toBe("切换权限模式");
   });
 });
 
@@ -55,32 +84,36 @@ describe("normalizeModelId", () => {
 });
 
 describe("formatAgentModeLabel", () => {
-  it("sentence-cases provider mode labels", () => {
-    expect(formatAgentModeLabel({ id: "plan", label: "Plan" })).toBe("Plan");
-    expect(formatAgentModeLabel({ id: "full-access", label: "Full Access" })).toBe("Full access");
-    expect(formatAgentModeLabel({ id: "auto-review", label: "Auto-review" })).toBe("Auto-review");
-    expect(formatAgentModeLabel({ id: "read_only", label: "read_only" })).toBe("Read only");
-    expect(formatAgentModeLabel({ id: "acceptEdits", label: "acceptEdits" })).toBe("Accept edits");
+  it("localizes known provider mode labels", () => {
+    expect(formatAgentModeLabel({ id: "auto", label: "Default Permissions" })).toBe("默认权限");
+    expect(formatAgentModeLabel({ id: "plan", label: "Plan" })).toBe("计划模式");
+    expect(formatAgentModeLabel({ id: "full-access", label: "Full Access" })).toBe("完全访问");
+    expect(formatAgentModeLabel({ id: "auto-review", label: "Auto-review" })).toBe("自动审核");
+    expect(formatAgentModeLabel({ id: "acceptEdits", label: "acceptEdits" })).toBe("接受文件编辑");
   });
 
-  it("splits compact mode ids when no provider label is available", () => {
-    expect(formatAgentModeLabel({ id: "auto-review" })).toBe("Auto review");
+  it("falls back to sentence-cased labels for unknown modes", () => {
+    expect(formatAgentModeLabel({ id: "read_only", label: "read_only" })).toBe("Read only");
+    expect(formatAgentModeLabel({ id: "custom-review" })).toBe("Custom review");
   });
 });
 
 describe("formatThinkingOptionLabel", () => {
-  it("formats compact thinking option labels for display", () => {
-    expect(formatThinkingOptionLabel({ id: "none", label: "none" })).toBe("None");
-    expect(formatThinkingOptionLabel({ id: "low", label: "low" })).toBe("Low");
-    expect(formatThinkingOptionLabel({ id: "medium", label: "medium" })).toBe("Medium");
-    expect(formatThinkingOptionLabel({ id: "high", label: "high" })).toBe("High");
-    expect(formatThinkingOptionLabel({ id: "xhigh", label: "xhigh" })).toBe("Extra high");
+  it("localizes known thinking option labels", () => {
+    expect(formatThinkingOptionLabel({ id: "none", label: "none" })).toBe("无");
+    expect(formatThinkingOptionLabel({ id: "low", label: "low" })).toBe("低");
+    expect(formatThinkingOptionLabel({ id: "medium", label: "medium" })).toBe("中");
+    expect(formatThinkingOptionLabel({ id: "high", label: "high" })).toBe("高");
+    expect(formatThinkingOptionLabel({ id: "xhigh", label: "xhigh" })).toBe("超高");
   });
 
-  it("sentence-cases split provider labels", () => {
-    expect(formatThinkingOptionLabel({ id: "extra_high", label: "extra_high" })).toBe("Extra high");
-    expect(formatThinkingOptionLabel({ id: "think-hard", label: "think-hard" })).toBe("Think hard");
-    expect(formatThinkingOptionLabel({ id: "xhigh", label: "XHigh" })).toBe("Extra high");
+  it("falls back to sentence-cased labels for unknown thinking options", () => {
+    expect(formatThinkingOptionLabel({ id: "extra_high", label: "extra_high" })).toBe("超高");
+    expect(formatThinkingOptionLabel({ id: "think-hard", label: "think-hard" })).toBe("深度思考");
+    expect(formatThinkingOptionLabel({ id: "custom-hard", label: "custom-hard" })).toBe(
+      "Custom hard",
+    );
+    expect(formatThinkingOptionLabel({ id: "xhigh", label: "XHigh" })).toBe("超高");
   });
 });
 
@@ -126,7 +159,7 @@ describe("resolveAgentModelSelection", () => {
     });
 
     expect(selection.selectedThinkingId).toBe("high");
-    expect(selection.displayThinking).toBe("High");
+    expect(selection.displayThinking).toBe("高");
   });
 
   it("formats raw thinking labels in the selected model display", () => {
@@ -148,7 +181,7 @@ describe("resolveAgentModelSelection", () => {
     });
 
     expect(selection.selectedThinkingId).toBe("xhigh");
-    expect(selection.displayThinking).toBe("Extra high");
+    expect(selection.displayThinking).toBe("超高");
   });
 
   it("falls back to the provider default model label instead of Auto", () => {
@@ -169,7 +202,7 @@ describe("resolveAgentModelSelection", () => {
     });
 
     expect(selection.displayModel).toBe("Model A");
-    expect(selection.displayThinking).toBe("Low");
+    expect(selection.displayThinking).toBe("低");
   });
 
   it("prefers the configured model when runtime model is not in the model list", () => {
@@ -194,6 +227,6 @@ describe("resolveAgentModelSelection", () => {
     expect(selection.activeModelId).toBe("default");
     expect(selection.displayModel).toBe("Default (Sonnet 4.6)");
     expect(selection.selectedThinkingId).toBe("low");
-    expect(selection.displayThinking).toBe("Low");
+    expect(selection.displayThinking).toBe("低");
   });
 });

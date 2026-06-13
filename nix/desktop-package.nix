@@ -31,8 +31,6 @@ buildNpmPackage rec {
       # Exclude mobile-only platform code (we only need the web/electron build)
       !(lib.hasPrefix "/packages/app/android" relPath)
       && !(lib.hasPrefix "/packages/app/ios" relPath)
-      # Website is unrelated to the desktop app
-      && !(lib.hasPrefix "/packages/website" relPath)
       # Test fixtures and build artifacts
       && !(lib.hasSuffix ".test.ts" baseName)
       && !(lib.hasSuffix ".e2e.test.ts" baseName)
@@ -102,7 +100,7 @@ buildNpmPackage rec {
     # creates workspace symlinks from node_modules/@chisacode/* into packages/*.
     # Missing any workspace package leaves dangling symlinks and fails the
     # noBrokenSymlinks output check. The cleanSourceWith filter above already
-    # drops the big platform-specific things (android/ios, website, tests).
+    # drops the big platform-specific things (android/ios, tests).
     cp package.json $out/share/chisacode-desktop/
     cp -a packages $out/share/chisacode-desktop/
     cp -a node_modules $out/share/chisacode-desktop/

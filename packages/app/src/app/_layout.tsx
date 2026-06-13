@@ -390,7 +390,15 @@ interface AppContainerProps {
   chromeEnabled?: boolean;
 }
 
-const THEME_CYCLE_ORDER: ThemeName[] = ["dark", "zinc", "midnight", "claude", "ghostty", "light"];
+const THEME_CYCLE_ORDER: ThemeName[] = [
+  "dark",
+  "zinc",
+  "midnight",
+  "claude",
+  "ghostty",
+  "chisaki",
+  "light",
+];
 
 function AppContainer({
   children,

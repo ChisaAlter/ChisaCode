@@ -15,13 +15,12 @@
 - `packages/cli`: Commander CLI; run the checkout version with `npm run cli -- ...`, not a globally installed `chisacode`.
 - `packages/desktop`: Electron wrapper that can spawn/manage its own daemon.
 - `packages/relay`: E2E encrypted relay; see `SECURITY.md` before changing relay/auth behavior.
-- `packages/website`: TanStack/Cloudflare marketing/docs site.
 
 ## Commands
 
 - Install with `npm ci`; CI uses Node 22 and npm cache.
 - Dev all surfaces: `npm run dev` on macOS/Linux, `npm run dev:win` on Windows.
-- Focused dev: `npm run dev:server`, `npm run dev:app`, `npm run dev:desktop`, `npm run dev:website`.
+- Focused dev: `npm run dev:server`, `npm run dev:app`, `npm run dev:desktop`.
 - Build dependency stacks instead of guessing order: `npm run build:client` (`protocol -> client`), `npm run build:server-deps` (`highlight -> relay -> protocol -> client`), `npm run build:server` (`server-deps -> server -> cli`), `npm run build:app-deps` (`highlight -> protocol -> client -> expo-two-way-audio`).
 - Verify after edits with `npm run typecheck` and `npm run lint`; format with `npm run format` or targeted `npm run format:files -- <paths>`.
 - Targeted lint accepts file paths through the npm script, e.g. `npm run lint -- packages/app/src/file.tsx`; do not call `npx oxlint`/`npx oxfmt` directly for normal checks.

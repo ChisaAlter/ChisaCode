@@ -5,7 +5,7 @@ import { z } from "zod";
 import {
   AgentProviderRuntimeSettingsMapSchema,
   migrateProviderSettings,
-  ProviderOverrideSchema,
+  ProviderOverridesSchema,
 } from "./agent/provider-launch-config.js";
 import type { ProviderOverride } from "./agent/provider-launch-config.js";
 import { ensurePrivateFile, writePrivateFileSync } from "./private-files.js";
@@ -145,8 +145,8 @@ const AgentMetadataGenerationSchema = z
   })
   .strict();
 
-const BUILTIN_PROVIDER_IDS = ["claude", "codex", "opencode", "pi", "kimi"] as const;
-const PersistedProviderOverridesSchema = z.record(ProviderOverrideSchema);
+const BUILTIN_PROVIDER_IDS = ["claude", "codex", "opencode", "mimocode", "pi", "kimi"] as const;
+const PersistedProviderOverridesSchema = ProviderOverridesSchema;
 
 function isLegacyProviderEntry(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

@@ -19,7 +19,7 @@
 ---
 
 ChisaCode 是一个本地优先的 AI 编程工作台。它在你的电脑上启动一个 daemon，
-由 daemon 管理 Claude Code、Codex、GitHub Copilot、OpenCode、Pi 等代理进程，
+由 daemon 管理 Claude Code、Codex、GitHub Copilot、OpenCode、MiMoCode、Pi 等代理进程，
 再让桌面端、手机端、网页端和 CLI 通过同一套界面连接并控制这些代理。
 
 你可以在电脑上启动任务，在手机上查看进度、发送后续指令、审批权限请求，或者从
@@ -28,7 +28,7 @@ ChisaCode 是一个本地优先的 AI 编程工作台。它在你的电脑上启
 ## 功能特性
 
 - **本地优先**：代理运行在你自己的机器上，直接使用你的项目、环境变量、工具链和账号配置
-- **多代理统一入口**：同一个界面管理 Claude Code、Codex、Copilot、OpenCode、Pi 等代理
+- **多代理统一入口**：同一个界面管理 Claude Code、Codex、Copilot、OpenCode、MiMoCode、Pi 等代理
 - **跨设备协作**：桌面端、手机端、网页端和 CLI 都能连接同一个 daemon
 - **并行任务**：同时启动多个代理，让它们在不同工作树或目录中处理独立任务
 - **语音控制**：支持语音输入和语音模式，适合移动端或不方便打字时使用
@@ -41,7 +41,7 @@ ChisaCode 是一个本地优先的 AI 编程工作台。它在你的电脑上启
 flowchart LR
   User["用户"] --> App["桌面端 / 手机端 / Web / CLI"]
   App --> Daemon["ChisaCode daemon"]
-  Daemon --> Agents["Claude Code / Codex / Copilot / OpenCode / Pi"]
+  Daemon --> Agents["Claude Code / Codex / Copilot / OpenCode / MiMoCode / Pi"]
   Daemon --> Project["本地项目与开发环境"]
   App -. 远程连接 .-> Relay["中转服务器"]
   Relay -. E2E 加密通道 .-> Daemon
@@ -60,6 +60,7 @@ daemon 是核心服务：它负责启动代理、保存会话、转发终端输�
 - [Codex](https://github.com/openai/codex)
 - [GitHub Copilot CLI](https://github.com/features/copilot/cli/)
 - [OpenCode](https://github.com/anomalyco/opencode)
+- [MiMoCode](https://github.com/XiaomiMiMo/MiMo-Code)
 - [Pi](https://pi.dev)
 
 这些工具的登录和 API Key 配置仍然由各自 CLI 管理。ChisaCode 只负责启动和编排它们。
@@ -113,7 +114,6 @@ npm run dev:win
 npm run dev:server
 npm run dev:app
 npm run dev:desktop
-npm run dev:website
 
 npm run build:server
 npm run build:desktop
@@ -133,7 +133,6 @@ npm run lint
 | `@chisacode/desktop`  | Electron 桌面壳，负责桌面端安装包和本地 daemon 管理          |
 | `@chisacode/cli`      | 命令行入口，用于启动 daemon、创建任务、连接会话              |
 | `@chisacode/relay`    | 端到端加密中转服务，用于跨网络连接 daemon                    |
-| `@chisacode/website`  | 官网和公开文档站点                                           |
 
 ## 打包
 

@@ -2,7 +2,11 @@ import { EventEmitter } from "node:events";
 import { describe, expect, test, vi } from "vitest";
 
 import { createTestLogger } from "../../../test-utils/test-logger.js";
-import { OpenCodeServerManager, type OpenCodeServerGeneration } from "./opencode/server-manager.js";
+import {
+  OpenCodeServerManager,
+  type OpenCodeLikeProviderConfig,
+  type OpenCodeServerGeneration,
+} from "./opencode/server-manager.js";
 
 type FakeServerProcess = EventEmitter & {
   killed: boolean;
@@ -12,6 +16,30 @@ type FakeServerProcess = EventEmitter & {
 type FakeGeneration = OpenCodeServerGeneration & { process: FakeServerProcess };
 
 describe("OpenCodeServerManager generations", () => {
+  test("keeps server manager instances isolated by provider id", () => {
+    const logger = createTestLogger();
+    const opencodeManager = OpenCodeServerManager.getInstance(logger, undefined, {
+      providerId: "opencode",
+      label: "OpenCode",
+      binary: "opencode",
+      serveArgs: (port) => ["serve", "--port", port],
+      rotateServerOnForceRefresh: true,
+      ignoreSystemEnvForDedicatedServer: false,
+      installUrl: "https://github.com/opencode-ai/opencode",
+    });
+    const mimoCodeManager = OpenCodeServerManager.getInstance(logger, undefined, {
+      providerId: "mimocode",
+      label: "MiMoCode",
+      binary: "mimo",
+      serveArgs: (port) => ["serve", "--port", port],
+      rotateServerOnForceRefresh: false,
+      ignoreSystemEnvForDedicatedServer: true,
+      installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
+    });
+
+    expect(mimoCodeManager).not.toBe(opencodeManager);
+  });
+
   test("rotation creates a new current server without killing a referenced old server", async () => {
     const manager = createTestManager();
     const first = createGeneration(4101);
@@ -72,6 +100,97 @@ describe("OpenCodeServerManager generations", () => {
 
     modesAcquisition.release();
     modelsAcquisition.release();
+  });
+
+  test("forced acquisitions reuse current server when rotation is disabled", async () => {
+    const manager = createTestManager({
+      providerId: "mimocode",
+      label: "MiMoCode",
+      binary: "mimo",
+      serveArgs: (port) => ["serve", "--port", port],
+      rotateServerOnForceRefresh: false,
+      ignoreSystemEnvForDedicatedServer: true,
+      installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
+    });
+    const first = createGeneration(4261);
+    const second = createGeneration(4262);
+    const startServer = stubGenerations(manager, [first, second]);
+
+    const initialAcquisition = await manager.acquire({ force: false });
+    initialAcquisition.release();
+
+    const forcedAcquisition = await manager.acquire({ force: true });
+
+    expect(forcedAcquisition.server.url).toBe("http://127.0.0.1:4261");
+    expect(startServer).toHaveBeenCalledTimes(1);
+    expect(first.process.kill).not.toHaveBeenCalled();
+
+    forcedAcquisition.release();
+  });
+
+  test("empty launch env reuses current server", async () => {
+    const manager = createTestManager();
+    const first = createGeneration(4271);
+    const second = createGeneration(4272);
+    const startServer = stubGenerations(manager, [first, second]);
+
+    const initialAcquisition = await manager.acquire({ force: false });
+    initialAcquisition.release();
+
+    const emptyEnvAcquisition = await manager.acquire({ force: false, env: {} });
+
+    expect(emptyEnvAcquisition.server.url).toBe("http://127.0.0.1:4271");
+    expect(startServer).toHaveBeenCalledTimes(1);
+
+    emptyEnvAcquisition.release();
+  });
+
+  test("non-empty launch env starts a dedicated server", async () => {
+    const manager = createTestManager();
+    const first = createGeneration(4281);
+    const second = createGeneration(4282);
+    const startServer = stubGenerations(manager, [first, second]);
+
+    const initialAcquisition = await manager.acquire({ force: false });
+    initialAcquisition.release();
+
+    const envAcquisition = await manager.acquire({
+      force: false,
+      env: { OPENCODE_TEST_ENV: "1" },
+    });
+
+    expect(envAcquisition.server.url).toBe("http://127.0.0.1:4282");
+    expect(startServer).toHaveBeenCalledTimes(2);
+
+    envAcquisition.release();
+  });
+
+  test("system-only launch env reuses current server when configured", async () => {
+    const manager = createTestManager({
+      providerId: "mimocode",
+      label: "MiMoCode",
+      binary: "mimo",
+      serveArgs: (port) => ["serve", "--port", port],
+      rotateServerOnForceRefresh: false,
+      ignoreSystemEnvForDedicatedServer: true,
+      installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
+    });
+    const first = createGeneration(4291);
+    const second = createGeneration(4292);
+    const startServer = stubGenerations(manager, [first, second]);
+
+    const initialAcquisition = await manager.acquire({ force: false });
+    initialAcquisition.release();
+
+    const systemEnvAcquisition = await manager.acquire({
+      force: false,
+      env: { CHISACODE_AGENT_ID: "agent_test" },
+    });
+
+    expect(systemEnvAcquisition.server.url).toBe("http://127.0.0.1:4291");
+    expect(startServer).toHaveBeenCalledTimes(1);
+
+    systemEnvAcquisition.release();
   });
 
   test("release is idempotent", async () => {
@@ -141,11 +260,15 @@ describe("OpenCodeServerManager generations", () => {
   });
 });
 
-function createTestManager(): OpenCodeServerManager {
+function createTestManager(providerConfig?: OpenCodeLikeProviderConfig): OpenCodeServerManager {
   const ManagerConstructor = OpenCodeServerManager as unknown as {
-    new (logger: ReturnType<typeof createTestLogger>): OpenCodeServerManager;
+    new (
+      logger: ReturnType<typeof createTestLogger>,
+      runtimeSettings?: undefined,
+      providerConfig?: OpenCodeLikeProviderConfig,
+    ): OpenCodeServerManager;
   };
-  return new ManagerConstructor(createTestLogger());
+  return new ManagerConstructor(createTestLogger(), undefined, providerConfig);
 }
 
 function stubGenerations(

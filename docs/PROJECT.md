@@ -80,7 +80,6 @@ ChisaCode 是一个**本地优先的 AI 编程 agent 编排平台**:
 | `packages/client`             | Daemon WS 客户端 SDK | `src/daemon-client.ts` 等                                           |
 | `packages/highlight`          | 代码高亮             | —                                                                   |
 | `packages/expo-two-way-audio` | 双向音频 native 模块 | —                                                                   |
-| `packages/website`            | 营销站 chisacode.sh  | TanStack Router + Cloudflare Workers                                |
 
 ### 1.3 三种部署模型
 

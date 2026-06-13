@@ -21,6 +21,7 @@ import {
   type LayoutChangeEvent,
   type PressableStateCallbackType,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -223,6 +224,7 @@ export interface ComboboxItemProps {
   kind?: "directory" | "file";
   leadingSlot?: ReactNode;
   trailingSlot?: ReactNode;
+  labelStyle?: StyleProp<TextStyle>;
   selected?: boolean;
   active?: boolean;
   disabled?: boolean;
@@ -238,6 +240,7 @@ export function ComboboxItem({
   kind,
   leadingSlot,
   trailingSlot,
+  labelStyle,
   selected,
   active,
   disabled,
@@ -279,12 +282,13 @@ export function ComboboxItem({
     () => [styles.comboboxItemContent, description && styles.comboboxItemContentInline],
     [description],
   );
+  const labelCombinedStyle = useMemo(() => [styles.comboboxItemLabel, labelStyle], [labelStyle]);
 
   return (
     <Pressable testID={testID} disabled={disabled} onPress={onPress} style={itemPressableStyle}>
       {leadingContent}
       <View style={itemContentStyle}>
-        <Text numberOfLines={1} style={styles.comboboxItemLabel}>
+        <Text numberOfLines={1} style={labelCombinedStyle}>
           {label}
         </Text>
         {description ? (

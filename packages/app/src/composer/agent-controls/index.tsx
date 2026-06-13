@@ -963,16 +963,18 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
 
       {extras}
 
-      {features?.map((feature) => (
-        <DesktopFeatureItem
-          key={`feature-${feature.id}`}
-          feature={feature}
-          disabled={disabled}
-          openSelector={openSelector}
-          handleOpenChange={handleOpenChange}
-          onSetFeature={onSetFeature}
-        />
-      ))}
+      {features
+        ?.filter((feature) => feature.id !== "plan_mode")
+        .map((feature) => (
+          <DesktopFeatureItem
+            key={`feature-${feature.id}`}
+            feature={feature}
+            disabled={disabled}
+            openSelector={openSelector}
+            handleOpenChange={handleOpenChange}
+            onSetFeature={onSetFeature}
+          />
+        ))}
     </>
   );
 }

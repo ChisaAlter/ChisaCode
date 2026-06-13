@@ -65,6 +65,8 @@ export interface AttachmentMenuItem {
   onSelect: () => void;
   disabled?: boolean;
   icon?: React.ReactElement | null;
+  trailing?: React.ReactElement | null;
+  closeOnSelect?: boolean;
 }
 
 export interface MessageInputProps {
@@ -191,6 +193,8 @@ function AttachmentMenuList({ items }: { items: AttachmentMenuItem[] }) {
           disabled={item.disabled}
           onSelect={item.onSelect}
           leading={item.icon ?? null}
+          trailing={item.trailing ?? null}
+          closeOnSelect={item.closeOnSelect ?? true}
         >
           {item.label}
         </DropdownMenuItem>

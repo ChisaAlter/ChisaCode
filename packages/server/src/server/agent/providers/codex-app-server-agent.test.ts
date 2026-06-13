@@ -138,6 +138,7 @@ type CapturedFakeCodexRecord = Record<string, unknown>;
 async function runCustomCodexProviderTurn(
   providerId: string,
   baseUrl: string,
+  wireApi: "responses" | "chat" = "responses",
 ): Promise<CapturedFakeCodexRecord[]> {
   const tempDir = await mkdtemp(path.join(tmpdir(), "codex-custom-provider-"));
   const fakeAppServerPath = path.join(tempDir, "fake-codex-app-server.cjs");
@@ -197,6 +198,7 @@ process.stdin.on("data", (chunk) => {
         env: {
           OPENAI_API_KEY: "sk-custom",
           OPENAI_BASE_URL: baseUrl,
+          OPENAI_WIRE_API: wireApi,
           CHISACODE_FAKE_CODEX_CAPTURE: capturedRequestsPath,
         },
       },
@@ -596,6 +598,23 @@ describe("Codex app-server provider", () => {
       model_providers: {
         "codex-custom": expect.objectContaining({
           base_url: "https://custom-relay.example.com/v1",
+        }),
+      },
+    });
+  });
+
+  test("configures Codex app-server to use chat wire API for converted OpenAI-compatible providers", async () => {
+    const capturedRequests = await runCustomCodexProviderTurn(
+      "codex-chat",
+      "https://custom-relay.example.com",
+      "chat",
+    );
+
+    expect(capturedThreadStartConfig(capturedRequests)).toEqual({
+      model_provider: "codex-chat",
+      model_providers: {
+        "codex-chat": expect.objectContaining({
+          wire_api: "chat",
         }),
       },
     });

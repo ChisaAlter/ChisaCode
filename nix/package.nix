@@ -34,8 +34,6 @@ buildNpmPackage rec {
       && !(lib.hasPrefix "/packages/app/assets" relPath)
       && !(lib.hasPrefix "/packages/app/android" relPath)
       && !(lib.hasPrefix "/packages/app/ios" relPath)
-      && !(lib.hasPrefix "/packages/website/src" relPath)
-      && !(lib.hasPrefix "/packages/website/public" relPath)
       && !(lib.hasPrefix "/packages/desktop/src" relPath)
       && !(lib.hasPrefix "/packages/desktop/src-tauri" relPath)
       # Exclude test fixtures and debug files
@@ -122,7 +120,7 @@ buildNpmPackage rec {
   '';
 
   meta = {
-    description = "Self-hosted daemon for Claude Code, Codex, and OpenCode";
+    description = "Self-hosted daemon for Claude Code, Codex, OpenCode, and MiMoCode";
     homepage = "https://github.com/getchisacode/chisacode";
     license = lib.licenses.agpl3Plus;
     mainProgram = "chisacode";

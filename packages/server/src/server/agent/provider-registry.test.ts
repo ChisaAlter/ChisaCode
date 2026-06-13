@@ -306,6 +306,13 @@ test("builds registry with no overrides — same as built-in count", () => {
   expect(Object.keys(registry)).toHaveLength(AGENT_PROVIDER_DEFINITIONS.length);
 });
 
+test("mimocode client is exposed under the mimocode provider id", () => {
+  const registry = buildProviderRegistry(logger);
+  const client = registry.mimocode.createClient(logger);
+
+  expect(client.provider).toBe("mimocode");
+});
+
 test("includes mock provider only for development builds", () => {
   expect(buildProviderRegistry(logger).mock).toBeUndefined();
   expect(buildProviderRegistry(logger, { isDev: false }).mock).toBeUndefined();

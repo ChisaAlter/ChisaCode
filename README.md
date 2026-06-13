@@ -16,14 +16,14 @@
   <a href="README.zh-CN.md">中文文档</a>
 </p>
 
-<p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
+<p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi agents.</p>
 
 ---
 
 Run agents in parallel on your own machines. Ship from your phone or your desk.
 
 - **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
-- **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
+- **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi through the same interface. Pick the right model for each job.
 - **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
 - **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
 - **Privacy-first:** ChisaCode doesn't have any telemetry, tracking, or forced log-ins.
@@ -40,6 +40,7 @@ You need at least one agent CLI installed and configured with your credentials:
 - [Codex](https://github.com/openai/codex)
 - [GitHub Copilot](https://github.com/features/copilot/cli/)
 - [OpenCode](https://github.com/anomalyco/opencode)
+- [MiMoCode](https://github.com/XiaomiMiMo/MiMo-Code)
 - [Pi](https://pi.dev)
 
 ### Desktop app (recommended)
@@ -106,7 +107,6 @@ Quick monorepo package map:
 - `packages/cli`: `chisacode` CLI for daemon and agent workflows
 - `packages/desktop`: Electron desktop app
 - `packages/relay`: Relay package for remote connectivity
-- `packages/website`: Marketing site and documentation (`chisacode.sh`)
 
 Common commands:
 
@@ -118,7 +118,6 @@ npm run dev
 npm run dev:server
 npm run dev:app
 npm run dev:desktop
-npm run dev:website
 
 # build the server stack
 npm run build:server

@@ -4,6 +4,7 @@ import {
   Text,
   ActivityIndicator,
   Image,
+  type GestureResponderEvent,
   type PressableStateCallbackType,
 } from "react-native";
 import {
@@ -13,10 +14,11 @@ import {
   useCallback,
   useMemo,
   memo,
+  type MutableRefObject,
   type ReactElement,
   type ReactNode,
 } from "react";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
 import {
@@ -27,7 +29,9 @@ import {
   CircleDot,
   GitPullRequest,
   Github,
+  ListTodo,
   Paperclip,
+  Target,
 } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
@@ -87,6 +91,7 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
+import type { AgentFeature } from "@chisacode/protocol/agent-types";
 import type { GitHubSearchItem } from "@chisacode/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -105,6 +110,7 @@ import { useGithubSearchQuery } from "@/git/use-github-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
+import { buildToggleFeatureMenuItems } from "@/composer/agent-controls/utils";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
 
 type QueuedMessage = QueuedComposerMessage;
@@ -179,7 +185,6 @@ function buildRealtimeVoiceButtonStyle(
     (value): value is object => Boolean(value),
   );
 }
-
 
 function renderContextWindowMeter(
   contextWindowMaxTokens: number | null,
@@ -615,6 +620,116 @@ function GithubPickerOption({
       leadingSlot={leadingSlot}
     />
   );
+}
+
+function FeatureMenuSwitch({
+  value,
+  featureId,
+  label,
+  disabled,
+  onToggleFeature,
+}: {
+  value: boolean;
+  featureId: string;
+  label: string;
+  disabled: boolean;
+  onToggleFeature: (featureId: string, value: boolean) => void;
+}) {
+  const { theme } = useUnistyles();
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      if (disabled) return;
+      onToggleFeature(featureId, !value);
+    },
+    [disabled, featureId, onToggleFeature, value],
+  );
+  const trackStyle = useMemo(
+    () => [
+      styles.featureMenuSwitchTrack,
+      {
+        backgroundColor: value ? theme.colors.accent : theme.colors.surface3,
+        opacity: disabled ? theme.opacity[50] : 1,
+      },
+    ],
+    [disabled, theme.colors.accent, theme.colors.surface3, theme.opacity, value],
+  );
+  const thumbStyle = useMemo(
+    () => [styles.featureMenuSwitchThumb, value ? styles.featureMenuSwitchThumbOn : null],
+    [value],
+  );
+  const accessibilityState = useMemo(() => ({ checked: value, disabled }), [disabled, value]);
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="switch"
+      accessibilityState={accessibilityState}
+      accessibilityLabel={label}
+      testID={`composer-feature-switch-${featureId}`}
+    >
+      <View style={trackStyle}>
+        <View style={thumbStyle} />
+      </View>
+    </Pressable>
+  );
+}
+
+function useComposerFeatureMenu(input: {
+  agentControls: DraftAgentControlsProps | undefined;
+  agentFeatures: AgentFeature[];
+  agentProvider: string | null;
+  agentId: string;
+  client: ReturnType<typeof useHostRuntimeClient>;
+  focusInput: () => void;
+  setUserInput: (text: string) => void;
+  toastErrorRef: MutableRefObject<(message: string) => void>;
+}) {
+  const {
+    agentControls,
+    agentFeatures,
+    agentProvider,
+    agentId,
+    client,
+    focusInput,
+    setUserInput,
+    toastErrorRef,
+  } = input;
+  const activeProvider = agentControls?.selectedProvider ?? agentProvider;
+  const featureMenuDescriptors = useMemo(
+    () => buildToggleFeatureMenuItems(agentControls?.features ?? agentFeatures),
+    [agentControls?.features, agentFeatures],
+  );
+  const handleSetFeatureFromMenu = useCallback(
+    (featureId: string, nextValue: boolean) => {
+      if (agentControls?.onSetFeature) {
+        agentControls.onSetFeature(featureId, nextValue);
+        return;
+      }
+      if (!client) {
+        return;
+      }
+      void client.setAgentFeature(agentId, featureId, nextValue).catch((error) => {
+        console.warn("[Composer] setAgentFeature failed", error);
+        toastErrorRef.current(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [agentControls, agentId, client, toastErrorRef],
+  );
+
+  const handleOpenGoalCommand = useCallback(() => {
+    setUserInput("/goal ");
+    focusInput();
+  }, [focusInput, setUserInput]);
+
+  return {
+    activeProvider,
+    featureMenuDescriptors,
+    handleOpenGoalCommand,
+    handleSetFeatureFromMenu,
+  };
 }
 
 interface ComposerProps {
@@ -1218,6 +1333,22 @@ export function Composer({
     addImages(newImages);
   }, [addImages, pickImages]);
 
+  const {
+    activeProvider,
+    featureMenuDescriptors,
+    handleOpenGoalCommand,
+    handleSetFeatureFromMenu,
+  } = useComposerFeatureMenu({
+    agentControls,
+    agentFeatures: agentState.features,
+    agentProvider: agentState.provider,
+    agentId,
+    client,
+    focusInput,
+    setUserInput,
+    toastErrorRef,
+  });
+
   const handleRemoveAttachment = useCallback(
     (index: number) => {
       githubAutoAttach.markGithubAttachmentRemoved(selectedAttachments[index]);
@@ -1501,11 +1632,11 @@ export function Composer({
     [githubSearchItems, githubSearchQueryTrimmed],
   );
 
-  const attachmentMenuItems = useMemo<AttachmentMenuItem[]>(
-    () => [
+  const attachmentMenuItems = useMemo<AttachmentMenuItem[]>(() => {
+    const items: AttachmentMenuItem[] = [
       {
         id: "image",
-        label: t("composer.addImage"),
+        label: t("composer.addPhotosAndFiles"),
         icon: <ThemedPaperclip size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
         onSelect: () => {
           void handlePickImage();
@@ -1519,9 +1650,47 @@ export function Composer({
           setIsGithubPickerOpen(true);
         },
       },
-    ],
-    [handlePickImage, t],
-  );
+    ];
+
+    for (const feature of featureMenuDescriptors) {
+      items.push({
+        id: `feature-${feature.id}`,
+        label: feature.label,
+        icon: <ThemedListTodo size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        trailing: (
+          <FeatureMenuSwitch
+            value={feature.selected}
+            featureId={feature.id}
+            label={feature.label}
+            disabled={isComposerLocked}
+            onToggleFeature={handleSetFeatureFromMenu}
+          />
+        ),
+        disabled: isComposerLocked,
+        closeOnSelect: false,
+        onSelect: () => handleSetFeatureFromMenu(feature.id, !feature.selected),
+      });
+    }
+
+    if (activeProvider === "codex") {
+      items.push({
+        id: "goal",
+        label: t("composer.pursueGoal"),
+        icon: <ThemedTarget size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        onSelect: handleOpenGoalCommand,
+      });
+    }
+
+    return items;
+  }, [
+    activeProvider,
+    featureMenuDescriptors,
+    handleOpenGoalCommand,
+    handlePickImage,
+    handleSetFeatureFromMenu,
+    isComposerLocked,
+    t,
+  ]);
 
   const handleToggleGithubItem = useCallback(
     (item: GitHubSearchItem) => {
@@ -1837,6 +2006,27 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  featureMenuSwitchTrack: {
+    width: 34,
+    height: 20,
+    borderRadius: 10,
+    padding: 2,
+    justifyContent: "center",
+  },
+  featureMenuSwitchThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: theme.colors.palette.white,
+    shadowColor: "rgba(0, 0, 0, 0.25)",
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    shadowOpacity: 1,
+    elevation: 2,
+  },
+  featureMenuSwitchThumbOn: {
+    transform: [{ translateX: 14 }],
+  },
   realtimeVoiceButtonActive: {
     backgroundColor: theme.colors.palette.green[600],
     borderColor: theme.colors.palette.green[800],
@@ -1943,6 +2133,8 @@ const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedAudioLines = withUnistyles(AudioLines);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedGithub = withUnistyles(Github);
+const ThemedListTodo = withUnistyles(ListTodo);
+const ThemedTarget = withUnistyles(Target);
 
 const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });

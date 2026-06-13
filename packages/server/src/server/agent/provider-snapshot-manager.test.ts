@@ -71,7 +71,7 @@ describe("ProviderSnapshotManager public surface", () => {
     const manager = new ProviderSnapshotManager({ logger: createTestLogger() });
     try {
       const ids = manager.listRegisteredProviderIds();
-      expect(ids).toEqual(["claude", "codex", "opencode", "pi", "kimi"]);
+      expect(ids).toEqual(["claude", "codex", "opencode", "mimocode", "pi", "kimi"]);
     } finally {
       manager.destroy();
     }
@@ -130,6 +130,7 @@ describe("ProviderSnapshotManager public surface", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -155,6 +156,7 @@ describe("ProviderSnapshotManager public surface", () => {
       providerOverrides: {
         claude: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -181,6 +183,7 @@ describe("ProviderSnapshotManager public surface", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -188,7 +191,7 @@ describe("ProviderSnapshotManager public surface", () => {
     try {
       const entries = await manager.listProviders({ cwd: "/tmp/project", wait: true });
       const providers = entries.map((entry) => entry.provider).sort();
-      expect(providers).toEqual(["claude", "codex", "kimi", "opencode", "pi"]);
+      expect(providers).toEqual(["claude", "codex", "kimi", "mimocode", "opencode", "pi"]);
       for (const entry of entries) {
         expect(entry.enabled).toBe(false);
         expect(entry.status).toBe("unavailable");
@@ -341,6 +344,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -367,6 +371,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         claude: { enabled: true },
         codex: { enabled: true },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -393,6 +398,7 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -429,6 +435,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -456,6 +463,7 @@ describe("ProviderSnapshotManager lifecycle", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -479,6 +487,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },
@@ -502,6 +511,7 @@ describe("ProviderSnapshotManager cwd routing", () => {
         claude: { enabled: false },
         codex: { enabled: false },
         opencode: { enabled: false },
+        mimocode: { enabled: false },
         pi: { enabled: false },
         kimi: { enabled: false },
       },

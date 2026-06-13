@@ -12,17 +12,11 @@ if (rg.status !== 0) {
   process.exit(1);
 }
 
-const targetRoots = [
-  "packages/app/src",
-  "packages/desktop/src",
-  "packages/website/src",
-  "packages/cli/src",
-];
+const targetRoots = ["packages/app/src", "packages/desktop/src", "packages/cli/src"];
 
 const allowedLocalizationFiles = new Set([
   "packages/app/src/i18n/index.ts",
   "packages/desktop/src/i18n.ts",
-  "packages/website/src/i18n.tsx",
   "packages/cli/src/i18n.ts",
 ]);
 

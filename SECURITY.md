@@ -62,7 +62,7 @@ ChisaCode validates the `Host` header on every HTTP request and every WebSocket 
 
 ## Agent authentication
 
-ChisaCode wraps agent CLIs (Claude Code, Codex, OpenCode) but does not manage their authentication. Each agent provider handles its own credentials. ChisaCode never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
+ChisaCode wraps agent CLIs (Claude Code, Codex, OpenCode, MiMoCode) but does not manage their authentication. Each agent provider handles its own credentials. ChisaCode never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
 
 ## Reporting vulnerabilities
 

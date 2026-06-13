@@ -30,7 +30,7 @@ Rules that apply to both steps:
 There are two supported ways to ship from `main`:
 
 1. **Direct stable release**: you are ready to ship the current `main` commit to everyone immediately.
-2. **Beta flow**: silent release candidates. Betas don't touch the changelog, don't move the website, and don't publish npm or production mobile builds.
+2. **Beta flow**: silent release candidates. Betas don't touch the changelog, and don't publish npm or production mobile builds.
 
 ## Standard release (patch)
 
@@ -232,13 +232,6 @@ Tight cadence on purpose. The first run fires immediately, giving a near-real-ti
 
 The GitHub Release body is populated automatically by the `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). It triggers on every `v*` tag push and on any push to `main` that touches `CHANGELOG.md`, then runs `scripts/sync-release-notes-from-changelog.mjs` to mirror the matching changelog entry into the release body. You don't need to write release notes on GitHub manually — keep `CHANGELOG.md` correct and the workflow will sync it. To force a re-sync, dispatch the workflow with the tag input.
 
-## Website behavior
-
-- The website download page points to GitHub's latest published **stable** release.
-- Published beta prereleases are public on GitHub Releases, but they do **not** become the website download target.
-- The website only moves when you publish the final stable release tag like `v0.1.41`.
-- The website itself is deployed by `Deploy Website` (Cloudflare Workers), which redeploys on `release: published` for non-prerelease releases and on pushes to `main` that touch `CHANGELOG.md` or `packages/website/**`.
-
 ## Fixing a failed release build
 
 **NEVER bump the version to fix a build problem.** New versions are reserved for meaningful product changes (features, fixes, improvements). Build/CI failures are fixed on the current version.
@@ -280,7 +273,6 @@ This ensures the checkout ref matches the actual code on `main` with the fix inc
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - `npm run dev:desktop` and `npm run build:desktop` target the Electron desktop package in `packages/desktop`
 - If `release:publish` partially fails, re-run it — npm skips already-published versions
-- The website uses GitHub's latest published release API for download links, so published beta prereleases do not replace the stable download target.
 
 ## Changelog format
 

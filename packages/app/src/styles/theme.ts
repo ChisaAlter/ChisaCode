@@ -106,7 +106,7 @@ export const baseColors = {
   },
 } as const;
 
-export type ThemeName = "light" | "dark" | "zinc" | "midnight" | "claude" | "ghostty";
+export type ThemeName = "light" | "dark" | "zinc" | "midnight" | "claude" | "ghostty" | "chisaki";
 
 // Diff stat colors — light uses muted tones, dark uses the brighter palette values
 const lightDiffColors = {
@@ -213,6 +213,27 @@ const lightSemanticColors = {
     brightMagenta: "#a855f7",
     brightCyan: "#06b6d4",
     brightWhite: "#fafafa",
+  },
+} as const;
+
+const chisakiSemanticColors = {
+  ...lightSemanticColors,
+
+  scrollbarHandle: "#dc2626",
+
+  border: "#dc2626",
+  borderAccent: "#dc2626",
+
+  accentBorder: "#dc2626",
+  ring: "#dc2626",
+
+  terminal: {
+    ...lightSemanticColors.terminal,
+    cursor: "#dc2626",
+    cursorAccent: "#ffffff",
+    selectionBackground: "rgba(220, 38, 38, 0.16)",
+    red: "#dc2626",
+    brightRed: "#ef4444",
   },
 } as const;
 
@@ -566,11 +587,41 @@ export const lightTheme = {
   ...commonTheme,
 } as const;
 
+export const chisakiTheme = {
+  colorScheme: "light" as const,
+  colors: {
+    ...chisakiSemanticColors,
+    palette: baseColors,
+    syntax: lightHighlightColors,
+  },
+  shadow: {
+    sm: {
+      shadowColor: "rgba(0, 0, 0, 0.02)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    md: {
+      shadowColor: "rgba(0, 0, 0, 0.04)",
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 16,
+      elevation: 4,
+    },
+    lg: {
+      shadowColor: "rgba(0, 0, 0, 0.08)",
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 24,
+      elevation: 8,
+    },
+  },
+  ...commonTheme,
+} as const;
+
 // Keep compatibility with existing code
 export const theme = darkTheme;
 
 // Export a union type that works for both themes
-export type Theme = typeof darkTheme | typeof lightTheme;
+export type Theme = typeof darkTheme | typeof lightTheme | typeof chisakiTheme;
 
 type UnistylesThemeKey =
   | "light"
@@ -578,7 +629,8 @@ type UnistylesThemeKey =
   | "darkZinc"
   | "darkMidnight"
   | "darkClaude"
-  | "darkGhostty";
+  | "darkGhostty"
+  | "chisaki";
 
 export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
   light: "light",
@@ -587,6 +639,7 @@ export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
   midnight: "darkMidnight",
   claude: "darkClaude",
   ghostty: "darkGhostty",
+  chisaki: "chisaki",
 };
 
 export const THEME_SWATCHES: Record<ThemeName, string> = {
@@ -596,4 +649,58 @@ export const THEME_SWATCHES: Record<ThemeName, string> = {
   midnight: "#4A6BA8",
   claude: "#D97757",
   ghostty: "#8caaee",
+  chisaki: "#dc2626",
+};
+
+export const THEME_PREVIEWS: Record<
+  ThemeName,
+  {
+    surface: string;
+    border: string;
+    line: string;
+    accent: string;
+  }
+> = {
+  light: {
+    surface: lightSemanticColors.surface0,
+    border: lightSemanticColors.border,
+    line: lightSemanticColors.surface3,
+    accent: lightSemanticColors.accent,
+  },
+  dark: {
+    surface: chisacodeDarkColors.surface0,
+    border: chisacodeDarkColors.borderAccent,
+    line: chisacodeDarkColors.surface3,
+    accent: chisacodeDarkColors.accent,
+  },
+  zinc: {
+    surface: zincDarkColors.surface0,
+    border: zincDarkColors.borderAccent,
+    line: zincDarkColors.surface3,
+    accent: zincDarkColors.accent,
+  },
+  midnight: {
+    surface: midnightDarkColors.surface0,
+    border: midnightDarkColors.borderAccent,
+    line: midnightDarkColors.surface3,
+    accent: midnightDarkColors.accent,
+  },
+  claude: {
+    surface: claudeDarkColors.surface0,
+    border: claudeDarkColors.borderAccent,
+    line: claudeDarkColors.surface3,
+    accent: claudeDarkColors.accent,
+  },
+  ghostty: {
+    surface: ghosttyDarkColors.surface0,
+    border: ghosttyDarkColors.borderAccent,
+    line: ghosttyDarkColors.surface3,
+    accent: ghosttyDarkColors.accent,
+  },
+  chisaki: {
+    surface: chisakiSemanticColors.surface0,
+    border: chisakiSemanticColors.borderAccent,
+    line: chisakiSemanticColors.border,
+    accent: chisakiSemanticColors.borderAccent,
+  },
 };

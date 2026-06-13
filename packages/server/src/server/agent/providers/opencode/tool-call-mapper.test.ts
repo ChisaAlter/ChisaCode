@@ -303,7 +303,7 @@ describe("opencode tool-call mapper", () => {
         callId: "opencode-edit-camel",
         status: "completed",
         input: {
-          filePath: "/Users/moboudra/dev/chisacode/packages/website/src/data/agent-pages.ts",
+          filePath: "/Users/moboudra/dev/chisacode/packages/app/src/data/agent-pages.ts",
           oldString: 'metaTitle: "Junie agent Mobile and Desktop App, Open Source"',
           newString: 'metaTitle: "Junie Agent Mobile and Desktop App, Open Source"',
         },
@@ -313,7 +313,7 @@ describe("opencode tool-call mapper", () => {
 
     expect(item.detail).toEqual({
       type: "edit",
-      filePath: "/Users/moboudra/dev/chisacode/packages/website/src/data/agent-pages.ts",
+      filePath: "/Users/moboudra/dev/chisacode/packages/app/src/data/agent-pages.ts",
       oldString: 'metaTitle: "Junie agent Mobile and Desktop App, Open Source"',
       newString: 'metaTitle: "Junie Agent Mobile and Desktop App, Open Source"',
     });
