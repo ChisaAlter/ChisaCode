@@ -10,10 +10,14 @@ import { navigateToAgent } from "@/utils/navigate-to-agent";
 
 const {
   theme,
+  routerPushMock,
   archiveAgentMock,
   updateAgentMock,
   deleteAgentMock,
   setAgentsMock,
+  getQueryDataMock,
+  setQueryDataMock,
+  removeQueriesMock,
   invalidateQueriesMock,
   setStringAsyncMock,
   toastCopiedMock,
@@ -31,6 +35,8 @@ const {
       foregroundMuted: "#aaa",
       accent: "#22c55e",
       border: "#555",
+      surface0: "#222",
+      surface1: "#333",
       surface2: "#222",
       surface3: "#444",
       surfaceSidebarHover: "#333",
@@ -39,11 +45,29 @@ const {
         red: { 300: "#fca5a5" },
       },
     },
+    shadow: {
+      sm: {
+        shadowColor: "rgba(0, 0, 0, 0.25)",
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 2,
+      },
+      md: {
+        shadowColor: "rgba(0, 0, 0, 0.20)",
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 8,
+        elevation: 8,
+      },
+    },
   },
+  routerPushMock: vi.fn(),
   archiveAgentMock: vi.fn(),
   updateAgentMock: vi.fn(),
   deleteAgentMock: vi.fn(),
   setAgentsMock: vi.fn(),
+  getQueryDataMock: vi.fn(),
+  setQueryDataMock: vi.fn(),
+  removeQueriesMock: vi.fn(),
   invalidateQueriesMock: vi.fn(),
   setStringAsyncMock: vi.fn(),
   toastCopiedMock: vi.fn(),
@@ -69,6 +93,12 @@ vi.mock("@/constants/platform", () => ({
 
 vi.mock("@/constants/layout", () => ({
   useIsCompactFormFactor: () => false,
+}));
+
+vi.mock("expo-router", () => ({
+  router: {
+    push: routerPushMock,
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -245,6 +275,9 @@ vi.mock("@/components/rename-modal", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
+    getQueryData: getQueryDataMock,
+    setQueryData: setQueryDataMock,
+    removeQueries: removeQueriesMock,
     invalidateQueries: invalidateQueriesMock,
   }),
 }));
@@ -279,6 +312,14 @@ vi.mock("@/stores/session-store", () => {
   return { useSessionStore };
 });
 
+vi.mock("@/stores/session-store-hooks", () => ({
+  useResolveWorkspaceIdByCwd: (_serverId: string | null, cwd: string | null | undefined) => {
+    if (cwd === "/repo/project") return "workspace-project";
+    if (cwd === "/repo/other") return "workspace-other";
+    return null;
+  },
+}));
+
 vi.mock("@/utils/navigate-to-agent", () => ({
   navigateToAgent: vi.fn(),
 }));
@@ -289,10 +330,13 @@ vi.mock("@/utils/agent-history-navigation", () => ({
 
 vi.mock("lucide-react-native", () => ({
   Archive: () => <span data-testid="archive-icon" />,
+  Bot: () => <span data-testid="bot-icon" />,
   Copy: () => <span data-testid="copy-icon" />,
+  Folder: () => <span data-testid="folder-icon" />,
   MoreHorizontal: () => <span data-testid="more-icon" />,
   Pencil: () => <span data-testid="pencil-icon" />,
   Pin: () => <span data-testid="pin-icon" />,
+  Plus: () => <span data-testid="plus-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
 }));
 
@@ -327,6 +371,7 @@ describe("SidebarSessionList", () => {
   });
 
   beforeEach(() => {
+    routerPushMock.mockReset();
     archiveAgentMock.mockReset();
     archiveAgentMock.mockResolvedValue(undefined);
     updateAgentMock.mockReset();
@@ -334,6 +379,9 @@ describe("SidebarSessionList", () => {
     deleteAgentMock.mockReset();
     deleteAgentMock.mockResolvedValue(undefined);
     setAgentsMock.mockReset();
+    getQueryDataMock.mockReset();
+    setQueryDataMock.mockReset();
+    removeQueriesMock.mockReset();
     invalidateQueriesMock.mockReset();
     setStringAsyncMock.mockReset();
     setStringAsyncMock.mockResolvedValue(undefined);
@@ -348,9 +396,43 @@ describe("SidebarSessionList", () => {
 
     renderSidebarSessionList({ serverId: "server-1", agents });
 
-    expect(screen.getByText("yuanhangxing")).toBeTruthy();
-    expect(screen.getByText("Review video pipeline")).toBeTruthy();
-    expect(screen.getByTestId("provider-icon-codex")).toBeTruthy();
+    expect(screen.getByText("yuanhangxing")).not.toBeNull();
+    expect(screen.getByText("Review video pipeline")).not.toBeNull();
+    expect(screen.getByTestId("folder-icon")).not.toBeNull();
+    expect(screen.getByTestId("provider-icon-codex")).not.toBeNull();
+  });
+
+  it("opens a new draft from a workspace group plus button", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Project session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    fireEvent.click(screen.getByTestId("sidebar-session-group-new-server-1-/repo/project"));
+
+    expect(routerPushMock).toHaveBeenCalledWith(
+      "/h/server-1/workspace/workspace-project?open=draft%3Anew",
+    );
+  });
+
+  it("renders session rows with title only and no status metadata", () => {
+    const agents = [
+      agent({
+        id: "agent-1",
+        cwd: "/repo/project",
+        title: "Summarized first prompt title",
+        status: "running",
+        pendingPermissionCount: 2,
+        requiresAttention: true,
+      }),
+    ];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    const row = screen.getByTestId("sidebar-session-server-1-agent-1");
+    expect(within(row).getByText("Summarized first prompt title")).not.toBeNull();
+    expect(within(row).queryByText("Running")).toBeNull();
+    expect(within(row).queryByText("2 pending")).toBeNull();
+    expect(within(row).queryByText("Needs attention")).toBeNull();
   });
 
   it("hides archived sessions from the sidebar", () => {
@@ -367,7 +449,7 @@ describe("SidebarSessionList", () => {
     renderSidebarSessionList({ serverId: "server-1", agents });
 
     expect(screen.queryByText("Archived session")).toBeNull();
-    expect(screen.getByText("Active session")).toBeTruthy();
+    expect(screen.getByText("Active session")).not.toBeNull();
   });
 
   it("navigates to visible sessions", () => {
@@ -388,7 +470,161 @@ describe("SidebarSessionList", () => {
     const emptyAgents: AggregatedAgent[] = [];
     renderSidebarSessionList({ serverId: "server-1", agents: emptyAgents });
 
-    expect(screen.getByText("No sessions yet")).toBeTruthy();
+    expect(screen.getByText("No sessions yet")).not.toBeNull();
+  });
+
+  it("renders draft sessions under their workspace and opens the draft route", () => {
+    renderSidebarSessionList({
+      serverId: "server-1",
+      agents: [],
+      drafts: [
+        {
+          serverId: "server-1",
+          workspaceId: "workspace-project",
+          draftId: "draft-1",
+          cwd: "/repo/project",
+          createdAt: new Date("2026-06-01T12:00:00.000Z"),
+        },
+      ],
+    });
+
+    expect(screen.getByText("project")).not.toBeNull();
+    const row = screen.getByTestId("sidebar-session-draft-server-1-workspace-project-draft-1");
+    expect(within(row).getByTestId("bot-icon")).not.toBeNull();
+    expect(within(row).getByText("New session")).not.toBeNull();
+
+    fireEvent.click(row);
+
+    expect(routerPushMock).toHaveBeenCalledWith(
+      "/h/server-1/workspace/workspace-project?open=draft%3Adraft-1",
+    );
+  });
+
+  it("keeps agent rows stable when draft rows are added and removed", () => {
+    const agents = [
+      agent({
+        id: "agent-1",
+        cwd: "/repo/project",
+        title: "Persistent agent session",
+        lastActivityAt: new Date("2026-06-01T11:00:00.000Z"),
+      }),
+    ];
+    const draft = {
+      serverId: "server-1",
+      workspaceId: "workspace-project",
+      draftId: "draft-1",
+      cwd: "/repo/project",
+      createdAt: new Date("2026-06-01T12:00:00.000Z"),
+    };
+
+    const { rerender } = renderSidebarSessionList({
+      serverId: "server-1",
+      agents,
+      drafts: [],
+    });
+
+    const rowBeforeDraft = screen.getByTestId("sidebar-session-server-1-agent-1");
+    expect(within(rowBeforeDraft).getByText("Persistent agent session")).not.toBeNull();
+
+    rerender(
+      React.createElement(SidebarSessionList, {
+        serverId: "server-1",
+        agents,
+        drafts: [draft],
+      }),
+    );
+
+    expect(screen.getByTestId("sidebar-session-server-1-agent-1")).not.toBeNull();
+    expect(
+      screen.getByTestId("sidebar-session-draft-server-1-workspace-project-draft-1"),
+    ).not.toBeNull();
+
+    rerender(
+      React.createElement(SidebarSessionList, {
+        serverId: "server-1",
+        agents,
+        drafts: [],
+      }),
+    );
+
+    const rowAfterDraft = screen.getByTestId("sidebar-session-server-1-agent-1");
+    expect(within(rowAfterDraft).getByText("Persistent agent session")).not.toBeNull();
+    expect(
+      screen.queryByTestId("sidebar-session-draft-server-1-workspace-project-draft-1"),
+    ).toBeNull();
+  });
+
+  it("does not reorder existing agent rows when a draft is added to an older group", () => {
+    const agents = [
+      agent({
+        id: "newer-agent",
+        cwd: "/repo/newer",
+        title: "Newer agent",
+        lastActivityAt: new Date("2026-06-01T12:00:00.000Z"),
+      }),
+      agent({
+        id: "older-agent",
+        cwd: "/repo/project",
+        title: "Older agent",
+        lastActivityAt: new Date("2026-06-01T11:00:00.000Z"),
+      }),
+    ];
+    const drafts = [
+      {
+        serverId: "server-1",
+        workspaceId: "workspace-project",
+        draftId: "draft-1",
+        cwd: "/repo/project",
+        createdAt: new Date("2026-06-01T13:00:00.000Z"),
+      },
+    ];
+
+    const { rerender } = renderSidebarSessionList({
+      serverId: "server-1",
+      agents,
+      drafts: [],
+    });
+
+    const newerBeforeDraft = screen.getByTestId("sidebar-session-server-1-newer-agent");
+    const olderBeforeDraft = screen.getByTestId("sidebar-session-server-1-older-agent");
+    expect(
+      newerBeforeDraft.compareDocumentPosition(olderBeforeDraft) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    rerender(
+      React.createElement(SidebarSessionList, {
+        serverId: "server-1",
+        agents,
+        drafts,
+      }),
+    );
+
+    const newerAfterDraft = screen.getByTestId("sidebar-session-server-1-newer-agent");
+    const olderAfterDraft = screen.getByTestId("sidebar-session-server-1-older-agent");
+    expect(
+      newerAfterDraft.compareDocumentPosition(olderAfterDraft) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+  });
+
+  it("does not render agent quick actions or context actions for draft sessions", () => {
+    renderSidebarSessionList({
+      serverId: "server-1",
+      agents: [],
+      drafts: [
+        {
+          serverId: "server-1",
+          workspaceId: "workspace-project",
+          draftId: "draft-1",
+          cwd: "/repo/project",
+          createdAt: new Date("2026-06-01T12:00:00.000Z"),
+        },
+      ],
+    });
+
+    expect(screen.queryByTestId("sidebar-session-quick-pin-server-1-draft-1")).toBeNull();
+    expect(screen.queryByTestId("sidebar-session-quick-archive-server-1-draft-1")).toBeNull();
+    expect(screen.queryByTestId("sidebar-session-rename-server-1-draft-1")).toBeNull();
+    expect(screen.queryByTestId("sidebar-session-delete-server-1-draft-1")).toBeNull();
   });
 
   it("renders load more action", () => {
@@ -419,10 +655,38 @@ describe("SidebarSessionList", () => {
 
   it("pins sessions from the row action", async () => {
     const agents = [agent({ id: "agent-1", cwd: "/repo/project" })];
+    getQueryDataMock.mockImplementation((queryKey: readonly unknown[]) => {
+      if (JSON.stringify(queryKey) !== JSON.stringify(["agentHistory", "server-1"])) {
+        return undefined;
+      }
+      return { pages: [{ agents: [agents[0]], pageInfo: { hasMore: false } }] };
+    });
     renderSidebarSessionList({ serverId: "server-1", agents });
 
     fireEvent.click(screen.getByTestId("sidebar-session-quick-pin-server-1-agent-1"));
 
+    expect(setQueryDataMock).toHaveBeenCalledWith(
+      ["agentHistory", "server-1"],
+      expect.any(Function),
+    );
+    const historyPatchCall = setQueryDataMock.mock.calls.find(
+      ([queryKey]) => JSON.stringify(queryKey) === JSON.stringify(["agentHistory", "server-1"]),
+    );
+    const historyPatch = historyPatchCall?.[1] as
+      | ((current: { pages: Array<{ agents: AggregatedAgent[] }> }) => unknown)
+      | undefined;
+    expect(historyPatch?.({ pages: [{ agents }] })).toEqual({
+      pages: [
+        {
+          agents: [
+            {
+              ...agents[0],
+              labels: { "chisacode.sidebarPinned": "true" },
+            },
+          ],
+        },
+      ],
+    });
     await vi.waitFor(() => {
       expect(updateAgentMock).toHaveBeenCalledWith("agent-1", {
         labels: { "chisacode.sidebarPinned": "true" },
@@ -532,7 +796,27 @@ describe("SidebarSessionList", () => {
       .map((entry) => entry.backgroundColor)
       .filter(Boolean);
 
-    expect(backgrounds.at(-1)).toBe("#444");
+    expect(backgrounds.at(-1)).toBe("#222");
+  });
+
+  it("uses shadow to mark the selected session row", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project" })];
+    renderSidebarSessionList({
+      serverId: "server-1",
+      agents,
+      selectedAgentId: "server-1:agent-1",
+    });
+
+    const rowStyle = JSON.parse(
+      screen.getByTestId("sidebar-session-server-1-agent-1").getAttribute("data-style") ?? "[]",
+    ) as Array<{ shadowColor?: string; elevation?: number } | false>;
+
+    expect(rowStyle).toContainEqual(
+      expect.objectContaining({
+        shadowColor: "rgba(0, 0, 0, 0.25)",
+        elevation: 2,
+      }),
+    );
   });
 
   it("sorts pinned sessions before recent unpinned sessions", () => {
@@ -556,7 +840,7 @@ describe("SidebarSessionList", () => {
     const pinned = screen.getByText("Pinned session");
     const recent = screen.getByText("Recent session");
 
-    expect(pinned.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pinned.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   });
 
   it("renders pinned sessions in a separate top section across projects", () => {
@@ -584,14 +868,29 @@ describe("SidebarSessionList", () => {
     const pinned = screen.getByText("Pinned session");
     const recent = screen.getByText("Recent session");
 
-    expect(within(pinnedSection).getByText("Pinned session")).toBeTruthy();
+    expect(within(pinnedSection).getByText("Pinned session")).not.toBeNull();
     expect(within(pinnedSection).queryByText("Recent session")).toBeNull();
-    expect(within(projectSection).getByText("Recent session")).toBeTruthy();
+    expect(within(projectSection).getByText("Recent session")).not.toBeNull();
     expect(within(projectSection).queryByText("Pinned session")).toBeNull();
     expect(
       pinnedGroup.compareDocumentPosition(projectGroup) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(pinned.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    ).not.toBe(0);
+    expect(pinned.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  });
+
+  it("does not show the new draft button on the pinned section", () => {
+    const agents = [
+      agent({
+        id: "pinned-agent",
+        cwd: "/repo/project",
+        title: "Pinned session",
+        labels: { "chisacode.sidebarPinned": "true" },
+      }),
+    ];
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    expect(screen.getByTestId("sidebar-session-group-__pinned__")).not.toBeNull();
+    expect(screen.queryByTestId("sidebar-session-group-new-server-1-__pinned__")).toBeNull();
   });
 
   it("hides the pinned section when no sessions are pinned", () => {
@@ -599,7 +898,7 @@ describe("SidebarSessionList", () => {
     renderSidebarSessionList({ serverId: "server-1", agents });
 
     expect(screen.queryByTestId("sidebar-session-group-__pinned__")).toBeNull();
-    expect(screen.getByTestId("sidebar-session-group-/repo/project")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-session-group-/repo/project")).not.toBeNull();
   });
 
   it("deletes sessions after confirmation", async () => {

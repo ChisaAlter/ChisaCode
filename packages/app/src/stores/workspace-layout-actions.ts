@@ -194,6 +194,7 @@ export interface WorkspaceTabReconcileState {
   layout: WorkspaceLayout;
   pinnedAgentIds?: ReadonlySet<string> | null;
   hiddenAgentIds?: ReadonlySet<string> | null;
+  suppressedAutoOpenAgentIds?: ReadonlySet<string> | null;
 }
 
 export interface WorkspaceTabSnapshot {
@@ -1739,6 +1740,7 @@ export function reconcileWorkspaceTabs(
   let reconciledFocusedTabId = originalFocusedTabId;
   const pinnedAgentIds = new Set(state.pinnedAgentIds ?? []);
   const hiddenAgentIds = new Set(state.hiddenAgentIds ?? []);
+  const suppressedAutoOpenAgentIds = new Set(state.suppressedAutoOpenAgentIds ?? []);
   const activeAgentIds = normalizeStringSet(snapshot.activeAgentIds);
   const autoOpenAgentIds = normalizeStringSet(snapshot.autoOpenAgentIds);
   const knownAgentIds = normalizeStringSet(snapshot.knownAgentIds);
@@ -1758,6 +1760,9 @@ export function reconcileWorkspaceTabs(
     hiddenAgentIds,
     knownAgentIds,
   });
+  for (const agentId of suppressedAutoOpenAgentIds) {
+    autoOpenSet.delete(agentId);
+  }
 
   const initialTabs = collectAllTabs(nextLayout.root);
   const representedAgentIds = new Set(

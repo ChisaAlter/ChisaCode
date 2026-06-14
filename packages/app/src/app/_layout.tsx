@@ -17,7 +17,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, View, type PressableStateCallbackType } from "react-native";
 import { PanelLeft } from "lucide-react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -472,6 +472,13 @@ function AppContainer({
     () => [layoutStyles.appRow, !isCompactLayout && layoutStyles.desktopAppRow],
     [isCompactLayout],
   );
+  const desktopSidebarRestoreButtonStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      layoutStyles.desktopSidebarRestoreButton,
+      (Boolean(hovered) || pressed) && layoutStyles.desktopSidebarRestoreButtonHovered,
+    ],
+    [],
+  );
 
   useKeyboardShortcuts({
     enabled: keyboardShortcutsEnabled,
@@ -497,7 +504,7 @@ function AppContainer({
               accessibilityRole="button"
               accessibilityLabel={appI18n.t("sidebar.openSidebar")}
               onPress={restoreLeftSidebarFromFocusMode}
-              style={layoutStyles.desktopSidebarRestoreButton}
+              style={desktopSidebarRestoreButtonStyle}
               testID="desktop-left-sidebar-open-focus"
             >
               {({ hovered, pressed }) => (
@@ -1034,7 +1041,7 @@ const layoutStyles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[3],
     borderRightWidth: theme.borderWidth[1],
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceSidebar,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   desktopSidebarRestoreButton: {
     width: 32,
@@ -1042,5 +1049,11 @@ const layoutStyles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+  },
+  desktopSidebarRestoreButtonHovered: {
+    backgroundColor: theme.colors.surface2,
   },
 }));

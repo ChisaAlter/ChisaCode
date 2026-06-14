@@ -1427,6 +1427,39 @@ describe("workspace-layout-store actions", () => {
     expect(workspaceLayoutStore.getState().getWorkspaceTabs(workspaceKey)).toEqual([]);
   });
 
+  it("suppresses agent auto-open without hiding manually reopened agent tabs", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    store.suppressAgentAutoOpen(workspaceKey, "agent-1");
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: ["agent-1"],
+      autoOpenAgentIds: ["agent-1"],
+      knownAgentIds: ["agent-1"],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: false,
+    });
+
+    expect(workspaceLayoutStore.getState().getWorkspaceTabs(workspaceKey)).toEqual([]);
+
+    store.openTabFocused(workspaceKey, { kind: "agent", agentId: "agent-1" });
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: ["agent-1"],
+      autoOpenAgentIds: ["agent-1"],
+      knownAgentIds: ["agent-1"],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: false,
+    });
+
+    const state = workspaceLayoutStore.getState();
+    expect(state.suppressedAutoOpenAgentIdsByWorkspace[workspaceKey]).toBeUndefined();
+    expect(state.getWorkspaceTabs(workspaceKey).map((tab) => tab.tabId)).toEqual(["agent_agent-1"]);
+  });
+
   it("reconcileTabs does not auto-open subagents omitted from autoOpenAgentIds", () => {
     const workspaceKey = createWorkspaceKey();
 

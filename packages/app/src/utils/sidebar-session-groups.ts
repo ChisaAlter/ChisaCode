@@ -3,6 +3,7 @@ import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 export interface SidebarSessionGroup {
   key: string;
   label: string;
+  cwd: string | null;
   agents: AggregatedAgent[];
   newestActivityAt: Date;
 }
@@ -101,6 +102,7 @@ export function groupAgentsForSidebar(
     groups.set(key, {
       key,
       label: getAgentCwdGroupLabel(agent.cwd, unknownWorkspaceLabel),
+      cwd: agent.cwd?.trim() || null,
       agents: [agent],
       newestActivityAt: agent.lastActivityAt,
     });
@@ -110,6 +112,7 @@ export function groupAgentsForSidebar(
     .map((group) => ({
       key: group.key,
       label: group.label,
+      cwd: group.cwd,
       newestActivityAt: group.newestActivityAt,
       agents: group.agents.slice().sort(compareAgentsByActivityDescending),
     }))
@@ -126,6 +129,7 @@ export function groupAgentsForSidebar(
     {
       key: PINNED_SIDEBAR_SESSION_GROUP_KEY,
       label: pinnedGroupLabel,
+      cwd: null,
       agents: sortedPinnedAgents,
       newestActivityAt: sortedPinnedAgents[0]?.lastActivityAt ?? new Date(0),
     },

@@ -48,6 +48,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/shallow";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -56,6 +57,8 @@ import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
+import { useSessionStore } from "@/stores/session-store";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import {
   DEFAULT_SIDEBAR_WIDTH,
@@ -82,6 +85,11 @@ import {
   buildSettingsRoute,
   mapPathnameToServer,
 } from "@/utils/host-routes";
+import {
+  collectSidebarDraftSessions,
+  resolveLeftSidebarNewConversationRoute,
+  type SidebarSessionDraft,
+} from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
@@ -110,6 +118,7 @@ interface SidebarSharedProps {
   isHostPickerOpen: boolean;
   setIsHostPickerOpen: Dispatch<SetStateAction<boolean>>;
   agents: ReturnType<typeof useAgentHistory>["agents"];
+  drafts: SidebarSessionDraft[];
   selectedAgentId?: string;
   isInitialLoad: boolean;
   isRevalidating: boolean;
@@ -210,6 +219,44 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
       serverId: activeServerId,
       enabled: isCompactLayout || isOpen,
     });
+  const layoutByWorkspace = useWorkspaceLayoutStore((state) => state.layoutByWorkspace);
+  const draftWorkspaceMetadataEntries = useSessionStore(
+    useShallow((state) => {
+      const workspaces = activeServerId ? state.sessions[activeServerId]?.workspaces : null;
+      if (!workspaces) {
+        return [];
+      }
+
+      const entries: string[] = [];
+      for (const workspace of workspaces.values()) {
+        entries.push(`${workspace.id}\u0000${workspace.workspaceDirectory}`);
+      }
+      entries.sort();
+      return entries;
+    }),
+  );
+  const draftWorkspaceMetadata = useMemo(() => {
+    const metadata: Record<string, { workspaceDirectory: string | null }> = {};
+    for (const entry of draftWorkspaceMetadataEntries) {
+      const separatorIndex = entry.indexOf("\u0000");
+      if (separatorIndex < 0) {
+        continue;
+      }
+      const workspaceId = entry.slice(0, separatorIndex);
+      const workspaceDirectory = entry.slice(separatorIndex + 1);
+      metadata[workspaceId] = { workspaceDirectory };
+    }
+    return metadata;
+  }, [draftWorkspaceMetadataEntries]);
+  const drafts = useMemo(
+    () =>
+      collectSidebarDraftSessions({
+        activeServerId,
+        layoutByWorkspace,
+        workspacesById: draftWorkspaceMetadata,
+      }),
+    [activeServerId, draftWorkspaceMetadata, layoutByWorkspace],
+  );
 
   const [isManualRefresh, setIsManualRefresh] = useState(false);
 
@@ -230,14 +277,36 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
 
   const openProjectPicker = useOpenProjectPicker(activeServerId);
 
+  const openCurrentWorkspaceDraft = useCallback(() => {
+    const draftRoute = resolveLeftSidebarNewConversationRoute({
+      activeServerId,
+      pathname,
+    });
+    if (!draftRoute) {
+      return false;
+    }
+    router.push(draftRoute);
+    return true;
+  }, [activeServerId, pathname]);
+
   const handleOpenProjectMobile = useCallback(() => {
     showMobileAgent();
+    if (openCurrentWorkspaceDraft()) {
+      return;
+    }
     void openProjectPicker();
-  }, [showMobileAgent, openProjectPicker]);
+  }, [openCurrentWorkspaceDraft, openProjectPicker, showMobileAgent]);
 
   const handleOpenProjectDesktop = useCallback(() => {
+    if (openCurrentWorkspaceDraft()) {
+      return;
+    }
     void openProjectPicker();
-  }, [openProjectPicker]);
+  }, [openCurrentWorkspaceDraft, openProjectPicker]);
+
+  const handleSearch = useCallback(() => {
+    useKeyboardShortcutsStore.getState().setCommandCenterOpen(true);
+  }, []);
 
   const handleSettingsMobile = useCallback(() => {
     showMobileAgent();
@@ -246,10 +315,6 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
 
   const handleSettingsDesktop = useCallback(() => {
     router.push(buildSettingsRoute());
-  }, []);
-
-  const handleSearch = useCallback(() => {
-    useKeyboardShortcutsStore.getState().setCommandCenterOpen(true);
   }, []);
 
   const handleViewMoreNavigate = useCallback(() => {
@@ -281,6 +346,7 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     isHostPickerOpen,
     setIsHostPickerOpen,
     agents,
+    drafts,
     selectedAgentId,
     isInitialLoad,
     isRevalidating,
@@ -430,28 +496,48 @@ function FooterIconButton({
 }
 
 function SidebarTopActions({
+  onCloseSidebar,
+  onViewSessions,
   onNewConversation,
   onSearch,
 }: {
+  onCloseSidebar: () => void;
+  onViewSessions: () => void;
   onNewConversation: () => void;
   onSearch: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <View style={styles.sidebarTopActions}>
-      <SidebarTopAction
-        icon={SquarePen}
-        label={t("sidebar.newConversation")}
-        onPress={onNewConversation}
-        testID="sidebar-new-conversation"
-      />
-      <SidebarTopAction
-        icon={Search}
-        label={t("common.search")}
-        onPress={onSearch}
-        testID="sidebar-search"
-      />
+    <View style={styles.sidebarTopArea}>
+      <View style={styles.sidebarTopActions}>
+        <SidebarTopAction
+          icon={PanelLeftClose}
+          label={t("sidebar.closeSidebar")}
+          onPress={onCloseSidebar}
+          testID="sidebar-close-left"
+        />
+        <SidebarTopAction
+          icon={MessagesSquare}
+          label={t("sidebar.allSessions")}
+          onPress={onViewSessions}
+          testID="sidebar-all-sessions"
+        />
+      </View>
+      <View style={styles.sidebarPrimaryActions}>
+        <SidebarPrimaryAction
+          icon={SquarePen}
+          label={t("sidebar.newConversation")}
+          onPress={onNewConversation}
+          testID="sidebar-new-conversation"
+        />
+        <SidebarPrimaryAction
+          icon={Search}
+          label={t("common.search")}
+          onPress={onSearch}
+          testID="sidebar-search"
+        />
+      </View>
     </View>
   );
 }
@@ -487,9 +573,49 @@ function SidebarTopAction({
       {({ hovered, pressed }) => {
         const color = hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted;
         return (
+          <View style={styles.sidebarTopActionIconSlot}>
+            <Icon size={theme.iconSize.sm} color={color} />
+          </View>
+        );
+      }}
+    </Pressable>
+  );
+}
+
+function SidebarPrimaryAction({
+  icon: Icon,
+  label,
+  onPress,
+  testID,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  const { theme } = useUnistyles();
+  const actionStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.sidebarPrimaryAction,
+      (Boolean(hovered) || pressed) && styles.sidebarPrimaryActionHovered,
+    ],
+    [],
+  );
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={actionStyle}
+      testID={testID}
+    >
+      {({ hovered, pressed }) => {
+        const color = hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted;
+        return (
           <>
             <Icon size={theme.iconSize.sm} color={color} />
-            <Text style={styles.sidebarTopActionText} numberOfLines={1}>
+            <Text style={styles.sidebarPrimaryActionText} numberOfLines={1}>
               {label}
             </Text>
           </>
@@ -746,6 +872,7 @@ function MobileSidebar({
   isHostPickerOpen,
   setIsHostPickerOpen,
   agents,
+  drafts,
   selectedAgentId,
   isInitialLoad,
   isRevalidating,
@@ -999,9 +1126,9 @@ function MobileSidebar({
       staticStyles.mobileSidebar,
       mobileSidebarInsetStyle,
       sidebarAnimatedStyle,
-      { backgroundColor: theme.colors.surfaceSidebar },
+      { backgroundColor: theme.colors.surfaceWorkspace },
     ],
-    [mobileSidebarInsetStyle, sidebarAnimatedStyle, theme.colors.surfaceSidebar],
+    [mobileSidebarInsetStyle, sidebarAnimatedStyle, theme.colors.surfaceWorkspace],
   );
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={overlayPointerEvents}>
@@ -1018,7 +1145,12 @@ function MobileSidebar({
       <GestureDetector gesture={closeGesture} touchAction="pan-y">
         <Animated.View style={mobileSidebarStyle} pointerEvents="auto">
           <View style={styles.sidebarContent} pointerEvents="auto">
-            <SidebarTopActions onNewConversation={handleOpenProject} onSearch={handleSearch} />
+            <SidebarTopActions
+              onCloseSidebar={closeToAgent}
+              onViewSessions={handleViewMore}
+              onNewConversation={handleOpenProject}
+              onSearch={handleSearch}
+            />
             <Pressable
               style={styles.mobileCloseButton}
               onPress={closeToAgent}
@@ -1056,6 +1188,7 @@ function MobileSidebar({
               <SidebarSessionList
                 serverId={activeServerId}
                 agents={agents}
+                drafts={drafts}
                 selectedAgentId={selectedAgentId}
                 isRefreshing={isManualRefresh && isRevalidating}
                 onRefresh={handleRefresh}
@@ -1097,6 +1230,7 @@ function DesktopSidebar({
   isHostPickerOpen,
   setIsHostPickerOpen,
   agents,
+  drafts,
   selectedAgentId,
   isInitialLoad,
   isRevalidating,
@@ -1116,6 +1250,7 @@ function DesktopSidebar({
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
   const openDesktopAgentList = usePanelStore((state) => state.openDesktopAgentList);
+  const closeDesktopAgentList = usePanelStore((state) => state.closeDesktopAgentList);
   const desktopSidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   const { width: viewportWidth } = useWindowDimensions();
   const hostStatusDotStyle = useMemo(
@@ -1184,6 +1319,12 @@ function DesktopSidebar({
     ],
     [],
   );
+  const handleViewSessions = useCallback(() => {
+    if (!activeServerId) {
+      return;
+    }
+    router.push(buildHostSessionsRoute(activeServerId));
+  }, [activeServerId]);
   return (
     <>
       {!isOpen ? (
@@ -1213,7 +1354,12 @@ function DesktopSidebar({
         <View style={desktopSidebarBorderStyle}>
           <View style={styles.desktopSidebarDragArea}>
             <TitlebarDragRegion />
-            <SidebarTopActions onNewConversation={handleOpenProject} onSearch={handleSearch} />
+            <SidebarTopActions
+              onCloseSidebar={closeDesktopAgentList}
+              onViewSessions={handleViewSessions}
+              onNewConversation={handleOpenProject}
+              onSearch={handleSearch}
+            />
           </View>
 
           {isInitialLoad ? (
@@ -1222,6 +1368,7 @@ function DesktopSidebar({
             <SidebarSessionList
               serverId={activeServerId}
               agents={agents}
+              drafts={drafts}
               selectedAgentId={selectedAgentId}
               isRefreshing={isManualRefresh && isRevalidating}
               onRefresh={handleRefresh}
@@ -1229,7 +1376,6 @@ function DesktopSidebar({
               isLoadingMore={isLoadingMore}
               onLoadMore={handleLoadMore}
               onAddProject={handleOpenProject}
-              showGroupTitles={false}
             />
           )}
 
@@ -1295,7 +1441,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surfaceSidebar,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   mobileQuickActions: {
     marginHorizontal: theme.spacing[3],
@@ -1373,10 +1519,12 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
   },
   desktopSidebarBorder: {
-    borderRightWidth: theme.borderWidth[1],
+    borderWidth: theme.borderWidth[1],
+    borderRightWidth: theme.borderWidth[2],
+    borderColor: theme.colors.border,
     borderRightColor: theme.colors.border,
     borderRadius: 8,
-    backgroundColor: theme.colors.surfaceSidebar,
+    backgroundColor: theme.colors.surfaceWorkspace,
     overflow: "hidden",
   },
   desktopSidebarRail: {
@@ -1386,7 +1534,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[3],
     borderRightWidth: theme.borderWidth[1],
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceSidebar,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   desktopSidebarRailButton: {
     width: 32,
@@ -1394,9 +1542,12 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   desktopSidebarRailButtonHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface2,
   },
   resizeHandle: {
     position: "absolute",
@@ -1415,27 +1566,52 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: 0,
     marginBottom: 0,
   },
-  sidebarTopActions: {
+  sidebarTopArea: {
     paddingTop: theme.spacing[3],
     paddingRight: theme.spacing[3],
-    paddingBottom: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
     paddingLeft: theme.spacing[3],
-    gap: theme.spacing[1],
+    gap: theme.spacing[2],
     userSelect: "none",
   },
+  sidebarTopActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
   sidebarTopAction: {
-    minHeight: 34,
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+  },
+  sidebarTopActionHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  sidebarTopActionIconSlot: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sidebarPrimaryActions: {
+    gap: theme.spacing[1],
+  },
+  sidebarPrimaryAction: {
+    minHeight: 30,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
   },
-  sidebarTopActionHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+  sidebarPrimaryActionHovered: {
+    backgroundColor: theme.colors.surface1,
   },
-  sidebarTopActionText: {
+  sidebarPrimaryActionText: {
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
@@ -1454,7 +1630,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
   },
   hostTriggerHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface1,
   },
   hostStatusDot: {
     width: 8,
@@ -1513,7 +1689,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
   },
   footerIconButtonHovered: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface1,
   },
   desktopFooterIconButton: {
     width: 32,

@@ -114,7 +114,6 @@ import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-works
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { checkoutStatusQueryKey } from "@/git/query-keys";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { createWorkspaceBrowser, useBrowserStore } from "@/stores/browser-store";
 import { getDesktopHost } from "@/desktop/host";
@@ -171,7 +170,7 @@ import {
   classifyBulkClosableTabs,
   closeBulkWorkspaceTabs,
 } from "@/screens/workspace/workspace-bulk-close";
-import { resolveCloseAgentTabPolicy } from "@/subagents";
+import { closeAgentWorkspaceTabOnly } from "@/screens/workspace/workspace-agent-tab-close";
 import { useSubagentsForParent, type SubagentRow } from "@/subagents/select";
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { isAbsolutePath } from "@/utils/path";
@@ -2397,8 +2396,6 @@ function WorkspaceScreenContent({
     onWorkspacePathUnavailable: handleWorkspacePathUnavailable,
     onTerminalCreateQueued: handleTerminalCreateQueued,
   });
-  const { archiveAgent } = useArchiveAgent();
-
   const { checkoutQuery, isCheckoutStatusLoading } = useWorkspaceCheckoutStatus({
     client,
     isConnected,
@@ -2608,7 +2605,9 @@ function WorkspaceScreenContent({
   const focusWorkspaceTab = useWorkspaceLayoutStore((state) => state.focusTab);
   const closeWorkspaceTab = useWorkspaceLayoutStore((state) => state.closeTab);
   const unpinWorkspaceAgent = useWorkspaceLayoutStore((state) => state.unpinAgent);
-  const hideWorkspaceAgent = useWorkspaceLayoutStore((state) => state.hideAgent);
+  const suppressWorkspaceAgentAutoOpen = useWorkspaceLayoutStore(
+    (state) => state.suppressAgentAutoOpen,
+  );
   const retargetWorkspaceTab = useWorkspaceLayoutStore((state) => state.retargetTab);
   const reconcileWorkspaceTabs = useWorkspaceLayoutStore((state) => state.reconcileTabs);
   const splitWorkspacePane = useWorkspaceLayoutStore((state) => state.splitPane);
@@ -2639,7 +2638,7 @@ function WorkspaceScreenContent({
 
       if (input.target?.kind === "agent") {
         unpinWorkspaceAgent(persistenceKey, input.target.agentId);
-        hideWorkspaceAgent(persistenceKey, input.target.agentId);
+        suppressWorkspaceAgentAutoOpen(persistenceKey, input.target.agentId);
       }
       if (input.target?.kind === "browser") {
         const { browserId } = input.target;
@@ -2648,7 +2647,7 @@ function WorkspaceScreenContent({
       }
       closeWorkspaceTab(persistenceKey, normalizedTabId);
     },
-    [closeWorkspaceTab, hideWorkspaceAgent, persistenceKey, unpinWorkspaceAgent],
+    [closeWorkspaceTab, persistenceKey, suppressWorkspaceAgentAutoOpen, unpinWorkspaceAgent],
   );
 
   const focusedPaneTabState = useMemo(
@@ -3432,46 +3431,25 @@ function WorkspaceScreenContent({
     async (input: { tabId: string; agentId: string }) => {
       const { tabId, agentId } = input;
       await closeTab(tabId, async () => {
-        if (!normalizedServerId) {
-          return;
-        }
-
-        const agent =
-          useSessionStore.getState().sessions[normalizedServerId]?.agents?.get(agentId) ?? null;
-        const closePolicy = resolveCloseAgentTabPolicy(agent);
-        const isRunning = agent?.status === "running" || agent?.status === "initializing";
-
-        if (isRunning && closePolicy.kind === "archive-on-close") {
-          const confirmed = await confirmDialog({
-            title: t("workspace.screen.archiveRunningAgentTitle"),
-            message: t("workspace.screen.archiveRunningAgentMessage"),
-            confirmLabel: t("common.archive"),
-            cancelLabel: t("common.cancel"),
-            destructive: true,
-          });
-          if (!confirmed) {
-            return;
-          }
-        }
-
-        setHoveredTabKey((current) => (current === tabId ? null : current));
-        setHoveredCloseTabKey((current) => (current === tabId ? null : current));
-        if (persistenceKey) {
-          closeWorkspaceTabWithCleanup({
-            tabId,
-            target: { kind: "agent", agentId },
-          });
-        }
-
-        if (closePolicy.kind === "layout-only") {
-          return;
-        }
-
-        // Errors (e.g. timeout) are handled by the mutation's onSettled callback
-        void archiveAgent({ serverId: normalizedServerId, agentId }).catch(() => {});
+        closeAgentWorkspaceTabOnly({
+          tabId,
+          agentId,
+          persistenceKey,
+          closeWorkspaceTabWithCleanup,
+          suppressAgentAutoOpen: suppressWorkspaceAgentAutoOpen,
+          unpinAgent: unpinWorkspaceAgent,
+          setHoveredTabKey,
+          setHoveredCloseTabKey,
+        });
       });
     },
-    [archiveAgent, closeTab, closeWorkspaceTabWithCleanup, normalizedServerId, persistenceKey, t],
+    [
+      closeTab,
+      closeWorkspaceTabWithCleanup,
+      persistenceKey,
+      suppressWorkspaceAgentAutoOpen,
+      unpinWorkspaceAgent,
+    ],
   );
 
   const handleCloseDraftOrFileTab = useCallback(
