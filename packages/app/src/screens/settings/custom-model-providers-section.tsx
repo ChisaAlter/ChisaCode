@@ -25,8 +25,8 @@ import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
-  buildCustomModelProviderIds,
   buildDisableCustomModelProviderPatch,
+  buildModelGatewayProviderIds,
   buildSaveCustomModelProviderPatch,
   collectCustomModelProviders,
   type CollectedCustomModelProvider,
@@ -54,6 +54,9 @@ interface ProviderEditorValues {
   openaiBaseUrl: string;
   openaiApiKey: string;
   openaiWireApi: CustomOpenAIWireApi;
+  responsesEnabled: boolean;
+  responsesBaseUrl: string;
+  responsesApiKey: string;
   modelsText: string;
 }
 
@@ -80,6 +83,15 @@ function readProviderEnv(
     config?.providers as Record<string, { env?: Record<string, unknown> }> | undefined
   )?.[providerId];
   const value = provider?.env?.[envKey];
+  return typeof value === "string" ? value : "";
+}
+
+function readGatewayApiKey(
+  config: MutableDaemonConfig | null,
+  gatewayId: string,
+  upstream: "anthropic" | "chatCompletions" | "responses",
+): string {
+  const value = config?.modelGateways?.[gatewayId]?.upstreams?.[upstream]?.apiKey;
   return typeof value === "string" ? value : "";
 }
 
@@ -188,6 +200,9 @@ function createEmptyEditorValues(): ProviderEditorValues {
     openaiBaseUrl: "",
     openaiApiKey: "",
     openaiWireApi: "responses",
+    responsesEnabled: false,
+    responsesBaseUrl: "",
+    responsesApiKey: "",
     modelsText: "",
   };
 }
@@ -201,15 +216,18 @@ function createEditorValuesFromProvider(
     label: provider.label,
     anthropicEnabled: provider.anthropic?.enabled ?? false,
     anthropicBaseUrl: provider.anthropic?.baseUrl ?? "",
-    anthropicApiKey: readProviderEnv(
-      config,
-      provider.anthropic?.providerId,
-      "ANTHROPIC_AUTH_TOKEN",
-    ),
+    anthropicApiKey:
+      readGatewayApiKey(config, provider.id, "anthropic") ||
+      readProviderEnv(config, provider.anthropic?.providerId, "ANTHROPIC_AUTH_TOKEN"),
     openaiEnabled: provider.openai?.enabled ?? false,
     openaiBaseUrl: provider.openai?.baseUrl ?? "",
-    openaiApiKey: readProviderEnv(config, provider.openai?.providerId, "OPENAI_API_KEY"),
+    openaiApiKey:
+      readGatewayApiKey(config, provider.id, "chatCompletions") ||
+      readProviderEnv(config, provider.openai?.providerId, "OPENAI_API_KEY"),
     openaiWireApi: provider.openai?.wireApi ?? "responses",
+    responsesEnabled: provider.responses?.enabled ?? false,
+    responsesBaseUrl: provider.responses?.baseUrl ?? "",
+    responsesApiKey: readGatewayApiKey(config, provider.id, "responses"),
     modelsText: provider.models.map((model) => model.id).join("\n"),
   };
 }
@@ -417,6 +435,18 @@ function ProviderEditorSheet({
     (value: CustomOpenAIWireApi) => setFieldValue("openaiWireApi", value),
     [setFieldValue],
   );
+  const handleResponsesEnabledChange = useCallback(
+    (value: boolean) => setFieldValue("responsesEnabled", value),
+    [setFieldValue],
+  );
+  const handleResponsesBaseUrlChange = useCallback(
+    (value: string) => setFieldValue("responsesBaseUrl", value),
+    [setFieldValue],
+  );
+  const handleResponsesApiKeyChange = useCallback(
+    (value: string) => setFieldValue("responsesApiKey", value),
+    [setFieldValue],
+  );
   const handleModelsTextChange = useCallback(
     (value: string) => setFieldValue("modelsText", value),
     [setFieldValue],
@@ -466,7 +496,7 @@ function ProviderEditorSheet({
           />
         </View>
         <EndpointEditorCard
-          title="Anthropic"
+          title="Anthropic Messages"
           enabled={values.anthropicEnabled}
           baseUrl={values.anthropicBaseUrl}
           apiKey={values.anthropicApiKey}
@@ -479,7 +509,7 @@ function ProviderEditorSheet({
           onApiKeyChange={handleAnthropicApiKeyChange}
         />
         <EndpointEditorCard
-          title="OpenAI"
+          title="Chat Completions"
           enabled={values.openaiEnabled}
           baseUrl={values.openaiBaseUrl}
           apiKey={values.openaiApiKey}
@@ -492,6 +522,19 @@ function ProviderEditorSheet({
           onBaseUrlChange={handleOpenaiBaseUrlChange}
           onApiKeyChange={handleOpenaiApiKeyChange}
           onWireApiChange={handleOpenaiWireApiChange}
+        />
+        <EndpointEditorCard
+          title="Responses"
+          enabled={values.responsesEnabled}
+          baseUrl={values.responsesBaseUrl}
+          apiKey={values.responsesApiKey}
+          apiKeyPlaceholder={t("customModelProviders.apiKey")}
+          baseUrlPlaceholder="https://api.example.com/v1"
+          resetPrefix={`responses-${resetSeed}`}
+          placeholderColor={theme.colors.foregroundMuted}
+          onEnabledChange={handleResponsesEnabledChange}
+          onBaseUrlChange={handleResponsesBaseUrlChange}
+          onApiKeyChange={handleResponsesApiKeyChange}
         />
         <ModelsField
           label={t("customModelProviders.models")}
@@ -520,8 +563,8 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
   const [editorState, setEditorState] = useState<EditingProviderState | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const providers = useMemo(
-    () => collectCustomModelProviders(config?.providers),
-    [config?.providers],
+    () => collectCustomModelProviders(config?.modelGateways, config?.providers),
+    [config?.modelGateways, config?.providers],
   );
   const snapshotById = useMemo(
     () => new Map((entries ?? []).map((entry) => [entry.provider, entry])),
@@ -537,7 +580,7 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
     async (values: ProviderEditorValues, previousId: string | null) => {
       try {
         const patch = buildSaveCustomModelProviderPatch({
-          currentProviders: config?.providers,
+          currentGateways: config?.modelGateways,
           previousId,
           id: values.id,
           label: values.label,
@@ -553,9 +596,19 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
             apiKey: values.openaiApiKey,
             wireApi: values.openaiWireApi,
           },
+          responses: {
+            enabled: values.responsesEnabled,
+            baseUrl: values.responsesBaseUrl,
+            apiKey: values.responsesApiKey,
+          },
         });
         await patchConfig(patch);
-        await refresh(Object.keys(patch.providers ?? {}) as AgentProvider[]);
+        const ids = buildModelGatewayProviderIds(values.id);
+        await refresh([
+          ids.claudeProviderId,
+          ids.codexProviderId,
+          ids.opencodeProviderId,
+        ] as AgentProvider[]);
         setEditorState(null);
       } catch (error) {
         Alert.alert(
@@ -564,7 +617,7 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
         );
       }
     },
-    [config?.providers, patchConfig, refresh, t],
+    [config?.modelGateways, patchConfig, refresh, t],
   );
   const handleTest = useCallback(
     (provider: CollectedCustomModelProvider) => {
@@ -588,8 +641,12 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
         if (!confirmed) return;
         const patch = buildDisableCustomModelProviderPatch(provider.id);
         await patchConfig(patch);
-        const ids = buildCustomModelProviderIds(provider.id);
-        await refresh([ids.anthropicProviderId, ids.openaiProviderId] as AgentProvider[]);
+        const ids = buildModelGatewayProviderIds(provider.id);
+        await refresh([
+          ids.claudeProviderId,
+          ids.codexProviderId,
+          ids.opencodeProviderId,
+        ] as AgentProvider[]);
       })().catch((error) => {
         Alert.alert(
           t("customModelProviders.deleteFailed"),

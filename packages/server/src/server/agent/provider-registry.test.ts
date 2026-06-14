@@ -12,6 +12,8 @@ const mockState = vi.hoisted(() => {
     constructorArgs: {
       claude: [] as ConstructorEntry[],
       codex: [] as ConstructorEntry[],
+      opencode: [] as ConstructorEntry[],
+      mimocode: [] as ConstructorEntry[],
       copilot: [] as ConstructorEntry[],
       cursor: [] as Array<{
         command: string[];
@@ -30,6 +32,8 @@ const mockState = vi.hoisted(() => {
     reset() {
       this.constructorArgs.claude = [];
       this.constructorArgs.codex = [];
+      this.constructorArgs.opencode = [];
+      this.constructorArgs.mimocode = [];
       this.constructorArgs.pi = [];
       this.constructorArgs.genericAcp = [];
       this.isCommandAvailable.mockReset();
@@ -159,6 +163,83 @@ vi.mock("./providers/pi/agent.js", () => ({
       mockState.constructorArgs.pi.push({
         runtimeSettings: options.runtimeSettings,
       });
+    }
+
+    async createSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async resumeSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async listModels(): Promise<AgentModelDefinition[]> {
+      return mockState.runtimeModels.get(this.provider) ?? [];
+    }
+
+    async listModes(): Promise<[]> {
+      return [];
+    }
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+  },
+}));
+
+vi.mock("./providers/opencode-agent.js", () => ({
+  OpenCodeAgentClient: class OpenCodeAgentClient {
+    readonly capabilities = {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    };
+    readonly provider = "opencode";
+    readonly runtimeSettings?: unknown;
+
+    constructor(_logger: unknown, runtimeSettings?: unknown) {
+      this.runtimeSettings = runtimeSettings;
+      mockState.constructorArgs.opencode.push({ runtimeSettings });
+    }
+
+    async createSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async resumeSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async listModels(): Promise<AgentModelDefinition[]> {
+      return mockState.runtimeModels.get(this.provider) ?? [];
+    }
+
+    async listModes(): Promise<[]> {
+      return [];
+    }
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+  },
+  MimoCodeAgentClient: class MimoCodeAgentClient {
+    readonly capabilities = {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    };
+    readonly provider = "mimocode";
+    readonly runtimeSettings?: unknown;
+
+    constructor(_logger: unknown, runtimeSettings?: unknown) {
+      this.runtimeSettings = runtimeSettings;
+      mockState.constructorArgs.mimocode.push({ runtimeSettings });
     }
 
     async createSession(): Promise<never> {
@@ -382,6 +463,124 @@ test("new provider extending claude appears in registry", () => {
   expect(registry.zai.label).toBe("ZAI");
   expect(registry.zai.description).toBe("Claude with ZAI defaults");
   expect(registry.zai.createClient(logger).provider).toBe("zai");
+});
+
+test("model gateway materializes Claude, Codex, and OpenCode provider entries", async () => {
+  const registry = buildProviderRegistry(logger, {
+    modelGateways: {
+      zai: {
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        models: [
+          { id: "glm-5", label: "GLM 5", isDefault: true },
+          { id: "glm-5-air", label: "GLM 5 Air" },
+        ],
+        upstreams: {
+          anthropic: {
+            enabled: true,
+            baseUrl: "https://api.z.ai/api/anthropic",
+            apiKey: "sk-anthropic",
+          },
+          chatCompletions: {
+            enabled: false,
+            baseUrl: "",
+            apiKey: "",
+          },
+          responses: {
+            enabled: true,
+            baseUrl: "https://api.z.ai/v1",
+            apiKey: "sk-responses",
+          },
+        },
+      },
+    },
+    modelGatewayBaseUrl: "http://127.0.0.1:6767",
+    modelGatewayToken: "internal-token",
+  });
+
+  expect(registry["zai-claude"]).toMatchObject({
+    id: "zai-claude",
+    label: "ZAI Claude",
+    derivedFromProviderId: "claude",
+    enabled: true,
+  });
+  expect(registry["zai-codex"]).toMatchObject({
+    id: "zai-codex",
+    label: "ZAI Codex",
+    derivedFromProviderId: "codex",
+    enabled: true,
+  });
+  expect(registry["zai-opencode"]).toMatchObject({
+    id: "zai-opencode",
+    label: "ZAI OpenCode",
+    derivedFromProviderId: "opencode",
+    enabled: true,
+  });
+
+  await expect(
+    registry["zai-opencode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "zai-opencode",
+      id: "openai/glm-5",
+      label: "GLM 5",
+      isDefault: true,
+    },
+    {
+      provider: "zai-opencode",
+      id: "openai/glm-5-air",
+      label: "GLM 5 Air",
+    },
+  ]);
+
+  registry["zai-claude"].createClient(logger);
+  registry["zai-codex"].createClient(logger);
+  registry["zai-opencode"].createClient(logger);
+
+  const claudeGatewayArgs = mockState.constructorArgs.claude.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.ANTHROPIC_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
+  });
+  expect(claudeGatewayArgs).toBeDefined();
+
+  const codexGatewayArgs = mockState.constructorArgs.codex.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.OPENAI_WIRE_API === "responses";
+  });
+  expect(codexGatewayArgs).toEqual({
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        OPENAI_API_KEY: "internal-token",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai",
+        OPENAI_WIRE_API: "responses",
+      },
+    },
+  });
+
+  const opencodeGatewayArgs = mockState.constructorArgs.opencode.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
+  });
+  expect(opencodeGatewayArgs).toEqual({
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        OPENAI_API_KEY: "internal-token",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+      },
+    },
+  });
 });
 
 test("new provider extending acp uses GenericACPAgentClient", () => {

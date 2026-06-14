@@ -32,6 +32,8 @@ interface TestChisaCodeDaemonOptions {
   voiceLlmModel?: string | null;
   dictationFinalTimeoutMs?: number;
   auth?: ChisaCodeDaemonConfig["auth"];
+  modelGateways?: ChisaCodeDaemonConfig["modelGateways"];
+  modelGatewayToken?: string;
   pushNotificationSender?: PushNotificationSender;
 }
 
@@ -162,6 +164,8 @@ async function prepareTestDaemonConfig(
     relayEndpoint: options.relayEndpoint ?? "relay.chisacode.sh:443",
     appBaseUrl: "https://app.chisacode.sh",
     auth: options.auth,
+    modelGateways: options.modelGateways,
+    modelGatewayToken: options.modelGatewayToken,
     pushNotificationSender: options.pushNotificationSender,
     openai: options.openai,
     speech: options.speech,

@@ -29,6 +29,7 @@ import {
   Puzzle,
   Plus,
   FolderGit2,
+  Bot,
 } from "lucide-react-native";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
@@ -78,6 +79,7 @@ import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
 import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
 import { HostPage, HostRenameButton } from "@/screens/settings/host-page";
+import { CustomModelProvidersSection } from "@/screens/settings/custom-model-providers-section";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -112,6 +114,7 @@ interface SidebarSectionItem {
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
+  { id: "models", labelKey: "settings.sections.models", icon: Bot },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
   {
     id: "integrations",
@@ -999,6 +1002,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     [webScrollbarStyle],
   );
   const hosts = useHosts();
+  const localServerId = useLocalDaemonServerId();
   const hostServerIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const anyOnlineServerId = useAnyOnlineHostServerId(hostServerIds);
 
@@ -1224,6 +1228,14 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
           );
         case "shortcuts":
           return isDesktopApp ? <KeyboardShortcutsSection /> : null;
+        case "models":
+          return anyOnlineServerId ? (
+            <CustomModelProvidersSection serverId={localServerId ?? anyOnlineServerId} />
+          ) : (
+            <View style={styles.placeholder}>
+              <Text style={styles.placeholderText}>{t("settings.models.noHost")}</Text>
+            </View>
+          );
         case "integrations":
           return isDesktopApp ? <IntegrationsSection /> : null;
         case "permissions":

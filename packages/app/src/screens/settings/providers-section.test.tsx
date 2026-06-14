@@ -85,6 +85,24 @@ vi.mock("react-native", () => ({
   ActivityIndicator: () => React.createElement("span", { "data-testid": "activity-indicator" }),
 }));
 
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, string>) => {
+      if (key === "providers.detailsLabel") return `${params?.provider} provider details`;
+      if (key === "providers.enableLabel") return `Enable ${params?.provider}`;
+      if (key === "providers.ready") return "Available";
+      if (key === "providers.disabled") return "Disabled";
+      if (key === "providers.missing") return "Missing";
+      if (key === "providers.loading") return "Loading";
+      if (key === "providers.error") return "Error";
+      if (key === "providers.modelCount") return `${params?.count} models`;
+      if (key === "providers.install") return "Install";
+      if (key === "providers.update") return "Update";
+      return key;
+    },
+  }),
+}));
+
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: unknown) =>
@@ -97,6 +115,7 @@ vi.mock("lucide-react-native", () => {
   const icon = (name: string) => () => React.createElement("span", { "data-icon": name });
   return {
     ChevronRight: icon("ChevronRight"),
+    Download: icon("Download"),
     Plus: icon("Plus"),
   };
 });
@@ -166,6 +185,9 @@ vi.mock("@/hooks/use-daemon-config", () => ({
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeIsConnected: () => true,
+  useHostRuntimeClient: () => ({
+    runProviderToolingAction: openProviderSettingsMock,
+  }),
 }));
 
 import { ProvidersSection } from "./providers-section";
@@ -199,6 +221,7 @@ function makeConfig(providers: MutableDaemonConfig["providers"] = {}): MutableDa
   return {
     mcp: { injectIntoAgents: false },
     providers,
+    modelGateways: {},
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,
     appendSystemPrompt: "",

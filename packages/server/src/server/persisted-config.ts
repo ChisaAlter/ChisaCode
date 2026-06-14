@@ -4,9 +4,11 @@ import { z } from "zod";
 
 import {
   AgentProviderRuntimeSettingsMapSchema,
+  ModelGatewayConfigsSchema,
   migrateProviderSettings,
   ProviderOverridesSchema,
 } from "./agent/provider-launch-config.js";
+import type { ModelGatewayConfigs } from "./agent/provider-launch-config.js";
 import type { ProviderOverride } from "./agent/provider-launch-config.js";
 import { ensurePrivateFile, writePrivateFileSync } from "./private-files.js";
 
@@ -254,6 +256,7 @@ export const PersistedConfigSchema = z
         providers: z
           .preprocess(normalizeAgentProviders, PersistedProviderOverridesSchema)
           .optional(),
+        modelGateways: ModelGatewayConfigsSchema.optional(),
         metadataGeneration: AgentMetadataGenerationSchema.optional(),
       })
       .strict()
@@ -275,6 +278,7 @@ type PersistedConfigSchemaOutput = z.infer<typeof PersistedConfigSchema>;
 export type PersistedConfig = Omit<PersistedConfigSchemaOutput, "agents"> & {
   agents?: Omit<NonNullable<PersistedConfigSchemaOutput["agents"]>, "providers"> & {
     providers?: Record<string, ProviderOverride>;
+    modelGateways?: ModelGatewayConfigs;
   };
 };
 

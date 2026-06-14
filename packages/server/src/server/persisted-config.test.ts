@@ -155,6 +155,64 @@ describe("PersistedConfigSchema agent provider runtime settings", () => {
   });
 });
 
+describe("PersistedConfigSchema model gateways", () => {
+  test("accepts daemon-global model gateway config", () => {
+    const parsed = PersistedConfigSchema.parse({
+      agents: {
+        modelGateways: {
+          zai: {
+            id: "zai",
+            label: "ZAI",
+            enabled: true,
+            models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+            upstreams: {
+              anthropic: {
+                enabled: true,
+                baseUrl: "https://api.z.ai/api/anthropic",
+                apiKey: "sk-anthropic",
+              },
+              chatCompletions: {
+                enabled: true,
+                baseUrl: "https://api.z.ai/v1",
+                apiKey: "sk-chat",
+              },
+              responses: {
+                enabled: false,
+                baseUrl: "",
+                apiKey: "",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(parsed.agents?.modelGateways?.zai).toEqual({
+      id: "zai",
+      label: "ZAI",
+      enabled: true,
+      models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+      upstreams: {
+        anthropic: {
+          enabled: true,
+          baseUrl: "https://api.z.ai/api/anthropic",
+          apiKey: "sk-anthropic",
+        },
+        chatCompletions: {
+          enabled: true,
+          baseUrl: "https://api.z.ai/v1",
+          apiKey: "sk-chat",
+        },
+        responses: {
+          enabled: false,
+          baseUrl: "",
+          apiKey: "",
+        },
+      },
+    });
+  });
+});
+
 describe("provider overrides (new format)", () => {
   test("override built-in provider with command and env", () => {
     const parsed = PersistedConfigSchema.parse({

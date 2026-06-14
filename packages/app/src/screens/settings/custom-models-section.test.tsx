@@ -250,6 +250,7 @@ function makeConfig(providers: MutableDaemonConfig["providers"] = {}): MutableDa
   return {
     mcp: { injectIntoAgents: false },
     providers,
+    modelGateways: {},
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,
     appendSystemPrompt: "",

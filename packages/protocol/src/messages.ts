@@ -3,6 +3,10 @@ import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@chisacode/protocol/agent-title-limits";
 import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
+import {
+  ModelGatewayConfigSchema,
+  ModelGatewayConfigsSchema,
+} from "@chisacode/protocol/provider-config";
 import { normalizeAgentModelDefinition, TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import {
   ChatCreateRequestSchema,
@@ -124,6 +128,7 @@ export const MutableDaemonConfigSchema = z
       })
       .passthrough(),
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
+    modelGateways: ModelGatewayConfigsSchema.default({}),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
     appendSystemPrompt: z.string().default(""),
@@ -136,6 +141,7 @@ export const MutableDaemonConfigPatchSchema = z
     providers: z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
       .optional(),
+    modelGateways: z.record(z.string(), ModelGatewayConfigSchema.partial()).optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
     appendSystemPrompt: z.string().optional(),
@@ -4171,12 +4177,18 @@ export const WSRecordingStateMessageSchema = z.object({
 });
 
 // Wrapped session message
-export const WSSessionInboundSchema = z.object({
+export const WSSessionInboundSchema: z.ZodObject<{
+  type: z.ZodLiteral<"session">;
+  message: typeof SessionInboundMessageSchema;
+}> = z.object({
   type: z.literal("session"),
   message: SessionInboundMessageSchema,
 });
 
-export const WSSessionOutboundSchema = z.object({
+export const WSSessionOutboundSchema: z.ZodObject<{
+  type: z.ZodLiteral<"session">;
+  message: typeof SessionOutboundMessageSchema;
+}> = z.object({
   type: z.literal("session"),
   message: SessionOutboundMessageSchema,
 });

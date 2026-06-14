@@ -352,6 +352,7 @@ export function loadConfig(
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     metadataGeneration: persisted.agents?.metadataGeneration,
     providerOverrides,
+    modelGateways: persisted.agents?.modelGateways,
     log: resolveLogConfigFromEnv(env, persisted),
   };
 }

@@ -189,6 +189,7 @@ function mergeMutableConfigIntoPersistedConfig(params: {
     persisted.agents?.providers as Record<string, ProviderOverride> | undefined,
     mutable.providers,
   );
+  const modelGateways = mutable.modelGateways ?? {};
   const persistedAgents = persisted.agents as Record<string, unknown> | undefined;
   const persistedMetadataGeneration = {
     providers: metadataGenerationProviders,
@@ -197,10 +198,19 @@ function mergeMutableConfigIntoPersistedConfig(params: {
     metadataGenerationProviders.length > 0 || persisted.agents?.metadataGeneration !== undefined;
 
   let nextAgents = persisted.agents as PersistedConfig["agents"];
-  if (providerOverrides && Object.keys(providerOverrides).length > 0) {
+  const shouldPersistModelGateways =
+    Object.keys(modelGateways).length > 0 || persisted.agents?.modelGateways !== undefined;
+
+  if (
+    (providerOverrides && Object.keys(providerOverrides).length > 0) ||
+    shouldPersistModelGateways
+  ) {
     nextAgents = {
       ...persistedAgents,
-      providers: providerOverrides,
+      ...(providerOverrides && Object.keys(providerOverrides).length > 0
+        ? { providers: providerOverrides }
+        : {}),
+      ...(shouldPersistModelGateways ? { modelGateways } : {}),
       ...(shouldPersistMetadataGeneration
         ? { metadataGeneration: persistedMetadataGeneration }
         : {}),

@@ -136,6 +136,11 @@ import { createScriptStatusEmitter } from "./script-status-projection.js";
 import { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
 import { createRequireBearerMiddleware, type DaemonAuthConfig } from "./auth.js";
+import {
+  handleModelGatewayRequest,
+  type ModelGatewayTargetFormat,
+} from "./model-gateway/model-gateway.js";
+import type { ModelGatewayConfigs } from "./agent/provider-launch-config.js";
 
 type AgentMcpTransportMap = Map<string, StreamableHTTPServerTransport>;
 
@@ -167,6 +172,14 @@ function createAgentMcpBaseUrl(listenTarget: ListenTarget | null): string | null
     "/mcp/agents",
     `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`,
   ).toString();
+}
+
+function createModelGatewayBaseUrl(listenTarget: ListenTarget | null): string | null {
+  if (!listenTarget || listenTarget.type !== "tcp") {
+    return null;
+  }
+  const host = resolveAgentMcpClientHost(listenTarget.host);
+  return `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`;
 }
 
 function summarizeAgentMcpDebugMessage(body: unknown): Record<string, unknown> {
@@ -266,6 +279,8 @@ export interface ChisaCodeDaemonConfig {
     }>;
   };
   providerOverrides?: Record<string, ProviderOverride>;
+  modelGateways?: ModelGatewayConfigs;
+  modelGatewayToken?: string;
   log?: PersistedConfig["log"];
   onLifecycleIntent?: (intent: DaemonLifecycleIntent) => void;
   pushNotificationSender?: PushNotificationSender;
@@ -304,6 +319,7 @@ export async function createChisaCodeDaemon(
           },
         ]),
       ),
+      modelGateways: config.modelGateways ?? {},
       metadataGeneration: {
         providers: config.metadataGeneration?.providers ?? [],
       },
@@ -325,6 +341,8 @@ export async function createChisaCodeDaemon(
   });
 
   const listenTarget = parseListenString(config.listen);
+  const modelGatewayToken = config.modelGatewayToken ?? randomUUID();
+  const modelGatewayBaseUrl = createModelGatewayBaseUrl(listenTarget);
 
   const app = express();
   let boundListenTarget: ListenTarget | null = null;
@@ -432,6 +450,54 @@ export async function createChisaCodeDaemon(
     });
   });
 
+  const runModelGatewayRequest = async (
+    req: express.Request,
+    res: express.Response,
+    targetFormat: ModelGatewayTargetFormat,
+  ): Promise<void> => {
+    const authHeader = req.header("authorization") ?? "";
+    if (authHeader !== `Bearer ${modelGatewayToken}`) {
+      res.status(401).json({ error: "Model gateway token required" });
+      return;
+    }
+
+    const gatewayId = typeof req.params.id === "string" ? req.params.id : "";
+    const gateway = daemonConfigStore.get().modelGateways[gatewayId];
+    if (!gateway || gateway.enabled === false) {
+      res.status(404).json({ error: "Unknown model gateway" });
+      return;
+    }
+
+    try {
+      const response = await handleModelGatewayRequest({
+        gateway,
+        targetFormat,
+        requestBody:
+          req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {},
+      });
+      res.status(response.status);
+      const contentType = response.headers.get("content-type");
+      if (contentType) {
+        res.setHeader("content-type", contentType);
+      }
+      res.send(Buffer.from(await response.arrayBuffer()));
+    } catch (error) {
+      logger.warn({ err: error, gatewayId, targetFormat }, "Model gateway request failed");
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(502).json({ error: message });
+    }
+  };
+
+  app.post("/api/model-gateways/:id/v1/messages", (req, res) => {
+    void runModelGatewayRequest(req, res, "anthropic");
+  });
+  app.post("/api/model-gateways/:id/v1/chat/completions", (req, res) => {
+    void runModelGatewayRequest(req, res, "chatCompletions");
+  });
+  app.post("/api/model-gateways/:id/v1/responses", (req, res) => {
+    void runModelGatewayRequest(req, res, "responses");
+  });
+
   const handleFileDownload = async (req: express.Request, res: express.Response): Promise<void> => {
     const token =
       typeof req.query.token === "string" && req.query.token.trim().length > 0
@@ -527,6 +593,9 @@ export async function createChisaCodeDaemon(
     logger: providerSnapshotLogger,
     runtimeSettings: config.agentProviderSettings,
     providerOverrides: config.providerOverrides,
+    modelGateways: config.modelGateways,
+    modelGatewayBaseUrl: modelGatewayBaseUrl ?? undefined,
+    modelGatewayToken,
     workspaceGitService,
     isDev: config.isDev === true,
     extraClients: config.agentClients,

@@ -403,6 +403,7 @@ export function buildHostNewWorkspaceRoute(
 
 export const SETTINGS_SECTION_SLUGS = [
   "general",
+  "models",
   "shortcuts",
   "integrations",
   "permissions",

@@ -17,6 +17,7 @@ import type { ManagedAgent } from "./agent-manager.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type {
   AgentProviderRuntimeSettingsMap,
+  ModelGatewayConfigs,
   ProviderOverride,
 } from "./provider-launch-config.js";
 import {
@@ -41,6 +42,9 @@ export interface ProviderSnapshotManagerOptions {
   logger: Logger;
   runtimeSettings?: AgentProviderRuntimeSettingsMap;
   providerOverrides?: Record<string, ProviderOverride>;
+  modelGateways?: ModelGatewayConfigs;
+  modelGatewayBaseUrl?: string;
+  modelGatewayToken?: string;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   isDev?: boolean;
   extraClients?: Partial<Record<AgentProvider, AgentClient>>;
@@ -117,6 +121,9 @@ export class ProviderSnapshotManager {
   private runtimeSettings: AgentProviderRuntimeSettingsMap | undefined;
   private providerOverrides: Record<string, ProviderOverride> | undefined;
   private readonly baseProviderOverrides: Record<string, ProviderOverride> | undefined;
+  private modelGateways: ModelGatewayConfigs | undefined;
+  private readonly modelGatewayBaseUrl: string | undefined;
+  private readonly modelGatewayToken: string | undefined;
   private providerRegistry: Record<AgentProvider, ProviderDefinition>;
   private providerClients: Record<AgentProvider, AgentClient>;
 
@@ -128,6 +135,9 @@ export class ProviderSnapshotManager {
     this.runtimeSettings = options.runtimeSettings;
     this.providerOverrides = options.providerOverrides;
     this.baseProviderOverrides = options.providerOverrides;
+    this.modelGateways = options.modelGateways;
+    this.modelGatewayBaseUrl = options.modelGatewayBaseUrl;
+    this.modelGatewayToken = options.modelGatewayToken;
     this.refreshTimeoutMs = options.refreshTimeoutMs ?? DEFAULT_REFRESH_TIMEOUT_MS;
     this.providerRegistry = this.buildRegistry();
     this.providerClients = { ...this.extraClients } as Record<AgentProvider, AgentClient>;
@@ -341,11 +351,13 @@ export class ProviderSnapshotManager {
 
   applyMutableProviderConfig(
     mutableProviders: MutableDaemonConfig["providers"] | undefined,
+    modelGateways?: MutableDaemonConfig["modelGateways"] | undefined,
   ): AgentManagerProviderState {
     this.providerOverrides = applyMutableProviderConfigToOverrides(
       this.baseProviderOverrides,
       mutableProviders,
     );
+    this.modelGateways = modelGateways;
     this.providerRegistry = this.buildRegistry();
     this.providerClients = { ...this.extraClients } as Record<AgentProvider, AgentClient>;
 
@@ -390,6 +402,9 @@ export class ProviderSnapshotManager {
     return buildProviderRegistry(this.logger, {
       runtimeSettings: this.runtimeSettings,
       providerOverrides: this.providerOverrides,
+      modelGateways: this.modelGateways,
+      modelGatewayBaseUrl: this.modelGatewayBaseUrl,
+      modelGatewayToken: this.modelGatewayToken,
       workspaceGitService: this.workspaceGitService,
       isDev: this.isDev,
     });

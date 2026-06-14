@@ -25,6 +25,8 @@ import { normalizeAgentModelDefinition } from "./agent-sdk-types.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type {
   AgentProviderRuntimeSettingsMap,
+  ModelGatewayConfig,
+  ModelGatewayConfigs,
   ProviderOverride,
   ProviderProfileModel,
   ProviderRuntimeSettings,
@@ -68,6 +70,9 @@ export { IMPORTABLE_PROVIDERS } from "@chisacode/protocol/importable-providers";
 export interface BuildProviderRegistryOptions {
   runtimeSettings?: AgentProviderRuntimeSettingsMap;
   providerOverrides?: Record<string, ProviderOverride>;
+  modelGateways?: ModelGatewayConfigs;
+  modelGatewayBaseUrl?: string;
+  modelGatewayToken?: string;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   isDev?: boolean;
 }
@@ -624,6 +629,127 @@ function addResolvedCustomProviders(
   }
 }
 
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/u, "");
+}
+
+function buildGatewayRouteBase(baseUrl: string, gatewayId: string): string {
+  return `${trimTrailingSlash(baseUrl)}/api/model-gateways/${encodeURIComponent(gatewayId)}`;
+}
+
+function buildGatewayProviderModels(
+  models: ProviderProfileModel[],
+  options?: { openCode?: boolean },
+): ProviderProfileModel[] {
+  return models.map((model, index) => ({
+    ...model,
+    id:
+      options?.openCode === true && !model.id.startsWith("openai/")
+        ? `openai/${model.id}`
+        : model.id,
+    ...(model.isDefault === undefined && index === 0 ? { isDefault: true } : {}),
+  }));
+}
+
+function gatewayProviderOverride(params: {
+  gateway: ModelGatewayConfig;
+  extendsProvider: "claude" | "codex" | "opencode";
+  label: string;
+  baseUrl: string;
+  token: string;
+  models: ProviderProfileModel[];
+}): ProviderOverride {
+  const { gateway, extendsProvider, baseUrl, token, models } = params;
+  const routeBase = buildGatewayRouteBase(baseUrl, gateway.id);
+  if (extendsProvider === "claude") {
+    return {
+      extends: "claude",
+      label: params.label,
+      env: {
+        ANTHROPIC_AUTH_TOKEN: token,
+        ANTHROPIC_BASE_URL: `${routeBase}/v1`,
+      },
+      disallowedTools: ["WebSearch"],
+      models,
+      enabled: gateway.enabled !== false,
+    };
+  }
+  if (extendsProvider === "codex") {
+    return {
+      extends: "codex",
+      label: params.label,
+      env: {
+        OPENAI_API_KEY: token,
+        OPENAI_BASE_URL: routeBase,
+        OPENAI_WIRE_API: "responses",
+      },
+      models,
+      enabled: gateway.enabled !== false,
+    };
+  }
+  return {
+    extends: "opencode",
+    label: params.label,
+    env: {
+      OPENAI_API_KEY: token,
+      OPENAI_BASE_URL: `${routeBase}/v1`,
+    },
+    models,
+    enabled: gateway.enabled !== false,
+  };
+}
+
+function addResolvedModelGatewayProviders(
+  resolvedProviders: Map<string, ResolvedProvider>,
+  modelGateways: ModelGatewayConfigs | undefined,
+  runtimeSettings: AgentProviderRuntimeSettingsMap | undefined,
+  options: Pick<
+    BuildProviderRegistryOptions,
+    "workspaceGitService" | "modelGatewayBaseUrl" | "modelGatewayToken"
+  >,
+): void {
+  const baseUrl = options.modelGatewayBaseUrl?.trim();
+  const token = options.modelGatewayToken?.trim();
+  if (!baseUrl || !token) {
+    return;
+  }
+
+  const gatewayOverrides: Record<string, ProviderOverride> = {};
+  for (const gateway of Object.values(modelGateways ?? {})) {
+    const gatewayId = gateway.id;
+    const models = buildGatewayProviderModels(gateway.models ?? []);
+    const openCodeModels = buildGatewayProviderModels(gateway.models ?? [], { openCode: true });
+    gatewayOverrides[`${gatewayId}-claude`] = gatewayProviderOverride({
+      gateway,
+      extendsProvider: "claude",
+      label: `${gateway.label} Claude`,
+      baseUrl,
+      token,
+      models,
+    });
+    gatewayOverrides[`${gatewayId}-codex`] = gatewayProviderOverride({
+      gateway,
+      extendsProvider: "codex",
+      label: `${gateway.label} Codex`,
+      baseUrl,
+      token,
+      models,
+    });
+    gatewayOverrides[`${gatewayId}-opencode`] = gatewayProviderOverride({
+      gateway,
+      extendsProvider: "opencode",
+      label: `${gateway.label} OpenCode`,
+      baseUrl,
+      token,
+      models: openCodeModels,
+    });
+  }
+
+  addResolvedCustomProviders(resolvedProviders, gatewayOverrides, runtimeSettings, {
+    workspaceGitService: options.workspaceGitService,
+  });
+}
+
 export function buildProviderRegistry(
   logger: Logger,
   options?: BuildProviderRegistryOptions,
@@ -640,6 +766,11 @@ export function buildProviderRegistry(
   );
   addResolvedCustomProviders(resolvedProviders, providerOverrides, runtimeSettings, {
     workspaceGitService: options?.workspaceGitService,
+  });
+  addResolvedModelGatewayProviders(resolvedProviders, options?.modelGateways, runtimeSettings, {
+    workspaceGitService: options?.workspaceGitService,
+    modelGatewayBaseUrl: options?.modelGatewayBaseUrl,
+    modelGatewayToken: options?.modelGatewayToken,
   });
   return Object.fromEntries(
     [...resolvedProviders.entries()].map(([provider, resolved]) => [

@@ -70,6 +70,78 @@ export const ProviderOverrideSchema = z
   })
   .strict();
 
+export const ModelGatewayUpstreamSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    baseUrl: z.string().default(""),
+    apiKey: z.string().default(""),
+  })
+  .strict();
+
+export const ModelGatewayConfigSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    models: z.array(ProviderProfileModelSchema).default([]),
+    enabled: z.boolean().default(true),
+    upstreams: z
+      .object({
+        anthropic: ModelGatewayUpstreamSchema.default({}),
+        chatCompletions: ModelGatewayUpstreamSchema.default({}),
+        responses: ModelGatewayUpstreamSchema.default({}),
+      })
+      .strict(),
+    generatedProviderIds: z
+      .object({
+        claude: z.string().min(1),
+        codex: z.string().min(1),
+        opencode: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+    generatedModels: z
+      .object({
+        opencode: z.array(ProviderProfileModelSchema).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+const MODEL_GATEWAY_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+export const ModelGatewayConfigsSchema = z
+  .record(ModelGatewayConfigSchema)
+  .superRefine((gateways, ctx) => {
+    for (const [gatewayId, gateway] of Object.entries(gateways)) {
+      if (!MODEL_GATEWAY_ID_PATTERN.test(gatewayId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [gatewayId],
+          message: `Model gateway ID "${gatewayId}" must match ${MODEL_GATEWAY_ID_PATTERN}.`,
+        });
+      }
+      if (gateway.id !== gatewayId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [gatewayId, "id"],
+          message: `Model gateway "${gatewayId}" must repeat the same id in its config.`,
+        });
+      }
+
+      const hasEnabledUpstream = Object.values(gateway.upstreams).some(
+        (upstream) => upstream.enabled === true,
+      );
+      if (gateway.enabled !== false && !hasEnabledUpstream) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [gatewayId, "upstreams"],
+          message: `Model gateway "${gatewayId}" must enable at least one upstream.`,
+        });
+      }
+    }
+  });
+
 const BUILTIN_PROVIDER_IDS = ["claude", "codex", "opencode", "mimocode", "pi", "kimi"] as const;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -143,6 +215,9 @@ export type ProviderRuntimeSettings = z.infer<typeof ProviderRuntimeSettingsSche
 export type ProviderProfileModel = z.infer<typeof ProviderProfileModelSchema>;
 export type ProviderOverride = z.infer<typeof ProviderOverrideSchema>;
 export type ProviderOverrides = z.infer<typeof ProviderOverridesSchema>;
+export type ModelGatewayUpstream = z.infer<typeof ModelGatewayUpstreamSchema>;
+export type ModelGatewayConfig = z.infer<typeof ModelGatewayConfigSchema>;
+export type ModelGatewayConfigs = z.infer<typeof ModelGatewayConfigsSchema>;
 export type AgentProviderRuntimeSettingsMap = Partial<
   Record<AgentProvider, ProviderRuntimeSettings>
 >;

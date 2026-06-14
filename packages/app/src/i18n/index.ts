@@ -1128,6 +1128,7 @@ export const resources = {
         local: "本机",
         sections: {
           general: "通用",
+          models: "模型",
           shortcuts: "快捷键",
           integrations: "集成",
           permissions: "权限",
@@ -1179,6 +1180,9 @@ export const resources = {
             description: "内置终端缓冲区保留的行数",
             accessibilityLabel: "终端回滚行数",
           },
+        },
+        models: {
+          noHost: "没有可用主机",
         },
         diagnostics: {
           title: "诊断",
@@ -2450,6 +2454,7 @@ export const resources = {
         local: "Local",
         sections: {
           general: "General",
+          models: "Models",
           shortcuts: "Shortcuts",
           integrations: "Integrations",
           permissions: "Permissions",
@@ -2501,6 +2506,9 @@ export const resources = {
             description: "Lines kept in the built-in terminal buffer",
             accessibilityLabel: "Terminal scrollback lines",
           },
+        },
+        models: {
+          noHost: "No available host",
         },
         diagnostics: {
           title: "Diagnostics",

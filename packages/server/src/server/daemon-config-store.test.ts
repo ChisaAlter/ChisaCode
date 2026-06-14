@@ -278,6 +278,77 @@ describe("DaemonConfigStore", () => {
     expect(persisted.agents?.metadataGeneration).toEqual({ providers: [] });
   });
 
+  test("patch persists model gateways into config.json", () => {
+    const chisacodeHome = mkdtempSync(path.join(tmpdir(), "chisacode-daemon-config-store-"));
+    tempDirs.push(chisacodeHome);
+
+    const store = new DaemonConfigStore(
+      chisacodeHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        modelGateways: {},
+        autoArchiveAfterMerge: false,
+        appendSystemPrompt: "",
+        metadataGeneration: { providers: [] },
+      },
+      undefined,
+    );
+
+    store.patch({
+      modelGateways: {
+        zai: {
+          id: "zai",
+          label: "ZAI",
+          enabled: true,
+          models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+          upstreams: {
+            anthropic: {
+              enabled: true,
+              baseUrl: "https://api.z.ai/api/anthropic",
+              apiKey: "sk-anthropic",
+            },
+            chatCompletions: {
+              enabled: false,
+              baseUrl: "",
+              apiKey: "",
+            },
+            responses: {
+              enabled: true,
+              baseUrl: "https://api.z.ai/v1",
+              apiKey: "sk-responses",
+            },
+          },
+        },
+      },
+    });
+
+    const persisted = loadPersistedConfig(chisacodeHome);
+    expect(persisted.agents?.modelGateways?.zai).toEqual({
+      id: "zai",
+      label: "ZAI",
+      enabled: true,
+      models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+      upstreams: {
+        anthropic: {
+          enabled: true,
+          baseUrl: "https://api.z.ai/api/anthropic",
+          apiKey: "sk-anthropic",
+        },
+        chatCompletions: {
+          enabled: false,
+          baseUrl: "",
+          apiKey: "",
+        },
+        responses: {
+          enabled: true,
+          baseUrl: "https://api.z.ai/v1",
+          apiKey: "sk-responses",
+        },
+      },
+    });
+  });
+
   test("patch persists custom ACP provider overrides into config.json", () => {
     const chisacodeHome = mkdtempSync(path.join(tmpdir(), "chisacode-daemon-config-store-"));
     tempDirs.push(chisacodeHome);

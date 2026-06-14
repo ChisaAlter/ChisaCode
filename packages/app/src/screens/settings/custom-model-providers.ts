@@ -2,7 +2,8 @@ import type { ProviderProfileModel } from "@chisacode/protocol/provider-config";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
 
 type ProviderConfig = MutableDaemonConfig["providers"][string];
-type ProviderPatch = NonNullable<MutableDaemonConfigPatch["providers"]>[string];
+type ModelGatewayConfig = NonNullable<MutableDaemonConfig["modelGateways"]>[string];
+type ModelGatewayPatch = NonNullable<MutableDaemonConfigPatch["modelGateways"]>[string];
 
 export type CustomOpenAIWireApi = "responses" | "chat";
 
@@ -17,13 +18,14 @@ export interface CustomModelProviderOpenAIEndpoint extends CustomModelProviderEn
 }
 
 export interface SaveCustomModelProviderInput {
-  currentProviders: MutableDaemonConfig["providers"] | undefined;
+  currentGateways: MutableDaemonConfig["modelGateways"] | undefined;
   previousId?: string | null;
   id: string;
   label: string;
   models: string[];
   anthropic: CustomModelProviderEndpoint;
   openai: CustomModelProviderOpenAIEndpoint;
+  responses: CustomModelProviderEndpoint;
 }
 
 export interface CollectedCustomModelProvider {
@@ -44,6 +46,12 @@ export interface CollectedCustomModelProvider {
     hasApiKey: boolean;
     wireApi: CustomOpenAIWireApi;
   } | null;
+  responses: {
+    providerId: string;
+    enabled: boolean;
+    baseUrl: string;
+    hasApiKey: boolean;
+  } | null;
 }
 
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -56,12 +64,37 @@ function normalizeSupplierId(value: string): string {
   return trim(value).toLowerCase();
 }
 
+function claudeProviderId(id: string): string {
+  return `${id}-claude`;
+}
+
+function codexProviderId(id: string): string {
+  return `${id}-codex`;
+}
+
+function opencodeProviderId(id: string): string {
+  return `${id}-opencode`;
+}
+
 function anthropicProviderId(id: string): string {
   return `${id}-anthropic`;
 }
 
 function openaiProviderId(id: string): string {
   return `${id}-openai`;
+}
+
+export function buildModelGatewayProviderIds(id: string): {
+  claudeProviderId: string;
+  codexProviderId: string;
+  opencodeProviderId: string;
+} {
+  const normalizedId = normalizeSupplierId(id);
+  return {
+    claudeProviderId: claudeProviderId(normalizedId),
+    codexProviderId: codexProviderId(normalizedId),
+    opencodeProviderId: opencodeProviderId(normalizedId),
+  };
 }
 
 export function buildCustomModelProviderIds(id: string): {
@@ -75,7 +108,7 @@ export function buildCustomModelProviderIds(id: string): {
   };
 }
 
-function stripFormatSuffix(providerId: string): string | null {
+function stripLegacyFormatSuffix(providerId: string): string | null {
   if (providerId.endsWith("-anthropic")) {
     return providerId.slice(0, -"anthropic".length - 1);
   }
@@ -90,7 +123,7 @@ function normalizeLabel(label: string, id: string): string {
 }
 
 function stripGeneratedLabelSuffix(label: string): string {
-  return label.replace(/\s+(Anthropic|OpenAI)$/u, "").trim();
+  return label.replace(/\s+(Anthropic|OpenAI|Claude|Codex|OpenCode)$/u, "").trim();
 }
 
 function normalizeModels(models: string[]): ProviderProfileModel[] {
@@ -111,15 +144,15 @@ function normalizeModels(models: string[]): ProviderProfileModel[] {
   return result;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function normalizeOpenCodeModels(models: ProviderProfileModel[]): ProviderProfileModel[] {
+  return models.map((model) => ({
+    ...model,
+    id: model.id.startsWith("openai/") ? model.id : `openai/${model.id}`,
+  }));
 }
 
-function getProviderConfig(
-  providers: MutableDaemonConfig["providers"] | undefined,
-  providerId: string,
-): ProviderConfig | undefined {
-  return (providers as Record<string, ProviderConfig> | undefined)?.[providerId];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readModelArray(value: unknown): ProviderProfileModel[] {
@@ -146,11 +179,25 @@ function resolveWireApi(provider: ProviderConfig | undefined): CustomOpenAIWireA
   return readEnv(provider, "OPENAI_WIRE_API") === "chat" ? "chat" : "responses";
 }
 
-function addDisablePatch(
-  providers: NonNullable<MutableDaemonConfigPatch["providers"]>,
-  providerId: string,
-): void {
-  providers[providerId] = { enabled: false };
+function normalizeGatewayEndpoint(endpoint: CustomModelProviderEndpoint): {
+  enabled: boolean;
+  baseUrl: string;
+  apiKey: string;
+} {
+  return {
+    enabled: endpoint.enabled,
+    baseUrl: trim(endpoint.baseUrl),
+    apiKey: trim(endpoint.apiKey),
+  };
+}
+
+function requireConfiguredEndpoint(name: string, endpoint: CustomModelProviderEndpoint): void {
+  if (!endpoint.enabled) {
+    return;
+  }
+  if (!trim(endpoint.baseUrl) || !trim(endpoint.apiKey)) {
+    throw new Error(`${name} interface requires base URL and API key`);
+  }
 }
 
 export function buildDisableCustomModelProviderPatch(id: string): MutableDaemonConfigPatch {
@@ -161,9 +208,8 @@ export function buildDisableCustomModelProviderPatch(id: string): MutableDaemonC
     );
   }
   return {
-    providers: {
-      [anthropicProviderId(normalizedId)]: { enabled: false },
-      [openaiProviderId(normalizedId)]: { enabled: false },
+    modelGateways: {
+      [normalizedId]: { enabled: false },
     },
   };
 }
@@ -182,72 +228,98 @@ export function buildSaveCustomModelProviderPatch(
   if (models.length === 0) {
     throw new Error("Add at least one model");
   }
-  if (!input.anthropic.enabled && !input.openai.enabled) {
+  if (!input.anthropic.enabled && !input.openai.enabled && !input.responses.enabled) {
     throw new Error("Enable at least one interface format");
   }
 
-  const providers: NonNullable<MutableDaemonConfigPatch["providers"]> = {};
+  requireConfiguredEndpoint("Anthropic", input.anthropic);
+  requireConfiguredEndpoint("Chat Completions", input.openai);
+  requireConfiguredEndpoint("Responses", input.responses);
+
+  const gatewayPatches: NonNullable<MutableDaemonConfigPatch["modelGateways"]> = {};
   const previousId = normalizeSupplierId(input.previousId ?? "");
   if (previousId && previousId !== id) {
-    addDisablePatch(providers, anthropicProviderId(previousId));
-    addDisablePatch(providers, openaiProviderId(previousId));
+    gatewayPatches[previousId] = { enabled: false } satisfies ModelGatewayPatch;
   }
 
-  const anthropicId = anthropicProviderId(id);
-  if (input.anthropic.enabled) {
-    const baseUrl = trim(input.anthropic.baseUrl);
-    const apiKey = trim(input.anthropic.apiKey);
-    if (!baseUrl || !apiKey) {
-      throw new Error("Anthropic interface requires base URL and API key");
-    }
-    providers[anthropicId] = {
-      extends: "claude",
-      label: `${label} Anthropic`,
-      env: {
-        ANTHROPIC_AUTH_TOKEN: apiKey,
-        ANTHROPIC_BASE_URL: baseUrl,
-      },
-      disallowedTools: ["WebSearch"],
-      models,
-      enabled: true,
-    } satisfies ProviderPatch;
-  } else if (getProviderConfig(input.currentProviders, anthropicId)) {
-    addDisablePatch(providers, anthropicId);
-  }
+  const ids = buildModelGatewayProviderIds(id);
+  gatewayPatches[id] = {
+    id,
+    label,
+    enabled: true,
+    models,
+    upstreams: {
+      anthropic: normalizeGatewayEndpoint(input.anthropic),
+      chatCompletions: normalizeGatewayEndpoint(input.openai),
+      responses: normalizeGatewayEndpoint(input.responses),
+    },
+    generatedProviderIds: {
+      claude: ids.claudeProviderId,
+      codex: ids.codexProviderId,
+      opencode: ids.opencodeProviderId,
+    },
+    generatedModels: {
+      opencode: normalizeOpenCodeModels(models),
+    },
+  } satisfies ModelGatewayPatch;
 
-  const openaiId = openaiProviderId(id);
-  if (input.openai.enabled) {
-    const baseUrl = trim(input.openai.baseUrl);
-    const apiKey = trim(input.openai.apiKey);
-    if (!baseUrl || !apiKey) {
-      throw new Error("OpenAI interface requires base URL and API key");
-    }
-    providers[openaiId] = {
-      extends: "codex",
-      label: `${label} OpenAI`,
-      env: {
-        OPENAI_API_KEY: apiKey,
-        OPENAI_BASE_URL: baseUrl,
-        OPENAI_WIRE_API: input.openai.wireApi,
-      },
-      models,
-      enabled: true,
-    } satisfies ProviderPatch;
-  } else if (getProviderConfig(input.currentProviders, openaiId)) {
-    addDisablePatch(providers, openaiId);
-  }
-
-  return { providers };
+  return { modelGateways: gatewayPatches };
 }
 
-export function collectCustomModelProviders(
+function collectGatewayProviders(
+  gateways: MutableDaemonConfig["modelGateways"] | undefined,
+): CollectedCustomModelProvider[] {
+  return Object.values(gateways ?? {})
+    .filter((gateway): gateway is ModelGatewayConfig => Boolean(gateway?.id))
+    .map(collectGatewayProvider);
+}
+
+function collectGatewayEndpoint(
+  providerId: string,
+  gatewayEnabled: boolean,
+  upstream:
+    | ModelGatewayConfig["upstreams"]["anthropic"]
+    | ModelGatewayConfig["upstreams"]["chatCompletions"]
+    | ModelGatewayConfig["upstreams"]["responses"]
+    | undefined,
+): NonNullable<CollectedCustomModelProvider["anthropic"]> {
+  return {
+    providerId,
+    enabled: gatewayEnabled && upstream?.enabled === true,
+    baseUrl: upstream?.baseUrl ?? "",
+    hasApiKey: trim(upstream?.apiKey).length > 0,
+  };
+}
+
+function collectGatewayProvider(gateway: ModelGatewayConfig): CollectedCustomModelProvider {
+  const ids = buildModelGatewayProviderIds(gateway.id);
+  const enabled = gateway.enabled !== false;
+  return {
+    id: gateway.id,
+    label: gateway.label ?? gateway.id,
+    providerIds: [ids.claudeProviderId, ids.codexProviderId, ids.opencodeProviderId],
+    models: gateway.models ?? [],
+    anthropic: collectGatewayEndpoint(ids.claudeProviderId, enabled, gateway.upstreams?.anthropic),
+    openai: {
+      ...collectGatewayEndpoint(
+        ids.opencodeProviderId,
+        enabled,
+        gateway.upstreams?.chatCompletions,
+      ),
+      wireApi: "chat",
+    },
+    responses: collectGatewayEndpoint(ids.codexProviderId, enabled, gateway.upstreams?.responses),
+  };
+}
+
+function collectLegacyProviders(
   providers: MutableDaemonConfig["providers"] | undefined,
 ): CollectedCustomModelProvider[] {
   const grouped = new Map<string, CollectedCustomModelProvider>();
 
   for (const [providerId, rawProvider] of Object.entries(providers ?? {})) {
     const provider = rawProvider as ProviderConfig;
-    const supplierId = stripFormatSuffix(providerId);
+    const supplierId = stripLegacyFormatSuffix(providerId);
     if (!supplierId) {
       continue;
     }
@@ -267,6 +339,7 @@ export function collectCustomModelProviders(
         models: readModels(provider),
         anthropic: null,
         openai: null,
+        responses: null,
       } satisfies CollectedCustomModelProvider);
 
     if (!entry.providerIds.includes(providerId)) {
@@ -296,7 +369,20 @@ export function collectCustomModelProviders(
     grouped.set(supplierId, entry);
   }
 
-  return Array.from(grouped.values()).sort((a, b) => {
+  return Array.from(grouped.values());
+}
+
+export function collectCustomModelProviders(
+  gateways: MutableDaemonConfig["modelGateways"] | undefined,
+  legacyProviders?: MutableDaemonConfig["providers"] | undefined,
+): CollectedCustomModelProvider[] {
+  const gatewayProviders = collectGatewayProviders(gateways);
+  const gatewayIds = new Set(gatewayProviders.map((provider) => provider.id));
+  const legacyProvidersOnly = collectLegacyProviders(legacyProviders).filter(
+    (provider) => !gatewayIds.has(provider.id),
+  );
+
+  return [...gatewayProviders, ...legacyProvidersOnly].sort((a, b) => {
     const labelCompare = a.label.localeCompare(b.label);
     return labelCompare !== 0 ? labelCompare : a.id.localeCompare(b.id);
   });

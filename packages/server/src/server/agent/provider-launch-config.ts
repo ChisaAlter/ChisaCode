@@ -3,12 +3,18 @@ import { executableExists, findExecutable } from "../../utils/executable.js";
 import { createExternalProcessEnv, type ProcessEnvRecord } from "../chisacode-env.js";
 export {
   AgentProviderRuntimeSettingsMapSchema,
+  ModelGatewayConfigSchema,
+  ModelGatewayConfigsSchema,
+  ModelGatewayUpstreamSchema,
   ProviderCommandSchema,
   ProviderOverrideSchema,
   ProviderOverridesSchema,
   ProviderProfileModelSchema,
   ProviderRuntimeSettingsSchema,
   type AgentProviderRuntimeSettingsMap,
+  type ModelGatewayConfig,
+  type ModelGatewayConfigs,
+  type ModelGatewayUpstream,
   type ProviderCommand,
   type ProviderOverride,
   type ProviderOverrides,

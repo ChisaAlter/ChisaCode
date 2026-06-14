@@ -55,4 +55,42 @@ describe("daemon auth config", () => {
     expect(config.auth?.password).toMatch(/^\$2[aby]\$12\$/);
     expect(isBearerTokenValid({ password: config.auth?.password, token: "from-env" })).toBe(true);
   });
+
+  test("loads model gateways from config.json", async () => {
+    const chisacodeHome = await createChisaCodeHome({
+      version: 1,
+      agents: {
+        modelGateways: {
+          zai: {
+            id: "zai",
+            label: "ZAI",
+            enabled: true,
+            models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+            upstreams: {
+              anthropic: {
+                enabled: false,
+                baseUrl: "",
+                apiKey: "",
+              },
+              chatCompletions: {
+                enabled: true,
+                baseUrl: "https://api.z.ai/v1",
+                apiKey: "sk-chat",
+              },
+              responses: {
+                enabled: false,
+                baseUrl: "",
+                apiKey: "",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const config = loadConfig(chisacodeHome, { env: {} });
+
+    expect(config.modelGateways?.zai?.label).toBe("ZAI");
+    expect(config.modelGateways?.zai?.upstreams.chatCompletions.apiKey).toBe("sk-chat");
+  });
 });
