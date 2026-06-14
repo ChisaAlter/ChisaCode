@@ -420,12 +420,6 @@ function SidebarSessionRow({
         </DropdownMenuContent>
       </DropdownMenu>
     );
-  } else if (isSelected && !showQuickActions) {
-    rowTrailingContent = (
-      <View style={styles.desktopSelectedStatusSlot}>
-        <View style={styles.desktopSelectedStatusDot} />
-      </View>
-    );
   } else {
     rowTrailingContent = (
       <View pointerEvents={showQuickActions ? "auto" : "none"} style={quickActionsStyle}>
@@ -865,26 +859,25 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   desktopRow: {
-    minHeight: 70,
+    minHeight: 46,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: theme.spacing[3],
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: theme.colors.surface1,
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
   },
   desktopRowHovered: {
-    backgroundColor: "#f0f1f3",
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   desktopRowPressed: {
     opacity: 0.9,
   },
   desktopRowSelected: {
-    backgroundColor: "#f0f1f3",
+    backgroundColor: theme.colors.surface3,
   },
   desktopRowLeading: {
-    width: 20,
+    width: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -939,18 +932,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: 0,
     flexShrink: 0,
   },
-  desktopSelectedStatusSlot: {
-    width: 12,
-    flexShrink: 0,
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  desktopSelectedStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.palette.green[400],
-  },
   desktopRowQuickButton: {
     width: 22,
     height: 22,
@@ -985,12 +966,11 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: 15,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
   },
   desktopRowTitleSelected: {
     color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.semibold,
   },
   rowMetaLine: {
     flexDirection: "row",

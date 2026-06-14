@@ -17,7 +17,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
+import { PanelLeft } from "lucide-react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Extrapolation, interpolate, runOnJS, useSharedValue } from "react-native-reanimated";
@@ -405,6 +406,7 @@ function AppContainer({
   selectedAgentId,
   chromeEnabled: chromeEnabledOverride,
 }: AppContainerProps) {
+  const { theme } = useUnistyles();
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
@@ -445,6 +447,12 @@ function AppContainer({
         }),
     });
   }, [closeDesktopAgentList, closeDesktopFileExplorer, openDesktopAgentList]);
+  const restoreLeftSidebarFromFocusMode = useCallback(() => {
+    if (usePanelStore.getState().desktop.focusModeEnabled) {
+      toggleFocusMode();
+    }
+    openDesktopAgentList();
+  }, [openDesktopAgentList, toggleFocusMode]);
   // TODO: stop matching pathname here as a branch. `chromeEnabled` should not
   // conflate workspace/project-specific chrome (sidebar, mobile gesture) with
   // global concerns like keyboard shortcuts. Split those out so settings (and
@@ -483,6 +491,26 @@ function AppContainer({
         {!isCompactLayout && chromeEnabled && !isFocusModeEnabled && (
           <LeftSidebar selectedAgentId={selectedAgentId} />
         )}
+        {!isCompactLayout && chromeEnabled && isFocusModeEnabled ? (
+          <View style={layoutStyles.desktopSidebarRestoreRail}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={appI18n.t("sidebar.openSidebar")}
+              onPress={restoreLeftSidebarFromFocusMode}
+              style={layoutStyles.desktopSidebarRestoreButton}
+              testID="desktop-left-sidebar-open-focus"
+            >
+              {({ hovered, pressed }) => (
+                <PanelLeft
+                  size={20}
+                  color={
+                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
+                  }
+                />
+              )}
+            </Pressable>
+          </View>
+        ) : null}
         <View style={layoutStyles.appContent}>{children}</View>
       </View>
       <FloatingPanelPortalHost />
@@ -998,5 +1026,21 @@ const layoutStyles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
+  },
+  desktopSidebarRestoreRail: {
+    width: 44,
+    alignSelf: "stretch",
+    alignItems: "center",
+    paddingTop: theme.spacing[3],
+    borderRightWidth: theme.borderWidth[1],
+    borderRightColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  desktopSidebarRestoreButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
   },
 }));
