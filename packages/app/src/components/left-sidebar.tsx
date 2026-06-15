@@ -48,7 +48,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { useShallow } from "zustand/shallow";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -57,8 +56,6 @@ import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
-import { useSessionStore } from "@/stores/session-store";
-import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import {
   DEFAULT_SIDEBAR_WIDTH,
@@ -85,11 +82,7 @@ import {
   buildSettingsRoute,
   mapPathnameToServer,
 } from "@/utils/host-routes";
-import {
-  collectSidebarDraftSessions,
-  resolveLeftSidebarNewConversationRoute,
-  type SidebarSessionDraft,
-} from "@/utils/left-sidebar-drafts";
+import { resolveLeftSidebarNewConversationRoute } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
@@ -118,7 +111,6 @@ interface SidebarSharedProps {
   isHostPickerOpen: boolean;
   setIsHostPickerOpen: Dispatch<SetStateAction<boolean>>;
   agents: ReturnType<typeof useAgentHistory>["agents"];
-  drafts: SidebarSessionDraft[];
   selectedAgentId?: string;
   isInitialLoad: boolean;
   isRevalidating: boolean;
@@ -219,45 +211,6 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
       serverId: activeServerId,
       enabled: isCompactLayout || isOpen,
     });
-  const layoutByWorkspace = useWorkspaceLayoutStore((state) => state.layoutByWorkspace);
-  const draftWorkspaceMetadataEntries = useSessionStore(
-    useShallow((state) => {
-      const workspaces = activeServerId ? state.sessions[activeServerId]?.workspaces : null;
-      if (!workspaces) {
-        return [];
-      }
-
-      const entries: string[] = [];
-      for (const workspace of workspaces.values()) {
-        entries.push(`${workspace.id}\u0000${workspace.workspaceDirectory}`);
-      }
-      entries.sort();
-      return entries;
-    }),
-  );
-  const draftWorkspaceMetadata = useMemo(() => {
-    const metadata: Record<string, { workspaceDirectory: string | null }> = {};
-    for (const entry of draftWorkspaceMetadataEntries) {
-      const separatorIndex = entry.indexOf("\u0000");
-      if (separatorIndex < 0) {
-        continue;
-      }
-      const workspaceId = entry.slice(0, separatorIndex);
-      const workspaceDirectory = entry.slice(separatorIndex + 1);
-      metadata[workspaceId] = { workspaceDirectory };
-    }
-    return metadata;
-  }, [draftWorkspaceMetadataEntries]);
-  const drafts = useMemo(
-    () =>
-      collectSidebarDraftSessions({
-        activeServerId,
-        layoutByWorkspace,
-        workspacesById: draftWorkspaceMetadata,
-      }),
-    [activeServerId, draftWorkspaceMetadata, layoutByWorkspace],
-  );
-
   const [isManualRefresh, setIsManualRefresh] = useState(false);
 
   const handleRefresh = useCallback(() => {
@@ -346,7 +299,6 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     isHostPickerOpen,
     setIsHostPickerOpen,
     agents,
-    drafts,
     selectedAgentId,
     isInitialLoad,
     isRevalidating,
@@ -872,7 +824,6 @@ function MobileSidebar({
   isHostPickerOpen,
   setIsHostPickerOpen,
   agents,
-  drafts,
   selectedAgentId,
   isInitialLoad,
   isRevalidating,
@@ -1188,7 +1139,6 @@ function MobileSidebar({
               <SidebarSessionList
                 serverId={activeServerId}
                 agents={agents}
-                drafts={drafts}
                 selectedAgentId={selectedAgentId}
                 isRefreshing={isManualRefresh && isRevalidating}
                 onRefresh={handleRefresh}
@@ -1230,7 +1180,6 @@ function DesktopSidebar({
   isHostPickerOpen,
   setIsHostPickerOpen,
   agents,
-  drafts,
   selectedAgentId,
   isInitialLoad,
   isRevalidating,
@@ -1368,7 +1317,6 @@ function DesktopSidebar({
             <SidebarSessionList
               serverId={activeServerId}
               agents={agents}
-              drafts={drafts}
               selectedAgentId={selectedAgentId}
               isRefreshing={isManualRefresh && isRevalidating}
               onRefresh={handleRefresh}

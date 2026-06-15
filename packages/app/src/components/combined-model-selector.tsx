@@ -27,6 +27,12 @@ import { Button } from "@/components/ui/button";
 const IS_WEB = platformIsWeb;
 
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
+import {
+  resolveInitialSelectorView,
+  resolveSingleProviderView,
+  resolveTopLevelFavoriteRows,
+  type SelectorView,
+} from "@/components/combined-model-selector-state";
 
 const EMPTY_COMBOBOX_OPTIONS: ComboboxOption[] = [];
 
@@ -57,7 +63,6 @@ import { getProviderIcon } from "@/components/provider-icons";
 import {
   buildSelectedTriggerLabel,
   filterAndRankModelRows,
-  getAllProviderModelRows,
   getProviderModelRows,
   resolveSelectedModelLabel,
   type ProviderSelectionModelRow,
@@ -70,10 +75,6 @@ const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
 const DESKTOP_PROVIDER_VIEW_BASE_HEIGHT = 80;
 const DESKTOP_MODEL_ROW_HEIGHT = 40;
-
-type SelectorView =
-  | { kind: "all" }
-  | { kind: "provider"; providerId: string; providerLabel: string };
 
 interface CombinedModelSelectorProps {
   providers: ProviderSelectorProvider[];
@@ -490,7 +491,7 @@ function SelectorContent({
     [normalizedQuery, selectedViewProvider],
   );
   const favoriteRows = useMemo(
-    () => getAllProviderModelRows(providers).filter((row) => favoriteKeys.has(row.favoriteKey)),
+    () => resolveTopLevelFavoriteRows({ providers, favoriteKeys }),
     [favoriteKeys, providers],
   );
   const hasResults = favoriteRows.length > 0 || providers.length > 0;
@@ -592,24 +593,17 @@ export function CombinedModelSelector({
 
   // Single-provider mode: only one provider → skip Level 1 entirely
   const singleProviderView = useMemo<SelectorView | null>(() => {
-    if (providers.length !== 1) return null;
-    const provider = providers[0];
-    if (!provider) return null;
-    return { kind: "provider", providerId: provider.id, providerLabel: provider.label };
+    return resolveSingleProviderView(providers);
   }, [providers]);
 
   const computeInitialView = useCallback((): SelectorView => {
-    if (singleProviderView) return singleProviderView;
-
-    const selectedFavoriteKey = `${selectedProvider}:${selectedModel}`;
-    if (selectedProvider && selectedModel && !favoriteKeys.has(selectedFavoriteKey)) {
-      const provider = providers.find((entry) => entry.id === selectedProvider);
-      if (provider)
-        return { kind: "provider", providerId: provider.id, providerLabel: provider.label };
-    }
-
-    return { kind: "all" };
-  }, [singleProviderView, selectedProvider, selectedModel, favoriteKeys, providers]);
+    return resolveInitialSelectorView({
+      providers,
+      selectedProvider,
+      selectedModel,
+      favoriteKeys,
+    });
+  }, [selectedProvider, selectedModel, favoriteKeys, providers]);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

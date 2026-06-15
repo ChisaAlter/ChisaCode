@@ -33,17 +33,17 @@ export interface BulkCloseConfirmationCopy {
 
 const DEFAULT_BULK_CLOSE_CONFIRMATION_COPY: BulkCloseConfirmationCopy = {
   allKinds: ({ agentCount, terminalCount, otherCount }) =>
-    `This will archive ${agentCount} agent(s), close ${terminalCount} terminal(s), and close ${otherCount} tab(s). Any running process in a closed terminal will be stopped immediately.`,
+    `This will close ${agentCount} agent tab(s), close ${terminalCount} terminal(s), and close ${otherCount} other tab(s). Any running process in a closed terminal will be stopped immediately.`,
   agentsAndTerminals: ({ agentCount, terminalCount }) =>
-    `This will archive ${agentCount} agent(s) and close ${terminalCount} terminal(s). Any running process in a closed terminal will be stopped immediately.`,
+    `This will close ${agentCount} agent tab(s) and close ${terminalCount} terminal(s). Any running process in a closed terminal will be stopped immediately.`,
   terminalsAndOthers: ({ terminalCount, otherCount }) =>
     `This will close ${terminalCount} terminal(s) and ${otherCount} tab(s). Any running process in a closed terminal will be stopped immediately.`,
   agentsAndOthers: ({ agentCount, otherCount }) =>
-    `This will archive ${agentCount} agent(s) and close ${otherCount} tab(s).`,
+    `This will close ${agentCount} agent tab(s) and close ${otherCount} other tab(s).`,
   terminalsOnly: ({ terminalCount }) =>
     `This will close ${terminalCount} terminal(s). Any running process in a closed terminal will be stopped immediately.`,
   othersOnly: ({ otherCount }) => `This will close ${otherCount} tab(s).`,
-  agentsOnly: ({ agentCount }) => `This will archive ${agentCount} agent(s).`,
+  agentsOnly: ({ agentCount }) => `This will close ${agentCount} agent tab(s).`,
 };
 
 export function classifyBulkClosableTabs(tabs: WorkspaceTabDescriptor[]): BulkClosableTabGroups {
@@ -109,18 +109,17 @@ export function buildBulkCloseConfirmationMessage(
 
 export async function closeBulkWorkspaceTabs(input: CloseBulkWorkspaceTabsInput): Promise<void> {
   const { client, groups, closeTab, closeWorkspaceTabWithCleanup, logLabel, warn } = input;
-  const hasDestructiveTabs = groups.agentTabs.length > 0 || groups.terminalTabs.length > 0;
+  const hasTerminalTabs = groups.terminalTabs.length > 0;
 
-  if (hasDestructiveTabs && client) {
+  if (hasTerminalTabs && client) {
     void client
       .closeItems({
-        agentIds: groups.agentTabs.map((tab) => tab.agentId),
         terminalIds: groups.terminalTabs.map((tab) => tab.terminalId),
       })
       .catch((error) => {
         warn?.(`[WorkspaceScreen] Failed to bulk close tabs ${logLabel}`, { error });
       });
-  } else if (hasDestructiveTabs) {
+  } else if (hasTerminalTabs) {
     warn?.(`[WorkspaceScreen] Failed to bulk close tabs ${logLabel}`, {
       error: new Error("Daemon client not available"),
     });

@@ -10,7 +10,7 @@ const readyEmptyWorkspace = {
   hasLoadedTerminals: true,
   activeAgentCount: 0,
   terminalCount: 0,
-  tabCount: 0,
+  workspaceTabCount: 0,
 };
 
 describe("shouldSeedEmptyWorkspaceDraft", () => {
@@ -51,7 +51,16 @@ describe("shouldSeedEmptyWorkspaceDraft", () => {
     expect(
       shouldSeedEmptyWorkspaceDraft({
         ...readyEmptyWorkspace,
-        tabCount: 1,
+        workspaceTabCount: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not seed when another pane still has a workspace tab", () => {
+    expect(
+      shouldSeedEmptyWorkspaceDraft({
+        ...readyEmptyWorkspace,
+        workspaceTabCount: 1,
       }),
     ).toBe(false);
   });

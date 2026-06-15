@@ -1,5 +1,5 @@
 import type { Href } from "expo-router";
-import { collectAllTabs, type WorkspaceLayout } from "@/stores/workspace-layout-store";
+import type { WorkspaceLayout } from "@/stores/workspace-layout-store";
 import {
   buildHostWorkspaceOpenRoute,
   parseHostWorkspaceRouteFromPathname,
@@ -17,45 +17,12 @@ export interface SidebarDraftWorkspaceMetadata {
   workspaceDirectory: string | null;
 }
 
-export function collectSidebarDraftSessions(input: {
+export function collectSidebarDraftSessions(_input: {
   activeServerId: string | null;
   layoutByWorkspace: Record<string, WorkspaceLayout>;
   workspacesById: Record<string, SidebarDraftWorkspaceMetadata | undefined>;
 }): SidebarSessionDraft[] {
-  const activeServerId = input.activeServerId?.trim() || null;
-  if (!activeServerId) {
-    return [];
-  }
-
-  const drafts: SidebarSessionDraft[] = [];
-  const workspaceKeyPrefix = `${activeServerId}:`;
-  for (const [workspaceKey, layout] of Object.entries(input.layoutByWorkspace)) {
-    if (!workspaceKey.startsWith(workspaceKeyPrefix)) {
-      continue;
-    }
-
-    const workspaceId = workspaceKey.slice(workspaceKeyPrefix.length).trim();
-    if (!workspaceId) {
-      continue;
-    }
-
-    const cwd = input.workspacesById[workspaceId]?.workspaceDirectory?.trim() || null;
-    for (const tab of collectAllTabs(layout.root)) {
-      if (tab.target.kind !== "draft") {
-        continue;
-      }
-      drafts.push({
-        serverId: activeServerId,
-        workspaceId,
-        draftId: tab.target.draftId,
-        cwd,
-        createdAt: new Date(tab.createdAt),
-      });
-    }
-  }
-
-  drafts.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
-  return drafts;
+  return [];
 }
 
 export function resolveLeftSidebarNewConversationRoute(input: {

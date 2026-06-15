@@ -78,6 +78,10 @@ import {
 } from "@/runtime/host-runtime";
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { usePanelStore } from "@/stores/panel-store";
+import {
+  buildWorkspaceTabPersistenceKey,
+  useWorkspaceLayoutStore,
+} from "@/stores/workspace-layout-store";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { resolveActiveHost } from "@/utils/active-host";
@@ -86,11 +90,13 @@ import {
   buildHostRootRoute,
   mapPathnameToServer,
   parseHostAgentRouteFromPathname,
+  parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
   parseWorkspaceOpenIntent,
 } from "@/utils/host-routes";
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { resolveSelectedSidebarAgentIdFromWorkspaceLayout } from "@/utils/selected-sidebar-agent";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import {
   ensureOsNotificationPermission,
@@ -724,18 +730,18 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
 
 function DesktopWindowControlsSync({ enabled }: { enabled: boolean }) {
   const { theme } = useUnistyles();
-  const surface0 = theme.colors.surface0;
+  const windowChromeBackground = theme.colors.surfaceSidebar;
   const foreground = theme.colors.foreground;
 
   useEffect(() => {
     if (!enabled || isNative) return;
     void updateDesktopWindowControls({
-      backgroundColor: surface0,
+      backgroundColor: windowChromeBackground,
       foregroundColor: foreground,
     }).catch((error) => {
       console.warn("[DesktopWindow] Failed to update window controls overlay", error);
     });
-  }, [enabled, surface0, foreground]);
+  }, [enabled, windowChromeBackground, foreground]);
 
   return null;
 }
@@ -870,6 +876,20 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
   const hosts = useHosts();
   const storeReady = useStoreReady();
   const activeServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
+  const workspaceRoute = useMemo(() => parseHostWorkspaceRouteFromPathname(pathname), [pathname]);
+  const selectedWorkspaceAgentKey = useWorkspaceLayoutStore((state) => {
+    if (!workspaceRoute) {
+      return undefined;
+    }
+    const workspaceKey = buildWorkspaceTabPersistenceKey(workspaceRoute);
+    if (!workspaceKey) {
+      return undefined;
+    }
+    const agentId = resolveSelectedSidebarAgentIdFromWorkspaceLayout(
+      state.layoutByWorkspace[workspaceKey],
+    );
+    return agentId ? `${workspaceRoute.serverId}:${agentId}` : undefined;
+  });
   const shouldShowAppChrome =
     storeReady && activeServerId !== null && hosts.some((host) => host.serverId === activeServerId);
 
@@ -886,18 +906,24 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
   // Parse selectedAgentKey directly from pathname
   // useLocalSearchParams doesn't update when navigating between same-pattern routes
   const selectedAgentKey = useMemo(() => {
-    const workspaceMatch = pathname.match(/^\/h\/([^/]+)\/workspace\/[^/]+(?:\/|$)/);
-    const workspaceServerId = workspaceMatch?.[1]?.trim() ?? "";
-    const openValue = Array.isArray(params.open) ? params.open[0] : params.open;
-    const openIntent = parseWorkspaceOpenIntent(openValue);
-    if (workspaceServerId && openIntent?.kind === "agent") {
-      const agentId = openIntent.agentId.trim();
-      return agentId ? `${workspaceServerId}:${agentId}` : undefined;
+    const match = parseHostAgentRouteFromPathname(pathname);
+    if (match) {
+      return `${match.serverId}:${match.agentId}`;
     }
 
-    const match = parseHostAgentRouteFromPathname(pathname);
-    return match ? `${match.serverId}:${match.agentId}` : undefined;
-  }, [params.open, pathname]);
+    if (selectedWorkspaceAgentKey) {
+      return selectedWorkspaceAgentKey;
+    }
+
+    const openValue = Array.isArray(params.open) ? params.open[0] : params.open;
+    const openIntent = parseWorkspaceOpenIntent(openValue);
+    if (workspaceRoute && openIntent?.kind === "agent") {
+      const agentId = openIntent.agentId.trim();
+      return agentId ? `${workspaceRoute.serverId}:${agentId}` : undefined;
+    }
+
+    return undefined;
+  }, [params.open, pathname, selectedWorkspaceAgentKey, workspaceRoute]);
 
   return (
     <AppContainer

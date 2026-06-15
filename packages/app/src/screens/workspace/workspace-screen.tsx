@@ -2902,7 +2902,7 @@ function WorkspaceScreenContent({
         hasLoadedTerminals: terminalsQuery.isSuccess,
         activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
         terminalCount: terminals.length,
-        tabCount: tabs.length,
+        workspaceTabCount: uiTabs.length,
       })
     ) {
       emptyWorkspaceSeedRef.current = null;
@@ -2924,7 +2924,7 @@ function WorkspaceScreenContent({
     isRouteFocused,
     terminals.length,
     terminalsQuery.isSuccess,
-    tabs.length,
+    uiTabs.length,
     workspaceDirectory,
     workspaceAgentVisibility.activeAgentIds.size,
   ]);

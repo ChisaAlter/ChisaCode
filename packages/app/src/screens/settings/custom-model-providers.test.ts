@@ -20,7 +20,14 @@ describe("custom model provider helpers", () => {
         currentGateways: {},
         id: "zai",
         label: "ZAI",
-        models: ["glm-5", "glm-5-air"],
+        models: [
+          {
+            id: "glm-5",
+            contextWindowMaxTokens: 200_000,
+            supportsImages: true,
+          },
+          { id: "glm-5-air" },
+        ],
         anthropic: {
           enabled: true,
           baseUrl: "https://api.z.ai/api/anthropic",
@@ -45,7 +52,13 @@ describe("custom model provider helpers", () => {
           label: "ZAI",
           enabled: true,
           models: [
-            { id: "glm-5", label: "glm-5", isDefault: true },
+            {
+              id: "glm-5",
+              label: "glm-5",
+              contextWindowMaxTokens: 200_000,
+              supportsImages: true,
+              isDefault: true,
+            },
             { id: "glm-5-air", label: "glm-5-air" },
           ],
           upstreams: {
@@ -72,7 +85,13 @@ describe("custom model provider helpers", () => {
           },
           generatedModels: {
             opencode: [
-              { id: "openai/glm-5", label: "glm-5", isDefault: true },
+              {
+                id: "openai/glm-5",
+                label: "glm-5",
+                contextWindowMaxTokens: 200_000,
+                supportsImages: true,
+                isDefault: true,
+              },
               { id: "openai/glm-5-air", label: "glm-5-air" },
             ],
           },

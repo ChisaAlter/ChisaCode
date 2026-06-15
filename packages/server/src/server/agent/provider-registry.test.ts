@@ -473,7 +473,13 @@ test("model gateway materializes Claude, Codex, and OpenCode provider entries", 
         label: "ZAI",
         enabled: true,
         models: [
-          { id: "glm-5", label: "GLM 5", isDefault: true },
+          {
+            id: "glm-5",
+            label: "GLM 5",
+            isDefault: true,
+            contextWindowMaxTokens: 200_000,
+            supportsImages: true,
+          },
           { id: "glm-5-air", label: "GLM 5 Air" },
         ],
         upstreams: {
@@ -526,6 +532,8 @@ test("model gateway materializes Claude, Codex, and OpenCode provider entries", 
       id: "openai/glm-5",
       label: "GLM 5",
       isDefault: true,
+      contextWindowMaxTokens: 200_000,
+      supportsImages: true,
     },
     {
       provider: "zai-opencode",

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -14,7 +14,6 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
   Archive,
-  Bot,
   Copy,
   Folder,
   MoreHorizontal,
@@ -27,7 +26,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
-import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Button } from "@/components/ui/button";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -55,9 +53,7 @@ import type { SidebarSessionDraft } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
   PINNED_SIDEBAR_SESSION_GROUP_KEY,
-  getAgentCwdGroupLabel,
   groupAgentsForSidebar,
-  normalizeAgentCwdGroupKey,
   type SidebarSessionGroup,
 } from "@/utils/sidebar-session-groups";
 import { buildHostWorkspaceOpenRoute } from "@/utils/host-routes";
@@ -80,7 +76,6 @@ interface SidebarSessionListProps {
 }
 
 interface SidebarSessionRenderGroup extends SidebarSessionGroup {
-  drafts: SidebarSessionDraft[];
   workspaceId: string | null;
 }
 
@@ -114,6 +109,11 @@ function getAgentActionKey(agent: AggregatedAgent): string {
 
 function isSidebarAgentPinned(agent: AggregatedAgent): boolean {
   return agent.labels?.[SIDEBAR_PINNED_LABEL] === "true";
+}
+
+function getSidebarSessionTitle(agent: AggregatedAgent, fallbackTitle: string): string {
+  const title = agent.title?.trim();
+  return title && title.length > 0 ? title : fallbackTitle;
 }
 
 async function copySidebarSessionText({
@@ -303,136 +303,11 @@ function invalidateSidebarSessionQueries(
   void queryClient.invalidateQueries({ queryKey: agentHistoryQueryKey(serverId) });
 }
 
-function compareDateDescending(left: Date, right: Date): number {
-  return right.getTime() - left.getTime();
-}
-
-function compareDraftsByCreatedAtDescending(
-  left: SidebarSessionDraft,
-  right: SidebarSessionDraft,
-): number {
-  return compareDateDescending(left.createdAt, right.createdAt);
-}
-
-function mergeDraftsIntoGroups(input: {
-  agentGroups: SidebarSessionGroup[];
-  drafts: SidebarSessionDraft[];
-  unknownWorkspaceLabel: string;
-}): SidebarSessionRenderGroup[] {
-  const groups = new Map<string, SidebarSessionRenderGroup>();
-  const order: string[] = [];
-
-  for (const group of input.agentGroups) {
-    const renderGroup: SidebarSessionRenderGroup = {
-      ...group,
-      drafts: [],
-      workspaceId: null,
-    };
-    groups.set(group.key, renderGroup);
-    order.push(group.key);
-  }
-
-  for (const draft of input.drafts) {
-    const key = normalizeAgentCwdGroupKey(draft.cwd);
-    const existing = groups.get(key);
-    if (existing && existing.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY) {
-      existing.drafts.push(draft);
-      existing.workspaceId ??= draft.workspaceId;
-      if (
-        existing.agents.length === 0 &&
-        draft.createdAt.getTime() > existing.newestActivityAt.getTime()
-      ) {
-        existing.newestActivityAt = draft.createdAt;
-      }
-      continue;
-    }
-
-    const renderGroup: SidebarSessionRenderGroup = {
-      key,
-      label: getAgentCwdGroupLabel(draft.cwd, input.unknownWorkspaceLabel),
-      cwd: draft.cwd?.trim() || null,
-      agents: [],
-      drafts: [draft],
-      workspaceId: draft.workspaceId,
-      newestActivityAt: draft.createdAt,
-    };
-    groups.set(key, renderGroup);
-    order.push(key);
-  }
-
-  const pinnedGroup = groups.get(PINNED_SIDEBAR_SESSION_GROUP_KEY) ?? null;
-  const workspaceGroups: SidebarSessionRenderGroup[] = [];
-  for (const key of order) {
-    const group = groups.get(key);
-    if (!group || group.key === PINNED_SIDEBAR_SESSION_GROUP_KEY) {
-      continue;
-    }
-    workspaceGroups.push(
-      Object.assign({}, group, {
-        drafts: group.drafts.slice().sort(compareDraftsByCreatedAtDescending),
-      }),
-    );
-  }
-  workspaceGroups.sort((left, right) =>
-    compareDateDescending(left.newestActivityAt, right.newestActivityAt),
-  );
-
-  return pinnedGroup ? [pinnedGroup, ...workspaceGroups] : workspaceGroups;
-}
-
-function SidebarDraftRow({
-  draft,
-  onAgentPress,
-}: {
-  draft: SidebarSessionDraft;
-  onAgentPress?: () => void;
-}) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  const isCompact = useIsCompactFormFactor();
-  const rowBaseStyle = isCompact ? styles.row : styles.desktopRow;
-  const rowHoveredStyle = isCompact ? styles.rowHovered : styles.desktopRowHovered;
-  const rowPressedStyle = isCompact ? styles.rowPressed : styles.desktopRowPressed;
-  const rowLeadingStyle = isCompact ? styles.rowLeading : styles.desktopRowLeading;
-  const rowContentStyle = isCompact ? styles.rowContent : styles.desktopRowContent;
-  const rowTitleStyle = isCompact ? styles.rowTitle : styles.desktopRowTitle;
-  const rowStyle = useCallback(
-    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      rowBaseStyle,
-      Boolean(hovered) && rowHoveredStyle,
-      pressed && rowPressedStyle,
-    ],
-    [rowBaseStyle, rowHoveredStyle, rowPressedStyle],
-  );
-  const handlePress = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      onAgentPress?.();
-      router.push(
-        buildHostWorkspaceOpenRoute(draft.serverId, draft.workspaceId, `draft:${draft.draftId}`),
-      );
-    },
-    [draft.draftId, draft.serverId, draft.workspaceId, onAgentPress],
-  );
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t("session.newSession")}
-      onPress={handlePress}
-      style={rowStyle}
-      testID={`sidebar-session-draft-${draft.serverId}-${draft.workspaceId}-${draft.draftId}`}
-    >
-      <View style={rowLeadingStyle}>
-        <Bot size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </View>
-      <View style={rowContentStyle}>
-        <Text style={rowTitleStyle} numberOfLines={1}>
-          {t("session.newSession")}
-        </Text>
-      </View>
-    </Pressable>
-  );
+function buildRenderGroups(agentGroups: SidebarSessionGroup[]): SidebarSessionRenderGroup[] {
+  return agentGroups.map((group) => ({
+    ...group,
+    workspaceId: null,
+  }));
 }
 
 // eslint-disable-next-line complexity -- Cross-platform row owns desktop hover, desktop context menu, and compact menu parity.
@@ -463,12 +338,12 @@ function SidebarSessionRow({
   const { t } = useTranslation();
   const toast = useToast();
   const isCompact = useIsCompactFormFactor();
-  const [isHovered, setIsHovered] = useState(false);
   const agentActionKey = getAgentActionKey(agent);
   const ProviderIcon = getProviderIcon(agent.provider);
   const isSelected = selectedAgentId === `${agent.serverId}:${agent.id}`;
   const isPinned = isSidebarAgentPinned(agent);
-  const showQuickActions = isHovered || isPinned;
+  const [isHovered, setIsHovered] = useState(false);
+  const sessionTitle = getSidebarSessionTitle(agent, t("session.newSession"));
   const rowBaseStyle = isCompact ? styles.row : styles.desktopRow;
   const rowHoveredStyle = isCompact ? styles.rowHovered : styles.desktopRowHovered;
   const rowSelectedStyle = isCompact ? styles.rowSelected : styles.desktopRowSelected;
@@ -487,6 +362,10 @@ function SidebarSessionRow({
   const rowQuickButtonPressedStyle = isCompact
     ? styles.rowQuickButtonPressed
     : styles.desktopRowQuickButtonPressed;
+  const selectedIndicatorStyle = isCompact
+    ? styles.rowSelectedIndicator
+    : styles.desktopRowSelectedIndicator;
+  const showQuickActions = isCompact || isHovered || isPinning || isArchiving;
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       rowBaseStyle,
@@ -500,11 +379,10 @@ function SidebarSessionRow({
     () => [rowTitleStyle, isSelected && rowTitleSelectedStyle],
     [isSelected, rowTitleSelectedStyle, rowTitleStyle],
   );
+  const rowAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const rowIconColor = isSelected ? theme.colors.foreground : theme.colors.foregroundMuted;
-
-  useEffect(() => {
-    setIsHovered(false);
-  }, [agentActionKey]);
+  const handleHoverIn = useCallback(() => setIsHovered(true), []);
+  const handleHoverOut = useCallback(() => setIsHovered(false), []);
 
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -523,8 +401,6 @@ function SidebarSessionRow({
   const handleTogglePin = useCallback(() => onTogglePin(agent), [agent, onTogglePin]);
   const handleArchive = useCallback(() => onArchive(agent), [agent, onArchive]);
   const handleDelete = useCallback(() => onDelete(agent), [agent, onDelete]);
-  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
-  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   const handleCopyPath = useCallback(() => {
     if (!agent.cwd) {
       return;
@@ -600,6 +476,7 @@ function SidebarSessionRow({
 
   const rowMainContent = (
     <>
+      {isSelected ? <View style={selectedIndicatorStyle} /> : null}
       <View style={rowLeadingStyle}>
         <ProviderIcon size={theme.iconSize.sm} color={rowIconColor} />
       </View>
@@ -679,10 +556,18 @@ function SidebarSessionRow({
     );
   } else {
     rowTrailingContent = (
-      <View pointerEvents={showQuickActions ? "auto" : "none"} style={quickActionsStyle}>
+      <View
+        pointerEvents={showQuickActions ? "auto" : "none"}
+        style={quickActionsStyle}
+        testID={`sidebar-session-quick-actions-${agent.serverId}-${agent.id}`}
+      >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
+          accessibilityLabel={
+            isPinned
+              ? t("sidebar.unpinSessionLabel", { title: sessionTitle })
+              : t("sidebar.pinSessionLabel", { title: sessionTitle })
+          }
           testID={`sidebar-session-quick-pin-${agent.serverId}-${agent.id}`}
           style={quickButtonStyle}
           onPress={handleQuickPin}
@@ -696,7 +581,7 @@ function SidebarSessionRow({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={t("sidebar.archive")}
+          accessibilityLabel={t("sidebar.archiveSessionLabel", { title: sessionTitle })}
           testID={`sidebar-session-quick-archive-${agent.serverId}-${agent.id}`}
           style={quickButtonStyle}
           onPress={handleQuickArchive}
@@ -715,7 +600,8 @@ function SidebarSessionRow({
         onPress={handlePress}
         testID={`sidebar-session-${agent.serverId}-${agent.id}`}
         accessibilityRole="button"
-        accessibilityLabel={agent.title || t("session.newSession")}
+        accessibilityLabel={sessionTitle}
+        accessibilityState={rowAccessibilityState}
       >
         {rowMainContent}
         {rowTrailingContent}
@@ -725,9 +611,12 @@ function SidebarSessionRow({
 
   return (
     <ContextMenu>
-      <View
-        onPointerEnter={isWeb ? handlePointerEnter : undefined}
-        onPointerLeave={isWeb ? handlePointerLeave : undefined}
+      <Pressable
+        key={agentActionKey}
+        style={styles.desktopRowContainer}
+        onHoverIn={handleHoverIn}
+        onHoverOut={handleHoverOut}
+        testID={`sidebar-session-container-${agent.serverId}-${agent.id}`}
       >
         <ContextMenuTrigger
           enabledOnMobile={false}
@@ -735,12 +624,13 @@ function SidebarSessionRow({
           onPress={handlePress}
           testID={`sidebar-session-${agent.serverId}-${agent.id}`}
           accessibilityRole="button"
-          accessibilityLabel={agent.title || t("session.newSession")}
+          accessibilityLabel={sessionTitle}
+          accessibilityState={rowAccessibilityState}
         >
           {rowMainContent}
-          {rowTrailingContent}
         </ContextMenuTrigger>
-      </View>
+        {rowTrailingContent}
+      </Pressable>
       <ContextMenuContent
         align="start"
         width={220}
@@ -792,6 +682,7 @@ function SidebarSessionGroupHeader({
   serverId: string | null;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const resolvedWorkspaceId = useResolveWorkspaceIdByCwd(serverId, group.cwd);
   const workspaceId = group.workspaceId ?? resolvedWorkspaceId;
   const canOpenDraft = Boolean(serverId && workspaceId);
@@ -824,7 +715,7 @@ function SidebarSessionGroupHeader({
       {canOpenDraft ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={group.label}
+          accessibilityLabel={t("sidebar.newSessionInWorkspace", { workspace: group.label })}
           hitSlop={4}
           onPress={handleNewDraft}
           style={addButtonStyle}
@@ -839,7 +730,6 @@ function SidebarSessionGroupHeader({
 
 export function SidebarSessionList({
   agents,
-  drafts = [],
   serverId,
   selectedAgentId,
   showGroupTitles = true,
@@ -860,10 +750,6 @@ export function SidebarSessionList({
   const [pinningAgentKey, setPinningAgentKey] = useState<string | null>(null);
   const [deletingAgentKey, setDeletingAgentKey] = useState<string | null>(null);
   const visibleAgents = useMemo(() => agents.filter((agent) => !agent.archivedAt), [agents]);
-  const visibleDrafts = useMemo(
-    () => drafts.filter((draft) => !serverId || draft.serverId === serverId),
-    [drafts, serverId],
-  );
   const resolvedSelectedAgentId = useMemo(() => {
     if (selectedAgentId) {
       return selectedAgentId;
@@ -879,12 +765,8 @@ export function SidebarSessionList({
       pinnedGroupLabel: t("sidebar.pinnedSessions"),
       isPinnedAgent: isSidebarAgentPinned,
     });
-    return mergeDraftsIntoGroups({
-      agentGroups,
-      drafts: visibleDrafts,
-      unknownWorkspaceLabel,
-    });
-  }, [t, visibleAgents, visibleDrafts]);
+    return buildRenderGroups(agentGroups);
+  }, [t, visibleAgents]);
   const pinnedGroup = useMemo(
     () => groups.find((group) => group.key === PINNED_SIDEBAR_SESSION_GROUP_KEY) ?? null,
     [groups],
@@ -1097,13 +979,6 @@ export function SidebarSessionList({
             isDeleting={deletingAgentKey === getAgentActionKey(agent)}
           />
         ))}
-        {group.drafts.map((draft) => (
-          <SidebarDraftRow
-            key={`${draft.serverId}:${draft.workspaceId}:${draft.draftId}`}
-            draft={draft}
-            onAgentPress={onAgentPress}
-          />
-        ))}
       </View>
     </View>
   );
@@ -1181,8 +1056,8 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
   },
   groupAddButton: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
@@ -1211,8 +1086,17 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.85,
   },
   rowSelected: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surface2,
     ...theme.shadow.sm,
+  },
+  rowSelectedIndicator: {
+    position: "absolute",
+    left: theme.spacing[1],
+    top: theme.spacing[2],
+    bottom: theme.spacing[2],
+    width: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
   },
   rowLeading: {
     width: 18,
@@ -1226,8 +1110,12 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[3],
+    paddingLeft: theme.spacing[3],
+    paddingRight: 68,
     borderRadius: theme.borderRadius.md,
+  },
+  desktopRowContainer: {
+    position: "relative",
   },
   desktopRowHovered: {
     backgroundColor: theme.colors.surface1,
@@ -1236,8 +1124,17 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.9,
   },
   desktopRowSelected: {
-    backgroundColor: theme.colors.surface0,
-    ...theme.shadow.sm,
+    backgroundColor: theme.colors.surface2,
+    ...theme.shadow.md,
+  },
+  desktopRowSelectedIndicator: {
+    position: "absolute",
+    left: theme.spacing[1],
+    top: 7,
+    bottom: 7,
+    width: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
   },
   desktopRowLeading: {
     width: 18,
@@ -1289,7 +1186,11 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.85,
   },
   desktopRowQuickActions: {
-    width: 48,
+    position: "absolute",
+    top: 3,
+    right: theme.spacing[1],
+    bottom: 3,
+    width: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -1297,8 +1198,8 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopRowQuickButton: {
-    width: 22,
-    height: 22,
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.sm,

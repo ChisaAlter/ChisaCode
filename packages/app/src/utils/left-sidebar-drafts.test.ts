@@ -18,7 +18,7 @@ function layoutWithDraft(draftId: string, now: number): WorkspaceLayout {
 }
 
 describe("left sidebar drafts", () => {
-  it("collects draft tabs for the active server with workspace cwd metadata", () => {
+  it("does not collect unsent workspace draft tabs for the sidebar session list", () => {
     const drafts = collectSidebarDraftSessions({
       activeServerId: "server-1",
       layoutByWorkspace: {
@@ -31,15 +31,7 @@ describe("left sidebar drafts", () => {
       },
     });
 
-    expect(drafts).toEqual([
-      {
-        serverId: "server-1",
-        workspaceId: "workspace-a",
-        draftId: "draft-a",
-        cwd: "/repo/project-a",
-        createdAt: new Date(1_781_000_000_000),
-      },
-    ]);
+    expect(drafts).toEqual([]);
   });
 
   it("opens a new draft directly when the current route is a workspace", () => {

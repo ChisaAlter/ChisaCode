@@ -17,12 +17,19 @@ export interface CustomModelProviderOpenAIEndpoint extends CustomModelProviderEn
   wireApi: CustomOpenAIWireApi;
 }
 
+export interface CustomModelProviderModelInput {
+  id: string;
+  label?: string;
+  contextWindowMaxTokens?: number;
+  supportsImages?: boolean;
+}
+
 export interface SaveCustomModelProviderInput {
   currentGateways: MutableDaemonConfig["modelGateways"] | undefined;
   previousId?: string | null;
   id: string;
   label: string;
-  models: string[];
+  models: Array<string | CustomModelProviderModelInput>;
   anthropic: CustomModelProviderEndpoint;
   openai: CustomModelProviderOpenAIEndpoint;
   responses: CustomModelProviderEndpoint;
@@ -126,18 +133,39 @@ function stripGeneratedLabelSuffix(label: string): string {
   return label.replace(/\s+(Anthropic|OpenAI|Claude|Codex|OpenCode)$/u, "").trim();
 }
 
-function normalizeModels(models: string[]): ProviderProfileModel[] {
+function normalizePositiveInteger(value: number | undefined): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+  const normalized = Math.trunc(value);
+  return normalized > 0 ? normalized : undefined;
+}
+
+function normalizeModelInput(
+  model: string | CustomModelProviderModelInput,
+): CustomModelProviderModelInput {
+  return typeof model === "string" ? { id: model } : model;
+}
+
+function normalizeModels(
+  models: Array<string | CustomModelProviderModelInput>,
+): ProviderProfileModel[] {
   const seen = new Set<string>();
   const result: ProviderProfileModel[] = [];
   for (const raw of models) {
-    const id = trim(raw);
+    const input = normalizeModelInput(raw);
+    const id = trim(input.id);
     if (!id || seen.has(id)) {
       continue;
     }
     seen.add(id);
+    const label = trim(input.label) || id;
+    const contextWindowMaxTokens = normalizePositiveInteger(input.contextWindowMaxTokens);
     result.push({
       id,
-      label: id,
+      label,
+      ...(contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {}),
+      ...(input.supportsImages === true ? { supportsImages: true } : {}),
       ...(result.length === 0 ? { isDefault: true } : {}),
     });
   }

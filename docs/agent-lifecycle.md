@@ -43,16 +43,16 @@ Cascade is what keeps subagent fleets from outliving their orchestrator.
 
 These are two distinct concepts that used to be conflated:
 
-| Concept                    | Scope      | Triggers                   |
-| -------------------------- | ---------- | -------------------------- |
-| **Tab** (workspace layout) | Per-client | User opens/closes a view   |
-| **Archive** (lifecycle)    | Global     | Explicit lifecycle gesture |
+| Concept                    | Scope      | Triggers                        |
+| -------------------------- | ---------- | ------------------------------- |
+| **Tab** (workspace layout) | Per-client | User opens/closes a view        |
+| **Archive** (lifecycle)    | Global     | Explicit archive/delete gesture |
 
-Closing a tab on a **root agent** still archives — the tab is the agent's home, so closing it means "I'm done with this agent." A confirm dialog protects against archiving a running agent by accident.
+Closing a workspace tab on an **agent** is layout-only. The agent stays unarchived, remains in the sidebar session list, and can be reopened from that list. Bulk tab close actions follow the same rule: agent tabs are removed from the local workspace layout, not archived on the daemon.
 
-Closing a tab on a **subagent** (any agent with `parentAgentId`) is **layout-only**. The agent stays unarchived and stays in its parent's track. The user can re-open the tab from the track at any time. This is implemented in `handleCloseAgentTab` (`packages/app/src/screens/workspace/workspace-screen.tsx`).
+Archiving is explicit. The user must choose an archive/delete action from the sidebar, subagents track, or another lifecycle surface before the daemon marks the agent archived.
 
-The asymmetry is intentional: a subagent's home is the parent's track, not the tab. Tabs are ephemeral viewing slots; the track is the persistent record of the parent's children.
+Draft tabs are not agent records. A new conversation draft remains local to the workspace until the first message is successfully sent; only then does it become an agent/session record for the workspace directory.
 
 ## The subagents track
 
@@ -66,14 +66,12 @@ Archived subagents disappear from the track, by design. To remove a subagent fro
 
 ## Why this shape
 
-The decision was to **decouple "close tab" from "archive" only for subagents**, rather than universally:
+The decision is to universally decouple "close tab" from "archive":
 
-- **Closing a tab on a root agent still archives** — preserves the existing UX users are trained on
-- **Closing a tab on a subagent is layout-only** — fixes the lossy "click to read, close to dismiss view, lose the row" flow
-- **Archive button on track rows** — gives subagents an explicit lifecycle gesture in their home surface
-- **Cascade archive on parent** — keeps subagents from leaking when the parent is archived
-
-We considered universal decoupling (no tab close ever archives, archive is always explicit) but rejected it: it changes a behavior root-agent users rely on.
+- **Closing an agent tab is layout-only** — fixes the lossy "close a view, lose the session" flow
+- **Archive/delete buttons own lifecycle** — sidebar rows and track rows provide explicit global lifecycle gestures
+- **Cascade archive on parent** — keeps subagents from leaking when the parent is explicitly archived
+- **Drafts become sessions only after send** — unsent new conversations do not create sidebar records
 
 ## Limitations
 

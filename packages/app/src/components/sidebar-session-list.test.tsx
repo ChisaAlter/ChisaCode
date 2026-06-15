@@ -37,7 +37,7 @@ const {
       border: "#555",
       surface0: "#222",
       surface1: "#333",
-      surface2: "#222",
+      surface2: "#444",
       surface3: "#444",
       surfaceSidebarHover: "#333",
       palette: {
@@ -114,10 +114,14 @@ vi.mock("react-i18next", () => ({
         "sidebar.sessionActions": "Session actions",
         "sidebar.copyPath": "Copy path",
         "sidebar.pinSession": "Pin",
+        "sidebar.pinSessionLabel": `Pin ${values?.title ?? "session"}`,
         "sidebar.unpinSession": "Unpin",
+        "sidebar.unpinSessionLabel": `Unpin ${values?.title ?? "session"}`,
         "sidebar.pinSessionFailed": "Failed to pin session",
         "sidebar.archive": "Archive",
+        "sidebar.archiveSessionLabel": `Archive ${values?.title ?? "session"}`,
         "sidebar.archiving": "Archiving...",
+        "sidebar.newSessionInWorkspace": `New session in ${values?.workspace ?? "workspace"}`,
         "sidebar.deleteSession": "Delete",
         "sidebar.deletingSession": "Deleting...",
         "sidebar.deleteSessionTitle": "Delete session?",
@@ -201,11 +205,15 @@ vi.mock("@/components/ui/context-menu", () => ({
     testID,
     onPress,
     style,
+    accessibilityLabel,
+    accessibilityState,
   }: {
     children: React.ReactNode;
     testID?: string;
     onPress?: (event: { stopPropagation: () => void }) => void;
     style?: unknown;
+    accessibilityLabel?: string;
+    accessibilityState?: { selected?: boolean };
   }) => {
     const handleClick = React.useCallback(() => {
       onPress?.({ stopPropagation: vi.fn() });
@@ -215,6 +223,8 @@ vi.mock("@/components/ui/context-menu", () => ({
     return (
       <button
         type="button"
+        aria-label={accessibilityLabel}
+        aria-selected={accessibilityState?.selected ? "true" : undefined}
         data-testid={testID}
         data-style={JSON.stringify(resolvedStyle)}
         onClick={handleClick}
@@ -473,7 +483,7 @@ describe("SidebarSessionList", () => {
     expect(screen.getByText("No sessions yet")).not.toBeNull();
   });
 
-  it("renders draft sessions under their workspace and opens the draft route", () => {
+  it("does not render draft sessions in the sidebar before they are sent", () => {
     renderSidebarSessionList({
       serverId: "server-1",
       agents: [],
@@ -488,16 +498,12 @@ describe("SidebarSessionList", () => {
       ],
     });
 
-    expect(screen.getByText("project")).not.toBeNull();
-    const row = screen.getByTestId("sidebar-session-draft-server-1-workspace-project-draft-1");
-    expect(within(row).getByTestId("bot-icon")).not.toBeNull();
-    expect(within(row).getByText("New session")).not.toBeNull();
-
-    fireEvent.click(row);
-
-    expect(routerPushMock).toHaveBeenCalledWith(
-      "/h/server-1/workspace/workspace-project?open=draft%3Adraft-1",
-    );
+    expect(screen.getByText("No sessions yet")).not.toBeNull();
+    expect(screen.queryByText("project")).toBeNull();
+    expect(
+      screen.queryByTestId("sidebar-session-draft-server-1-workspace-project-draft-1"),
+    ).toBeNull();
+    expect(routerPushMock).not.toHaveBeenCalled();
   });
 
   it("keeps agent rows stable when draft rows are added and removed", () => {
@@ -536,8 +542,8 @@ describe("SidebarSessionList", () => {
 
     expect(screen.getByTestId("sidebar-session-server-1-agent-1")).not.toBeNull();
     expect(
-      screen.getByTestId("sidebar-session-draft-server-1-workspace-project-draft-1"),
-    ).not.toBeNull();
+      screen.queryByTestId("sidebar-session-draft-server-1-workspace-project-draft-1"),
+    ).toBeNull();
 
     rerender(
       React.createElement(SidebarSessionList, {
@@ -606,7 +612,7 @@ describe("SidebarSessionList", () => {
     ).not.toBe(0);
   });
 
-  it("does not render agent quick actions or context actions for draft sessions", () => {
+  it("ignores draft-only rows instead of rendering incomplete session actions", () => {
     renderSidebarSessionList({
       serverId: "server-1",
       agents: [],
@@ -621,10 +627,93 @@ describe("SidebarSessionList", () => {
       ],
     });
 
+    expect(screen.getByText("No sessions yet")).not.toBeNull();
+    expect(
+      screen.queryByTestId("sidebar-session-draft-server-1-workspace-project-draft-1"),
+    ).toBeNull();
     expect(screen.queryByTestId("sidebar-session-quick-pin-server-1-draft-1")).toBeNull();
     expect(screen.queryByTestId("sidebar-session-quick-archive-server-1-draft-1")).toBeNull();
     expect(screen.queryByTestId("sidebar-session-rename-server-1-draft-1")).toBeNull();
     expect(screen.queryByTestId("sidebar-session-delete-server-1-draft-1")).toBeNull();
+  });
+
+  it("renders pin and archive actions for every real desktop session row", () => {
+    const agents = [
+      agent({ id: "agent-1", cwd: "/repo/project", title: "First session" }),
+      agent({ id: "agent-2", cwd: "/repo/other", title: "Second session" }),
+    ];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    for (const visibleAgent of agents) {
+      expect(
+        screen.getByTestId(`sidebar-session-quick-pin-server-1-${visibleAgent.id}`),
+      ).not.toBeNull();
+      expect(
+        screen.getByTestId(`sidebar-session-quick-archive-server-1-${visibleAgent.id}`),
+      ).not.toBeNull();
+    }
+  });
+
+  it("labels desktop quick actions with their session title", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "First session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    expect(screen.getByLabelText("Pin First session")).not.toBeNull();
+    expect(screen.getByLabelText("Archive First session")).not.toBeNull();
+  });
+
+  it("exposes selected state for the active desktop session row", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "First session" })];
+
+    renderSidebarSessionList({
+      serverId: "server-1",
+      agents,
+      selectedAgentId: "server-1:agent-1",
+    });
+
+    expect(
+      screen.getByTestId("sidebar-session-server-1-agent-1").getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  it("labels workspace new-session buttons with the workspace name", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "First session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    expect(screen.getByLabelText("New session in project")).not.toBeNull();
+  });
+
+  it("keeps desktop row action targets large enough to click reliably", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "First session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    const pinButton = screen.getByTestId("sidebar-session-quick-pin-server-1-agent-1");
+    const archiveButton = screen.getByTestId("sidebar-session-quick-archive-server-1-agent-1");
+    const newSessionButton = screen.getByTestId("sidebar-session-group-new-server-1-/repo/project");
+
+    expect(Number.parseInt(pinButton.style.width, 10)).toBeGreaterThanOrEqual(28);
+    expect(Number.parseInt(pinButton.style.height, 10)).toBeGreaterThanOrEqual(28);
+    expect(Number.parseInt(archiveButton.style.width, 10)).toBeGreaterThanOrEqual(28);
+    expect(Number.parseInt(archiveButton.style.height, 10)).toBeGreaterThanOrEqual(28);
+    expect(Number.parseInt(newSessionButton.style.width, 10)).toBeGreaterThanOrEqual(28);
+    expect(Number.parseInt(newSessionButton.style.height, 10)).toBeGreaterThanOrEqual(28);
+  });
+
+  it("does not nest desktop quick action buttons inside the session row button", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "First session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    const row = screen.getByTestId("sidebar-session-server-1-agent-1");
+    const pinButton = screen.getByTestId("sidebar-session-quick-pin-server-1-agent-1");
+    const archiveButton = screen.getByTestId("sidebar-session-quick-archive-server-1-agent-1");
+
+    expect(row.contains(pinButton)).toBe(false);
+    expect(row.contains(archiveButton)).toBe(false);
   });
 
   it("renders load more action", () => {
@@ -796,10 +885,10 @@ describe("SidebarSessionList", () => {
       .map((entry) => entry.backgroundColor)
       .filter(Boolean);
 
-    expect(backgrounds.at(-1)).toBe("#222");
+    expect(backgrounds.at(-1)).toBe(theme.colors.surface2);
   });
 
-  it("uses shadow to mark the selected session row", () => {
+  it("uses stronger elevation to mark the selected session row", () => {
     const agents = [agent({ id: "agent-1", cwd: "/repo/project" })];
     renderSidebarSessionList({
       serverId: "server-1",
@@ -813,10 +902,19 @@ describe("SidebarSessionList", () => {
 
     expect(rowStyle).toContainEqual(
       expect.objectContaining({
-        shadowColor: "rgba(0, 0, 0, 0.25)",
-        elevation: 2,
+        shadowColor: "rgba(0, 0, 0, 0.20)",
+        elevation: 8,
       }),
     );
+  });
+
+  it("hides desktop quick actions until the session row is hovered", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project" })];
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    const quickActions = screen.getByTestId("sidebar-session-quick-actions-server-1-agent-1");
+
+    expect(quickActions.style.opacity).toBe("0");
   });
 
   it("sorts pinned sessions before recent unpinned sessions", () => {
