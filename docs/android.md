@@ -13,8 +13,8 @@ EAS profiles: `development`, `production`, and `production-apk` in `packages/app
 
 `development` uses Android `debug`.
 
-The GitHub APK release workflow builds the checked-in native Android project locally with
-Gradle. It does not require an Expo account or `EXPO_TOKEN`.
+The GitHub APK release workflow generates the native Android project with Expo prebuild, then
+builds it locally with Gradle. It does not require an Expo account or `EXPO_TOKEN`.
 
 ## Local build + install
 
@@ -62,7 +62,7 @@ iOS auto-submits to App Store review via a Fastlane lane after EAS uploads to Te
 
 Beta tags like `v0.1.1-beta.1` only trigger the GitHub APK workflow. They publish a GitHub prerelease APK for testing and do not submit to the stores.
 
-`android-v*` tags also trigger only the GitHub APK workflow — useful when you want to ship an APK without going through stores. The GitHub APK workflow supports `workflow_dispatch` with an existing `tag` input so you can rebuild without cutting a new tag. For ad-hoc verification builds, dispatch it with `publish=false`; the APK is uploaded as a workflow artifact instead of being attached to the GitHub Release. The workflow runs `npm run build:app-deps`, builds the terminal webview bundle, then runs `packages/app/android/gradlew :app:assembleRelease` and uploads `app-release.apk`.
+`android-v*` tags also trigger only the GitHub APK workflow — useful when you want to ship an APK without going through stores. The GitHub APK workflow supports `workflow_dispatch` with an existing `tag` input so you can rebuild without cutting a new tag. For ad-hoc verification builds, dispatch it with `publish=false`; the APK is uploaded as a workflow artifact instead of being attached to the GitHub Release. The workflow runs `npm run build:app-deps`, builds the terminal webview bundle, runs `expo prebuild --platform android`, then runs `packages/app/android/gradlew :app:assembleRelease` and uploads `app-release.apk`.
 
 ### Useful commands
 

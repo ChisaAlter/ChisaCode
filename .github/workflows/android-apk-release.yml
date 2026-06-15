@@ -102,12 +102,20 @@ jobs:
           npm run build:app-deps
           npm run build:terminal-webview --workspace=@chisacode/app
 
+      - name: Generate Android native project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd packages/app
+          APP_VARIANT=production npx expo prebuild --platform android --non-interactive
+
       - name: Build Android APK locally
         id: build_apk
         shell: bash
         run: |
           set -euo pipefail
           cd packages/app/android
+          chmod +x ./gradlew
 
           ./gradlew --no-daemon :app:assembleRelease \
             -x lint \
