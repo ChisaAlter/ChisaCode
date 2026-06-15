@@ -234,6 +234,7 @@ import {
   IntegrationsSection,
   type AgentToolAction,
 } from "./integrations-section";
+import { openExternalUrl } from "@/utils/open-external-url";
 
 function providerEntry(
   input: Partial<ProviderSnapshotEntry> & { provider: string },
@@ -414,6 +415,22 @@ describe("IntegrationsSection agent tools", () => {
     expect(container?.querySelector('[aria-label="更新 Claude Code"]')).not.toBeNull();
     expect(container?.querySelector('[aria-label="重装 Codex"]')).not.toBeNull();
     expect(container?.querySelector('[aria-label="安装 OpenCode"]')).not.toBeNull();
+  });
+
+  it("opens the GitHub documentation links", () => {
+    render();
+
+    click("打开 CLI 文档");
+    click("打开技能文档");
+
+    expect(openExternalUrl).toHaveBeenNthCalledWith(
+      1,
+      "https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/cli.md",
+    );
+    expect(openExternalUrl).toHaveBeenNthCalledWith(
+      2,
+      "https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/skills.md",
+    );
   });
 
   it("refreshes only the clicked provider when checking versions", () => {

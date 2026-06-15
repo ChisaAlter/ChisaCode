@@ -26,8 +26,8 @@ import {
 import { useTranslation } from "react-i18next";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 
-const CLI_DOCS_URL = "https://chisacode.sh/docs/cli";
-const SKILLS_DOCS_URL = "https://chisacode.sh/docs/skills";
+const CLI_DOCS_URL = "https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/cli.md";
+const SKILLS_DOCS_URL = "https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/skills.md";
 const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
 
 const OP_KIND_ORDER: Record<SkillOp["kind"], number> = { add: 0, update: 1, delete: 2 };

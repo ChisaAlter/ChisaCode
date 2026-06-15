@@ -81,14 +81,18 @@ chisacode send abc123 "also add tests" # follow-up task
 chisacode --host workstation.local:6767 run "run the full test suite"
 ```
 
-See the [full CLI reference](https://chisacode.sh/docs/cli) for more.
+See the [full CLI reference](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/cli.md)
+for more.
 
 ## Skills
 
 Skills teach your agent to use ChisaCode to orchestrate other agents.
 
+See the [skills guide](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/skills.md)
+for setup and usage details.
+
 ```bash
-npx skills add getchisacode/chisacode
+npx skills add ChisaAlter/ChisaCode
 ```
 
 Then use them in any agent conversation:
