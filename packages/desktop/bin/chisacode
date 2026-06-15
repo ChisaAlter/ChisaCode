@@ -36,15 +36,20 @@ else
 fi
 
 RUNNER_PATH="${RESOURCES_DIR}/app.asar.unpacked/dist/daemon/node-entrypoint-runner.js"
-CLI_ENTRYPOINT="${RESOURCES_DIR}/app.asar/node_modules/@chisacode/cli/dist/index.js"
+UNPACKED_CLI_ENTRYPOINT="${RESOURCES_DIR}/app.asar.unpacked/node_modules/@chisacode/cli/dist/index.js"
+ASAR_CLI_ENTRYPOINT="${RESOURCES_DIR}/app.asar/node_modules/@chisacode/cli/dist/index.js"
 
 if [ ! -f "$RUNNER_PATH" ]; then
   echo "Bundled ChisaCode node runner not found at ${RUNNER_PATH}" >&2
   exit 1
 fi
 
-if [ ! -f "$CLI_ENTRYPOINT" ]; then
-  echo "Bundled ChisaCode CLI not found at ${CLI_ENTRYPOINT}" >&2
+if [ -f "$UNPACKED_CLI_ENTRYPOINT" ]; then
+  CLI_ENTRYPOINT="$UNPACKED_CLI_ENTRYPOINT"
+elif [ -f "${RESOURCES_DIR}/app.asar" ]; then
+  CLI_ENTRYPOINT="$ASAR_CLI_ENTRYPOINT"
+else
+  echo "Bundled ChisaCode app archive not found at ${RESOURCES_DIR}/app.asar" >&2
   exit 1
 fi
 

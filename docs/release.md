@@ -177,9 +177,11 @@ iOS and Android store builds are not in `.github/workflows`. They are triggered 
 
 - **Android (Play Store)** — EAS builds with profile `production` and auto-submits to the Play Store via `eas submit` (EAS-managed credentials, no Fastlane).
 - **iOS (TestFlight + App Store)** — EAS builds with profile `production`, uploads to TestFlight, and a Fastlane lane submits the build for App Store review.
-- **Android APK (GitHub Release asset)** — separate, via `.github/workflows/android-apk-release.yml`. This is the only Android-related workflow that lives in this repo.
+- **Android APK (GitHub Release asset)** — separate, via `.github/workflows/android-apk-release.yml`. This workflow builds the APK locally on GitHub Actions with Gradle and does not require `EXPO_TOKEN`.
 
 There is no `release-mobile.yml` in this repo. Earlier versions of these docs referenced one — that workflow was removed and the EAS GitHub app handles tag triggering directly.
+
+Desktop macOS release artifacts are signed and notarized when the Apple certificate secrets are configured. If those secrets are absent, the GitHub workflow still builds and uploads unsigned, unnotarized macOS artifacts.
 
 ### Watching mobile builds from the terminal
 
