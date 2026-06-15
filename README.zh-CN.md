@@ -94,6 +94,12 @@ chisacode attach abc123
 chisacode send abc123 "顺手把边界情况也测一下"
 ```
 
+完整命令说明见
+[CLI 文档](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/cli.md)。
+
+如果要让 agent 使用 ChisaCode 做交接、循环、advisor、committee 或 epic 编排，见
+[技能文档](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/skills.md)。
+
 ## 本地开发
 
 本仓库是 npm workspace monorepo。请使用 Node 22，并用 `npm ci` 安装依赖。
