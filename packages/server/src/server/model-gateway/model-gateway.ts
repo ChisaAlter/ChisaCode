@@ -1,4 +1,8 @@
-import type { ModelGatewayConfig, ModelGatewayUpstream } from "@chisacode/protocol/provider-config";
+import type {
+  ModelGatewayConfig,
+  ModelGatewayUpstream,
+  SyntheticModelConfig,
+} from "@chisacode/protocol/provider-config";
 
 export type ModelGatewayTargetFormat = "anthropic" | "chatCompletions" | "responses";
 
@@ -16,6 +20,20 @@ interface UpstreamSelection {
   upstream: ModelGatewayUpstream;
   url: string;
 }
+
+const SYNTHETIC_MODEL_SYSTEM_PROMPT = `You have been provided with a set of responses from multiple models to the latest user request. Synthesize them into one high-quality answer. Critically evaluate the responses because some may be incomplete, biased, or incorrect. Do not merely copy them; produce a refined, accurate, coherent, and complete response.
+
+Responses from models:`;
+const SYNTHETIC_CHAT_OPTION_KEYS = [
+  "temperature",
+  "top_p",
+  "max_tokens",
+  "max_completion_tokens",
+  "presence_penalty",
+  "frequency_penalty",
+  "stop",
+  "seed",
+] as const;
 
 function asRecord(value: unknown): JsonRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -106,6 +124,25 @@ function readTextContent(content: unknown): string {
     return "";
   }
   return content.map(readPartText).join("");
+}
+
+function normalizeRequestedModelId(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  return trimmed.startsWith("openai/") ? trimmed.slice("openai/".length) : trimmed;
+}
+
+function findSyntheticModel(
+  gateway: ModelGatewayConfig,
+  requestedModel: unknown,
+): SyntheticModelConfig | null {
+  const normalized = normalizeRequestedModelId(requestedModel);
+  if (!normalized) {
+    return null;
+  }
+  return gateway.syntheticModels?.find((model) => model.id === normalized) ?? null;
 }
 
 function parseJsonObject(value: unknown): JsonRecord {
@@ -647,7 +684,9 @@ function buildUpstreamBody(
   requestBody: JsonRecord,
 ): JsonRecord {
   if (targetFormat === upstreamFormat) {
-    return upstreamFormat === "chatCompletions" ? normalizeChatUpstreamBody(requestBody) : requestBody;
+    return upstreamFormat === "chatCompletions"
+      ? normalizeChatUpstreamBody(requestBody)
+      : requestBody;
   }
   if (upstreamFormat === "chatCompletions") {
     const chatBody =
@@ -720,12 +759,191 @@ function buildUpstreamHeaders(
   return headers;
 }
 
+function readChatResponseText(response: JsonRecord): string {
+  const choices = Array.isArray(response.choices) ? response.choices : [];
+  const firstChoice = asRecord(choices[0]);
+  const message = asRecord(firstChoice?.message);
+  return readTextContent(message?.content);
+}
+
+function buildSyntheticChatResponse(model: unknown, text: string): JsonRecord {
+  const modelId = typeof model === "string" && model.trim().length > 0 ? model : "synthetic";
+  return {
+    id: `chatcmpl_synthetic_${Date.now()}`,
+    object: "chat.completion",
+    model: modelId,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: text,
+        },
+        finish_reason: "stop",
+      },
+    ],
+  };
+}
+
+function getChatMessages(
+  targetFormat: ModelGatewayTargetFormat,
+  requestBody: JsonRecord,
+): JsonRecord[] {
+  const chatBody =
+    targetFormat === "chatCompletions"
+      ? normalizeChatUpstreamBody(requestBody)
+      : buildUpstreamBody(targetFormat, "chatCompletions", requestBody);
+  return (Array.isArray(chatBody.messages) ? chatBody.messages : []).flatMap((message) => {
+    const record = asRecord(message);
+    return record ? [record] : [];
+  });
+}
+
+function withReferenceSystemMessage(messages: JsonRecord[], references: string[]): JsonRecord[] {
+  if (references.length === 0) {
+    return messages;
+  }
+  const referenceText = references
+    .map((reference, index) => `${index + 1}. ${reference}`)
+    .join("\n");
+  return [
+    {
+      role: "system",
+      content: `${SYNTHETIC_MODEL_SYSTEM_PROMPT}\n${referenceText}`,
+    },
+    ...messages,
+  ];
+}
+
+function buildSyntheticChatBody(input: {
+  requestBody: JsonRecord;
+  messages: JsonRecord[];
+  model: string;
+}): JsonRecord {
+  const { requestBody, messages, model } = input;
+  const options: JsonRecord = {};
+  for (const key of SYNTHETIC_CHAT_OPTION_KEYS) {
+    if (requestBody[key] !== undefined) {
+      options[key] = requestBody[key];
+    }
+  }
+  if (options.max_tokens === undefined && typeof requestBody.max_output_tokens === "number") {
+    options.max_tokens = requestBody.max_output_tokens;
+  }
+  return {
+    ...options,
+    model,
+    messages,
+    stream: false,
+  };
+}
+
+async function fetchGatewayChatCompletion(input: {
+  selection: UpstreamSelection;
+  chatBody: JsonRecord;
+  fetchImpl: typeof fetch;
+}): Promise<JsonRecord> {
+  const { selection, chatBody, fetchImpl } = input;
+  const upstreamBody = buildUpstreamBody("chatCompletions", selection.format, chatBody);
+  const response = await fetchImpl(selection.url, {
+    method: "POST",
+    headers: buildUpstreamHeaders(selection.format, selection.upstream.apiKey),
+    body: JSON.stringify(upstreamBody),
+  });
+  if (!response.ok) {
+    throw new Error(`Synthetic model upstream request failed with HTTP ${response.status}`);
+  }
+  const json = (await response.json()) as JsonRecord;
+  return selection.format === "chatCompletions"
+    ? json
+    : convertJsonResponseBody("chatCompletions", selection.format, chatBody, json);
+}
+
+async function runSyntheticModel(input: {
+  gateway: ModelGatewayConfig;
+  syntheticModel: SyntheticModelConfig;
+  targetFormat: ModelGatewayTargetFormat;
+  requestBody: JsonRecord;
+  fetchImpl: typeof fetch;
+}): Promise<string> {
+  const { gateway, syntheticModel, targetFormat, requestBody, fetchImpl } = input;
+  const messages = getChatMessages(targetFormat, requestBody);
+  const selection = selectUpstream(gateway, "chatCompletions");
+  let references: string[] = [];
+  const rounds = Math.max(1, Math.min(4, syntheticModel.rounds ?? 1));
+
+  for (let round = 0; round < rounds; round += 1) {
+    const roundMessages = withReferenceSystemMessage(messages, references);
+    const responses = await Promise.all(
+      syntheticModel.references.map(async (reference) => {
+        const chatResponse = await fetchGatewayChatCompletion({
+          selection,
+          fetchImpl,
+          chatBody: buildSyntheticChatBody({
+            requestBody,
+            messages: roundMessages,
+            model: reference.model,
+          }),
+        });
+        return readChatResponseText(chatResponse).trim();
+      }),
+    );
+    references = responses.filter((response) => response.length > 0);
+  }
+
+  const aggregateResponse = await fetchGatewayChatCompletion({
+    selection,
+    fetchImpl,
+    chatBody: buildSyntheticChatBody({
+      requestBody,
+      messages: withReferenceSystemMessage(messages, references),
+      model: syntheticModel.aggregatorModel,
+    }),
+  });
+  return readChatResponseText(aggregateResponse).trim();
+}
+
+function syntheticResponseForTarget(input: {
+  targetFormat: ModelGatewayTargetFormat;
+  requestBody: JsonRecord;
+  text: string;
+}): Response {
+  const { targetFormat, requestBody, text } = input;
+  if (requestBody.stream === true) {
+    if (targetFormat === "anthropic") {
+      return streamTextAsAnthropic([text], 200);
+    }
+    if (targetFormat === "chatCompletions") {
+      return streamTextAsChat([text], 200);
+    }
+    return streamTextAsResponses([text], 200);
+  }
+  const chatResponse = buildSyntheticChatResponse(requestBody.model, text);
+  const body =
+    targetFormat === "chatCompletions"
+      ? chatResponse
+      : convertJsonResponseBody(targetFormat, "chatCompletions", requestBody, chatResponse);
+  return Response.json(body, { status: 200 });
+}
+
 export async function handleModelGatewayRequest({
   gateway,
   targetFormat,
   requestBody,
   fetchImpl = fetch,
 }: HandleModelGatewayRequestOptions): Promise<Response> {
+  const syntheticModel = findSyntheticModel(gateway, requestBody.model);
+  if (syntheticModel) {
+    const text = await runSyntheticModel({
+      gateway,
+      syntheticModel,
+      targetFormat,
+      requestBody,
+      fetchImpl,
+    });
+    return syntheticResponseForTarget({ targetFormat, requestBody, text });
+  }
+
   const selection = selectUpstream(gateway, targetFormat);
   const upstreamBody = buildUpstreamBody(targetFormat, selection.format, requestBody);
   const response = await fetchImpl(selection.url, {

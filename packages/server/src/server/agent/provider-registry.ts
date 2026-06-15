@@ -659,6 +659,29 @@ function buildGatewayProviderModels(
   }));
 }
 
+function buildGatewaySyntheticModels(gateway: ModelGatewayConfig): ProviderProfileModel[] {
+  return (gateway.syntheticModels ?? []).map((model) => {
+    const providerModel: ProviderProfileModel = {
+      id: model.id,
+      label: model.label,
+    };
+    if (model.description) {
+      providerModel.description = model.description;
+    }
+    return providerModel;
+  });
+}
+
+function buildAllGatewayProviderModels(
+  gateway: ModelGatewayConfig,
+  options?: { modelPrefix?: string },
+): ProviderProfileModel[] {
+  return buildGatewayProviderModels(
+    [...(gateway.models ?? []), ...buildGatewaySyntheticModels(gateway)],
+    options,
+  );
+}
+
 function gatewayProviderOverride(params: {
   gateway: ModelGatewayConfig;
   extendsProvider: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
@@ -738,8 +761,8 @@ function addResolvedModelGatewayProviders(
   const modelGatewayIds = new Map<string, string>();
   for (const gateway of Object.values(modelGateways ?? {})) {
     const gatewayId = gateway.id;
-    const models = buildGatewayProviderModels(gateway.models ?? []);
-    const openAiProviderModels = buildGatewayProviderModels(gateway.models ?? [], {
+    const models = buildAllGatewayProviderModels(gateway);
+    const openAiProviderModels = buildAllGatewayProviderModels(gateway, {
       modelPrefix: "openai",
     });
     gatewayOverrides[`${gatewayId}-claude`] = gatewayProviderOverride({

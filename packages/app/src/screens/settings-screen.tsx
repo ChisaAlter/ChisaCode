@@ -84,6 +84,7 @@ import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pc
 import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
 import { HostPage, HostRenameButton } from "@/screens/settings/host-page";
 import { CustomModelProvidersSection } from "@/screens/settings/custom-model-providers-section";
+import { SyntheticModelsSection } from "@/screens/settings/synthetic-models-section";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -1367,7 +1368,10 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
           return isDesktopApp ? <KeyboardShortcutsSection /> : null;
         case "models":
           return anyOnlineServerId ? (
-            <CustomModelProvidersSection serverId={localServerId ?? anyOnlineServerId} />
+            <>
+              <CustomModelProvidersSection serverId={localServerId ?? anyOnlineServerId} />
+              <SyntheticModelsSection serverId={localServerId ?? anyOnlineServerId} />
+            </>
           ) : (
             <View style={styles.placeholder}>
               <Text style={styles.placeholderText}>{t("settings.models.noHost")}</Text>

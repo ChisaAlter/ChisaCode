@@ -80,11 +80,29 @@ export const ModelGatewayUpstreamSchema = z
   })
   .strict();
 
+export const SyntheticModelReferenceSchema = z
+  .object({
+    model: z.string().min(1),
+  })
+  .strict();
+
+export const SyntheticModelConfigSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    references: z.array(SyntheticModelReferenceSchema).min(2),
+    aggregatorModel: z.string().min(1),
+    rounds: z.number().int().positive().max(4).default(1),
+  })
+  .strict();
+
 export const ModelGatewayConfigSchema = z
   .object({
     id: z.string().min(1),
     label: z.string().min(1),
     models: z.array(ProviderProfileModelSchema).default([]),
+    syntheticModels: z.array(SyntheticModelConfigSchema).default([]),
     enabled: z.boolean().default(true),
     upstreams: z
       .object({
@@ -224,6 +242,7 @@ export type ProviderProfileModel = z.infer<typeof ProviderProfileModelSchema>;
 export type ProviderOverride = z.infer<typeof ProviderOverrideSchema>;
 export type ProviderOverrides = z.infer<typeof ProviderOverridesSchema>;
 export type ModelGatewayUpstream = z.infer<typeof ModelGatewayUpstreamSchema>;
+export type SyntheticModelConfig = z.infer<typeof SyntheticModelConfigSchema>;
 export type ModelGatewayConfig = z.infer<typeof ModelGatewayConfigSchema>;
 export type ModelGatewayConfigs = z.infer<typeof ModelGatewayConfigsSchema>;
 export type AgentProviderRuntimeSettingsMap = Partial<

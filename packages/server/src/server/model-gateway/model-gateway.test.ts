@@ -9,6 +9,7 @@ function makeGateway(overrides: Partial<ModelGatewayConfig> = {}): ModelGatewayC
     label: "ZAI",
     enabled: true,
     models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+    syntheticModels: [],
     upstreams: {
       anthropic: {
         enabled: false,
@@ -55,6 +56,63 @@ function makeGatewayWithOnly(
 }
 
 describe("model gateway", () => {
+  test("synthesizes a configured model from references and an aggregator", async () => {
+    const fetchCalls: Array<{ body: unknown }> = [];
+    const response = await handleModelGatewayRequest({
+      gateway: makeGateway({
+        models: [
+          { id: "glm-5", label: "GLM 5", isDefault: true },
+          { id: "glm-5-air", label: "GLM 5 Air" },
+          { id: "glm-4.6", label: "GLM 4.6" },
+        ],
+        syntheticModels: [
+          {
+            id: "moa-coder",
+            label: "MoA Coder",
+            references: [{ model: "glm-5-air" }, { model: "glm-4.6" }],
+            aggregatorModel: "glm-5",
+            rounds: 1,
+          },
+        ],
+      }),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "moa-coder",
+        messages: [{ role: "user", content: "hello" }],
+      },
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        fetchCalls.push({ body });
+        let content = "final synthetic answer";
+        if (body.model === "glm-5-air") {
+          content = "air answer";
+        } else if (body.model === "glm-4.6") {
+          content = "base answer";
+        }
+        return new Response(
+          JSON.stringify({
+            id: `chatcmpl_${body.model}`,
+            choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      },
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      choices: [{ message: { content: "final synthetic answer" } }],
+    });
+    expect(fetchCalls.map((call) => (call.body as { model: string }).model)).toEqual([
+      "glm-5-air",
+      "glm-4.6",
+      "glm-5",
+    ]);
+    const aggregateCall = fetchCalls[2];
+    expect(aggregateCall).toBeDefined();
+    expect(
+      (aggregateCall.body as { messages: Array<{ content: string }> }).messages[0]?.content,
+    ).toContain("air answer");
+  });
   test("forwards chat completions to a matching chat upstream without conversion", async () => {
     const fetchCalls: Array<{ url: string; init: RequestInit }> = [];
     const response = await handleModelGatewayRequest({
