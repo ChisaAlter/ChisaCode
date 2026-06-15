@@ -312,7 +312,7 @@ export function loadConfig(
     cliRelayUseTls: options?.cli?.relayUseTls,
   });
 
-  const { openai, speech } = resolveSpeechConfig({
+  const { mimo, openai, speech } = resolveSpeechConfig({
     chisacodeHome,
     env,
     persisted,
@@ -344,6 +344,7 @@ export function loadConfig(
     relayPublicUseTls: relay.publicUseTls,
     appBaseUrl,
     auth: resolveAuthConfig(env, persisted),
+    mimo,
     openai,
     speech,
     voiceLlmProvider: voiceLlm.provider,

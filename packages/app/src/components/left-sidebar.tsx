@@ -51,6 +51,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
@@ -1130,7 +1131,7 @@ function MobileSidebar({
 
       <GestureDetector gesture={closeGesture} touchAction="pan-y">
         <Animated.View style={mobileSidebarStyle} pointerEvents="auto">
-          <View style={styles.sidebarContent} pointerEvents="auto">
+          <GlassSurface variant="chrome" style={styles.sidebarContent}>
             <SidebarTopActions
               onCloseSidebar={closeToAgent}
               onViewSessions={handleViewMore}
@@ -1199,7 +1200,7 @@ function MobileSidebar({
               handleHome={handleHome}
               handleSettings={handleSettings}
             />
-          </View>
+          </GlassSurface>
         </Animated.View>
       </GestureDetector>
     </View>
@@ -1337,7 +1338,7 @@ function DesktopSidebar({
         testID="desktop-left-sidebar"
         pointerEvents={isOpen ? "auto" : "none"}
       >
-        <View style={desktopSidebarBorderStyle}>
+        <GlassSurface variant="chrome" style={desktopSidebarBorderStyle}>
           <View style={styles.desktopSidebarDragArea}>
             <TitlebarDragRegion />
             <SidebarTopActions
@@ -1384,7 +1385,7 @@ function DesktopSidebar({
           <GestureDetector gesture={resizeGesture}>
             <View style={resizeHandleStyle} />
           </GestureDetector>
-        </View>
+        </GlassSurface>
       </Animated.View>
     </>
   );

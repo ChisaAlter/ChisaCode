@@ -8,23 +8,34 @@ import {
   type ViewStyle,
 } from "react-native";
 import Animated from "react-native-reanimated";
+import { GlassSurface, type GlassSurfaceVariant } from "@/components/ui/glass-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
-export interface FloatingSurfaceProps extends Omit<ComponentProps<typeof Animated.View>, "style"> {
+export interface FloatingSurfaceProps extends Omit<
+  ComponentProps<typeof Animated.View>,
+  "children" | "style"
+> {
+  children?: ReactNode;
   frameStyle?: StyleProp<ViewStyle>;
+  glassVariant?: GlassSurfaceVariant;
   style?: StyleProp<ViewStyle>;
 }
 
 export const FloatingSurface = forwardRef<View, FloatingSurfaceProps>(function FloatingSurface(
-  { frameStyle, style, ...props },
+  { children, frameStyle, glassVariant = "popover", style, ...props },
   ref,
 ): ReactElement {
   const inlineFrameStyle = useMemo(() => {
     const flattened = StyleSheet.flatten(frameStyle);
     return flattened ? inlineUnistylesStyle(flattened) : undefined;
   }, [frameStyle]);
-  const surfaceStyle = useMemo(() => [style, inlineFrameStyle], [inlineFrameStyle, style]);
-  return <Animated.View {...props} ref={ref} style={surfaceStyle} />;
+  return (
+    <Animated.View {...props} ref={ref} style={inlineFrameStyle}>
+      <GlassSurface variant={glassVariant} style={style}>
+        {children}
+      </GlassSurface>
+    </Animated.View>
+  );
 });
 
 export interface FloatingScrollViewProps {

@@ -91,6 +91,10 @@ vi.mock("react-native-svg", () => {
   };
 });
 
+vi.mock("expo-blur", () => ({
+  BlurView: () => null,
+}));
+
 vi.mock("expo-linking", () => ({
   openURL: vi.fn().mockResolvedValue(undefined),
 }));

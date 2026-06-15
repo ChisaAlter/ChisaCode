@@ -94,6 +94,18 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.theme).toBe("chisaki");
   });
 
+  it("loads the liquid neon theme from app settings", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "liquid-neon" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.theme).toBe("liquid-neon");
+  });
+
   it("normalizes terminal scrollback lines from storage", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({

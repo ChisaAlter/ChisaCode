@@ -1,8 +1,13 @@
 import { z } from "zod";
 
 import type { PersistedConfig } from "../persisted-config.js";
-import type { ChisaCodeOpenAIConfig, ChisaCodeSpeechConfig } from "../bootstrap.js";
+import type {
+  ChisaCodeMimoSpeechConfig,
+  ChisaCodeOpenAIConfig,
+  ChisaCodeSpeechConfig,
+} from "../bootstrap.js";
 import { resolveLocalSpeechConfig } from "./providers/local/config.js";
+import { resolveMimoSpeechConfig } from "./providers/mimo/config.js";
 import { resolveOpenAiSpeechConfig } from "./providers/openai/config.js";
 import {
   SpeechProviderIdSchema,
@@ -148,6 +153,7 @@ export function resolveSpeechConfig(params: {
   env: NodeJS.ProcessEnv;
   persisted: PersistedConfig;
 }): {
+  mimo: ChisaCodeMimoSpeechConfig | undefined;
   openai: ChisaCodeOpenAIConfig | undefined;
   speech: ChisaCodeSpeechConfig;
 } {
@@ -169,7 +175,14 @@ export function resolveSpeechConfig(params: {
     providers,
   });
 
+  const mimo = resolveMimoSpeechConfig({
+    env: params.env,
+    persisted: params.persisted,
+    providers,
+  });
+
   return {
+    mimo,
     openai,
     speech: {
       providers,

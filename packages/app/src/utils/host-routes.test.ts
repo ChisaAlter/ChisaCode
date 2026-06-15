@@ -5,6 +5,7 @@ import {
   buildHostRootRoute,
   buildHostWorkspaceOpenRoute,
   buildHostWorkspaceRoute,
+  buildSettingsHostRoute,
   buildProjectSettingsRoute,
   buildProjectsSettingsRoute,
   decodeFilePathFromPathSegment,
@@ -15,7 +16,9 @@ import {
   parseHostAgentRouteFromPathname,
   parseHostWorkspaceOpenIntentFromPathname,
   parseHostWorkspaceRouteFromPathname,
+  parseSettingsHostRouteFromPathname,
   parseWorkspaceOpenIntent,
+  mapPathnameToServer,
 } from "./host-routes";
 
 describe("parseHostAgentRouteFromPathname", () => {
@@ -24,6 +27,22 @@ describe("parseHostAgentRouteFromPathname", () => {
       serverId: "local",
       agentId: "abc123",
     });
+  });
+});
+
+describe("settings host routes", () => {
+  it("parses a settings host route", () => {
+    expect(parseSettingsHostRouteFromPathname("/settings/hosts/srv%20one")).toBe("srv one");
+  });
+
+  it("builds a settings host route", () => {
+    expect(buildSettingsHostRoute("srv one")).toBe("/settings/hosts/srv%20one");
+  });
+
+  it("maps a stale settings host route to another host settings route", () => {
+    expect(mapPathnameToServer("/settings/hosts/server-1", "server-2")).toBe(
+      "/settings/hosts/server-2",
+    );
   });
 });
 

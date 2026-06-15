@@ -84,7 +84,12 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
     const stored = await deps.storage.getItem(APP_SETTINGS_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<AppSettings>;
-      return { ...DEFAULT_CLIENT_SETTINGS, ...pickAppSettings(parsed) };
+      const next = { ...DEFAULT_CLIENT_SETTINGS, ...pickAppSettings(parsed) } satisfies AppSettings;
+      const serializedNext = JSON.stringify(next);
+      if (serializedNext !== stored) {
+        await deps.storage.setItem(APP_SETTINGS_KEY, serializedNext);
+      }
+      return next;
     }
 
     const legacyAppStored = await deps.storage.getItem(LEGACY_APP_SETTINGS_KEY);

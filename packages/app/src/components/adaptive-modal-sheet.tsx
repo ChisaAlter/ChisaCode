@@ -19,6 +19,7 @@ import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import { isNative, isWeb } from "@/constants/platform";
 import { useTranslation } from "react-i18next";
 
@@ -238,7 +239,7 @@ function SheetBackground({ style }: BottomSheetBackgroundProps) {
     ],
     [style, theme.colors.surface1, theme.borderRadius.xl],
   );
-  return <View style={combinedStyle} />;
+  return <GlassSurface variant="sheet" style={combinedStyle} />;
 }
 
 export type AdaptiveTextInputProps = TextInputProps & {
@@ -553,13 +554,13 @@ export function AdaptiveModalSheet({
         style={ABSOLUTE_FILL_STYLE}
         onPress={onClose}
       />
-      <View style={desktopCardStyle}>
+      <GlassSurface variant="sheet" style={desktopCardStyle}>
         {onFilesDropped ? (
           <FileDropZone onFilesDropped={onFilesDropped}>{cardInner}</FileDropZone>
         ) : (
           cardInner
         )}
-      </View>
+      </GlassSurface>
     </View>
   );
 

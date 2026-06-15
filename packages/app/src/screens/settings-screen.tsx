@@ -385,17 +385,19 @@ function GeneralSection({
                 />
               ))}
               <DropdownMenuSeparator />
-              {(["zinc", "midnight", "claude", "ghostty", "chisaki"] as const).map((themeValue) => (
-                <ThemeMenuItem
-                  key={themeValue}
-                  themeValue={themeValue}
-                  selected={settings.theme === themeValue}
-                  previewHeight={themePreviewHeight}
-                  iconColor={iconColor}
-                  label={t(`settings.general.theme.options.${themeValue}`)}
-                  onChange={handleThemeChange}
-                />
-              ))}
+              {(["zinc", "midnight", "claude", "ghostty", "liquid-neon", "chisaki"] as const).map(
+                (themeValue) => (
+                  <ThemeMenuItem
+                    key={themeValue}
+                    themeValue={themeValue}
+                    selected={settings.theme === themeValue}
+                    previewHeight={themePreviewHeight}
+                    iconColor={iconColor}
+                    label={t(`settings.general.theme.options.${themeValue}`)}
+                    onChange={handleThemeChange}
+                  />
+                ),
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </View>

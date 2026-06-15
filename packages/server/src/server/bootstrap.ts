@@ -93,6 +93,7 @@ import { createChisaCodeWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import type { OpenAiSpeechProviderConfig } from "./speech/providers/openai/config.js";
 import type { LocalSpeechProviderConfig } from "./speech/providers/local/config.js";
+import type { MimoSpeechProviderConfig } from "./speech/providers/mimo/config.js";
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
@@ -216,6 +217,7 @@ function summarizeAgentMcpDebugBody(body: unknown): Record<string, unknown> {
 
 export type ChisaCodeOpenAIConfig = OpenAiSpeechProviderConfig;
 export type ChisaCodeLocalSpeechConfig = LocalSpeechProviderConfig;
+export type ChisaCodeMimoSpeechConfig = MimoSpeechProviderConfig;
 
 export interface ChisaCodeSpeechSttLanguages {
   dictation: string;
@@ -264,6 +266,7 @@ export interface ChisaCodeDaemonConfig {
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
   openai?: ChisaCodeOpenAIConfig;
+  mimo?: ChisaCodeMimoSpeechConfig;
   speech?: ChisaCodeSpeechConfig;
   voiceLlmProvider?: AgentProvider | null;
   voiceLlmProviderExplicit?: boolean;
@@ -933,6 +936,7 @@ export async function createChisaCodeDaemon(
 
   const speechService = createSpeechService({
     logger,
+    mimoConfig: config.mimo,
     openaiConfig: config.openai,
     speechConfig: config.speech,
   });

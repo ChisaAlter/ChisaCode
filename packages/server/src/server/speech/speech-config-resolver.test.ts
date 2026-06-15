@@ -18,6 +18,7 @@ describe("resolveSpeechConfig", () => {
     });
 
     expect(result.openai).toBeUndefined();
+    expect(result.mimo).toBeUndefined();
     expect(result.speech.providers.dictationStt).toEqual({
       provider: "local",
       explicit: false,
@@ -131,6 +132,53 @@ describe("resolveSpeechConfig", () => {
     });
     expect(result.openai?.apiKey).toBe("env-key");
     expect(result.openai?.stt?.model).toBe("gpt-4o-transcribe");
+  });
+
+  test("resolves MiMo TTS settings for voice mode", () => {
+    const persisted = PersistedConfigSchema.parse({
+      providers: {
+        mimo: {
+          apiKey: "persisted-mimo-key",
+          baseUrl: "https://persisted.example/v1/",
+        },
+      },
+      features: {
+        voiceMode: {
+          tts: {
+            provider: "mimo",
+            model: "persisted-tts-model",
+            voice: "mimo_default",
+          },
+        },
+      },
+    });
+
+    const result = resolveSpeechConfig({
+      chisacodeHome: "/tmp/chisacode-home",
+      env: {
+        CHISACODE_VOICE_TTS_PROVIDER: "mimo",
+        MIMO_API_KEY: "env-mimo-key",
+        MIMO_BASE_URL: "https://env.example/v1/",
+        MIMO_TTS_MODEL: "env-tts-model",
+        MIMO_TTS_VOICE: "env-voice",
+      } as NodeJS.ProcessEnv,
+      persisted,
+    });
+
+    expect(result.speech.providers.voiceTts).toEqual({
+      provider: "mimo",
+      explicit: true,
+      enabled: true,
+    });
+    expect(result.mimo).toEqual({
+      apiKey: "env-mimo-key",
+      baseUrl: "https://env.example/v1",
+      tts: {
+        model: "env-tts-model",
+        voice: "env-voice",
+        responseFormat: "pcm",
+      },
+    });
   });
 
   test("resolves STT language from env, settings, and voice-to-dictation fallback", () => {

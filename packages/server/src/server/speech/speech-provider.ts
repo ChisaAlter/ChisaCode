@@ -64,5 +64,6 @@ export interface SpeechStreamResult {
 }
 
 export interface TextToSpeechProvider {
+  id?: "openai" | "local" | "mimo" | (string & {});
   synthesizeSpeech(text: string): Promise<SpeechStreamResult>;
 }

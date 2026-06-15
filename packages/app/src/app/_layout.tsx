@@ -30,11 +30,13 @@ import { DownloadToast } from "@/components/download-toast";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { LeftSidebar } from "@/components/left-sidebar";
+import { LiquidNeonBackdrop } from "@/components/liquid-neon-backdrop";
 import { ProjectPickerModal } from "@/components/project-picker-modal";
 import { ProviderSettingsHost } from "@/components/provider-settings-host";
 import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import {
@@ -96,6 +98,7 @@ import {
   parseHostAgentRouteFromPathname,
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
+  parseSettingsHostRouteFromPathname,
   parseWorkspaceOpenIntent,
 } from "@/utils/host-routes";
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
@@ -407,6 +410,7 @@ const THEME_CYCLE_ORDER: ThemeName[] = [
   "midnight",
   "claude",
   "ghostty",
+  "liquid-neon",
   "chisaki",
   "light",
 ];
@@ -501,35 +505,44 @@ function AppContainer({
 
   useActiveWorktreeNewAction();
 
+  const appRowContent = (
+    <>
+      {!isCompactLayout && chromeEnabled && !isFocusModeEnabled && (
+        <LeftSidebar selectedAgentId={selectedAgentId} />
+      )}
+      {!isCompactLayout && chromeEnabled && isFocusModeEnabled ? (
+        <View style={layoutStyles.desktopSidebarRestoreRail}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={appI18n.t("sidebar.openSidebar")}
+            onPress={restoreLeftSidebarFromFocusMode}
+            style={desktopSidebarRestoreButtonStyle}
+            testID="desktop-left-sidebar-open-focus"
+          >
+            {({ hovered, pressed }) => (
+              <PanelLeft
+                size={20}
+                color={hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
+              />
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+      <View style={layoutStyles.appContent}>{children}</View>
+    </>
+  );
+
   const content = (
     <View style={surfaceStyle}>
+      <LiquidNeonBackdrop />
       <DesktopTitlebarDragStrip />
-      <View style={appRowStyle}>
-        {!isCompactLayout && chromeEnabled && !isFocusModeEnabled && (
-          <LeftSidebar selectedAgentId={selectedAgentId} />
-        )}
-        {!isCompactLayout && chromeEnabled && isFocusModeEnabled ? (
-          <View style={layoutStyles.desktopSidebarRestoreRail}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={appI18n.t("sidebar.openSidebar")}
-              onPress={restoreLeftSidebarFromFocusMode}
-              style={desktopSidebarRestoreButtonStyle}
-              testID="desktop-left-sidebar-open-focus"
-            >
-              {({ hovered, pressed }) => (
-                <PanelLeft
-                  size={20}
-                  color={
-                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
-                  }
-                />
-              )}
-            </Pressable>
-          </View>
-        ) : null}
-        <View style={layoutStyles.appContent}>{children}</View>
-      </View>
+      {!isCompactLayout ? (
+        <GlassSurface variant="panel" style={appRowStyle}>
+          {appRowContent}
+        </GlassSurface>
+      ) : (
+        <View style={appRowStyle}>{appRowContent}</View>
+      )}
       <FloatingPanelPortalHost />
       {isCompactLayout && chromeEnabled && <LeftSidebar selectedAgentId={selectedAgentId} />}
       <DownloadToast />
@@ -879,7 +892,11 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
   const params = useGlobalSearchParams<{ open?: string | string[] }>();
   const hosts = useHosts();
   const storeReady = useStoreReady();
-  const activeServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
+  const chromeServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
+  const activeServerId = useMemo(
+    () => chromeServerId ?? parseSettingsHostRouteFromPathname(pathname),
+    [chromeServerId, pathname],
+  );
   const workspaceRoute = useMemo(() => parseHostWorkspaceRouteFromPathname(pathname), [pathname]);
   const selectedWorkspaceAgentKey = useWorkspaceLayoutStore((state) => {
     if (!workspaceRoute) {
@@ -895,7 +912,7 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
     return agentId ? `${workspaceRoute.serverId}:${agentId}` : undefined;
   });
   const shouldShowAppChrome =
-    storeReady && activeServerId !== null && hosts.some((host) => host.serverId === activeServerId);
+    storeReady && chromeServerId !== null && hosts.some((host) => host.serverId === chromeServerId);
 
   useEffect(() => {
     const redirectRoute = resolveActiveHostRedirectRoute({

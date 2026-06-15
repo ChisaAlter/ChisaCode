@@ -605,6 +605,35 @@ describe("PersistedConfigSchema voice mode config", () => {
     expect(parsed.features?.dictation?.stt?.language).toBe("fr");
     expect(parsed.features?.voiceMode?.stt?.language).toBe("de");
   });
+
+  test("accepts MiMo TTS provider config and arbitrary voice names", () => {
+    const parsed = PersistedConfigSchema.parse({
+      providers: {
+        mimo: {
+          apiKey: "mimo-key",
+          baseUrl: "https://api.example/v1",
+        },
+        mimocode: {
+          apiKey: "mimocode-key",
+          baseUrl: "https://mimocode.example/v1",
+        },
+      },
+      features: {
+        voiceMode: {
+          tts: {
+            provider: "mimo",
+            model: "mimo-v2.5-tts",
+            voice: "mimo_default",
+          },
+        },
+      },
+    });
+
+    expect(parsed.providers?.mimo?.baseUrl).toBe("https://api.example/v1");
+    expect(parsed.providers?.mimocode?.apiKey).toBe("mimocode-key");
+    expect(parsed.features?.voiceMode?.tts?.provider).toBe("mimo");
+    expect(parsed.features?.voiceMode?.tts?.voice).toBe("mimo_default");
+  });
 });
 
 describe.skipIf(process.platform === "win32")("persisted config file permissions", () => {

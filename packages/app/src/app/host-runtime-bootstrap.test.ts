@@ -277,4 +277,24 @@ describe("resolveActiveHostRedirectRoute", () => {
       }),
     ).toBeNull();
   });
+
+  it("redirects a stale settings host route to the remaining host settings", () => {
+    expect(
+      resolveActiveHostRedirectRoute({
+        pathname: "/settings/hosts/server-1",
+        activeServerId: "server-1",
+        hostServerIds: ["server-2"],
+      }),
+    ).toBe("/settings/hosts/server-2");
+  });
+
+  it("redirects a stale settings host route to welcome when the last host was removed", () => {
+    expect(
+      resolveActiveHostRedirectRoute({
+        pathname: "/settings/hosts/server-1",
+        activeServerId: "server-1",
+        hostServerIds: [],
+      }),
+    ).toBe(WELCOME_ROUTE);
+  });
 });

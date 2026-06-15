@@ -106,7 +106,15 @@ export const baseColors = {
   },
 } as const;
 
-export type ThemeName = "light" | "dark" | "zinc" | "midnight" | "claude" | "ghostty" | "chisaki";
+export type ThemeName =
+  | "light"
+  | "dark"
+  | "zinc"
+  | "midnight"
+  | "claude"
+  | "ghostty"
+  | "liquid-neon"
+  | "chisaki";
 
 // Diff stat colors — light uses muted tones, dark uses the brighter palette values
 const lightDiffColors = {
@@ -437,6 +445,59 @@ const ghosttyDarkColors = buildDarkSemanticColors({
   destructive: "#c44a55", // red with slight cool lean against the slate-blue surfaces
 });
 
+const liquidNeonDarkColors = {
+  ...buildDarkSemanticColors({
+    surface0: "rgba(4, 9, 18, 0.96)",
+    surface1: "rgba(8, 17, 32, 0.82)",
+    surface2: "rgba(15, 28, 48, 0.72)",
+    surface3: "rgba(34, 55, 84, 0.64)",
+    surface4: "rgba(59, 83, 120, 0.68)",
+    surfaceDiffEmpty: "rgba(12, 24, 42, 0.68)",
+    surfaceSidebar: "rgba(5, 12, 24, 0.72)",
+    surfaceSidebarHover: "rgba(18, 37, 63, 0.78)",
+    foregroundMuted: "#a8bad3",
+    scrollbarHandle: "#67e8f9",
+    border: "rgba(103, 232, 249, 0.18)",
+    borderAccent: "rgba(217, 70, 239, 0.26)",
+    accent: "#22d3ee",
+    accentBright: "#f0abfc",
+    accentForeground: "#031019",
+    destructive: "#fb7185",
+  }),
+  foreground: "#f8fbff",
+  success: "#34d399",
+  statusSuccess: "#34d399",
+  statusDanger: "#fb7185",
+  statusWarning: "#fbbf24",
+  statusMerged: "#d946ef",
+  diffAddition: "#5eead4",
+  diffDeletion: "#fb7185",
+  terminal: {
+    background: "#050914",
+    foreground: "#f8fbff",
+    cursor: "#67e8f9",
+    cursorAccent: "#031019",
+    selectionBackground: "rgba(34, 211, 238, 0.26)",
+    selectionForeground: "#f8fbff",
+    black: "#050914",
+    red: "#fb7185",
+    green: "#34d399",
+    yellow: "#fbbf24",
+    blue: "#60a5fa",
+    magenta: "#d946ef",
+    cyan: "#22d3ee",
+    white: "#dbeafe",
+    brightBlack: "#334155",
+    brightRed: "#fda4af",
+    brightGreen: "#6ee7b7",
+    brightYellow: "#fde68a",
+    brightBlue: "#93c5fd",
+    brightMagenta: "#f0abfc",
+    brightCyan: "#67e8f9",
+    brightWhite: "#ffffff",
+  },
+} as const;
+
 export const SPACING = {
   0: 0,
   1: 4,
@@ -538,6 +599,51 @@ const darkShadow = {
   },
 } as const;
 
+const defaultGlass = {
+  enabled: false,
+  blurIntensity: 0,
+  panel: "transparent",
+  popover: "transparent",
+  sheet: "transparent",
+  chrome: "transparent",
+  border: "transparent",
+  highlight: "transparent",
+  glow: "transparent",
+} as const;
+
+const liquidNeonGlass = {
+  enabled: true,
+  blurIntensity: 42,
+  panel: "rgba(8, 18, 34, 0.56)",
+  popover: "rgba(9, 19, 36, 0.68)",
+  sheet: "rgba(8, 18, 34, 0.74)",
+  chrome: "rgba(5, 13, 27, 0.58)",
+  border: "rgba(103, 232, 249, 0.28)",
+  highlight: "rgba(255, 255, 255, 0.18)",
+  glow: "rgba(217, 70, 239, 0.28)",
+} as const;
+
+const liquidNeonShadow = {
+  sm: {
+    shadowColor: "rgba(34, 211, 238, 0.24)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  md: {
+    shadowColor: "rgba(217, 70, 239, 0.20)",
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  lg: {
+    shadowColor: "rgba(34, 211, 238, 0.24)",
+    shadowOffset: { width: 0, height: 16 },
+    shadowRadius: 36,
+    elevation: 10,
+  },
+} as const;
+
 function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemanticColors>) {
   return {
     colorScheme: "dark" as const,
@@ -546,6 +652,7 @@ function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemanticColor
       palette: baseColors,
       syntax: darkHighlightColors,
     },
+    glass: defaultGlass,
     shadow: darkShadow,
     ...commonTheme,
   } as const;
@@ -557,6 +664,18 @@ export const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
 export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
 export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
 
+export const liquidNeonTheme = {
+  colorScheme: "dark" as const,
+  colors: {
+    ...liquidNeonDarkColors,
+    palette: baseColors,
+    syntax: darkHighlightColors,
+  },
+  glass: liquidNeonGlass,
+  shadow: liquidNeonShadow,
+  ...commonTheme,
+} as const;
+
 export const lightTheme = {
   colorScheme: "light" as const,
   colors: {
@@ -564,6 +683,7 @@ export const lightTheme = {
     palette: baseColors,
     syntax: lightHighlightColors,
   },
+  glass: defaultGlass,
   shadow: {
     sm: {
       shadowColor: "rgba(0, 0, 0, 0.02)",
@@ -594,6 +714,7 @@ export const chisakiTheme = {
     palette: baseColors,
     syntax: lightHighlightColors,
   },
+  glass: defaultGlass,
   shadow: {
     sm: {
       shadowColor: "rgba(0, 0, 0, 0.02)",
@@ -621,7 +742,15 @@ export const chisakiTheme = {
 export const theme = darkTheme;
 
 // Export a union type that works for both themes
-export type Theme = typeof darkTheme | typeof lightTheme | typeof chisakiTheme;
+export type Theme =
+  | typeof darkTheme
+  | typeof lightTheme
+  | typeof chisakiTheme
+  | typeof liquidNeonTheme;
+
+export function isLiquidNeonThemeName(themeName: ThemeName | "auto"): boolean {
+  return themeName === "liquid-neon";
+}
 
 type UnistylesThemeKey =
   | "light"
@@ -630,6 +759,7 @@ type UnistylesThemeKey =
   | "darkMidnight"
   | "darkClaude"
   | "darkGhostty"
+  | "liquidNeon"
   | "chisaki";
 
 export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
@@ -639,6 +769,7 @@ export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
   midnight: "darkMidnight",
   claude: "darkClaude",
   ghostty: "darkGhostty",
+  "liquid-neon": "liquidNeon",
   chisaki: "chisaki",
 };
 
@@ -649,6 +780,7 @@ export const THEME_SWATCHES: Record<ThemeName, string> = {
   midnight: "#4A6BA8",
   claude: "#D97757",
   ghostty: "#8caaee",
+  "liquid-neon": "#22d3ee",
   chisaki: "#dc2626",
 };
 
@@ -696,6 +828,12 @@ export const THEME_PREVIEWS: Record<
     border: ghosttyDarkColors.borderAccent,
     line: ghosttyDarkColors.surface3,
     accent: ghosttyDarkColors.accent,
+  },
+  "liquid-neon": {
+    surface: "#050914",
+    border: liquidNeonDarkColors.borderAccent,
+    line: "#223754",
+    accent: liquidNeonDarkColors.accent,
   },
   chisaki: {
     surface: chisakiSemanticColors.surface0,

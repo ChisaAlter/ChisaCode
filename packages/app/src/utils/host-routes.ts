@@ -262,6 +262,20 @@ export function parseServerIdFromPathname(pathname: string): string | null {
   return trimNonEmpty(decodeSegment(raw));
 }
 
+export function parseSettingsHostRouteFromPathname(pathname: string): string | null {
+  const pathOnly = stripSearchAndHash(pathname);
+  const match = pathOnly.match(/^\/settings\/hosts\/([^/]+)(?:\/|$)/);
+  if (!match) {
+    return null;
+  }
+
+  const raw = match[1];
+  if (!raw) {
+    return null;
+  }
+  return trimNonEmpty(decodeSegment(raw));
+}
+
 export function parseHostAgentRouteFromPathname(
   pathname: string,
 ): { serverId: string; agentId: string } | null {
@@ -449,6 +463,10 @@ export function mapPathnameToServer(pathname: string, nextServerId: string) {
   const normalized = trimNonEmpty(nextServerId);
   if (!normalized) {
     return "/" as const;
+  }
+
+  if (parseSettingsHostRouteFromPathname(pathname)) {
+    return buildSettingsHostRoute(normalized);
   }
 
   const suffix = pathname.replace(/^\/h\/[^/]+\/?/, "");

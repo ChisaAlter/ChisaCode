@@ -2,7 +2,11 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Logger } from "pino";
 
-import type { ChisaCodeOpenAIConfig, ChisaCodeSpeechConfig } from "../bootstrap.js";
+import type {
+  ChisaCodeMimoSpeechConfig,
+  ChisaCodeOpenAIConfig,
+  ChisaCodeSpeechConfig,
+} from "../bootstrap.js";
 import type { LocalSpeechModelId } from "./providers/local/config.js";
 import {
   ensureLocalSpeechModels,
@@ -10,6 +14,11 @@ import {
   listLocalSpeechModels,
 } from "./providers/local/models.js";
 import { initializeLocalSpeechServices } from "./providers/local/runtime.js";
+import {
+  getMimoSpeechAvailability,
+  initializeMimoSpeechServices,
+  validateMimoCredentialRequirements,
+} from "./providers/mimo/runtime.js";
 import {
   getOpenAiSpeechAvailability,
   initializeOpenAiSpeechServices,
@@ -314,9 +323,10 @@ function describeRequestedProviders(providers: RequestedSpeechProviders): {
 function resolveVoiceTtsLabel(
   ttsService: TextToSpeechProvider | null,
   localVoiceTtsProvider: TextToSpeechProvider | null,
-): "unavailable" | "local" | "openai" {
+): "unavailable" | "local" | "mimo" | "openai" {
   if (!ttsService) return "unavailable";
   if (ttsService === localVoiceTtsProvider) return "local";
+  if (ttsService.id === "mimo") return "mimo";
   return "openai";
 }
 
@@ -356,11 +366,13 @@ export interface SpeechService {
 
 export function createSpeechService(params: {
   logger: Logger;
+  mimoConfig?: ChisaCodeMimoSpeechConfig;
   openaiConfig?: ChisaCodeOpenAIConfig;
   speechConfig?: ChisaCodeSpeechConfig;
 }): SpeechService {
   const logger = params.logger.child({ module: "speech-runtime" });
   const speechConfig = params.speechConfig ?? null;
+  const mimoConfig = params.mimoConfig;
   const openaiConfig = params.openaiConfig;
   const providers = resolveRequestedSpeechProviders(speechConfig);
   const requestedProviders = describeRequestedProviders(providers);
@@ -370,11 +382,17 @@ export function createSpeechService(params: {
     openaiConfig,
     logger,
   });
+  validateMimoCredentialRequirements({
+    providers,
+    mimoConfig,
+    logger,
+  });
 
   logger.info(
     {
       requestedProviders,
       availability: {
+        mimo: getMimoSpeechAvailability(mimoConfig),
         openai: getOpenAiSpeechAvailability(openaiConfig),
       },
     },
@@ -514,11 +532,17 @@ export function createSpeechService(params: {
       },
       logger,
     });
+    const nextTtsService = initializeMimoSpeechServices({
+      providers,
+      mimoConfig,
+      existingTtsService: nextOpenAiSpeech.ttsService,
+      logger,
+    });
 
     const previousLocalCleanup = localCleanup;
     turnDetectionService = nextOpenAiSpeech.turnDetectionService;
     sttService = nextOpenAiSpeech.sttService;
-    ttsService = nextOpenAiSpeech.ttsService;
+    ttsService = nextTtsService;
     dictationSttService = nextOpenAiSpeech.dictationSttService;
     localModelConfig = nextLocalSpeech.localModelConfig;
     localVoiceTtsProvider = nextLocalSpeech.localVoiceTtsProvider;
