@@ -484,6 +484,10 @@ function submitWorkspaceDraft(input: SubmitDraftInput): void {
     attachments,
     cwd: workspaceDirectory,
     provider,
+    ...(composerState.selectedRuntimeProvider &&
+    composerState.selectedRuntimeProvider !== composerState.selectedProvider
+      ? { runtimeProvider: composerState.selectedRuntimeProvider }
+      : {}),
     clientMessageId,
     timestamp,
     ...(composerState.modeOptions.length > 0 && composerState.selectedMode !== ""

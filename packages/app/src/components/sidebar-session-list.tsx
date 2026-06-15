@@ -381,8 +381,8 @@ function SidebarSessionRow({
   );
   const rowAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const rowIconColor = isSelected ? theme.colors.foreground : theme.colors.foregroundMuted;
-  const handleHoverIn = useCallback(() => setIsHovered(true), []);
-  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
+  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
 
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -611,11 +611,11 @@ function SidebarSessionRow({
 
   return (
     <ContextMenu>
-      <Pressable
+      <View
         key={agentActionKey}
         style={styles.desktopRowContainer}
-        onHoverIn={handleHoverIn}
-        onHoverOut={handleHoverOut}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
         testID={`sidebar-session-container-${agent.serverId}-${agent.id}`}
       >
         <ContextMenuTrigger
@@ -630,7 +630,7 @@ function SidebarSessionRow({
           {rowMainContent}
         </ContextMenuTrigger>
         {rowTrailingContent}
-      </Pressable>
+      </View>
       <ContextMenuContent
         align="start"
         width={220}

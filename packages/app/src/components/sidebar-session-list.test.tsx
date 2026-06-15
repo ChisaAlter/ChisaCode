@@ -917,6 +917,24 @@ describe("SidebarSessionList", () => {
     expect(quickActions.style.opacity).toBe("0");
   });
 
+  it("reveals desktop quick actions when the pointer enters the session row", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project" })];
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    const container = screen.getByTestId("sidebar-session-container-server-1-agent-1");
+    const quickActions = screen.getByTestId("sidebar-session-quick-actions-server-1-agent-1");
+
+    expect(quickActions.style.opacity).toBe("0");
+
+    fireEvent.pointerEnter(container);
+
+    expect(quickActions.style.opacity).toBe("");
+
+    fireEvent.pointerLeave(container);
+
+    expect(quickActions.style.opacity).toBe("0");
+  });
+
   it("sorts pinned sessions before recent unpinned sessions", () => {
     const agents = [
       agent({

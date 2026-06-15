@@ -92,6 +92,7 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
   if (!record.config) {
     return config;
   }
+  if (record.config.runtimeProvider != null) config.runtimeProvider = record.config.runtimeProvider;
   if (record.config.modeId != null) config.modeId = record.config.modeId;
   if (record.config.model != null) config.model = record.config.model;
   if (record.config.thinkingOptionId != null) {
@@ -714,23 +715,24 @@ export class AgentManager {
 
   async listDraftCommands(config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
     const normalizedConfig = await this.normalizeConfig(config);
-    const client = this.requireClient(normalizedConfig.provider);
+    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
+    const client = this.requireClient(launchConfig.provider);
     const available = await client.isAvailable();
     if (!available) {
       throw new Error(
-        `Provider '${normalizedConfig.provider}' is not available. Please ensure the CLI is installed.`,
+        `Provider '${launchConfig.provider}' is not available. Please ensure the CLI is installed.`,
       );
     }
 
     if (client.listCommands) {
-      return await client.listCommands(normalizedConfig);
+      return await client.listCommands(launchConfig);
     }
 
-    const session = await client.createSession(normalizedConfig);
+    const session = await client.createSession(launchConfig);
     try {
       if (!session.listCommands) {
         throw new Error(
-          `Provider '${normalizedConfig.provider}' does not support listing commands`,
+          `Provider '${launchConfig.provider}' does not support listing commands`,
         );
       }
       return await session.listCommands();
@@ -748,19 +750,20 @@ export class AgentManager {
 
   async listDraftFeatures(config: AgentSessionConfig): Promise<AgentFeature[]> {
     const normalizedConfig = await this.normalizeConfig(config);
-    const client = this.requireClient(normalizedConfig.provider);
+    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
+    const client = this.requireClient(launchConfig.provider);
     const available = await client.isAvailable();
     if (!available) {
       throw new Error(
-        `Provider '${normalizedConfig.provider}' is not available. Please ensure the CLI is installed.`,
+        `Provider '${launchConfig.provider}' is not available. Please ensure the CLI is installed.`,
       );
     }
 
     if (client.listFeatures) {
-      return await client.listFeatures(normalizedConfig);
+      return await client.listFeatures(launchConfig);
     }
 
-    const session = await client.createSession(normalizedConfig);
+    const session = await client.createSession(launchConfig);
     try {
       return session.features ?? [];
     } finally {
@@ -825,15 +828,17 @@ export class AgentManager {
             },
           };
     this.requireEnabledProvider(injectedConfig.provider);
+    this.requireEnabledProvider(injectedConfig.runtimeProvider ?? injectedConfig.provider);
     const normalizedConfig = this.applyDaemonAppendSystemPrompt(
       await this.normalizeConfig(injectedConfig),
     );
+    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
     const launchContext = this.buildLaunchContext(resolvedAgentId, options?.env);
     const client = await this.requireAvailableClient({
-      provider: normalizedConfig.provider,
+      provider: launchConfig.provider,
     });
     const createOptions = this.buildCreateSessionOptions(options);
-    const session = await client.createSession(normalizedConfig, launchContext, createOptions);
+    const session = await client.createSession(launchConfig, launchContext, createOptions);
     return this.registerSession(session, normalizedConfig, resolvedAgentId, {
       labels: options?.labels,
       workspaceId: options?.workspaceId,
@@ -931,21 +936,23 @@ export class AgentManager {
     const preservedLastError = existing.lastError;
     const preservedAttention = existing.attention;
     const handle = existing.persistence;
-    const provider = handle?.provider ?? existing.provider;
-    const client = this.requireClient(provider);
+    const runtimeProvider = handle?.provider ?? existing.config.runtimeProvider ?? existing.provider;
+    const client = this.requireClient(runtimeProvider);
     const refreshConfig = {
       ...existing.config,
       ...overrides,
-      provider,
+      provider: existing.provider,
+      runtimeProvider,
     } as AgentSessionConfig;
     const normalizedConfig = this.applyDaemonAppendSystemPrompt(
       await this.normalizeConfig(refreshConfig),
     );
+    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
     const launchContext = this.buildLaunchContext(agentId);
 
     const session = handle
-      ? await client.resumeSession(handle, normalizedConfig, launchContext)
-      : await client.createSession(normalizedConfig, launchContext);
+      ? await client.resumeSession(handle, launchConfig, launchContext)
+      : await client.createSession(launchConfig, launchContext);
 
     this.agentStreamCoalescer.flushAndDiscard(agentId);
     // Remove the existing agent entry before swapping sessions
@@ -1629,7 +1636,10 @@ export class AgentManager {
     const persistenceHandle =
       mutableAgent.session.describePersistence() ??
       (mutableAgent.runtimeInfo?.sessionId
-        ? { provider: mutableAgent.provider, sessionId: mutableAgent.runtimeInfo.sessionId }
+        ? {
+            provider: mutableAgent.runtimeInfo.provider,
+            sessionId: mutableAgent.runtimeInfo.sessionId,
+          }
         : null);
     if (persistenceHandle) {
       mutableAgent.persistence = attachPersistenceCwd(persistenceHandle, mutableAgent.cwd);
@@ -2636,7 +2646,7 @@ export class AgentManager {
       agent.runtimeInfo = newInfo;
       if (!agent.persistence && newInfo.sessionId) {
         agent.persistence = attachPersistenceCwd(
-          { provider: agent.provider, sessionId: newInfo.sessionId },
+          { provider: newInfo.provider, sessionId: newInfo.sessionId },
           agent.cwd,
         );
       }
@@ -2880,7 +2890,7 @@ export class AgentManager {
         agent.runtimeInfo = event.runtimeInfo;
         if (!agent.persistence && event.runtimeInfo.sessionId) {
           agent.persistence = attachPersistenceCwd(
-            { provider: agent.provider, sessionId: event.runtimeInfo.sessionId },
+            { provider: event.runtimeInfo.provider, sessionId: event.runtimeInfo.sessionId },
             agent.cwd,
           );
         }
@@ -3429,6 +3439,7 @@ export class AgentManager {
 
   private async normalizeConfig(config: AgentSessionConfig): Promise<AgentSessionConfig> {
     const normalized: AgentSessionConfig = { ...config };
+    const runtimeProvider = normalized.runtimeProvider ?? normalized.provider;
 
     // Always resolve cwd to absolute path for consistent history file lookup
     if (normalized.cwd) {
@@ -3459,7 +3470,7 @@ export class AgentManager {
     }
 
     if (!normalized.model) {
-      const client = this.clients.get(normalized.provider);
+      const client = this.clients.get(runtimeProvider);
       if (client) {
         try {
           const models = await client.listModels({ cwd: normalized.cwd, force: false });
@@ -3483,6 +3494,11 @@ export class AgentManager {
     }
 
     return normalized;
+  }
+
+  private buildRuntimeLaunchConfig(config: AgentSessionConfig): AgentSessionConfig {
+    const runtimeProvider = config.runtimeProvider ?? config.provider;
+    return runtimeProvider === config.provider ? config : { ...config, provider: runtimeProvider };
   }
 
   private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {

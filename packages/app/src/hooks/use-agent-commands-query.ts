@@ -13,6 +13,7 @@ export interface AgentSlashCommand {
 
 export interface DraftCommandConfig {
   provider: AgentProvider;
+  runtimeProvider?: AgentProvider;
   cwd: string;
   modeId?: string;
   model?: string;
@@ -43,6 +44,7 @@ function agentCommandsQueryKey(
     serverId,
     agentId,
     draftConfig?.provider ?? null,
+    draftConfig?.runtimeProvider ?? null,
     draftConfig?.cwd ?? null,
     draftConfig?.modeId ?? null,
     draftConfig?.model ?? null,

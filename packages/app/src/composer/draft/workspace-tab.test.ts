@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
 import { validateDraftSubmission } from "./workspace-tab-core";
 
 const baseComposerState = {
@@ -47,5 +48,20 @@ describe("workspace draft agent model validation", () => {
         },
       }),
     ).toBe("No model is available for the selected provider");
+  });
+
+  test("keeps agent provider separate from runtime provider in create config", () => {
+    expect(
+      buildWorkspaceDraftAgentConfig({
+        provider: "claude",
+        runtimeProvider: "deepseek-claude",
+        cwd: "/tmp/project",
+        model: "deepseek-r1",
+      } as Parameters<typeof buildWorkspaceDraftAgentConfig>[0] & { runtimeProvider: string }),
+    ).toMatchObject({
+      provider: "claude",
+      runtimeProvider: "deepseek-claude",
+      model: "deepseek-r1",
+    });
   });
 });

@@ -1,7 +1,7 @@
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import type { DaemonStartResult } from "@/runtime/daemon-start-service";
 import type { Href } from "expo-router";
-import { buildHostRootRoute } from "@/utils/host-routes";
+import { buildHostRootRoute, mapPathnameToServer } from "@/utils/host-routes";
 
 export interface HostRuntimeBootstrapStore {
   boot: () => void;
@@ -66,6 +66,12 @@ export interface ResolveStartupRedirectInput {
   hasGivenUpWaitingForHost: boolean;
 }
 
+export interface ResolveActiveHostRedirectInput {
+  pathname: string;
+  activeServerId: string | null;
+  hostServerIds: readonly string[];
+}
+
 function isIndexPathname(pathname: string) {
   return pathname === "/" || pathname === "";
 }
@@ -105,4 +111,19 @@ export function resolveStartupRedirectRoute(input: ResolveStartupRedirectInput):
   }
 
   return null;
+}
+
+export function resolveActiveHostRedirectRoute(input: ResolveActiveHostRedirectInput): Href | null {
+  if (!input.activeServerId) {
+    return null;
+  }
+  if (input.hostServerIds.includes(input.activeServerId)) {
+    return null;
+  }
+
+  const fallbackServerId = input.hostServerIds[0] ?? null;
+  if (fallbackServerId) {
+    return mapPathnameToServer(input.pathname, fallbackServerId);
+  }
+  return WELCOME_ROUTE;
 }

@@ -26,6 +26,7 @@ import { CombinedModelSelector } from "@/components/combined-model-selector";
 import {
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,
+  type ProviderModelSelectionValue,
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
 import { useSessionStore } from "@/stores/session-store";
@@ -85,8 +86,13 @@ interface ControlledAgentControlsProps {
   onSelectProvider?: (providerId: string) => void;
   modelOptions?: AgentControlOption[];
   selectedModelId?: string;
+  selectedRuntimeProviderId?: string | null;
   onSelectModel?: (modelId: string) => void;
-  onSelectProviderAndModel?: (provider: string, modelId: string) => void;
+  onSelectProviderAndModel?: (
+    provider: string,
+    modelId: string,
+    runtimeProvider?: string,
+  ) => void;
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
   onSelectThinkingOption?: (thinkingOptionId: string) => void;
@@ -117,11 +123,16 @@ export interface DraftAgentControlsProps {
   onSelectMode: (modeId: string) => void;
   models: AgentModelDefinition[];
   selectedModel: string;
+  selectedRuntimeProvider?: string | null;
   onSelectModel: (modelId: string) => void;
   isModelLoading: boolean;
   modelSelectorProviders: ProviderSelectorProvider[];
   isAllModelsLoading: boolean;
-  onSelectProviderAndModel: (provider: AgentProvider, modelId: string) => void;
+  onSelectProviderAndModel: (
+    provider: AgentProvider,
+    modelId: string,
+    runtimeProvider?: string,
+  ) => void;
   thinkingOptions: NonNullable<AgentModelDefinition["thinkingOptions"]>;
   selectedThinkingOptionId: string;
   onSelectThinkingOption: (thinkingOptionId: string) => void;
@@ -248,6 +259,8 @@ function buildFallbackModelSelectorProviders(
         rows: modelOptions.map((option) => ({
           favoriteKey: buildFavoriteModelKey({ provider, modelId: option.id }),
           provider,
+          agentProvider: provider,
+          runtimeProvider: provider,
           providerLabel: provider,
           modelId: option.id,
           modelLabel: option.label,
@@ -356,43 +369,61 @@ function makeBadgePressableStyle(
 }
 
 function pickSheetModel({
-  nextProviderId,
-  modelId,
+  selection,
   currentProvider,
   onSelectProviderAndModel,
   onSelectProvider,
   onSelectModel,
 }: {
-  nextProviderId: string;
-  modelId: string;
+  selection: ProviderModelSelectionValue;
   currentProvider: string;
-  onSelectProviderAndModel?: (provider: string, modelId: string) => void;
+  onSelectProviderAndModel?: (
+    provider: string,
+    modelId: string,
+    runtimeProvider?: string,
+  ) => void;
   onSelectProvider?: (providerId: string) => void;
   onSelectModel?: (modelId: string) => void;
 }) {
   if (onSelectProviderAndModel) {
-    onSelectProviderAndModel(nextProviderId, modelId);
+    onSelectProviderAndModel(
+      selection.agentProvider,
+      selection.modelId,
+      selection.runtimeProvider,
+    );
     return;
   }
-  if (nextProviderId !== currentProvider) {
-    onSelectProvider?.(nextProviderId);
+  if (selection.agentProvider !== currentProvider) {
+    onSelectProvider?.(selection.agentProvider);
   }
-  onSelectModel?.(modelId);
+  onSelectModel?.(selection.modelId);
 }
 
 function pickDesktopModel({
-  nextProviderId,
-  modelId,
+  selection,
   currentProvider,
+  onSelectProviderAndModel,
   onSelectModel,
 }: {
-  nextProviderId: string;
-  modelId: string;
+  selection: ProviderModelSelectionValue;
   currentProvider: string;
+  onSelectProviderAndModel?: (
+    provider: string,
+    modelId: string,
+    runtimeProvider?: string,
+  ) => void;
   onSelectModel?: (modelId: string) => void;
 }) {
-  if (nextProviderId === currentProvider) {
-    onSelectModel?.(modelId);
+  if (selection.agentProvider === currentProvider) {
+    if (onSelectProviderAndModel) {
+      onSelectProviderAndModel(
+        selection.agentProvider,
+        selection.modelId,
+        selection.runtimeProvider,
+      );
+      return;
+    }
+    onSelectModel?.(selection.modelId);
   }
 }
 
@@ -405,6 +436,7 @@ function resolveProviderIcon(provider: string) {
 
 type AgentControlsSlice = {
   provider: string;
+  runtimeProvider: string | null;
   cwd: string | null;
   runtimeModelId: string | null;
   model: string | null | undefined;
@@ -424,6 +456,7 @@ function selectAgentControlsSlice(
   }
   return {
     provider: currentAgent.provider,
+    runtimeProvider: currentAgent.runtimeInfo?.provider ?? null,
     cwd: currentAgent.cwd,
     runtimeModelId: currentAgent.runtimeInfo?.model ?? null,
     model: currentAgent.model,
@@ -464,6 +497,146 @@ function buildAgentProviderModels(
   return map;
 }
 
+function resolveAgentRuntimeProvider(agent: AgentControlsSlice): string | null {
+  return agent?.runtimeProvider ?? agent?.provider ?? null;
+}
+
+function resolveProviderModels(input: {
+  runtimeEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
+  selectedEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
+}): AgentModelDefinition[] | null {
+  return input.runtimeEntry?.models ?? input.selectedEntry?.models ?? null;
+}
+
+function isSnapshotProviderLoading(input: {
+  runtimeEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
+  selectedEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
+}): boolean {
+  return input.runtimeEntry?.status === "loading" || input.selectedEntry?.status === "loading";
+}
+
+function buildRunningAgentModelSelectorProviders(input: {
+  agentProvider: string | undefined;
+  snapshotEntries: ReturnType<typeof useProvidersSnapshot>["entries"];
+  selectedEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
+  providerDefinitions: AgentProviderDefinition[];
+  modelsByProvider: Map<string, AgentModelDefinition[]>;
+  copy: {
+    defaultModelLabel: string;
+    unavailable: string;
+    unknownError: string;
+  };
+}): ProviderSelectorProvider[] {
+  const groupedProviders = buildSelectableProviderSelectorProviders(input.snapshotEntries, {
+    defaultModelLabel: input.copy.defaultModelLabel,
+    unavailable: input.copy.unavailable,
+    unknownError: input.copy.unknownError,
+  }).filter((provider) => provider.id === input.agentProvider);
+  if (groupedProviders.length > 0) {
+    return groupedProviders;
+  }
+  if (input.selectedEntry) {
+    return buildSelectableProviderSelectorProviders([input.selectedEntry], {
+      defaultModelLabel: input.copy.defaultModelLabel,
+      unavailable: input.copy.unavailable,
+      unknownError: input.copy.unknownError,
+    });
+  }
+  return buildProviderSelectorProviders({
+    providerDefinitions: input.providerDefinitions,
+    modelsByProvider: input.modelsByProvider,
+    copy: {
+      defaultModelLabel: input.copy.defaultModelLabel,
+    },
+  });
+}
+
+function useRunningAgentModelControls(input: {
+  agent: AgentControlsSlice;
+  snapshotEntries: ReturnType<typeof useProvidersSnapshot>["entries"];
+  defaultModelLabel: string;
+  unavailable: string;
+  unknownError: string;
+}) {
+  const { agent, snapshotEntries } = input;
+  const agentProvider = agent?.provider;
+  const agentRuntimeProvider = resolveAgentRuntimeProvider(agent);
+  const snapshotSelectedEntry = useMemo(
+    () => resolveSnapshotSelectedEntry(snapshotEntries, agentProvider),
+    [snapshotEntries, agentProvider],
+  );
+  const snapshotRuntimeEntry = useMemo(
+    () => resolveSnapshotSelectedEntry(snapshotEntries, agentRuntimeProvider ?? undefined),
+    [snapshotEntries, agentRuntimeProvider],
+  );
+  const models = resolveProviderModels({
+    runtimeEntry: snapshotRuntimeEntry,
+    selectedEntry: snapshotSelectedEntry,
+  });
+  const selectedProviderIsLoading = isSnapshotProviderLoading({
+    runtimeEntry: snapshotRuntimeEntry,
+    selectedEntry: snapshotSelectedEntry,
+  });
+  const agentProviderDefinitions = useMemo(
+    () => buildAgentProviderDefinitions(agentProvider, snapshotEntries),
+    [agentProvider, snapshotEntries],
+  );
+  const agentProviderModels = useMemo(
+    () => buildAgentProviderModels(agentProvider, models),
+    [agentProvider, models],
+  );
+  const agentModelSelectorProviders = useMemo(
+    () =>
+      buildRunningAgentModelSelectorProviders({
+        agentProvider,
+        snapshotEntries,
+        selectedEntry: snapshotSelectedEntry,
+        providerDefinitions: agentProviderDefinitions,
+        modelsByProvider: agentProviderModels,
+        copy: {
+          defaultModelLabel: input.defaultModelLabel,
+          unavailable: input.unavailable,
+          unknownError: input.unknownError,
+        },
+      }),
+    [
+      agentProvider,
+      agentProviderDefinitions,
+      agentProviderModels,
+      input.defaultModelLabel,
+      input.unavailable,
+      input.unknownError,
+      snapshotEntries,
+      snapshotSelectedEntry,
+    ],
+  );
+  const modelSelection = resolveAgentModelSelection({
+    models,
+    runtimeModelId: agent?.runtimeModelId,
+    configuredModelId: agent?.model,
+    explicitThinkingOptionId: agent?.thinkingOptionId,
+  });
+  const modelOptions = useMemo<AgentControlOption[]>(() => {
+    return (models ?? []).map((model) => ({ id: model.id, label: model.label }));
+  }, [models]);
+  const thinkingOptions = useMemo<AgentControlOption[]>(() => {
+    return (modelSelection.thinkingOptions ?? []).map((option) => ({
+      id: option.id,
+      label: formatThinkingOptionLabel(option),
+    }));
+  }, [modelSelection.thinkingOptions]);
+  return {
+    agentProvider,
+    agentRuntimeProvider,
+    agentModelSelectorProviders,
+    models,
+    modelOptions,
+    modelSelection,
+    selectedProviderIsLoading,
+    thinkingOptions,
+  };
+}
+
 function buildOpenChangeHandler(
   selector: AgentControlSelector,
   setOpenSelector: (next: AgentControlSelector | null) => void,
@@ -484,6 +657,7 @@ function ControlledAgentControls({
   onSelectProvider,
   modelOptions,
   selectedModelId,
+  selectedRuntimeProviderId,
   onSelectModel,
   onSelectProviderAndModel,
   thinkingOptions,
@@ -603,10 +777,15 @@ function ControlledAgentControls({
   );
 
   const handleDesktopModelSelect = useCallback(
-    (nextProviderId: string, modelId: string) => {
-      pickDesktopModel({ nextProviderId, modelId, currentProvider: provider, onSelectModel });
+    (selection: ProviderModelSelectionValue) => {
+      pickDesktopModel({
+        selection,
+        currentProvider: provider,
+        onSelectProviderAndModel,
+        onSelectModel,
+      });
     },
-    [onSelectModel, provider],
+    [onSelectModel, onSelectProviderAndModel, provider],
   );
 
   const providerPressableStyle = useMemo(
@@ -649,10 +828,9 @@ function ControlledAgentControls({
   );
 
   const handleSheetModelSelect = useCallback(
-    (nextProviderId: string, modelId: string) => {
+    (selection: ProviderModelSelectionValue) => {
       pickSheetModel({
-        nextProviderId,
-        modelId,
+        selection,
         currentProvider: provider,
         onSelectProviderAndModel,
         onSelectProvider,
@@ -680,6 +858,7 @@ function ControlledAgentControls({
           selectedProviderId={selectedProviderId}
           modelOptions={modelOptions}
           selectedModelId={selectedModelId}
+          selectedRuntimeProviderId={selectedRuntimeProviderId}
           thinkingOptions={formattedThinkingOptions}
           selectedThinkingOptionId={selectedThinkingOptionId}
           features={features}
@@ -743,6 +922,7 @@ function ControlledAgentControls({
             modelSelectorProviders={effectiveModelSelectorProviders}
             modelDisabled={modelDisabled}
             comboboxThinkingOptions={comboboxThinkingOptions}
+            selectedRuntimeProviderId={selectedRuntimeProviderId}
             openSelector={openSelector}
             ProviderIcon={ProviderIcon}
             selectThinkingLabel={t("composer.controls.selectThinking")}
@@ -771,6 +951,7 @@ interface DesktopAgentControlsContentProps {
   selectedProviderId?: string;
   modelOptions?: AgentControlOption[];
   selectedModelId?: string;
+  selectedRuntimeProviderId?: string | null;
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
@@ -803,7 +984,7 @@ interface DesktopAgentControlsContentProps {
   handleThinkingPress: () => void;
   handleProviderSelect: (id: string) => void;
   handleThinkingSelect: (id: string) => void;
-  handleDesktopModelSelect: (providerId: string, modelId: string) => void;
+  handleDesktopModelSelect: (selection: ProviderModelSelectionValue) => void;
   handleProviderOpenChange: (open: boolean) => void;
   handleThinkingOpenChange: (open: boolean) => void;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
@@ -826,6 +1007,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     providerOptions,
     selectedProviderId,
     selectedModelId,
+    selectedRuntimeProviderId,
     thinkingOptions,
     selectedThinkingOptionId,
     features,
@@ -904,6 +1086,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
               <CombinedModelSelector
                 providers={modelSelectorProviders}
                 selectedProvider={provider}
+                selectedRuntimeProvider={selectedRuntimeProviderId}
                 selectedModel={selectedModelId ?? ""}
                 onSelect={handleDesktopModelSelect}
                 favoriteKeys={favoriteKeys}
@@ -982,6 +1165,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
 interface SheetAgentControlsContentProps {
   provider: string;
   selectedModelId?: string;
+  selectedRuntimeProviderId?: string | null;
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
@@ -1007,7 +1191,7 @@ interface SheetAgentControlsContentProps {
   activeSheet: ActiveSheet;
   handleOpenSheet: (sheet: Exclude<ActiveSheet, null>) => void;
   handleCloseSheet: () => void;
-  handleSheetModelSelect: (providerId: string, modelId: string) => void;
+  handleSheetModelSelect: (selection: ProviderModelSelectionValue) => void;
   handleSelectThinkingAndClose: (thinkingOptionId: string) => void;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   renderThinkingOption: (args: {
@@ -1024,6 +1208,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   const {
     provider,
     selectedModelId,
+    selectedRuntimeProviderId,
     selectedThinkingOptionId,
     features,
     onSetFeature,
@@ -1115,6 +1300,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         <CombinedModelSelector
           providers={modelSelectorProviders}
           selectedProvider={provider}
+          selectedRuntimeProvider={selectedRuntimeProviderId}
           selectedModel={selectedModelId ?? ""}
           onSelect={handleSheetModelSelect}
           favoriteKeys={favoriteKeys}
@@ -1493,66 +1679,29 @@ export const AgentControls = memo(function AgentControls({
     refetchIfStale: refetchSnapshotIfStale,
   } = useProvidersSnapshot(serverId, { cwd: agent?.cwd });
 
-  const snapshotSelectedEntry = useMemo(
-    () => resolveSnapshotSelectedEntry(snapshotEntries, agent?.provider),
-    [snapshotEntries, agent?.provider],
-  );
-
-  const models = snapshotSelectedEntry?.models ?? null;
-  const selectedProviderIsLoading = snapshotSelectedEntry?.status === "loading";
-
-  const agentProviderDefinitions = useMemo(
-    () => buildAgentProviderDefinitions(agent?.provider, snapshotEntries),
-    [agent?.provider, snapshotEntries],
-  );
-
-  const agentProviderModels = useMemo(
-    () => buildAgentProviderModels(agent?.provider, models),
-    [agent?.provider, models],
-  );
-  const agentModelSelectorProviders = useMemo(() => {
-    if (snapshotSelectedEntry) {
-      return buildSelectableProviderSelectorProviders([snapshotSelectedEntry], {
-        defaultModelLabel: t("modelSelector.defaultModel"),
-        unavailable: t("modelSelector.unavailable"),
-        unknownError: t("modelSelector.unknownError"),
-      });
-    }
-    return buildProviderSelectorProviders({
-      providerDefinitions: agentProviderDefinitions,
-      modelsByProvider: agentProviderModels,
-      copy: {
-        defaultModelLabel: t("modelSelector.defaultModel"),
-      },
-    });
-  }, [agentProviderDefinitions, agentProviderModels, snapshotSelectedEntry, t]);
-
-  const modelSelection = resolveAgentModelSelection({
-    models,
-    runtimeModelId: agent?.runtimeModelId,
-    configuredModelId: agent?.model,
-    explicitThinkingOptionId: agent?.thinkingOptionId,
+  const {
+    agentProvider,
+    agentRuntimeProvider,
+    agentModelSelectorProviders,
+    modelOptions,
+    modelSelection,
+    selectedProviderIsLoading,
+    thinkingOptions,
+  } = useRunningAgentModelControls({
+    agent,
+    snapshotEntries,
+    defaultModelLabel: t("modelSelector.defaultModel"),
+    unavailable: t("modelSelector.unavailable"),
+    unknownError: t("modelSelector.unknownError"),
   });
 
-  const modelOptions = useMemo<AgentControlOption[]>(() => {
-    return (models ?? []).map((model) => ({ id: model.id, label: model.label }));
-  }, [models]);
   const favoriteKeys = useMemo(
     () =>
       new Set(
         (preferences.favoriteModels ?? []).map((favorite) => buildFavoriteModelKey(favorite)),
       ),
-    [preferences.favoriteModels],
+      [preferences.favoriteModels],
   );
-
-  const thinkingOptions = useMemo<AgentControlOption[]>(() => {
-    return (modelSelection.thinkingOptions ?? []).map((option) => ({
-      id: option.id,
-      label: formatThinkingOptionLabel(option),
-    }));
-  }, [modelSelection.thinkingOptions]);
-
-  const agentProvider = agent?.provider;
   const activeModelId = modelSelection.activeModelId;
 
   const handleSelectModel = useCallback(
@@ -1671,6 +1820,7 @@ export const AgentControls = memo(function AgentControls({
       modelSelectorProviders={agentModelSelectorProviders}
       modelOptions={modelOptions}
       selectedModelId={modelSelection.activeModelId ?? undefined}
+      selectedRuntimeProviderId={agentRuntimeProvider}
       onSelectModel={handleSelectModel}
       favoriteKeys={favoriteKeys}
       onToggleFavoriteModel={handleToggleFavoriteModel}
@@ -1700,6 +1850,7 @@ export function DraftAgentControls({
   onSelectMode,
   models,
   selectedModel,
+  selectedRuntimeProvider,
   onSelectModel,
   isModelLoading: _isModelLoading,
   modelSelectorProviders,
@@ -1753,6 +1904,16 @@ export function DraftAgentControls({
     },
     [updatePreferences],
   );
+  const handleSelectProviderAndModel = useCallback(
+    (selection: ProviderModelSelectionValue) => {
+      onSelectProviderAndModel(
+        selection.agentProvider,
+        selection.modelId,
+        selection.runtimeProvider,
+      );
+    },
+    [onSelectProviderAndModel],
+  );
 
   const draftModeChip = useMemo(
     () => (
@@ -1788,8 +1949,9 @@ export function DraftAgentControls({
         <CombinedModelSelector
           providers={modelSelectorProviders}
           selectedProvider={selectedProvider ?? ""}
+          selectedRuntimeProvider={selectedRuntimeProvider}
           selectedModel={selectedModel}
-          onSelect={onSelectProviderAndModel}
+          onSelect={handleSelectProviderAndModel}
           favoriteKeys={favoriteKeys}
           onToggleFavorite={handleToggleFavorite}
           isLoading={isAllModelsLoading}
@@ -1825,6 +1987,7 @@ export function DraftAgentControls({
       modelSelectorProviders={modelSelectorProviders}
       modelOptions={modelOptions}
       selectedModelId={selectedModel}
+      selectedRuntimeProviderId={selectedRuntimeProvider}
       onSelectModel={onSelectModel}
       onSelectProviderAndModel={onSelectProviderAndModel}
       isModelLoading={isAllModelsLoading}

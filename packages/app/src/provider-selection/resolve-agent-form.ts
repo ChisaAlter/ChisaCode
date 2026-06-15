@@ -13,6 +13,7 @@ import {
 export interface FormInitialValues {
   serverId?: string | null;
   provider?: AgentProvider;
+  runtimeProvider?: AgentProvider | null;
   modeId?: string | null;
   model?: string | null;
   thinkingOptionId?: string | null;
@@ -22,6 +23,7 @@ export interface FormInitialValues {
 export interface FormState {
   serverId: string | null;
   provider: AgentProvider | null;
+  runtimeProvider: AgentProvider | null;
   modeId: string;
   model: string;
   thinkingOptionId: string;
@@ -31,6 +33,7 @@ export interface FormState {
 export interface UserModifiedFields {
   serverId: boolean;
   provider: boolean;
+  runtimeProvider: boolean;
   modeId: boolean;
   model: boolean;
   thinkingOptionId: boolean;
@@ -45,6 +48,7 @@ export interface AgentFormReducerState {
 export const INITIAL_USER_MODIFIED: UserModifiedFields = {
   serverId: false,
   provider: false,
+  runtimeProvider: false,
   modeId: false,
   model: false,
   thinkingOptionId: false,
@@ -79,6 +83,7 @@ export type AgentFormAction =
   | {
       type: "SET_PROVIDER_AND_MODEL_FROM_USER";
       provider: AgentProvider;
+      runtimeProvider?: AgentProvider | null;
       modelId: string;
       providerDef: AgentProviderDefinition | undefined;
       providerModels: AgentModelDefinition[] | null;
@@ -88,6 +93,7 @@ export type AgentFormAction =
   | {
       type: "SET_MODEL_FROM_USER";
       modelId: string;
+      runtimeProvider?: AgentProvider | null;
       availableModels: AgentModelDefinition[] | null;
     }
   | { type: "SET_THINKING_OPTION_FROM_USER"; thinkingOptionId: string }
@@ -182,6 +188,7 @@ export function hasFormStateChanged(prev: FormState, next: FormState): boolean {
   return (
     prev.serverId !== next.serverId ||
     prev.provider !== next.provider ||
+    prev.runtimeProvider !== next.runtimeProvider ||
     prev.modeId !== next.modeId ||
     prev.model !== next.model ||
     prev.thinkingOptionId !== next.thinkingOptionId ||
@@ -245,6 +252,42 @@ function resolveProvider(input: {
     return null;
   }
   return currentProvider;
+}
+
+function resolveRuntimeProvider(input: {
+  provider: AgentProvider | null;
+  currentRuntimeProvider: AgentProvider | null;
+  userModified: boolean;
+  initialValues: FormInitialValues | undefined;
+  providerPrefs: ProviderPrefs | undefined;
+  modelId: string;
+}): AgentProvider | null {
+  if (!input.provider) return null;
+  if (input.userModified) {
+    return normalizeRuntimeProvider(input.provider, input.currentRuntimeProvider);
+  }
+  const initialRuntimeProvider = input.initialValues?.runtimeProvider?.trim();
+  if (initialRuntimeProvider) {
+    return normalizeRuntimeProvider(input.provider, initialRuntimeProvider);
+  }
+  const preferredRuntimeProvider = input.modelId
+    ? input.providerPrefs?.runtimeProviderByModel?.[input.modelId]?.trim()
+    : "";
+  return (
+    normalizeRuntimeProvider(input.provider, preferredRuntimeProvider) ||
+    normalizeRuntimeProvider(input.provider, input.currentRuntimeProvider)
+  );
+}
+
+function normalizeRuntimeProvider(
+  provider: AgentProvider | null,
+  runtimeProvider: AgentProvider | null | undefined,
+): AgentProvider | null {
+  const normalized = runtimeProvider?.trim();
+  if (!provider || !normalized || normalized === provider) {
+    return null;
+  }
+  return normalized;
 }
 
 function resolveModeId(input: {
@@ -362,6 +405,15 @@ export function resolveFormState(
     initialValues,
     providerPrefs,
     availableModels,
+  });
+
+  result.runtimeProvider = resolveRuntimeProvider({
+    provider: result.provider,
+    currentRuntimeProvider: result.runtimeProvider,
+    userModified: userModified.runtimeProvider,
+    initialValues,
+    providerPrefs,
+    modelId: result.model,
   });
 
   result.thinkingOptionId = resolveThinkingOption({
@@ -500,6 +552,7 @@ export function resolveAgentForm(
         form: {
           ...state.form,
           provider: action.provider,
+          runtimeProvider: null,
           modeId: nextModeId,
           model: nextModelId,
           thinkingOptionId: nextThinkingOptionId,
@@ -523,15 +576,25 @@ export function resolveAgentForm(
         providerDef: action.providerDef,
         providerPrefs: action.providerPrefs,
       });
+      const nextRuntimeProvider = normalizeRuntimeProvider(
+        action.provider,
+        action.runtimeProvider,
+      );
       return {
         form: {
           ...state.form,
           provider: action.provider,
+          runtimeProvider: nextRuntimeProvider,
           model: nextModelId,
           modeId: nextModeId,
           thinkingOptionId: nextThinkingOptionId,
         },
-        userModified: { ...state.userModified, provider: true, model: true },
+        userModified: {
+          ...state.userModified,
+          provider: true,
+          runtimeProvider: true,
+          model: true,
+        },
       };
     }
 
@@ -554,10 +617,19 @@ export function resolveAgentForm(
       return {
         form: {
           ...state.form,
+          runtimeProvider:
+            action.runtimeProvider !== undefined
+              ? normalizeRuntimeProvider(state.form.provider, action.runtimeProvider)
+              : state.form.runtimeProvider,
           model: nextModelId,
           thinkingOptionId: nextThinkingOptionId,
         },
-        userModified: { ...state.userModified, model: true },
+        userModified: {
+          ...state.userModified,
+          runtimeProvider:
+            action.runtimeProvider !== undefined ? true : state.userModified.runtimeProvider,
+          model: true,
+        },
       };
     }
 

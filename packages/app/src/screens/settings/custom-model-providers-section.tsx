@@ -26,7 +26,7 @@ import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
   buildDisableCustomModelProviderPatch,
-  buildModelGatewayProviderIds,
+  buildModelGatewayProviderIdList,
   buildSaveCustomModelProviderPatch,
   collectCustomModelProviders,
   type CollectedCustomModelProvider,
@@ -962,12 +962,7 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
         throw new Error(t("customModelProviders.saveUnavailable"));
       }
       setEditorState(null);
-      const ids = buildModelGatewayProviderIds(values.id);
-      void refresh([
-        ids.claudeProviderId,
-        ids.codexProviderId,
-        ids.opencodeProviderId,
-      ] as AgentProvider[]).catch((error) => {
+      void refresh(buildModelGatewayProviderIdList(values.id) as AgentProvider[]).catch((error) => {
         console.warn("[CustomModelProviders] Failed to refresh providers after save", error);
       });
     },
@@ -975,12 +970,7 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
   );
   const handleTestGatewayId = useCallback(
     async (gatewayId: string) => {
-      const ids = buildModelGatewayProviderIds(gatewayId);
-      await refresh([
-        ids.claudeProviderId,
-        ids.codexProviderId,
-        ids.opencodeProviderId,
-      ] as AgentProvider[]);
+      await refresh(buildModelGatewayProviderIdList(gatewayId) as AgentProvider[]);
     },
     [refresh],
   );
@@ -1006,12 +996,7 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
         if (!confirmed) return;
         const patch = buildDisableCustomModelProviderPatch(provider.id);
         await patchConfig(patch);
-        const ids = buildModelGatewayProviderIds(provider.id);
-        await refresh([
-          ids.claudeProviderId,
-          ids.codexProviderId,
-          ids.opencodeProviderId,
-        ] as AgentProvider[]);
+        await refresh(buildModelGatewayProviderIdList(provider.id) as AgentProvider[]);
       })().catch((error) => {
         Alert.alert(
           t("customModelProviders.deleteFailed"),

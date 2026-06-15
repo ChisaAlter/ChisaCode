@@ -9,6 +9,7 @@ import type { WorkspaceFileTabTarget } from "@/workspace/file-open";
 
 export interface WorkspaceDraftTabSetup {
   provider: AgentProvider;
+  runtimeProvider?: AgentProvider | null;
   cwd: string;
   modeId: string | null;
   model: string | null;

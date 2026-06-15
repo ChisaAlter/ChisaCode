@@ -53,6 +53,8 @@ describe("combined model selector data", () => {
             {
               favoriteKey: "codex:gpt-5.4",
               provider: "codex",
+              agentProvider: "codex",
+              runtimeProvider: "codex",
               providerLabel: "Codex",
               modelId: "gpt-5.4",
               modelLabel: "GPT-5.4",
@@ -84,6 +86,8 @@ describe("combined model selector data", () => {
             {
               favoriteKey: "deepseek-tui:",
               provider: "deepseek-tui",
+              agentProvider: "deepseek-tui",
+              runtimeProvider: "deepseek-tui",
               providerLabel: "DeepSeek TUI",
               modelId: "",
               modelLabel: "Default",
@@ -107,6 +111,139 @@ describe("combined model selector data", () => {
         }),
       ]),
     ).toEqual([]);
+  });
+
+  it("groups model gateway provider models under their target agent instead of showing them as agents", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "claude",
+        label: "Claude",
+        models: [
+          {
+            provider: "claude",
+            id: "sonnet",
+            label: "Sonnet",
+          },
+        ],
+      }),
+      snapshotEntry({
+        provider: "opencode-go-claude",
+        label: "opencode go Claude",
+        derivedFromProviderId: "claude",
+        modelGatewayId: "opencode-go",
+        models: [
+          {
+            provider: "opencode-go-claude",
+            id: "kimi-k2.6",
+            label: "Kimi K2.6",
+          },
+        ],
+      } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+    ]);
+
+    expect(providers.map((provider) => provider.id)).toEqual(["claude"]);
+    expect(providers[0]?.modelSelection).toEqual({
+      kind: "models",
+      rows: [
+        expect.objectContaining({
+          provider: "claude",
+          agentProvider: "claude",
+          runtimeProvider: "claude",
+          modelId: "sonnet",
+          modelLabel: "Sonnet",
+        }),
+        expect.objectContaining({
+          provider: "opencode-go-claude",
+          agentProvider: "claude",
+          runtimeProvider: "opencode-go-claude",
+          providerLabel: "opencode go Claude",
+          modelId: "kimi-k2.6",
+          modelLabel: "Kimi K2.6",
+        }),
+      ],
+    });
+  });
+
+  it("keeps gateway models selectable when the base agent provider requires authentication", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "kimi",
+        label: "Kimi Code",
+        status: "error",
+        error: "Authentication required",
+        models: [],
+      }),
+      snapshotEntry({
+        provider: "opencode-kimi",
+        label: "DeepSeek via Kimi Code",
+        derivedFromProviderId: "kimi",
+        modelGatewayId: "opencode",
+        models: [
+          {
+            provider: "opencode-kimi",
+            id: "deepseek-v4-pro",
+            label: "DeepSeek V4 Pro",
+          },
+        ],
+      } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+    ]);
+
+    expect(providers.map((provider) => provider.id)).toEqual(["kimi"]);
+    expect(providers[0]?.modelSelection).toEqual({
+      kind: "models",
+      rows: [
+        expect.objectContaining({
+          provider: "opencode-kimi",
+          agentProvider: "kimi",
+          runtimeProvider: "opencode-kimi",
+          providerLabel: "DeepSeek via Kimi Code",
+          modelId: "deepseek-v4-pro",
+          modelLabel: "DeepSeek V4 Pro",
+        }),
+      ],
+    });
+    expect(
+      resolveSelectedModelLabel({
+        providers,
+        selectedProvider: "kimi",
+        selectedRuntimeProvider: "opencode-kimi",
+        selectedModel: "deepseek-v4-pro",
+        isLoading: false,
+      }),
+    ).toBe("DeepSeek V4 Pro");
+  });
+
+  it("resolves selected labels from gateway model rows grouped under base agents", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "claude",
+        label: "Claude",
+        models: [],
+      }),
+      snapshotEntry({
+        provider: "opencode-go-claude",
+        label: "opencode go Claude",
+        derivedFromProviderId: "claude",
+        modelGatewayId: "opencode-go",
+        models: [
+          {
+            provider: "opencode-go-claude",
+            id: "kimi-k2.6",
+            label: "Kimi K2.6",
+          },
+        ],
+      } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+    ]);
+
+    expect(
+      resolveSelectedModelLabel({
+        providers,
+        selectedProvider: "claude",
+        selectedRuntimeProvider: "opencode-go-claude",
+        selectedModel: "kimi-k2.6",
+        isLoading: false,
+      }),
+    ).toBe("Kimi K2.6");
   });
 
   it("surfaces non-ready providers with their state-specific selection", () => {
@@ -183,6 +320,8 @@ describe("combined model selector data", () => {
     const row = {
       favoriteKey: "opencode:opencode-zen/kimi-k2.5",
       provider: "opencode",
+      agentProvider: "opencode",
+      runtimeProvider: "opencode",
       providerLabel: "OpenCode",
       modelId: "opencode-zen/kimi-k2.5",
       modelLabel: "Kimi K2.5",
@@ -200,6 +339,8 @@ describe("combined model selector data", () => {
       {
         favoriteKey: "openai:gpt-4.1",
         provider: "openai",
+        agentProvider: "openai",
+        runtimeProvider: "openai",
         providerLabel: "OpenAI",
         modelId: "gpt-4.1",
         modelLabel: "GPT-4.1",
@@ -207,6 +348,8 @@ describe("combined model selector data", () => {
       {
         favoriteKey: "openai:gpt-5.4",
         provider: "openai",
+        agentProvider: "openai",
+        runtimeProvider: "openai",
         providerLabel: "OpenAI",
         modelId: "gpt-5.4",
         modelLabel: "GPT-5.4",
@@ -214,6 +357,8 @@ describe("combined model selector data", () => {
       {
         favoriteKey: "google:gemini",
         provider: "google",
+        agentProvider: "google",
+        runtimeProvider: "google",
         providerLabel: "Google",
         modelId: "gemini",
         modelLabel: "Gemini",

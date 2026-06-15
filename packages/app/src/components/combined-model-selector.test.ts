@@ -10,6 +10,8 @@ function modelRow(providerId: string, modelId: string) {
   return {
     favoriteKey: `${providerId}:${modelId}`,
     provider: providerId,
+    agentProvider: providerId,
+    runtimeProvider: providerId,
     providerLabel: providerId,
     modelId,
     modelLabel: modelId,

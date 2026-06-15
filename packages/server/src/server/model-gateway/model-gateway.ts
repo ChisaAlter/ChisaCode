@@ -205,7 +205,10 @@ function responsesToChat(body: JsonRecord): JsonRecord {
 }
 
 function normalizeMessageRole(role: unknown): string {
-  if (role === "assistant" || role === "system" || role === "developer" || role === "tool") {
+  if (role === "developer") {
+    return "system";
+  }
+  if (role === "assistant" || role === "system" || role === "tool") {
     return role;
   }
   return "user";
@@ -325,6 +328,25 @@ function anthropicToResponses(body: JsonRecord): JsonRecord {
 
 function responsesToAnthropic(body: JsonRecord): JsonRecord {
   return chatToAnthropic(responsesToChat(body));
+}
+
+function normalizeChatUpstreamBody(body: JsonRecord): JsonRecord {
+  if (!Array.isArray(body.messages)) {
+    return body;
+  }
+  return {
+    ...body,
+    messages: body.messages.map((message) => {
+      const record = asRecord(message);
+      if (!record) {
+        return message;
+      }
+      return {
+        ...record,
+        role: normalizeMessageRole(record.role),
+      };
+    }),
+  };
 }
 
 function readUsageNumber(usage: JsonRecord, primary: string, fallback?: string): number {
@@ -625,12 +647,12 @@ function buildUpstreamBody(
   requestBody: JsonRecord,
 ): JsonRecord {
   if (targetFormat === upstreamFormat) {
-    return requestBody;
+    return upstreamFormat === "chatCompletions" ? normalizeChatUpstreamBody(requestBody) : requestBody;
   }
   if (upstreamFormat === "chatCompletions") {
-    return targetFormat === "anthropic"
-      ? anthropicToChat(requestBody)
-      : responsesToChat(requestBody);
+    const chatBody =
+      targetFormat === "anthropic" ? anthropicToChat(requestBody) : responsesToChat(requestBody);
+    return normalizeChatUpstreamBody(chatBody);
   }
   if (upstreamFormat === "anthropic") {
     return targetFormat === "chatCompletions"

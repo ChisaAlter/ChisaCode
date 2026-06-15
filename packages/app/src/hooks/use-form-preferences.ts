@@ -24,6 +24,7 @@ export interface FavoriteModelRow {
 const providerPreferencesSchema = z.object({
   model: z.string().optional(),
   mode: z.string().optional(),
+  runtimeProviderByModel: z.record(z.string()).optional(),
   thinkingByModel: z.record(z.string()).optional(),
   featureValues: z.record(z.unknown()).optional(),
 });
@@ -76,6 +77,13 @@ export function mergeProviderPreferences(args: {
           ...existing.thinkingByModel,
           ...updates.thinkingByModel,
         };
+  const nextRuntimeProviderByModel =
+    updates.runtimeProviderByModel === undefined
+      ? existing.runtimeProviderByModel
+      : {
+          ...existing.runtimeProviderByModel,
+          ...updates.runtimeProviderByModel,
+        };
   const nextFeatureValues =
     updates.featureValues === undefined
       ? existing.featureValues
@@ -92,6 +100,9 @@ export function mergeProviderPreferences(args: {
       [provider]: {
         ...existing,
         ...updates,
+        ...(nextRuntimeProviderByModel
+          ? { runtimeProviderByModel: nextRuntimeProviderByModel }
+          : {}),
         ...(nextThinkingByModel ? { thinkingByModel: nextThinkingByModel } : {}),
         ...(nextFeatureValues ? { featureValues: nextFeatureValues } : {}),
       },

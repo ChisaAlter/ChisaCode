@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  resolveActiveHostRedirectRoute,
   resolveStartupRedirectRoute,
   resolveStartupWorkspaceSelection,
   startHostRuntimeBootstrap,
@@ -243,5 +244,37 @@ describe("resolveStartupRedirectRoute", () => {
 
       expect(route).toBe("/h/server-saved");
     });
+  });
+});
+
+describe("resolveActiveHostRedirectRoute", () => {
+  it("redirects a stale host route to the remaining host", () => {
+    expect(
+      resolveActiveHostRedirectRoute({
+        pathname: "/h/server-1/workspace/workspace-a",
+        activeServerId: "server-1",
+        hostServerIds: ["server-2"],
+      }),
+    ).toBe("/h/server-2/workspace/workspace-a");
+  });
+
+  it("redirects a stale host route to welcome when the last host was removed", () => {
+    expect(
+      resolveActiveHostRedirectRoute({
+        pathname: "/h/server-1/workspace/workspace-a",
+        activeServerId: "server-1",
+        hostServerIds: [],
+      }),
+    ).toBe(WELCOME_ROUTE);
+  });
+
+  it("does not redirect while the active host still exists", () => {
+    expect(
+      resolveActiveHostRedirectRoute({
+        pathname: "/h/server-1/workspace/workspace-a",
+        activeServerId: "server-1",
+        hostServerIds: ["server-1"],
+      }),
+    ).toBeNull();
   });
 });

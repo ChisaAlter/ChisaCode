@@ -7,6 +7,7 @@ import {
   PanelLeftClose,
   Search,
   Settings,
+  Smartphone,
   SquarePen,
   SquareTerminal,
   X,
@@ -82,7 +83,10 @@ import {
   buildSettingsRoute,
   mapPathnameToServer,
 } from "@/utils/host-routes";
-import { resolveLeftSidebarNewConversationRoute } from "@/utils/left-sidebar-drafts";
+import {
+  resolveLeftSidebarHomeRoute,
+  resolveLeftSidebarNewConversationRoute,
+} from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
@@ -121,6 +125,7 @@ interface SidebarSharedProps {
   handleLoadMore: () => void;
   handleHostSelect: (nextServerId: string) => void;
   handleOpenProject: () => void;
+  handleHome: () => void;
   handleSearch: () => void;
   handleSettings: () => void;
   renderHostOption: (input: {
@@ -270,6 +275,23 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     router.push(buildSettingsRoute());
   }, []);
 
+  const handleHomeMobile = useCallback(() => {
+    const homeRoute = resolveLeftSidebarHomeRoute(activeServerId);
+    if (!homeRoute) {
+      return;
+    }
+    showMobileAgent();
+    router.push(homeRoute);
+  }, [activeServerId, showMobileAgent]);
+
+  const handleHomeDesktop = useCallback(() => {
+    const homeRoute = resolveLeftSidebarHomeRoute(activeServerId);
+    if (!homeRoute) {
+      return;
+    }
+    router.push(homeRoute);
+  }, [activeServerId]);
+
   const handleViewMoreNavigate = useCallback(() => {
     if (!activeServerId) {
       return;
@@ -321,6 +343,7 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
         isOpen={isOpen}
         closeToAgent={showMobileAgent}
         handleOpenProject={handleOpenProjectMobile}
+        handleHome={handleHomeMobile}
         handleSettings={handleSettingsMobile}
         handleViewMoreNavigate={handleViewMoreNavigate}
       />
@@ -333,6 +356,7 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
       insetsTop={insets.top}
       isOpen={isOpen}
       handleOpenProject={handleOpenProjectDesktop}
+      handleHome={handleHomeDesktop}
       handleSettings={handleSettingsDesktop}
     />
   );
@@ -588,6 +612,7 @@ function SidebarFooter({
   setIsHostPickerOpen,
   handleHostSelect,
   renderHostOption,
+  handleHome,
   handleSettings,
   variant = "mobile",
 }: {
@@ -601,6 +626,7 @@ function SidebarFooter({
   setIsHostPickerOpen: Dispatch<SetStateAction<boolean>>;
   handleHostSelect: (nextServerId: string) => void;
   renderHostOption: SidebarSharedProps["renderHostOption"];
+  handleHome: () => void;
   handleSettings: () => void;
   variant?: "mobile" | "desktop";
 }) {
@@ -625,6 +651,14 @@ function SidebarFooter({
         />
       </View>
       <View style={iconRowStyle}>
+        <FooterIconButton
+          onPress={handleHome}
+          testID="sidebar-home"
+          accessibilityLabel={t("sidebar.home")}
+          icon={Smartphone}
+          theme={theme}
+          variant={variant}
+        />
         <FooterIconButton
           onPress={handleSettings}
           testID="sidebar-settings"
@@ -835,6 +869,7 @@ function MobileSidebar({
   handleHostSelect,
   renderHostOption,
   handleOpenProject,
+  handleHome,
   handleSearch,
   handleSettings,
   insetsTop,
@@ -1161,6 +1196,7 @@ function MobileSidebar({
               setIsHostPickerOpen={setIsHostPickerOpen}
               handleHostSelect={handleHostSelect}
               renderHostOption={renderHostOption}
+              handleHome={handleHome}
               handleSettings={handleSettings}
             />
           </View>
@@ -1191,6 +1227,7 @@ function DesktopSidebar({
   handleHostSelect,
   renderHostOption,
   handleOpenProject,
+  handleHome,
   handleSearch,
   handleSettings,
   isOpen,
@@ -1338,6 +1375,7 @@ function DesktopSidebar({
             setIsHostPickerOpen={setIsHostPickerOpen}
             handleHostSelect={handleHostSelect}
             renderHostOption={renderHostOption}
+            handleHome={handleHome}
             handleSettings={handleSettings}
             variant="desktop"
           />

@@ -112,6 +112,7 @@ function buildCreateAgentOptions({
 }: {
   composerState: {
     modeOptions: { id: string }[];
+    selectedRuntimeProvider: string | null;
     selectedMode: string;
     effectiveModelId: string | null;
     effectiveThinkingOptionId: string | null;
@@ -125,6 +126,10 @@ function buildCreateAgentOptions({
 }): CreateAgentRequestOptions {
   return {
     provider,
+    ...(composerState.selectedRuntimeProvider &&
+    composerState.selectedRuntimeProvider !== provider
+      ? { runtimeProvider: composerState.selectedRuntimeProvider }
+      : {}),
     cwd: workspaceDirectory,
     workspaceId,
     ...(composerState.modeOptions.length > 0 && composerState.selectedMode !== ""

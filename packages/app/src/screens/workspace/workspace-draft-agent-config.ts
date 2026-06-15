@@ -2,6 +2,7 @@ import type { AgentSessionConfig } from "@chisacode/protocol/agent-types";
 
 export function buildWorkspaceDraftAgentConfig(input: {
   provider: AgentSessionConfig["provider"];
+  runtimeProvider?: AgentSessionConfig["runtimeProvider"];
   cwd: string;
   modeId?: string;
   model?: string;
@@ -10,6 +11,9 @@ export function buildWorkspaceDraftAgentConfig(input: {
 }): AgentSessionConfig {
   return {
     provider: input.provider,
+    ...(input.runtimeProvider && input.runtimeProvider !== input.provider
+      ? { runtimeProvider: input.runtimeProvider }
+      : {}),
     cwd: input.cwd,
     ...(input.modeId ? { modeId: input.modeId } : {}),
     ...(input.model ? { model: input.model } : {}),

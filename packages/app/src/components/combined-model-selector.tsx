@@ -65,6 +65,7 @@ import {
   filterAndRankModelRows,
   getProviderModelRows,
   resolveSelectedModelLabel,
+  type ProviderModelSelectionValue,
   type ProviderSelectionModelRow,
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
@@ -79,8 +80,9 @@ const DESKTOP_MODEL_ROW_HEIGHT = 40;
 interface CombinedModelSelectorProps {
   providers: ProviderSelectorProvider[];
   selectedProvider: string;
+  selectedRuntimeProvider?: string | null;
   selectedModel: string;
-  onSelect: (provider: AgentProvider, modelId: string) => void;
+  onSelect: (selection: ProviderModelSelectionValue) => void;
   isLoading: boolean;
   favoriteKeys?: Set<string>;
   onToggleFavorite?: (provider: string, modelId: string) => void;
@@ -102,10 +104,11 @@ interface SelectorContentProps {
   view: SelectorView;
   providers: ProviderSelectorProvider[];
   selectedProvider: string;
+  selectedRuntimeProvider?: string | null;
   selectedModel: string;
   searchQuery: string;
   favoriteKeys: Set<string>;
-  onSelect: (provider: string, modelId: string) => void;
+  onSelect: (selection: ProviderModelSelectionValue) => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
   onDrillDown: (providerId: string, providerLabel: string) => void;
   onRetryProvider?: (provider: AgentProvider) => void;
@@ -149,7 +152,7 @@ function ModelRow({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const ProviderIcon = getProviderIcon(row.provider);
+  const ProviderIcon = getProviderIcon(row.agentProvider);
 
   const handleToggleFavorite = useCallback(
     (event: GestureResponderEvent) => {
@@ -224,7 +227,7 @@ interface SelectableModelRowProps {
   isSelected: boolean;
   isFavorite: boolean;
   elevated?: boolean;
-  onSelect: (provider: string, modelId: string) => void;
+  onSelect: (selection: ProviderModelSelectionValue) => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
 }
 
@@ -237,8 +240,12 @@ function SelectableModelRow({
   onToggleFavorite,
 }: SelectableModelRowProps) {
   const handlePress = useCallback(() => {
-    onSelect(row.provider, row.modelId);
-  }, [onSelect, row.provider, row.modelId]);
+    onSelect({
+      agentProvider: row.agentProvider,
+      runtimeProvider: row.runtimeProvider,
+      modelId: row.modelId,
+    });
+  }, [onSelect, row.agentProvider, row.runtimeProvider, row.modelId]);
   return (
     <ModelRow
       row={row}
@@ -254,6 +261,7 @@ function SelectableModelRow({
 function FavoritesSection({
   favoriteRows,
   selectedProvider,
+  selectedRuntimeProvider,
   selectedModel,
   favoriteKeys,
   onSelect,
@@ -261,9 +269,10 @@ function FavoritesSection({
 }: {
   favoriteRows: ProviderSelectionModelRow[];
   selectedProvider: string;
+  selectedRuntimeProvider?: string | null;
   selectedModel: string;
   favoriteKeys: Set<string>;
-  onSelect: (provider: string, modelId: string) => void;
+  onSelect: (selection: ProviderModelSelectionValue) => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -280,7 +289,11 @@ function FavoritesSection({
         <SelectableModelRow
           key={row.favoriteKey}
           row={row}
-          isSelected={row.provider === selectedProvider && row.modelId === selectedModel}
+          isSelected={
+            row.agentProvider === selectedProvider &&
+            row.runtimeProvider === (selectedRuntimeProvider ?? selectedProvider) &&
+            row.modelId === selectedModel
+          }
           isFavorite={favoriteKeys.has(row.favoriteKey)}
           elevated
           onSelect={onSelect}
@@ -374,6 +387,7 @@ function GroupedProviderRows({
 function ProviderModelRows({
   rows,
   selectedProvider,
+  selectedRuntimeProvider,
   selectedModel,
   favoriteKeys,
   onSelect,
@@ -382,9 +396,10 @@ function ProviderModelRows({
 }: {
   rows: ProviderSelectionModelRow[];
   selectedProvider: string;
+  selectedRuntimeProvider?: string | null;
   selectedModel: string;
   favoriteKeys: Set<string>;
-  onSelect: (provider: string, modelId: string) => void;
+  onSelect: (selection: ProviderModelSelectionValue) => void;
   onToggleFavorite?: (provider: string, modelId: string) => void;
   normalizedQuery: string;
 }) {
@@ -398,13 +413,24 @@ function ProviderModelRows({
     ({ item }: { item: ProviderSelectionModelRow }) => (
       <SelectableModelRow
         row={item}
-        isSelected={item.provider === selectedProvider && item.modelId === selectedModel}
+        isSelected={
+          item.agentProvider === selectedProvider &&
+          item.runtimeProvider === (selectedRuntimeProvider ?? selectedProvider) &&
+          item.modelId === selectedModel
+        }
         isFavorite={favoriteKeys.has(item.favoriteKey)}
         onSelect={onSelect}
         onToggleFavorite={onToggleFavorite}
       />
     ),
-    [favoriteKeys, onSelect, onToggleFavorite, selectedModel, selectedProvider],
+    [
+      favoriteKeys,
+      onSelect,
+      onToggleFavorite,
+      selectedModel,
+      selectedProvider,
+      selectedRuntimeProvider,
+    ],
   );
   const keyExtractor = useCallback((row: ProviderSelectionModelRow) => row.favoriteKey, []);
 
@@ -464,6 +490,7 @@ function SelectorContent({
   view,
   providers,
   selectedProvider,
+  selectedRuntimeProvider,
   selectedModel,
   searchQuery,
   favoriteKeys,
@@ -537,6 +564,7 @@ function SelectorContent({
       <ProviderModelRows
         rows={visibleRows}
         selectedProvider={selectedProvider}
+        selectedRuntimeProvider={selectedRuntimeProvider}
         selectedModel={selectedModel}
         favoriteKeys={favoriteKeys}
         onSelect={onSelect}
@@ -551,6 +579,7 @@ function SelectorContent({
       <FavoritesSection
         favoriteRows={favoriteRows}
         selectedProvider={selectedProvider}
+        selectedRuntimeProvider={selectedRuntimeProvider}
         selectedModel={selectedModel}
         favoriteKeys={favoriteKeys}
         onSelect={onSelect}
@@ -569,6 +598,7 @@ function SelectorContent({
 export function CombinedModelSelector({
   providers,
   selectedProvider,
+  selectedRuntimeProvider = null,
   selectedModel,
   onSelect,
   isLoading,
@@ -621,8 +651,8 @@ export function CombinedModelSelector({
   );
 
   const handleSelect = useCallback(
-    (provider: string, modelId: string) => {
-      onSelect(provider, modelId);
+    (selection: ProviderModelSelectionValue) => {
+      onSelect(selection);
       setIsOpen(false);
       setSearchQuery("");
       bumpSearchResetKey();
@@ -637,6 +667,7 @@ export function CombinedModelSelector({
     return resolveSelectedModelLabel({
       providers,
       selectedProvider,
+      selectedRuntimeProvider,
       selectedModel,
       isLoading,
       copy: {
@@ -645,7 +676,7 @@ export function CombinedModelSelector({
         error: t("modelSelector.error"),
       },
     });
-  }, [isLoading, providers, selectedModel, selectedProvider, t]);
+  }, [isLoading, providers, selectedModel, selectedProvider, selectedRuntimeProvider, t]);
 
   const desktopFixedHeight = useMemo(() => {
     if (view.kind !== "provider") {
@@ -830,6 +861,7 @@ export function CombinedModelSelector({
             view={view}
             providers={providers}
             selectedProvider={selectedProvider}
+            selectedRuntimeProvider={selectedRuntimeProvider}
             selectedModel={selectedModel}
             searchQuery={searchQuery}
             favoriteKeys={favoriteKeys}

@@ -51,11 +51,12 @@ export interface UseAgentFormStateResult {
   setSelectedServerId: (value: string | null) => void;
   setSelectedServerIdFromUser: (value: string | null) => void;
   selectedProvider: AgentProvider | null;
+  selectedRuntimeProvider: AgentProvider | null;
   setProviderFromUser: (provider: AgentProvider) => void;
   selectedMode: string;
   setModeFromUser: (modeId: string) => void;
   selectedModel: string;
-  setModelFromUser: (modelId: string) => void;
+  setModelFromUser: (modelId: string, runtimeProvider?: AgentProvider | null) => void;
   selectedThinkingOptionId: string;
   setThinkingOptionFromUser: (thinkingOptionId: string) => void;
   workingDir: string;
@@ -76,7 +77,11 @@ export interface UseAgentFormStateResult {
   modelError: string | null;
   refreshProviderModels: (provider?: AgentProvider) => void;
   refetchProviderModelsIfStale: () => void;
-  setProviderAndModelFromUser: (provider: AgentProvider, modelId: string) => void;
+  setProviderAndModelFromUser: (
+    provider: AgentProvider,
+    modelId: string,
+    runtimeProvider?: AgentProvider | null,
+  ) => void;
   workingDirIsEmpty: boolean;
   persistFormPreferences: () => Promise<void>;
 }
@@ -133,8 +138,30 @@ function buildAllProviderModels(
   return map;
 }
 
+function findProviderSnapshotEntry(
+  snapshotEntries: ProviderSnapshotEntry[] | undefined,
+  provider: AgentProvider | null | undefined,
+): ProviderSnapshotEntry | null {
+  return provider ? (snapshotEntries ?? []).find((entry) => entry.provider === provider) ?? null : null;
+}
+
+function resolveSnapshotModels(input: {
+  runtimeEntry: ProviderSnapshotEntry | null;
+  selectedEntry: ProviderSnapshotEntry | null;
+}): AgentModelDefinition[] | null {
+  return input.runtimeEntry?.models ?? input.selectedEntry?.models ?? null;
+}
+
+function isProviderEntryLoading(input: {
+  runtimeEntry: ProviderSnapshotEntry | null;
+  selectedEntry: ProviderSnapshotEntry | null;
+}): boolean {
+  return input.runtimeEntry?.status === "loading" || input.selectedEntry?.status === "loading";
+}
+
 async function persistProviderPreferences(input: {
   provider: AgentProvider;
+  runtimeProvider?: AgentProvider | null;
   formState: FormState;
   availableModels: AgentModelDefinition[] | null;
   updatePreferences: (
@@ -151,6 +178,9 @@ async function persistProviderPreferences(input: {
       updates: {
         model: modelId || undefined,
         mode: formState.modeId || undefined,
+        ...(modelId && input.runtimeProvider && input.runtimeProvider !== input.provider
+          ? { runtimeProviderByModel: { [modelId]: input.runtimeProvider } }
+          : {}),
         ...(modelId && formState.thinkingOptionId
           ? { thinkingByModel: { [modelId]: formState.thinkingOptionId } }
           : {}),
@@ -183,6 +213,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
       form: {
         serverId,
         provider: null,
+        runtimeProvider: null,
         modeId: "",
         model: "",
         thinkingOptionId: "",
@@ -256,14 +287,21 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
     [snapshotEntries, t],
   );
   const snapshotSelectedEntry = useMemo(
-    () =>
-      formState.provider
-        ? ((snapshotEntries ?? []).find((entry) => entry.provider === formState.provider) ?? null)
-        : null,
+    () => findProviderSnapshotEntry(snapshotEntries, formState.provider),
     [formState.provider, snapshotEntries],
   );
-  const snapshotSelectedProviderModels = snapshotSelectedEntry?.models ?? null;
-  const selectedProviderIsLoading = snapshotSelectedEntry?.status === "loading";
+  const snapshotRuntimeEntry = useMemo(
+    () => findProviderSnapshotEntry(snapshotEntries, formState.runtimeProvider ?? formState.provider),
+    [formState.provider, formState.runtimeProvider, snapshotEntries],
+  );
+  const snapshotSelectedProviderModels = resolveSnapshotModels({
+    runtimeEntry: snapshotRuntimeEntry,
+    selectedEntry: snapshotSelectedEntry,
+  });
+  const selectedProviderIsLoading = isProviderEntryLoading({
+    runtimeEntry: snapshotRuntimeEntry,
+    selectedEntry: snapshotSelectedEntry,
+  });
   const snapshotSelectedProviderModes = resolveSelectedProviderModes({
     selectedEntry: snapshotSelectedEntry,
     provider: formState.provider,
@@ -375,12 +413,13 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
   );
 
   const setProviderAndModelFromUser = useCallback(
-    (provider: AgentProvider, modelId: string) => {
+    (provider: AgentProvider, modelId: string, runtimeProvider?: AgentProvider | null) => {
       if (!selectableProviderDefinitionMap.has(provider)) {
         return;
       }
+      const selectedRuntimeProvider = runtimeProvider || provider;
       const providerDef = selectableProviderDefinitionMap.get(provider);
-      const providerModels = allProviderModels.get(provider) ?? null;
+      const providerModels = allProviderModels.get(selectedRuntimeProvider) ?? null;
       const providerPrefs = preferences?.providerPreferences?.[provider];
       const normalizedModelId = normalizeSelectedModelId(modelId);
       const nextModelId = normalizedModelId || resolveDefaultModelId(providerModels);
@@ -388,6 +427,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
       dispatch({
         type: "SET_PROVIDER_AND_MODEL_FROM_USER",
         provider,
+        runtimeProvider: selectedRuntimeProvider,
         modelId,
         providerDef,
         providerModels,
@@ -399,6 +439,9 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
           provider,
           updates: {
             model: nextModelId || undefined,
+            ...(nextModelId && selectedRuntimeProvider !== provider
+              ? { runtimeProviderByModel: { [nextModelId]: selectedRuntimeProvider } }
+              : {}),
           },
         }),
       );
@@ -431,24 +474,37 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
   );
 
   const setModelFromUser = useCallback(
-    (modelId: string) => {
-      dispatch({ type: "SET_MODEL_FROM_USER", modelId, availableModels });
+    (modelId: string, runtimeProvider?: AgentProvider | null) => {
+      const selectedRuntimeProvider = runtimeProvider ?? reducerStateRef.current.form.runtimeProvider;
+      const providerModels =
+        selectedRuntimeProvider && allProviderModels.has(selectedRuntimeProvider)
+          ? (allProviderModels.get(selectedRuntimeProvider) ?? null)
+          : availableModels;
+      dispatch({
+        type: "SET_MODEL_FROM_USER",
+        modelId,
+        runtimeProvider: selectedRuntimeProvider,
+        availableModels: providerModels,
+      });
       const provider = reducerStateRef.current.form.provider;
       if (provider) {
         const normalizedModelId = normalizeSelectedModelId(modelId);
-        const nextModelId = normalizedModelId || resolveDefaultModelId(availableModels);
+        const nextModelId = normalizedModelId || resolveDefaultModelId(providerModels);
         void updatePreferences((current) =>
           mergeSelectedComposerPreferences({
             preferences: current,
             provider,
             updates: {
               model: nextModelId || undefined,
+              ...(nextModelId && selectedRuntimeProvider && selectedRuntimeProvider !== provider
+                ? { runtimeProviderByModel: { [nextModelId]: selectedRuntimeProvider } }
+                : {}),
             },
           }),
         );
       }
     },
-    [availableModels, updatePreferences],
+    [allProviderModels, availableModels, updatePreferences],
   );
 
   const setThinkingOptionFromUser = useCallback(
@@ -492,7 +548,8 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
   );
 
   const refetchProviderModelsIfStale = useCallback(() => {
-    refetchSnapshotIfStale(reducerStateRef.current.form.provider);
+    const { provider, runtimeProvider } = reducerStateRef.current.form;
+    refetchSnapshotIfStale(runtimeProvider ?? provider);
   }, [refetchSnapshotIfStale]);
 
   const persistFormPreferences = useCallback(async () => {
@@ -501,6 +558,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
     }
     await persistProviderPreferences({
       provider: formState.provider,
+      runtimeProvider: formState.runtimeProvider,
       formState,
       availableModels,
       updatePreferences,
@@ -528,6 +586,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
       setSelectedServerId,
       setSelectedServerIdFromUser,
       selectedProvider: formState.provider,
+      selectedRuntimeProvider: formState.runtimeProvider,
       setProviderFromUser,
       selectedMode: formState.modeId,
       setModeFromUser,
@@ -560,6 +619,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
     [
       formState.serverId,
       formState.provider,
+      formState.runtimeProvider,
       formState.modeId,
       resolvedModelId,
       formState.thinkingOptionId,

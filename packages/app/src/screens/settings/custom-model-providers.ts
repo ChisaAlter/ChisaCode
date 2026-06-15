@@ -83,6 +83,18 @@ function opencodeProviderId(id: string): string {
   return `${id}-opencode`;
 }
 
+function mimocodeProviderId(id: string): string {
+  return `${id}-mimocode`;
+}
+
+function piProviderId(id: string): string {
+  return `${id}-pi`;
+}
+
+function kimiProviderId(id: string): string {
+  return `${id}-kimi`;
+}
+
 function anthropicProviderId(id: string): string {
   return `${id}-anthropic`;
 }
@@ -95,13 +107,31 @@ export function buildModelGatewayProviderIds(id: string): {
   claudeProviderId: string;
   codexProviderId: string;
   opencodeProviderId: string;
+  mimocodeProviderId: string;
+  piProviderId: string;
+  kimiProviderId: string;
 } {
   const normalizedId = normalizeSupplierId(id);
   return {
     claudeProviderId: claudeProviderId(normalizedId),
     codexProviderId: codexProviderId(normalizedId),
     opencodeProviderId: opencodeProviderId(normalizedId),
+    mimocodeProviderId: mimocodeProviderId(normalizedId),
+    piProviderId: piProviderId(normalizedId),
+    kimiProviderId: kimiProviderId(normalizedId),
   };
+}
+
+export function buildModelGatewayProviderIdList(id: string): string[] {
+  const ids = buildModelGatewayProviderIds(id);
+  return [
+    ids.claudeProviderId,
+    ids.codexProviderId,
+    ids.opencodeProviderId,
+    ids.mimocodeProviderId,
+    ids.piProviderId,
+    ids.kimiProviderId,
+  ];
 }
 
 export function buildCustomModelProviderIds(id: string): {
@@ -173,10 +203,11 @@ function normalizeModels(
 }
 
 function normalizeOpenCodeModels(models: ProviderProfileModel[]): ProviderProfileModel[] {
-  return models.map((model) => ({
-    ...model,
-    id: model.id.startsWith("openai/") ? model.id : `openai/${model.id}`,
-  }));
+  return models.map((model) =>
+    Object.assign({}, model, {
+      id: model.id.startsWith("openai/") ? model.id : `openai/${model.id}`,
+    }),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -285,9 +316,15 @@ export function buildSaveCustomModelProviderPatch(
       claude: ids.claudeProviderId,
       codex: ids.codexProviderId,
       opencode: ids.opencodeProviderId,
+      mimocode: ids.mimocodeProviderId,
+      pi: ids.piProviderId,
+      kimi: ids.kimiProviderId,
     },
     generatedModels: {
       opencode: normalizeOpenCodeModels(models),
+      mimocode: normalizeOpenCodeModels(models),
+      pi: normalizeOpenCodeModels(models),
+      kimi: models,
     },
   } satisfies ModelGatewayPatch;
 
@@ -325,7 +362,7 @@ function collectGatewayProvider(gateway: ModelGatewayConfig): CollectedCustomMod
   return {
     id: gateway.id,
     label: gateway.label ?? gateway.id,
-    providerIds: [ids.claudeProviderId, ids.codexProviderId, ids.opencodeProviderId],
+    providerIds: buildModelGatewayProviderIdList(gateway.id),
     models: gateway.models ?? [],
     anthropic: collectGatewayEndpoint(ids.claudeProviderId, enabled, gateway.upstreams?.anthropic),
     openai: {

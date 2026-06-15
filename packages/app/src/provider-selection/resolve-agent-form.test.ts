@@ -76,6 +76,7 @@ function makeState(
     form: {
       serverId: null,
       provider: null,
+      runtimeProvider: null,
       modeId: "",
       model: "",
       thinkingOptionId: "",
@@ -490,6 +491,7 @@ describe("resolveFormState", () => {
       {
         serverId: false,
         provider: true,
+        runtimeProvider: true,
         modeId: true,
         model: true,
         thinkingOptionId: true,

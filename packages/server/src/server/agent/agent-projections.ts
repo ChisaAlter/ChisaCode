@@ -319,6 +319,9 @@ function normalizePromptPreview(text: string): string | null {
 
 function buildSerializableConfig(config: AgentSessionConfig): SerializableAgentConfig | null {
   const serializable: SerializableAgentConfig = {};
+  if (config.runtimeProvider && config.runtimeProvider !== config.provider) {
+    serializable.runtimeProvider = config.runtimeProvider;
+  }
   if (config.modeId) {
     serializable.modeId = config.modeId;
   }

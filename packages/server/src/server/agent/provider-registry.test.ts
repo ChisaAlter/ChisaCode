@@ -465,7 +465,7 @@ test("new provider extending claude appears in registry", () => {
   expect(registry.zai.createClient(logger).provider).toBe("zai");
 });
 
-test("model gateway materializes Claude, Codex, and OpenCode provider entries", async () => {
+test("model gateway materializes provider entries for all built-in agents", async () => {
   const registry = buildProviderRegistry(logger, {
     modelGateways: {
       zai: {
@@ -509,24 +509,46 @@ test("model gateway materializes Claude, Codex, and OpenCode provider entries", 
     id: "zai-claude",
     label: "ZAI Claude",
     derivedFromProviderId: "claude",
+    modelGatewayId: "zai",
     enabled: true,
   });
   expect(registry["zai-codex"]).toMatchObject({
     id: "zai-codex",
     label: "ZAI Codex",
     derivedFromProviderId: "codex",
+    modelGatewayId: "zai",
     enabled: true,
   });
   expect(registry["zai-opencode"]).toMatchObject({
     id: "zai-opencode",
     label: "ZAI OpenCode",
     derivedFromProviderId: "opencode",
+    modelGatewayId: "zai",
+    enabled: true,
+  });
+  expect(registry["zai-mimocode"]).toMatchObject({
+    id: "zai-mimocode",
+    label: "ZAI MiMoCode",
+    derivedFromProviderId: "mimocode",
+    modelGatewayId: "zai",
+    enabled: true,
+  });
+  expect(registry["zai-pi"]).toMatchObject({
+    id: "zai-pi",
+    label: "ZAI Pi",
+    derivedFromProviderId: "pi",
+    modelGatewayId: "zai",
+    enabled: true,
+  });
+  expect(registry["zai-kimi"]).toMatchObject({
+    id: "zai-kimi",
+    label: "ZAI Kimi Code",
+    derivedFromProviderId: "kimi",
+    modelGatewayId: "zai",
     enabled: true,
   });
 
-  await expect(
-    registry["zai-opencode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
-  ).resolves.toEqual([
+  const openAiProviderModels = [
     {
       provider: "zai-opencode",
       id: "openai/glm-5",
@@ -540,11 +562,44 @@ test("model gateway materializes Claude, Codex, and OpenCode provider entries", 
       id: "openai/glm-5-air",
       label: "GLM 5 Air",
     },
+  ];
+  await expect(
+    registry["zai-opencode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual(openAiProviderModels);
+  await expect(
+    registry["zai-mimocode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual(
+    openAiProviderModels.map((model) => Object.assign({}, model, { provider: "zai-mimocode" })),
+  );
+  await expect(
+    registry["zai-pi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual(
+    openAiProviderModels.map((model) => Object.assign({}, model, { provider: "zai-pi" })),
+  );
+  await expect(
+    registry["zai-kimi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "zai-kimi",
+      id: "glm-5",
+      label: "GLM 5",
+      isDefault: true,
+      contextWindowMaxTokens: 200_000,
+      supportsImages: true,
+    },
+    {
+      provider: "zai-kimi",
+      id: "glm-5-air",
+      label: "GLM 5 Air",
+    },
   ]);
 
   registry["zai-claude"].createClient(logger);
   registry["zai-codex"].createClient(logger);
   registry["zai-opencode"].createClient(logger);
+  registry["zai-mimocode"].createClient(logger);
+  registry["zai-pi"].createClient(logger);
+  registry["zai-kimi"].createClient(logger);
 
   const claudeGatewayArgs = mockState.constructorArgs.claude.find((entry) => {
     const env =
@@ -588,6 +643,56 @@ test("model gateway materializes Claude, Codex, and OpenCode provider entries", 
         OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
       },
     },
+  });
+
+  const mimocodeGatewayArgs = mockState.constructorArgs.mimocode.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
+  });
+  expect(mimocodeGatewayArgs).toEqual({
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        OPENAI_API_KEY: "internal-token",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+      },
+    },
+  });
+
+  const piGatewayArgs = mockState.constructorArgs.pi.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
+  });
+  expect(piGatewayArgs).toEqual({
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        OPENAI_API_KEY: "internal-token",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+      },
+    },
+  });
+
+  const kimiGatewayArgs = mockState.constructorArgs.genericAcp.find((entry) => {
+    return (
+      entry.providerId === "kimi" &&
+      entry.env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1"
+    );
+  });
+  expect(kimiGatewayArgs).toEqual({
+    command: ["kimi", "acp"],
+    env: {
+      OPENAI_API_KEY: "internal-token",
+      OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+    },
+    providerId: "kimi",
+    label: "Kimi Code",
   });
 });
 

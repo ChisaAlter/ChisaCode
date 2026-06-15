@@ -54,6 +54,7 @@ const DRAFT_CAPABILITIES: AgentCapabilityFlags = {
 
 interface AutoSubmitConfig {
   provider: string;
+  runtimeProvider: string | null;
   modeId: string | null;
   model: string | null;
   thinkingOptionId: string | null;
@@ -63,6 +64,7 @@ interface AutoSubmitConfig {
 function resolveAutoSubmitConfig(
   pending: {
     provider: string;
+    runtimeProvider?: string | null;
     modeId?: string | null;
     model?: string | null;
     thinkingOptionId?: string | null;
@@ -72,6 +74,7 @@ function resolveAutoSubmitConfig(
   if (!pending) return null;
   return {
     provider: pending.provider,
+    runtimeProvider: pending.runtimeProvider ?? null,
     modeId: pending.modeId ?? null,
     model: pending.model ?? null,
     thinkingOptionId: pending.thinkingOptionId ?? null,
@@ -109,6 +112,37 @@ function resolveDraftModeId(input: {
   return null;
 }
 
+function buildSubmitDraftAgentConfig(input: {
+  provider: string;
+  runtimeProvider: string;
+  workspaceDirectory: string;
+  autoSubmitConfig: AutoSubmitConfig | null;
+  composerState: {
+    selectedMode: string;
+    modeOptions: unknown[];
+    effectiveModelId: string | null;
+    effectiveThinkingOptionId: string | null;
+    featureValues: Record<string, unknown> | undefined;
+  };
+}) {
+  const { provider, runtimeProvider, workspaceDirectory, autoSubmitConfig, composerState } = input;
+  const modeIdOverride = resolveDraftModeIdOverride({
+    autoSubmitConfig,
+    modeOptionsCount: composerState.modeOptions.length,
+    selectedMode: composerState.selectedMode,
+  });
+  return buildWorkspaceDraftAgentConfig({
+    provider,
+    runtimeProvider,
+    cwd: workspaceDirectory,
+    ...modeIdOverride,
+    model: autoSubmitConfig?.model ?? (composerState.effectiveModelId || undefined),
+    thinkingOptionId:
+      autoSubmitConfig?.thinkingOptionId ?? (composerState.effectiveThinkingOptionId || undefined),
+    featureValues: autoSubmitConfig?.featureValues ?? composerState.featureValues,
+  });
+}
+
 async function submitDraftCreateRequest(input: {
   attempt: { clientMessageId: string };
   text: string;
@@ -120,6 +154,7 @@ async function submitDraftCreateRequest(input: {
   autoSubmitConfig: AutoSubmitConfig | null;
   composerState: {
     selectedProvider: string | null;
+    selectedRuntimeProvider: string | null;
     selectedMode: string;
     modeOptions: unknown[];
     effectiveModelId: string | null;
@@ -149,19 +184,14 @@ async function submitDraftCreateRequest(input: {
   if (!provider) {
     throw new Error("Select a model");
   }
-  const modeIdOverride = resolveDraftModeIdOverride({
-    autoSubmitConfig,
-    modeOptionsCount: composerState.modeOptions.length,
-    selectedMode: composerState.selectedMode,
-  });
-  const config = buildWorkspaceDraftAgentConfig({
+  const runtimeProvider =
+    autoSubmitConfig?.runtimeProvider ?? composerState.selectedRuntimeProvider ?? provider;
+  const config = buildSubmitDraftAgentConfig({
     provider,
-    cwd: workspaceDirectory,
-    ...modeIdOverride,
-    model: autoSubmitConfig?.model ?? (composerState.effectiveModelId || undefined),
-    thinkingOptionId:
-      autoSubmitConfig?.thinkingOptionId ?? (composerState.effectiveThinkingOptionId || undefined),
-    featureValues: autoSubmitConfig?.featureValues ?? composerState.featureValues,
+    runtimeProvider,
+    workspaceDirectory,
+    autoSubmitConfig,
+    composerState,
   });
 
   const imagesData = await encodeImages(images);
@@ -193,6 +223,7 @@ function buildDraftAgentSnapshot(input: {
     modeOptions: unknown[];
     selectedMode: string;
     selectedProvider: string | null;
+    selectedRuntimeProvider: string | null;
     agentControls: { features?: Agent["features"] };
   };
 }): Agent {
@@ -211,6 +242,8 @@ function buildDraftAgentSnapshot(input: {
   if (!provider) {
     throw new Error("Select a model");
   }
+  const runtimeProvider =
+    autoSubmitConfig?.runtimeProvider ?? composerState.selectedRuntimeProvider ?? provider;
   return {
     serverId,
     id: tabId,
@@ -225,7 +258,7 @@ function buildDraftAgentSnapshot(input: {
     availableModes: [],
     pendingPermissions: [],
     persistence: null,
-    runtimeInfo: { provider, sessionId: null, model, modeId },
+    runtimeInfo: { provider: runtimeProvider, sessionId: null, model, modeId },
     title: "智能体",
     cwd: workspaceDirectory,
     model,
@@ -249,6 +282,7 @@ function buildDraftInitialValues(input: {
   return {
     workingDir: input.workingDir,
     provider: input.initialSetup.provider,
+    runtimeProvider: input.initialSetup.runtimeProvider,
     modeId: input.initialSetup.modeId,
     model: input.initialSetup.model,
     thinkingOptionId: input.initialSetup.thinkingOptionId,
@@ -563,8 +597,8 @@ export function WorkspaceDraftAgentTab({
   );
 
   const handleModelSelectWithFocus = useCallback(
-    (modelId: string) => {
-      composerState.setModelFromUser(modelId);
+    (modelId: string, runtimeProvider?: string | null) => {
+      composerState.setModelFromUser(modelId, runtimeProvider);
       focusInputRef.current?.();
     },
     [composerState],
@@ -574,8 +608,9 @@ export function WorkspaceDraftAgentTab({
     (
       provider: Parameters<typeof composerState.setProviderAndModelFromUser>[0],
       modelId: string,
+      runtimeProvider?: string | null,
     ) => {
-      composerState.setProviderAndModelFromUser(provider, modelId);
+      composerState.setProviderAndModelFromUser(provider, modelId, runtimeProvider);
       focusInputRef.current?.();
     },
     [composerState],

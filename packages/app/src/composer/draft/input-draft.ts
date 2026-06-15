@@ -205,6 +205,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
   const providerSelection = useMemo<ProviderSelectionState>(
     () => ({
       provider: formState.selectedProvider,
+      runtimeProvider: formState.selectedRuntimeProvider,
       modelId: formState.selectedModel,
       modeId: formState.selectedMode,
       thinkingOptionId: formState.selectedThinkingOptionId,
@@ -217,6 +218,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
       formState.selectedMode,
       formState.selectedModel,
       formState.selectedProvider,
+      formState.selectedRuntimeProvider,
       formState.selectedThinkingOptionId,
     ],
   );
@@ -239,6 +241,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
   } = useDraftAgentFeatures({
     serverId: formState.selectedServerId,
     provider: formState.selectedProvider,
+    runtimeProvider: formState.selectedRuntimeProvider,
     cwd: workingDir,
     modeId: formState.selectedMode,
     modelId: effectiveModelId,

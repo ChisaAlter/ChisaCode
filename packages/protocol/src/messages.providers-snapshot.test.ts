@@ -96,6 +96,22 @@ describe("provider snapshot message schemas", () => {
     });
   });
 
+  test("preserves derived provider and model gateway metadata on snapshot entries", () => {
+    const parsed = ProviderSnapshotEntrySchema.parse({
+      provider: "opencode-go-claude",
+      status: "ready",
+      label: "opencode go Claude",
+      derivedFromProviderId: "claude",
+      modelGatewayId: "opencode-go",
+    });
+
+    expect(parsed).toMatchObject({
+      provider: "opencode-go-claude",
+      derivedFromProviderId: "claude",
+      modelGatewayId: "opencode-go",
+    });
+  });
+
   test("parses provider tooling action request and response messages", () => {
     expect(
       ProviderToolingActionRequestMessageSchema.parse({

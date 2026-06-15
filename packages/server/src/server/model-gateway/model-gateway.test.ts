@@ -98,6 +98,35 @@ describe("model gateway", () => {
     ]);
   });
 
+  test("normalizes developer role for matching chat completion upstreams", async () => {
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "deepseek-v4-pro",
+        messages: [
+          { role: "developer", content: "Use repo context." },
+          { role: "user", content: "hello" },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            model: "deepseek-v4-pro",
+            messages: [
+              { role: "system", content: "Use repo context." },
+              { role: "user", content: "hello" },
+            ],
+          }),
+        );
+        return Response.json({
+          id: "chatcmpl_deepseek",
+          choices: [{ message: { role: "assistant", content: "hi" }, finish_reason: "stop" }],
+        });
+      },
+    });
+  });
+
   test("converts an Anthropic Messages request to chat completions when only chat upstream exists", async () => {
     const response = await handleModelGatewayRequest({
       gateway: makeGateway(),
@@ -256,6 +285,38 @@ describe("model gateway", () => {
       status: "completed",
       output_text: "hi",
       usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+    });
+  });
+
+  test("converts Responses developer input to system for chat completion upstreams", async () => {
+    await handleModelGatewayRequest({
+      gateway: makeGatewayWithOnly("chatCompletions"),
+      targetFormat: "responses",
+      requestBody: {
+        model: "deepseek-v4-pro",
+        input: [
+          { role: "user", content: [{ type: "input_text", text: "hello" }] },
+          { role: "developer", content: [{ type: "input_text", text: "Use repo context." }] },
+        ],
+      },
+      fetchImpl: async (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            model: "deepseek-v4-pro",
+            messages: [
+              { role: "user", content: "hello" },
+              { role: "system", content: "Use repo context." },
+            ],
+            stream: false,
+          }),
+        );
+        return Response.json({
+          id: "chatcmpl_deepseek",
+          model: "deepseek-v4-pro",
+          choices: [{ message: { role: "assistant", content: "hi" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
+        });
+      },
     });
   });
 

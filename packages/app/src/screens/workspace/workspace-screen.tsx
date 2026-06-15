@@ -57,7 +57,12 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { BranchSwitcher } from "@/components/branch-switcher";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import {
+  Combobox,
+  ComboboxItem,
+  type ComboboxOption,
+  type ComboboxProps,
+} from "@/components/ui/combobox";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
   DropdownMenu,
@@ -78,6 +83,7 @@ import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-bu
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { ExplorerSidebarAnimationProvider } from "@/contexts/explorer-sidebar-animation-context";
 import { useToast } from "@/contexts/toast-context";
+import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
 import { useExplorerOpenGesture } from "@/hooks/use-explorer-open-gesture";
 import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
 import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
@@ -199,6 +205,7 @@ import {
   type WorkspaceActivityItem,
 } from "@/screens/workspace/workspace-environment-panel-model";
 import { resolveWorkspaceScreenOpenIntentAction } from "@/screens/workspace/workspace-open-intent";
+import { WorkspaceEnvironmentGitPopover } from "@/screens/workspace/workspace-environment-git-popover";
 import {
   buildBrowserContextSummary,
   findLatestTurnChanges,
@@ -1376,7 +1383,10 @@ type EnvironmentIconName =
   | "todo";
 
 function WorkspaceEnvironmentPanel({
+  serverId,
+  cwd,
   currentBranchName,
+  isGitCheckout,
   isLocalDaemon,
   diffStat,
   browserContext,
@@ -1406,16 +1416,22 @@ function WorkspaceEnvironmentPanel({
           >
             <WorkspaceEnvironmentInlineDiffStat diffStat={diffStat} />
           </EnvironmentActionRow>
-          <EnvironmentDisplayRow icon="location" label={locationLabel}>
-            <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
-          </EnvironmentDisplayRow>
-          <EnvironmentDisplayRow
-            icon="branch"
-            label={currentBranchName ?? t("workspace.environment.branch")}
+          <EnvironmentDisplayRow icon="location" label={locationLabel} />
+          <WorkspaceEnvironmentBranchRow
+            serverId={serverId}
+            cwd={cwd}
+            currentBranchName={currentBranchName}
+            isGitCheckout={isGitCheckout}
+          />
+          <WorkspaceEnvironmentGitPopover
+            serverId={serverId}
+            cwd={cwd}
+            currentBranchName={currentBranchName}
           >
-            <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
-          </EnvironmentDisplayRow>
-          <EnvironmentDisplayRow icon="changes" label={t("workspace.environment.commitOrPush")} />
+            <EnvironmentRowContent icon="changes" label={t("workspace.environment.commitOrPush")}>
+              <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
+            </EnvironmentRowContent>
+          </WorkspaceEnvironmentGitPopover>
         </View>
         <View style={styles.environmentCardDivider} />
         <View style={styles.environmentSection}>
@@ -1448,6 +1464,94 @@ function WorkspaceSourceSection({ sourceLabel }: { sourceLabel: string | null })
       <Text style={styles.environmentSourceEmpty} numberOfLines={1}>
         {sourceLabel ?? t("workspace.environment.noSource")}
       </Text>
+    </View>
+  );
+}
+
+function WorkspaceEnvironmentBranchRow({
+  serverId,
+  cwd,
+  currentBranchName,
+  isGitCheckout,
+}: {
+  serverId: string;
+  cwd: string | null;
+  currentBranchName: string | null;
+  isGitCheckout: boolean;
+}) {
+  const { t } = useTranslation();
+  const anchorRef = useRef<View>(null);
+  const client = useHostRuntimeClient(serverId);
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const normalizedCwd = cwd?.trim() ?? "";
+  const canSwitchBranch = Boolean(normalizedCwd && currentBranchName && isGitCheckout);
+  const branchLabel = currentBranchName ?? t("workspace.environment.branch");
+  const { branchOptions, isOpen, setIsOpen, handleBranchSelect } = useBranchSwitcher({
+    client,
+    normalizedServerId: serverId,
+    normalizedWorkspaceId: normalizedCwd,
+    currentBranchName,
+    isGitCheckout: canSwitchBranch,
+    isConnected,
+    toast,
+    queryClient,
+  });
+
+  const branchLeadingSlot = useMemo(
+    () => <ThemedGitBranch size={14} uniProps={mutedColorMapping} />,
+    [],
+  );
+  const renderBranchOption = useCallback<NonNullable<ComboboxProps["renderOption"]>>(
+    ({ option, selected, active, onPress }) => (
+      <ComboboxItem
+        label={option.label}
+        selected={selected}
+        active={active}
+        onPress={onPress}
+        leadingSlot={branchLeadingSlot}
+      />
+    ),
+    [branchLeadingSlot],
+  );
+  const handleOpen = useCallback(() => {
+    if (canSwitchBranch) {
+      setIsOpen(true);
+    }
+  }, [canSwitchBranch, setIsOpen]);
+
+  if (!canSwitchBranch) {
+    return <EnvironmentDisplayRow icon="branch" label={branchLabel} />;
+  }
+
+  return (
+    <View ref={anchorRef} collapsable={false}>
+      <EnvironmentActionRow
+        icon="branch"
+        label={branchLabel}
+        onPress={handleOpen}
+        testID="workspace-environment-branch"
+      >
+        <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
+      </EnvironmentActionRow>
+      <Combobox
+        options={branchOptions}
+        value={branchLabel}
+        onSelect={handleBranchSelect}
+        searchable
+        placeholder={t("branches.placeholder")}
+        searchPlaceholder={t("branches.searchPlaceholder")}
+        emptyText={t("branches.empty")}
+        title={t("branches.title")}
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        anchorRef={anchorRef}
+        desktopPlacement="bottom-start"
+        desktopPreventInitialFlash
+        desktopMinWidth={280}
+        renderOption={renderBranchOption}
+      />
     </View>
   );
 }

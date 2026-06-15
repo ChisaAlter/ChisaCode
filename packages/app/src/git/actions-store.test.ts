@@ -128,6 +128,121 @@ describe("checkout-git-actions-store", () => {
     ).toBe("success");
   });
 
+  it("passes commit message and addAll options to checkout commit", async () => {
+    const client = {
+      checkoutCommit: vi.fn(async () => ({})),
+    };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await useCheckoutGitActionsStore.getState().commit({
+      serverId,
+      cwd,
+      message: "feat: wire environment git actions",
+      addAll: false,
+    });
+
+    expect(client.checkoutCommit).toHaveBeenCalledWith(cwd, {
+      message: "feat: wire environment git actions",
+      addAll: false,
+    });
+  });
+
+  it("omits a blank commit message so the daemon can generate it", async () => {
+    const client = {
+      checkoutCommit: vi.fn(async () => ({})),
+    };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await useCheckoutGitActionsStore.getState().commit({
+      serverId,
+      cwd,
+      message: "   ",
+      addAll: true,
+    });
+
+    expect(client.checkoutCommit).toHaveBeenCalledWith(cwd, { addAll: true });
+  });
+
+  it("runs commit then push sequentially for commit-and-push", async () => {
+    const order: string[] = [];
+    const client = {
+      checkoutCommit: vi.fn(async () => {
+        order.push("commit");
+        return {};
+      }),
+      checkoutPush: vi.fn(async () => {
+        order.push("push");
+        return {};
+      }),
+    };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await useCheckoutGitActionsStore.getState().commitAndPush({
+      serverId,
+      cwd,
+      message: "feat: ship panel",
+      addAll: false,
+    });
+
+    expect(order).toEqual(["commit", "push"]);
+    expect(client.checkoutCommit).toHaveBeenCalledWith(cwd, {
+      message: "feat: ship panel",
+      addAll: false,
+    });
+    expect(
+      useCheckoutGitActionsStore.getState().getStatus({
+        serverId,
+        cwd,
+        actionId: "commit-and-push",
+      }),
+    ).toBe("success");
+  });
+
+  it("does not push when commit fails for commit-and-push", async () => {
+    const client = {
+      checkoutCommit: vi.fn(async () => ({ error: { message: "nothing to commit" } })),
+      checkoutPush: vi.fn(async () => ({})),
+    };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await expect(
+      useCheckoutGitActionsStore.getState().commitAndPush({ serverId, cwd }),
+    ).rejects.toThrow("nothing to commit");
+
+    expect(client.checkoutPush).not.toHaveBeenCalled();
+    expect(
+      useCheckoutGitActionsStore.getState().getStatus({
+        serverId,
+        cwd,
+        actionId: "commit-and-push",
+      }),
+    ).toBe("idle");
+  });
+
   it("does not push when pull fails for pull-and-push", async () => {
     const client = {
       checkoutPull: vi.fn(async () => ({ error: { message: "pull conflict" } })),

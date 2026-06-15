@@ -53,6 +53,9 @@ export function normalizeWorkspaceDraftTabSetup(
   }
   return {
     provider,
+    runtimeProvider: trimOptionalString(
+      typeof record.runtimeProvider === "string" ? record.runtimeProvider : null,
+    ),
     cwd,
     modeId: trimOptionalString(typeof record.modeId === "string" ? record.modeId : null),
     model: trimOptionalString(typeof record.model === "string" ? record.model : null),
@@ -100,6 +103,7 @@ function workspaceDraftTabSetupsEqual(
   }
   return (
     left.provider === right.provider &&
+    left.runtimeProvider === right.runtimeProvider &&
     left.cwd === right.cwd &&
     left.modeId === right.modeId &&
     left.model === right.model &&

@@ -9,7 +9,11 @@ import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { buildFavoriteModelKey, type FavoriteModelRow } from "@/hooks/use-form-preferences";
 import { compareMatchScores, scoreTextFields } from "@/utils/score-match";
 
-export type ProviderSelectionModelRow = FavoriteModelRow & { isDefault?: boolean };
+export type ProviderSelectionModelRow = FavoriteModelRow & {
+  agentProvider: string;
+  runtimeProvider: string;
+  isDefault?: boolean;
+};
 
 export type ProviderModelSelection =
   | { kind: "models"; rows: ProviderSelectionModelRow[] }
@@ -38,13 +42,25 @@ export interface ProviderSelectionCopy {
   hostDisconnected?: string;
 }
 
+type SelectableProviderEntry = ProviderSnapshotEntry & {
+  derivedFromProviderId?: string | null;
+  modelGatewayId?: string | null;
+};
+
 export interface ProviderSelectionState {
   provider: AgentProvider | null;
+  runtimeProvider?: AgentProvider | null;
   modelId: string;
   modeId: string;
   thinkingOptionId: string;
   availableModels: AgentModelDefinition[];
   modeOptions: AgentMode[];
+}
+
+export interface ProviderModelSelectionValue {
+  agentProvider: AgentProvider;
+  runtimeProvider: AgentProvider;
+  modelId: string;
 }
 
 export interface ProviderSelectionReadiness {
@@ -76,10 +92,14 @@ function buildModelRows(
   provider: string,
   providerLabel: string,
   models: AgentModelDefinition[],
+  options?: { agentProvider?: string },
 ): ProviderSelectionModelRow[] {
+  const agentProvider = options?.agentProvider ?? provider;
   return models.map((model) => ({
     favoriteKey: buildFavoriteModelKey({ provider, modelId: model.id }),
     provider,
+    agentProvider,
+    runtimeProvider: provider,
     providerLabel,
     modelId: model.id,
     modelLabel: model.label,
@@ -92,11 +112,15 @@ function buildSyntheticDefaultRow(
   provider: string,
   providerLabel: string,
   copy?: ProviderSelectionCopy,
+  options?: { agentProvider?: string },
 ): ProviderSelectionModelRow {
   const labels = resolveProviderSelectionCopy(copy);
+  const agentProvider = options?.agentProvider ?? provider;
   return {
     favoriteKey: buildFavoriteModelKey({ provider, modelId: "" }),
     provider,
+    agentProvider,
+    runtimeProvider: provider,
     providerLabel,
     modelId: "",
     modelLabel: labels.defaultModelLabel,
@@ -110,26 +134,31 @@ function buildModelSelection(
   providerLabel: string,
   models: AgentModelDefinition[] | null,
   copy?: ProviderSelectionCopy,
+  options?: { agentProvider?: string },
 ): ProviderModelSelection {
   if (models === null) {
     return { kind: "loading" };
   }
   if (models.length === 0) {
-    return { kind: "models", rows: [buildSyntheticDefaultRow(provider, providerLabel, copy)] };
+    return {
+      kind: "models",
+      rows: [buildSyntheticDefaultRow(provider, providerLabel, copy, options)],
+    };
   }
-  return { kind: "models", rows: buildModelRows(provider, providerLabel, models) };
+  return { kind: "models", rows: buildModelRows(provider, providerLabel, models, options) };
 }
 
 function buildEntryModelSelection(
   entry: ProviderSnapshotEntry,
   label: string,
   copy?: ProviderSelectionCopy,
+  options?: { agentProvider?: string },
 ): ProviderModelSelection {
   if ((entry.models?.length ?? 0) > 0) {
-    return buildModelSelection(entry.provider, label, entry.models ?? null, copy);
+    return buildModelSelection(entry.provider, label, entry.models ?? null, copy, options);
   }
   if (entry.status === "ready") {
-    return buildModelSelection(entry.provider, label, entry.models ?? null, copy);
+    return buildModelSelection(entry.provider, label, entry.models ?? null, copy, options);
   }
   if (entry.status === "loading") {
     return { kind: "loading" };
@@ -165,16 +194,54 @@ export function buildSelectableProviderSelectorProviders(
   entries: ProviderSnapshotEntry[] | undefined,
   copy?: ProviderSelectionCopy,
 ): ProviderSelectorProvider[] {
-  return (entries ?? [])
-    .filter((entry) => entry.enabled)
-    .map((entry) => {
-      const label = entry.label ?? entry.provider;
-      return {
-        id: entry.provider,
-        label,
-        modelSelection: buildEntryModelSelection(entry, label, copy),
-      };
+  const enabledEntries = (entries ?? []).filter((entry) => entry.enabled);
+  const selectorProviders: ProviderSelectorProvider[] = [];
+  const selectorProviderById = new Map<string, ProviderSelectorProvider>();
+  const gatewayEntries: SelectableProviderEntry[] = [];
+
+  for (const entry of enabledEntries) {
+    const selectableEntry = entry as SelectableProviderEntry;
+    if (selectableEntry.modelGatewayId && selectableEntry.derivedFromProviderId) {
+      gatewayEntries.push(selectableEntry);
+      continue;
+    }
+
+    const label = entry.label ?? entry.provider;
+    const provider = {
+      id: entry.provider,
+      label,
+      modelSelection: buildEntryModelSelection(entry, label, copy),
+    };
+    selectorProviders.push(provider);
+    selectorProviderById.set(provider.id, provider);
+  }
+
+  for (const entry of gatewayEntries) {
+    const targetProvider = selectorProviderById.get(entry.derivedFromProviderId ?? "");
+    if (!targetProvider) {
+      continue;
+    }
+    const label = entry.label ?? entry.provider;
+    const gatewayModelSelection = buildEntryModelSelection(entry, label, copy, {
+      agentProvider: targetProvider.id,
     });
+    if (gatewayModelSelection.kind !== "models" || gatewayModelSelection.rows.length === 0) {
+      continue;
+    }
+    if (targetProvider.modelSelection.kind !== "models") {
+      targetProvider.modelSelection = {
+        kind: "models",
+        rows: gatewayModelSelection.rows,
+      };
+      continue;
+    }
+    targetProvider.modelSelection = {
+      kind: "models",
+      rows: [...targetProvider.modelSelection.rows, ...gatewayModelSelection.rows],
+    };
+  }
+
+  return selectorProviders;
 }
 
 export function getProviderModelRows(
@@ -192,6 +259,7 @@ export function getAllProviderModelRows(
 export function resolveSelectedModelLabel(input: {
   providers: ProviderSelectorProvider[];
   selectedProvider: string;
+  selectedRuntimeProvider?: string | null;
   selectedModel: string;
   isLoading: boolean;
   copy?: ProviderSelectionCopy;
@@ -203,8 +271,17 @@ export function resolveSelectedModelLabel(input: {
   }
 
   const provider = input.providers.find((entry) => entry.id === selectedProvider);
+  const selectedRuntimeProvider = (
+    input.selectedRuntimeProvider?.trim() || selectedProvider
+  ).trim();
   if (!provider) {
-    return input.isLoading ? labels.loading : labels.selectModel;
+    const groupedModel = getAllProviderModelRows(input.providers).find(
+      (entry) =>
+        entry.runtimeProvider === selectedProvider &&
+        entry.provider === selectedProvider &&
+        entry.modelId === input.selectedModel,
+    );
+    return groupedModel?.modelLabel ?? (input.isLoading ? labels.loading : labels.selectModel);
   }
   if (provider.modelSelection.kind === "loading") {
     return labels.loading;
@@ -216,7 +293,10 @@ export function resolveSelectedModelLabel(input: {
     return labels.selectModel;
   }
 
-  const model = provider.modelSelection.rows.find((entry) => entry.modelId === input.selectedModel);
+  const model = provider.modelSelection.rows.find(
+    (entry) =>
+      entry.modelId === input.selectedModel && entry.runtimeProvider === selectedRuntimeProvider,
+  );
   const defaultModel = provider.modelSelection.rows.find((row) => row.isDefault);
   return (
     model?.modelLabel ??
@@ -300,6 +380,10 @@ export function buildDraftCommandConfig(input: {
 
   return {
     provider: input.selection.provider,
+    ...(input.selection.runtimeProvider &&
+    input.selection.runtimeProvider !== input.selection.provider
+      ? { runtimeProvider: input.selection.runtimeProvider }
+      : {}),
     cwd,
     ...(input.selection.modeOptions.length > 0 && input.selection.modeId !== ""
       ? { modeId: input.selection.modeId }

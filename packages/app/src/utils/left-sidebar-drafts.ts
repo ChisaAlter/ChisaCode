@@ -1,6 +1,7 @@
 import type { Href } from "expo-router";
 import type { WorkspaceLayout } from "@/stores/workspace-layout-store";
 import {
+  buildHostOpenProjectRoute,
   buildHostWorkspaceOpenRoute,
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
@@ -39,4 +40,12 @@ export function resolveLeftSidebarNewConversationRoute(input: {
     return null;
   }
   return buildHostWorkspaceOpenRoute(activeServerId, workspaceRoute.workspaceId, "draft:new");
+}
+
+export function resolveLeftSidebarHomeRoute(activeServerId: string | null): Href | null {
+  const normalizedServerId = activeServerId?.trim() || null;
+  if (!normalizedServerId) {
+    return null;
+  }
+  return buildHostOpenProjectRoute(normalizedServerId);
 }

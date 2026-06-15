@@ -459,6 +459,97 @@ test("normalizeConfig injects the provider default model when omitted", async ()
   expect(snapshot.config.modeId).toBe("auto");
 });
 
+test("createAgent uses runtimeProvider for launch while keeping the base provider identity", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-runtime-provider-test-"));
+  const createdConfigs: AgentSessionConfig[] = [];
+  const runtimeClient: AgentClient = {
+    provider: "deepseek-claude",
+    capabilities: TEST_CAPABILITIES,
+    async isAvailable() {
+      return true;
+    },
+    async listModels() {
+      return [{ provider: "deepseek-claude", id: "deepseek-r1", label: "DeepSeek R1" }];
+    },
+    async createSession(config: AgentSessionConfig) {
+      createdConfigs.push(config);
+      const sessionId = randomUUID();
+      return {
+        provider: "deepseek-claude",
+        id: sessionId,
+        capabilities: TEST_CAPABILITIES,
+        async run() {
+          return { sessionId, finalText: "", timeline: [] };
+        },
+        async startTurn() {
+          return { turnId: "turn-1" };
+        },
+        subscribe() {
+          return () => {};
+        },
+        async *streamHistory() {},
+        async getRuntimeInfo() {
+          return {
+            provider: "deepseek-claude",
+            sessionId,
+            model: config.model ?? null,
+            modeId: config.modeId ?? null,
+          };
+        },
+        async getAvailableModes() {
+          return [];
+        },
+        async getCurrentMode() {
+          return null;
+        },
+        async setMode() {},
+        getPendingPermissions() {
+          return [];
+        },
+        async respondToPermission() {},
+        describePersistence() {
+          return { provider: "deepseek-claude", sessionId };
+        },
+        async interrupt() {},
+        async close() {},
+      };
+    },
+  };
+  const manager = new AgentManager({
+    clients: {
+      "deepseek-claude": runtimeClient,
+    },
+    providerDefinitions: {
+      claude: { enabled: true, derivedFromProviderId: null },
+      "deepseek-claude": { enabled: true, derivedFromProviderId: "claude" },
+    },
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-00000000c1a0",
+  });
+
+  try {
+    const snapshot = await manager.createAgent({
+      provider: "claude",
+      runtimeProvider: "deepseek-claude",
+      cwd: workdir,
+      model: "deepseek-r1",
+    } as AgentSessionConfig & { runtimeProvider: string });
+
+    expect(createdConfigs).toEqual([
+      expect.objectContaining({
+        provider: "deepseek-claude",
+        model: "deepseek-r1",
+      }),
+    ]);
+    expect(snapshot.provider).toBe("claude");
+    expect(snapshot.config.provider).toBe("claude");
+    expect(snapshot.config.runtimeProvider).toBe("deepseek-claude");
+    expect(snapshot.runtimeInfo?.provider).toBe("deepseek-claude");
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("createAgent forwards request env into the spawned provider process", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-env-test-"));
   const client = new EnvProbeAgentClient();

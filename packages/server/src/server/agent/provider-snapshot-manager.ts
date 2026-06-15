@@ -459,6 +459,8 @@ export class ProviderSnapshotManager {
         label: definition?.label,
         description: definition?.description,
         defaultModeId: definition?.defaultModeId ?? null,
+        derivedFromProviderId: definition?.derivedFromProviderId ?? null,
+        modelGatewayId: definition?.modelGatewayId ?? null,
       });
     }
     return entries;
@@ -477,6 +479,8 @@ export class ProviderSnapshotManager {
         label: definition?.label,
         description: definition?.description,
         defaultModeId: definition?.defaultModeId ?? null,
+        derivedFromProviderId: definition?.derivedFromProviderId ?? null,
+        modelGatewayId: definition?.modelGatewayId ?? null,
       };
 
       if (!definition?.enabled || !current || current.status === "loading") {
@@ -609,6 +613,8 @@ export class ProviderSnapshotManager {
       label: definition.label,
       description: definition.description,
       defaultModeId: definition.defaultModeId,
+      derivedFromProviderId: definition.derivedFromProviderId,
+      modelGatewayId: definition.modelGatewayId,
     };
     const setEntry = async (entry: ProviderSnapshotEntry) => {
       if (!this.isCurrentProviderLoad(cwd, provider, load)) {

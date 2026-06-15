@@ -6,6 +6,7 @@ import {
 } from "@/stores/workspace-layout-actions";
 import {
   collectSidebarDraftSessions,
+  resolveLeftSidebarHomeRoute,
   resolveLeftSidebarNewConversationRoute,
 } from "./left-sidebar-drafts";
 
@@ -50,5 +51,13 @@ describe("left sidebar drafts", () => {
         pathname: "/h/server-1/sessions",
       }),
     ).toBeNull();
+  });
+
+  it("resolves the sidebar home action to the current host open-project route", () => {
+    expect(resolveLeftSidebarHomeRoute("server-1")).toBe("/h/server-1/open-project");
+  });
+
+  it("does not resolve a sidebar home action without an active host", () => {
+    expect(resolveLeftSidebarHomeRoute(null)).toBeNull();
   });
 });

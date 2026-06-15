@@ -98,12 +98,18 @@ export const ModelGatewayConfigSchema = z
         claude: z.string().min(1),
         codex: z.string().min(1),
         opencode: z.string().min(1),
+        mimocode: z.string().min(1).optional(),
+        pi: z.string().min(1).optional(),
+        kimi: z.string().min(1).optional(),
       })
       .strict()
       .optional(),
     generatedModels: z
       .object({
         opencode: z.array(ProviderProfileModelSchema).optional(),
+        mimocode: z.array(ProviderProfileModelSchema).optional(),
+        pi: z.array(ProviderProfileModelSchema).optional(),
+        kimi: z.array(ProviderProfileModelSchema).optional(),
       })
       .strict()
       .optional(),

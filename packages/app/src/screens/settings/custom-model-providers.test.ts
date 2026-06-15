@@ -82,6 +82,9 @@ describe("custom model provider helpers", () => {
             claude: "zai-claude",
             codex: "zai-codex",
             opencode: "zai-opencode",
+            mimocode: "zai-mimocode",
+            pi: "zai-pi",
+            kimi: "zai-kimi",
           },
           generatedModels: {
             opencode: [
@@ -94,17 +97,50 @@ describe("custom model provider helpers", () => {
               },
               { id: "openai/glm-5-air", label: "glm-5-air" },
             ],
+            mimocode: [
+              {
+                id: "openai/glm-5",
+                label: "glm-5",
+                contextWindowMaxTokens: 200_000,
+                supportsImages: true,
+                isDefault: true,
+              },
+              { id: "openai/glm-5-air", label: "glm-5-air" },
+            ],
+            pi: [
+              {
+                id: "openai/glm-5",
+                label: "glm-5",
+                contextWindowMaxTokens: 200_000,
+                supportsImages: true,
+                isDefault: true,
+              },
+              { id: "openai/glm-5-air", label: "glm-5-air" },
+            ],
+            kimi: [
+              {
+                id: "glm-5",
+                label: "glm-5",
+                contextWindowMaxTokens: 200_000,
+                supportsImages: true,
+                isDefault: true,
+              },
+              { id: "glm-5-air", label: "glm-5-air" },
+            ],
           },
         },
       },
     });
   });
 
-  it("returns the three generated provider IDs for a gateway", () => {
+  it("returns generated provider IDs for every built-in agent", () => {
     expect(buildModelGatewayProviderIds("zai")).toEqual({
       claudeProviderId: "zai-claude",
       codexProviderId: "zai-codex",
       opencodeProviderId: "zai-opencode",
+      mimocodeProviderId: "zai-mimocode",
+      piProviderId: "zai-pi",
+      kimiProviderId: "zai-kimi",
     });
   });
 
@@ -187,9 +223,15 @@ describe("custom model provider helpers", () => {
             claude: "zai-claude",
             codex: "zai-codex",
             opencode: "zai-opencode",
+            mimocode: "zai-mimocode",
+            pi: "zai-pi",
+            kimi: "zai-kimi",
           },
           generatedModels: {
             opencode: [{ id: "openai/glm-5", label: "glm-5", isDefault: true }],
+            mimocode: [{ id: "openai/glm-5", label: "glm-5", isDefault: true }],
+            pi: [{ id: "openai/glm-5", label: "glm-5", isDefault: true }],
+            kimi: [{ id: "glm-5", label: "glm-5", isDefault: true }],
           },
         },
       },

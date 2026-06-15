@@ -25,6 +25,7 @@ export type CheckoutGitActionStatus = "idle" | "pending" | "success";
 
 export type CheckoutGitAsyncActionId =
   | "commit"
+  | "commit-and-push"
   | "pull"
   | "push"
   | "pull-and-push"
@@ -233,7 +234,18 @@ interface CheckoutGitActionsStoreState {
     actionId: CheckoutGitAsyncActionId;
   }) => CheckoutGitActionStatus;
 
-  commit: (params: { serverId: string; cwd: string }) => Promise<void>;
+  commit: (params: {
+    serverId: string;
+    cwd: string;
+    message?: string;
+    addAll?: boolean;
+  }) => Promise<void>;
+  commitAndPush: (params: {
+    serverId: string;
+    cwd: string;
+    message?: string;
+    addAll?: boolean;
+  }) => Promise<void>;
   pull: (params: { serverId: string; cwd: string }) => Promise<void>;
   push: (params: { serverId: string; cwd: string }) => Promise<void>;
   pullAndPush: (params: { serverId: string; cwd: string }) => Promise<void>;
@@ -317,16 +329,43 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
     return get().statusByCheckout[key]?.[actionId] ?? "idle";
   },
 
-  commit: async ({ serverId, cwd }) => {
+  commit: async ({ serverId, cwd, message, addAll }) => {
     await runCheckoutAction({
       serverId,
       cwd,
       actionId: "commit",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutCommit(cwd, { addAll: true });
+        const trimmedMessage = message?.trim();
+        const payload = await client.checkoutCommit(cwd, {
+          ...(trimmedMessage ? { message: trimmedMessage } : {}),
+          addAll: addAll ?? true,
+        });
         if (payload.error) {
           throw new Error(payload.error.message);
+        }
+      },
+    });
+  },
+
+  commitAndPush: async ({ serverId, cwd, message, addAll }) => {
+    await runCheckoutAction({
+      serverId,
+      cwd,
+      actionId: "commit-and-push",
+      run: async () => {
+        const client = resolveClient(serverId);
+        const trimmedMessage = message?.trim();
+        const commitPayload = await client.checkoutCommit(cwd, {
+          ...(trimmedMessage ? { message: trimmedMessage } : {}),
+          addAll: addAll ?? true,
+        });
+        if (commitPayload.error) {
+          throw new Error(commitPayload.error.message);
+        }
+        const pushPayload = await client.checkoutPush(cwd);
+        if (pushPayload.error) {
+          throw new Error(pushPayload.error.message);
         }
       },
     });

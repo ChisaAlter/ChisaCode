@@ -58,6 +58,7 @@ export interface ProviderDefinition extends AgentProviderDefinition {
    * generic ACP providers (which only extend the literal "acp" sentinel).
    */
   derivedFromProviderId: string | null;
+  modelGatewayId: string | null;
   createClient: (logger: Logger) => AgentClient;
   resolveCreateConfig: (input: ResolveAgentCreateConfigInput) => ResolveAgentCreateConfigResult;
   isCreateConfigUnattended: (input: AgentCreateConfigUnattendedInput) => boolean;
@@ -102,6 +103,7 @@ interface ResolvedProvider {
   profileModelsAreAdditive: boolean;
   enabled: boolean;
   derivedFromProviderId: string | null;
+  modelGatewayId: string | null;
   createBaseClient: (logger: Logger) => AgentClient;
 }
 
@@ -412,6 +414,7 @@ function createRegistryEntry(
     ...resolved.definition,
     enabled: resolved.enabled,
     derivedFromProviderId: resolved.derivedFromProviderId,
+    modelGatewayId: resolved.modelGatewayId,
     createClient: (providerLogger: Logger) =>
       createResolvedProviderClient(providerLogger, provider, resolved),
     resolveCreateConfig: modelClient?.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
@@ -491,6 +494,7 @@ function buildResolvedBuiltinProviders(
       profileModelsAreAdditive: definition.id === "claude",
       enabled: override?.enabled !== false,
       derivedFromProviderId: null,
+      modelGatewayId: null,
       createBaseClient: (logger) =>
         factory(logger, mergedRuntimeSettings, {
           workspaceGitService: options.workspaceGitService,
@@ -557,7 +561,9 @@ function addResolvedCustomProviders(
   resolvedProviders: Map<string, ResolvedProvider>,
   providerOverrides: Record<string, ProviderOverride>,
   runtimeSettings: AgentProviderRuntimeSettingsMap | undefined,
-  options: Pick<BuildProviderRegistryOptions, "workspaceGitService">,
+  options: Pick<BuildProviderRegistryOptions, "workspaceGitService"> & {
+    modelGatewayIds?: Map<string, string>;
+  },
 ): void {
   for (const [providerId, override] of Object.entries(providerOverrides)) {
     if (resolvedProviders.has(providerId) || !override.extends) {
@@ -581,6 +587,7 @@ function addResolvedCustomProviders(
         profileModelsAreAdditive: false,
         enabled: override.enabled !== false,
         derivedFromProviderId: null,
+        modelGatewayId: options.modelGatewayIds?.get(providerId) ?? null,
         createBaseClient: (logger) =>
           new GenericACPAgentClient({
             logger,
@@ -616,6 +623,7 @@ function addResolvedCustomProviders(
       profileModelsAreAdditive: false,
       enabled: override.enabled !== false,
       derivedFromProviderId: extendsProvider,
+      modelGatewayId: options.modelGatewayIds?.get(providerId) ?? null,
       createBaseClient: (logger) =>
         factory(logger, mergedRuntimeSettings, {
           workspaceGitService: options.workspaceGitService,
@@ -639,13 +647,13 @@ function buildGatewayRouteBase(baseUrl: string, gatewayId: string): string {
 
 function buildGatewayProviderModels(
   models: ProviderProfileModel[],
-  options?: { openCode?: boolean },
+  options?: { modelPrefix?: string },
 ): ProviderProfileModel[] {
   return models.map((model, index) => ({
     ...model,
     id:
-      options?.openCode === true && !model.id.startsWith("openai/")
-        ? `openai/${model.id}`
+      options?.modelPrefix && !model.id.startsWith(`${options.modelPrefix}/`)
+        ? `${options.modelPrefix}/${model.id}`
         : model.id,
     ...(model.isDefault === undefined && index === 0 ? { isDefault: true } : {}),
   }));
@@ -653,7 +661,7 @@ function buildGatewayProviderModels(
 
 function gatewayProviderOverride(params: {
   gateway: ModelGatewayConfig;
-  extendsProvider: "claude" | "codex" | "opencode";
+  extendsProvider: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
   label: string;
   baseUrl: string;
   token: string;
@@ -687,8 +695,20 @@ function gatewayProviderOverride(params: {
       enabled: gateway.enabled !== false,
     };
   }
+  if (extendsProvider === "kimi") {
+    return {
+      extends: "kimi",
+      label: params.label,
+      env: {
+        OPENAI_API_KEY: token,
+        OPENAI_BASE_URL: `${routeBase}/v1`,
+      },
+      models,
+      enabled: gateway.enabled !== false,
+    };
+  }
   return {
-    extends: "opencode",
+    extends: extendsProvider,
     label: params.label,
     env: {
       OPENAI_API_KEY: token,
@@ -715,10 +735,13 @@ function addResolvedModelGatewayProviders(
   }
 
   const gatewayOverrides: Record<string, ProviderOverride> = {};
+  const modelGatewayIds = new Map<string, string>();
   for (const gateway of Object.values(modelGateways ?? {})) {
     const gatewayId = gateway.id;
     const models = buildGatewayProviderModels(gateway.models ?? []);
-    const openCodeModels = buildGatewayProviderModels(gateway.models ?? [], { openCode: true });
+    const openAiProviderModels = buildGatewayProviderModels(gateway.models ?? [], {
+      modelPrefix: "openai",
+    });
     gatewayOverrides[`${gatewayId}-claude`] = gatewayProviderOverride({
       gateway,
       extendsProvider: "claude",
@@ -727,6 +750,7 @@ function addResolvedModelGatewayProviders(
       token,
       models,
     });
+    modelGatewayIds.set(`${gatewayId}-claude`, gatewayId);
     gatewayOverrides[`${gatewayId}-codex`] = gatewayProviderOverride({
       gateway,
       extendsProvider: "codex",
@@ -735,18 +759,48 @@ function addResolvedModelGatewayProviders(
       token,
       models,
     });
+    modelGatewayIds.set(`${gatewayId}-codex`, gatewayId);
     gatewayOverrides[`${gatewayId}-opencode`] = gatewayProviderOverride({
       gateway,
       extendsProvider: "opencode",
       label: `${gateway.label} OpenCode`,
       baseUrl,
       token,
-      models: openCodeModels,
+      models: openAiProviderModels,
     });
+    modelGatewayIds.set(`${gatewayId}-opencode`, gatewayId);
+    gatewayOverrides[`${gatewayId}-mimocode`] = gatewayProviderOverride({
+      gateway,
+      extendsProvider: "mimocode",
+      label: `${gateway.label} MiMoCode`,
+      baseUrl,
+      token,
+      models: openAiProviderModels,
+    });
+    modelGatewayIds.set(`${gatewayId}-mimocode`, gatewayId);
+    gatewayOverrides[`${gatewayId}-pi`] = gatewayProviderOverride({
+      gateway,
+      extendsProvider: "pi",
+      label: `${gateway.label} Pi`,
+      baseUrl,
+      token,
+      models: openAiProviderModels,
+    });
+    modelGatewayIds.set(`${gatewayId}-pi`, gatewayId);
+    gatewayOverrides[`${gatewayId}-kimi`] = gatewayProviderOverride({
+      gateway,
+      extendsProvider: "kimi",
+      label: `${gateway.label} Kimi Code`,
+      baseUrl,
+      token,
+      models,
+    });
+    modelGatewayIds.set(`${gatewayId}-kimi`, gatewayId);
   }
 
   addResolvedCustomProviders(resolvedProviders, gatewayOverrides, runtimeSettings, {
     workspaceGitService: options.workspaceGitService,
+    modelGatewayIds,
   });
 }
 

@@ -49,10 +49,15 @@ import {
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
 import { VoiceProvider } from "@/contexts/voice-context";
-import { startDaemonIfGateAllows, startHostRuntimeBootstrap } from "@/app/host-runtime-bootstrap";
+import {
+  resolveActiveHostRedirectRoute,
+  startDaemonIfGateAllows,
+  startHostRuntimeBootstrap,
+} from "@/app/host-runtime-bootstrap";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { listenToDesktopEvent } from "@/desktop/electron/events";
 import { updateDesktopWindowControls } from "@/desktop/electron/window";
+import { getDesktopWindowControlsBackground } from "@/desktop/electron/window-controls";
 import { getDesktopHost } from "@/desktop/host";
 import { loadDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { RosettaCalloutSource } from "@/desktop/updates/rosetta-callout-source";
@@ -88,7 +93,6 @@ import { resolveActiveHost } from "@/utils/active-host";
 import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
 import {
   buildHostRootRoute,
-  mapPathnameToServer,
   parseHostAgentRouteFromPathname,
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
@@ -730,7 +734,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
 
 function DesktopWindowControlsSync({ enabled }: { enabled: boolean }) {
   const { theme } = useUnistyles();
-  const windowChromeBackground = theme.colors.surfaceSidebar;
+  const windowChromeBackground = getDesktopWindowControlsBackground(theme.colors);
   const foreground = theme.colors.foreground;
 
   useEffect(() => {
@@ -894,13 +898,15 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
     storeReady && activeServerId !== null && hosts.some((host) => host.serverId === activeServerId);
 
   useEffect(() => {
-    if (!activeServerId || hosts.length === 0) {
+    const redirectRoute = resolveActiveHostRedirectRoute({
+      pathname,
+      activeServerId,
+      hostServerIds: hosts.map((host) => host.serverId),
+    });
+    if (!redirectRoute) {
       return;
     }
-    if (hosts.some((host) => host.serverId === activeServerId)) {
-      return;
-    }
-    router.replace(mapPathnameToServer(pathname, hosts[0].serverId));
+    router.replace(redirectRoute);
   }, [activeServerId, hosts, pathname, router]);
 
   // Parse selectedAgentKey directly from pathname

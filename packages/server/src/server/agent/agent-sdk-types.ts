@@ -92,6 +92,8 @@ export interface ProviderSnapshotEntry {
   label?: string;
   description?: string;
   defaultModeId?: string | null;
+  derivedFromProviderId?: AgentProvider | null;
+  modelGatewayId?: string | null;
   installedVersion?: string | null;
   latestVersion?: string | null;
   versionStatus?: "unknown" | "not-installed" | "current" | "outdated";
@@ -511,6 +513,7 @@ export interface PersistedAgentDescriptor {
 
 export interface AgentSessionConfig {
   provider: AgentProvider;
+  runtimeProvider?: AgentProvider;
   cwd: string;
   /**
    * Provider-agnostic system/developer instruction string.
