@@ -18,7 +18,7 @@ $env:EXPO_DEV_URL = "http://localhost:$($env:EXPO_PORT)"
 $RemoteDebuggingPort = if ($env:CHISACODE_ELECTRON_REMOTE_DEBUGGING_PORT) {
     $env:CHISACODE_ELECTRON_REMOTE_DEBUGGING_PORT
 } else {
-    "9223"
+    (npx get-port-cli 9223 9224 9225 9226 9227).Trim()
 }
 $ExistingElectronFlags = if ($env:CHISACODE_ELECTRON_FLAGS) {
     "$($env:CHISACODE_ELECTRON_FLAGS) "
@@ -42,9 +42,9 @@ Write-Host @"
 "@
 
 # Launch Metro + Electron together, kill both on exit
-& "$RootDir\node_modules\.bin\concurrently" `
+& "$RootDir\node_modules\.bin\concurrently.cmd" `
     --kill-others `
     --names "metro,electron" `
     --prefix-colors "magenta,cyan" `
-    "cd `"$AppDir`" && `$env:CHISACODE_WEB_PLATFORM = `"electron`"; npx expo start --port $($env:EXPO_PORT)" `
+    "cd /d `"$AppDir`" && set `"CHISACODE_WEB_PLATFORM=electron`" && npx expo start --port $($env:EXPO_PORT)" `
     "npx wait-on tcp:$($env:EXPO_PORT) && npx electron `"$DesktopDir`""

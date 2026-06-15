@@ -36,7 +36,6 @@ import { ProviderSettingsHost } from "@/components/provider-settings-host";
 import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
-import { GlassSurface } from "@/components/ui/glass-surface";
 import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import {
@@ -536,13 +535,7 @@ function AppContainer({
     <View style={surfaceStyle}>
       <LiquidNeonBackdrop />
       <DesktopTitlebarDragStrip />
-      {!isCompactLayout ? (
-        <GlassSurface variant="panel" style={appRowStyle}>
-          {appRowContent}
-        </GlassSurface>
-      ) : (
-        <View style={appRowStyle}>{appRowContent}</View>
-      )}
+      <View style={appRowStyle}>{appRowContent}</View>
       <FloatingPanelPortalHost />
       {isCompactLayout && chromeEnabled && <LeftSidebar selectedAgentId={selectedAgentId} />}
       <DownloadToast />

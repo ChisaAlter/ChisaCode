@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { StyleSheet as RNStyleSheet, View } from "react-native";
-import {
-  createAnimatedComponent,
+import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
@@ -11,11 +10,10 @@ import {
 import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import { StyleSheet } from "react-native-unistyles";
 
-const AnimatedSvg = createAnimatedComponent(Svg);
-
 export function LiquidNeonBackdrop() {
   const driftA = useSharedValue(0);
   const driftB = useSharedValue(0);
+  const driftC = useSharedValue(0);
   const pulse = useSharedValue(0);
 
   useEffect(() => {
@@ -29,15 +27,20 @@ export function LiquidNeonBackdrop() {
       -1,
       true,
     );
+    driftC.value = withRepeat(
+      withTiming(1, { duration: 26000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
     pulse.value = withRepeat(
       withTiming(1, { duration: 9000, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
-  }, [driftA, driftB, pulse]);
+  }, [driftA, driftB, driftC, pulse]);
 
   const bandAStyle = useAnimatedStyle(() => ({
-    opacity: 0.42 + pulse.value * 0.14,
+    opacity: 0.08 + pulse.value * 0.025,
     transform: [
       { translateX: -64 + driftA.value * 112 },
       { translateY: -18 + driftA.value * 32 },
@@ -45,11 +48,19 @@ export function LiquidNeonBackdrop() {
     ],
   }));
   const bandBStyle = useAnimatedStyle(() => ({
-    opacity: 0.28 + pulse.value * 0.12,
+    opacity: 0.07 + pulse.value * 0.02,
     transform: [
       { translateX: 72 - driftB.value * 128 },
       { translateY: 42 - driftB.value * 46 },
       { scale: 1.04 - pulse.value * 0.03 },
+    ],
+  }));
+  const bandCStyle = useAnimatedStyle(() => ({
+    opacity: 0.06 + pulse.value * 0.018,
+    transform: [
+      { translateX: -34 + driftC.value * 76 },
+      { translateY: 58 - driftC.value * 74 },
+      { scale: 1.08 + pulse.value * 0.025 },
     ],
   }));
   const bandACombinedStyle = useMemo(() => [staticStyles.band, bandAStyle], [bandAStyle]);
@@ -57,49 +68,62 @@ export function LiquidNeonBackdrop() {
     () => [staticStyles.band, staticStyles.bandB, bandBStyle],
     [bandBStyle],
   );
+  const bandCCombinedStyle = useMemo(
+    () => [staticStyles.band, staticStyles.bandC, bandCStyle],
+    [bandCStyle],
+  );
 
   return (
     <View pointerEvents="none" style={styles.root}>
-      <AnimatedSvg
-        height="125%"
-        preserveAspectRatio="none"
-        style={bandACombinedStyle}
-        viewBox="0 0 1200 760"
-        width="125%"
-      >
-        <Defs>
-          <LinearGradient id="liquidNeonA" x1="0%" x2="100%" y1="0%" y2="100%">
-            <Stop offset="0%" stopColor="#22d3ee" stopOpacity="0" />
-            <Stop offset="42%" stopColor="#22d3ee" stopOpacity="0.52" />
-            <Stop offset="72%" stopColor="#d946ef" stopOpacity="0.36" />
-            <Stop offset="100%" stopColor="#d946ef" stopOpacity="0" />
-          </LinearGradient>
-        </Defs>
-        <Path
-          d="M-80 420 C 140 250, 280 620, 520 430 S 920 260, 1280 390 L 1280 610 C 940 470, 760 650, 520 560 S 120 520, -80 690 Z"
-          fill="url(#liquidNeonA)"
-        />
-      </AnimatedSvg>
-      <AnimatedSvg
-        height="120%"
-        preserveAspectRatio="none"
-        style={bandBCombinedStyle}
-        viewBox="0 0 1200 760"
-        width="120%"
-      >
-        <Defs>
-          <LinearGradient id="liquidNeonB" x1="100%" x2="0%" y1="0%" y2="100%">
-            <Stop offset="0%" stopColor="#f0abfc" stopOpacity="0" />
-            <Stop offset="34%" stopColor="#f0abfc" stopOpacity="0.28" />
-            <Stop offset="64%" stopColor="#38bdf8" stopOpacity="0.42" />
-            <Stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
-          </LinearGradient>
-        </Defs>
-        <Path
-          d="M-60 140 C 200 30, 360 280, 610 170 S 930 60, 1260 170 L 1260 320 C 940 250, 760 380, 540 300 S 160 220, -60 350 Z"
-          fill="url(#liquidNeonB)"
-        />
-      </AnimatedSvg>
+      <Animated.View style={bandACombinedStyle}>
+        <Svg height="100%" preserveAspectRatio="none" viewBox="0 0 1200 760" width="100%">
+          <Defs>
+            <LinearGradient id="liquidNeonA" x1="0%" x2="100%" y1="0%" y2="100%">
+              <Stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+              <Stop offset="30%" stopColor="#ffffff" stopOpacity="0.68" />
+              <Stop offset="58%" stopColor="#dfe6ef" stopOpacity="0.18" />
+              <Stop offset="78%" stopColor="#edf5ff" stopOpacity="0.12" />
+              <Stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+            </LinearGradient>
+          </Defs>
+          <Path
+            d="M-80 420 C 140 250, 280 620, 520 430 S 920 260, 1280 390 L 1280 610 C 940 470, 760 650, 520 560 S 120 520, -80 690 Z"
+            fill="url(#liquidNeonA)"
+          />
+        </Svg>
+      </Animated.View>
+      <Animated.View style={bandBCombinedStyle}>
+        <Svg height="100%" preserveAspectRatio="none" viewBox="0 0 1200 760" width="100%">
+          <Defs>
+            <LinearGradient id="liquidNeonB" x1="100%" x2="0%" y1="0%" y2="100%">
+              <Stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+              <Stop offset="34%" stopColor="#ffffff" stopOpacity="0.48" />
+              <Stop offset="64%" stopColor="#dfe6ef" stopOpacity="0.16" />
+              <Stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+            </LinearGradient>
+          </Defs>
+          <Path
+            d="M-60 140 C 200 30, 360 280, 610 170 S 930 60, 1260 170 L 1260 320 C 940 250, 760 380, 540 300 S 160 220, -60 350 Z"
+            fill="url(#liquidNeonB)"
+          />
+        </Svg>
+      </Animated.View>
+      <Animated.View style={bandCCombinedStyle}>
+        <Svg height="100%" preserveAspectRatio="none" viewBox="0 0 1200 760" width="100%">
+          <Defs>
+            <LinearGradient id="liquidNeonC" x1="0%" x2="100%" y1="100%" y2="0%">
+              <Stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+              <Stop offset="36%" stopColor="#ffffff" stopOpacity="0.40" />
+              <Stop offset="62%" stopColor="#edf5ff" stopOpacity="0.10" />
+              <Stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+            </LinearGradient>
+          </Defs>
+          <Path
+            d="M-90 520 C 150 440, 310 520, 520 470 S 880 410, 1290 480 L 1290 650 C 910 600, 710 690, 480 630 S 120 590, -90 720 Z"
+            fill="url(#liquidNeonC)"
+          />
+        </Svg>
+      </Animated.View>
       <View style={styles.noiseVeil} />
     </View>
   );
@@ -110,10 +134,20 @@ const staticStyles = RNStyleSheet.create({
     position: "absolute",
     top: -120,
     left: -120,
+    width: "125%",
+    height: "125%",
   },
   bandB: {
-    top: 120,
-    left: 40,
+    top: 140,
+    left: 160,
+    width: "120%",
+    height: "120%",
+  },
+  bandC: {
+    top: 260,
+    left: 80,
+    width: "118%",
+    height: "118%",
   },
 });
 
@@ -121,11 +155,11 @@ const styles = StyleSheet.create((theme) => ({
   root: {
     ...RNStyleSheet.absoluteFillObject,
     display: theme.glass.enabled ? "flex" : "none",
-    backgroundColor: "#050914",
+    backgroundColor: "#f3f7fb",
     overflow: "hidden",
   },
   noiseVeil: {
     ...RNStyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(2, 6, 14, 0.52)",
+    backgroundColor: "rgba(255, 255, 255, 0.58)",
   },
 }));
