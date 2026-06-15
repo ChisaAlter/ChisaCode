@@ -75,6 +75,10 @@ import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissi
 import { IntegrationsSection } from "@/desktop/components/integrations-section";
 import { isElectronRuntime } from "@/desktop/host";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
+import {
+  checkGitHubReleaseUpdate,
+  type GitHubReleaseUpdateResult,
+} from "@/updates/github-release-updates";
 import { settingsStyles } from "@/styles/settings";
 import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
 import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
@@ -85,6 +89,8 @@ import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
+import { resolveAppVersion } from "@/utils/app-version";
+import { openExternalUrl } from "@/utils/open-external-url";
 import {
   buildHostOpenProjectRoute,
   buildProjectsSettingsRoute,
@@ -534,13 +540,11 @@ function AboutSection({ isDesktopApp }: { isDesktopApp: boolean }) {
   const { t } = useTranslation();
   return (
     <>
-      {isDesktopApp ? (
-        <SettingsSection title={t("settings.about.title")}>
-          <View style={settingsStyles.card}>
-            <DesktopAppUpdateRow />
-          </View>
-        </SettingsSection>
-      ) : null}
+      <SettingsSection title={t("settings.about.title")}>
+        <View style={settingsStyles.card}>
+          {isDesktopApp ? <DesktopAppUpdateRow /> : <GitHubReleaseUpdateRow />}
+        </View>
+      </SettingsSection>
       <ConnectedHostsSection />
     </>
   );
@@ -711,6 +715,137 @@ function DesktopAppUpdateRow() {
         </View>
       </View>
     </>
+  );
+}
+
+function formatVersionLabel(version: string | null | undefined): string {
+  const trimmed = version?.trim();
+  if (!trimmed) {
+    return "\u2014";
+  }
+  return trimmed.startsWith("v") ? trimmed : `v${trimmed}`;
+}
+
+function getGitHubReleaseStatusText({
+  isChecking,
+  result,
+  errorMessage,
+  t,
+}: {
+  isChecking: boolean;
+  result: GitHubReleaseUpdateResult | null;
+  errorMessage: string | null;
+  t: TFunction;
+}): string {
+  if (isChecking) {
+    return t("settings.updates.githubChecking");
+  }
+  if (errorMessage) {
+    return t("settings.updates.githubFailed");
+  }
+  if (!result) {
+    return t("settings.updates.githubNotChecked");
+  }
+  if (result.status === "available") {
+    return t("settings.updates.githubAvailable", {
+      version: formatVersionLabel(result.latestVersion),
+    });
+  }
+  if (result.status === "up-to-date") {
+    return t("settings.updates.githubUpToDate");
+  }
+  return t("settings.updates.githubLatest", {
+    version: formatVersionLabel(result.latestVersion),
+  });
+}
+
+function GitHubReleaseUpdateRow() {
+  const { t } = useTranslation();
+  const currentVersion = useMemo(() => resolveAppVersion(), []);
+  const [result, setResult] = useState<GitHubReleaseUpdateResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+
+  const runCheck = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!silent) {
+        setIsChecking(true);
+      }
+      setErrorMessage(null);
+      try {
+        const nextResult = await checkGitHubReleaseUpdate({ currentVersion });
+        setResult(nextResult);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!silent) {
+          setErrorMessage(message);
+        }
+      } finally {
+        if (!silent) {
+          setIsChecking(false);
+        }
+      }
+    },
+    [currentVersion],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void runCheck({ silent: true });
+      return undefined;
+    }, [runCheck]),
+  );
+
+  const handleCheck = useCallback(() => {
+    void runCheck();
+  }, [runCheck]);
+
+  const handleOpenRelease = useCallback(() => {
+    const url = result?.releaseUrl;
+    if (!url) {
+      return;
+    }
+    void openExternalUrl(url);
+  }, [result?.releaseUrl]);
+
+  const handleDownloadApk = useCallback(() => {
+    const url = result?.androidApkUrl ?? result?.releaseUrl;
+    if (!url) {
+      return;
+    }
+    void openExternalUrl(url);
+  }, [result?.androidApkUrl, result?.releaseUrl]);
+
+  const statusText = getGitHubReleaseStatusText({ isChecking, result, errorMessage, t });
+  const canOpenRelease = Boolean(result?.releaseUrl);
+  const canDownloadApk = Boolean(result?.androidApkUrl);
+
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.updates.githubReleases")}</Text>
+        <Text style={settingsStyles.rowHint}>{statusText}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.updates.githubCurrentVersion", {
+            version: formatVersionLabel(currentVersion),
+          })}
+        </Text>
+        {errorMessage ? <Text style={styles.aboutErrorText}>{errorMessage}</Text> : null}
+      </View>
+      <View style={styles.aboutUpdateActions}>
+        <Button variant="outline" size="sm" onPress={handleCheck} disabled={isChecking}>
+          {isChecking ? t("settings.updates.checking") : t("settings.updates.check")}
+        </Button>
+        {canDownloadApk ? (
+          <Button variant="outline" size="sm" onPress={handleDownloadApk}>
+            {t("settings.updates.downloadAndroidApk")}
+          </Button>
+        ) : null}
+        <Button variant="default" size="sm" onPress={handleOpenRelease} disabled={!canOpenRelease}>
+          {t("settings.updates.openRelease")}
+        </Button>
+      </View>
+    </View>
   );
 }
 
