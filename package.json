@@ -122,8 +122,25 @@
     "ws": "8.21.0"
   },
   "overrides": {
+    "@expo/cli": {
+      "picomatch": "3.0.2",
+      "undici": "6.24.0"
+    },
+    "@xmldom/xmldom": "0.8.13",
+    "anymatch": {
+      "picomatch": "2.3.2"
+    },
     "form-data": "4.0.6",
+    "hono": "4.12.25",
+    "jest-util": {
+      "picomatch": "2.3.2"
+    },
     "lightningcss": "1.30.1",
+    "micromatch": {
+      "picomatch": "2.3.2"
+    },
+    "node-forge": "1.4.0",
+    "picomatch": "4.0.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native-reanimated": "4.3.1",

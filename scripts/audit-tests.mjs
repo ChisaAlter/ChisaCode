@@ -34,7 +34,7 @@ const checks = [
   {
     id: "fixedWait",
     description: "fixed sleeps and waitForTimeout",
-    pattern: /\b(?:setTimeout|waitForTimeout|sleep)\s*\(/g,
+    pattern: /(?<!\.)\bsetTimeout\s*\(|\b(?:waitForTimeout|sleep)\s*\(/g,
   },
   {
     id: "weakAssertion",

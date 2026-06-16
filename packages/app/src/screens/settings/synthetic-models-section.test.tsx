@@ -584,6 +584,86 @@ describe("SyntheticModelsSection", () => {
     });
   });
 
+  it("preserves extra MoA layers when editing a saved synthetic model", async () => {
+    const gateway = configState.config?.modelGateways?.zai;
+    if (gateway) {
+      gateway.syntheticModels = [
+        {
+          id: "moa-three-stage",
+          label: "MoA Three Stage",
+          references: [{ model: "glm-5" }, { model: "qwen-max" }],
+          aggregatorModel: "glm-5",
+          rounds: 3,
+          moa: {
+            layers: [
+              {
+                id: "layer-1",
+                label: "Layer 1",
+                nodes: [{ model: "glm-5" }, { model: "qwen-max" }],
+              },
+              {
+                id: "layer-2",
+                label: "Layer 2",
+                nodes: [{ model: "qwen-max" }],
+              },
+              {
+                id: "layer-3",
+                label: "Layer 3",
+                nodes: [{ model: "glm-5" }],
+              },
+            ],
+            aggregator: { model: "glm-5" },
+          },
+        },
+      ];
+    }
+
+    act(() => {
+      root.render(<SyntheticModelsSection serverId="server-1" />);
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Edit MoA Three Stage"]',
+    );
+    expect(editButton).not.toBeNull();
+
+    act(() => {
+      editButton!.click();
+    });
+
+    const saveButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Save",
+    );
+    expect(saveButton).not.toBeUndefined();
+
+    await act(async () => {
+      saveButton!.click();
+      await Promise.resolve();
+    });
+
+    const savedModel = patchConfigMock.mock.calls[0]?.[0].modelGateways?.zai?.syntheticModels?.[0];
+    expect(savedModel?.moa?.layers).toEqual([
+      {
+        id: "layer-1",
+        label: "Layer 1",
+        nodes: [
+          { id: "layer-1:glm-5", model: "glm-5" },
+          { id: "layer-1:qwen-max", model: "qwen-max" },
+        ],
+      },
+      {
+        id: "layer-2",
+        label: "Layer 2",
+        nodes: [{ id: "layer-2:qwen-max", model: "qwen-max" }],
+      },
+      {
+        id: "layer-3",
+        label: "Layer 3",
+        nodes: [{ id: "layer-3:glm-5", model: "glm-5" }],
+      },
+    ]);
+  });
+
   it("keeps MoA sheets on the glass desktop surface", () => {
     act(() => {
       root.render(<SyntheticModelsSection serverId="server-1" />);

@@ -74,6 +74,8 @@ interface MoaParameterTextValues {
 
 interface MoaTestLayerValues {
   id: string;
+  serializedId?: string;
+  label?: string;
   selectedModels: string[];
   nodeOverrides: Record<string, MoaParameterTextValues>;
 }
@@ -189,6 +191,8 @@ function createLayerValuesFromMoaLayer(
   }
   return {
     id,
+    serializedId: layer.id,
+    label: layer.label,
     selectedModels: layer.nodes.map((node) => node.model),
     nodeOverrides: Object.fromEntries(
       layer.nodes
@@ -211,6 +215,16 @@ function createLegacyMoaFromModel(model: SyntheticModelEntry): SyntheticModelMoa
   };
 }
 
+function getLayerEditorId(index: number): string {
+  if (index === 0) {
+    return "draft";
+  }
+  if (index === 1) {
+    return "review";
+  }
+  return `extra-${index + 1}`;
+}
+
 function createValuesFromModel(
   model: SyntheticModelEntry,
   gateways: SelectableSyntheticGateway[],
@@ -223,10 +237,9 @@ function createValuesFromModel(
     label: model.label,
     description: model.description ?? "",
     defaults: createParameterTextValues(moa.defaults),
-    layers: [
-      createLayerValuesFromMoaLayer("draft", gatewayModels, moa.layers[0]),
-      createLayerValuesFromMoaLayer("review", gatewayModels, moa.layers[1]),
-    ],
+    layers: moa.layers.map((layer, index) =>
+      createLayerValuesFromMoaLayer(getLayerEditorId(index), gatewayModels, layer),
+    ),
     aggregatorModel: moa.aggregator.model,
     aggregator: createParameterTextValues(moa.aggregator.parameters),
   };
@@ -344,10 +357,10 @@ function buildMoaConfig(values: {
       ? { defaults: buildMoaParameters(values.defaults) }
       : {}),
     layers: values.layers.map((layer, index) => ({
-      id: `layer-${index + 1}`,
-      label: `Layer ${index + 1}`,
+      id: layer.serializedId ?? `layer-${index + 1}`,
+      label: layer.label ?? `Layer ${index + 1}`,
       nodes: layer.selectedModels.map((model) => ({
-        id: `${layer.id}:${model}`,
+        id: `${layer.serializedId ?? layer.id}:${model}`,
         model,
         ...(buildMoaParameters(layer.nodeOverrides[model] ?? EMPTY_PARAMETER_VALUES)
           ? {
