@@ -85,6 +85,7 @@ import type { ScriptHealthState } from "./script-health-monitor.js";
 import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
+import { runSyntheticModelTest } from "./model-gateway/model-gateway.js";
 import { getErrorMessage, getErrorMessageOr } from "@chisacode/protocol/error-utils";
 import { getAgentStatusPriority } from "@chisacode/protocol/agent-state-bucket";
 import type {
@@ -2143,6 +2144,8 @@ export class Session {
         return this.handleProviderDiagnosticRequest(msg);
       case "provider.tooling.run.request":
         return this.handleProviderToolingActionRequest(msg);
+      case "model_gateway.moa.test.request":
+        return this.handleModelGatewayMoaTestRequest(msg);
       default:
         return undefined;
     }
@@ -3976,6 +3979,51 @@ export class Session {
           requestType: msg.type,
           error: `Failed to ${msg.action} provider: ${err.message}`,
           code: "provider_tooling_action_failed",
+        },
+      });
+    }
+  }
+
+  private async handleModelGatewayMoaTestRequest(
+    msg: Extract<SessionInboundMessage, { type: "model_gateway.moa.test.request" }>,
+  ): Promise<void> {
+    const gateway = this.daemonConfigStore.get().modelGateways[msg.gatewayId];
+    if (!gateway || gateway.enabled === false) {
+      this.emit({
+        type: "model_gateway.moa.test.response",
+        payload: {
+          requestId: msg.requestId,
+          gatewayId: msg.gatewayId,
+          result: null,
+          error: "Unknown model gateway",
+        },
+      });
+      return;
+    }
+
+    try {
+      const result = await runSyntheticModelTest({
+        gateway,
+        syntheticModel: msg.syntheticModel,
+        prompt: msg.prompt,
+      });
+      this.emit({
+        type: "model_gateway.moa.test.response",
+        payload: {
+          requestId: msg.requestId,
+          gatewayId: msg.gatewayId,
+          result,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "model_gateway.moa.test.response",
+        payload: {
+          requestId: msg.requestId,
+          gatewayId: msg.gatewayId,
+          result: null,
+          error: getErrorMessage(error),
         },
       });
     }

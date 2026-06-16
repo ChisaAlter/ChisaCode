@@ -12,6 +12,10 @@ import {
   type KeyboardShortcutHelpCopy,
   type ShortcutSectionId,
 } from "@/keyboard/keyboard-shortcuts";
+import {
+  COMPOSER_VOICE_UI_VISIBLE,
+  isComposerVoiceShortcutHelpId,
+} from "@/composer/voice-visibility";
 
 const SNAP_POINTS: string[] = ["70%", "92%"];
 const SHORTCUT_SECTION_IDS: ShortcutSectionId[] = [
@@ -61,7 +65,6 @@ const SHORTCUT_LABEL_IDS = [
   "message-queue",
   "voice-mode-mute-toggle",
 ];
-
 export function KeyboardShortcutsDialog() {
   const { t } = useTranslation();
   const open = useKeyboardShortcutsStore((s) => s.shortcutsDialogOpen);
@@ -88,10 +91,20 @@ export function KeyboardShortcutsDialog() {
     }),
     [t],
   );
-  const sections = useMemo(
-    () => buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp }, undefined, copy),
-    [copy, isDesktopApp, isMac],
-  );
+  const sections = useMemo(() => {
+    const nextSections = buildKeyboardShortcutHelpSections(
+      { isMac, isDesktop: isDesktopApp },
+      undefined,
+      copy,
+    );
+    if (COMPOSER_VOICE_UI_VISIBLE) {
+      return nextSections;
+    }
+    return nextSections.flatMap((section) => {
+      const rows = section.rows.filter((row) => !isComposerVoiceShortcutHelpId(row.id));
+      return rows.length > 0 ? [{ title: section.title, rows }] : [];
+    });
+  }, [copy, isDesktopApp, isMac]);
   const header = useMemo<SheetHeader>(() => ({ title: t("shortcuts.title") }), [t]);
 
   const handleClose = useCallback(() => setOpen(false), [setOpen]);

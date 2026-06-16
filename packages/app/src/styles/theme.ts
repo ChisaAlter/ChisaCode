@@ -445,17 +445,19 @@ const ghosttyDarkColors = buildDarkSemanticColors({
   destructive: "#c44a55", // red with slight cool lean against the slate-blue surfaces
 });
 
+const liquidNeonWorkspaceSurface = "#f8fafc";
+
 const liquidNeonLightColors = {
   ...lightSemanticColors,
-  surface0: "#f8fafc",
+  surface0: liquidNeonWorkspaceSurface,
   surface1: "rgba(255, 255, 255, 0.72)",
   surface2: "rgba(255, 255, 255, 0.82)",
   surface3: "rgba(245, 248, 252, 0.90)",
   surface4: "rgba(233, 238, 245, 0.94)",
   surfaceDiffEmpty: "rgba(255, 255, 255, 0.72)",
-  surfaceSidebar: "rgba(255, 255, 255, 0.58)",
+  surfaceSidebar: liquidNeonWorkspaceSurface,
   surfaceSidebarHover: "rgba(255, 255, 255, 0.76)",
-  surfaceWorkspace: "#f3f7fb",
+  surfaceWorkspace: liquidNeonWorkspaceSurface,
   foreground: "#1d1d1f",
   foregroundMuted: "#6e6e73",
   scrollbarHandle: "rgba(60, 60, 67, 0.34)",
@@ -468,7 +470,7 @@ const liquidNeonLightColors = {
   destructiveForeground: "#ffffff",
   success: "#047857",
   successForeground: "#ffffff",
-  background: "#f8fafc",
+  background: liquidNeonWorkspaceSurface,
   popover: "rgba(255, 255, 255, 0.82)",
   popoverForeground: "#1d1d1f",
   primary: "#1d1d1f",
@@ -856,7 +858,7 @@ export const THEME_PREVIEWS: Record<
     accent: ghosttyDarkColors.accent,
   },
   "liquid-neon": {
-    surface: "#fbfcff",
+    surface: liquidNeonLightColors.surfaceWorkspace,
     border: liquidNeonLightColors.borderAccent,
     line: "#f2f4f8",
     accent: liquidNeonLightColors.accent,

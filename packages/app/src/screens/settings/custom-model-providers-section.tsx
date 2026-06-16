@@ -155,15 +155,31 @@ function readGatewayApiKey(
   return typeof value === "string" ? value : "";
 }
 
-function statusText(
-  entry: ProviderSnapshotEntry | undefined,
+function summarizeProviderStatuses(
+  providerIds: string[],
+  snapshotById: Map<string, ProviderSnapshotEntry>,
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
-  if (!entry) return t("customModelProviders.notTested");
-  if (entry.status === "ready") return t("providers.ready");
-  if (entry.status === "loading") return t("providers.loading");
-  if (entry.status === "error") return entry.error ?? t("providers.error");
-  return t("providers.missing");
+  const entries = providerIds
+    .map((providerId) => snapshotById.get(providerId))
+    .filter((entry): entry is ProviderSnapshotEntry => entry !== undefined);
+  if (entries.length === 0) {
+    return t("customModelProviders.notTested");
+  }
+  if (entries.some((entry) => entry.status === "loading")) {
+    return t("providers.loading");
+  }
+  const readyCount = entries.filter((entry) => entry.status === "ready").length;
+  if (readyCount === entries.length) {
+    return t("providers.ready");
+  }
+  if (readyCount > 0) {
+    return t("customModelProviders.partiallyReady", {
+      ready: readyCount,
+      total: entries.length,
+    });
+  }
+  return t("customModelProviders.testFailedShort");
 }
 
 function CustomProviderRow({
@@ -194,9 +210,7 @@ function CustomProviderRow({
     ],
     [testing],
   );
-  const statuses = provider.providerIds
-    .map((providerId) => statusText(snapshotById.get(providerId), t))
-    .join(" / ");
+  const statuses = summarizeProviderStatuses(provider.providerIds, snapshotById, t);
 
   return (
     <View style={styles.providerRow} testID={`custom-provider-row-${provider.id}`}>
@@ -335,6 +349,7 @@ function ProviderTextField({
 
 function EndpointEditorCard({
   title,
+  subtitle,
   enabled,
   baseUrl,
   apiKey,
@@ -349,6 +364,7 @@ function EndpointEditorCard({
   onWireApiChange,
 }: {
   title: string;
+  subtitle: string;
   enabled: boolean;
   baseUrl: string;
   apiKey: string;
@@ -365,7 +381,12 @@ function EndpointEditorCard({
   return (
     <View style={styles.endpointCard}>
       <View style={styles.endpointHeader}>
-        <Text style={settingsStyles.rowTitle}>{title}</Text>
+        <View style={styles.endpointTitleColumn}>
+          <Text style={settingsStyles.rowTitle}>{title}</Text>
+          <Text style={settingsStyles.rowHint} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
         <Switch value={enabled} onValueChange={onEnabledChange} />
       </View>
       <AdaptiveTextInput
@@ -837,7 +858,8 @@ function ProviderEditorSheet({
           />
         </View>
         <EndpointEditorCard
-          title="Anthropic Messages"
+          title={t("customModelProviders.anthropicEndpoint")}
+          subtitle={t("customModelProviders.anthropicEndpointHint")}
           enabled={values.anthropicEnabled}
           baseUrl={values.anthropicBaseUrl}
           apiKey={values.anthropicApiKey}
@@ -850,7 +872,8 @@ function ProviderEditorSheet({
           onApiKeyChange={handleAnthropicApiKeyChange}
         />
         <EndpointEditorCard
-          title="Chat Completions"
+          title={t("customModelProviders.openaiEndpoint")}
+          subtitle={t("customModelProviders.openaiEndpointHint")}
           enabled={values.openaiEnabled}
           baseUrl={values.openaiBaseUrl}
           apiKey={values.openaiApiKey}
@@ -865,7 +888,8 @@ function ProviderEditorSheet({
           onWireApiChange={handleOpenaiWireApiChange}
         />
         <EndpointEditorCard
-          title="Responses"
+          title={t("customModelProviders.responsesEndpoint")}
+          subtitle={t("customModelProviders.responsesEndpointHint")}
           enabled={values.responsesEnabled}
           baseUrl={values.responsesBaseUrl}
           apiKey={values.responsesApiKey}
@@ -1154,6 +1178,11 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: theme.spacing[3],
+  },
+  endpointTitleColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   modelsHeader: {
     flexDirection: "row",

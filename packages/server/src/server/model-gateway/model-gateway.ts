@@ -2,6 +2,8 @@ import type {
   ModelGatewayConfig,
   ModelGatewayUpstream,
   SyntheticModelConfig,
+  SyntheticModelMoa,
+  SyntheticModelParameters,
 } from "@chisacode/protocol/provider-config";
 
 export type ModelGatewayTargetFormat = "anthropic" | "chatCompletions" | "responses";
@@ -19,6 +21,36 @@ interface UpstreamSelection {
   format: ModelGatewayTargetFormat;
   upstream: ModelGatewayUpstream;
   url: string;
+}
+
+export interface MoaTestNodeTrace {
+  id: string | null;
+  model: string;
+  status: "success" | "error";
+  output: string | null;
+  error: string | null;
+  durationMs: number;
+}
+
+export interface MoaTestLayerTrace {
+  id: string;
+  label: string | null;
+  nodes: MoaTestNodeTrace[];
+}
+
+export interface MoaTestAggregatorTrace {
+  model: string;
+  status: "success" | "error";
+  output: string | null;
+  error: string | null;
+  durationMs: number;
+}
+
+export interface MoaTestResult {
+  finalText: string;
+  durationMs: number;
+  layers: MoaTestLayerTrace[];
+  aggregator: MoaTestAggregatorTrace;
 }
 
 const SYNTHETIC_MODEL_SYSTEM_PROMPT = `You have been provided with a set of responses from multiple models to the latest user request. Synthesize them into one high-quality answer. Critically evaluate the responses because some may be incomplete, biased, or incorrect. Do not merely copy them; produce a refined, accurate, coherent, and complete response.
@@ -799,17 +831,32 @@ function getChatMessages(
   });
 }
 
-function withReferenceSystemMessage(messages: JsonRecord[], references: string[]): JsonRecord[] {
+function buildReferenceSystemPrompt(references: string[], systemPrompt?: string): string {
+  const basePrompt =
+    typeof systemPrompt === "string" && systemPrompt.trim().length > 0
+      ? systemPrompt.trim()
+      : SYNTHETIC_MODEL_SYSTEM_PROMPT;
   if (references.length === 0) {
-    return messages;
+    return basePrompt;
   }
   const referenceText = references
     .map((reference, index) => `${index + 1}. ${reference}`)
     .join("\n");
+  return `${basePrompt}\n${referenceText}`;
+}
+
+function withReferenceSystemMessage(
+  messages: JsonRecord[],
+  references: string[],
+  systemPrompt?: string,
+): JsonRecord[] {
+  if (references.length === 0 && !systemPrompt?.trim()) {
+    return messages;
+  }
   return [
     {
       role: "system",
-      content: `${SYNTHETIC_MODEL_SYSTEM_PROMPT}\n${referenceText}`,
+      content: buildReferenceSystemPrompt(references, systemPrompt),
     },
     ...messages,
   ];
@@ -819,13 +866,20 @@ function buildSyntheticChatBody(input: {
   requestBody: JsonRecord;
   messages: JsonRecord[];
   model: string;
+  parameters?: SyntheticModelParameters;
 }): JsonRecord {
-  const { requestBody, messages, model } = input;
+  const { requestBody, messages, model, parameters } = input;
   const options: JsonRecord = {};
   for (const key of SYNTHETIC_CHAT_OPTION_KEYS) {
     if (requestBody[key] !== undefined) {
       options[key] = requestBody[key];
     }
+  }
+  if (typeof parameters?.temperature === "number") {
+    options.temperature = parameters.temperature;
+  }
+  if (typeof parameters?.maxTokens === "number") {
+    options.max_tokens = parameters.maxTokens;
   }
   if (options.max_tokens === undefined && typeof requestBody.max_output_tokens === "number") {
     options.max_tokens = requestBody.max_output_tokens;
@@ -859,6 +913,165 @@ async function fetchGatewayChatCompletion(input: {
     : convertJsonResponseBody("chatCompletions", selection.format, chatBody, json);
 }
 
+function mergeSyntheticParameters(
+  ...parameters: Array<SyntheticModelParameters | undefined>
+): SyntheticModelParameters {
+  return Object.assign({}, ...parameters.filter(Boolean));
+}
+
+function createLegacyMoaPlan(syntheticModel: SyntheticModelConfig): SyntheticModelMoa {
+  const rounds = Math.max(1, Math.min(4, syntheticModel.rounds ?? 1));
+  const nodes = syntheticModel.references.map((reference) => ({ model: reference.model }));
+  return {
+    layers: Array.from({ length: rounds }, (_, index) => ({
+      id: `layer-${index + 1}`,
+      label: `Layer ${index + 1}`,
+      nodes,
+    })),
+    aggregator: { model: syntheticModel.aggregatorModel },
+  };
+}
+
+function resolveSyntheticMoaPlan(syntheticModel: SyntheticModelConfig): SyntheticModelMoa {
+  return syntheticModel.moa ?? createLegacyMoaPlan(syntheticModel);
+}
+
+async function runSyntheticNode(input: {
+  selection: UpstreamSelection;
+  fetchImpl: typeof fetch;
+  requestBody: JsonRecord;
+  messages: JsonRecord[];
+  model: string;
+  parameters?: SyntheticModelParameters;
+  id?: string;
+}): Promise<MoaTestNodeTrace> {
+  const startedAt = performance.now();
+  try {
+    const chatResponse = await fetchGatewayChatCompletion({
+      selection: input.selection,
+      fetchImpl: input.fetchImpl,
+      chatBody: buildSyntheticChatBody({
+        requestBody: input.requestBody,
+        messages: input.messages,
+        model: input.model,
+        parameters: input.parameters,
+      }),
+    });
+    return {
+      id: input.id ?? null,
+      model: input.model,
+      status: "success",
+      output: readChatResponseText(chatResponse).trim(),
+      error: null,
+      durationMs: Math.round(performance.now() - startedAt),
+    };
+  } catch (error) {
+    return {
+      id: input.id ?? null,
+      model: input.model,
+      status: "error",
+      output: null,
+      error: error instanceof Error ? error.message : String(error),
+      durationMs: Math.round(performance.now() - startedAt),
+    };
+  }
+}
+
+async function runSyntheticModelWithTrace(input: {
+  gateway: ModelGatewayConfig;
+  syntheticModel: SyntheticModelConfig;
+  targetFormat: ModelGatewayTargetFormat;
+  requestBody: JsonRecord;
+  fetchImpl: typeof fetch;
+}): Promise<MoaTestResult> {
+  const { gateway, syntheticModel, targetFormat, requestBody, fetchImpl } = input;
+  const startedAt = performance.now();
+  const messages = getChatMessages(targetFormat, requestBody);
+  const selection = selectUpstream(gateway, "chatCompletions");
+  const plan = resolveSyntheticMoaPlan(syntheticModel);
+  const layerTraces: MoaTestLayerTrace[] = [];
+  let references: string[] = [];
+
+  for (const layer of plan.layers) {
+    const layerParameters = mergeSyntheticParameters(plan.defaults, layer.parameters);
+    const layerMessages = withReferenceSystemMessage(
+      messages,
+      references,
+      layerParameters.systemPrompt,
+    );
+    const nodes = await Promise.all(
+      layer.nodes.map((node) =>
+        runSyntheticNode({
+          selection,
+          fetchImpl,
+          requestBody,
+          messages: layerMessages,
+          model: node.model,
+          id: node.id,
+          parameters: mergeSyntheticParameters(layerParameters, node.parameters),
+        }),
+      ),
+    );
+    layerTraces.push({
+      id: layer.id,
+      label: layer.label ?? null,
+      nodes,
+    });
+    references = nodes
+      .filter((node) => node.status === "success" && node.output?.trim())
+      .map((node) => node.output ?? "");
+    if (references.length === 0) {
+      throw new Error(`MoA layer "${layer.id}" produced no successful outputs`);
+    }
+  }
+
+  const aggregatorStartedAt = performance.now();
+  const aggregatorParameters = mergeSyntheticParameters(plan.defaults, plan.aggregator.parameters);
+  try {
+    const aggregateResponse = await fetchGatewayChatCompletion({
+      selection,
+      fetchImpl,
+      chatBody: buildSyntheticChatBody({
+        requestBody,
+        messages: withReferenceSystemMessage(
+          messages,
+          references,
+          aggregatorParameters.systemPrompt,
+        ),
+        model: plan.aggregator.model,
+        parameters: aggregatorParameters,
+      }),
+    });
+    const finalText = readChatResponseText(aggregateResponse).trim();
+    return {
+      finalText,
+      durationMs: Math.round(performance.now() - startedAt),
+      layers: layerTraces,
+      aggregator: {
+        model: plan.aggregator.model,
+        status: "success",
+        output: finalText,
+        error: null,
+        durationMs: Math.round(performance.now() - aggregatorStartedAt),
+      },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      finalText: "",
+      durationMs: Math.round(performance.now() - startedAt),
+      layers: layerTraces,
+      aggregator: {
+        model: plan.aggregator.model,
+        status: "error",
+        output: null,
+        error: message,
+        durationMs: Math.round(performance.now() - aggregatorStartedAt),
+      },
+    };
+  }
+}
+
 async function runSyntheticModel(input: {
   gateway: ModelGatewayConfig;
   syntheticModel: SyntheticModelConfig;
@@ -866,41 +1079,29 @@ async function runSyntheticModel(input: {
   requestBody: JsonRecord;
   fetchImpl: typeof fetch;
 }): Promise<string> {
-  const { gateway, syntheticModel, targetFormat, requestBody, fetchImpl } = input;
-  const messages = getChatMessages(targetFormat, requestBody);
-  const selection = selectUpstream(gateway, "chatCompletions");
-  let references: string[] = [];
-  const rounds = Math.max(1, Math.min(4, syntheticModel.rounds ?? 1));
-
-  for (let round = 0; round < rounds; round += 1) {
-    const roundMessages = withReferenceSystemMessage(messages, references);
-    const responses = await Promise.all(
-      syntheticModel.references.map(async (reference) => {
-        const chatResponse = await fetchGatewayChatCompletion({
-          selection,
-          fetchImpl,
-          chatBody: buildSyntheticChatBody({
-            requestBody,
-            messages: roundMessages,
-            model: reference.model,
-          }),
-        });
-        return readChatResponseText(chatResponse).trim();
-      }),
-    );
-    references = responses.filter((response) => response.length > 0);
+  const result = await runSyntheticModelWithTrace(input);
+  if (result.aggregator.status === "error") {
+    throw new Error(result.aggregator.error ?? "MoA aggregator failed");
   }
+  return result.finalText;
+}
 
-  const aggregateResponse = await fetchGatewayChatCompletion({
-    selection,
-    fetchImpl,
-    chatBody: buildSyntheticChatBody({
-      requestBody,
-      messages: withReferenceSystemMessage(messages, references),
-      model: syntheticModel.aggregatorModel,
-    }),
+export async function runSyntheticModelTest(input: {
+  gateway: ModelGatewayConfig;
+  syntheticModel: SyntheticModelConfig;
+  prompt: string;
+  fetchImpl?: typeof fetch;
+}): Promise<MoaTestResult> {
+  return runSyntheticModelWithTrace({
+    gateway: input.gateway,
+    syntheticModel: input.syntheticModel,
+    targetFormat: "chatCompletions",
+    requestBody: {
+      model: input.syntheticModel.id,
+      messages: [{ role: "user", content: input.prompt }],
+    },
+    fetchImpl: input.fetchImpl ?? fetch,
   });
-  return readChatResponseText(aggregateResponse).trim();
 }
 
 function syntheticResponseForTarget(input: {

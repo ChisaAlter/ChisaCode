@@ -576,10 +576,7 @@ export function resolveAgentForm(
         providerDef: action.providerDef,
         providerPrefs: action.providerPrefs,
       });
-      const nextRuntimeProvider = normalizeRuntimeProvider(
-        action.provider,
-        action.runtimeProvider,
-      );
+      const nextRuntimeProvider = normalizeRuntimeProvider(action.provider, action.runtimeProvider);
       return {
         form: {
           ...state.form,

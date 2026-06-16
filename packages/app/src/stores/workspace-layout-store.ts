@@ -75,6 +75,8 @@ interface WorkspaceLayoutStore {
   pinnedAgentIdsByWorkspace: Record<string, Set<string>>;
   hiddenAgentIdsByWorkspace: Record<string, Set<string>>;
   suppressedAutoOpenAgentIdsByWorkspace: Record<string, Set<string>>;
+  suppressedAutoOpenTerminalIdsByWorkspace: Record<string, Set<string>>;
+  workspaceAutoOpenSuppressedByWorkspace: Record<string, true>;
   focusRestorationByWorkspace: Record<string, WorkspaceFocusRestorationState>;
   openTabFocused: (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
   openChildTabFocused: (
@@ -117,6 +119,8 @@ interface WorkspaceLayoutStore {
   unhideAgent: (workspaceKey: string, agentId: string) => void;
   suppressAgentAutoOpen: (workspaceKey: string, agentId: string) => void;
   unsuppressAgentAutoOpen: (workspaceKey: string, agentId: string) => void;
+  suppressTerminalAutoOpen: (workspaceKey: string, terminalId: string) => void;
+  unsuppressTerminalAutoOpen: (workspaceKey: string, terminalId: string) => void;
   purgeWorkspace: (workspaceKey: string) => void;
 }
 
@@ -135,45 +139,45 @@ function trimNonEmpty(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function addAgentIdToWorkspaceSet(
+function addIdToWorkspaceSet(
   state: Record<string, Set<string>>,
   workspaceKey: string,
-  agentId: string,
+  id: string,
 ): Record<string, Set<string>> {
-  const currentAgentIds = state[workspaceKey] ?? null;
-  if (currentAgentIds?.has(agentId)) {
+  const currentIds = state[workspaceKey] ?? null;
+  if (currentIds?.has(id)) {
     return state;
   }
 
-  const nextAgentIds = new Set(currentAgentIds ?? []);
-  nextAgentIds.add(agentId);
+  const nextIds = new Set(currentIds ?? []);
+  nextIds.add(id);
   return {
     ...state,
-    [workspaceKey]: nextAgentIds,
+    [workspaceKey]: nextIds,
   };
 }
 
-function removeAgentIdFromWorkspaceSet(
+function removeIdFromWorkspaceSet(
   state: Record<string, Set<string>>,
   workspaceKey: string,
-  agentId: string,
+  id: string,
 ): Record<string, Set<string>> {
-  const currentAgentIds = state[workspaceKey] ?? null;
-  if (!currentAgentIds?.has(agentId)) {
+  const currentIds = state[workspaceKey] ?? null;
+  if (!currentIds?.has(id)) {
     return state;
   }
 
-  if (currentAgentIds.size === 1) {
+  if (currentIds.size === 1) {
     const nextState = { ...state };
     delete nextState[workspaceKey];
     return nextState;
   }
 
-  const nextAgentIds = new Set(currentAgentIds);
-  nextAgentIds.delete(agentId);
+  const nextIds = new Set(currentIds);
+  nextIds.delete(id);
   return {
     ...state,
-    [workspaceKey]: nextAgentIds,
+    [workspaceKey]: nextIds,
   };
 }
 
@@ -205,17 +209,43 @@ function clearAgentVisibilityBlocks(input: {
   "hiddenAgentIdsByWorkspace" | "suppressedAutoOpenAgentIdsByWorkspace"
 > {
   return {
-    hiddenAgentIdsByWorkspace: removeAgentIdFromWorkspaceSet(
+    hiddenAgentIdsByWorkspace: removeIdFromWorkspaceSet(
       input.state.hiddenAgentIdsByWorkspace,
       input.workspaceKey,
       input.agentId,
     ),
-    suppressedAutoOpenAgentIdsByWorkspace: removeAgentIdFromWorkspaceSet(
+    suppressedAutoOpenAgentIdsByWorkspace: removeIdFromWorkspaceSet(
       input.state.suppressedAutoOpenAgentIdsByWorkspace,
       input.workspaceKey,
       input.agentId,
     ),
   };
+}
+
+function clearTerminalVisibilityBlocks(input: {
+  state: WorkspaceLayoutStore;
+  workspaceKey: string;
+  terminalId: string;
+}): Pick<WorkspaceLayoutStore, "suppressedAutoOpenTerminalIdsByWorkspace"> {
+  return {
+    suppressedAutoOpenTerminalIdsByWorkspace: removeIdFromWorkspaceSet(
+      input.state.suppressedAutoOpenTerminalIdsByWorkspace,
+      input.workspaceKey,
+      input.terminalId,
+    ),
+  };
+}
+
+function clearWorkspaceAutoOpenSuppression(
+  state: WorkspaceLayoutStore,
+  workspaceKey: string,
+): Pick<WorkspaceLayoutStore, "workspaceAutoOpenSuppressedByWorkspace"> | null {
+  if (!(workspaceKey in state.workspaceAutoOpenSuppressedByWorkspace)) {
+    return null;
+  }
+  const { [workspaceKey]: _removed, ...workspaceAutoOpenSuppressedByWorkspace } =
+    state.workspaceAutoOpenSuppressedByWorkspace;
+  return { workspaceAutoOpenSuppressedByWorkspace };
 }
 
 function attachParentTab(input: {
@@ -254,6 +284,8 @@ export function createWorkspaceLayoutStore(
         pinnedAgentIdsByWorkspace: {},
         hiddenAgentIdsByWorkspace: {},
         suppressedAutoOpenAgentIdsByWorkspace: {},
+        suppressedAutoOpenTerminalIdsByWorkspace: {},
+        workspaceAutoOpenSuppressedByWorkspace: {},
         focusRestorationByWorkspace: {},
         openTabFocused: (workspaceKey, target) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
@@ -270,11 +302,19 @@ export function createWorkspaceLayoutStore(
 
           set((state) => ({
             ...withoutFocusRestoration(state, normalizedWorkspaceKey),
+            ...clearWorkspaceAutoOpenSuppression(state, normalizedWorkspaceKey),
             ...(normalizedTarget.kind === "agent"
               ? clearAgentVisibilityBlocks({
                   state,
                   workspaceKey: normalizedWorkspaceKey,
                   agentId: normalizedTarget.agentId,
+                })
+              : {}),
+            ...(normalizedTarget.kind === "terminal"
+              ? clearTerminalVisibilityBlocks({
+                  state,
+                  workspaceKey: normalizedWorkspaceKey,
+                  terminalId: normalizedTarget.terminalId,
                 })
               : {}),
             layoutByWorkspace: {
@@ -307,11 +347,19 @@ export function createWorkspaceLayoutStore(
             });
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
+              ...clearWorkspaceAutoOpenSuppression(state, normalizedWorkspaceKey),
               ...(normalizedTarget.kind === "agent"
                 ? clearAgentVisibilityBlocks({
                     state,
                     workspaceKey: normalizedWorkspaceKey,
                     agentId: normalizedTarget.agentId,
+                  })
+                : {}),
+              ...(normalizedTarget.kind === "terminal"
+                ? clearTerminalVisibilityBlocks({
+                    state,
+                    workspaceKey: normalizedWorkspaceKey,
+                    terminalId: normalizedTarget.terminalId,
                   })
                 : {}),
               layoutByWorkspace: {
@@ -337,11 +385,19 @@ export function createWorkspaceLayoutStore(
           });
 
           set((state) => ({
+            ...clearWorkspaceAutoOpenSuppression(state, normalizedWorkspaceKey),
             ...(normalizedTarget.kind === "agent"
               ? clearAgentVisibilityBlocks({
                   state,
                   workspaceKey: normalizedWorkspaceKey,
                   agentId: normalizedTarget.agentId,
+                })
+              : {}),
+            ...(normalizedTarget.kind === "terminal"
+              ? clearTerminalVisibilityBlocks({
+                  state,
+                  workspaceKey: normalizedWorkspaceKey,
+                  terminalId: normalizedTarget.terminalId,
                 })
               : {}),
             layoutByWorkspace: {
@@ -360,8 +416,15 @@ export function createWorkspaceLayoutStore(
           }
 
           set((state) => {
+            const currentLayout = getWorkspaceLayout(
+              state.layoutByWorkspace,
+              normalizedWorkspaceKey,
+            );
+            const closingTab =
+              collectAllTabs(currentLayout.root).find((tab) => tab.tabId === normalizedTabId) ??
+              null;
             const nextLayout = closeTabInLayout({
-              layout: getWorkspaceLayout(state.layoutByWorkspace, normalizedWorkspaceKey),
+              layout: currentLayout,
               tabId: normalizedTabId,
             });
             if (!nextLayout) {
@@ -370,6 +433,23 @@ export function createWorkspaceLayoutStore(
 
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
+              ...(closingTab?.target.kind === "terminal"
+                ? {
+                    suppressedAutoOpenTerminalIdsByWorkspace: addIdToWorkspaceSet(
+                      state.suppressedAutoOpenTerminalIdsByWorkspace,
+                      normalizedWorkspaceKey,
+                      closingTab.target.terminalId,
+                    ),
+                  }
+                : {}),
+              ...(collectAllTabs(nextLayout.root).length === 0
+                ? {
+                    workspaceAutoOpenSuppressedByWorkspace: {
+                      ...state.workspaceAutoOpenSuppressedByWorkspace,
+                      [normalizedWorkspaceKey]: true,
+                    },
+                  }
+                : {}),
               layoutByWorkspace: {
                 ...state.layoutByWorkspace,
                 [normalizedWorkspaceKey]: nextLayout,
@@ -490,6 +570,11 @@ export function createWorkspaceLayoutStore(
                 hiddenAgentIds: state.hiddenAgentIdsByWorkspace[normalizedWorkspaceKey] ?? null,
                 suppressedAutoOpenAgentIds:
                   state.suppressedAutoOpenAgentIdsByWorkspace[normalizedWorkspaceKey] ?? null,
+                suppressedAutoOpenTerminalIds:
+                  state.suppressedAutoOpenTerminalIdsByWorkspace[normalizedWorkspaceKey] ?? null,
+                isWorkspaceAutoOpenSuppressed: Boolean(
+                  state.workspaceAutoOpenSuppressedByWorkspace[normalizedWorkspaceKey],
+                ),
               },
               snapshot,
             );
@@ -847,7 +932,7 @@ export function createWorkspaceLayoutStore(
           }
 
           set((state) => {
-            const nextHiddenAgentIdsByWorkspace = addAgentIdToWorkspaceSet(
+            const nextHiddenAgentIdsByWorkspace = addIdToWorkspaceSet(
               state.hiddenAgentIdsByWorkspace,
               normalizedWorkspaceKey,
               normalizedAgentId,
@@ -869,7 +954,7 @@ export function createWorkspaceLayoutStore(
           }
 
           set((state) => {
-            const nextHiddenAgentIdsByWorkspace = removeAgentIdFromWorkspaceSet(
+            const nextHiddenAgentIdsByWorkspace = removeIdFromWorkspaceSet(
               state.hiddenAgentIdsByWorkspace,
               normalizedWorkspaceKey,
               normalizedAgentId,
@@ -891,7 +976,7 @@ export function createWorkspaceLayoutStore(
           }
 
           set((state) => {
-            const nextSuppressedAutoOpenAgentIdsByWorkspace = addAgentIdToWorkspaceSet(
+            const nextSuppressedAutoOpenAgentIdsByWorkspace = addIdToWorkspaceSet(
               state.suppressedAutoOpenAgentIdsByWorkspace,
               normalizedWorkspaceKey,
               normalizedAgentId,
@@ -916,7 +1001,7 @@ export function createWorkspaceLayoutStore(
           }
 
           set((state) => {
-            const nextSuppressedAutoOpenAgentIdsByWorkspace = removeAgentIdFromWorkspaceSet(
+            const nextSuppressedAutoOpenAgentIdsByWorkspace = removeIdFromWorkspaceSet(
               state.suppressedAutoOpenAgentIdsByWorkspace,
               normalizedWorkspaceKey,
               normalizedAgentId,
@@ -933,6 +1018,58 @@ export function createWorkspaceLayoutStore(
             };
           });
         },
+        suppressTerminalAutoOpen: (workspaceKey, terminalId) => {
+          const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
+          const normalizedTerminalId = trimNonEmpty(terminalId);
+          if (!normalizedWorkspaceKey || !normalizedTerminalId) {
+            return;
+          }
+
+          set((state) => {
+            const nextSuppressedAutoOpenTerminalIdsByWorkspace = addIdToWorkspaceSet(
+              state.suppressedAutoOpenTerminalIdsByWorkspace,
+              normalizedWorkspaceKey,
+              normalizedTerminalId,
+            );
+            if (
+              nextSuppressedAutoOpenTerminalIdsByWorkspace ===
+              state.suppressedAutoOpenTerminalIdsByWorkspace
+            ) {
+              return state;
+            }
+
+            return {
+              suppressedAutoOpenTerminalIdsByWorkspace:
+                nextSuppressedAutoOpenTerminalIdsByWorkspace,
+            };
+          });
+        },
+        unsuppressTerminalAutoOpen: (workspaceKey, terminalId) => {
+          const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
+          const normalizedTerminalId = trimNonEmpty(terminalId);
+          if (!normalizedWorkspaceKey || !normalizedTerminalId) {
+            return;
+          }
+
+          set((state) => {
+            const nextSuppressedAutoOpenTerminalIdsByWorkspace = removeIdFromWorkspaceSet(
+              state.suppressedAutoOpenTerminalIdsByWorkspace,
+              normalizedWorkspaceKey,
+              normalizedTerminalId,
+            );
+            if (
+              nextSuppressedAutoOpenTerminalIdsByWorkspace ===
+              state.suppressedAutoOpenTerminalIdsByWorkspace
+            ) {
+              return state;
+            }
+
+            return {
+              suppressedAutoOpenTerminalIdsByWorkspace:
+                nextSuppressedAutoOpenTerminalIdsByWorkspace,
+            };
+          });
+        },
         purgeWorkspace: (workspaceKey) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
           if (!normalizedWorkspaceKey) {
@@ -946,6 +1083,8 @@ export function createWorkspaceLayoutStore(
               normalizedWorkspaceKey in state.pinnedAgentIdsByWorkspace ||
               normalizedWorkspaceKey in state.hiddenAgentIdsByWorkspace ||
               normalizedWorkspaceKey in state.suppressedAutoOpenAgentIdsByWorkspace ||
+              normalizedWorkspaceKey in state.suppressedAutoOpenTerminalIdsByWorkspace ||
+              normalizedWorkspaceKey in state.workspaceAutoOpenSuppressedByWorkspace ||
               normalizedWorkspaceKey in state.focusRestorationByWorkspace;
             if (!hasAny) {
               return state;
@@ -962,6 +1101,14 @@ export function createWorkspaceLayoutStore(
               [normalizedWorkspaceKey]: _suppressedAutoOpen,
               ...suppressedAutoOpenAgentIdsByWorkspace
             } = state.suppressedAutoOpenAgentIdsByWorkspace;
+            const {
+              [normalizedWorkspaceKey]: _suppressedTerminalAutoOpen,
+              ...suppressedAutoOpenTerminalIdsByWorkspace
+            } = state.suppressedAutoOpenTerminalIdsByWorkspace;
+            const {
+              [normalizedWorkspaceKey]: _workspaceAutoOpenSuppressed,
+              ...workspaceAutoOpenSuppressedByWorkspace
+            } = state.workspaceAutoOpenSuppressedByWorkspace;
             const { [normalizedWorkspaceKey]: _restoration, ...focusRestorationByWorkspace } =
               state.focusRestorationByWorkspace;
             return {
@@ -970,6 +1117,8 @@ export function createWorkspaceLayoutStore(
               pinnedAgentIdsByWorkspace,
               hiddenAgentIdsByWorkspace,
               suppressedAutoOpenAgentIdsByWorkspace,
+              suppressedAutoOpenTerminalIdsByWorkspace,
+              workspaceAutoOpenSuppressedByWorkspace,
               focusRestorationByWorkspace,
             };
           });

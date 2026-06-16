@@ -6,6 +6,7 @@ import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
 import {
   ModelGatewayConfigSchema,
   ModelGatewayConfigsSchema,
+  SyntheticModelConfigSchema,
 } from "@chisacode/protocol/provider-config";
 import { normalizeAgentModelDefinition, TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import {
@@ -1189,6 +1190,14 @@ export const ProviderToolingActionRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const ModelGatewayMoaTestRequestMessageSchema = z.object({
+  type: z.literal("model_gateway.moa.test.request"),
+  requestId: z.string(),
+  gatewayId: z.string().min(1),
+  syntheticModel: SyntheticModelConfigSchema,
+  prompt: z.string().min(1),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("resume_agent_request"),
   handle: AgentPersistenceHandleSchema,
@@ -1927,6 +1936,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
   ProviderToolingActionRequestMessageSchema,
+  ModelGatewayMoaTestRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
@@ -3565,6 +3575,46 @@ export const ProviderToolingActionResponseMessageSchema = z.object({
   }),
 });
 
+const ModelGatewayMoaNodeTraceSchema = z.object({
+  id: z.string().nullable(),
+  model: z.string(),
+  status: z.enum(["success", "error"]),
+  output: z.string().nullable(),
+  error: z.string().nullable(),
+  durationMs: z.number(),
+});
+
+const ModelGatewayMoaLayerTraceSchema = z.object({
+  id: z.string(),
+  label: z.string().nullable(),
+  nodes: z.array(ModelGatewayMoaNodeTraceSchema),
+});
+
+const ModelGatewayMoaAggregatorTraceSchema = z.object({
+  model: z.string(),
+  status: z.enum(["success", "error"]),
+  output: z.string().nullable(),
+  error: z.string().nullable(),
+  durationMs: z.number(),
+});
+
+const ModelGatewayMoaTestResultSchema = z.object({
+  finalText: z.string(),
+  durationMs: z.number(),
+  layers: z.array(ModelGatewayMoaLayerTraceSchema),
+  aggregator: ModelGatewayMoaAggregatorTraceSchema,
+});
+
+export const ModelGatewayMoaTestResponseMessageSchema = z.object({
+  type: z.literal("model_gateway.moa.test.response"),
+  payload: z.object({
+    requestId: z.string(),
+    gatewayId: z.string(),
+    result: ModelGatewayMoaTestResultSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
 const AgentSlashCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -3804,6 +3854,7 @@ type SessionOutboundMessageSchemaOptions = [
   typeof RefreshProvidersSnapshotResponseMessageSchema,
   typeof ProviderDiagnosticResponseMessageSchema,
   typeof ProviderToolingActionResponseMessageSchema,
+  typeof ModelGatewayMoaTestResponseMessageSchema,
   typeof ListCommandsResponseSchema,
   typeof ListTerminalsResponseSchema,
   typeof TerminalsChangedSchema,
@@ -3934,6 +3985,7 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
   ProviderToolingActionResponseMessageSchema,
+  ModelGatewayMoaTestResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -4061,6 +4113,9 @@ export type ProviderDiagnosticResponseMessage = z.infer<
 export type ProviderToolingActionResponseMessage = z.infer<
   typeof ProviderToolingActionResponseMessageSchema
 >;
+export type ModelGatewayMoaTestResponseMessage = z.infer<
+  typeof ModelGatewayMoaTestResponseMessageSchema
+>;
 export type ChatCreateResponse = z.infer<typeof ChatCreateResponseSchema>;
 export type ChatListResponse = z.infer<typeof ChatListResponseSchema>;
 export type ChatInspectResponse = z.infer<typeof ChatInspectResponseSchema>;
@@ -4126,6 +4181,9 @@ export type ProviderDiagnosticRequestMessage = z.infer<
 >;
 export type ProviderToolingActionRequestMessage = z.infer<
   typeof ProviderToolingActionRequestMessageSchema
+>;
+export type ModelGatewayMoaTestRequestMessage = z.infer<
+  typeof ModelGatewayMoaTestRequestMessageSchema
 >;
 export type ChatCreateRequest = z.infer<typeof ChatCreateRequestSchema>;
 export type ChatListRequest = z.infer<typeof ChatListRequestSchema>;

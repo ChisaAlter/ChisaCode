@@ -2712,6 +2712,9 @@ function WorkspaceScreenContent({
   const suppressWorkspaceAgentAutoOpen = useWorkspaceLayoutStore(
     (state) => state.suppressAgentAutoOpen,
   );
+  const suppressWorkspaceTerminalAutoOpen = useWorkspaceLayoutStore(
+    (state) => state.suppressTerminalAutoOpen,
+  );
   const retargetWorkspaceTab = useWorkspaceLayoutStore((state) => state.retargetTab);
   const reconcileWorkspaceTabs = useWorkspaceLayoutStore((state) => state.reconcileTabs);
   const splitWorkspacePane = useWorkspaceLayoutStore((state) => state.splitPane);
@@ -2744,6 +2747,9 @@ function WorkspaceScreenContent({
         unpinWorkspaceAgent(persistenceKey, input.target.agentId);
         suppressWorkspaceAgentAutoOpen(persistenceKey, input.target.agentId);
       }
+      if (input.target?.kind === "terminal") {
+        suppressWorkspaceTerminalAutoOpen(persistenceKey, input.target.terminalId);
+      }
       if (input.target?.kind === "browser") {
         const { browserId } = input.target;
         useBrowserStore.getState().removeBrowser(browserId);
@@ -2751,7 +2757,13 @@ function WorkspaceScreenContent({
       }
       closeWorkspaceTab(persistenceKey, normalizedTabId);
     },
-    [closeWorkspaceTab, persistenceKey, suppressWorkspaceAgentAutoOpen, unpinWorkspaceAgent],
+    [
+      closeWorkspaceTab,
+      persistenceKey,
+      suppressWorkspaceAgentAutoOpen,
+      suppressWorkspaceTerminalAutoOpen,
+      unpinWorkspaceAgent,
+    ],
   );
 
   const focusedPaneTabState = useMemo(
@@ -2943,7 +2955,7 @@ function WorkspaceScreenContent({
   );
   const handleOpenEnvironmentSubagent = handleImportedAgent;
 
-  const emptyWorkspaceSeedRef = useRef<string | null>(null);
+  const emptyWorkspaceSeedKeysRef = useRef<Set<string>>(new Set());
   const autoOpenedSetupTabWorkspaceRef = useRef<string | null>(null);
   const requestedWorkspaceSetupStatusKeyRef = useRef<string | null>(null);
 
@@ -2996,31 +3008,43 @@ function WorkspaceScreenContent({
   ]);
 
   useEffect(() => {
-    if (
-      !shouldSeedEmptyWorkspaceDraft({
-        isRouteFocused,
-        hasPersistenceKey: Boolean(persistenceKey),
-        hasWorkspaceDirectory: Boolean(workspaceDirectory),
-        hasHydratedWorkspaceLayoutStore,
-        hasHydratedAgents,
-        hasLoadedTerminals: terminalsQuery.isSuccess,
-        activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
-        terminalCount: terminals.length,
-        workspaceTabCount: uiTabs.length,
-      })
-    ) {
-      emptyWorkspaceSeedRef.current = null;
+    const hasSeedPrerequisites = Boolean(
+      isRouteFocused &&
+      persistenceKey &&
+      workspaceDirectory &&
+      hasHydratedWorkspaceLayoutStore &&
+      hasHydratedAgents &&
+      terminalsQuery.isSuccess,
+    );
+    if (!hasSeedPrerequisites || !persistenceKey) {
       return;
     }
-    const workspaceKey = `${normalizedServerId}:${normalizedWorkspaceId}`;
-    if (emptyWorkspaceSeedRef.current === workspaceKey) {
+
+    const hasConsideredEmptyWorkspaceDraftSeed =
+      emptyWorkspaceSeedKeysRef.current.has(persistenceKey);
+    const shouldSeedDraft = shouldSeedEmptyWorkspaceDraft({
+      isRouteFocused,
+      hasPersistenceKey: true,
+      hasWorkspaceDirectory: true,
+      hasHydratedWorkspaceLayoutStore,
+      hasHydratedAgents,
+      hasLoadedTerminals: terminalsQuery.isSuccess,
+      hasConsideredEmptyWorkspaceDraftSeed,
+      activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
+      terminalCount: terminals.length,
+      workspaceTabCount: uiTabs.length,
+    });
+
+    if (hasConsideredEmptyWorkspaceDraftSeed) {
       return;
     }
-    emptyWorkspaceSeedRef.current = workspaceKey;
+
+    emptyWorkspaceSeedKeysRef.current.add(persistenceKey);
+    if (!shouldSeedDraft) {
+      return;
+    }
     openWorkspaceDraftTab();
   }, [
-    normalizedServerId,
-    normalizedWorkspaceId,
     openWorkspaceDraftTab,
     persistenceKey,
     hasHydratedAgents,

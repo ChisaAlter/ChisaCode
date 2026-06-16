@@ -11,9 +11,22 @@ interface SidebarAnimationTargetInput {
   sidebarWidth?: number;
 }
 
+interface DesktopSidebarResizeStateInput {
+  storedWidth: number;
+  viewportWidth: number;
+  minWidth: number;
+  maxWidth: number;
+  minContentWidth: number;
+}
+
 interface SidebarAnimationTargets {
   translateX: number;
   backdropOpacity: number;
+}
+
+interface DesktopSidebarResizeState {
+  width: number;
+  maxWidth: number;
 }
 
 export function shouldSyncSidebarAnimation(input: SidebarAnimationSyncInput): boolean {
@@ -58,4 +71,18 @@ export function getMobileSidebarWidth(windowWidth: number): number {
   }
   const preferredWidth = windowWidth * 0.56;
   return Math.round(Math.min(windowWidth, Math.max(280, Math.min(420, preferredWidth))));
+}
+
+export function getDesktopSidebarResizeState(
+  input: DesktopSidebarResizeStateInput,
+): DesktopSidebarResizeState {
+  const availableMaxWidth = Number.isFinite(input.viewportWidth)
+    ? input.viewportWidth - input.minContentWidth
+    : input.maxWidth;
+  const maxWidth = Math.max(input.minWidth, Math.min(input.maxWidth, availableMaxWidth));
+  const storedWidth = Number.isFinite(input.storedWidth) ? input.storedWidth : input.minWidth;
+  return {
+    width: Math.max(input.minWidth, Math.min(maxWidth, storedWidth)),
+    maxWidth,
+  };
 }

@@ -16,22 +16,36 @@ export interface FloatingSurfaceProps extends Omit<
   "children" | "style"
 > {
   children?: ReactNode;
+  fillContent?: boolean;
+  fillFrame?: boolean;
   frameStyle?: StyleProp<ViewStyle>;
   glassVariant?: GlassSurfaceVariant;
   style?: StyleProp<ViewStyle>;
 }
 
 export const FloatingSurface = forwardRef<View, FloatingSurfaceProps>(function FloatingSurface(
-  { children, frameStyle, glassVariant = "popover", style, ...props },
+  {
+    children,
+    fillContent = false,
+    fillFrame = false,
+    frameStyle,
+    glassVariant = "popover",
+    style,
+    ...props
+  },
   ref,
 ): ReactElement {
   const inlineFrameStyle = useMemo(() => {
     const flattened = StyleSheet.flatten(frameStyle);
     return flattened ? inlineUnistylesStyle(flattened) : undefined;
   }, [frameStyle]);
+  const surfaceStyle = useMemo(
+    () => [style, fillFrame ? styles.frameFill : null],
+    [fillFrame, style],
+  );
   return (
     <Animated.View {...props} ref={ref} style={inlineFrameStyle}>
-      <GlassSurface variant={glassVariant} style={style}>
+      <GlassSurface fillContent={fillContent} variant={glassVariant} style={surfaceStyle}>
         {children}
       </GlassSurface>
     </Animated.View>
@@ -72,3 +86,10 @@ export function FloatingScrollView({
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  frameFill: {
+    height: "100%",
+    width: "100%",
+  },
+});

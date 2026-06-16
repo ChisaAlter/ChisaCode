@@ -19,6 +19,7 @@ export type GlassSurfaceVariant = "panel" | "popover" | "sheet" | "chrome";
 
 export interface GlassSurfaceProps {
   children?: ReactNode;
+  fillContent?: boolean;
   style?: StyleProp<ViewStyle>;
   variant: GlassSurfaceVariant;
 }
@@ -28,12 +29,12 @@ const ThemedBlurView = withUnistyles(BlurView, (theme) => ({
   tint: theme.colorScheme === "light" ? ("light" as const) : ("dark" as const),
 }));
 
-export function GlassSurface({ children, style, variant }: GlassSurfaceProps) {
+export function GlassSurface({ children, fillContent = false, style, variant }: GlassSurfaceProps) {
   const surfaceStyle = useMemo(() => [style, styles.root, styles[variant]], [style, variant]);
   const webBlurLayerStyle = useMemo(() => [styles.blurLayer, styles.webBlurLayer], []);
   const contentLayerStyle = useMemo(
-    () => [styles.contentLayer, variant !== "popover" && styles.contentLayerFill],
-    [variant],
+    () => [styles.contentLayer, (fillContent || variant !== "popover") && styles.contentLayerFill],
+    [fillContent, variant],
   );
 
   return (
@@ -71,7 +72,12 @@ function WebRefractionLayer() {
         <Defs>
           <Filter id={filterId} x="-8%" y="-8%" width="116%" height="116%">
             <FeTurbulence baseFrequency="0.018 0.032" numOctaves="2" seed="7" type="fractalNoise" />
-            <FeDisplacementMap in="SourceGraphic" scale="5" xChannelSelector="R" yChannelSelector="G" />
+            <FeDisplacementMap
+              in="SourceGraphic"
+              scale="5"
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
           </Filter>
           <LinearGradient id={strokeId} x1="0%" x2="100%" y1="0%" y2="100%">
             <Stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
@@ -203,7 +209,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   webBlurLayer: {
     backgroundColor: "rgba(255, 255, 255, 0.015)",
-    backdropFilter: "blur(30px) saturate(1.18) brightness(1.03)" as unknown as ViewStyle["backfaceVisibility"],
+    backdropFilter:
+      "blur(30px) saturate(1.18) brightness(1.03)" as unknown as ViewStyle["backfaceVisibility"],
   },
   materialTint: {
     ...absoluteFill,

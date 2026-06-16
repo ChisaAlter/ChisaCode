@@ -3426,6 +3426,90 @@ test("sends close_items_request and resolves close_items_response", async () => 
   });
 });
 
+test("runs a model gateway MoA test request", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://localhost:1",
+    clientId: "client-1",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.runModelGatewayMoaTest({
+    gatewayId: "zai",
+    prompt: "hello",
+    syntheticModel: {
+      id: "moa-layered",
+      label: "MoA Layered",
+      references: [{ model: "glm-5-air" }, { model: "glm-4.6" }],
+      aggregatorModel: "glm-5",
+      rounds: 1,
+      moa: {
+        layers: [{ id: "layer-1", nodes: [{ model: "glm-5-air" }, { model: "glm-4.6" }] }],
+        aggregator: { model: "glm-5" },
+      },
+    },
+    requestId: "moa-test-request",
+  });
+
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "model_gateway.moa.test.request",
+    requestId: "moa-test-request",
+    gatewayId: "zai",
+    prompt: "hello",
+    syntheticModel: { id: "moa-layered" },
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "model_gateway.moa.test.response",
+      payload: {
+        requestId: "moa-test-request",
+        gatewayId: "zai",
+        result: {
+          finalText: "final",
+          durationMs: 42,
+          layers: [
+            {
+              id: "layer-1",
+              label: null,
+              nodes: [
+                {
+                  id: null,
+                  model: "glm-5-air",
+                  status: "success",
+                  output: "draft",
+                  error: null,
+                  durationMs: 10,
+                },
+              ],
+            },
+          ],
+          aggregator: {
+            model: "glm-5",
+            status: "success",
+            output: "final",
+            error: null,
+            durationMs: 12,
+          },
+        },
+        error: null,
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toMatchObject({
+    gatewayId: "zai",
+    result: { finalText: "final" },
+    error: null,
+  });
+});
+
 test("waitForFinish with timeout=0 omits timeoutMs and has no client deadline", async () => {
   vi.useFakeTimers();
   try {

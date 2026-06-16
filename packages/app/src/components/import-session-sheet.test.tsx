@@ -117,15 +117,17 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     visible,
     header,
     children,
+    scrollable,
     testID,
   }: {
     visible: boolean;
     header?: { title: string; actions?: ReactNode };
     children: ReactNode;
+    scrollable?: boolean;
     testID?: string;
   }) =>
     visible ? (
-      <section data-testid={testID}>
+      <section data-scrollable={scrollable === false ? "false" : "true"} data-testid={testID}>
         <h1>{header?.title}</h1>
         {header?.actions}
         {children}
@@ -275,6 +277,17 @@ function createSnapshotEntry(
   };
 }
 
+function createManyProviderSessionEntries(count: number): FetchRecentProviderSessionEntry[] {
+  return Array.from({ length: count }, (_, index) =>
+    createProviderSessionEntry({
+      providerId: "claude",
+      providerLabel: "Claude Code",
+      providerHandleId: `claude-thread-${index}`,
+      title: `Session ${index}`,
+    }),
+  );
+}
+
 describe("ImportSessionSheet", () => {
   afterEach(() => {
     cleanup();
@@ -290,7 +303,7 @@ describe("ImportSessionSheet", () => {
       "fetchRecentProviderSessions" | "importAgent"
     >);
 
-    await screen.findByText("Update the host to import sessions.");
+    await screen.findByText("更新主机后即可导入会话。");
     expect(fetchRecentProviderSessions).not.toHaveBeenCalled();
   });
 
@@ -310,7 +323,7 @@ describe("ImportSessionSheet", () => {
       },
     );
 
-    await screen.findByText("Loading recent sessions...");
+    await screen.findByText("正在加载最近会话...");
     expect(fetchRecentProviderSessions).not.toHaveBeenCalled();
   });
 
@@ -372,7 +385,7 @@ describe("ImportSessionSheet", () => {
       },
     );
 
-    await screen.findByText("Could not load recent sessions.");
+    await screen.findByText("无法加载最近会话。");
   });
 
   it("loads recent provider sessions for the workspace and renders descriptor-owned labels", async () => {
@@ -531,7 +544,7 @@ describe("ImportSessionSheet", () => {
 
     fireEvent.click(await screen.findByTestId("import-session-session-claude-provider-thread-1"));
 
-    await screen.findByText("Could not import selected session.");
+    await screen.findByText("无法导入所选会话。");
     expect(importAgent).toHaveBeenCalledWith({
       providerId: "claude",
       providerHandleId: "provider-thread-1",
@@ -686,6 +699,72 @@ describe("ImportSessionSheet", () => {
     screen.getByText("Session codex");
   });
 
+  it("owns the sheet body scrolling so the filters stay reachable above long import lists", async () => {
+    const entries = createManyProviderSessionEntries(20);
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-claude",
+      entries,
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findByText("Session 19");
+    expect(screen.getByTestId("import-session-sheet").getAttribute("data-scrollable")).toBe(
+      "false",
+    );
+    expect(screen.getByTestId("import-session-results-scroll")).toBeTruthy();
+  });
+
+  it("keeps the provider filter strip to one row when several agents are available", async () => {
+    const fetchRecentProviderSessions = vi.fn(
+      async (options: { providers?: string[] } | undefined) => {
+        const provider = options?.providers?.[0] ?? "claude";
+        return {
+          requestId: `recent-${provider}`,
+          entries: [
+            createProviderSessionEntry({
+              providerId: provider,
+              providerHandleId: `${provider}-thread`,
+              providerLabel: provider,
+              title: `Session ${provider}`,
+            }),
+          ],
+        };
+      },
+    );
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: {
+          supportsSnapshot: true,
+          entries: [
+            createSnapshotEntry("claude"),
+            createSnapshotEntry("codex"),
+            createSnapshotEntry("opencode"),
+          ],
+        },
+      },
+    );
+
+    await screen.findByText("Session claude");
+    const filterScroll = screen.getByTestId("import-session-filter-scroll");
+    expect(filterScroll.getAttribute("style")).toContain("max-height: 40px");
+  });
+
   it("does not render filter badges when only one importable provider is enabled", async () => {
     const fetchRecentProviderSessions = vi.fn(async () => ({
       requestId: "recent-codex",
@@ -738,7 +817,7 @@ describe("ImportSessionSheet", () => {
       },
     );
 
-    await screen.findByText("No importable providers are enabled.");
+    await screen.findByText("没有启用可导入的提供商。");
     expect(fetchRecentProviderSessions).not.toHaveBeenCalled();
   });
 

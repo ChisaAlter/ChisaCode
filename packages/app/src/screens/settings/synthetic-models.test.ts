@@ -4,6 +4,7 @@ import {
   buildSaveSyntheticModelPatch,
   collectSyntheticModelGateways,
   collectSyntheticModels,
+  createLegacyMoaConfig,
 } from "@/screens/settings/synthetic-models";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
@@ -84,6 +85,148 @@ describe("synthetic model helpers", () => {
           ],
         },
       },
+    });
+  });
+
+  it("builds a gateway patch for a layered MoA model while preserving legacy summary fields", () => {
+    expect(
+      buildSaveSyntheticModelPatch({
+        currentGateways: modelGateways,
+        gatewayId: "zai",
+        id: "moa-layered",
+        label: "MoA Layered",
+        references: ["glm-5-air", "glm-4.6"],
+        aggregatorModel: "glm-5",
+        rounds: 1,
+        moa: {
+          defaults: { temperature: 0.4, maxTokens: 1024 },
+          layers: [
+            {
+              id: "layer-1",
+              label: "Draft",
+              nodes: [{ model: "glm-5-air" }, { model: "glm-4.6" }],
+            },
+            {
+              id: "layer-2",
+              label: "Refine",
+              nodes: [{ model: "glm-5-air", parameters: { temperature: 0.2 } }],
+            },
+          ],
+          aggregator: {
+            model: "glm-5",
+            parameters: { systemPrompt: "Synthesize carefully." },
+          },
+        },
+      }),
+    ).toEqual({
+      modelGateways: {
+        zai: {
+          models: modelGateways.zai.models,
+          syntheticModels: [
+            modelGateways.zai.syntheticModels[0],
+            {
+              id: "moa-layered",
+              label: "MoA Layered",
+              references: [{ model: "glm-5-air" }, { model: "glm-4.6" }],
+              aggregatorModel: "glm-5",
+              rounds: 1,
+              moa: {
+                defaults: { temperature: 0.4, maxTokens: 1024 },
+                layers: [
+                  {
+                    id: "layer-1",
+                    label: "Draft",
+                    nodes: [{ model: "glm-5-air" }, { model: "glm-4.6" }],
+                  },
+                  {
+                    id: "layer-2",
+                    label: "Refine",
+                    nodes: [{ model: "glm-5-air", parameters: { temperature: 0.2 } }],
+                  },
+                ],
+                aggregator: {
+                  model: "glm-5",
+                  parameters: { systemPrompt: "Synthesize carefully." },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it("allows a layered MoA synthetic model with one configured model per stage", () => {
+    expect(
+      buildSaveSyntheticModelPatch({
+        currentGateways: modelGateways,
+        gatewayId: "zai",
+        id: "single-model-moa",
+        label: "Single Model MoA",
+        references: ["glm-5"],
+        aggregatorModel: "glm-5",
+        rounds: 2,
+        moa: {
+          layers: [
+            {
+              id: "layer-1",
+              label: "Draft",
+              nodes: [{ model: "glm-5" }],
+            },
+            {
+              id: "layer-2",
+              label: "Review",
+              nodes: [{ model: "glm-5" }],
+            },
+          ],
+          aggregator: { model: "glm-5" },
+        },
+      }),
+    ).toMatchObject({
+      modelGateways: {
+        zai: {
+          syntheticModels: [
+            modelGateways.zai.syntheticModels[0],
+            {
+              id: "single-model-moa",
+              references: [{ model: "glm-5" }],
+              aggregatorModel: "glm-5",
+              rounds: 2,
+              moa: {
+                layers: [
+                  { id: "layer-1", nodes: [{ model: "glm-5" }] },
+                  { id: "layer-2", nodes: [{ model: "glm-5" }] },
+                ],
+                aggregator: { model: "glm-5" },
+              },
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it("creates a legacy-compatible MoA config from references and rounds", () => {
+    expect(
+      createLegacyMoaConfig({
+        references: [{ model: "glm-5" }, { model: "glm-5-air" }],
+        aggregatorModel: "glm-5",
+        rounds: 2,
+      }),
+    ).toEqual({
+      layers: [
+        {
+          id: "layer-1",
+          label: "Layer 1",
+          nodes: [{ model: "glm-5" }, { model: "glm-5-air" }],
+        },
+        {
+          id: "layer-2",
+          label: "Layer 2",
+          nodes: [{ model: "glm-5" }, { model: "glm-5-air" }],
+        },
+      ],
+      aggregator: { model: "glm-5" },
     });
   });
 

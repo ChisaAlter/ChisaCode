@@ -88,11 +88,7 @@ interface ControlledAgentControlsProps {
   selectedModelId?: string;
   selectedRuntimeProviderId?: string | null;
   onSelectModel?: (modelId: string) => void;
-  onSelectProviderAndModel?: (
-    provider: string,
-    modelId: string,
-    runtimeProvider?: string,
-  ) => void;
+  onSelectProviderAndModel?: (provider: string, modelId: string, runtimeProvider?: string) => void;
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
   onSelectThinkingOption?: (thinkingOptionId: string) => void;
@@ -377,20 +373,12 @@ function pickSheetModel({
 }: {
   selection: ProviderModelSelectionValue;
   currentProvider: string;
-  onSelectProviderAndModel?: (
-    provider: string,
-    modelId: string,
-    runtimeProvider?: string,
-  ) => void;
+  onSelectProviderAndModel?: (provider: string, modelId: string, runtimeProvider?: string) => void;
   onSelectProvider?: (providerId: string) => void;
   onSelectModel?: (modelId: string) => void;
 }) {
   if (onSelectProviderAndModel) {
-    onSelectProviderAndModel(
-      selection.agentProvider,
-      selection.modelId,
-      selection.runtimeProvider,
-    );
+    onSelectProviderAndModel(selection.agentProvider, selection.modelId, selection.runtimeProvider);
     return;
   }
   if (selection.agentProvider !== currentProvider) {
@@ -407,11 +395,7 @@ function pickDesktopModel({
 }: {
   selection: ProviderModelSelectionValue;
   currentProvider: string;
-  onSelectProviderAndModel?: (
-    provider: string,
-    modelId: string,
-    runtimeProvider?: string,
-  ) => void;
+  onSelectProviderAndModel?: (provider: string, modelId: string, runtimeProvider?: string) => void;
   onSelectModel?: (modelId: string) => void;
 }) {
   if (selection.agentProvider === currentProvider) {
@@ -1700,7 +1684,7 @@ export const AgentControls = memo(function AgentControls({
       new Set(
         (preferences.favoriteModels ?? []).map((favorite) => buildFavoriteModelKey(favorite)),
       ),
-      [preferences.favoriteModels],
+    [preferences.favoriteModels],
   );
   const activeModelId = modelSelection.activeModelId;
 

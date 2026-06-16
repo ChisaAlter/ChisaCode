@@ -86,14 +86,56 @@ export const SyntheticModelReferenceSchema = z
   })
   .strict();
 
+export const SyntheticModelParametersSchema = z
+  .object({
+    temperature: z.number().min(0).max(2).optional(),
+    maxTokens: z.number().int().positive().optional(),
+    systemPrompt: z.string().optional(),
+  })
+  .strict();
+
+export const SyntheticModelNodeSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    model: z.string().min(1),
+    label: z.string().optional(),
+    parameters: SyntheticModelParametersSchema.optional(),
+  })
+  .strict();
+
+export const SyntheticModelLayerSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().optional(),
+    nodes: z.array(SyntheticModelNodeSchema).min(1),
+    parameters: SyntheticModelParametersSchema.optional(),
+  })
+  .strict();
+
+export const SyntheticModelAggregatorSchema = z
+  .object({
+    model: z.string().min(1),
+    parameters: SyntheticModelParametersSchema.optional(),
+  })
+  .strict();
+
+export const SyntheticModelMoaSchema = z
+  .object({
+    defaults: SyntheticModelParametersSchema.optional(),
+    layers: z.array(SyntheticModelLayerSchema).min(1),
+    aggregator: SyntheticModelAggregatorSchema,
+  })
+  .strict();
+
 export const SyntheticModelConfigSchema = z
   .object({
     id: z.string().min(1),
     label: z.string().min(1),
     description: z.string().optional(),
-    references: z.array(SyntheticModelReferenceSchema).min(2),
+    references: z.array(SyntheticModelReferenceSchema).min(1),
     aggregatorModel: z.string().min(1),
     rounds: z.number().int().positive().max(4).default(1),
+    moa: SyntheticModelMoaSchema.optional(),
   })
   .strict();
 
@@ -242,6 +284,10 @@ export type ProviderProfileModel = z.infer<typeof ProviderProfileModelSchema>;
 export type ProviderOverride = z.infer<typeof ProviderOverrideSchema>;
 export type ProviderOverrides = z.infer<typeof ProviderOverridesSchema>;
 export type ModelGatewayUpstream = z.infer<typeof ModelGatewayUpstreamSchema>;
+export type SyntheticModelParameters = z.infer<typeof SyntheticModelParametersSchema>;
+export type SyntheticModelNode = z.infer<typeof SyntheticModelNodeSchema>;
+export type SyntheticModelLayer = z.infer<typeof SyntheticModelLayerSchema>;
+export type SyntheticModelMoa = z.infer<typeof SyntheticModelMoaSchema>;
 export type SyntheticModelConfig = z.infer<typeof SyntheticModelConfigSchema>;
 export type ModelGatewayConfig = z.infer<typeof ModelGatewayConfigSchema>;
 export type ModelGatewayConfigs = z.infer<typeof ModelGatewayConfigsSchema>;

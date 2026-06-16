@@ -111,6 +111,11 @@ vi.mock("@/constants/platform", () => ({ isWeb: true }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, string>) => {
+      const context = params?.context ?? "";
+      const model = params?.model ?? "";
+      const provider = params?.provider ?? "";
+      const ready = params?.ready ?? "";
+      const total = params?.total ?? "";
       const translations: Record<string, string> = {
         "common.cancel": "Cancel",
         "common.delete": "Delete",
@@ -119,20 +124,22 @@ vi.mock("react-i18next", () => ({
         "customModelProviders.addCustomProvider": "Add custom provider",
         "customModelProviders.addModel": "Add model",
         "customModelProviders.apiKey": "API key",
-        "customModelProviders.contextBadge": `${params?.context ?? ""} context`,
+        "customModelProviders.contextBadge": `${context} context`,
         "customModelProviders.contextPlaceholder": "Context tokens, e.g. 200000",
-        "customModelProviders.deleteConfirmMessage": `Disable ${params?.provider ?? ""}`,
+        "customModelProviders.deleteConfirmMessage": `Disable ${provider}`,
         "customModelProviders.deleteConfirmTitle": "Delete custom provider?",
         "customModelProviders.deleteFailed": "Failed to delete custom provider",
-        "customModelProviders.deleteModel": `Delete ${params?.model ?? ""}`,
-        "customModelProviders.deleteProvider": `Delete ${params?.provider ?? ""}`,
+        "customModelProviders.deleteModel": `Delete ${model}`,
+        "customModelProviders.deleteProvider": `Delete ${provider}`,
         "customModelProviders.editCustomProvider": "Edit custom provider",
-        "customModelProviders.editModel": `Edit ${params?.model ?? ""}`,
-        "customModelProviders.editProvider": `Edit ${params?.provider ?? ""}`,
+        "customModelProviders.editModel": `Edit ${model}`,
+        "customModelProviders.editProvider": `Edit ${provider}`,
         "customModelProviders.empty": "No custom providers yet",
         "customModelProviders.modelList": "Model list",
         "customModelProviders.noModels": "No models yet",
         "customModelProviders.notTested": "Not tested",
+        "customModelProviders.partiallyReady": `${ready}/${total} ready`,
+        "customModelProviders.testFailedShort": "Test failed",
         "customModelProviders.providerId": "Provider ID",
         "customModelProviders.providerLabel": "Display name",
         "customModelProviders.saveFailed": "Failed to save custom provider",
@@ -142,12 +149,13 @@ vi.mock("react-i18next", () => ({
         "customModelProviders.supportsImages": "Recognizes images",
         "customModelProviders.supportsImagesBadge": "Images",
         "customModelProviders.test": "Test",
-        "customModelProviders.testingModel": `Testing ${params?.model ?? ""}`,
-        "customModelProviders.testQueued": `${params?.model ?? ""} test started`,
-        "customModelProviders.testModel": `Test ${params?.model ?? ""}`,
+        "customModelProviders.testingModel": `Testing ${model}`,
+        "customModelProviders.testQueued": `${model} test started`,
+        "customModelProviders.testModel": `Test ${model}`,
         "customModelProviders.testing": "Testing...",
         "customModelProviders.title": "Custom providers",
         "providers.ready": "Ready",
+        "providers.loading": "Loading",
       };
       return translations[key] ?? key;
     },
@@ -346,6 +354,36 @@ describe("CustomModelProvidersSection", () => {
     expect(container.querySelector('button[aria-label="Test glm-5"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Edit glm-5"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Delete glm-5"]')).not.toBeNull();
+  });
+
+  it("summarizes generated provider status without exposing raw availability errors", () => {
+    snapshotState.entries = [
+      {
+        provider: "zai-claude",
+        status: "ready",
+        enabled: true,
+      },
+      {
+        provider: "zai-codex",
+        status: "error",
+        enabled: true,
+        error: "Timed out checking zai Codex availability after 30000ms",
+      },
+      {
+        provider: "zai-opencode",
+        status: "error",
+        enabled: true,
+        error: "Unknown error",
+      },
+    ];
+
+    act(() => {
+      root.render(<CustomModelProvidersSection serverId="server-1" />);
+    });
+
+    expect(container.textContent).toContain("1/3 ready");
+    expect(container.textContent).not.toContain("Timed out checking");
+    expect(container.textContent).not.toContain("Unknown error");
   });
 
   it("closes the editor after saving without waiting for provider refresh", async () => {

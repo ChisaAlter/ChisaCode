@@ -195,6 +195,8 @@ export interface WorkspaceTabReconcileState {
   pinnedAgentIds?: ReadonlySet<string> | null;
   hiddenAgentIds?: ReadonlySet<string> | null;
   suppressedAutoOpenAgentIds?: ReadonlySet<string> | null;
+  suppressedAutoOpenTerminalIds?: ReadonlySet<string> | null;
+  isWorkspaceAutoOpenSuppressed?: boolean;
 }
 
 export interface WorkspaceTabSnapshot {
@@ -1730,53 +1732,41 @@ function addMissingEntityTabs(input: {
   return nextLayout;
 }
 
-export function reconcileWorkspaceTabs(
-  state: WorkspaceTabReconcileState,
-  snapshot: WorkspaceTabSnapshot,
-): WorkspaceTabReconcileState {
-  let nextLayout = state.layout;
-  const originalFocusedTabId =
-    findPaneById(nextLayout.root, nextLayout.focusedPaneId)?.focusedTabId ?? null;
-  let reconciledFocusedTabId = originalFocusedTabId;
-  const pinnedAgentIds = new Set(state.pinnedAgentIds ?? []);
-  const hiddenAgentIds = new Set(state.hiddenAgentIds ?? []);
-  const suppressedAutoOpenAgentIds = new Set(state.suppressedAutoOpenAgentIds ?? []);
-  const activeAgentIds = normalizeStringSet(snapshot.activeAgentIds);
-  const autoOpenAgentIds = normalizeStringSet(snapshot.autoOpenAgentIds);
-  const knownAgentIds = normalizeStringSet(snapshot.knownAgentIds);
-  const standaloneTerminalIds = normalizeStringSet(snapshot.standaloneTerminalIds);
-  const knownTerminalIds = snapshot.knownTerminalIds
-    ? normalizeStringSet(snapshot.knownTerminalIds)
-    : standaloneTerminalIds;
-  const visibleAgentIds = applyPinnedAndHidden({
-    baseAgentIds: activeAgentIds,
-    pinnedAgentIds,
-    hiddenAgentIds,
-    knownAgentIds,
-  });
-  const autoOpenSet = applyPinnedAndHidden({
-    baseAgentIds: autoOpenAgentIds,
-    pinnedAgentIds,
-    hiddenAgentIds,
-    knownAgentIds,
-  });
-  for (const agentId of suppressedAutoOpenAgentIds) {
-    autoOpenSet.delete(agentId);
+function removeSetItems(target: Set<string>, items: ReadonlySet<string>): void {
+  for (const item of items) {
+    target.delete(item);
   }
+}
 
-  const initialTabs = collectAllTabs(nextLayout.root);
-  const representedAgentIds = new Set(
-    initialTabs.filter(isAgentTab).map((tab) => tab.target.agentId),
-  );
+function addMissingEntityTabsIfAllowed(input: {
+  layout: WorkspaceLayout;
+  autoOpenAgentIds: Set<string>;
+  representedAgentIds: Set<string>;
+  standaloneTerminalIds: Set<string>;
+  hasActivePendingDraftCreate: boolean;
+  isWorkspaceAutoOpenSuppressed: boolean;
+}): WorkspaceLayout {
+  if (input.isWorkspaceAutoOpenSuppressed) {
+    return input.layout;
+  }
+  return addMissingEntityTabs(input);
+}
 
-  const entityGroups = buildEntityTabGroups(initialTabs);
+function reconcileEntityTabGroups(input: {
+  layout: WorkspaceLayout;
+  initialTabs: WorkspaceTab[];
+  originalFocusedTabId: string | null;
+}): { layout: WorkspaceLayout; reconciledFocusedTabId: string | null } {
+  let nextLayout = input.layout;
+  let reconciledFocusedTabId = input.originalFocusedTabId;
+  const entityGroups = buildEntityTabGroups(input.initialTabs);
 
   for (const [canonicalTabId, group] of entityGroups) {
     const keeper = group.tabs.find((tab) => tab.tabId === canonicalTabId) ?? group.tabs[0] ?? null;
     if (!keeper) {
       continue;
     }
-    if (group.tabs.some((tab) => tab.tabId === originalFocusedTabId)) {
+    if (group.tabs.some((tab) => tab.tabId === input.originalFocusedTabId)) {
       reconciledFocusedTabId = keeper.tabId;
     }
     if (!workspaceTabTargetsEqual(keeper.target, group.target)) {
@@ -1802,6 +1792,56 @@ export function reconcileWorkspaceTabs(
     }
   }
 
+  return { layout: nextLayout, reconciledFocusedTabId };
+}
+
+export function reconcileWorkspaceTabs(
+  state: WorkspaceTabReconcileState,
+  snapshot: WorkspaceTabSnapshot,
+): WorkspaceTabReconcileState {
+  let nextLayout = state.layout;
+  const originalFocusedTabId =
+    findPaneById(nextLayout.root, nextLayout.focusedPaneId)?.focusedTabId ?? null;
+  let reconciledFocusedTabId = originalFocusedTabId;
+  const pinnedAgentIds = new Set(state.pinnedAgentIds ?? []);
+  const hiddenAgentIds = new Set(state.hiddenAgentIds ?? []);
+  const suppressedAutoOpenAgentIds = new Set(state.suppressedAutoOpenAgentIds ?? []);
+  const suppressedAutoOpenTerminalIds = new Set(state.suppressedAutoOpenTerminalIds ?? []);
+  const activeAgentIds = normalizeStringSet(snapshot.activeAgentIds);
+  const autoOpenAgentIds = normalizeStringSet(snapshot.autoOpenAgentIds);
+  const knownAgentIds = normalizeStringSet(snapshot.knownAgentIds);
+  const standaloneTerminalIds = normalizeStringSet(snapshot.standaloneTerminalIds);
+  const knownTerminalIds = snapshot.knownTerminalIds
+    ? normalizeStringSet(snapshot.knownTerminalIds)
+    : standaloneTerminalIds;
+  const visibleAgentIds = applyPinnedAndHidden({
+    baseAgentIds: activeAgentIds,
+    pinnedAgentIds,
+    hiddenAgentIds,
+    knownAgentIds,
+  });
+  const autoOpenSet = applyPinnedAndHidden({
+    baseAgentIds: autoOpenAgentIds,
+    pinnedAgentIds,
+    hiddenAgentIds,
+    knownAgentIds,
+  });
+  removeSetItems(autoOpenSet, suppressedAutoOpenAgentIds);
+  removeSetItems(standaloneTerminalIds, suppressedAutoOpenTerminalIds);
+
+  const initialTabs = collectAllTabs(nextLayout.root);
+  const representedAgentIds = new Set(
+    initialTabs.filter(isAgentTab).map((tab) => tab.target.agentId),
+  );
+
+  const dedupedEntityTabs = reconcileEntityTabGroups({
+    layout: nextLayout,
+    initialTabs,
+    originalFocusedTabId,
+  });
+  nextLayout = dedupedEntityTabs.layout;
+  reconciledFocusedTabId = dedupedEntityTabs.reconciledFocusedTabId;
+
   nextLayout = collapseStaleEntityTabs({
     layout: nextLayout,
     snapshot,
@@ -1809,12 +1849,13 @@ export function reconcileWorkspaceTabs(
     knownTerminalIds,
   });
 
-  nextLayout = addMissingEntityTabs({
+  nextLayout = addMissingEntityTabsIfAllowed({
     layout: nextLayout,
     autoOpenAgentIds: autoOpenSet,
     representedAgentIds,
     standaloneTerminalIds,
     hasActivePendingDraftCreate: snapshot.hasActivePendingDraftCreate ?? false,
+    isWorkspaceAutoOpenSuppressed: state.isWorkspaceAutoOpenSuppressed ?? false,
   });
 
   if (reconciledFocusedTabId) {

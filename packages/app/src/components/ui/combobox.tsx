@@ -1096,6 +1096,7 @@ interface DesktopBodyProps {
   refs: ReturnType<typeof useFloating>["refs"];
   shouldUseDesktopFade: boolean;
   desktopFrameStyle: StyleProp<ViewStyle>;
+  fillDesktopFrame: boolean;
   handleDesktopContentLayout: (event: LayoutChangeEvent) => void;
   header: SheetHeader | undefined;
   stickyHeader: ReactNode;
@@ -1219,6 +1220,8 @@ function DesktopComboboxBody(props: DesktopBodyProps): ReactElement {
           testID="combobox-desktop-container"
           entering={props.shouldUseDesktopFade ? FadeIn.duration(100) : undefined}
           exiting={props.shouldUseDesktopFade ? FadeOut.duration(100) : undefined}
+          fillContent={props.fillDesktopFrame}
+          fillFrame={props.fillDesktopFrame}
           style={styles.desktopContainer}
           frameStyle={props.desktopFrameStyle}
           ref={props.refs.setFloating}
@@ -1598,6 +1601,7 @@ export function Combobox({
       refs={refs}
       shouldUseDesktopFade={shouldUseDesktopFade}
       desktopFrameStyle={desktopFrameStyle}
+      fillDesktopFrame={desktopFixedHeight != null}
       handleDesktopContentLayout={handleDesktopContentLayout}
       header={header}
       stickyHeader={stickyHeader}

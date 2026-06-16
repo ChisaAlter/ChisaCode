@@ -24,6 +24,11 @@ describe("createAppI18n", () => {
     expect(i18n.t("settings.general.language.title")).toBe("Language");
   });
 
+  it("labels the glass theme in Chinese and English", () => {
+    expect(createAppI18n("zh-CN").t("settings.general.theme.options.liquid-neon")).toBe("玻璃");
+    expect(createAppI18n("en").t("settings.general.theme.options.liquid-neon")).toBe("Glass");
+  });
+
   it("falls back to English when a key is missing from the selected language", () => {
     const i18n = createAppI18n("zh-CN", {
       "zh-CN": {},

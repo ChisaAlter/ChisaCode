@@ -55,6 +55,7 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
 import { useComposerHeightMirror } from "./height-mirror";
 import { computeCanStartDictation } from "./state";
 import { useTranslation } from "react-i18next";
@@ -438,6 +439,7 @@ interface KeyboardActionHandlers {
   cancelDictation: () => void | Promise<void>;
   startDictationIfAvailable: () => Promise<void>;
   handleToggleRealtimeVoiceShortcut: () => void;
+  isVoiceUiVisible: boolean;
   isRealtimeVoiceForCurrentAgent: boolean;
   voice: { toggleMute: () => void } | null | undefined;
 }
@@ -459,10 +461,12 @@ function runKeyboardActionImpl(
     return false;
   }
   if (action === "voice-toggle") {
+    if (!h.isVoiceUiVisible) return false;
     h.handleToggleRealtimeVoiceShortcut();
     return true;
   }
   if (action === "voice-mute-toggle") {
+    if (!h.isVoiceUiVisible) return false;
     if (h.isRealtimeVoiceForCurrentAgent) {
       h.voice?.toggleMute();
     }
@@ -476,6 +480,7 @@ function runKeyboardActionImpl(
     return false;
   }
   if (action === "dictation-toggle") {
+    if (!h.isVoiceUiVisible) return false;
     if (h.isDictatingRef.current) {
       h.sendAfterTranscriptRef.current = true;
       void h.confirmDictation();
@@ -975,6 +980,20 @@ function computeShouldShowDictationOverlay(
   return isDictating || isDictationProcessing || dictationStatus === "failed";
 }
 
+function computeVisibleDictationOverlay(
+  isDictating: boolean,
+  isDictationProcessing: boolean,
+  dictationStatus: string,
+): boolean {
+  if (!COMPOSER_VOICE_UI_VISIBLE) return false;
+  return computeShouldShowDictationOverlay(isDictating, isDictationProcessing, dictationStatus);
+}
+
+function computeVisibleRealtimeOverlay(isRealtimeVoiceForCurrentAgent: boolean): boolean {
+  if (!COMPOSER_VOICE_UI_VISIBLE) return false;
+  return isRealtimeVoiceForCurrentAgent;
+}
+
 interface SendableContentInput {
   value: string;
   attachments: ComposerAttachment[];
@@ -1255,6 +1274,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           cancelDictation,
           startDictationIfAvailable,
           handleToggleRealtimeVoiceShortcut,
+          isVoiceUiVisible: COMPOSER_VOICE_UI_VISIBLE,
           isRealtimeVoiceForCurrentAgent,
           voice,
         }),
@@ -1371,12 +1391,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       voiceServerId,
       voiceAgentId,
     );
-    const showDictationOverlay = computeShouldShowDictationOverlay(
+    const showDictationOverlay = computeVisibleDictationOverlay(
       isDictating,
       isDictationProcessing,
       dictationStatus,
     );
-    const showRealtimeOverlay = isRealtimeVoiceForCurrentAgent;
+    const showRealtimeOverlay = computeVisibleRealtimeOverlay(isRealtimeVoiceForCurrentAgent);
     const showOverlay = showDictationOverlay || showRealtimeOverlay;
 
     useEffect(() => {
@@ -1834,17 +1854,19 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             {/* Right: voice button, contextual button (realtime/send/cancel) */}
             <View style={styles.rightButtonGroup}>
               {beforeVoiceContent}
-              <VoiceButtonTooltip
-                onVoicePress={handleVoicePress}
-                isDictationStartEnabled={isDictationStartEnabled}
-                voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
-                voiceButtonStyle={voiceButtonStyle}
-                renderVoiceButtonIcon={renderVoiceButtonIcon}
-                voiceTooltipText={voiceTooltipText}
-                isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
-                voiceMuteToggleKeys={voiceMuteToggleKeys}
-                dictationToggleKeys={dictationToggleKeys}
-              />
+              {COMPOSER_VOICE_UI_VISIBLE ? (
+                <VoiceButtonTooltip
+                  onVoicePress={handleVoicePress}
+                  isDictationStartEnabled={isDictationStartEnabled}
+                  voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
+                  voiceButtonStyle={voiceButtonStyle}
+                  renderVoiceButtonIcon={renderVoiceButtonIcon}
+                  voiceTooltipText={voiceTooltipText}
+                  isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
+                  voiceMuteToggleKeys={voiceMuteToggleKeys}
+                  dictationToggleKeys={dictationToggleKeys}
+                />
+              ) : null}
               {rightContent}
               <SendButtonTooltip
                 shouldShow={shouldShowSendButton}

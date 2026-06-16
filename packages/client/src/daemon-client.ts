@@ -64,6 +64,7 @@ import type {
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
   ProviderToolingActionResponseMessage,
+  ModelGatewayMoaTestResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   AgentRewindResponseMessage,
@@ -82,6 +83,7 @@ import type {
   ChisaCodeConfigRaw,
   ChisaCodeConfigRevision,
 } from "@chisacode/protocol/messages";
+import type { SyntheticModelConfig } from "@chisacode/protocol/provider-config";
 import type {
   AgentPermissionRequest,
   AgentPermissionResponse,
@@ -331,6 +333,7 @@ type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderToolingActionPayload = ProviderToolingActionResponseMessage["payload"];
+type ModelGatewayMoaTestPayload = ModelGatewayMoaTestResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type ReadProjectConfigPayload = Extract<
@@ -355,6 +358,13 @@ export interface WriteProjectConfigInput {
 interface ListCommandsOptions {
   requestId?: string;
   draftConfig?: ListCommandsDraftConfig;
+}
+
+export interface RunModelGatewayMoaTestInput {
+  gatewayId: string;
+  syntheticModel: SyntheticModelConfig;
+  prompt: string;
+  requestId?: string;
 }
 type SetVoiceModePayload = Extract<
   SessionOutboundMessage,
@@ -3556,6 +3566,22 @@ export class DaemonClient {
         action,
       },
       responseType: "provider.tooling.run.response",
+      timeout: 120000,
+    });
+  }
+
+  async runModelGatewayMoaTest(
+    input: RunModelGatewayMoaTestInput,
+  ): Promise<ModelGatewayMoaTestPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "model_gateway.moa.test.request",
+        gatewayId: input.gatewayId,
+        syntheticModel: input.syntheticModel,
+        prompt: input.prompt,
+      },
+      responseType: "model_gateway.moa.test.response",
       timeout: 120000,
     });
   }

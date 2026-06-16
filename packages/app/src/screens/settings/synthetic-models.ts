@@ -1,6 +1,7 @@
 import type {
   ProviderProfileModel,
   SyntheticModelConfig,
+  SyntheticModelMoa,
 } from "@chisacode/protocol/provider-config";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
 
@@ -29,6 +30,7 @@ export interface SaveSyntheticModelInput {
   references: string[];
   aggregatorModel: string;
   rounds: number;
+  moa?: SyntheticModelMoa;
 }
 
 function trim(value: string | null | undefined): string {
@@ -63,6 +65,24 @@ function modelFromSyntheticModel(model: SyntheticModelConfig): ProviderProfileMo
 
 function modelIds(models: ProviderProfileModel[]): Set<string> {
   return new Set(models.map((model) => model.id));
+}
+
+function validateMoaModels(
+  moa: SyntheticModelMoa | undefined,
+  availableModelIds: Set<string>,
+): void {
+  if (!moa) {
+    return;
+  }
+  const modelIdsToCheck = [
+    moa.aggregator.model,
+    ...moa.layers.flatMap((layer) => layer.nodes.map((node) => node.model)),
+  ];
+  for (const model of modelIdsToCheck) {
+    if (!availableModelIds.has(model)) {
+      throw new Error(`Model "${model}" is not configured on this provider`);
+    }
+  }
 }
 
 function buildGatewayPatch(
@@ -104,6 +124,7 @@ export function collectSyntheticModels(
         references: model.references,
         aggregatorModel: model.aggregatorModel,
         rounds: model.rounds,
+        moa: model.moa,
         gatewayId: gateway.id,
         gatewayLabel: gateway.label ?? gateway.id,
       })),
@@ -129,8 +150,8 @@ export function buildSaveSyntheticModelPatch(
   if (!id) {
     throw new Error("Model ID is required");
   }
-  if (references.length < 2) {
-    throw new Error("Select at least two reference models");
+  if (references.length < 1) {
+    throw new Error("Select at least one reference model");
   }
   if (!aggregatorModel) {
     throw new Error("Select an aggregator model");
@@ -143,6 +164,7 @@ export function buildSaveSyntheticModelPatch(
       throw new Error(`Model "${model}" is not configured on ${gateway.label ?? gateway.id}`);
     }
   }
+  validateMoaModels(input.moa, availableModelIds);
 
   const nextModel: SyntheticModelConfig = {
     id,
@@ -151,6 +173,7 @@ export function buildSaveSyntheticModelPatch(
     references: references.map((model) => ({ model })),
     aggregatorModel,
     rounds: normalizePositiveRounds(input.rounds),
+    ...(input.moa ? { moa: input.moa } : {}),
   };
   const previousGatewayId = trim(input.previousGatewayId);
   const previousId = trim(input.previousId);
@@ -198,4 +221,21 @@ export function getGatewayModelListWithSyntheticModels(
   gateway: SelectableSyntheticGateway,
 ): ProviderProfileModel[] {
   return [...gateway.models, ...gateway.syntheticModels.map(modelFromSyntheticModel)];
+}
+
+export function createLegacyMoaConfig(input: {
+  references: SyntheticModelConfig["references"];
+  aggregatorModel: string;
+  rounds?: number;
+}): SyntheticModelMoa {
+  const rounds = normalizePositiveRounds(input.rounds ?? 1);
+  const nodes = input.references.map((reference) => ({ model: reference.model }));
+  return {
+    layers: Array.from({ length: rounds }, (_, index) => ({
+      id: `layer-${index + 1}`,
+      label: `Layer ${index + 1}`,
+      nodes,
+    })),
+    aggregator: { model: input.aggregatorModel },
+  };
 }

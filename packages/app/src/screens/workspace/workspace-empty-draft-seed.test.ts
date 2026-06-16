@@ -8,6 +8,7 @@ const readyEmptyWorkspace = {
   hasHydratedWorkspaceLayoutStore: true,
   hasHydratedAgents: true,
   hasLoadedTerminals: true,
+  hasConsideredEmptyWorkspaceDraftSeed: false,
   activeAgentCount: 0,
   terminalCount: 0,
   workspaceTabCount: 0,
@@ -67,5 +68,14 @@ describe("shouldSeedEmptyWorkspaceDraft", () => {
 
   it("seeds once an empty focused workspace is fully known", () => {
     expect(shouldSeedEmptyWorkspaceDraft(readyEmptyWorkspace)).toBe(true);
+  });
+
+  it("does not seed again once empty workspace seeding was already considered", () => {
+    const alreadyConsideredWorkspace = {
+      ...readyEmptyWorkspace,
+      hasConsideredEmptyWorkspaceDraftSeed: true,
+    };
+
+    expect(shouldSeedEmptyWorkspaceDraft(alreadyConsideredWorkspace)).toBe(false);
   });
 });

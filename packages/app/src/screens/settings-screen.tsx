@@ -1623,7 +1623,7 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     width: 320,
     borderRightWidth: 1,
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   mobileContainer: {
     paddingVertical: theme.spacing[2],
@@ -1646,10 +1646,10 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     borderColor: "transparent",
   },
   itemHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   itemSelected: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceSidebarHover,
     borderColor: theme.colors.borderAccent,
     ...theme.shadow.sm,
   },

@@ -1,0 +1,229 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-06-16T06:39:13.268Z",
+  "generator": "scripts/generate-modular-knowledge-graphs.mjs",
+  "module": {
+    "id": "highlight",
+    "packageName": "@chisacode/highlight",
+    "path": "packages/highlight",
+    "description": "Shared syntax highlighting utilities used by client-facing packages.",
+    "ownership": [
+      "syntax tokenization",
+      "shared highlighting output",
+      "renderer-safe code display support"
+    ]
+  },
+  "entrypoints": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "source": "./src/index.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "scripts": {
+      "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json --incremental false",
+      "prepack": "npm run build",
+      "test": "vitest run",
+      "typecheck": "tsgo --noEmit"
+    }
+  },
+  "stats": {
+    "files": 11,
+    "categories": {
+      "config": 2,
+      "docs": 1,
+      "test": 3,
+      "source": 5
+    },
+    "internalImportEdges": 11,
+    "workspaceDependencies": [],
+    "externalDependencies": [
+      "@lezer/common",
+      "@lezer/cpp",
+      "@lezer/css",
+      "@lezer/go",
+      "@lezer/highlight",
+      "@lezer/html",
+      "@lezer/java",
+      "@lezer/javascript",
+      "@lezer/json",
+      "@lezer/markdown",
+      "@lezer/php",
+      "@lezer/python",
+      "@lezer/rust",
+      "@lezer/xml",
+      "@lezer/yaml",
+      "lezer-elixir",
+      "node:fs",
+      "vitest"
+    ],
+    "unresolvedInternalImports": 0
+  },
+  "nodes": [
+    {
+      "id": "file:packages/highlight/package.json",
+      "type": "config",
+      "path": "packages/highlight/package.json",
+      "lines": 50,
+      "imports": ["node:fs"]
+    },
+    {
+      "id": "file:packages/highlight/README.md",
+      "type": "docs",
+      "path": "packages/highlight/README.md",
+      "lines": 28,
+      "imports": []
+    },
+    {
+      "id": "file:packages/highlight/src/__tests__/colors.test.ts",
+      "type": "test",
+      "path": "packages/highlight/src/__tests__/colors.test.ts",
+      "lines": 66,
+      "imports": ["../colors.js", "../types.js", "vitest"]
+    },
+    {
+      "id": "file:packages/highlight/src/__tests__/highlighter.test.ts",
+      "type": "test",
+      "path": "packages/highlight/src/__tests__/highlighter.test.ts",
+      "lines": 126,
+      "imports": ["../highlighter.js", "vitest"]
+    },
+    {
+      "id": "file:packages/highlight/src/__tests__/parsers.test.ts",
+      "type": "test",
+      "path": "packages/highlight/src/__tests__/parsers.test.ts",
+      "lines": 75,
+      "imports": ["../parsers.js", "vitest"]
+    },
+    {
+      "id": "file:packages/highlight/src/colors.ts",
+      "type": "source",
+      "path": "packages/highlight/src/colors.ts",
+      "lines": 48,
+      "imports": ["./types.js"]
+    },
+    {
+      "id": "file:packages/highlight/src/highlighter.ts",
+      "type": "source",
+      "path": "packages/highlight/src/highlighter.ts",
+      "lines": 112,
+      "imports": ["./parsers.js", "./types.js", "@lezer/highlight"]
+    },
+    {
+      "id": "file:packages/highlight/src/index.ts",
+      "type": "source",
+      "path": "packages/highlight/src/index.ts",
+      "lines": 5,
+      "imports": ["./colors.js", "./highlighter.js", "./parsers.js", "./types.js"]
+    },
+    {
+      "id": "file:packages/highlight/src/parsers.ts",
+      "type": "source",
+      "path": "packages/highlight/src/parsers.ts",
+      "lines": 79,
+      "imports": [
+        "@lezer/common",
+        "@lezer/cpp",
+        "@lezer/css",
+        "@lezer/go",
+        "@lezer/html",
+        "@lezer/java",
+        "@lezer/javascript",
+        "@lezer/json",
+        "@lezer/markdown",
+        "@lezer/php",
+        "@lezer/python",
+        "@lezer/rust",
+        "@lezer/xml",
+        "@lezer/yaml",
+        "lezer-elixir"
+      ]
+    },
+    {
+      "id": "file:packages/highlight/src/types.ts",
+      "type": "source",
+      "path": "packages/highlight/src/types.ts",
+      "lines": 27,
+      "imports": []
+    },
+    {
+      "id": "file:packages/highlight/tsconfig.json",
+      "type": "config",
+      "path": "packages/highlight/tsconfig.json",
+      "lines": 21,
+      "imports": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:packages/highlight/src/__tests__/colors.test.ts",
+      "target": "file:packages/highlight/src/colors.ts",
+      "type": "imports",
+      "specifier": "../colors.js"
+    },
+    {
+      "source": "file:packages/highlight/src/__tests__/colors.test.ts",
+      "target": "file:packages/highlight/src/types.ts",
+      "type": "imports",
+      "specifier": "../types.js"
+    },
+    {
+      "source": "file:packages/highlight/src/__tests__/highlighter.test.ts",
+      "target": "file:packages/highlight/src/highlighter.ts",
+      "type": "imports",
+      "specifier": "../highlighter.js"
+    },
+    {
+      "source": "file:packages/highlight/src/__tests__/parsers.test.ts",
+      "target": "file:packages/highlight/src/parsers.ts",
+      "type": "imports",
+      "specifier": "../parsers.js"
+    },
+    {
+      "source": "file:packages/highlight/src/colors.ts",
+      "target": "file:packages/highlight/src/types.ts",
+      "type": "imports",
+      "specifier": "./types.js"
+    },
+    {
+      "source": "file:packages/highlight/src/highlighter.ts",
+      "target": "file:packages/highlight/src/parsers.ts",
+      "type": "imports",
+      "specifier": "./parsers.js"
+    },
+    {
+      "source": "file:packages/highlight/src/highlighter.ts",
+      "target": "file:packages/highlight/src/types.ts",
+      "type": "imports",
+      "specifier": "./types.js"
+    },
+    {
+      "source": "file:packages/highlight/src/index.ts",
+      "target": "file:packages/highlight/src/colors.ts",
+      "type": "imports",
+      "specifier": "./colors.js"
+    },
+    {
+      "source": "file:packages/highlight/src/index.ts",
+      "target": "file:packages/highlight/src/highlighter.ts",
+      "type": "imports",
+      "specifier": "./highlighter.js"
+    },
+    {
+      "source": "file:packages/highlight/src/index.ts",
+      "target": "file:packages/highlight/src/parsers.ts",
+      "type": "imports",
+      "specifier": "./parsers.js"
+    },
+    {
+      "source": "file:packages/highlight/src/index.ts",
+      "target": "file:packages/highlight/src/types.ts",
+      "type": "imports",
+      "specifier": "./types.js"
+    }
+  ],
+  "unresolvedInternalImports": []
+}

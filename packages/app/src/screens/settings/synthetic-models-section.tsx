@@ -1,5 +1,11 @@
-import { Brain, Pencil, Plus, Trash2 } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ModelGatewayMoaTestResponseMessage } from "@chisacode/protocol/messages";
+import type {
+  SyntheticModelConfig,
+  SyntheticModelMoa,
+  SyntheticModelParameters,
+} from "@chisacode/protocol/provider-config";
+import { Brain, FlaskConical, Pencil, Play, Plus, Trash2 } from "lucide-react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -19,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
   buildDeleteSyntheticModelPatch,
@@ -45,9 +52,10 @@ interface SyntheticModelEditorValues {
   id: string;
   label: string;
   description: string;
-  references: string[];
+  defaults: MoaParameterTextValues;
+  layers: MoaTestLayerValues[];
   aggregatorModel: string;
-  roundsText: string;
+  aggregator: MoaParameterTextValues;
 }
 
 interface PreviousSyntheticModelRef {
@@ -55,8 +63,79 @@ interface PreviousSyntheticModelRef {
   id: string;
 }
 
+interface MoaParameterTextValues {
+  temperatureText: string;
+  maxTokensText: string;
+  systemPrompt: string;
+}
+
+interface MoaTestLayerValues {
+  id: string;
+  selectedModels: string[];
+  nodeOverrides: Record<string, MoaParameterTextValues>;
+}
+
+interface MoaTesterValues {
+  gatewayId: string;
+  modelId: string;
+  label: string;
+  defaults: MoaParameterTextValues;
+  layers: MoaTestLayerValues[];
+  aggregatorModel: string;
+  aggregator: MoaParameterTextValues;
+  prompt: string;
+}
+
+type MoaTestPayload = ModelGatewayMoaTestResponseMessage["payload"];
+type MoaTestResult = NonNullable<MoaTestPayload["result"]>;
+type MoaTestNode = MoaTestResult["layers"][number]["nodes"][number];
+
 const EDITOR_SNAP_POINTS = ["82%", "94%"];
+const MOA_TESTER_SNAP_POINTS = ["88%", "96%"];
 const EMPTY_PROVIDER_MODELS: SelectableSyntheticGateway["models"] = [];
+const EMPTY_PARAMETER_VALUES: MoaParameterTextValues = {
+  temperatureText: "",
+  maxTokensText: "",
+  systemPrompt: "",
+};
+const EMPTY_DRAFT_LAYER: MoaTestLayerValues = {
+  id: "draft",
+  selectedModels: [],
+  nodeOverrides: {},
+};
+const EMPTY_REVIEW_LAYER: MoaTestLayerValues = {
+  id: "review",
+  selectedModels: [],
+  nodeOverrides: {},
+};
+const EMPTY_FINAL_LAYER: MoaTestLayerValues = {
+  id: "final",
+  selectedModels: [],
+  nodeOverrides: {},
+};
+
+function createDefaultMoaLayers(
+  models: SelectableSyntheticGateway["models"],
+): MoaTestLayerValues[] {
+  const defaultLayerModels = models.slice(0, 2).map((model) => model.id);
+  return [
+    {
+      id: "draft",
+      selectedModels: defaultLayerModels,
+      nodeOverrides: {},
+    },
+    {
+      id: "review",
+      selectedModels: defaultLayerModels,
+      nodeOverrides: {},
+    },
+    {
+      id: "final",
+      selectedModels: defaultLayerModels,
+      nodeOverrides: {},
+    },
+  ];
+}
 
 function createDefaultValues(gateways: SelectableSyntheticGateway[]): SyntheticModelEditorValues {
   const firstGateway = gateways[0];
@@ -66,21 +145,104 @@ function createDefaultValues(gateways: SelectableSyntheticGateway[]): SyntheticM
     id: "",
     label: "",
     description: "",
-    references: firstModels.slice(0, 2).map((model) => model.id),
+    defaults: { ...EMPTY_PARAMETER_VALUES },
+    layers: createDefaultMoaLayers(firstModels),
     aggregatorModel: firstModels[0]?.id ?? "",
-    roundsText: "1",
+    aggregator: { ...EMPTY_PARAMETER_VALUES },
   };
 }
 
-function createValuesFromModel(model: SyntheticModelEntry): SyntheticModelEditorValues {
+function createDefaultMoaTesterValues(gateways: SelectableSyntheticGateway[]): MoaTesterValues {
+  const firstGateway = gateways[0];
+  const firstModels = firstGateway?.models ?? [];
+  return {
+    gatewayId: firstGateway?.id ?? "",
+    modelId: "moa-test",
+    label: "MoA Test",
+    defaults: { ...EMPTY_PARAMETER_VALUES },
+    layers: createDefaultMoaLayers(firstModels),
+    aggregatorModel: firstModels[0]?.id ?? "",
+    aggregator: { ...EMPTY_PARAMETER_VALUES },
+    prompt: "",
+  };
+}
+
+function createParameterTextValues(
+  parameters: SyntheticModelParameters | undefined,
+): MoaParameterTextValues {
+  return {
+    temperatureText:
+      typeof parameters?.temperature === "number" ? String(parameters.temperature) : "",
+    maxTokensText: typeof parameters?.maxTokens === "number" ? String(parameters.maxTokens) : "",
+    systemPrompt: parameters?.systemPrompt ?? "",
+  };
+}
+
+function createLayerValuesFromMoaLayer(
+  id: string,
+  fallbackModels: SelectableSyntheticGateway["models"],
+  layer: SyntheticModelMoa["layers"][number] | undefined,
+): MoaTestLayerValues {
+  if (!layer) {
+    let fallbackIndex = 0;
+    if (id === "review") {
+      fallbackIndex = 1;
+    }
+    if (id === "final") {
+      fallbackIndex = 2;
+    }
+    let emptyFallback = EMPTY_DRAFT_LAYER;
+    if (fallbackIndex === 1) {
+      emptyFallback = EMPTY_REVIEW_LAYER;
+    }
+    if (fallbackIndex === 2) {
+      emptyFallback = EMPTY_FINAL_LAYER;
+    }
+    return createDefaultMoaLayers(fallbackModels)[fallbackIndex] ?? emptyFallback;
+  }
+  return {
+    id,
+    selectedModels: layer.nodes.map((node) => node.model),
+    nodeOverrides: Object.fromEntries(
+      layer.nodes
+        .filter((node) => node.parameters)
+        .map((node) => [node.model, createParameterTextValues(node.parameters)]),
+    ),
+  };
+}
+
+function createLegacyMoaFromModel(model: SyntheticModelEntry): SyntheticModelMoa {
+  const rounds = parseRounds(String(model.rounds ?? 1));
+  const nodes = model.references.map((reference) => ({ model: reference.model }));
+  return {
+    layers: Array.from({ length: rounds }, (_, index) => ({
+      id: `layer-${index + 1}`,
+      label: `Layer ${index + 1}`,
+      nodes,
+    })),
+    aggregator: { model: model.aggregatorModel },
+  };
+}
+
+function createValuesFromModel(
+  model: SyntheticModelEntry,
+  gateways: SelectableSyntheticGateway[],
+): SyntheticModelEditorValues {
+  const gatewayModels = getSelectedGatewayModels(gateways, model.gatewayId);
+  const moa = model.moa ?? createLegacyMoaFromModel(model);
   return {
     gatewayId: model.gatewayId,
     id: model.id,
     label: model.label,
     description: model.description ?? "",
-    references: model.references.map((reference) => reference.model),
-    aggregatorModel: model.aggregatorModel,
-    roundsText: String(model.rounds ?? 1),
+    defaults: createParameterTextValues(moa.defaults),
+    layers: [
+      createLayerValuesFromMoaLayer("draft", gatewayModels, moa.layers[0]),
+      createLayerValuesFromMoaLayer("review", gatewayModels, moa.layers[1]),
+      createLayerValuesFromMoaLayer("final", gatewayModels, moa.layers[2]),
+    ],
+    aggregatorModel: moa.aggregator.model,
+    aggregator: createParameterTextValues(moa.aggregator.parameters),
   };
 }
 
@@ -89,7 +251,7 @@ function createValuesForState(
   gateways: SelectableSyntheticGateway[],
 ): SyntheticModelEditorValues {
   if (state.model) {
-    return createValuesFromModel(state.model);
+    return createValuesFromModel(state.model, gateways);
   }
   return createDefaultValues(gateways);
 }
@@ -112,8 +274,9 @@ function getEditorTitleKey(mode: EditingSyntheticModelState["mode"] | undefined)
 function canSaveSyntheticModel(values: SyntheticModelEditorValues, saving: boolean): boolean {
   return (
     values.id.trim().length > 0 &&
-    values.references.length >= 2 &&
     values.aggregatorModel.trim().length > 0 &&
+    values.layers.length > 0 &&
+    values.layers.every((layer) => layer.selectedModels.length > 0) &&
     !saving
   );
 }
@@ -141,6 +304,110 @@ function parseRounds(value: string): number {
     return 1;
   }
   return Math.max(1, Math.min(4, Math.trunc(parsed)));
+}
+
+function parseOptionalNumber(
+  value: string,
+  input: { min: number; max?: number; integer?: boolean },
+): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  const rounded = input.integer ? Math.trunc(parsed) : parsed;
+  const max = input.max ?? rounded;
+  return Math.max(input.min, Math.min(max, rounded));
+}
+
+function buildMoaParameters(values: MoaParameterTextValues): SyntheticModelParameters | undefined {
+  const temperature = parseOptionalNumber(values.temperatureText, { min: 0, max: 2 });
+  const maxTokens = parseOptionalNumber(values.maxTokensText, { min: 1, integer: true });
+  const systemPrompt = values.systemPrompt.trim();
+  const parameters: SyntheticModelParameters = {
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+    ...(systemPrompt ? { systemPrompt } : {}),
+  };
+  return Object.keys(parameters).length > 0 ? parameters : undefined;
+}
+
+function getMoaReferenceModels(values: {
+  layers: MoaTestLayerValues[];
+  aggregatorModel: string;
+}): string[] {
+  return Array.from(
+    new Set(
+      [...values.layers.flatMap((layer) => layer.selectedModels), values.aggregatorModel].filter(
+        Boolean,
+      ),
+    ),
+  );
+}
+
+function buildMoaConfig(values: {
+  defaults: MoaParameterTextValues;
+  layers: MoaTestLayerValues[];
+  aggregatorModel: string;
+  aggregator: MoaParameterTextValues;
+}): SyntheticModelMoa {
+  return {
+    ...(buildMoaParameters(values.defaults)
+      ? { defaults: buildMoaParameters(values.defaults) }
+      : {}),
+    layers: values.layers.map((layer, index) => ({
+      id: `layer-${index + 1}`,
+      label: `Layer ${index + 1}`,
+      nodes: layer.selectedModels.map((model) => ({
+        id: `${layer.id}:${model}`,
+        model,
+        ...(buildMoaParameters(layer.nodeOverrides[model] ?? EMPTY_PARAMETER_VALUES)
+          ? {
+              parameters: buildMoaParameters(layer.nodeOverrides[model] ?? EMPTY_PARAMETER_VALUES),
+            }
+          : {}),
+      })),
+    })),
+    aggregator: {
+      model: values.aggregatorModel,
+      ...(buildMoaParameters(values.aggregator)
+        ? { parameters: buildMoaParameters(values.aggregator) }
+        : {}),
+    },
+  };
+}
+
+function buildMoaTestSyntheticModel(values: MoaTesterValues): SyntheticModelConfig {
+  const references = getMoaReferenceModels(values);
+  return {
+    id: values.modelId.trim() || "moa-test",
+    label: values.label.trim() || values.modelId.trim() || "MoA Test",
+    references: references.map((model) => ({ model })),
+    aggregatorModel: values.aggregatorModel,
+    rounds: values.layers.length,
+    moa: buildMoaConfig(values),
+  };
+}
+
+function canRunMoaTest(
+  values: MoaTesterValues,
+  gateways: SelectableSyntheticGateway[],
+  running: boolean,
+  clientAvailable: boolean,
+): boolean {
+  const selectedModels = getSelectedGatewayModels(gateways, values.gatewayId);
+  return (
+    clientAvailable &&
+    !running &&
+    values.prompt.trim().length > 0 &&
+    selectedModels.length > 0 &&
+    values.aggregatorModel.trim().length > 0 &&
+    values.layers.length > 0 &&
+    values.layers.every((layer) => layer.selectedModels.length > 0)
+  );
 }
 
 function SyntheticModelRow({
@@ -202,6 +469,221 @@ function SyntheticModelRow({
       </View>
     </View>
   );
+}
+
+function MoaStageModelRow({
+  model,
+  selected,
+  bordered,
+  onToggleModel,
+}: {
+  model: SelectableSyntheticGateway["models"][number];
+  selected: boolean;
+  bordered: boolean;
+  onToggleModel: (modelId: string, selected: boolean) => void;
+}) {
+  const rowStyle = useMemo(
+    () => [styles.optionRow, bordered && settingsStyles.rowBorder],
+    [bordered],
+  );
+  const handleToggle = useCallback(
+    (nextSelected: boolean) => onToggleModel(model.id, nextSelected),
+    [model.id, onToggleModel],
+  );
+
+  return (
+    <View style={rowStyle}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+          {model.label}
+        </Text>
+        <Text style={settingsStyles.rowHint} numberOfLines={1}>
+          {model.id}
+        </Text>
+      </View>
+      <Switch value={selected} onValueChange={handleToggle} />
+    </View>
+  );
+}
+
+function MoaModelStageCard({
+  layer,
+  title,
+  hint,
+  models,
+  onToggleModel,
+}: {
+  layer: MoaTestLayerValues;
+  title: string;
+  hint: string;
+  models: SelectableSyntheticGateway["models"];
+  onToggleModel: (layerId: string, modelId: string, selected: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const handleToggle = useCallback(
+    (modelId: string, selected: boolean) => onToggleModel(layer.id, modelId, selected),
+    [layer.id, onToggleModel],
+  );
+
+  return (
+    <View style={styles.stagePanel}>
+      <View style={styles.stageHeader}>
+        <View style={styles.stageTextColumn}>
+          <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={settingsStyles.rowHint} numberOfLines={2}>
+            {hint}
+          </Text>
+        </View>
+        <Text style={styles.stageCount}>
+          {t("syntheticModels.layerModelCount", { count: layer.selectedModels.length })}
+        </Text>
+      </View>
+      <View style={styles.layerModelList}>
+        {models.map((model, index) => (
+          <MoaStageModelRow
+            key={model.id}
+            model={model}
+            selected={layer.selectedModels.includes(model.id)}
+            bordered={index > 0}
+            onToggleModel={handleToggle}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function MoaAggregatorStageCard({
+  title,
+  hint,
+  models,
+  selectedModel,
+  onSelectModel,
+}: {
+  title: string;
+  hint: string;
+  models: SelectableSyntheticGateway["models"];
+  selectedModel: string;
+  onSelectModel: (modelId: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <View style={styles.stagePanel}>
+      <View style={styles.stageHeader}>
+        <View style={styles.stageTextColumn}>
+          <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={settingsStyles.rowHint} numberOfLines={2}>
+            {hint}
+          </Text>
+        </View>
+        <Text style={styles.stageCount}>
+          {t("syntheticModels.layerModelCount", { count: selectedModel ? 1 : 0 })}
+        </Text>
+      </View>
+      <View style={styles.layerModelList}>
+        {models.map((model, index) => (
+          <GatewayModelRadioRow
+            key={model.id}
+            model={model}
+            selected={selectedModel === model.id}
+            bordered={index > 0}
+            onSelect={onSelectModel}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ResultNodeRow({ node }: { node: MoaTestNode }) {
+  const { t } = useTranslation();
+  const success = node.status === "success";
+  return (
+    <View style={styles.resultNode}>
+      <View style={styles.resultNodeHeader}>
+        <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+          {node.model}
+        </Text>
+        <Text style={success ? styles.resultSuccessText : styles.resultErrorText}>
+          {success ? t("syntheticModels.nodeSuccess") : t("syntheticModels.nodeFailed")} ·{" "}
+          {Math.round(node.durationMs)}ms
+        </Text>
+      </View>
+      <Text style={styles.resultOutputText} selectable>
+        {node.output ?? node.error ?? ""}
+      </Text>
+    </View>
+  );
+}
+
+function MoaTestResults({ payload }: { payload: MoaTestPayload | null }) {
+  const { t } = useTranslation();
+  const result = payload?.result ?? null;
+
+  if (!payload) {
+    return null;
+  }
+  if (payload.error || !result) {
+    return (
+      <View style={styles.resultPanel}>
+        <Text style={styles.resultErrorText}>
+          {payload.error ?? t("syntheticModels.testFailed")}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.resultPanel}>
+      <Text style={styles.formLabel}>{t("syntheticModels.finalAnswer")}</Text>
+      <Text style={styles.resultOutputText} selectable>
+        {result.finalText}
+      </Text>
+      <Text style={settingsStyles.rowHint}>
+        {t("syntheticModels.totalDuration", { duration: Math.round(result.durationMs) })}
+      </Text>
+      {result.layers.map((layer, index) => (
+        <View key={layer.id} style={styles.resultLayer}>
+          <Text style={settingsStyles.rowTitle}>
+            {layer.label ?? t("syntheticModels.layerTitle", { index: index + 1 })}
+          </Text>
+          {layer.nodes.map((node) => (
+            <ResultNodeRow key={`${layer.id}:${node.id ?? node.model}`} node={node} />
+          ))}
+        </View>
+      ))}
+      <View style={styles.resultLayer}>
+        <Text style={settingsStyles.rowTitle}>{t("syntheticModels.aggregatorResult")}</Text>
+        <AggregatorResultNode aggregator={result.aggregator} />
+      </View>
+    </View>
+  );
+}
+
+function AggregatorResultNode({ aggregator }: { aggregator: MoaTestResult["aggregator"] }) {
+  const node = useMemo<MoaTestNode>(
+    () => ({
+      id: "aggregator",
+      model: aggregator.model,
+      status: aggregator.status,
+      output: aggregator.output,
+      error: aggregator.error,
+      durationMs: aggregator.durationMs,
+    }),
+    [
+      aggregator.durationMs,
+      aggregator.error,
+      aggregator.model,
+      aggregator.output,
+      aggregator.status,
+    ],
+  );
+  return <ResultNodeRow node={node} />;
 }
 
 function GatewayOptionRow({
@@ -276,92 +758,6 @@ function GatewayPicker({
   );
 }
 
-function ReferenceModelOptionRow({
-  model,
-  selected,
-  aggregator,
-  bordered,
-  onToggleReference,
-  onSelectAggregator,
-}: {
-  model: SelectableSyntheticGateway["models"][number];
-  selected: boolean;
-  aggregator: boolean;
-  bordered: boolean;
-  onToggleReference: (modelId: string, selected: boolean) => void;
-  onSelectAggregator: (modelId: string) => void;
-}) {
-  const { t } = useTranslation();
-  const rowStyle = useMemo(
-    () => [styles.optionRow, bordered && settingsStyles.rowBorder],
-    [bordered],
-  );
-  const handleAggregatorPress = useCallback(
-    () => onSelectAggregator(model.id),
-    [model.id, onSelectAggregator],
-  );
-  const handleReferenceChange = useCallback(
-    (nextSelected: boolean) => onToggleReference(model.id, nextSelected),
-    [model.id, onToggleReference],
-  );
-
-  return (
-    <View style={rowStyle}>
-      <View style={settingsStyles.rowContent}>
-        <Text style={settingsStyles.rowTitle} numberOfLines={1}>
-          {model.label}
-        </Text>
-        <Text style={settingsStyles.rowHint} numberOfLines={1}>
-          {model.id}
-        </Text>
-      </View>
-      <Button
-        variant={aggregator ? "secondary" : "ghost"}
-        size="sm"
-        onPress={handleAggregatorPress}
-      >
-        {t("syntheticModels.aggregator")}
-      </Button>
-      <Switch value={selected} onValueChange={handleReferenceChange} />
-    </View>
-  );
-}
-
-function ReferenceModelsPicker({
-  models,
-  references,
-  aggregatorModel,
-  onToggleReference,
-  onSelectAggregator,
-}: {
-  models: SelectableSyntheticGateway["models"];
-  references: string[];
-  aggregatorModel: string;
-  onToggleReference: (modelId: string, selected: boolean) => void;
-  onSelectAggregator: (modelId: string) => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.formLabel}>{t("syntheticModels.referenceModels")}</Text>
-      <View style={settingsStyles.card}>
-        {models.map((model, index) => (
-          <ReferenceModelOptionRow
-            key={model.id}
-            model={model}
-            selected={references.includes(model.id)}
-            aggregator={aggregatorModel === model.id}
-            bordered={index > 0}
-            onToggleReference={onToggleReference}
-            onSelectAggregator={onSelectAggregator}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
 function SyntheticModelEditorSheet({
   state,
   gateways,
@@ -408,7 +804,7 @@ function SyntheticModelEditorSheet({
     setValues((current) => ({
       ...current,
       gatewayId: gateway.id,
-      references: gateway.models.slice(0, 2).map((model) => model.id),
+      layers: createDefaultMoaLayers(gateway.models),
       aggregatorModel: gateway.models[0]?.id ?? "",
     }));
   }, []);
@@ -424,19 +820,26 @@ function SyntheticModelEditorSheet({
     (value: string) => setFieldValue("description", value),
     [setFieldValue],
   );
-  const handleRoundsChange = useCallback(
-    (value: string) => setFieldValue("roundsText", value.replace(/[^\d]/g, "")),
-    [setFieldValue],
-  );
-  const handleToggleReference = useCallback((modelId: string, selected: boolean) => {
-    setValues((current) => ({
-      ...current,
-      references: toggleReference(current.references, modelId, selected),
-    }));
-  }, []);
   const handleAggregatorSelect = useCallback((modelId: string) => {
     setValues((current) => ({ ...current, aggregatorModel: modelId }));
   }, []);
+  const handleToggleLayerModel = useCallback(
+    (layerId: string, modelId: string, selected: boolean) => {
+      setValues((current) => ({
+        ...current,
+        layers: current.layers.map((layer) => {
+          if (layer.id !== layerId) {
+            return layer;
+          }
+          return {
+            ...layer,
+            selectedModels: toggleReference(layer.selectedModels, modelId, selected),
+          };
+        }),
+      }));
+    },
+    [],
+  );
   const handleSave = useCallback(() => {
     if (saving) return;
     setSaving(true);
@@ -466,7 +869,7 @@ function SyntheticModelEditorSheet({
           onSelect={handleGatewaySelect}
         />
         <View style={styles.fieldRow}>
-          <View style={styles.fieldGroup}>
+          <View style={FIELD_GROUP_ROW_STYLE}>
             <Text style={styles.formLabel}>{t("syntheticModels.modelId")}</Text>
             <AdaptiveTextInput
               initialValue={values.id}
@@ -480,7 +883,7 @@ function SyntheticModelEditorSheet({
               style={FORM_INPUT_STYLE}
             />
           </View>
-          <View style={styles.fieldGroup}>
+          <View style={FIELD_GROUP_ROW_STYLE}>
             <Text style={styles.formLabel}>{t("syntheticModels.modelLabel")}</Text>
             <AdaptiveTextInput
               initialValue={values.label}
@@ -507,25 +910,35 @@ function SyntheticModelEditorSheet({
             style={FORM_INPUT_STYLE}
           />
         </View>
-        <ReferenceModelsPicker
-          models={selectedGatewayModels}
-          references={values.references}
-          aggregatorModel={values.aggregatorModel}
-          onToggleReference={handleToggleReference}
-          onSelectAggregator={handleAggregatorSelect}
-        />
-        <View style={styles.fieldGroup}>
-          <Text style={styles.formLabel}>{t("syntheticModels.rounds")}</Text>
-          <TextInput
-            value={values.roundsText}
-            onChangeText={handleRoundsChange}
-            placeholder="1"
-            placeholderTextColor={theme.colors.foregroundMuted}
-            keyboardType="number-pad"
-            inputMode="numeric"
-            style={styles.formInput}
+        <View style={styles.stageStack}>
+          <MoaModelStageCard
+            layer={values.layers[0] ?? EMPTY_DRAFT_LAYER}
+            title={t("syntheticModels.moaStageDraft")}
+            hint={t("syntheticModels.moaDraftHint")}
+            models={selectedGatewayModels}
+            onToggleModel={handleToggleLayerModel}
           />
-          <Text style={settingsStyles.rowHint}>{t("syntheticModels.roundsHint")}</Text>
+          <MoaModelStageCard
+            layer={values.layers[1] ?? EMPTY_REVIEW_LAYER}
+            title={t("syntheticModels.moaStageReview")}
+            hint={t("syntheticModels.moaReviewHint")}
+            models={selectedGatewayModels}
+            onToggleModel={handleToggleLayerModel}
+          />
+          <MoaModelStageCard
+            layer={values.layers[2] ?? EMPTY_FINAL_LAYER}
+            title={t("syntheticModels.moaStageFinal")}
+            hint={t("syntheticModels.moaFinalHint")}
+            models={selectedGatewayModels}
+            onToggleModel={handleToggleLayerModel}
+          />
+          <MoaAggregatorStageCard
+            title={t("syntheticModels.aggregatorModel")}
+            hint={t("syntheticModels.moaAggregatorHint")}
+            models={selectedGatewayModels}
+            selectedModel={values.aggregatorModel}
+            onSelectModel={handleAggregatorSelect}
+          />
         </View>
         <View style={styles.formActions}>
           <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
@@ -546,11 +959,229 @@ function SyntheticModelEditorSheet({
   );
 }
 
+function MoaTesterSheet({
+  visible,
+  serverId,
+  gateways,
+  onClose,
+}: {
+  visible: boolean;
+  serverId: string;
+  gateways: SelectableSyntheticGateway[];
+  onClose: () => void;
+}) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const client = useHostRuntimeClient(serverId);
+  const [values, setValues] = useState<MoaTesterValues>(() =>
+    createDefaultMoaTesterValues(gateways),
+  );
+  const [running, setRunning] = useState(false);
+  const [resultPayload, setResultPayload] = useState<MoaTestPayload | null>(null);
+  const selectedGatewayModels = useMemo(
+    () => getSelectedGatewayModels(gateways, values.gatewayId),
+    [gateways, values.gatewayId],
+  );
+  const header = useMemo<SheetHeader>(
+    () => ({
+      title: t("syntheticModels.moaTestTitle"),
+      subtitle: t("syntheticModels.moaTestSubtitle"),
+    }),
+    [t],
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    setValues(createDefaultMoaTesterValues(gateways));
+    setRunning(false);
+    setResultPayload(null);
+  }, [gateways, visible]);
+
+  const handleGatewaySelect = useCallback((gateway: SelectableSyntheticGateway) => {
+    setValues((current) => ({
+      ...createDefaultMoaTesterValues([gateway]),
+      modelId: current.modelId,
+      label: current.label,
+      prompt: current.prompt,
+    }));
+    setResultPayload(null);
+  }, []);
+  const handlePromptChange = useCallback((prompt: string) => {
+    setValues((current) => ({ ...current, prompt }));
+  }, []);
+  const handleAggregatorSelect = useCallback((modelId: string) => {
+    setValues((current) => ({ ...current, aggregatorModel: modelId }));
+  }, []);
+  const handleToggleLayerModel = useCallback(
+    (layerId: string, modelId: string, selected: boolean) => {
+      setValues((current) => ({
+        ...current,
+        layers: current.layers.map((layer) => {
+          if (layer.id !== layerId) {
+            return layer;
+          }
+          return {
+            ...layer,
+            selectedModels: toggleReference(layer.selectedModels, modelId, selected),
+          };
+        }),
+      }));
+    },
+    [],
+  );
+  const handleRun = useCallback(() => {
+    if (!client || running) {
+      return;
+    }
+    const syntheticModel = buildMoaTestSyntheticModel(values);
+    setRunning(true);
+    setResultPayload(null);
+    void client
+      .runModelGatewayMoaTest({
+        gatewayId: values.gatewayId,
+        syntheticModel,
+        prompt: values.prompt.trim(),
+      })
+      .then(setResultPayload)
+      .catch((error: unknown) => {
+        setResultPayload({
+          requestId: "",
+          gatewayId: values.gatewayId,
+          result: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => setRunning(false));
+  }, [client, running, values]);
+  const canRun = canRunMoaTest(values, gateways, running, client !== null);
+
+  return (
+    <AdaptiveModalSheet
+      header={header}
+      visible={visible}
+      onClose={onClose}
+      desktopMaxWidth={760}
+      snapPoints={MOA_TESTER_SNAP_POINTS}
+      testID="synthetic-model-moa-tester-sheet"
+    >
+      <View style={styles.formGroup}>
+        <GatewayPicker
+          gateways={gateways}
+          selectedGatewayId={values.gatewayId}
+          onSelect={handleGatewaySelect}
+        />
+        <View style={styles.stageStack}>
+          <MoaModelStageCard
+            layer={values.layers[0] ?? EMPTY_DRAFT_LAYER}
+            title={t("syntheticModels.moaStageDraft")}
+            hint={t("syntheticModels.moaDraftHint")}
+            models={selectedGatewayModels}
+            onToggleModel={handleToggleLayerModel}
+          />
+          <MoaModelStageCard
+            layer={values.layers[1] ?? EMPTY_REVIEW_LAYER}
+            title={t("syntheticModels.moaStageReview")}
+            hint={t("syntheticModels.moaReviewHint")}
+            models={selectedGatewayModels}
+            onToggleModel={handleToggleLayerModel}
+          />
+          <MoaModelStageCard
+            layer={values.layers[2] ?? EMPTY_FINAL_LAYER}
+            title={t("syntheticModels.moaStageFinal")}
+            hint={t("syntheticModels.moaFinalHint")}
+            models={selectedGatewayModels}
+            onToggleModel={handleToggleLayerModel}
+          />
+          <MoaAggregatorStageCard
+            title={t("syntheticModels.aggregatorModel")}
+            hint={t("syntheticModels.moaAggregatorHint")}
+            models={selectedGatewayModels}
+            selectedModel={values.aggregatorModel}
+            onSelectModel={handleAggregatorSelect}
+          />
+        </View>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.formLabel}>{t("syntheticModels.testPrompt")}</Text>
+          <TextInput
+            value={values.prompt}
+            onChangeText={handlePromptChange}
+            placeholder={t("syntheticModels.testPromptPlaceholder")}
+            placeholderTextColor={theme.colors.foregroundMuted}
+            multiline
+            style={PROMPT_INPUT_STYLE}
+            testID="moa-test-prompt-input"
+          />
+        </View>
+        <View style={styles.formActions}>
+          <Button variant="secondary" size="sm" onPress={onClose} disabled={running}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            leftIcon={Play}
+            onPress={handleRun}
+            disabled={!canRun}
+            loading={running}
+            testID="moa-test-run-button"
+          >
+            {running ? t("syntheticModels.testing") : t("syntheticModels.runTest")}
+          </Button>
+        </View>
+        {!client ? (
+          <Text style={styles.resultErrorText}>{t("syntheticModels.hostUnavailable")}</Text>
+        ) : null}
+        <MoaTestResults payload={resultPayload} />
+      </View>
+    </AdaptiveModalSheet>
+  );
+}
+
+function GatewayModelRadioRow({
+  model,
+  selected,
+  bordered,
+  onSelect,
+}: {
+  model: SelectableSyntheticGateway["models"][number];
+  selected: boolean;
+  bordered: boolean;
+  onSelect: (modelId: string) => void;
+}) {
+  const rowStyle = useMemo(
+    () => [styles.optionRow, bordered && settingsStyles.rowBorder],
+    [bordered],
+  );
+  const handleSelect = useCallback(() => onSelect(model.id), [model.id, onSelect]);
+  const accessibilityState = useMemo(() => ({ selected }), [selected]);
+  return (
+    <Pressable
+      onPress={handleSelect}
+      style={rowStyle}
+      accessibilityRole="button"
+      accessibilityState={accessibilityState}
+    >
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+          {model.label}
+        </Text>
+        <Text style={settingsStyles.rowHint} numberOfLines={1}>
+          {model.id}
+        </Text>
+      </View>
+      <Switch value={selected} onValueChange={handleSelect} />
+    </Pressable>
+  );
+}
+
 export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [editorState, setEditorState] = useState<EditingSyntheticModelState | null>(null);
+  const [moaTesterOpen, setMoaTesterOpen] = useState(false);
   const gateways = useMemo(
     () => collectSyntheticModelGateways(config?.modelGateways),
     [config?.modelGateways],
@@ -560,11 +1191,13 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
     [config?.modelGateways],
   );
   const openAdd = useCallback(() => setEditorState({ mode: "add", model: null }), []);
+  const openMoaTester = useCallback(() => setMoaTesterOpen(true), []);
   const openEdit = useCallback(
     (model: SyntheticModelEntry) => setEditorState({ mode: "edit", model }),
     [],
   );
   const closeEditor = useCallback(() => setEditorState(null), []);
+  const closeMoaTester = useCallback(() => setMoaTesterOpen(false), []);
   const handleSave = useCallback(
     async (values: SyntheticModelEditorValues, previous: PreviousSyntheticModelRef | null) => {
       try {
@@ -577,9 +1210,10 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
             id: values.id,
             label: values.label,
             description: values.description,
-            references: values.references,
+            references: getMoaReferenceModels(values),
             aggregatorModel: values.aggregatorModel,
-            rounds: parseRounds(values.roundsText),
+            rounds: values.layers.length,
+            moa: buildMoaConfig(values),
           }),
         );
         setEditorState(null);
@@ -621,18 +1255,30 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
   );
   const headerActions = useMemo(
     () => (
-      <Pressable
-        onPress={openAdd}
-        hitSlop={8}
-        style={settingsStyles.sectionHeaderLink}
-        accessibilityRole="button"
-        accessibilityLabel={t("syntheticModels.addSyntheticModel")}
-      >
-        <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        <Text style={settingsStyles.sectionHeaderLinkText}>{t("syntheticModels.add")}</Text>
-      </Pressable>
+      <View style={styles.headerActions}>
+        <Pressable
+          onPress={openMoaTester}
+          hitSlop={8}
+          style={settingsStyles.sectionHeaderLink}
+          accessibilityRole="button"
+          accessibilityLabel={t("syntheticModels.openMoaTest")}
+        >
+          <FlaskConical size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <Text style={settingsStyles.sectionHeaderLinkText}>{t("syntheticModels.moaTest")}</Text>
+        </Pressable>
+        <Pressable
+          onPress={openAdd}
+          hitSlop={8}
+          style={settingsStyles.sectionHeaderLink}
+          accessibilityRole="button"
+          accessibilityLabel={t("syntheticModels.addSyntheticModel")}
+        >
+          <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          <Text style={settingsStyles.sectionHeaderLinkText}>{t("syntheticModels.add")}</Text>
+        </Pressable>
+      </View>
     ),
-    [openAdd, t, theme.colors.foregroundMuted, theme.iconSize.sm],
+    [openAdd, openMoaTester, t, theme.colors.foregroundMuted, theme.iconSize.sm],
   );
 
   return (
@@ -665,6 +1311,12 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
         gateways={gateways}
         onClose={closeEditor}
         onSave={handleSave}
+      />
+      <MoaTesterSheet
+        visible={moaTesterOpen}
+        serverId={serverId}
+        gateways={gateways}
+        onClose={closeMoaTester}
       />
     </>
   );
@@ -709,6 +1361,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
   iconButton: {
     width: 30,
     height: 30,
@@ -719,6 +1376,9 @@ const styles = StyleSheet.create((theme) => ({
   iconButtonHovered: {
     backgroundColor: theme.colors.surface2,
   },
+  disabledButton: {
+    opacity: theme.opacity[50],
+  },
   formGroup: {
     gap: theme.spacing[4],
   },
@@ -727,7 +1387,12 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   fieldGroup: {
+    gap: theme.spacing[2],
+    minWidth: 0,
+  },
+  fieldGroupInRow: {
     flex: 1,
+    minWidth: 0,
     gap: theme.spacing[2],
   },
   formLabel: {
@@ -745,6 +1410,79 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     fontSize: theme.fontSize.sm,
   },
+  promptInput: {
+    minHeight: 108,
+    textAlignVertical: "top",
+  },
+  stageStack: {
+    gap: theme.spacing[3],
+  },
+  stagePanel: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
+    overflow: "hidden",
+  },
+  stageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+    padding: theme.spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  stageTextColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  stageCount: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  layerModelList: {
+    gap: 0,
+  },
+  resultPanel: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
+    padding: theme.spacing[4],
+    gap: theme.spacing[3],
+  },
+  resultLayer: {
+    gap: theme.spacing[2],
+    paddingTop: theme.spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  resultNode: {
+    gap: theme.spacing[2],
+    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing[3],
+  },
+  resultNodeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+  },
+  resultOutputText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+  },
+  resultSuccessText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  resultErrorText: {
+    color: theme.colors.destructive,
+    fontSize: theme.fontSize.sm,
+  },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -760,4 +1498,6 @@ const styles = StyleSheet.create((theme) => ({
 }));
 
 const EMPTY_CARD_STYLE = [settingsStyles.card, styles.emptyCard];
+const FIELD_GROUP_ROW_STYLE = [styles.fieldGroup, styles.fieldGroupInRow];
 const FORM_INPUT_STYLE = [styles.formInput, isWeb && { outlineStyle: "none" }];
+const PROMPT_INPUT_STYLE = [styles.formInput, styles.promptInput];

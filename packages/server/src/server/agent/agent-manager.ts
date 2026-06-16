@@ -731,9 +731,7 @@ export class AgentManager {
     const session = await client.createSession(launchConfig);
     try {
       if (!session.listCommands) {
-        throw new Error(
-          `Provider '${launchConfig.provider}' does not support listing commands`,
-        );
+        throw new Error(`Provider '${launchConfig.provider}' does not support listing commands`);
       }
       return await session.listCommands();
     } finally {
@@ -936,7 +934,8 @@ export class AgentManager {
     const preservedLastError = existing.lastError;
     const preservedAttention = existing.attention;
     const handle = existing.persistence;
-    const runtimeProvider = handle?.provider ?? existing.config.runtimeProvider ?? existing.provider;
+    const runtimeProvider =
+      handle?.provider ?? existing.config.runtimeProvider ?? existing.provider;
     const client = this.requireClient(runtimeProvider);
     const refreshConfig = {
       ...existing.config,

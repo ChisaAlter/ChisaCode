@@ -112,6 +112,7 @@ import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
 import { buildToggleFeatureMenuItems } from "@/composer/agent-controls/utils";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
+import { COMPOSER_VOICE_UI_VISIBLE } from "./voice-visibility";
 
 type QueuedMessage = QueuedComposerMessage;
 
@@ -891,7 +892,11 @@ function ComposerRightControlsSlot({
 }: ComposerRightControlsSlotProps) {
   const hideVoiceForCompactInput = isCompact && hasSendableContent;
   const showVoiceModeButton =
-    !isVoiceModeForAgent && hasAgent && !isAgentRunning && !hideVoiceForCompactInput;
+    COMPOSER_VOICE_UI_VISIBLE &&
+    !isVoiceModeForAgent &&
+    hasAgent &&
+    !isAgentRunning &&
+    !hideVoiceForCompactInput;
   const shouldShowCancelButton = isAgentRunning && !hasSendableContent && !isProcessing;
   if (!showVoiceModeButton && !shouldShowCancelButton) return null;
   return (

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { handleModelGatewayRequest } from "./model-gateway.js";
+import { handleModelGatewayRequest, runSyntheticModelTest } from "./model-gateway.js";
 import type { ModelGatewayConfig } from "@chisacode/protocol/provider-config";
 
 function makeGateway(overrides: Partial<ModelGatewayConfig> = {}): ModelGatewayConfig {
@@ -112,6 +112,108 @@ describe("model gateway", () => {
     expect(
       (aggregateCall.body as { messages: Array<{ content: string }> }).messages[0]?.content,
     ).toContain("air answer");
+  });
+
+  test("runs a layered MoA synthetic model and returns node traces", async () => {
+    const fetchCalls: Array<{ body: { model: string; messages: Array<{ content: string }> } }> = [];
+    const result = await runSyntheticModelTest({
+      gateway: makeGateway({
+        models: [
+          { id: "glm-5", label: "GLM 5", isDefault: true },
+          { id: "glm-5-air", label: "GLM 5 Air" },
+          { id: "glm-4.6", label: "GLM 4.6" },
+        ],
+      }),
+      syntheticModel: {
+        id: "moa-layered",
+        label: "MoA Layered",
+        references: [{ model: "glm-5-air" }, { model: "glm-4.6" }],
+        aggregatorModel: "glm-5",
+        rounds: 1,
+        moa: {
+          defaults: { temperature: 0.4, maxTokens: 128 },
+          layers: [
+            {
+              id: "layer-1",
+              label: "Draft",
+              nodes: [{ model: "glm-5-air" }, { model: "glm-4.6" }],
+            },
+            {
+              id: "layer-2",
+              label: "Refine",
+              nodes: [{ model: "glm-5-air", parameters: { temperature: 0.2 } }],
+            },
+          ],
+          aggregator: { model: "glm-5" },
+        },
+      },
+      prompt: "hello",
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        fetchCalls.push({ body });
+        return Response.json({
+          id: `chatcmpl_${body.model}_${fetchCalls.length}`,
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: `${body.model} answer ${fetchCalls.length}`,
+              },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+    });
+
+    expect(result.finalText).toBe("glm-5 answer 4");
+    expect(result.layers).toHaveLength(2);
+    expect(result.layers[0]?.nodes.map((node) => node.model)).toEqual(["glm-5-air", "glm-4.6"]);
+    expect(result.layers[1]?.nodes).toMatchObject([
+      { model: "glm-5-air", status: "success", output: "glm-5-air answer 3" },
+    ]);
+    expect(fetchCalls.map((call) => call.body.model)).toEqual([
+      "glm-5-air",
+      "glm-4.6",
+      "glm-5-air",
+      "glm-5",
+    ]);
+    expect(fetchCalls[2]?.body.messages[0]?.content).toContain("glm-5-air answer 1");
+    expect(fetchCalls[2]?.body.messages[0]?.content).toContain("glm-4.6 answer 2");
+    expect(fetchCalls[2]?.body).toMatchObject({ temperature: 0.2, max_tokens: 128 });
+  });
+
+  test("continues a MoA layer when one node fails and fails when a whole layer fails", async () => {
+    const gateway = makeGateway({
+      models: [
+        { id: "glm-5", label: "GLM 5", isDefault: true },
+        { id: "bad-a", label: "Bad A" },
+        { id: "bad-b", label: "Bad B" },
+      ],
+    });
+    await expect(
+      runSyntheticModelTest({
+        gateway,
+        syntheticModel: {
+          id: "moa-failing",
+          label: "MoA Failing",
+          references: [{ model: "bad-a" }, { model: "bad-b" }],
+          aggregatorModel: "glm-5",
+          rounds: 1,
+          moa: {
+            layers: [
+              {
+                id: "layer-1",
+                nodes: [{ model: "bad-a" }, { model: "bad-b" }],
+              },
+            ],
+            aggregator: { model: "glm-5" },
+          },
+        },
+        prompt: "hello",
+        fetchImpl: async () => new Response("{}", { status: 500 }),
+      }),
+    ).rejects.toThrow('MoA layer "layer-1" produced no successful outputs');
   });
   test("forwards chat completions to a matching chat upstream without conversion", async () => {
     const fetchCalls: Array<{ url: string; init: RequestInit }> = [];

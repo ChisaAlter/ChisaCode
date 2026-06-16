@@ -849,7 +849,9 @@
     <svg class="sr-only" aria-hidden="true">
       <symbol id="i-message" viewBox="0 0 24 24">
         <path d="M8 10h8M8 14h5" />
-        <path d="M6 4h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-7l-5 3v-3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z" />
+        <path
+          d="M6 4h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-7l-5 3v-3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z"
+        />
       </symbol>
       <symbol id="i-sidebar" viewBox="0 0 24 24">
         <path d="M4 5h16v14H4zM9 5v14" />
@@ -881,7 +883,9 @@
       </symbol>
       <symbol id="i-settings" viewBox="0 0 24 24">
         <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-        <path d="M19 12a7.5 7.5 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7.5 7.5 0 0 0-1.8-1L14.4 3H10l-.4 3.1a7.5 7.5 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7.5 7.5 0 0 0 1.8 1l.4 3.1h4.4l.4-3.1a7.5 7.5 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z" />
+        <path
+          d="M19 12a7.5 7.5 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7.5 7.5 0 0 0-1.8-1L14.4 3H10l-.4 3.1a7.5 7.5 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7.5 7.5 0 0 0 1.8 1l.4 3.1h4.4l.4-3.1a7.5 7.5 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z"
+        />
       </symbol>
       <symbol id="i-wrench" viewBox="0 0 24 24">
         <path d="M14 6a5 5 0 0 0 7 7L12 22l-5-5 9-9a5 5 0 0 0-2-2Z" />
@@ -938,7 +942,11 @@
           </div>
 
           <section class="session-list">
-            <button class="session-card active" data-action="select-session" aria-label="打开会话 你好啊">
+            <button
+              class="session-card active"
+              data-action="select-session"
+              aria-label="打开会话 你好啊"
+            >
               <svg class="spinner"><use href="#i-settings" /></svg>
               <span class="session-copy">
                 <span class="session-title">你好啊</span>
@@ -970,34 +978,38 @@
         <div class="workspace-stage">
           <section class="main-panel" aria-label="主工作区">
             <div class="tab-row">
-            <div class="tab-left">
-              <div class="tabs" id="tabs">
-                <button class="tab-chip active" data-tab="chat" data-action="select-chat-tab">
-                  <svg class="spinner"><use href="#i-settings" /></svg>
-                  <span class="tab-name">你好啊</span>
-                  <span class="icon-button" data-action="close-tab" aria-label="关闭当前标签">
-                    <svg><use href="#i-x" /></svg>
-                  </span>
+              <div class="tab-left">
+                <div class="tabs" id="tabs">
+                  <button class="tab-chip active" data-tab="chat" data-action="select-chat-tab">
+                    <svg class="spinner"><use href="#i-settings" /></svg>
+                    <span class="tab-name">你好啊</span>
+                    <span class="icon-button" data-action="close-tab" aria-label="关闭当前标签">
+                      <svg><use href="#i-x" /></svg>
+                    </span>
+                  </button>
+                </div>
+                <button class="icon-button" data-action="new-inline-tab" aria-label="新建标签">
+                  <svg><use href="#i-plus" /></svg>
                 </button>
               </div>
-              <button class="icon-button" data-action="new-inline-tab" aria-label="新建标签">
-                <svg><use href="#i-plus" /></svg>
-              </button>
-            </div>
-            <div class="tab-actions" aria-label="主工具栏">
-              <button class="icon-button bordered" data-action="new-chat" aria-label="新建会话">
-                <svg><use href="#i-edit" /></svg>
-              </button>
-              <button class="icon-button bordered" data-action="terminal" aria-label="打开终端">
-                <svg><use href="#i-terminal" /></svg>
-              </button>
-              <button class="icon-button bordered" data-action="split" aria-label="右侧分栏">
-                <svg><use href="#i-columns" /></svg>
-              </button>
-              <button class="icon-button bordered active" data-action="open-env" aria-label="显示或隐藏右侧悬浮卡片">
-                <svg><use href="#i-sidebar" /></svg>
-              </button>
-            </div>
+              <div class="tab-actions" aria-label="主工具栏">
+                <button class="icon-button bordered" data-action="new-chat" aria-label="新建会话">
+                  <svg><use href="#i-edit" /></svg>
+                </button>
+                <button class="icon-button bordered" data-action="terminal" aria-label="打开终端">
+                  <svg><use href="#i-terminal" /></svg>
+                </button>
+                <button class="icon-button bordered" data-action="split" aria-label="右侧分栏">
+                  <svg><use href="#i-columns" /></svg>
+                </button>
+                <button
+                  class="icon-button bordered active"
+                  data-action="open-env"
+                  aria-label="显示或隐藏右侧悬浮卡片"
+                >
+                  <svg><use href="#i-sidebar" /></svg>
+                </button>
+              </div>
             </div>
 
             <div class="notification-row">
@@ -1041,7 +1053,11 @@
                       <button class="icon-button" data-action="dislike" aria-label="点踩">
                         <svg><use href="#i-thumbs-down" /></svg>
                       </button>
-                      <button class="mini-button" data-action="worked-menu" aria-label="查看工作耗时详情">
+                      <button
+                        class="mini-button"
+                        data-action="worked-menu"
+                        aria-label="查看工作耗时详情"
+                      >
                         Worked for 8s
                         <svg><use href="#i-chevron-down" /></svg>
                       </button>
@@ -1049,9 +1065,11 @@
                   </div>
                 </article>
               </div>
-              <pre class="terminal-view">pi-desktop $ npm run dev
+              <pre class="terminal-view">
+pi-desktop $ npm run dev
 ready - local daemon connected
-workspace: cn-main</pre>
+workspace: cn-main</pre
+              >
             </div>
 
             <div class="composer-wrap">
@@ -1070,7 +1088,11 @@ workspace: cn-main</pre>
                       glm-5.1
                       <svg><use href="#i-chevron-down" /></svg>
                     </button>
-                    <button class="mini-button" data-action="permission-menu" aria-label="选择权限模式">
+                    <button
+                      class="mini-button"
+                      data-action="permission-menu"
+                      aria-label="选择权限模式"
+                    >
                       <svg><use href="#i-shield" /></svg>
                       Always ask
                       <svg><use href="#i-chevron-down" /></svg>
@@ -1102,17 +1124,23 @@ workspace: cn-main</pre>
                   <div class="info-row">
                     <svg><use href="#i-copy" /></svg>
                     <span>变更</span>
-                    <span class="change-values"><span class="pos">+1,510</span><span class="neg">-162</span></span>
+                    <span class="change-values"
+                      ><span class="pos">+1,510</span><span class="neg">-162</span></span
+                    >
                   </div>
                   <div class="info-row">
                     <svg><use href="#i-terminal" /></svg>
                     <span>本地</span>
-                    <span><svg><use href="#i-chevron-down" /></svg></span>
+                    <span
+                      ><svg><use href="#i-chevron-down" /></svg
+                    ></span>
                   </div>
                   <div class="info-row">
                     <svg><use href="#i-columns" /></svg>
                     <span>cn-main</span>
-                    <span><svg><use href="#i-chevron-down" /></svg></span>
+                    <span
+                      ><svg><use href="#i-chevron-down" /></svg
+                    ></span>
                   </div>
                   <div class="info-row">
                     <svg><use href="#i-settings" /></svg>
@@ -1227,8 +1255,12 @@ workspace: cn-main</pre>
               a.bottom > b.top + 1;
             if (intersect) {
               overlaps.push([
-                controls[i].getAttribute("data-action") || controls[i].ariaLabel || controls[i].className,
-                controls[j].getAttribute("data-action") || controls[j].ariaLabel || controls[j].className,
+                controls[i].getAttribute("data-action") ||
+                  controls[i].ariaLabel ||
+                  controls[i].className,
+                controls[j].getAttribute("data-action") ||
+                  controls[j].ariaLabel ||
+                  controls[j].className,
               ]);
             }
           }
@@ -1246,18 +1278,28 @@ workspace: cn-main</pre>
         }
 
         const action = actionElement.dataset.action;
-        if (action !== "model-menu" && action !== "permission-menu" && action !== "env-settings" && action !== "host-menu" && action !== "worked-menu") {
+        if (
+          action !== "model-menu" &&
+          action !== "permission-menu" &&
+          action !== "env-settings" &&
+          action !== "host-menu" &&
+          action !== "worked-menu"
+        ) {
           closePopover();
         }
 
         switch (action) {
           case "toggle-left":
             body.classList.toggle("left-collapsed");
-            toast(body.classList.contains("left-collapsed") ? "左侧会话栏已折叠" : "左侧会话栏已展开");
+            toast(
+              body.classList.contains("left-collapsed") ? "左侧会话栏已折叠" : "左侧会话栏已展开",
+            );
             break;
           case "open-env":
             setEnvOpen(body.classList.contains("env-closed"));
-            toast(body.classList.contains("env-closed") ? "右侧悬浮卡片已隐藏" : "右侧悬浮卡片已显示");
+            toast(
+              body.classList.contains("env-closed") ? "右侧悬浮卡片已隐藏" : "右侧悬浮卡片已显示",
+            );
             break;
           case "new-inline-tab":
           case "new-chat":
@@ -1266,7 +1308,9 @@ workspace: cn-main</pre>
           case "terminal":
             body.classList.toggle("terminal-tab");
             if (body.classList.contains("terminal-tab")) {
-              document.querySelectorAll(".tab-chip").forEach((item) => item.classList.remove("active"));
+              document
+                .querySelectorAll(".tab-chip")
+                .forEach((item) => item.classList.remove("active"));
             }
             actionElement.classList.toggle("active", body.classList.contains("terminal-tab"));
             toast(body.classList.contains("terminal-tab") ? "终端标签已打开" : "已回到会话标签");
@@ -1274,7 +1318,9 @@ workspace: cn-main</pre>
           case "split":
             body.classList.toggle("split-mode");
             actionElement.classList.toggle("active", body.classList.contains("split-mode"));
-            toast(body.classList.contains("split-mode") ? "已打开右侧分栏预览" : "已关闭右侧分栏预览");
+            toast(
+              body.classList.contains("split-mode") ? "已打开右侧分栏预览" : "已关闭右侧分栏预览",
+            );
             break;
           case "close-tab":
             event.stopPropagation();
@@ -1287,7 +1333,9 @@ workspace: cn-main</pre>
             break;
           case "select-chat-tab":
           case "select-draft-tab":
-            document.querySelectorAll(".tab-chip").forEach((item) => item.classList.remove("active"));
+            document
+              .querySelectorAll(".tab-chip")
+              .forEach((item) => item.classList.remove("active"));
             actionElement.classList.add("active");
             body.classList.remove("terminal-tab");
             document.querySelector('[data-action="terminal"]').classList.remove("active");

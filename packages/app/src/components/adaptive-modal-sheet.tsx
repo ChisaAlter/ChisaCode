@@ -98,10 +98,14 @@ const styles = StyleSheet.create((theme) => ({
     maxHeight: "85%",
     flexShrink: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surface1,
     borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
-    borderColor: theme.colors.surface2,
+    borderColor: theme.glass.enabled ? theme.glass.border : theme.colors.border,
+  },
+  desktopPlainCard: {
+    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
   },
   headerContainer: {
     borderBottomWidth: 1,
@@ -447,6 +451,8 @@ export interface AdaptiveModalSheetProps {
   testID?: string;
   /** Override the max width of the desktop card. */
   desktopMaxWidth?: number;
+  /** Desktop-only surface treatment. Defaults to the glass sheet material. */
+  desktopSurface?: "glass" | "plain";
   /** When provided, wraps the card content in a FileDropZone. */
   onFilesDropped?: (files: ImageAttachment[]) => void;
   scrollable?: boolean;
@@ -461,6 +467,7 @@ export function AdaptiveModalSheet({
   snapPoints,
   testID,
   desktopMaxWidth,
+  desktopSurface = "glass",
   onFilesDropped,
   scrollable = true,
 }: AdaptiveModalSheetProps) {
@@ -488,6 +495,10 @@ export function AdaptiveModalSheet({
   const desktopCardStyle = useMemo(
     () => [styles.desktopCard, desktopMaxWidth != null && { maxWidth: desktopMaxWidth }],
     [desktopMaxWidth],
+  );
+  const desktopPlainCardStyle = useMemo(
+    () => [desktopCardStyle, styles.desktopPlainCard],
+    [desktopCardStyle],
   );
 
   useEffect(() => {
@@ -547,13 +558,16 @@ export function AdaptiveModalSheet({
     </>
   );
 
-  const desktopContent = (
-    <View style={styles.desktopOverlay} testID={testID}>
-      <Pressable
-        accessibilityLabel={t("common.dismiss")}
-        style={ABSOLUTE_FILL_STYLE}
-        onPress={onClose}
-      />
+  const desktopCard =
+    desktopSurface === "plain" ? (
+      <View style={desktopPlainCardStyle}>
+        {onFilesDropped ? (
+          <FileDropZone onFilesDropped={onFilesDropped}>{cardInner}</FileDropZone>
+        ) : (
+          cardInner
+        )}
+      </View>
+    ) : (
       <GlassSurface variant="sheet" style={desktopCardStyle}>
         {onFilesDropped ? (
           <FileDropZone onFilesDropped={onFilesDropped}>{cardInner}</FileDropZone>
@@ -561,6 +575,16 @@ export function AdaptiveModalSheet({
           cardInner
         )}
       </GlassSurface>
+    );
+
+  const desktopContent = (
+    <View style={styles.desktopOverlay} testID={testID}>
+      <Pressable
+        accessibilityLabel={t("common.dismiss")}
+        style={ABSOLUTE_FILL_STYLE}
+        onPress={onClose}
+      />
+      {desktopCard}
     </View>
   );
 

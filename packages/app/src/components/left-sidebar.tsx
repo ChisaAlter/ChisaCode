@@ -60,7 +60,6 @@ import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import {
-  DEFAULT_SIDEBAR_WIDTH,
   MAX_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
   selectIsAgentListOpen,
@@ -78,7 +77,10 @@ import {
   type MobileSidebarQuickActionButtonModel,
   type MobileSidebarQuickActionId,
 } from "@/utils/mobile-sidebar-quick-actions";
-import { getMobileSidebarWidth } from "@/utils/sidebar-animation-state";
+import {
+  getDesktopSidebarResizeState,
+  getMobileSidebarWidth,
+} from "@/utils/sidebar-animation-state";
 import {
   buildHostSessionsRoute,
   buildSettingsRoute,
@@ -1238,8 +1240,20 @@ function DesktopSidebar({
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
   const openDesktopAgentList = usePanelStore((state) => state.openDesktopAgentList);
   const closeDesktopAgentList = usePanelStore((state) => state.closeDesktopAgentList);
-  const desktopSidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   const { width: viewportWidth } = useWindowDimensions();
+  const desktopSidebarResizeState = useMemo(
+    () =>
+      getDesktopSidebarResizeState({
+        storedWidth: sidebarWidth,
+        viewportWidth,
+        minWidth: MIN_SIDEBAR_WIDTH,
+        maxWidth: MAX_SIDEBAR_WIDTH,
+        minContentWidth: MIN_CHAT_WIDTH,
+      }),
+    [sidebarWidth, viewportWidth],
+  );
+  const desktopSidebarWidth = desktopSidebarResizeState.width;
+  const desktopSidebarMaxWidth = desktopSidebarResizeState.maxWidth;
   const hostStatusDotStyle = useMemo(
     () => [styles.hostStatusDot, { backgroundColor: activeHostStatusColor }],
     [activeHostStatusColor],
@@ -1250,15 +1264,12 @@ function DesktopSidebar({
   const openProgress = useSharedValue(isOpen ? 1 : 0);
 
   useEffect(() => {
-    if (sidebarWidth !== desktopSidebarWidth) {
-      setSidebarWidth(desktopSidebarWidth);
-    }
     resizeWidth.value = withTiming(
       isOpen ? desktopSidebarWidth : 0,
       DESKTOP_SIDEBAR_ANIMATION_CONFIG,
     );
     openProgress.value = withTiming(isOpen ? 1 : 0, DESKTOP_SIDEBAR_ANIMATION_CONFIG);
-  }, [desktopSidebarWidth, isOpen, openProgress, resizeWidth, setSidebarWidth, sidebarWidth]);
+  }, [desktopSidebarWidth, isOpen, openProgress, resizeWidth]);
 
   const resizeGesture = useMemo(
     () =>
@@ -1271,17 +1282,16 @@ function DesktopSidebar({
         .onUpdate((event) => {
           // Dragging right (positive translationX) increases width
           const newWidth = startWidthRef.current + event.translationX;
-          const maxWidth = Math.max(
+          const clampedWidth = Math.max(
             MIN_SIDEBAR_WIDTH,
-            Math.min(MAX_SIDEBAR_WIDTH, viewportWidth - MIN_CHAT_WIDTH),
+            Math.min(desktopSidebarMaxWidth, newWidth),
           );
-          const clampedWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(maxWidth, newWidth));
           resizeWidth.value = clampedWidth;
         })
         .onEnd(() => {
           runOnJS(setSidebarWidth)(resizeWidth.value);
         }),
-    [desktopSidebarWidth, resizeWidth, setSidebarWidth, viewportWidth],
+    [desktopSidebarMaxWidth, desktopSidebarWidth, resizeWidth, setSidebarWidth],
   );
 
   const resizeAnimatedStyle = useAnimatedStyle(() => ({
@@ -1338,7 +1348,7 @@ function DesktopSidebar({
         testID="desktop-left-sidebar"
         pointerEvents={isOpen ? "auto" : "none"}
       >
-        <GlassSurface variant="chrome" style={desktopSidebarBorderStyle}>
+        <View style={desktopSidebarBorderStyle}>
           <View style={styles.desktopSidebarDragArea}>
             <TitlebarDragRegion />
             <SidebarTopActions
@@ -1385,7 +1395,7 @@ function DesktopSidebar({
           <GestureDetector gesture={resizeGesture}>
             <View style={resizeHandleStyle} />
           </GestureDetector>
-        </GlassSurface>
+        </View>
       </Animated.View>
     </>
   );
@@ -1507,12 +1517,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopSidebarBorder: {
     borderWidth: theme.borderWidth[1],
-    borderRightWidth: theme.borderWidth[2],
     borderColor: theme.colors.border,
-    borderRightColor: theme.colors.border,
-    borderRadius: 8,
-    backgroundColor: theme.colors.surfaceWorkspace,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
     overflow: "hidden",
+    ...theme.shadow.lg,
   },
   desktopSidebarRail: {
     width: 44,

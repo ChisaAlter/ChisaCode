@@ -22,6 +22,10 @@ import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
+import {
+  COMPOSER_VOICE_UI_VISIBLE,
+  isComposerVoiceShortcutHelpId,
+} from "@/composer/voice-visibility";
 
 const EMPTY_CAPTURED_COMBOS: string[] = [];
 
@@ -167,7 +171,16 @@ export function KeyboardShortcutsSection() {
   const isFocused = useIsFocused();
   const isMac = getShortcutOs() === "mac";
   const isDesktopApp = getIsElectronRuntime();
-  const sections = buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp });
+  const sections = useMemo(() => {
+    const nextSections = buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp });
+    if (COMPOSER_VOICE_UI_VISIBLE) {
+      return nextSections;
+    }
+    return nextSections.flatMap((section) => {
+      const rows = section.rows.filter((row) => !isComposerVoiceShortcutHelpId(row.id));
+      return rows.length > 0 ? [{ ...section, rows }] : [];
+    });
+  }, [isDesktopApp, isMac]);
 
   const cancelCapture = useCallback(() => {
     setCapturedCombos([]);

@@ -1182,6 +1182,26 @@ describe("workspace-layout-store actions", () => {
     expect(layout).toEqual(createDefaultLayout());
   });
 
+  it("does not repopulate an explicitly emptied workspace with auto-open entities", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    const tabId = store.openTabFocused(workspaceKey, { kind: "draft", draftId: "draft-1" });
+    store.closeTab(workspaceKey, tabId!);
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: ["agent-1"],
+      autoOpenAgentIds: ["agent-1"],
+      knownAgentIds: ["agent-1"],
+      knownTerminalIds: ["term-1", "term-2"],
+      standaloneTerminalIds: ["term-1", "term-2"],
+      hasActivePendingDraftCreate: false,
+    });
+
+    expect(store.getWorkspaceTabs(workspaceKey)).toEqual([]);
+  });
+
   it("keeps pinned archived agents in memory per workspace without persisting them", () => {
     const workspaceKey = createWorkspaceKey();
     const otherWorkspaceKey = buildWorkspaceTabPersistenceKey({
@@ -1553,6 +1573,40 @@ describe("workspace-layout-store actions", () => {
     expect(state.getWorkspaceTabs(workspaceKey).map((tab) => tab.tabId)).toEqual([
       "agent_child-agent",
     ]);
+  });
+
+  it("does not re-open a standalone terminal after the user closes its last tab", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: [],
+      autoOpenAgentIds: [],
+      knownAgentIds: [],
+      knownTerminalIds: ["term-1"],
+      standaloneTerminalIds: ["term-1"],
+      hasActivePendingDraftCreate: false,
+    });
+
+    expect(store.getWorkspaceTabs(workspaceKey).map((tab) => tab.tabId)).toEqual([
+      "terminal_term-1",
+    ]);
+
+    store.closeTab(workspaceKey, "terminal_term-1");
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: [],
+      autoOpenAgentIds: [],
+      knownAgentIds: [],
+      knownTerminalIds: ["term-1"],
+      standaloneTerminalIds: ["term-1"],
+      hasActivePendingDraftCreate: false,
+    });
+
+    expect(store.getWorkspaceTabs(workspaceKey)).toEqual([]);
   });
 
   it("reconcileTabs auto-opens only standalone terminals while keeping explicitly opened live terminals", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getDesktopSidebarResizeState,
   getLeftSidebarAnimationTargets,
   getMobileSidebarWidth,
   getRightSidebarAnimationTargets,
@@ -104,5 +105,35 @@ describe("sidebar-animation-state", () => {
 
   it("does not exceed extremely narrow but valid mobile viewports", () => {
     expect(getMobileSidebarWidth(240)).toBe(240);
+  });
+
+  it("keeps the stored desktop sidebar width instead of resetting to the default", () => {
+    expect(
+      getDesktopSidebarResizeState({
+        storedWidth: 280,
+        viewportWidth: 1200,
+        minWidth: 200,
+        maxWidth: 360,
+        minContentWidth: 400,
+      }),
+    ).toEqual({
+      width: 280,
+      maxWidth: 360,
+    });
+  });
+
+  it("clamps the desktop sidebar width to leave room for the workspace content", () => {
+    expect(
+      getDesktopSidebarResizeState({
+        storedWidth: 360,
+        viewportWidth: 640,
+        minWidth: 200,
+        maxWidth: 360,
+        minContentWidth: 400,
+      }),
+    ).toEqual({
+      width: 240,
+      maxWidth: 240,
+    });
   });
 });

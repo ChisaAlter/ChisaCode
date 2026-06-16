@@ -5,6 +5,7 @@ export function shouldSeedEmptyWorkspaceDraft(input: {
   hasHydratedWorkspaceLayoutStore: boolean;
   hasHydratedAgents: boolean;
   hasLoadedTerminals: boolean;
+  hasConsideredEmptyWorkspaceDraftSeed: boolean;
   activeAgentCount: number;
   terminalCount: number;
   workspaceTabCount: number;
@@ -15,7 +16,8 @@ export function shouldSeedEmptyWorkspaceDraft(input: {
     !input.hasWorkspaceDirectory ||
     !input.hasHydratedWorkspaceLayoutStore ||
     !input.hasHydratedAgents ||
-    !input.hasLoadedTerminals
+    !input.hasLoadedTerminals ||
+    input.hasConsideredEmptyWorkspaceDraftSeed
   ) {
     return false;
   }

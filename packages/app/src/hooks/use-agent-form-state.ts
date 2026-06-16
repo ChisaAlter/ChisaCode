@@ -142,7 +142,9 @@ function findProviderSnapshotEntry(
   snapshotEntries: ProviderSnapshotEntry[] | undefined,
   provider: AgentProvider | null | undefined,
 ): ProviderSnapshotEntry | null {
-  return provider ? (snapshotEntries ?? []).find((entry) => entry.provider === provider) ?? null : null;
+  return provider
+    ? ((snapshotEntries ?? []).find((entry) => entry.provider === provider) ?? null)
+    : null;
 }
 
 function resolveSnapshotModels(input: {
@@ -291,7 +293,8 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
     [formState.provider, snapshotEntries],
   );
   const snapshotRuntimeEntry = useMemo(
-    () => findProviderSnapshotEntry(snapshotEntries, formState.runtimeProvider ?? formState.provider),
+    () =>
+      findProviderSnapshotEntry(snapshotEntries, formState.runtimeProvider ?? formState.provider),
     [formState.provider, formState.runtimeProvider, snapshotEntries],
   );
   const snapshotSelectedProviderModels = resolveSnapshotModels({
@@ -475,7 +478,8 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
 
   const setModelFromUser = useCallback(
     (modelId: string, runtimeProvider?: AgentProvider | null) => {
-      const selectedRuntimeProvider = runtimeProvider ?? reducerStateRef.current.form.runtimeProvider;
+      const selectedRuntimeProvider =
+        runtimeProvider ?? reducerStateRef.current.form.runtimeProvider;
       const providerModels =
         selectedRuntimeProvider && allProviderModels.has(selectedRuntimeProvider)
           ? (allProviderModels.get(selectedRuntimeProvider) ?? null)

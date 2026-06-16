@@ -126,8 +126,7 @@ function buildCreateAgentOptions({
 }): CreateAgentRequestOptions {
   return {
     provider,
-    ...(composerState.selectedRuntimeProvider &&
-    composerState.selectedRuntimeProvider !== provider
+    ...(composerState.selectedRuntimeProvider && composerState.selectedRuntimeProvider !== provider
       ? { runtimeProvider: composerState.selectedRuntimeProvider }
       : {}),
     cwd: workspaceDirectory,

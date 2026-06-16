@@ -417,53 +417,88 @@ export function ImportSessionSheet({
       testID="import-session-sheet"
       desktopMaxWidth={560}
       snapPoints={IMPORT_SHEET_SNAP_POINTS}
+      scrollable={false}
     >
-      {showFilter ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-        >
-          <SegmentedControl
-            testID="import-session-filters"
-            size="sm"
-            options={filterOptions}
-            value={selectedProvider}
-            onValueChange={setSelectedProvider}
-          />
-        </ScrollView>
-      ) : null}
-      <SheetStatusMessages
-        isClientReady={Boolean(client)}
-        isSnapshotUnsupported={isSnapshotUnsupported}
-        hasNoImportableProviders={hasNoImportableProviders}
-        isLoadingSessions={isLoadingSessions}
-        allQueriesErrored={allQueriesErrored}
-        erroredProviderLabels={erroredProviderLabels}
-        importErrored={importMutation.isError}
-      />
-      {visibleEntries.length > 0 ? (
-        <View style={styles.list}>
-          {visibleEntries.map((entry) => (
-            <ImportSessionSheetRow
-              key={`${entry.providerId}:${entry.providerHandleId}`}
-              entry={entry}
-              disabled={importMutation.isPending}
-              importing={importingSessionKey === `${entry.providerId}:${entry.providerHandleId}`}
-              showCwd={!cwd}
-              onImportSession={handleImportSession}
+      <View style={styles.sheetBody}>
+        {showFilter ? (
+          <ScrollView
+            testID="import-session-filter-scroll"
+            horizontal
+            showsHorizontalScrollIndicator
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterRow}
+          >
+            <SegmentedControl
+              testID="import-session-filters"
+              size="sm"
+              options={filterOptions}
+              value={selectedProvider}
+              onValueChange={setSelectedProvider}
             />
-          ))}
-        </View>
-      ) : null}
-      {showEmptyState ? <SheetEmptyState title={emptyStateTitle} /> : null}
+          </ScrollView>
+        ) : null}
+        <SheetStatusMessages
+          isClientReady={Boolean(client)}
+          isSnapshotUnsupported={isSnapshotUnsupported}
+          hasNoImportableProviders={hasNoImportableProviders}
+          isLoadingSessions={isLoadingSessions}
+          allQueriesErrored={allQueriesErrored}
+          erroredProviderLabels={erroredProviderLabels}
+          importErrored={importMutation.isError}
+        />
+        <ScrollView
+          testID="import-session-results-scroll"
+          style={styles.resultsScroll}
+          contentContainerStyle={styles.resultsContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+        >
+          {visibleEntries.length > 0 ? (
+            <View style={styles.list}>
+              {visibleEntries.map((entry) => (
+                <ImportSessionSheetRow
+                  key={`${entry.providerId}:${entry.providerHandleId}`}
+                  entry={entry}
+                  disabled={importMutation.isPending}
+                  importing={
+                    importingSessionKey === `${entry.providerId}:${entry.providerHandleId}`
+                  }
+                  showCwd={!cwd}
+                  onImportSession={handleImportSession}
+                />
+              ))}
+            </View>
+          ) : null}
+          {showEmptyState ? <SheetEmptyState title={emptyStateTitle} /> : null}
+        </ScrollView>
+      </View>
     </AdaptiveModalSheet>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  sheetBody: {
+    flex: 1,
+    minHeight: 0,
+    gap: theme.spacing[3],
+  },
   filterRow: {
     flexDirection: "row",
+    alignItems: "center",
+  },
+  filterScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 40,
+    maxHeight: 40,
+    minHeight: 0,
+  },
+  resultsScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  resultsContent: {
+    flexGrow: 1,
     paddingBottom: theme.spacing[2],
   },
   list: {
