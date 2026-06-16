@@ -37,7 +37,9 @@ There are two supported ways to ship from `main`:
 Before running any stable patch release command:
 
 - Make sure the intended release commit is already committed to `main` and the working tree is clean.
+- Use Node `22.20.0` from `.tool-versions` and run `npm run check:node` before release checks. On Windows, do not rely on the ambient PATH Node if it reports a different version.
 - **Run `npm run format`, `npm run lint`, and `npm run typecheck` and commit any resulting changes BEFORE you start any `release:*` command.** `release:check` runs `npm install --workspaces --include-workspace-root` as part of `release:prepare`, which can mutate `package-lock.json` (e.g. churning `"dev": true` markers on optional deps). The next step, `version:all:*`, runs `npm version` which aborts when the working tree is dirty. If this happens mid-flight you have to commit the lockfile churn before retrying — and the pre-commit format hook will reject a lockfile-only commit because oxfmt internally skips `package-lock.json` while lefthook's glob still matches it. Avoid the whole mess by running format/lint/typecheck first, then `release:prepare` once on its own to absorb any lockfile churn into a normal commit, then start the release.
+- Run security audits against the official npm registry: `npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/`. The default mirror used on some Windows machines may not implement npm's audit endpoint.
 - Do not use `npm run release:patch` as a substitute for checking whether the current commit is actually ready.
 
 ```bash
@@ -274,6 +276,7 @@ This ensures the checkout ref matches the actual code on `main` with the fix inc
 - `version:all:*` bumps root + syncs workspace versions and `@chisacode/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - `npm run dev:desktop` and `npm run build:desktop` target the Electron desktop package in `packages/desktop`
+- Keep desktop build outputs under ignored `packages/desktop/release/` or `packages/desktop/release-*` directories. Move or delete old local release directories before broad source scans so release artifacts do not pollute audits.
 - If `release:publish` partially fails, re-run it — npm skips already-published versions
 
 ## Changelog format
@@ -405,7 +408,10 @@ The changelog covers **stable-to-stable**. Betas are not represented. When you p
 
 - [ ] Run the pre-release sanity check (see above) and address any findings
 - [ ] Ensure the intended release commit is already committed and the git worktree is clean before running any `release:*` patch/promote command
+- [ ] Ensure `npm run check:node` passes on Node `22.20.0`
 - [ ] Ensure local `npm run typecheck` passes on that exact commit before running any `release:*` patch/promote command
+- [ ] Verify desktop package artifacts exist and the packaged asar path resolves before publishing desktop release assets
+- [ ] Verify GitHub desktop release manifests exist and point to the intended version after release workflows finish
 - [ ] Update `CHANGELOG.md` with user-facing release notes (features, fixes — not refactors)
 - [ ] Verify the changelog heading follows strict `## X.Y.Z - YYYY-MM-DD` format
 - [ ] `npm run release:patch` or `npm run release:promote` completes successfully

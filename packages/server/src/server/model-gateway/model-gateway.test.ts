@@ -114,6 +114,53 @@ describe("model gateway", () => {
     ).toContain("air answer");
   });
 
+  test("recognizes provider-prefixed synthetic model ids before forwarding upstream", async () => {
+    const fetchCalls: Array<{ body: { model: string } }> = [];
+    const response = await handleModelGatewayRequest({
+      gateway: makeGateway({
+        models: [
+          { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
+          { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+        ],
+        syntheticModels: [
+          {
+            id: "GPT6.0",
+            label: "GPT6.0",
+            references: [{ model: "deepseek-v4-flash" }],
+            aggregatorModel: "deepseek-v4-pro",
+            rounds: 1,
+          },
+        ],
+      }),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "openai/GPT6.0",
+        messages: [{ role: "user", content: "hello" }],
+      },
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        fetchCalls.push({ body });
+        return Response.json({
+          id: `chatcmpl_${body.model}`,
+          choices: [
+            {
+              message: { role: "assistant", content: `${body.model} answer` },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      choices: [{ message: { content: "deepseek-v4-pro answer" } }],
+    });
+    expect(fetchCalls.map((call) => call.body.model)).toEqual([
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+    ]);
+  });
+
   test("runs a layered MoA synthetic model and returns node traces", async () => {
     const fetchCalls: Array<{ body: { model: string; messages: Array<{ content: string }> } }> = [];
     const result = await runSyntheticModelTest({
@@ -181,6 +228,115 @@ describe("model gateway", () => {
     expect(fetchCalls[2]?.body.messages[0]?.content).toContain("glm-5-air answer 1");
     expect(fetchCalls[2]?.body.messages[0]?.content).toContain("glm-4.6 answer 2");
     expect(fetchCalls[2]?.body).toMatchObject({ temperature: 0.2, max_tokens: 128 });
+  });
+
+  test("caps existing three-layer MoA configs at two layers before aggregation", async () => {
+    const fetchCalls: Array<{ body: { model: string } }> = [];
+    const result = await runSyntheticModelTest({
+      gateway: makeGateway({
+        models: [
+          { id: "draft-model", label: "Draft" },
+          { id: "review-model", label: "Review" },
+          { id: "third-model", label: "Third" },
+          { id: "decision-model", label: "Decision" },
+        ],
+      }),
+      syntheticModel: {
+        id: "legacy-three-layer",
+        label: "Legacy Three Layer",
+        references: [{ model: "draft-model" }],
+        aggregatorModel: "decision-model",
+        rounds: 3,
+        moa: {
+          layers: [
+            { id: "layer-1", nodes: [{ model: "draft-model" }] },
+            { id: "layer-2", nodes: [{ model: "review-model" }] },
+            { id: "layer-3", nodes: [{ model: "third-model" }] },
+          ],
+          aggregator: { model: "decision-model" },
+        },
+      },
+      prompt: "hello",
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        fetchCalls.push({ body });
+        return Response.json({
+          id: `chatcmpl_${body.model}`,
+          choices: [
+            {
+              message: { role: "assistant", content: `${body.model} answer` },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+    });
+
+    expect(result.layers.map((layer) => layer.id)).toEqual(["layer-1", "layer-2"]);
+    expect(fetchCalls.map((call) => call.body.model)).toEqual([
+      "draft-model",
+      "review-model",
+      "decision-model",
+    ]);
+  });
+
+  test("skips empty MoA layers and lets the aggregator decide directly", async () => {
+    const fetchCalls: Array<{ body: { model: string; messages: Array<{ content: string }> } }> = [];
+    const result = await runSyntheticModelTest({
+      gateway: makeGateway({
+        models: [
+          { id: "glm-5", label: "GLM 5", isDefault: true },
+          { id: "glm-5-air", label: "GLM 5 Air" },
+        ],
+      }),
+      syntheticModel: {
+        id: "decision-only",
+        label: "Decision Only",
+        references: [{ model: "glm-5" }],
+        aggregatorModel: "glm-5",
+        rounds: 2,
+        moa: {
+          layers: [
+            {
+              id: "layer-1",
+              label: "Draft",
+              nodes: [],
+            },
+            {
+              id: "layer-2",
+              label: "Review",
+              nodes: [],
+            },
+          ],
+          aggregator: { model: "glm-5" },
+        },
+      },
+      prompt: "hello",
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        fetchCalls.push({ body });
+        return Response.json({
+          id: `chatcmpl_${body.model}`,
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: `${body.model} decision`,
+              },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+    });
+
+    expect(result.finalText).toBe("glm-5 decision");
+    expect(result.layers).toEqual([
+      { id: "layer-1", label: "Draft", nodes: [] },
+      { id: "layer-2", label: "Review", nodes: [] },
+    ]);
+    expect(fetchCalls.map((call) => call.body.model)).toEqual(["glm-5"]);
+    expect(fetchCalls[0]?.body.messages[0]?.content).toBe("hello");
   });
 
   test("continues a MoA layer when one node fails and fails when a whole layer fails", async () => {

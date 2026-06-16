@@ -674,10 +674,10 @@ function buildGatewaySyntheticModels(gateway: ModelGatewayConfig): ProviderProfi
 
 function buildAllGatewayProviderModels(
   gateway: ModelGatewayConfig,
-  options?: { modelPrefix?: string },
+  options?: { modelPrefix?: string; models?: ProviderProfileModel[] },
 ): ProviderProfileModel[] {
   return buildGatewayProviderModels(
-    [...(gateway.models ?? []), ...buildGatewaySyntheticModels(gateway)],
+    [...(options?.models ?? gateway.models ?? []), ...buildGatewaySyntheticModels(gateway)],
     options,
   );
 }
@@ -762,8 +762,20 @@ function addResolvedModelGatewayProviders(
   for (const gateway of Object.values(modelGateways ?? {})) {
     const gatewayId = gateway.id;
     const models = buildAllGatewayProviderModels(gateway);
-    const openAiProviderModels = buildAllGatewayProviderModels(gateway, {
+    const opencodeProviderModels = buildAllGatewayProviderModels(gateway, {
       modelPrefix: "openai",
+      models: gateway.generatedModels?.opencode,
+    });
+    const mimocodeProviderModels = buildAllGatewayProviderModels(gateway, {
+      modelPrefix: "openai",
+      models: gateway.generatedModels?.mimocode,
+    });
+    const piProviderModels = buildAllGatewayProviderModels(gateway, {
+      modelPrefix: "openai",
+      models: gateway.generatedModels?.pi,
+    });
+    const kimiProviderModels = buildAllGatewayProviderModels(gateway, {
+      models: gateway.generatedModels?.kimi,
     });
     gatewayOverrides[`${gatewayId}-claude`] = gatewayProviderOverride({
       gateway,
@@ -789,7 +801,7 @@ function addResolvedModelGatewayProviders(
       label: `${gateway.label} OpenCode`,
       baseUrl,
       token,
-      models: openAiProviderModels,
+      models: opencodeProviderModels,
     });
     modelGatewayIds.set(`${gatewayId}-opencode`, gatewayId);
     gatewayOverrides[`${gatewayId}-mimocode`] = gatewayProviderOverride({
@@ -798,7 +810,7 @@ function addResolvedModelGatewayProviders(
       label: `${gateway.label} MiMoCode`,
       baseUrl,
       token,
-      models: openAiProviderModels,
+      models: mimocodeProviderModels,
     });
     modelGatewayIds.set(`${gatewayId}-mimocode`, gatewayId);
     gatewayOverrides[`${gatewayId}-pi`] = gatewayProviderOverride({
@@ -807,7 +819,7 @@ function addResolvedModelGatewayProviders(
       label: `${gateway.label} Pi`,
       baseUrl,
       token,
-      models: openAiProviderModels,
+      models: piProviderModels,
     });
     modelGatewayIds.set(`${gatewayId}-pi`, gatewayId);
     gatewayOverrides[`${gatewayId}-kimi`] = gatewayProviderOverride({
@@ -816,7 +828,7 @@ function addResolvedModelGatewayProviders(
       label: `${gateway.label} Kimi Code`,
       baseUrl,
       token,
-      models,
+      models: kimiProviderModels,
     });
     modelGatewayIds.set(`${gatewayId}-kimi`, gatewayId);
   }

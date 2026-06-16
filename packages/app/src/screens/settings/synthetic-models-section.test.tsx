@@ -6,79 +6,85 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
 
-const { theme, configState, runMoaTestMock, patchConfigMock, confirmDialogMock } = vi.hoisted(
-  () => ({
-    theme: {
-      spacing: { 1: 4, 2: 8, 3: 12, 4: 16 },
-      iconSize: { sm: 14, md: 18 },
-      fontSize: { xs: 11, sm: 13, base: 14 },
-      fontWeight: { medium: "500" },
-      borderRadius: { full: 999, lg: 8 },
-      opacity: { 50: 0.5 },
-      colors: {
-        surface1: "#111",
-        surface2: "#222",
-        foreground: "#fff",
-        foregroundMuted: "#aaa",
-        border: "#555",
-        destructive: "#f00",
-      },
+const {
+  theme,
+  configState,
+  runMoaTestMock,
+  patchConfigMock,
+  refreshProvidersMock,
+  confirmDialogMock,
+} = vi.hoisted(() => ({
+  theme: {
+    spacing: { 1: 4, 2: 8, 3: 12, 4: 16 },
+    iconSize: { sm: 14, md: 18 },
+    fontSize: { xs: 11, sm: 13, base: 14 },
+    fontWeight: { medium: "500" },
+    borderRadius: { full: 999, lg: 8 },
+    opacity: { 50: 0.5 },
+    colors: {
+      surface1: "#111",
+      surface2: "#222",
+      foreground: "#fff",
+      foregroundMuted: "#aaa",
+      border: "#555",
+      destructive: "#f00",
     },
-    configState: {
-      config: null as MutableDaemonConfig | null,
-    },
-    runMoaTestMock: vi.fn(async (_input: unknown) => ({
-      requestId: "request-1",
-      gatewayId: "zai",
-      error: null,
-      result: {
-        finalText: "final answer",
-        durationMs: 120,
-        layers: [
-          {
-            id: "layer-1",
-            label: "Layer 1",
-            nodes: [
-              {
-                id: "layer-1:glm-5",
-                model: "glm-5",
-                status: "success" as const,
-                output: "glm draft",
-                error: null,
-                durationMs: 40,
-              },
-            ],
-          },
-          {
-            id: "layer-2",
-            label: "Layer 2",
-            nodes: [
-              {
-                id: "layer-2:qwen-max",
-                model: "qwen-max",
-                status: "success" as const,
-                output: "qwen draft",
-                error: null,
-                durationMs: 45,
-              },
-            ],
-          },
-        ],
-        aggregator: {
-          model: "glm-5",
-          status: "success" as const,
-          output: "final answer",
-          error: null,
-          durationMs: 35,
+  },
+  configState: {
+    config: null as MutableDaemonConfig | null,
+  },
+  runMoaTestMock: vi.fn(async (_input: unknown) => ({
+    requestId: "request-1",
+    gatewayId: "zai",
+    error: null,
+    result: {
+      finalText: "final answer",
+      durationMs: 120,
+      layers: [
+        {
+          id: "layer-1",
+          label: "Layer 1",
+          nodes: [
+            {
+              id: "layer-1:glm-5",
+              model: "glm-5",
+              status: "success" as const,
+              output: "glm draft",
+              error: null,
+              durationMs: 40,
+            },
+          ],
         },
+        {
+          id: "layer-2",
+          label: "Layer 2",
+          nodes: [
+            {
+              id: "layer-2:qwen-max",
+              model: "qwen-max",
+              status: "success" as const,
+              output: "qwen draft",
+              error: null,
+              durationMs: 45,
+            },
+          ],
+        },
+      ],
+      aggregator: {
+        model: "glm-5",
+        status: "success" as const,
+        output: "final answer",
+        error: null,
+        durationMs: 35,
       },
-    })),
-    patchConfigMock: vi.fn<
-      (patch: MutableDaemonConfigPatch) => Promise<MutableDaemonConfig | undefined>
-    >(async () => undefined),
-    confirmDialogMock: vi.fn(async () => true),
-  }),
-);
+    },
+  })),
+  patchConfigMock: vi.fn<
+    (patch: MutableDaemonConfigPatch) => Promise<MutableDaemonConfig | undefined>
+  >(async () => undefined),
+  refreshProvidersMock: vi.fn(async (_providers?: string[]) => undefined),
+  confirmDialogMock: vi.fn(async () => true),
+}));
 
 vi.mock("react-native", () => ({
   View: ({
@@ -345,6 +351,12 @@ vi.mock("@/hooks/use-daemon-config", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-providers-snapshot", () => ({
+  useProvidersSnapshot: () => ({
+    refresh: refreshProvidersMock,
+  }),
+}));
+
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => ({
     runModelGatewayMoaTest: runMoaTestMock,
@@ -402,6 +414,8 @@ describe("SyntheticModelsSection", () => {
     root = createRoot(container);
     configState.config = makeConfig();
     patchConfigMock.mockReset();
+    patchConfigMock.mockImplementation(async () => configState.config ?? undefined);
+    refreshProvidersMock.mockClear();
     runMoaTestMock.mockClear();
   });
 
@@ -410,7 +424,7 @@ describe("SyntheticModelsSection", () => {
     container.remove();
   });
 
-  it("opens the MoA tester, adds a layer, runs the RPC, and renders traces", async () => {
+  it("opens the two-stage MoA tester, runs the RPC, and renders traces", async () => {
     act(() => {
       root.render(<SyntheticModelsSection serverId="server-1" />);
     });
@@ -430,7 +444,7 @@ describe("SyntheticModelsSection", () => {
 
     expect(container.textContent).toContain("Layer 1 · Draft");
     expect(container.textContent).toContain("Layer 2 · Review");
-    expect(container.textContent).toContain("Layer 3 · Final");
+    expect(container.textContent).not.toContain("Layer 3 · Final");
     expect(container.textContent).toContain("Aggregator model");
     expect(container.textContent).not.toContain("Add layer");
     expect(container.textContent).not.toContain("Global parameters");
@@ -476,10 +490,6 @@ describe("SyntheticModelsSection", () => {
               id: "layer-2",
               nodes: [{ model: "glm-5" }, { model: "qwen-max" }],
             },
-            {
-              id: "layer-3",
-              nodes: [{ model: "glm-5" }, { model: "qwen-max" }],
-            },
           ],
           aggregator: { model: "glm-5" },
         },
@@ -490,7 +500,7 @@ describe("SyntheticModelsSection", () => {
     expect(container.textContent).toContain("qwen draft");
   });
 
-  it("saves added synthetic models from three configurable MoA stages", async () => {
+  it("saves added synthetic models from two configurable MoA stages", async () => {
     act(() => {
       root.render(<SyntheticModelsSection serverId="server-1" />);
     });
@@ -506,7 +516,7 @@ describe("SyntheticModelsSection", () => {
 
     expect(container.textContent).toContain("Layer 1 · Draft");
     expect(container.textContent).toContain("Layer 2 · Review");
-    expect(container.textContent).toContain("Layer 3 · Final");
+    expect(container.textContent).not.toContain("Layer 3 · Final");
     expect(container.textContent).toContain("Aggregator model");
     expect(container.textContent).not.toContain("Reference models");
 
@@ -536,6 +546,14 @@ describe("SyntheticModelsSection", () => {
     });
 
     expect(patchConfigMock).toHaveBeenCalledTimes(1);
+    expect(refreshProvidersMock).toHaveBeenCalledWith([
+      "zai-claude",
+      "zai-codex",
+      "zai-opencode",
+      "zai-mimocode",
+      "zai-pi",
+      "zai-kimi",
+    ]);
     expect(patchConfigMock.mock.calls[0]?.[0]).toMatchObject({
       modelGateways: {
         zai: {
@@ -545,7 +563,7 @@ describe("SyntheticModelsSection", () => {
               label: "MoA Test",
               references: [{ model: "glm-5" }, { model: "qwen-max" }],
               aggregatorModel: "glm-5",
-              rounds: 3,
+              rounds: 2,
               moa: {
                 layers: [
                   {
@@ -554,10 +572,6 @@ describe("SyntheticModelsSection", () => {
                   },
                   {
                     id: "layer-2",
-                    nodes: [{ model: "glm-5" }, { model: "qwen-max" }],
-                  },
-                  {
-                    id: "layer-3",
                     nodes: [{ model: "glm-5" }, { model: "qwen-max" }],
                   },
                 ],
@@ -648,5 +662,74 @@ describe("SyntheticModelsSection", () => {
     );
     expect(runButton).not.toBeNull();
     expect(runButton!.disabled).toBe(false);
+  });
+
+  it("saves a synthetic model when all MoA stages are empty", async () => {
+    act(() => {
+      root.render(<SyntheticModelsSection serverId="server-1" />);
+    });
+
+    const addButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add synthetic model"]',
+    );
+    expect(addButton).not.toBeNull();
+
+    act(() => {
+      addButton!.click();
+    });
+
+    const switches = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'),
+    );
+    expect(switches.length).toBeGreaterThanOrEqual(4);
+
+    await act(async () => {
+      for (const control of switches) {
+        control.click();
+      }
+      await Promise.resolve();
+    });
+
+    const idInput = container.querySelector<HTMLInputElement>('input[placeholder="moa-coder"]');
+    expect(idInput).not.toBeNull();
+
+    await act(async () => {
+      idInput!.value = "decision-only";
+      idInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const saveButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Save",
+    );
+    expect(saveButton).not.toBeUndefined();
+    expect(saveButton!.disabled).toBe(false);
+
+    await act(async () => {
+      saveButton!.click();
+      await Promise.resolve();
+    });
+
+    expect(patchConfigMock.mock.calls[0]?.[0]).toMatchObject({
+      modelGateways: {
+        zai: {
+          syntheticModels: [
+            {
+              id: "decision-only",
+              references: [{ model: "glm-5" }],
+              aggregatorModel: "glm-5",
+              rounds: 2,
+              moa: {
+                layers: [
+                  { id: "layer-1", nodes: [] },
+                  { id: "layer-2", nodes: [] },
+                ],
+                aggregator: { model: "glm-5" },
+              },
+            },
+          ],
+        },
+      },
+    });
   });
 });

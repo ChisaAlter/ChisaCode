@@ -107,7 +107,7 @@ export const SyntheticModelLayerSchema = z
   .object({
     id: z.string().min(1),
     label: z.string().optional(),
-    nodes: z.array(SyntheticModelNodeSchema).min(1),
+    nodes: z.array(SyntheticModelNodeSchema),
     parameters: SyntheticModelParametersSchema.optional(),
   })
   .strict();

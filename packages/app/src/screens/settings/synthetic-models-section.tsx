@@ -1,4 +1,5 @@
 import type { ModelGatewayMoaTestResponseMessage } from "@chisacode/protocol/messages";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import type {
   SyntheticModelConfig,
   SyntheticModelMoa,
@@ -25,7 +26,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { buildModelGatewayProviderIdList } from "@/screens/settings/custom-model-providers";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import {
   buildDeleteSyntheticModelPatch,
@@ -108,11 +111,6 @@ const EMPTY_REVIEW_LAYER: MoaTestLayerValues = {
   selectedModels: [],
   nodeOverrides: {},
 };
-const EMPTY_FINAL_LAYER: MoaTestLayerValues = {
-  id: "final",
-  selectedModels: [],
-  nodeOverrides: {},
-};
 
 function createDefaultMoaLayers(
   models: SelectableSyntheticGateway["models"],
@@ -126,11 +124,6 @@ function createDefaultMoaLayers(
     },
     {
       id: "review",
-      selectedModels: defaultLayerModels,
-      nodeOverrides: {},
-    },
-    {
-      id: "final",
       selectedModels: defaultLayerModels,
       nodeOverrides: {},
     },
@@ -188,15 +181,9 @@ function createLayerValuesFromMoaLayer(
     if (id === "review") {
       fallbackIndex = 1;
     }
-    if (id === "final") {
-      fallbackIndex = 2;
-    }
     let emptyFallback = EMPTY_DRAFT_LAYER;
     if (fallbackIndex === 1) {
       emptyFallback = EMPTY_REVIEW_LAYER;
-    }
-    if (fallbackIndex === 2) {
-      emptyFallback = EMPTY_FINAL_LAYER;
     }
     return createDefaultMoaLayers(fallbackModels)[fallbackIndex] ?? emptyFallback;
   }
@@ -239,7 +226,6 @@ function createValuesFromModel(
     layers: [
       createLayerValuesFromMoaLayer("draft", gatewayModels, moa.layers[0]),
       createLayerValuesFromMoaLayer("review", gatewayModels, moa.layers[1]),
-      createLayerValuesFromMoaLayer("final", gatewayModels, moa.layers[2]),
     ],
     aggregatorModel: moa.aggregator.model,
     aggregator: createParameterTextValues(moa.aggregator.parameters),
@@ -276,7 +262,6 @@ function canSaveSyntheticModel(values: SyntheticModelEditorValues, saving: boole
     values.id.trim().length > 0 &&
     values.aggregatorModel.trim().length > 0 &&
     values.layers.length > 0 &&
-    values.layers.every((layer) => layer.selectedModels.length > 0) &&
     !saving
   );
 }
@@ -405,8 +390,7 @@ function canRunMoaTest(
     values.prompt.trim().length > 0 &&
     selectedModels.length > 0 &&
     values.aggregatorModel.trim().length > 0 &&
-    values.layers.length > 0 &&
-    values.layers.every((layer) => layer.selectedModels.length > 0)
+    values.layers.length > 0
   );
 }
 
@@ -925,13 +909,6 @@ function SyntheticModelEditorSheet({
             models={selectedGatewayModels}
             onToggleModel={handleToggleLayerModel}
           />
-          <MoaModelStageCard
-            layer={values.layers[2] ?? EMPTY_FINAL_LAYER}
-            title={t("syntheticModels.moaStageFinal")}
-            hint={t("syntheticModels.moaFinalHint")}
-            models={selectedGatewayModels}
-            onToggleModel={handleToggleLayerModel}
-          />
           <MoaAggregatorStageCard
             title={t("syntheticModels.aggregatorModel")}
             hint={t("syntheticModels.moaAggregatorHint")}
@@ -1087,13 +1064,6 @@ function MoaTesterSheet({
             models={selectedGatewayModels}
             onToggleModel={handleToggleLayerModel}
           />
-          <MoaModelStageCard
-            layer={values.layers[2] ?? EMPTY_FINAL_LAYER}
-            title={t("syntheticModels.moaStageFinal")}
-            hint={t("syntheticModels.moaFinalHint")}
-            models={selectedGatewayModels}
-            onToggleModel={handleToggleLayerModel}
-          />
           <MoaAggregatorStageCard
             title={t("syntheticModels.aggregatorModel")}
             hint={t("syntheticModels.moaAggregatorHint")}
@@ -1180,6 +1150,7 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
+  const { refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingSyntheticModelState | null>(null);
   const [moaTesterOpen, setMoaTesterOpen] = useState(false);
   const gateways = useMemo(
@@ -1198,10 +1169,27 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
   );
   const closeEditor = useCallback(() => setEditorState(null), []);
   const closeMoaTester = useCallback(() => setMoaTesterOpen(false), []);
+  const refreshGatewayProviders = useCallback(
+    async (gatewayIds: Array<string | null | undefined>) => {
+      const providers = Array.from(
+        new Set(
+          gatewayIds
+            .map((gatewayId) => gatewayId?.trim())
+            .filter((gatewayId): gatewayId is string => Boolean(gatewayId))
+            .flatMap(buildModelGatewayProviderIdList),
+        ),
+      ) as AgentProvider[];
+      if (providers.length === 0) {
+        return;
+      }
+      await refresh(providers);
+    },
+    [refresh],
+  );
   const handleSave = useCallback(
     async (values: SyntheticModelEditorValues, previous: PreviousSyntheticModelRef | null) => {
       try {
-        await patchConfig(
+        const updatedConfig = await patchConfig(
           buildSaveSyntheticModelPatch({
             currentGateways: config?.modelGateways,
             previousGatewayId: previous?.gatewayId,
@@ -1216,7 +1204,13 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
             moa: buildMoaConfig(values),
           }),
         );
+        if (!updatedConfig) {
+          throw new Error(t("syntheticModels.saveFailed"));
+        }
         setEditorState(null);
+        void refreshGatewayProviders([values.gatewayId, previous?.gatewayId]).catch((error) => {
+          console.warn("[SyntheticModels] Failed to refresh providers after save", error);
+        });
       } catch (error) {
         Alert.alert(
           t("syntheticModels.saveFailed"),
@@ -1224,7 +1218,7 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
         );
       }
     },
-    [config?.modelGateways, patchConfig, t],
+    [config?.modelGateways, patchConfig, refreshGatewayProviders, t],
   );
   const handleDelete = useCallback(
     (model: SyntheticModelEntry) => {
@@ -1237,13 +1231,19 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           destructive: true,
         });
         if (!confirmed) return;
-        await patchConfig(
+        const updatedConfig = await patchConfig(
           buildDeleteSyntheticModelPatch({
             currentGateways: config?.modelGateways,
             gatewayId: model.gatewayId,
             id: model.id,
           }),
         );
+        if (!updatedConfig) {
+          throw new Error(t("syntheticModels.deleteFailed"));
+        }
+        void refreshGatewayProviders([model.gatewayId]).catch((error) => {
+          console.warn("[SyntheticModels] Failed to refresh providers after delete", error);
+        });
       })().catch((error) => {
         Alert.alert(
           t("syntheticModels.deleteFailed"),
@@ -1251,7 +1251,7 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
         );
       });
     },
-    [config?.modelGateways, patchConfig, t],
+    [config?.modelGateways, patchConfig, refreshGatewayProviders, t],
   );
   const headerActions = useMemo(
     () => (

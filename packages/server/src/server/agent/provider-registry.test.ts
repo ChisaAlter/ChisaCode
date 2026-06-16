@@ -482,6 +482,38 @@ test("model gateway materializes provider entries for all built-in agents", asyn
           },
           { id: "glm-5-air", label: "GLM 5 Air" },
         ],
+        syntheticModels: [
+          {
+            id: "moa-coder",
+            label: "MoA Coder",
+            description: "Synthetic coding model",
+            references: [{ model: "glm-5" }],
+            aggregatorModel: "glm-5",
+            rounds: 2,
+          },
+        ],
+        generatedModels: {
+          opencode: [
+            {
+              id: "openai/glm-5",
+              label: "GLM 5",
+              isDefault: true,
+              contextWindowMaxTokens: 200_000,
+              supportsImages: true,
+            },
+            { id: "openai/glm-5-air", label: "GLM 5 Air" },
+          ],
+          kimi: [
+            {
+              id: "glm-5",
+              label: "GLM 5",
+              isDefault: true,
+              contextWindowMaxTokens: 200_000,
+              supportsImages: true,
+            },
+            { id: "glm-5-air", label: "GLM 5 Air" },
+          ],
+        },
         upstreams: {
           anthropic: {
             enabled: true,
@@ -562,6 +594,12 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       id: "openai/glm-5-air",
       label: "GLM 5 Air",
     },
+    {
+      provider: "zai-opencode",
+      id: "openai/moa-coder",
+      label: "MoA Coder",
+      description: "Synthetic coding model",
+    },
   ];
   await expect(
     registry["zai-opencode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
@@ -591,6 +629,12 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       provider: "zai-kimi",
       id: "glm-5-air",
       label: "GLM 5 Air",
+    },
+    {
+      provider: "zai-kimi",
+      id: "moa-coder",
+      label: "MoA Coder",
+      description: "Synthetic coding model",
     },
   ]);
 

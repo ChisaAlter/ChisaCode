@@ -5,6 +5,7 @@ import {
   collectSyntheticModelGateways,
   collectSyntheticModels,
   createLegacyMoaConfig,
+  getGatewayModelListWithSyntheticModels,
 } from "@/screens/settings/synthetic-models";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
@@ -204,6 +205,62 @@ describe("synthetic model helpers", () => {
         },
       },
     });
+  });
+
+  it("allows empty MoA stages and preserves them for runtime skipping", () => {
+    expect(
+      buildSaveSyntheticModelPatch({
+        currentGateways: modelGateways,
+        gatewayId: "zai",
+        id: "skip-empty-layer",
+        label: "Skip Empty Layer",
+        references: ["glm-5"],
+        aggregatorModel: "glm-5",
+        rounds: 2,
+        moa: {
+          layers: [
+            {
+              id: "layer-1",
+              label: "Draft",
+              nodes: [],
+            },
+            {
+              id: "layer-2",
+              label: "Review",
+              nodes: [{ model: "glm-5" }],
+            },
+          ],
+          aggregator: { model: "glm-5" },
+        },
+      }),
+    ).toMatchObject({
+      modelGateways: {
+        zai: {
+          syntheticModels: [
+            modelGateways.zai.syntheticModels[0],
+            {
+              id: "skip-empty-layer",
+              references: [{ model: "glm-5" }],
+              aggregatorModel: "glm-5",
+              rounds: 2,
+              moa: {
+                layers: [
+                  { id: "layer-1", nodes: [] },
+                  { id: "layer-2", nodes: [{ model: "glm-5" }] },
+                ],
+                aggregator: { model: "glm-5" },
+              },
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it("appends synthetic models to gateway model lists used by agent model selection", () => {
+    expect(
+      getGatewayModelListWithSyntheticModels(modelGateways.zai).map((model) => model.id),
+    ).toEqual(["glm-5", "glm-5-air", "glm-4.6", "moa-coder"]);
   });
 
   it("creates a legacy-compatible MoA config from references and rounds", () => {

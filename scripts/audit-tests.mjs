@@ -48,14 +48,27 @@ const checks = [
   },
 ];
 
-const ignoredDirs = new Set(["node_modules", "dist", ".git", ".claude", ".turbo"]);
+const ignoredDirs = new Set([
+  "node_modules",
+  "dist",
+  ".git",
+  ".claude",
+  ".turbo",
+  ".worktrees",
+  "worktrees",
+  "release",
+]);
 const testFilePattern = /(?:\.test|\.spec)\.[cm]?[jt]sx?$/;
+
+function shouldIgnoreDirectory(name) {
+  return ignoredDirs.has(name) || /^release-.+/.test(name);
+}
 
 async function collectFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
-    if (ignoredDirs.has(entry.name)) continue;
+    if (shouldIgnoreDirectory(entry.name)) continue;
     const entryPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await collectFiles(entryPath)));

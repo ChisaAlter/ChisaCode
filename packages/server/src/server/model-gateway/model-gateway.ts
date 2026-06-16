@@ -163,7 +163,7 @@ function normalizeRequestedModelId(value: unknown): string {
     return "";
   }
   const trimmed = value.trim();
-  return trimmed.startsWith("openai/") ? trimmed.slice("openai/".length) : trimmed;
+  return trimmed;
 }
 
 function findSyntheticModel(
@@ -174,7 +174,17 @@ function findSyntheticModel(
   if (!normalized) {
     return null;
   }
-  return gateway.syntheticModels?.find((model) => model.id === normalized) ?? null;
+  const syntheticModels = gateway.syntheticModels ?? [];
+  const exact = syntheticModels.find((model) => model.id === normalized);
+  if (exact) {
+    return exact;
+  }
+  const slashIndex = normalized.indexOf("/");
+  if (slashIndex < 0) {
+    return null;
+  }
+  const withoutProviderPrefix = normalized.slice(slashIndex + 1);
+  return syntheticModels.find((model) => model.id === withoutProviderPrefix) ?? null;
 }
 
 function parseJsonObject(value: unknown): JsonRecord {
@@ -920,7 +930,7 @@ function mergeSyntheticParameters(
 }
 
 function createLegacyMoaPlan(syntheticModel: SyntheticModelConfig): SyntheticModelMoa {
-  const rounds = Math.max(1, Math.min(4, syntheticModel.rounds ?? 1));
+  const rounds = Math.max(1, Math.min(2, syntheticModel.rounds ?? 1));
   const nodes = syntheticModel.references.map((reference) => ({ model: reference.model }));
   return {
     layers: Array.from({ length: rounds }, (_, index) => ({
@@ -933,7 +943,11 @@ function createLegacyMoaPlan(syntheticModel: SyntheticModelConfig): SyntheticMod
 }
 
 function resolveSyntheticMoaPlan(syntheticModel: SyntheticModelConfig): SyntheticModelMoa {
-  return syntheticModel.moa ?? createLegacyMoaPlan(syntheticModel);
+  const plan = syntheticModel.moa ?? createLegacyMoaPlan(syntheticModel);
+  return {
+    ...plan,
+    layers: plan.layers.slice(0, 2),
+  };
 }
 
 async function runSyntheticNode(input: {
@@ -999,6 +1013,14 @@ async function runSyntheticModelWithTrace(input: {
       references,
       layerParameters.systemPrompt,
     );
+    if (layer.nodes.length === 0) {
+      layerTraces.push({
+        id: layer.id,
+        label: layer.label ?? null,
+        nodes: [],
+      });
+      continue;
+    }
     const nodes = await Promise.all(
       layer.nodes.map((node) =>
         runSyntheticNode({
