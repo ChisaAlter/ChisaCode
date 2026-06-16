@@ -55,6 +55,8 @@ export interface MoaTestResult {
 
 const SYNTHETIC_MODEL_SYSTEM_PROMPT = `You have been provided with a set of responses from multiple models to the latest user request. Synthesize them into one high-quality answer. Critically evaluate the responses because some may be incomplete, biased, or incorrect. Do not merely copy them; produce a refined, accurate, coherent, and complete response.
 
+Return only the final answer that should be shown to the user. Do not describe your evaluation process, do not mention the model responses, and do not include hidden reasoning or analysis.
+
 Responses from models:`;
 const SYNTHETIC_CHAT_OPTION_KEYS = [
   "temperature",
@@ -805,7 +807,11 @@ function readChatResponseText(response: JsonRecord): string {
   const choices = Array.isArray(response.choices) ? response.choices : [];
   const firstChoice = asRecord(choices[0]);
   const message = asRecord(firstChoice?.message);
-  return readTextContent(message?.content);
+  const content = readTextContent(message?.content);
+  if (content.trim().length > 0) {
+    return content;
+  }
+  return typeof message?.reasoning_content === "string" ? message.reasoning_content : "";
 }
 
 function buildSyntheticChatResponse(model: unknown, text: string): JsonRecord {

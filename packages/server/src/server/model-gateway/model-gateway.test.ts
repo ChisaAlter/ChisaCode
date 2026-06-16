@@ -339,6 +339,94 @@ describe("model gateway", () => {
     expect(fetchCalls[0]?.body.messages[0]?.content).toBe("hello");
   });
 
+  test("uses reasoning_content when chat completion content is empty", async () => {
+    const result = await runSyntheticModelTest({
+      gateway: makeGateway({
+        models: [
+          { id: "reasoning-model", label: "Reasoning" },
+          { id: "decision-model", label: "Decision" },
+        ],
+      }),
+      syntheticModel: {
+        id: "reasoning-fallback",
+        label: "Reasoning Fallback",
+        references: [{ model: "reasoning-model" }],
+        aggregatorModel: "decision-model",
+        rounds: 1,
+        moa: {
+          layers: [{ id: "layer-1", nodes: [{ model: "reasoning-model" }] }],
+          aggregator: { model: "decision-model" },
+        },
+      },
+      prompt: "hello",
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        return Response.json({
+          id: `chatcmpl_${body.model}`,
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: body.model === "reasoning-model" ? "" : "final",
+                reasoning_content:
+                  body.model === "reasoning-model" ? "reasoning fallback output" : undefined,
+              },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+    });
+
+    expect(result.layers[0]?.nodes[0]).toMatchObject({
+      model: "reasoning-model",
+      status: "success",
+      output: "reasoning fallback output",
+    });
+    expect(result.finalText).toBe("final");
+  });
+
+  test("instructs the aggregator to return only the final user-facing answer", async () => {
+    const aggregatePrompts: string[] = [];
+    await runSyntheticModelTest({
+      gateway: makeGateway({
+        models: [
+          { id: "draft-model", label: "Draft" },
+          { id: "decision-model", label: "Decision" },
+        ],
+      }),
+      syntheticModel: {
+        id: "final-only",
+        label: "Final Only",
+        references: [{ model: "draft-model" }],
+        aggregatorModel: "decision-model",
+        rounds: 1,
+      },
+      prompt: "hello",
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        if (body.model === "decision-model") {
+          aggregatePrompts.push(String(body.messages[0]?.content ?? ""));
+        }
+        return Response.json({
+          id: `chatcmpl_${body.model}`,
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: body.model === "draft-model" ? "draft answer" : "final answer",
+              },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+    });
+
+    expect(aggregatePrompts[0]).toContain("Return only the final answer");
+    expect(aggregatePrompts[0]).toContain("do not include hidden reasoning or analysis");
+  });
+
   test("continues a MoA layer when one node fails and fails when a whole layer fails", async () => {
     const gateway = makeGateway({
       models: [
