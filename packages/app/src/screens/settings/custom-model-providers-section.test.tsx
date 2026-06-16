@@ -278,6 +278,7 @@ function makeConfig(): MutableDaemonConfig {
             supportsImages: true,
           },
         ],
+        syntheticModels: [],
         upstreams: {
           anthropic: {
             enabled: true,
