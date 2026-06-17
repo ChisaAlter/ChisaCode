@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-16T06:39:13.799Z",
+  "generatedAt": "2026-06-17T01:16:02.319Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "server",
@@ -58,15 +58,15 @@
     }
   },
   "stats": {
-    "files": 565,
+    "files": 574,
     "categories": {
       "docs": 4,
       "config": 19,
       "support": 15,
-      "test": 281,
-      "source": 246
+      "test": 283,
+      "source": 253
     },
-    "internalImportEdges": 1707,
+    "internalImportEdges": 1734,
     "workspaceDependencies": ["client", "highlight", "protocol", "relay"],
     "externalDependencies": [
       "@agentclientprotocol/sdk",
@@ -79,6 +79,7 @@
       "ai",
       "ajv",
       "bcryptjs",
+      "better-sqlite3",
       "child_process",
       "crypto",
       "dotenv",
@@ -149,7 +150,7 @@
       "id": "file:packages/server/package.json",
       "type": "config",
       "path": "packages/server/package.json",
-      "lines": 110,
+      "lines": 113,
       "imports": []
     },
     {
@@ -394,6 +395,56 @@
       "imports": ["@chisacode/protocol/agent-attention-notification"]
     },
     {
+      "id": "file:packages/server/src/server/agent-index/agent-index-rebuilder.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent-index/agent-index-rebuilder.ts",
+      "lines": 16,
+      "imports": ["../agent/agent-storage.js", "./sqlite-agent-index.js"]
+    },
+    {
+      "id": "file:packages/server/src/server/agent-index/schema.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent-index/schema.ts",
+      "lines": 31,
+      "imports": []
+    },
+    {
+      "id": "file:packages/server/src/server/agent-index/sqlite-agent-index.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/agent-index/sqlite-agent-index.test.ts",
+      "lines": 136,
+      "imports": [
+        "../../test-utils/test-logger.js",
+        "../agent/agent-storage.js",
+        "./agent-index-rebuilder.js",
+        "./sqlite-agent-index.js",
+        "@chisacode/protocol/agent-labels",
+        "better-sqlite3",
+        "node:fs",
+        "node:module",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "lines": 191,
+      "imports": [
+        "../agent/agent-sdk-types.js",
+        "../agent/agent-storage.js",
+        "./schema.js",
+        "@chisacode/protocol/agent-labels",
+        "better-sqlite3",
+        "node:fs",
+        "node:module",
+        "node:path",
+        "pino"
+      ]
+    },
+    {
       "id": "file:packages/server/src/server/agent/activity-curator.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/activity-curator.test.ts",
@@ -430,7 +481,7 @@
       "id": "file:packages/server/src/server/agent/agent-loading.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-loading.ts",
-      "lines": 85,
+      "lines": 92,
       "imports": [
         "../persistence-hooks.js",
         "./agent-manager.js",
@@ -460,7 +511,7 @@
       "id": "file:packages/server/src/server/agent/agent-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-manager.test.ts",
-      "lines": 5767,
+      "lines": 5882,
       "imports": [
         "../../test-utils/test-logger.js",
         "./agent-manager.js",
@@ -481,7 +532,7 @@
       "id": "file:packages/server/src/server/agent/agent-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-manager.ts",
-      "lines": 3610,
+      "lines": 3662,
       "imports": [
         "../../terminal/terminal-manager.js",
         "./agent-archive.js",
@@ -491,6 +542,7 @@
         "./agent-stream-coalescer.js",
         "./agent-timeline-store-types.js",
         "./agent-timeline-store.js",
+        "./companion-mcp-injection.js",
         "./foreground-run-state.js",
         "./provider-registry.js",
         "./rewind/rewind.js",
@@ -581,6 +633,27 @@
       ]
     },
     {
+      "id": "file:packages/server/src/server/agent/agent-preset-store.test.ts",
+      "type": "test",
+      "path": "packages/server/src/server/agent/agent-preset-store.test.ts",
+      "lines": 42,
+      "imports": [
+        "../../test-utils/test-logger.js",
+        "./agent-preset-store.js",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/server/src/server/agent/agent-preset-store.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent/agent-preset-store.ts",
+      "lines": 56,
+      "imports": ["@chisacode/protocol/agent-presets", "node:fs", "node:path", "pino"]
+    },
+    {
       "id": "file:packages/server/src/server/agent/agent-projections.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/agent-projections.test.ts",
@@ -591,14 +664,15 @@
       "id": "file:packages/server/src/server/agent/agent-projections.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-projections.ts",
-      "lines": 514,
+      "lines": 520,
       "imports": [
         "../json-utils.js",
         "../messages.js",
         "../persistence-hooks.js",
         "./agent-manager.js",
         "./agent-sdk-types.js",
-        "./agent-storage.js"
+        "./agent-storage.js",
+        "@chisacode/protocol/agent-labels"
       ]
     },
     {
@@ -708,12 +782,13 @@
       "id": "file:packages/server/src/server/agent/agent-storage.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/agent-storage.ts",
-      "lines": 399,
+      "lines": 436,
       "imports": [
         "../messages.js",
         "./agent-manager.js",
         "./agent-projections.js",
         "./agent-sdk-types.js",
+        "@chisacode/protocol/agent-labels",
         "node:crypto",
         "node:fs",
         "node:path",
@@ -764,6 +839,32 @@
       "imports": []
     },
     {
+      "id": "file:packages/server/src/server/agent/companion-mcp-injection.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent/companion-mcp-injection.ts",
+      "lines": 35,
+      "imports": ["node:crypto"]
+    },
+    {
+      "id": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent/companion-mcp-tools.ts",
+      "lines": 190,
+      "imports": [
+        "../json-utils.js",
+        "./agent-manager.js",
+        "./agent-storage.js",
+        "./create-agent/create.js",
+        "./delegation-task-status.js",
+        "./lifecycle-command.js",
+        "./mcp-shared.js",
+        "./provider-snapshot-manager.js",
+        "@modelcontextprotocol/sdk/server/mcp.js",
+        "pino",
+        "zod"
+      ]
+    },
+    {
       "id": "file:packages/server/src/server/agent/create-agent-lifecycle-dispatch.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/create-agent-lifecycle-dispatch.ts",
@@ -806,7 +907,7 @@
       "id": "file:packages/server/src/server/agent/create-agent/create.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/create-agent/create.ts",
-      "lines": 484,
+      "lines": 507,
       "imports": [
         "../../../terminal/terminal-manager.js",
         "../../chisacode-worktree-service.js",
@@ -828,6 +929,13 @@
         "@chisacode/protocol/agent-labels",
         "pino"
       ]
+    },
+    {
+      "id": "file:packages/server/src/server/agent/delegation-task-status.ts",
+      "type": "source",
+      "path": "packages/server/src/server/agent/delegation-task-status.ts",
+      "lines": 46,
+      "imports": ["./agent-manager.js", "./agent-sdk-types.js", "./agent-storage.js"]
     },
     {
       "id": "file:packages/server/src/server/agent/dictation-debug.ts",
@@ -924,7 +1032,7 @@
       "id": "file:packages/server/src/server/agent/mcp-server.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/mcp-server.test.ts",
-      "lines": 3609,
+      "lines": 3619,
       "imports": [
         "../../services/github-service.js",
         "../../terminal/terminal-manager.js",
@@ -958,7 +1066,7 @@
       "id": "file:packages/server/src/server/agent/mcp-server.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/mcp-server.ts",
-      "lines": 2371,
+      "lines": 2401,
       "imports": [
         "../../services/github-service.js",
         "../../terminal/terminal-manager.js",
@@ -980,6 +1088,7 @@
         "./agent-prompt.js",
         "./agent-sdk-types.js",
         "./agent-storage.js",
+        "./companion-mcp-tools.js",
         "./create-agent/create.js",
         "./lifecycle-command.js",
         "./mcp-shared.js",
@@ -1118,7 +1227,7 @@
       "id": "file:packages/server/src/server/agent/provider-registry.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-registry.test.ts",
-      "lines": 1368,
+      "lines": 1412,
       "imports": [
         "../../test-utils/test-logger.js",
         "../../utils/executable.js",
@@ -1131,7 +1240,7 @@
       "id": "file:packages/server/src/server/agent/provider-registry.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-registry.ts",
-      "lines": 912,
+      "lines": 926,
       "imports": [
         "../workspace-git-service.js",
         "./agent-sdk-types.js",
@@ -1154,7 +1263,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.test.ts",
-      "lines": 537,
+      "lines": 589,
       "imports": [
         "../../test-utils/test-logger.js",
         "./agent-sdk-types.js",
@@ -1167,7 +1276,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.ts",
-      "lines": 814,
+      "lines": 1037,
       "imports": [
         "../../utils/path.js",
         "../../utils/promise-timeout.js",
@@ -1188,7 +1297,7 @@
       "id": "file:packages/server/src/server/agent/provider-tooling.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/provider-tooling.ts",
-      "lines": 188,
+      "lines": 194,
       "imports": ["../../utils/spawn.js", "./agent-sdk-types.js", "./provider-launch-config.js"]
     },
     {
@@ -2725,11 +2834,13 @@
       "id": "file:packages/server/src/server/bootstrap.ts",
       "type": "source",
       "path": "packages/server/src/server/bootstrap.ts",
-      "lines": 1157,
+      "lines": 1188,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager-factory.js",
         "../terminal/terminal-manager.js",
+        "./agent-index/agent-index-rebuilder.js",
+        "./agent-index/sqlite-agent-index.js",
         "./agent/agent-manager.js",
         "./agent/agent-sdk-types.js",
         "./agent/agent-storage.js",
@@ -4302,14 +4413,14 @@
       "id": "file:packages/server/src/server/model-gateway/model-gateway.test.ts",
       "type": "test",
       "path": "packages/server/src/server/model-gateway/model-gateway.test.ts",
-      "lines": 569,
+      "lines": 813,
       "imports": ["./model-gateway.js", "@chisacode/protocol/provider-config", "vitest"]
     },
     {
       "id": "file:packages/server/src/server/model-gateway/model-gateway.ts",
       "type": "source",
       "path": "packages/server/src/server/model-gateway/model-gateway.ts",
-      "lines": 1157,
+      "lines": 1185,
       "imports": ["@chisacode/protocol/provider-config"]
     },
     {
@@ -4782,7 +4893,7 @@
       "id": "file:packages/server/src/server/session.ts",
       "type": "source",
       "path": "packages/server/src/server/session.ts",
-      "lines": 9200,
+      "lines": 9240,
       "imports": [
         "../services/github-service.js",
         "../terminal/terminal-manager.js",
@@ -4796,6 +4907,7 @@
         "../utils/spawn.js",
         "./agent/agent-loading.js",
         "./agent/agent-manager.js",
+        "./agent/agent-preset-store.js",
         "./agent/agent-projections.js",
         "./agent/agent-prompt.js",
         "./agent/agent-response-loop.js",
@@ -7287,6 +7399,72 @@
       "specifier": "@chisacode/protocol/agent-attention-notification"
     },
     {
+      "source": "file:packages/server/src/server/agent-index/agent-index-rebuilder.ts",
+      "target": "file:packages/server/src/server/agent/agent-storage.ts",
+      "type": "imports",
+      "specifier": "../agent/agent-storage.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/agent-index-rebuilder.ts",
+      "target": "file:packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "type": "imports",
+      "specifier": "./sqlite-agent-index.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/sqlite-agent-index.test.ts",
+      "target": "file:packages/server/src/test-utils/test-logger.ts",
+      "type": "imports",
+      "specifier": "../../test-utils/test-logger.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/sqlite-agent-index.test.ts",
+      "target": "file:packages/server/src/server/agent/agent-storage.ts",
+      "type": "imports",
+      "specifier": "../agent/agent-storage.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/sqlite-agent-index.test.ts",
+      "target": "file:packages/server/src/server/agent-index/agent-index-rebuilder.ts",
+      "type": "imports",
+      "specifier": "./agent-index-rebuilder.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/sqlite-agent-index.test.ts",
+      "target": "file:packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "type": "imports",
+      "specifier": "./sqlite-agent-index.js"
+    },
+    {
+      "source": "module:server",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-labels"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "target": "file:packages/server/src/server/agent/agent-sdk-types.ts",
+      "type": "imports",
+      "specifier": "../agent/agent-sdk-types.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "target": "file:packages/server/src/server/agent/agent-storage.ts",
+      "type": "imports",
+      "specifier": "../agent/agent-storage.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "target": "file:packages/server/src/server/agent-index/schema.ts",
+      "type": "imports",
+      "specifier": "./schema.js"
+    },
+    {
+      "source": "module:server",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-labels"
+    },
+    {
       "source": "file:packages/server/src/server/agent/activity-curator.test.ts",
       "target": "file:packages/server/src/server/agent/activity-curator.ts",
       "type": "imports",
@@ -7486,6 +7664,12 @@
     },
     {
       "source": "file:packages/server/src/server/agent/agent-manager.ts",
+      "target": "file:packages/server/src/server/agent/companion-mcp-injection.ts",
+      "type": "imports",
+      "specifier": "./companion-mcp-injection.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/agent-manager.ts",
       "target": "file:packages/server/src/server/agent/foreground-run-state.ts",
       "type": "imports",
       "specifier": "./foreground-run-state.js"
@@ -7653,6 +7837,24 @@
       "specifier": "@chisacode/protocol/agent-title-limits"
     },
     {
+      "source": "file:packages/server/src/server/agent/agent-preset-store.test.ts",
+      "target": "file:packages/server/src/test-utils/test-logger.ts",
+      "type": "imports",
+      "specifier": "../../test-utils/test-logger.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/agent-preset-store.test.ts",
+      "target": "file:packages/server/src/server/agent/agent-preset-store.ts",
+      "type": "imports",
+      "specifier": "./agent-preset-store.js"
+    },
+    {
+      "source": "module:server",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-presets"
+    },
+    {
       "source": "file:packages/server/src/server/agent/agent-projections.test.ts",
       "target": "file:packages/server/src/server/agent/agent-manager.ts",
       "type": "imports",
@@ -7705,6 +7907,12 @@
       "target": "file:packages/server/src/server/agent/agent-storage.ts",
       "type": "imports",
       "specifier": "./agent-storage.js"
+    },
+    {
+      "source": "module:server",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-labels"
     },
     {
       "source": "file:packages/server/src/server/agent/agent-prompt.test.ts",
@@ -7881,6 +8089,12 @@
       "specifier": "./agent-sdk-types.js"
     },
     {
+      "source": "module:server",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-labels"
+    },
+    {
       "source": "file:packages/server/src/server/agent/agent-stream-coalescer.test.ts",
       "target": "file:packages/server/src/server/agent/agent-sdk-types.ts",
       "type": "imports",
@@ -7921,6 +8135,54 @@
       "target": "file:packages/server/src/server/agent/agent-timeline-store-types.ts",
       "type": "imports",
       "specifier": "./agent-timeline-store-types.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/json-utils.ts",
+      "type": "imports",
+      "specifier": "../json-utils.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/agent/agent-manager.ts",
+      "type": "imports",
+      "specifier": "./agent-manager.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/agent/agent-storage.ts",
+      "type": "imports",
+      "specifier": "./agent-storage.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/agent/create-agent/create.ts",
+      "type": "imports",
+      "specifier": "./create-agent/create.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/agent/delegation-task-status.ts",
+      "type": "imports",
+      "specifier": "./delegation-task-status.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/agent/lifecycle-command.ts",
+      "type": "imports",
+      "specifier": "./lifecycle-command.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/agent/mcp-shared.ts",
+      "type": "imports",
+      "specifier": "./mcp-shared.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "target": "file:packages/server/src/server/agent/provider-snapshot-manager.ts",
+      "type": "imports",
+      "specifier": "./provider-snapshot-manager.js"
     },
     {
       "source": "file:packages/server/src/server/agent/create-agent-lifecycle-dispatch.ts",
@@ -8095,6 +8357,24 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/agent-labels"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/delegation-task-status.ts",
+      "target": "file:packages/server/src/server/agent/agent-manager.ts",
+      "type": "imports",
+      "specifier": "./agent-manager.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/delegation-task-status.ts",
+      "target": "file:packages/server/src/server/agent/agent-sdk-types.ts",
+      "type": "imports",
+      "specifier": "./agent-sdk-types.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/delegation-task-status.ts",
+      "target": "file:packages/server/src/server/agent/agent-storage.ts",
+      "type": "imports",
+      "specifier": "./agent-storage.js"
     },
     {
       "source": "file:packages/server/src/server/agent/dictation-debug.ts",
@@ -8485,6 +8765,12 @@
       "target": "file:packages/server/src/server/agent/agent-storage.ts",
       "type": "imports",
       "specifier": "./agent-storage.js"
+    },
+    {
+      "source": "file:packages/server/src/server/agent/mcp-server.ts",
+      "target": "file:packages/server/src/server/agent/companion-mcp-tools.ts",
+      "type": "imports",
+      "specifier": "./companion-mcp-tools.js"
     },
     {
       "source": "file:packages/server/src/server/agent/mcp-server.ts",
@@ -11203,6 +11489,18 @@
       "target": "file:packages/server/src/terminal/terminal-manager.ts",
       "type": "imports",
       "specifier": "../terminal/terminal-manager.js"
+    },
+    {
+      "source": "file:packages/server/src/server/bootstrap.ts",
+      "target": "file:packages/server/src/server/agent-index/agent-index-rebuilder.ts",
+      "type": "imports",
+      "specifier": "./agent-index/agent-index-rebuilder.js"
+    },
+    {
+      "source": "file:packages/server/src/server/bootstrap.ts",
+      "target": "file:packages/server/src/server/agent-index/sqlite-agent-index.ts",
+      "type": "imports",
+      "specifier": "./agent-index/sqlite-agent-index.js"
     },
     {
       "source": "file:packages/server/src/server/bootstrap.ts",
@@ -14395,6 +14693,12 @@
       "target": "file:packages/server/src/server/agent/agent-manager.ts",
       "type": "imports",
       "specifier": "./agent/agent-manager.js"
+    },
+    {
+      "source": "file:packages/server/src/server/session.ts",
+      "target": "file:packages/server/src/server/agent/agent-preset-store.ts",
+      "type": "imports",
+      "specifier": "./agent/agent-preset-store.js"
     },
     {
       "source": "file:packages/server/src/server/session.ts",

@@ -72,6 +72,7 @@ import {
   unarchiveAgentState,
 } from "./agent/agent-prompt.js";
 import { resolveCreateAgentTitles } from "./agent/create-agent-title.js";
+import { AgentPresetStore } from "./agent/agent-preset-store.js";
 import { respondToAgentPermission } from "./agent/permission-response.js";
 import { experimental_createMCPClient } from "ai";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -789,6 +790,7 @@ export class Session {
   } | null = null;
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
+  private readonly agentPresetStore: AgentPresetStore;
   private unsubscribeProviderSnapshotEvents: (() => void) | null = null;
   private readonly scriptRouteStore: ScriptRouteStore | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
@@ -908,6 +910,10 @@ export class Session {
     this.daemonConfigStore = daemonConfigStore;
     this.mcpBaseUrl = mcpBaseUrl ?? null;
     this.terminalManager = terminalManager;
+    this.agentPresetStore = new AgentPresetStore({
+      chisacodeHome: this.chisacodeHome,
+      logger: this.sessionLogger,
+    });
     this.terminalController = new TerminalSessionController({
       terminalManager,
       emit: (msg) => this.emit(msg),
@@ -2144,6 +2150,8 @@ export class Session {
         return this.handleProviderDiagnosticRequest(msg);
       case "provider.tooling.run.request":
         return this.handleProviderToolingActionRequest(msg);
+      case "agent.presets.list.request":
+        return this.handleAgentPresetsListRequest(msg);
       case "model_gateway.moa.test.request":
         return this.handleModelGatewayMoaTestRequest(msg);
       default:
@@ -3064,6 +3072,7 @@ export class Session {
       images,
       attachments,
       labels,
+      relationKind,
       env,
     } = msg;
     this.sessionLogger.info(
@@ -3119,6 +3128,7 @@ export class Session {
           attachments,
           git,
           labels,
+          relationKind,
           env,
           provisionalTitle,
           explicitTitle,
@@ -3924,12 +3934,15 @@ export class Session {
     msg: Extract<SessionInboundMessage, { type: "provider_diagnostic_request" }>,
   ): Promise<void> {
     try {
-      const { diagnostic } = await this.providerSnapshotManager.getProviderDiagnostic(msg.provider);
+      const { diagnostic, details } = await this.providerSnapshotManager.getProviderDiagnostic(
+        msg.provider,
+      );
       this.emit({
         type: "provider_diagnostic_response",
         payload: {
           provider: msg.provider,
           diagnostic,
+          details,
           requestId: msg.requestId,
         },
       });
@@ -3979,6 +3992,33 @@ export class Session {
           requestType: msg.type,
           error: `Failed to ${msg.action} provider: ${err.message}`,
           code: "provider_tooling_action_failed",
+        },
+      });
+    }
+  }
+
+  private async handleAgentPresetsListRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.presets.list.request" }>,
+  ): Promise<void> {
+    try {
+      const presets = await this.agentPresetStore.list();
+      this.emit({
+        type: "agent.presets.list.response",
+        payload: {
+          presets,
+          requestId: msg.requestId,
+        },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.sessionLogger.error({ err }, "Failed to list agent presets");
+      this.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Failed to list agent presets: ${err.message}`,
+          code: "agent_presets_list_failed",
         },
       });
     }

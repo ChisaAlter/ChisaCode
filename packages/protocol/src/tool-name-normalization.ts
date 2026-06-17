@@ -47,14 +47,12 @@ export function isChisaCodeToolName(name: string): boolean {
   if (normalized.includes("__")) {
     const segments = normalized.split("__").filter((s) => s.length > 0);
     return (
-      segments.length >= 3 &&
-      segments[0] === "mcp" &&
-      (segments[1] === "chisacode" || segments[1].startsWith("chisacode_"))
+      segments.length >= 3 && segments[0] === "mcp" && isChisaCodeNamespaceSegment(segments[1])
     );
   }
   if (normalized.includes(".")) {
     const firstSegment = normalized.split(".")[0];
-    return firstSegment === "chisacode" || firstSegment.startsWith("chisacode_");
+    return isChisaCodeNamespaceSegment(firstSegment);
   }
   return false;
 }
@@ -63,23 +61,25 @@ export function getChisaCodeToolLeafName(name: string): string | null {
   const normalized = normalizeToolName(name);
   if (normalized.includes("__")) {
     const segments = normalized.split("__").filter((s) => s.length > 0);
-    if (
-      segments.length >= 3 &&
-      segments[0] === "mcp" &&
-      (segments[1] === "chisacode" || segments[1].startsWith("chisacode_"))
-    ) {
+    if (segments.length >= 3 && segments[0] === "mcp" && isChisaCodeNamespaceSegment(segments[1])) {
       return segments.slice(2).join("__");
     }
     return null;
   }
   if (normalized.includes(".")) {
     const firstSegment = normalized.split(".")[0];
-    if (firstSegment === "chisacode" || firstSegment.startsWith("chisacode_")) {
+    if (isChisaCodeNamespaceSegment(firstSegment)) {
       return normalized.split(".").slice(1).join(".");
     }
     return null;
   }
   return null;
+}
+
+function isChisaCodeNamespaceSegment(segment: string): boolean {
+  return (
+    segment === "chisacode" || segment.startsWith("chisacode_") || segment.startsWith("chisacode-")
+  );
 }
 
 export function isLikelyExternalToolName(name: string): boolean {

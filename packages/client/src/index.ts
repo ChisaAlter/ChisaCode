@@ -13,6 +13,7 @@ import type {
   MutableDaemonConfigPatch,
   ProviderDiagnosticResponseMessage,
   ProviderToolingActionResponseMessage,
+  AgentPresetsListResponseMessage,
   ProjectPlacementPayload,
   RefreshProvidersSnapshotResponseMessage,
   SendAgentMessageRequest,
@@ -274,6 +275,7 @@ export type ChisaCodeProviderSnapshotUpdate = Extract<
 export type ChisaCodeProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
 export type ChisaCodeProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
 export type ChisaCodeProviderToolingActionResult = ProviderToolingActionResponseMessage["payload"];
+export type ChisaCodeAgentPresetsListResult = AgentPresetsListResponseMessage["payload"];
 
 export interface ChisaCodeProviderListOptions {
   cwd?: string;
@@ -318,10 +320,15 @@ export interface ChisaCodeProviderActions {
   ): Promise<ChisaCodeProviderDiagnosticResult>;
   toolingAction(
     provider: ChisaCodeAgentProvider,
-    action: "install" | "update",
+    action: "install" | "update" | "reinstall",
     options?: { requestId?: string },
   ): Promise<ChisaCodeProviderToolingActionResult>;
+  listPresets(options?: { requestId?: string }): Promise<ChisaCodeAgentPresetsListResult>;
   subscribe(handler: (update: ChisaCodeProviderSnapshotUpdate) => void): () => void;
+}
+
+export interface ChisaCodePresetActions {
+  list(options?: { requestId?: string }): Promise<ChisaCodeAgentPresetsListResult>;
 }
 
 export interface ChisaCodeConfigActions {
@@ -348,6 +355,7 @@ export interface ChisaCodeClient {
   readonly workspaces: ChisaCodeWorkspaceActions;
   readonly agents: ChisaCodeAgentActions;
   readonly providers: ChisaCodeProviderActions;
+  readonly presets: ChisaCodePresetActions;
   readonly config: ChisaCodeConfigActions;
   connect(): Promise<void>;
   close(): Promise<void>;
@@ -408,10 +416,14 @@ export function createChisaCodeClient(config: ChisaCodeClientConfig): ChisaCodeC
       diagnostic: (provider, options) => daemonClient.getProviderDiagnostic(provider, options),
       toolingAction: (provider, action, options) =>
         daemonClient.runProviderToolingAction(provider, action, options),
+      listPresets: (options) => daemonClient.listAgentPresets(options),
       subscribe: (handler) =>
         daemonClient.on("providers_snapshot_update", (message) => {
           handler(message.payload);
         }),
+    },
+    presets: {
+      list: (options) => daemonClient.listAgentPresets(options),
     },
     config: {
       get: (requestId) => daemonClient.getDaemonConfig(requestId),

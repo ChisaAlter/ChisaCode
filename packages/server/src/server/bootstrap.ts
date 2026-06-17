@@ -98,6 +98,8 @@ import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
+import { rebuildAgentIndexIfEmpty } from "./agent-index/agent-index-rebuilder.js";
+import { createSqliteAgentIndex } from "./agent-index/sqlite-agent-index.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
@@ -213,6 +215,16 @@ function summarizeAgentMcpDebugBody(body: unknown): Record<string, unknown> {
     messages,
     ...(body.length > messages.length ? { omitted: body.length - messages.length } : {}),
   };
+}
+
+function firstQueryString(value: unknown): string | undefined {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (Array.isArray(value) && typeof value[0] === "string" && value[0].length > 0) {
+    return value[0];
+  }
+  return undefined;
 }
 
 export type ChisaCodeOpenAIConfig = OpenAiSpeechProviderConfig;
@@ -570,6 +582,11 @@ export async function createChisaCodeDaemon(
   httpServer.on("upgrade", scriptProxyUpgradeHandler);
 
   const agentStorage = new AgentStorage(config.agentStoragePath, logger);
+  const agentIndex = createSqliteAgentIndex(
+    path.join(config.chisacodeHome, "index", "agent-index.sqlite"),
+    logger,
+  );
+  agentStorage.setMutationHook(agentIndex);
   const projectRegistry = new FileBackedProjectRegistry(
     path.join(config.chisacodeHome, "projects", "projects.json"),
     logger,
@@ -618,6 +635,7 @@ export async function createChisaCodeDaemon(
     agentStorage,
   );
   await agentStorage.initialize();
+  await rebuildAgentIndexIfEmpty({ index: agentIndex, agentStorage });
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({
     chisacodeHome: config.chisacodeHome,
@@ -748,7 +766,11 @@ export async function createChisaCodeDaemon(
     const agentMcpRoute = "/mcp/agents";
     const agentMcpTransports: AgentMcpTransportMap = new Map();
 
-    const createAgentMcpTransport = async (callerAgentId?: string) => {
+    const createAgentMcpTransport = async (transportInput?: {
+      callerAgentId?: string;
+      companionParentAgentId?: string;
+      companionToken?: string;
+    }) => {
       const agentMcpServer = await createAgentMcpServer({
         agentManager,
         agentStorage,
@@ -812,7 +834,9 @@ export async function createChisaCodeDaemon(
           );
         },
         chisacodeHome: config.chisacodeHome,
-        callerAgentId,
+        callerAgentId: transportInput?.callerAgentId,
+        companionParentAgentId: transportInput?.companionParentAgentId,
+        companionToken: transportInput?.companionToken,
         enableVoiceTools: false,
         resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
         resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
@@ -892,14 +916,11 @@ export async function createChisaCodeDaemon(
             });
             return;
           }
-          const callerAgentIdRaw = req.query.callerAgentId;
-          let callerAgentId: string | undefined;
-          if (typeof callerAgentIdRaw === "string") {
-            callerAgentId = callerAgentIdRaw;
-          } else if (Array.isArray(callerAgentIdRaw) && typeof callerAgentIdRaw[0] === "string") {
-            callerAgentId = callerAgentIdRaw[0];
-          }
-          transport = await createAgentMcpTransport(callerAgentId);
+          transport = await createAgentMcpTransport({
+            callerAgentId: firstQueryString(req.query.callerAgentId),
+            companionParentAgentId: firstQueryString(req.query.parentAgentId),
+            companionToken: firstQueryString(req.query.companionToken),
+          });
         }
 
         await transport.handleRequest(
@@ -958,8 +979,17 @@ export async function createChisaCodeDaemon(
           const mcpBaseUrl = mcpEnabled ? createAgentMcpBaseUrl(boundListenTarget) : null;
           agentMcpBaseUrl = config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
           agentManager.setMcpBaseUrl(agentMcpBaseUrl);
+          providerSnapshotManager.setMcpInjectionState({
+            enabled: agentMcpBaseUrl !== null,
+            baseUrl: mcpBaseUrl,
+          });
           daemonConfigStore.onFieldChange("mcp.injectIntoAgents", (value) => {
-            agentManager.setMcpBaseUrl(value ? mcpBaseUrl : null);
+            const nextAgentMcpBaseUrl = value ? mcpBaseUrl : null;
+            agentManager.setMcpBaseUrl(nextAgentMcpBaseUrl);
+            providerSnapshotManager.setMcpInjectionState({
+              enabled: nextAgentMcpBaseUrl !== null,
+              baseUrl: mcpBaseUrl,
+            });
           });
           daemonConfigStore.onFieldChange("appendSystemPrompt", (value) => {
             agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");
@@ -1105,6 +1135,7 @@ export async function createChisaCodeDaemon(
     detachAgentStoragePersistence();
     await agentStorage.flush().catch(() => undefined);
     await providerSnapshotManager.shutdown();
+    agentIndex?.close();
     terminalManager.killAll();
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);

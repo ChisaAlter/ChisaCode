@@ -398,7 +398,7 @@ interface AgentToolRowProps {
   isFirst: boolean;
   isWorking: boolean;
   onCheck: (providerId: string) => void;
-  onToolingAction: (providerId: string, action: "install" | "update") => void;
+  onToolingAction: (providerId: string, action: "install" | "update" | "reinstall") => void;
 }
 
 function AgentToolRow({
@@ -432,6 +432,10 @@ function AgentToolRow({
   );
   const handleUpdate = useCallback(
     () => onToolingAction(catalogEntry.id, "update"),
+    [catalogEntry.id, onToolingAction],
+  );
+  const handleReinstall = useCallback(
+    () => onToolingAction(catalogEntry.id, "reinstall"),
     [catalogEntry.id, onToolingAction],
   );
   const downloadIcon = useMemo(
@@ -501,7 +505,7 @@ function AgentToolRow({
           <Button
             variant="outline"
             size="sm"
-            onPress={handleInstall}
+            onPress={handleReinstall}
             disabled={isWorking}
             accessibilityLabel={t("settings.integrations.reinstallAgentTool", {
               provider: catalogEntry.title,
@@ -541,7 +545,7 @@ function AgentToolsSection() {
     [checkingProviderId, refresh, workingProviderId],
   );
   const handleToolingAction = useCallback(
-    (providerId: string, action: "install" | "update") => {
+    (providerId: string, action: "install" | "update" | "reinstall") => {
       if (!client || workingProviderId || checkingProviderId) return;
       setWorkingProviderId(providerId);
       void client

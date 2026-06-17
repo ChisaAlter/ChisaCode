@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager, type ManagedAgent } from "./agent-manager.js";
 import { AgentStorage } from "./agent-storage.js";
-import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
+import { PARENT_AGENT_ID_LABEL, RELATION_KIND_LABEL } from "@chisacode/protocol/agent-labels";
 import { formatSystemNotificationPrompt } from "./agent-prompt.js";
 import type { StoredAgentRecord } from "./agent-storage.js";
 import type {
@@ -1078,6 +1078,12 @@ test("createAgent injects chisacode MCP server when manager has an MCP base URL"
       type: "http",
       url: `http://127.0.0.1:6767/mcp/agents?callerAgentId=${snapshot.id}`,
     },
+    "chisacode-companion": {
+      type: "http",
+      url: expect.stringContaining(
+        `http://127.0.0.1:6767/mcp/agents?callerAgentId=${snapshot.id}&parentAgentId=${snapshot.id}&companionToken=`,
+      ),
+    },
     custom: {
       type: "stdio",
       command: "custom-mcp",
@@ -1126,6 +1132,12 @@ test("createAgent preserves a user-provided chisacode MCP config", async () => {
     chisacode: {
       type: "http",
       url: "https://example.com/custom-chisacode",
+    },
+    "chisacode-companion": {
+      type: "http",
+      url: expect.stringContaining(
+        `http://127.0.0.1:6767/mcp/agents?callerAgentId=${snapshot.id}&parentAgentId=${snapshot.id}&companionToken=`,
+      ),
     },
   });
   expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
@@ -4299,6 +4311,109 @@ test("archiveAgent cascade archives in-memory children with the full archive con
   expectArchivedAgentRecord(storedParent, "closed");
   expectArchivedAgentRecord(storedChild, "closed");
   expect(storedUnrelated?.archivedAt).toBeUndefined();
+});
+
+test("archiveAgent cascade ignores detached and handoff children", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-cascade-relation-kind-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const manager = new AgentManager({
+    clients: {
+      codex: new TestAgentClient(),
+    },
+    registry: storage,
+    logger,
+  });
+
+  const parent = await manager.createAgent({
+    provider: "codex",
+    cwd: workdir,
+    title: "Parent",
+  });
+  const subagent = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      title: "Subagent",
+    },
+    undefined,
+    {
+      labels: { [PARENT_AGENT_ID_LABEL]: parent.id },
+      relation: { kind: "subagent", parentAgentId: parent.id, source: "mcp" },
+    },
+  );
+  const detached = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      title: "Detached",
+    },
+    undefined,
+    {
+      labels: { [PARENT_AGENT_ID_LABEL]: parent.id },
+      relation: { kind: "detached", parentAgentId: parent.id, source: "user" },
+    },
+  );
+  const handoff = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      title: "Handoff",
+    },
+    undefined,
+    {
+      labels: { [PARENT_AGENT_ID_LABEL]: parent.id },
+      relation: { kind: "handoff", parentAgentId: parent.id, source: "user" },
+    },
+  );
+
+  await manager.archiveAgent(parent.id);
+
+  expectArchivedAgentRecord(await storage.get(subagent.id), "closed");
+  expect((await storage.get(detached.id))?.archivedAt).toBeUndefined();
+  expect((await storage.get(handoff.id))?.archivedAt).toBeUndefined();
+});
+
+test("createAgent persists relation and compatibility labels", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-create-relation-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const manager = new AgentManager({
+    clients: {
+      codex: new TestAgentClient(),
+    },
+    registry: storage,
+    logger,
+  });
+
+  const parent = await manager.createAgent({
+    provider: "codex",
+    cwd: workdir,
+    title: "Parent",
+  });
+  const child = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+      title: "Child",
+    },
+    undefined,
+    {
+      relation: { kind: "team-slot", parentAgentId: parent.id, taskId: "task-1", source: "mcp" },
+    },
+  );
+
+  const storedChild = await storage.get(child.id);
+  expect(storedChild?.relation).toEqual({
+    kind: "team-slot",
+    parentAgentId: parent.id,
+    taskId: "task-1",
+    source: "mcp",
+  });
+  expect(storedChild?.labels).toMatchObject({
+    [PARENT_AGENT_ID_LABEL]: parent.id,
+    [RELATION_KIND_LABEL]: "team-slot",
+  });
 });
 
 test("archiveAgent cascade closes a running child runtime", async () => {

@@ -73,6 +73,7 @@ import {
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import { WorktreeRequestError } from "../worktree-errors.js";
+import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import {
   archiveChisaCodeWorktreeCommand,
   type ArchiveChisaCodeWorktreeCommandDependencies,
@@ -104,6 +105,8 @@ export interface AgentMcpServerOptions {
    * Used for cwd/mode inheritance when agents spawn child agents.
    */
   callerAgentId?: string;
+  companionParentAgentId?: string;
+  companionToken?: string;
   /**
    * Optional resolver for session-bound speak handlers.
    * Used by hidden voice agents to narrate through daemon-managed TTS.
@@ -484,6 +487,8 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     scheduleService,
     providerSnapshotManager,
     callerAgentId,
+    companionParentAgentId,
+    companionToken,
     resolveSpeakHandler,
     resolveCallerContext,
     logger,
@@ -491,6 +496,14 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
   const childLogger = logger.child({ module: "agent", component: "mcp-server" });
   const waitTracker = new WaitForAgentTracker(logger);
   const callerContext = callerAgentId ? (resolveCallerContext?.(callerAgentId) ?? null) : null;
+  if (companionParentAgentId || companionToken) {
+    if (!companionParentAgentId || !companionToken) {
+      throw new Error("Companion MCP requires parentAgentId and companionToken");
+    }
+    if (!agentManager.validateCompanionMcpToken(companionParentAgentId, companionToken)) {
+      throw new Error("Invalid or expired companion MCP token");
+    }
+  }
 
   const server = new McpServer({
     name: "agent-mcp",
@@ -696,6 +709,10 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     provider: ProviderModelInputSchema.describe(
       "Required provider/model pair, for example codex/gpt-5.4.",
     ),
+    relationKind: z
+      .enum(["subagent", "detached", "handoff", "team-slot"])
+      .optional()
+      .describe("Relationship to the caller agent. Defaults to subagent for agent-scoped calls."),
     labels: z.record(z.string(), z.string()).optional().describe("Labels to set on the agent"),
     settings: CreateAgentSettingsInputSchema.optional().describe(
       "Initial runtime settings for the new agent.",
@@ -838,6 +855,18 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     return server;
   }
 
+  if (companionParentAgentId) {
+    registerCompanionMcpTools({
+      server,
+      parentAgentId: companionParentAgentId,
+      agentManager,
+      agentStorage,
+      providerSnapshotManager,
+      logger: childLogger,
+      registerTool,
+    });
+  }
+
   registerTool(
     "create_agent",
     {
@@ -878,6 +907,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
           thinking: parsedArgs.settings?.thinkingOptionId,
           features: parsedArgs.settings?.features,
           labels: parsedArgs.labels,
+          relationKind: "relationKind" in parsedArgs ? parsedArgs.relationKind : undefined,
           mode: parsedArgs.settings?.modeId,
           background: parsedArgs.background ?? false,
           notifyOnFinish: parsedArgs.notifyOnFinish ?? false,

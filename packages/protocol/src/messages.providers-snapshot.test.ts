@@ -3,6 +3,9 @@ import {
   GetProvidersSnapshotResponseMessageSchema,
   ProviderToolingActionRequestMessageSchema,
   ProviderToolingActionResponseMessageSchema,
+  ProviderDiagnosticResponseMessageSchema,
+  AgentPresetsListRequestMessageSchema,
+  AgentPresetsListResponseMessageSchema,
   ProviderSnapshotEntrySchema,
   ProvidersSnapshotUpdateMessageSchema,
 } from "./messages.js";
@@ -136,6 +139,63 @@ describe("provider snapshot message schemas", () => {
     });
 
     expect(response.payload.success).toBe(true);
+  });
+
+  test("parses provider diagnostic details without requiring new clients to send them", () => {
+    const parsed = ProviderDiagnosticResponseMessageSchema.parse({
+      type: "provider_diagnostic_response",
+      payload: {
+        provider: "codex",
+        diagnostic: "Provider: Codex",
+        details: {
+          provider: "codex",
+          effectiveCommand: {
+            argv: ["codex"],
+            source: "default",
+            resolvedPath: null,
+            available: false,
+          },
+          cwd: "/tmp",
+          env: [{ name: "OPENAI_API_KEY", present: false, source: "process" }],
+          mcpInjection: {
+            supported: true,
+            enabled: false,
+            reason: "daemon MCP injection is disabled",
+          },
+        },
+        requestId: "req-diagnostic",
+      },
+    });
+
+    expect(parsed.payload.details?.env[0]).toMatchObject({
+      name: "OPENAI_API_KEY",
+      present: false,
+    });
+  });
+
+  test("parses agent preset list request and response messages", () => {
+    expect(
+      AgentPresetsListRequestMessageSchema.parse({
+        type: "agent.presets.list.request",
+        requestId: "req-presets",
+      }).requestId,
+    ).toBe("req-presets");
+
+    const response = AgentPresetsListResponseMessageSchema.parse({
+      type: "agent.presets.list.response",
+      payload: {
+        presets: [
+          {
+            id: "reviewer",
+            label: "Reviewer",
+            provider: "default",
+          },
+        ],
+        requestId: "req-presets",
+      },
+    });
+
+    expect(response.payload.presets[0]?.description).toBe("");
   });
 
   test("defaults missing enabled state in providers snapshot response entries", () => {

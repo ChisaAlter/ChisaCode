@@ -1,5 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import {
+  Alert,
+  Pressable,
+  Text,
+  View,
+  type GestureResponderEvent,
+  type PressableStateCallbackType,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
 import { useHostRuntimeIsConnected, useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -81,7 +88,9 @@ function ProviderRow({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const [toolingAction, setToolingAction] = useState<"install" | "update" | null>(null);
+  const [toolingAction, setToolingAction] = useState<"install" | "update" | "reinstall" | null>(
+    null,
+  );
   const ProviderIcon = getProviderIcon(def.id);
   const providerError =
     enabled &&
@@ -109,7 +118,7 @@ function ProviderRow({
     [def.id, onToggleEnabled],
   );
   const handleRunToolingAction = useCallback(
-    (action: "install" | "update") => {
+    (action: "install" | "update" | "reinstall") => {
       if (!client || toolingAction) return;
       setToolingAction(action);
       void client
@@ -128,12 +137,29 @@ function ProviderRow({
   );
   const canInstall = entry.installAvailable === true || entry.status === "unavailable";
   const canUpdate = entry.updateAvailable === true;
+  const canReinstall =
+    Boolean(entry.packageName) &&
+    Boolean(entry.installedVersion) &&
+    entry.versionStatus !== "not-installed";
   const handleInstall = useCallback(
-    () => handleRunToolingAction("install"),
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      handleRunToolingAction("install");
+    },
     [handleRunToolingAction],
   );
   const handleUpdate = useCallback(
-    () => handleRunToolingAction("update"),
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      handleRunToolingAction("update");
+    },
+    [handleRunToolingAction],
+  );
+  const handleReinstall = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      handleRunToolingAction("reinstall");
+    },
     [handleRunToolingAction],
   );
   const rowStyle = useCallback(
@@ -206,6 +232,23 @@ function ProviderRow({
                   <RefreshCw size={14} color={theme.colors.accent} />
                 )}
                 <Text style={styles.actionLabel}>{t("providers.update")}</Text>
+              </Pressable>
+            ) : null}
+            {canReinstall ? (
+              <Pressable
+                onPress={handleReinstall}
+                disabled={toolingAction !== null}
+                accessibilityLabel={t("settings.integrations.reinstallAgentTool", {
+                  provider: def.label,
+                })}
+                style={styles.actionButton}
+              >
+                {toolingAction === "reinstall" ? (
+                  <LoadingSpinner size={14} color={theme.colors.accent} />
+                ) : (
+                  <RefreshCw size={14} color={theme.colors.accent} />
+                )}
+                <Text style={styles.actionLabel}>{t("settings.integrations.reinstall")}</Text>
               </Pressable>
             ) : null}
           </View>

@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import type { Logger } from "pino";
+import { AGENT_RELATION_KINDS, AGENT_RELATION_SOURCES } from "@chisacode/protocol/agent-labels";
 
 import { AgentFeatureSchema, AgentStatusSchema } from "../messages.js";
 import { toStoredAgentRecord } from "./agent-projections.js";
@@ -43,6 +44,14 @@ const STORED_AGENT_SCHEMA = z.object({
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
   labels: z.record(z.string()).default({}),
+  relation: z
+    .object({
+      kind: z.enum(AGENT_RELATION_KINDS),
+      parentAgentId: z.string().optional(),
+      taskId: z.string().optional(),
+      source: z.enum(AGENT_RELATION_SOURCES).optional(),
+    })
+    .optional(),
   lastStatus: AgentStatusSchema.default("closed"),
   lastModeId: z.string().nullable().optional(),
   config: SERIALIZABLE_CONFIG_SCHEMA,
@@ -83,6 +92,11 @@ export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
   return STORED_AGENT_SCHEMA.parse(value);
 }
 
+export interface AgentStorageMutationHook {
+  upsertAgent(record: StoredAgentRecord): void;
+  markDeleted(agentId: string): void;
+}
+
 export class AgentStorage {
   private cache: Map<string, StoredAgentRecord> = new Map();
   private pathById: Map<string, string> = new Map();
@@ -93,6 +107,7 @@ export class AgentStorage {
   private baseDir: string;
   private loadPromise: Promise<StoredAgentRecord[]> | null = null;
   private logger: Logger;
+  private mutationHook: AgentStorageMutationHook | null = null;
 
   constructor(baseDir: string, logger: Logger) {
     this.baseDir = baseDir;
@@ -101,6 +116,10 @@ export class AgentStorage {
 
   async initialize(): Promise<void> {
     await this.load();
+  }
+
+  setMutationHook(hook: AgentStorageMutationHook | null): void {
+    this.mutationHook = hook;
   }
 
   async list(): Promise<StoredAgentRecord[]> {
@@ -160,6 +179,7 @@ export class AgentStorage {
 
     this.cache.set(agentId, record);
     this.pathById.set(agentId, nextPath);
+    this.notifyUpsert(record);
   }
 
   beginDelete(agentId: string): void {
@@ -190,6 +210,7 @@ export class AgentStorage {
     this.cache.delete(agentId);
     this.pathById.delete(agentId);
     this.pathsById.delete(agentId);
+    this.notifyDeleted(agentId);
   }
 
   async applySnapshot(
@@ -369,6 +390,22 @@ export class AgentStorage {
     paths.delete(filePath);
     if (paths.size === 0) {
       this.pathsById.delete(agentId);
+    }
+  }
+
+  private notifyUpsert(record: StoredAgentRecord): void {
+    try {
+      this.mutationHook?.upsertAgent(record);
+    } catch (error) {
+      this.logger.warn({ err: error, agentId: record.id }, "Agent index upsert failed");
+    }
+  }
+
+  private notifyDeleted(agentId: string): void {
+    try {
+      this.mutationHook?.markDeleted(agentId);
+    } catch (error) {
+      this.logger.warn({ err: error, agentId }, "Agent index delete marker failed");
     }
   }
 

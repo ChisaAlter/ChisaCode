@@ -165,6 +165,16 @@ describe("shared tool-call display mapping", () => {
     expect(display.displayName).toBe("List Agents");
   });
 
+  it("humanizes ChisaCode companion delegation tools", () => {
+    const display = buildToolCallDisplayModel({
+      name: "mcp__chisacode-companion__delegate_to_agent",
+      status: "running",
+      error: null,
+      detail: { type: "unknown", input: null, output: null },
+    });
+    expect(display.displayName).toBe("Delegate To Agent");
+  });
+
   it("does not override speak tool display name", () => {
     const display = buildToolCallDisplayModel({
       name: "speak",

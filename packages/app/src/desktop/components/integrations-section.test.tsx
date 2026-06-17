@@ -453,6 +453,6 @@ describe("IntegrationsSection agent tools", () => {
 
     expect(runProviderToolingActionMock).toHaveBeenNthCalledWith(1, "claude", "update");
     expect(runProviderToolingActionMock).toHaveBeenNthCalledWith(2, "opencode", "install");
-    expect(runProviderToolingActionMock).toHaveBeenNthCalledWith(3, "codex", "install");
+    expect(runProviderToolingActionMock).toHaveBeenNthCalledWith(3, "codex", "reinstall");
   });
 });

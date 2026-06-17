@@ -11,23 +11,30 @@ import type {
 import { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 
 const providerToolingMock = vi.hoisted(() => ({
+  getProviderToolingDefinition: vi.fn((provider: string) => ({
+    binary: provider,
+    packageName: `${provider}-package`,
+    installArgs: ["install", "-g", `${provider}-package@latest`],
+  })),
   getProviderToolingInfo: vi.fn(async (provider: string) => ({
     packageName: `${provider}-package`,
     installedVersion: null,
     latestVersion: null,
-    versionStatus: "not_installed" as const,
+    versionStatus: "not-installed" as const,
     checkedAt: "2026-06-10T00:00:00.000Z",
     installAvailable: true,
     updateAvailable: false,
   })),
-  runProviderToolingAction: vi.fn(async (provider: string, action: "install" | "update") => ({
-    provider,
-    action,
-    exitCode: 0,
-    stdout: "ok",
-    stderr: "",
-    success: true,
-  })),
+  runProviderToolingAction: vi.fn(
+    async (provider: string, action: "install" | "update" | "reinstall") => ({
+      provider,
+      action,
+      exitCode: 0,
+      stdout: "ok",
+      stderr: "",
+      success: true,
+    }),
+  ),
 }));
 
 vi.mock("./provider-tooling.js", () => providerToolingMock);
@@ -77,7 +84,7 @@ describe("ProviderSnapshotManager public surface", () => {
     }
   });
 
-  test("hasProvider ignores non-whitelist providerOverrides additions", () => {
+  test("hasProvider includes custom providerOverrides additions", () => {
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
       providerOverrides: {
@@ -86,7 +93,7 @@ describe("ProviderSnapshotManager public surface", () => {
     });
     try {
       expect(manager.hasProvider("claude")).toBe(true);
-      expect(manager.hasProvider("zai-claude")).toBe(false);
+      expect(manager.hasProvider("zai-claude")).toBe(true);
       expect(manager.hasProvider("not-a-provider" as AgentProvider)).toBe(false);
     } finally {
       manager.destroy();
@@ -286,7 +293,10 @@ describe("ProviderSnapshotManager public surface", () => {
     });
     try {
       const result = await manager.getProviderDiagnostic("codex");
-      expect(result).toEqual({ provider: "codex", diagnostic: "codex is ready" });
+      expect(result.provider).toBe("codex");
+      expect(result.diagnostic).toContain("Provider: Codex");
+      expect(result.diagnostic).toContain("codex is ready");
+      expect(result.details.mcpInjection.supported).toBe(false);
       expect(getDiagnostic).toHaveBeenCalledTimes(1);
     } finally {
       manager.destroy();
@@ -301,16 +311,55 @@ describe("ProviderSnapshotManager public surface", () => {
     try {
       const result = await manager.getProviderDiagnostic("codex");
       expect(result.provider).toBe("codex");
-      expect(result.diagnostic).toMatch(/no diagnostic/i);
+      expect(result.diagnostic).toMatch(/no provider-specific diagnostic/i);
+      expect(result.details.env.some((entry) => entry.name === "OPENAI_API_KEY")).toBe(true);
     } finally {
       manager.destroy();
     }
   });
 
-  test("getProviderDiagnostic throws when no client is configured for the provider", async () => {
+  test("getProviderDiagnostic throws when the provider is not configured", async () => {
     const manager = new ProviderSnapshotManager({ logger: createTestLogger() });
     try {
-      await expect(manager.getProviderDiagnostic("codex")).rejects.toThrow(/not configured/);
+      await expect(
+        manager.getProviderDiagnostic("not-a-provider" as AgentProvider),
+      ).rejects.toThrow(/not configured/);
+    } finally {
+      manager.destroy();
+    }
+  });
+
+  test("getProviderDiagnostic redacts provider env values and explains MCP injection", async () => {
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: {
+        codex: {
+          env: {
+            OPENAI_API_KEY: "secret-key",
+            OPENAI_BASE_URL: "https://example.test",
+          },
+        },
+      },
+      extraClients: {
+        codex: createExtraClient("codex", {
+          capabilities: { ...TEST_CAPABILITIES, supportsMcpServers: true },
+          getDiagnostic: async () => ({ diagnostic: "provider ok" }),
+        }),
+      },
+    });
+    manager.setMcpInjectionState({ enabled: true, baseUrl: "http://127.0.0.1:6767/mcp/agents" });
+    try {
+      const result = await manager.getProviderDiagnostic("codex");
+      expect(result.details.env).toEqual(
+        expect.arrayContaining([
+          { name: "OPENAI_API_KEY", present: true, source: "provider-config" },
+          { name: "OPENAI_BASE_URL", present: true, source: "provider-config" },
+        ]),
+      );
+      expect(result.diagnostic).toContain("OPENAI_API_KEY=present");
+      expect(result.diagnostic).not.toContain("secret-key");
+      expect(result.diagnostic).not.toContain("https://example.test");
+      expect(result.details.mcpInjection).toMatchObject({ supported: true, enabled: true });
     } finally {
       manager.destroy();
     }
@@ -337,7 +386,7 @@ describe("ProviderSnapshotManager public surface", () => {
 });
 
 describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
-  test("applyMutableProviderConfig ignores non-whitelist provider additions", async () => {
+  test("applyMutableProviderConfig includes custom provider additions", async () => {
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
       providerOverrides: {
@@ -356,9 +405,12 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
         "zai-claude": { extends: "claude", label: "ZAI", enabled: true },
       });
 
-      expect(manager.hasProvider("zai-claude" as AgentProvider)).toBe(false);
-      expect(state.providerDefinitions["zai-claude" as AgentProvider]).toBeUndefined();
-      expect(manager.listRegisteredProviderIds()).not.toContain("zai-claude" as AgentProvider);
+      expect(manager.hasProvider("zai-claude" as AgentProvider)).toBe(true);
+      expect(state.providerDefinitions["zai-claude" as AgentProvider]).toMatchObject({
+        enabled: true,
+        derivedFromProviderId: "claude",
+      });
+      expect(manager.listRegisteredProviderIds()).toContain("zai-claude" as AgentProvider);
     } finally {
       manager.destroy();
     }

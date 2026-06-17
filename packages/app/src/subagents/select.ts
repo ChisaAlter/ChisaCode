@@ -32,6 +32,14 @@ function toSubagentRow(agent: Agent): SubagentRow {
   };
 }
 
+function isTrackRelation(agent: Agent): boolean {
+  if (!agent.parentAgentId) {
+    return false;
+  }
+  const relationKind = agent.relationKind ?? "subagent";
+  return relationKind === "subagent" || relationKind === "team-slot";
+}
+
 export function selectSubagentsForParent(
   state: SessionStoreSnapshot,
   params: SelectSubagentsParams,
@@ -47,7 +55,8 @@ export function selectSubagentsForParent(
     if (
       agent.archivedAt ||
       pendingArchiveIds.has(agent.id) ||
-      agent.parentAgentId !== params.parentAgentId
+      agent.parentAgentId !== params.parentAgentId ||
+      !isTrackRelation(agent)
     ) {
       continue;
     }

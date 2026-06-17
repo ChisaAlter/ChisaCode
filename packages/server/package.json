@@ -103,6 +103,9 @@
     "typescript": "^5.2.2",
     "vitest": "^4.1.6"
   },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.11.1"
+  },
   "overrides": {
     "lightningcss": "1.30.1"
   }

@@ -18,6 +18,10 @@ $CHISACODE_HOME/
 ├── agents/
 │   └── {sanitized-cwd}/
 │       └── {agentId}.json               # One file per agent
+├── index/
+│   └── agent-index.sqlite               # Rebuildable local agent metadata index
+├── presets/
+│   └── {presetId}.json                  # Optional user-created assistant presets
 ├── schedules/
 │   └── {scheduleId}.json                # One file per schedule
 ├── chat/
@@ -31,6 +35,8 @@ $CHISACODE_HOME/
 ```
 
 The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` by stripping the filesystem root and replacing path separators with `-` (Windows drive letters become a `C-` style prefix). Atomic writes (temp file + rename): agent records, chat, project/workspace registries, push tokens. Non-atomic (plain `writeFile`): `config.json`, `schedules/*.json`, `loops/loops.json`, `server-id`, `daemon-keypair.json`.
+
+Agent JSON remains the source of truth. The SQLite file under `index/` is an optional query cache; it can be deleted and rebuilt from JSON, and daemon startup continues if the native SQLite binding or DB initialization fails.
 
 ---
 
@@ -51,6 +57,7 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `lastUserMessageAt`  | `string?` (ISO 8601)                     | Last user message timestamp                                                                                                                                                   |
 | `title`              | `string?`                                | User-visible title                                                                                                                                                            |
 | `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). `chisacode.parent-agent-id` set automatically when launched via the `create_agent` MCP tool — see [agent-lifecycle.md](./agent-lifecycle.md) |
+| `relation`           | `AgentRelation?`                         | Rich parent/delegation relation metadata. Legacy records without this derive relation from labels.                                                                            |
 | `lastStatus`         | `AgentStatus`                            | One of: `"initializing"`, `"idle"`, `"running"`, `"error"`, `"closed"`                                                                                                        |
 | `lastModeId`         | `string?`                                | Last active mode ID                                                                                                                                                           |
 | `config`             | `SerializableConfig?`                    | Agent session configuration (see below)                                                                                                                                       |
@@ -63,6 +70,54 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `attentionTimestamp` | `string?` (ISO 8601)                     | When attention was flagged                                                                                                                                                    |
 | `internal`           | `boolean?`                               | Whether this is a system-internal agent (loop workers, etc.)                                                                                                                  |
 | `archivedAt`         | `string?` (ISO 8601)                     | Soft-delete timestamp                                                                                                                                                         |
+
+### Nested: AgentRelation
+
+| Field           | Type                                                   |
+| --------------- | ------------------------------------------------------ |
+| `kind`          | `"subagent" \| "detached" \| "handoff" \| "team-slot"` |
+| `parentAgentId` | `string?`                                              |
+| `taskId`        | `string?`                                              |
+| `source`        | `"mcp" \| "user" \| "system"?`                         |
+
+Compatibility labels:
+
+- `chisacode.parent-agent-id`
+- `chisacode.relation-kind`
+- `chisacode.delegation-task-id`
+
+Records with only `chisacode.parent-agent-id` are interpreted as `kind: "subagent"`.
+
+### Optional Agent Index
+
+`$CHISACODE_HOME/index/agent-index.sqlite` is an optional local query cache. Agent JSON is authoritative; the index can be deleted and rebuilt from JSON records.
+
+Tables:
+
+- `agent_index(agent_id primary key, provider, cwd, title, last_status, relation_kind, parent_agent_id, archived_at, updated_at)`
+- `agent_relation(agent_id primary key, parent_agent_id, relation_kind, task_id, source)`
+- `agent_timeline_search(agent_id, seq, kind, text, created_at)`
+
+Timeline search rows cap indexed text per row to keep the database bounded. If SQLite initialization or the optional native binding fails, the daemon logs a warning and continues with JSON-only behavior.
+
+### Assistant Presets
+
+Built-in assistant presets live in source. User presets are optional JSON files under `$CHISACODE_HOME/presets/*.json`.
+
+| Field           | Type        | Description                             |
+| --------------- | ----------- | --------------------------------------- |
+| `id`            | `string`    | Stable preset ID                        |
+| `label`         | `string`    | User-visible label                      |
+| `description`   | `string`    | User-visible summary                    |
+| `provider`      | `string`    | Provider ID or `"default"`              |
+| `modeId`        | `string?`   | Mode to preselect                       |
+| `model`         | `string?`   | Model to preselect                      |
+| `systemPrompt`  | `string?`   | Draft system prompt                     |
+| `skillIds`      | `string[]?` | Skills to preselect when available      |
+| `mcpServerIds`  | `string[]?` | MCP servers to preselect when available |
+| `samplePrompts` | `string[]?` | Example prompts for starting a draft    |
+
+Applying a preset fills a new-agent draft only; it does not start an agent by itself. Invalid user preset files are skipped with a warning.
 
 ### Nested: SerializableConfig
 

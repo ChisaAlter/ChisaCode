@@ -53,6 +53,9 @@ Use a coordinator agent when a change crosses one of these seams:
 - Protocol message shape or compatibility: `protocol`, `server`, `client`, plus any consumer UI/CLI.
 - Provider behavior: `server`, `protocol`, `app`, `client`, sometimes `cli`.
 - Agent lifecycle: `server`, `protocol`, `client`, `app`, `cli`.
+- Agent delegation or relation semantics: `protocol`, `server`, `client`, `app`, and `desktop` when MCP injection is involved.
+- Rebuildable local indexes: `server` and storage docs first; keep public protocol/API changes out until an explicit query surface exists.
+- Assistant presets: `protocol`, `server`, `client`, and `app`; presets fill drafts and must not start agents by themselves.
 - Desktop daemon behavior: `desktop`, `server`, `app`, `client`.
 - Relay security or pairing: `relay`, `server`, `client`, `app`, `desktop`.
 - Cross-platform UI behavior: `app`, optionally `desktop` and `expo-two-way-audio`.

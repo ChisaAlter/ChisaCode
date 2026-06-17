@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-16T06:39:13.288Z",
+  "generatedAt": "2026-06-17T01:16:01.832Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "protocol",
@@ -31,14 +31,14 @@
     }
   },
   "stats": {
-    "files": 63,
+    "files": 65,
     "categories": {
       "config": 4,
       "docs": 1,
-      "test": 26,
-      "source": 32
+      "test": 27,
+      "source": 33
     },
-    "internalImportEdges": 48,
+    "internalImportEdges": 52,
     "workspaceDependencies": [],
     "externalDependencies": [
       "@chisacode/protocol",
@@ -90,7 +90,7 @@
       "id": "file:packages/protocol/src/agent-labels.ts",
       "type": "source",
       "path": "packages/protocol/src/agent-labels.ts",
-      "lines": 6,
+      "lines": 111,
       "imports": []
     },
     {
@@ -99,6 +99,20 @@
       "path": "packages/protocol/src/agent-lifecycle.ts",
       "lines": 10,
       "imports": []
+    },
+    {
+      "id": "file:packages/protocol/src/agent-presets.test.ts",
+      "type": "test",
+      "path": "packages/protocol/src/agent-presets.test.ts",
+      "lines": 9,
+      "imports": ["./agent-presets.js", "vitest"]
+    },
+    {
+      "id": "file:packages/protocol/src/agent-presets.ts",
+      "type": "source",
+      "path": "packages/protocol/src/agent-presets.ts",
+      "lines": 61,
+      "imports": ["zod"]
     },
     {
       "id": "file:packages/protocol/src/agent-state-bucket.test.ts",
@@ -125,8 +139,8 @@
       "id": "file:packages/protocol/src/agent-types.ts",
       "type": "source",
       "path": "packages/protocol/src/agent-types.ts",
-      "lines": 485,
-      "imports": ["./messages.js"]
+      "lines": 486,
+      "imports": ["./agent-labels.js", "./messages.js"]
     },
     {
       "id": "file:packages/protocol/src/binary-frames/file-transfer.test.ts",
@@ -307,8 +321,8 @@
       "id": "file:packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
-      "lines": 60,
-      "imports": ["./messages.js", "vitest"]
+      "lines": 74,
+      "imports": ["./agent-labels.js", "./messages.js", "vitest"]
     },
     {
       "id": "file:packages/protocol/src/messages.list-commands.test.ts",
@@ -321,7 +335,7 @@
       "id": "file:packages/protocol/src/messages.providers-snapshot.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.providers-snapshot.test.ts",
-      "lines": 185,
+      "lines": 245,
       "imports": ["./messages.js", "vitest"]
     },
     {
@@ -370,13 +384,15 @@
       "id": "file:packages/protocol/src/messages.ts",
       "type": "source",
       "path": "packages/protocol/src/messages.ts",
-      "lines": 4437,
+      "lines": 4507,
       "imports": [
+        "./agent-labels.js",
         "./agent-lifecycle.js",
         "./agent-types.js",
         "./chat/rpc-schemas.js",
         "./client-capabilities.js",
         "./literal-union.js",
+        "@chisacode/protocol/agent-presets",
         "@chisacode/protocol/agent-title-limits",
         "@chisacode/protocol/chisacode-config-schema",
         "@chisacode/protocol/loop/rpc-schemas",
@@ -481,7 +497,7 @@
       "id": "file:packages/protocol/src/tool-call-display.test.ts",
       "type": "test",
       "path": "packages/protocol/src/tool-call-display.test.ts",
-      "lines": 194,
+      "lines": 204,
       "imports": ["./tool-call-display.js", "vitest"]
     },
     {
@@ -524,6 +540,12 @@
       "specifier": "./messages.js"
     },
     {
+      "source": "file:packages/protocol/src/agent-presets.test.ts",
+      "target": "file:packages/protocol/src/agent-presets.ts",
+      "type": "imports",
+      "specifier": "./agent-presets.js"
+    },
+    {
       "source": "file:packages/protocol/src/agent-state-bucket.test.ts",
       "target": "file:packages/protocol/src/agent-state-bucket.ts",
       "type": "imports",
@@ -540,6 +562,12 @@
       "target": "file:packages/protocol/src/messages.ts",
       "type": "imports",
       "specifier": "./messages.js"
+    },
+    {
+      "source": "file:packages/protocol/src/agent-types.ts",
+      "target": "file:packages/protocol/src/agent-labels.ts",
+      "type": "imports",
+      "specifier": "./agent-labels.js"
     },
     {
       "source": "file:packages/protocol/src/agent-types.ts",
@@ -627,6 +655,12 @@
     },
     {
       "source": "file:packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
+      "target": "file:packages/protocol/src/agent-labels.ts",
+      "type": "imports",
+      "specifier": "./agent-labels.js"
+    },
+    {
+      "source": "file:packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
       "target": "file:packages/protocol/src/messages.ts",
       "type": "imports",
       "specifier": "./messages.js"
@@ -678,6 +712,12 @@
       "target": "file:packages/protocol/src/messages.ts",
       "type": "imports",
       "specifier": "./messages.js"
+    },
+    {
+      "source": "file:packages/protocol/src/messages.ts",
+      "target": "file:packages/protocol/src/agent-labels.ts",
+      "type": "imports",
+      "specifier": "./agent-labels.js"
     },
     {
       "source": "file:packages/protocol/src/messages.ts",

@@ -1,6 +1,10 @@
 import type { Logger } from "pino";
 
-import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
+import {
+  PARENT_AGENT_ID_LABEL,
+  type AgentRelation,
+  type AgentRelationKind,
+} from "@chisacode/protocol/agent-labels";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
 import type { CreateChisaCodeWorktreeInput } from "../../chisacode-worktree-service.js";
 import { expandUserPath, resolvePathFromBase } from "../../path-utils.js";
@@ -68,6 +72,7 @@ export interface CreateAgentFromSessionInput {
   attachments?: AgentAttachment[];
   git?: GitSetupOptions;
   labels: Record<string, string>;
+  relationKind?: AgentRelationKind;
   env?: Record<string, string>;
   provisionalTitle: string | null;
   explicitTitle: string | null;
@@ -90,6 +95,7 @@ export interface CreateAgentFromMcpInput {
   thinking?: string;
   features?: Record<string, unknown>;
   labels?: Record<string, string>;
+  relationKind?: AgentRelationKind;
   mode?: string;
   background: boolean;
   notifyOnFinish: boolean;
@@ -132,6 +138,7 @@ interface ResolvedCreateAgent {
 
 interface AgentCreateOptions {
   labels?: Record<string, string>;
+  relation?: AgentRelation;
   workspaceId?: string;
   initialPrompt?: string;
   env?: Record<string, string>;
@@ -205,6 +212,7 @@ async function resolveSessionCreateAgent(
     config: sessionConfig,
     createOptions: {
       labels: input.labels,
+      ...(input.relationKind ? { relation: { kind: input.relationKind, source: "user" } } : {}),
       workspaceId: workspace.workspaceId,
       initialPrompt: trimmedPrompt,
       env: input.env,
@@ -261,6 +269,7 @@ async function resolveMcpCreateAgent(
     input.callerContext?.childAgentDefaultLabels,
     input.labels,
   );
+  const relation = resolveMcpRelation(input.callerAgentId, input.relationKind);
 
   const trimmedPrompt = input.initialPrompt.trim();
   return {
@@ -273,7 +282,7 @@ async function resolveMcpCreateAgent(
       thinkingOptionId: input.thinking,
       ...(resolvedFeatures ? { featureValues: resolvedFeatures } : {}),
     },
-    createOptions: labels ? { labels } : undefined,
+    createOptions: labels || relation ? { labels, relation } : undefined,
     metadataInitialPrompt: trimmedPrompt,
     prompt: trimmedPrompt,
     explicitTitle: input.title.trim(),
@@ -480,4 +489,18 @@ function mergeLabels(
     ...labels,
   };
   return Object.keys(mergedLabels).length > 0 ? mergedLabels : undefined;
+}
+
+function resolveMcpRelation(
+  callerAgentId: string | undefined,
+  relationKind: AgentRelationKind | undefined,
+): AgentRelation | undefined {
+  if (!callerAgentId && !relationKind) {
+    return undefined;
+  }
+  return {
+    kind: relationKind ?? "subagent",
+    ...(callerAgentId ? { parentAgentId: callerAgentId } : {}),
+    source: "mcp",
+  };
 }

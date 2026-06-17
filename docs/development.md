@@ -132,6 +132,31 @@ For tighter loops, you can rebuild a single workspace:
 - Changed `packages/server/src/*`, `packages/cli/src/*`, `packages/relay/src/*`, or `packages/highlight/src/*`: `npm run build:server`.
 - Changed app build dependencies: `npm run build:app-deps`.
 
+### P0/P1 agent-runtime verification
+
+For changes touching agent relation semantics, MCP delegation, provider
+diagnostics, the optional agent index, or assistant presets, keep checks focused
+on the changed surface:
+
+```bash
+npm run build:client
+npm run build:server
+npm run typecheck
+npm run lint
+npx vitest run <changed test files> --bail=1
+```
+
+Desktop smoke for app/desktop-facing changes should at least exercise:
+
+- `npm run build:desktop` when packaging behavior matters.
+- An unpacked `packages/desktop/release/win-unpacked/ChisaCode.exe` launch when the package is produced but installer metadata editing fails on Windows.
+- `$APPDATA/ChisaCode/logs/main.log` for packaged Electron startup, renderer route warnings, daemon supervisor startup, and daemon status polling.
+
+`better-sqlite3` is optional in the server package. In packaged Electron builds,
+the native binding can fail to load if it was compiled for a different Node ABI.
+That must be a warning-only path: the daemon should continue with JSON-backed
+agent storage and no SQLite index.
+
 ## CLI reference
 
 Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The globally installed `chisacode` binary on macOS is a symlink into the installed ChisaCode desktop app, not this checkout — use it to drive the desktop's built-in daemon, but use `npm run cli` when you want to talk to the CLI you are editing.

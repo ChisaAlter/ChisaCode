@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-16T06:39:13.227Z",
+  "generatedAt": "2026-06-17T01:16:01.767Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "client",
@@ -178,7 +178,7 @@
       "id": "file:packages/client/src/daemon-client.ts",
       "type": "source",
       "path": "packages/client/src/daemon-client.ts",
-      "lines": 4918,
+      "lines": 4931,
       "imports": [
         "./daemon-client-runtime-metrics.js",
         "./daemon-client-transport.js",
@@ -203,7 +203,7 @@
       "id": "file:packages/client/src/index.ts",
       "type": "source",
       "path": "packages/client/src/index.ts",
-      "lines": 562,
+      "lines": 574,
       "imports": ["./daemon-client.js", "@chisacode/protocol/messages"]
     },
     {

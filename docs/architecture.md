@@ -62,7 +62,8 @@ All paths are under `packages/server/src/`.
 | `server/session.ts`             | Per-client session state, timeline subscriptions, terminal operations        |
 | `server/agent/agent-manager.ts` | Agent lifecycle state machine, timeline tracking, subscriber management      |
 | `server/agent/agent-storage.ts` | File-backed JSON persistence at `$CHISACODE_HOME/agents/`                    |
-| `server/agent/mcp-server.ts`    | MCP server for sub-agent creation, permissions, timeouts                     |
+| `server/agent/mcp-server.ts`    | MCP server for agent control, delegation, permissions, timeouts              |
+| `server/agent-index/`           | Optional SQLite metadata index rebuilt from agent JSON                       |
 | `server/agent/providers/`       | Provider adapters (see "Agent providers" below)                              |
 | `server/relay-transport.ts`     | Outbound relay connection with E2E encryption                                |
 | `server/schedule/`              | Cron-based scheduled agents                                                  |
@@ -222,6 +223,24 @@ initializing → idle ⇄ running
 - Events stream to connected clients in real time; correctness is backed by authoritative timeline fetches and paged-to-completion catch-up.
 - Agent state persists to `$CHISACODE_HOME/agents/{cwd-with-dashes}/{agent-id}.json` (timeline rows live alongside the record)
 
+### Agent relationships and delegation
+
+Agent parentage is modeled as an optional `AgentRelation` instead of treating every
+`parentAgentId` label as a true lifecycle child. The canonical relation kinds are
+`subagent`, `team-slot`, `handoff`, and `detached`.
+
+- `subagent` and `team-slot` are owned by the parent lifecycle and are cascade-archived when the parent is archived.
+- `handoff` and `detached` keep their parent reference for provenance but survive parent archive.
+- Legacy records that only have `chisacode.parent-agent-id` still derive a `subagent` relation.
+- Compatibility labels remain on stored records and snapshots: `chisacode.parent-agent-id`, `chisacode.relation-kind`, and `chisacode.delegation-task-id`.
+
+The daemon MCP endpoint continues to expose the existing `create_agent` tool. When
+daemon MCP injection is enabled and a provider supports MCP servers, new agent
+sessions also receive a scoped `chisacode-companion` HTTP MCP server. Its URL
+contains a daemon-local, short-lived token scoped to the parent agent. Companion
+tools can delegate to a child agent, poll status, cancel the delegated run, and
+read the capped final assistant text. The companion token is not persisted.
+
 ## Agent providers
 
 Each provider implements the `AgentClient` interface in `agent/agent-sdk-types.ts`. Provider implementations live in `agent/providers/`.
@@ -247,6 +266,22 @@ All providers:
 - Map tool calls to a normalized `ToolCallDetail` type
 - Expose provider-specific modes (plan, default, full-access)
 
+Provider snapshots include lightweight tooling metadata when available:
+installed/latest version, version status, package name, install/update flags,
+and the check timestamp. Provider diagnostics are intentionally operational but
+secret-conscious: they report effective argv, resolved command path, probe cwd,
+environment variable presence only, MCP injection support/enabled state, and
+tooling version metadata.
+
+## Assistant presets
+
+Assistant presets are draft templates for the new-agent form. Built-in presets
+live in protocol/app source, while user presets load from
+`$CHISACODE_HOME/presets/*.json`. Applying a preset only fills provider, mode,
+model, system prompt, skills, MCP servers, and sample prompt fields; it does not
+start an agent. Missing providers, skills, or MCP server ids keep the draft
+editable and should be surfaced as non-fatal UI warnings.
+
 ## Data flow: running an agent
 
 1. Client sends `CreateAgentRequestMessage` with config (prompt, cwd, provider, model, mode)
@@ -264,6 +299,8 @@ All providers:
 ```
 $CHISACODE_HOME/
 ├── agents/{cwd-with-dashes}/{agent-id}.json   # Agent record + persisted timeline rows
+├── index/agent-index.sqlite                    # Optional rebuildable agent metadata index
+├── presets/*.json                              # User assistant presets
 ├── projects/projects.json                      # Project registry
 ├── projects/workspaces.json                    # Workspace registry
 ├── chat/                                       # Chat rooms

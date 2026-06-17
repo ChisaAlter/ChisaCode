@@ -20,6 +20,7 @@ import type {
 } from "./agent-sdk-types.js";
 import type { ManagedAgent } from "./agent-manager.js";
 import type { JsonValue } from "../json-utils.js";
+import { readAgentRelation } from "@chisacode/protocol/agent-labels";
 import { isStoredAgentProviderAvailable, toAgentPersistenceHandle } from "../persistence-hooks.js";
 export type { ManagedAgent };
 
@@ -82,6 +83,7 @@ export function toStoredAgentRecord(
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
     labels: agent.labels,
+    ...(agent.relation ? { relation: agent.relation } : {}),
     lastStatus: agent.lifecycle,
     lastModeId: agent.currentModeId ?? config?.modeId ?? null,
     config: config ?? null,
@@ -129,6 +131,7 @@ export function toAgentPayload(
     persistence: sanitizePersistenceHandle(agent.persistence),
     title: options?.title ?? null,
     labels: agent.labels,
+    ...(agent.relation ? { relation: agent.relation } : {}),
   };
 
   const usage = sanitizeUsage(agent.lastUsage);
@@ -235,6 +238,9 @@ export function buildStoredAgentPayload(
     attentionTimestamp: record.attentionTimestamp ?? null,
     archivedAt: record.archivedAt ?? null,
     labels: normalizeLabels(record.labels),
+    ...(readAgentRelation(record.labels, record.relation)
+      ? { relation: readAgentRelation(record.labels, record.relation)! }
+      : {}),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { readAgentRelation } from "./agent-labels.js";
 import { SessionInboundMessageSchema } from "./messages.js";
 
 describe("create_agent_request worktree and autoArchive fields", () => {
@@ -17,6 +18,7 @@ describe("create_agent_request worktree and autoArchive fields", () => {
         base: "main",
       },
       autoArchive: true,
+      relationKind: "handoff",
     });
 
     expect(parsed).toEqual({
@@ -32,6 +34,7 @@ describe("create_agent_request worktree and autoArchive fields", () => {
         base: "main",
       },
       autoArchive: true,
+      relationKind: "handoff",
       labels: {},
     });
   });
@@ -54,6 +57,17 @@ describe("create_agent_request worktree and autoArchive fields", () => {
         cwd: "/repo/app",
       },
       labels: {},
+    });
+  });
+
+  test("derives a legacy subagent relation from the parent label", () => {
+    expect(
+      readAgentRelation({
+        "chisacode.parent-agent-id": " parent-agent ",
+      }),
+    ).toEqual({
+      kind: "subagent",
+      parentAgentId: "parent-agent",
     });
   });
 });

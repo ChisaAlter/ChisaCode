@@ -3,7 +3,7 @@ import type { AgentProvider } from "./agent-sdk-types.js";
 import { createProviderEnvSpec } from "./provider-launch-config.js";
 
 export type ProviderVersionStatus = "unknown" | "not-installed" | "current" | "outdated";
-export type ProviderToolingAction = "install" | "update";
+export type ProviderToolingAction = "install" | "update" | "reinstall";
 
 export interface ProviderToolingInfo {
   installedVersion: string | null;
@@ -24,7 +24,7 @@ export interface ProviderToolingActionResult {
   success: boolean;
 }
 
-interface ProviderToolingDefinition {
+export interface ProviderToolingDefinition {
   binary: string;
   packageName: string;
   installArgs: string[];
@@ -69,6 +69,12 @@ const PROVIDER_TOOLING: Record<string, ProviderToolingDefinition> = {
 
 export function isProviderToolingSupported(provider: AgentProvider): boolean {
   return Object.prototype.hasOwnProperty.call(PROVIDER_TOOLING, provider);
+}
+
+export function getProviderToolingDefinition(
+  provider: AgentProvider,
+): ProviderToolingDefinition | null {
+  return PROVIDER_TOOLING[provider] ?? null;
 }
 
 export async function getProviderToolingInfo(

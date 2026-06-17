@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
-import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
+import { PARENT_AGENT_ID_LABEL, RELATION_KIND_LABEL } from "@chisacode/protocol/agent-labels";
 import { normalizeAgentSnapshot } from "./agent-snapshots";
 
 function createSnapshot(
@@ -31,6 +31,7 @@ function createSnapshot(
     persistence: input.persistence ?? null,
     title: input.title ?? null,
     labels: (input.labels ?? {}) as AgentSnapshotPayload["labels"],
+    ...(input.relation ? { relation: input.relation } : {}),
   };
 }
 
@@ -44,6 +45,7 @@ describe("normalizeAgentSnapshot", () => {
     const agent = normalizeAgentSnapshot(createSnapshot({ labels }), "server-1");
 
     expect(agent.parentAgentId).toBe("parent-1");
+    expect(agent.relationKind).toBe("subagent");
     expect(agent.labels).toEqual(labels);
   });
 
@@ -70,5 +72,26 @@ describe("normalizeAgentSnapshot", () => {
     expect(missing.parentAgentId).toBeNull();
     expect(empty.parentAgentId).toBeNull();
     expect(nonString.parentAgentId).toBeNull();
+    expect(missing.relationKind).toBeNull();
+  });
+
+  it("uses explicit snapshot relation before compatibility labels", () => {
+    const agent = normalizeAgentSnapshot(
+      createSnapshot({
+        relation: {
+          kind: "handoff",
+          parentAgentId: "snapshot-parent",
+          source: "user",
+        },
+        labels: {
+          [PARENT_AGENT_ID_LABEL]: "label-parent",
+          [RELATION_KIND_LABEL]: "subagent",
+        },
+      }),
+      "server-1",
+    );
+
+    expect(agent.parentAgentId).toBe("snapshot-parent");
+    expect(agent.relationKind).toBe("handoff");
   });
 });

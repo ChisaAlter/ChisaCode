@@ -5,7 +5,18 @@ import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@chisacode/protocol/agent-lifecycle";
-import { readParentAgentIdLabel } from "@chisacode/protocol/agent-labels";
+import {
+  isCascadingAgentRelation,
+  labelsForAgentRelation,
+  readAgentRelation,
+  type AgentRelation,
+} from "@chisacode/protocol/agent-labels";
+import {
+  buildCompanionMcpUrl,
+  COMPANION_MCP_SERVER_NAME,
+  createCompanionTokenEntry,
+  type CompanionMcpTokenEntry,
+} from "./companion-mcp-injection.js";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -270,6 +281,7 @@ interface ManagedAgentBase {
    * User-defined labels for categorizing agents (e.g., { surface: "workspace" }).
    */
   labels: Record<string, string>;
+  relation?: AgentRelation;
 }
 
 type ManagedAgentWithSession = ManagedAgentBase & {
@@ -428,6 +440,7 @@ export class AgentManager {
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
+  private companionMcpTokens = new Map<string, CompanionMcpTokenEntry>();
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
@@ -497,6 +510,18 @@ export class AgentManager {
 
   setMcpBaseUrl(url: string | null): void {
     this.mcpBaseUrl = url;
+  }
+
+  validateCompanionMcpToken(parentAgentId: string, token: string): boolean {
+    const entry = this.companionMcpTokens.get(token);
+    if (!entry) {
+      return false;
+    }
+    if (entry.expiresAt < Date.now()) {
+      this.companionMcpTokens.delete(token);
+      return false;
+    }
+    return entry.parentAgentId === parentAgentId;
   }
 
   setAppendSystemPrompt(prompt: string | null | undefined): void {
@@ -804,6 +829,7 @@ export class AgentManager {
     agentId?: string,
     options?: {
       labels?: Record<string, string>;
+      relation?: AgentRelation;
       workspaceId?: string;
       initialPrompt?: string;
       env?: Record<string, string>;
@@ -812,19 +838,7 @@ export class AgentManager {
     },
   ): Promise<ManagedAgent> {
     const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
-    const injectedConfig =
-      this.mcpBaseUrl == null
-        ? config
-        : {
-            ...config,
-            mcpServers: {
-              chisacode: {
-                type: "http" as const,
-                url: `${this.mcpBaseUrl}?callerAgentId=${resolvedAgentId}`,
-              },
-              ...config.mcpServers,
-            },
-          };
+    const injectedConfig = this.injectDaemonMcpServers(config, resolvedAgentId);
     this.requireEnabledProvider(injectedConfig.provider);
     this.requireEnabledProvider(injectedConfig.runtimeProvider ?? injectedConfig.provider);
     const normalizedConfig = this.applyDaemonAppendSystemPrompt(
@@ -837,8 +851,10 @@ export class AgentManager {
     });
     const createOptions = this.buildCreateSessionOptions(options);
     const session = await client.createSession(launchConfig, launchContext, createOptions);
+    const relation = readAgentRelation(options?.labels, options?.relation) ?? undefined;
     return this.registerSession(session, normalizedConfig, resolvedAgentId, {
-      labels: options?.labels,
+      labels: labelsForAgentRelation(options?.labels, relation),
+      relation,
       workspaceId: options?.workspaceId,
       initialTitle: options?.initialTitle,
     });
@@ -863,6 +879,7 @@ export class AgentManager {
       updatedAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
+      relation?: AgentRelation;
     },
   ): Promise<ManagedAgent> {
     const resolvedAgentId = validateAgentId(
@@ -909,7 +926,41 @@ export class AgentManager {
       hasResumeOverrides ? resumeOverrides : undefined,
       launchContext,
     );
-    return this.registerSession(session, normalizedConfig, resolvedAgentId, options);
+    const relation = readAgentRelation(options?.labels, options?.relation) ?? undefined;
+    return this.registerSession(session, normalizedConfig, resolvedAgentId, {
+      ...options,
+      labels: labelsForAgentRelation(options?.labels, relation),
+      relation,
+    });
+  }
+
+  private injectDaemonMcpServers(
+    config: AgentSessionConfig,
+    resolvedAgentId: string,
+  ): AgentSessionConfig {
+    if (this.mcpBaseUrl == null) {
+      return config;
+    }
+    const { token, entry } = createCompanionTokenEntry(resolvedAgentId);
+    this.companionMcpTokens.set(token, entry);
+    return {
+      ...config,
+      mcpServers: {
+        chisacode: {
+          type: "http" as const,
+          url: `${this.mcpBaseUrl}?callerAgentId=${resolvedAgentId}`,
+        },
+        [COMPANION_MCP_SERVER_NAME]: {
+          type: "http" as const,
+          url: buildCompanionMcpUrl({
+            mcpBaseUrl: this.mcpBaseUrl,
+            parentAgentId: resolvedAgentId,
+            token,
+          }),
+        },
+        ...config.mcpServers,
+      },
+    };
   }
 
   // Hot-reload an active agent session with config overrides. By default the
@@ -974,6 +1025,7 @@ export class AgentManager {
     // Preserve existing labels and timeline during reload.
     return this.registerSession(session, normalizedConfig, agentId, {
       labels: existing.labels,
+      relation: existing.relation,
       createdAt: existing.createdAt,
       updatedAt: existing.updatedAt,
       lastUserMessageAt: existing.lastUserMessageAt,
@@ -1090,11 +1142,8 @@ export class AgentManager {
     return { archivedAt };
   }
 
-  // Children created via the MCP `create_agent` tool carry the parent-agent-id
-  // label pointing back at the caller. Archiving the parent cascades to those
-  // children so subagent fleets don't outlive their orchestrator. Handoff agents
-  // launched the same way are caught by this cascade — see docs/agent-lifecycle.md
-  // for the accepted limitation.
+  // Only true subagent/team-slot relations are owned by the parent lifecycle.
+  // Legacy records with only a parent label still derive a subagent relation.
   private async cascadeArchiveChildren(parentAgentId: string): Promise<void> {
     const registry = this.registry;
     if (!registry) {
@@ -1105,7 +1154,8 @@ export class AgentManager {
       if (record.archivedAt) {
         continue;
       }
-      if (readParentAgentIdLabel(record.labels) !== parentAgentId) {
+      const relation = readAgentRelation(record.labels, record.relation);
+      if (relation?.parentAgentId !== parentAgentId || !isCascadingAgentRelation(relation)) {
         continue;
       }
       if (this.agents.has(record.id)) {
@@ -2282,6 +2332,7 @@ export class AgentManager {
       updatedAt?: Date;
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
+      relation?: AgentRelation;
       timeline?: AgentTimelineItem[];
       timelineRows?: AgentTimelineRow[];
       timelineNextSeq?: number;
@@ -2382,6 +2433,7 @@ export class AgentManager {
           updatedAt?: Date;
           lastUserMessageAt?: Date | null;
           labels?: Record<string, string>;
+          relation?: AgentRelation;
           historyPrimed?: boolean;
           lastUsage?: AgentUsage;
           lastError?: string;
@@ -2419,6 +2471,7 @@ export class AgentManager {
       attention: resolveInitialAttention(options?.attention),
       internal: config.internal ?? false,
       labels: options?.labels ?? {},
+      relation: options?.relation,
     } as ActiveManagedAgent;
   }
 

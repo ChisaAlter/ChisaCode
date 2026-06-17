@@ -1,4 +1,5 @@
 import type { AgentAttachment } from "./messages.js";
+export type { AgentRelation, AgentRelationKind, AgentRelationSource } from "./agent-labels.js";
 
 export type AgentProvider = string;
 

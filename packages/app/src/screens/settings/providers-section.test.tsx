@@ -98,6 +98,9 @@ vi.mock("react-i18next", () => ({
       if (key === "providers.modelCount") return `${params?.count} models`;
       if (key === "providers.install") return "Install";
       if (key === "providers.update") return "Update";
+      if (key === "settings.integrations.reinstall") return "Reinstall";
+      if (key === "settings.integrations.reinstallAgentTool")
+        return `Reinstall ${params?.provider}`;
       return key;
     },
   }),
@@ -116,7 +119,7 @@ vi.mock("lucide-react-native", () => {
   return {
     ChevronRight: icon("ChevronRight"),
     Download: icon("Download"),
-    Plus: icon("Plus"),
+    RefreshCw: icon("RefreshCw"),
   };
 });
 
@@ -205,6 +208,16 @@ const claudeEntry: ProviderSnapshotEntry = {
     { provider: "claude", id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
     { provider: "claude", id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
   ],
+};
+
+const currentClaudeEntry: ProviderSnapshotEntry = {
+  ...claudeEntry,
+  installedVersion: "2.1.170",
+  latestVersion: "2.1.170",
+  versionStatus: "current",
+  packageName: "@anthropic-ai/claude-code",
+  installAvailable: false,
+  updateAvailable: false,
 };
 
 const disabledCodexEntry: ProviderSnapshotEntry = {
@@ -371,5 +384,24 @@ describe("ProvidersSection", () => {
     expect(patchConfigMock).toHaveBeenCalledWith({
       providers: { claude: { enabled: false } },
     });
+  });
+
+  it("routes provider reinstall actions through tooling requests", async () => {
+    snapshotState.entries = [currentClaudeEntry];
+    configState.config = makeConfig();
+    openProviderSettingsMock.mockResolvedValue(undefined);
+
+    render();
+
+    const reinstallButton = container?.querySelector<HTMLElement>(
+      '[aria-label="Reinstall Claude"]',
+    );
+    expect(reinstallButton).not.toBeNull();
+
+    await act(async () => {
+      reinstallButton?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(openProviderSettingsMock).toHaveBeenCalledWith("claude", "reinstall");
   });
 });

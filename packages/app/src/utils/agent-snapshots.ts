@@ -1,6 +1,6 @@
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import type { AgentPermissionRequest } from "@chisacode/protocol/agent-types";
-import { readParentAgentIdLabel } from "@chisacode/protocol/agent-labels";
+import { readAgentRelation } from "@chisacode/protocol/agent-labels";
 
 export function derivePendingPermissionKey(
   agentId: string,
@@ -26,11 +26,8 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     ? new Date(snapshot.attentionTimestamp)
     : null;
   const archivedAt = snapshot.archivedAt ? new Date(snapshot.archivedAt) : null;
-  const parentAgentLabel = readParentAgentIdLabel(snapshot.labels);
-  const parentAgentId =
-    typeof parentAgentLabel === "string" && parentAgentLabel.trim().length > 0
-      ? parentAgentLabel.trim()
-      : null;
+  const relation = readAgentRelation(snapshot.labels, snapshot.relation);
+  const parentAgentId = relation?.parentAgentId ?? null;
 
   return {
     serverId,
@@ -59,6 +56,7 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     attentionTimestamp,
     archivedAt,
     parentAgentId,
+    relationKind: relation?.kind ?? null,
     labels: snapshot.labels,
   };
 }

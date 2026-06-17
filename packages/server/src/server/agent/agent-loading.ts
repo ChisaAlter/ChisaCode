@@ -53,7 +53,11 @@ export async function ensureAgentLoaded(
         handle,
         buildConfigOverrides(record),
         agentId,
-        extractTimestamps(record),
+        {
+          ...extractTimestamps(record),
+          labels: record.labels,
+          relation: record.relation,
+        },
       );
       deps.logger.info({ agentId, provider: record.provider }, "Agent resumed from persistence");
     } else {
@@ -63,7 +67,10 @@ export async function ensureAgentLoaded(
       if (!config) {
         throw new Error(`Agent ${agentId} references unavailable provider '${record.provider}'`);
       }
-      snapshot = await deps.agentManager.createAgent(config, agentId, { labels: record.labels });
+      snapshot = await deps.agentManager.createAgent(config, agentId, {
+        labels: record.labels,
+        relation: record.relation,
+      });
       deps.logger.info({ agentId, provider: record.provider }, "Agent created from stored config");
     }
 

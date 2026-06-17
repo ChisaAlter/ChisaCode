@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-16T06:39:13.114Z",
+  "generatedAt": "2026-06-17T01:16:01.660Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "app",
@@ -47,15 +47,15 @@
     }
   },
   "stats": {
-    "files": 1082,
+    "files": 1083,
     "categories": {
-      "config": 39,
-      "test": 337,
-      "support": 51,
+      "config": 38,
+      "test": 338,
+      "support": 50,
       "docs": 2,
-      "source": 653
+      "source": 655
     },
-    "internalImportEdges": 2816,
+    "internalImportEdges": 2819,
     "workspaceDependencies": ["client", "expo-two-way-audio", "highlight", "protocol"],
     "externalDependencies": [
       "@dnd-kit/core",
@@ -1017,13 +1017,6 @@
       "imports": ["eslint-config-expo/flat", "eslint/config"]
     },
     {
-      "id": "file:packages/app/expo-env.d.ts",
-      "type": "support",
-      "path": "packages/app/expo-env.d.ts",
-      "lines": 3,
-      "imports": []
-    },
-    {
       "id": "file:packages/app/global.d.ts",
       "type": "support",
       "path": "packages/app/global.d.ts",
@@ -1293,6 +1286,27 @@
       "path": "packages/app/scripts/reset-project.js",
       "lines": 113,
       "imports": ["expo-router", "fs", "path", "react-native", "readline"]
+    },
+    {
+      "id": "file:packages/app/src/agent-presets/apply-preset.test.ts",
+      "type": "test",
+      "path": "packages/app/src/agent-presets/apply-preset.test.ts",
+      "lines": 29,
+      "imports": ["./apply-preset", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/agent-presets/apply-preset.ts",
+      "type": "source",
+      "path": "packages/app/src/agent-presets/apply-preset.ts",
+      "lines": 26,
+      "imports": ["@chisacode/protocol/agent-presets"]
+    },
+    {
+      "id": "file:packages/app/src/agent-presets/preset-catalog.ts",
+      "type": "source",
+      "path": "packages/app/src/agent-presets/preset-catalog.ts",
+      "lines": 6,
+      "imports": ["@chisacode/protocol/agent-presets"]
     },
     {
       "id": "file:packages/app/src/agent-stream/bottom-anchor-controller.test.ts",
@@ -2929,7 +2943,7 @@
       "id": "file:packages/app/src/components/keyboard-shortcuts-dialog.tsx",
       "type": "source",
       "path": "packages/app/src/components/keyboard-shortcuts-dialog.tsx",
-      "lines": 190,
+      "lines": 187,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/ui/shortcut",
@@ -4252,7 +4266,7 @@
       "id": "file:packages/app/src/components/workspace-setup-dialog.tsx",
       "type": "source",
       "path": "packages/app/src/components/workspace-setup-dialog.tsx",
-      "lines": 490,
+      "lines": 489,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/composer",
@@ -4374,7 +4388,7 @@
       "id": "file:packages/app/src/composer/agent-controls/index.tsx",
       "type": "source",
       "path": "packages/app/src/composer/agent-controls/index.tsx",
-      "lines": 2161,
+      "lines": 2145,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/combined-model-selector",
@@ -5222,7 +5236,7 @@
       "id": "file:packages/app/src/desktop/components/integrations-section.tsx",
       "type": "source",
       "path": "packages/app/src/desktop/components/integrations-section.tsx",
-      "lines": 644,
+      "lines": 648,
       "imports": [
         "@/components/provider-icons",
         "@/components/ui/button",
@@ -6294,7 +6308,7 @@
       "id": "file:packages/app/src/hooks/use-agent-form-state.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-agent-form-state.ts",
-      "lines": 658,
+      "lines": 662,
       "imports": [
         "./use-form-preferences",
         "./use-providers-snapshot",
@@ -7573,7 +7587,7 @@
       "id": "file:packages/app/src/provider-selection/resolve-agent-form.ts",
       "type": "source",
       "path": "packages/app/src/provider-selection/resolve-agent-form.ts",
-      "lines": 661,
+      "lines": 658,
       "imports": [
         "@/hooks/use-form-preferences",
         "@chisacode/protocol/agent-types",
@@ -8209,7 +8223,7 @@
       "id": "file:packages/app/src/screens/settings/providers-section.test.tsx",
       "type": "test",
       "path": "packages/app/src/screens/settings/providers-section.test.tsx",
-      "lines": 376,
+      "lines": 407,
       "imports": [
         "./providers-section",
         "@chisacode/protocol/agent-types",
@@ -8223,7 +8237,7 @@
       "id": "file:packages/app/src/screens/settings/providers-section.tsx",
       "type": "source",
       "path": "packages/app/src/screens/settings/providers-section.tsx",
-      "lines": 436,
+      "lines": 479,
       "imports": [
         "@/components/provider-icons",
         "@/components/ui/loading-spinner",
@@ -8267,7 +8281,7 @@
       "id": "file:packages/app/src/screens/settings/synthetic-models-section.test.tsx",
       "type": "test",
       "path": "packages/app/src/screens/settings/synthetic-models-section.test.tsx",
-      "lines": 653,
+      "lines": 816,
       "imports": [
         "@/screens/settings/synthetic-models-section",
         "@chisacode/protocol/messages",
@@ -8280,18 +8294,21 @@
       "id": "file:packages/app/src/screens/settings/synthetic-models-section.tsx",
       "type": "source",
       "path": "packages/app/src/screens/settings/synthetic-models-section.tsx",
-      "lines": 1504,
+      "lines": 1517,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/ui/button",
         "@/components/ui/switch",
         "@/constants/platform",
         "@/hooks/use-daemon-config",
+        "@/hooks/use-providers-snapshot",
         "@/runtime/host-runtime",
+        "@/screens/settings/custom-model-providers",
         "@/screens/settings/settings-section",
         "@/screens/settings/synthetic-models",
         "@/styles/settings",
         "@/utils/confirm-dialog",
+        "@chisacode/protocol/agent-types",
         "@chisacode/protocol/messages",
         "@chisacode/protocol/provider-config",
         "lucide-react-native",
@@ -8305,7 +8322,7 @@
       "id": "file:packages/app/src/screens/settings/synthetic-models.test.ts",
       "type": "test",
       "path": "packages/app/src/screens/settings/synthetic-models.test.ts",
-      "lines": 250,
+      "lines": 307,
       "imports": ["@/screens/settings/synthetic-models", "@chisacode/protocol/messages", "vitest"]
     },
     {
@@ -9220,7 +9237,7 @@
       "id": "file:packages/app/src/stores/session-store.ts",
       "type": "source",
       "path": "packages/app/src/stores/session-store.ts",
-      "lines": 1371,
+      "lines": 1372,
       "imports": [
         "@/attachments/types",
         "@/runtime/activity",
@@ -9506,7 +9523,7 @@
       "id": "file:packages/app/src/subagents/select.test.ts",
       "type": "test",
       "path": "packages/app/src/subagents/select.test.ts",
-      "lines": 315,
+      "lines": 371,
       "imports": [
         "./select",
         "@/stores/session-store",
@@ -9518,7 +9535,7 @@
       "id": "file:packages/app/src/subagents/select.ts",
       "type": "source",
       "path": "packages/app/src/subagents/select.ts",
-      "lines": 73,
+      "lines": 82,
       "imports": [
         "@/hooks/use-archive-agent",
         "@/stores/session-store",
@@ -10074,7 +10091,7 @@
       "id": "file:packages/app/src/utils/agent-snapshots.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/agent-snapshots.test.ts",
-      "lines": 75,
+      "lines": 98,
       "imports": [
         "./agent-snapshots",
         "@chisacode/protocol/agent-labels",
@@ -10086,7 +10103,7 @@
       "id": "file:packages/app/src/utils/agent-snapshots.ts",
       "type": "source",
       "path": "packages/app/src/utils/agent-snapshots.ts",
-      "lines": 65,
+      "lines": 63,
       "imports": [
         "@chisacode/protocol/agent-labels",
         "@chisacode/protocol/agent-types",
@@ -11491,13 +11508,6 @@
         "@/stores/session-store",
         "@/utils/workspace-execution"
       ]
-    },
-    {
-      "id": "file:packages/app/test-results/.last-run.json",
-      "type": "config",
-      "path": "packages/app/test-results/.last-run.json",
-      "lines": 4,
-      "imports": []
     },
     {
       "id": "file:packages/app/test-stubs/xterm-addon-ligatures.ts",
@@ -13094,6 +13104,24 @@
       "target": "file:packages/app/src/styles/unistyles.ts",
       "type": "imports",
       "specifier": "./src/styles/unistyles"
+    },
+    {
+      "source": "file:packages/app/src/agent-presets/apply-preset.test.ts",
+      "target": "file:packages/app/src/agent-presets/apply-preset.ts",
+      "type": "imports",
+      "specifier": "./apply-preset"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-presets"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-presets"
     },
     {
       "source": "file:packages/app/src/agent-stream/bottom-anchor-controller.test.ts",
@@ -25745,9 +25773,21 @@
     },
     {
       "source": "file:packages/app/src/screens/settings/synthetic-models-section.tsx",
+      "target": "file:packages/app/src/hooks/use-providers-snapshot.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-providers-snapshot"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/synthetic-models-section.tsx",
       "target": "file:packages/app/src/runtime/host-runtime.ts",
       "type": "imports",
       "specifier": "@/runtime/host-runtime"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/synthetic-models-section.tsx",
+      "target": "file:packages/app/src/screens/settings/custom-model-providers.ts",
+      "type": "imports",
+      "specifier": "@/screens/settings/custom-model-providers"
     },
     {
       "source": "file:packages/app/src/screens/settings/synthetic-models-section.tsx",
@@ -25772,6 +25812,12 @@
       "target": "file:packages/app/src/utils/confirm-dialog.ts",
       "type": "imports",
       "specifier": "@/utils/confirm-dialog"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
     },
     {
       "source": "module:app",

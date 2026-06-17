@@ -1693,6 +1693,11 @@ describe("create_agent MCP tool", () => {
           [PARENT_AGENT_ID_LABEL]: "voice-agent",
           source: "voice",
         },
+        relation: {
+          kind: "subagent",
+          parentAgentId: "voice-agent",
+          source: "mcp",
+        },
       },
     );
     await rm(baseDir, { recursive: true, force: true });
@@ -1746,6 +1751,11 @@ describe("create_agent MCP tool", () => {
       {
         labels: {
           [PARENT_AGENT_ID_LABEL]: "parent-agent",
+        },
+        relation: {
+          kind: "subagent",
+          parentAgentId: "parent-agent",
+          source: "mcp",
         },
       },
     );

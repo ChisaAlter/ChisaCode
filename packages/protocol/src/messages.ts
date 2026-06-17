@@ -3,6 +3,7 @@ import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
 import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@chisacode/protocol/agent-title-limits";
 import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
+import { AGENT_RELATION_KINDS, AGENT_RELATION_SOURCES } from "./agent-labels.js";
 import {
   ModelGatewayConfigSchema,
   ModelGatewayConfigsSchema,
@@ -57,6 +58,7 @@ import {
   LoopLogsResponseSchema,
   LoopStopResponseSchema,
 } from "@chisacode/protocol/loop/rpc-schemas";
+import { AgentPresetSchema, AgentPresetsPayloadSchema } from "@chisacode/protocol/agent-presets";
 import {
   ChisaCodeConfigRawSchema,
   ChisaCodeLifecycleCommandRawSchema,
@@ -252,6 +254,46 @@ export const ProviderSnapshotEntrySchema = z.object({
   checkedAt: z.string().optional(),
   installAvailable: z.boolean().optional(),
   updateAvailable: z.boolean().optional(),
+});
+
+const ProviderDiagnosticDetailsSchema = z.object({
+  provider: AgentProviderSchema,
+  effectiveCommand: z
+    .object({
+      argv: z.array(z.string()),
+      source: z.enum(["default", "append", "override", "custom", "unknown"]),
+      resolvedPath: z.string().nullable(),
+      available: z.boolean(),
+    })
+    .optional(),
+  cwd: z.string().optional(),
+  env: z
+    .array(
+      z.object({
+        name: z.string(),
+        present: z.boolean(),
+        source: z.enum(["process", "provider-config"]),
+      }),
+    )
+    .optional(),
+  mcpInjection: z
+    .object({
+      supported: z.boolean(),
+      enabled: z.boolean(),
+      reason: z.string(),
+    })
+    .optional(),
+  tooling: ProviderSnapshotEntrySchema.pick({
+    installedVersion: true,
+    latestVersion: true,
+    versionStatus: true,
+    packageName: true,
+    installAvailable: true,
+    updateAvailable: true,
+    checkedAt: true,
+  })
+    .partial()
+    .optional(),
 });
 
 const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z.object({
@@ -671,6 +713,13 @@ const AgentRuntimeInfoSchema: z.ZodType<AgentRuntimeInfo> = z.object({
   extra: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const AgentRelationSchema = z.object({
+  kind: z.enum(AGENT_RELATION_KINDS),
+  parentAgentId: z.string().optional(),
+  taskId: z.string().optional(),
+  source: z.enum(AGENT_RELATION_SOURCES).optional(),
+});
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -693,6 +742,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastError: z.string().optional(),
   title: z.string().nullable(),
   labels: z.record(z.string(), z.string()).default({}),
+  relation: AgentRelationSchema.optional(),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
   attentionTimestamp: z.string().nullable().optional(),
@@ -724,6 +774,7 @@ export const AgentListItemPayloadSchema = z.object({
 });
 
 export type AgentListItemPayload = z.infer<typeof AgentListItemPayloadSchema>;
+export const AgentPresetPayloadSchema = AgentPresetSchema;
 
 export type AgentStreamEventPayload = z.infer<typeof AgentStreamEventPayloadSchema>;
 
@@ -1142,6 +1193,7 @@ export const CreateAgentRequestMessageSchema = z.object({
   worktree: CreateAgentWorktreeTargetSchema.optional(),
   autoArchive: z.boolean().optional(),
   labels: z.record(z.string()).default({}),
+  relationKind: z.enum(AGENT_RELATION_KINDS).optional(),
   requestId: z.string(),
 });
 
@@ -1186,7 +1238,12 @@ export const ProviderDiagnosticRequestMessageSchema = z.object({
 export const ProviderToolingActionRequestMessageSchema = z.object({
   type: z.literal("provider.tooling.run.request"),
   provider: AgentProviderSchema,
-  action: z.enum(["install", "update"]),
+  action: z.enum(["install", "update", "reinstall"]),
+  requestId: z.string(),
+});
+
+export const AgentPresetsListRequestMessageSchema = z.object({
+  type: z.literal("agent.presets.list.request"),
   requestId: z.string(),
 });
 
@@ -1936,6 +1993,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
   ProviderToolingActionRequestMessageSchema,
+  AgentPresetsListRequestMessageSchema,
   ModelGatewayMoaTestRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
@@ -3558,6 +3616,14 @@ export const ProviderDiagnosticResponseMessageSchema = z.object({
   payload: z.object({
     provider: AgentProviderSchema,
     diagnostic: z.string(),
+    details: ProviderDiagnosticDetailsSchema.optional(),
+    requestId: z.string(),
+  }),
+});
+
+export const AgentPresetsListResponseMessageSchema = z.object({
+  type: z.literal("agent.presets.list.response"),
+  payload: AgentPresetsPayloadSchema.extend({
     requestId: z.string(),
   }),
 });
@@ -3566,7 +3632,7 @@ export const ProviderToolingActionResponseMessageSchema = z.object({
   type: z.literal("provider.tooling.run.response"),
   payload: z.object({
     provider: AgentProviderSchema,
-    action: z.enum(["install", "update"]),
+    action: z.enum(["install", "update", "reinstall"]),
     exitCode: z.number().nullable(),
     stdout: z.string(),
     stderr: z.string(),
@@ -3854,6 +3920,7 @@ type SessionOutboundMessageSchemaOptions = [
   typeof RefreshProvidersSnapshotResponseMessageSchema,
   typeof ProviderDiagnosticResponseMessageSchema,
   typeof ProviderToolingActionResponseMessageSchema,
+  typeof AgentPresetsListResponseMessageSchema,
   typeof ModelGatewayMoaTestResponseMessageSchema,
   typeof ListCommandsResponseSchema,
   typeof ListTerminalsResponseSchema,
@@ -3985,6 +4052,7 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
   ProviderToolingActionResponseMessageSchema,
+  AgentPresetsListResponseMessageSchema,
   ModelGatewayMoaTestResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
@@ -4113,6 +4181,7 @@ export type ProviderDiagnosticResponseMessage = z.infer<
 export type ProviderToolingActionResponseMessage = z.infer<
   typeof ProviderToolingActionResponseMessageSchema
 >;
+export type AgentPresetsListResponseMessage = z.infer<typeof AgentPresetsListResponseMessageSchema>;
 export type ModelGatewayMoaTestResponseMessage = z.infer<
   typeof ModelGatewayMoaTestResponseMessageSchema
 >;
@@ -4182,6 +4251,7 @@ export type ProviderDiagnosticRequestMessage = z.infer<
 export type ProviderToolingActionRequestMessage = z.infer<
   typeof ProviderToolingActionRequestMessageSchema
 >;
+export type AgentPresetsListRequestMessage = z.infer<typeof AgentPresetsListRequestMessageSchema>;
 export type ModelGatewayMoaTestRequestMessage = z.infer<
   typeof ModelGatewayMoaTestRequestMessageSchema
 >;

@@ -19,13 +19,16 @@ import type {
   AgentProviderRuntimeSettingsMap,
   ModelGatewayConfigs,
   ProviderOverride,
+  ProviderRuntimeSettings,
 } from "./provider-launch-config.js";
+import { checkProviderLaunchAvailable, resolveProviderLaunch } from "./provider-launch-config.js";
 import {
   buildProviderRegistry,
   shutdownAgentClients,
   type ProviderDefinition,
 } from "./provider-registry.js";
 import {
+  getProviderToolingDefinition,
   getProviderToolingInfo,
   runProviderToolingAction,
   type ProviderToolingAction,
@@ -90,6 +93,37 @@ interface ResolveDefaultModelOptions {
 export interface ProviderDiagnosticResult {
   provider: AgentProvider;
   diagnostic: string;
+  details: ProviderDiagnosticDetails;
+}
+
+export interface ProviderDiagnosticDetails {
+  provider: AgentProvider;
+  effectiveCommand?: {
+    argv: string[];
+    source: "default" | "append" | "override" | "custom" | "unknown";
+    resolvedPath: string | null;
+    available: boolean;
+  };
+  cwd: string;
+  env: Array<{
+    name: string;
+    present: boolean;
+    source: "process" | "provider-config";
+  }>;
+  mcpInjection: {
+    supported: boolean;
+    enabled: boolean;
+    reason: string;
+  };
+  tooling?: {
+    installedVersion?: string | null;
+    latestVersion?: string | null;
+    versionStatus?: "unknown" | "not-installed" | "current" | "outdated";
+    packageName?: string;
+    installAvailable?: boolean;
+    updateAvailable?: boolean;
+    checkedAt?: string;
+  };
 }
 
 export interface AgentManagerProviderState {
@@ -126,6 +160,10 @@ export class ProviderSnapshotManager {
   private readonly modelGatewayToken: string | undefined;
   private providerRegistry: Record<AgentProvider, ProviderDefinition>;
   private providerClients: Record<AgentProvider, AgentClient>;
+  private mcpInjectionState: { enabled: boolean; baseUrl: string | null } = {
+    enabled: false,
+    baseUrl: null,
+  };
 
   constructor(options: ProviderSnapshotManagerOptions) {
     this.logger = options.logger;
@@ -223,6 +261,10 @@ export class ProviderSnapshotManager {
 
   hasProvider(provider: AgentProvider): boolean {
     return Object.prototype.hasOwnProperty.call(this.providerRegistry, provider);
+  }
+
+  setMcpInjectionState(state: { enabled: boolean; baseUrl: string | null }): void {
+    this.mcpInjectionState = { ...state };
   }
 
   getProviderLabel(provider: AgentProvider): string {
@@ -327,14 +369,21 @@ export class ProviderSnapshotManager {
   }
 
   async getProviderDiagnostic(provider: AgentProvider): Promise<ProviderDiagnosticResult> {
-    const client = this.providerClients[provider];
-    if (!client) {
-      throw new Error(`Provider ${provider} is not configured`);
-    }
-    const diagnostic = client.getDiagnostic
+    const definition = this.requireProvider(provider);
+    const client = this.ensureClient(provider, definition);
+    const details = await this.buildProviderDiagnosticDetails(provider, definition, client);
+    const providerDiagnostic = client.getDiagnostic
       ? (await client.getDiagnostic()).diagnostic
-      : "No diagnostic available for this provider.";
-    return { provider, diagnostic };
+      : "No provider-specific diagnostic available.";
+    return {
+      provider,
+      diagnostic: formatProviderDiagnosticReport({
+        providerLabel: definition.label ?? provider,
+        details,
+        providerDiagnostic,
+      }),
+      details,
+    };
   }
 
   async runProviderToolingAction(
@@ -675,6 +724,44 @@ export class ProviderSnapshotManager {
     }
   }
 
+  private async buildProviderDiagnosticDetails(
+    provider: AgentProvider,
+    definition: ProviderDefinition,
+    client: AgentClient,
+  ): Promise<ProviderDiagnosticDetails> {
+    const baseProvider = definition.derivedFromProviderId ?? provider;
+    const toolingDefinition = getProviderToolingDefinition(baseProvider);
+    const effectiveCommand = await resolveDiagnosticCommand(
+      definition.runtimeSettings,
+      toolingDefinition?.binary ?? null,
+    );
+    const tooling = await getProviderToolingInfo(baseProvider).catch((error) => {
+      this.logger.warn({ err: error, provider }, "Failed to resolve provider diagnostic tooling");
+      return null;
+    });
+
+    return {
+      provider,
+      ...(effectiveCommand ? { effectiveCommand } : {}),
+      cwd: resolveSnapshotCwd(),
+      env: collectProviderEnvPresence(baseProvider, definition.runtimeSettings),
+      mcpInjection: resolveMcpInjectionDiagnostic(client, this.mcpInjectionState),
+      ...(tooling
+        ? {
+            tooling: {
+              installedVersion: tooling.installedVersion,
+              latestVersion: tooling.latestVersion,
+              versionStatus: tooling.versionStatus,
+              packageName: tooling.packageName,
+              installAvailable: tooling.installAvailable,
+              updateAvailable: tooling.updateAvailable,
+              checkedAt: tooling.checkedAt,
+            },
+          }
+        : {}),
+    };
+  }
+
   private async resolveToolingMetadata(
     provider: AgentProvider,
   ): Promise<Partial<ProviderSnapshotEntry>> {
@@ -786,6 +873,142 @@ export function resolveSnapshotCwd(cwd?: string | null): string {
   const expanded =
     trimmed === "~" || trimmed.startsWith("~/") ? `${homedir()}${trimmed.slice(1)}` : trimmed;
   return resolve(expanded);
+}
+
+async function resolveDiagnosticCommand(
+  runtimeSettings: ProviderRuntimeSettings | undefined,
+  defaultBinary: string | null,
+): Promise<ProviderDiagnosticDetails["effectiveCommand"] | undefined> {
+  if (!defaultBinary && runtimeSettings?.command?.mode !== "replace") {
+    return undefined;
+  }
+  const launch = await resolveProviderLaunch({
+    commandConfig: runtimeSettings?.command,
+    ...(defaultBinary ? { defaultBinary } : {}),
+  });
+  const availability = await checkProviderLaunchAvailable(launch);
+  return {
+    argv: [launch.command, ...launch.args],
+    source: launch.source,
+    resolvedPath: availability.resolvedPath,
+    available: availability.available,
+  };
+}
+
+const PROVIDER_ENV_KEYS: Record<string, string[]> = {
+  claude: [
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX",
+  ],
+  codex: ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_WIRE_API"],
+  opencode: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
+  mimocode: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
+  pi: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
+  kimi: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
+};
+
+function collectProviderEnvPresence(
+  baseProvider: AgentProvider,
+  runtimeSettings: ProviderRuntimeSettings | undefined,
+): ProviderDiagnosticDetails["env"] {
+  const providerConfigKeys = Object.keys(runtimeSettings?.env ?? {});
+  const keys = Array.from(
+    new Set([...(PROVIDER_ENV_KEYS[baseProvider] ?? []), ...providerConfigKeys]),
+  );
+  return keys.map((name) => {
+    const configuredValue = runtimeSettings?.env?.[name];
+    if (configuredValue !== undefined) {
+      return {
+        name,
+        present: configuredValue.trim().length > 0,
+        source: "provider-config" as const,
+      };
+    }
+    const processValue = process.env[name];
+    return {
+      name,
+      present: typeof processValue === "string" && processValue.trim().length > 0,
+      source: "process" as const,
+    };
+  });
+}
+
+function resolveMcpInjectionDiagnostic(
+  client: AgentClient,
+  state: { enabled: boolean; baseUrl: string | null },
+): ProviderDiagnosticDetails["mcpInjection"] {
+  if (!client.capabilities.supportsMcpServers) {
+    return {
+      supported: false,
+      enabled: false,
+      reason: "provider does not support MCP servers",
+    };
+  }
+  if (!state.baseUrl) {
+    return {
+      supported: true,
+      enabled: false,
+      reason: "daemon MCP endpoint is unavailable",
+    };
+  }
+  if (!state.enabled) {
+    return {
+      supported: true,
+      enabled: false,
+      reason: "daemon MCP injection is disabled",
+    };
+  }
+  return {
+    supported: true,
+    enabled: true,
+    reason: "provider supports MCP servers and daemon injection is enabled",
+  };
+}
+
+function formatProviderDiagnosticReport(input: {
+  providerLabel: string;
+  details: ProviderDiagnosticDetails;
+  providerDiagnostic: string;
+}): string {
+  const { providerLabel, details, providerDiagnostic } = input;
+  const rows: string[] = [`Provider: ${providerLabel}`, `CWD: ${details.cwd}`];
+  if (details.effectiveCommand) {
+    rows.push(`Effective argv: ${formatArgv(details.effectiveCommand.argv)}`);
+    rows.push(`Resolved command: ${details.effectiveCommand.resolvedPath ?? "not found"}`);
+    rows.push(`Command source: ${details.effectiveCommand.source}`);
+  } else {
+    rows.push("Effective argv: unknown");
+    rows.push("Resolved command: not checked");
+  }
+  rows.push(
+    `MCP injection: ${details.mcpInjection.enabled ? "enabled" : "disabled"} (${details.mcpInjection.reason})`,
+  );
+  rows.push(`Env presence: ${formatEnvPresence(details.env)}`);
+  if (details.tooling) {
+    rows.push(`Package: ${details.tooling.packageName ?? "unknown"}`);
+    rows.push(`Installed version: ${details.tooling.installedVersion ?? "not installed"}`);
+    rows.push(`Latest version: ${details.tooling.latestVersion ?? "unknown"}`);
+    rows.push(`Version status: ${details.tooling.versionStatus ?? "unknown"}`);
+  }
+  const providerSection = providerDiagnostic.trim();
+  if (providerSection.length > 0) {
+    rows.push("", "Provider-specific diagnostic:", providerSection);
+  }
+  return rows.join("\n");
+}
+
+function formatArgv(argv: string[]): string {
+  return argv.map((part) => (part.includes(" ") ? JSON.stringify(part) : part)).join(" ");
+}
+
+function formatEnvPresence(env: ProviderDiagnosticDetails["env"]): string {
+  if (env.length === 0) {
+    return "none configured or detected";
+  }
+  return env.map((entry) => `${entry.name}=${entry.present ? "present" : "missing"}`).join(", ");
 }
 
 function entriesToArray(

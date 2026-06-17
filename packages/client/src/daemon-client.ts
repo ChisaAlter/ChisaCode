@@ -64,6 +64,7 @@ import type {
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
   ProviderToolingActionResponseMessage,
+  AgentPresetsListResponseMessage,
   ModelGatewayMoaTestResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
@@ -333,6 +334,7 @@ type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderToolingActionPayload = ProviderToolingActionResponseMessage["payload"];
+type AgentPresetsListPayload = AgentPresetsListResponseMessage["payload"];
 type ModelGatewayMoaTestPayload = ModelGatewayMoaTestResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
@@ -3555,7 +3557,7 @@ export class DaemonClient {
 
   async runProviderToolingAction(
     provider: AgentProvider,
-    action: "install" | "update",
+    action: "install" | "update" | "reinstall",
     options?: { requestId?: string },
   ): Promise<ProviderToolingActionPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -3567,6 +3569,17 @@ export class DaemonClient {
       },
       responseType: "provider.tooling.run.response",
       timeout: 120000,
+    });
+  }
+
+  async listAgentPresets(options?: { requestId?: string }): Promise<AgentPresetsListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "agent.presets.list.request",
+      },
+      responseType: "agent.presets.list.response",
+      timeout: 30000,
     });
   }
 

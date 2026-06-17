@@ -41,6 +41,7 @@ const AGENT_DEFAULTS: Agent = {
   attentionTimestamp: null,
   archivedAt: null,
   parentAgentId: null,
+  relationKind: null,
   labels: {},
   projectPlacement: null,
 };
@@ -64,10 +65,11 @@ describe("selectSubagentsForParent", () => {
   it("returns only non-archived children for the requested parent", () => {
     setAgents([
       makeAgent({ id: "parent-a" }),
-      makeAgent({ id: "child-a", parentAgentId: "parent-a" }),
+      makeAgent({ id: "child-a", parentAgentId: "parent-a", relationKind: "subagent" }),
       makeAgent({
         id: "archived-child",
         parentAgentId: "parent-a",
+        relationKind: "subagent",
         archivedAt: new Date("2026-03-08T12:00:00.000Z"),
       }),
     ]);
@@ -82,6 +84,60 @@ describe("selectSubagentsForParent", () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual(["child-a"]);
+  });
+
+  it("excludes detached and handoff children from the subagents track", () => {
+    setAgents([
+      makeAgent({ id: "parent" }),
+      makeAgent({ id: "subagent", parentAgentId: "parent", relationKind: "subagent" }),
+      makeAgent({ id: "team-slot", parentAgentId: "parent", relationKind: "team-slot" }),
+      makeAgent({ id: "detached", parentAgentId: "parent", relationKind: "detached" }),
+      makeAgent({ id: "handoff", parentAgentId: "parent", relationKind: "handoff" }),
+    ]);
+
+    const rows = selectSubagentsForParent(
+      useSessionStore.getState(),
+      {
+        serverId: SERVER_ID,
+        parentAgentId: "parent",
+      },
+      EMPTY_PENDING_ARCHIVE_IDS,
+    );
+
+    expect(rows.map((row) => row.id)).toEqual(["subagent", "team-slot"]);
+  });
+
+  it("removes a child when its relation changes from subagent to detached", () => {
+    const child = makeAgent({
+      id: "child",
+      parentAgentId: "parent",
+      relationKind: "subagent",
+    });
+    setAgents([makeAgent({ id: "parent" }), child]);
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        {
+          serverId: SERVER_ID,
+          parentAgentId: "parent",
+        },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).map((row) => row.id),
+    ).toEqual(["child"]);
+
+    setAgents([makeAgent({ id: "parent" }), { ...child, relationKind: "detached" }]);
+
+    expect(
+      selectSubagentsForParent(
+        useSessionStore.getState(),
+        {
+          serverId: SERVER_ID,
+          parentAgentId: "parent",
+        },
+        EMPTY_PENDING_ARCHIVE_IDS,
+      ).map((row) => row.id),
+    ).toEqual([]);
   });
 
   it("excludes siblings, unrelated agents, and grandchildren", () => {
