@@ -171,6 +171,7 @@ function buildAgentManagerSpies() {
     getPendingPermissions: vi.fn(),
     getRegisteredProviderIds: vi.fn().mockReturnValue(["claude"]),
     listDraftFeatures: vi.fn(),
+    validateCompanionMcpToken: vi.fn().mockReturnValue(true),
   };
 }
 
@@ -567,6 +568,27 @@ function createChisaCodeWorktreeForMcpTest(options: {
     return result;
   };
 }
+
+describe("companion MCP scope", () => {
+  const logger = createTestLogger();
+
+  it("rejects a companion token when callerAgentId does not match parentAgentId", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+
+    await expect(
+      createAgentMcpServer({
+        agentManager,
+        agentStorage,
+        providerSnapshotManager: createClaudeOnlyManager(),
+        logger,
+        callerAgentId: "other-agent",
+        companionParentAgentId: "parent-agent",
+        companionToken: "token-1",
+      }),
+    ).rejects.toThrow("Companion MCP callerAgentId must match parentAgentId");
+    expect(spies.agentManager.validateCompanionMcpToken).not.toHaveBeenCalled();
+  });
+});
 
 describe("terminal MCP tools", () => {
   const logger = createTestLogger();

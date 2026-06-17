@@ -152,6 +152,18 @@ Desktop smoke for app/desktop-facing changes should at least exercise:
 - An unpacked `packages/desktop/release/win-unpacked/ChisaCode.exe` launch when the package is produced but installer metadata editing fails on Windows.
 - `$APPDATA/ChisaCode/logs/main.log` for packaged Electron startup, renderer route warnings, daemon supervisor startup, and daemon status polling.
 
+On Windows, `electron-builder` can produce `release/win-unpacked/ChisaCode.exe` and then fail in
+the final `rcedit` resource update step with `Fatal error: Unable to commit changes`. Treat that as
+a packaging metadata blocker, not as proof that the renderer or daemon failed. If this happens:
+
+```bash
+node packages/desktop/scripts/smoke-packaged-desktop-app.js --app packages/desktop/release/win-unpacked
+```
+
+The smoke must report the desktop-managed daemon, bundled CLI shim daemon status, and terminal
+command capture before the build can be considered runtime-tested. Still record the `rcedit`
+failure separately; release artifacts are not shippable until the metadata step succeeds.
+
 `better-sqlite3` is optional in the server package. In packaged Electron builds,
 the native binding can fail to load if it was compiled for a different Node ABI.
 That must be a warning-only path: the daemon should continue with JSON-backed

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T01:16:01.660Z",
+  "generatedAt": "2026-06-17T03:13:08.036Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "app",
@@ -47,11 +47,11 @@
     }
   },
   "stats": {
-    "files": 1083,
+    "files": 1085,
     "categories": {
-      "config": 38,
+      "config": 39,
       "test": 338,
-      "support": 50,
+      "support": 51,
       "docs": 2,
       "source": 655
     },
@@ -1015,6 +1015,13 @@
       "path": "packages/app/eslint.config.js",
       "lines": 11,
       "imports": ["eslint-config-expo/flat", "eslint/config"]
+    },
+    {
+      "id": "file:packages/app/expo-env.d.ts",
+      "type": "support",
+      "path": "packages/app/expo-env.d.ts",
+      "lines": 3,
+      "imports": []
     },
     {
       "id": "file:packages/app/global.d.ts",
@@ -8223,7 +8230,7 @@
       "id": "file:packages/app/src/screens/settings/providers-section.test.tsx",
       "type": "test",
       "path": "packages/app/src/screens/settings/providers-section.test.tsx",
-      "lines": 407,
+      "lines": 408,
       "imports": [
         "./providers-section",
         "@chisacode/protocol/agent-types",
@@ -11508,6 +11515,13 @@
         "@/stores/session-store",
         "@/utils/workspace-execution"
       ]
+    },
+    {
+      "id": "file:packages/app/test-results/.last-run.json",
+      "type": "config",
+      "path": "packages/app/test-results/.last-run.json",
+      "lines": 4,
+      "imports": []
     },
     {
       "id": "file:packages/app/test-stubs/xterm-addon-ligatures.ts",

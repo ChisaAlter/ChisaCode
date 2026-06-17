@@ -201,6 +201,12 @@ Status dots — the small filled circles next to a host or agent name — are `b
 
 The bespoke pills in `packages/app/src/screens/settings/host-page.tsx:97-116`, `packages/app/src/components/agent-list.tsx:607-632`, and `packages/app/src/components/sidebar-workspace-list.tsx:2889-2894` are drift to be removed. New code uses `<StatusBadge>`.
 
+### Provider tooling actions
+
+Provider install, update, and reinstall controls are row-level maintenance actions. They stay in the trailing slot, use small outline/icon buttons, and never become a page-level primary CTA. A custom provider can show diagnostic command/env information, but unsupported install/update/reinstall actions remain disabled rather than hidden behind a generic error.
+
+Version status copy is factual and short: installed version, latest version when known, and one action label. Diagnostics can contain longer copy because they are inspection surfaces; settings rows stay scannable.
+
 ---
 
 ## 13. Forbidden

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T01:16:02.326Z",
+  "generatedAt": "2026-06-17T03:13:08.736Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "project": {
     "name": "chisacode",
@@ -24,11 +24,11 @@
       "handoffPath": "docs/modules/app/README.md",
       "dependsOn": ["client", "expo-two-way-audio", "highlight", "protocol"],
       "dependedOnBy": [],
-      "fileCount": 1083,
+      "fileCount": 1085,
       "categories": {
-        "config": 38,
+        "config": 39,
         "test": 338,
-        "support": 50,
+        "support": 51,
         "docs": 2,
         "source": 655
       }
@@ -187,8 +187,9 @@
       "handoffPath": "docs/modules/relay/README.md",
       "dependsOn": [],
       "dependedOnBy": ["client", "server"],
-      "fileCount": 17,
+      "fileCount": 71,
       "categories": {
+        "support": 54,
         "config": 3,
         "docs": 1,
         "source": 7,

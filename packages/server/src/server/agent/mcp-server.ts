@@ -500,6 +500,9 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     if (!companionParentAgentId || !companionToken) {
       throw new Error("Companion MCP requires parentAgentId and companionToken");
     }
+    if (callerAgentId !== companionParentAgentId) {
+      throw new Error("Companion MCP callerAgentId must match parentAgentId");
+    }
     if (!agentManager.validateCompanionMcpToken(companionParentAgentId, companionToken)) {
       throw new Error("Invalid or expired companion MCP token");
     }

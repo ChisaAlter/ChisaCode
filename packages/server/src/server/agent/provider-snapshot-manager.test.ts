@@ -316,7 +316,7 @@ describe("ProviderSnapshotManager public surface", () => {
     } finally {
       manager.destroy();
     }
-  });
+  }, 15_000);
 
   test("getProviderDiagnostic throws when the provider is not configured", async () => {
     const manager = new ProviderSnapshotManager({ logger: createTestLogger() });

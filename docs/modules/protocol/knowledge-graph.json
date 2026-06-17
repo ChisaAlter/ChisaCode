@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T01:16:01.832Z",
+  "generatedAt": "2026-06-17T03:13:08.231Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "protocol",
@@ -90,7 +90,7 @@
       "id": "file:packages/protocol/src/agent-labels.ts",
       "type": "source",
       "path": "packages/protocol/src/agent-labels.ts",
-      "lines": 111,
+      "lines": 119,
       "imports": []
     },
     {
@@ -321,7 +321,7 @@
       "id": "file:packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
       "type": "test",
       "path": "packages/protocol/src/messages.create-agent-worktree-autoarchive.test.ts",
-      "lines": 74,
+      "lines": 94,
       "imports": ["./agent-labels.js", "./messages.js", "vitest"]
     },
     {

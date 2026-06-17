@@ -25,7 +25,15 @@ export function readAgentRelation(
 ): AgentRelation | null {
   const normalizedRelation = normalizeAgentRelation(relation);
   if (normalizedRelation) {
-    return normalizedRelation;
+    const parentAgentId =
+      normalizedRelation.parentAgentId ?? normalizeNonEmptyString(labels?.[PARENT_AGENT_ID_LABEL]);
+    const taskId =
+      normalizedRelation.taskId ?? normalizeNonEmptyString(labels?.[DELEGATION_TASK_ID_LABEL]);
+    return {
+      ...normalizedRelation,
+      ...(parentAgentId ? { parentAgentId } : {}),
+      ...(taskId ? { taskId } : {}),
+    };
   }
 
   const parentAgentId = normalizeNonEmptyString(labels?.[PARENT_AGENT_ID_LABEL]);

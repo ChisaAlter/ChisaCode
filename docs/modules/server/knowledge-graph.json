@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T01:16:02.319Z",
+  "generatedAt": "2026-06-17T03:13:08.730Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "server",
@@ -1032,7 +1032,7 @@
       "id": "file:packages/server/src/server/agent/mcp-server.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/mcp-server.test.ts",
-      "lines": 3619,
+      "lines": 3641,
       "imports": [
         "../../services/github-service.js",
         "../../terminal/terminal-manager.js",
@@ -1066,7 +1066,7 @@
       "id": "file:packages/server/src/server/agent/mcp-server.ts",
       "type": "source",
       "path": "packages/server/src/server/agent/mcp-server.ts",
-      "lines": 2401,
+      "lines": 2404,
       "imports": [
         "../../services/github-service.js",
         "../../terminal/terminal-manager.js",
@@ -1263,7 +1263,7 @@
       "id": "file:packages/server/src/server/agent/provider-snapshot-manager.test.ts",
       "type": "test",
       "path": "packages/server/src/server/agent/provider-snapshot-manager.test.ts",
-      "lines": 589,
+      "lines": 593,
       "imports": [
         "../../test-utils/test-logger.js",
         "./agent-sdk-types.js",

@@ -70,4 +70,24 @@ describe("create_agent_request worktree and autoArchive fields", () => {
       parentAgentId: "parent-agent",
     });
   });
+
+  test("merges compatibility labels into partial relation records", () => {
+    expect(
+      readAgentRelation(
+        {
+          "chisacode.parent-agent-id": "parent-agent",
+          "chisacode.delegation-task-id": "task-1",
+        },
+        {
+          kind: "handoff",
+          source: "mcp",
+        },
+      ),
+    ).toEqual({
+      kind: "handoff",
+      parentAgentId: "parent-agent",
+      taskId: "task-1",
+      source: "mcp",
+    });
+  });
 });
