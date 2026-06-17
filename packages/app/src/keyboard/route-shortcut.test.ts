@@ -250,9 +250,12 @@ describe("routeKeyboardShortcut — settings.toggle", () => {
     expect(
       routeKeyboardShortcut(
         { action: "settings.toggle", payload: null },
-        makeCtx({ pathname: "/h/srv/workspace/ws-2" }),
+        makeCtx({ pathname: "/h/srv/agent/agent-1" }),
       ),
-    ).toEqual<ShortcutAction>({ kind: "router-push", route: "/settings" });
+    ).toEqual<ShortcutAction>({
+      kind: "router-push",
+      route: "/settings?returnTo=%2Fh%2Fsrv%2Fagent%2Fagent-1",
+    });
   });
 
   it("navigates to the last workspace when leaving settings on desktop", () => {

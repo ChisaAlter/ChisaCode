@@ -20,6 +20,12 @@ const mockState = vi.hoisted(() => {
         env?: Record<string, string>;
       }>,
       pi: [] as ConstructorEntry[],
+      kimi: [] as Array<{
+        runtimeSettings?: unknown;
+        providerId?: string;
+        label?: string;
+        models?: unknown[];
+      }>,
       genericAcp: [] as Array<{
         command: string[];
         env?: Record<string, string>;
@@ -35,6 +41,7 @@ const mockState = vi.hoisted(() => {
       this.constructorArgs.opencode = [];
       this.constructorArgs.mimocode = [];
       this.constructorArgs.pi = [];
+      this.constructorArgs.kimi = [];
       this.constructorArgs.genericAcp = [];
       this.isCommandAvailable.mockReset();
       this.isCommandAvailable.mockImplementation(async (_command: string) => false);
@@ -240,6 +247,56 @@ vi.mock("./providers/opencode-agent.js", () => ({
     constructor(_logger: unknown, runtimeSettings?: unknown) {
       this.runtimeSettings = runtimeSettings;
       mockState.constructorArgs.mimocode.push({ runtimeSettings });
+    }
+
+    async createSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async resumeSession(): Promise<never> {
+      throw new Error("not implemented");
+    }
+
+    async listModels(): Promise<AgentModelDefinition[]> {
+      return mockState.runtimeModels.get(this.provider) ?? [];
+    }
+
+    async listModes(): Promise<[]> {
+      return [];
+    }
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+  },
+}));
+
+vi.mock("./providers/kimi-code-agent.js", () => ({
+  KimiCodeAgentClient: class KimiCodeAgentClient {
+    readonly capabilities = {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    };
+    readonly provider = "kimi";
+    readonly runtimeSettings?: unknown;
+
+    constructor(options: {
+      runtimeSettings?: unknown;
+      providerId?: string;
+      label?: string;
+      models?: unknown[];
+    }) {
+      this.runtimeSettings = options.runtimeSettings;
+      mockState.constructorArgs.kimi.push({
+        runtimeSettings: options.runtimeSettings,
+        providerId: options.providerId,
+        label: options.label,
+        models: options.models,
+      });
     }
 
     async createSession(): Promise<never> {
@@ -650,9 +707,19 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
         ? Reflect.get(entry.runtimeSettings, "env")
         : undefined;
-    return env?.ANTHROPIC_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
+    return env?.ANTHROPIC_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai";
   });
-  expect(claudeGatewayArgs).toBeDefined();
+  expect(claudeGatewayArgs).toEqual({
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        ANTHROPIC_API_KEY: "internal-token",
+        ANTHROPIC_AUTH_TOKEN: "internal-token",
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai",
+      },
+      disallowedTools: ["WebSearch"],
+    },
+  });
 
   const codexGatewayArgs = mockState.constructorArgs.codex.find((entry) => {
     const env =
@@ -723,20 +790,38 @@ test("model gateway materializes provider entries for all built-in agents", asyn
     },
   });
 
-  const kimiGatewayArgs = mockState.constructorArgs.genericAcp.find((entry) => {
-    return (
-      entry.providerId === "kimi" &&
-      entry.env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1"
-    );
+  const kimiGatewayArgs = mockState.constructorArgs.kimi.find((entry) => {
+    const env =
+      typeof entry.runtimeSettings === "object" && entry.runtimeSettings !== null
+        ? Reflect.get(entry.runtimeSettings, "env")
+        : undefined;
+    return env?.OPENAI_BASE_URL === "http://127.0.0.1:6767/api/model-gateways/zai/v1";
   });
   expect(kimiGatewayArgs).toEqual({
-    command: ["kimi", "acp"],
-    env: {
-      OPENAI_API_KEY: "internal-token",
-      OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        OPENAI_API_KEY: "internal-token",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai/v1",
+      },
     },
-    providerId: "kimi",
-    label: "Kimi Code",
+    providerId: "zai-kimi",
+    label: "ZAI Kimi Code",
+    models: [
+      {
+        id: "glm-5",
+        label: "GLM 5",
+        isDefault: true,
+        contextWindowMaxTokens: 200_000,
+        supportsImages: true,
+      },
+      { id: "glm-5-air", label: "GLM 5 Air" },
+      {
+        id: "moa-coder",
+        label: "MoA Coder",
+        description: "Synthetic coding model",
+      },
+    ],
   });
 });
 

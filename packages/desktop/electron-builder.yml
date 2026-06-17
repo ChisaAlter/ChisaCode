@@ -22,8 +22,8 @@ extraResources:
     to: skills
 publish:
   provider: github
-  owner: getchisacode
-  repo: chisacode
+  owner: ChisaAlter
+  repo: ChisaCode
 mac:
   artifactName: "ChisaCode-${version}-${arch}.${ext}"
   category: public.app-category.developer-tools

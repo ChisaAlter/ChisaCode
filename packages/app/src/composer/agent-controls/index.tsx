@@ -26,6 +26,7 @@ import { CombinedModelSelector } from "@/components/combined-model-selector";
 import {
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,
+  filterProviderSelectorProvidersByRuntimeProvider,
   type ProviderModelSelectionValue,
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
@@ -501,6 +502,7 @@ function isSnapshotProviderLoading(input: {
 
 function buildRunningAgentModelSelectorProviders(input: {
   agentProvider: string | undefined;
+  agentRuntimeProvider: string | null;
   snapshotEntries: ReturnType<typeof useProvidersSnapshot>["entries"];
   selectedEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
   providerDefinitions: AgentProviderDefinition[];
@@ -511,28 +513,36 @@ function buildRunningAgentModelSelectorProviders(input: {
     unknownError: string;
   };
 }): ProviderSelectorProvider[] {
-  const groupedProviders = buildSelectableProviderSelectorProviders(input.snapshotEntries, {
-    defaultModelLabel: input.copy.defaultModelLabel,
-    unavailable: input.copy.unavailable,
-    unknownError: input.copy.unknownError,
-  }).filter((provider) => provider.id === input.agentProvider);
+  const filterToRuntime = (providers: ProviderSelectorProvider[]) =>
+    filterProviderSelectorProvidersByRuntimeProvider(providers, input.agentRuntimeProvider);
+  const groupedProviders = filterToRuntime(
+    buildSelectableProviderSelectorProviders(input.snapshotEntries, {
+      defaultModelLabel: input.copy.defaultModelLabel,
+      unavailable: input.copy.unavailable,
+      unknownError: input.copy.unknownError,
+    }).filter((provider) => provider.id === input.agentProvider),
+  );
   if (groupedProviders.length > 0) {
     return groupedProviders;
   }
   if (input.selectedEntry) {
-    return buildSelectableProviderSelectorProviders([input.selectedEntry], {
-      defaultModelLabel: input.copy.defaultModelLabel,
-      unavailable: input.copy.unavailable,
-      unknownError: input.copy.unknownError,
-    });
+    return filterToRuntime(
+      buildSelectableProviderSelectorProviders([input.selectedEntry], {
+        defaultModelLabel: input.copy.defaultModelLabel,
+        unavailable: input.copy.unavailable,
+        unknownError: input.copy.unknownError,
+      }),
+    );
   }
-  return buildProviderSelectorProviders({
-    providerDefinitions: input.providerDefinitions,
-    modelsByProvider: input.modelsByProvider,
-    copy: {
-      defaultModelLabel: input.copy.defaultModelLabel,
-    },
-  });
+  return filterToRuntime(
+    buildProviderSelectorProviders({
+      providerDefinitions: input.providerDefinitions,
+      modelsByProvider: input.modelsByProvider,
+      copy: {
+        defaultModelLabel: input.copy.defaultModelLabel,
+      },
+    }),
+  );
 }
 
 function useRunningAgentModelControls(input: {
@@ -573,6 +583,7 @@ function useRunningAgentModelControls(input: {
     () =>
       buildRunningAgentModelSelectorProviders({
         agentProvider,
+        agentRuntimeProvider,
         snapshotEntries,
         selectedEntry: snapshotSelectedEntry,
         providerDefinitions: agentProviderDefinitions,
@@ -585,6 +596,7 @@ function useRunningAgentModelControls(input: {
       }),
     [
       agentProvider,
+      agentRuntimeProvider,
       agentProviderDefinitions,
       agentProviderModels,
       input.defaultModelLabel,

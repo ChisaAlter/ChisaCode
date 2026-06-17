@@ -104,8 +104,8 @@ export function useCommandCenter() {
   }, [agents, open, query]);
 
   const settingsRoute = useMemo<Href>(() => {
-    return buildSettingsRoute();
-  }, []);
+    return buildSettingsRoute({ returnTo: pathname }) as Href;
+  }, [pathname]);
 
   const homeRoute = useMemo<Href | undefined>(() => {
     if (!routeActiveServerId) return undefined;

@@ -6,6 +6,7 @@ import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspac
 import { useSessionStore } from "@/stores/session-store";
 import { buildHostNewWorkspaceRoute } from "@/utils/host-routes";
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
+import { generateDraftId } from "@/stores/draft-keys";
 
 const WORKTREE_NEW_ACTIONS: readonly KeyboardActionId[] = ["worktree.new"];
 
@@ -43,6 +44,7 @@ export function useActiveWorktreeNewAction() {
     router.navigate(
       buildHostNewWorkspaceRoute(serverId, workingDir, {
         displayName: displayName ?? undefined,
+        draftKey: generateDraftId(),
       }) as never,
     );
     return true;

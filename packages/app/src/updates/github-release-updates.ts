@@ -1,4 +1,4 @@
-export const DEFAULT_CHISACODE_GITHUB_REPOSITORY = "getchisacode/chisacode";
+export const DEFAULT_CHISACODE_GITHUB_REPOSITORY = "ChisaAlter/ChisaCode";
 
 export interface GitHubReleaseAsset {
   name: string;

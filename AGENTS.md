@@ -29,7 +29,6 @@
 
 - Workspace package exports resolve to compiled `dist/`, not sibling `src/`; rebuild producer packages before diagnosing cross-package type/runtime errors.
 - `npm run dev`, `dev:server`, and `dev:app` do initial builds and then watch `protocol` and `client`; outside those workflows, rebuild after changing protocol/client code.
-- Do not restart the main daemon on `localhost:6767` without permission; it may be managing the current agent process. Do not assume a timeout means restart is needed.
 - On macOS/Linux `npm run dev` uses portless names such as `https://daemon.localhost` / `https://app.localhost` with ephemeral ports; Windows dev binds the daemon to `localhost:6767`.
 - Daemon logs are in `$CHISACODE_HOME/daemon.log`; set `CHISACODE_LOG_LEVEL=trace` before launch for provider/session/agent-manager traces.
 

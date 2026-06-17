@@ -1054,6 +1054,8 @@ export const resources = {
       },
       stream: {
         scrollToBottom: "滚动到底部",
+        thinking: "思考",
+        thinkingRunning: "思考中...",
       },
       review: {
         editComment: "编辑评论",
@@ -1303,6 +1305,8 @@ export const resources = {
           check: "检查",
           installing: "安装中...",
           update: "更新",
+          appCurrentVersion: "当前版本：{{version}}",
+          appLatestVersion: "最新版本：{{version}}",
           stable: "稳定版",
           beta: "测试版",
           githubReleases: "GitHub 版本",
@@ -2498,6 +2502,8 @@ export const resources = {
       },
       stream: {
         scrollToBottom: "Scroll to bottom",
+        thinking: "Thinking",
+        thinkingRunning: "Thinking...",
       },
       review: {
         editComment: "Edit comment",
@@ -2747,6 +2753,8 @@ export const resources = {
           check: "Check",
           installing: "Installing...",
           update: "Update",
+          appCurrentVersion: "Current version: {{version}}",
+          appLatestVersion: "Latest version: {{version}}",
           stable: "Stable",
           beta: "Beta",
           githubReleases: "GitHub releases",

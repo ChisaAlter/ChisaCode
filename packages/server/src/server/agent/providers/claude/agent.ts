@@ -430,7 +430,71 @@ function mergeClaudeSettings(
   if (!settings || typeof settings === "string") {
     return settings ?? updates;
   }
-  return { ...settings, ...updates };
+  const merged = { ...settings, ...updates };
+  if (settings.env || updates.env) {
+    merged.env = {
+      ...settings.env,
+      ...updates.env,
+    };
+  }
+  return merged;
+}
+
+function readRuntimeSettingsEnv(
+  runtimeSettings: ProviderRuntimeSettings | undefined,
+): Record<string, string> | null {
+  const entries = Object.entries(runtimeSettings?.env ?? {}).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
+const CLAUDE_MODEL_GATEWAY_CARRIER_MODEL = "claude-sonnet-4-5";
+
+function buildModelGatewayOverrideBaseUrl(baseUrl: string, model: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    return null;
+  }
+
+  const normalizedPath = parsed.pathname.replace(/\/+$/u, "");
+  const gatewayPathMatch = normalizedPath.match(/^(.*\/api\/model-gateways\/[^/]+)(?:\/v1)?$/u);
+  if (!gatewayPathMatch?.[1]) {
+    return null;
+  }
+
+  parsed.pathname = `${gatewayPathMatch[1]}/model-overrides/${encodeURIComponent(model)}`;
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString().replace(/\/$/u, "");
+}
+
+function resolveClaudeModelGatewayOverride(input: {
+  model: string | undefined;
+  env: NodeJS.ProcessEnv;
+}): { env: Record<string, string>; model: string } | null {
+  const selectedModel = input.model?.trim();
+  const baseUrl = input.env["ANTHROPIC_BASE_URL"]?.trim();
+  if (!selectedModel || !baseUrl) {
+    return null;
+  }
+
+  const overrideBaseUrl = buildModelGatewayOverrideBaseUrl(baseUrl, selectedModel);
+  if (!overrideBaseUrl) {
+    return null;
+  }
+
+  const env: Record<string, string> = {
+    ANTHROPIC_BASE_URL: overrideBaseUrl,
+  };
+  const token = input.env["ANTHROPIC_API_KEY"] ?? input.env["ANTHROPIC_AUTH_TOKEN"];
+  if (token) {
+    env.ANTHROPIC_API_KEY = token;
+    env.ANTHROPIC_AUTH_TOKEN = token;
+  }
+  return { env, model: CLAUDE_MODEL_GATEWAY_CARRIER_MODEL };
 }
 
 function isToolResultTextBlock(value: unknown): value is { type: "text"; text: string } {
@@ -2552,8 +2616,8 @@ class ClaudeAgentSession implements AgentSession {
     const { thinking, effort } = this.resolveThinkingConfig();
     const appendedSystemPrompt = this.buildAppendedSystemPrompt();
     const extraClaudeOptions = this.config.extra?.claude;
-    const fastModeOptions = this.buildFastModeOptions(extraClaudeOptions);
-    const sdkEnv = this.buildSdkEnv(extraClaudeOptions);
+    const { sdkEnv, flagSettingsOptions, launchModel } =
+      this.buildSdkLaunchOptions(extraClaudeOptions);
     assertClaudeAutoModeEligible(this.currentMode, sdkEnv);
 
     const claudeBinary = await this.resolveBinary();
@@ -2605,7 +2669,7 @@ class ClaudeAgentSession implements AgentSession {
       ...(thinking ? { thinking } : {}),
       ...(effort ? { effort } : {}),
       ...extraClaudeOptions,
-      ...fastModeOptions,
+      ...flagSettingsOptions,
       ...(this.persistSession === undefined ? {} : { persistSession: this.persistSession }),
       env: sdkEnv,
     };
@@ -2614,8 +2678,8 @@ class ClaudeAgentSession implements AgentSession {
       base.mcpServers = this.normalizeMcpServers(this.config.mcpServers);
     }
 
-    if (this.config.model) {
-      base.model = this.config.model;
+    if (launchModel) {
+      base.model = launchModel;
     }
     this.lastOptionsModel = base.model ?? null;
     if (this.claudeSessionId && !this.pendingFreshSessionId) {
@@ -2630,14 +2694,43 @@ class ClaudeAgentSession implements AgentSession {
     return base;
   }
 
-  private buildFastModeOptions(
+  private buildSdkLaunchOptions(extraClaudeOptions: Partial<ClaudeOptions> | undefined): {
+    sdkEnv: NodeJS.ProcessEnv;
+    flagSettingsOptions: Pick<ClaudeOptions, "settings"> | Record<string, never>;
+    launchModel: string | undefined;
+  } {
+    const baseEnv = this.buildSdkEnv(extraClaudeOptions);
+    const modelGatewayOverride = resolveClaudeModelGatewayOverride({
+      model: this.config.model,
+      env: baseEnv,
+    });
+    const sdkEnv = modelGatewayOverride ? { ...baseEnv, ...modelGatewayOverride.env } : baseEnv;
+    const flagSettingsOptions = this.buildFlagSettingsOptions(
+      extraClaudeOptions,
+      modelGatewayOverride?.env,
+    );
+    return {
+      sdkEnv,
+      flagSettingsOptions,
+      launchModel: modelGatewayOverride?.model ?? this.config.model,
+    };
+  }
+
+  private buildFlagSettingsOptions(
     extraClaudeOptions: Partial<ClaudeOptions> | undefined,
+    envOverride?: Record<string, string>,
   ): Pick<ClaudeOptions, "settings"> | Record<string, never> {
+    const runtimeEnv = readRuntimeSettingsEnv(this.runtimeSettings);
     const fastMode = this.resolveFastModeSetting();
-    if (fastMode === null) {
+    const env = runtimeEnv || envOverride ? { ...runtimeEnv, ...envOverride } : null;
+    if (!env && fastMode === null) {
       return {};
     }
-    return { settings: mergeClaudeSettings(extraClaudeOptions?.settings, { fastMode }) };
+    const updates: NonNullable<Exclude<ClaudeOptions["settings"], string>> = {
+      ...(env ? { env } : {}),
+      ...(fastMode === null ? {} : { fastMode }),
+    };
+    return { settings: mergeClaudeSettings(extraClaudeOptions?.settings, updates) };
   }
 
   private resolveFastModeSetting(): boolean | null {

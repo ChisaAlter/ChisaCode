@@ -1,10 +1,6 @@
 import type { Href } from "expo-router";
 import type { WorkspaceLayout } from "@/stores/workspace-layout-store";
-import {
-  buildHostOpenProjectRoute,
-  buildHostWorkspaceOpenRoute,
-  parseHostWorkspaceRouteFromPathname,
-} from "@/utils/host-routes";
+import { buildHostOpenProjectRoute, buildHostNewWorkspaceRoute } from "@/utils/host-routes";
 
 export interface SidebarSessionDraft {
   serverId: string;
@@ -29,17 +25,17 @@ export function collectSidebarDraftSessions(_input: {
 export function resolveLeftSidebarNewConversationRoute(input: {
   activeServerId: string | null;
   pathname: string;
+  sourceDirectory?: string | null;
+  draftKey?: string | null;
 }): Href | null {
   const activeServerId = input.activeServerId?.trim() || null;
   if (!activeServerId) {
     return null;
   }
-
-  const workspaceRoute = parseHostWorkspaceRouteFromPathname(input.pathname);
-  if (!workspaceRoute || workspaceRoute.serverId !== activeServerId) {
-    return null;
-  }
-  return buildHostWorkspaceOpenRoute(activeServerId, workspaceRoute.workspaceId, "draft:new");
+  void input.pathname;
+  return buildHostNewWorkspaceRoute(activeServerId, input.sourceDirectory, {
+    draftKey: input.draftKey ?? undefined,
+  });
 }
 
 export function resolveLeftSidebarHomeRoute(activeServerId: string | null): Href | null {

@@ -19,6 +19,8 @@ function makeDeps(
   overrides: {
     storage?: ReturnType<typeof createInMemoryKeyValueStorage>;
     desktop?: ReturnType<typeof createFakeDesktopBridge>;
+    allowedThemes?: SettingsDeps["allowedThemes"];
+    fallbackTheme?: SettingsDeps["fallbackTheme"];
   } = {},
 ): SettingsDeps & {
   storage: ReturnType<typeof createInMemoryKeyValueStorage>;
@@ -27,16 +29,23 @@ function makeDeps(
   return {
     storage: overrides.storage ?? createInMemoryKeyValueStorage(),
     desktop: overrides.desktop ?? createFakeDesktopBridge(),
+    allowedThemes: overrides.allowedThemes,
+    fallbackTheme: overrides.fallbackTheme,
   };
 }
 
+const androidThemePolicy = {
+  allowedThemes: new Set(["liquid-neon", "dark", "light"]),
+  fallbackTheme: "liquid-neon" as const,
+};
+
 describe("loadAppSettingsFromStorage", () => {
-  it("defaults theme to auto when storage is empty", async () => {
+  it("defaults theme to glass when storage is empty", async () => {
     const deps = makeDeps();
 
     const result = await loadAppSettingsFromStorage(deps);
 
-    expect(result.theme).toBe("auto");
+    expect(result.theme).toBe("liquid-neon");
   });
 
   it("defaults language to Simplified Chinese when storage is empty", async () => {
@@ -105,6 +114,51 @@ describe("loadAppSettingsFromStorage", () => {
 
     expect(result.theme).toBe("liquid-neon");
   });
+
+  it("normalizes disallowed Android themes to glass and writes the normalized settings", async () => {
+    const deps = makeDeps({
+      ...androidThemePolicy,
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "zinc", language: "en" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.theme).toBe("liquid-neon");
+    expect(result.language).toBe("en");
+    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(JSON.stringify(result));
+  });
+
+  it("normalizes Android system theme preference to glass and writes the normalized settings", async () => {
+    const deps = makeDeps({
+      ...androidThemePolicy,
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "auto" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.theme).toBe("liquid-neon");
+    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(JSON.stringify(result));
+  });
+
+  it.each(["liquid-neon", "dark", "light"] as const)(
+    "keeps the allowed Android %s theme",
+    async (theme) => {
+      const deps = makeDeps({
+        ...androidThemePolicy,
+        storage: createInMemoryKeyValueStorage({
+          [APP_SETTINGS_KEY]: JSON.stringify({ theme }),
+        }),
+      });
+
+      const result = await loadAppSettingsFromStorage(deps);
+
+      expect(result.theme).toBe(theme);
+    },
+  );
 
   it("normalizes terminal scrollback lines from storage", async () => {
     const deps = makeDeps({
@@ -357,6 +411,29 @@ describe("saveAppSettings", () => {
       JSON.stringify({
         ...DEFAULT_CLIENT_SETTINGS,
         language: "en",
+      }),
+    );
+  });
+
+  it("normalizes disallowed Android theme updates to glass before saving", async () => {
+    const deps = makeDeps({
+      ...androidThemePolicy,
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify(DEFAULT_CLIENT_SETTINGS),
+      }),
+    });
+    const queryClient = new QueryClient();
+
+    await saveAppSettings({
+      queryClient,
+      updates: { theme: "ghostty" },
+      deps,
+    });
+
+    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(
+      JSON.stringify({
+        ...DEFAULT_CLIENT_SETTINGS,
+        theme: "liquid-neon",
       }),
     );
   });

@@ -244,6 +244,40 @@ export function buildSelectableProviderSelectorProviders(
   return selectorProviders;
 }
 
+export function filterProviderSelectorProvidersByRuntimeProvider(
+  providers: ProviderSelectorProvider[],
+  runtimeProvider: AgentProvider | string | null | undefined,
+): ProviderSelectorProvider[] {
+  const normalizedRuntimeProvider = runtimeProvider?.trim();
+  if (!normalizedRuntimeProvider) {
+    return providers;
+  }
+
+  return providers
+    .map((provider) => {
+      if (provider.modelSelection.kind !== "models") {
+        return provider;
+      }
+      const rows = provider.modelSelection.rows.filter(
+        (row) => row.runtimeProvider === normalizedRuntimeProvider,
+      );
+      if (rows.length === provider.modelSelection.rows.length) {
+        return provider;
+      }
+      return {
+        ...provider,
+        modelSelection: {
+          kind: "models" as const,
+          rows,
+        },
+      };
+    })
+    .filter(
+      (provider) =>
+        provider.modelSelection.kind !== "models" || provider.modelSelection.rows.length > 0,
+    );
+}
+
 export function getProviderModelRows(
   provider: ProviderSelectorProvider,
 ): ProviderSelectionModelRow[] {

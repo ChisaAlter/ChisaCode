@@ -33,7 +33,7 @@ export interface Settings extends AppSettings {
 }
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
-  theme: "auto",
+  theme: "liquid-neon",
   language: "zh-CN",
   sendBehavior: "interrupt",
   serviceUrlBehavior: "ask",
@@ -64,6 +64,8 @@ export interface DesktopSettingsBridge {
 export interface SettingsDeps {
   storage: KeyValueStorage;
   desktop: DesktopSettingsBridge;
+  allowedThemes?: ReadonlySet<string>;
+  fallbackTheme?: ThemeName;
 }
 
 export async function saveAppSettings(input: {
@@ -74,7 +76,7 @@ export async function saveAppSettings(input: {
   const current =
     input.queryClient.getQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY) ??
     (await loadAppSettingsFromStorage(input.deps));
-  const next = { ...current, ...input.updates };
+  const next = normalizeAppSettings({ ...current, ...input.updates }, input.deps);
   input.queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
   await input.deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
 }
@@ -84,7 +86,10 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
     const stored = await deps.storage.getItem(APP_SETTINGS_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<AppSettings>;
-      const next = { ...DEFAULT_CLIENT_SETTINGS, ...pickAppSettings(parsed) } satisfies AppSettings;
+      const next = {
+        ...DEFAULT_CLIENT_SETTINGS,
+        ...pickAppSettings(parsed, deps),
+      } satisfies AppSettings;
       const serializedNext = JSON.stringify(next);
       if (serializedNext !== stored) {
         await deps.storage.setItem(APP_SETTINGS_KEY, serializedNext);
@@ -97,7 +102,7 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
       const legacyAppParsed = JSON.parse(legacyAppStored) as Partial<AppSettings>;
       const next = {
         ...DEFAULT_CLIENT_SETTINGS,
-        ...pickAppSettings(legacyAppParsed),
+        ...pickAppSettings(legacyAppParsed, deps),
       } satisfies AppSettings;
       await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
       return next;
@@ -108,7 +113,7 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
       const legacyParsed = JSON.parse(legacyStored) as Record<string, unknown>;
       const next = {
         ...DEFAULT_CLIENT_SETTINGS,
-        ...pickAppSettingsFromLegacy(legacyParsed),
+        ...pickAppSettingsFromLegacy(legacyParsed, deps),
       } satisfies AppSettings;
       await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
       return next;
@@ -149,10 +154,11 @@ export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Setti
   };
 }
 
-function pickAppSettings(stored: Partial<AppSettings>): Partial<AppSettings> {
+function pickAppSettings(stored: Partial<AppSettings>, deps: SettingsDeps): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
-  if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
-    result.theme = stored.theme;
+  const theme = normalizeTheme(stored.theme, deps);
+  if (theme) {
+    result.theme = theme;
   }
   if (typeof stored.language === "string" && VALID_APP_LANGUAGES.has(stored.language)) {
     result.language = stored.language;
@@ -173,12 +179,39 @@ function pickAppSettings(stored: Partial<AppSettings>): Partial<AppSettings> {
   return result;
 }
 
-function pickAppSettingsFromLegacy(legacy: Record<string, unknown>): Partial<AppSettings> {
+function pickAppSettingsFromLegacy(
+  legacy: Record<string, unknown>,
+  deps: SettingsDeps,
+): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (legacy.theme === "dark" || legacy.theme === "light" || legacy.theme === "auto") {
-    result.theme = legacy.theme;
+    const theme = normalizeTheme(legacy.theme, deps);
+    if (theme) {
+      result.theme = theme;
+    }
   }
   return result;
+}
+
+function normalizeAppSettings(settings: AppSettings, deps: SettingsDeps): AppSettings {
+  const theme = normalizeTheme(settings.theme, deps);
+  return {
+    ...settings,
+    theme: theme ?? DEFAULT_CLIENT_SETTINGS.theme,
+  };
+}
+
+function normalizeTheme(
+  theme: unknown,
+  deps?: Pick<SettingsDeps, "allowedThemes" | "fallbackTheme">,
+): AppSettings["theme"] | null {
+  if (typeof theme !== "string" || !VALID_THEMES.has(theme)) {
+    return null;
+  }
+  if (!deps?.allowedThemes || deps.allowedThemes.has(theme)) {
+    return theme as AppSettings["theme"];
+  }
+  return deps.fallbackTheme ?? DEFAULT_CLIENT_SETTINGS.theme;
 }
 
 export function parseTerminalScrollbackLines(value: unknown): number | null {

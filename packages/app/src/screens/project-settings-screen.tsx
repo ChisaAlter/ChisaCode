@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, MoreVertical, Pencil, Plus, X } from "lucide-react-native";
@@ -90,9 +90,13 @@ type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export interface ProjectSettingsScreenProps {
   projectKey: string;
+  returnTo?: string | null;
 }
 
-export default function ProjectSettingsScreen({ projectKey }: ProjectSettingsScreenProps) {
+export default function ProjectSettingsScreen({
+  projectKey,
+  returnTo,
+}: ProjectSettingsScreenProps) {
   const { projects } = useProjects();
   const project = useMemo(
     () => projects.find((entry) => entry.projectKey === projectKey),
@@ -121,7 +125,7 @@ export default function ProjectSettingsScreen({ projectKey }: ProjectSettingsScr
   const client = useHostRuntimeClient(selectedHost?.serverId ?? "");
 
   if (!project || editableHosts.length === 0 || !selectedHost || !client) {
-    return <NoEditableTarget />;
+    return <NoEditableTarget returnTo={returnTo} />;
   }
 
   return (
@@ -132,6 +136,7 @@ export default function ProjectSettingsScreen({ projectKey }: ProjectSettingsScr
       onSelectHost={setSelectedServerId}
       client={client}
       isHostGone={isHostGone}
+      returnTo={returnTo}
     />
   );
 }
@@ -143,19 +148,20 @@ function filterEditableHosts(project: ProjectSummary | undefined): ProjectHostEn
   );
 }
 
-function navigateBackToProjects() {
-  router.navigate(buildProjectsSettingsRoute());
+function navigateBackToProjects(returnTo?: string | null) {
+  router.navigate(buildProjectsSettingsRoute({ returnTo }) as Href);
 }
 
-function NoEditableTarget() {
+function NoEditableTarget({ returnTo }: { returnTo?: string | null }) {
   const { t } = useTranslation();
+  const handleBack = useCallback(() => navigateBackToProjects(returnTo), [returnTo]);
   return (
     <View style={styles.noTargetContainer}>
-      <BackToProjectsButton />
+      <BackToProjectsButton returnTo={returnTo} />
       <Text style={styles.noTargetText}>{t("projectSettings.noEditableTarget")}</Text>
       <Button
         testID="project-settings-back-button"
-        onPress={navigateBackToProjects}
+        onPress={handleBack}
         variant="secondary"
         size="md"
       >
@@ -165,13 +171,14 @@ function NoEditableTarget() {
   );
 }
 
-function BackToProjectsButton() {
+function BackToProjectsButton({ returnTo }: { returnTo?: string | null }) {
   const { t } = useTranslation();
+  const handleBack = useCallback(() => navigateBackToProjects(returnTo), [returnTo]);
   return (
     <Button
       testID="project-settings-back-link"
       accessibilityLabel={t("projectSettings.backToProjects")}
-      onPress={navigateBackToProjects}
+      onPress={handleBack}
       variant="ghost"
       size="sm"
       leftIcon={ArrowLeft}
@@ -189,6 +196,7 @@ interface ProjectSettingsBodyProps {
   onSelectHost: (serverId: string) => void;
   client: DaemonClient;
   isHostGone: boolean;
+  returnTo?: string | null;
 }
 
 function ProjectSettingsBody({
@@ -198,6 +206,7 @@ function ProjectSettingsBody({
   onSelectHost,
   client,
   isHostGone,
+  returnTo,
 }: ProjectSettingsBodyProps) {
   const queryKey = useMemo(
     () => ["project-config", selectedHost.serverId, selectedHost.repoRoot] as const,
@@ -223,7 +232,7 @@ function ProjectSettingsBody({
 
   return (
     <View style={styles.body}>
-      <BackToProjectsButton />
+      <BackToProjectsButton returnTo={returnTo} />
 
       <View style={styles.headerBlock}>
         <View style={styles.titleRow}>
@@ -248,6 +257,7 @@ function ProjectSettingsBody({
         onReload: handleReload,
         hasMultipleHosts,
         isHostGone,
+        returnTo,
       })}
     </View>
   );
@@ -264,6 +274,7 @@ interface RenderContentInput {
   onReload: () => void;
   hasMultipleHosts: boolean;
   isHostGone: boolean;
+  returnTo?: string | null;
 }
 
 function renderContent({
@@ -277,6 +288,7 @@ function renderContent({
   onReload,
   hasMultipleHosts,
   isHostGone,
+  returnTo,
 }: RenderContentInput) {
   if (readQuery.isLoading) {
     return (
@@ -309,7 +321,7 @@ function renderContent({
   }
 
   if (isHostGone) {
-    return <NoEditableTarget />;
+    return <NoEditableTarget returnTo={returnTo} />;
   }
 
   if (!loadedConfig) {

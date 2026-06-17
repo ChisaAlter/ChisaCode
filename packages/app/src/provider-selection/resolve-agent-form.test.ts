@@ -980,5 +980,39 @@ describe("resolveAgentForm", () => {
 
       expect([...map.keys()]).toEqual(["codex"]);
     });
+
+    it("keeps a base provider selectable when a ready model-gateway provider is grouped under it", () => {
+      const entries: ProviderSnapshotEntry[] = [
+        {
+          provider: "codex",
+          status: "error",
+          enabled: true,
+          error: "Authentication required",
+          label: "Codex",
+          description: "",
+          defaultModeId: "auto",
+          modes: [],
+        },
+        {
+          provider: "zai-codex",
+          status: "ready",
+          enabled: true,
+          label: "ZAI Codex",
+          description: "",
+          defaultModeId: "auto",
+          modes: [],
+          models: [{ provider: "zai-codex", id: "GPT6.0", label: "GPT6.0" }],
+          derivedFromProviderId: "codex",
+          modelGatewayId: "zai",
+        },
+      ];
+      const map = buildProviderDefinitionMapForStatuses({
+        snapshotEntries: entries,
+        providerDefinitions: [TEST_CODEX_DEFINITION],
+        statuses: new Set<ProviderSnapshotEntry["status"]>(["ready"]),
+      });
+
+      expect([...map.keys()]).toEqual(["codex"]);
+    });
   });
 });

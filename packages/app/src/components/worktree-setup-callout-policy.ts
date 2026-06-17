@@ -30,7 +30,7 @@ export interface WorktreeSetupCalloutPolicy {
   title: string;
   description: string;
   actionLabel: string;
-  projectSettingsRoute: ReturnType<typeof buildProjectSettingsRoute>;
+  projectSettingsRoute: `/settings/projects/${string}`;
   testID: string;
 }
 

@@ -2,6 +2,8 @@ import { useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryClient as appQueryClient } from "@/query/query-client";
+import { isAndroid } from "@/constants/platform";
+import { ANDROID_FALLBACK_THEME, ANDROID_THEME_OPTIONS } from "@/styles/theme";
 import {
   DEFAULT_DESKTOP_SETTINGS,
   loadDesktopSettings,
@@ -60,6 +62,8 @@ const productionDeps: SettingsDeps = {
     loadDesktopSettings,
     migrateLegacyDesktopSettings,
   },
+  allowedThemes: isAndroid ? new Set(ANDROID_THEME_OPTIONS) : undefined,
+  fallbackTheme: isAndroid ? ANDROID_FALLBACK_THEME : undefined,
 };
 
 export interface UseAppSettingsReturn {

@@ -5,10 +5,20 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNameId } from "mnemonic-id";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, GitBranch, GitPullRequest, X } from "lucide-react-native";
+import {
+  Check,
+  ChevronDown,
+  Folder,
+  GitBranch,
+  GitPullRequest,
+  Inbox,
+  X,
+} from "lucide-react-native";
+import { useRouter, type Href } from "expo-router";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
+import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { Combobox, ComboboxItem } from "@/components/ui/combobox";
 import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combobox";
@@ -18,6 +28,9 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { HEADER_INNER_HEIGHT, MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { useOpenProject } from "@/hooks/use-open-project";
+import { useRecommendedProjectPaths } from "@/stores/session-store-hooks";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import { useGithubSearchQuery } from "@/git/use-github-search-query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -29,12 +42,17 @@ import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
 import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
+import { buildHostAgentDetailRoute } from "@/utils/host-routes";
+import { pickDirectory } from "@/desktop/pick-directory";
+import { shortenPath } from "@/utils/shorten-path";
+import { buildWorkingDirectorySuggestions } from "@/utils/working-directory-suggestions";
 import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
 import type { AgentAttachment, GitHubSearchItem } from "@chisacode/protocol/messages";
 import type { CreateChisaCodeWorktreeInput } from "@chisacode/client/internal/daemon-client";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
+import { resolveNewWorkspaceDraftReset } from "./new-workspace-draft-reset";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
   pickerItemToCheckoutRequest,
@@ -59,9 +77,10 @@ function resolveCheckoutRequest(
 
 interface NewWorkspaceScreenProps {
   serverId: string;
-  sourceDirectory: string;
+  sourceDirectory: string | null;
   projectId?: string;
   displayName?: string;
+  resetKey?: string;
 }
 
 interface PickerOptionData {
@@ -189,6 +208,224 @@ function CheckoutHintBadge({
       >
         <X size={iconSize} color={iconColor} />
       </Pressable>
+    </View>
+  );
+}
+
+function DirectoryTrigger({
+  anchorRef,
+  directory,
+  onPress,
+  disabled,
+  badgePressableStyle,
+  iconColor,
+  iconSize,
+}: {
+  anchorRef: React.RefObject<View | null>;
+  directory: string | null;
+  onPress: () => void;
+  disabled: boolean;
+  badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
+  iconColor: string;
+  iconSize: number;
+}) {
+  const label = directory ? shortenPath(directory) : "选择工作目录";
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild triggerRefProp="ref">
+        <Pressable
+          ref={anchorRef}
+          testID="new-workspace-directory-trigger"
+          onPress={onPress}
+          disabled={disabled}
+          style={badgePressableStyle}
+          accessibilityRole="button"
+          accessibilityLabel="选择工作目录"
+        >
+          <View style={styles.badgeIconBox}>
+            <Folder size={iconSize} color={iconColor} />
+          </View>
+          <Text style={styles.badgeText} numberOfLines={1}>
+            {label}
+          </Text>
+          <ChevronDown size={iconSize} color={iconColor} />
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center" offset={8}>
+        <Text style={styles.tooltipText}>选择工作目录</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ImportSessionCard({ onPress, disabled }: { onPress: () => void; disabled: boolean }) {
+  const cardStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.importCard,
+      Boolean(hovered) && !disabled && styles.importCardHovered,
+      pressed && !disabled && styles.importCardPressed,
+      disabled && styles.importCardDisabled,
+    ],
+    [disabled],
+  );
+  return (
+    <Pressable
+      testID="new-workspace-import-session-card"
+      accessibilityRole="button"
+      accessibilityLabel="导入会话"
+      onPress={onPress}
+      disabled={disabled}
+      style={cardStyle}
+    >
+      <View style={styles.importCardIcon}>
+        <Inbox size={18} color="#e24a4a" />
+      </View>
+      <View style={styles.importCardContent}>
+        <Text style={styles.importCardTitle} numberOfLines={1}>
+          导入会话
+        </Text>
+        <Text style={styles.importCardDescription} numberOfLines={2}>
+          导入最近的外部 CLI 会话
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function NewWorkspaceComposerFooter({
+  directoryAnchorRef,
+  normalizedSelectedDirectory,
+  openDirectoryPicker,
+  isPending,
+  badgePressableStyle,
+  iconColor,
+  iconSize,
+  isLocalDaemon,
+  directoryOptions,
+  handleSelectDirectoryOption,
+  directoryPickerOpen,
+  handleDirectoryPickerOpenChange,
+  setDirectorySearchQuery,
+  pickerAnchorRef,
+  openPicker,
+  refPickerDisabled,
+  selectedItem,
+  triggerLabel,
+  options,
+  selectedOptionId,
+  handleSelectOption,
+  pickerOpen,
+  handlePickerOpenChange,
+  setPickerSearchQuery,
+  pickerEmptyText,
+  renderPickerOption,
+  agentControls,
+  checkoutHintPrAttachment,
+  acceptCheckoutHint,
+  dismissCheckoutHint,
+}: {
+  directoryAnchorRef: React.RefObject<View | null>;
+  normalizedSelectedDirectory: string | null;
+  openDirectoryPicker: () => void;
+  isPending: boolean;
+  badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
+  iconColor: string;
+  iconSize: number;
+  isLocalDaemon: boolean;
+  directoryOptions: ComboboxOptionType[];
+  handleSelectDirectoryOption: (directory: string) => void;
+  directoryPickerOpen: boolean;
+  handleDirectoryPickerOpenChange: (open: boolean) => void;
+  setDirectorySearchQuery: (query: string) => void;
+  pickerAnchorRef: React.RefObject<View | null>;
+  openPicker: () => void;
+  refPickerDisabled: boolean;
+  selectedItem: PickerItem | null;
+  triggerLabel: string;
+  options: ComboboxOptionType[];
+  selectedOptionId: string;
+  handleSelectOption: (id: string) => void;
+  pickerOpen: boolean;
+  handlePickerOpenChange: (open: boolean) => void;
+  setPickerSearchQuery: (query: string) => void;
+  pickerEmptyText: string;
+  renderPickerOption: NonNullable<React.ComponentProps<typeof Combobox>["renderOption"]>;
+  agentControls: Omit<React.ComponentProps<typeof DraftAgentModeControl>, "placement"> | undefined;
+  checkoutHintPrAttachment: ReturnType<typeof findCheckoutHintPrAttachment>;
+  acceptCheckoutHint: () => void;
+  dismissCheckoutHint: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View testID="new-workspace-ref-picker-row" style={styles.optionsRow}>
+      <View>
+        <DirectoryTrigger
+          anchorRef={directoryAnchorRef}
+          directory={normalizedSelectedDirectory}
+          onPress={openDirectoryPicker}
+          disabled={isPending}
+          badgePressableStyle={badgePressableStyle}
+          iconColor={iconColor}
+          iconSize={iconSize}
+        />
+        {!isLocalDaemon ? (
+          <Combobox
+            options={directoryOptions}
+            value={normalizedSelectedDirectory ?? ""}
+            onSelect={handleSelectDirectoryOption}
+            searchable
+            allowCustomValue
+            customValuePrefix="使用"
+            customValueDescription="使用这个工作目录"
+            customValueKind="directory"
+            searchPlaceholder="搜索或输入工作目录"
+            title="工作目录"
+            open={directoryPickerOpen}
+            onOpenChange={handleDirectoryPickerOpenChange}
+            onSearchQueryChange={setDirectorySearchQuery}
+            desktopPlacement="bottom-start"
+            anchorRef={directoryAnchorRef}
+            emptyText="没有匹配的目录"
+          />
+        ) : null}
+      </View>
+      <View>
+        <RefPickerTrigger
+          pickerAnchorRef={pickerAnchorRef}
+          onPress={openPicker}
+          disabled={refPickerDisabled}
+          badgePressableStyle={badgePressableStyle}
+          selectedItem={selectedItem}
+          triggerLabel={triggerLabel}
+          iconColor={iconColor}
+          iconSize={iconSize}
+        />
+        <Combobox
+          options={options}
+          value={selectedOptionId}
+          onSelect={handleSelectOption}
+          searchable
+          searchPlaceholder={t("workspace.searchBranchesAndPrs")}
+          title={t("workspace.startFrom")}
+          open={pickerOpen}
+          onOpenChange={handlePickerOpenChange}
+          onSearchQueryChange={setPickerSearchQuery}
+          desktopPlacement="bottom-start"
+          anchorRef={pickerAnchorRef}
+          emptyText={pickerEmptyText}
+          renderOption={renderPickerOption}
+        />
+      </View>
+      {agentControls ? <DraftAgentModeControl placement="footer" {...agentControls} /> : null}
+      {checkoutHintPrAttachment ? (
+        <CheckoutHintBadge
+          prNumber={checkoutHintPrAttachment.item.number}
+          onAccept={acceptCheckoutHint}
+          onDismiss={dismissCheckoutHint}
+          iconColor={iconColor}
+          iconSize={iconSize}
+        />
+      ) : null}
     </View>
   );
 }
@@ -337,6 +574,24 @@ async function createAndMergeWorkspace(input: {
   return normalizedWorkspace;
 }
 
+async function openAndMergeWorkspace(input: {
+  client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
+  cwd: string;
+  mergeWorkspaces: (
+    serverId: string,
+    workspaces: ReturnType<typeof normalizeWorkspaceDescriptor>[],
+  ) => void;
+  serverId: string;
+}): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
+  const payload = await input.client.openProject(input.cwd);
+  if (payload.error || !payload.workspace) {
+    throw new Error(payload.error ?? "Failed to open workspace");
+  }
+  const normalizedWorkspace = normalizeWorkspaceDescriptor(payload.workspace);
+  input.mergeWorkspaces(input.serverId, [normalizedWorkspace]);
+  return normalizedWorkspace;
+}
+
 interface CreateChatAgentInput {
   payload: MessagePayload;
   composerState: ReturnType<typeof useAgentInputDraft>["composerState"];
@@ -380,33 +635,30 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<void> {
 function buildComposerConfig(input: {
   serverId: string;
   isConnected: boolean;
-  workspaceDirectory: string | null;
-  sourceDirectory: string;
+  workingDirectory: string | null;
 }): Parameters<typeof useAgentInputDraft>[0]["composer"] {
-  const { serverId, isConnected, workspaceDirectory, sourceDirectory } = input;
+  const { serverId, isConnected, workingDirectory } = input;
   return {
     initialServerId: serverId || null,
-    initialValues:
-      workspaceDirectory || sourceDirectory
-        ? { workingDir: workspaceDirectory || sourceDirectory }
-        : undefined,
+    initialValues: workingDirectory ? { workingDir: workingDirectory } : undefined,
     isVisible: true,
     onlineServerIds: isConnected && serverId ? [serverId] : [],
-    lockedWorkingDir: workspaceDirectory || sourceDirectory || undefined,
+    lockedWorkingDir: workingDirectory || undefined,
   };
 }
 
 function computeWorkspaceTitle(
   workspace: ReturnType<typeof normalizeWorkspaceDescriptor> | null,
   displayName: string,
-  sourceDirectory: string,
+  sourceDirectory: string | null,
 ): string {
   return (
     workspace?.name ||
     workspace?.projectDisplayName ||
     displayName ||
-    sourceDirectory.split(/[\\/]/).findLast(Boolean) ||
-    sourceDirectory
+    sourceDirectory?.split(/[\\/]/).findLast(Boolean) ||
+    sourceDirectory ||
+    "New conversation"
   );
 }
 
@@ -436,6 +688,16 @@ function pruneDismissedCheckoutHintPrNumbers(
   return changed ? next : dismissed;
 }
 
+function useDebouncedText(value: string, delayMs: number): string {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const trimmed = value.trim();
+    const timer = setTimeout(() => setDebouncedValue(trimmed), delayMs);
+    return () => clearTimeout(timer);
+  }, [delayMs, value]);
+  return debouncedValue;
+}
+
 function useCheckoutHintDismissals(attachments: ReadonlyArray<UserComposerAttachment>) {
   const [dismissedPrNumbers, setDismissedPrNumbers] = useState<ReadonlySet<number>>(
     () => new Set(),
@@ -449,6 +711,125 @@ function useCheckoutHintDismissals(attachments: ReadonlyArray<UserComposerAttach
   }, [attachedPrNumbers]);
 
   return [dismissedPrNumbers, setDismissedPrNumbers] as const;
+}
+
+function useNewWorkspaceDirectoryPicker(input: {
+  client: ReturnType<typeof useHostRuntimeClient>;
+  isConnected: boolean;
+  isLocalDaemon: boolean;
+  isPending: boolean;
+  recommendedPaths: string[];
+  serverId: string;
+  normalizedSelectedDirectory: string | null;
+  onDirectorySelected: (directory: string) => void;
+  onError: (message: string) => void;
+}) {
+  const {
+    client,
+    isConnected,
+    isLocalDaemon,
+    isPending,
+    recommendedPaths,
+    serverId,
+    normalizedSelectedDirectory,
+    onDirectorySelected,
+    onError,
+  } = input;
+  const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false);
+  const [directorySearchQuery, setDirectorySearchQuery] = useState("");
+  const debouncedDirectorySearchQuery = useDebouncedText(directorySearchQuery, 180);
+
+  const directorySuggestionsQuery = useQuery({
+    queryKey: ["new-workspace-directory-suggestions", serverId, debouncedDirectorySearchQuery],
+    queryFn: async () => {
+      if (!client) return [];
+      const result = await client.getDirectorySuggestions({
+        query: debouncedDirectorySearchQuery,
+        includeDirectories: true,
+        includeFiles: false,
+        limit: 30,
+      });
+      return (
+        result.entries?.flatMap((entry) => (entry.kind === "directory" ? [entry.path] : [])) ?? []
+      );
+    },
+    enabled: Boolean(client) && isConnected && directoryPickerOpen,
+    staleTime: 15_000,
+    retry: false,
+  });
+
+  const directoryOptions = useMemo<ComboboxOptionType[]>(() => {
+    const suggestions = buildWorkingDirectorySuggestions({
+      recommendedPaths,
+      serverPaths: directorySuggestionsQuery.data ?? [],
+      query: directorySearchQuery,
+    });
+    const selected = normalizedSelectedDirectory;
+    const withSelected =
+      selected && !suggestions.includes(selected) ? [selected, ...suggestions] : suggestions;
+    return withSelected.map((path) => ({
+      id: path,
+      label: shortenPath(path),
+      description: path,
+      kind: "directory",
+    }));
+  }, [
+    directorySearchQuery,
+    directorySuggestionsQuery.data,
+    normalizedSelectedDirectory,
+    recommendedPaths,
+  ]);
+
+  const openDirectoryPicker = useCallback(() => {
+    if (isPending) {
+      return;
+    }
+    if (!isLocalDaemon) {
+      setDirectoryPickerOpen(true);
+      return;
+    }
+    void (async () => {
+      try {
+        const path = await pickDirectory();
+        const trimmed = path?.trim();
+        if (!trimmed) {
+          return;
+        }
+        onDirectorySelected(trimmed);
+      } catch (error) {
+        onError(toErrorMessage(error));
+      }
+    })();
+  }, [isLocalDaemon, isPending, onDirectorySelected, onError]);
+
+  const handleSelectDirectoryOption = useCallback(
+    (directory: string) => {
+      const trimmed = directory.trim();
+      if (!trimmed) {
+        return;
+      }
+      onDirectorySelected(trimmed);
+      setDirectoryPickerOpen(false);
+      setDirectorySearchQuery("");
+    },
+    [onDirectorySelected],
+  );
+
+  const handleDirectoryPickerOpenChange = useCallback((nextOpen: boolean) => {
+    setDirectoryPickerOpen(nextOpen);
+    if (!nextOpen) {
+      setDirectorySearchQuery("");
+    }
+  }, []);
+
+  return {
+    directoryOptions,
+    directoryPickerOpen,
+    handleDirectoryPickerOpenChange,
+    handleSelectDirectoryOption,
+    openDirectoryPicker,
+    setDirectorySearchQuery,
+  };
 }
 
 function submitWorkspaceDraft(input: SubmitDraftInput): void {
@@ -508,55 +889,120 @@ function submitWorkspaceDraft(input: SubmitDraftInput): void {
   useDraftStore.getState().clearDraftInput({ draftKey, lifecycle: "sent" });
 }
 
+// eslint-disable-next-line complexity
 export function NewWorkspaceScreen({
   serverId,
   sourceDirectory,
   projectId,
   displayName: displayNameProp,
+  resetKey,
 }: NewWorkspaceScreenProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
   const toast = useToast();
+  const openProject = useOpenProject(serverId);
   const mergeWorkspaces = useSessionStore((state) => state.mergeWorkspaces);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdWorkspace, setCreatedWorkspace] = useState<ReturnType<
     typeof normalizeWorkspaceDescriptor
   > | null>(null);
+  const [selectedDirectory, setSelectedDirectory] = useState<string | null>(
+    () => sourceDirectory?.trim() || null,
+  );
+  const [isImportSheetOpen, setIsImportSheetOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"chat" | "empty" | null>(null);
   const [manualPickerSelection, setManualPickerSelection] = useState<PickerSelection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearchQuery, setPickerSearchQuery] = useState("");
-  const [debouncedPickerSearchQuery, setDebouncedPickerSearchQuery] = useState("");
+  const debouncedPickerSearchQuery = useDebouncedText(pickerSearchQuery, 180);
   const pickerAnchorRef = useRef<View>(null);
-
-  useEffect(() => {
-    const trimmed = pickerSearchQuery.trim();
-    const timer = setTimeout(() => setDebouncedPickerSearchQuery(trimmed), 180);
-    return () => clearTimeout(timer);
-  }, [pickerSearchQuery]);
+  const directoryAnchorRef = useRef<View>(null);
+  const resetKeyRef = useRef<string | null>(null);
 
   const displayName = displayNameProp?.trim() ?? "";
   const workspace = createdWorkspace;
   const isPending = pendingAction !== null;
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const draftKey = `new-workspace:${serverId}:${sourceDirectory}`;
+  const isLocalDaemon = useIsLocalDaemon(serverId);
+  const recommendedPaths = useRecommendedProjectPaths(serverId);
+  const draftKey = `new-workspace:${serverId}`;
   const chatDraft = useAgentInputDraft({
     draftKey,
     composer: buildComposerConfig({
       serverId,
       isConnected,
-      workspaceDirectory: workspace?.workspaceDirectory ?? null,
-      sourceDirectory,
+      workingDirectory: workspace?.workspaceDirectory ?? selectedDirectory,
     }),
   });
   const composerState = chatDraft.composerState;
+  const clearDraft = chatDraft.clear;
   const [dismissedCheckoutHintPrNumbers, setDismissedCheckoutHintPrNumbers] =
     useCheckoutHintDismissals(chatDraft.attachments);
 
   const selectedItem = manualPickerSelection?.item ?? null;
+  const normalizedSourceDirectory = sourceDirectory?.trim() || null;
+  const normalizedSelectedDirectory = selectedDirectory?.trim() || null;
+
+  const handleDirectorySelected = useCallback((directory: string) => {
+    setSelectedDirectory(directory);
+    setCreatedWorkspace(null);
+    setManualPickerSelection(null);
+    setErrorMessage(null);
+  }, []);
+
+  const handleDirectoryPickerError = useCallback(
+    (message: string) => {
+      setErrorMessage(message);
+      toast.error(message);
+    },
+    [toast],
+  );
+
+  const {
+    directoryOptions,
+    directoryPickerOpen,
+    handleDirectoryPickerOpenChange,
+    handleSelectDirectoryOption,
+    openDirectoryPicker,
+    setDirectorySearchQuery,
+  } = useNewWorkspaceDirectoryPicker({
+    client,
+    isConnected,
+    isLocalDaemon,
+    isPending,
+    recommendedPaths,
+    serverId,
+    normalizedSelectedDirectory,
+    onDirectorySelected: handleDirectorySelected,
+    onError: handleDirectoryPickerError,
+  });
+
+  useEffect(() => {
+    const reset = resolveNewWorkspaceDraftReset({
+      currentResetKey: resetKeyRef.current,
+      resetKey,
+      sourceDirectory: normalizedSourceDirectory,
+      pendingAction,
+    });
+    if (reset.kind === "unchanged") {
+      return;
+    }
+    resetKeyRef.current = reset.nextResetKey;
+    if (reset.kind === "pending") {
+      return;
+    }
+    setCreatedWorkspace(null);
+    setManualPickerSelection(null);
+    setPickerOpen(false);
+    setPickerSearchQuery("");
+    setErrorMessage(null);
+    setSelectedDirectory(reset.selectedDirectory);
+    clearDraft("abandoned");
+  }, [clearDraft, normalizedSourceDirectory, pendingAction, resetKey]);
 
   const withConnectedClient = useCallback(() => {
     if (!client || !isConnected) {
@@ -566,15 +1012,19 @@ export function NewWorkspaceScreen({
   }, [client, isConnected]);
 
   const clientReady = isConnected && Boolean(client);
-  const pickerQueryEnabled = pickerOpen && clientReady;
+  const directoryReady = Boolean(normalizedSelectedDirectory);
+  const pickerQueryEnabled = pickerOpen && clientReady && directoryReady;
 
   const checkoutStatusQuery = useQuery({
-    queryKey: ["checkout-status", serverId, sourceDirectory],
+    queryKey: ["checkout-status", serverId, normalizedSelectedDirectory],
     queryFn: async () => {
       const connectedClient = withConnectedClient();
-      return connectedClient.getCheckoutStatus(sourceDirectory);
+      if (!normalizedSelectedDirectory) {
+        throw new Error("Select a working directory");
+      }
+      return connectedClient.getCheckoutStatus(normalizedSelectedDirectory);
     },
-    enabled: clientReady,
+    enabled: clientReady && directoryReady,
     staleTime: Infinity,
     refetchOnMount: false,
     refetchOnReconnect: false,
@@ -584,11 +1034,19 @@ export function NewWorkspaceScreen({
   const currentBranch = checkoutStatusQuery.data?.currentBranch ?? null;
 
   const branchSuggestionsQuery = useQuery({
-    queryKey: ["branch-suggestions", serverId, sourceDirectory, debouncedPickerSearchQuery],
+    queryKey: [
+      "branch-suggestions",
+      serverId,
+      normalizedSelectedDirectory,
+      debouncedPickerSearchQuery,
+    ],
     queryFn: async () => {
       const connectedClient = withConnectedClient();
+      if (!normalizedSelectedDirectory) {
+        throw new Error("Select a working directory");
+      }
       return connectedClient.getBranchSuggestions({
-        cwd: sourceDirectory,
+        cwd: normalizedSelectedDirectory,
         query: debouncedPickerSearchQuery || undefined,
         limit: 20,
       });
@@ -600,7 +1058,7 @@ export function NewWorkspaceScreen({
   const githubPrSearchQuery = useGithubSearchQuery({
     client,
     serverId,
-    cwd: sourceDirectory,
+    cwd: normalizedSelectedDirectory ?? "",
     query: debouncedPickerSearchQuery,
     kinds: ["github-pr"],
     enabled: pickerQueryEnabled,
@@ -725,7 +1183,7 @@ export function NewWorkspaceScreen({
 
       return {
         cwd: input.cwd,
-        ...(projectId ? { projectId } : {}),
+        ...(projectId && input.cwd === normalizedSourceDirectory ? { projectId } : {}),
         worktreeSlug: createNameId(),
         ...(hasFirstAgentContext
           ? {
@@ -738,7 +1196,7 @@ export function NewWorkspaceScreen({
         ...checkoutRequest,
       };
     },
-    [currentBranch, projectId, selectedItem],
+    [currentBranch, normalizedSourceDirectory, projectId, selectedItem],
   );
 
   const ensureWorkspace = useCallback(
@@ -746,8 +1204,22 @@ export function NewWorkspaceScreen({
       if (createdWorkspace) {
         return createdWorkspace;
       }
+      const connectedClient = withConnectedClient();
+      const checkoutStatus = await connectedClient
+        .getCheckoutStatus(input.cwd)
+        .catch(() => checkoutStatusQuery.data ?? null);
+      if (checkoutStatus?.isGit === false) {
+        const normalizedWorkspace = await openAndMergeWorkspace({
+          client: connectedClient,
+          cwd: input.cwd,
+          mergeWorkspaces,
+          serverId,
+        });
+        setCreatedWorkspace(normalizedWorkspace);
+        return normalizedWorkspace;
+      }
       const normalizedWorkspace = await createAndMergeWorkspace({
-        client: withConnectedClient(),
+        client: connectedClient,
         createInput: buildCreateWorktreeInput(input),
         mergeWorkspaces,
         serverId,
@@ -755,17 +1227,31 @@ export function NewWorkspaceScreen({
       setCreatedWorkspace(normalizedWorkspace);
       return normalizedWorkspace;
     },
-    [buildCreateWorktreeInput, createdWorkspace, mergeWorkspaces, serverId, withConnectedClient],
+    [
+      buildCreateWorktreeInput,
+      checkoutStatusQuery.data,
+      createdWorkspace,
+      mergeWorkspaces,
+      serverId,
+      withConnectedClient,
+    ],
   );
 
   const handleSubmitNewWorkspace = useCallback(
     async (payload: MessagePayload) => {
       try {
         setErrorMessage(null);
+        if (!normalizedSelectedDirectory) {
+          throw new Error("请选择工作目录");
+        }
+        const payloadWithDirectory = {
+          ...payload,
+          cwd: normalizedSelectedDirectory,
+        };
         if (isEmptyWorkspaceSubmission(payload)) {
           setPendingAction("empty");
           await runCreateEmptyWorkspace({
-            payload,
+            payload: payloadWithDirectory,
             ensureWorkspace,
             serverId,
             navigate: navigateToWorkspace,
@@ -775,7 +1261,7 @@ export function NewWorkspaceScreen({
 
         setPendingAction("chat");
         await runCreateChatAgent({
-          payload,
+          payload: payloadWithDirectory,
           composerState,
           ensureWorkspace,
           serverId,
@@ -788,7 +1274,7 @@ export function NewWorkspaceScreen({
         toast.error(message);
       }
     },
-    [composerState, draftKey, ensureWorkspace, serverId, toast],
+    [composerState, draftKey, ensureWorkspace, normalizedSelectedDirectory, serverId, toast],
   );
 
   const workspaceTitle = computeWorkspaceTitle(workspace, displayName, sourceDirectory);
@@ -800,6 +1286,17 @@ export function NewWorkspaceScreen({
   const handleFilesDropped = useCallback((files: ImageAttachment[]) => {
     addImagesRef.current?.(files);
   }, []);
+  const handleOpenImportSheet = useCallback(() => setIsImportSheetOpen(true), []);
+  const handleCloseImportSheet = useCallback(() => setIsImportSheetOpen(false), []);
+  const handleImported = useCallback(
+    (agent: { id: string; cwd: string }) => {
+      void (async () => {
+        await openProject(agent.cwd);
+        router.push(buildHostAgentDetailRoute(serverId, agent.id) as Href);
+      })();
+    },
+    [openProject, router, serverId],
+  );
 
   const renderPickerOption = useCallback(
     ({
@@ -870,56 +1367,58 @@ export function NewWorkspaceScreen({
 
   const composerFooter = useMemo(
     () => (
-      <View testID="new-workspace-ref-picker-row" style={styles.optionsRow}>
-        <View>
-          <RefPickerTrigger
-            pickerAnchorRef={pickerAnchorRef}
-            onPress={openPicker}
-            disabled={isPending}
-            badgePressableStyle={badgePressableStyle}
-            selectedItem={selectedItem}
-            triggerLabel={triggerLabel}
-            iconColor={theme.colors.foregroundMuted}
-            iconSize={theme.iconSize.sm}
-          />
-          <Combobox
-            options={options}
-            value={selectedOptionId}
-            onSelect={handleSelectOption}
-            searchable
-            searchPlaceholder={t("workspace.searchBranchesAndPrs")}
-            title={t("workspace.startFrom")}
-            open={pickerOpen}
-            onOpenChange={handlePickerOpenChange}
-            onSearchQueryChange={setPickerSearchQuery}
-            desktopPlacement="bottom-start"
-            anchorRef={pickerAnchorRef}
-            emptyText={pickerEmptyText}
-            renderOption={renderPickerOption}
-          />
-        </View>
-        {agentControlsWithDisabled ? (
-          <DraftAgentModeControl placement="footer" {...agentControlsWithDisabled} />
-        ) : null}
-        {checkoutHintPrAttachment ? (
-          <CheckoutHintBadge
-            prNumber={checkoutHintPrAttachment.item.number}
-            onAccept={acceptCheckoutHint}
-            onDismiss={dismissCheckoutHint}
-            iconColor={theme.colors.foregroundMuted}
-            iconSize={theme.iconSize.sm}
-          />
-        ) : null}
-      </View>
+      <NewWorkspaceComposerFooter
+        directoryAnchorRef={directoryAnchorRef}
+        normalizedSelectedDirectory={normalizedSelectedDirectory}
+        openDirectoryPicker={openDirectoryPicker}
+        isPending={isPending}
+        badgePressableStyle={badgePressableStyle}
+        iconColor={theme.colors.foregroundMuted}
+        iconSize={theme.iconSize.sm}
+        isLocalDaemon={isLocalDaemon}
+        directoryOptions={directoryOptions}
+        handleSelectDirectoryOption={handleSelectDirectoryOption}
+        directoryPickerOpen={directoryPickerOpen}
+        handleDirectoryPickerOpenChange={handleDirectoryPickerOpenChange}
+        setDirectorySearchQuery={setDirectorySearchQuery}
+        pickerAnchorRef={pickerAnchorRef}
+        openPicker={openPicker}
+        refPickerDisabled={
+          isPending || !normalizedSelectedDirectory || checkoutStatusQuery.data?.isGit === false
+        }
+        selectedItem={selectedItem}
+        triggerLabel={triggerLabel}
+        options={options}
+        selectedOptionId={selectedOptionId}
+        handleSelectOption={handleSelectOption}
+        pickerOpen={pickerOpen}
+        handlePickerOpenChange={handlePickerOpenChange}
+        setPickerSearchQuery={setPickerSearchQuery}
+        pickerEmptyText={pickerEmptyText}
+        renderPickerOption={renderPickerOption}
+        agentControls={agentControlsWithDisabled}
+        checkoutHintPrAttachment={checkoutHintPrAttachment}
+        acceptCheckoutHint={acceptCheckoutHint}
+        dismissCheckoutHint={dismissCheckoutHint}
+      />
     ),
     [
       acceptCheckoutHint,
+      agentControlsWithDisabled,
       badgePressableStyle,
       checkoutHintPrAttachment,
+      checkoutStatusQuery.data?.isGit,
+      directoryOptions,
+      directoryPickerOpen,
       dismissCheckoutHint,
+      handleDirectoryPickerOpenChange,
       handlePickerOpenChange,
+      handleSelectDirectoryOption,
       handleSelectOption,
+      isLocalDaemon,
       isPending,
+      normalizedSelectedDirectory,
+      openDirectoryPicker,
       openPicker,
       options,
       pickerEmptyText,
@@ -927,11 +1426,10 @@ export function NewWorkspaceScreen({
       renderPickerOption,
       selectedItem,
       selectedOptionId,
+      setDirectorySearchQuery,
       setPickerSearchQuery,
-      agentControlsWithDisabled,
       theme.colors.foregroundMuted,
       theme.iconSize.sm,
-      t,
       triggerLabel,
     ],
   );
@@ -974,7 +1472,7 @@ export function NewWorkspaceScreen({
               onChangeText={chatDraft.setText}
               attachments={chatDraft.attachments}
               onChangeAttachments={chatDraft.setAttachments}
-              cwd={sourceDirectory}
+              cwd={normalizedSelectedDirectory ?? ""}
               clearDraft={handleClearDraft}
               autoFocus
               commandDraftConfig={composerState?.commandDraftConfig}
@@ -983,8 +1481,19 @@ export function NewWorkspaceScreen({
               footer={composerFooter}
             />
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+            <View style={styles.cardsRow}>
+              <ImportSessionCard onPress={handleOpenImportSheet} disabled={isPending} />
+            </View>
           </View>
         </View>
+        <ImportSessionSheet
+          visible={isImportSheetOpen}
+          client={client}
+          serverId={serverId}
+          cwd={normalizedSelectedDirectory}
+          onClose={handleCloseImportSheet}
+          onImported={handleImported}
+        />
       </View>
     </FileDropZone>
   );
@@ -1040,6 +1549,55 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     color: theme.colors.destructive,
     lineHeight: 20,
+  },
+  cardsRow: {
+    marginTop: theme.spacing[6],
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[3],
+  },
+  importCard: {
+    width: 220,
+    minHeight: 92,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[3],
+  },
+  importCardHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  importCardPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  importCardDisabled: {
+    opacity: 0.6,
+  },
+  importCardIcon: {
+    width: theme.iconSize.lg,
+    height: theme.iconSize.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  importCardContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  importCardTitle: {
+    fontSize: theme.fontSize.base,
+    color: theme.colors.foreground,
+  },
+  importCardDescription: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+    lineHeight: 18,
   },
   optionsRow: {
     flexDirection: "row",

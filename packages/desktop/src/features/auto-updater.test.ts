@@ -2,24 +2,48 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { UUID } from "builder-util-runtime";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("electron", () => ({
+const electronMock = vi.hoisted(() => ({
   app: {
     getPath: vi.fn(),
+    isPackaged: false,
   },
 }));
 
+const updaterMock = vi.hoisted(() => ({
+  autoUpdater: {
+    checkForUpdates: vi.fn(),
+    downloadUpdate: vi.fn(),
+    quitAndInstall: vi.fn(),
+    on: vi.fn(),
+  },
+}));
+
+vi.mock("electron", () => ({
+  app: electronMock.app,
+}));
+
 vi.mock("electron-updater", () => ({
-  autoUpdater: {},
+  autoUpdater: updaterMock.autoUpdater,
 }));
 
 import {
   bucketFromStagingUserId,
+  checkForAppUpdate,
   resolveStagingUserId,
   rolloutManifestSchema,
   shouldAdmitToRollout,
 } from "./auto-updater";
+
+beforeEach(() => {
+  electronMock.app.isPackaged = false;
+  electronMock.app.getPath.mockReset();
+  updaterMock.autoUpdater.checkForUpdates.mockReset();
+  updaterMock.autoUpdater.downloadUpdate.mockReset();
+  updaterMock.autoUpdater.quitAndInstall.mockReset();
+  updaterMock.autoUpdater.on.mockReset();
+});
 
 describe("shouldAdmitToRollout", () => {
   it("admits beta, missing rollout hours, zero-hour rollout, and missing release date", () => {
@@ -185,5 +209,19 @@ describe("shouldAdmitToRollout", () => {
     } finally {
       await rm(tempDir, { force: true, recursive: true });
     }
+  });
+});
+
+describe("checkForAppUpdate", () => {
+  it("surfaces GitHub release feed errors instead of reporting the app as up to date", async () => {
+    electronMock.app.isPackaged = true;
+    updaterMock.autoUpdater.checkForUpdates.mockRejectedValue(new Error("release feed not found"));
+
+    await expect(
+      checkForAppUpdate({
+        currentVersion: "0.9.0",
+        releaseChannel: "stable",
+      }),
+    ).rejects.toThrow("release feed not found");
   });
 });

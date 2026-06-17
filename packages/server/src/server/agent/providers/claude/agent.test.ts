@@ -396,11 +396,11 @@ describe("convertClaudeHistoryEntry", () => {
 describe("ClaudeAgentClient.listModels", () => {
   const logger = createTestLogger();
 
-  test("returns hardcoded claude models", async () => {
+  test("returns hardcoded claude models before settings-discovered models", async () => {
     const client = new ClaudeAgentClient({ logger, resolveBinary: async () => "/test/claude/bin" });
     const models = await client.listModels({ cwd: "/tmp/claude-models", force: false });
 
-    expect(models.map((m) => m.id)).toEqual([
+    const hardcodedModelIds = [
       "claude-opus-4-8[1m]",
       "claude-opus-4-8",
       "claude-opus-4-7[1m]",
@@ -410,7 +410,8 @@ describe("ClaudeAgentClient.listModels", () => {
       "claude-sonnet-4-6[1m]",
       "claude-sonnet-4-6",
       "claude-haiku-4-5",
-    ]);
+    ];
+    expect(models.map((m) => m.id).slice(0, hardcodedModelIds.length)).toEqual(hardcodedModelIds);
 
     for (const model of models) {
       expect(model.provider).toBe("claude");
@@ -456,6 +457,64 @@ describe("ClaudeAgentClient binary resolution", () => {
       "project",
       "local",
     ]);
+
+    await session.close();
+  });
+
+  test("promotes runtime env to Claude flag settings so provider env wins over user settings", async () => {
+    const queryReturn = vi.fn();
+    queryReturn.mockResolvedValue(undefined);
+    const queryFactory = vi.fn(() => ({
+      close: vi.fn(),
+      return: queryReturn,
+    }));
+
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+      runtimeSettings: {
+        env: {
+          ANTHROPIC_API_KEY: "gateway-token",
+          ANTHROPIC_AUTH_TOKEN: "gateway-token",
+          ANTHROPIC_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/opencode",
+        },
+      },
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "GPT6.0",
+    });
+
+    await expect(
+      (
+        session as unknown as {
+          ensureQuery(): Promise<unknown>;
+        }
+      ).ensureQuery(),
+    ).resolves.toBeDefined();
+
+    expect(queryFactory.mock.calls[0]?.[0].options.settingSources).toEqual([
+      "user",
+      "project",
+      "local",
+    ]);
+    expect(queryFactory.mock.calls[0]?.[0].options.settings).toMatchObject({
+      env: {
+        ANTHROPIC_API_KEY: "gateway-token",
+        ANTHROPIC_AUTH_TOKEN: "gateway-token",
+        ANTHROPIC_BASE_URL:
+          "http://127.0.0.1:6767/api/model-gateways/opencode/model-overrides/GPT6.0",
+      },
+    });
+    expect(queryFactory.mock.calls[0]?.[0].options.env).toMatchObject({
+      ANTHROPIC_API_KEY: "gateway-token",
+      ANTHROPIC_AUTH_TOKEN: "gateway-token",
+      ANTHROPIC_BASE_URL:
+        "http://127.0.0.1:6767/api/model-gateways/opencode/model-overrides/GPT6.0",
+    });
+    expect(queryFactory.mock.calls[0]?.[0].options.model).toBe("claude-sonnet-4-5");
 
     await session.close();
   });

@@ -83,6 +83,8 @@ interface ProviderClientFactoryOptions extends Pick<
   BuildProviderRegistryOptions,
   "workspaceGitService"
 > {
+  profileModels?: ProviderProfileModel[];
+  additionalModels?: ProviderProfileModel[];
   customProvider?: {
     id: string;
     label: string;
@@ -126,10 +128,13 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       logger,
       runtimeSettings,
     }),
-  kimi: (logger, runtimeSettings) =>
+  kimi: (logger, runtimeSettings, options) =>
     new KimiCodeAgentClient({
       logger,
       runtimeSettings,
+      providerId: options?.customProvider?.id ?? "kimi",
+      label: options?.customProvider?.label ?? "Kimi Code",
+      models: [...(options?.profileModels ?? []), ...(options?.additionalModels ?? [])],
     }),
   mock: (logger) => new MockLoadTestAgentClient(logger),
   "mock-slow": () => new MockSlowProviderClient(),
@@ -483,6 +488,8 @@ function buildResolvedBuiltinProviders(
   for (const definition of definitions) {
     const override = providerOverrides[definition.id];
     const factory = getProviderClientFactory(definition.id);
+    const profileModels = override?.models ?? [];
+    const additionalModels = override?.additionalModels ?? [];
     const mergedRuntimeSettings = mergeRuntimeSettings(
       runtimeSettings?.[definition.id],
       toRuntimeSettings(override),
@@ -491,8 +498,8 @@ function buildResolvedBuiltinProviders(
     resolvedProviders.set(definition.id, {
       definition: applyOverrideToDefinition(definition, override),
       runtimeSettings: mergedRuntimeSettings,
-      profileModels: override?.models ?? [],
-      additionalModels: override?.additionalModels ?? [],
+      profileModels,
+      additionalModels,
       profileModelsAreAdditive: definition.id === "claude",
       enabled: override?.enabled !== false,
       derivedFromProviderId: null,
@@ -500,6 +507,8 @@ function buildResolvedBuiltinProviders(
       createBaseClient: (logger) =>
         factory(logger, mergedRuntimeSettings, {
           workspaceGitService: options.workspaceGitService,
+          profileModels,
+          additionalModels,
         }),
     });
   }
@@ -574,6 +583,8 @@ function addResolvedCustomProviders(
 
     const label = requireCustomProviderLabel(providerId, override);
     const extendsProvider = requireCustomProviderExtends(providerId, override);
+    const profileModels = override.models ?? [];
+    const additionalModels = override.additionalModels ?? [];
     const overrideRuntimeSettings = mergeRuntimeSettings(
       runtimeSettings?.[providerId],
       toRuntimeSettings(override),
@@ -584,8 +595,8 @@ function addResolvedCustomProviders(
       resolvedProviders.set(providerId, {
         definition: buildCustomAcpDefinition(providerId, override, label),
         runtimeSettings: overrideRuntimeSettings,
-        profileModels: override.models ?? [],
-        additionalModels: override.additionalModels ?? [],
+        profileModels,
+        additionalModels,
         profileModelsAreAdditive: false,
         enabled: override.enabled !== false,
         derivedFromProviderId: null,
@@ -620,8 +631,8 @@ function addResolvedCustomProviders(
         label,
       ),
       runtimeSettings: mergedRuntimeSettings,
-      profileModels: override.models ?? [],
-      additionalModels: override.additionalModels ?? [],
+      profileModels,
+      additionalModels,
       profileModelsAreAdditive: false,
       enabled: override.enabled !== false,
       derivedFromProviderId: extendsProvider,
@@ -634,6 +645,8 @@ function addResolvedCustomProviders(
             label,
             extends: extendsProvider,
           },
+          profileModels,
+          additionalModels,
         }),
     });
   }
@@ -699,8 +712,9 @@ function gatewayProviderOverride(params: {
       extends: "claude",
       label: params.label,
       env: {
+        ANTHROPIC_API_KEY: token,
         ANTHROPIC_AUTH_TOKEN: token,
-        ANTHROPIC_BASE_URL: `${routeBase}/v1`,
+        ANTHROPIC_BASE_URL: routeBase,
       },
       disallowedTools: ["WebSearch"],
       models,

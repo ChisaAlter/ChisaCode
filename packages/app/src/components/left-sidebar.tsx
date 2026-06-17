@@ -1,4 +1,4 @@
-import { router, usePathname } from "expo-router";
+import { router, usePathname, type Href } from "expo-router";
 import {
   GitCompare,
   MessageSquareText,
@@ -85,12 +85,14 @@ import {
   buildHostSessionsRoute,
   buildSettingsRoute,
   mapPathnameToServer,
+  parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
   resolveLeftSidebarHomeRoute,
   resolveLeftSidebarNewConversationRoute,
 } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { generateDraftId } from "@/stores/draft-keys";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
 
@@ -237,18 +239,26 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
   }, [isRevalidating, isManualRefresh]);
 
   const openProjectPicker = useOpenProjectPicker(activeServerId);
+  const activeWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname);
+  const newConversationSourceDirectory = useWorkspaceFields(
+    activeWorkspaceRoute?.serverId === activeServerId ? activeServerId : null,
+    activeWorkspaceRoute?.serverId === activeServerId ? activeWorkspaceRoute.workspaceId : null,
+    (workspace) => workspace.projectRootPath || workspace.workspaceDirectory,
+  );
 
   const openCurrentWorkspaceDraft = useCallback(() => {
     const draftRoute = resolveLeftSidebarNewConversationRoute({
       activeServerId,
       pathname,
+      sourceDirectory: newConversationSourceDirectory,
+      draftKey: generateDraftId(),
     });
     if (!draftRoute) {
       return false;
     }
     router.push(draftRoute);
     return true;
-  }, [activeServerId, pathname]);
+  }, [activeServerId, newConversationSourceDirectory, pathname]);
 
   const handleOpenProjectMobile = useCallback(() => {
     showMobileAgent();
@@ -271,12 +281,12 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
 
   const handleSettingsMobile = useCallback(() => {
     showMobileAgent();
-    router.push(buildSettingsRoute());
-  }, [showMobileAgent]);
+    router.push(buildSettingsRoute({ returnTo: pathname }) as Href);
+  }, [pathname, showMobileAgent]);
 
   const handleSettingsDesktop = useCallback(() => {
-    router.push(buildSettingsRoute());
-  }, []);
+    router.push(buildSettingsRoute({ returnTo: pathname }) as Href);
+  }, [pathname]);
 
   const handleHomeMobile = useCallback(() => {
     const homeRoute = resolveLeftSidebarHomeRoute(activeServerId);

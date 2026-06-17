@@ -26,6 +26,14 @@ describe("desktop packaging", () => {
     expect(config).toContain("!node_modules/@chisacode/**/*.spec.*");
   });
 
+  it("publishes desktop update manifests to the ChisaAlter GitHub release feed", () => {
+    const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8");
+
+    expect(config).toContain("provider: github");
+    expect(config).toContain("owner: ChisaAlter");
+    expect(config).toContain("repo: ChisaCode");
+  });
+
   // electron-builder packs production dependencies declared in package.json into
   // app.asar. Runtime code in runtime-paths.ts and bin/chisacode dynamically resolves
   // these workspace packages by string, so static analysis (TypeScript, Knip) cannot

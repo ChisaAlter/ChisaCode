@@ -119,6 +119,7 @@ import {
 import { WorkspaceHoverCard } from "@/components/workspace-hover-card";
 import { GitHubIcon } from "@/components/icons/github-icon";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
+import { generateDraftId } from "@/stores/draft-keys";
 
 const workspaceKeyExtractor = (workspace: SidebarWorkspaceEntry) => workspace.workspaceKey;
 
@@ -1213,6 +1214,7 @@ function ProjectHeaderRow({
       buildHostNewWorkspaceRoute(serverId, project.iconWorkingDir, {
         displayName,
         projectId: project.projectKey,
+        draftKey: generateDraftId(),
       }) as Href,
     );
     onWorkspacePress?.();

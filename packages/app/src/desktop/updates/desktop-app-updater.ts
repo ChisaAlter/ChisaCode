@@ -19,6 +19,7 @@ export const PENDING_RECHECK_MS = 10_000;
 export interface DesktopAppUpdaterSnapshot {
   status: DesktopAppUpdateStatus;
   availableUpdate: DesktopAppUpdateCheckResult | null;
+  lastCheckResult: DesktopAppUpdateCheckResult | null;
   errorMessage: string | null;
   installMessage: string | null;
   lastCheckedAt: number | null;
@@ -79,6 +80,7 @@ export interface DesktopAppUpdater {
 interface InternalState {
   status: DesktopAppUpdateStatus;
   availableUpdate: DesktopAppUpdateCheckResult | null;
+  lastCheckResult: DesktopAppUpdateCheckResult | null;
   errorMessage: string | null;
   installMessage: string | null;
   lastCheckedAt: number | null;
@@ -89,6 +91,7 @@ interface InternalState {
 const INITIAL_STATE: InternalState = {
   status: "idle",
   availableUpdate: null,
+  lastCheckResult: null,
   errorMessage: null,
   installMessage: null,
   lastCheckedAt: null,
@@ -100,6 +103,7 @@ function buildSnapshot(state: InternalState): DesktopAppUpdaterSnapshot {
   return {
     status: state.status,
     availableUpdate: state.availableUpdate,
+    lastCheckResult: state.lastCheckResult,
     errorMessage: state.errorMessage,
     installMessage: state.installMessage,
     lastCheckedAt: state.lastCheckedAt,
@@ -213,6 +217,7 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
         ...state,
         status: nextStatus,
         availableUpdate: nextAvailable,
+        lastCheckResult: result,
         installMessage: null,
         lastCheckedAt: nextLastCheckedAt,
       });

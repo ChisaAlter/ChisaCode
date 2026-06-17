@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -13,9 +13,10 @@ import type { ProjectHostEntry, ProjectSummary } from "@/utils/projects";
 
 interface ProjectsScreenProps {
   view: { kind: "projects" } | { kind: "project"; projectKey: string };
+  returnTo?: string | null;
 }
 
-export default function ProjectsScreen({ view }: ProjectsScreenProps) {
+export default function ProjectsScreen({ view, returnTo }: ProjectsScreenProps) {
   const { projects, hostErrors, isLoading } = useProjects();
   const selectedProjectKey = view.kind === "project" ? view.projectKey : null;
 
@@ -45,6 +46,7 @@ export default function ProjectsScreen({ view }: ProjectsScreenProps) {
             project={project}
             isFirst={index === 0}
             isSelected={selectedProjectKey === project.projectKey}
+            returnTo={returnTo}
           />
         ))}
       </View>
@@ -68,16 +70,17 @@ interface ProjectRowProps {
   project: ProjectSummary;
   isFirst: boolean;
   isSelected: boolean;
+  returnTo?: string | null;
 }
 
-function ProjectRow({ project, isFirst, isSelected }: ProjectRowProps) {
+function ProjectRow({ project, isFirst, isSelected, returnTo }: ProjectRowProps) {
   const { theme } = useUnistyles();
   const { hosts, projectKey, projectName } = project;
   const leadingHost = hosts[0];
 
   const handleNavigate = useCallback(() => {
-    router.navigate(buildProjectSettingsRoute(projectKey));
-  }, [projectKey]);
+    router.navigate(buildProjectSettingsRoute(projectKey, { returnTo }) as Href);
+  }, [projectKey, returnTo]);
 
   const rowStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [

@@ -3,6 +3,10 @@ import { Buffer } from "buffer";
 type NullableString = string | null | undefined;
 const BASE64_WORKSPACE_ID_PREFIX = "b64_";
 
+interface SettingsRouteOptions {
+  returnTo?: NullableString;
+}
+
 function stripSearchAndHash(pathname: string): string {
   const hashIndex = pathname.indexOf("#");
   const queryIndex = pathname.indexOf("?");
@@ -29,6 +33,30 @@ function trimNonEmpty(value: NullableString): string | null {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+export function normalizeSettingsReturnToRoute(value: string | string[] | null | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const normalized = trimNonEmpty(rawValue);
+  if (!normalized || !normalized.startsWith("/") || normalized.startsWith("//")) {
+    return null;
+  }
+
+  const pathOnly = stripSearchAndHash(normalized);
+  if (pathOnly === "/settings" || pathOnly.startsWith("/settings/")) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function appendSettingsReturnTo(route: string, options?: SettingsRouteOptions) {
+  const returnTo = normalizeSettingsReturnToRoute(options?.returnTo);
+  if (!returnTo) {
+    return route;
+  }
+  const separator = route.includes("?") ? "&" : "?";
+  return `${route}${separator}returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 function encodeSegment(value: string): string {
@@ -394,25 +422,35 @@ export function buildHostOpenProjectRoute(serverId: string) {
 
 export function buildHostNewWorkspaceRoute(
   serverId: string,
-  sourceDirectory: string,
-  options?: { displayName?: string; projectId?: string },
+  sourceDirectory?: NullableString,
+  options?: { displayName?: string; projectId?: string; draftKey?: string },
 ) {
   const base = buildHostRootRoute(serverId);
   const normalizedSourceDirectory = trimNonEmpty(sourceDirectory);
-  if (base === "/" || !normalizedSourceDirectory) {
+  if (base === "/") {
     return "/" as const;
   }
+  if (!normalizedSourceDirectory && !options) {
+    return `${base}/new` as const;
+  }
   const params = new URLSearchParams();
-  params.set("dir", normalizedSourceDirectory);
+  if (normalizedSourceDirectory) {
+    params.set("dir", normalizedSourceDirectory);
+  }
   const displayName = trimNonEmpty(options?.displayName);
   const projectId = trimNonEmpty(options?.projectId);
+  const draftKey = trimNonEmpty(options?.draftKey);
   if (displayName) {
     params.set("name", displayName);
   }
   if (projectId) {
     params.set("projectId", projectId);
   }
-  return `${base}/new?${params.toString()}` as const;
+  if (draftKey) {
+    params.set("draft", draftKey);
+  }
+  const search = params.toString();
+  return search ? (`${base}/new?${search}` as const) : (`${base}/new` as const);
 }
 
 export const SETTINGS_SECTION_SLUGS = [
@@ -431,32 +469,51 @@ export function isSettingsSectionSlug(value: string): value is SettingsSectionSl
   return (SETTINGS_SECTION_SLUGS as readonly string[]).includes(value);
 }
 
-export function buildSettingsRoute() {
-  return "/settings" as const;
+export function buildSettingsRoute(): "/settings";
+export function buildSettingsRoute(options: SettingsRouteOptions): string;
+export function buildSettingsRoute(options?: SettingsRouteOptions) {
+  return appendSettingsReturnTo("/settings", options);
 }
 
-export function buildSettingsSectionRoute(section: SettingsSectionSlug) {
-  return `/settings/${section}` as const;
+export function buildSettingsSectionRoute(section: SettingsSectionSlug): `/settings/${string}`;
+export function buildSettingsSectionRoute(
+  section: SettingsSectionSlug,
+  options: SettingsRouteOptions,
+): string;
+export function buildSettingsSectionRoute(
+  section: SettingsSectionSlug,
+  options?: SettingsRouteOptions,
+) {
+  return appendSettingsReturnTo(`/settings/${section}`, options);
 }
 
-export function buildSettingsHostRoute(serverId: string) {
+export function buildSettingsHostRoute(serverId: string): `/settings/hosts/${string}`;
+export function buildSettingsHostRoute(serverId: string, options: SettingsRouteOptions): string;
+export function buildSettingsHostRoute(serverId: string, options?: SettingsRouteOptions) {
   const normalized = trimNonEmpty(serverId);
   if (!normalized) {
     throw new Error("buildSettingsHostRoute requires a non-empty serverId");
   }
-  return `/settings/hosts/${encodeSegment(normalized)}` as const;
+  return appendSettingsReturnTo(`/settings/hosts/${encodeSegment(normalized)}`, options);
 }
 
-export function buildProjectsSettingsRoute() {
-  return "/settings/projects" as const;
+export function buildProjectsSettingsRoute(): "/settings/projects";
+export function buildProjectsSettingsRoute(options: SettingsRouteOptions): string;
+export function buildProjectsSettingsRoute(options?: SettingsRouteOptions) {
+  return appendSettingsReturnTo("/settings/projects", options);
 }
 
-export function buildProjectSettingsRoute(projectKey: string) {
+export function buildProjectSettingsRoute(projectKey: string): `/settings/projects/${string}`;
+export function buildProjectSettingsRoute(
+  projectKey: string,
+  options: SettingsRouteOptions,
+): string;
+export function buildProjectSettingsRoute(projectKey: string, options?: SettingsRouteOptions) {
   const normalized = trimNonEmpty(projectKey);
   if (!normalized) {
     throw new Error("buildProjectSettingsRoute requires a non-empty projectKey");
   }
-  return `/settings/projects/${encodeSegment(normalized)}` as const;
+  return appendSettingsReturnTo(`/settings/projects/${encodeSegment(normalized)}`, options);
 }
 
 export function mapPathnameToServer(pathname: string, nextServerId: string) {

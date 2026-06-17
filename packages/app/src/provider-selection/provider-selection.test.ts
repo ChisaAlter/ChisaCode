@@ -6,6 +6,7 @@ import {
   buildSelectableProviderSelectorProviders,
   buildSelectedTriggerLabel,
   filterAndRankModelRows,
+  filterProviderSelectorProvidersByRuntimeProvider,
   matchesModelSearch,
   resolveSelectedModelLabel,
   resolveSubmissionReadiness,
@@ -244,6 +245,48 @@ describe("combined model selector data", () => {
         isLoading: false,
       }),
     ).toBe("Kimi K2.6");
+  });
+
+  it("filters grouped gateway rows to the running agent runtime provider", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "codex",
+        label: "Codex",
+        models: [
+          {
+            provider: "codex",
+            id: "gpt-5.4",
+            label: "GPT-5.4",
+          },
+        ],
+      }),
+      snapshotEntry({
+        provider: "opencode-codex",
+        label: "OpenCode Gateway Codex",
+        derivedFromProviderId: "codex",
+        modelGatewayId: "opencode",
+        models: [
+          {
+            provider: "opencode-codex",
+            id: "GPT6.0",
+            label: "GPT6.0",
+          },
+        ],
+      } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+    ]);
+
+    const filtered = filterProviderSelectorProvidersByRuntimeProvider(providers, "codex");
+
+    expect(filtered[0]?.modelSelection).toEqual({
+      kind: "models",
+      rows: [
+        expect.objectContaining({
+          provider: "codex",
+          runtimeProvider: "codex",
+          modelId: "gpt-5.4",
+        }),
+      ],
+    });
   });
 
   it("surfaces non-ready providers with their state-specific selection", () => {

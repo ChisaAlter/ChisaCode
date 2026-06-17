@@ -5,9 +5,11 @@ import {
   buildHostRootRoute,
   buildHostWorkspaceOpenRoute,
   buildHostWorkspaceRoute,
-  buildSettingsHostRoute,
   buildProjectSettingsRoute,
   buildProjectsSettingsRoute,
+  buildSettingsHostRoute,
+  buildSettingsRoute,
+  buildSettingsSectionRoute,
   decodeFilePathFromPathSegment,
   decodeWorkspaceIdFromPathSegment,
   encodeFilePathForPathSegment,
@@ -19,6 +21,7 @@ import {
   parseSettingsHostRouteFromPathname,
   parseWorkspaceOpenIntent,
   mapPathnameToServer,
+  normalizeSettingsReturnToRoute,
 } from "./host-routes";
 
 describe("parseHostAgentRouteFromPathname", () => {
@@ -37,6 +40,22 @@ describe("settings host routes", () => {
 
   it("builds a settings host route", () => {
     expect(buildSettingsHostRoute("srv one")).toBe("/settings/hosts/srv%20one");
+  });
+
+  it("preserves an internal return route on settings links", () => {
+    expect(buildSettingsRoute({ returnTo: "/h/srv/agent/agent-1" })).toBe(
+      "/settings?returnTo=%2Fh%2Fsrv%2Fagent%2Fagent-1",
+    );
+    expect(buildSettingsSectionRoute("general", { returnTo: "/h/srv/workspace/ws-1" })).toBe(
+      "/settings/general?returnTo=%2Fh%2Fsrv%2Fworkspace%2Fws-1",
+    );
+  });
+
+  it("rejects unsafe or looping settings return routes", () => {
+    expect(normalizeSettingsReturnToRoute("https://example.com")).toBeNull();
+    expect(normalizeSettingsReturnToRoute("//example.com/path")).toBeNull();
+    expect(normalizeSettingsReturnToRoute("/settings/general")).toBeNull();
+    expect(normalizeSettingsReturnToRoute("/h/srv/agent/agent-1")).toBe("/h/srv/agent/agent-1");
   });
 
   it("maps a stale settings host route to another host settings route", () => {
@@ -179,8 +198,8 @@ describe("workspace route parsing", () => {
     ).toBe("/h/local/new?dir=%2Frepo&name=Repo");
   });
 
-  it("requires a non-empty new-workspace source directory", () => {
-    expect(buildHostNewWorkspaceRoute("local", "   ")).toBe("/");
+  it("builds the singleton new-conversation route without a source directory", () => {
+    expect(buildHostNewWorkspaceRoute("local", "   ")).toBe("/h/local/new");
   });
 
   it("trims the new-workspace source directory", () => {

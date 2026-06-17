@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_CHISACODE_GITHUB_REPOSITORY,
   checkGitHubReleaseUpdate,
   findAndroidApkAsset,
   isReleaseVersionNewer,
@@ -71,6 +72,10 @@ describe("findAndroidApkAsset", () => {
 });
 
 describe("checkGitHubReleaseUpdate", () => {
+  it("defaults to the ChisaAlter GitHub release repository", async () => {
+    expect(DEFAULT_CHISACODE_GITHUB_REPOSITORY).toBe("ChisaAlter/ChisaCode");
+  });
+
   it("checks the latest GitHub release and reports Android APK availability", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,
@@ -104,7 +109,7 @@ describe("checkGitHubReleaseUpdate", () => {
       checkedAt: 123,
     });
     expect(fetcher).toHaveBeenCalledWith(
-      "https://api.github.com/repos/getchisacode/chisacode/releases/latest",
+      "https://api.github.com/repos/ChisaAlter/ChisaCode/releases/latest",
       {
         headers: {
           Accept: "application/vnd.github+json",

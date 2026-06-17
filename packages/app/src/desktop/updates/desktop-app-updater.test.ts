@@ -120,11 +120,24 @@ describe("desktop app updater — check", () => {
 
   it("reports 'up-to-date' when the check resolves with no update", async () => {
     const { updater, port } = createUpdater();
-    port.nextCheckResult(buildFakeCheckResult({ hasUpdate: false, readyToInstall: false }));
+    port.nextCheckResult(
+      buildFakeCheckResult({
+        hasUpdate: false,
+        readyToInstall: false,
+        currentVersion: "1.2.3",
+        latestVersion: "1.2.3",
+      }),
+    );
 
     await updater.checkForUpdates({ releaseChannel: "stable" });
 
-    expect(updater.getSnapshot().status).toBe("up-to-date");
+    expect(updater.getSnapshot()).toMatchObject({
+      status: "up-to-date",
+      lastCheckResult: {
+        currentVersion: "1.2.3",
+        latestVersion: "1.2.3",
+      },
+    });
   });
 
   it("reports 'error' when a non-silent check throws", async () => {

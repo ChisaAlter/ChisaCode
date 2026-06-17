@@ -25,6 +25,9 @@ export const isWeb = Platform.OS === "web";
 /** iOS or Android — the JS runtime is React Native. */
 export const isNative = Platform.OS !== "web";
 
+/** Android native runtime. */
+export const isAndroid = Platform.OS === "android";
+
 /** Development build/runtime — true in Metro dev bundles, false in production. */
 export const isDev = Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
 

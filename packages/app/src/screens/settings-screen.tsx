@@ -9,7 +9,7 @@ import {
   View,
   type PressableStateCallbackType,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useFocusEffect } from "@react-navigation/native";
@@ -45,7 +45,7 @@ import {
   type ServiceUrlBehavior,
   type Settings as EffectiveSettings,
 } from "@/hooks/use-settings";
-import { THEME_PREVIEWS, type ThemeName } from "@/styles/theme";
+import { ANDROID_THEME_OPTIONS, THEME_PREVIEWS, type ThemeName } from "@/styles/theme";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -87,6 +87,7 @@ import { CustomModelProvidersSection } from "@/screens/settings/custom-model-pro
 import { SyntheticModelsSection } from "@/screens/settings/synthetic-models-section";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
+import { isAndroid } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
@@ -96,7 +97,9 @@ import {
   buildHostOpenProjectRoute,
   buildProjectsSettingsRoute,
   buildSettingsHostRoute,
+  buildSettingsRoute,
   buildSettingsSectionRoute,
+  normalizeSettingsReturnToRoute,
   type SettingsSectionSlug,
 } from "@/utils/host-routes";
 import { navigateToLastWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -225,6 +228,15 @@ const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
 
 const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
 const APP_LANGUAGE_VALUES: AppLanguage[] = ["zh-CN", "en"];
+const STANDARD_THEME_OPTIONS = ["light", "dark", "auto"] as const;
+const CUSTOM_THEME_OPTIONS = [
+  "zinc",
+  "midnight",
+  "claude",
+  "ghostty",
+  "liquid-neon",
+  "chisaki",
+] as const;
 
 // ---------------------------------------------------------------------------
 // Section components
@@ -374,7 +386,7 @@ function GeneralSection({
               <ChevronDown size={theme.iconSize.sm} color={iconColor} />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
-              {(["light", "dark", "auto"] as const).map((themeValue) => (
+              {(isAndroid ? ANDROID_THEME_OPTIONS : STANDARD_THEME_OPTIONS).map((themeValue) => (
                 <ThemeMenuItem
                   key={themeValue}
                   themeValue={themeValue}
@@ -385,19 +397,21 @@ function GeneralSection({
                   onChange={handleThemeChange}
                 />
               ))}
-              <DropdownMenuSeparator />
-              {(["zinc", "midnight", "claude", "ghostty", "liquid-neon", "chisaki"] as const).map(
-                (themeValue) => (
-                  <ThemeMenuItem
-                    key={themeValue}
-                    themeValue={themeValue}
-                    selected={settings.theme === themeValue}
-                    previewHeight={themePreviewHeight}
-                    iconColor={iconColor}
-                    label={t(`settings.general.theme.options.${themeValue}`)}
-                    onChange={handleThemeChange}
-                  />
-                ),
+              {isAndroid ? null : (
+                <>
+                  <DropdownMenuSeparator />
+                  {CUSTOM_THEME_OPTIONS.map((themeValue) => (
+                    <ThemeMenuItem
+                      key={themeValue}
+                      themeValue={themeValue}
+                      selected={settings.theme === themeValue}
+                      previewHeight={themePreviewHeight}
+                      iconColor={iconColor}
+                      label={t(`settings.general.theme.options.${themeValue}`)}
+                      onChange={handleThemeChange}
+                    />
+                  ))}
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -611,6 +625,7 @@ function DesktopAppUpdateRow() {
     isDesktopApp,
     statusText,
     availableUpdate,
+    lastCheckResult,
     errorMessage,
     isChecking,
     isInstalling,
@@ -696,6 +711,20 @@ function DesktopAppUpdateRow() {
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.updates.appUpdates")}</Text>
           <Text style={settingsStyles.rowHint}>{statusText}</Text>
+          {lastCheckResult?.currentVersion ? (
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.updates.appCurrentVersion", {
+                version: formatVersionLabel(lastCheckResult.currentVersion),
+              })}
+            </Text>
+          ) : null}
+          {lastCheckResult?.latestVersion ? (
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.updates.appLatestVersion", {
+                version: formatVersionLabel(lastCheckResult.latestVersion),
+              })}
+            </Text>
+          ) : null}
           {errorMessage ? <Text style={styles.aboutErrorText}>{errorMessage}</Text> : null}
         </View>
         <View style={styles.aboutUpdateActions}>
@@ -1140,6 +1169,8 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     [webScrollbarStyle],
   );
   const hosts = useHosts();
+  const routeParams = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const returnToRoute = normalizeSettingsReturnToRoute(routeParams.returnTo);
   const localServerId = useLocalDaemonServerId();
   const hostServerIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const anyOnlineServerId = useAnyOnlineHostServerId(hostServerIds);
@@ -1236,48 +1267,48 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
 
   const handleHostAdded = useCallback(
     ({ serverId }: { serverId: string }) => {
-      const target = buildSettingsHostRoute(serverId);
+      const target = buildSettingsHostRoute(serverId, { returnTo: returnToRoute }) as Href;
       if (isCompactLayout) {
         router.push(target);
       } else {
         router.replace(target);
       }
     },
-    [isCompactLayout, router],
+    [isCompactLayout, returnToRoute, router],
   );
 
   const handleSelectSection = useCallback(
     (section: SettingsSectionSlug) => {
-      const target = buildSettingsSectionRoute(section);
+      const target = buildSettingsSectionRoute(section, { returnTo: returnToRoute }) as Href;
       if (isCompactLayout) {
         router.push(target);
       } else {
         router.replace(target);
       }
     },
-    [isCompactLayout, router],
+    [isCompactLayout, returnToRoute, router],
   );
 
   const handleSelectHost = useCallback(
     (serverId: string) => {
-      const target = buildSettingsHostRoute(serverId);
+      const target = buildSettingsHostRoute(serverId, { returnTo: returnToRoute }) as Href;
       if (isCompactLayout) {
         router.push(target);
       } else {
         router.replace(target);
       }
     },
-    [isCompactLayout, router],
+    [isCompactLayout, returnToRoute, router],
   );
 
   const handleSelectProjects = useCallback(() => {
-    const target = buildProjectsSettingsRoute();
+    const target = buildProjectsSettingsRoute({ returnTo: returnToRoute }) as Href;
     if (isCompactLayout) {
       router.push(target);
     } else {
       router.replace(target);
     }
-  }, [isCompactLayout, router]);
+  }, [isCompactLayout, returnToRoute, router]);
 
   const handleScanQr = useCallback(() => {
     closeAddConnectionFlow();
@@ -1288,23 +1319,27 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
   }, [closeAddConnectionFlow, router]);
 
   const handleHostRemoved = useCallback(() => {
-    const fallback = buildSettingsSectionRoute("general");
+    const fallback = buildSettingsSectionRoute("general", { returnTo: returnToRoute }) as Href;
     if (isCompactLayout) {
-      router.replace("/settings");
+      router.replace(buildSettingsRoute({ returnTo: returnToRoute }) as Href);
     } else {
       router.replace(fallback);
     }
-  }, [isCompactLayout, router]);
+  }, [isCompactLayout, returnToRoute, router]);
 
   const handleBackToRoot = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace("/settings");
+      router.replace(buildSettingsRoute({ returnTo: returnToRoute }) as Href);
     }
-  }, [router]);
+  }, [returnToRoute, router]);
 
   const handleBackToWorkspace = useCallback(() => {
+    if (returnToRoute) {
+      router.dismissTo(returnToRoute as Href);
+      return;
+    }
     if (navigateToLastWorkspace()) {
       return;
     }
@@ -1313,7 +1348,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
       return;
     }
     router.replace("/");
-  }, [anyOnlineServerId, router]);
+  }, [anyOnlineServerId, returnToRoute, router]);
 
   const detailHeader = ((): {
     title: string;
@@ -1345,10 +1380,10 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
       return <HostPage serverId={view.serverId} onHostRemoved={handleHostRemoved} />;
     }
     if (view.kind === "projects") {
-      return <ProjectsScreen view={view} />;
+      return <ProjectsScreen view={view} returnTo={returnToRoute} />;
     }
     if (view.kind === "project") {
-      return <ProjectSettingsScreen projectKey={view.projectKey} />;
+      return <ProjectSettingsScreen projectKey={view.projectKey} returnTo={returnToRoute} />;
     }
     if (view.kind === "section") {
       switch (view.section) {

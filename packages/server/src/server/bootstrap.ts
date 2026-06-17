@@ -37,6 +37,7 @@ function resolveBoundListenTarget(
 
 // Matches a Windows drive-letter path like C:\ or D:\
 const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
+const DAEMON_JSON_LIMIT = "512mb";
 
 export function parseListenString(listen: string): ListenTarget {
   // 1. Windows named pipes: \\.\pipe\... or pipe://...
@@ -448,7 +449,8 @@ export async function createChisaCodeDaemon(
   app.use("/public", express.static(staticDir));
 
   // Middleware
-  app.use(express.json());
+  const defaultJsonParser = express.json({ limit: DAEMON_JSON_LIMIT });
+  const modelGatewayJsonParser = express.json({ limit: DAEMON_JSON_LIMIT });
 
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
@@ -471,7 +473,8 @@ export async function createChisaCodeDaemon(
     targetFormat: ModelGatewayTargetFormat,
   ): Promise<void> => {
     const authHeader = req.header("authorization") ?? "";
-    if (authHeader !== `Bearer ${modelGatewayToken}`) {
+    const apiKeyHeader = req.header("x-api-key") ?? "";
+    if (authHeader !== `Bearer ${modelGatewayToken}` && apiKeyHeader !== modelGatewayToken) {
       res.status(401).json({ error: "Model gateway token required" });
       return;
     }
@@ -484,11 +487,16 @@ export async function createChisaCodeDaemon(
     }
 
     try {
+      const baseRequestBody =
+        req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+      const modelOverride =
+        typeof req.params.modelOverride === "string" && req.params.modelOverride.trim().length > 0
+          ? req.params.modelOverride.trim()
+          : null;
       const response = await handleModelGatewayRequest({
         gateway,
         targetFormat,
-        requestBody:
-          req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {},
+        requestBody: modelOverride ? { ...baseRequestBody, model: modelOverride } : baseRequestBody,
       });
       res.status(response.status);
       const contentType = response.headers.get("content-type");
@@ -503,15 +511,39 @@ export async function createChisaCodeDaemon(
     }
   };
 
-  app.post("/api/model-gateways/:id/v1/messages", (req, res) => {
+  app.post(
+    "/api/model-gateways/:id/model-overrides/:modelOverride/v1/messages",
+    modelGatewayJsonParser,
+    (req, res) => {
+      void runModelGatewayRequest(req, res, "anthropic");
+    },
+  );
+  app.post(
+    "/api/model-gateways/:id/model-overrides/:modelOverride/v1/chat/completions",
+    modelGatewayJsonParser,
+    (req, res) => {
+      void runModelGatewayRequest(req, res, "chatCompletions");
+    },
+  );
+  app.post(
+    "/api/model-gateways/:id/model-overrides/:modelOverride/v1/responses",
+    modelGatewayJsonParser,
+    (req, res) => {
+      void runModelGatewayRequest(req, res, "responses");
+    },
+  );
+
+  app.post("/api/model-gateways/:id/v1/messages", modelGatewayJsonParser, (req, res) => {
     void runModelGatewayRequest(req, res, "anthropic");
   });
-  app.post("/api/model-gateways/:id/v1/chat/completions", (req, res) => {
+  app.post("/api/model-gateways/:id/v1/chat/completions", modelGatewayJsonParser, (req, res) => {
     void runModelGatewayRequest(req, res, "chatCompletions");
   });
-  app.post("/api/model-gateways/:id/v1/responses", (req, res) => {
+  app.post("/api/model-gateways/:id/v1/responses", modelGatewayJsonParser, (req, res) => {
     void runModelGatewayRequest(req, res, "responses");
   });
+
+  app.use(defaultJsonParser);
 
   const handleFileDownload = async (req: express.Request, res: express.Response): Promise<void> => {
     const token =

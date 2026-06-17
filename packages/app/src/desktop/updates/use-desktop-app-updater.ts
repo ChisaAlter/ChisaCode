@@ -24,6 +24,7 @@ export interface UseDesktopAppUpdaterReturn {
   status: DesktopAppUpdateStatus;
   statusText: string;
   availableUpdate: DesktopAppUpdateCheckResult | null;
+  lastCheckResult: DesktopAppUpdateCheckResult | null;
   errorMessage: string | null;
   lastCheckedAt: number | null;
   isChecking: boolean;
@@ -129,6 +130,7 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
       copy: statusCopy,
     }),
     availableUpdate: snapshot.availableUpdate,
+    lastCheckResult: snapshot.lastCheckResult,
     errorMessage: snapshot.errorMessage,
     lastCheckedAt: snapshot.lastCheckedAt,
     isChecking: snapshot.isChecking,

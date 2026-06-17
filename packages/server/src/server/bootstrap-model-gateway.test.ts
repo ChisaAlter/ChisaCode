@@ -142,4 +142,113 @@ describe("model gateway bootstrap routes", () => {
       await daemonHandle.close();
     }
   });
+
+  test("accepts large gateway requests without the default JSON body limit", async () => {
+    const upstream = await createJsonUpstream();
+    const daemonHandle = await createTestChisaCodeDaemon({
+      modelGatewayToken: "internal-token",
+      modelGateways: {
+        zai: {
+          id: "zai",
+          label: "ZAI",
+          enabled: true,
+          models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+          upstreams: {
+            anthropic: {
+              enabled: false,
+              baseUrl: "",
+              apiKey: "",
+            },
+            chatCompletions: {
+              enabled: true,
+              baseUrl: upstream.baseUrl,
+              apiKey: "sk-chat",
+            },
+            responses: {
+              enabled: false,
+              baseUrl: "",
+              apiKey: "",
+            },
+          },
+        },
+      },
+    });
+    try {
+      const largeContent = "x".repeat(33 * 1024 * 1024);
+      const response = await fetch(
+        `http://127.0.0.1:${daemonHandle.port}/api/model-gateways/zai/v1/messages`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer internal-token",
+          },
+          body: JSON.stringify({
+            model: "glm-5",
+            messages: [{ role: "user", content: largeContent }],
+          }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(upstream.requests).toHaveLength(1);
+    } finally {
+      await daemonHandle.close();
+    }
+  });
+
+  test("applies model override routes and accepts Anthropic x-api-key auth", async () => {
+    const upstream = await createJsonUpstream();
+    const daemonHandle = await createTestChisaCodeDaemon({
+      modelGatewayToken: "internal-token",
+      modelGateways: {
+        zai: {
+          id: "zai",
+          label: "ZAI",
+          enabled: true,
+          models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+          upstreams: {
+            anthropic: {
+              enabled: false,
+              baseUrl: "",
+              apiKey: "",
+            },
+            chatCompletions: {
+              enabled: true,
+              baseUrl: upstream.baseUrl,
+              apiKey: "sk-chat",
+            },
+            responses: {
+              enabled: false,
+              baseUrl: "",
+              apiKey: "",
+            },
+          },
+        },
+      },
+    });
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${daemonHandle.port}/api/model-gateways/zai/model-overrides/GPT6.0/v1/messages`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": "internal-token",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-5",
+            messages: [{ role: "user", content: "hello" }],
+          }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(upstream.requests[0]?.body).toMatchObject({
+        model: "GPT6.0",
+      });
+    } finally {
+      await daemonHandle.close();
+    }
+  });
 });

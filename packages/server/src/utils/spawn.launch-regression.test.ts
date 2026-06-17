@@ -17,7 +17,8 @@ interface SpawnResult {
 }
 
 const tempDirs: string[] = [];
-const JSON_ARG = '{"key":"value with spaces","nested":{"quote":"\\"yes\\""}}';
+const JSON_ARG =
+  '{"mcpServers":{"chisacode":{"type":"http","url":"http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1&parentAgentId=parent-1&companionToken=token-1"}}}';
 
 const ASSERT_SCRIPT_BODY = `
 if (process.argv.includes("--version")) {

@@ -213,11 +213,16 @@ export function buildProviderDefinitionMapForStatuses(args: {
     return buildProviderDefinitionMap(args.providerDefinitions);
   }
 
-  const matchingProviders = new Set(
-    args.snapshotEntries
-      .filter((entry) => args.statuses.has(entry.status) && entry.enabled)
-      .map((entry) => entry.provider),
-  );
+  const matchingProviders = new Set<AgentProvider>();
+  for (const entry of args.snapshotEntries) {
+    if (!args.statuses.has(entry.status) || !entry.enabled) {
+      continue;
+    }
+    matchingProviders.add(entry.provider);
+    if (entry.modelGatewayId && entry.derivedFromProviderId) {
+      matchingProviders.add(entry.derivedFromProviderId);
+    }
+  }
 
   return buildProviderDefinitionMap(
     args.providerDefinitions.filter((definition) => matchingProviders.has(definition.id)),
