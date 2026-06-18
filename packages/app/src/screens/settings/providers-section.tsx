@@ -208,7 +208,7 @@ function ProviderRow({
           <>
             <View style={styles.compactHeaderRow}>
               <ProviderSummary
-                hovered={hovered}
+                hovered={hovered === true}
                 label={def.label}
                 providerStatus={providerStatus}
                 providerError={providerError}
@@ -221,7 +221,7 @@ function ProviderRow({
         ) : (
           <>
             <ProviderSummary
-              hovered={hovered}
+              hovered={hovered === true}
               label={def.label}
               providerStatus={providerStatus}
               providerError={providerError}
