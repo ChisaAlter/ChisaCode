@@ -722,7 +722,7 @@ export function WorkspaceDesktopTabsRow({
             accessibilityLabel={t("workspace.desktopTabs.newAgentTab")}
             style={newTabActionButtonStyle}
           >
-            <ThemedSquarePen size={14} uniProps={mutedColorMapping} />
+            <ThemedSquarePen size={16} uniProps={mutedColorMapping} />
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
             <View style={styles.newTabTooltipRow}>
@@ -746,7 +746,7 @@ export function WorkspaceDesktopTabsRow({
             }
             style={newTerminalActionButtonStyle}
           >
-            <ThemedSquareTerminal size={14} uniProps={mutedColorMapping} />
+            <ThemedSquareTerminal size={16} uniProps={mutedColorMapping} />
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
             <View style={styles.newTabTooltipRow}>
@@ -770,7 +770,7 @@ export function WorkspaceDesktopTabsRow({
               accessibilityLabel={t("workspace.desktopTabs.splitPaneRight")}
               style={newTabActionButtonStyle}
             >
-              <ThemedColumns2 size={14} uniProps={mutedColorMapping} />
+              <ThemedColumns2 size={16} uniProps={mutedColorMapping} />
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center" offset={8}>
               <View style={styles.newTabTooltipRow}>
@@ -1067,19 +1067,20 @@ const styles = StyleSheet.create((theme) => ({
   newTabActionButton: {
     width: 32,
     height: 32,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.surface0,
+    ...theme.shadow.sm,
   },
   newTabActionButtonDisabled: {
     opacity: 0.5,
   },
   newTabActionButtonHovered: {
     backgroundColor: theme.colors.surface2,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
   },
   newTabTooltipText: {
     color: theme.colors.foreground,

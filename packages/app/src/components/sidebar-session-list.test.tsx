@@ -23,6 +23,7 @@ const {
   toastCopiedMock,
   toastErrorMock,
   confirmDialogMock,
+  isCompactFormFactorMock,
 } = vi.hoisted(() => ({
   theme: {
     spacing: { 1: 4, 2: 8, 3: 12, 4: 16, 8: 32 },
@@ -73,6 +74,7 @@ const {
   toastCopiedMock: vi.fn(),
   toastErrorMock: vi.fn(),
   confirmDialogMock: vi.fn(),
+  isCompactFormFactorMock: vi.fn(() => false),
 }));
 
 vi.hoisted(() => {
@@ -92,7 +94,7 @@ vi.mock("@/constants/platform", () => ({
 }));
 
 vi.mock("@/constants/layout", () => ({
-  useIsCompactFormFactor: () => false,
+  useIsCompactFormFactor: () => isCompactFormFactorMock(),
 }));
 
 vi.mock("expo-router", () => ({
@@ -330,6 +332,10 @@ vi.mock("@/stores/session-store-hooks", () => ({
   },
 }));
 
+vi.mock("@/stores/draft-keys", () => ({
+  generateDraftId: () => "draft-fixed",
+}));
+
 vi.mock("@/utils/navigate-to-agent", () => ({
   navigateToAgent: vi.fn(),
 }));
@@ -399,6 +405,8 @@ describe("SidebarSessionList", () => {
     toastErrorMock.mockReset();
     confirmDialogMock.mockReset();
     confirmDialogMock.mockResolvedValue(true);
+    isCompactFormFactorMock.mockReset();
+    isCompactFormFactorMock.mockReturnValue(false);
   });
 
   it("groups sessions by cwd basename and renders provider icons", () => {
@@ -412,7 +420,7 @@ describe("SidebarSessionList", () => {
     expect(screen.getByTestId("provider-icon-codex")).not.toBeNull();
   });
 
-  it("opens a new draft from a workspace group plus button", () => {
+  it("opens the singleton new-conversation page from a workspace group plus button", () => {
     const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Project session" })];
 
     renderSidebarSessionList({ serverId: "server-1", agents });
@@ -420,7 +428,7 @@ describe("SidebarSessionList", () => {
     fireEvent.click(screen.getByTestId("sidebar-session-group-new-server-1-/repo/project"));
 
     expect(routerPushMock).toHaveBeenCalledWith(
-      "/h/server-1/workspace/workspace-project?open=draft%3Anew",
+      "/h/server-1/new?dir=%2Frepo%2Fproject&draft=draft-fixed",
     );
   });
 
@@ -443,6 +451,24 @@ describe("SidebarSessionList", () => {
     expect(within(row).queryByText("Running")).toBeNull();
     expect(within(row).queryByText("2 pending")).toBeNull();
     expect(within(row).queryByText("Needs attention")).toBeNull();
+  });
+
+  it("centers compact session title text against the provider icon", () => {
+    isCompactFormFactorMock.mockReturnValue(true);
+    const agents = [
+      agent({
+        id: "agent-1",
+        cwd: "/repo/project",
+        title: "问候响应",
+      }),
+    ];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    const title = screen.getByText("问候响应");
+    expect(title.style.lineHeight).toBe("20px");
+    expect(title.style.paddingTop).toBe("4px");
+    expect(title.style.transform).toBe("translateY(2px)");
   });
 
   it("hides archived sessions from the sidebar", () => {

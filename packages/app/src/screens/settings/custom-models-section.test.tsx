@@ -254,6 +254,8 @@ function makeConfig(providers: MutableDaemonConfig["providers"] = {}): MutableDa
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,
     appendSystemPrompt: "",
+    skills: { global: { disabledSkillNames: [] }, providers: {}, agents: {}, installedSources: {} },
+    mcpServers: { servers: {}, global: { disabledServerNames: [] }, providers: {}, agents: {} },
   };
 }
 

@@ -191,6 +191,7 @@ const primaryForegroundColorMapping = (theme: Theme) => ({
   color: theme.colors.primaryForeground,
 });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
+type IconColorMapping = (theme: Theme) => { color: string };
 const WEB_TOOLCALL_SHIMMER_KEYFRAME_CSS = `
   @keyframes ${WEB_TOOLCALL_SHIMMER_ANIMATION_NAME} {
     0% {
@@ -2473,7 +2474,7 @@ function renderExpandableBadgeIcon({
 }: {
   isError: boolean;
   isActive: boolean;
-  ThemedIcon: ComponentType<{ size?: number; uniProps?: typeof foregroundColorMapping }> | null;
+  ThemedIcon: ComponentType<{ size?: number; uniProps?: IconColorMapping }> | null;
 }): ReactNode {
   if (isError) {
     return (

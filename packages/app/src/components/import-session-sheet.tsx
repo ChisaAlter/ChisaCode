@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, type PressableStateCallbackType, ScrollView, Text, View } from "react-native";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import type {
   DaemonClient,
   FetchRecentProviderSessionEntry,
@@ -12,6 +13,7 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { getProviderIcon } from "@/components/provider-icons";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { formatTimeAgo } from "@/utils/time";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import {
@@ -267,6 +269,8 @@ export function ImportSessionSheet({
   onImported,
 }: ImportSessionSheetProps) {
   const queryClient = useQueryClient();
+  const isCompact = useIsCompactFormFactor();
+  const ResultsScrollView = isCompact ? BottomSheetScrollView : ScrollView;
 
   const { entries: snapshotEntries, supportsSnapshot } = useProvidersSnapshot(serverId, {
     cwd,
@@ -446,7 +450,7 @@ export function ImportSessionSheet({
           erroredProviderLabels={erroredProviderLabels}
           importErrored={importMutation.isError}
         />
-        <ScrollView
+        <ResultsScrollView
           testID="import-session-results-scroll"
           style={styles.resultsScroll}
           contentContainerStyle={styles.resultsContent}
@@ -470,7 +474,7 @@ export function ImportSessionSheet({
             </View>
           ) : null}
           {showEmptyState ? <SheetEmptyState title={emptyStateTitle} /> : null}
-        </ScrollView>
+        </ResultsScrollView>
       </View>
     </AdaptiveModalSheet>
   );

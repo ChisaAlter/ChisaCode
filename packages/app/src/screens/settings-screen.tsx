@@ -30,6 +30,7 @@ import {
   Plus,
   FolderGit2,
   Bot,
+  Blocks,
 } from "lucide-react-native";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
@@ -85,6 +86,8 @@ import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
 import { HostPage, HostRenameButton } from "@/screens/settings/host-page";
 import { CustomModelProvidersSection } from "@/screens/settings/custom-model-providers-section";
 import { SyntheticModelsSection } from "@/screens/settings/synthetic-models-section";
+import { SkillsSection } from "@/screens/settings/skills-section";
+import { McpServersSection } from "@/screens/settings/mcp-servers-section";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { isAndroid } from "@/constants/platform";
@@ -125,6 +128,8 @@ interface SidebarSectionItem {
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
   { id: "models", labelKey: "settings.sections.models", icon: Bot },
+  { id: "skills", labelKey: "settings.sections.skills", icon: Blocks },
+  { id: "mcp", labelKey: "settings.sections.mcp", icon: Server },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
   {
     id: "integrations",
@@ -1375,6 +1380,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     return null;
   })();
 
+  // eslint-disable-next-line complexity
   const content = (() => {
     if (view.kind === "host") {
       return <HostPage serverId={view.serverId} onHostRemoved={handleHostRemoved} />;
@@ -1410,6 +1416,22 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
           ) : (
             <View style={styles.placeholder}>
               <Text style={styles.placeholderText}>{t("settings.models.noHost")}</Text>
+            </View>
+          );
+        case "skills":
+          return anyOnlineServerId ? (
+            <SkillsSection serverId={localServerId ?? anyOnlineServerId} />
+          ) : (
+            <View style={styles.placeholder}>
+              <Text style={styles.placeholderText}>{t("settings.skills.noHost")}</Text>
+            </View>
+          );
+        case "mcp":
+          return anyOnlineServerId ? (
+            <McpServersSection serverId={localServerId ?? anyOnlineServerId} />
+          ) : (
+            <View style={styles.placeholder}>
+              <Text style={styles.placeholderText}>{t("settings.mcpServers.noHost")}</Text>
             </View>
           );
         case "integrations":

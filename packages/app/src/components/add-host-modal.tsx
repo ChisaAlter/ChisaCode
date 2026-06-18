@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useReducer, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { useCallback, useMemo, useReducer, useRef, useState } from "react";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -16,6 +16,8 @@ import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adapt
 import { Button } from "@/components/ui/button";
 
 const FLEX_ONE_STYLE = { flex: 1 } as const;
+const DEFAULT_DIRECT_HOST = "localhost";
+const DEFAULT_DIRECT_PORT = "6767";
 
 interface DirectConnectionDraft {
   host: string;
@@ -58,9 +60,14 @@ const styles = StyleSheet.create((theme) => ({
   input: {
     backgroundColor: theme.colors.surface2,
     borderRadius: theme.borderRadius.lg,
+    height: 48,
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
+    paddingVertical: 0,
     color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    lineHeight: 20,
+    textAlignVertical: "center",
+    includeFontPadding: false,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
@@ -296,12 +303,15 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   const { probeAndUpsertDirectConnection } = useHostMutations();
   const isMobile = useIsCompactFormFactor();
 
+  const hostRef = useRef(DEFAULT_DIRECT_HOST);
+  const portRef = useRef(DEFAULT_DIRECT_PORT);
+  const passwordRef = useRef("");
+  const hostInputRef = useRef<TextInput>(null);
+  const portInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [host, setHost] = useState("");
-  const [port, setPort] = useState("6767");
   const [useTls, setUseTls] = useState(false);
-  const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [advancedUri, setAdvancedUri] = useState("");
@@ -326,10 +336,13 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   );
 
   const clearInput = useCallback(() => {
-    setHost("");
-    setPort("6767");
+    hostRef.current = DEFAULT_DIRECT_HOST;
+    portRef.current = DEFAULT_DIRECT_PORT;
+    passwordRef.current = "";
+    hostInputRef.current?.clear();
+    portInputRef.current?.clear();
+    passwordInputRef.current?.clear();
     setUseTls(false);
-    setPassword("");
     setIsPasswordVisible(false);
     setIsAdvancedOpen(false);
     setAdvancedUri("");
@@ -371,7 +384,15 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
 
     let connection: PreparedDirectConnection;
     try {
-      connection = prepareDirectConnection({ host, port, useTls, password }, connectionCopy);
+      connection = prepareDirectConnection(
+        {
+          host: hostRef.current,
+          port: portRef.current,
+          useTls,
+          password: passwordRef.current,
+        },
+        connectionCopy,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : t("host.invalidConnectionInfo");
       setErrorMessage(message);
@@ -416,12 +437,9 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     daemons,
     connectionCopy,
     handleClose,
-    host,
     isMobile,
     isSaving,
     onSaved,
-    password,
-    port,
     probeAndUpsertDirectConnection,
     t,
     useTls,
@@ -444,11 +462,31 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     setIsPasswordVisible((current) => !current);
   }, []);
 
+  const handleHostChange = useCallback((next: string) => {
+    hostRef.current = next;
+  }, []);
+
+  const handlePortChange = useCallback((next: string) => {
+    portRef.current = next;
+  }, []);
+
+  const handlePasswordChange = useCallback((next: string) => {
+    passwordRef.current = next;
+  }, []);
+
   const handleToggleAdvanced = useCallback(() => {
     if (!isAdvancedOpen) {
       try {
         setAdvancedUri(
-          buildConnectionUriFromDraft({ host, port, useTls, password }, connectionCopy),
+          buildConnectionUriFromDraft(
+            {
+              host: hostRef.current,
+              port: portRef.current,
+              useTls,
+              password: passwordRef.current,
+            },
+            connectionCopy,
+          ),
         );
       } catch {
         setAdvancedUri("");
@@ -460,17 +498,17 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
 
     try {
       const next = draftFromConnectionUri(advancedUri);
-      setHost(next.host);
-      setPort(next.port);
+      hostRef.current = next.host;
+      portRef.current = next.port;
+      passwordRef.current = next.password;
       setUseTls(next.useTls);
-      setPassword(next.password);
       setErrorMessage("");
       bumpInputResetKey();
     } catch {
       setErrorMessage("");
     }
     setIsAdvancedOpen(false);
-  }, [advancedUri, connectionCopy, host, isAdvancedOpen, password, port, useTls]);
+  }, [advancedUri, connectionCopy, isAdvancedOpen, useTls]);
 
   const AdvancedIcon = isAdvancedOpen ? ChevronDown : ChevronRight;
   const PasswordIcon = isPasswordVisible ? EyeOff : Eye;
@@ -488,13 +526,13 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         <View style={hostFieldStyle}>
           <Text style={styles.label}>{t("host.host")}</Text>
           <AdaptiveTextInput
+            ref={hostInputRef}
             testID="direct-host-input"
             nativeID="direct-host-input"
             accessibilityLabel={t("host.host")}
-            initialValue={host}
+            initialValue={hostRef.current}
             resetKey={`direct-host-${inputResetKey}`}
-            value={host}
-            onChangeText={setHost}
+            onChangeText={handleHostChange}
             placeholder="localhost"
             placeholderTextColor={theme.colors.foregroundMuted}
             style={styles.input}
@@ -508,13 +546,13 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         <View style={portFieldStyle}>
           <Text style={styles.label}>{t("host.port")}</Text>
           <AdaptiveTextInput
+            ref={portInputRef}
             testID="direct-port-input"
             nativeID="direct-port-input"
             accessibilityLabel={t("host.port")}
-            initialValue={port}
+            initialValue={portRef.current}
             resetKey={`direct-port-${inputResetKey}`}
-            value={port}
-            onChangeText={setPort}
+            onChangeText={handlePortChange}
             placeholder="6767"
             placeholderTextColor={theme.colors.foregroundMuted}
             style={styles.input}
@@ -551,13 +589,13 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         <Text style={styles.label}>{t("host.password")}</Text>
         <View style={styles.passwordRow}>
           <AdaptiveTextInput
+            ref={passwordInputRef}
             testID="direct-password-input"
             nativeID="direct-password-input"
             accessibilityLabel={t("host.password")}
-            initialValue={password}
+            initialValue={passwordRef.current}
             resetKey={`direct-password-${inputResetKey}`}
-            value={password}
-            onChangeText={setPassword}
+            onChangeText={handlePasswordChange}
             placeholder={t("host.optional")}
             placeholderTextColor={theme.colors.foregroundMuted}
             style={passwordInputStyle}
@@ -602,7 +640,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             accessibilityLabel={t("host.connectionUri")}
             initialValue={advancedUri}
             resetKey={`direct-host-uri-${inputResetKey}`}
-            value={advancedUri}
             onChangeText={setAdvancedUri}
             placeholder="tcp://localhost:6767?ssl=true"
             placeholderTextColor={theme.colors.foregroundMuted}

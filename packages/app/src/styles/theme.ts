@@ -227,21 +227,53 @@ const lightSemanticColors = {
 const chisakiSemanticColors = {
   ...lightSemanticColors,
 
-  scrollbarHandle: "#dc2626",
+  surface0: "#fff8f8",
+  surface1: "#fffafa",
+  surface2: "#f8f0f1",
+  surface3: "#eadadd",
+  surface4: "#d7a6ad",
+  surfaceDiffEmpty: "#fbf3f4",
+  surfaceSidebar: "#f3eaec",
+  surfaceSidebarHover: "#eadadd",
+  surfaceWorkspace: "#fffafa",
 
-  border: "#dc2626",
-  borderAccent: "#dc2626",
+  foreground: "#22191b",
+  foregroundMuted: "#77686b",
 
-  accentBorder: "#dc2626",
-  ring: "#dc2626",
+  scrollbarHandle: "#b65f69",
+
+  border: "#eadadd",
+  borderAccent: "#d7a6ad",
+
+  accent: "#b51d2a",
+  accentBright: "#e04755",
+  accentForeground: "#ffffff",
+
+  background: "#fff8f8",
+  popover: "#fffafa",
+  popoverForeground: "#22191b",
+  primary: "#22191b",
+  primaryForeground: "#fffafa",
+  secondary: "#f8f0f1",
+  secondaryForeground: "#22191b",
+  muted: "#f8f0f1",
+  mutedForeground: "#77686b",
+  accentBorder: "#d7a6ad",
+  input: "#f8f0f1",
+  ring: "#b51d2a",
 
   terminal: {
     ...lightSemanticColors.terminal,
-    cursor: "#dc2626",
+    background: "#fffafa",
+    foreground: "#22191b",
+    cursor: "#b51d2a",
     cursorAccent: "#ffffff",
-    selectionBackground: "rgba(220, 38, 38, 0.16)",
-    red: "#dc2626",
-    brightRed: "#ef4444",
+    selectionBackground: "rgba(181, 29, 42, 0.18)",
+    selectionForeground: "#22191b",
+    black: "#22191b",
+    red: "#b51d2a",
+    brightBlack: "#77686b",
+    brightRed: "#e04755",
   },
 } as const;
 
@@ -816,7 +848,7 @@ export const THEME_SWATCHES: Record<ThemeName, string> = {
   claude: "#D97757",
   ghostty: "#8caaee",
   "liquid-neon": "#ffffff",
-  chisaki: "#dc2626",
+  chisaki: "#b51d2a",
 };
 
 export const THEME_PREVIEWS: Record<
@@ -873,7 +905,7 @@ export const THEME_PREVIEWS: Record<
   chisaki: {
     surface: chisakiSemanticColors.surface0,
     border: chisakiSemanticColors.borderAccent,
-    line: chisakiSemanticColors.border,
-    accent: chisakiSemanticColors.borderAccent,
+    line: chisakiSemanticColors.surface3,
+    accent: chisakiSemanticColors.accent,
   },
 };

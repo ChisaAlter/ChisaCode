@@ -13,9 +13,12 @@ vi.mock("electron", () => ({
 import {
   getSkillsStatus,
   installSkills,
+  installUserSkillsFromLocalDirectory,
+  normalizeGitHubSkillSource,
   CHISACODE_SKILL_NAMES,
   type SkillTargets,
   uninstallSkills,
+  uninstallUserInstalledSkills,
   updateSkills,
 } from "./operations";
 
@@ -301,5 +304,139 @@ describe("uninstallSkills", () => {
     ]) {
       expect(await pathExists(path.join(dir, "chisacode-chat"))).toBe(false);
     }
+  });
+});
+
+describe("user skill installation", () => {
+  let sandbox: Sandbox;
+
+  beforeEach(async () => {
+    sandbox = await makeSandbox();
+  });
+
+  afterEach(async () => {
+    await fs.rm(sandbox.root, { recursive: true, force: true });
+  });
+
+  it("installs a local single skill directory into all supported user skill roots", async () => {
+    const localSkillDir = path.join(sandbox.root, "local", "review");
+    await writeFiles(localSkillDir, {
+      "SKILL.md": "---\nname: review\n---\nReview code.",
+      "references/checklist.md": "read this",
+    });
+
+    const result = await installUserSkillsFromLocalDirectory(localSkillDir, {
+      targets: sandbox.targets,
+      installedAt: "2026-06-18T00:00:00.000Z",
+    });
+
+    expect(result.skillNames).toEqual(["review"]);
+    expect(result.installedSource).toMatchObject({
+      type: "local",
+      localPath: localSkillDir,
+      skillNames: ["review"],
+    });
+    for (const dir of [
+      sandbox.targets.agentsDir,
+      sandbox.targets.codexDir,
+      sandbox.targets.claudeDir,
+    ]) {
+      expect(await fs.readFile(path.join(dir, "review", "SKILL.md"), "utf-8")).toContain(
+        "Review code.",
+      );
+      expect(
+        await fs.readFile(path.join(dir, "review", "references", "checklist.md"), "utf-8"),
+      ).toBe("read this");
+    }
+  });
+
+  it("installs every skill directory found under a local parent directory", async () => {
+    const parentDir = path.join(sandbox.root, "skill-pack");
+    await writeFiles(path.join(parentDir, "review"), { "SKILL.md": "review" });
+    await writeFiles(path.join(parentDir, "security-review"), { "SKILL.md": "security" });
+    await writeFiles(path.join(parentDir, "notes"), { "README.md": "not a skill" });
+
+    const result = await installUserSkillsFromLocalDirectory(parentDir, {
+      targets: sandbox.targets,
+      installedAt: "2026-06-18T00:00:00.000Z",
+    });
+
+    expect(result.skillNames).toEqual(["review", "security-review"]);
+    expect(await pathExists(path.join(sandbox.targets.agentsDir, "review", "SKILL.md"))).toBe(true);
+    expect(
+      await pathExists(path.join(sandbox.targets.agentsDir, "security-review", "SKILL.md")),
+    ).toBe(true);
+    expect(await pathExists(path.join(sandbox.targets.agentsDir, "notes"))).toBe(false);
+  });
+
+  it("rejects a local directory that contains no SKILL.md files", async () => {
+    const parentDir = path.join(sandbox.root, "empty-pack");
+    await writeFiles(path.join(parentDir, "notes"), { "README.md": "not a skill" });
+
+    await expect(
+      installUserSkillsFromLocalDirectory(parentDir, {
+        targets: sandbox.targets,
+      }),
+    ).rejects.toThrow(/No skills found/i);
+  });
+
+  it("rejects duplicate skill names unless replace is enabled", async () => {
+    const localSkillDir = path.join(sandbox.root, "local", "review");
+    await writeFiles(localSkillDir, { "SKILL.md": "new review" });
+    await writeOnDiskSkill(sandbox.targets.agentsDir, "review", { "SKILL.md": "old review" });
+
+    await expect(
+      installUserSkillsFromLocalDirectory(localSkillDir, {
+        targets: sandbox.targets,
+      }),
+    ).rejects.toThrow(/already exists/i);
+
+    const result = await installUserSkillsFromLocalDirectory(localSkillDir, {
+      targets: sandbox.targets,
+      replace: true,
+    });
+
+    expect(result.skillNames).toEqual(["review"]);
+    expect(
+      await fs.readFile(path.join(sandbox.targets.agentsDir, "review", "SKILL.md"), "utf-8"),
+    ).toBe("new review");
+  });
+
+  it("normalizes supported GitHub slugs and URLs", () => {
+    expect(normalizeGitHubSkillSource("owner/repo")).toEqual({
+      owner: "owner",
+      repo: "repo",
+      id: "github:owner/repo",
+      url: "https://github.com/owner/repo",
+      archiveUrl: "https://codeload.github.com/owner/repo/tar.gz/HEAD",
+    });
+
+    expect(normalizeGitHubSkillSource("https://github.com/Owner/Repo.git")).toMatchObject({
+      owner: "Owner",
+      repo: "Repo",
+      id: "github:Owner/Repo",
+    });
+
+    expect(() => normalizeGitHubSkillSource("https://example.com/owner/repo")).toThrow(/GitHub/i);
+  });
+
+  it("uninstalls only skills recorded for a user installed source", async () => {
+    await writeOnDiskSkill(sandbox.targets.agentsDir, "review", { "SKILL.md": "review" });
+    await writeOnDiskSkill(sandbox.targets.codexDir, "review", { "SKILL.md": "review" });
+    await writeOnDiskSkill(sandbox.targets.claudeDir, "review", { "SKILL.md": "review" });
+    await writeOnDiskSkill(sandbox.targets.agentsDir, "project-skill", { "SKILL.md": "keep" });
+
+    await uninstallUserInstalledSkills(["review"], {
+      agentsDir: sandbox.targets.agentsDir,
+      claudeDir: sandbox.targets.claudeDir,
+      codexDir: sandbox.targets.codexDir,
+    });
+
+    expect(await pathExists(path.join(sandbox.targets.agentsDir, "review"))).toBe(false);
+    expect(await pathExists(path.join(sandbox.targets.codexDir, "review"))).toBe(false);
+    expect(await pathExists(path.join(sandbox.targets.claudeDir, "review"))).toBe(false);
+    expect(
+      await fs.readFile(path.join(sandbox.targets.agentsDir, "project-skill", "SKILL.md"), "utf-8"),
+    ).toBe("keep");
   });
 });

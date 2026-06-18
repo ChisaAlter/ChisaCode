@@ -456,6 +456,8 @@ export function buildHostNewWorkspaceRoute(
 export const SETTINGS_SECTION_SLUGS = [
   "general",
   "models",
+  "skills",
+  "mcp",
   "shortcuts",
   "integrations",
   "permissions",

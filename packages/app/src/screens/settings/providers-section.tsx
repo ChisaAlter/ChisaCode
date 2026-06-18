@@ -18,6 +18,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { ChevronRight, Download, RefreshCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -85,8 +86,8 @@ function ProviderRow({
   onPress,
   onToggleEnabled,
 }: ProviderRowProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const client = useHostRuntimeClient(serverId);
   const [toolingAction, setToolingAction] = useState<"install" | "update" | "reinstall" | null>(
     null,
@@ -167,10 +168,32 @@ function ProviderRow({
       settingsStyles.row,
       !isFirst && settingsStyles.rowBorder,
       styles.row,
+      isCompact && styles.compactRow,
       hovered && styles.rowHovered,
       pressed && styles.rowPressed,
     ],
-    [isFirst],
+    [isFirst, isCompact],
+  );
+  const providerSwitch = (
+    <Switch
+      value={enabled}
+      onValueChange={handleToggleValueChange}
+      disabled={isToggling}
+      accessibilityLabel={t("providers.enableLabel", { provider: def.label })}
+    />
+  );
+  const maintenanceActions = (
+    <ProviderMaintenanceActions
+      providerLabel={def.label}
+      compact={isCompact}
+      canInstall={canInstall && !canUpdate}
+      canUpdate={canUpdate}
+      canReinstall={canReinstall}
+      toolingAction={toolingAction}
+      onInstall={handleInstall}
+      onUpdate={handleUpdate}
+      onReinstall={handleReinstall}
+    />
   );
 
   return (
@@ -180,87 +203,162 @@ function ProviderRow({
       accessibilityRole="button"
       accessibilityLabel={t("providers.detailsLabel", { provider: def.label })}
     >
-      {({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
-        <>
-          <View style={styles.rowContent}>
-            <ChevronRight
-              size={theme.iconSize.sm}
-              color={hovered ? theme.colors.foreground : theme.colors.foregroundMuted}
-            />
-            <ProviderIcon size={theme.iconSize.md} color={theme.colors.foreground} />
-            <View style={styles.textColumn}>
-              <View style={styles.titleRow}>
-                <Text style={settingsStyles.rowTitle} numberOfLines={1}>
-                  {def.label}
-                </Text>
-                <Text style={styles.separator}>·</Text>
-                <StatusIndicator status={providerStatus} />
-              </View>
-              {providerError ? (
-                <Text style={styles.errorText} numberOfLines={3}>
-                  {providerError}
-                </Text>
-              ) : null}
+      {({ hovered }: PressableStateCallbackType & { hovered?: boolean }) =>
+        isCompact ? (
+          <>
+            <View style={styles.compactHeaderRow}>
+              <ProviderSummary
+                hovered={hovered}
+                label={def.label}
+                providerStatus={providerStatus}
+                providerError={providerError}
+                ProviderIcon={ProviderIcon}
+              />
+              {providerSwitch}
             </View>
-          </View>
-          <View style={styles.actionsRow}>
-            {canInstall && !canUpdate ? (
-              <Pressable
-                onPress={handleInstall}
-                disabled={toolingAction !== null}
-                accessibilityLabel={t("providers.install")}
-                style={styles.actionButton}
-              >
-                {toolingAction === "install" ? (
-                  <LoadingSpinner size={14} color={theme.colors.accent} />
-                ) : (
-                  <Download size={14} color={theme.colors.accent} />
-                )}
-                <Text style={styles.actionLabel}>{t("providers.install")}</Text>
-              </Pressable>
-            ) : null}
-            {canUpdate ? (
-              <Pressable
-                onPress={handleUpdate}
-                disabled={toolingAction !== null}
-                accessibilityLabel={t("providers.update")}
-                style={styles.actionButton}
-              >
-                {toolingAction === "update" ? (
-                  <LoadingSpinner size={14} color={theme.colors.accent} />
-                ) : (
-                  <RefreshCw size={14} color={theme.colors.accent} />
-                )}
-                <Text style={styles.actionLabel}>{t("providers.update")}</Text>
-              </Pressable>
-            ) : null}
-            {canReinstall ? (
-              <Pressable
-                onPress={handleReinstall}
-                disabled={toolingAction !== null}
-                accessibilityLabel={t("settings.integrations.reinstallAgentTool", {
-                  provider: def.label,
-                })}
-                style={styles.actionButton}
-              >
-                {toolingAction === "reinstall" ? (
-                  <LoadingSpinner size={14} color={theme.colors.accent} />
-                ) : (
-                  <RefreshCw size={14} color={theme.colors.accent} />
-                )}
-                <Text style={styles.actionLabel}>{t("settings.integrations.reinstall")}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <Switch
-            value={enabled}
-            onValueChange={handleToggleValueChange}
-            disabled={isToggling}
-            accessibilityLabel={t("providers.enableLabel", { provider: def.label })}
-          />
-        </>
-      )}
+            {maintenanceActions}
+          </>
+        ) : (
+          <>
+            <ProviderSummary
+              hovered={hovered}
+              label={def.label}
+              providerStatus={providerStatus}
+              providerError={providerError}
+              ProviderIcon={ProviderIcon}
+            />
+            {maintenanceActions}
+            {providerSwitch}
+          </>
+        )
+      }
     </Pressable>
+  );
+}
+
+function ProviderMaintenanceActions({
+  providerLabel,
+  compact,
+  canInstall,
+  canUpdate,
+  canReinstall,
+  toolingAction,
+  onInstall,
+  onUpdate,
+  onReinstall,
+}: {
+  providerLabel: string;
+  compact: boolean;
+  canInstall: boolean;
+  canUpdate: boolean;
+  canReinstall: boolean;
+  toolingAction: "install" | "update" | "reinstall" | null;
+  onInstall: (event: GestureResponderEvent) => void;
+  onUpdate: (event: GestureResponderEvent) => void;
+  onReinstall: (event: GestureResponderEvent) => void;
+}) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const rowStyle = useMemo(
+    () => [styles.actionsRow, compact && styles.compactActionsRow],
+    [compact],
+  );
+  if (!canInstall && !canUpdate && !canReinstall) return null;
+  return (
+    <View style={rowStyle}>
+      {canInstall ? (
+        <Pressable
+          onPress={onInstall}
+          disabled={toolingAction !== null}
+          accessibilityLabel={t("providers.install")}
+          style={styles.actionButton}
+        >
+          {toolingAction === "install" ? (
+            <LoadingSpinner size={14} color={theme.colors.accent} />
+          ) : (
+            <Download size={14} color={theme.colors.accent} />
+          )}
+          <Text style={styles.actionLabel}>{t("providers.install")}</Text>
+        </Pressable>
+      ) : null}
+      {canUpdate ? (
+        <Pressable
+          onPress={onUpdate}
+          disabled={toolingAction !== null}
+          accessibilityLabel={t("providers.update")}
+          style={styles.actionButton}
+        >
+          {toolingAction === "update" ? (
+            <LoadingSpinner size={14} color={theme.colors.accent} />
+          ) : (
+            <RefreshCw size={14} color={theme.colors.accent} />
+          )}
+          <Text style={styles.actionLabel}>{t("providers.update")}</Text>
+        </Pressable>
+      ) : null}
+      {canReinstall ? (
+        <Pressable
+          onPress={onReinstall}
+          disabled={toolingAction !== null}
+          accessibilityLabel={t("settings.integrations.reinstallAgentTool", {
+            provider: providerLabel,
+          })}
+          style={styles.actionButton}
+        >
+          {toolingAction === "reinstall" ? (
+            <LoadingSpinner size={14} color={theme.colors.accent} />
+          ) : (
+            <RefreshCw size={14} color={theme.colors.accent} />
+          )}
+          <Text style={styles.actionLabel}>{t("settings.integrations.reinstall")}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function ProviderSummary({
+  hovered,
+  label,
+  providerStatus,
+  providerError,
+  ProviderIcon,
+}: {
+  hovered: boolean;
+  label: string;
+  providerStatus: ProviderStatus;
+  providerError: string | null;
+  ProviderIcon: ReturnType<typeof getProviderIcon>;
+}) {
+  const { theme } = useUnistyles();
+  const isCompact = useIsCompactFormFactor();
+  const titleRowStyle = useMemo(
+    () => [styles.titleRow, isCompact && styles.compactTitleRow],
+    [isCompact],
+  );
+  const titleStyle = useMemo(() => [settingsStyles.rowTitle, styles.providerTitle], []);
+  return (
+    <View style={styles.rowContent}>
+      <ChevronRight
+        size={theme.iconSize.sm}
+        color={hovered ? theme.colors.foreground : theme.colors.foregroundMuted}
+      />
+      <ProviderIcon size={theme.iconSize.md} color={theme.colors.foreground} />
+      <View style={styles.textColumn}>
+        <View style={titleRowStyle}>
+          <Text style={titleStyle} numberOfLines={1}>
+            {label}
+          </Text>
+          {!isCompact ? <Text style={styles.separator}>·</Text> : null}
+          <StatusIndicator status={providerStatus} compact={isCompact} />
+        </View>
+        {providerError ? (
+          <Text style={styles.errorText} numberOfLines={isCompact ? 4 : 3}>
+            {providerError}
+          </Text>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
@@ -277,16 +375,23 @@ function getDotColor(tone: StatusTone, theme: ReturnType<typeof useUnistyles>["t
   }
 }
 
-function StatusIndicator({ status }: { status: ProviderStatus }) {
+function StatusIndicator({
+  status,
+  compact = false,
+}: {
+  status: ProviderStatus;
+  compact?: boolean;
+}) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const rowStyle = useMemo(() => [styles.statusRow, compact && styles.compactStatusRow], [compact]);
   const dotStyle = useMemo(
     () => [styles.statusDot, { backgroundColor: getDotColor(status.tone, theme) }],
     [status.tone, theme],
   );
 
   return (
-    <View style={styles.statusRow}>
+    <View style={rowStyle}>
       {status.tone === "loading" ? (
         <LoadingSpinner size={10} color={theme.colors.foregroundMuted} />
       ) : (
@@ -411,6 +516,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     minHeight: 56,
   },
+  compactRow: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    gap: theme.spacing[3],
+    minHeight: 0,
+  },
   rowHovered: {
     backgroundColor: theme.colors.surface2,
   },
@@ -422,6 +534,14 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+    minWidth: 0,
+  },
+  compactHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+    minWidth: 0,
   },
   textColumn: {
     flex: 1,
@@ -431,11 +551,26 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+    minWidth: 0,
+  },
+  compactTitleRow: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: theme.spacing[1],
+  },
+  providerTitle: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   statusRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
+    minWidth: 0,
+  },
+  compactStatusRow: {
+    flexWrap: "wrap",
+    alignItems: "center",
   },
   statusDot: {
     width: 8,
@@ -460,10 +595,15 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  compactActionsRow: {
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+  },
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+    minHeight: 40,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.lg,

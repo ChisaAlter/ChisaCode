@@ -490,6 +490,37 @@ export interface AgentSlashCommand {
   argumentHint: string;
 }
 
+export type AgentSkillSourceType =
+  | "project"
+  | "agents-home"
+  | "codex-home"
+  | "claude-home"
+  | "bundled"
+  | "unknown";
+
+export interface AgentSkillSource {
+  id: string;
+  type: AgentSkillSourceType;
+  path: string;
+  installedSourceId?: string;
+  removable?: boolean;
+}
+
+export interface AgentSkill {
+  name: string;
+  description?: string;
+  sources: AgentSkillSource[];
+  errors?: string[];
+}
+
+export interface AgentSkillEffectivePolicy {
+  globalDisabledSkillNames?: string[];
+  providerEnabledSkillNames?: string[];
+  providerDisabledSkillNames?: string[];
+  agentEnabledSkillNames?: string[];
+  agentDisabledSkillNames?: string[];
+}
+
 export interface ListPersistedAgentsOptions {
   limit?: number;
   /**
@@ -589,6 +620,7 @@ export interface AgentSession {
   interrupt(): Promise<void>;
   close(): Promise<void>;
   listCommands?(): Promise<AgentSlashCommand[]>;
+  listSkills?(): Promise<AgentSkill[]>;
   setModel?(modelId: string | null): Promise<void>;
   setThinkingOption?(thinkingOptionId: string | null): Promise<void>;
   setFeature?(featureId: string, value: unknown): Promise<void>;
@@ -636,6 +668,7 @@ export interface AgentClient {
   resolveCreateConfig?(input: ResolveAgentCreateConfigInput): ResolveAgentCreateConfigResult;
   isCreateConfigUnattended?(input: AgentCreateConfigUnattendedInput): boolean;
   listCommands?(config: AgentSessionConfig): Promise<AgentSlashCommand[]>;
+  listSkills?(config: AgentSessionConfig): Promise<AgentSkill[]>;
   listFeatures?(config: AgentSessionConfig): Promise<AgentFeature[]>;
   listPersistedAgents?(options?: ListPersistedAgentsOptions): Promise<PersistedAgentDescriptor[]>;
   /**

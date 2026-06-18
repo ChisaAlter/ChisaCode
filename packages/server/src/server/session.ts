@@ -20,6 +20,12 @@ import {
   type FileExplorerRequest,
   type FileDownloadTokenRequest,
   type GitSetupOptions,
+  type AgentSkillsPolicyPatchRequest,
+  type AgentSkillsInstallRequest,
+  type AgentSkillsUninstallRequest,
+  type AgentMcpServersUpsertRequest,
+  type AgentMcpServersPolicyPatchRequest,
+  type AgentMcpServersDeleteRequest,
   type CheckoutRenameBranchRequest,
   type StartWorkspaceScriptRequest,
   type CloseItemsRequest,
@@ -96,6 +102,18 @@ import type {
 } from "./workspace-git-service.js";
 
 import { AgentManager } from "./agent/agent-manager.js";
+import {
+  installUserSkillsFromGitHub,
+  installUserSkillsFromLocalDirectory,
+  listManagedSkills,
+  uninstallUserInstalledSkills,
+} from "./agent/skills-management.js";
+import {
+  deleteManagedMcpServer,
+  listManagedMcpServers,
+  patchManagedMcpServerPolicy,
+  upsertManagedMcpServer,
+} from "./agent/mcp-server-management.js";
 import { ProviderSnapshotManager, resolveSnapshotCwd } from "./agent/provider-snapshot-manager.js";
 import type {
   AgentManagerEvent,
@@ -2226,6 +2244,30 @@ export class Session {
     switch (msg.type) {
       case "list_commands_request":
         await this.handleListCommandsRequest(msg);
+        return;
+      case "agent.skills.list.request":
+        await this.handleAgentSkillsListRequest(msg.requestId);
+        return;
+      case "agent.skills.policy.patch.request":
+        await this.handleAgentSkillsPolicyPatchRequest(msg);
+        return;
+      case "agent.skills.install.request":
+        await this.handleAgentSkillsInstallRequest(msg);
+        return;
+      case "agent.skills.uninstall.request":
+        await this.handleAgentSkillsUninstallRequest(msg);
+        return;
+      case "agent.mcp_servers.list.request":
+        await this.handleAgentMcpServersListRequest(msg.requestId);
+        return;
+      case "agent.mcp_servers.upsert.request":
+        await this.handleAgentMcpServersUpsertRequest(msg);
+        return;
+      case "agent.mcp_servers.policy.patch.request":
+        await this.handleAgentMcpServersPolicyPatchRequest(msg);
+        return;
+      case "agent.mcp_servers.delete.request":
+        await this.handleAgentMcpServersDeleteRequest(msg);
         return;
       case "register_push_token":
         this.handleRegisterPushToken(msg.token);
@@ -4571,6 +4613,325 @@ export class Session {
   private handleRegisterPushToken(token: string): void {
     this.pushTokenStore.addToken(token);
     this.sessionLogger.info("Registered push token");
+  }
+
+  private async handleAgentSkillsListRequest(requestId: string): Promise<void> {
+    try {
+      const config = this.daemonConfigStore.get();
+      const agents = this.agentManager
+        .listAgents()
+        .filter((agent) => !agent.internal)
+        .map((agent) => ({
+          id: agent.id,
+          provider: agent.config.provider,
+          title: agent.config.title ?? null,
+          lastStatus: agent.lifecycle,
+          session: agent.session,
+        }));
+      const result = await listManagedSkills(agents, config);
+      this.emit({
+        type: "agent.skills.list.response",
+        payload: {
+          requestId,
+          scopes: result.scopes,
+          skills: result.skills,
+          policy: config.skills,
+          errors: result.errors,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.skills.list.response",
+        payload: {
+          requestId,
+          scopes: [{ type: "global", label: "Global" }],
+          skills: [],
+          policy: this.daemonConfigStore.get().skills,
+          errors: [getErrorMessage(error)],
+        },
+      });
+    }
+  }
+
+  private async handleAgentSkillsPolicyPatchRequest(
+    msg: AgentSkillsPolicyPatchRequest,
+  ): Promise<void> {
+    try {
+      const current = this.daemonConfigStore.get();
+      const nextSkills = {
+        ...current.skills,
+        global: { ...current.skills.global },
+        providers: { ...current.skills.providers },
+        agents: { ...current.skills.agents },
+        installedSources: { ...current.skills.installedSources },
+      };
+
+      if (msg.scope.type === "global") {
+        nextSkills.global = {
+          ...nextSkills.global,
+          disabledSkillNames: msg.policy.disabledSkillNames ?? nextSkills.global.disabledSkillNames,
+        };
+      } else if (msg.scope.type === "provider") {
+        const existing = nextSkills.providers[msg.scope.provider] ?? {
+          enabledSkillNames: [],
+          disabledSkillNames: [],
+        };
+        nextSkills.providers[msg.scope.provider] = {
+          ...existing,
+          enabledSkillNames: msg.policy.enabledSkillNames ?? existing.enabledSkillNames,
+          disabledSkillNames: msg.policy.disabledSkillNames ?? existing.disabledSkillNames,
+        };
+      } else {
+        const existing = nextSkills.agents[msg.scope.agentId] ?? {
+          enabledSkillNames: [],
+          disabledSkillNames: [],
+        };
+        nextSkills.agents[msg.scope.agentId] = {
+          ...existing,
+          enabledSkillNames: msg.policy.enabledSkillNames ?? existing.enabledSkillNames,
+          disabledSkillNames: msg.policy.disabledSkillNames ?? existing.disabledSkillNames,
+        };
+      }
+
+      const next = this.daemonConfigStore.replace({ ...current, skills: nextSkills });
+      this.emit({
+        type: "agent.skills.policy.patch.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: true,
+          policy: next.skills,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.skills.policy.patch.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: false,
+          policy: this.daemonConfigStore.get().skills,
+          error: getErrorMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleAgentSkillsInstallRequest(msg: AgentSkillsInstallRequest): Promise<void> {
+    try {
+      const result =
+        msg.source.type === "github"
+          ? await installUserSkillsFromGitHub(msg.source.value, { replace: msg.replace })
+          : await installUserSkillsFromLocalDirectory(expandTilde(msg.source.path), {
+              replace: msg.replace,
+            });
+      const current = this.daemonConfigStore.get();
+      const next = this.daemonConfigStore.replace({
+        ...current,
+        skills: {
+          ...current.skills,
+          installedSources: {
+            ...current.skills.installedSources,
+            [result.installedSource.id]: result.installedSource,
+          },
+        },
+      });
+      this.emit({
+        type: "agent.skills.install.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: true,
+          installedSource: next.skills.installedSources[result.installedSource.id] ?? null,
+          skills: result.skillNames,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.skills.install.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: false,
+          installedSource: null,
+          skills: [],
+          error: getErrorMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleAgentSkillsUninstallRequest(msg: AgentSkillsUninstallRequest): Promise<void> {
+    try {
+      const current = this.daemonConfigStore.get();
+      const source = current.skills.installedSources[msg.sourceId];
+      if (!source) {
+        throw new Error(`Installed skill source not found: ${msg.sourceId}`);
+      }
+      const removedSkillNames = await uninstallUserInstalledSkills(source.skillNames);
+      const { [msg.sourceId]: _removed, ...installedSources } = current.skills.installedSources;
+      const next = this.daemonConfigStore.replace({
+        ...current,
+        skills: {
+          ...current.skills,
+          installedSources,
+        },
+      });
+      this.emit({
+        type: "agent.skills.uninstall.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: true,
+          removedSkillNames,
+          policy: next.skills,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.skills.uninstall.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: false,
+          removedSkillNames: [],
+          policy: this.daemonConfigStore.get().skills,
+          error: getErrorMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleAgentMcpServersListRequest(requestId: string): Promise<void> {
+    try {
+      const config = this.daemonConfigStore.get();
+      const agents = this.agentManager
+        .listAgents()
+        .filter((agent) => !agent.internal)
+        .map((agent) => ({
+          id: agent.id,
+          provider: agent.config.provider,
+          title: agent.config.title ?? null,
+          lastStatus: agent.lifecycle,
+        }));
+      const result = listManagedMcpServers(agents, config, { mcpBaseUrl: this.mcpBaseUrl });
+      this.emit({
+        type: "agent.mcp_servers.list.response",
+        payload: {
+          requestId,
+          scopes: result.scopes,
+          servers: result.servers,
+          policy: config.mcpServers,
+          errors: result.errors,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.mcp_servers.list.response",
+        payload: {
+          requestId,
+          scopes: [{ type: "global", label: "Global" }],
+          servers: [],
+          policy: this.daemonConfigStore.get().mcpServers,
+          errors: [getErrorMessage(error)],
+        },
+      });
+    }
+  }
+
+  private async handleAgentMcpServersUpsertRequest(
+    msg: AgentMcpServersUpsertRequest,
+  ): Promise<void> {
+    try {
+      const current = this.daemonConfigStore.get();
+      const next = this.daemonConfigStore.replace(
+        upsertManagedMcpServer(current, msg.server, msg.originalName),
+      );
+      const savedServer =
+        next.mcpServers.servers[msg.server.name.trim()] ??
+        Object.values(next.mcpServers.servers).find(
+          (server) => server.name === msg.server.name.trim(),
+        ) ??
+        null;
+      this.emit({
+        type: "agent.mcp_servers.upsert.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: true,
+          server: savedServer,
+          policy: next.mcpServers,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.mcp_servers.upsert.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: false,
+          server: null,
+          policy: this.daemonConfigStore.get().mcpServers,
+          error: getErrorMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleAgentMcpServersPolicyPatchRequest(
+    msg: AgentMcpServersPolicyPatchRequest,
+  ): Promise<void> {
+    try {
+      const current = this.daemonConfigStore.get();
+      const next = this.daemonConfigStore.replace(
+        patchManagedMcpServerPolicy(current, msg.scope, msg.policy),
+      );
+      this.emit({
+        type: "agent.mcp_servers.policy.patch.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: true,
+          policy: next.mcpServers,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.mcp_servers.policy.patch.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: false,
+          policy: this.daemonConfigStore.get().mcpServers,
+          error: getErrorMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleAgentMcpServersDeleteRequest(
+    msg: AgentMcpServersDeleteRequest,
+  ): Promise<void> {
+    try {
+      const current = this.daemonConfigStore.get();
+      const next = this.daemonConfigStore.replace(deleteManagedMcpServer(current, msg.name));
+      this.emit({
+        type: "agent.mcp_servers.delete.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: true,
+          removedServerName: msg.name,
+          policy: next.mcpServers,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.mcp_servers.delete.response",
+        payload: {
+          requestId: msg.requestId,
+          ok: false,
+          removedServerName: null,
+          policy: this.daemonConfigStore.get().mcpServers,
+          error: getErrorMessage(error),
+        },
+      });
+    }
   }
 
   /**

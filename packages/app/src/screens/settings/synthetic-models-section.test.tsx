@@ -257,7 +257,7 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     visible,
     children,
     testID,
-    desktopSurface = "glass",
+    desktopSurface = "plain",
   }: {
     header: { title: string; subtitle?: React.ReactNode };
     visible: boolean;
@@ -401,6 +401,8 @@ function makeConfig(): MutableDaemonConfig {
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,
     appendSystemPrompt: "",
+    skills: { global: { disabledSkillNames: [] }, providers: {}, agents: {}, installedSources: {} },
+    mcpServers: { servers: {}, global: { disabledServerNames: [] }, providers: {}, agents: {} },
   };
 }
 
@@ -664,7 +666,7 @@ describe("SyntheticModelsSection", () => {
     ]);
   });
 
-  it("keeps MoA sheets on the glass desktop surface", () => {
+  it("keeps MoA sheets on the plain themed desktop surface", () => {
     act(() => {
       root.render(<SyntheticModelsSection serverId="server-1" />);
     });
@@ -682,7 +684,7 @@ describe("SyntheticModelsSection", () => {
       container
         .querySelector('[data-testid="synthetic-model-moa-tester-sheet"]')
         ?.getAttribute("data-desktop-surface"),
-    ).toBe("glass");
+    ).toBe("plain");
   });
 
   it("keeps vertical MoA field groups from using row flex sizing", () => {

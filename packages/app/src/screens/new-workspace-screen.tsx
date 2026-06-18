@@ -40,18 +40,22 @@ import { generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
+import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import { pickDirectory } from "@/desktop/pick-directory";
 import { shortenPath } from "@/utils/shorten-path";
-import { buildWorkingDirectorySuggestions } from "@/utils/working-directory-suggestions";
 import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload } from "@/composer/types";
 import type { AgentAttachment, GitHubSearchItem } from "@chisacode/protocol/messages";
 import type { CreateChisaCodeWorktreeInput } from "@chisacode/client/internal/daemon-client";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
+import {
+  buildNewWorkspaceDirectoryOptions,
+  NEW_WORKSPACE_ADD_PROJECT_OPTION_ID,
+} from "./new-workspace-directory-options";
 import { resolveNewWorkspaceDraftReset } from "./new-workspace-draft-reset";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
@@ -61,6 +65,8 @@ import {
 } from "./new-workspace-picker-item";
 import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
 import { useTranslation } from "react-i18next";
+
+const DRAFT_COMPOSER_HORIZONTAL_OFFSET = 14;
 
 function resolveCheckoutRequest(
   selectedItem: PickerItem | null,
@@ -368,26 +374,24 @@ function NewWorkspaceComposerFooter({
           iconColor={iconColor}
           iconSize={iconSize}
         />
-        {!isLocalDaemon ? (
-          <Combobox
-            options={directoryOptions}
-            value={normalizedSelectedDirectory ?? ""}
-            onSelect={handleSelectDirectoryOption}
-            searchable
-            allowCustomValue
-            customValuePrefix="使用"
-            customValueDescription="使用这个工作目录"
-            customValueKind="directory"
-            searchPlaceholder="搜索或输入工作目录"
-            title="工作目录"
-            open={directoryPickerOpen}
-            onOpenChange={handleDirectoryPickerOpenChange}
-            onSearchQueryChange={setDirectorySearchQuery}
-            desktopPlacement="bottom-start"
-            anchorRef={directoryAnchorRef}
-            emptyText="没有匹配的目录"
-          />
-        ) : null}
+        <Combobox
+          options={directoryOptions}
+          value={normalizedSelectedDirectory ?? ""}
+          onSelect={handleSelectDirectoryOption}
+          searchable
+          allowCustomValue={!isLocalDaemon}
+          customValuePrefix="使用"
+          customValueDescription="使用这个工作目录"
+          customValueKind="directory"
+          searchPlaceholder={isLocalDaemon ? "搜索项目" : "搜索或输入工作目录"}
+          title="工作目录"
+          open={directoryPickerOpen}
+          onOpenChange={handleDirectoryPickerOpenChange}
+          onSearchQueryChange={setDirectorySearchQuery}
+          desktopPlacement="bottom-start"
+          anchorRef={directoryAnchorRef}
+          emptyText="没有匹配的目录"
+        />
       </View>
       <View>
         <RefPickerTrigger
@@ -759,23 +763,17 @@ function useNewWorkspaceDirectoryPicker(input: {
   });
 
   const directoryOptions = useMemo<ComboboxOptionType[]>(() => {
-    const suggestions = buildWorkingDirectorySuggestions({
+    return buildNewWorkspaceDirectoryOptions({
       recommendedPaths,
       serverPaths: directorySuggestionsQuery.data ?? [],
       query: directorySearchQuery,
+      selectedDirectory: normalizedSelectedDirectory,
+      canPickLocalDirectory: isLocalDaemon,
     });
-    const selected = normalizedSelectedDirectory;
-    const withSelected =
-      selected && !suggestions.includes(selected) ? [selected, ...suggestions] : suggestions;
-    return withSelected.map((path) => ({
-      id: path,
-      label: shortenPath(path),
-      description: path,
-      kind: "directory",
-    }));
   }, [
     directorySearchQuery,
     directorySuggestionsQuery.data,
+    isLocalDaemon,
     normalizedSelectedDirectory,
     recommendedPaths,
   ]);
@@ -784,10 +782,10 @@ function useNewWorkspaceDirectoryPicker(input: {
     if (isPending) {
       return;
     }
-    if (!isLocalDaemon) {
-      setDirectoryPickerOpen(true);
-      return;
-    }
+    setDirectoryPickerOpen(true);
+  }, [isPending]);
+
+  const handleAddLocalProject = useCallback(() => {
     void (async () => {
       try {
         const path = await pickDirectory();
@@ -800,10 +798,16 @@ function useNewWorkspaceDirectoryPicker(input: {
         onError(toErrorMessage(error));
       }
     })();
-  }, [isLocalDaemon, isPending, onDirectorySelected, onError]);
+  }, [onDirectorySelected, onError]);
 
   const handleSelectDirectoryOption = useCallback(
     (directory: string) => {
+      if (directory === NEW_WORKSPACE_ADD_PROJECT_OPTION_ID) {
+        handleAddLocalProject();
+        setDirectoryPickerOpen(false);
+        setDirectorySearchQuery("");
+        return;
+      }
       const trimmed = directory.trim();
       if (!trimmed) {
         return;
@@ -812,7 +816,7 @@ function useNewWorkspaceDirectoryPicker(input: {
       setDirectoryPickerOpen(false);
       setDirectorySearchQuery("");
     },
-    [onDirectorySelected],
+    [handleAddLocalProject, onDirectorySelected],
   );
 
   const handleDirectoryPickerOpenChange = useCallback((nextOpen: boolean) => {
@@ -902,6 +906,7 @@ export function NewWorkspaceScreen({
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
+  const isAgentListOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact }));
   const toast = useToast();
   const openProject = useOpenProject(serverId);
   const mergeWorkspaces = useSessionStore((state) => state.mergeWorkspaces);
@@ -1440,7 +1445,7 @@ export function NewWorkspaceScreen({
         <ScreenHeader
           left={
             <>
-              <SidebarMenuToggle />
+              {(isCompact || isAgentListOpen) && <SidebarMenuToggle />}
               <View style={styles.headerTitleContainer}>
                 <Text style={styles.headerTitle} numberOfLines={1}>
                   {t("workspace.newWorkspace")}
@@ -1457,6 +1462,7 @@ export function NewWorkspaceScreen({
         <View style={contentStyle}>
           <TitlebarDragRegion />
           <View style={styles.centered}>
+            <Text style={styles.draftTitle}>开始使用ChisaCode</Text>
             <Composer
               agentId={`new-workspace:${serverId}:${sourceDirectory}`}
               serverId={serverId}
@@ -1479,6 +1485,7 @@ export function NewWorkspaceScreen({
               agentControls={agentControlsWithDisabled}
               onAddImages={handleAddImagesCallback}
               footer={composerFooter}
+              inputWrapperStyle={styles.draftComposerInputWrapper}
             />
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
             <View style={styles.cardsRow}>
@@ -1520,6 +1527,20 @@ const styles = StyleSheet.create((theme) => ({
   centered: {
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
+  },
+  draftTitle: {
+    marginBottom: theme.spacing[4],
+    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize["3xl"],
+    fontWeight: "500",
+    lineHeight: 34,
+    textAlign: "center",
+  },
+  draftComposerInputWrapper: {
+    borderWidth: 0,
+    ...theme.shadow.lg,
   },
   headerLeft: {
     gap: theme.spacing[2],
@@ -1552,8 +1573,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   cardsRow: {
     marginTop: theme.spacing[6],
+    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
     flexDirection: "row",
     flexWrap: "wrap",
+    justifyContent: "flex-start",
     gap: theme.spacing[3],
   },
   importCard: {

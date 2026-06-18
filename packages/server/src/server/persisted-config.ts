@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import {
+  McpServerManagementConfigSchema,
+  SkillManagementConfigSchema,
+} from "@chisacode/protocol/messages";
 
 import {
   AgentProviderRuntimeSettingsMapSchema,
@@ -221,6 +225,8 @@ export const PersistedConfigSchema = z
           .optional(),
         autoArchiveAfterMerge: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),
+        skills: SkillManagementConfigSchema.optional(),
+        mcpServers: McpServerManagementConfigSchema.optional(),
         cors: z
           .object({
             allowedOrigins: z.array(z.string()).optional(),

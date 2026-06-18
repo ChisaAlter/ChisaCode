@@ -12,7 +12,7 @@ import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 
-const { theme } = vi.hoisted(() => ({
+const { theme, compactState } = vi.hoisted(() => ({
   theme: {
     spacing: { 1: 4, 1.5: 6, 2: 8, 3: 12, 4: 16, 6: 24 },
     borderWidth: { 1: 1 },
@@ -31,6 +31,9 @@ const { theme } = vi.hoisted(() => ({
       border: "#444",
       borderAccent: "#555",
     },
+  },
+  compactState: {
+    value: false,
   },
 }));
 
@@ -57,7 +60,15 @@ vi.mock("react-native-unistyles", () => ({
 }));
 
 vi.mock("@/constants/layout", () => ({
-  useIsCompactFormFactor: () => false,
+  useIsCompactFormFactor: () => compactState.value,
+}));
+
+vi.mock("@gorhom/bottom-sheet", () => ({
+  BottomSheetScrollView: ({ children, testID }: { children?: ReactNode; testID?: string }) => (
+    <div data-bottom-sheet-scroll="true" data-testid={testID}>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/provider-icons", () => ({
@@ -291,6 +302,7 @@ function createManyProviderSessionEntries(count: number): FetchRecentProviderSes
 describe("ImportSessionSheet", () => {
   afterEach(() => {
     cleanup();
+    compactState.value = false;
     vi.clearAllMocks();
   });
 
@@ -722,6 +734,31 @@ describe("ImportSessionSheet", () => {
       "false",
     );
     expect(screen.getByTestId("import-session-results-scroll")).toBeTruthy();
+  });
+
+  it("uses the bottom-sheet scroll container on compact devices so long agent lists can scroll", async () => {
+    compactState.value = true;
+    const entries = createManyProviderSessionEntries(20);
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-claude",
+      entries,
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findByText("Session 19");
+    expect(
+      screen.getByTestId("import-session-results-scroll").getAttribute("data-bottom-sheet-scroll"),
+    ).toBe("true");
   });
 
   it("keeps the provider filter strip to one row when several agents are available", async () => {

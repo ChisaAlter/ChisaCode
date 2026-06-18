@@ -98,14 +98,18 @@ const styles = StyleSheet.create((theme) => ({
     maxHeight: "85%",
     flexShrink: 1,
     minHeight: 0,
-    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderRadius: theme.borderRadius.xl,
-    borderWidth: 1,
-    borderColor: theme.glass.enabled ? theme.glass.border : theme.colors.border,
+    overflow: "hidden",
+    ...theme.shadow.lg,
+  },
+  desktopGlassCard: {
+    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surface0,
+    borderWidth: theme.glass.enabled ? 1 : 0,
+    borderColor: theme.glass.border,
   },
   desktopPlainCard: {
-    backgroundColor: theme.colors.surface1,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   headerContainer: {
     borderBottomWidth: 1,
@@ -236,14 +240,14 @@ function SheetBackground({ style }: BottomSheetBackgroundProps) {
     () => [
       style,
       {
-        backgroundColor: theme.colors.surface1,
+        backgroundColor: theme.colors.surface0,
         borderTopLeftRadius: theme.borderRadius.xl,
         borderTopRightRadius: theme.borderRadius.xl,
       },
     ],
-    [style, theme.colors.surface1, theme.borderRadius.xl],
+    [style, theme.colors.surface0, theme.borderRadius.xl],
   );
-  return <GlassSurface variant="sheet" style={combinedStyle} />;
+  return <View style={combinedStyle} />;
 }
 
 export type AdaptiveTextInputProps = TextInputProps & {
@@ -451,7 +455,7 @@ export interface AdaptiveModalSheetProps {
   testID?: string;
   /** Override the max width of the desktop card. */
   desktopMaxWidth?: number;
-  /** Desktop-only surface treatment. Defaults to the glass sheet material. */
+  /** Desktop-only surface treatment. Focused task modals default to the plain themed surface. */
   desktopSurface?: "glass" | "plain";
   /** When provided, wraps the card content in a FileDropZone. */
   onFilesDropped?: (files: ImageAttachment[]) => void;
@@ -467,7 +471,7 @@ export function AdaptiveModalSheet({
   snapPoints,
   testID,
   desktopMaxWidth,
-  desktopSurface = "glass",
+  desktopSurface = "plain",
   onFilesDropped,
   scrollable = true,
 }: AdaptiveModalSheetProps) {
@@ -498,6 +502,10 @@ export function AdaptiveModalSheet({
   );
   const desktopPlainCardStyle = useMemo(
     () => [desktopCardStyle, styles.desktopPlainCard],
+    [desktopCardStyle],
+  );
+  const desktopGlassCardStyle = useMemo(
+    () => [desktopCardStyle, styles.desktopGlassCard],
     [desktopCardStyle],
   );
 
@@ -568,7 +576,7 @@ export function AdaptiveModalSheet({
         )}
       </View>
     ) : (
-      <GlassSurface variant="sheet" style={desktopCardStyle}>
+      <GlassSurface variant="sheet" style={desktopGlassCardStyle}>
         {onFilesDropped ? (
           <FileDropZone onFilesDropped={onFilesDropped}>{cardInner}</FileDropZone>
         ) : (

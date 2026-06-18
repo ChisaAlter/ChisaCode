@@ -91,6 +91,10 @@ export default defineConfig({
         find: "react-native",
         replacement: path.resolve(rootNodeModules, "react-native-web/dist/index.js"),
       },
+      {
+        find: /^react-native-svg$/,
+        replacement: path.resolve(__dirname, "test-stubs/react-native-svg-web.ts"),
+      },
       { find: "react", replacement: resolvePackageEntry("react") },
       {
         find: "react-dom",

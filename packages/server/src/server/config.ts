@@ -265,6 +265,10 @@ function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedCon
   return persisted.daemon?.appendSystemPrompt ?? "";
 }
 
+function resolveMcpServerManagementConfig(persisted: ReturnType<typeof loadPersistedConfig>) {
+  return persisted.daemon?.mcpServers;
+}
+
 function resolveStaticLoadConfigSettings(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
@@ -276,6 +280,8 @@ function resolveStaticLoadConfigSettings(
       cli?.mcpInjectIntoAgents ?? persisted.daemon?.mcp?.injectIntoAgents ?? false,
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
+    skills: persisted.daemon?.skills,
+    mcpServers: resolveMcpServerManagementConfig(persisted),
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
       parseHostnamesEnv(chisacodeEnv(env, "HOSTNAMES") ?? env.CHISACODE_ALLOWED_HOSTS),
@@ -301,6 +307,8 @@ export function loadConfig(
     mcpInjectIntoAgents,
     autoArchiveAfterMerge,
     appendSystemPrompt,
+    skills,
+    mcpServers,
     hostnames,
     appBaseUrl,
   } = resolveStaticLoadConfigSettings(env, options?.cli, persisted);
@@ -332,6 +340,8 @@ export function loadConfig(
     mcpInjectIntoAgents,
     autoArchiveAfterMerge,
     appendSystemPrompt,
+    skills,
+    mcpServers,
     mcpDebug: env.MCP_DEBUG === "1",
     isDev: resolveChisaCodeNodeEnv(env) === "development",
     agentStoragePath: path.join(chisacodeHome, "agents"),

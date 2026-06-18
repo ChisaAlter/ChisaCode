@@ -738,6 +738,7 @@ export function WorkspaceDraftAgentTab({
             commandDraftConfig={composerState.commandDraftConfig}
             agentControls={composerAgentControls}
             footer={composerFooter}
+            inputWrapperStyle={styles.composerInputWrapper}
           />
         </ReanimatedAnimated.View>
       </View>
@@ -771,6 +772,10 @@ const styles = StyleSheet.create((theme) => ({
   inputAreaWrapper: {
     width: "100%",
     backgroundColor: theme.colors.surface0,
+  },
+  composerInputWrapper: {
+    borderWidth: 0,
+    ...theme.shadow.sm,
   },
   importPillRow: {
     width: "100%",

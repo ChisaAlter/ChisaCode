@@ -8,6 +8,10 @@ import path from "node:path";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { Logger } from "pino";
+import type {
+  McpServerManagementConfig,
+  SkillManagementConfig,
+} from "@chisacode/protocol/messages";
 import { createBranchChangeRouteHandler } from "./script-route-branch-handler.js";
 
 export type ListenTarget =
@@ -98,6 +102,8 @@ import type { MimoSpeechProviderConfig } from "./speech/providers/mimo/config.js
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
+import { resolveEffectiveManagedMcpServers } from "./agent/mcp-server-management.js";
+import { resolveAgentSkillPolicy } from "./agent/skill-policy.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { rebuildAgentIndexIfEmpty } from "./agent-index/agent-index-rebuilder.js";
 import { createSqliteAgentIndex } from "./agent-index/sqlite-agent-index.js";
@@ -266,6 +272,8 @@ export interface ChisaCodeDaemonConfig {
   mcpInjectIntoAgents?: boolean;
   autoArchiveAfterMerge?: boolean;
   appendSystemPrompt?: string;
+  skills?: SkillManagementConfig;
+  mcpServers?: McpServerManagementConfig;
   staticDir: string;
   mcpDebug: boolean;
   isDev?: boolean;
@@ -341,6 +349,18 @@ export async function createChisaCodeDaemon(
       },
       autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
       appendSystemPrompt: config.appendSystemPrompt ?? "",
+      skills: config.skills ?? {
+        global: { disabledSkillNames: [] },
+        providers: {},
+        agents: {},
+        installedSources: {},
+      },
+      mcpServers: config.mcpServers ?? {
+        servers: {},
+        global: { disabledServerNames: [] },
+        providers: {},
+        agents: {},
+      },
     },
     logger,
   );
@@ -658,6 +678,10 @@ export async function createChisaCodeDaemon(
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
     appendSystemPrompt: config.appendSystemPrompt,
+    resolveSkillPolicy: (agentId, sessionConfig) =>
+      resolveAgentSkillPolicy(daemonConfigStore.get(), agentId, sessionConfig.provider),
+    resolveMcpServers: (agentId, sessionConfig) =>
+      resolveEffectiveManagedMcpServers(agentId, sessionConfig, daemonConfigStore.get()),
     logger,
   });
 
@@ -1009,17 +1033,15 @@ export async function createChisaCodeDaemon(
         const logAndResolve = async () => {
           boundListenTarget = resolveBoundListenTarget(listenTarget, httpServer);
           const mcpBaseUrl = mcpEnabled ? createAgentMcpBaseUrl(boundListenTarget) : null;
-          agentMcpBaseUrl = config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
+          agentMcpBaseUrl = mcpBaseUrl;
           agentManager.setMcpBaseUrl(agentMcpBaseUrl);
           providerSnapshotManager.setMcpInjectionState({
-            enabled: agentMcpBaseUrl !== null,
+            enabled: agentMcpBaseUrl !== null && daemonConfigStore.get().mcp.injectIntoAgents,
             baseUrl: mcpBaseUrl,
           });
           daemonConfigStore.onFieldChange("mcp.injectIntoAgents", (value) => {
-            const nextAgentMcpBaseUrl = value ? mcpBaseUrl : null;
-            agentManager.setMcpBaseUrl(nextAgentMcpBaseUrl);
             providerSnapshotManager.setMcpInjectionState({
-              enabled: nextAgentMcpBaseUrl !== null,
+              enabled: mcpBaseUrl !== null && value === true,
               baseUrl: mcpBaseUrl,
             });
           });

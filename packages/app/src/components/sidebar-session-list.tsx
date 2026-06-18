@@ -45,8 +45,8 @@ import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { useToast } from "@/contexts/toast-context";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
-import { useResolveWorkspaceIdByCwd } from "@/stores/session-store-hooks";
 import { useSessionStore } from "@/stores/session-store";
+import { generateDraftId } from "@/stores/draft-keys";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { rememberArchivedAgentDetail } from "@/utils/agent-history-navigation";
 import type { SidebarSessionDraft } from "@/utils/left-sidebar-drafts";
@@ -56,7 +56,7 @@ import {
   groupAgentsForSidebar,
   type SidebarSessionGroup,
 } from "@/utils/sidebar-session-groups";
-import { buildHostWorkspaceOpenRoute } from "@/utils/host-routes";
+import { buildHostNewWorkspaceRoute } from "@/utils/host-routes";
 
 const SIDEBAR_PINNED_LABEL = "chisacode.sidebarPinned";
 
@@ -683,18 +683,20 @@ function SidebarSessionGroupHeader({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const resolvedWorkspaceId = useResolveWorkspaceIdByCwd(serverId, group.cwd);
-  const workspaceId = group.workspaceId ?? resolvedWorkspaceId;
-  const canOpenDraft = Boolean(serverId && workspaceId);
+  const canOpenDraft = Boolean(serverId && group.cwd);
   const handleNewDraft = useCallback(
     (event: GestureResponderEvent) => {
       event.stopPropagation();
-      if (!serverId || !workspaceId) {
+      if (!serverId || !group.cwd) {
         return;
       }
-      router.push(buildHostWorkspaceOpenRoute(serverId, workspaceId, "draft:new"));
+      router.push(
+        buildHostNewWorkspaceRoute(serverId, group.cwd, {
+          draftKey: generateDraftId(),
+        }),
+      );
     },
-    [serverId, workspaceId],
+    [group.cwd, serverId],
   );
   const addButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -1215,6 +1217,10 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+    paddingTop: 4,
+    transform: [{ translateY: 2 }],
+    includeFontPadding: false,
     fontWeight: theme.fontWeight.normal,
   },
   rowTitleSelected: {

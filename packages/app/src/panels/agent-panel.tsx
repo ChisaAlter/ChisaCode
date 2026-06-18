@@ -1452,6 +1452,7 @@ function ActiveAgentComposer({
         onMessageSent={onMessageSent}
         onClientSlashCommand={handleClientSlashCommand}
         footer={composerFooter}
+        inputWrapperStyle={styles.composerInputWrapper}
       />
     </ReanimatedAnimated.View>
   );
@@ -1545,6 +1546,10 @@ const styles = StyleSheet.create((theme) => ({
   inputAreaWrapper: {
     width: "100%",
     backgroundColor: theme.colors.surface0,
+  },
+  composerInputWrapper: {
+    borderWidth: 0,
+    ...theme.shadow.sm,
   },
   historySyncOverlay: {
     position: "absolute",

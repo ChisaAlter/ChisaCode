@@ -1,25 +1,16 @@
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
 import { View } from "react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
-import type { Theme } from "@/styles/theme";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import {
   collectAssistantTurnContentForStreamRenderStrategy,
   type StreamStrategy,
 } from "./strategy";
-import { AssistantTurnFooter, LiveElapsed, STREAM_METADATA_FONT_SIZE } from "@/components/message";
+import { AssistantTurnFooter } from "@/components/message";
 import type { TurnFooterHost } from "./layout";
-import { SyncedLoader } from "@/components/synced-loader";
-
-const ThemedSyncedLoader = withUnistyles(SyncedLoader);
-const workingIndicatorColorMapping = (theme: Theme) => ({
-  color:
-    theme.colorScheme === "light"
-      ? theme.colors.palette.amber[700]
-      : theme.colors.palette.amber[500],
-});
+import { RunningTurnFooter } from "./running-turn-footer";
 
 export type TurnContentStrategy = StreamStrategy;
 
@@ -77,35 +68,6 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   );
 });
 
-const WorkingIndicator = memo(function WorkingIndicator({
-  inFlightTurnStartedAt = null,
-}: {
-  inFlightTurnStartedAt?: Date | null;
-}) {
-  return (
-    <View style={stylesheet.turnFooterContent}>
-      <View style={stylesheet.workingLoader}>
-        <ThemedSyncedLoader size={14} uniProps={workingIndicatorColorMapping} />
-      </View>
-      {inFlightTurnStartedAt ? (
-        <LiveElapsed
-          startedAt={inFlightTurnStartedAt}
-          style={stylesheet.workingElapsed}
-          testID="turn-working-elapsed"
-        />
-      ) : null}
-    </View>
-  );
-});
-
-function RunningTurnFooter({ inFlightTurnStartedAt }: { inFlightTurnStartedAt: Date | null }) {
-  return (
-    <View style={stylesheet.turnFooterSlot} testID="turn-working-indicator">
-      <WorkingIndicator inFlightTurnStartedAt={inFlightTurnStartedAt} />
-    </View>
-  );
-}
-
 function CompletedTurnFooter({
   strategy,
   items,
@@ -158,20 +120,5 @@ const stylesheet = StyleSheet.create((theme) => ({
     alignSelf: "flex-start",
     minHeight: 24,
     paddingBottom: theme.spacing[6],
-  },
-  turnFooterContent: {
-    height: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: theme.spacing[3],
-  },
-  workingElapsed: {
-    color: theme.colors.foregroundMuted,
-    fontSize: STREAM_METADATA_FONT_SIZE,
-    fontVariant: ["tabular-nums"],
-  },
-  workingLoader: {
-    marginLeft: -2,
   },
 }));

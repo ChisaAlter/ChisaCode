@@ -1573,7 +1573,7 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: 0,
   },
   sidebarTopArea: {
-    paddingTop: theme.spacing[3],
+    paddingTop: theme.spacing[2],
     paddingRight: theme.spacing[3],
     paddingBottom: theme.spacing[3],
     paddingLeft: theme.spacing[3],
@@ -1591,13 +1591,15 @@ const styles = StyleSheet.create((theme) => ({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
     backgroundColor: theme.colors.surface0,
+    ...theme.shadow.sm,
   },
   sidebarTopActionHovered: {
     backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.borderAccent,
   },
   sidebarTopActionIconSlot: {
     alignItems: "center",

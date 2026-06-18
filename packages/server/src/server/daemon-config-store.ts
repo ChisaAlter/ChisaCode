@@ -113,7 +113,15 @@ export class DaemonConfigStore {
   public patch(partial: MutableDaemonConfigPatch): MutableDaemonConfig {
     const parsedPatch = MutableDaemonConfigPatchSchema.parse(partial);
     const next = MutableDaemonConfigSchema.parse(deepMerge(this.current, parsedPatch));
+    return this.commit(next);
+  }
 
+  public replace(nextConfig: MutableDaemonConfig): MutableDaemonConfig {
+    const next = MutableDaemonConfigSchema.parse(nextConfig);
+    return this.commit(next);
+  }
+
+  private commit(next: MutableDaemonConfig): MutableDaemonConfig {
     const changedFieldPaths = Array.from(this.fieldChangeHandlers.keys()).filter((path) => {
       return !isEqualValue(getValueAtPath(this.current, path), getValueAtPath(next, path));
     });
@@ -232,6 +240,8 @@ function mergeMutableConfigIntoPersistedConfig(params: {
       },
       autoArchiveAfterMerge: mutable.autoArchiveAfterMerge,
       appendSystemPrompt: mutable.appendSystemPrompt,
+      skills: mutable.skills,
+      mcpServers: mutable.mcpServers,
     },
     agents: nextAgents,
   } as PersistedConfig;

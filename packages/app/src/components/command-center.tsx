@@ -355,11 +355,8 @@ export function CommandCenter() {
   const agentItems = useMemo(() => items.filter((item) => item.kind === "agent"), [items]);
 
   const panelStyle = useMemo(
-    () => [
-      styles.panel,
-      { borderColor: theme.colors.border, backgroundColor: theme.colors.surface0 },
-    ],
-    [theme.colors.border, theme.colors.surface0],
+    () => [styles.panel, { backgroundColor: theme.colors.surface0 }],
+    [theme.colors.surface0],
   );
   const headerStyle = useMemo(
     () => [styles.header, { borderBottomColor: theme.colors.border }],
@@ -468,7 +465,6 @@ const styles = StyleSheet.create((theme) => ({
     width: 640,
     maxWidth: "92%",
     maxHeight: "80%",
-    borderWidth: theme.borderWidth[1],
     borderRadius: theme.borderRadius.xl,
     overflow: "hidden",
     ...theme.shadow.lg,

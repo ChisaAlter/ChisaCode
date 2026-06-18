@@ -20,6 +20,8 @@ import {
   type AgentRuntimeInfo,
   type AgentSession,
   type AgentSessionConfig,
+  type AgentSkill,
+  type AgentSkillEffectivePolicy,
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
@@ -632,10 +634,16 @@ async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
   return commands.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function listCodexSkills(
+interface CodexDiscoveredSkill {
+  name: string;
+  description: string;
+  path: string;
+}
+
+export async function listCodexSkillEntries(
   cwd: string,
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<AgentSlashCommand[]> {
+): Promise<CodexDiscoveredSkill[]> {
   const candidates: string[] = [];
   candidates.push(path.join(cwd, ".codex", "skills"));
 
@@ -655,7 +663,7 @@ export async function listCodexSkills(
       try {
         entries = await fs.readdir(dir, { withFileTypes: true });
       } catch {
-        return [] as string[];
+        return [] as Array<{ path: string; content: string }>;
       }
       const dirEntries = entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink());
       const skillContents = await Promise.all(
@@ -663,36 +671,127 @@ export async function listCodexSkills(
           const skillDir = path.join(dir, entry.name);
           const skillPath = path.join(skillDir, "SKILL.md");
           try {
-            return await fs.readFile(skillPath, "utf8");
+            return {
+              path: skillPath,
+              content: await fs.readFile(skillPath, "utf8"),
+            };
           } catch {
             return null;
           }
         }),
       );
-      return skillContents.filter((content): content is string => content !== null);
+      return skillContents.filter((content): content is { path: string; content: string } => {
+        return content !== null;
+      });
     }),
   );
 
-  const commandsByName = new Map<string, AgentSlashCommand>();
-  for (const skillContents of candidateReads) {
-    for (const content of skillContents) {
+  const skillsByName = new Map<string, CodexDiscoveredSkill>();
+  for (const skillEntries of candidateReads) {
+    for (const { path: skillPath, content } of skillEntries) {
       const { frontMatter } = parseFrontMatter(content);
       const name = frontMatter["name"];
       const description = frontMatter["description"];
       if (!name || !description) {
         continue;
       }
-      if (!commandsByName.has(name)) {
-        commandsByName.set(name, {
+      if (!skillsByName.has(name)) {
+        skillsByName.set(name, {
           name,
           description,
-          argumentHint: "",
+          path: skillPath,
         });
       }
     }
   }
 
-  return Array.from(commandsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function listCodexSkills(
+  cwd: string,
+  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
+  policy?: AgentSkillEffectivePolicy,
+): Promise<AgentSlashCommand[]> {
+  const skills = applyAgentSkillPolicy(
+    await listCodexSkillEntries(cwd, workspaceGitService),
+    policy,
+  );
+  return skills.map((skill) => ({
+    name: skill.name,
+    description: skill.description,
+    argumentHint: "",
+  }));
+}
+
+function resolveCodexSkillSourceType(skillPath: string): AgentSkill["sources"][number]["type"] {
+  const normalized = path.normalize(skillPath);
+  if (normalized.includes(path.normalize(`${path.sep}.codex${path.sep}skills${path.sep}`))) {
+    const codexHome = path.normalize(resolveCodexHomeDir());
+    return normalized.startsWith(codexHome) ? "codex-home" : "project";
+  }
+  if (normalized.includes(path.normalize(`${path.sep}.agents${path.sep}skills${path.sep}`))) {
+    return "agents-home";
+  }
+  if (normalized.includes(path.normalize(`${path.sep}.claude${path.sep}skills${path.sep}`))) {
+    return "claude-home";
+  }
+  return "unknown";
+}
+
+function toAgentSkill(skill: CodexDiscoveredSkill): AgentSkill {
+  return {
+    name: skill.name,
+    description: skill.description,
+    sources: [
+      {
+        id: skill.path,
+        type: resolveCodexSkillSourceType(skill.path),
+        path: skill.path,
+      },
+    ],
+    errors: [],
+  };
+}
+
+function resolveSkillPolicy(config: AgentSessionConfig): AgentSkillEffectivePolicy | undefined {
+  const codexExtra = config.extra?.codex;
+  if (!isRecord(codexExtra)) return undefined;
+  const policy = codexExtra.skillsPolicy;
+  if (!isRecord(policy)) return undefined;
+  return {
+    globalDisabledSkillNames: stringArray(policy.globalDisabledSkillNames),
+    providerEnabledSkillNames: stringArray(policy.providerEnabledSkillNames),
+    providerDisabledSkillNames: stringArray(policy.providerDisabledSkillNames),
+    agentEnabledSkillNames: stringArray(policy.agentEnabledSkillNames),
+    agentDisabledSkillNames: stringArray(policy.agentDisabledSkillNames),
+  };
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+}
+
+function isSkillEnabled(name: string, policy: AgentSkillEffectivePolicy | undefined): boolean {
+  if (!policy) return true;
+  const agentDisabled = new Set(policy.agentDisabledSkillNames ?? []);
+  if (agentDisabled.has(name)) return false;
+  const agentEnabled = new Set(policy.agentEnabledSkillNames ?? []);
+  if (agentEnabled.has(name)) return true;
+  const providerDisabled = new Set(policy.providerDisabledSkillNames ?? []);
+  if (providerDisabled.has(name)) return false;
+  const providerEnabled = new Set(policy.providerEnabledSkillNames ?? []);
+  if (providerEnabled.has(name)) return true;
+  const globalDisabled = new Set(policy.globalDisabledSkillNames ?? []);
+  return !globalDisabled.has(name);
+}
+
+function applyAgentSkillPolicy<T extends { name: string }>(
+  skills: readonly T[],
+  policy: AgentSkillEffectivePolicy | undefined,
+): T[] {
+  return skills.filter((skill) => isSkillEnabled(skill.name, policy));
 }
 
 function escapeRegExp(value: string): string {
@@ -2304,7 +2403,12 @@ const CodexNotificationSchema = z.union([
   ),
   z
     .object({
-      method: z.literal("item/reasoning/summaryTextDelta"),
+      method: z.enum([
+        "item/reasoning/summaryTextDelta",
+        "item/reasoning/textDelta",
+        "item/reasoning/delta",
+        "item/reasoning/contentDelta",
+      ]),
       params: ItemTextDeltaNotificationSchema,
     })
     .transform(
@@ -2315,13 +2419,23 @@ const CodexNotificationSchema = z.union([
         threadId: params.threadId ?? null,
       }),
     ),
-  z.object({ method: z.literal("item/reasoning/summaryTextDelta"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.enum([
+        "item/reasoning/summaryTextDelta",
+        "item/reasoning/textDelta",
+        "item/reasoning/delta",
+        "item/reasoning/contentDelta",
+      ]),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({ method: z.literal("item/completed"), params: ItemLifecycleNotificationSchema })
     .transform(
@@ -3107,6 +3221,10 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
+  private enabledCachedSkills(): Array<{ name: string; description: string; path: string }> {
+    return applyAgentSkillPolicy(this.cachedSkills, resolveSkillPolicy(this.config));
+  }
+
   private findCollaborationMode(target: "code" | "plan"): {
     name: string;
     mode?: string | null;
@@ -3361,7 +3479,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     } else {
       await this.loadSkills();
     }
-    const skill = this.cachedSkills.find((entry) => entry.name === commandName);
+    const skill = this.enabledCachedSkills().find((entry) => entry.name === commandName);
     if (skill) {
       const trimmedArgs = args?.trim() ?? "";
       const text = trimmedArgs ? `$${skill.name} ${trimmedArgs}` : `$${skill.name}`;
@@ -3942,14 +4060,18 @@ export class CodexAppServerAgentSession implements AgentSession {
     } else {
       await this.loadSkills();
     }
-    const appServerSkills = this.cachedSkills.map((skill) => ({
+    const appServerSkills = this.enabledCachedSkills().map((skill) => ({
       name: skill.name,
       description: skill.description,
       argumentHint: "",
     }));
     const fallbackSkills =
       appServerSkills.length === 0
-        ? await listCodexSkills(this.config.cwd, this.deps.workspaceGitService)
+        ? await listCodexSkills(
+            this.config.cwd,
+            this.deps.workspaceGitService,
+            resolveSkillPolicy(this.config),
+          )
         : [];
     const builtin: AgentSlashCommand[] = [
       {
@@ -3967,6 +4089,20 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     return [...builtin, ...appServerSkills, ...fallbackSkills, ...prompts].sort((a, b) =>
       a.name.localeCompare(b.name),
+    );
+  }
+
+  async listSkills(): Promise<AgentSkill[]> {
+    if (!this.connected) {
+      await this.connect();
+    } else {
+      await this.loadSkills();
+    }
+    if (this.cachedSkills.length > 0) {
+      return this.cachedSkills.map(toAgentSkill);
+    }
+    return (await listCodexSkillEntries(this.config.cwd, this.deps.workspaceGitService)).map(
+      toAgentSkill,
     );
   }
 

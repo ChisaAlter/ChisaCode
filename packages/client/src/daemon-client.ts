@@ -68,6 +68,18 @@ import type {
   ModelGatewayMoaTestResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
+  AgentSkillManagementScope,
+  AgentSkillsListResponse,
+  AgentSkillsPolicyPatchResponse,
+  AgentSkillsInstallResponse,
+  AgentSkillsInstallSourceSchema,
+  AgentSkillsUninstallResponse,
+  AgentMcpServerManagementScope,
+  AgentMcpServersListResponse,
+  AgentMcpServersUpsertResponse,
+  AgentMcpServersPolicyPatchResponse,
+  AgentMcpServersDeleteResponse,
+  ManagedMcpServerConfig,
   AgentRewindResponseMessage,
   ListTerminalsResponse,
   CreateTerminalResponse,
@@ -347,6 +359,15 @@ type WriteProjectConfigPayload = Extract<
   { type: "write_project_config_response" }
 >["payload"];
 type ListCommandsPayload = ListCommandsResponse["payload"];
+type AgentSkillsListPayload = AgentSkillsListResponse["payload"];
+type AgentSkillsPolicyPatchPayload = AgentSkillsPolicyPatchResponse["payload"];
+type AgentSkillsInstallPayload = AgentSkillsInstallResponse["payload"];
+type AgentSkillsInstallSource = z.infer<typeof AgentSkillsInstallSourceSchema>;
+type AgentSkillsUninstallPayload = AgentSkillsUninstallResponse["payload"];
+type AgentMcpServersListPayload = AgentMcpServersListResponse["payload"];
+type AgentMcpServersUpsertPayload = AgentMcpServersUpsertResponse["payload"];
+type AgentMcpServersPolicyPatchPayload = AgentMcpServersPolicyPatchResponse["payload"];
+type AgentMcpServersDeletePayload = AgentMcpServersDeleteResponse["payload"];
 type ListCommandsDraftConfig = Pick<
   AgentSessionConfig,
   "provider" | "cwd" | "modeId" | "model" | "thinkingOptionId" | "featureValues"
@@ -3618,6 +3639,132 @@ export class DaemonClient {
         ...(draftConfig ? { draftConfig } : {}),
       },
       responseType: "list_commands_response",
+      timeout: 30000,
+    });
+  }
+
+  async listAgentSkills(options?: { requestId?: string }): Promise<AgentSkillsListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "agent.skills.list.request",
+      },
+      responseType: "agent.skills.list.response",
+      timeout: 30000,
+    });
+  }
+
+  async patchAgentSkillPolicy(input: {
+    requestId?: string;
+    scope: AgentSkillManagementScope;
+    policy: {
+      enabledSkillNames?: string[];
+      disabledSkillNames?: string[];
+    };
+  }): Promise<AgentSkillsPolicyPatchPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "agent.skills.policy.patch.request",
+        scope: input.scope,
+        policy: input.policy,
+      },
+      responseType: "agent.skills.policy.patch.response",
+      timeout: 30000,
+    });
+  }
+
+  async installAgentSkills(input: {
+    requestId?: string;
+    source: AgentSkillsInstallSource;
+    replace?: boolean;
+  }): Promise<AgentSkillsInstallPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "agent.skills.install.request",
+        source: input.source,
+        ...(input.replace !== undefined ? { replace: input.replace } : {}),
+      },
+      responseType: "agent.skills.install.response",
+      timeout: 120000,
+    });
+  }
+
+  async uninstallAgentSkill(input: {
+    requestId?: string;
+    sourceId: string;
+  }): Promise<AgentSkillsUninstallPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "agent.skills.uninstall.request",
+        sourceId: input.sourceId,
+      },
+      responseType: "agent.skills.uninstall.response",
+      timeout: 30000,
+    });
+  }
+
+  async listAgentMcpServers(options?: { requestId?: string }): Promise<AgentMcpServersListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "agent.mcp_servers.list.request",
+      },
+      responseType: "agent.mcp_servers.list.response",
+      timeout: 30000,
+    });
+  }
+
+  async upsertAgentMcpServer(input: {
+    requestId?: string;
+    server: ManagedMcpServerConfig;
+    originalName?: string;
+  }): Promise<AgentMcpServersUpsertPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "agent.mcp_servers.upsert.request",
+        server: input.server,
+        ...(input.originalName ? { originalName: input.originalName } : {}),
+      },
+      responseType: "agent.mcp_servers.upsert.response",
+      timeout: 30000,
+    });
+  }
+
+  async patchAgentMcpServerPolicy(input: {
+    requestId?: string;
+    scope: AgentMcpServerManagementScope;
+    policy: {
+      enabledServerNames?: string[];
+      disabledServerNames?: string[];
+    };
+  }): Promise<AgentMcpServersPolicyPatchPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "agent.mcp_servers.policy.patch.request",
+        scope: input.scope,
+        policy: input.policy,
+      },
+      responseType: "agent.mcp_servers.policy.patch.response",
+      timeout: 30000,
+    });
+  }
+
+  async deleteAgentMcpServer(input: {
+    requestId?: string;
+    name: string;
+  }): Promise<AgentMcpServersDeletePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "agent.mcp_servers.delete.request",
+        name: input.name,
+      },
+      responseType: "agent.mcp_servers.delete.response",
       timeout: 30000,
     });
   }

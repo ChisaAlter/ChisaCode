@@ -8,7 +8,7 @@ import {
   View,
   type PressableStateCallbackType,
 } from "react-native";
-import { Folder } from "lucide-react-native";
+import { Check, Folder, FolderPlus, FolderX, Search } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useQuery } from "@tanstack/react-query";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
@@ -19,6 +19,8 @@ import { useOpenProject } from "@/hooks/use-open-project";
 import { buildWorkingDirectorySuggestions } from "@/utils/working-directory-suggestions";
 import { isNative } from "@/constants/platform";
 import { useActiveServerId } from "@/hooks/use-active-server-id";
+import { pickDirectory } from "@/desktop/pick-directory";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 
 interface PathRowProps {
   path: string;
@@ -53,6 +55,54 @@ function PathRow({ path, active, onSelect }: PathRowProps) {
         <Text style={rowTextStyle} numberOfLines={1}>
           {shortenPath(path)}
         </Text>
+        {active ? (
+          <View style={styles.checkSlot}>
+            <Check size={16} strokeWidth={2.1} color={theme.colors.foregroundMuted} />
+          </View>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function ProjectPickerActionRow({
+  label,
+  onPress,
+  icon,
+  testID,
+}: {
+  label: string;
+  onPress: () => void;
+  icon: "add" | "none";
+  testID: string;
+}) {
+  const { theme } = useUnistyles();
+  const rowStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.row,
+      (Boolean(hovered) || pressed) && {
+        backgroundColor: theme.colors.surface1,
+      },
+    ],
+    [theme.colors.surface1],
+  );
+  const rowTextStyle = useMemo(
+    () => [styles.rowText, { color: theme.colors.foreground }],
+    [theme.colors.foreground],
+  );
+  return (
+    <Pressable testID={testID} accessibilityRole="button" onPress={onPress} style={rowStyle}>
+      <View style={styles.rowContent}>
+        <View style={styles.iconSlot}>
+          {icon === "add" ? (
+            <FolderPlus size={16} strokeWidth={2.1} color={theme.colors.foregroundMuted} />
+          ) : (
+            <FolderX size={16} strokeWidth={2.1} color={theme.colors.foregroundMuted} />
+          )}
+        </View>
+        <Text style={rowTextStyle} numberOfLines={1}>
+          {label}
+        </Text>
       </View>
     </Pressable>
   );
@@ -67,6 +117,7 @@ export function ProjectPickerModal() {
 
   const client = useHostRuntimeClient(serverId ?? "");
   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
+  const isLocalDaemon = useIsLocalDaemon(serverId ?? "");
   const recommendedPaths = useRecommendedProjectPaths(serverId);
 
   const inputRef = useRef<TextInput>(null);
@@ -134,6 +185,18 @@ export function ProjectPickerModal() {
     if (!trimmed) return;
     void handleSelectPath(trimmed);
   }, [handleSelectPath, query]);
+
+  const handleAddProject = useCallback(() => {
+    if (!isLocalDaemon) {
+      return;
+    }
+    void (async () => {
+      const path = await pickDirectory();
+      const trimmed = path?.trim();
+      if (!trimmed) return;
+      await handleSelectPath(trimmed);
+    })();
+  }, [handleSelectPath, isLocalDaemon]);
 
   const handleChangeQuery = useCallback((text: string) => {
     setQuery(text);
@@ -203,11 +266,10 @@ export function ProjectPickerModal() {
     () => [
       styles.panel,
       {
-        borderColor: theme.colors.border,
         backgroundColor: theme.colors.surface0,
       },
     ],
-    [theme.colors.border, theme.colors.surface0],
+    [theme.colors.surface0],
   );
   const headerStyle = useMemo(
     () => [styles.header, { borderBottomColor: theme.colors.border }],
@@ -231,20 +293,23 @@ export function ProjectPickerModal() {
 
         <View style={panelStyle}>
           <View style={headerStyle}>
-            <TextInput
-              ref={inputRef}
-              value={query}
-              onChangeText={handleChangeQuery}
-              placeholder="Type a directory path..."
-              placeholderTextColor={theme.colors.foregroundMuted}
-              style={inputStyle}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-              editable={!isSubmitting}
-              returnKeyType="go"
-              onSubmitEditing={handleSubmitCustom}
-            />
+            <View style={styles.searchRow}>
+              <Search size={16} strokeWidth={2} color={theme.colors.foregroundMuted} />
+              <TextInput
+                ref={inputRef}
+                value={query}
+                onChangeText={handleChangeQuery}
+                placeholder="搜索项目"
+                placeholderTextColor={theme.colors.foregroundMuted}
+                style={inputStyle}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+                editable={!isSubmitting}
+                returnKeyType="go"
+                onSubmitEditing={handleSubmitCustom}
+              />
+            </View>
           </View>
 
           <ScrollView
@@ -255,7 +320,7 @@ export function ProjectPickerModal() {
           >
             {isSubmitting ? <Text style={emptyTextStyle}>正在打开项目...</Text> : null}
             {!isSubmitting && options.length === 0 && !query.trim() ? (
-              <Text style={emptyTextStyle}>开始输入路径</Text>
+              <Text style={emptyTextStyle}>没有最近项目</Text>
             ) : null}
             {!isSubmitting && !(options.length === 0 && !query.trim()) ? (
               <>
@@ -270,6 +335,22 @@ export function ProjectPickerModal() {
               </>
             ) : null}
           </ScrollView>
+          <View style={styles.actions}>
+            {isLocalDaemon ? (
+              <ProjectPickerActionRow
+                testID="project-picker-add-project"
+                label="添加新项目"
+                icon="add"
+                onPress={handleAddProject}
+              />
+            ) : null}
+            <ProjectPickerActionRow
+              testID="project-picker-no-project"
+              label="不使用项目"
+              icon="none"
+              onPress={handleClose}
+            />
+          </View>
         </View>
       </View>
     </Modal>
@@ -291,18 +372,23 @@ const styles = StyleSheet.create((theme) => ({
     width: 640,
     maxWidth: "92%",
     maxHeight: "80%",
-    borderWidth: 1,
     borderRadius: theme.borderRadius.lg,
     overflow: "hidden",
     ...theme.shadow.lg,
   },
   header: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
   },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   input: {
-    fontSize: theme.fontSize.lg,
+    flex: 1,
+    fontSize: theme.fontSize.sm,
     paddingVertical: theme.spacing[1],
     outlineStyle: "none",
   } as object,
@@ -329,13 +415,23 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowText: {
     fontSize: theme.fontSize.base,
-    fontWeight: "400",
     lineHeight: 20,
     flexShrink: 1,
+  },
+  checkSlot: {
+    marginLeft: "auto",
+    width: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyText: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[4],
     fontSize: theme.fontSize.base,
+  },
+  actions: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    paddingVertical: theme.spacing[2],
   },
 }));

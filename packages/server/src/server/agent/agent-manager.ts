@@ -17,6 +17,7 @@ import {
   createCompanionTokenEntry,
   type CompanionMcpTokenEntry,
 } from "./companion-mcp-injection.js";
+import type { EffectiveMcpServersResult } from "./mcp-server-management.js";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -40,6 +41,7 @@ import {
   type AgentRunResult,
   type AgentSession,
   type AgentSessionConfig,
+  type AgentSkillEffectivePolicy,
   type AgentStreamEvent,
   type AgentTimelineItem,
   type AgentUsage,
@@ -197,6 +199,14 @@ export interface AgentManagerOptions {
   terminalManager?: TerminalManager | null;
   mcpBaseUrl?: string;
   appendSystemPrompt?: string;
+  resolveSkillPolicy?: (
+    agentId: string,
+    config: AgentSessionConfig,
+  ) => AgentSkillEffectivePolicy | undefined;
+  resolveMcpServers?: (
+    agentId: string,
+    config: AgentSessionConfig,
+  ) => EffectiveMcpServersResult | undefined;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
   logger: Logger;
@@ -442,6 +452,12 @@ export class AgentManager {
   private mcpBaseUrl: string | null;
   private companionMcpTokens = new Map<string, CompanionMcpTokenEntry>();
   private appendSystemPrompt: string;
+  private readonly resolveSkillPolicy:
+    | ((agentId: string, config: AgentSessionConfig) => AgentSkillEffectivePolicy | undefined)
+    | undefined;
+  private readonly resolveMcpServers:
+    | ((agentId: string, config: AgentSessionConfig) => EffectiveMcpServersResult | undefined)
+    | undefined;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private logger: Logger;
@@ -454,6 +470,8 @@ export class AgentManager {
     this.onAgentAttention = options?.onAgentAttention;
     this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
+    this.resolveSkillPolicy = options.resolveSkillPolicy;
+    this.resolveMcpServers = options.resolveMcpServers;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -838,11 +856,12 @@ export class AgentManager {
     },
   ): Promise<ManagedAgent> {
     const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
-    const injectedConfig = this.injectDaemonMcpServers(config, resolvedAgentId);
-    this.requireEnabledProvider(injectedConfig.provider);
-    this.requireEnabledProvider(injectedConfig.runtimeProvider ?? injectedConfig.provider);
+    const mcpConfig = this.applyDaemonMcpServers(config, resolvedAgentId);
+    const skillConfig = this.applyDaemonSkillPolicy(mcpConfig, resolvedAgentId);
+    this.requireEnabledProvider(skillConfig.provider);
+    this.requireEnabledProvider(skillConfig.runtimeProvider ?? skillConfig.provider);
     const normalizedConfig = this.applyDaemonAppendSystemPrompt(
-      await this.normalizeConfig(injectedConfig),
+      await this.normalizeConfig(skillConfig),
     );
     const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
     const launchContext = this.buildLaunchContext(resolvedAgentId, options?.env);
@@ -892,8 +911,10 @@ export class AgentManager {
       ...overrides,
       provider: handle.provider,
     } as AgentSessionConfig;
+    const mcpConfig = this.applyDaemonMcpServers(mergedConfig, resolvedAgentId);
+    const skillConfig = this.applyDaemonSkillPolicy(mcpConfig, resolvedAgentId);
     const normalizedConfig = this.applyDaemonAppendSystemPrompt(
-      await this.normalizeConfig(mergedConfig),
+      await this.normalizeConfig(skillConfig),
     );
     const resumeOverrides: Partial<AgentSessionConfig> = { ...overrides };
     let hasResumeOverrides = overrides !== undefined;
@@ -910,6 +931,11 @@ export class AgentManager {
 
     if (metadata.daemonAppendSystemPrompt !== normalizedConfig.daemonAppendSystemPrompt) {
       resumeOverrides.daemonAppendSystemPrompt = normalizedConfig.daemonAppendSystemPrompt;
+      hasResumeOverrides = true;
+    }
+
+    if (JSON.stringify(metadata.extra) !== JSON.stringify(normalizedConfig.extra)) {
+      resumeOverrides.extra = normalizedConfig.extra;
       hasResumeOverrides = true;
     }
 
@@ -934,18 +960,32 @@ export class AgentManager {
     });
   }
 
-  private injectDaemonMcpServers(
+  private applyDaemonMcpServers(
     config: AgentSessionConfig,
     resolvedAgentId: string,
   ): AgentSessionConfig {
-    if (this.mcpBaseUrl == null) {
-      return config;
+    const resolved = this.resolveMcpServers?.(resolvedAgentId, config);
+    const managedMcpServers = resolved?.servers ?? {};
+    const hasManagedMcpServers = Object.keys(managedMcpServers).length > 0;
+    const daemonMcpEnabled = resolved?.daemonMcpEnabled ?? true;
+    if (this.mcpBaseUrl == null || !daemonMcpEnabled) {
+      if (!hasManagedMcpServers) {
+        return config;
+      }
+      return {
+        ...config,
+        mcpServers: {
+          ...managedMcpServers,
+          ...config.mcpServers,
+        },
+      };
     }
     const { token, entry } = createCompanionTokenEntry(resolvedAgentId);
     this.companionMcpTokens.set(token, entry);
     return {
       ...config,
       mcpServers: {
+        ...managedMcpServers,
         chisacode: {
           type: "http" as const,
           url: `${this.mcpBaseUrl}?callerAgentId=${resolvedAgentId}`,
@@ -959,6 +999,27 @@ export class AgentManager {
           }),
         },
         ...config.mcpServers,
+      },
+    };
+  }
+
+  private applyDaemonSkillPolicy(config: AgentSessionConfig, agentId: string): AgentSessionConfig {
+    const policy = this.resolveSkillPolicy?.(agentId, config);
+    if (!policy) {
+      return config;
+    }
+    const runtimeProvider = config.runtimeProvider ?? config.provider;
+    if (config.provider !== "codex" && runtimeProvider !== "codex") {
+      return config;
+    }
+    return {
+      ...config,
+      extra: {
+        ...config.extra,
+        codex: {
+          ...config.extra?.codex,
+          skillsPolicy: policy,
+        },
       },
     };
   }
@@ -994,8 +1055,10 @@ export class AgentManager {
       provider: existing.provider,
       runtimeProvider,
     } as AgentSessionConfig;
+    const mcpConfig = this.applyDaemonMcpServers(refreshConfig, agentId);
+    const skillConfig = this.applyDaemonSkillPolicy(mcpConfig, agentId);
     const normalizedConfig = this.applyDaemonAppendSystemPrompt(
-      await this.normalizeConfig(refreshConfig),
+      await this.normalizeConfig(skillConfig),
     );
     const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
     const launchContext = this.buildLaunchContext(agentId);

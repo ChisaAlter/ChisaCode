@@ -7,83 +7,124 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
-const { theme, snapshotState, configState, patchConfigMock, openProviderSettingsMock } = vi.hoisted(
-  () => ({
-    theme: {
-      spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
-      iconSize: { sm: 14, md: 20 },
-      fontSize: { xs: 11, sm: 13, base: 15 },
-      fontWeight: { normal: "400" },
-      borderRadius: { lg: 8 },
-      opacity: { 50: 0.5 },
-      colors: {
-        surface1: "#111",
-        surface2: "#222",
-        surface3: "#333",
-        foreground: "#fff",
-        foregroundMuted: "#aaa",
-        border: "#555",
-        accent: "#0a84ff",
-        statusSuccess: "#00ff00",
-        statusWarning: "#ff9500",
-        statusDanger: "#ff0000",
-        palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
-      },
+const {
+  theme,
+  snapshotState,
+  configState,
+  patchConfigMock,
+  openProviderSettingsMock,
+  compactState,
+} = vi.hoisted(() => ({
+  theme: {
+    spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
+    iconSize: { sm: 14, md: 20 },
+    fontSize: { xs: 11, sm: 13, base: 15 },
+    fontWeight: { normal: "400" },
+    borderRadius: { lg: 8 },
+    opacity: { 50: 0.5 },
+    colors: {
+      surface1: "#111",
+      surface2: "#222",
+      surface3: "#333",
+      foreground: "#fff",
+      foregroundMuted: "#aaa",
+      border: "#555",
+      accent: "#0a84ff",
+      statusSuccess: "#00ff00",
+      statusWarning: "#ff9500",
+      statusDanger: "#ff0000",
+      palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
     },
-    snapshotState: {
-      entries: undefined as ProviderSnapshotEntry[] | undefined,
-      isLoading: false,
-      isRefreshing: false,
-    },
-    configState: {
-      config: null as MutableDaemonConfig | null,
-    },
-    patchConfigMock: vi.fn(async () => undefined),
-    openProviderSettingsMock: vi.fn(),
-  }),
-);
-
-vi.mock("react-native", () => ({
-  View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) =>
-    React.createElement("div", { "data-testid": testID }, children),
-  Text: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement("span", null, children),
-  Pressable: ({
-    children,
-    onPress,
-    onHoverIn,
-    onHoverOut,
-    accessibilityRole,
-    accessibilityLabel,
-    disabled,
-    testID,
-  }: {
-    children?:
-      | React.ReactNode
-      | ((state: { pressed: boolean; hovered: boolean }) => React.ReactNode);
-    onPress?: (event: React.MouseEvent) => void;
-    onHoverIn?: () => void;
-    onHoverOut?: () => void;
-    accessibilityRole?: string;
-    accessibilityLabel?: string;
-    disabled?: boolean;
-    testID?: string;
-  }) =>
-    React.createElement(
-      "div",
-      {
-        role: accessibilityRole,
-        "aria-label": accessibilityLabel,
-        "aria-disabled": disabled ? "true" : undefined,
-        "data-testid": testID,
-        onClick: disabled ? undefined : onPress,
-        onMouseEnter: onHoverIn,
-        onMouseLeave: onHoverOut,
-      },
-      typeof children === "function" ? children({ pressed: false, hovered: false }) : children,
-    ),
-  ActivityIndicator: () => React.createElement("span", { "data-testid": "activity-indicator" }),
+  },
+  snapshotState: {
+    entries: undefined as ProviderSnapshotEntry[] | undefined,
+    isLoading: false,
+    isRefreshing: false,
+  },
+  configState: {
+    config: null as MutableDaemonConfig | null,
+  },
+  patchConfigMock: vi.fn(async () => undefined),
+  openProviderSettingsMock: vi.fn(),
+  compactState: {
+    value: false,
+  },
 }));
+
+vi.mock("react-native", () => {
+  function flatten(input: unknown): Record<string, unknown> {
+    if (!input) return {};
+    if (Array.isArray(input)) {
+      return input.reduce<Record<string, unknown>>((acc, item) => {
+        Object.assign(acc, flatten(item));
+        return acc;
+      }, {});
+    }
+    if (typeof input === "object") return input as Record<string, unknown>;
+    return {};
+  }
+  function stringifyStyle(style: unknown): string {
+    return JSON.stringify(flatten(style));
+  }
+  return {
+    View: ({
+      children,
+      testID,
+      style,
+    }: {
+      children?: React.ReactNode;
+      testID?: string;
+      style?: unknown;
+    }) =>
+      React.createElement(
+        "div",
+        { "data-testid": testID, "data-style": stringifyStyle(style) },
+        children,
+      ),
+    Text: ({ children, style }: { children?: React.ReactNode; style?: unknown }) =>
+      React.createElement("span", { "data-style": stringifyStyle(style) }, children),
+    Pressable: ({
+      children,
+      onPress,
+      onHoverIn,
+      onHoverOut,
+      accessibilityRole,
+      accessibilityLabel,
+      disabled,
+      testID,
+      style,
+    }: {
+      children?:
+        | React.ReactNode
+        | ((state: { pressed: boolean; hovered: boolean }) => React.ReactNode);
+      onPress?: (event: React.MouseEvent) => void;
+      onHoverIn?: () => void;
+      onHoverOut?: () => void;
+      accessibilityRole?: string;
+      accessibilityLabel?: string;
+      disabled?: boolean;
+      testID?: string;
+      style?: unknown;
+    }) =>
+      React.createElement(
+        "div",
+        {
+          role: accessibilityRole,
+          "aria-label": accessibilityLabel,
+          "aria-disabled": disabled ? "true" : undefined,
+          "data-testid": testID,
+          "data-style": stringifyStyle(
+            typeof style === "function" ? style({ pressed: false, hovered: false }) : style,
+          ),
+          onClick: disabled ? undefined : onPress,
+          onMouseEnter: onHoverIn,
+          onMouseLeave: onHoverOut,
+        },
+        typeof children === "function" ? children({ pressed: false, hovered: false }) : children,
+      ),
+    ActivityIndicator: () => React.createElement("span", { "data-testid": "activity-indicator" }),
+  };
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -193,6 +234,10 @@ vi.mock("@/runtime/host-runtime", () => ({
   }),
 }));
 
+vi.mock("@/constants/layout", () => ({
+  useIsCompactFormFactor: () => compactState.value,
+}));
+
 import { ProvidersSection } from "./providers-section";
 
 const claudeEntry: ProviderSnapshotEntry = {
@@ -238,6 +283,8 @@ function makeConfig(providers: MutableDaemonConfig["providers"] = {}): MutableDa
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,
     appendSystemPrompt: "",
+    skills: { global: { disabledSkillNames: [] }, providers: {}, agents: {}, installedSources: {} },
+    mcpServers: { servers: {}, global: { disabledServerNames: [] }, providers: {}, agents: {} },
   };
 }
 
@@ -272,6 +319,7 @@ describe("ProvidersSection", () => {
     patchConfigMock.mockReset();
     patchConfigMock.mockResolvedValue(undefined);
     openProviderSettingsMock.mockReset();
+    compactState.value = false;
   });
 
   afterEach(() => {
@@ -403,5 +451,25 @@ describe("ProvidersSection", () => {
     });
 
     expect(openProviderSettingsMock).toHaveBeenCalledWith("claude", "reinstall");
+  });
+
+  it("uses a wrapped compact layout for provider maintenance controls", () => {
+    compactState.value = true;
+    snapshotState.entries = [
+      {
+        ...currentClaudeEntry,
+        updateAvailable: true,
+      },
+    ];
+    configState.config = makeConfig();
+
+    render();
+
+    const row = findRow("Claude provider details");
+    expect(row.getAttribute("data-style")).toContain('"flexDirection":"column"');
+
+    const updateButton = row.querySelector<HTMLElement>('[aria-label="Update"]');
+    expect(updateButton).not.toBeNull();
+    expect(updateButton?.parentElement?.getAttribute("data-style")).toContain('"flexWrap":"wrap"');
   });
 });

@@ -1052,6 +1052,10 @@ export class VoiceAssistantWebSocketServer {
         rewind: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: true,
+        // COMPAT(agentSkillManagement): added in v0.1.X, remove gate when all clients support it.
+        agentSkillManagement: true,
+        // COMPAT(agentMcpServerManagement): added in v0.1.X, remove gate when all clients support it.
+        agentMcpServerManagement: true,
       },
     };
   }

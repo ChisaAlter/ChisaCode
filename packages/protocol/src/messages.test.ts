@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { FileExplorerRequestSchema, SessionOutboundMessageSchema } from "./messages.js";
+import {
+  FileExplorerRequestSchema,
+  MutableDaemonConfigSchema,
+  SessionInboundMessageSchema,
+  SessionOutboundMessageSchema,
+} from "./messages.js";
 
 function workspaceDescriptor(overrides: Record<string, unknown> = {}) {
   return {
@@ -159,5 +164,353 @@ describe("file explorer request compatibility", () => {
       requestId: "req-new",
       acceptBinary: true,
     });
+  });
+});
+
+describe("agent skill management protocol", () => {
+  test("old daemon config defaults skill management to all enabled", () => {
+    const parsed = MutableDaemonConfigSchema.parse({
+      mcp: { injectIntoAgents: true },
+    });
+
+    expect(parsed.skills).toEqual({
+      global: {
+        disabledSkillNames: [],
+      },
+      providers: {},
+      agents: {},
+      installedSources: {},
+    });
+  });
+
+  test("parses skill list request and response", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.skills.list.request",
+        requestId: "req-1",
+      }),
+    ).toEqual({
+      type: "agent.skills.list.request",
+      requestId: "req-1",
+    });
+
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "agent.skills.list.response",
+      payload: {
+        requestId: "req-1",
+        scopes: [
+          { type: "global", label: "Global" },
+          { type: "provider", provider: "codex", label: "Codex" },
+          { type: "agent", agentId: "agent-1", label: "Agent 1", status: "idle" },
+        ],
+        skills: [
+          {
+            name: "review",
+            sources: [
+              {
+                id: "codex-home:review",
+                type: "codex-home",
+                path: "/home/me/.codex/skills/review",
+                installedSourceId: "src-1",
+                removable: true,
+              },
+            ],
+            statusByScope: {
+              global: "enabled",
+              providers: {
+                codex: "agent-enabled",
+              },
+              agents: {
+                "agent-1": "agent-disabled",
+              },
+            },
+            errors: [],
+          },
+        ],
+        policy: {
+          global: { disabledSkillNames: [] },
+          providers: {
+            codex: {
+              enabledSkillNames: ["review"],
+              disabledSkillNames: [],
+            },
+          },
+          agents: {
+            "agent-1": {
+              enabledSkillNames: [],
+              disabledSkillNames: ["review"],
+            },
+          },
+          installedSources: {},
+        },
+        errors: [],
+      },
+    });
+
+    expect(parsed.type).toBe("agent.skills.list.response");
+  });
+
+  test("parses skill policy patch request and response", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.skills.policy.patch.request",
+        requestId: "req-2",
+        scope: { type: "agent", agentId: "agent-1" },
+        policy: {
+          enabledSkillNames: ["review"],
+          disabledSkillNames: ["security-review"],
+        },
+      }),
+    ).toMatchObject({
+      type: "agent.skills.policy.patch.request",
+      scope: { type: "agent", agentId: "agent-1" },
+    });
+
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.skills.policy.patch.request",
+        requestId: "req-provider",
+        scope: { type: "provider", provider: "codex" },
+        policy: {
+          enabledSkillNames: ["review"],
+        },
+      }),
+    ).toMatchObject({
+      type: "agent.skills.policy.patch.request",
+      scope: { type: "provider", provider: "codex" },
+    });
+
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "agent.skills.policy.patch.response",
+      payload: {
+        requestId: "req-2",
+        ok: true,
+        policy: {
+          global: { disabledSkillNames: [] },
+          providers: {},
+          agents: {},
+          installedSources: {},
+        },
+        error: null,
+      },
+    });
+
+    expect(parsed.type).toBe("agent.skills.policy.patch.response");
+  });
+
+  test("parses skill install and uninstall messages", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.skills.install.request",
+        requestId: "req-3",
+        source: { type: "github", value: "owner/repo" },
+        replace: true,
+      }),
+    ).toMatchObject({
+      type: "agent.skills.install.request",
+      source: { type: "github", value: "owner/repo" },
+      replace: true,
+    });
+
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.skills.uninstall.request",
+        requestId: "req-4",
+        sourceId: "github:owner/repo",
+      }),
+    ).toMatchObject({
+      type: "agent.skills.uninstall.request",
+      sourceId: "github:owner/repo",
+    });
+
+    expect(
+      SessionOutboundMessageSchema.parse({
+        type: "agent.skills.install.response",
+        payload: {
+          requestId: "req-3",
+          ok: true,
+          installedSource: {
+            id: "github:owner/repo",
+            type: "github",
+            url: "https://github.com/owner/repo",
+            installedAt: "2026-06-18T00:00:00.000Z",
+            skillNames: ["review"],
+          },
+          skills: ["review"],
+          error: null,
+        },
+      }).type,
+    ).toBe("agent.skills.install.response");
+
+    expect(
+      SessionOutboundMessageSchema.parse({
+        type: "agent.skills.uninstall.response",
+        payload: {
+          requestId: "req-4",
+          ok: true,
+          removedSkillNames: ["review"],
+          policy: {
+            global: { disabledSkillNames: [] },
+            providers: {},
+            agents: {},
+            installedSources: {},
+          },
+          error: null,
+        },
+      }).type,
+    ).toBe("agent.skills.uninstall.response");
+  });
+});
+
+describe("agent MCP server management protocol", () => {
+  test("old daemon config defaults MCP server management to empty and all enabled", () => {
+    const parsed = MutableDaemonConfigSchema.parse({
+      mcp: { injectIntoAgents: true },
+    });
+
+    expect(parsed.mcpServers).toEqual({
+      servers: {},
+      global: { disabledServerNames: [] },
+      providers: {},
+      agents: {},
+    });
+  });
+
+  test("parses MCP server list request and response", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.mcp_servers.list.request",
+        requestId: "mcp-list",
+      }),
+    ).toEqual({
+      type: "agent.mcp_servers.list.request",
+      requestId: "mcp-list",
+    });
+
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "agent.mcp_servers.list.response",
+      payload: {
+        requestId: "mcp-list",
+        scopes: [
+          { type: "global", label: "Global" },
+          { type: "provider", provider: "codex", label: "Codex" },
+        ],
+        servers: [
+          {
+            name: "github",
+            source: "user",
+            removable: true,
+            editable: true,
+            config: {
+              type: "stdio",
+              command: "npx",
+              args: ["-y", "@modelcontextprotocol/server-github"],
+              env: { GITHUB_TOKEN: "token" },
+            },
+            statusByScope: {
+              global: "enabled",
+              providers: { codex: "provider-disabled" },
+              agents: {},
+            },
+            errors: [],
+          },
+        ],
+        policy: {
+          servers: {},
+          global: { disabledServerNames: [] },
+          providers: {},
+          agents: {},
+        },
+        errors: [],
+      },
+    });
+
+    expect(parsed.type).toBe("agent.mcp_servers.list.response");
+  });
+
+  test("parses MCP server upsert, policy, and delete messages", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.mcp_servers.upsert.request",
+        requestId: "mcp-upsert-stdio",
+        server: {
+          name: "github",
+          config: { type: "stdio", command: "npx" },
+        },
+      }),
+    ).toMatchObject({
+      type: "agent.mcp_servers.upsert.request",
+      server: { name: "github", config: { type: "stdio" } },
+    });
+
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.mcp_servers.upsert.request",
+        requestId: "mcp-upsert-http",
+        originalName: "linear",
+        server: {
+          name: "linear",
+          config: { type: "http", url: "https://example.com/mcp" },
+        },
+      }),
+    ).toMatchObject({
+      type: "agent.mcp_servers.upsert.request",
+      originalName: "linear",
+      server: { name: "linear", config: { type: "http" } },
+    });
+
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.mcp_servers.upsert.request",
+        requestId: "mcp-upsert-sse",
+        server: {
+          name: "docs",
+          config: { type: "sse", url: "https://example.com/sse" },
+        },
+      }),
+    ).toMatchObject({
+      type: "agent.mcp_servers.upsert.request",
+      server: { name: "docs", config: { type: "sse" } },
+    });
+
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.mcp_servers.policy.patch.request",
+        requestId: "mcp-policy",
+        scope: { type: "provider", provider: "codex" },
+        policy: { disabledServerNames: ["github"] },
+      }),
+    ).toMatchObject({
+      type: "agent.mcp_servers.policy.patch.request",
+      scope: { type: "provider", provider: "codex" },
+    });
+
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.mcp_servers.delete.request",
+        requestId: "mcp-delete",
+        name: "github",
+      }),
+    ).toMatchObject({
+      type: "agent.mcp_servers.delete.request",
+      name: "github",
+    });
+
+    expect(
+      SessionOutboundMessageSchema.parse({
+        type: "agent.mcp_servers.policy.patch.response",
+        payload: {
+          requestId: "mcp-policy",
+          ok: true,
+          policy: {
+            servers: {},
+            global: { disabledServerNames: [] },
+            providers: { codex: { enabledServerNames: [], disabledServerNames: ["github"] } },
+            agents: {},
+          },
+          error: null,
+        },
+      }).type,
+    ).toBe("agent.mcp_servers.policy.patch.response");
   });
 });

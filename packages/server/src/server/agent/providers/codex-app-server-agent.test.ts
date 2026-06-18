@@ -229,7 +229,10 @@ function capturedThreadStartConfig(records: CapturedFakeCodexRecord[]): unknown 
   return params?.config;
 }
 
-async function listCommandsFromFakeCodex(skills: unknown[]): Promise<AgentSlashCommand[]> {
+async function listCommandsFromFakeCodex(
+  skills: unknown[],
+  configOverrides: Partial<AgentSessionConfig> = {},
+): Promise<AgentSlashCommand[]> {
   const tempDir = await mkdtemp(path.join(tmpdir(), "codex-command-list-"));
   const fakeCodexPath = path.join(tempDir, "fake-codex.cjs");
   writeFileSync(
@@ -277,7 +280,7 @@ process.stdin.on("data", (chunk) => {
   const client = new CodexAppServerAgentClient(createTestLogger(), {
     command: { mode: "replace", argv: [process.execPath, fakeCodexPath] },
   });
-  const session = await client.createSession(createConfig());
+  const session = await client.createSession(createConfig(configOverrides));
   try {
     return await session.listCommands();
   } finally {
@@ -657,6 +660,9 @@ describe("Codex app-server provider", () => {
     const provider = new CodexAppServerAgentClient(createTestLogger());
     castInternals<{ goalsEnabledPromise: Promise<boolean> | null }>(provider).goalsEnabledPromise =
       Promise.resolve(false);
+    castInternals<{ autoReviewEnabledPromise: Promise<boolean> | null }>(
+      provider,
+    ).autoReviewEnabledPromise = Promise.resolve(false);
     castInternals<{ spawnAppServer: () => Promise<ChildProcessWithoutNullStreams> }>(
       provider,
     ).spawnAppServer = async () => appServer.child;
@@ -975,6 +981,76 @@ describe("Codex app-server provider", () => {
         argumentHint: "",
       },
     ]);
+  });
+
+  test("does not list globally disabled Codex skills", async () => {
+    const commands = await listCommandsFromFakeCodex(
+      [
+        {
+          name: "review",
+          description: "Review code.",
+          path: "/Users/test/.codex/skills/review/SKILL.md",
+        },
+      ],
+      {
+        extra: {
+          codex: {
+            skillsPolicy: {
+              globalDisabledSkillNames: ["review"],
+            },
+          },
+        },
+      },
+    );
+
+    expect(commands.some((command) => command.name === "review")).toBe(false);
+  });
+
+  test("lists an agent-enabled skill even when it is globally disabled", async () => {
+    const commands = await listCommandsFromFakeCodex(
+      [
+        {
+          name: "review",
+          description: "Review code.",
+          path: "/Users/test/.codex/skills/review/SKILL.md",
+        },
+      ],
+      {
+        extra: {
+          codex: {
+            skillsPolicy: {
+              globalDisabledSkillNames: ["review"],
+              agentEnabledSkillNames: ["review"],
+            },
+          },
+        },
+      },
+    );
+
+    expect(commands.some((command) => command.name === "review")).toBe(true);
+  });
+
+  test("does not list an agent-disabled skill even when it is globally enabled", async () => {
+    const commands = await listCommandsFromFakeCodex(
+      [
+        {
+          name: "review",
+          description: "Review code.",
+          path: "/Users/test/.codex/skills/review/SKILL.md",
+        },
+      ],
+      {
+        extra: {
+          codex: {
+            skillsPolicy: {
+              agentDisabledSkillNames: ["review"],
+            },
+          },
+        },
+      },
+    );
+
+    expect(commands.some((command) => command.name === "review")).toBe(false);
   });
 
   test("maps image prompt blocks to Codex localImage input", async () => {
@@ -2443,6 +2519,36 @@ describe("Codex app-server provider", () => {
         provider: "codex",
         turnId: "test-turn",
         item: { type: "reasoning", text: "ing" },
+      },
+    ]);
+  });
+
+  test("streams Codex reasoning delta aliases", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("item/reasoning/textDelta", {
+      itemId: "reasoning-item-alias-1",
+      delta: "Read ",
+    });
+    asInternals(session).handleNotification("item/reasoning/delta", {
+      itemId: "reasoning-item-alias-1",
+      delta: "docs",
+    });
+
+    expect(events).toEqual([
+      {
+        type: "timeline",
+        provider: "codex",
+        turnId: "test-turn",
+        item: { type: "reasoning", text: "Read " },
+      },
+      {
+        type: "timeline",
+        provider: "codex",
+        turnId: "test-turn",
+        item: { type: "reasoning", text: "docs" },
       },
     ]);
   });

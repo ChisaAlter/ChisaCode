@@ -472,13 +472,11 @@ function AppContainer({
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
   const keyboardShortcutsEnabled = chromeEnabled || pathname.startsWith("/settings");
   const windowControlsPadding = useWindowControlsPadding("sidebar");
-  const surfaceStyle = useMemo(
-    () => [
-      layoutStyles.surfaceFill,
+  const titlebarSpacerStyle = useMemo(
+    () =>
       !isCompactLayout && windowControlsPadding.top > 0
-        ? { paddingTop: windowControlsPadding.top }
+        ? { height: windowControlsPadding.top, flexShrink: 0 }
         : null,
-    ],
     [isCompactLayout, windowControlsPadding.top],
   );
   const appRowStyle = useMemo(
@@ -532,9 +530,10 @@ function AppContainer({
   );
 
   const content = (
-    <View style={surfaceStyle}>
+    <View style={layoutStyles.surfaceFill}>
       <LiquidNeonBackdrop />
       <DesktopTitlebarDragStrip />
+      {titlebarSpacerStyle ? <View style={titlebarSpacerStyle} /> : null}
       <View style={appRowStyle}>{appRowContent}</View>
       <FloatingPanelPortalHost />
       {isCompactLayout && chromeEnabled && <LeftSidebar selectedAgentId={selectedAgentId} />}

@@ -50,8 +50,8 @@ export function useToolCallSheet(): ToolCallSheetContextValue {
 function CustomSheetBackground({ style }: BottomSheetBackgroundProps) {
   const { theme } = useUnistyles();
   const containerStyle = useMemo(
-    () => [style, { backgroundColor: theme.colors.surface2, borderRadius: 16 }],
-    [style, theme.colors.surface2],
+    () => [style, { backgroundColor: theme.colors.surface0, borderRadius: 16 }],
+    [style, theme.colors.surface0],
   );
   return <Animated.View pointerEvents="none" style={containerStyle} />;
 }

@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import {
   getAgentsSkillsDir,
   getBundledSkillsDir,
@@ -8,6 +11,8 @@ import {
   getCodexSkillsDir,
 } from "./paths.js";
 import { listFilesRecursive, removeSkill, syncSkills } from "./sync.js";
+
+const execFileAsync = promisify(execFile);
 
 export type SkillsState = "not-installed" | "up-to-date" | "drift";
 
@@ -26,6 +31,40 @@ export interface SkillTargets {
   agentsDir: string;
   claudeDir: string;
   codexDir: string;
+}
+
+export interface UserSkillTargets {
+  agentsDir: string;
+  claudeDir: string;
+  codexDir: string;
+}
+
+export interface UserInstalledSkillSource {
+  id: string;
+  type: "github" | "local";
+  url?: string;
+  localPath?: string;
+  installedAt: string;
+  skillNames: string[];
+}
+
+export interface UserSkillInstallResult {
+  installedSource: UserInstalledSkillSource;
+  skillNames: string[];
+}
+
+export interface InstallUserSkillsOptions {
+  targets?: UserSkillTargets;
+  replace?: boolean;
+  installedAt?: string;
+}
+
+export interface NormalizedGitHubSkillSource {
+  owner: string;
+  repo: string;
+  id: string;
+  url: string;
+  archiveUrl: string;
 }
 
 export const CHISACODE_SKILL_NAMES = [
@@ -49,6 +88,99 @@ function resolveSkillTargets(): SkillTargets {
     claudeDir: getClaudeSkillsDir(),
     codexDir: getCodexSkillsDir(),
   };
+}
+
+function resolveUserSkillTargets(): UserSkillTargets {
+  return {
+    agentsDir: getAgentsSkillsDir(),
+    claudeDir: getClaudeSkillsDir(),
+    codexDir: getCodexSkillsDir(),
+  };
+}
+
+async function pathIsDirectory(p: string): Promise<boolean> {
+  const stat = await fs.stat(p).catch(() => null);
+  return stat?.isDirectory() ?? false;
+}
+
+async function pathExists(p: string): Promise<boolean> {
+  return fs
+    .access(p)
+    .then(() => true)
+    .catch(() => false);
+}
+
+function isValidSkillName(name: string): boolean {
+  return (
+    name.length > 0 && name !== "." && name !== ".." && !name.includes("/") && !name.includes("\\")
+  );
+}
+
+async function hasSkillMarkdown(dir: string): Promise<boolean> {
+  return pathExists(path.join(dir, "SKILL.md"));
+}
+
+async function discoverSkillNames(sourceDir: string): Promise<string[]> {
+  const resolved = path.resolve(sourceDir);
+  if (!(await pathIsDirectory(resolved))) {
+    throw new Error(`Skill source is not a directory: ${sourceDir}`);
+  }
+
+  if (await hasSkillMarkdown(resolved)) {
+    const name = path.basename(resolved);
+    if (!isValidSkillName(name)) {
+      throw new Error(`Invalid skill directory name: ${name}`);
+    }
+    return [name];
+  }
+
+  const entries = await fs.readdir(resolved, { withFileTypes: true });
+  const names: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !isValidSkillName(entry.name)) continue;
+    if (await hasSkillMarkdown(path.join(resolved, entry.name))) {
+      names.push(entry.name);
+    }
+  }
+  names.sort(compareStrings);
+  if (names.length === 0) {
+    throw new Error(
+      `No skills found in ${sourceDir}; expected SKILL.md in the directory or its children.`,
+    );
+  }
+  return names;
+}
+
+function sourceParentForInstall(sourceDir: string, skillNames: readonly string[]): string {
+  const resolved = path.resolve(sourceDir);
+  if (skillNames.length === 1 && path.basename(resolved) === skillNames[0]) {
+    return path.dirname(resolved);
+  }
+  return resolved;
+}
+
+async function assertNoSkillConflicts(
+  skillNames: readonly string[],
+  targets: UserSkillTargets,
+): Promise<void> {
+  const conflicts: string[] = [];
+  for (const name of skillNames) {
+    for (const root of [targets.agentsDir, targets.claudeDir, targets.codexDir]) {
+      if (await pathExists(path.join(root, name))) {
+        conflicts.push(name);
+        break;
+      }
+    }
+  }
+  if (conflicts.length > 0) {
+    throw new Error(`Skill already exists: ${conflicts.sort(compareStrings).join(", ")}`);
+  }
+}
+
+function makeSourceId(type: "github" | "local", value: string): string {
+  if (type === "github") return `github:${value}`;
+  const sha = createHash("sha256").update(path.resolve(value)).digest("hex").slice(0, 16);
+  return `local:${sha}`;
 }
 
 async function hashSkillDir(skillDir: string): Promise<SkillFiles | null> {
@@ -161,4 +293,132 @@ export async function uninstallSkills(targets?: SkillTargets): Promise<SkillsSta
     });
   }
   return getSkillsStatus(t);
+}
+
+export async function installUserSkillsFromLocalDirectory(
+  localPath: string,
+  options: InstallUserSkillsOptions = {},
+): Promise<UserSkillInstallResult> {
+  const targets = options.targets ?? resolveUserSkillTargets();
+  const resolved = path.resolve(localPath);
+  const skillNames = await discoverSkillNames(resolved);
+
+  if (!options.replace) {
+    await assertNoSkillConflicts(skillNames, targets);
+  }
+
+  await syncSkills({
+    sourceDir: sourceParentForInstall(resolved, skillNames),
+    agentsDir: targets.agentsDir,
+    claudeDir: targets.claudeDir,
+    codexDir: targets.codexDir,
+    skillNames,
+  });
+
+  const installedSource: UserInstalledSkillSource = {
+    id: makeSourceId("local", resolved),
+    type: "local",
+    localPath: resolved,
+    installedAt: options.installedAt ?? new Date().toISOString(),
+    skillNames,
+  };
+
+  return { installedSource, skillNames };
+}
+
+export function normalizeGitHubSkillSource(value: string): NormalizedGitHubSkillSource {
+  const trimmed = value.trim();
+  let owner: string | undefined;
+  let repo: string | undefined;
+
+  const slugMatch = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/.exec(trimmed);
+  if (slugMatch) {
+    owner = slugMatch[1];
+    repo = slugMatch[2];
+  } else {
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      throw new Error("URL install supports GitHub repository URLs or owner/repo slugs.");
+    }
+
+    if (parsed.hostname.toLowerCase() !== "github.com") {
+      throw new Error("URL install only supports GitHub repository URLs.");
+    }
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts.length < 2) {
+      throw new Error("GitHub URL must include owner and repository.");
+    }
+    owner = parts[0];
+    repo = parts[1].replace(/\.git$/, "");
+  }
+
+  if (!owner || !repo) {
+    throw new Error("GitHub source must be an owner/repo slug or repository URL.");
+  }
+
+  return {
+    owner,
+    repo,
+    id: makeSourceId("github", `${owner}/${repo}`),
+    url: `https://github.com/${owner}/${repo}`,
+    archiveUrl: `https://codeload.github.com/${owner}/${repo}/tar.gz/HEAD`,
+  };
+}
+
+async function downloadGitHubArchive(source: NormalizedGitHubSkillSource): Promise<string> {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "chisacode-skill-github-"));
+  const archivePath = path.join(tempRoot, "repo.tar.gz");
+  const extractDir = path.join(tempRoot, "extract");
+  await fs.mkdir(extractDir, { recursive: true });
+
+  const response = await fetch(source.archiveUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${source.url}: HTTP ${response.status}`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  await fs.writeFile(archivePath, bytes);
+  await execFileAsync("tar", ["-xzf", archivePath, "-C", extractDir]);
+  return extractDir;
+}
+
+export async function installUserSkillsFromGitHub(
+  value: string,
+  options: InstallUserSkillsOptions = {},
+): Promise<UserSkillInstallResult> {
+  const source = normalizeGitHubSkillSource(value);
+  const extractDir = await downloadGitHubArchive(source);
+  const entries = await fs.readdir(extractDir, { withFileTypes: true });
+  const repoRoot = entries.find((entry) => entry.isDirectory());
+  if (!repoRoot) {
+    throw new Error(`Downloaded GitHub archive for ${source.url} did not contain a repository.`);
+  }
+
+  const result = await installUserSkillsFromLocalDirectory(path.join(extractDir, repoRoot.name), {
+    ...options,
+    installedAt: options.installedAt,
+  });
+
+  return {
+    installedSource: {
+      id: source.id,
+      type: "github",
+      url: source.url,
+      installedAt: result.installedSource.installedAt,
+      skillNames: result.skillNames,
+    },
+    skillNames: result.skillNames,
+  };
+}
+
+export async function uninstallUserInstalledSkills(
+  skillNames: readonly string[],
+  targets: UserSkillTargets = resolveUserSkillTargets(),
+): Promise<string[]> {
+  const removed = [...new Set(skillNames)].sort(compareStrings);
+  for (const name of removed) {
+    await removeSkill(name, targets);
+  }
+  return removed;
 }

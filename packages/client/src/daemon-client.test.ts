@@ -2688,6 +2688,286 @@ test("lists commands with legacy requestId signature via RPC", async () => {
   });
 });
 
+test("manages agent skills via correlated RPCs", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const listPromise = client.listAgentSkills({ requestId: "skills-list" });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.skills.list.request",
+    requestId: "skills-list",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.skills.list.response",
+      payload: {
+        requestId: "skills-list",
+        scopes: [{ type: "global", label: "Global" }],
+        skills: [],
+        policy: {
+          global: { disabledSkillNames: [] },
+          providers: {},
+          agents: {},
+          installedSources: {},
+        },
+        errors: [],
+      },
+    }),
+  );
+  await expect(listPromise).resolves.toMatchObject({ requestId: "skills-list" });
+
+  const patchPromise = client.patchAgentSkillPolicy({
+    requestId: "skills-patch",
+    scope: { type: "agent", agentId: "agent-1" },
+    policy: { disabledSkillNames: ["review"] },
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.skills.policy.patch.request",
+    requestId: "skills-patch",
+    scope: { type: "agent", agentId: "agent-1" },
+    policy: { disabledSkillNames: ["review"] },
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.skills.policy.patch.response",
+      payload: {
+        requestId: "skills-patch",
+        ok: true,
+        policy: {
+          global: { disabledSkillNames: [] },
+          providers: {},
+          agents: { "agent-1": { enabledSkillNames: [], disabledSkillNames: ["review"] } },
+          installedSources: {},
+        },
+        error: null,
+      },
+    }),
+  );
+  await expect(patchPromise).resolves.toMatchObject({ ok: true, requestId: "skills-patch" });
+
+  const installPromise = client.installAgentSkills({
+    requestId: "skills-install",
+    source: { type: "github", value: "owner/repo" },
+    replace: true,
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.skills.install.request",
+    requestId: "skills-install",
+    source: { type: "github", value: "owner/repo" },
+    replace: true,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.skills.install.response",
+      payload: {
+        requestId: "skills-install",
+        ok: true,
+        installedSource: {
+          id: "github:owner/repo",
+          type: "github",
+          url: "https://github.com/owner/repo",
+          installedAt: "2026-06-18T00:00:00.000Z",
+          skillNames: ["review"],
+        },
+        skills: ["review"],
+        error: null,
+      },
+    }),
+  );
+  await expect(installPromise).resolves.toMatchObject({
+    ok: true,
+    skills: ["review"],
+    requestId: "skills-install",
+  });
+
+  const uninstallPromise = client.uninstallAgentSkill({
+    requestId: "skills-uninstall",
+    sourceId: "github:owner/repo",
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.skills.uninstall.request",
+    requestId: "skills-uninstall",
+    sourceId: "github:owner/repo",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.skills.uninstall.response",
+      payload: {
+        requestId: "skills-uninstall",
+        ok: true,
+        removedSkillNames: ["review"],
+        policy: {
+          global: { disabledSkillNames: [] },
+          providers: {},
+          agents: {},
+          installedSources: {},
+        },
+        error: null,
+      },
+    }),
+  );
+  await expect(uninstallPromise).resolves.toMatchObject({
+    ok: true,
+    removedSkillNames: ["review"],
+    requestId: "skills-uninstall",
+  });
+});
+
+test("manages agent MCP servers via correlated RPCs", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const listPromise = client.listAgentMcpServers({ requestId: "mcp-list" });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.mcp_servers.list.request",
+    requestId: "mcp-list",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.mcp_servers.list.response",
+      payload: {
+        requestId: "mcp-list",
+        scopes: [{ type: "global", label: "Global" }],
+        servers: [],
+        policy: {
+          servers: {},
+          global: { disabledServerNames: [] },
+          providers: {},
+          agents: {},
+        },
+        errors: [],
+      },
+    }),
+  );
+  await expect(listPromise).resolves.toMatchObject({ requestId: "mcp-list" });
+
+  const upsertPromise = client.upsertAgentMcpServer({
+    requestId: "mcp-upsert",
+    server: {
+      name: "github",
+      config: { type: "stdio", command: "npx", args: ["-y", "server"] },
+    },
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.mcp_servers.upsert.request",
+    requestId: "mcp-upsert",
+    server: { name: "github", config: { type: "stdio", command: "npx" } },
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.mcp_servers.upsert.response",
+      payload: {
+        requestId: "mcp-upsert",
+        ok: true,
+        server: {
+          name: "github",
+          config: { type: "stdio", command: "npx", args: ["-y", "server"] },
+        },
+        policy: {
+          servers: {
+            github: {
+              name: "github",
+              config: { type: "stdio", command: "npx", args: ["-y", "server"] },
+            },
+          },
+          global: { disabledServerNames: [] },
+          providers: {},
+          agents: {},
+        },
+        error: null,
+      },
+    }),
+  );
+  await expect(upsertPromise).resolves.toMatchObject({ ok: true, requestId: "mcp-upsert" });
+
+  const patchPromise = client.patchAgentMcpServerPolicy({
+    requestId: "mcp-policy",
+    scope: { type: "provider", provider: "codex" },
+    policy: { disabledServerNames: ["github"] },
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.mcp_servers.policy.patch.request",
+    requestId: "mcp-policy",
+    scope: { type: "provider", provider: "codex" },
+    policy: { disabledServerNames: ["github"] },
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.mcp_servers.policy.patch.response",
+      payload: {
+        requestId: "mcp-policy",
+        ok: true,
+        policy: {
+          servers: {},
+          global: { disabledServerNames: [] },
+          providers: { codex: { enabledServerNames: [], disabledServerNames: ["github"] } },
+          agents: {},
+        },
+        error: null,
+      },
+    }),
+  );
+  await expect(patchPromise).resolves.toMatchObject({ ok: true, requestId: "mcp-policy" });
+
+  const deletePromise = client.deleteAgentMcpServer({
+    requestId: "mcp-delete",
+    name: "github",
+  });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "agent.mcp_servers.delete.request",
+    requestId: "mcp-delete",
+    name: "github",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.mcp_servers.delete.response",
+      payload: {
+        requestId: "mcp-delete",
+        ok: true,
+        removedServerName: "github",
+        policy: {
+          servers: {},
+          global: { disabledServerNames: [] },
+          providers: {},
+          agents: {},
+        },
+        error: null,
+      },
+    }),
+  );
+  await expect(deletePromise).resolves.toMatchObject({
+    ok: true,
+    removedServerName: "github",
+    requestId: "mcp-delete",
+  });
+});
+
 test("emits output events for the active terminal stream", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

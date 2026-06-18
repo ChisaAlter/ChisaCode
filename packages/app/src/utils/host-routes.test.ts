@@ -22,6 +22,7 @@ import {
   parseWorkspaceOpenIntent,
   mapPathnameToServer,
   normalizeSettingsReturnToRoute,
+  SETTINGS_SECTION_SLUGS,
 } from "./host-routes";
 
 describe("parseHostAgentRouteFromPathname", () => {
@@ -40,6 +41,13 @@ describe("settings host routes", () => {
 
   it("builds a settings host route", () => {
     expect(buildSettingsHostRoute("srv one")).toBe("/settings/hosts/srv%20one");
+  });
+
+  it("includes the skills and MCP settings sections", () => {
+    expect(SETTINGS_SECTION_SLUGS).toContain("skills");
+    expect(buildSettingsSectionRoute("skills")).toBe("/settings/skills");
+    expect(SETTINGS_SECTION_SLUGS).toContain("mcp");
+    expect(buildSettingsSectionRoute("mcp")).toBe("/settings/mcp");
   });
 
   it("preserves an internal return route on settings links", () => {
