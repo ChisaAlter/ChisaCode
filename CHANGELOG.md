@@ -4,45 +4,20 @@
 
 ### Added
 
-- Agent delegation foundations are now available through scoped ChisaCode companion MCP
-  tools. Parent agents can delegate to child agents, inspect delegation status, cancel
-  delegated work, and read completed results.
-- Agent relationship metadata now tracks subagents, handoffs, detached agents, and
-  team slots while preserving compatibility labels for older stored agent records.
-- Settings now include richer provider controls for custom model gateways and synthetic
-  model-of-agents routing.
-- MCP server and skills management surfaces are now available from settings, with
-  desktop integration for installing bundled ChisaCode skills.
-- Repository documentation now includes CLI and skills guides, module maps, cross-cutting
-  architecture notes, and generated knowledge graphs for future maintenance work.
+- Custom model routing can now be configured from settings
+- Agent delegation workflows are now available across the app and host daemon
+- The app has refreshed glass surfaces and a brighter visual theme
 
 ### Improved
 
-- Provider discovery, model selection, provider snapshots, and diagnostics now share more
-  daemon-side plumbing, making custom providers and model routing more consistent across
-  app, CLI, MCP, and client SDK consumers.
-- Workspace drafts, tabs, sidebar sessions, project picking, and host routes now sync more
-  reliably across desktop, web, and mobile clients.
-- Agent archive behavior is clearer: closing tabs is a layout action, while archive is a
-  daemon-level lifecycle action that can cascade to owned subagents.
-- Desktop and app surfaces received refreshed glass UI components, updated theme tokens,
-  better floating controls, and a brighter default visual treatment.
-- Release automation is more robust: desktop workflows tolerate missing optional signing
-  secrets, Android APK releases generate the native project before packaging, and release
-  inputs are normalized before use.
-- Development documentation now calls out current Node requirements, package build order,
-  daemon home behavior, release checks, and platform-specific gotchas.
+- Workspaces and agent lists stay in sync more reliably across desktop and mobile
+- Desktop and Android release builds now publish through GitHub without extra local secrets
+- Provider setup and diagnostics are easier to understand
 
 ### Fixed
 
-- Synthetic model gateway responses now return consistently for supported gateway formats.
-- Provider hover and settings code now satisfies current typecheck expectations.
-- Android APK GitHub release builds no longer fail because the native Android project is
-  missing.
-- Desktop release packaging no longer requires unrelated local secrets to produce GitHub
-  release artifacts.
-- Agent delegation and subagent UI state now avoid several stale-list and archive edge
-  cases when workspaces or clients reconnect.
+- Synthetic model responses now return consistently through the gateway
+- Android APK release builds now generate the native project before packaging
 
 ## 0.1.87 - 2026-05-30
 

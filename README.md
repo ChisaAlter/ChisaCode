@@ -4,7 +4,7 @@
 
 <h1 align="center">ChisaCode</h1>
 
-<p align="center"><strong>Run AI coding agents from desktop, mobile, web, and CLI.</strong></p>
+<p align="center"><strong>ChisaCode</strong></p>
 
 > Languages: **English** | [简体中文](README.zh-CN.md)
 
@@ -13,196 +13,185 @@
   ·
   <a href="https://github.com/ChisaAlter/ChisaCode/actions/workflows/ci.yml">CI</a>
   ·
-  <a href="docs/cli.md">CLI</a>
-  ·
-  <a href="docs/skills.md">Skills</a>
+  <a href="README.zh-CN.md">中文文档</a>
 </p>
+
+<p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi agents.</p>
 
 ---
 
-ChisaCode is a local-first control surface for AI coding agents. It runs a daemon
-on your machine, starts provider CLIs in your real development environment, and
-lets multiple clients control the same work from a desktop app, phone, browser,
-or terminal.
+Run agents in parallel on your own machines. Ship from your phone or your desk.
 
-Use it when you want to run several agents in parallel, keep work in isolated
-worktrees, check progress from another device, or give other agents a safe way
-to delegate work through ChisaCode.
+- **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
+- **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi through the same interface. Pick the right model for each job.
+- **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
+- **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
+- **Privacy-first:** ChisaCode doesn't have any telemetry, tracking, or forced log-ins.
 
-## What You Get
+## Getting Started
 
-- **Local-first agent runtime**: code, credentials, shells, and agent processes
-  stay on the daemon host.
-- **One UI for many providers**: Claude Code, Codex, GitHub Copilot, OpenCode,
-  MiMoCode, Pi, ACP-compatible providers, and custom provider definitions.
-- **Cross-device sessions**: desktop, mobile, web, and CLI clients can connect to
-  the same daemon and see the same agents.
-- **Worktree-based parallelism**: create isolated git worktrees for independent
-  tasks without disturbing the main checkout.
-- **Agent delegation**: injected ChisaCode MCP tools let a parent agent delegate
-  to child agents, inspect their status, cancel them, or collect results.
-- **Schedules and loops**: run recurring checks through schedules, or use skills
-  for long-running iteration with explicit exit conditions.
-- **Voice and speech support**: dictate prompts, use voice mode, and choose local
-  or configured speech providers.
-- **Model routing and custom gateways**: configure custom providers, model
-  gateways, and synthetic model-of-agents routing from settings.
-- **Privacy-aware defaults**: no forced cloud account, no telemetry requirement,
-  and no inference markup from ChisaCode.
+ChisaCode runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
 
-## How It Works
+### Prerequisites
 
-```mermaid
-flowchart LR
-  Client["Desktop / Mobile / Web / CLI"] --> Daemon["ChisaCode daemon"]
-  Daemon --> Agents["Provider CLIs and agent SDKs"]
-  Daemon --> Workspace["Projects, worktrees, terminals, schedules"]
-  Client -. optional .-> Relay["E2EE relay"]
-  Relay -. encrypted bridge .-> Daemon
-```
-
-The daemon owns long-lived state: agents, logs, workspaces, terminals, schedules,
-provider settings, pairing, and relay connections. Clients are control surfaces.
-Agents continue running when a client closes, and another client can reconnect
-to the same daemon later.
-
-## Quick Start
-
-### 1. Install an Agent Provider
-
-Install and authenticate at least one provider CLI or runtime:
+You need at least one agent CLI installed and configured with your credentials:
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - [Codex](https://github.com/openai/codex)
-- [GitHub Copilot CLI](https://github.com/features/copilot/cli/)
-- [OpenCode](https://github.com/opencode-ai/opencode)
+- [GitHub Copilot](https://github.com/features/copilot/cli/)
+- [OpenCode](https://github.com/anomalyco/opencode)
 - [MiMoCode](https://github.com/XiaomiMiMo/MiMo-Code)
 - [Pi](https://pi.dev)
 
-Provider credentials remain managed by the provider tools themselves. ChisaCode
-starts them and coordinates their sessions.
+### Desktop app (recommended)
 
-### 2. Use the Desktop App
+Download it from [chisacode.sh/download](https://chisacode.sh/download) or the [GitHub releases page](https://github.com/getchisacode/chisacode/releases). Open the app and the daemon starts automatically. Nothing else to install.
 
-Download a release from
-[GitHub Releases](https://github.com/ChisaAlter/ChisaCode/releases). The desktop
-app can start and supervise its own daemon, install the matching CLI, and install
-the bundled ChisaCode skills from Settings.
+To connect from your phone, scan the QR code shown in Settings.
 
-To connect from a phone or another browser client, open Settings and scan the
-pairing QR code.
+### CLI / headless
 
-### 3. Use the CLI or a Headless Machine
-
-For a terminal-only setup:
+Install the CLI and start ChisaCode:
 
 ```bash
 npm install -g @chisacode/cli
-chisacode daemon start
-chisacode daemon status
+chisacode
 ```
 
-Start agents and follow them from the shell:
+This shows a QR code in the terminal. Connect from any client. This path is useful for servers and remote machines.
+
+For full setup and configuration, see:
+
+- [Docs](https://chisacode.sh/docs)
+- [Configuration reference](https://chisacode.sh/docs/configuration)
+
+## CLI
+
+Everything you can do in the app, you can do from the terminal.
 
 ```bash
-chisacode provider ls
-chisacode run --provider codex "fix the failing login test"
-chisacode run --provider claude --worktree fix-login "implement the fix and add tests"
+chisacode run --provider claude/opus-4.6 "implement user authentication"
+chisacode run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
 
-chisacode ls -a -g
-chisacode attach <agent-id>
-chisacode send <agent-id> "also update the docs"
-chisacode wait <agent-id>
+chisacode ls                           # list running agents
+chisacode attach abc123                # stream live output
+chisacode send abc123 "also add tests" # follow-up task
+
+# run on a remote daemon
+chisacode --host workstation.local:6767 run "run the full test suite"
 ```
 
-Connect to a daemon on another machine:
-
-```bash
-chisacode --host workstation.local:6767 ls -a
-```
-
-See the [CLI guide](docs/cli.md) for agent, provider, worktree, schedule, loop,
-chat, terminal, and daemon commands.
+See the [full CLI reference](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/cli.md)
+for more.
 
 ## Skills
 
-ChisaCode ships skills that teach supported agents how to use ChisaCode itself.
-Install them from the desktop Settings page, or manually:
+Skills teach your agent to use ChisaCode to orchestrate other agents.
+
+See the [skills guide](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/skills.md)
+for setup and usage details.
 
 ```bash
 npx skills add ChisaAlter/ChisaCode
 ```
 
-Core skills:
+Then use them in any agent conversation:
 
-- `chisacode`: reference skill for creating agents, managing worktrees, sending
-  prompts, and checking daemon state.
-- `chisacode-advisor`: ask one separate agent for a second opinion.
-- `chisacode-committee`: ask two contrasting agents to analyze a problem.
-- `chisacode-handoff`: transfer work to another agent with context.
-- `chisacode-loop`: repeat work until explicit acceptance criteria pass.
-- `chisacode-epic`: run a large multi-phase orchestration flow.
+- `/chisacode-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
+- `/chisacode-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
+- `/chisacode-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
+- `/chisacode-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
 
-See the [skills guide](docs/skills.md) for usage and operational notes.
+## Development
 
-## Developer Setup
+Quick monorepo package map:
 
-This repository is an npm workspace monorepo. Use the Node version from
-`.tool-versions`.
+- `packages/server`: ChisaCode daemon (agent process orchestration, WebSocket API, MCP server)
+- `packages/app`: Expo client (iOS, Android, web)
+- `packages/cli`: `chisacode` CLI for daemon and agent workflows
+- `packages/desktop`: Electron desktop app
+- `packages/relay`: Relay package for remote connectivity
 
-```bash
-npm ci
-npm run dev        # macOS/Linux
-npm run dev:win    # Windows
-```
-
-Focused development commands:
+Common commands:
 
 ```bash
+# run all local dev services
+npm run dev
+
+# run individual surfaces
 npm run dev:server
 npm run dev:app
 npm run dev:desktop
 
-npm run build:client
+# build the server stack
 npm run build:server
-npm run build:desktop
 
+# repo-wide checks
 npm run typecheck
-npm run lint
 ```
 
-Useful architecture entry points:
+## Community
 
-- [Product overview](docs/product.md)
-- [Architecture map](docs/ARCHITECTURE_MAP.md)
-- [Development guide](docs/development.md)
-- [Release guide](docs/release.md)
-- [Custom providers](docs/custom-providers.md)
-- [Security policy](SECURITY.md)
+- [chisacode-relay](https://github.com/zenghongtu/chisacode-relay) — self-hosted relay in Go
 
-## Packages
+### Self-hosted relay TLS
 
-| Package                         | Responsibility                                                  |
-| ------------------------------- | --------------------------------------------------------------- |
-| `@chisacode/protocol`           | Wire schemas, shared types, binary frame codecs                 |
-| `@chisacode/client`             | Daemon WebSocket driver and SDK facade                          |
-| `@chisacode/server`             | Local daemon, provider runtime, storage, MCP, relay, schedules  |
-| `@chisacode/app`                | Expo client for iOS, Android, web, and desktop renderer UI      |
-| `@chisacode/desktop`            | Electron wrapper, packaged app integration, daemon supervision  |
-| `@chisacode/cli`                | Terminal interface for daemon, agents, worktrees, and schedules |
-| `@chisacode/relay`              | End-to-end encrypted relay transport                            |
-| `@chisacode/highlight`          | Reusable syntax highlighting                                    |
-| `@chisacode/expo-two-way-audio` | Native audio bridge for voice features                          |
+Self-hosted relays use `ws://` unless TLS is opted in. For a relay behind nginx on 443, start the daemon with:
 
-## Release Notes
+```bash
+CHISACODE_RELAY_ENDPOINT=127.0.0.1:8080 \
+CHISACODE_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
+CHISACODE_RELAY_USE_TLS=true \
+chisacode daemon start
+```
 
-All workspaces share one version. See [CHANGELOG.md](CHANGELOG.md) for user-facing
-changes and [the release guide](docs/release.md) for the current release process.
+Equivalent config:
 
-Stable releases publish npm packages for the public workspaces and attach desktop
-and APK artifacts through GitHub Actions. Mobile store builds are handled by the
-configured EAS release flow.
+```json
+{
+  "daemon": {
+    "relay": {
+      "enabled": true,
+      "endpoint": "127.0.0.1:8080",
+      "publicEndpoint": "relay.example.com:443",
+      "useTls": true
+    }
+  }
+}
+```
+
+Minimal nginx WebSocket proxy:
+
+```nginx
+server {
+  listen 443 ssl;
+  server_name relay.example.com;
+
+  ssl_certificate /etc/letsencrypt/live/relay.example.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/relay.example.com/privkey.pem;
+
+  location /ws {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+  }
+}
+```
+
+---
+
+<p align="center">
+  <a href="https://star-history.com/#getchisacode/chisacode&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date&theme=dark">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date">
+      <img src="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date" alt="Star history chart for getchisacode/chisacode" width="600" style="max-width: 100%;">
+    </picture>
+  </a>
+</p>
 
 ## License
 
-AGPL-3.0-or-later
+AGPL-3.0
