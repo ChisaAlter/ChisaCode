@@ -1,6 +1,6 @@
 {
   "name": "@chisacode/relay",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ChisaCode relay for bridging daemon and client connections",
   "files": [
     "dist",

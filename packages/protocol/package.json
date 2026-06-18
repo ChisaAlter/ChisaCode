@@ -1,6 +1,6 @@
 {
   "name": "@chisacode/protocol",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ChisaCode shared protocol schemas and wire types",
   "files": [
     "dist",

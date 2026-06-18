@@ -1,6 +1,6 @@
 {
   "name": "@chisacode/desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "ChisaCode desktop app (Electron wrapper)",
   "homepage": "https://chisacode.sh",
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ChisaAlter/ChisaCode.git"
+    "url": "https://github.com/getchisacode/chisacode.git"
   },
   "main": "dist/main.js",
   "scripts": {
