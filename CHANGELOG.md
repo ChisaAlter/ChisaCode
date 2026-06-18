@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.1 - 2026-06-18
+
+### Added
+
+- Custom model routing can now be configured from settings
+- Agent delegation workflows are now available across the app and host daemon
+- The app has refreshed glass surfaces and a brighter visual theme
+
+### Improved
+
+- Workspaces and agent lists stay in sync more reliably across desktop and mobile
+- Desktop and Android release builds now publish through GitHub without extra local secrets
+- Provider setup and diagnostics are easier to understand
+
+### Fixed
+
+- Synthetic model responses now return consistently through the gateway
+- Android APK release builds now generate the native project before packaging
+
 ## 0.1.87 - 2026-05-30
 
 ### Added
