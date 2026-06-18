@@ -1,6 +1,6 @@
 ---
 title: OpenChamber Alternative With Linux, Windows, and Mobile
-description: ChisaCode ships native iOS and Android apps, runs on macOS, Linux, and Windows, and supports 30+ agents. OpenChamber is macOS only with a PWA and is built around OpenCode.
+description: ChisaCode ships native iOS and Android apps, runs on macOS, Linux, and Windows, and supports Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, and custom ACP providers. OpenChamber is macOS only with a PWA and is built around OpenCode.
 nav: OpenChamber
 order: 103
 ---
@@ -19,7 +19,7 @@ OpenChamber runs on macOS, around OpenCode, with a phone PWA. ChisaCode runs Ope
 
 - Linux and Windows desktop
 - A native iOS and Android app
-- Many more agents than OpenCode (Claude Code, Codex, Pi, plus 30+ more via the in-app ACP catalog)
+- Built-in providers beyond OpenCode: Claude, Codex, MiMoCode, Pi, and Kimi Code
 - A scriptable CLI to drive agents and connect to remote daemons
 
 ## Mobile
@@ -36,7 +36,7 @@ OpenChamber ships on macOS.
 
 ## Providers
 
-ChisaCode runs Claude Code, Codex, OpenCode, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. ChisaCode speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
+ChisaCode runs Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
 
 OpenChamber is built around OpenCode.
 
@@ -74,20 +74,20 @@ ChisaCode's speech-to-text and text-to-speech run locally on your device. OpenCh
 
 ## Comparison
 
-|                              | ChisaCode                                                       | OpenChamber       |
-| ---------------------------- | --------------------------------------------------------------- | ----------------- |
-| License                      | Open source (AGPL-3.0)                                          | Open source (MIT) |
-| Desktop platforms            | macOS, Linux, Windows                                           | macOS             |
-| Mobile                       | Native iOS, Android                                             | PWA               |
-| Providers                    | Claude Code, Codex, OpenCode, Pi + 30+ via ACP catalog + custom | OpenCode          |
-| Split panes and tabs         | Yes                                                             | —                 |
-| In-app terminal              | Yes                                                             | —                 |
-| In-app browser               | Yes                                                             | —                 |
-| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                        | Yes               |
-| CLI                          | Run, `--host`, ls, send, schedule, loop                         | —                 |
-| Git worktrees                | Yes                                                             | Yes               |
-| Per-worktree dev server URLs | Yes                                                             | —                 |
-| Local voice (on-device)      | Yes                                                             | —                 |
-| Self-hosted daemon           | Yes                                                             | —                 |
+|                              | ChisaCode                                                     | OpenChamber       |
+| ---------------------------- | ------------------------------------------------------------- | ----------------- |
+| License                      | Open source (AGPL-3.0)                                        | Open source (MIT) |
+| Desktop platforms            | macOS, Linux, Windows                                         | macOS             |
+| Mobile                       | Native iOS, Android                                           | PWA               |
+| Providers                    | Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code + custom ACP | OpenCode          |
+| Split panes and tabs         | Yes                                                           | —                 |
+| In-app terminal              | Yes                                                           | —                 |
+| In-app browser               | Yes                                                           | —                 |
+| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                      | Yes               |
+| CLI                          | Run, `--host`, ls, send, schedule, loop                       | —                 |
+| Git worktrees                | Yes                                                           | Yes               |
+| Per-worktree dev server URLs | Yes                                                           | —                 |
+| Local voice (on-device)      | Yes                                                           | —                 |
+| Self-hosted daemon           | Yes                                                           | —                 |
 
 See also: [ChisaCode vs Conductor](/docs/alternatives/conductor), [ChisaCode vs Superset](/docs/alternatives/superset), [ChisaCode vs Happy Coder](/docs/alternatives/happy-coder).

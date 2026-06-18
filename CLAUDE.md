@@ -1,18 +1,22 @@
 # CLAUDE.md
 
-ChisaCode is a mobile app for monitoring and controlling your local AI coding agents from anywhere. Your dev environment, in your pocket. Connects directly to your actual development environment — your code stays on your machine.
+ChisaCode is a local-first app for monitoring and controlling local AI coding agents from desktop, mobile, web, and CLI clients. It connects to your actual development environment; your code stays on your machine.
 
-**Supported agents:** Claude Code, Codex, GitHub Copilot, OpenCode, MiMoCode, and Pi.
+**Built-in providers:** Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. Custom providers can extend those providers or use `extends: "acp"` for Agent Client Protocol commands.
 
 ## Repository map
 
 This is an npm workspace monorepo:
 
+- `packages/protocol` — Shared WebSocket schemas, provider manifests, and protocol types
+- `packages/client` — Daemon WebSocket driver and SDK facade
 - `packages/server` — Daemon: agent lifecycle, WebSocket API, MCP server
-- `packages/app` — Mobile + web client (Expo)
+- `packages/app` — Expo client for native, web, and desktop renderer surfaces
 - `packages/cli` — Docker-style CLI (`chisacode run/ls/logs/wait`)
 - `packages/relay` — E2E encrypted relay for remote access
 - `packages/desktop` — Electron desktop wrapper
+- `packages/highlight` — Shared syntax highlighting
+- `packages/expo-two-way-audio` — Native two-way audio module
 
 ## Docs
 
@@ -52,7 +56,7 @@ npm run cli -- ls -a -g              # List all agents
 npm run cli -- daemon status         # Check daemon status
 npm run typecheck                    # Always run after changes
 npm run lint                         # Always run after changes
-npm run format                       # Auto-format with Biome
+npm run format                       # Auto-format with oxfmt
 npm run format:check                 # Check formatting without writing
 ```
 

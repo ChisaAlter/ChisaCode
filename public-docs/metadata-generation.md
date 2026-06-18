@@ -25,7 +25,7 @@ The candidate list is assembled in this order:
 1. **Providers you configured**, in the order you list them (see below).
 2. **Built-in defaults**, matched against the models of the providers you have enabled:
    1. a `haiku` model
-   2. `gpt-5.4-mini` (low reasoning)
+   2. the configured Codex low-reasoning default model, when available
    3. `minimax-m2.5`
    4. `nemotron-3-super`
 3. **The model currently selected** for that agent or draft, as a last resort.
@@ -53,7 +53,7 @@ To control which models ChisaCode uses — for example to keep all metadata gene
 
 Each entry accepts:
 
-- `provider` (required) — the provider id. Built-in ids are `claude`, `codex`, `copilot`, `opencode`, and `pi`; custom providers use the id you gave them.
+- `provider` (required) — the provider id. Built-in ids are `claude`, `codex`, `opencode`, `mimocode`, `pi`, and `kimi`; custom providers use the id you gave them.
 - `model` (optional) — a specific model id. Omit it to use that provider's default model.
 - `thinkingOptionId` (optional) — a reasoning/thinking level for models that support one. Falls back to the model's default if the value isn't valid for that model.
 

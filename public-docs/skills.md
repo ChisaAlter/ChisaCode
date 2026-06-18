@@ -7,7 +7,7 @@ order: 8
 
 # Orchestration skills
 
-ChisaCode ships orchestration skills that teach coding agents (Claude Code, Codex) how to use the ChisaCode CLI to spawn, coordinate, and manage other agents. Skills are slash commands your agent can invoke, they provide the prompts, context, and workflows so agents know how to orchestrate without you writing boilerplate. Install them from the desktop app's Integrations settings or via the CLI.
+ChisaCode ships orchestration skills that teach coding agents how to use the ChisaCode CLI to spawn, coordinate, and manage other agents. Skills are slash commands your agent can invoke, they provide the prompts, context, and workflows so agents know how to orchestrate without you writing boilerplate. Install them from the desktop app's Integrations settings or via the CLI.
 
 ## Installation
 
@@ -67,7 +67,7 @@ The advisor gives a judgment. You decide what to do. The advisor prompt is analy
 
 ```
 /chisacode-advisor did I miss anything in this migration plan?
-/chisacode-advisor --provider claude/opus what is the UX risk in this flow?
+/chisacode-advisor --provider claude what is the UX risk in this flow?
 ```
 
 ## `/chisacode-epic`, Epic Orchestration

@@ -1,27 +1,44 @@
 ---
 title: Providers
-description: How ChisaCode thinks about coding agents, wrapping existing CLIs, native vs ACP support, and where to go next.
+description: How ChisaCode launches and supervises external coding agent CLIs.
 nav: Providers
 order: 3
 ---
 
 # Providers
 
-ChisaCode doesn't ship its own coding agent. It launches and supervises **existing CLIs you've already installed and authenticated**, Claude Code, Codex, OpenCode, Cursor, Gemini, and the rest. Your subscriptions, your config, your skills, your MCP servers all stay intact. ChisaCode just gives you a UI, a CLI, a relay, and orchestration on top.
+ChisaCode does not ship its own coding agent. It launches and supervises external CLIs you have installed and authenticated. Your subscriptions, credentials, project config, and MCP servers stay with the underlying provider.
 
 ## Mental model
 
-A provider is the contract between ChisaCode and one external agent CLI: how to launch it, how to stream its output, how to send input back, what modes it supports. The actual binary lives on your machine and runs as a normal subprocess.
+A provider is the contract between ChisaCode and one external agent runtime: how to launch it, how to stream output, how to send input back, what modes and models it exposes, and how permissions are represented.
 
-## Two tiers
+The actual binary lives on your machine and runs as a subprocess of the local daemon.
 
-- **Native support**, ChisaCode ships a bundled adapter for the major agents (Claude Code, Codex, OpenCode, pi). Auto-discovered when the underlying CLI is installed, with mode metadata and voice support where applicable.
-- **ACP catalog**, any agent speaking the [Agent Client Protocol](https://agentclientprotocol.com) is supported through a generic adapter. ChisaCode ships a curated catalog of one-click installs (Cursor, Gemini, GitHub Copilot, Hermes, Kimi, Qwen Code, and 25+ more), and you can add any other ACP agent yourself.
+## Current built-ins
 
-Either way, **you install the underlying CLI**. ChisaCode runs it.
+The built-in provider manifest currently declares:
+
+- Claude
+- Codex
+- OpenCode
+- MiMoCode
+- Pi
+- Kimi Code
+
+See [Supported providers](/docs/supported-providers) for IDs and install links.
+
+## Custom providers
+
+Custom providers live in `agents.providers` inside ChisaCode config.
+
+- Extend a built-in provider to create a separate profile, override environment variables, replace the command, or curate models.
+- Extend `acp` to run a generic Agent Client Protocol command.
+- Disable a built-in provider by setting `enabled: false`.
+
+See [Custom providers](/docs/custom-providers) for examples and field reference.
 
 ## Where to go next
 
-- [Supported providers](/docs/supported-providers), the full list with install links.
-- [Custom providers](/docs/custom-providers), add your own provider, point an existing one at a different endpoint, run multiple profiles, or override the binary in `~/.chisacode/config.json`.
-- [chisacode.sh/agents](/agents), per-agent landing page for each supported provider.
+- [Supported providers](/docs/supported-providers), the current built-in provider list.
+- [Custom providers](/docs/custom-providers), profiles, custom binaries, model overrides, and generic ACP commands.

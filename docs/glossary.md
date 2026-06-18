@@ -15,7 +15,7 @@ Authoritative terminology. UI label wins. Don't invent synonyms; use what's here
 - **Repository / Remote** — Internal git inputs (`remoteUrl`, `mainRepoRoot`) used to derive `projectKey`. No UI label.
 - **Session** — Per-client connection to a daemon. Internal. Code: `Session` (`packages/server/src/server/session.ts`). Don't confuse with: provider-side agent session log.
 - **Profile** — Internal name for the persisted shape of a host. Code: `HostProfile` (`packages/app/src/types/host-connection.ts:37`). Never user-facing.
-- **Provider** — Agent backend (Claude Code, Codex, Copilot, OpenCode, MiMoCode, Pi). UI: "Provider". Code: `ProviderSnapshotEntry` (`packages/protocol/src/messages.ts:198`).
+- **Provider** — Agent backend (Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code, or a configured custom provider). UI: "Provider". Code: `ProviderSnapshotEntry`.
 - **Model** — A specific LLM offered by a provider. UI: "Model" / "Select model". Code: `AgentModelDefinition` (`packages/protocol/src/messages.ts:187`).
 - **Terminal** — Workspace-scoped PTY shell streamed over the binary mux channel. UI: "Terminal". Code: `TerminalStreamFrame` (`packages/protocol/src/terminal-stream-protocol.ts`).
 - **Schedule** — Cron-style trigger that creates remote agents. UI: CLI only (`chisacode schedule`). Code: `ScheduleCreateRequest` (re-exported from `packages/protocol/src/messages.ts`). Don't confuse with: Loop (iterative re-execution of one agent).

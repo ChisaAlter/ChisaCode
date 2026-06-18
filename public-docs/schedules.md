@@ -35,7 +35,7 @@ Overnight refactor on Codex:
 chisacode schedule create \
   --every 30m \
   --name overnight-refactor \
-  --provider codex/gpt-5.5 \
+  --provider codex \
   --cwd ~/dev/my-app \
   --max-runs 16 \
   --expires-in 10h \
@@ -48,7 +48,7 @@ Long build babysitter on Claude:
 chisacode schedule create \
   --every 5m \
   --name build-watch \
-  --provider claude/opus-4.7 \
+  --provider claude \
   --cwd ~/dev/my-app \
   --max-runs 24 \
   "Check the release build. If it failed, inspect logs, fix the cause, and rerun."
@@ -61,7 +61,8 @@ chisacode schedule create \
   --cron "0 14 * * 1-5" \
   --run-now \
   --name github-triage \
-  --provider opencode/openrouter/glm-5.1 \
+  --provider opencode \
+  --model openrouter/glm-5.1 \
   --cwd ~/dev/my-app \
   "Triage GitHub issues, PRs, and failing checks. Summarize what needs attention."
 ```

@@ -1,6 +1,6 @@
 ---
 title: OpenCode Desktop Alternative With Native Mobile and Multi-Provider Orchestration
-description: ChisaCode is an OpenCode Desktop alternative for developers who want native mobile apps, a self-hosted daemon, and OpenCode alongside Claude Code, Codex, Copilot, and more.
+description: ChisaCode is an OpenCode Desktop alternative for developers who want native mobile apps, a self-hosted daemon, and OpenCode alongside Claude, Codex, MiMoCode, Pi, and Kimi Code.
 nav: OpenCode Desktop
 order: 107
 ---
@@ -20,7 +20,7 @@ Pick OpenCode Desktop if you want the OpenCode app, the OpenCode terminal workfl
 Pick ChisaCode if you want:
 
 - A native iOS and Android app
-- OpenCode beside Claude Code, Codex, Copilot, Pi, and 30+ more agents
+- OpenCode beside Claude, Codex, MiMoCode, Pi, and Kimi Code
 - First-party harnesses for Claude Code and Codex instead of one agent runtime for everything
 - A self-hosted daemon you can run on a laptop, VM, or dev server
 - GitHub PRs, checks, reviews, and merges in the app
@@ -36,7 +36,7 @@ OpenCode Desktop is the desktop app for OpenCode. OpenCode is available as a ter
 
 OpenCode is a multi-model coding agent. It can connect to many LLM providers through its own provider system, including OpenCode Zen, local models, and API providers.
 
-ChisaCode is multi-provider at the agent harness layer. It runs OpenCode, Claude Code, Codex, and Pi natively, plus 30+ more agents through the in-app catalog including GitHub Copilot, Cursor, Gemini CLI, and Amp. ChisaCode speaks the [Agent Client Protocol](https://agentclientprotocol.com), so any ACP agent works. Custom providers run any CLI agent. See [Supported providers](/docs/supported-providers).
+ChisaCode is multi-provider at the agent harness layer. It runs OpenCode, Claude, Codex, MiMoCode, Pi, and Kimi Code as built-in providers. Custom providers can extend a built-in provider or run an Agent Client Protocol command. See [Supported providers](/docs/supported-providers).
 
 ## Desktop platforms
 
@@ -95,22 +95,22 @@ ChisaCode supports dictation and realtime voice mode. Speech-to-text and text-to
 
 ## Comparison
 
-|                              | ChisaCode                                                       | OpenCode Desktop                |
-| ---------------------------- | --------------------------------------------------------------- | ------------------------------- |
-| License                      | Open source (AGPL-3.0)                                          | Open source                     |
-| Desktop platforms            | macOS, Linux, Windows                                           | macOS, Linux, Windows           |
-| Native mobile                | iOS, Android                                                    | No                              |
-| Agent harnesses              | Claude Code, Codex, OpenCode, Pi + 30+ via ACP catalog + custom | OpenCode                        |
-| Multi-model support          | Through supported agent harnesses                               | Through OpenCode providers      |
-| Git worktrees                | Yes                                                             | No built-in worktree manager    |
-| Per-worktree dev server URLs | Yes                                                             | No                              |
-| Split panes and tabs         | Yes                                                             | Desktop sessions                |
-| In-app terminal              | Yes                                                             | OpenCode terminal workflow      |
-| In-app browser               | Yes                                                             | No                              |
-| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                        | GitHub integration              |
-| CLI                          | Run, `--host`, ls, send, schedule, loop                         | OpenCode CLI                    |
-| MCP server for orchestration | Yes                                                             | MCP support inside OpenCode     |
-| Local voice                  | Yes                                                             | No                              |
-| Self-hosted daemon           | Yes                                                             | OpenCode server / local runtime |
+|                              | ChisaCode                                                     | OpenCode Desktop                |
+| ---------------------------- | ------------------------------------------------------------- | ------------------------------- |
+| License                      | Open source (AGPL-3.0)                                        | Open source                     |
+| Desktop platforms            | macOS, Linux, Windows                                         | macOS, Linux, Windows           |
+| Native mobile                | iOS, Android                                                  | No                              |
+| Agent harnesses              | Claude, Codex, OpenCode, MiMoCode, Pi, Kimi Code + custom ACP | OpenCode                        |
+| Multi-model support          | Through supported agent harnesses                             | Through OpenCode providers      |
+| Git worktrees                | Yes                                                           | No built-in worktree manager    |
+| Per-worktree dev server URLs | Yes                                                           | No                              |
+| Split panes and tabs         | Yes                                                           | Desktop sessions                |
+| In-app terminal              | Yes                                                           | OpenCode terminal workflow      |
+| In-app browser               | Yes                                                           | No                              |
+| GitHub workflow in app       | Commit, push, PR, checks, reviews, merge                      | GitHub integration              |
+| CLI                          | Run, `--host`, ls, send, schedule, loop                       | OpenCode CLI                    |
+| MCP server for orchestration | Yes                                                           | MCP support inside OpenCode     |
+| Local voice                  | Yes                                                           | No                              |
+| Self-hosted daemon           | Yes                                                           | OpenCode server / local runtime |
 
 See also: [ChisaCode vs Codex App](/docs/alternatives/codex-app), [ChisaCode vs Claude Desktop](/docs/alternatives/claude-desktop), [ChisaCode vs OpenChamber](/docs/alternatives/openchamber).

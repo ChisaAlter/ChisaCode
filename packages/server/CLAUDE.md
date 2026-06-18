@@ -1,10 +1,10 @@
 # AGENTS.md — ChisaCode Server Development Guide
 
-For AI coding agents working in `packages/server`. Supplements [CLAUDE.md](../CLAUDE.md) at the repo root.
+For AI coding agents working in `packages/server`. Supplements [CLAUDE.md](../../CLAUDE.md) at the repo root.
 
 ## Project Overview
 
-ChisaCode is a mobile + CLI app for monitoring and controlling local AI coding agents (Claude Code, Codex, GitHub Copilot, OpenCode, Pi). The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
+ChisaCode is a local-first app for monitoring and controlling local AI coding agents. The built-in providers are Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. The daemon runs on your machine, manages agent processes, and streams their output over WebSocket to clients.
 
 ---
 
@@ -165,7 +165,7 @@ packages/server/src/
 │   └── agent/
 │       ├── agent-manager.ts  # Agent lifecycle state machine
 │       └── agent-storage.ts  # File-backed JSON persistence
-├── providers/                 # Claude, Codex, Copilot, OpenCode, Pi adapters
+├── providers/                 # Claude, Codex, OpenCode, MiMoCode, Pi, Kimi, generic ACP, and test adapters
 ├── relay-transport.ts        # Outbound relay connection
 ```
 
@@ -187,10 +187,10 @@ npm run db:query -- "SELECT * FROM agent_timeline_rows..."
 
 ## Relevant Docs
 
-| File                                                       | What it covers                                   |
-| ---------------------------------------------------------- | ------------------------------------------------ |
-| [../CLAUDE.md](../CLAUDE.md)                               | Repository overview, critical rules, quick start |
-| [../docs/architecture.md](../docs/architecture.md)         | System design, WebSocket protocol, data flow     |
-| [../docs/coding-standards.md](../docs/coding-standards.md) | Type hygiene, error handling, React patterns     |
-| [../docs/testing.md](../docs/testing.md)                   | TDD workflow, determinism, real deps over mocks  |
-| [../SECURITY.md](../SECURITY.md)                           | Relay threat model, E2E encryption               |
+| File                                                             | What it covers                                   |
+| ---------------------------------------------------------------- | ------------------------------------------------ |
+| [../../CLAUDE.md](../../CLAUDE.md)                               | Repository overview, critical rules, quick start |
+| [../../docs/architecture.md](../../docs/architecture.md)         | System design, WebSocket protocol, data flow     |
+| [../../docs/coding-standards.md](../../docs/coding-standards.md) | Type hygiene, error handling, React patterns     |
+| [../../docs/testing.md](../../docs/testing.md)                   | TDD workflow, determinism, real deps over mocks  |
+| [../../SECURITY.md](../../SECURITY.md)                           | Relay threat model, E2E encryption               |

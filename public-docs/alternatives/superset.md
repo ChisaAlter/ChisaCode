@@ -46,7 +46,7 @@ Superset's desktop is the host. Agents run inside it.
 
 ## Providers
 
-Both tools support many agents. Superset is a terminal multiplexer where each agent runs inside a terminal pane. ChisaCode runs Claude Code, Codex, OpenCode, and Pi natively with a per-agent UI (modes, slash commands, file picker, diff viewer), plus 30+ more agents through the in-app catalog via ACP, plus any custom CLI agent. See [Supported providers](/docs/supported-providers).
+Both tools support many agents. Superset is a terminal multiplexer where each agent runs inside a terminal pane. ChisaCode runs Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code with a per-agent UI (modes, slash commands, file picker, diff viewer), plus custom ACP providers. See [Supported providers](/docs/supported-providers).
 
 ## Panes
 

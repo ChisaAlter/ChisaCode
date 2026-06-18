@@ -12,10 +12,12 @@ Everything beyond the [supported providers](/docs/supported-providers) lives und
 - **Extend** a first-class provider to point at a different API (Z.AI, Alibaba/Qwen, a proxy, a self-hosted endpoint).
 - **Add profiles**, multiple entries against the same underlying provider with different credentials or curated model lists.
 - **Override the binary**, run a nightly build, a wrapper script, or a Docker image instead of the installed CLI.
-- **Add ACP agents**, Gemini CLI, Hermes, or any agent speaking the Agent Client Protocol over stdio.
+- **Add ACP agents**, any command that speaks the Agent Client Protocol over stdio.
 - **Disable** a provider you don't use.
 
 Provider IDs must be lowercase alphanumeric with hyphens (`/^[a-z][a-z0-9-]*$/`). Every custom entry needs `extends` (a first-class provider ID or `"acp"`) and a `label`.
+
+Current first-class provider IDs are `claude`, `codex`, `opencode`, `mimocode`, `pi`, and `kimi`.
 
 The examples below are a quick tour. The full, up-to-date reference is on GitHub: [docs/custom-providers.md](https://github.com/getchisacode/chisacode/blob/main/docs/custom-providers.md).
 
@@ -181,7 +183,7 @@ Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be a
 {
   "agents": {
     "providers": {
-      "copilot": { "enabled": false }
+      "codex": { "enabled": false }
     }
   }
 }

@@ -20,7 +20,7 @@ Returns `{ branchName, worktreePath }`. Pass `cwd` to target a specific repo.
 
 ## Agents
 
-**`create_agent`** — required: `title`, `provider` (`claude/opus`, `codex/gpt-5.4`, …), `initialPrompt`. Common: `cwd` (often a `worktreePath`), `background` (default `false` — blocks until completion or permission), `notifyOnFinish`, `settings`. Returns `{ agentId, … }`.
+**`create_agent`** — required: `title`, `provider` (`claude`, `codex`, …), `initialPrompt`. Common: `model`, `cwd` (often a `worktreePath`), `background` (default `false` — blocks until completion or permission), `notifyOnFinish`, `settings`. Returns `{ agentId, … }`.
 
 Initial runtime settings live under `settings`: `modeId`, `thinkingOptionId`, and provider-specific `features`. For Codex fast mode, pass `settings: { features: { "fast_mode": true } }` when creating the agent.
 
@@ -50,7 +50,7 @@ Only set feature IDs returned by `inspect_provider`. For Codex fast mode, look f
 
 ## Models
 
-`claude/sonnet` (default), `claude/opus` (harder reasoning), `codex/gpt-5.4` (frontier coding), `claude/haiku` (tests only).
+Use provider IDs such as `claude`, `codex`, `opencode`, `mimocode`, `pi`, or `kimi`, and pass a separate `model` only when you need a specific model.
 
 ## Orchestration preferences
 
@@ -66,14 +66,14 @@ Categories: `impl`, `ui`, `research`, `planning`, `audit`. Skills pick the categ
 ```json
 {
   "providers": {
-    "impl": "codex/gpt-5.4",
-    "ui": "claude/opus",
-    "research": "codex/gpt-5.4",
-    "planning": "codex/gpt-5.4",
-    "audit": "codex/gpt-5.4"
+    "impl": "codex",
+    "ui": "claude",
+    "research": "codex",
+    "planning": "codex",
+    "audit": "codex"
   },
   "preferences": [
-    "Claude Opus is the right choice for anything artistic or human-skill-oriented: copywriting, naming, UX copy, visual design, styling. Codex is the workhorse for mechanical work."
+    "Claude is the right choice for anything artistic or human-skill-oriented: copywriting, naming, UX copy, visual design, styling. Codex is the workhorse for mechanical work."
   ]
 }
 ```
@@ -93,7 +93,7 @@ Don't poll `list_agents` or `get_agent_status` to "check on" a running agent. Th
 The `chisacode` CLI is a thin wrapper over the same daemon. Same surface:
 
 ```bash
-chisacode run --provider codex/gpt-5.4 --mode full-access --worktree feat/x "<prompt>"
+chisacode run --provider codex --mode full-access --worktree feat/x "<prompt>"
 chisacode send <agent-id> "<follow-up>"
 chisacode ls
 chisacode worktree ls

@@ -1,59 +1,29 @@
 ---
 title: Supported providers
-description: Every coding agent ChisaCode can launch, natively supported providers and the ACP catalog.
+description: Provider CLIs currently declared by ChisaCode's shared provider manifest and in-app catalog.
 nav: Supported providers
 order: 4
 ---
 
 # Supported providers
 
-For the concept and how ChisaCode manages providers, see [Providers](/docs/providers). To add or configure your own, see [Custom providers](/docs/custom-providers).
+For the concept and how ChisaCode manages providers, see [Providers](/docs/providers). To add or configure your own provider, see [Custom providers](/docs/custom-providers).
 
-## Native support
+ChisaCode does not ship its own coding model or hosted agent. Install and authenticate the provider CLI yourself, then ChisaCode launches it from the local daemon.
 
-Work out of the box once the underlying CLI is installed and authenticated.
+## Built-in providers
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Anthropic's coding agent with MCP support, streaming, and deep reasoning.
-- [Codex CLI](https://github.com/openai/codex). OpenAI's workspace agent with sandbox controls and optional network access.
-- [OpenCode](https://opencode.ai/). Open-source coding assistant with multi-provider model support.
-- [pi](https://github.com/svkozak/pi-acp). Minimal terminal-based coding agent with multi-provider LLM support.
+These provider IDs come from ChisaCode's shared provider manifest and appear in the in-app provider catalog.
 
-## ACP catalog
+| Provider ID | Provider                                                            | Expected command |
+| ----------- | ------------------------------------------------------------------- | ---------------- |
+| `claude`    | [Claude Code](https://docs.anthropic.com/en/docs/claude-code/setup) | `claude`         |
+| `codex`     | [Codex](https://developers.openai.com/codex)                        | `codex`          |
+| `opencode`  | [OpenCode](https://opencode.ai/docs/)                               | `opencode`       |
+| `mimocode`  | [MiMoCode](https://github.com/XiaomiMiMo/MiMo-Code)                 | `mimo`           |
+| `pi`        | [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) | `pi`             |
+| `kimi`      | [Kimi Code](https://github.com/MoonshotAI/kimi-code)                | `kimi acp`       |
 
-Pick any of these from the in-app provider catalog. Each entry is a one-click install of the underlying CLI.
+## Custom ACP providers
 
-- [Agoragentic](https://agoragentic.com), agent marketplace with 174+ AI capabilities.
-- [Amp](https://github.com/tao12345666333/amp-acp), frontier coding agent.
-- [Auggie CLI](https://www.augmentcode.com/), Augment Code's agent backed by their context engine.
-- [Autohand Code](https://www.autohand.ai/cli/), Autohand AI's coding agent.
-- [Cline](https://cline.bot/cli), autonomous coding agent.
-- [Codebuddy Code](https://www.codebuddy.cn/cli/), Tencent Cloud's coding tool.
-- [Cortex Code](https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code-cli), Snowflake's coding agent.
-- [Corust Agent](https://github.com/Corust-ai/corust-agent-release/releases), Rust-focused coding partner.
-- [crow-cli](https://crow-ai.dev/), minimal ACP-native coding agent.
-- [Cursor](https://cursor.com/docs/cli/overview), Cursor's coding agent.
-- [DeepAgents](https://docs.langchain.com/oss/javascript/deepagents/overview), LangChain-powered coding agent.
-- [DimCode](https://dimcode.dev/docs/acp.html), multi-model coding agent.
-- [Dirac](https://dirac.run), open-source agent with hash-anchored parallel edits.
-- [Factory Droid](https://factory.ai/product/cli), Factory AI's coding agent.
-- [fast-agent](https://fast-agent.ai/acp/), multi-provider coding agent.
-- [Gemini CLI](https://geminicli.com), Google's official Gemini CLI.
-- [GitHub Copilot](https://github.com/features/copilot/cli/), GitHub's AI pair programmer via ACP.
-- [GLM Agent](https://github.com/stefandevo/glm-acp-agent), Zhipu AI's GLM coding agent.
-- [goose](https://block.github.io/goose/), Block's local open-source AI agent.
-- [Grok](https://docs.x.ai/build/overview), xAI's Grok Build agentic coding CLI.
-- [Hermes Agent](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp), Nous Research's self-improving agent.
-- [Junie](https://junie.jetbrains.com/docs/junie-cli-acp.html), JetBrains' coding agent.
-- [Kilo Code](https://kilo.ai/docs/code-with-ai/platforms/cli), open-source coding agent.
-- [Kimi Code CLI](https://github.com/MoonshotAI/kimi-cli), Moonshot AI's coding assistant.
-- [Minion Code](https://github.com/femto/minion-code), Minion-framework coding agent.
-- [Mistral Vibe](https://github.com/mistralai/mistral-vibe), Mistral's open-source CLI assistant.
-- [Nova](https://www.compassap.ai/portfolio/nova.html), Compass AI's software engineer.
-- [Poolside](https://docs.poolside.ai/cli/pool), Poolside's coding agent.
-- [Qoder](https://qoder.com), agentic coding assistant.
-- [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/overview), Alibaba's Qwen coding assistant.
-- [siGit Code](https://github.com/getsigit/sigit), local-first coding agent with optional on-device LLM.
-- [Stakpak](https://stakpak.dev/), Rust-based DevOps agent.
-- [VT Code](https://github.com/vinhnx/VTCode/blob/main/docs/guides/zed-acp.md), open-source multi-provider coding agent.
-
-The in-app catalog is the canonical, version-pinned source. Anything not listed here can still be added manually, see [Custom providers](/docs/custom-providers).
+If another CLI speaks the Agent Client Protocol over stdio, add it manually with `extends: "acp"` and a `command` array. ChisaCode will start the command, initialize the ACP session, and use the models and modes reported by that runtime.

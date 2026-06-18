@@ -1,197 +1,154 @@
 <p align="center">
-  <img src="packages/desktop/assets/128x128@2x.png" width="72" height="72" alt="ChisaCode icon">
+  <img alt="ChisaCode" src="packages/desktop/assets/128x128@2x.png" width="96" />
 </p>
 
 <h1 align="center">ChisaCode</h1>
 
-<p align="center"><strong>ChisaCode</strong></p>
+<p align="center"><strong>用桌面端、移动端、网页端和 CLI 控制本地 AI 编程代理。</strong></p>
 
-> Languages: **English** | [简体中文](README.zh-CN.md)
+> 语言：**简体中文** | [中文镜像](README.zh-CN.md)
 
 <p align="center">
-  <a href="https://github.com/ChisaAlter/ChisaCode/releases">Releases</a>
+  <a href="https://chisacode.sh">Website</a>
   ·
   <a href="https://github.com/ChisaAlter/ChisaCode/actions/workflows/ci.yml">CI</a>
   ·
-  <a href="README.zh-CN.md">中文文档</a>
+  <a href="docs/cli.md">CLI</a>
+  ·
+  <a href="docs/custom-providers.md">Providers</a>
 </p>
-
-<p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi agents.</p>
 
 ---
 
-Run agents in parallel on your own machines. Ship from your phone or your desk.
+ChisaCode 是一个本地优先的编程代理控制面。它在你的机器上运行 daemon，
+在你自己的开发环境里启动当前支持的 agent CLI，然后让桌面端、移动端、网页端和 CLI
+连接并控制同一批任务。
 
-- **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
-- **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi through the same interface. Pick the right model for each job.
-- **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
-- **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
-- **Privacy-first:** ChisaCode doesn't have any telemetry, tracking, or forced log-ins.
+ChisaCode 不提供自己的模型，也不是托管式 coding agent。你需要自己安装并登录底层 agent CLI；
+ChisaCode 负责启动、托管、展示和编排。
 
-## Getting Started
+## 当前 Provider 支持
 
-ChisaCode runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
+当前内置 provider ID 以 `packages/protocol/src/provider-manifest.ts` 为准：
 
-### Prerequisites
+| Provider ID | 显示名称  | ChisaCode 期望的运行时                  |
+| ----------- | --------- | --------------------------------------- |
+| `claude`    | Claude    | `claude` CLI                            |
+| `codex`     | Codex     | `codex` CLI                             |
+| `opencode`  | OpenCode  | `opencode` CLI / server                 |
+| `mimocode`  | MiMoCode  | `mimo` CLI / OpenCode-compatible server |
+| `pi`        | Pi        | `pi` CLI                                |
+| `kimi`      | Kimi Code | `kimi acp` CLI                          |
 
-You need at least one agent CLI installed and configured with your credentials:
+自定义 provider 通过 `agents.providers` 配置。自定义 provider 必须继承上面的某个内置
+provider ID，或者继承 `acp` 来运行通用 Agent Client Protocol 命令。见
+[自定义 provider 文档](docs/custom-providers.md)。
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- [Codex](https://github.com/openai/codex)
-- [GitHub Copilot](https://github.com/features/copilot/cli/)
-- [OpenCode](https://github.com/anomalyco/opencode)
-- [MiMoCode](https://github.com/XiaomiMiMo/MiMo-Code)
-- [Pi](https://pi.dev)
+## ChisaCode 做什么
 
-### Desktop app (recommended)
+- 通过本地 daemon 启动和托管 agent 进程。
+- 向已连接客户端流式同步 agent 输出、工具调用、权限请求和状态。
+- 允许多个客户端连接同一个 daemon。
+- 创建和归档由 ChisaCode 管理的 git worktree。
+- 提供 CLI 命令管理 agent、provider、worktree、schedule、terminal、loop、chat、
+  permission、speech model 和 daemon。
+- 暴露 MCP 工具，让 agent 自己创建或控制 ChisaCode agent。
+- 支持 relay 远程连接，但不会把 ChisaCode 变成托管 agent 服务。
 
-Download it from [chisacode.sh/download](https://chisacode.sh/download) or the [GitHub releases page](https://github.com/getchisacode/chisacode/releases). Open the app and the daemon starts automatically. Nothing else to install.
+## 快速开始
 
-To connect from your phone, scan the QR code shown in Settings.
-
-### CLI / headless
-
-Install the CLI and start ChisaCode:
+安装仓库依赖：
 
 ```bash
-npm install -g @chisacode/cli
-chisacode
+npm ci
 ```
 
-This shows a QR code in the terminal. Connect from any client. This path is useful for servers and remote machines.
-
-For full setup and configuration, see:
-
-- [Docs](https://chisacode.sh/docs)
-- [Configuration reference](https://chisacode.sh/docs/configuration)
-
-## CLI
-
-Everything you can do in the app, you can do from the terminal.
+启动开发环境：
 
 ```bash
-chisacode run --provider claude/opus-4.6 "implement user authentication"
-chisacode run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
-
-chisacode ls                           # list running agents
-chisacode attach abc123                # stream live output
-chisacode send abc123 "also add tests" # follow-up task
-
-# run on a remote daemon
-chisacode --host workstation.local:6767 run "run the full test suite"
+npm run dev        # macOS/Linux
+npm run dev:win    # Windows
 ```
 
-See the [full CLI reference](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/cli.md)
-for more.
-
-## Skills
-
-Skills teach your agent to use ChisaCode to orchestrate other agents.
-
-See the [skills guide](https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/skills.md)
-for setup and usage details.
+运行仓库内 CLI：
 
 ```bash
-npx skills add ChisaAlter/ChisaCode
+npm run cli -- provider ls
+npm run cli -- daemon status
+npm run cli -- run --provider codex "检查这个仓库"
 ```
 
-Then use them in any agent conversation:
-
-- `/chisacode-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
-- `/chisacode-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
-- `/chisacode-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
-- `/chisacode-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
-
-## Development
-
-Quick monorepo package map:
-
-- `packages/server`: ChisaCode daemon (agent process orchestration, WebSocket API, MCP server)
-- `packages/app`: Expo client (iOS, Android, web)
-- `packages/cli`: `chisacode` CLI for daemon and agent workflows
-- `packages/desktop`: Electron desktop app
-- `packages/relay`: Relay package for remote connectivity
-
-Common commands:
+如果使用打包版或全局安装的 CLI：
 
 ```bash
-# run all local dev services
-npm run dev
-
-# run individual surfaces
-npm run dev:server
-npm run dev:app
-npm run dev:desktop
-
-# build the server stack
-npm run build:server
-
-# repo-wide checks
-npm run typecheck
-```
-
-## Community
-
-- [chisacode-relay](https://github.com/zenghongtu/chisacode-relay) — self-hosted relay in Go
-
-### Self-hosted relay TLS
-
-Self-hosted relays use `ws://` unless TLS is opted in. For a relay behind nginx on 443, start the daemon with:
-
-```bash
-CHISACODE_RELAY_ENDPOINT=127.0.0.1:8080 \
-CHISACODE_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
-CHISACODE_RELAY_USE_TLS=true \
 chisacode daemon start
+chisacode provider ls
+chisacode run --provider codex "检查这个仓库"
 ```
 
-Equivalent config:
+对正在运行的 daemon 执行 `chisacode provider ls`，可以看到当前环境里启用且可用的 provider。
 
-```json
-{
-  "daemon": {
-    "relay": {
-      "enabled": true,
-      "endpoint": "127.0.0.1:8080",
-      "publicEndpoint": "relay.example.com:443",
-      "useTls": true
-    }
-  }
-}
+## 常用 CLI 命令
+
+```bash
+chisacode ls
+chisacode run --provider codex "修复失败的测试"
+chisacode attach <agent-id>
+chisacode send <agent-id> "顺手更新文档"
+chisacode wait <agent-id>
+
+chisacode provider ls
+chisacode provider models codex
+
+chisacode worktree ls
+chisacode worktree create --mode branch-off --new-branch fix-docs
+
+chisacode schedule create --every 5m "检查 CI 是否仍然通过"
+chisacode terminal create --cwd .
 ```
 
-Minimal nginx WebSocket proxy:
+完整 CLI 说明见 [docs/cli.md](docs/cli.md)。
 
-```nginx
-server {
-  listen 443 ssl;
-  server_name relay.example.com;
+## 本地开发
 
-  ssl_certificate /etc/letsencrypt/live/relay.example.com/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/relay.example.com/privkey.pem;
+本仓库是 npm workspace monorepo。Node 版本以 `.tool-versions` 为准。
 
-  location /ws {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-  }
-}
+常用根命令：
+
+```bash
+npm run build:client       # protocol -> client
+npm run build:server-deps  # highlight -> relay -> protocol -> client
+npm run build:server       # server-deps -> server -> cli
+npm run build:app-deps     # highlight -> protocol -> client -> expo-two-way-audio
+
+npm run typecheck
+npm run lint
+npm run format:check
 ```
 
----
+包结构：
 
-<p align="center">
-  <a href="https://star-history.com/#getchisacode/chisacode&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date&theme=dark">
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date">
-      <img src="https://api.star-history.com/svg?repos=getchisacode/chisacode&type=Date" alt="Star history chart for getchisacode/chisacode" width="600" style="max-width: 100%;">
-    </picture>
-  </a>
-</p>
+| 包                              | 职责                                                      |
+| ------------------------------- | --------------------------------------------------------- |
+| `@chisacode/protocol`           | 共享协议 schema、provider manifest、wire types            |
+| `@chisacode/client`             | daemon client 和 SDK facade                               |
+| `@chisacode/server`             | 本地 daemon、provider runtime、存储、MCP、relay、schedule |
+| `@chisacode/app`                | Expo app，覆盖 native、web 和桌面 renderer                |
+| `@chisacode/desktop`            | Electron 壳和桌面打包集成                                 |
+| `@chisacode/cli`                | daemon 和 agent 工作流的命令行入口                        |
+| `@chisacode/relay`              | 端到端加密 relay transport                                |
+| `@chisacode/highlight`          | 语法高亮                                                  |
+| `@chisacode/expo-two-way-audio` | 原生音频桥接                                              |
 
-## License
+## 文档
 
-AGPL-3.0
+- [开发指南](docs/development.md)
+- [架构地图](docs/ARCHITECTURE_MAP.md)
+- [Provider 内部说明](docs/providers.md)
+- [自定义 Provider](docs/custom-providers.md)
+- [发布指南](docs/release.md)
+- [安全策略](SECURITY.md)
+
+## 许可证
+
+AGPL-3.0-or-later

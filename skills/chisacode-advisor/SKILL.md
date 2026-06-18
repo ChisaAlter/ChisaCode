@@ -17,7 +17,7 @@ Read the **chisacode** skill — provider for the advisor comes from orchestrati
 
 ## Picking the advisor
 
-1. **User named one** (`--provider claude/opus`) → use it.
+1. **User named one** (`--provider claude`) → use it.
 2. **Otherwise** resolve from preferences — pick the category that matches the question:
    - Design / approach question → `planning`
    - "Did I miss something" review → `audit`

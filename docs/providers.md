@@ -1,410 +1,176 @@
-# Adding a New Provider to ChisaCode
+# Adding a Provider to ChisaCode
 
-This guide walks through adding a new agent provider end-to-end. There are two integration patterns, and this doc covers both.
+This guide describes the current provider plumbing. Use it when adding a built-in provider or debugging provider registration.
 
-## Two Integration Patterns
+ChisaCode also supports user-defined providers through config. For runtime configuration, see [Custom Provider Configuration](custom-providers.md).
 
-### ACP (Agent Client Protocol) -- recommended
+## Current Provider Set
 
-Extend `ACPAgentClient` from `packages/server/src/server/agent/providers/acp-agent.ts`. The base class handles process spawning, stdio transport, session lifecycle, streaming, permissions, and model discovery. You provide configuration (command, modes, capabilities) and optionally override `isAvailable()` for auth checks.
+The shared provider manifest currently exposes these user-facing built-ins:
 
-The only built-in ACP provider today is `copilot` (`copilot-acp-agent.ts`). `GenericACPAgentClient` (`generic-acp-agent.ts`) is also ACP-based but is used for user-defined custom providers configured via `extends: "acp"` overrides — see [docs/custom-providers.md](custom-providers.md).
+| ID         | Label     | Integration shape                          |
+| ---------- | --------- | ------------------------------------------ |
+| `claude`   | Claude    | direct provider backed by Claude tooling   |
+| `codex`    | Codex     | direct provider backed by Codex app-server |
+| `opencode` | OpenCode  | direct provider backed by OpenCode         |
+| `mimocode` | MiMoCode  | OpenCode-compatible provider               |
+| `pi`       | Pi        | direct provider backed by Pi RPC           |
+| `kimi`     | Kimi Code | ACP-backed provider                        |
 
-### Direct
+Development-only providers are `mock` and `mock-slow`.
 
-Implement the `AgentClient` and `AgentSession` interfaces from `agent-sdk-types.ts` yourself. This gives full control but requires you to handle process management, streaming, permissions, and session persistence from scratch.
+Custom provider config may derive from any built-in provider ID above, or from the special `acp` value for a generic Agent Client Protocol command.
 
-Existing direct providers: `claude` (in `providers/claude/agent.ts`), `codex` (`codex-app-server-agent.ts`), `opencode` (`opencode-agent.ts`), `pi` (`providers/pi/agent.ts`). The dev-only `mock` provider (`mock-load-test-agent.ts`) is also direct.
+## Integration Patterns
 
-Pi is a process-backed provider. ChisaCode requires the user to have the `pi` binary installed and talks to it through `pi --mode rpc`; the server package does not embed Pi's SDK/runtime packages.
+### Generic ACP Provider
 
-ChisaCode's per-agent and daemon-wide system prompts are passed to Pi with `--append-system-prompt`, so Pi keeps its default coding prompt while receiving ChisaCode's additional instructions.
+If a runtime speaks the Agent Client Protocol over stdio and does not need a first-class adapter, users can configure it with:
 
-Pi MCP support depends on the open-source `pi-mcp-adapter` extension being loaded for the agent cwd. Probe with Pi RPC `get_commands`; the adapter registers an extension command named `mcp` (often with `sourceInfo.source` containing `pi-mcp-adapter`). When ChisaCode injects MCP servers into Pi, write a per-agent MCP config and pass it with `--mcp-config` instead of modifying user or project MCP files. For local HTTP servers such as ChisaCode's own `/mcp/agents` endpoint, explicitly disable adapter OAuth (`auth: false`, `oauth: false`) in the generated config.
-
-Pi import discovery reads Pi's persisted JSONL session files because Pi RPC does not expose a recent-session listing command. Resume and full history hydration still go through `pi --mode rpc` using the session file as `nativeHandle`.
-
-Pi RPC extension UI dialog requests (`select`, `input`, `editor`, `confirm`) are bridged into ChisaCode question permissions and answered with `extension_ui_response`. Pi extensions such as `ask_user` may chain dialogs: for example, a `select` can be followed by an optional-comment `input`. When an `ask_user` tool call declares `allowComment: true`, ChisaCode presents the selection and optional comment as one question permission, answers Pi's initial `select` immediately, then auto-answers the follow-up optional `input` with the comment the user already supplied (or an empty string). Preserve placeholders and optional/skip semantics for standalone optional inputs so the app can still distinguish "skip this optional input" from "cancel the whole dialog." Fire-and-forget extension UI requests such as notifications are intentionally ignored by the provider adapter unless ChisaCode grows first-class UI for them.
-
-OpenCode MCP injection is dynamic and session-scoped. Call OpenCode's `mcp.add` endpoint with the MCP server config and do not follow it with `mcp.connect`; `connect` only toggles MCP servers already present in OpenCode's own config. New OpenCode versions return `McpServerNotFoundError`/404 for `connect` after a dynamic add because the server is not config-backed, while older versions silently swallowed the same missing-config path.
-
-OpenCode owns user message IDs. Do not pass ChisaCode-generated IDs to OpenCode prompt APIs; let OpenCode create `msg*` IDs and record the user timeline item from the `message.updated` event.
-
-Draft metadata lookups should avoid creating provider sessions when the upstream provider has top-level APIs for that metadata. Prefer `AgentClient.listModels`, `listModes`, `listCommands`, or `listFeatures` over creating a scratch `AgentSession`; scratch sessions can show up as empty native sessions in provider import/history UIs.
-
----
-
-## Provider Snapshot Refresh Contract
-
-The daemon keeps provider snapshots per resolved working directory. Missing or blank cwd resolves to the user's home directory. Workspace selectors and old model/mode list requests should pass the cwd that will launch the provider so providers with project-specific models or modes are probed in the right context. Settings/provider management intentionally uses the home-directory snapshot.
-
-Snapshot reads may probe providers only while the requested cwd scope is cold. Once an entry is warm, its `ready`, `error`, or `unavailable` state stays cached until an explicit refresh. Do not add TTL revalidation, focus-triggered refreshes, selector-open refreshes, or config-reload refreshes. Selector-open refetches may read an already-loading or stale React Query, but they must not force provider probing on their own.
-
-Settings refresh is the user-facing "forget stale provider knowledge everywhere" action. A settings refresh clears provider snapshot caches and in-flight loads across all cwd scopes, then immediately refreshes only the home-directory snapshot with `force: true`. Workspace snapshots are re-probed lazily on the next scoped read; do not fan out a settings refresh across every known workspace.
-
-Registry/config replacement may update visible metadata such as label, description, default mode, enabled state, and provider membership, but it must not spawn provider processes. If a provider needs to be re-probed after a config change, route that through the explicit settings refresh path.
-
-Boundary tests should assert observable behavior: cold reads may call provider availability/model/mode discovery for that cwd; warm reads and registry replacement must not; explicit workspace refreshes affect only one cwd; settings refresh wipes all scopes but immediately refreshes only home.
-
----
-
-## ACP Provider Checklist
-
-### 1. Create the provider class
-
-Create `packages/server/src/server/agent/providers/{name}-agent.ts`.
-
-Define capabilities, modes, and a thin subclass of `ACPAgentClient`:
-
-```ts
-import type { Logger } from "pino";
-import type { AgentCapabilityFlags, AgentMode } from "../agent-sdk-types.js";
-import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
-import { ACPAgentClient } from "./acp-agent.js";
-
-const MY_PROVIDER_CAPABILITIES: AgentCapabilityFlags = {
-  supportsStreaming: true,
-  supportsSessionPersistence: true,
-  supportsDynamicModes: true,
-  supportsMcpServers: true,
-  supportsReasoningStream: true,
-  supportsToolInvocations: true,
-};
-
-const MY_PROVIDER_MODES: AgentMode[] = [
-  {
-    id: "default",
-    label: "Default",
-    description: "Standard agent mode",
-  },
-  // Add more modes as needed
-];
-
-type MyProviderClientOptions = {
-  logger: Logger;
-  runtimeSettings?: ProviderRuntimeSettings;
-};
-
-export class MyProviderACPAgentClient extends ACPAgentClient {
-  constructor(options: MyProviderClientOptions) {
-    super({
-      provider: "my-provider", // Must match the ID used everywhere else
-      logger: options.logger,
-      runtimeSettings: options.runtimeSettings,
-      defaultCommand: ["my-agent-binary", "--acp"], // CLI command to spawn
-      defaultModes: MY_PROVIDER_MODES,
-      capabilities: MY_PROVIDER_CAPABILITIES,
-    });
-  }
-
-  // Override isAvailable() if the provider needs specific auth/env vars
-  override async isAvailable(): Promise<boolean> {
-    if (!(await super.isAvailable())) {
-      return false; // Binary not found
+```json
+{
+  "agents": {
+    "providers": {
+      "my-agent": {
+        "extends": "acp",
+        "label": "My Agent",
+        "command": ["my-agent", "--acp"]
+      }
     }
-    return Boolean(process.env["MY_PROVIDER_API_KEY"]);
   }
 }
 ```
 
-The `super.isAvailable()` call checks that the binary from `defaultCommand` is on `$PATH`. Override only to add credential checks on top.
+The generic ACP client handles process spawning, initialization, session creation, streaming, permissions, model discovery, and mode discovery.
 
-For reference, here is how Copilot does it -- no auth override needed because the CLI handles auth itself:
+### Built-in ACP Provider
 
-```ts
-export class CopilotACPAgentClient extends ACPAgentClient {
-  constructor(options: CopilotACPAgentClientOptions) {
-    super({
-      provider: "copilot",
-      logger: options.logger,
-      runtimeSettings: options.runtimeSettings,
-      defaultCommand: ["copilot", "--acp"],
-      defaultModes: COPILOT_MODES,
-      capabilities: COPILOT_CAPABILITIES,
-    });
-  }
+Use a built-in ACP provider when the runtime needs first-class defaults or provider-specific behavior. The current built-in ACP-backed provider is Kimi Code.
 
-  override async isAvailable(): Promise<boolean> {
-    return super.isAvailable();
-  }
-}
-```
+Create a provider class that wraps the ACP base client or a specialized ACP client, then register it in the provider registry and shared manifest.
 
-### 2. Add to the provider manifest
+### Direct Provider
 
-In `packages/server/src/server/agent/provider-manifest.ts`, add mode definitions with UI metadata (icons, color tiers) and a provider definition entry.
+Use a direct provider when the runtime does not speak ACP or when ChisaCode must drive provider-specific APIs. The provider implements the `AgentClient` and `AgentSession` contracts directly.
 
-First, define the modes with visual metadata:
+Current direct providers include Claude, Codex, OpenCode, MiMoCode, and Pi.
 
-```ts
-const MY_PROVIDER_MODES: AgentProviderModeDefinition[] = [
-  {
-    id: "default",
-    label: "Default",
-    description: "Standard agent mode",
-    icon: "ShieldCheck",
-    colorTier: "safe",
-  },
-  {
-    id: "autonomous",
-    label: "Autonomous",
-    description: "Runs without prompting",
-    icon: "ShieldOff",
-    colorTier: "dangerous",
-  },
-];
-```
+## Built-in Provider Checklist
 
-Available `colorTier` values: `"safe"`, `"moderate"`, `"dangerous"`, `"planning"`.
-Available `icon` values: `"ShieldCheck"`, `"ShieldAlert"`, `"ShieldOff"`.
+### 1. Implement the Provider Client
 
-Then add to the `AGENT_PROVIDER_DEFINITIONS` array:
+Create or update a provider implementation under the server provider layer.
 
-```ts
-export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
-  // ... existing providers ...
-  {
-    id: "my-provider",
-    label: "My Provider",
-    description: "Short description of the provider",
-    defaultModeId: "default",
-    modes: MY_PROVIDER_MODES,
-    // Optional: enable voice
-    voice: {
-      enabled: true,
-      defaultModeId: "default",
-      defaultModel: "some-model",
-    },
-  },
-];
-```
+The client must expose:
 
-### 3. Add the factory to the provider registry
+- provider ID
+- capabilities
+- session creation and resume
+- model listing
+- availability checks
+- optional mode, command, feature, diagnostic, and persisted-session APIs
 
-In `packages/server/src/server/agent/provider-registry.ts`, import your class and add a factory entry to `PROVIDER_CLIENT_FACTORIES`:
+For direct providers, implement the session lifecycle yourself. For ACP providers, prefer the shared ACP base behavior unless the runtime needs custom handling.
 
-```ts
-import { MyProviderACPAgentClient } from "./providers/my-provider-agent.js";
+### 2. Add Shared Manifest Metadata
 
-const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
-  // ... existing factories ...
-  "my-provider": (logger, runtimeSettings) =>
-    new MyProviderACPAgentClient({
-      logger,
-      runtimeSettings,
-    }),
-};
-```
+Add the provider to the shared provider manifest with:
 
-The factory is invoked with `(logger, runtimeSettings, options)`; `options.workspaceGitService` is also available if you need it (see the `codex` factory for an example). The registry already passes the per-provider runtime settings slice through, so you don't index into the map yourself.
+- stable provider ID
+- label
+- description
+- default mode ID
+- mode metadata with icons and color tiers
+- optional voice metadata
 
-### 4. Add a provider icon (app)
+The app, CLI, server, and MCP surfaces read provider labels and modes from this shared manifest. Keep this manifest aligned with runtime behavior.
 
-Create `packages/app/src/components/icons/my-provider-icon.tsx` following the pattern from existing icons (e.g., `claude-icon.tsx`):
+### 3. Register the Provider Factory
 
-```tsx
-import Svg, { Path } from "react-native-svg";
+Register the provider in the server provider registry. The registry is responsible for:
 
-interface MyProviderIconProps {
-  size?: number;
-  color?: string;
-}
+- creating the provider client
+- applying runtime command/env/tool overrides
+- resolving derived custom providers
+- wrapping derived providers so they keep their custom provider ID
+- merging configured models with runtime-discovered models
 
-export function MyProviderIcon({ size = 16, color = "currentColor" }: MyProviderIconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <Path d="..." />
-    </Svg>
-  );
-}
-```
+When a provider can be inherited by custom providers, make sure its factory accepts the custom-provider metadata it needs.
 
-Then register it in `packages/app/src/components/provider-icons.ts` by adding an entry to the existing `PROVIDER_ICONS` map (which already covers the built-in providers):
+### 4. Add App Catalog and Icon Support
 
-```ts
-import { MyProviderIcon } from "@/components/icons/my-provider-icon";
+If the provider is user-facing, add it to the app provider catalog with:
 
-const PROVIDER_ICONS: Record<string, typeof Bot> = {
-  // ... existing entries ...
-  "my-provider": MyProviderIcon as unknown as typeof Bot,
-};
-```
+- provider ID
+- title
+- description
+- install link
+- default command
 
-If no icon is registered, `getProviderIcon()` falls back to a generic `Bot` icon from lucide.
+Register a provider icon if a custom icon exists. Otherwise the app falls back to a generic bot icon.
 
-### 5. Add E2E test config
+### 5. Add Config Validation
 
-In `packages/server/src/server/daemon-e2e/agent-configs.ts`, add your provider:
+The provider config schema validates which IDs can be used in `extends`. Add the provider ID there so custom providers can derive from it.
 
-```ts
-export const agentConfigs = {
-  // ... existing configs ...
-  "my-provider": {
-    provider: "my-provider",
-    model: "default-model-id",
-    modes: {
-      full: "autonomous", // Mode with no permission prompts
-      ask: "default", // Mode that requires permission approval
-    },
-  },
-} as const satisfies Record<string, AgentTestConfig>;
-```
+For model gateway support, add generated-provider ID fields only when the gateway can generate a useful profile for that provider.
 
-Add an availability check in `isProviderAvailable()`. Note `isCommandAvailable` is async, so all branches `await` it:
+### 6. Add E2E Provider Config
 
-```ts
-case "my-provider":
-  return (
-    (await isCommandAvailable("my-agent-binary")) &&
-    Boolean(process.env.MY_PROVIDER_API_KEY)
-  );
-```
+If the provider participates in server E2E tests, add its real-provider config and availability check. Availability checks should prove the command and required credentials are present; they should not hide failures inside normal tests.
 
-Add to the `allProviders` array (current built-ins are `claude`, `codex`, `copilot`, `opencode`, `pi`):
+### 7. Verify
 
-```ts
-export const allProviders: AgentProvider[] = [
-  "claude",
-  "codex",
-  "copilot",
-  "opencode",
-  "pi",
-  "my-provider",
-];
-```
-
-### 6. Run typecheck
+Use targeted checks:
 
 ```bash
-npm run typecheck
+npm run build:server
+npm run lint -- <changed-files>
+npm run format:files -- <changed-files>
 ```
 
-This is required after every change per project rules.
-
----
-
-## Direct Provider Checklist
-
-If your agent does not speak ACP, implement the interfaces from `agent-sdk-types.ts` directly.
-
-### Interfaces to implement
-
-The interfaces below are abridged signatures — read `agent-sdk-types.ts` for the full source of truth (option bag types, generics, etc.).
-
-**`AgentClient`** -- factory for sessions and model/mode listing:
-
-```ts
-interface AgentClient {
-  readonly provider: AgentProvider;
-  readonly capabilities: AgentCapabilityFlags;
-  createSession(
-    config: AgentSessionConfig,
-    launchContext?: AgentLaunchContext,
-    options?: AgentCreateSessionOptions,
-  ): Promise<AgentSession>;
-  resumeSession(
-    handle: AgentPersistenceHandle,
-    overrides?: Partial<AgentSessionConfig>,
-    launchContext?: AgentLaunchContext,
-  ): Promise<AgentSession>;
-  listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]>;
-  isAvailable(): Promise<boolean>;
-  // Optional:
-  listModes?(options: ListModesOptions): Promise<AgentMode[]>;
-  listPersistedAgents?(options?: ListPersistedAgentsOptions): Promise<PersistedAgentDescriptor[]>;
-  getDiagnostic?(): Promise<{ diagnostic: string }>;
-}
-```
-
-**`AgentSession`** -- a running agent conversation:
-
-```ts
-interface AgentSession {
-  readonly provider: AgentProvider;
-  readonly id: string | null;
-  readonly capabilities: AgentCapabilityFlags;
-  readonly features?: AgentFeature[];
-  run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult>;
-  startTurn(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<{ turnId: string }>;
-  subscribe(callback: (event: AgentStreamEvent) => void): () => void;
-  streamHistory(): AsyncGenerator<AgentStreamEvent>;
-  getRuntimeInfo(): Promise<AgentRuntimeInfo>;
-  getAvailableModes(): Promise<AgentMode[]>;
-  getCurrentMode(): Promise<string | null>;
-  setMode(modeId: string): Promise<void>;
-  getPendingPermissions(): AgentPermissionRequest[];
-  respondToPermission(
-    requestId: string,
-    response: AgentPermissionResponse,
-  ): Promise<AgentPermissionResult | void>;
-  describePersistence(): AgentPersistenceHandle | null;
-  interrupt(): Promise<void>;
-  close(): Promise<void>;
-  // Optional:
-  listCommands?(): Promise<AgentSlashCommand[]>;
-  setModel?(modelId: string | null): Promise<void>;
-  setThinkingOption?(thinkingOptionId: string | null): Promise<void>;
-  setFeature?(featureId: string, value: unknown): Promise<void>;
-  tryHandleOutOfBand?(prompt: AgentPromptInput): {
-    run(ctx: { emit: (event: AgentStreamEvent) => void }): Promise<void>;
-  } | null;
-}
-```
-
-### Steps
-
-1. Create `packages/server/src/server/agent/providers/{name}-agent.ts` implementing both interfaces
-2. Add to the provider manifest (same as ACP step 2 above)
-3. Add factory to the registry (same as ACP step 3 above)
-4. Add icon (same as ACP step 4 above)
-5. Add E2E config (same as ACP step 5 above)
-6. Run typecheck
-
----
-
-## Testing
-
-### Manual testing with the CLI
-
-Start the daemon if not already running, then:
+Run a changed Vitest file directly when provider behavior changes:
 
 ```bash
-# Launch an agent with your provider
-chisacode run --provider my-provider
-
-# Launch with a specific model and mode
-chisacode run --provider my-provider --model some-model --mode default
-
-# List running agents
-chisacode ls -a -g
-
-# Check if the provider reports models
-chisacode models --provider my-provider
+npx vitest run <path> --bail=1
 ```
 
-### E2E test patterns
+Do not run full test suites locally unless explicitly asked.
 
-The E2E configs in `agent-configs.ts` expose two helpers:
+## Provider Snapshot Rules
 
-- `getFullAccessConfig(provider)` -- returns config for a session with no permission prompts
-- `getAskModeConfig(provider)` -- returns config for a session that triggers permission requests
+The daemon keeps provider snapshots per resolved working directory. Missing or blank cwd resolves to the user's home directory.
 
-Tests use `isProviderAvailable(provider)` to skip when the binary or credentials are missing, so CI will not fail for providers that are not installed.
+Snapshot reads may probe providers only while the requested cwd scope is cold. Warm entries stay cached until an explicit refresh. Do not add TTL revalidation, focus-triggered refresh, selector-open refresh, or config-reload refresh.
 
----
+Settings refresh is the user-facing "forget stale provider knowledge everywhere" action. It clears provider snapshot caches and in-flight loads across all cwd scopes, then immediately refreshes only the home-directory snapshot with `force: true`.
+
+Registry/config replacement may update visible metadata such as label, description, default mode, enabled state, and provider membership, but it must not spawn provider processes. Route provider re-probing through explicit refresh paths.
+
+## Custom Provider Behavior
+
+Custom providers can:
+
+- extend a built-in provider
+- extend `acp` with a required command
+- replace a command
+- add environment variables
+- disable tools
+- replace or augment model lists
+- set display label, description, order, and enabled state
+
+Derived providers keep their own provider ID in ChisaCode snapshots and timelines, while delegating runtime behavior to the provider they extend.
 
 ## Gotchas
 
-**Mode IDs can be URIs.** ACP providers like Copilot use full URIs as mode IDs (e.g., `"https://agentclientprotocol.com/protocol/session-modes#agent"`). Never assume mode IDs are simple strings. The manifest `defaultModeId` must match exactly.
+**Provider IDs are strings.** Runtime validation decides whether an ID is registered.
 
-**Models and modes are discovered dynamically.** ACP providers report available models and modes at runtime via the protocol. The static definitions in `provider-manifest.ts` are used for UI scaffolding (icons, color tiers) but the runtime values from the agent process are the source of truth.
+**Models and modes can be dynamic.** ACP providers report modes and models at runtime. Static manifest metadata is for UI scaffolding and default display behavior.
 
-**`AgentProvider` is always `string`.** The type alias is `type AgentProvider = string`. Provider IDs are validated against the manifest at runtime, not at the type level.
+**Mode IDs are opaque.** Do not assume a mode ID is a simple word. Treat it as an exact string from the provider.
 
-**Auth patterns vary.** Some providers need API keys in env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), some use OAuth tokens (`CLAUDE_CODE_OAUTH_TOKEN`), some use auth files (`~/.codex/auth.json`), and some handle auth entirely in their CLI binary (Copilot). Your `isAvailable()` method should check whatever is needed.
+**Auth belongs to the provider runtime.** ChisaCode can pass environment variables, but the underlying CLI or SDK owns authentication.
 
-**The manifest mode list and the agent class mode list are separate.** The manifest in `provider-manifest.ts` includes UI metadata (`icon`, `colorTier`). The agent class defines modes without UI metadata (just `id`, `label`, `description`). Keep them in sync.
+**Command overrides replace the launch command.** A custom `command` array fully replaces the default command for that provider.
 
-**`defaultCommand` is a tuple.** The first element is the binary name, the rest are default arguments. The base class uses this to find the executable and spawn the process.
-
-**Runtime settings can override the command.** Users can configure custom binary paths or environment variables per provider via `ProviderRuntimeSettings`. Your factory in the registry should pass `runtimeSettings?.["your-provider"]` through to the constructor.
+**Manifest and runtime modes must stay aligned.** The manifest includes UI metadata; the runtime reports or enforces actual modes. Keep both paths consistent.

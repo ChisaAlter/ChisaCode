@@ -22,13 +22,13 @@ Your code never leaves your machine. ChisaCode is local-first.
             │  (Node.js)  │
             └──────┬──────┘
                    │
-      ┌────────────┼────────────┬────────────┬────────────┐
-      │            │            │            │            │
-┌─────▼─────┐ ┌───▼────┐ ┌──────▼─────┐ ┌────▼─────┐ ┌────▼────┐
-│  Claude   │ │ Codex  │ │  Copilot   │ │ OpenCode │ │MiMoCode│ │   Pi    │
-│  Agent    │ │ Agent  │ │   Agent    │ │  Agent   │ │ Agent   │
-│  SDK      │ │ Server │ │    ACP     │ │          │ │         │
-└───────────┘ └────────┘ └────────────┘ └──────────┘ └─────────┘
+      ┌────────────┼────────────┬────────────┬────────────┬────────────┐
+      │            │            │            │            │            │
+┌─────▼─────┐ ┌───▼────┐ ┌──────▼────┐ ┌─────▼────┐ ┌─────▼────┐ ┌────▼────┐
+│  Claude   │ │ Codex  │ │ OpenCode  │ │ MiMoCode │ │    Pi    │ │  Kimi   │
+│  Agent    │ │ Agent  │ │  Agent    │ │  Agent   │ │  Agent   │ │  ACP    │
+│  SDK      │ │ Server │ │           │ │          │ │   RPC    │ │         │
+└───────────┘ └────────┘ └───────────┘ └──────────┘ └──────────┘ └────────┘
 ```
 
 ## Components at a glance
@@ -245,18 +245,17 @@ read the capped final assistant text. The companion token is not persisted.
 
 Each provider implements the `AgentClient` interface in `agent/agent-sdk-types.ts`. Provider implementations live in `agent/providers/`.
 
-The built-in, user-facing providers are Claude Code, Codex, Copilot, OpenCode, MiMoCode, and Pi. Additional adapters exist in the same directory for ACP-compatible agents and internal use:
+The built-in, user-facing providers are Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. Additional adapters exist in the same directory for generic ACP-compatible agents and internal use:
 
 | Provider           | Wraps                                | Session format                                     |
 | ------------------ | ------------------------------------ | -------------------------------------------------- |
 | Claude (`claude/`) | Anthropic Agent SDK                  | `~/.claude/projects/{cwd}/{session-id}.jsonl`      |
 | Codex              | Codex AppServer (`codex-app-server`) | `~/.codex/sessions/{date}/rollout-{ts}-{id}.jsonl` |
-| Copilot            | GitHub Copilot via ACP               | Provider-managed                                   |
 | OpenCode           | OpenCode server / CLI                | Provider-managed                                   |
 | MiMoCode           | MiMoCode server / CLI                | Provider-managed                                   |
-| Cursor             | ACP wrapper (`acp-agent`)            | Provider-managed                                   |
-| Generic ACP        | ACP wrapper                          | Provider-managed                                   |
 | Pi                 | Local Pi RPC process                 | Provider-managed                                   |
+| Kimi Code          | Kimi ACP command                     | Provider-managed                                   |
+| Generic ACP        | Configured ACP command               | Provider-managed                                   |
 | Mock load test     | In-process fake                      | In-memory                                          |
 
 All providers:

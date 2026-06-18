@@ -4,20 +4,35 @@
 
 ### Added
 
-- Custom model routing can now be configured from settings
-- Agent delegation workflows are now available across the app and host daemon
-- The app has refreshed glass surfaces and a brighter visual theme
+- Built-in provider metadata now includes Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code
+  from the shared protocol manifest.
+- Custom model gateways can generate provider profiles for Claude, Codex, OpenCode,
+  MiMoCode, Pi, and Kimi Code.
+- Scoped companion MCP tools now support agent delegation, delegation status, cancellation,
+  and result collection.
+- Settings surfaces were added for skills management, MCP server management, custom model
+  providers, and synthetic model-of-agents configuration.
+- Repository docs now include generated module maps and cross-cutting architecture notes.
 
 ### Improved
 
-- Workspaces and agent lists stay in sync more reliably across desktop and mobile
-- Desktop and Android release builds now publish through GitHub without extra local secrets
-- Provider setup and diagnostics are easier to understand
+- Provider discovery and snapshots now use the shared provider manifest and registry plumbing
+  more consistently across daemon, client, app, CLI, and MCP surfaces.
+- Workspace draft state, sidebar session state, host routing, and project selection were
+  tightened across desktop, web, and mobile surfaces.
+- Agent lifecycle metadata now distinguishes subagent, handoff, detached, and team-slot
+  relationships while preserving compatibility labels for existing records.
+- Desktop and app UI surfaces now use refreshed glass components and updated theme tokens.
+- Release automation now handles desktop signing secrets and Android native project generation
+  more reliably.
 
 ### Fixed
 
-- Synthetic model responses now return consistently through the gateway
-- Android APK release builds now generate the native project before packaging
+- Synthetic model gateway responses now return consistently for supported gateway formats.
+- Provider hover and settings code now satisfies current typecheck expectations.
+- Android APK release builds now generate the native Android project before Gradle packaging.
+- Desktop release packaging no longer requires unrelated local secrets just to produce GitHub
+  release artifacts.
 
 ## 0.1.87 - 2026-05-30
 

@@ -35,7 +35,7 @@ Provider IDs must be lowercase alphanumeric with hyphens (`/^[a-z][a-z0-9-]*$/`)
 
 ## Extending a built-in provider
 
-Use `extends` to create a new provider entry that inherits from a built-in provider (claude, codex, copilot, opencode, pi). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
+Use `extends` to create a new provider entry that inherits from a built-in provider (`claude`, `codex`, `opencode`, `mimocode`, `pi`, or `kimi`). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
 
 ```json
 {
@@ -357,7 +357,7 @@ Set `enabled: false` to hide a provider from the provider list. The provider wil
 {
   "agents": {
     "providers": {
-      "copilot": { "enabled": false },
+      "codex": { "enabled": false },
       "codex": { "enabled": false }
     }
   }
@@ -374,7 +374,7 @@ The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) is an open st
 
 ACP agents communicate over JSON-RPC 2.0 on stdio. ChisaCode spawns the agent process and talks to it through stdin/stdout.
 
-ChisaCode also ships an in-app ACP provider catalog for common agents, including Cursor, DeepAgents, DeepSeek TUI, DimCode, Gemini CLI, Hermes, Qwen Code, and Kimi Code. Catalog entries create the same `extends: "acp"` provider config shown below.
+ChisaCode has built-in ACP-backed support for Kimi Code. Other ACP-speaking commands can be configured manually with `extends: "acp"` as shown below.
 
 ### Adding a generic ACP provider
 
@@ -606,7 +606,7 @@ Use `disallowedTools` to disable unsupported tools:
 
 ### Valid `extends` values
 
-Built-in providers: `claude`, `codex`, `copilot`, `opencode`, `pi`
+Built-in providers: `claude`, `codex`, `opencode`, `mimocode`, `pi`, `kimi`
 
 Special value: `acp` — creates a generic ACP provider (requires `command`)
 
@@ -619,7 +619,7 @@ A config.json with multiple custom providers:
   "version": 1,
   "agents": {
     "providers": {
-      "copilot": { "enabled": false },
+      "codex": { "enabled": false },
 
       "zai": {
         "extends": "claude",

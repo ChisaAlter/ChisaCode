@@ -67,11 +67,11 @@ Anyone who builds software:
 3. **The daemon as infrastructure.** Server/client architecture enables deployment anywhere.
 4. **Open source outlasts funding.** Open source communities are resilient. Contributors become advocates.
 
-## Current state (May 2026)
+## Current code state
 
 - Desktop (Electron), mobile (iOS/Android), web, CLI
-- Built-in providers: Claude Code (Agent SDK), Codex (app-server), GitHub Copilot (ACP), OpenCode, MiMoCode, Pi
-- One-click ACP provider catalog: Cursor, DeepSeek TUI, Hermes, Qwen Coder, Kimi Code, and others — plus custom ACP providers
+- Built-in providers: Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code
+- Custom providers can extend a built-in provider or use `extends: "acp"` for Agent Client Protocol commands
 - Voice mode: dictate prompts or talk through problems hands-free
 - MCP server exposes the daemon to other agents (create_agent, send_agent_prompt, schedules, terminals, worktrees)
 - Scheduled agents (cron-style triggers) via app, CLI, and MCP

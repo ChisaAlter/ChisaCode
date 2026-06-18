@@ -51,8 +51,8 @@ chisacode ls -a -g --json
 Start an agent:
 
 ```bash
-chisacode run --provider codex/gpt-5.4 "fix the failing login test"
-chisacode run --provider claude/opus --cwd ./my-project "review this design"
+chisacode run --provider codex "fix the failing login test"
+chisacode run --provider claude --model opus --cwd ./my-project "review this design"
 ```
 
 Inspect and follow an agent:
@@ -95,7 +95,7 @@ Use worktrees when you want an agent to make isolated code changes:
 
 ```bash
 chisacode worktree ls
-chisacode run --worktree fix-login --provider codex/gpt-5.4 "fix login"
+chisacode run --worktree fix-login --provider codex "fix login"
 ```
 
 Project-level setup and teardown scripts can prepare dependencies for new
@@ -176,8 +176,8 @@ chisacode ls -a -g --json
 启动 agent：
 
 ```bash
-chisacode run --provider codex/gpt-5.4 "修复失败的登录测试"
-chisacode run --provider claude/opus --cwd ./my-project "评审这个设计"
+chisacode run --provider codex "修复失败的登录测试"
+chisacode run --provider claude --model opus --cwd ./my-project "评审这个设计"
 ```
 
 查看和跟进 agent：
@@ -220,7 +220,7 @@ chisacode --host workstation.local:6767 ls -a
 
 ```bash
 chisacode worktree ls
-chisacode run --worktree fix-login --provider codex/gpt-5.4 "修复登录问题"
+chisacode run --worktree fix-login --provider codex "修复登录问题"
 ```
 
 项目级 setup 和 teardown 脚本可以为新 worktree 准备依赖。脚本应保持可重复执行，
