@@ -95,6 +95,12 @@ import type { DaemonConfigStore } from "./daemon-config-store.js";
 import { runSyntheticModelTest } from "./model-gateway/model-gateway.js";
 import { getErrorMessage, getErrorMessageOr } from "@chisacode/protocol/error-utils";
 import { getAgentStatusPriority } from "@chisacode/protocol/agent-state-bucket";
+import {
+  buildUsageSummary,
+  exportUsageEvents,
+  pruneUsageEvents,
+  type UsageStore,
+} from "./usage/usage-store.js";
 import type {
   WorkspaceGitRuntimeSnapshot,
   WorkspaceGitService,
@@ -589,6 +595,7 @@ export interface SessionOptions {
   chisacodeHome: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
+  usageStore?: UsageStore;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   chatService: FileBackedChatService;
@@ -784,6 +791,7 @@ export class Session {
   private agentTools: ToolSet | null = null;
   private agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
+  private readonly usageStore: UsageStore | null;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly chatService: FileBackedChatService;
@@ -871,6 +879,7 @@ export class Session {
       chisacodeHome,
       agentManager,
       agentStorage,
+      usageStore,
       projectRegistry,
       workspaceRegistry,
       chatService,
@@ -917,6 +926,7 @@ export class Session {
     });
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
+    this.usageStore = usageStore ?? null;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
     this.chatService = chatService;
@@ -1765,6 +1775,7 @@ export class Session {
     const promise =
       this.dispatchVoiceAndControlMessage(msg) ??
       this.dispatchAgentRewindMessage(msg) ??
+      this.dispatchUsageMessage(msg) ??
       this.dispatchAgentLifecycleMessage(msg) ??
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
@@ -1853,6 +1864,19 @@ export class Session {
       return;
     }
     await this.dictationStreamManager.handleStart(msg.dictationId, msg.format);
+  }
+
+  private dispatchUsageMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "usage.summary.get.request":
+        return this.handleUsageSummaryGet(msg);
+      case "usage.export.request":
+        return this.handleUsageExport(msg);
+      case "usage.clear.request":
+        return this.handleUsageClear(msg);
+      default:
+        return undefined;
+    }
   }
 
   private dispatchAgentLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -7446,6 +7470,101 @@ export class Session {
           requestType: request.type,
           error: message,
           code,
+        },
+      });
+    }
+  }
+
+  private async listRetainedUsageEvents() {
+    if (!this.usageStore) {
+      return [];
+    }
+    const records = await this.usageStore.list();
+    const retained = pruneUsageEvents({ events: records });
+    if (retained.length !== records.length) {
+      await this.usageStore.replace(retained);
+    }
+    return retained;
+  }
+
+  private async handleUsageSummaryGet(
+    request: Extract<SessionInboundMessage, { type: "usage.summary.get.request" }>,
+  ): Promise<void> {
+    try {
+      const records = await this.listRetainedUsageEvents();
+      this.emit({
+        type: "usage.summary.get.response",
+        payload: {
+          requestId: request.requestId,
+          summary: buildUsageSummary({
+            events: records,
+            rangeDays: request.rangeDays,
+          }),
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error }, "Failed to handle usage.summary.get.request");
+      this.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: request.requestId,
+          requestType: request.type,
+          error: error instanceof Error ? error.message : "Failed to fetch usage summary",
+          code: "usage_summary_failed",
+        },
+      });
+    }
+  }
+
+  private async handleUsageExport(
+    request: Extract<SessionInboundMessage, { type: "usage.export.request" }>,
+  ): Promise<void> {
+    try {
+      const records = await this.listRetainedUsageEvents();
+      this.emit({
+        type: "usage.export.response",
+        payload: {
+          requestId: request.requestId,
+          format: request.format,
+          filename: `chisacode-usage.${request.format}`,
+          content: exportUsageEvents(records, request.format),
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error }, "Failed to handle usage.export.request");
+      this.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: request.requestId,
+          requestType: request.type,
+          error: error instanceof Error ? error.message : "Failed to export usage",
+          code: "usage_export_failed",
+        },
+      });
+    }
+  }
+
+  private async handleUsageClear(
+    request: Extract<SessionInboundMessage, { type: "usage.clear.request" }>,
+  ): Promise<void> {
+    try {
+      await this.usageStore?.clear();
+      this.emit({
+        type: "usage.clear.response",
+        payload: {
+          requestId: request.requestId,
+          cleared: true,
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error }, "Failed to handle usage.clear.request");
+      this.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: request.requestId,
+          requestType: request.type,
+          error: error instanceof Error ? error.message : "Failed to clear usage",
+          code: "usage_clear_failed",
         },
       });
     }

@@ -71,6 +71,7 @@ import { getAgentProviderDefinition } from "@chisacode/protocol/provider-manifes
 import { IMPORTABLE_PROVIDERS } from "./provider-registry.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
+import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -219,6 +220,7 @@ export interface AgentManagerOptions {
     agentId: string,
     config: AgentSessionConfig,
   ) => EffectiveMcpServersResult | undefined;
+  usageStore?: UsageStore;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
   logger: Logger;
@@ -472,6 +474,7 @@ export class AgentManager {
   private onAgentArchived?: AgentArchivedCallback;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
+  private readonly usageStore?: UsageStore;
 
   constructor(options: AgentManagerOptions) {
     this.idFactory = options?.idFactory ?? (() => randomUUID());
@@ -482,6 +485,7 @@ export class AgentManager {
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.resolveSkillPolicy = options.resolveSkillPolicy;
     this.resolveMcpServers = options.resolveMcpServers;
+    this.usageStore = options.usageStore;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -3111,7 +3115,13 @@ export class AgentManager {
       case "timeline":
         return this.onStreamTimelineEvent({ agent, event, options, isForegroundEvent, flags });
       case "turn_completed":
-        this.onStreamTurnCompleted({ agent, event, eventTurnId, isForegroundEvent });
+        this.onStreamTurnCompleted({
+          agent,
+          event,
+          eventTurnId,
+          isForegroundEvent,
+          fromHistory: options?.fromHistory === true,
+        });
         return undefined;
       case "turn_failed":
         return this.onStreamTurnFailed({
@@ -3190,8 +3200,9 @@ export class AgentManager {
     event: Extract<AgentStreamEvent, { type: "turn_completed" }>;
     eventTurnId: string | undefined;
     isForegroundEvent: boolean;
+    fromHistory: boolean;
   }): void {
-    const { agent, event, eventTurnId, isForegroundEvent } = params;
+    const { agent, event, eventTurnId, isForegroundEvent, fromHistory } = params;
     this.logger.trace(
       {
         agentId: agent.id,
@@ -3204,12 +3215,42 @@ export class AgentManager {
       "agent.manager.turn.completed",
     );
     agent.lastUsage = event.usage;
+    if (!fromHistory) {
+      this.recordUsageEvent(agent, event, eventTurnId);
+    }
     agent.lastError = undefined;
     if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
       this.emitState(agent);
     }
     void this.refreshRuntimeInfo(agent);
+  }
+
+  private recordUsageEvent(
+    agent: ActiveManagedAgent,
+    event: Extract<AgentStreamEvent, { type: "turn_completed" }>,
+    eventTurnId: string | undefined,
+  ): void {
+    if (!this.usageStore || !event.usage) {
+      return;
+    }
+    const record = createUsageEventRecord({
+      agentId: agent.id,
+      cwd: agent.cwd,
+      provider: event.provider,
+      model: agent.runtimeInfo?.model ?? agent.config.model ?? null,
+      turnId: eventTurnId,
+      usage: event.usage,
+      messageCount: 1,
+    });
+    if (!record) {
+      return;
+    }
+    const appendTask = this.usageStore.append(record).catch((error) => {
+      this.logger.warn({ err: error, agentId: agent.id }, "Failed to record usage event");
+    });
+    this.backgroundTasks.add(appendTask);
+    appendTask.finally(() => this.backgroundTasks.delete(appendTask));
   }
 
   private async onStreamTurnFailed(params: {

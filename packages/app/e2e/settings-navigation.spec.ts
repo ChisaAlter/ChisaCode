@@ -25,6 +25,7 @@ import {
   expectDiagnosticsContent,
   expectAboutContent,
   expectGeneralContent,
+  expectUsageContent,
 } from "./helpers/settings";
 
 test.describe("Settings sidebar navigation", () => {
@@ -39,6 +40,10 @@ test.describe("Settings sidebar navigation", () => {
     await openSettingsSection(page, "about");
     await expectSettingsHeader(page, "About");
     await expectAboutContent(page);
+
+    await openSettingsSection(page, "usage");
+    await expectSettingsHeader(page, "Usage");
+    await expectUsageContent(page);
 
     await openSettingsSection(page, "general");
     await expectSettingsHeader(page, "General");
@@ -104,7 +109,7 @@ test.describe("Settings — compact master-detail", () => {
     await gotoAppShell(page);
     await openCompactSettings(page);
 
-    await expectSettingsSidebarSections(page, ["general", "diagnostics", "about"]);
+    await expectSettingsSidebarSections(page, ["general", "usage", "diagnostics", "about"]);
     await expectCompactSettingsList(page);
 
     await expectSettingsBackButton(page);
@@ -117,7 +122,7 @@ test.describe("Settings — compact master-detail", () => {
     await openCompactSettings(page);
 
     await openSettingsSection(page, "diagnostics");
-    await expect(page).toHaveURL(/\/settings\/diagnostics$/);
+    await expect(page).toHaveURL(/\/settings\/diagnostics(?:\?.*)?$/);
     await expectDiagnosticsContent(page);
     await expectSettingsSidebarHidden(page);
     await expectSettingsBackButton(page);
@@ -128,7 +133,7 @@ test.describe("Settings — compact master-detail", () => {
     await openCompactSettings(page);
 
     await openSettingsSection(page, "about");
-    await expect(page).toHaveURL(/\/settings\/about$/);
+    await expect(page).toHaveURL(/\/settings\/about(?:\?.*)?$/);
 
     await goBackInSettings(page);
     await expectCompactSettingsList(page);
@@ -150,7 +155,7 @@ test.describe("Settings — compact master-detail", () => {
 
     await openCompactSettingsHost(page);
     await goBackInSettings(page);
-    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page).toHaveURL(/\/settings(?:\?.*)?$/);
     await expectSettingsSidebarVisible(page);
   });
 });

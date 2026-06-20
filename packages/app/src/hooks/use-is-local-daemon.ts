@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDesktopDaemonStatus, shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import { resolveLocalDaemonServerId } from "@/hooks/local-daemon-hosts";
+import { useHosts } from "@/runtime/host-runtime";
 
 const DESKTOP_DAEMON_SERVER_ID_QUERY_KEY = ["desktop-daemon-server-id"] as const;
 
@@ -17,6 +19,7 @@ async function loadDesktopDaemonServerId(): Promise<DesktopDaemonServerIdResult>
 
 export function useLocalDaemonServerId(): string | null {
   const isDesktopApp = shouldUseDesktopDaemon();
+  const hosts = useHosts();
 
   const query = useQuery({
     queryKey: DESKTOP_DAEMON_SERVER_ID_QUERY_KEY,
@@ -31,11 +34,10 @@ export function useLocalDaemonServerId(): string | null {
     retry: false,
   });
 
-  if (!isDesktopApp) {
-    return null;
-  }
-
-  return query.data?.serverId ?? null;
+  return resolveLocalDaemonServerId({
+    desktopServerId: isDesktopApp ? (query.data?.serverId ?? null) : null,
+    hosts,
+  });
 }
 
 export function useIsLocalDaemon(serverId: string): boolean {

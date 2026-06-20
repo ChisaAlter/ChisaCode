@@ -5,6 +5,7 @@ import { basename, join } from "path";
 import { hostname as getHostname } from "node:os";
 import type { AgentManager } from "./agent/agent-manager.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
+import type { UsageStore } from "./usage/usage-store.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type pino from "pino";
@@ -341,6 +342,7 @@ export class VoiceAssistantWebSocketServer {
     | undefined;
   private readonly agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
+  private readonly usageStore: UsageStore | null;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly chatService: FileBackedChatService;
@@ -428,6 +430,7 @@ export class VoiceAssistantWebSocketServer {
         publicUseTls: boolean;
       };
     },
+    usageStore?: UsageStore | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.serverId = serverId;
@@ -438,6 +441,7 @@ export class VoiceAssistantWebSocketServer {
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
+    this.usageStore = usageStore ?? null;
     this.projectRegistry = projectRegistry ?? createNoopProjectRegistry();
     this.workspaceRegistry = workspaceRegistry ?? createNoopWorkspaceRegistry();
     const requiredServices = requireWebSocketServices({
@@ -862,6 +866,7 @@ export class VoiceAssistantWebSocketServer {
       chisacodeHome: this.chisacodeHome,
       agentManager: this.agentManager,
       agentStorage: this.agentStorage,
+      usageStore: this.usageStore ?? undefined,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       chatService: this.chatService,

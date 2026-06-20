@@ -102,6 +102,7 @@ import type { MimoSpeechProviderConfig } from "./speech/providers/mimo/config.js
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
+import { FileBackedUsageStore } from "./usage/usage-store.js";
 import { resolveEffectiveManagedMcpServers } from "./agent/mcp-server-management.js";
 import { resolveAgentSkillPolicy } from "./agent/skill-policy.js";
 import { AgentStorage } from "./agent/agent-storage.js";
@@ -634,6 +635,9 @@ export async function createChisaCodeDaemon(
   httpServer.on("upgrade", scriptProxyUpgradeHandler);
 
   const agentStorage = new AgentStorage(config.agentStoragePath, logger);
+  const usageStore = new FileBackedUsageStore(
+    path.join(config.chisacodeHome, "usage", "usage-events.jsonl"),
+  );
   const agentIndex = createSqliteAgentIndex(
     path.join(config.chisacodeHome, "index", "agent-index.sqlite"),
     logger,
@@ -677,6 +681,7 @@ export async function createChisaCodeDaemon(
     clients: initialAgentManagerState.clients,
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
+    usageStore,
     appendSystemPrompt: config.appendSystemPrompt,
     resolveSkillPolicy: (agentId, sessionConfig) =>
       resolveAgentSkillPolicy(daemonConfigStore.get(), agentId, sessionConfig.provider),
@@ -1130,6 +1135,7 @@ export async function createChisaCodeDaemon(
                 publicUseTls: relayPublicUseTls,
               },
             },
+            usageStore,
           );
 
           if (relayEnabled) {

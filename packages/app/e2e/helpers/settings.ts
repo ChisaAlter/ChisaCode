@@ -4,11 +4,22 @@ import { getServerId } from "./server-id";
 
 const SECTION_LABELS = {
   general: "General",
+  usage: "Usage",
   shortcuts: "Shortcuts",
   integrations: "Integrations",
   permissions: "Permissions",
   diagnostics: "Diagnostics",
   about: "About",
+} as const;
+
+const LOCALIZED_TEXT = {
+  General: ["General", "通用"],
+  Usage: ["Usage", "用量统计"],
+  Diagnostics: ["Diagnostics", "诊断"],
+  About: ["About", "关于"],
+  Theme: ["Theme", "主题"],
+  "Play test": ["Play test", "播放测试"],
+  "GitHub releases": ["GitHub releases", "GitHub 版本"],
 } as const;
 
 export type SettingsSection = keyof typeof SECTION_LABELS | "projects";
@@ -19,12 +30,12 @@ export async function openSettingsSection(page: Page, section: SettingsSection):
 
   if (section === "projects") {
     await page.getByTestId("settings-projects").click();
-    await expect(page).toHaveURL(/\/settings\/projects$/);
+    await expect(page).toHaveURL(/\/settings\/projects(?:\?.*)?$/);
     return;
   }
 
-  await sidebar.getByRole("button", { name: SECTION_LABELS[section], exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/settings/${section}$`));
+  await sidebar.getByTestId(`settings-section-${section}`).click();
+  await expect(page).toHaveURL(new RegExp(`/settings/${section}(?:\\?.*)?$`));
 }
 
 export async function openSettingsHost(page: Page, serverId: string): Promise<void> {
@@ -33,7 +44,10 @@ export async function openSettingsHost(page: Page, serverId: string): Promise<vo
 }
 
 export async function expectSettingsHeader(page: Page, title: string): Promise<void> {
-  await expect(page.getByTestId("settings-detail-header-title")).toHaveText(title);
+  const alternatives = localizedAlternatives(title);
+  await expect(page.getByTestId("settings-detail-header-title")).toHaveText(
+    new RegExp(`^(${alternatives.map(escapeRegex).join("|")})$`),
+  );
 }
 
 export async function openAddHostFlow(page: Page): Promise<void> {
@@ -59,12 +73,12 @@ export async function openCompactSettings(page: Page): Promise<void> {
   const settingsButton = page.locator('[data-testid="sidebar-settings"]:visible').first();
   await expect(settingsButton).toBeVisible();
   await settingsButton.click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings(?:\?.*)?$/);
   await expect(page.getByTestId("settings-sidebar")).toBeVisible();
 }
 
 export async function expectCompactSettingsList(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings(?:\?.*)?$/);
   await expect(page.getByTestId("settings-sidebar")).toBeVisible();
   await expect(page.getByText("Theme", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Play test" })).toHaveCount(0);
@@ -85,9 +99,7 @@ export async function expectSettingsSidebarSections(
 ): Promise<void> {
   const sidebar = page.getByTestId("settings-sidebar");
   for (const section of sections) {
-    await expect(
-      sidebar.getByRole("button", { name: SECTION_LABELS[section], exact: true }),
-    ).toBeVisible();
+    await expect(sidebar.getByTestId(`settings-section-${section}`)).toBeVisible();
   }
 }
 
@@ -105,7 +117,7 @@ export async function clickSettingsBackToWorkspace(page: Page): Promise<void> {
 
 export async function expectHostSettingsUrl(page: Page, serverId: string): Promise<void> {
   await expect(page).toHaveURL(
-    new RegExp(`/settings/hosts/${escapeRegex(encodeURIComponent(serverId))}$`),
+    new RegExp(`/settings/hosts/${escapeRegex(encodeURIComponent(serverId))}(?:\\?.*)?$`),
   );
 }
 
@@ -152,15 +164,23 @@ export async function expectDirectHostUriHidden(page: Page): Promise<void> {
 }
 
 export async function expectDiagnosticsContent(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Play test" })).toBeVisible();
+  await expect(page.getByRole("button", { name: localizedRegex("Play test") })).toBeVisible();
 }
 
 export async function expectAboutContent(page: Page): Promise<void> {
-  await expect(page.getByText("App version", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(localizedRegex("GitHub releases")).first()).toBeVisible();
 }
 
 export async function expectGeneralContent(page: Page): Promise<void> {
-  await expect(page.getByText("Theme", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(localizedRegex("Theme")).first()).toBeVisible();
+}
+
+export async function expectUsageContent(page: Page): Promise<void> {
+  await expect(page.getByTestId("settings-usage-section")).toBeVisible();
+  await expect(page.getByTestId("settings-usage-metrics")).toBeVisible();
+  await expect(page.getByTestId("settings-usage-heatmap")).toBeVisible();
+  await expect(page.getByTestId("settings-usage-trend")).toBeVisible();
+  await expect(page.getByTestId("settings-usage-models")).toBeVisible();
 }
 
 export async function expectHostLabelDisplayed(page: Page): Promise<void> {
@@ -242,4 +262,12 @@ export async function expectLocalHostEntryFirst(page: Page, serverId: string): P
   const localHostEntry = page.getByTestId(`settings-host-entry-${serverId}`);
   await expect(localHostEntry.getByTestId("settings-host-local-marker")).toBeVisible();
   await expect(localHostEntry.getByText("Local", { exact: true })).toBeVisible();
+}
+
+function localizedAlternatives(text: string): string[] {
+  return [...(LOCALIZED_TEXT[text as keyof typeof LOCALIZED_TEXT] ?? [text])];
+}
+
+function localizedRegex(text: string): RegExp {
+  return new RegExp(`^(${localizedAlternatives(text).map(escapeRegex).join("|")})$`);
 }

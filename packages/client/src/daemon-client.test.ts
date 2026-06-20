@@ -260,6 +260,100 @@ test("advertises client capabilities in hello", async () => {
   });
 });
 
+test("sends usage statistics RPC requests and resolves correlated responses", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const summaryPromise = client.fetchUsageSummary({ rangeDays: 7, requestId: "usage-summary" });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "usage.summary.get.request",
+    requestId: "usage-summary",
+    rangeDays: 7,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "usage.summary.get.response",
+      payload: {
+        requestId: "usage-summary",
+        summary: {
+          rangeDays: 7,
+          generatedAt: "2026-06-20T12:00:00.000Z",
+          totals: {
+            inputTokens: 100,
+            cachedInputTokens: 10,
+            outputTokens: 40,
+            totalTokens: 140,
+            turnCount: 2,
+            messageCount: 4,
+            activeDays: 1,
+            currentStreakDays: 1,
+          },
+          mostUsedModel: null,
+          daily: [],
+          models: [],
+        },
+      },
+    }),
+  );
+  await expect(summaryPromise).resolves.toMatchObject({
+    summary: { rangeDays: 7, totals: { totalTokens: 140 } },
+  });
+
+  const exportPromise = client.exportUsage({ format: "csv", requestId: "usage-export" });
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "usage.export.request",
+    requestId: "usage-export",
+    format: "csv",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "usage.export.response",
+      payload: {
+        requestId: "usage-export",
+        format: "csv",
+        filename: "chisacode-usage-2026-06-20.csv",
+        content: "timestamp,inputTokens\n",
+      },
+    }),
+  );
+  await expect(exportPromise).resolves.toMatchObject({
+    format: "csv",
+    content: "timestamp,inputTokens\n",
+  });
+
+  const clearPromise = client.clearUsage("usage-clear");
+  expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+    type: "usage.clear.request",
+    requestId: "usage-clear",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "usage.clear.response",
+      payload: {
+        requestId: "usage-clear",
+        cleared: true,
+      },
+    }),
+  );
+  await expect(clearPromise).resolves.toEqual({
+    requestId: "usage-clear",
+    cleared: true,
+  });
+});
+
 test("does not reconnect after close when ensureConnected is called", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

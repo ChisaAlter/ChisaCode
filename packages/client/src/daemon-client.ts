@@ -95,6 +95,9 @@ import type {
   EditorTargetId,
   ChisaCodeConfigRaw,
   ChisaCodeConfigRevision,
+  UsageClearResponseMessage,
+  UsageExportResponseMessage,
+  UsageSummaryGetResponseMessage,
 } from "@chisacode/protocol/messages";
 import type { SyntheticModelConfig } from "@chisacode/protocol/provider-config";
 import type {
@@ -519,6 +522,17 @@ export type FetchRecentProviderSessionsOptions = Omit<
   requestId?: string;
 };
 export type FetchRecentProviderSessionEntry = FetchRecentProviderSessionsPayload["entries"][number];
+export type UsageSummaryPayload = UsageSummaryGetResponseMessage["payload"];
+type UsageSummaryGetRequest = Extract<SessionInboundMessage, { type: "usage.summary.get.request" }>;
+export type FetchUsageSummaryOptions = Omit<UsageSummaryGetRequest, "type" | "requestId"> & {
+  requestId?: string;
+};
+export type UsageExportPayload = UsageExportResponseMessage["payload"];
+type UsageExportRequest = Extract<SessionInboundMessage, { type: "usage.export.request" }>;
+export type ExportUsageOptions = Omit<UsageExportRequest, "type" | "requestId"> & {
+  requestId?: string;
+};
+export type UsageClearPayload = UsageClearResponseMessage["payload"];
 type FetchWorkspacesPayload = Extract<
   SessionOutboundMessage,
   { type: "fetch_workspaces_response" }
@@ -1750,6 +1764,38 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    });
+  }
+
+  async fetchUsageSummary(options?: FetchUsageSummaryOptions): Promise<UsageSummaryPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"usage.summary.get.response">({
+      requestId: options?.requestId,
+      message: {
+        type: "usage.summary.get.request",
+        ...(options?.rangeDays ? { rangeDays: options.rangeDays } : {}),
+      },
+      timeout: 10000,
+    });
+  }
+
+  async exportUsage(options?: ExportUsageOptions): Promise<UsageExportPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"usage.export.response">({
+      requestId: options?.requestId,
+      message: {
+        type: "usage.export.request",
+        ...(options?.format ? { format: options.format } : {}),
+      },
+      timeout: 10000,
+    });
+  }
+
+  async clearUsage(requestId?: string): Promise<UsageClearPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"usage.clear.response">({
+      requestId,
+      message: {
+        type: "usage.clear.request",
+      },
+      timeout: 10000,
     });
   }
 

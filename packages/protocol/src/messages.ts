@@ -1141,6 +1141,26 @@ export const FetchRecentProviderSessionsRequestMessageSchema = z.object({
   limit: z.number().int().positive().max(200).optional(),
 });
 
+export const UsageRangeDaysSchema = z.union([z.literal(7), z.literal(30), z.literal(180)]);
+export const UsageExportFormatSchema = z.enum(["json", "csv"]);
+
+export const UsageSummaryGetRequestMessageSchema = z.object({
+  type: z.literal("usage.summary.get.request"),
+  requestId: z.string(),
+  rangeDays: UsageRangeDaysSchema.default(30),
+});
+
+export const UsageExportRequestMessageSchema = z.object({
+  type: z.literal("usage.export.request"),
+  requestId: z.string(),
+  format: UsageExportFormatSchema.default("json"),
+});
+
+export const UsageClearRequestMessageSchema = z.object({
+  type: z.literal("usage.clear.request"),
+  requestId: z.string(),
+});
+
 export const FetchAgentRequestMessageSchema = z.object({
   type: z.literal("fetch_agent_request"),
   requestId: z.string(),
@@ -2148,6 +2168,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentsRequestMessageSchema,
   FetchAgentHistoryRequestMessageSchema,
   FetchRecentProviderSessionsRequestMessageSchema,
+  UsageSummaryGetRequestMessageSchema,
+  UsageExportRequestMessageSchema,
+  UsageClearRequestMessageSchema,
   FetchWorkspacesRequestMessageSchema,
   FetchAgentRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
@@ -2817,6 +2840,69 @@ export const FetchRecentProviderSessionsResponseMessageSchema = z.object({
     requestId: z.string(),
     entries: z.array(RecentProviderSessionDescriptorPayloadSchema),
     filteredAlreadyImportedCount: z.number().int().nonnegative().optional(),
+  }),
+});
+
+const UsageModelSummaryPayloadSchema = z.object({
+  model: z.string(),
+  totalTokens: z.number().nonnegative(),
+  turnCount: z.number().int().nonnegative(),
+  percentage: z.number().int().nonnegative(),
+});
+
+const UsageDailySummaryPayloadSchema = z.object({
+  date: z.string(),
+  inputTokens: z.number().nonnegative(),
+  cachedInputTokens: z.number().nonnegative(),
+  outputTokens: z.number().nonnegative(),
+  totalTokens: z.number().nonnegative(),
+  turnCount: z.number().int().nonnegative(),
+  messageCount: z.number().int().nonnegative(),
+  topModel: z.string().nullable(),
+  models: z.array(UsageModelSummaryPayloadSchema),
+});
+
+export const UsageSummaryPayloadSchema = z.object({
+  rangeDays: UsageRangeDaysSchema,
+  generatedAt: z.string(),
+  totals: z.object({
+    inputTokens: z.number().nonnegative(),
+    cachedInputTokens: z.number().nonnegative(),
+    outputTokens: z.number().nonnegative(),
+    totalTokens: z.number().nonnegative(),
+    turnCount: z.number().int().nonnegative(),
+    messageCount: z.number().int().nonnegative(),
+    activeDays: z.number().int().nonnegative(),
+    currentStreakDays: z.number().int().nonnegative(),
+  }),
+  mostUsedModel: UsageModelSummaryPayloadSchema.nullable(),
+  daily: z.array(UsageDailySummaryPayloadSchema),
+  models: z.array(UsageModelSummaryPayloadSchema),
+});
+
+export const UsageSummaryGetResponseMessageSchema = z.object({
+  type: z.literal("usage.summary.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    summary: UsageSummaryPayloadSchema,
+  }),
+});
+
+export const UsageExportResponseMessageSchema = z.object({
+  type: z.literal("usage.export.response"),
+  payload: z.object({
+    requestId: z.string(),
+    format: UsageExportFormatSchema,
+    filename: z.string(),
+    content: z.string(),
+  }),
+});
+
+export const UsageClearResponseMessageSchema = z.object({
+  type: z.literal("usage.clear.response"),
+  payload: z.object({
+    requestId: z.string(),
+    cleared: z.boolean(),
   }),
 });
 
@@ -4230,6 +4316,9 @@ type SessionOutboundMessageSchemaOptions = [
   typeof FetchAgentsResponseMessageSchema,
   typeof FetchAgentHistoryResponseMessageSchema,
   typeof FetchRecentProviderSessionsResponseMessageSchema,
+  typeof UsageSummaryGetResponseMessageSchema,
+  typeof UsageExportResponseMessageSchema,
+  typeof UsageClearResponseMessageSchema,
   typeof FetchWorkspacesResponseMessageSchema,
   typeof OpenProjectResponseMessageSchema,
   typeof StartWorkspaceScriptResponseMessageSchema,
@@ -4370,6 +4459,9 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   FetchAgentsResponseMessageSchema,
   FetchAgentHistoryResponseMessageSchema,
   FetchRecentProviderSessionsResponseMessageSchema,
+  UsageSummaryGetResponseMessageSchema,
+  UsageExportResponseMessageSchema,
+  UsageClearResponseMessageSchema,
   FetchWorkspacesResponseMessageSchema,
   OpenProjectResponseMessageSchema,
   StartWorkspaceScriptResponseMessageSchema,
@@ -4522,6 +4614,10 @@ export type FetchAgentHistoryResponseMessage = z.infer<
 export type FetchRecentProviderSessionsResponseMessage = z.infer<
   typeof FetchRecentProviderSessionsResponseMessageSchema
 >;
+export type UsageSummaryPayload = z.infer<typeof UsageSummaryPayloadSchema>;
+export type UsageSummaryGetResponseMessage = z.infer<typeof UsageSummaryGetResponseMessageSchema>;
+export type UsageExportResponseMessage = z.infer<typeof UsageExportResponseMessageSchema>;
+export type UsageClearResponseMessage = z.infer<typeof UsageClearResponseMessageSchema>;
 export type FetchWorkspacesResponseMessage = z.infer<typeof FetchWorkspacesResponseMessageSchema>;
 export type ScriptStatusUpdateMessage = z.infer<typeof ScriptStatusUpdateMessageSchema>;
 export type OpenProjectResponseMessage = z.infer<typeof OpenProjectResponseMessageSchema>;

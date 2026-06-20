@@ -31,6 +31,7 @@ import {
   FolderGit2,
   Bot,
   Blocks,
+  ChartNoAxesColumnIncreasing,
 } from "lucide-react-native";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
@@ -89,6 +90,7 @@ import { CustomModelProvidersSection } from "@/screens/settings/custom-model-pro
 import { SyntheticModelsSection } from "@/screens/settings/synthetic-models-section";
 import { SkillsSection } from "@/screens/settings/skills-section";
 import { McpServersSection } from "@/screens/settings/mcp-servers-section";
+import { UsageStatisticsSection } from "@/screens/settings/usage-statistics-section";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { isAndroid } from "@/constants/platform";
@@ -129,6 +131,7 @@ interface SidebarSectionItem {
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
   { id: "models", labelKey: "settings.sections.models", icon: Bot },
+  { id: "usage", labelKey: "settings.sections.usage", icon: ChartNoAxesColumnIncreasing },
   { id: "skills", labelKey: "settings.sections.skills", icon: Blocks },
   { id: "mcp", labelKey: "settings.sections.mcp", icon: Server },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
@@ -959,6 +962,7 @@ function SidebarSectionButton({
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       onPress={handlePress}
+      testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
       <IconComponent
@@ -1442,6 +1446,8 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
               <Text style={styles.placeholderText}>{t("settings.models.noHost")}</Text>
             </View>
           );
+        case "usage":
+          return <UsageStatisticsSection serverId={localServerId} />;
         case "skills":
           return anyOnlineServerId ? (
             <SkillsSection serverId={localServerId ?? anyOnlineServerId} />
