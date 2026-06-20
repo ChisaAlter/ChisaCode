@@ -269,6 +269,17 @@ function providerScopes(
   return scopes;
 }
 
+function agentScopes(agents: readonly SkillsListAgent[]): AgentSkillScopePayload[] {
+  return agents
+    .map((agent) => ({
+      type: "agent" as const,
+      agentId: agent.id,
+      label: agent.title?.trim() || agent.id,
+      ...(agent.lastStatus ? { status: agent.lastStatus } : {}),
+    }))
+    .sort((a, b) => compareStrings(a.label, b.label));
+}
+
 export async function listManagedSkills(
   agents: readonly SkillsListAgent[],
   config: MutableDaemonConfig,
@@ -322,7 +333,11 @@ export async function listManagedSkills(
   }
 
   return {
-    scopes: [{ type: "global", label: "Global" }, ...providerScopes(agents, config)],
+    scopes: [
+      { type: "global", label: "Global" },
+      ...providerScopes(agents, config),
+      ...agentScopes(agents),
+    ],
     skills,
     errors,
   };

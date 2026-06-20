@@ -29,6 +29,7 @@ import {
   type AgentCreateSessionOptions,
   type AgentFeature,
   type AgentLaunchContext,
+  type AgentModelDefinition,
   type AgentSlashCommand,
   type AgentMode,
   type AgentPermissionRequest,
@@ -120,6 +121,17 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
   }
   if (record.config.mcpServers != null) config.mcpServers = record.config.mcpServers;
   return config;
+}
+
+function isModelAvailableForRuntimeProvider(
+  modelId: string,
+  models: readonly AgentModelDefinition[],
+): boolean {
+  return models.some((model) => model.id === modelId);
+}
+
+function resolveDefaultModelId(models: readonly AgentModelDefinition[]): string | undefined {
+  return (models.find((model) => model.isDefault) ?? models[0])?.id;
 }
 
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
@@ -348,8 +360,6 @@ type ActiveManagedAgent =
   | ManagedAgentRunning
   | ManagedAgentError;
 
-type LiveManagedAgent = ActiveManagedAgent;
-
 const SYSTEM_ERROR_PREFIX = "[System Error]";
 
 function attachPersistenceCwd(
@@ -437,7 +447,7 @@ export class AgentManager {
   private readonly clients = new Map<AgentProvider, AgentClient>();
   private readonly providerEnabled = new Map<AgentProvider, boolean>();
   private readonly providerDerivedFromId = new Map<AgentProvider, string | null>();
-  private readonly agents = new Map<string, LiveManagedAgent>();
+  private readonly agents = new Map<string, ActiveManagedAgent>();
   private readonly timelineStore = new InMemoryAgentTimelineStore();
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
@@ -531,6 +541,19 @@ export class AgentManager {
   }
 
   validateCompanionMcpToken(parentAgentId: string, token: string): boolean {
+    // Lazy cleanup: evict expired tokens on every validation call to prevent
+    // unbounded growth of the companionMcpTokens map.  This is cheap because
+    // validation is infrequent (once per companion MCP connection) and the
+    // map is typically very small (< 50 entries).
+    if (this.companionMcpTokens.size > 0) {
+      const now = Date.now();
+      for (const [key, entry] of this.companionMcpTokens) {
+        if (entry.expiresAt < now) {
+          this.companionMcpTokens.delete(key);
+        }
+      }
+    }
+
     const entry = this.companionMcpTokens.get(token);
     if (!entry) {
       return false;
@@ -939,19 +962,24 @@ export class AgentManager {
       hasResumeOverrides = true;
     }
 
+    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
+    const runtimeProvider = launchConfig.provider;
     const launchContext = this.buildLaunchContext(resolvedAgentId);
-    const client = this.requireClient(handle.provider);
+    const client = this.requireClient(runtimeProvider);
     const available = await client.isAvailable();
     if (!available) {
       throw new Error(
-        `Provider '${handle.provider}' is not available. Please ensure the CLI is installed.`,
+        `Provider '${runtimeProvider}' is not available. Please ensure the CLI is installed.`,
       );
     }
-    const session = await client.resumeSession(
-      handle,
-      hasResumeOverrides ? resumeOverrides : undefined,
-      launchContext,
-    );
+    const session =
+      handle.provider === runtimeProvider
+        ? await client.resumeSession(
+            handle,
+            hasResumeOverrides ? resumeOverrides : undefined,
+            launchContext,
+          )
+        : await client.createSession(launchConfig, launchContext);
     const relation = readAgentRelation(options?.labels, options?.relation) ?? undefined;
     return this.registerSession(session, normalizedConfig, resolvedAgentId, {
       ...options,
@@ -1046,9 +1074,12 @@ export class AgentManager {
     const preservedLastError = existing.lastError;
     const preservedAttention = existing.attention;
     const handle = existing.persistence;
-    const runtimeProvider =
+    const currentRuntimeProvider =
       handle?.provider ?? existing.config.runtimeProvider ?? existing.provider;
+    const runtimeProvider =
+      overrides?.runtimeProvider ?? existing.config.runtimeProvider ?? currentRuntimeProvider;
     const client = this.requireClient(runtimeProvider);
+    const reloadHandle = handle?.provider === runtimeProvider ? handle : null;
     const refreshConfig = {
       ...existing.config,
       ...overrides,
@@ -1063,8 +1094,8 @@ export class AgentManager {
     const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
     const launchContext = this.buildLaunchContext(agentId);
 
-    const session = handle
-      ? await client.resumeSession(handle, launchConfig, launchContext)
+    const session = reloadHandle
+      ? await client.resumeSession(reloadHandle, launchConfig, launchContext)
       : await client.createSession(launchConfig, launchContext);
 
     this.agentStreamCoalescer.flushAndDiscard(agentId);
@@ -1314,10 +1345,48 @@ export class AgentManager {
     this.emitState(agent);
   }
 
-  async setAgentModel(agentId: string, modelId: string | null): Promise<void> {
+  async setAgentModel(
+    agentId: string,
+    modelId: string | null,
+    options?: { runtimeProvider?: AgentProvider | string | null },
+  ): Promise<void> {
     const agent = this.requireSessionAgent(agentId);
     const normalizedModelId =
       typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
+    const currentRuntimeProvider =
+      agent.runtimeInfo?.provider ?? agent.config.runtimeProvider ?? agent.provider;
+    const requestedRuntimeProvider =
+      typeof options?.runtimeProvider === "string" && options.runtimeProvider.trim().length > 0
+        ? options.runtimeProvider.trim()
+        : currentRuntimeProvider;
+
+    if (requestedRuntimeProvider !== currentRuntimeProvider) {
+      this.requireEnabledProvider(requestedRuntimeProvider);
+      if (normalizedModelId) {
+        const client = this.requireClient(requestedRuntimeProvider);
+        const availableModels = await client.listModels({ cwd: agent.config.cwd, force: false });
+        if (!isModelAvailableForRuntimeProvider(normalizedModelId, availableModels)) {
+          throw new Error(
+            `Model '${normalizedModelId}' is not available for runtime provider '${requestedRuntimeProvider}'`,
+          );
+        }
+      }
+      await this.reloadAgentSession(agentId, {
+        model: normalizedModelId ?? undefined,
+        runtimeProvider: requestedRuntimeProvider,
+      });
+      return;
+    }
+
+    if (normalizedModelId) {
+      const client = this.requireClient(currentRuntimeProvider);
+      const availableModels = await client.listModels({ cwd: agent.config.cwd, force: false });
+      if (!isModelAvailableForRuntimeProvider(normalizedModelId, availableModels)) {
+        throw new Error(
+          `Model '${normalizedModelId}' is not available for runtime provider '${currentRuntimeProvider}'`,
+        );
+      }
+    }
 
     if (agent.session.setModel) {
       await agent.session.setModel(normalizedModelId);
@@ -1937,8 +2006,12 @@ export class AgentManager {
 
       try {
         await this.refreshSessionState(agent);
-      } catch {
+      } catch (error) {
         // Ignore refresh errors - state sync after permission approval is best effort.
+        this.logger.debug(
+          { err: error, agentId: agent.id },
+          "Failed to refresh state after permission response",
+        );
       }
 
       this.touchUpdatedAt(agent);
@@ -1978,7 +2051,9 @@ export class AgentManager {
       const waiter = Array.from(agent.foregroundTurnWaiters).find(
         (candidate) => candidate.turnId === foregroundTurnId,
       );
-      const timeout = new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 2000));
+      const timeout = new Promise<void>((resolvePromise) =>
+        setTimeout(resolvePromise, INTERRUPT_SESSION_TIMEOUT_MS),
+      );
       if (waiter) {
         await Promise.race([waiter.settledPromise, timeout]);
       } else if (agent.activeForegroundTurnId === foregroundTurnId) {
@@ -2009,7 +2084,9 @@ export class AgentManager {
         await Promise.race([pendingRun.settledPromise, timeout]);
       }
     } else if (pendingRun) {
-      const timeout = new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 2000));
+      const timeout = new Promise<void>((resolvePromise) =>
+        setTimeout(resolvePromise, INTERRUPT_SESSION_TIMEOUT_MS),
+      );
       await Promise.race([pendingRun.settledPromise, timeout]);
     }
 
@@ -2553,7 +2630,7 @@ export class AgentManager {
   }
 
   private prepareAgentForClosure(
-    agent: LiveManagedAgent,
+    agent: ActiveManagedAgent,
     cancelReason: string,
   ): ManagedAgentClosed {
     this.agentStreamCoalescer.flushAndDiscard(agent.id);
@@ -2729,20 +2806,23 @@ export class AgentManager {
     try {
       const modes = await agent.session.getAvailableModes();
       agent.availableModes = modes;
-    } catch {
+    } catch (error) {
+      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh available modes");
       agent.availableModes = [];
     }
 
     try {
       agent.currentModeId = await agent.session.getCurrentMode();
-    } catch {
+    } catch (error) {
+      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh current mode");
       agent.currentModeId = null;
     }
 
     try {
       const pending = agent.session.getPendingPermissions();
       agent.pendingPermissions = new Map(pending.map((request) => [request.id, request]));
-    } catch {
+    } catch (error) {
+      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh pending permissions");
       agent.pendingPermissions.clear();
     }
 
@@ -2769,8 +2849,9 @@ export class AgentManager {
       if (changed) {
         this.emitState(agent);
       }
-    } catch {
+    } catch (error) {
       // Keep existing runtimeInfo if refresh fails.
+      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh runtime info");
     }
   }
 
@@ -2833,8 +2914,12 @@ export class AgentManager {
           event.timestamp ? { timestamp: event.timestamp } : undefined,
         );
       }
-    } catch {
+    } catch (error) {
       // ignore history failures
+      this.logger.debug(
+        { err: error, agentId: agent.id },
+        "Failed to hydrate timeline from legacy provider history",
+      );
     }
   }
 
@@ -3589,12 +3674,13 @@ export class AgentManager {
       if (client) {
         try {
           const models = await client.listModels({ cwd: normalized.cwd, force: false });
-          const defaultModel = models.find((model) => model.isDefault) ?? models[0];
-          if (defaultModel) {
-            normalized.model = defaultModel.id;
-          }
-        } catch {
+          normalized.model = resolveDefaultModelId(models);
+        } catch (error) {
           // Provider may not support model listing — leave model undefined
+          this.logger.debug(
+            { err: error, provider: runtimeProvider },
+            "Failed to list models for default resolution",
+          );
         }
       }
     }
@@ -3603,8 +3689,12 @@ export class AgentManager {
       try {
         normalized.modeId =
           getAgentProviderDefinition(normalized.provider).defaultModeId ?? undefined;
-      } catch {
+      } catch (error) {
         // Unknown provider
+        this.logger.debug(
+          { err: error, provider: normalized.provider },
+          "Failed to resolve default mode for provider",
+        );
       }
     }
 
@@ -3705,7 +3795,7 @@ export class AgentManager {
     }
   }
 
-  private requireAgent(id: string): LiveManagedAgent {
+  private requireAgent(id: string): ActiveManagedAgent {
     const normalizedId = validateAgentId(id, "requireAgent");
     const agent = this.agents.get(normalizedId);
     if (!agent) {

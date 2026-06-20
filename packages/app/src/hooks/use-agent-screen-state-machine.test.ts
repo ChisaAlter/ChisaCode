@@ -332,7 +332,7 @@ describe("deriveAgentScreenViewState", () => {
     const memory = createBaseMemory();
     const input: AgentScreenMachineInput = {
       ...createBaseInput(),
-      agent: createAgentWithStatus({ id: "agent-1", status: "idle" }),
+      agent: createAgentWithStatus({ id: "agent-1", status: "initializing" }),
       continuity: { kind: "optimistic-create", agent: createAgent("agent-1") },
       needsAuthoritativeSync: true,
       isHistorySyncing: true,
@@ -378,7 +378,7 @@ describe("deriveAgentScreenViewState", () => {
     const memory = createBaseMemory();
     const input: AgentScreenMachineInput = {
       ...createBaseInput(),
-      agent: createAgentWithStatus({ id: "agent-1", status: "idle" }),
+      agent: createAgentWithStatus({ id: "agent-1", status: "initializing" }),
       continuity: { kind: "optimistic-create", agent: createAgent("agent-1") },
     };
 
@@ -389,6 +389,25 @@ describe("deriveAgentScreenViewState", () => {
     expect(ready.agent.status).toBe("running");
   });
 
+  it("uses authoritative idle status once the created agent has finished", () => {
+    const memory = createBaseMemory({
+      hasRenderedReady: true,
+      lastReadyAgent: createAgent("agent-1"),
+    });
+    const input: AgentScreenMachineInput = {
+      ...createBaseInput(),
+      agent: createAgentWithStatus({ id: "agent-1", status: "idle" }),
+      continuity: { kind: "optimistic-create", agent: createAgent("agent-1") },
+      hasHydratedHistoryBefore: true,
+    };
+
+    const result = deriveAgentScreenViewState({ input, memory });
+    const ready = expectReadyState(result.state);
+
+    expect(ready.source).toBe("authoritative");
+    expect(ready.agent.status).toBe("idle");
+  });
+
   it("keeps send lifecycle transitions forward-only across optimistic and authoritative handoff", () => {
     let memory = createBaseMemory();
     const transitions: Array<"loading" | "resolving" | Agent["status"]> = [];
@@ -397,7 +416,7 @@ describe("deriveAgentScreenViewState", () => {
       createBaseInput(),
       {
         ...createBaseInput(),
-        agent: createAgentWithStatus({ id: "agent-1", status: "idle" }),
+        agent: createAgentWithStatus({ id: "agent-1", status: "initializing" }),
         continuity: { kind: "optimistic-create", agent: createAgent("agent-1") },
       },
       {

@@ -65,6 +65,7 @@ import { PairLinkModal } from "@/components/pair-link-modal";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -255,6 +256,7 @@ interface GeneralSectionProps {
   handleSendBehaviorChange: (behavior: SendBehavior) => void;
   handleServiceUrlBehaviorChange: (behavior: ServiceUrlBehavior) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
+  handleShowReasoningChange: (showReasoning: boolean) => void;
 }
 
 interface ThemeMenuItemProps {
@@ -337,6 +339,7 @@ function GeneralSection({
   handleSendBehaviorChange,
   handleServiceUrlBehaviorChange,
   handleTerminalScrollbackLinesChange,
+  handleShowReasoningChange,
 }: GeneralSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -458,6 +461,19 @@ function GeneralSection({
             value={settings.sendBehavior}
             onValueChange={handleSendBehaviorChange}
             options={sendBehaviorOptions}
+          />
+        </View>
+        <View style={ROW_WITH_BORDER_STYLE}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.general.showReasoning.title")}</Text>
+            <Text style={settingsStyles.rowHint}>
+              {t("settings.general.showReasoning.description")}
+            </Text>
+          </View>
+          <Switch
+            value={settings.showReasoning}
+            onValueChange={handleShowReasoningChange}
+            accessibilityLabel={t("settings.general.showReasoning.accessibilityLabel")}
           />
         </View>
         {isDesktopApp ? (
@@ -1215,6 +1231,13 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     [updateSettings],
   );
 
+  const handleShowReasoningChange = useCallback(
+    (showReasoning: boolean) => {
+      void updateSettings({ showReasoning });
+    },
+    [updateSettings],
+  );
+
   const handlePlaybackTest = useCallback(async () => {
     if (!voiceAudioEngine || isPlaybackTestRunning) {
       return;
@@ -1403,6 +1426,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
               handleSendBehaviorChange={handleSendBehaviorChange}
               handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
               handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+              handleShowReasoningChange={handleShowReasoningChange}
             />
           );
         case "shortcuts":

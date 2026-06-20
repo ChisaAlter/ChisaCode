@@ -56,6 +56,14 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.language).toBe("zh-CN");
   });
 
+  it("defaults reasoning display to enabled when storage is empty", async () => {
+    const deps = makeDeps();
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.showReasoning).toBe(true);
+  });
+
   it("seeds storage with the client defaults when nothing is persisted", async () => {
     const deps = makeDeps();
 
@@ -89,6 +97,31 @@ describe("loadAppSettingsFromStorage", () => {
     const result = await loadAppSettingsFromStorage(deps);
 
     expect(result.language).toBe("en");
+  });
+
+  it("loads configured reasoning display from app settings", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ showReasoning: false }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.showReasoning).toBe(false);
+  });
+
+  it("normalizes invalid reasoning display values to enabled", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ showReasoning: "no" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.showReasoning).toBe(true);
+    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(JSON.stringify(result));
   });
 
   it("loads the chisaki theme from app settings", async () => {
@@ -191,6 +224,7 @@ describe("loadAppSettingsFromStorage", () => {
       sendBehavior: "interrupt",
       serviceUrlBehavior: "ask",
       terminalScrollbackLines: 10_000,
+      showReasoning: true,
     });
     expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(JSON.stringify(result));
   });
@@ -252,6 +286,7 @@ describe("loadSettingsFromStorage", () => {
       sendBehavior: "interrupt",
       serviceUrlBehavior: "ask",
       terminalScrollbackLines: 10_000,
+      showReasoning: true,
       releaseChannel: "stable",
     });
   });
@@ -304,6 +339,7 @@ describe("loadSettingsFromStorage", () => {
       sendBehavior: "interrupt",
       serviceUrlBehavior: "ask",
       terminalScrollbackLines: 10_000,
+      showReasoning: true,
       manageBuiltInDaemon: true,
       releaseChannel: "stable",
     });
@@ -341,6 +377,7 @@ describe("loadSettingsFromStorage", () => {
       sendBehavior: "interrupt",
       serviceUrlBehavior: "ask",
       terminalScrollbackLines: 10_000,
+      showReasoning: true,
       manageBuiltInDaemon: false,
       releaseChannel: "beta",
     });
@@ -364,6 +401,7 @@ describe("loadSettingsFromStorage", () => {
       sendBehavior: "interrupt",
       serviceUrlBehavior: "ask",
       terminalScrollbackLines: 10_000,
+      showReasoning: true,
       manageBuiltInDaemon: true,
       releaseChannel: "stable",
     });
@@ -411,6 +449,28 @@ describe("saveAppSettings", () => {
       JSON.stringify({
         ...DEFAULT_CLIENT_SETTINGS,
         language: "en",
+      }),
+    );
+  });
+
+  it("saves reasoning display through app settings persistence", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify(DEFAULT_CLIENT_SETTINGS),
+      }),
+    });
+    const queryClient = new QueryClient();
+
+    await saveAppSettings({
+      queryClient,
+      updates: { showReasoning: false },
+      deps,
+    });
+
+    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(
+      JSON.stringify({
+        ...DEFAULT_CLIENT_SETTINGS,
+        showReasoning: false,
       }),
     );
   });

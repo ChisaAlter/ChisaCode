@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThoughtMessage } from "./thought-message";
 
@@ -94,36 +94,23 @@ vi.mock("lucide-react-native", () => ({
   ChevronRight: () => React.createElement("span", { "data-testid": "chevron-right" }),
 }));
 
-function svgElement(tagName: string) {
-  return function SvgElement({
-    children,
-    testID,
-    ...props
-  }: {
-    children?: React.ReactNode;
-    testID?: string;
-    [key: string]: unknown;
-  }) {
-    return React.createElement(tagName, { ...props, "data-testid": testID }, children);
-  };
-}
-
-vi.mock("react-native-svg", () => ({
-  default: svgElement("svg"),
-  Circle: svgElement("circle"),
-  G: svgElement("g"),
-  Line: svgElement("line"),
-  Rect: svgElement("rect"),
+vi.mock("@/components/synced-loader", () => ({
+  SyncedLoader: ({ color, size }: { color: string; size?: number }) =>
+    React.createElement("span", {
+      "data-color": color,
+      "data-size": size,
+      "data-testid": "synced-loader",
+    }),
 }));
 
 vi.mock("react-native-unistyles", () => {
   const theme = {
     borderRadius: { md: 6 },
+    colorScheme: "light",
     colors: {
       foregroundMuted: "#71717a",
       palette: {
-        black: "#000000",
-        red: { 300: "#fca5a5", 600: "#dc2626" },
+        amber: { 500: "#f59e0b", 700: "#b45309" },
       },
     },
     fontSize: { xs: 12 },
@@ -148,7 +135,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("ThoughtMessage", () => {
-  it("shows reasoning content by default and lets the user collapse it", () => {
+  it("collapses completed reasoning to a one-line preview by default", () => {
     render(
       <ThoughtMessage
         text={"First private step\nSecond private step"}
@@ -158,41 +145,24 @@ describe("ThoughtMessage", () => {
     );
 
     expect(screen.getByText("推理过程")).toBeTruthy();
-    expect(screen.getByText("First private step", { exact: false })).toBeTruthy();
-    expect(screen.getByText("Second private step", { exact: false })).toBeTruthy();
+    expect(screen.getByTestId("thought-pixel-dot")).toBeTruthy();
+    expect(screen.queryByTestId("brain-icon")).toBeNull();
+    expect(screen.getByTestId("thought-message-preview")).toBeTruthy();
+    expect(screen.queryByTestId("thought-message-content")).toBeNull();
 
     fireEvent.click(screen.getByTestId("thought-message-toggle"));
 
-    expect(screen.queryByText("First private step", { exact: false })).toBeNull();
+    expect(screen.getByTestId("thought-message-content").textContent).toBe(
+      "First private step\nSecond private step",
+    );
   });
 
-  it("uses the running label while reasoning is streaming", () => {
+  it("uses the running label and expands reasoning while streaming", () => {
     render(<ThoughtMessage text="Still streaming" status="loading" isLastInSequence />);
 
     expect(screen.getByText("正在推理")).toBeTruthy();
-    expect(screen.getByTestId("chisa-thinking-indicator")).toBeTruthy();
-    expect(screen.getByText("Still streaming", { exact: false })).toBeTruthy();
-  });
-
-  it("moves the visible scissors around the square-cut path while reasoning is streaming", () => {
-    vi.useFakeTimers();
-    try {
-      render(<ThoughtMessage text="Still streaming" status="loading" isLastInSequence />);
-
-      const firstPosition = screen.getByTestId("chisa-thinking-scissors-position-0");
-      expect(firstPosition).toBeTruthy();
-      expect(screen.getByTestId("chisa-thinking-avatar")).toBeTruthy();
-      expect(firstPosition.querySelector("circle")?.getAttribute("cx")).toBe("4");
-
-      act(() => {
-        vi.advanceTimersByTime(260);
-      });
-
-      const secondPosition = screen.getByTestId("chisa-thinking-scissors-position-1");
-      expect(secondPosition).toBeTruthy();
-      expect(secondPosition.querySelector("circle")?.getAttribute("cx")).toBe("22");
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(screen.getByTestId("synced-loader").getAttribute("data-color")).toBe("#b45309");
+    expect(screen.queryByTestId("thought-message-preview")).toBeNull();
+    expect(screen.getByTestId("thought-message-content").textContent).toBe("Still streaming");
   });
 });

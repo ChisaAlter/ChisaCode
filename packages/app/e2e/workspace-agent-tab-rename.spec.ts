@@ -8,9 +8,14 @@ import { captureWsSessionFrames, renameModalInput, renameModalSubmit } from "./h
 import { getServerId } from "./helpers/server-id";
 
 async function openAgentInWorkspace(page: Page, agent: { id: string; cwd: string }) {
-  await page.goto(buildHostAgentDetailRoute(getServerId(), agent.id, agent.cwd));
-  await page.waitForURL(
-    (url) => url.pathname.includes("/workspace/") && !url.searchParams.has("open"),
+  await page.goto(buildHostAgentDetailRoute(getServerId(), agent.id), {
+    waitUntil: "commit",
+    timeout: 60_000,
+  });
+  await page.waitForFunction(
+    () =>
+      window.location.pathname.includes("/workspace/") && !window.location.search.includes("open="),
+    undefined,
     { timeout: 60_000 },
   );
   await waitForWorkspaceTabsVisible(page);

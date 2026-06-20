@@ -67,6 +67,19 @@ display_name = "MoA Coder"
     expect(toml).toContain('display_name = "GLM 5 Updated"');
     expect(toml).toContain("max_context_size = 200000");
   });
+
+  test("omits tool capability for models that do not support tools", () => {
+    const toml = buildManagedKimiConfigToml({
+      providerId: "chisacode",
+      apiKey: "secret",
+      baseUrl: "http://127.0.0.1:6767/v1",
+      models: [{ id: "mimo-v2.5", label: "MiMo v2.5", supportsTools: false }],
+    });
+
+    expect(toml).toContain('[models."mimo-v2.5"]');
+    expect(toml).toContain("capabilities = []");
+    expect(toml).not.toContain('"tool_use"');
+  });
 });
 
 describe("KimiCodeAgentClient managed home", () => {

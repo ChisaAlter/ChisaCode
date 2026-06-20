@@ -21,9 +21,15 @@ test.describe("Workspace pane mounting", () => {
         title: `pane-remount-${Date.now()}`,
       });
 
-      await page.goto(buildHostAgentDetailRoute(serverId, agent.id, agent.cwd));
-      await page.waitForURL(
-        (url) => url.pathname.includes("/workspace/") && !url.searchParams.has("open"),
+      await page.goto(buildHostAgentDetailRoute(serverId, agent.id), {
+        waitUntil: "commit",
+        timeout: 60_000,
+      });
+      await page.waitForFunction(
+        () =>
+          window.location.pathname.includes("/workspace/") &&
+          !window.location.search.includes("open="),
+        undefined,
         { timeout: 60_000 },
       );
       await waitForWorkspaceTabsVisible(page);

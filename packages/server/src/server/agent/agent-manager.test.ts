@@ -190,7 +190,7 @@ class EnvProbeAgentClient extends TestAgentClient {
 }
 
 class TestAgentSession implements AgentSession {
-  readonly provider = "codex" as const;
+  readonly provider: AgentProvider;
   readonly capabilities = TEST_CAPABILITIES;
   readonly id = randomUUID();
   private runtimeModel: string | null = null;
@@ -198,7 +198,9 @@ class TestAgentSession implements AgentSession {
   private turnIdCounter = 0;
   private interrupted = false;
 
-  constructor(private readonly config: AgentSessionConfig) {}
+  constructor(private readonly config: AgentSessionConfig) {
+    this.provider = config.provider;
+  }
 
   async run(): Promise<AgentRunResult> {
     return {
@@ -1593,6 +1595,69 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
   });
 });
 
+test("resumeAgentFromPersistence creates a fresh runtime session when overrides change runtimeProvider", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-resume-runtime-switch-"));
+  const createdConfigs: AgentSessionConfig[] = [];
+  const resumedProviders: AgentProvider[] = [];
+  const createClient = (provider: AgentProvider): AgentClient => ({
+    provider,
+    capabilities: TEST_CAPABILITIES,
+    async isAvailable() {
+      return true;
+    },
+    async listModels() {
+      return [{ provider, id: "kimi-k2.6", label: "kimi-k2.6", isDefault: true }];
+    },
+    async createSession(config: AgentSessionConfig) {
+      createdConfigs.push(config);
+      return new TestAgentSession(config);
+    },
+    async resumeSession() {
+      resumedProviders.push(provider);
+      throw new Error("should not resume a handle from another runtime provider");
+    },
+  });
+  const manager = new AgentManager({
+    clients: {
+      claude: createClient("claude"),
+      "opencode-claude": createClient("opencode-claude"),
+    },
+    providerDefinitions: {
+      claude: { enabled: true, derivedFromProviderId: null },
+      "opencode-claude": { enabled: true, derivedFromProviderId: "claude" },
+    },
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000109",
+  });
+
+  const snapshot = await manager.resumeAgentFromPersistence(
+    {
+      provider: "claude",
+      sessionId: "old-claude-session",
+      metadata: {
+        provider: "claude",
+        cwd: workdir,
+      },
+    },
+    {
+      cwd: workdir,
+      runtimeProvider: "opencode-claude",
+      model: "kimi-k2.6",
+    },
+  );
+
+  expect(resumedProviders).toEqual([]);
+  expect(createdConfigs).toEqual([
+    expect.objectContaining({
+      provider: "opencode-claude",
+      model: "kimi-k2.6",
+    }),
+  ]);
+  expect(snapshot.provider).toBe("claude");
+  expect(snapshot.config.runtimeProvider).toBe("opencode-claude");
+  expect(snapshot.runtimeInfo?.provider).toBe("opencode-claude");
+});
+
 test("reloadAgentSession preserves timeline and does not force history replay", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-reload-"));
   const storagePath = join(workdir, "agents");
@@ -1888,6 +1953,178 @@ test("persists live mode, model, and thinking changes without an external snapsh
   expect(persisted?.config?.thinkingOptionId).toBe("high");
   expect(persisted?.runtimeInfo?.modeId).toBe("build");
   expect(persisted?.runtimeInfo?.model).toBe("gpt-5.4");
+});
+
+test("setAgentModel rejects models outside the active runtime provider", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-model-runtime-guard-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const setModelCalls: Array<string | null> = [];
+  const claudeClient: AgentClient = {
+    provider: "claude",
+    capabilities: TEST_CAPABILITIES,
+    async isAvailable() {
+      return true;
+    },
+    async listModels() {
+      return [{ provider: "claude", id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" }];
+    },
+    async createSession(config: AgentSessionConfig) {
+      const session = new TestAgentSession(config);
+      session.setModel = async (modelId: string | null) => {
+        setModelCalls.push(modelId);
+      };
+      return session;
+    },
+    async resumeSession() {
+      throw new Error("unused");
+    },
+  };
+  const manager = new AgentManager({
+    clients: {
+      claude: claudeClient,
+    },
+    providerDefinitions: {
+      claude: { enabled: true, derivedFromProviderId: null },
+    },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000134",
+  });
+
+  const snapshot = await manager.createAgent({
+    provider: "claude",
+    cwd: workdir,
+    model: "claude-sonnet-4-5",
+  });
+
+  await expect(manager.setAgentModel(snapshot.id, "kimi-k2.6")).rejects.toThrow(
+    "Model 'kimi-k2.6' is not available for runtime provider 'claude'",
+  );
+  await manager.flush();
+
+  const persisted = await storage.get(snapshot.id);
+  expect(setModelCalls).toEqual([]);
+  expect(persisted?.config?.model).toBe("claude-sonnet-4-5");
+  expect(persisted?.runtimeInfo?.model).toBe("claude-sonnet-4-5");
+});
+
+test("setAgentModel reloads the agent when selecting a different runtime provider", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-model-runtime-switch-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const createdConfigs: AgentSessionConfig[] = [];
+  const createClient = (provider: AgentProvider, modelId: string): AgentClient => ({
+    provider,
+    capabilities: TEST_CAPABILITIES,
+    async isAvailable() {
+      return true;
+    },
+    async listModels() {
+      return [{ provider, id: modelId, label: modelId, isDefault: true }];
+    },
+    async createSession(config: AgentSessionConfig) {
+      createdConfigs.push(config);
+      return new TestAgentSession(config);
+    },
+    async resumeSession() {
+      throw new Error("should create a fresh session when runtime provider changes");
+    },
+  });
+  const manager = new AgentManager({
+    clients: {
+      claude: createClient("claude", "claude-sonnet-4-5"),
+      "opencode-claude": createClient("opencode-claude", "kimi-k2.6"),
+    },
+    providerDefinitions: {
+      claude: { enabled: true, derivedFromProviderId: null },
+      "opencode-claude": { enabled: true, derivedFromProviderId: "claude" },
+    },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000135",
+  });
+
+  const snapshot = await manager.createAgent({
+    provider: "claude",
+    cwd: workdir,
+    model: "claude-sonnet-4-5",
+  });
+
+  await manager.setAgentModel(snapshot.id, "kimi-k2.6", { runtimeProvider: "opencode-claude" });
+  await manager.flush();
+
+  const persisted = await storage.get(snapshot.id);
+  expect(
+    createdConfigs.map((config) => ({ provider: config.provider, model: config.model })),
+  ).toEqual([
+    { provider: "claude", model: "claude-sonnet-4-5" },
+    { provider: "opencode-claude", model: "kimi-k2.6" },
+  ]);
+  expect(persisted?.provider).toBe("claude");
+  expect(persisted?.config?.runtimeProvider).toBe("opencode-claude");
+  expect(persisted?.config?.model).toBe("kimi-k2.6");
+  expect(persisted?.runtimeInfo?.provider).toBe("opencode-claude");
+  expect(persisted?.runtimeInfo?.model).toBe("kimi-k2.6");
+});
+
+test("setAgentModel rejects models outside a requested runtime provider before reload", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-model-runtime-switch-guard-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const createdConfigs: AgentSessionConfig[] = [];
+  const createClient = (provider: AgentProvider, modelId: string): AgentClient => ({
+    provider,
+    capabilities: TEST_CAPABILITIES,
+    async isAvailable() {
+      return true;
+    },
+    async listModels() {
+      return [{ provider, id: modelId, label: modelId, isDefault: true }];
+    },
+    async createSession(config: AgentSessionConfig) {
+      createdConfigs.push(config);
+      return new TestAgentSession(config);
+    },
+    async resumeSession() {
+      throw new Error("should not reload with an unavailable requested model");
+    },
+  });
+  const manager = new AgentManager({
+    clients: {
+      claude: createClient("claude", "claude-sonnet-4-5"),
+      "opencode-claude": createClient("opencode-claude", "kimi-k2.6"),
+    },
+    providerDefinitions: {
+      claude: { enabled: true, derivedFromProviderId: null },
+      "opencode-claude": { enabled: true, derivedFromProviderId: "claude" },
+    },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000136",
+  });
+
+  const snapshot = await manager.createAgent({
+    provider: "claude",
+    cwd: workdir,
+    model: "claude-sonnet-4-5",
+  });
+
+  await expect(
+    manager.setAgentModel(snapshot.id, "claude-sonnet-4-5", {
+      runtimeProvider: "opencode-claude",
+    }),
+  ).rejects.toThrow(
+    "Model 'claude-sonnet-4-5' is not available for runtime provider 'opencode-claude'",
+  );
+  await manager.flush();
+
+  const persisted = await storage.get(snapshot.id);
+  expect(
+    createdConfigs.map((config) => ({ provider: config.provider, model: config.model })),
+  ).toEqual([{ provider: "claude", model: "claude-sonnet-4-5" }]);
+  expect(persisted?.config?.runtimeProvider).toBeUndefined();
+  expect(persisted?.config?.model).toBe("claude-sonnet-4-5");
 });
 
 test("session config drift events update state through the stream channel", async () => {

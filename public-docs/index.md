@@ -11,7 +11,7 @@ ChisaCode runs your coding agents on your machine and gives you a mobile, deskto
 
 ## Desktop app (recommended)
 
-Download from [chisacode.sh/download](https://chisacode.sh/download) or the [GitHub releases page](https://github.com/getchisacode/chisacode/releases). Open it and you're done.
+Download from [chisacode.sh/download](https://chisacode.sh/download) or the [GitHub releases page](https://github.com/ChisaAlter/ChisaCode/releases). Open it and you're done.
 
 The desktop app bundles its own daemon and starts it automatically, no separate install required. On first launch you'll see a brief startup screen, then connect from your phone by scanning the QR code in Settings.
 
@@ -32,8 +32,8 @@ Configuration and local state live under `CHISACODE_HOME` (defaults to `~/.chisa
 
 - [Providers](/docs/providers), what a provider is and how ChisaCode wraps existing CLIs.
 - [CLI reference](/docs/cli), every command.
-- [GitHub repo](https://github.com/getchisacode/chisacode)
-- [Report an issue](https://github.com/getchisacode/chisacode/issues)
+- [GitHub repo](https://github.com/ChisaAlter/ChisaCode)
+- [Report an issue](https://github.com/ChisaAlter/ChisaCode/issues)
 
 ## Prerequisites
 

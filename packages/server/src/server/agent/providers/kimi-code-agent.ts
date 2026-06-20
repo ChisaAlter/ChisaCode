@@ -173,7 +173,7 @@ function mergeKimiModels(models: ProviderProfileModel[]): ProviderProfileModel[]
 }
 
 function modelCapabilities(model: ProviderProfileModel): string[] {
-  const capabilities = ["tool_use"];
+  const capabilities = model.supportsTools === false ? [] : ["tool_use"];
   if (model.supportsImages) {
     capabilities.push("image_in");
   }

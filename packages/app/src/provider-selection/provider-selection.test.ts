@@ -165,6 +165,55 @@ describe("combined model selector data", () => {
     });
   });
 
+  it("groups MiMo gateway models under every generated agent provider", () => {
+    const agentIds = ["claude", "codex", "opencode", "mimocode", "pi", "kimi"];
+    const entries = [
+      ...agentIds.map((provider) =>
+        snapshotEntry({
+          provider,
+          label: provider,
+          models: [],
+        }),
+      ),
+      ...agentIds.map((provider) =>
+        snapshotEntry({
+          provider: `opencode-${provider}`,
+          label: `opencode ${provider}`,
+          derivedFromProviderId: provider,
+          modelGatewayId: "opencode",
+          models: [
+            {
+              provider: `opencode-${provider}`,
+              id:
+                provider === "opencode" || provider === "mimocode" || provider === "pi"
+                  ? "xiaomi/mimo-v2.5"
+                  : "mimo-v2.5",
+              label: "mimo-v2.5",
+            },
+          ],
+        } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+      ),
+    ];
+
+    const providers = buildSelectableProviderSelectorProviders(entries);
+
+    expect(providers.map((provider) => provider.id)).toEqual(agentIds);
+    for (const provider of providers) {
+      expect(provider.modelSelection.kind).toBe("models");
+      if (provider.modelSelection.kind !== "models") {
+        throw new Error("expected models");
+      }
+      expect(provider.modelSelection.rows).toContainEqual(
+        expect.objectContaining({
+          agentProvider: provider.id,
+          runtimeProvider: `opencode-${provider.id}`,
+          providerLabel: `opencode ${provider.id}`,
+          modelLabel: "mimo-v2.5",
+        }),
+      );
+    }
+  });
+
   it("keeps gateway models selectable when the base agent provider requires authentication", () => {
     const providers = buildSelectableProviderSelectorProviders([
       snapshotEntry({

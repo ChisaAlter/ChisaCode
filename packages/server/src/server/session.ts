@@ -1905,7 +1905,12 @@ export class Session {
       case "set_agent_mode_request":
         return this.handleSetAgentModeRequest(msg.agentId, msg.modeId, msg.requestId);
       case "set_agent_model_request":
-        return this.handleSetAgentModelRequest(msg.agentId, msg.modelId, msg.requestId);
+        return this.handleSetAgentModelRequest(
+          msg.agentId,
+          msg.modelId,
+          msg.requestId,
+          msg.runtimeProvider,
+        );
       case "set_agent_feature_request":
         return this.handleSetAgentFeatureRequest(
           msg.agentId,
@@ -4418,13 +4423,17 @@ export class Session {
     agentId: string,
     modelId: string | null,
     requestId: string,
+    runtimeProvider?: string | null,
   ): Promise<void> {
-    this.sessionLogger.info({ agentId, modelId, requestId }, "session: set_agent_model_request");
+    this.sessionLogger.info(
+      { agentId, modelId, runtimeProvider, requestId },
+      "session: set_agent_model_request",
+    );
 
     try {
-      await this.agentManager.setAgentModel(agentId, modelId);
+      await this.agentManager.setAgentModel(agentId, modelId, { runtimeProvider });
       this.sessionLogger.info(
-        { agentId, modelId, requestId },
+        { agentId, modelId, runtimeProvider, requestId },
         "session: set_agent_model_request success",
       );
       this.emit({
@@ -4433,7 +4442,7 @@ export class Session {
       });
     } catch (error) {
       this.sessionLogger.error(
-        { err: error, agentId, modelId, requestId },
+        { err: error, agentId, modelId, runtimeProvider, requestId },
         "session: set_agent_model_request error",
       );
       this.emit({

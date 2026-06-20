@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { Logger } from "pino";
 import { AGENT_RELATION_KINDS, AGENT_RELATION_SOURCES } from "@chisacode/protocol/agent-labels";
 
-import { AgentFeatureSchema, AgentStatusSchema } from "../messages.js";
+import { AgentFeatureSchema, AgentStatusSchema, McpServerConfigSchema } from "../messages.js";
 import { toStoredAgentRecord } from "./agent-projections.js";
 import type { ManagedAgent } from "./agent-manager.js";
 import type { AgentSessionConfig } from "./agent-sdk-types.js";
@@ -17,9 +17,15 @@ const SERIALIZABLE_CONFIG_SCHEMA = z
     model: z.string().nullable().optional(),
     thinkingOptionId: z.string().nullable().optional(),
     featureValues: z.record(z.unknown()).nullable().optional(),
-    extra: z.record(z.any()).nullable().optional(),
+    extra: z
+      .object({
+        codex: z.record(z.unknown()).optional(),
+        claude: z.record(z.unknown()).optional(),
+      })
+      .nullable()
+      .optional(),
     systemPrompt: z.string().nullable().optional(),
-    mcpServers: z.record(z.any()).nullable().optional(),
+    mcpServers: z.record(McpServerConfigSchema).nullable().optional(),
   })
   .nullable()
   .optional();
@@ -28,8 +34,8 @@ const PERSISTENCE_HANDLE_SCHEMA = z
   .object({
     provider: z.string(),
     sessionId: z.string(),
-    nativeHandle: z.any().optional(),
-    metadata: z.record(z.any()).optional(),
+    nativeHandle: z.string().optional(),
+    metadata: z.record(z.unknown()).optional(),
   })
   .nullable()
   .optional();

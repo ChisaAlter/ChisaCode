@@ -1270,6 +1270,11 @@ export const resources = {
               queue: "排队",
             },
           },
+          showReasoning: {
+            title: "显示思考内容",
+            description: "在对话中显示模型返回的推理过程",
+            accessibilityLabel: "显示思考内容",
+          },
           serviceUrls: {
             title: "服务 URL",
             description: "运行脚本打开 URL 时使用的位置",
@@ -2777,6 +2782,11 @@ export const resources = {
               interrupt: "Interrupt",
               queue: "Queue",
             },
+          },
+          showReasoning: {
+            title: "Show reasoning",
+            description: "Show reasoning content returned by the model in chat",
+            accessibilityLabel: "Show reasoning content",
           },
           serviceUrls: {
             title: "Service URLs",

@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
 const CLIENT_SESSION_KEY_FILE = join(
-  process.env.CHISACODE_HOME ?? process.env.CHISACODE_HOME ?? join(homedir(), ".chisacode"),
+  process.env.CHISACODE_HOME ?? join(homedir(), ".chisacode"),
   "cli-client-id",
 );
 

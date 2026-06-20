@@ -51,6 +51,7 @@ export function attachAgentStoragePersistence(
 export function buildConfigOverrides(record: StoredAgentRecord): Partial<AgentSessionConfig> {
   return {
     cwd: record.cwd,
+    runtimeProvider: record.config?.runtimeProvider ?? undefined,
     modeId: record.lastModeId ?? record.config?.modeId ?? undefined,
     model: record.config?.model ?? undefined,
     thinkingOptionId: record.config?.thinkingOptionId ?? undefined,
@@ -73,6 +74,7 @@ export function buildSessionConfig(
   const overrides = buildConfigOverrides(record);
   return {
     provider: record.provider,
+    runtimeProvider: overrides.runtimeProvider,
     cwd: record.cwd,
     modeId: overrides.modeId,
     model: overrides.model,

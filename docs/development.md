@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js (see `.tool-versions` for exact version)
+- Node.js from your active `PATH`; this repository does not enforce an exact Node version.
 - npm workspaces (comes with Node)
 
 ## Running the dev server

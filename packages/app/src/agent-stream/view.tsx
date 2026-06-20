@@ -78,6 +78,7 @@ import { resolveWorkspaceIdByExecutionDirectory } from "@/utils/workspace-execut
 import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { isWeb } from "@/constants/platform";
+import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
 
 function renderLiveAuxiliaryNode(input: {
@@ -235,6 +236,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     ref,
   ) {
     const { t } = useTranslation();
+    const { settings: appSettings } = useAppSettings();
     const viewportRef = useRef<StreamViewportHandle | null>(null);
     const isMobile = useIsCompactFormFactor();
     const streamRenderStrategy = useMemo(
@@ -459,6 +461,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const renderThoughtItem = useCallback(
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
+        if (!appSettings.showReasoning) {
+          return null;
+        }
         return (
           <ThoughtMessage
             text={item.text}
@@ -467,7 +472,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [],
+      [appSettings.showReasoning],
     );
 
     const renderToolCallItem = useCallback(

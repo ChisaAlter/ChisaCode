@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useSessionStore } from "@/stores/session-store";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { agentHistoryQueryKey } from "./agent-history-query-key";
 
 export const ARCHIVE_AGENT_PENDING_QUERY_KEY = ["archive-agent-pending"] as const;
@@ -333,6 +334,7 @@ export function applyArchivedAgentCloseResults(input: ApplyArchivedAgentCloseRes
   }
 
   for (const result of input.results) {
+    useWorkspaceLayoutStore.getState().unpinAgentEverywhere(result.agentId);
     markAgentArchivedInStore({
       serverId: input.serverId,
       agentId: result.agentId,

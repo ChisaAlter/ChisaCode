@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test } from "./fixtures";
 import { connectSeedClient } from "./helpers/seed-client";
-import { createTempGitRepo } from "./helpers/workspace";
+import { createTempDirectory } from "./helpers/workspace";
 import {
   archiveAgentFromDaemon,
   archiveAgentFromSessions,
@@ -27,7 +27,7 @@ test.describe("Archive tab reconciliation", () => {
   test.describe.configure({ timeout: 300_000 });
 
   test.beforeAll(async () => {
-    tempRepo = await createTempGitRepo("archive-tab-");
+    tempRepo = await createTempDirectory("archive-tab-");
     client = await connectSeedClient();
   });
 

@@ -68,6 +68,17 @@ const SYNTHETIC_CHAT_OPTION_KEYS = [
   "stop",
   "seed",
 ] as const;
+const XIAOMI_CHAT_COMPLETIONS_MAX_TOKENS = 131_072;
+const UPSTREAM_COMPATIBILITY_RULES = [
+  {
+    host: "api.xiaomimimo.com",
+    format: "chatCompletions",
+    tokenLimits: {
+      max_tokens: XIAOMI_CHAT_COMPLETIONS_MAX_TOKENS,
+      max_completion_tokens: XIAOMI_CHAT_COMPLETIONS_MAX_TOKENS,
+    },
+  },
+] as const;
 
 function asRecord(value: unknown): JsonRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -412,22 +423,68 @@ function responsesToAnthropic(body: JsonRecord): JsonRecord {
 }
 
 function normalizeChatUpstreamBody(body: JsonRecord): JsonRecord {
-  if (!Array.isArray(body.messages)) {
+  const normalized = Array.isArray(body.messages)
+    ? {
+        ...body,
+        messages: body.messages.map((message) => {
+          const record = asRecord(message);
+          if (!record) {
+            return message;
+          }
+          return {
+            ...record,
+            role: normalizeMessageRole(record.role),
+          };
+        }),
+      }
+    : body;
+  return normalized;
+}
+
+function isXiaomiChatCompletionsUpstream(
+  upstreamFormat: ModelGatewayTargetFormat,
+  upstream: ModelGatewayUpstream,
+): boolean {
+  try {
+    const hostname = new URL(upstream.baseUrl).hostname;
+    return UPSTREAM_COMPATIBILITY_RULES.some(
+      (rule) => rule.format === upstreamFormat && rule.host === hostname,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function clampTokenLimit(body: JsonRecord, key: string, limit: number): JsonRecord {
+  const value = body[key];
+  if (typeof value !== "number" || value <= limit) {
     return body;
   }
   return {
     ...body,
-    messages: body.messages.map((message) => {
-      const record = asRecord(message);
-      if (!record) {
-        return message;
-      }
-      return {
-        ...record,
-        role: normalizeMessageRole(record.role),
-      };
-    }),
+    [key]: limit,
   };
+}
+
+function applyUpstreamCompatibility(
+  upstreamFormat: ModelGatewayTargetFormat,
+  upstream: ModelGatewayUpstream,
+  body: JsonRecord,
+): JsonRecord {
+  if (!isXiaomiChatCompletionsUpstream(upstreamFormat, upstream)) {
+    return body;
+  }
+
+  let nextBody = body;
+  for (const rule of UPSTREAM_COMPATIBILITY_RULES) {
+    if (rule.format !== upstreamFormat) {
+      continue;
+    }
+    for (const [key, limit] of Object.entries(rule.tokenLimits)) {
+      nextBody = clampTokenLimit(nextBody, key, limit);
+    }
+  }
+  return nextBody;
 }
 
 function readUsageNumber(usage: JsonRecord, primary: string, fallback?: string): number {
@@ -618,6 +675,228 @@ function readStreamDelta(parsed: JsonRecord, format: ModelGatewayTargetFormat): 
   return typeof parsed.delta === "string" ? parsed.delta : "";
 }
 
+function readSseBlockTextDelta(block: string, format: ModelGatewayTargetFormat): string {
+  const data = block
+    .split(/\r?\n/u)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice("data:".length).trim())
+    .filter((payload) => payload.length > 0 && payload !== "[DONE]")
+    .join("\n");
+  if (!data) {
+    return "";
+  }
+  try {
+    return readStreamDelta(asRecord(JSON.parse(data) as unknown) ?? {}, format);
+  } catch {
+    return "";
+  }
+}
+
+function createStreamFormatter(targetFormat: ModelGatewayTargetFormat): {
+  start: () => string;
+  delta: (text: string) => string;
+  finish: () => string;
+} {
+  if (targetFormat === "anthropic") {
+    return {
+      start: () =>
+        [
+          sseEvent("message_start", {
+            type: "message_start",
+            message: {
+              id: `msg_${Date.now()}`,
+              type: "message",
+              role: "assistant",
+              content: [],
+              model: "",
+              stop_reason: null,
+              stop_sequence: null,
+              usage: { input_tokens: 0, output_tokens: 0 },
+            },
+          }),
+          sseEvent("content_block_start", {
+            type: "content_block_start",
+            index: 0,
+            content_block: { type: "text", text: "" },
+          }),
+        ].join(""),
+      delta: (text: string) =>
+        sseEvent("content_block_delta", {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text },
+        }),
+      finish: () =>
+        [
+          sseEvent("content_block_stop", { type: "content_block_stop", index: 0 }),
+          sseEvent("message_stop", { type: "message_stop" }),
+        ].join(""),
+    };
+  }
+
+  if (targetFormat === "chatCompletions") {
+    const id = `chatcmpl_${Date.now()}`;
+    return {
+      start: () => "",
+      delta: (text: string) =>
+        `data: ${JSON.stringify({
+          id,
+          object: "chat.completion.chunk",
+          choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
+        })}\n\n`,
+      finish: () =>
+        [
+          `data: ${JSON.stringify({
+            id,
+            object: "chat.completion.chunk",
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          })}\n\n`,
+          "data: [DONE]\n\n",
+        ].join(""),
+    };
+  }
+
+  const responseId = `resp_${Date.now()}`;
+  const itemId = `msg_${Date.now()}`;
+  const chunks: string[] = [];
+  return {
+    start: () =>
+      [
+        sseEvent("response.created", {
+          type: "response.created",
+          response: {
+            id: responseId,
+            object: "response",
+            status: "in_progress",
+            output: [],
+            output_text: "",
+          },
+        }),
+        sseEvent("response.output_item.added", {
+          type: "response.output_item.added",
+          output_index: 0,
+          item: {
+            id: itemId,
+            type: "message",
+            status: "in_progress",
+            role: "assistant",
+            content: [],
+          },
+        }),
+        sseEvent("response.content_part.added", {
+          type: "response.content_part.added",
+          item_id: itemId,
+          output_index: 0,
+          content_index: 0,
+          part: { type: "output_text", text: "", annotations: [] },
+        }),
+      ].join(""),
+    delta: (text: string) => {
+      chunks.push(text);
+      return sseEvent("response.output_text.delta", {
+        type: "response.output_text.delta",
+        item_id: itemId,
+        output_index: 0,
+        content_index: 0,
+        delta: text,
+      });
+    },
+    finish: () => {
+      const fullText = chunks.join("");
+      const messageItem = {
+        id: itemId,
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: [{ type: "output_text", text: fullText, annotations: [] }],
+      };
+      return [
+        sseEvent("response.output_text.done", {
+          type: "response.output_text.done",
+          item_id: itemId,
+          output_index: 0,
+          content_index: 0,
+          text: fullText,
+        }),
+        sseEvent("response.content_part.done", {
+          type: "response.content_part.done",
+          item_id: itemId,
+          output_index: 0,
+          content_index: 0,
+          part: { type: "output_text", text: fullText, annotations: [] },
+        }),
+        sseEvent("response.output_item.done", {
+          type: "response.output_item.done",
+          output_index: 0,
+          item: messageItem,
+        }),
+        sseEvent("response.completed", {
+          type: "response.completed",
+          response: {
+            id: responseId,
+            object: "response",
+            status: "completed",
+            output: [messageItem],
+            output_text: fullText,
+          },
+        }),
+        "data: [DONE]\n\n",
+      ].join("");
+    },
+  };
+}
+
+function createStreamingTextTransform(
+  targetFormat: ModelGatewayTargetFormat,
+  upstreamFormat: ModelGatewayTargetFormat,
+): TransformStream<Uint8Array, Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const formatter = createStreamFormatter(targetFormat);
+  let buffer = "";
+
+  function emit(value: string, controller: TransformStreamDefaultController<Uint8Array>): void {
+    if (value.length > 0) {
+      controller.enqueue(encoder.encode(value));
+    }
+  }
+
+  function drainCompleteBlocks(controller: TransformStreamDefaultController<Uint8Array>): void {
+    while (true) {
+      const match = /\r?\n\r?\n/u.exec(buffer);
+      if (!match) {
+        return;
+      }
+      const block = buffer.slice(0, match.index);
+      buffer = buffer.slice(match.index + match[0].length);
+      const text = readSseBlockTextDelta(block, upstreamFormat);
+      if (text.length > 0) {
+        emit(formatter.delta(text), controller);
+      }
+    }
+  }
+
+  return new TransformStream({
+    start(controller) {
+      emit(formatter.start(), controller);
+    },
+    transform(chunk, controller) {
+      buffer += decoder.decode(chunk, { stream: true });
+      drainCompleteBlocks(controller);
+    },
+    flush(controller) {
+      buffer += decoder.decode();
+      if (buffer.trim().length > 0) {
+        const text = readSseBlockTextDelta(buffer, upstreamFormat);
+        if (text.length > 0) {
+          emit(formatter.delta(text), controller);
+        }
+      }
+      emit(formatter.finish(), controller);
+    },
+  });
+}
+
 function streamTextAsAnthropic(contentChunks: string[], status: number): Response {
   const body = [
     sseEvent("message_start", {
@@ -680,23 +959,81 @@ function streamTextAsChat(contentChunks: string[], status: number): Response {
 
 function streamTextAsResponses(contentChunks: string[], status: number): Response {
   const responseId = `resp_${Date.now()}`;
+  const itemId = `msg_${Date.now()}`;
+  const fullText = contentChunks.join("");
+  const messageItem = {
+    id: itemId,
+    type: "message",
+    status: "completed",
+    role: "assistant",
+    content: [{ type: "output_text", text: fullText, annotations: [] }],
+  };
   const body = [
     sseEvent("response.created", {
       type: "response.created",
-      response: { id: responseId, object: "response", status: "in_progress" },
+      response: {
+        id: responseId,
+        object: "response",
+        status: "in_progress",
+        output: [],
+        output_text: "",
+      },
+    }),
+    sseEvent("response.output_item.added", {
+      type: "response.output_item.added",
+      output_index: 0,
+      item: {
+        id: itemId,
+        type: "message",
+        status: "in_progress",
+        role: "assistant",
+        content: [],
+      },
+    }),
+    sseEvent("response.content_part.added", {
+      type: "response.content_part.added",
+      item_id: itemId,
+      output_index: 0,
+      content_index: 0,
+      part: { type: "output_text", text: "", annotations: [] },
     }),
     ...contentChunks.map((text) =>
       sseEvent("response.output_text.delta", {
         type: "response.output_text.delta",
-        item_id: "msg_0",
+        item_id: itemId,
         output_index: 0,
         content_index: 0,
         delta: text,
       }),
     ),
+    sseEvent("response.output_text.done", {
+      type: "response.output_text.done",
+      item_id: itemId,
+      output_index: 0,
+      content_index: 0,
+      text: fullText,
+    }),
+    sseEvent("response.content_part.done", {
+      type: "response.content_part.done",
+      item_id: itemId,
+      output_index: 0,
+      content_index: 0,
+      part: { type: "output_text", text: fullText, annotations: [] },
+    }),
+    sseEvent("response.output_item.done", {
+      type: "response.output_item.done",
+      output_index: 0,
+      item: messageItem,
+    }),
     sseEvent("response.completed", {
       type: "response.completed",
-      response: { id: responseId, object: "response", status: "completed" },
+      response: {
+        id: responseId,
+        object: "response",
+        status: "completed",
+        output: [messageItem],
+        output_text: fullText,
+      },
     }),
     "data: [DONE]\n\n",
   ].join("");
@@ -711,15 +1048,24 @@ async function convertStreamResponse(
   upstreamFormat: ModelGatewayTargetFormat,
   response: Response,
 ): Promise<Response> {
-  const sourceText = await response.text();
-  const contentChunks = parseStreamTextDeltas(sourceText, upstreamFormat);
-  if (targetFormat === "anthropic") {
-    return streamTextAsAnthropic(contentChunks, response.status);
+  if (!response.body) {
+    const sourceText = await response.text();
+    const contentChunks = parseStreamTextDeltas(sourceText, upstreamFormat);
+    if (targetFormat === "anthropic") {
+      return streamTextAsAnthropic(contentChunks, response.status);
+    }
+    if (targetFormat === "chatCompletions") {
+      return streamTextAsChat(contentChunks, response.status);
+    }
+    return streamTextAsResponses(contentChunks, response.status);
   }
-  if (targetFormat === "chatCompletions") {
-    return streamTextAsChat(contentChunks, response.status);
-  }
-  return streamTextAsResponses(contentChunks, response.status);
+  return new Response(
+    response.body.pipeThrough(createStreamingTextTransform(targetFormat, upstreamFormat)),
+    {
+      status: response.status,
+      headers: { "content-type": "text/event-stream" },
+    },
+  );
 }
 
 function buildUpstreamBody(
@@ -914,7 +1260,11 @@ async function fetchGatewayChatCompletion(input: {
   fetchImpl: typeof fetch;
 }): Promise<JsonRecord> {
   const { selection, chatBody, fetchImpl } = input;
-  const upstreamBody = buildUpstreamBody("chatCompletions", selection.format, chatBody);
+  const upstreamBody = applyUpstreamCompatibility(
+    selection.format,
+    selection.upstream,
+    buildUpstreamBody("chatCompletions", selection.format, chatBody),
+  );
   const response = await fetchImpl(selection.url, {
     method: "POST",
     headers: buildUpstreamHeaders(selection.format, selection.upstream.apiKey),
@@ -1174,7 +1524,11 @@ export async function handleModelGatewayRequest({
   }
 
   const selection = selectUpstream(gateway, targetFormat);
-  const upstreamBody = buildUpstreamBody(targetFormat, selection.format, requestBody);
+  const upstreamBody = applyUpstreamCompatibility(
+    selection.format,
+    selection.upstream,
+    buildUpstreamBody(targetFormat, selection.format, requestBody),
+  );
   const response = await fetchImpl(selection.url, {
     method: "POST",
     headers: buildUpstreamHeaders(selection.format, selection.upstream.apiKey),

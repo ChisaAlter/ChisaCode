@@ -1594,7 +1594,12 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         if (this.activeForegroundTurnId) {
           await this.connection.cancel({ sessionId: this.sessionId });
         }
-      } catch {}
+      } catch (error) {
+        this.logger.debug(
+          { err: error, sessionId: this.sessionId },
+          "Failed to cancel ACP session during close",
+        );
+      }
 
       try {
         if (this.agentCapabilities?.sessionCapabilities?.close) {

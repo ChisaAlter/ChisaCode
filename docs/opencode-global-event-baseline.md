@@ -9,8 +9,8 @@ Replace the OpenCode provider's per-directory `/event` stream with OpenCode's `/
 ## Environment
 
 - `opencode --version`: `1.14.46`
-- `which opencode`: `/Users/moboudra/.asdf/installs/nodejs/22.20.0/bin/opencode`
-- `node --version`: `v22.20.0`
+- `which opencode`: local asdf-managed `opencode` installation
+- `node --version`: local Node.js version used for the historical baseline
 - `npm --version`: `10.9.3`
 
 Each OpenCode test file was run independently with:

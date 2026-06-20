@@ -1,3 +1,4 @@
+import equal from "fast-deep-equal";
 import { WebSocket, WebSocketServer } from "ws";
 import type { IncomingMessage, Server as HTTPServer } from "http";
 import { basename, join } from "path";
@@ -237,7 +238,7 @@ function areServerCapabilitiesEqual(
   current: ServerCapabilities | undefined,
   next: ServerCapabilities | undefined,
 ): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
+  return equal(current ?? null, next ?? null);
 }
 
 function bufferFromWsData(data: Buffer | ArrayBuffer | Buffer[] | string): Buffer {

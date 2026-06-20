@@ -28,6 +28,23 @@ function buildSeededStoragePayload() {
   };
 }
 
+async function navigateToAppRoot(page: Page): Promise<void> {
+  await page.goto("/", { waitUntil: "commit", timeout: 60_000 });
+}
+
+async function navigateToRoute(page: Page, route: string): Promise<void> {
+  await page.goto(route, { waitUntil: "commit", timeout: 60_000 });
+}
+
+async function waitForCleanWorkspaceRoute(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      window.location.pathname.includes("/workspace/") && !window.location.search.includes("open="),
+    undefined,
+    { timeout: 60_000 },
+  );
+}
+
 /**
  * The slice of a daemon client `createIdleAgent` needs: spawn an agent and await
  * its idle upsert. The shared seed client satisfies it, so a spec can seed an
@@ -111,12 +128,12 @@ export async function primeAdditionalPage(page: Page): Promise<void> {
     },
     { daemon, preferences, seedNonce },
   );
-  await page.goto("/");
+  await navigateToAppRoot(page);
 }
 
 export async function resetSeededPageState(page: Page): Promise<void> {
   const { daemon, preferences } = buildSeededStoragePayload();
-  await page.goto("/");
+  await navigateToAppRoot(page);
   await page.evaluate(
     ({ daemon: seededDaemon, preferences: seededPreferences }) => {
       localStorage.clear();
@@ -130,7 +147,7 @@ export async function resetSeededPageState(page: Page): Promise<void> {
     },
     { daemon, preferences },
   );
-  await page.goto("/");
+  await navigateToAppRoot(page);
 }
 
 export async function openWorkspaceWithAgents(
@@ -139,16 +156,13 @@ export async function openWorkspaceWithAgents(
 ): Promise<void> {
   const serverId = getServerId();
   for (const agent of agents) {
-    await page.goto(buildHostAgentDetailRoute(serverId, agent.id, agent.cwd));
+    await navigateToRoute(page, buildHostAgentDetailRoute(serverId, agent.id));
 
     // The workspace layout consumes `?open=agent:xxx`, returns null during the effect,
     // then replaces the URL with the clean workspace route after preparing the tab.
     // On CI, Expo Router's rootNavigationState may take time to initialize,
     // so we allow a generous timeout here (matching terminal-perf pattern).
-    await page.waitForURL(
-      (url) => url.pathname.includes("/workspace/") && !url.searchParams.has("open"),
-      { timeout: 60_000 },
-    );
+    await waitForCleanWorkspaceRoute(page);
 
     await waitForWorkspaceTabsVisible(page);
     await expectWorkspaceTabVisible(page, agent.id);
@@ -189,7 +203,10 @@ export async function closeWorkspaceAgentTab(page: Page, agentId: string): Promi
 export async function expectArchivedAgentFocused(page: Page, agentId: string): Promise<void> {
   await expectWorkspaceTabVisible(page, agentId);
   await expect(
-    page.getByText("This agent is archived").filter({ visible: true }).first(),
+    page
+      .getByText(/This agent is archived|此智能体已归档/)
+      .filter({ visible: true })
+      .first(),
   ).toBeVisible({
     timeout: 30_000,
   });
@@ -197,18 +214,25 @@ export async function expectArchivedAgentFocused(page: Page, agentId: string): P
 
 export async function reloadWorkspace(page: Page, workspaceId: string): Promise<void> {
   const serverId = getServerId();
-  await page.goto(buildHostWorkspaceRoute(serverId, workspaceId));
+  await navigateToRoute(page, buildHostWorkspaceRoute(serverId, workspaceId));
   await waitForWorkspaceTabsVisible(page);
 }
 
 export async function openSessions(page: Page): Promise<void> {
-  const sessionsButton = page.getByTestId("sidebar-sessions");
-  await expect(sessionsButton).toBeVisible({ timeout: 30_000 });
-  await sessionsButton.click();
+  const serverId = getServerId();
+  const currentSessionsButton = page.getByTestId("sidebar-all-sessions");
+  const legacySessionsButton = page.getByTestId("sidebar-sessions");
+  if (await currentSessionsButton.isVisible().catch(() => false)) {
+    await currentSessionsButton.click();
+  } else if (await legacySessionsButton.isVisible().catch(() => false)) {
+    await legacySessionsButton.click();
+  } else {
+    await navigateToRoute(page, buildHostSessionsRoute(serverId));
+  }
   await expect(page).toHaveURL(new RegExp(`${buildHostSessionsRoute(getServerId())}$`), {
     timeout: 30_000,
   });
-  await expect(page.getByText("Sessions", { exact: true }).last()).toBeVisible({
+  await expect(page.getByText(/^(Sessions|会话)$/).last()).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -224,7 +248,9 @@ export async function expectSessionRowVisible(page: Page, title: string): Promis
 }
 
 export async function expectSessionRowArchived(page: Page, title: string): Promise<void> {
-  await expect(getSessionRowByTitle(page, title)).toContainText("Archived", { timeout: 30_000 });
+  await expect(getSessionRowByTitle(page, title)).toContainText(/Archived|已归档/, {
+    timeout: 30_000,
+  });
 }
 
 export async function clickSessionRow(page: Page, title: string): Promise<void> {

@@ -34,6 +34,11 @@ import {
   type FormInitialValues,
   type FormState,
 } from "@/provider-selection/resolve-agent-form";
+import {
+  isProviderEntryLoading,
+  resolveProviderSnapshotLoadingState,
+} from "@/provider-selection/provider-snapshot-loading";
+import { resolveProviderSnapshotModels } from "@/provider-selection/provider-snapshot-models";
 
 export type { FormInitialValues } from "@/provider-selection/resolve-agent-form";
 
@@ -145,20 +150,6 @@ function findProviderSnapshotEntry(
   return provider
     ? ((snapshotEntries ?? []).find((entry) => entry.provider === provider) ?? null)
     : null;
-}
-
-function resolveSnapshotModels(input: {
-  runtimeEntry: ProviderSnapshotEntry | null;
-  selectedEntry: ProviderSnapshotEntry | null;
-}): AgentModelDefinition[] | null {
-  return input.runtimeEntry?.models ?? input.selectedEntry?.models ?? null;
-}
-
-function isProviderEntryLoading(input: {
-  runtimeEntry: ProviderSnapshotEntry | null;
-  selectedEntry: ProviderSnapshotEntry | null;
-}): boolean {
-  return input.runtimeEntry?.status === "loading" || input.selectedEntry?.status === "loading";
 }
 
 async function persistProviderPreferences(input: {
@@ -297,11 +288,13 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
       findProviderSnapshotEntry(snapshotEntries, formState.runtimeProvider ?? formState.provider),
     [formState.provider, formState.runtimeProvider, snapshotEntries],
   );
-  const snapshotSelectedProviderModels = resolveSnapshotModels({
+  const snapshotSelectedProviderModels = resolveProviderSnapshotModels({
+    runtimeProvider: formState.runtimeProvider,
     runtimeEntry: snapshotRuntimeEntry,
     selectedEntry: snapshotSelectedEntry,
   });
   const selectedProviderIsLoading = isProviderEntryLoading({
+    runtimeProvider: formState.runtimeProvider,
     runtimeEntry: snapshotRuntimeEntry,
     selectedEntry: snapshotSelectedEntry,
   });
@@ -317,7 +310,12 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
   const modelSelectorProviders = snapshotModelSelectorProviders;
   const availableModels = snapshotSelectedProviderModels;
   const modeOptions = snapshotSelectedProviderModes;
-  const isAllModelsLoading = snapshotIsLoading || selectedProviderIsLoading;
+  const providerSnapshotLoadingState = resolveProviderSnapshotLoadingState({
+    snapshotIsLoading,
+    snapshotEntries,
+    selectedProviderIsLoading,
+  });
+  const isAllModelsLoading = providerSnapshotLoadingState.isAllModelsLoading;
 
   const combinedInitialValues = useMemo(
     () => combineInitialValues(initialValues, initialServerId),
@@ -579,7 +577,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
     () => availableThinkingOptionsRaw ?? [],
     [availableThinkingOptionsRaw],
   );
-  const isModelLoading = snapshotIsLoading || selectedProviderIsLoading;
+  const isModelLoading = providerSnapshotLoadingState.isModelLoading;
   const modelError = snapshotError;
 
   const workingDirIsEmpty = !formState.workingDir.trim();

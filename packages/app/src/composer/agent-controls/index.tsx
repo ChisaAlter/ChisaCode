@@ -30,6 +30,7 @@ import {
   type ProviderModelSelectionValue,
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
+import { resolveProviderSnapshotLoadingState } from "@/provider-selection/provider-snapshot-loading";
 import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
@@ -1699,6 +1700,11 @@ export const AgentControls = memo(function AgentControls({
     [preferences.favoriteModels],
   );
   const activeModelId = modelSelection.activeModelId;
+  const modelLoadingState = resolveProviderSnapshotLoadingState({
+    snapshotIsLoading,
+    snapshotEntries,
+    selectedProviderIsLoading,
+  });
 
   const handleSelectModel = useCallback(
     (modelId: string) => {
@@ -1717,6 +1723,35 @@ export const AgentControls = memo(function AgentControls({
         console.warn("[AgentControls] persist model preference failed", error);
       });
       void client.setAgentModel(agentId, modelId).catch((error) => {
+        console.warn("[AgentControls] setAgentModel failed", error);
+        toast.error(toErrorMessage(error));
+      });
+    },
+    [agentId, agentProvider, client, toast, updatePreferences],
+  );
+
+  const handleSelectProviderAndModel = useCallback(
+    (provider: string, modelId: string, runtimeProvider?: string) => {
+      if (!client || !agentProvider || provider !== agentProvider) {
+        return;
+      }
+      void updatePreferences((current) =>
+        mergeProviderPreferences({
+          preferences: current,
+          provider,
+          updates: {
+            model: modelId,
+            runtimeProviderByModel: runtimeProvider
+              ? {
+                  [modelId]: runtimeProvider,
+                }
+              : undefined,
+          },
+        }),
+      ).catch((error) => {
+        console.warn("[AgentControls] persist model preference failed", error);
+      });
+      void client.setAgentModel(agentId, modelId, runtimeProvider).catch((error) => {
         console.warn("[AgentControls] setAgentModel failed", error);
         toast.error(toErrorMessage(error));
       });
@@ -1818,6 +1853,7 @@ export const AgentControls = memo(function AgentControls({
       selectedModelId={modelSelection.activeModelId ?? undefined}
       selectedRuntimeProviderId={agentRuntimeProvider}
       onSelectModel={handleSelectModel}
+      onSelectProviderAndModel={handleSelectProviderAndModel}
       favoriteKeys={favoriteKeys}
       onToggleFavoriteModel={handleToggleFavoriteModel}
       thinkingOptions={thinkingOptions.length > 1 ? thinkingOptions : undefined}
@@ -1825,7 +1861,7 @@ export const AgentControls = memo(function AgentControls({
       onSelectThinkingOption={handleSelectThinkingOption}
       features={agent.features}
       onSetFeature={handleSetFeature}
-      isModelLoading={snapshotIsLoading || selectedProviderIsLoading}
+      isModelLoading={modelLoadingState.isModelLoading}
       onModelSelectorOpen={handleModelSelectorOpen}
       onRetryModelProvider={handleRetryModelProvider}
       isRetryingModelProvider={snapshotIsRefreshing}

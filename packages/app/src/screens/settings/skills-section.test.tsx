@@ -238,6 +238,8 @@ const skillsPayload: AgentSkillsListResponse["payload"] = {
     { type: "provider", provider: "mimocode", label: "MiMoCode" },
     { type: "provider", provider: "kimi", label: "Kimi Code" },
     { type: "provider", provider: "pi", label: "Pi" },
+    { type: "agent", agentId: "agent-codex", label: "Codex workspace", status: "idle" },
+    { type: "agent", agentId: "agent-claude", label: "Claude workspace", status: "running" },
   ],
   skills: [
     {
@@ -247,7 +249,7 @@ const skillsPayload: AgentSkillsListResponse["payload"] = {
       statusByScope: {
         global: "enabled",
         providers: { codex: "enabled", claude: "enabled" },
-        agents: {},
+        agents: { "agent-codex": "agent-disabled", "agent-claude": "enabled" },
       },
       errors: [],
     },
@@ -260,7 +262,7 @@ const skillsPayload: AgentSkillsListResponse["payload"] = {
       statusByScope: {
         global: "enabled",
         providers: { codex: "enabled", claude: "enabled" },
-        agents: {},
+        agents: { "agent-codex": "enabled", "agent-claude": "enabled" },
       },
       errors: [],
     },
@@ -311,6 +313,8 @@ describe("SkillsSection", () => {
     expect(host.textContent).toContain("MiMoCode");
     expect(host.textContent).toContain("Kimi Code");
     expect(host.textContent).toContain("Pi");
+    expect(host.textContent).toContain("Codex workspace");
+    expect(host.textContent).toContain("Claude workspace");
 
     const searchInput = host.querySelector('input[placeholder="搜索技能"]');
     expect(searchInput).not.toBeNull();
@@ -354,6 +358,33 @@ describe("SkillsSection", () => {
     expect(clientMock.patchAgentSkillPolicy).toHaveBeenCalledWith({
       scope: { type: "provider", provider: "codex" },
       policy: { enabledSkillNames: [], disabledSkillNames: ["review"] },
+    });
+  });
+
+  it("patches the selected agent policy instead of reusing the shared skill scope", async () => {
+    await renderSection();
+
+    const agentButton = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Codex workspace",
+    );
+    await act(async () => {
+      agentButton?.click();
+    });
+
+    expect(host.textContent).toContain("Codex workspace");
+    expect(host.textContent).toContain("Agent disabled");
+
+    const disabledSwitch = [...host.querySelectorAll('button[aria-pressed="false"]')][0] as
+      | HTMLElement
+      | undefined;
+    await act(async () => {
+      disabledSwitch?.click();
+      await Promise.resolve();
+    });
+
+    expect(clientMock.patchAgentSkillPolicy).toHaveBeenCalledWith({
+      scope: { type: "agent", agentId: "agent-codex" },
+      policy: { enabledSkillNames: ["review"], disabledSkillNames: [] },
     });
   });
 });

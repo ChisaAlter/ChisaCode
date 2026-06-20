@@ -2,7 +2,7 @@
 
 ## Sources Of Truth
 
-- Use Node `22.20.0` from `.tool-versions`; this is an npm workspace monorepo with `package-lock.json`, not pnpm/yarn.
+- Use the active Node.js installation from `PATH`; the repository does not enforce an exact Node version. This is an npm workspace monorepo with `package-lock.json`, not pnpm/yarn.
 - `docs/` holds repo-specific architecture, workflow, and gotcha docs. For non-trivial work, list it and skim the relevant file before editing.
 - `CLAUDE.md` has longer standing guidance; prefer this file for the compact checklist and consult the docs it references for details.
 
@@ -41,6 +41,7 @@
 - Server test categories: `npm run test:unit --workspace=@chisacode/server`, `npm run test:e2e --workspace=@chisacode/server`, real-provider tests use `*.real.e2e.test.ts` and credentials.
 - App Playwright E2E is `npm run test:e2e --workspace=@chisacode/app`; do not run the full Playwright suite locally, only targeted specs when needed.
 - Tests should be either unit tests with injected real-world ports/fakes or real E2E; avoid `vi.mock`, JSDOM/component mounting, private-state assertions, and auth/env skips in normal tests.
+- Surface-specific UI verification must use the real target surface. Desktop testing means the Electron desktop app only; mobile testing means the native mobile app/device or emulator only. Do not use the web app/browser preview as a substitute for desktop or mobile verification, and do not claim desktop/mobile validation from web results.
 
 ## Protocol And Compatibility
 

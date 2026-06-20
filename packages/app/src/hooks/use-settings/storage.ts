@@ -25,6 +25,7 @@ export interface AppSettings {
   sendBehavior: SendBehavior;
   serviceUrlBehavior: ServiceUrlBehavior;
   terminalScrollbackLines: number;
+  showReasoning: boolean;
 }
 
 export interface Settings extends AppSettings {
@@ -38,6 +39,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   sendBehavior: "interrupt",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
+  showReasoning: true,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -175,6 +177,9 @@ function pickAppSettings(stored: Partial<AppSettings>, deps: SettingsDeps): Part
   const terminalScrollbackLines = parseTerminalScrollbackLines(stored.terminalScrollbackLines);
   if (terminalScrollbackLines !== null) {
     result.terminalScrollbackLines = terminalScrollbackLines;
+  }
+  if (typeof stored.showReasoning === "boolean") {
+    result.showReasoning = stored.showReasoning;
   }
   return result;
 }

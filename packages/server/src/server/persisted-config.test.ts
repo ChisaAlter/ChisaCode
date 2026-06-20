@@ -288,6 +288,20 @@ describe("provider overrides (new format)", () => {
     expect(parsed.agents?.providers?.claude?.enabled).toBe(false);
   });
 
+  test("dev provider enabled: false accepted", () => {
+    const parsed = PersistedConfigSchema.parse({
+      agents: {
+        providers: {
+          "mock-slow": {
+            enabled: false,
+          },
+        },
+      },
+    });
+
+    expect(parsed.agents?.providers?.["mock-slow"]?.enabled).toBe(false);
+  });
+
   test("models array accepted", () => {
     const parsed = PersistedConfigSchema.parse({
       agents: {

@@ -313,6 +313,13 @@ function mergeModelAdditions(
   );
 }
 
+function shouldUseProfileModelsOnly(
+  profileModels: ProviderProfileModel[],
+  profileModelsAreAdditive: boolean,
+): boolean {
+  return profileModels.length > 0 && profileModelsAreAdditive !== true;
+}
+
 export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession): AgentSession {
   return {
     provider,
@@ -389,10 +396,22 @@ function wrapClientProvider(
           launchContext,
         ),
       ),
-    listModels: async (options) =>
-      mergeModels(provider, profileModels, additionalModels, await inner.listModels(options), {
-        profileModelsAreAdditive,
-      }),
+    listModels: async (options) => {
+      if (shouldUseProfileModelsOnly(profileModels, profileModelsAreAdditive)) {
+        return mergeModels(provider, profileModels, additionalModels, [], {
+          profileModelsAreAdditive,
+        });
+      }
+      return mergeModels(
+        provider,
+        profileModels,
+        additionalModels,
+        await inner.listModels(options),
+        {
+          profileModelsAreAdditive,
+        },
+      );
+    },
     listModes: inner.listModes?.bind(inner),
     resolveCreateConfig: inner.resolveCreateConfig?.bind(inner),
     isCreateConfigUnattended: inner.isCreateConfigUnattended?.bind(inner),
@@ -427,8 +446,13 @@ function createRegistryEntry(
     resolveCreateConfig: modelClient?.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
     isCreateConfigUnattended:
       modelClient?.isCreateConfigUnattended ?? isDefaultAgentCreateConfigUnattended,
-    fetchModels: async (options: ListModelsOptions) =>
-      mergeModels(
+    fetchModels: async (options: ListModelsOptions) => {
+      if (shouldUseProfileModelsOnly(resolved.profileModels, resolved.profileModelsAreAdditive)) {
+        return mergeModels(provider, resolved.profileModels, resolved.additionalModels, [], {
+          profileModelsAreAdditive: resolved.profileModelsAreAdditive,
+        });
+      }
+      return mergeModels(
         provider,
         resolved.profileModels,
         resolved.additionalModels,
@@ -436,8 +460,12 @@ function createRegistryEntry(
         {
           profileModelsAreAdditive: resolved.profileModelsAreAdditive,
         },
-      ),
+      );
+    },
     fetchModes: async (options: ListModesOptions) => {
+      if (shouldUseProfileModelsOnly(resolved.profileModels, resolved.profileModelsAreAdditive)) {
+        return resolved.definition.modes;
+      }
       const client = getModelClient();
       const modes = client.listModes ? await client.listModes(options) : resolved.definition.modes;
       return modes.map((mode) => {
@@ -662,7 +690,7 @@ function buildGatewayRouteBase(baseUrl: string, gatewayId: string): string {
 
 function buildGatewayProviderModels(
   models: ProviderProfileModel[],
-  options?: { modelPrefix?: string },
+  options?: { modelPrefix?: string; supportsTools?: boolean },
 ): ProviderProfileModel[] {
   return models.map((model, index) => ({
     ...model,
@@ -670,6 +698,7 @@ function buildGatewayProviderModels(
       options?.modelPrefix && !model.id.startsWith(`${options.modelPrefix}/`)
         ? `${options.modelPrefix}/${model.id}`
         : model.id,
+    ...(options?.supportsTools === false ? { supportsTools: false } : {}),
     ...(model.isDefault === undefined && index === 0 ? { isDefault: true } : {}),
   }));
 }
@@ -689,12 +718,39 @@ function buildGatewaySyntheticModels(gateway: ModelGatewayConfig): ProviderProfi
 
 function buildAllGatewayProviderModels(
   gateway: ModelGatewayConfig,
-  options?: { modelPrefix?: string; models?: ProviderProfileModel[] },
+  options?: { modelPrefix?: string; models?: ProviderProfileModel[]; supportsTools?: boolean },
 ): ProviderProfileModel[] {
   return buildGatewayProviderModels(
     [...(options?.models ?? gateway.models ?? []), ...buildGatewaySyntheticModels(gateway)],
     options,
   );
+}
+
+function isXiaomiChatCompletionsGateway(gateway: ModelGatewayConfig): boolean {
+  if (gateway.upstreams.chatCompletions.enabled !== true) {
+    return false;
+  }
+  try {
+    return new URL(gateway.upstreams.chatCompletions.baseUrl).hostname === "api.xiaomimimo.com";
+  } catch {
+    return false;
+  }
+}
+
+function resolveNativeXiaomiGatewayEnv(
+  gateway: ModelGatewayConfig,
+): { env: Record<string, string>; modelPrefix: string } | null {
+  if (!isXiaomiChatCompletionsGateway(gateway)) {
+    return null;
+  }
+  const apiKey = gateway.upstreams.chatCompletions.apiKey.trim();
+  if (!apiKey) {
+    return null;
+  }
+  return {
+    env: { XIAOMI_API_KEY: apiKey },
+    modelPrefix: "xiaomi",
+  };
 }
 
 function gatewayProviderOverride(params: {
@@ -746,6 +802,18 @@ function gatewayProviderOverride(params: {
       enabled: gateway.enabled !== false,
     };
   }
+  const nativeXiaomi = ["opencode", "mimocode", "pi"].includes(extendsProvider)
+    ? resolveNativeXiaomiGatewayEnv(gateway)
+    : null;
+  if (nativeXiaomi) {
+    return {
+      extends: extendsProvider,
+      label: params.label,
+      env: nativeXiaomi.env,
+      models: buildGatewayProviderModels(models, { modelPrefix: nativeXiaomi.modelPrefix }),
+      enabled: gateway.enabled !== false,
+    };
+  }
   return {
     extends: extendsProvider,
     label: params.label,
@@ -778,20 +846,22 @@ function addResolvedModelGatewayProviders(
   for (const gateway of Object.values(modelGateways ?? {})) {
     const gatewayId = gateway.id;
     const models = buildAllGatewayProviderModels(gateway);
+    const nativeXiaomi = resolveNativeXiaomiGatewayEnv(gateway);
     const opencodeProviderModels = buildAllGatewayProviderModels(gateway, {
-      modelPrefix: "openai",
+      modelPrefix: nativeXiaomi?.modelPrefix ?? "openai",
       models: gateway.generatedModels?.opencode,
     });
     const mimocodeProviderModels = buildAllGatewayProviderModels(gateway, {
-      modelPrefix: "openai",
+      modelPrefix: nativeXiaomi?.modelPrefix ?? "openai",
       models: gateway.generatedModels?.mimocode,
     });
     const piProviderModels = buildAllGatewayProviderModels(gateway, {
-      modelPrefix: "openai",
+      modelPrefix: nativeXiaomi?.modelPrefix ?? "openai",
       models: gateway.generatedModels?.pi,
     });
     const kimiProviderModels = buildAllGatewayProviderModels(gateway, {
       models: gateway.generatedModels?.kimi,
+      supportsTools: nativeXiaomi ? false : undefined,
     });
     gatewayOverrides[`${gatewayId}-claude`] = gatewayProviderOverride({
       gateway,

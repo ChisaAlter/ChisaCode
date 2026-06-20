@@ -171,9 +171,15 @@ test.describe("Workspace navigation regression", () => {
 
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
-      await page.goto(buildHostAgentDetailRoute(serverId, agent.id, agent.cwd));
-      await page.waitForURL(
-        (url) => url.pathname.includes("/workspace/") && !url.searchParams.has("open"),
+      await page.goto(buildHostAgentDetailRoute(serverId, agent.id), {
+        waitUntil: "commit",
+        timeout: 60_000,
+      });
+      await page.waitForFunction(
+        () =>
+          window.location.pathname.includes("/workspace/") &&
+          !window.location.search.includes("open="),
+        undefined,
         { timeout: 60_000 },
       );
       await expectWorkspaceHeader(page, {

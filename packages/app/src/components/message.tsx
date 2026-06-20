@@ -71,7 +71,9 @@ import { resolveToolCallIcon } from "@/utils/tool-call-icon";
 import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
+import { GenerativeHtmlPreview } from "@/components/generative-html-preview";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
+import { getGenerativeHtmlFence } from "@/utils/generative-ui-html";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
@@ -363,6 +365,7 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[4],
     minWidth: 0,
     flexShrink: 1,
+    ...theme.shadow.sm,
   },
   text: {
     color: theme.colors.foreground,
@@ -759,6 +762,15 @@ export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
   container: {
     paddingVertical: theme.spacing[3],
     ...(isWeb ? { userSelect: "text" as const } : {}),
+  },
+  textSurface: {
+    backgroundColor: theme.colors.surface1,
+    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    minWidth: 0,
+    maxWidth: "100%",
+    ...theme.shadow.sm,
   },
   containerCompactTop: {
     paddingTop: 0,
@@ -1469,6 +1481,7 @@ function AssistantMessageBlockContainer({
   children,
 }: AssistantMessageBlockContainerProps) {
   const style = useMemo(() => (marginBottom > 0 ? { marginBottom } : undefined), [marginBottom]);
+  const containerStyle = useMemo(() => [assistantMessageStylesheet.textSurface, style], [style]);
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const { width, height } = event.nativeEvent.layout;
@@ -1477,7 +1490,7 @@ function AssistantMessageBlockContainer({
     [block],
   );
   return (
-    <View style={style} onLayout={isWeb ? handleLayout : undefined}>
+    <View style={containerStyle} onLayout={isWeb ? handleLayout : undefined}>
       {children}
     </View>
   );
@@ -1635,15 +1648,29 @@ export const AssistantMessage = memo(function AssistantMessage({
         _parent: ASTNode[],
         styles: MarkdownStyles,
         inheritedStyles: TextStyle = {},
-      ) => (
-        <HighlightedCodeBlock
-          key={node.key}
-          code={node.content}
-          language={node.sourceInfo}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.fence}
-        />
-      ),
+      ) => {
+        const generativeHtml = getGenerativeHtmlFence(node.sourceInfo, node.content ?? "");
+        if (generativeHtml) {
+          return (
+            <GenerativeHtmlPreview
+              key={node.key}
+              html={generativeHtml.html}
+              inheritedStyles={inheritedStyles}
+              sourceTextStyle={styles.fence}
+            />
+          );
+        }
+
+        return (
+          <HighlightedCodeBlock
+            key={node.key}
+            code={node.content}
+            language={node.sourceInfo}
+            inheritedStyles={inheritedStyles}
+            textStyle={styles.fence}
+          />
+        );
+      },
       code_inline: (
         node: ASTNode,
         _children: ReactNode[],

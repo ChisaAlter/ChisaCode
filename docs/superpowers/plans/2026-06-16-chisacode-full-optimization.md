@@ -13,8 +13,8 @@ Scope: repository hygiene, security dependency triage, test debt recovery, relea
 
 ## Phase 1: Baseline And Local Hygiene
 
-- Use Node `22.20.0` from `.tool-versions`; do not rely on Windows PATH Node when it drifts.
-- Add a repository Node version guard and wire it into release checks.
+- Use the active Node.js installation from `PATH`; the repository does not enforce an exact Node version.
+- Keep Node version checks advisory, not blocking release checks.
 - Keep local desktop release artifacts out of routine source scans.
 - Verify with `node -v`, `npm run typecheck`, `npm run lint`, and `git status --short`.
 

@@ -531,6 +531,51 @@ describe("model gateway", () => {
     });
   });
 
+  test("caps excessive token limits for Xiaomi chat completion upstreams", async () => {
+    await handleModelGatewayRequest({
+      gateway: makeGateway({
+        upstreams: {
+          anthropic: {
+            enabled: false,
+            baseUrl: "",
+            apiKey: "",
+          },
+          chatCompletions: {
+            enabled: true,
+            baseUrl: "https://api.xiaomimimo.com/v1",
+            apiKey: "sk-chat",
+          },
+          responses: {
+            enabled: false,
+            baseUrl: "",
+            apiKey: "",
+          },
+        },
+      }),
+      targetFormat: "chatCompletions",
+      requestBody: {
+        model: "mimo-v2.5",
+        messages: [{ role: "user", content: "hello" }],
+        max_tokens: 262_144,
+        max_completion_tokens: 262_144,
+      },
+      fetchImpl: async (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            model: "mimo-v2.5",
+            messages: [{ role: "user", content: "hello" }],
+            max_tokens: 131_072,
+            max_completion_tokens: 131_072,
+          }),
+        );
+        return Response.json({
+          id: "chatcmpl_mimo",
+          choices: [{ message: { role: "assistant", content: "hi" }, finish_reason: "stop" }],
+        });
+      },
+    });
+  });
+
   test("converts an Anthropic Messages request to chat completions when only chat upstream exists", async () => {
     const response = await handleModelGatewayRequest({
       gateway: makeGateway(),
@@ -608,6 +653,52 @@ describe("model gateway", () => {
     const text = await response.text();
     expect(text).toContain("event: content_block_delta");
     expect(text).toContain('"text":"hi"');
+    expect(text).toContain("event: message_stop");
+  });
+
+  test("returns converted streaming responses before the upstream stream completes", async () => {
+    const encoder = new TextEncoder();
+    let releaseUpstream!: () => void;
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'));
+        releaseUpstream = () => {
+          controller.enqueue(
+            encoder.encode('data: {"choices":[{"delta":{"content":" there"}}]}\n\n'),
+          );
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        };
+      },
+    });
+    const responsePromise = handleModelGatewayRequest({
+      gateway: makeGateway(),
+      targetFormat: "anthropic",
+      requestBody: {
+        model: "glm-5",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true,
+      },
+      fetchImpl: async () =>
+        new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }),
+    });
+
+    await expect(
+      Promise.race([
+        responsePromise.then(() => "resolved"),
+        new Promise((resolve) => setTimeout(() => resolve("pending"), 20)),
+      ]),
+    ).resolves.toBe("resolved");
+
+    const response = await responsePromise;
+    const textPromise = response.text();
+    releaseUpstream();
+    const text = await textPromise;
+    expect(text).toContain('"text":"hi"');
+    expect(text).toContain('"text":" there"');
     expect(text).toContain("event: message_stop");
   });
 
@@ -805,8 +896,13 @@ describe("model gateway", () => {
     });
 
     const text = await response.text();
+    expect(text).toContain("event: response.output_item.added");
+    expect(text).toContain("event: response.content_part.added");
     expect(text).toContain("event: response.output_text.delta");
     expect(text).toContain('"delta":"hi"');
+    expect(text).toContain("event: response.output_text.done");
+    expect(text).toContain("event: response.output_item.done");
     expect(text).toContain("event: response.completed");
+    expect(text).toContain('"output_text":"hi"');
   });
 });

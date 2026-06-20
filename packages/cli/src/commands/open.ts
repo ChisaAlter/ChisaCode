@@ -8,8 +8,6 @@ function findDesktopApp(): string | null {
     const candidates = [
       "/Applications/ChisaCode.app",
       path.join(homedir(), "Applications", "ChisaCode.app"),
-      "/Applications/ChisaCode.app",
-      path.join(homedir(), "Applications", "ChisaCode.app"),
     ];
 
     for (const candidate of candidates) {
@@ -23,9 +21,6 @@ function findDesktopApp(): string | null {
 
   if (process.platform === "linux") {
     const candidates = [
-      "/usr/bin/ChisaCode",
-      "/opt/ChisaCode/ChisaCode",
-      path.join(homedir(), "Applications", "ChisaCode.AppImage"),
       "/usr/bin/ChisaCode",
       "/opt/ChisaCode/ChisaCode",
       path.join(homedir(), "Applications", "ChisaCode.AppImage"),
@@ -46,11 +41,8 @@ function findDesktopApp(): string | null {
       return null;
     }
 
-    const candidates = [
-      path.join(localAppData, "Programs", "ChisaCode", "ChisaCode.exe"),
-      path.join(localAppData, "Programs", "ChisaCode", "ChisaCode.exe"),
-    ];
-    return candidates.find((candidate) => existsSync(candidate)) ?? null;
+    const candidate = path.join(localAppData, "Programs", "ChisaCode", "ChisaCode.exe");
+    return existsSync(candidate) ? candidate : null;
   }
 
   return null;

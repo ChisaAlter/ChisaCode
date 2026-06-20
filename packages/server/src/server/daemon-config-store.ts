@@ -1,3 +1,5 @@
+import equal from "fast-deep-equal";
+
 import {
   loadPersistedConfig,
   savePersistedConfig,
@@ -61,7 +63,7 @@ function getValueAtPath(config: MutableDaemonConfig, path: string): unknown {
 }
 
 function isEqualValue(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return equal(a, b);
 }
 
 export function applyMutableProviderConfigToOverrides(

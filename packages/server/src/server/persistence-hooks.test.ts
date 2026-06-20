@@ -95,6 +95,27 @@ describe("persistence hooks", () => {
     });
   });
 
+  test("buildSessionConfig preserves persisted runtimeProvider", () => {
+    const record = createRecord({
+      provider: "claude",
+      config: {
+        runtimeProvider: "opencode-claude",
+        modeId: "default",
+        model: "kimi-k2.6",
+      },
+    });
+
+    expect(buildConfigOverrides(record)).toMatchObject({
+      runtimeProvider: "opencode-claude",
+      model: "kimi-k2.6",
+    });
+    expect(buildSessionConfig(record)).toMatchObject({
+      provider: "claude",
+      runtimeProvider: "opencode-claude",
+      model: "kimi-k2.6",
+    });
+  });
+
   test("buildSessionConfig accepts providers from the canonical manifest", () => {
     const record = createRecord({
       provider: "claude",

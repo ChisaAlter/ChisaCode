@@ -457,6 +457,25 @@ async function applyChisaCodeHomeFork(targetHome: string): Promise<void> {
   }
 }
 
+async function writeE2eDaemonConfig(targetHome: string): Promise<void> {
+  const configPath = path.join(targetHome, "config.json");
+  const config = {
+    version: 1,
+    agents: {
+      providers: {
+        claude: { enabled: false },
+        codex: { enabled: false },
+        kimi: { enabled: false },
+        mimocode: { enabled: false },
+        pi: { enabled: false },
+        "mock-slow": { enabled: false },
+      },
+    },
+  };
+
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
 async function resolveDictationConfig(): Promise<DictationConfig> {
   const openAiUsable = await isOpenAiApiKeyUsable(process.env.OPENAI_API_KEY);
   const defaultLocalModelsDir = path.join(
@@ -620,11 +639,15 @@ async function startRelay(excludedPorts: Set<number>): Promise<number> {
 
 function startMetro(metroPort: number, buffer: ReturnType<typeof createLineBuffer>): ChildProcess {
   const appDir = path.resolve(__dirname, "..");
+  const metroNodeOptions = process.env.NODE_OPTIONS?.includes("--max-old-space-size")
+    ? process.env.NODE_OPTIONS
+    : [process.env.NODE_OPTIONS, "--max-old-space-size=4096"].filter(Boolean).join(" ");
   const child = spawnNpx(["expo", "start", "--web", "--port", String(metroPort)], {
     cwd: appDir,
     env: {
       ...process.env,
       BROWSER: "none",
+      NODE_OPTIONS: metroNodeOptions,
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
@@ -765,6 +788,9 @@ export default async function globalSetup() {
   const daemonLineBuffer = createLineBuffer();
 
   await applyChisaCodeHomeFork(chisacodeHome);
+  if (!requestedChisaCodeHome) {
+    await writeE2eDaemonConfig(chisacodeHome);
+  }
 
   const cleanup = () => performCleanup(shouldRemoveChisaCodeHome);
 

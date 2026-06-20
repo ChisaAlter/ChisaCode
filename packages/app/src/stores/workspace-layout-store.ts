@@ -115,6 +115,7 @@ interface WorkspaceLayoutStore {
   reorderTabsInPane: (workspaceKey: string, paneId: string, tabIds: string[]) => void;
   pinAgent: (workspaceKey: string, agentId: string) => void;
   unpinAgent: (workspaceKey: string, agentId: string) => void;
+  unpinAgentEverywhere: (agentId: string) => void;
   hideAgent: (workspaceKey: string, agentId: string) => void;
   unhideAgent: (workspaceKey: string, agentId: string) => void;
   suppressAgentAutoOpen: (workspaceKey: string, agentId: string) => void;
@@ -179,6 +180,30 @@ function removeIdFromWorkspaceSet(
     ...state,
     [workspaceKey]: nextIds,
   };
+}
+
+function removeIdFromEveryWorkspaceSet(
+  state: Record<string, Set<string>>,
+  id: string,
+): Record<string, Set<string>> {
+  let nextState: Record<string, Set<string>> | null = null;
+  for (const [workspaceKey, currentIds] of Object.entries(state)) {
+    if (!currentIds.has(id)) {
+      continue;
+    }
+
+    nextState ??= { ...state };
+    if (currentIds.size === 1) {
+      delete nextState[workspaceKey];
+      continue;
+    }
+
+    const nextIds = new Set(currentIds);
+    nextIds.delete(id);
+    nextState[workspaceKey] = nextIds;
+  }
+
+  return nextState ?? state;
 }
 
 function getWorkspaceLayout(
@@ -922,6 +947,23 @@ export function createWorkspaceLayoutStore(
                 [normalizedWorkspaceKey]: nextPinnedAgentIds,
               },
             };
+          });
+        },
+        unpinAgentEverywhere: (agentId) => {
+          const normalizedAgentId = trimNonEmpty(agentId);
+          if (!normalizedAgentId) {
+            return;
+          }
+
+          set((state) => {
+            const pinnedAgentIdsByWorkspace = removeIdFromEveryWorkspaceSet(
+              state.pinnedAgentIdsByWorkspace,
+              normalizedAgentId,
+            );
+            if (pinnedAgentIdsByWorkspace === state.pinnedAgentIdsByWorkspace) {
+              return state;
+            }
+            return { pinnedAgentIdsByWorkspace };
           });
         },
         hideAgent: (workspaceKey, agentId) => {

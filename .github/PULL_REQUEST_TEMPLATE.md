@@ -38,6 +38,6 @@ AI-generated PR descriptions are fine in principle. AI-generated *verification c
 - [ ] One focused change. Unrelated cleanups split out.
 - [ ] `npm run typecheck` passes
 - [ ] `npm run lint` passes
-- [ ] `npm run format` ran (Biome)
+- [ ] `npm run format` ran (oxfmt)
 - [ ] UI changes include screenshots or video for every affected platform
 - [ ] Tests added or updated where it made sense

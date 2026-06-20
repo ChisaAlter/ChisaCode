@@ -37,7 +37,7 @@ There are two supported ways to ship from `main`:
 Before running any stable patch release command:
 
 - Make sure the intended release commit is already committed to `main` and the working tree is clean.
-- Use Node `22.20.0` from `.tool-versions` and run `npm run check:node` before release checks. On Windows, do not rely on the ambient PATH Node if it reports a different version.
+- Use the active Node.js installation from `PATH`. `npm run check:node` is advisory only and release checks do not enforce an exact Node version.
 - **Run `npm run format`, `npm run lint`, and `npm run typecheck` and commit any resulting changes BEFORE you start any `release:*` command.** `release:check` runs `npm install --workspaces --include-workspace-root` as part of `release:prepare`, which can mutate `package-lock.json` (e.g. churning `"dev": true` markers on optional deps). The next step, `version:all:*`, runs `npm version` which aborts when the working tree is dirty. If this happens mid-flight you have to commit the lockfile churn before retrying — and the pre-commit format hook will reject a lockfile-only commit because oxfmt internally skips `package-lock.json` while lefthook's glob still matches it. Avoid the whole mess by running format/lint/typecheck first, then `release:prepare` once on its own to absorb any lockfile churn into a normal commit, then start the release.
 - Run security audits against the official npm registry: `npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/`. The default mirror used on some Windows machines may not implement npm's audit endpoint.
 - Do not use `npm run release:patch` as a substitute for checking whether the current commit is actually ready.
@@ -342,15 +342,15 @@ Every bullet must be scannable at a glance. The changelog is not release documen
 
 Every changelog bullet must credit contributors and link to the PR(s) that delivered the change. This is not one-PR-per-line — a single bullet describes a user-facing change and may reference multiple PRs.
 
-Format: append `([#123](https://github.com/getchisacode/chisacode/pull/123) by [@user](https://github.com/user))` at the end of each bullet. For changes spanning multiple PRs or contributors:
+Format: append `([#123](https://github.com/ChisaAlter/ChisaCode/pull/123) by [@user](https://github.com/user))` at the end of each bullet. For changes spanning multiple PRs or contributors:
 
 ```markdown
-- Voice mode now works on tablets with proper microphone permissions. ([#210](https://github.com/getchisacode/chisacode/pull/210), [#215](https://github.com/getchisacode/chisacode/pull/215) by [@alice](https://github.com/alice), [@bob](https://github.com/bob))
+- Voice mode now works on tablets with proper microphone permissions. ([#210](https://github.com/ChisaAlter/ChisaCode/pull/210), [#215](https://github.com/ChisaAlter/ChisaCode/pull/215) by [@alice](https://github.com/alice), [@bob](https://github.com/bob))
 ```
 
 Rules:
 
-- **Always link the PR number** as `[#N](https://github.com/getchisacode/chisacode/pull/N)`.
+- **Always link the PR number** as `[#N](https://github.com/ChisaAlter/ChisaCode/pull/N)`.
 - **Always link the contributor's GitHub profile** as `[@user](https://github.com/user)`.
 - **One bullet = one user-facing change**, regardless of how many PRs went into it. Group related PRs on the same bullet.
 - **De-duplicate contributors.** If the same person authored multiple PRs in one bullet, list them once.
@@ -408,7 +408,7 @@ The changelog covers **stable-to-stable**. Betas are not represented. When you p
 
 - [ ] Run the pre-release sanity check (see above) and address any findings
 - [ ] Ensure the intended release commit is already committed and the git worktree is clean before running any `release:*` patch/promote command
-- [ ] Ensure `npm run check:node` passes on Node `22.20.0`
+- [ ] Optionally run `npm run check:node` to print the active Node.js version
 - [ ] Ensure local `npm run typecheck` passes on that exact commit before running any `release:*` patch/promote command
 - [ ] Verify desktop package artifacts exist and the packaged asar path resolves before publishing desktop release assets
 - [ ] Verify GitHub desktop release manifests exist and point to the intended version after release workflows finish

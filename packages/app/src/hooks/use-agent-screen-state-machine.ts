@@ -101,7 +101,7 @@ function updateInitialSyncFailureMemory(args: {
 function shouldUseOptimisticCreateFlowAgent(input: AgentScreenMachineInput): boolean {
   return (
     input.continuity.kind === "optimistic-create" &&
-    (!input.agent || input.agent.status === "initializing" || input.agent.status === "idle")
+    (!input.agent || input.agent.status === "initializing")
   );
 }
 

@@ -23,7 +23,7 @@ export async function expectInlineWorkingIndicator(page: Page): Promise<void> {
 }
 
 export async function expectTurnCopyButton(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Copy turn" }).first()).toBeVisible({
+  await expect(page.getByRole("button", { name: /^(Copy turn|复制回合)$/ }).first()).toBeVisible({
     timeout: 30_000,
   });
 }

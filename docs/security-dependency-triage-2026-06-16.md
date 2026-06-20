@@ -24,9 +24,9 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 
 - Before: 47 vulnerabilities, including 6 high and 1 critical.
 - After this batch: 36 vulnerabilities, including 0 high and 0 critical.
-- `npm ls ai @ai-sdk/provider-utils @anthropic-ai/claude-agent-sdk @anthropic-ai/sdk react-native-markdown-display markdown-it ws form-data shell-quote --all --depth=6` now exits cleanly under Node 22.20.0; the local install tree reflects the `ws`, `form-data`, and `shell-quote` overrides.
-- `npm ls @xmldom/xmldom node-forge picomatch undici --all --depth=10` now exits cleanly
-  under Node 22.20.0; the high-risk transitive dependency overrides are installed, not just
+- `npm ls ai @ai-sdk/provider-utils @anthropic-ai/claude-agent-sdk @anthropic-ai/sdk react-native-markdown-display markdown-it ws form-data shell-quote --all --depth=6` exited cleanly in the local audit environment; the local install tree reflects the `ws`, `form-data`, and `shell-quote` overrides.
+- `npm ls @xmldom/xmldom node-forge picomatch undici --all --depth=10` exited cleanly
+  in the local audit environment; the high-risk transitive dependency overrides are installed, not just
   declared.
 - `npm ls hono --all --depth=10` now exits cleanly with `hono@4.12.25` installed under
   `@modelcontextprotocol/sdk`.

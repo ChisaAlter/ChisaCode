@@ -1,8 +1,12 @@
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { QueryClient } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Agent } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
+import {
+  buildWorkspaceTabPersistenceKey,
+  useWorkspaceLayoutStore,
+} from "@/stores/workspace-layout-store";
 import { agentHistoryQueryKey } from "./agent-history-query-key";
 import {
   applyArchivedAgentCloseResults,
@@ -11,6 +15,21 @@ import {
   selectPendingArchiveAgentIds,
   setAgentArchiving,
 } from "./use-archive-agent";
+
+vi.mock("@react-native-async-storage/async-storage", () => {
+  const storage = new Map<string, string>();
+  return {
+    default: {
+      getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
+      setItem: vi.fn(async (key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn(async (key: string) => {
+        storage.delete(key);
+      }),
+    },
+  };
+});
 
 function makeAgent(overrides: Partial<Agent> = {}): Agent {
   return {
@@ -47,6 +66,16 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
 describe("useArchiveAgent", () => {
   beforeEach(() => {
     useSessionStore.setState((state) => ({ ...state, sessions: {} }));
+    useWorkspaceLayoutStore.setState({
+      layoutByWorkspace: {},
+      splitSizesByWorkspace: {},
+      pinnedAgentIdsByWorkspace: {},
+      hiddenAgentIdsByWorkspace: {},
+      suppressedAutoOpenAgentIdsByWorkspace: {},
+      suppressedAutoOpenTerminalIdsByWorkspace: {},
+      workspaceAutoOpenSuppressedByWorkspace: {},
+      focusRestorationByWorkspace: {},
+    });
   });
 
   it("tracks pending archive state in shared react-query cache", () => {
@@ -174,6 +203,38 @@ describe("useArchiveAgent", () => {
       ],
       pageParams: [null],
     });
+  });
+
+  it("clears stale workspace pins when an agent is archived", () => {
+    const queryClient = new QueryClient();
+    const firstWorkspaceKey = buildWorkspaceTabPersistenceKey({
+      serverId: "server-a",
+      workspaceId: "workspace-a",
+    });
+    const secondWorkspaceKey = buildWorkspaceTabPersistenceKey({
+      serverId: "server-a",
+      workspaceId: "workspace-b",
+    });
+
+    expect(firstWorkspaceKey).toBeTruthy();
+    expect(secondWorkspaceKey).toBeTruthy();
+
+    useWorkspaceLayoutStore.getState().pinAgent(firstWorkspaceKey!, "agent-1");
+    useWorkspaceLayoutStore.getState().pinAgent(secondWorkspaceKey!, "agent-1");
+    useWorkspaceLayoutStore.getState().pinAgent(secondWorkspaceKey!, "agent-2");
+
+    applyArchivedAgentCloseResults({
+      queryClient,
+      serverId: "server-a",
+      results: [{ agentId: "agent-1", archivedAt: "2026-04-01T04:00:00.000Z" }],
+      invalidateQueries: false,
+    });
+
+    const state = useWorkspaceLayoutStore.getState();
+    expect(state.pinnedAgentIdsByWorkspace[firstWorkspaceKey!]).toBeUndefined();
+    expect(Array.from(state.pinnedAgentIdsByWorkspace[secondWorkspaceKey!] ?? [])).toEqual([
+      "agent-2",
+    ]);
   });
 
   it("can apply archived agent close results without invalidating cached lists", () => {

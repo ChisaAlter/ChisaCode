@@ -1,49 +1,26 @@
 import React, { memo, useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  ChisaThinkingIndicator,
-  type ChisaThinkingIndicatorColors,
-} from "@/components/thought-message";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { SyncedLoader } from "@/components/synced-loader";
 import { formatDuration } from "@/utils/time";
 
 const STREAM_METADATA_FONT_SIZE = 13;
-
-interface ChisaIndicatorTheme {
-  colors: {
-    foregroundMuted: string;
-    palette: {
-      black: string;
-      red: { 300: string; 600: string };
-    };
-  };
-}
-
-const ThemedChisaThinkingIndicator = withUnistyles(ChisaThinkingIndicator);
-const chisaThinkingIndicatorColorMapping = (
-  theme: ChisaIndicatorTheme,
-): { colors: ChisaThinkingIndicatorColors } => ({
-  colors: {
-    black: theme.colors.palette.black,
-    muted: theme.colors.foregroundMuted,
-    red: theme.colors.palette.red[600],
-    redBright: theme.colors.palette.red[300],
-  },
-});
 
 export const RunningTurnFooter = memo(function RunningTurnFooter({
   inFlightTurnStartedAt,
 }: {
   inFlightTurnStartedAt: Date | null;
 }) {
+  const { theme } = useUnistyles();
+  const loaderColor =
+    theme.colorScheme === "light"
+      ? theme.colors.palette.amber[700]
+      : theme.colors.palette.amber[500];
   return (
     <View style={stylesheet.turnFooterSlot} testID="turn-working-indicator">
       <View style={stylesheet.turnFooterContent}>
-        <View style={stylesheet.workingMascot}>
-          <ThemedChisaThinkingIndicator
-            status="loading"
-            uniProps={chisaThinkingIndicatorColorMapping}
-          />
+        <View style={stylesheet.workingIcon} testID="turn-working-pixel-loader">
+          <SyncedLoader size={14} color={loaderColor} />
         </View>
         {inFlightTurnStartedAt ? (
           <RunningElapsed startedAt={inFlightTurnStartedAt} testID="turn-working-elapsed" />
@@ -91,18 +68,17 @@ const stylesheet = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
   },
   workingElapsed: {
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
     fontVariant: ["tabular-nums"],
   },
-  workingMascot: {
-    width: 72,
-    height: 30,
+  workingIcon: {
+    width: 14,
+    height: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: -2,
   },
 }));

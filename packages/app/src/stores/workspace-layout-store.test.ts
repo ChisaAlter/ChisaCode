@@ -1238,6 +1238,30 @@ describe("workspace-layout-store actions", () => {
     });
   });
 
+  it("removes an agent pin from every workspace when the agent leaves the workspace", () => {
+    const workspaceKey = createWorkspaceKey();
+    const otherWorkspaceKey = buildWorkspaceTabPersistenceKey({
+      serverId: SERVER_ID,
+      workspaceId: "ws-other-worktree",
+    });
+
+    expect(otherWorkspaceKey).toBeTruthy();
+
+    const store = workspaceLayoutStore.getState();
+    store.pinAgent(workspaceKey, "agent-1");
+    store.pinAgent(workspaceKey, "agent-keep");
+    store.pinAgent(otherWorkspaceKey as string, "agent-1");
+    store.pinAgent(otherWorkspaceKey as string, "agent-2");
+
+    store.unpinAgentEverywhere("agent-1");
+
+    const state = workspaceLayoutStore.getState();
+    expect(Array.from(state.pinnedAgentIdsByWorkspace[workspaceKey] ?? [])).toEqual(["agent-keep"]);
+    expect(Array.from(state.pinnedAgentIdsByWorkspace[otherWorkspaceKey as string] ?? [])).toEqual([
+      "agent-2",
+    ]);
+  });
+
   it("keeps hidden agent intents in memory per workspace without persisting them", () => {
     const workspaceKey = createWorkspaceKey();
     const otherWorkspaceKey = buildWorkspaceTabPersistenceKey({

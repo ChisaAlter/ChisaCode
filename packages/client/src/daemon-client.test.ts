@@ -2688,6 +2688,52 @@ test("lists commands with legacy requestId signature via RPC", async () => {
   });
 });
 
+test("sets an agent model with a derived runtime provider via RPC", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.setAgentModel("agent-1", "mimo-v2.5", "opencode-claude");
+  expect(mock.sent).toHaveLength(1);
+
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "set_agent_model_request",
+    agentId: "agent-1",
+    modelId: "mimo-v2.5",
+    runtimeProvider: "opencode-claude",
+  });
+
+  mock.triggerMessage(
+    JSON.stringify({
+      type: "session",
+      message: {
+        type: "set_agent_model_response",
+        payload: {
+          accepted: true,
+          agentId: "agent-1",
+          error: null,
+          requestId: request.requestId,
+        },
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toBeUndefined();
+});
+
 test("manages agent skills via correlated RPCs", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

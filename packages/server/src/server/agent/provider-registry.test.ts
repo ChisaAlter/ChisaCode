@@ -552,13 +552,13 @@ test("model gateway materializes provider entries for all built-in agents", asyn
         generatedModels: {
           opencode: [
             {
-              id: "openai/glm-5",
+              id: "glm-5",
               label: "GLM 5",
               isDefault: true,
               contextWindowMaxTokens: 200_000,
               supportsImages: true,
             },
-            { id: "openai/glm-5-air", label: "GLM 5 Air" },
+            { id: "glm-5-air", label: "GLM 5 Air" },
           ],
           kimi: [
             {
@@ -637,7 +637,7 @@ test("model gateway materializes provider entries for all built-in agents", asyn
     enabled: true,
   });
 
-  const openAiProviderModels = [
+  const opencodeProviderModels = [
     {
       provider: "zai-opencode",
       id: "openai/glm-5",
@@ -660,16 +660,62 @@ test("model gateway materializes provider entries for all built-in agents", asyn
   ];
   await expect(
     registry["zai-opencode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
-  ).resolves.toEqual(openAiProviderModels);
+  ).resolves.toEqual(opencodeProviderModels);
+  await expect(
+    registry["zai-claude"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "zai-claude",
+      id: "glm-5",
+      label: "GLM 5",
+      isDefault: true,
+      contextWindowMaxTokens: 200_000,
+      supportsImages: true,
+    },
+    {
+      provider: "zai-claude",
+      id: "glm-5-air",
+      label: "GLM 5 Air",
+    },
+    {
+      provider: "zai-claude",
+      id: "moa-coder",
+      label: "MoA Coder",
+      description: "Synthetic coding model",
+    },
+  ]);
+  await expect(
+    registry["zai-codex"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "zai-codex",
+      id: "glm-5",
+      label: "GLM 5",
+      isDefault: true,
+      contextWindowMaxTokens: 200_000,
+      supportsImages: true,
+    },
+    {
+      provider: "zai-codex",
+      id: "glm-5-air",
+      label: "GLM 5 Air",
+    },
+    {
+      provider: "zai-codex",
+      id: "moa-coder",
+      label: "MoA Coder",
+      description: "Synthetic coding model",
+    },
+  ]);
   await expect(
     registry["zai-mimocode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
   ).resolves.toEqual(
-    openAiProviderModels.map((model) => Object.assign({}, model, { provider: "zai-mimocode" })),
+    opencodeProviderModels.map((model) => Object.assign({}, model, { provider: "zai-mimocode" })),
   );
   await expect(
     registry["zai-pi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
   ).resolves.toEqual(
-    openAiProviderModels.map((model) => Object.assign({}, model, { provider: "zai-pi" })),
+    opencodeProviderModels.map((model) => Object.assign({}, model, { provider: "zai-pi" })),
   );
   await expect(
     registry["zai-kimi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
@@ -820,6 +866,115 @@ test("model gateway materializes provider entries for all built-in agents", asyn
         id: "moa-coder",
         label: "MoA Coder",
         description: "Synthetic coding model",
+      },
+    ],
+  });
+});
+
+test("xiaomi chat gateway uses native Xiaomi provider settings for OpenCode-like agents", async () => {
+  const registry = buildProviderRegistry(logger, {
+    modelGateways: {
+      opencode: {
+        id: "opencode",
+        label: "Xiaomi MiMo",
+        enabled: true,
+        models: [{ id: "mimo-v2.5", label: "MiMo v2.5", isDefault: true }],
+        upstreams: {
+          anthropic: {
+            enabled: false,
+            baseUrl: "",
+            apiKey: "",
+          },
+          chatCompletions: {
+            enabled: true,
+            baseUrl: "https://api.xiaomimimo.com/v1",
+            apiKey: "sk-xiaomi",
+          },
+          responses: {
+            enabled: false,
+            baseUrl: "",
+            apiKey: "",
+          },
+        },
+      },
+    },
+    modelGatewayBaseUrl: "http://127.0.0.1:6767",
+    modelGatewayToken: "internal-token",
+  });
+
+  await expect(
+    registry["opencode-opencode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "opencode-opencode",
+      id: "xiaomi/mimo-v2.5",
+      label: "MiMo v2.5",
+      isDefault: true,
+    },
+  ]);
+  await expect(
+    registry["opencode-mimocode"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "opencode-mimocode",
+      id: "xiaomi/mimo-v2.5",
+      label: "MiMo v2.5",
+      isDefault: true,
+    },
+  ]);
+  await expect(
+    registry["opencode-pi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "opencode-pi",
+      id: "xiaomi/mimo-v2.5",
+      label: "MiMo v2.5",
+      isDefault: true,
+    },
+  ]);
+  await expect(
+    registry["opencode-kimi"].fetchModels({ cwd: "/tmp/registry-models", force: false }),
+  ).resolves.toEqual([
+    {
+      provider: "opencode-kimi",
+      id: "mimo-v2.5",
+      label: "MiMo v2.5",
+      isDefault: true,
+      supportsTools: false,
+    },
+  ]);
+
+  registry["opencode-opencode"].createClient(logger);
+  registry["opencode-mimocode"].createClient(logger);
+  registry["opencode-pi"].createClient(logger);
+  registry["opencode-kimi"].createClient(logger);
+
+  for (const provider of ["opencode", "mimocode", "pi"] as const) {
+    expect(mockState.constructorArgs[provider].at(-1)).toEqual({
+      runtimeSettings: {
+        command: undefined,
+        env: {
+          XIAOMI_API_KEY: "sk-xiaomi",
+        },
+      },
+    });
+  }
+  expect(mockState.constructorArgs.kimi.at(-1)).toEqual({
+    runtimeSettings: {
+      command: undefined,
+      env: {
+        OPENAI_API_KEY: "internal-token",
+        OPENAI_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/opencode/v1",
+      },
+    },
+    providerId: "opencode-kimi",
+    label: "Xiaomi MiMo Kimi Code",
+    models: [
+      {
+        id: "mimo-v2.5",
+        label: "MiMo v2.5",
+        isDefault: true,
+        supportsTools: false,
       },
     ],
   });

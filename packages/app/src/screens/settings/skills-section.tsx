@@ -32,6 +32,11 @@ type SelectedScope =
   | { type: "provider"; provider: string }
   | { type: "agent"; agentId: string };
 
+interface ScopeButtonItem {
+  value: SelectedScope;
+  label: string;
+}
+
 type InstallMode = "url" | "local";
 
 interface CreateMenuFrame {
@@ -54,6 +59,12 @@ function sameScope(a: SelectedScope, b: SelectedScope): boolean {
   if (a.type === "provider" && b.type === "provider") return a.provider === b.provider;
   if (a.type === "agent" && b.type === "agent") return a.agentId === b.agentId;
   return false;
+}
+
+function scopeKey(scope: SelectedScope): string {
+  if (scope.type === "global") return "global";
+  if (scope.type === "provider") return `provider:${scope.provider}`;
+  return `agent:${scope.agentId}`;
 }
 
 function statusForScope(skill: AgentSkillPayload, scope: SelectedScope): AgentSkillStatus {
@@ -500,18 +511,26 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
     ),
     [createButton, createMenu, refresh, t],
   );
-  const scopeButtons = useMemo(
-    () => [
-      { value: { type: "global" as const }, label: t("settings.skills.all") },
-      ...scopes
-        .filter((scope) => scope.type === "provider")
-        .map((scope) => ({
-          value: { type: "provider" as const, provider: scope.provider },
+  const scopeButtons = useMemo<ScopeButtonItem[]>(() => {
+    const buttons: ScopeButtonItem[] = [
+      { value: { type: "global" }, label: t("settings.skills.all") },
+    ];
+    for (const scope of scopes) {
+      if (scope.type === "global") continue;
+      if (scope.type === "provider") {
+        buttons.push({
+          value: { type: "provider", provider: scope.provider },
           label: scope.label,
-        })),
-    ],
-    [scopes, t],
-  );
+        });
+        continue;
+      }
+      buttons.push({
+        value: { type: "agent", agentId: scope.agentId },
+        label: scope.label,
+      });
+    }
+    return buttons;
+  }, [scopes, t]);
 
   const filteredSkills = useMemo(
     () => skills.filter((skill) => skillMatchesQuery(skill, searchValue)),
@@ -566,7 +585,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
         >
           {scopeButtons.map((scope) => (
             <ScopeButton
-              key={scope.value.type === "global" ? "global" : scope.value.provider}
+              key={scopeKey(scope.value)}
               scope={scope.value}
               label={scope.label}
               selected={sameScope(scope.value, selectedScope)}

@@ -145,6 +145,9 @@ export function useSettings(): UseSettingsReturn {
       if (updates.terminalScrollbackLines !== undefined) {
         appUpdates.terminalScrollbackLines = updates.terminalScrollbackLines;
       }
+      if (updates.showReasoning !== undefined) {
+        appUpdates.showReasoning = updates.showReasoning;
+      }
       const promises: Promise<void>[] = [];
       if (Object.keys(appUpdates).length > 0) {
         promises.push(appSettings.updateSettings(appUpdates));

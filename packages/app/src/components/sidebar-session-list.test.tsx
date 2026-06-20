@@ -15,6 +15,8 @@ const {
   updateAgentMock,
   deleteAgentMock,
   setAgentsMock,
+  setAgentDetailsMock,
+  unpinAgentEverywhereMock,
   getQueryDataMock,
   setQueryDataMock,
   removeQueriesMock,
@@ -66,6 +68,8 @@ const {
   updateAgentMock: vi.fn(),
   deleteAgentMock: vi.fn(),
   setAgentsMock: vi.fn(),
+  setAgentDetailsMock: vi.fn(),
+  unpinAgentEverywhereMock: vi.fn(),
   getQueryDataMock: vi.fn(),
   setQueryDataMock: vi.fn(),
   removeQueriesMock: vi.fn(),
@@ -316,6 +320,7 @@ vi.mock("@/stores/session-store", () => {
       },
     },
     setAgents: setAgentsMock,
+    setAgentDetails: setAgentDetailsMock,
   };
   function useSessionStore(selector: (state: unknown) => unknown) {
     return selector(state);
@@ -323,6 +328,14 @@ vi.mock("@/stores/session-store", () => {
   useSessionStore.getState = () => state;
   return { useSessionStore };
 });
+
+vi.mock("@/stores/workspace-layout-store", () => ({
+  useWorkspaceLayoutStore: {
+    getState: () => ({
+      unpinAgentEverywhere: unpinAgentEverywhereMock,
+    }),
+  },
+}));
 
 vi.mock("@/stores/session-store-hooks", () => ({
   useResolveWorkspaceIdByCwd: (_serverId: string | null, cwd: string | null | undefined) => {
@@ -395,6 +408,8 @@ describe("SidebarSessionList", () => {
     deleteAgentMock.mockReset();
     deleteAgentMock.mockResolvedValue(undefined);
     setAgentsMock.mockReset();
+    setAgentDetailsMock.mockReset();
+    unpinAgentEverywhereMock.mockReset();
     getQueryDataMock.mockReset();
     setQueryDataMock.mockReset();
     removeQueriesMock.mockReset();
@@ -1053,7 +1068,39 @@ describe("SidebarSessionList", () => {
       expect(confirmDialogMock).toHaveBeenCalled();
       expect(deleteAgentMock).toHaveBeenCalledWith("agent-1");
     });
+    expect(unpinAgentEverywhereMock).toHaveBeenCalledWith("agent-1");
     expect(setAgentsMock).toHaveBeenCalled();
+    expect(setAgentDetailsMock).toHaveBeenCalled();
+
+    const [, agentsUpdater] = setAgentsMock.mock.calls[0] as [
+      string,
+      (prev: Map<string, unknown>) => Map<string, unknown>,
+    ];
+    const [, detailsUpdater] = setAgentDetailsMock.mock.calls[0] as [
+      string,
+      (prev: Map<string, unknown>) => Map<string, unknown>,
+    ];
+
+    expect(
+      Array.from(
+        agentsUpdater(
+          new Map<string, unknown>([
+            ["agent-1", { id: "agent-1" }],
+            ["agent-2", { id: "agent-2" }],
+          ]),
+        ).keys(),
+      ),
+    ).toEqual(["agent-2"]);
+    expect(
+      Array.from(
+        detailsUpdater(
+          new Map<string, unknown>([
+            ["agent-1", { id: "agent-1" }],
+            ["agent-2", { id: "agent-2" }],
+          ]),
+        ).keys(),
+      ),
+    ).toEqual(["agent-2"]);
   });
 
   it("copies the session cwd from the row menu", async () => {

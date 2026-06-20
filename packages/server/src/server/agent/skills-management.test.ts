@@ -87,6 +87,11 @@ describe("listManagedSkills", () => {
       roots,
     );
 
+    expect(result.scopes).toContainEqual({
+      type: "agent",
+      agentId: "agent-codex",
+      label: "agent-codex",
+    });
     expect(result.skills[0]?.statusByScope).toMatchObject({
       global: "global-disabled",
       providers: { codex: "agent-enabled" },

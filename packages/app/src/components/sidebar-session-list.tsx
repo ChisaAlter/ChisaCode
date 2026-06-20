@@ -46,6 +46,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
 import { useSessionStore } from "@/stores/session-store";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { generateDraftId } from "@/stores/draft-keys";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { rememberArchivedAgentDetail } from "@/utils/agent-history-navigation";
@@ -283,8 +284,18 @@ function patchAgentLabelsInSidebarCaches(
 }
 
 function deleteAgentFromStore(input: { serverId: string; agentId: string }) {
+  useWorkspaceLayoutStore.getState().unpinAgentEverywhere(input.agentId);
   const setAgents = useSessionStore.getState().setAgents;
+  const setAgentDetails = useSessionStore.getState().setAgentDetails;
   setAgents(input.serverId, (prev) => {
+    if (!prev.has(input.agentId)) {
+      return prev;
+    }
+    const next = new Map(prev);
+    next.delete(input.agentId);
+    return next;
+  });
+  setAgentDetails(input.serverId, (prev) => {
     if (!prev.has(input.agentId)) {
       return prev;
     }

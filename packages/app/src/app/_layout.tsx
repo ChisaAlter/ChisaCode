@@ -4,7 +4,13 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { I18nextProvider } from "react-i18next";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
-import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import {
+  Stack,
+  useGlobalSearchParams,
+  usePathname,
+  useRootNavigationState,
+  useRouter,
+} from "expo-router";
 import {
   createContext,
   type CSSProperties,
@@ -25,6 +31,7 @@ import { Extrapolation, interpolate, runOnJS, useSharedValue } from "react-nativ
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet, UnistylesRuntime, useUnistyles } from "react-native-unistyles";
 import { CommandCenter } from "@/components/command-center";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { DownloadToast } from "@/components/download-toast";
 import { QuittingOverlay } from "@/components/quitting-overlay";
@@ -880,6 +887,7 @@ function OpenProjectListener() {
 
 function AppWithSidebar({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ open?: string | string[] }>();
   const hosts = useHosts();
@@ -907,6 +915,9 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
     storeReady && chromeServerId !== null && hosts.some((host) => host.serverId === chromeServerId);
 
   useEffect(() => {
+    if (!rootNavigationState?.key) {
+      return;
+    }
     const redirectRoute = resolveActiveHostRedirectRoute({
       pathname,
       activeServerId,
@@ -915,8 +926,11 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
     if (!redirectRoute) {
       return;
     }
-    router.replace(redirectRoute);
-  }, [activeServerId, hosts, pathname, router]);
+    const handle = setTimeout(() => {
+      router.replace(redirectRoute);
+    }, 0);
+    return () => clearTimeout(handle);
+  }, [activeServerId, hosts, pathname, rootNavigationState?.key, router]);
 
   // Parse selectedAgentKey directly from pathname
   // useLocalSearchParams doesn't update when navigating between same-pattern routes
@@ -1048,7 +1062,9 @@ export default function RootLayout() {
       <View style={layoutStyles.surfaceFill}>
         <RootProviders>
           <RuntimeProviders>
-            <AppShell />
+            <ErrorBoundary>
+              <AppShell />
+            </ErrorBoundary>
           </RuntimeProviders>
         </RootProviders>
       </View>

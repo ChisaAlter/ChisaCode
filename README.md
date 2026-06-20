@@ -111,7 +111,7 @@ chisacode terminal create --cwd .
 
 ## 本地开发
 
-本仓库是 npm workspace monorepo。Node 版本以 `.tool-versions` 为准。
+本仓库是 npm workspace monorepo。使用当前 `PATH` 中的 Node.js；仓库不强制精确 Node 版本。
 
 常用根命令：
 

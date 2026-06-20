@@ -14,7 +14,7 @@ ChisaCode ships orchestration skills that teach coding agents how to use the Chi
 Two ways to install:
 
 - **Desktop app:** Settings → Integrations → Install
-- **Manual:** `npx skills add getchisacode/chisacode`, this installs to `~/.agents/skills/` and sets up symlinks for each agent.
+- **Manual:** `npx skills add ChisaAlter/ChisaCode`, this installs to `~/.agents/skills/` and sets up symlinks for each agent.
 
 ## `/chisacode`, ChisaCode Reference
 

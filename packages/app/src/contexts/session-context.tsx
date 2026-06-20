@@ -14,6 +14,7 @@ import {
   type TimelineReducerSideEffect,
 } from "@/timeline/session-stream-reducers";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import {
   isTimelineCatchUpComplete,
   planResumeTimelineSync,
@@ -483,6 +484,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const setHasHydratedAgents = useSessionStore((state) => state.setHasHydratedAgents);
   const setHasHydratedWorkspaces = useSessionStore((state) => state.setHasHydratedWorkspaces);
   const setAgents = useSessionStore((state) => state.setAgents);
+  const setAgentDetails = useSessionStore((state) => state.setAgentDetails);
   const setWorkspaces = useSessionStore((state) => state.setWorkspaces);
   const mergeWorkspaces = useSessionStore((state) => state.mergeWorkspaces);
   const removeWorkspace = useSessionStore((state) => state.removeWorkspace);
@@ -1566,8 +1568,17 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       const { agentId } = message.payload;
       deletePendingAgentUpdate(serverId, agentId);
       clearArchiveAgentPending({ queryClient, serverId, agentId });
+      useWorkspaceLayoutStore.getState().unpinAgentEverywhere(agentId);
 
       setAgents(serverId, (prev) => {
+        if (!prev.has(agentId)) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.delete(agentId);
+        return next;
+      });
+      setAgentDetails(serverId, (prev) => {
         if (!prev.has(agentId)) {
           return prev;
         }
@@ -1640,6 +1651,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       }
       const { agentId, archivedAt } = message.payload;
       clearArchiveAgentPending({ queryClient, serverId, agentId });
+      useWorkspaceLayoutStore.getState().unpinAgentEverywhere(agentId);
 
       setAgents(serverId, (prev) => {
         const existing = prev.get(agentId);
@@ -1689,6 +1701,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     setAgentTimelineCursor,
     setInitializingAgents,
     setAgents,
+    setAgentDetails,
     setWorkspaces,
     mergeWorkspaces,
     removeWorkspace,

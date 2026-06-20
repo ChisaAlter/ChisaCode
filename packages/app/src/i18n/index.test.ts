@@ -29,6 +29,11 @@ describe("createAppI18n", () => {
     expect(createAppI18n("en").t("settings.general.theme.options.liquid-neon")).toBe("Glass");
   });
 
+  it("labels the reasoning display setting in Chinese and English", () => {
+    expect(createAppI18n("zh-CN").t("settings.general.showReasoning.title")).toBe("显示思考内容");
+    expect(createAppI18n("en").t("settings.general.showReasoning.title")).toBe("Show reasoning");
+  });
+
   it("falls back to English when a key is missing from the selected language", () => {
     const i18n = createAppI18n("zh-CN", {
       "zh-CN": {},

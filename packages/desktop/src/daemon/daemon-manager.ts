@@ -44,6 +44,29 @@ import { translateDesktop } from "../i18n.js";
 const DAEMON_LOG_FILENAME = "daemon.log";
 const DAEMON_PID_FILENAMES = ["chisacode.pid", "chisacode.pid"] as const;
 const IPC_PREFIXES = ["chisacode"] as const;
+
+/**
+ * Commands that require the sender to be the main application window.
+ * These perform privileged operations (starting/stopping the daemon, writing
+ * attachments, opening transport sessions, etc.) that should not be callable
+ * from a compromised webview or sub-frame.
+ */
+const PRIVILEGED_COMMANDS: ReadonlySet<string> = new Set([
+  "start_desktop_daemon",
+  "stop_desktop_daemon",
+  "restart_desktop_daemon",
+  "write_attachment_base64",
+  "write_attachment_bytes",
+  "copy_attachment_file",
+  "read_file_base64",
+  "delete_attachment_file",
+  "garbage_collect_attachment_files",
+  "open_local_daemon_transport",
+  "send_local_daemon_transport_message",
+  "close_local_daemon_transport",
+  "install_cli",
+  "install_app_update",
+]);
 const STARTUP_POLL_INTERVAL_MS = 200;
 const STARTUP_POLL_MAX_ATTEMPTS = 150;
 const DETACHED_STARTUP_GRACE_MS = 1200;
@@ -622,10 +645,29 @@ export function registerDaemonManager(): void {
   for (const prefix of IPC_PREFIXES) {
     ipcMain.handle(
       `${prefix}:invoke`,
-      async (_event, command: string, args?: Record<string, unknown>) => {
+      async (event, command: string, args?: Record<string, unknown>) => {
+        // Validate sender for privileged commands. Only the main application
+        // window (not webviews or sub-frames) may invoke these.
+        if (PRIVILEGED_COMMANDS.has(command)) {
+          const senderUrl = event.senderFrame?.url ?? event.sender?.getURL?.() ?? "";
+          // The main app loads from file:// (production) or localhost (dev).
+          // Webviews load from https:// or other external origins.
+          const isMainAppSender =
+            senderUrl.startsWith("file://") ||
+            senderUrl.startsWith("http://localhost") ||
+            senderUrl.startsWith("https://localhost");
+          if (!isMainAppSender) {
+            logDesktopDaemonLifecycle("blocked privileged IPC command from non-main sender", {
+              command,
+              senderUrl: senderUrl.slice(0, 200),
+            });
+            throw new Error(`Command "${command}" is not available from this context`);
+          }
+        }
+
         const handler = handlers[command];
         if (!handler) {
-          throw new Error(`未知桌面命令：${command}`);
+          throw new Error(`Unknown desktop command: ${command}`);
         }
         return await handler(args);
       },

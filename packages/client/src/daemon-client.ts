@@ -2356,12 +2356,17 @@ export class DaemonClient {
     }
   }
 
-  async setAgentModel(agentId: string, modelId: string | null): Promise<void> {
+  async setAgentModel(
+    agentId: string,
+    modelId: string | null,
+    runtimeProvider?: string | null,
+  ): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
       type: "set_agent_model_request",
       agentId,
       modelId,
+      ...(runtimeProvider ? { runtimeProvider } : {}),
       requestId,
     });
     const payload = await this.sendRequest({
