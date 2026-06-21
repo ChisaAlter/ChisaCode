@@ -76,6 +76,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.xl,
   },
   sm: {
+    minHeight: 32,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.xl,

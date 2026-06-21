@@ -1,4 +1,5 @@
 import { Redirect, useLocalSearchParams, type Href } from "expo-router";
+import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import SettingsScreen from "@/screens/settings-screen";
 import { buildSettingsSectionRoute, normalizeSettingsReturnToRoute } from "@/utils/host-routes";
@@ -11,8 +12,16 @@ export default function SettingsIndexRoute() {
   const returnTo = normalizeSettingsReturnToRoute(params.returnTo);
 
   if (!isCompactLayout) {
-    return <Redirect href={buildSettingsSectionRoute("general", { returnTo }) as Href} />;
+    return (
+      <HostRouteBootstrapBoundary>
+        <Redirect href={buildSettingsSectionRoute("general", { returnTo }) as Href} />
+      </HostRouteBootstrapBoundary>
+    );
   }
 
-  return <SettingsScreen view={ROOT_VIEW} />;
+  return (
+    <HostRouteBootstrapBoundary>
+      <SettingsScreen view={ROOT_VIEW} />
+    </HostRouteBootstrapBoundary>
+  );
 }

@@ -254,6 +254,7 @@ async function applyImportedAgentTitle(input: {
     },
     initialPrompt,
     explicitTitle,
+    provisionalTitle,
     chisacodeHome: input.chisacodeHome,
     logger: input.logger,
   });

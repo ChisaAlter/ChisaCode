@@ -14,6 +14,7 @@ const AGENT_HISTORY_PAGE_LIMIT = 200;
 const AGENT_HISTORY_SORT: NonNullable<FetchAgentHistoryOptions["sort"]> = [
   { key: "updated_at", direction: "desc" },
 ];
+const historyPageInFlight = new Map<string, Promise<AgentHistoryPage>>();
 
 export interface AgentHistoryResult {
   agents: AggregatedAgent[];
@@ -33,43 +34,66 @@ export interface AgentHistoryPage {
 
 export type AgentHistoryClient = Pick<DaemonClient, "fetchAgentHistory">;
 
+function buildHistoryPageInFlightKey(input: { serverId: string; cursor: string | null }): string {
+  return JSON.stringify({
+    serverId: input.serverId,
+    cursor: input.cursor ?? null,
+    sort: AGENT_HISTORY_SORT,
+  });
+}
+
 export async function fetchAgentHistoryPage(input: {
   client: AgentHistoryClient;
   serverId: string;
   cursor: string | null;
 }): Promise<AgentHistoryPage> {
-  const payload = await input.client.fetchAgentHistory({
-    sort: AGENT_HISTORY_SORT,
-    page: input.cursor
-      ? { limit: AGENT_HISTORY_PAGE_LIMIT, cursor: input.cursor }
-      : { limit: AGENT_HISTORY_PAGE_LIMIT },
-  });
+  const inFlightKey = buildHistoryPageInFlightKey(input);
+  const existing = historyPageInFlight.get(inFlightKey);
+  if (existing) {
+    return existing;
+  }
 
-  const { agents } = buildAgentDirectoryState({
-    serverId: input.serverId,
-    entries: payload.entries,
-  });
+  const request = (async () => {
+    const payload = await input.client.fetchAgentHistory({
+      sort: AGENT_HISTORY_SORT,
+      page: input.cursor
+        ? { limit: AGENT_HISTORY_PAGE_LIMIT, cursor: input.cursor }
+        : { limit: AGENT_HISTORY_PAGE_LIMIT },
+    });
 
-  return {
-    agents: Array.from(agents.values(), (agent) => ({
-      id: agent.id,
+    const { agents } = buildAgentDirectoryState({
       serverId: input.serverId,
-      serverLabel: input.serverId,
-      title: agent.title ?? null,
-      status: agent.status,
-      lastActivityAt: agent.lastActivityAt,
-      cwd: agent.cwd,
-      provider: agent.provider,
-      pendingPermissionCount: agent.pendingPermissions.length,
-      requiresAttention: agent.requiresAttention,
-      attentionReason: agent.attentionReason,
-      attentionTimestamp: agent.attentionTimestamp ?? null,
-      archivedAt: agent.archivedAt ?? null,
-      createdAt: agent.createdAt,
-      labels: agent.labels,
-    })),
-    pageInfo: payload.pageInfo,
-  };
+      entries: payload.entries,
+    });
+
+    return {
+      agents: Array.from(agents.values(), (agent) => ({
+        id: agent.id,
+        serverId: input.serverId,
+        serverLabel: input.serverId,
+        title: agent.title ?? null,
+        status: agent.status,
+        lastActivityAt: agent.lastActivityAt,
+        cwd: agent.cwd,
+        provider: agent.provider,
+        pendingPermissionCount: agent.pendingPermissions.length,
+        requiresAttention: agent.requiresAttention,
+        attentionReason: agent.attentionReason,
+        attentionTimestamp: agent.attentionTimestamp ?? null,
+        archivedAt: agent.archivedAt ?? null,
+        createdAt: agent.createdAt,
+        labels: agent.labels,
+      })),
+      pageInfo: payload.pageInfo,
+    };
+  })();
+
+  historyPageInFlight.set(inFlightKey, request);
+  try {
+    return await request;
+  } finally {
+    historyPageInFlight.delete(inFlightKey);
+  }
 }
 
 export function useAgentHistory(options: {

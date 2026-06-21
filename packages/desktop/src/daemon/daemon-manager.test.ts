@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
-import { createDaemonCommandHandlers } from "./daemon-manager";
+import { createDaemonCommandHandlers, isMainAppSenderUrl } from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
   settings: {
@@ -111,12 +111,8 @@ describe("daemon-manager commands", () => {
     mocks.settings = desktopSettingsWithManagement(false);
     const handlers = createDaemonCommandHandlers();
 
-    await expect(handlers.start_desktop_daemon()).rejects.toThrow(
-      "Built-in daemon management is disabled.",
-    );
-    await expect(handlers.restart_desktop_daemon()).rejects.toThrow(
-      "Built-in daemon management is disabled.",
-    );
+    await expect(handlers.start_desktop_daemon()).rejects.toThrow(/daemon 管理已禁用|disabled/);
+    await expect(handlers.restart_desktop_daemon()).rejects.toThrow(/daemon 管理已禁用|disabled/);
 
     expect(mocks.runExternalCliJsonCommand).not.toHaveBeenCalled();
     expect(mocks.spawnProcess).not.toHaveBeenCalled();
@@ -250,5 +246,18 @@ describe("daemon-manager commands", () => {
     expect(message).toContain("stdout-tail");
     expect(message).toContain("stderr-tail");
     expect(message.length).toBeLessThan(150_000);
+  });
+});
+
+describe("daemon-manager privileged IPC sender validation", () => {
+  it("accepts packaged app protocol routes as main application senders", () => {
+    expect(isMainAppSenderUrl("chisacode://app/h/srv_1/workspace/b64_x")).toBe(true);
+    expect(isMainAppSenderUrl("chisacode://app/settings/models")).toBe(true);
+  });
+
+  it("keeps external origins blocked from privileged desktop commands", () => {
+    expect(isMainAppSenderUrl("https://example.com")).toBe(false);
+    expect(isMainAppSenderUrl("https://localhost.evil.test")).toBe(false);
+    expect(isMainAppSenderUrl("about:blank")).toBe(false);
   });
 });

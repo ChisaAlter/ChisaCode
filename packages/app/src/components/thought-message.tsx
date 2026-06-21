@@ -19,7 +19,7 @@ export const ThoughtMessage = memo(function ThoughtMessage({ text, status }: Tho
   const content = text.trim();
   const hasContent = content.length > 0;
   const isLoading = status === "loading";
-  const [isExpanded, setIsExpanded] = useState(() => isLoading && hasContent);
+  const [isExpanded, setIsExpanded] = useState(() => hasContent);
   const previousStatusRef = useRef(status);
   const label = isLoading ? t("stream.thinkingRunning") : t("stream.thinking");
   const Icon = isExpanded ? ChevronDown : ChevronRight;
@@ -40,8 +40,6 @@ export const ThoughtMessage = memo(function ThoughtMessage({ text, status }: Tho
     }
     if (isLoading) {
       setIsExpanded(true);
-    } else if (previousStatusRef.current === "loading") {
-      setIsExpanded(false);
     }
     previousStatusRef.current = status;
   }, [hasContent, isLoading, status]);

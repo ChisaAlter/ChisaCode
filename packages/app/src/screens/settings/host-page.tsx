@@ -781,8 +781,12 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
 
 const styles = StyleSheet.create((theme) => ({
   identityEditButton: {
+    width: 28,
+    height: 28,
     padding: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
   identityBadges: {
     flexDirection: "row",

@@ -1243,6 +1243,13 @@ export class HostRuntimeStore {
   private deps: HostRuntimeControllerDeps;
   private lastConnectionStatusByServer = new Map<string, HostRuntimeConnectionStatus>();
   private agentDirectoryBootstrapInFlight = new Map<string, Promise<void>>();
+  private agentDirectoryRefreshInFlight = new Map<
+    string,
+    Promise<{
+      agents: ReturnType<typeof replaceFetchedAgentDirectory>["agents"];
+      subscriptionId: string | null;
+    }>
+  >();
   private configuredOverrideBootstrapInFlight: Promise<void> | null = null;
   private bootStarted = false;
 
@@ -1411,6 +1418,7 @@ export class HostRuntimeStore {
 
     rekeyMap(this.lastConnectionStatusByServer, oldServerId, newServerId);
     rekeyMap(this.agentDirectoryBootstrapInFlight, oldServerId, newServerId);
+    rekeyMap(this.agentDirectoryRefreshInFlight, oldServerId, newServerId);
 
     const listeners = this.serverListeners.get(oldServerId);
     if (listeners) {
@@ -1701,6 +1709,7 @@ export class HostRuntimeStore {
       this.controllers.delete(serverId);
       this.lastConnectionStatusByServer.delete(serverId);
       this.agentDirectoryBootstrapInFlight.delete(serverId);
+      this.agentDirectoryRefreshInFlight.delete(serverId);
       void controller.stop();
       this.emit(serverId);
     }
@@ -1864,6 +1873,22 @@ export class HostRuntimeStore {
     ).then(() => undefined);
   }
 
+  private buildCoalescibleAgentDirectoryRefreshKey(input: {
+    serverId: string;
+    filter?: FetchAgentsOptions["filter"];
+    subscribe?: FetchAgentsOptions["subscribe"];
+    page?: FetchAgentsOptions["page"];
+  }): string | null {
+    if (input.filter || input.page?.cursor) {
+      return null;
+    }
+    return JSON.stringify({
+      serverId: input.serverId,
+      limit: input.page?.limit ?? DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT,
+      subscribeId: input.subscribe?.subscriptionId ?? null,
+    });
+  }
+
   async refreshAgentDirectory(input: {
     serverId: string;
     filter?: FetchAgentsOptions["filter"];
@@ -1873,6 +1898,12 @@ export class HostRuntimeStore {
     agents: ReturnType<typeof replaceFetchedAgentDirectory>["agents"];
     subscriptionId: string | null;
   }> {
+    const inFlightKey = this.buildCoalescibleAgentDirectoryRefreshKey(input);
+    const existing = inFlightKey ? this.agentDirectoryRefreshInFlight.get(inFlightKey) : undefined;
+    if (existing) {
+      return existing;
+    }
+
     const controller = this.controllers.get(input.serverId);
     if (!controller) {
       throw new Error(`Unknown host runtime for serverId ${input.serverId}`);
@@ -1883,8 +1914,8 @@ export class HostRuntimeStore {
       throw new Error(`主机 ${input.serverId} 未连接`);
     }
 
-    controller.markAgentDirectorySyncLoading();
-    try {
+    const refresh = (async () => {
+      controller.markAgentDirectorySyncLoading();
       const pageLimit = input.page?.limit ?? DEFAULT_AGENT_DIRECTORY_PAGE_LIMIT;
       let cursor = input.page?.cursor ?? null;
       let includeSubscribe = true;
@@ -1926,9 +1957,21 @@ export class HostRuntimeStore {
         agents,
         subscriptionId,
       };
+    })();
+
+    if (inFlightKey) {
+      this.agentDirectoryRefreshInFlight.set(inFlightKey, refresh);
+    }
+
+    try {
+      return await refresh;
     } catch (error) {
       controller.markAgentDirectorySyncError(toErrorMessage(error));
       throw error;
+    } finally {
+      if (inFlightKey) {
+        this.agentDirectoryRefreshInFlight.delete(inFlightKey);
+      }
     }
   }
 

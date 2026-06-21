@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
-import { getAssistantBlockSpacing, isSameAssistantBlockGroup } from "./spacing";
+import {
+  getAssistantBlockSpacing,
+  getGapBetweenStreamItems,
+  isSameAssistantBlockGroup,
+} from "./spacing";
 
 function assistantBlock(params: {
   id: string;
@@ -119,5 +123,22 @@ describe("getAssistantBlockSpacing", () => {
     expect(
       getAssistantBlockSpacing({ item: headBlock, aboveItem: tailBlock, belowItem: null }),
     ).toBe("compactTop");
+  });
+
+  it("uses no visual gap between blocks in the same assistant response", () => {
+    const firstBlock = assistantBlock({
+      id: "group-1:block:0",
+      blockGroupId: "group-1",
+      blockIndex: 0,
+      text: "First paragraph",
+    });
+    const secondBlock = assistantBlock({
+      id: "group-1:block:1",
+      blockGroupId: "group-1",
+      blockIndex: 1,
+      text: "Second paragraph",
+    });
+
+    expect(getGapBetweenStreamItems(firstBlock, secondBlock)).toBe(0);
   });
 });

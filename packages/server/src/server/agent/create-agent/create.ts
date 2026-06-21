@@ -134,6 +134,7 @@ interface ResolvedCreateAgent {
   background: boolean;
   promptFailure: "throw" | "log";
   promptLogger?: Logger;
+  provisionalTitle?: string | null;
 }
 
 interface AgentCreateOptions {
@@ -222,6 +223,7 @@ async function resolveSessionCreateAgent(
     prompt: hasPromptContent ? prompt : undefined,
     runOptions: input.outputSchema ? { outputSchema: input.outputSchema } : undefined,
     explicitTitle: input.explicitTitle,
+    provisionalTitle: input.provisionalTitle,
     setupContinuation,
     background: true,
     promptFailure: "throw",
@@ -286,6 +288,7 @@ async function resolveMcpCreateAgent(
     metadataInitialPrompt: trimmedPrompt,
     prompt: trimmedPrompt,
     explicitTitle: input.title.trim(),
+    provisionalTitle: input.title.trim(),
     setupContinuation,
     background: input.background,
     promptFailure: "log",
@@ -312,6 +315,7 @@ async function sendInitialPrompt(
     },
     initialPrompt: resolved.metadataInitialPrompt,
     explicitTitle: resolved.explicitTitle,
+    provisionalTitle: resolved.provisionalTitle,
     chisacodeHome: dependencies.chisacodeHome,
     logger: dependencies.logger,
   });

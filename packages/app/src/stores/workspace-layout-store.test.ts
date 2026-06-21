@@ -311,6 +311,9 @@ describe("workspace-layout-store actions", () => {
       splitSizesByWorkspace: {},
       pinnedAgentIdsByWorkspace: {},
       hiddenAgentIdsByWorkspace: {},
+      suppressedAutoOpenAgentIdsByWorkspace: {},
+      suppressedAutoOpenTerminalIdsByWorkspace: {},
+      workspaceAutoOpenSuppressedByWorkspace: {},
       focusRestorationByWorkspace: {},
     });
   });
@@ -427,6 +430,31 @@ describe("workspace-layout-store actions", () => {
     expect(duplicateTabId).toBe(firstTabId);
     expect(pane.tabIds).toEqual([firstTabId, secondTabId]);
     expect(pane.focusedTabId).toBe(secondTabId);
+  });
+
+  it("closeTab suppresses a closed agent tab so reconcile does not auto-reopen it", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    const tabId = store.openTabFocused(workspaceKey, { kind: "agent", agentId: "agent-1" });
+    expect(tabId).toBe("agent_agent-1");
+
+    store.closeTab(workspaceKey, tabId!);
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: ["agent-1"],
+      autoOpenAgentIds: ["agent-1"],
+      knownAgentIds: ["agent-1"],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: false,
+    });
+
+    const state = workspaceLayoutStore.getState();
+    expect(Array.from(state.suppressedAutoOpenAgentIdsByWorkspace[workspaceKey] ?? [])).toEqual([
+      "agent-1",
+    ]);
+    expect(state.getWorkspaceTabs(workspaceKey)).toEqual([]);
   });
 
   it("closing a focused middle tab selects the tab to its right", () => {
@@ -1298,6 +1326,49 @@ describe("workspace-layout-store actions", () => {
     });
   });
 
+  it("persists agent and workspace auto-open suppression across storage hydration", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    const tabId = store.openTabFocused(workspaceKey, { kind: "agent", agentId: "agent-1" });
+    store.closeTab(workspaceKey, tabId!);
+
+    const state = workspaceLayoutStore.getState();
+    const partialize = workspaceLayoutStore.persist.getOptions().partialize;
+    expect(partialize).toBeTypeOf("function");
+    expect(partialize?.(state)).toEqual(
+      expect.objectContaining({
+        suppressedAutoOpenAgentIdsByWorkspace: {
+          [workspaceKey]: ["agent-1"],
+        },
+        workspaceAutoOpenSuppressedByWorkspace: {
+          [workspaceKey]: true,
+        },
+      }),
+    );
+
+    const merge = workspaceLayoutStore.persist.getOptions().merge;
+    expect(merge).toBeTypeOf("function");
+    const merged = merge?.(
+      {
+        layoutByWorkspace: {},
+        splitSizesByWorkspace: {},
+        suppressedAutoOpenAgentIdsByWorkspace: {
+          [workspaceKey]: ["agent-1"],
+        },
+        workspaceAutoOpenSuppressedByWorkspace: {
+          [workspaceKey]: true,
+        },
+      },
+      workspaceLayoutStore.getInitialState(),
+    ) as ReturnType<typeof workspaceLayoutStore.getState>;
+
+    expect(Array.from(merged.suppressedAutoOpenAgentIdsByWorkspace[workspaceKey] ?? [])).toEqual([
+      "agent-1",
+    ]);
+    expect(merged.workspaceAutoOpenSuppressedByWorkspace[workspaceKey]).toBe(true);
+  });
+
   it("convertDraftToAgent removes the draft and focuses the existing canonical agent tab", () => {
     useWorkspaceLayoutIds("67676767-6767-6767-6767-676767676767");
     const workspaceKey = createWorkspaceKey();
@@ -1523,6 +1594,72 @@ describe("workspace-layout-store actions", () => {
         .getWorkspaceTabs(workspaceKey)
         .map((tab) => tab.tabId),
     ).toEqual(["agent_parent-agent"]);
+  });
+
+  it("reconcileTabs keeps draft handoff protection while the create request has been sent", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    store.openTabFocused(workspaceKey, { kind: "draft", draftId: "draft-1" });
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: ["old-agent"],
+      autoOpenAgentIds: ["old-agent"],
+      knownAgentIds: ["old-agent"],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: true,
+    });
+
+    expect(store.getWorkspaceTabs(workspaceKey).map((tab) => tab.tabId)).toEqual(["draft-1"]);
+  });
+
+  it("reconcileTabs closes setup tabs when no matching workspace setup is active", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    store.openTabFocused(workspaceKey, {
+      kind: "setup",
+      workspaceId: WORKSPACE_ID,
+    });
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: [],
+      autoOpenAgentIds: [],
+      knownAgentIds: [],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: false,
+      activeSetupWorkspaceId: null,
+    });
+
+    expect(store.getWorkspaceTabs(workspaceKey)).toEqual([]);
+  });
+
+  it("reconcileTabs keeps only the setup tab for the active setup workspace", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    store.openTabFocused(workspaceKey, {
+      kind: "setup",
+      workspaceId: "ws-stale",
+    });
+    store.openTabFocused(workspaceKey, {
+      kind: "setup",
+      workspaceId: WORKSPACE_ID,
+    });
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: [],
+      autoOpenAgentIds: [],
+      knownAgentIds: [],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: false,
+      activeSetupWorkspaceId: WORKSPACE_ID,
+    });
+
+    expect(store.getWorkspaceTabs(workspaceKey).map((tab) => tab.tabId)).toEqual(["setup_ws-main"]);
   });
 
   it("reconcileTabs keeps manually opened subagent tabs that remain active", () => {

@@ -65,6 +65,25 @@ describe("passthrough CLI", () => {
     ).toBeNull();
   });
 
+  it("ignores Electron and shortcut metadata arguments used for GUI launches", () => {
+    expect(
+      parsePassthroughCliArgs({
+        argv: [
+          "C:\\Program Files\\ChisaCode\\ChisaCode.exe",
+          "--allow-file-access-from-files",
+          "--secure-schemes=chisacode",
+          "--fetch-schemes=chisacode",
+          "--standard-schemes=chisacode",
+          "--remote-debugging-port=9333",
+          "--enable-logging",
+          "--source-shortcut=C:\\Users\\me\\Desktop\\ChisaCode.lnk",
+        ],
+        isDefaultApp: false,
+        forceCli: false,
+      }),
+    ).toBeNull();
+  });
+
   it("preserves CLI flags for direct app invocations", () => {
     expect(
       parsePassthroughCliArgs({

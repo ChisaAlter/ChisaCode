@@ -213,6 +213,78 @@ function getWorkspaceLayout(
   return normalizeLayout(state[workspaceKey] ?? createDefaultLayout());
 }
 
+function serializeWorkspaceSets(state: Record<string, Set<string>>): Record<string, string[]> {
+  const serialized: Record<string, string[]> = {};
+  for (const [workspaceKey, ids] of Object.entries(state)) {
+    const values = Array.from(ids).filter((value) => value.trim().length > 0);
+    if (values.length > 0) {
+      serialized[workspaceKey] = values;
+    }
+  }
+  return serialized;
+}
+
+function deserializeWorkspaceSets(value: unknown): Record<string, Set<string>> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const result: Record<string, Set<string>> = {};
+  for (const [workspaceKey, ids] of Object.entries(value)) {
+    if (!Array.isArray(ids)) {
+      continue;
+    }
+    const normalizedIds = ids
+      .filter((id): id is string => typeof id === "string")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    if (normalizedIds.length > 0) {
+      result[workspaceKey] = new Set(normalizedIds);
+    }
+  }
+  return result;
+}
+
+function normalizeWorkspaceAutoOpenSuppression(value: unknown): Record<string, true> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const result: Record<string, true> = {};
+  for (const [workspaceKey, suppressed] of Object.entries(value)) {
+    if (suppressed === true) {
+      result[workspaceKey] = true;
+    }
+  }
+  return result;
+}
+
+function mergePersistedWorkspaceLayoutState(
+  persistedState: unknown,
+  currentState: WorkspaceLayoutStore,
+): WorkspaceLayoutStore {
+  if (!persistedState || typeof persistedState !== "object") {
+    return currentState;
+  }
+  const persisted = persistedState as Partial<WorkspaceLayoutStore>;
+  return {
+    ...currentState,
+    ...persisted,
+    layoutByWorkspace: persisted.layoutByWorkspace ?? currentState.layoutByWorkspace,
+    splitSizesByWorkspace: persisted.splitSizesByWorkspace ?? currentState.splitSizesByWorkspace,
+    pinnedAgentIdsByWorkspace: currentState.pinnedAgentIdsByWorkspace,
+    hiddenAgentIdsByWorkspace: currentState.hiddenAgentIdsByWorkspace,
+    suppressedAutoOpenAgentIdsByWorkspace: deserializeWorkspaceSets(
+      persisted.suppressedAutoOpenAgentIdsByWorkspace,
+    ),
+    suppressedAutoOpenTerminalIdsByWorkspace: deserializeWorkspaceSets(
+      persisted.suppressedAutoOpenTerminalIdsByWorkspace,
+    ),
+    workspaceAutoOpenSuppressedByWorkspace: normalizeWorkspaceAutoOpenSuppression(
+      persisted.workspaceAutoOpenSuppressedByWorkspace,
+    ),
+    focusRestorationByWorkspace: currentState.focusRestorationByWorkspace,
+  };
+}
+
 function withoutFocusRestoration(
   state: WorkspaceLayoutStore,
   workspaceKey: string,
@@ -464,6 +536,15 @@ export function createWorkspaceLayoutStore(
                       state.suppressedAutoOpenTerminalIdsByWorkspace,
                       normalizedWorkspaceKey,
                       closingTab.target.terminalId,
+                    ),
+                  }
+                : {}),
+              ...(closingTab?.target.kind === "agent"
+                ? {
+                    suppressedAutoOpenAgentIdsByWorkspace: addIdToWorkspaceSet(
+                      state.suppressedAutoOpenAgentIdsByWorkspace,
+                      normalizedWorkspaceKey,
+                      closingTab.target.agentId,
                     ),
                   }
                 : {}),
@@ -1175,11 +1256,30 @@ export function createWorkspaceLayoutStore(
           for (const key in state.layoutByWorkspace) {
             layoutByWorkspace[key] = normalizeLayout(state.layoutByWorkspace[key]);
           }
+          const suppressedAutoOpenAgentIdsByWorkspace = serializeWorkspaceSets(
+            state.suppressedAutoOpenAgentIdsByWorkspace,
+          );
+          const suppressedAutoOpenTerminalIdsByWorkspace = serializeWorkspaceSets(
+            state.suppressedAutoOpenTerminalIdsByWorkspace,
+          );
           return {
             layoutByWorkspace,
             splitSizesByWorkspace: state.splitSizesByWorkspace,
+            ...(Object.keys(suppressedAutoOpenAgentIdsByWorkspace).length > 0
+              ? { suppressedAutoOpenAgentIdsByWorkspace }
+              : {}),
+            ...(Object.keys(suppressedAutoOpenTerminalIdsByWorkspace).length > 0
+              ? { suppressedAutoOpenTerminalIdsByWorkspace }
+              : {}),
+            ...(Object.keys(state.workspaceAutoOpenSuppressedByWorkspace).length > 0
+              ? {
+                  workspaceAutoOpenSuppressedByWorkspace:
+                    state.workspaceAutoOpenSuppressedByWorkspace,
+                }
+              : {}),
           };
         },
+        merge: mergePersistedWorkspaceLayoutState,
       },
     ),
   );

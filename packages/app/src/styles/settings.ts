@@ -27,6 +27,9 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     alignItems: "center",
     flexDirection: "row",
     gap: theme.spacing[1],
+    minHeight: 28,
+    paddingHorizontal: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
   },
   sectionHeaderLinkText: {
     color: theme.colors.foregroundMuted,

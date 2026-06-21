@@ -31,6 +31,7 @@ import {
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
 import { resolveProviderSnapshotLoadingState } from "@/provider-selection/provider-snapshot-loading";
+import { resolveRunningAgentModelLoading } from "@/composer/agent-controls/model-loading";
 import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
@@ -494,13 +495,6 @@ function resolveProviderModels(input: {
   return input.runtimeEntry?.models ?? input.selectedEntry?.models ?? null;
 }
 
-function isSnapshotProviderLoading(input: {
-  runtimeEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
-  selectedEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
-}): boolean {
-  return input.runtimeEntry?.status === "loading" || input.selectedEntry?.status === "loading";
-}
-
 function buildRunningAgentModelSelectorProviders(input: {
   agentProvider: string | undefined;
   agentRuntimeProvider: string | null;
@@ -568,7 +562,10 @@ function useRunningAgentModelControls(input: {
     runtimeEntry: snapshotRuntimeEntry,
     selectedEntry: snapshotSelectedEntry,
   });
-  const selectedProviderIsLoading = isSnapshotProviderLoading({
+  const selectedProviderIsLoading = resolveRunningAgentModelLoading({
+    configuredModelId: agent?.model,
+    runtimeModelId: agent?.runtimeModelId,
+    runtimeProvider: agentRuntimeProvider,
     runtimeEntry: snapshotRuntimeEntry,
     selectedEntry: snapshotSelectedEntry,
   });

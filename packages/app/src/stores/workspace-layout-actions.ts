@@ -208,6 +208,7 @@ export interface WorkspaceTabSnapshot {
   knownTerminalIds?: Iterable<string>;
   standaloneTerminalIds: Iterable<string>;
   hasActivePendingDraftCreate?: boolean;
+  activeSetupWorkspaceId?: string | null;
 }
 
 const DEFAULT_PANE_ID = "main";
@@ -1676,6 +1677,16 @@ function collapseStaleEntityTabs(input: {
           layout: nextLayout,
           tabId: tab.tabId,
         }) ?? nextLayout;
+    }
+    if (tab.target.kind === "setup") {
+      const activeSetupWorkspaceId = trimNonEmpty(snapshot.activeSetupWorkspaceId);
+      if (!activeSetupWorkspaceId || tab.target.workspaceId !== activeSetupWorkspaceId) {
+        nextLayout =
+          closeTabInLayout({
+            layout: nextLayout,
+            tabId: tab.tabId,
+          }) ?? nextLayout;
+      }
     }
   }
   return nextLayout;

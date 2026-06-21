@@ -132,6 +132,29 @@ describe("applyStreamEvent", () => {
     expect(result.tail[0].kind).toBe("assistant_message");
   });
 
+  it("keeps promoted assistant blocks in a shared block group", () => {
+    const result = applyStreamEvent({
+      tail: [],
+      head: [],
+      event: assistantChunk("First paragraph\n\nSecond paragraph"),
+      timestamp: baseTimestamp,
+    });
+
+    expect(result.tail).toHaveLength(1);
+    expect(result.head).toHaveLength(1);
+    expect(result.tail[0].kind).toBe("assistant_message");
+    expect(result.head[0].kind).toBe("assistant_message");
+    if (
+      result.tail[0].kind === "assistant_message" &&
+      result.head[0].kind === "assistant_message"
+    ) {
+      expect(result.tail[0].blockGroupId).toBeDefined();
+      expect(result.head[0].blockGroupId).toBe(result.tail[0].blockGroupId);
+      expect(result.tail[0].blockIndex).toBe(0);
+      expect(result.head[0].blockIndex).toBe(1);
+    }
+  });
+
   it("does not continue a tail assistant message when the incoming message id differs", () => {
     const result = applyStreamEvent({
       tail: [

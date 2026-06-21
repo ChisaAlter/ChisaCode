@@ -34,6 +34,20 @@ describe("desktop packaging", () => {
     expect(config).toContain("repo: ChisaCode");
   });
 
+  it("adds Windows ASAR integrity after rcedit writes executable metadata", () => {
+    const pkg = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const buildScript = readFileSync(join(packageRoot, "scripts", "build.js"), "utf8");
+    const afterSignScript = readFileSync(join(packageRoot, "scripts", "after-sign.js"), "utf8");
+
+    expect(pkg.scripts?.build).toContain("node scripts/build.js");
+    expect(pkg.scripts?.build).not.toContain("electron-builder --config");
+    expect(buildScript).toContain("class WindowsAsarIntegrityAfterRceditPackager");
+    expect(buildScript).toContain("disableAsarIntegrity: true");
+    expect(afterSignScript).toContain("restoreWinAsarIntegrityAfterRcedit");
+  });
+
   // electron-builder packs production dependencies declared in package.json into
   // app.asar. Runtime code in runtime-paths.ts and bin/chisacode dynamically resolves
   // these workspace packages by string, so static analysis (TypeScript, Knip) cannot

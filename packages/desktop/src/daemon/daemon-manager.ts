@@ -72,6 +72,24 @@ const STARTUP_POLL_MAX_ATTEMPTS = 150;
 const DETACHED_STARTUP_GRACE_MS = 1200;
 const STARTUP_OUTPUT_CAPTURE_LIMIT_CHARS = 64 * 1024;
 
+export function isMainAppSenderUrl(senderUrl: string): boolean {
+  try {
+    const url = new URL(senderUrl);
+    if (url.protocol === "file:") {
+      return true;
+    }
+    if (url.protocol === "chisacode:" && url.hostname === "app") {
+      return true;
+    }
+    if ((url.protocol === "http:" || url.protocol === "https:") && url.hostname === "localhost") {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 type DesktopDaemonState = "starting" | "running" | "stopped" | "errored";
 
 export interface DesktopDaemonStatus {
@@ -650,13 +668,9 @@ export function registerDaemonManager(): void {
         // window (not webviews or sub-frames) may invoke these.
         if (PRIVILEGED_COMMANDS.has(command)) {
           const senderUrl = event.senderFrame?.url ?? event.sender?.getURL?.() ?? "";
-          // The main app loads from file:// (production) or localhost (dev).
-          // Webviews load from https:// or other external origins.
-          const isMainAppSender =
-            senderUrl.startsWith("file://") ||
-            senderUrl.startsWith("http://localhost") ||
-            senderUrl.startsWith("https://localhost");
-          if (!isMainAppSender) {
+          // The main app loads from the app protocol in packaged builds, file:// in
+          // static exports, or localhost in dev. Webviews use external origins.
+          if (!isMainAppSenderUrl(senderUrl)) {
             logDesktopDaemonLifecycle("blocked privileged IPC command from non-main sender", {
               command,
               senderUrl: senderUrl.slice(0, 200),

@@ -20,6 +20,7 @@ import { buildHostAgentDetailRoute, buildSettingsHostRoute } from "@/utils/host-
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useOpenProject } from "@/hooks/use-open-project";
+import { shouldShowOpenProjectMenuHeader } from "./open-project-screen-layout";
 import type { Href } from "expo-router";
 
 export function OpenProjectScreen({ serverId }: { serverId: string }) {
@@ -66,7 +67,7 @@ export function OpenProjectScreen({ serverId }: { serverId: string }) {
 
   return (
     <View style={styles.container}>
-      <MenuHeader borderless />
+      {shouldShowOpenProjectMenuHeader({ isCompactLayout }) ? <MenuHeader borderless /> : null}
       <View style={styles.content}>
         <TitlebarDragRegion />
         <View style={styles.logo}>

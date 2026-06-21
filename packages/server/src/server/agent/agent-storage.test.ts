@@ -340,8 +340,10 @@ describe("AgentStorage", () => {
     const written = await storage.setGeneratedTitle(agentId, "Generated title");
 
     expect(written.title).toBe("Generated title");
+    expect(written.titleSource).toBe("generated");
     const record = await storage.get(agentId);
     expect(record?.title).toBe("Generated title");
+    expect(record?.titleSource).toBe("generated");
   });
 
   test("applySnapshot accepts explicit title overrides", async () => {
@@ -350,6 +352,35 @@ describe("AgentStorage", () => {
 
     const record = await storage.get(agentId);
     expect(record?.title).toBe("Provided Title");
+    expect(record?.titleSource).toBe("explicit");
+  });
+
+  test("applySnapshot marks initial prompt title overrides", async () => {
+    const agentId = "agent-initial-prompt-title";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }), {
+      title: "Fix startup title",
+      titleSource: "initial_prompt",
+    });
+
+    const record = await storage.get(agentId);
+    expect(record?.title).toBe("Fix startup title");
+    expect(record?.titleSource).toBe("initial_prompt");
+  });
+
+  test("setGeneratedTitle preserves protected initial prompt titles", async () => {
+    const agentId = "agent-generated-title-protected";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }), {
+      title: "User prompt title",
+      titleSource: "initial_prompt",
+    });
+
+    const written = await storage.setGeneratedTitle(agentId, "Generated title");
+
+    expect(written.title).toBe("User prompt title");
+    expect(written.titleSource).toBe("initial_prompt");
+    const record = await storage.get(agentId);
+    expect(record?.title).toBe("User prompt title");
+    expect(record?.titleSource).toBe("initial_prompt");
   });
 
   test("applySnapshot preserves custom titles while updating metadata", async () => {

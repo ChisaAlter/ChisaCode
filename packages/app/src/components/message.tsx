@@ -772,6 +772,26 @@ export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
     maxWidth: "100%",
     ...theme.shadow.sm,
   },
+  textSurfaceCompactTop: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    paddingTop: 0,
+    ...(isWeb
+      ? { boxShadow: "none" as const }
+      : {
+          shadowOpacity: 0,
+          elevation: 0,
+        }),
+  },
+  textSurfaceCompactBottom: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingBottom: 0,
+  },
+  blockContainer: {
+    minWidth: 0,
+    maxWidth: "100%",
+  },
   containerCompactTop: {
     paddingTop: 0,
   },
@@ -1481,7 +1501,7 @@ function AssistantMessageBlockContainer({
   children,
 }: AssistantMessageBlockContainerProps) {
   const style = useMemo(() => (marginBottom > 0 ? { marginBottom } : undefined), [marginBottom]);
-  const containerStyle = useMemo(() => [assistantMessageStylesheet.textSurface, style], [style]);
+  const containerStyle = useMemo(() => [assistantMessageStylesheet.blockContainer, style], [style]);
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const { width, height } = event.nativeEvent.layout;
@@ -1847,23 +1867,35 @@ export const AssistantMessage = memo(function AssistantMessage({
     ],
     [spacing],
   );
+  const assistantSurfaceStyle = useMemo(
+    () => [
+      assistantMessageStylesheet.textSurface,
+      (spacing === "compactTop" || spacing === "compactBoth") &&
+        assistantMessageStylesheet.textSurfaceCompactTop,
+      (spacing === "compactBottom" || spacing === "compactBoth") &&
+        assistantMessageStylesheet.textSurfaceCompactBottom,
+    ],
+    [spacing],
+  );
 
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      {keyedBlocks.map(({ key, block }, index) => (
-        <AssistantMessageBlockContainer
-          key={key}
-          block={block}
-          marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
-        >
-          <MemoizedMarkdownBlock
-            text={block}
-            rules={markdownRules}
-            parser={markdownParser}
-            onLinkPress={handleMarkdownLinkPress}
-          />
-        </AssistantMessageBlockContainer>
-      ))}
+      <View testID="assistant-message-surface" style={assistantSurfaceStyle}>
+        {keyedBlocks.map(({ key, block }, index) => (
+          <AssistantMessageBlockContainer
+            key={key}
+            block={block}
+            marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
+          >
+            <MemoizedMarkdownBlock
+              text={block}
+              rules={markdownRules}
+              parser={markdownParser}
+              onLinkPress={handleMarkdownLinkPress}
+            />
+          </AssistantMessageBlockContainer>
+        ))}
+      </View>
     </View>
   );
 });

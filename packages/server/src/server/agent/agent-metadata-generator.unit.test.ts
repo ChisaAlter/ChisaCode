@@ -84,6 +84,28 @@ describe("agent metadata generator auto-title", () => {
     expect(setGeneratedTitle).not.toHaveBeenCalled();
   });
 
+  it("does not generate an auto title when a provisional prompt title exists", async () => {
+    const setGeneratedTitle = vi.fn().mockResolvedValue(undefined);
+    const manager = { setGeneratedTitle } as unknown as AgentManager;
+    const generateStructured = vi.fn().mockResolvedValue({ title: "Generated" }) as NonNullable<
+      AgentMetadataGeneratorDeps["generateStructuredAgentResponseWithFallback"]
+    >;
+
+    await generateAndApplyAgentMetadata({
+      agentManager: manager,
+      agentId: "agent-provisional-title",
+      cwd: "/tmp/repo",
+      initialPrompt: "Implement this feature",
+      explicitTitle: null,
+      provisionalTitle: "Implement this feature",
+      logger,
+      deps: createDeps(generateStructured),
+    });
+
+    expect(generateStructured).not.toHaveBeenCalled();
+    expect(setGeneratedTitle).not.toHaveBeenCalled();
+  });
+
   it("generates titles independently from workspace branch naming", async () => {
     const setGeneratedTitle = vi.fn().mockResolvedValue(undefined);
     const manager = { setGeneratedTitle } as unknown as AgentManager;

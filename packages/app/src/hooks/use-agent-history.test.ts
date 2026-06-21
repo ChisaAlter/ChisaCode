@@ -30,6 +30,20 @@ function createClient(pages: FetchAgentHistoryResult[]): FakeAgentHistoryClient 
   };
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function historyPayload(input: {
   entries: FetchAgentHistoryEntry[];
   hasMore?: boolean;
@@ -205,5 +219,54 @@ describe("fetchAgentHistoryPage", () => {
     const page = await fetchAgentHistoryPage({ client, serverId: "server-1", cursor: null });
 
     expect(page.agents[0]?.archivedAt).toEqual(new Date("2026-04-01T10:05:00.000Z"));
+  });
+
+  it("coalesces concurrent requests for the same server, cursor, and sort", async () => {
+    const deferred = createDeferred<FetchAgentHistoryResult>();
+    const calls: FetchAgentHistoryOptions[] = [];
+    const client: FakeAgentHistoryClient = {
+      calls,
+      fetchAgentHistory: async (options) => {
+        calls.push(options ?? {});
+        return deferred.promise;
+      },
+    };
+
+    const first = fetchAgentHistoryPage({ client, serverId: "server-1", cursor: null });
+    const second = fetchAgentHistoryPage({ client, serverId: "server-1", cursor: null });
+
+    expect(calls).toHaveLength(1);
+    deferred.resolve(
+      historyPayload({
+        entries: [
+          historyEntry({
+            id: "history-1",
+            cwd: "/repo",
+            updatedAt: "2026-04-02T10:00:00.000Z",
+          }),
+        ],
+      }),
+    );
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({
+        agents: [expect.objectContaining({ id: "history-1" })],
+      }),
+      expect.objectContaining({
+        agents: [expect.objectContaining({ id: "history-1" })],
+      }),
+    ]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("does not coalesce different cursors", async () => {
+    const client = createClient([historyPayload({ entries: [] }), historyPayload({ entries: [] })]);
+
+    await Promise.all([
+      fetchAgentHistoryPage({ client, serverId: "server-1", cursor: null }),
+      fetchAgentHistoryPage({ client, serverId: "server-1", cursor: "cursor-2" }),
+    ]);
+
+    expect(client.calls).toHaveLength(2);
   });
 });

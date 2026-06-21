@@ -57,7 +57,7 @@ export function getGapBetweenStreamItems(
     return SPACING[1];
   }
   if (isSameAssistantBlockGroup({ item, other: belowItem })) {
-    return SPACING[3];
+    return 0;
   }
   return SPACING[4];
 }

@@ -34,6 +34,7 @@ export interface AgentMetadataGenerationOptions {
   };
   initialPrompt?: string | null;
   explicitTitle?: string | null;
+  provisionalTitle?: string | null;
   chisacodeHome?: string;
   logger: Logger;
   deps?: AgentMetadataGeneratorDeps;
@@ -59,7 +60,7 @@ function normalizeAutoTitle(title: string): string | null {
 export async function determineAgentMetadataNeeds(
   options: Pick<
     AgentMetadataGenerationOptions,
-    "initialPrompt" | "explicitTitle" | "cwd" | "chisacodeHome" | "deps"
+    "initialPrompt" | "explicitTitle" | "provisionalTitle" | "cwd" | "chisacodeHome" | "deps"
   >,
 ): Promise<AgentMetadataNeeds> {
   const prompt = options.initialPrompt?.trim();
@@ -67,7 +68,8 @@ export async function determineAgentMetadataNeeds(
     return { prompt: null, needsTitle: false };
   }
 
-  const needsTitle = !hasExplicitTitle(options.explicitTitle);
+  const needsTitle =
+    !hasExplicitTitle(options.explicitTitle) && !hasExplicitTitle(options.provisionalTitle);
 
   return {
     prompt,
@@ -121,6 +123,12 @@ export async function generateAndApplyAgentMetadata(
 
   const schema = buildMetadataSchema(needs);
   if (!schema) {
+    if (hasExplicitTitle(options.provisionalTitle) && !hasExplicitTitle(options.explicitTitle)) {
+      options.logger.debug(
+        { agentId: options.agentId, title: options.provisionalTitle },
+        "Skipping generated agent title because a provisional prompt title exists",
+      );
+    }
     return;
   }
 

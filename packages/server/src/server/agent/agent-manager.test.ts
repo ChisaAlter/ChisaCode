@@ -1473,6 +1473,37 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
   });
 });
 
+test("resumeAgentFromPersistence ignores stale title from persistence metadata", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-resume-title-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: {
+      codex: client,
+    },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000929",
+  });
+
+  const resumed = await manager.resumeAgentFromPersistence(
+    {
+      provider: "codex",
+      sessionId: "resume-session-title",
+      metadata: {
+        provider: "codex",
+        cwd: workdir,
+        title: "Stale provider title",
+      },
+    },
+    { cwd: workdir },
+  );
+
+  expect(resumed.config.title).toBeUndefined();
+  expect(client.resumeOverrides.at(-1)).not.toHaveProperty("title");
+});
+
 test("findPersistedAgent returns matching descriptors by session id or native handle", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-find-persisted-"));
   const storagePath = join(workdir, "agents");
@@ -1862,6 +1893,36 @@ test("setGeneratedTitle persists generated title when no title exists", async ()
 
   const after = await storage.get(snapshot.id);
   expect(after?.title).toBe("Generated title");
+  expect(after?.titleSource).toBe("generated");
+});
+
+test("setGeneratedTitle does not overwrite initial prompt title", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-generated-title-initial-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const manager = new AgentManager({
+    clients: {
+      codex: new TestAgentClient(),
+    },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000928",
+  });
+
+  const snapshot = await manager.createAgent(
+    {
+      provider: "codex",
+      cwd: workdir,
+    },
+    undefined,
+    { initialTitle: "Implement title protection" },
+  );
+
+  await manager.setGeneratedTitle(snapshot.id, "Generated title");
+
+  const after = await storage.get(snapshot.id);
+  expect(after?.title).toBe("Implement title protection");
+  expect(after?.titleSource).toBe("initial_prompt");
 });
 
 test("setGeneratedTitle ignores blank generated titles", async () => {

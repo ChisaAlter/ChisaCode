@@ -61,7 +61,7 @@ import {
   resolveActiveHostRedirectRoute,
   startDaemonIfGateAllows,
   startHostRuntimeBootstrap,
-} from "@/app/host-runtime-bootstrap";
+} from "@/utils/host-runtime-bootstrap";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { listenToDesktopEvent } from "@/desktop/electron/events";
 import { updateDesktopWindowControls } from "@/desktop/electron/window";
@@ -989,10 +989,6 @@ function RootStack() {
       <Stack.Screen name="index" />
       <Stack.Protected guard={storeReady}>
         <Stack.Screen name="welcome" />
-        <Stack.Screen name="settings/index" />
-        <Stack.Screen name="settings/[section]" />
-        <Stack.Screen name="settings/projects/index" />
-        <Stack.Screen name="settings/projects/[projectKey]" />
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       {/*
@@ -1008,6 +1004,10 @@ function RootStack() {
       <Stack.Screen name="h/[serverId]/sessions" />
       <Stack.Screen name="h/[serverId]/open-project" />
       <Stack.Screen name="h/[serverId]/settings" />
+      <Stack.Screen name="settings/index" />
+      <Stack.Screen name="settings/[section]" />
+      <Stack.Screen name="settings/projects/index" />
+      <Stack.Screen name="settings/projects/[projectKey]" />
       <Stack.Screen name="settings/hosts/[serverId]" />
     </Stack>
   );

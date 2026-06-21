@@ -164,9 +164,11 @@ describe("layoutStream", () => {
       expect(findLayoutItem(splitLayout, firstBlock.id).gapBelow).toBe(
         findLayoutItem(unsplitLayout, firstBlock.id).gapBelow,
       );
+      expect(findLayoutItem(splitLayout, firstBlock.id).gapBelow).toBe(0);
       expect(findLayoutItem(splitLayout, secondBlock.id).gapBelow).toBe(
         findLayoutItem(unsplitLayout, secondBlock.id).gapBelow,
       );
+      expect(findLayoutItem(splitLayout, secondBlock.id).gapBelow).toBe(0);
     },
   );
 

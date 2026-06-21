@@ -40,6 +40,9 @@ const PERSISTENCE_HANDLE_SCHEMA = z
   .nullable()
   .optional();
 
+const TITLE_SOURCE_SCHEMA = z.enum(["explicit", "initial_prompt", "generated", "legacy"]);
+export type StoredAgentTitleSource = z.infer<typeof TITLE_SOURCE_SCHEMA>;
+
 const STORED_AGENT_SCHEMA = z.object({
   id: z.string(),
   provider: z.string(),
@@ -49,6 +52,7 @@ const STORED_AGENT_SCHEMA = z.object({
   lastActivityAt: z.string().optional(),
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
+  titleSource: TITLE_SOURCE_SCHEMA.default("legacy"),
   labels: z.record(z.string()).default({}),
   relation: z
     .object({
@@ -101,6 +105,57 @@ export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
 export interface AgentStorageMutationHook {
   upsertAgent(record: StoredAgentRecord): void;
   markDeleted(agentId: string): void;
+}
+
+interface AgentStorageSnapshotOptions {
+  title?: string | null;
+  titleSource?: StoredAgentTitleSource;
+  internal?: boolean;
+}
+
+function resolveTitleSourceForOverride(
+  title: string | null,
+  titleSource: StoredAgentTitleSource | undefined,
+): StoredAgentTitleSource {
+  if (!title) {
+    return "legacy";
+  }
+  return titleSource ?? "explicit";
+}
+
+function hasSnapshotOption(options: AgentStorageSnapshotOptions | undefined, key: string): boolean {
+  return options !== undefined && Object.prototype.hasOwnProperty.call(options, key);
+}
+
+function resolveSnapshotTitle(
+  options: AgentStorageSnapshotOptions | undefined,
+  existing: StoredAgentRecord | null,
+): string | null {
+  if (hasSnapshotOption(options, "title")) {
+    return options?.title ?? null;
+  }
+  return existing?.title ?? null;
+}
+
+function resolveSnapshotTitleSource(
+  options: AgentStorageSnapshotOptions | undefined,
+  existing: StoredAgentRecord | null,
+): StoredAgentTitleSource {
+  if (hasSnapshotOption(options, "title")) {
+    return resolveTitleSourceForOverride(options?.title ?? null, options?.titleSource);
+  }
+  return existing?.titleSource ?? "legacy";
+}
+
+function resolveSnapshotInternal(
+  agent: ManagedAgent,
+  options: AgentStorageSnapshotOptions | undefined,
+  existing: StoredAgentRecord | null,
+): boolean | undefined {
+  if (hasSnapshotOption(options, "internal")) {
+    return options?.internal;
+  }
+  return agent.internal ?? existing?.internal;
 }
 
 export class AgentStorage {
@@ -221,23 +276,18 @@ export class AgentStorage {
 
   async applySnapshot(
     agent: ManagedAgent,
-    workspaceIdOrOptions?: string | { title?: string | null; internal?: boolean },
-    options?: { title?: string | null; internal?: boolean },
+    workspaceIdOrOptions?: string | AgentStorageSnapshotOptions,
+    options?: AgentStorageSnapshotOptions,
   ): Promise<void> {
     const nextOptions = typeof workspaceIdOrOptions === "string" ? options : workspaceIdOrOptions;
     await this.load();
     await this.waitForPendingWrite(agent.id);
     const existing = (await this.get(agent.id)) ?? null;
-    const hasTitleOverride =
-      nextOptions !== undefined && Object.prototype.hasOwnProperty.call(nextOptions, "title");
-    const hasInternalOverride =
-      nextOptions !== undefined && Object.prototype.hasOwnProperty.call(nextOptions, "internal");
     const record = toStoredAgentRecord(agent, {
-      title: hasTitleOverride ? (nextOptions?.title ?? null) : (existing?.title ?? null),
+      title: resolveSnapshotTitle(nextOptions, existing),
+      titleSource: resolveSnapshotTitleSource(nextOptions, existing),
       createdAt: existing?.createdAt,
-      internal: hasInternalOverride
-        ? nextOptions?.internal
-        : (agent.internal ?? existing?.internal),
+      internal: resolveSnapshotInternal(agent, nextOptions, existing),
     });
 
     // Preserve soft-delete/archive status across snapshot flushes.
@@ -256,7 +306,7 @@ export class AgentStorage {
     if (!record) {
       throw new Error(`Agent ${agentId} not found`);
     }
-    await this.upsert({ ...record, title });
+    await this.upsert({ ...record, title, titleSource: "explicit" });
   }
 
   async setGeneratedTitle(agentId: string, title: string): Promise<StoredAgentRecord> {
@@ -266,9 +316,13 @@ export class AgentStorage {
     if (!record) {
       throw new Error(`Agent ${agentId} not found`);
     }
+    if (record.title && record.titleSource !== "generated") {
+      return record;
+    }
     const nextRecord = {
       ...record,
       title,
+      titleSource: "generated" as const,
       updatedAt: new Date().toISOString(),
     };
     await this.queueRecordWrite(nextRecord);

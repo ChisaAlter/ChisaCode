@@ -3,7 +3,11 @@ import type {
   AgentSnapshotPayload,
   RecentProviderSessionDescriptorPayload,
 } from "../messages.js";
-import type { SerializableAgentConfig, StoredAgentRecord } from "./agent-storage.js";
+import type {
+  SerializableAgentConfig,
+  StoredAgentRecord,
+  StoredAgentTitleSource,
+} from "./agent-storage.js";
 import type {
   AgentCapabilityFlags,
   AgentFeature,
@@ -26,6 +30,7 @@ export type { ManagedAgent };
 
 interface ProjectionOptions {
   title?: string | null;
+  titleSource?: StoredAgentTitleSource;
   createdAt?: string;
   internal?: boolean;
 }
@@ -82,6 +87,7 @@ export function toStoredAgentRecord(
     lastActivityAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
+    titleSource: options?.titleSource ?? "legacy",
     labels: agent.labels,
     ...(agent.relation ? { relation: agent.relation } : {}),
     lastStatus: agent.lifecycle,

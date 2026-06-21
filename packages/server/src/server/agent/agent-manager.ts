@@ -51,7 +51,7 @@ import {
   type PersistedAgentDescriptor,
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
-import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
+import type { AgentStorage, StoredAgentRecord, StoredAgentTitleSource } from "./agent-storage.js";
 import {
   InMemoryAgentTimelineStore,
   type SeedAgentTimelineOptions,
@@ -932,7 +932,8 @@ export class AgentManager {
       agentId ?? this.idFactory(),
       "resumeAgentFromPersistence",
     );
-    const metadata = (handle.metadata ?? {}) as Partial<AgentSessionConfig>;
+    const metadata = { ...((handle.metadata ?? {}) as Partial<AgentSessionConfig>) };
+    delete metadata.title;
     const mergedConfig = {
       ...metadata,
       ...overrides,
@@ -1453,7 +1454,7 @@ export class AgentManager {
       return;
     }
     this.touchUpdatedAt(agent);
-    await this.persistSnapshot(agent, { title: normalizedTitle });
+    await this.persistSnapshot(agent, { title: normalizedTitle, titleSource: "explicit" });
     this.emitState(agent, { persist: false });
   }
 
@@ -2519,7 +2520,8 @@ export class AgentManager {
     await this.refreshRuntimeInfo(managed);
     await this.persistSnapshot(managed, {
       workspaceId: options?.workspaceId,
-      title: initialPersistedTitle,
+      title: initialPersistedTitle.title,
+      titleSource: initialPersistedTitle.titleSource,
     });
     this.emitState(managed, { persist: false });
 
@@ -2769,21 +2771,35 @@ export class AgentManager {
     agentId: string,
     config: AgentSessionConfig,
     fallbackTitle: string | null,
-  ): Promise<string | null> {
+  ): Promise<{ title: string | null; titleSource: StoredAgentTitleSource }> {
     const existing = await this.registry?.get(agentId);
     if (existing) {
-      return existing.title ?? null;
+      return {
+        title: existing.title ?? null,
+        titleSource: existing.titleSource ?? "legacy",
+      };
     }
     const explicitTitle =
       typeof config.title === "string" && config.title.trim().length > 0
         ? config.title.trim()
         : null;
-    return explicitTitle ?? fallbackTitle;
+    if (explicitTitle) {
+      return { title: explicitTitle, titleSource: "explicit" };
+    }
+    return {
+      title: fallbackTitle,
+      titleSource: fallbackTitle ? "initial_prompt" : "legacy",
+    };
   }
 
   private async persistSnapshot(
     agent: ManagedAgent,
-    options?: { workspaceId?: string; title?: string | null; internal?: boolean },
+    options?: {
+      workspaceId?: string;
+      title?: string | null;
+      titleSource?: StoredAgentTitleSource;
+      internal?: boolean;
+    },
   ): Promise<void> {
     if (!this.registry) {
       return;

@@ -57,6 +57,7 @@ import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
+import { useSessionStore } from "@/stores/session-store";
 import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import {
@@ -92,6 +93,7 @@ import {
   resolveLeftSidebarNewConversationRoute,
 } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "@/utils/sidebar-session-source";
 import { generateDraftId } from "@/stores/draft-keys";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
@@ -216,11 +218,42 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
   const hostTriggerRef = useRef<View | null>(null);
   const [isHostPickerOpen, setIsHostPickerOpen] = useState(false);
 
-  const { agents, isInitialLoad, isRevalidating, isLoadingMore, hasMore, refreshAll, loadMore } =
-    useAgentHistory({
-      serverId: activeServerId,
-      enabled: isCompactLayout || isOpen,
-    });
+  const {
+    agents: historyAgents,
+    isInitialLoad: isHistoryInitialLoad,
+    isRevalidating,
+    isLoadingMore,
+    hasMore,
+    refreshAll,
+    loadMore,
+  } = useAgentHistory({
+    serverId: activeServerId,
+    enabled: isCompactLayout || isOpen,
+  });
+  const liveSessionAgents = useSessionStore((state) =>
+    activeServerId ? state.sessions[activeServerId]?.agents : undefined,
+  );
+  const liveAgents = useMemo(
+    () =>
+      buildSidebarLiveAgents({
+        agents: liveSessionAgents,
+        serverId: activeServerId,
+        serverLabel: activeHostLabel,
+      }),
+    [activeHostLabel, activeServerId, liveSessionAgents],
+  );
+  const sidebarSessionSource = useMemo(
+    () =>
+      mergeSidebarSessionSources({
+        liveAgents,
+        historyAgents,
+        selectedAgentId,
+      }),
+    [historyAgents, liveAgents, selectedAgentId],
+  );
+  const agents = sidebarSessionSource.agents;
+  const resolvedSelectedAgentId = sidebarSessionSource.selectedAgentId;
+  const isInitialLoad = isHistoryInitialLoad && agents.length === 0;
   const [isManualRefresh, setIsManualRefresh] = useState(false);
 
   const handleRefresh = useCallback(() => {
@@ -334,7 +367,7 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     isHostPickerOpen,
     setIsHostPickerOpen,
     agents,
-    selectedAgentId,
+    selectedAgentId: resolvedSelectedAgentId,
     isInitialLoad,
     isRevalidating,
     isLoadingMore,

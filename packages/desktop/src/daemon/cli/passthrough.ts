@@ -2,7 +2,19 @@ import { pathToFileURL } from "node:url";
 import { resolvePassthroughCliEntrypoint } from "./entrypoints.js";
 
 const DESKTOP_CLI_ENV = "CHISACODE_DESKTOP_CLI";
-const IGNORED_ARG_PREFIXES = ["-psn_", "--no-sandbox"];
+const IGNORED_ARG_PREFIXES = [
+  "-psn_",
+  "--fetch-schemes=",
+  "--remote-debugging-port=",
+  "--secure-schemes=",
+  "--source-shortcut=",
+  "--standard-schemes=",
+];
+const IGNORED_ARGS = new Set([
+  "--allow-file-access-from-files",
+  "--enable-logging",
+  "--no-sandbox",
+]);
 
 export type PassthroughCliRunner = (argv: string[]) => Promise<number>;
 
@@ -15,7 +27,7 @@ export function parsePassthroughCliArgs(input: {
   const effective: string[] = [];
 
   for (const arg of input.argv.slice(startIndex)) {
-    if (IGNORED_ARG_PREFIXES.some((prefix) => arg.startsWith(prefix))) {
+    if (IGNORED_ARGS.has(arg) || IGNORED_ARG_PREFIXES.some((prefix) => arg.startsWith(prefix))) {
       continue;
     }
     effective.push(arg);

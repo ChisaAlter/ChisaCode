@@ -1306,6 +1306,94 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("coalesces concurrent default active directory refreshes per server", async () => {
+    const host = makeHost({
+      serverId: "srv_refresh",
+      connections: [
+        {
+          id: "direct:lan:6767",
+          type: "directTcp",
+          endpoint: "lan:6767",
+        },
+      ],
+    });
+    const fakeClient = new FakeDaemonClient();
+    fakeClient.setConnectionState({ status: "connected" });
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async ({ host: hostProfile }) => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: hostProfile.serverId,
+          hostname: hostProfile.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    store.syncHosts([host], {
+      initialConnectionByServerId: new Map([
+        [
+          host.serverId,
+          {
+            connectionId: "direct:lan:6767",
+            existingClient: fakeClient as unknown as DaemonClient,
+          },
+        ],
+      ]),
+    });
+
+    const timeoutAt = Date.now() + 200;
+    while (
+      (store.getSnapshot(host.serverId)?.connectionStatus !== "online" ||
+        fakeClient.fetchAgentsCalls.length === 0) &&
+      Date.now() < timeoutAt
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    fakeClient.fetchAgentsCalls = [];
+
+    let resolveFetch!: (payload: Awaited<ReturnType<DaemonClient["fetchAgents"]>>) => void;
+    const fetchPromise = new Promise<Awaited<ReturnType<DaemonClient["fetchAgents"]>>>(
+      (resolve) => {
+        resolveFetch = resolve;
+      },
+    );
+    fakeClient.fetchAgents = async (options?: FetchAgentsOptions) => {
+      fakeClient.fetchAgentsCalls.push(options ?? {});
+      return fetchPromise;
+    };
+
+    const first = store.refreshAgentDirectory({ serverId: host.serverId });
+    const second = store.refreshAgentDirectory({ serverId: host.serverId });
+
+    expect(fakeClient.fetchAgentsCalls).toHaveLength(1);
+    resolveFetch(
+      makeFetchAgentsPayload({
+        entries: [
+          makeFetchAgentsEntry({
+            id: "agent-1",
+            cwd: "/repo",
+            updatedAt: "2026-04-02T10:00:00.000Z",
+          }),
+        ],
+      }),
+    );
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({
+        subscriptionId: null,
+      }),
+      expect.objectContaining({
+        subscriptionId: null,
+      }),
+    ]);
+    expect(fakeClient.fetchAgentsCalls).toHaveLength(1);
+    expect(store.getSnapshot(host.serverId)?.agentDirectoryStatus).toBe("ready");
+
+    store.syncHosts([]);
+  });
+
   it("bootstraps agent directory subscription when host transitions online", async () => {
     const host = makeHost({
       connections: [

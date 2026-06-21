@@ -135,7 +135,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("ThoughtMessage", () => {
-  it("collapses completed reasoning to a one-line preview by default", () => {
+  it("expands completed reasoning by default", () => {
     render(
       <ThoughtMessage
         text={"First private step\nSecond private step"}
@@ -147,14 +147,15 @@ describe("ThoughtMessage", () => {
     expect(screen.getByText("推理过程")).toBeTruthy();
     expect(screen.getByTestId("thought-pixel-dot")).toBeTruthy();
     expect(screen.queryByTestId("brain-icon")).toBeNull();
-    expect(screen.getByTestId("thought-message-preview")).toBeTruthy();
-    expect(screen.queryByTestId("thought-message-content")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("thought-message-toggle"));
-
+    expect(screen.queryByTestId("thought-message-preview")).toBeNull();
     expect(screen.getByTestId("thought-message-content").textContent).toBe(
       "First private step\nSecond private step",
     );
+
+    fireEvent.click(screen.getByTestId("thought-message-toggle"));
+
+    expect(screen.getByTestId("thought-message-preview")).toBeTruthy();
+    expect(screen.queryByTestId("thought-message-content")).toBeNull();
   });
 
   it("uses the running label and expands reasoning while streaming", () => {
