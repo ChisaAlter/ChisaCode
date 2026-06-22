@@ -29,3 +29,20 @@ export function resolveRunningAgentModelLoading(input: {
     selectedEntry: input.selectedEntry,
   });
 }
+
+export function resolveDraftModelSelectorLoading(input: {
+  isAllModelsLoading: boolean;
+  isModelLoading: boolean;
+  selectedProviderId: string | null | undefined;
+  selectedModelId: string | null | undefined;
+}): boolean {
+  const hasSelectedModel = Boolean(input.selectedModelId?.trim());
+  if (hasSelectedModel) {
+    return false;
+  }
+  const hasSelectedProvider = Boolean(input.selectedProviderId?.trim());
+  if (hasSelectedProvider) {
+    return input.isModelLoading;
+  }
+  return input.isAllModelsLoading || input.isModelLoading;
+}

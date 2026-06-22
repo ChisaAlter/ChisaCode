@@ -31,7 +31,10 @@ import {
   type ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
 import { resolveProviderSnapshotLoadingState } from "@/provider-selection/provider-snapshot-loading";
-import { resolveRunningAgentModelLoading } from "@/composer/agent-controls/model-loading";
+import {
+  resolveDraftModelSelectorLoading,
+  resolveRunningAgentModelLoading,
+} from "@/composer/agent-controls/model-loading";
 import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
@@ -1881,7 +1884,7 @@ export function DraftAgentControls({
   selectedModel,
   selectedRuntimeProvider,
   onSelectModel,
-  isModelLoading: _isModelLoading,
+  isModelLoading,
   modelSelectorProviders,
   isAllModelsLoading,
   onSelectProviderAndModel,
@@ -1971,6 +1974,12 @@ export function DraftAgentControls({
     () => <ProviderCapabilityHints provider={selectedProvider} />,
     [selectedProvider],
   );
+  const modelSelectorLoading = resolveDraftModelSelectorLoading({
+    isAllModelsLoading,
+    isModelLoading,
+    selectedProviderId: selectedProvider,
+    selectedModelId: selectedModel,
+  });
 
   if (!isCompact) {
     return (
@@ -1983,7 +1992,7 @@ export function DraftAgentControls({
           onSelect={handleSelectProviderAndModel}
           favoriteKeys={favoriteKeys}
           onToggleFavorite={handleToggleFavorite}
-          isLoading={isAllModelsLoading}
+          isLoading={modelSelectorLoading}
           disabled={disabled}
           onOpen={onModelSelectorOpen}
           onClose={onDropdownClose}
@@ -2019,7 +2028,7 @@ export function DraftAgentControls({
       selectedRuntimeProviderId={selectedRuntimeProvider}
       onSelectModel={onSelectModel}
       onSelectProviderAndModel={onSelectProviderAndModel}
-      isModelLoading={isAllModelsLoading}
+      isModelLoading={modelSelectorLoading}
       favoriteKeys={favoriteKeys}
       onToggleFavoriteModel={handleToggleFavorite}
       thinkingOptions={mappedThinkingOptions.length > 0 ? mappedThinkingOptions : undefined}

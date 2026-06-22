@@ -496,6 +496,18 @@ describe("combined model selector data", () => {
     ).toBe("Default");
   });
 
+  it("keeps the selected model visible while snapshot providers are not available", () => {
+    expect(
+      resolveSelectedModelLabel({
+        providers: [],
+        selectedProvider: "codex",
+        selectedRuntimeProvider: "xiaomi-codex",
+        selectedModel: "mimo-v2.5",
+        isLoading: false,
+      }),
+    ).toBe("mimo-v2.5");
+  });
+
   it("keeps provider snapshot errors visible in the selected trigger label", () => {
     const providers = buildSelectableProviderSelectorProviders([
       snapshotEntry({
@@ -548,6 +560,25 @@ describe("combined model selector data", () => {
           modelId: "",
           availableModels: [],
           isModelLoading: false,
+        },
+        autoSubmitConfig: null,
+        workspaceDirectory: "/repo",
+        hasClient: true,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("allows submission with an explicit selected model while provider defaults are loading", () => {
+    expect(
+      resolveSubmissionReadiness({
+        text: "hello",
+        allowsEmptyAutoSubmit: false,
+        providerCount: 1,
+        selection: {
+          provider: "codex",
+          modelId: "mimo-v2.5",
+          availableModels: [],
+          isModelLoading: true,
         },
         autoSubmitConfig: null,
         workspaceDirectory: "/repo",

@@ -5,6 +5,8 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThoughtMessage } from "./thought-message";
+import { getExpandableBadgeLayoutStyles } from "./message-layout";
+import { stripLeadingMarkdownHorizontalRule } from "./message-markdown";
 
 afterEach(cleanup);
 
@@ -158,6 +160,27 @@ describe("ThoughtMessage", () => {
     expect(screen.queryByTestId("thought-message-content")).toBeNull();
   });
 
+  it("can collapse completed reasoning into a one-line preview by default", () => {
+    render(
+      <ThoughtMessage
+        text={"First private step\nSecond private step"}
+        status="ready"
+        defaultCollapsed
+        isLastInSequence
+      />,
+    );
+
+    expect(screen.getByText("推理过程")).toBeTruthy();
+    expect(screen.getByTestId("thought-message-preview")).toBeTruthy();
+    expect(screen.queryByTestId("thought-message-content")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("thought-message-toggle"));
+
+    expect(screen.getByTestId("thought-message-content").textContent).toBe(
+      "First private step\nSecond private step",
+    );
+  });
+
   it("uses the running label and expands reasoning while streaming", () => {
     render(<ThoughtMessage text="Still streaming" status="loading" isLastInSequence />);
 
@@ -165,5 +188,32 @@ describe("ThoughtMessage", () => {
     expect(screen.getByTestId("synced-loader").getAttribute("data-color")).toBe("#b45309");
     expect(screen.queryByTestId("thought-message-preview")).toBeNull();
     expect(screen.getByTestId("thought-message-content").textContent).toBe("Still streaming");
+  });
+});
+
+describe("ExpandableBadge layout", () => {
+  it("keeps expanded tool details inside the message column", () => {
+    const styles = getExpandableBadgeLayoutStyles();
+
+    expect(styles.container).not.toMatchObject({ marginHorizontal: expect.any(Number) });
+    expect(styles.detailWrapper).toMatchObject({
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+    });
+  });
+});
+
+describe("assistant markdown preprocessing", () => {
+  it("removes a leading markdown horizontal rule before rendering assistant text", () => {
+    expect(stripLeadingMarkdownHorizontalRule("---\n正式回答")).toBe("正式回答");
+    expect(stripLeadingMarkdownHorizontalRule("***\n正式回答")).toBe("正式回答");
+    expect(stripLeadingMarkdownHorizontalRule("___\n正式回答")).toBe("正式回答");
+  });
+
+  it("keeps horizontal rules that are not the first assistant block", () => {
+    expect(stripLeadingMarkdownHorizontalRule("先说结论\n\n---\n补充")).toBe(
+      "先说结论\n\n---\n补充",
+    );
   });
 });

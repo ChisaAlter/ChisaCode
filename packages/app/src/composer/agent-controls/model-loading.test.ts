@@ -1,7 +1,11 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
-import { isProviderModelsQueryLoading, resolveRunningAgentModelLoading } from "./model-loading";
+import {
+  isProviderModelsQueryLoading,
+  resolveDraftModelSelectorLoading,
+  resolveRunningAgentModelLoading,
+} from "./model-loading";
 
 describe("isProviderModelsQueryLoading", () => {
   it("does not treat a disabled pending query as loading", () => {
@@ -75,6 +79,41 @@ describe("resolveRunningAgentModelLoading", () => {
           label: "Mock",
           models: [],
         },
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("resolveDraftModelSelectorLoading", () => {
+  it("does not show loading for a draft with a selected ready model while unrelated snapshots load", () => {
+    expect(
+      resolveDraftModelSelectorLoading({
+        isAllModelsLoading: true,
+        isModelLoading: false,
+        selectedProviderId: "codex",
+        selectedModelId: "mimo-v2.5",
+      }),
+    ).toBe(false);
+  });
+
+  it("does not show loading for a draft with an explicit selected model while provider details load", () => {
+    expect(
+      resolveDraftModelSelectorLoading({
+        isAllModelsLoading: false,
+        isModelLoading: true,
+        selectedProviderId: "codex",
+        selectedModelId: "mimo-v2.5",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps the empty draft selector loading while the initial provider list loads", () => {
+    expect(
+      resolveDraftModelSelectorLoading({
+        isAllModelsLoading: true,
+        isModelLoading: false,
+        selectedProviderId: null,
+        selectedModelId: "",
       }),
     ).toBe(true);
   });

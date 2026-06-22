@@ -52,6 +52,39 @@ export function getAgentCwdGroupLabel(
   return parts.at(-1) ?? cleaned;
 }
 
+function getChisaCodeOwnedProjectRoot(agent: AggregatedAgent): string | null {
+  const placement = agent.projectPlacement;
+  if (placement?.checkout.isChisaCodeOwnedWorktree !== true) {
+    return null;
+  }
+  const mainRepoRoot = placement.checkout.mainRepoRoot?.trim() ?? "";
+  if (mainRepoRoot) {
+    return mainRepoRoot;
+  }
+  const projectKey = placement.projectKey.trim();
+  return projectKey || null;
+}
+
+function getSidebarSessionGroupKey(agent: AggregatedAgent): string {
+  return normalizeAgentCwdGroupKey(getChisaCodeOwnedProjectRoot(agent) ?? agent.cwd);
+}
+
+function getSidebarSessionGroupLabel(
+  agent: AggregatedAgent,
+  fallbackLabel = "Unknown workspace",
+): string {
+  const ownedProjectRoot = getChisaCodeOwnedProjectRoot(agent);
+  if (ownedProjectRoot) {
+    const projectName = agent.projectPlacement?.projectName.trim() ?? "";
+    return projectName || getAgentCwdGroupLabel(ownedProjectRoot, fallbackLabel);
+  }
+  return getAgentCwdGroupLabel(agent.cwd, fallbackLabel);
+}
+
+function getSidebarSessionGroupCwd(agent: AggregatedAgent): string | null {
+  return (getChisaCodeOwnedProjectRoot(agent) ?? agent.cwd)?.trim() || null;
+}
+
 function getActivityTime(value: Date): number {
   const time = value.getTime();
   return Number.isFinite(time) ? time : 0;
@@ -89,7 +122,7 @@ export function groupAgentsForSidebar(
       continue;
     }
 
-    const key = normalizeAgentCwdGroupKey(agent.cwd);
+    const key = getSidebarSessionGroupKey(agent);
     const existing = groups.get(key);
     if (existing) {
       existing.agents.push(agent);
@@ -101,8 +134,8 @@ export function groupAgentsForSidebar(
 
     groups.set(key, {
       key,
-      label: getAgentCwdGroupLabel(agent.cwd, unknownWorkspaceLabel),
-      cwd: agent.cwd?.trim() || null,
+      label: getSidebarSessionGroupLabel(agent, unknownWorkspaceLabel),
+      cwd: getSidebarSessionGroupCwd(agent),
       agents: [agent],
       newestActivityAt: agent.lastActivityAt,
     });

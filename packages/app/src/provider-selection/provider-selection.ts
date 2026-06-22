@@ -299,6 +299,7 @@ export function resolveSelectedModelLabel(input: {
   copy?: ProviderSelectionCopy;
 }): string {
   const labels = resolveProviderSelectionCopy(input.copy);
+  const selectedModel = input.selectedModel.trim();
   const selectedProvider = input.selectedProvider.trim();
   if (!selectedProvider) {
     return labels.selectModel;
@@ -313,12 +314,15 @@ export function resolveSelectedModelLabel(input: {
       (entry) =>
         entry.runtimeProvider === selectedProvider &&
         entry.provider === selectedProvider &&
-        entry.modelId === input.selectedModel,
+        entry.modelId === selectedModel,
     );
-    return groupedModel?.modelLabel ?? (input.isLoading ? labels.loading : labels.selectModel);
+    return (
+      groupedModel?.modelLabel ??
+      (input.isLoading ? labels.loading : selectedModel || labels.selectModel)
+    );
   }
   if (provider.modelSelection.kind === "loading") {
-    return labels.loading;
+    return input.isLoading ? labels.loading : selectedModel || labels.loading;
   }
   if (provider.modelSelection.kind === "error") {
     return labels.error;
@@ -328,8 +332,7 @@ export function resolveSelectedModelLabel(input: {
   }
 
   const model = provider.modelSelection.rows.find(
-    (entry) =>
-      entry.modelId === input.selectedModel && entry.runtimeProvider === selectedRuntimeProvider,
+    (entry) => entry.modelId === selectedModel && entry.runtimeProvider === selectedRuntimeProvider,
   );
   const defaultModel = provider.modelSelection.rows.find((row) => row.isDefault);
   return (
@@ -455,10 +458,11 @@ export function resolveSubmissionReadiness(input: {
   if (!(input.autoSubmitConfig?.provider ?? input.selection.provider)) {
     return { ok: false, reason: labels.modelRequired };
   }
-  if (input.selection.isModelLoading) {
+  const hasExplicitAutoSubmitModel = Boolean(input.autoSubmitConfig?.model);
+  const hasSelectedModel = Boolean(input.autoSubmitConfig?.model ?? input.selection.modelId);
+  if (input.selection.isModelLoading && !hasExplicitAutoSubmitModel && !hasSelectedModel) {
     return { ok: false, reason: labels.modelLoading };
   }
-  const hasSelectedModel = Boolean(input.autoSubmitConfig?.model ?? input.selection.modelId);
   if (!hasSelectedModel && input.selection.availableModels.length > 0) {
     return { ok: false, reason: labels.providerNoModels };
   }

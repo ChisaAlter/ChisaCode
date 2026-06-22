@@ -468,6 +468,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <ThoughtMessage
             text={item.text}
             status={item.status}
+            defaultCollapsed={item.isCollapsedSummary === true}
             isLastInSequence={layoutItem.isLastInToolSequence}
           />
         );

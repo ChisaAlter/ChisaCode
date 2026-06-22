@@ -46,6 +46,7 @@ function toAggregatedAgent(input: {
     archivedAt: input.agent.archivedAt,
     createdAt: input.agent.createdAt,
     labels: input.agent.labels,
+    projectPlacement: input.agent.projectPlacement ?? null,
   };
 }
 

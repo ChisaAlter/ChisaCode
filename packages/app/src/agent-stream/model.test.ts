@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
-import { buildAgentStreamRenderModel } from "./model";
+import { buildAgentStreamRenderModel, collapseCompletedTurnThoughtsForDisplay } from "./model";
 
 function createTimestamp(seed: number): Date {
   return new Date(`2026-01-01T00:00:${seed.toString().padStart(2, "0")}.000Z`);
@@ -21,6 +21,34 @@ function assistantMessage(id: string, seed: number): StreamItem {
     id,
     text: id,
     timestamp: createTimestamp(seed),
+  };
+}
+
+function thoughtMessage(id: string, seed: number, text = id): StreamItem {
+  return {
+    kind: "thought",
+    id,
+    text,
+    status: "ready",
+    timestamp: createTimestamp(seed),
+  };
+}
+
+function toolCall(id: string, seed: number): StreamItem {
+  return {
+    kind: "tool_call",
+    id,
+    timestamp: createTimestamp(seed),
+    payload: {
+      source: "orchestrator",
+      data: {
+        toolCallId: id,
+        toolName: "Shell",
+        arguments: "pwd",
+        result: null,
+        status: "completed",
+      },
+    },
   };
 }
 
@@ -157,5 +185,76 @@ describe("buildAgentStreamRenderModel", () => {
     });
 
     expect(model.turnTiming.byAssistantId.size).toBe(0);
+  });
+});
+
+describe("collapseCompletedTurnThoughtsForDisplay", () => {
+  it("moves all completed thoughts in a turn after the formal assistant answer", () => {
+    const items = [
+      userMessage("u1", 1),
+      thoughtMessage("t1", 2, "Inspect project"),
+      toolCall("tool-1", 3),
+      thoughtMessage("t2", 4, "Compare files"),
+      assistantMessage("a1", 5),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.kind)).toEqual([
+      "user_message",
+      "tool_call",
+      "assistant_message",
+      "thought",
+    ]);
+    const summary = result.at(-1);
+    expect(summary).toMatchObject({
+      kind: "thought",
+      text: "Inspect project\n\nCompare files",
+      status: "ready",
+      isCollapsedSummary: true,
+      summaryForAssistantMessageId: "a1",
+    });
+  });
+
+  it("keeps tool calls in place when collapsing completed thoughts", () => {
+    const items = [
+      userMessage("u1", 1),
+      thoughtMessage("t1", 2),
+      toolCall("tool-1", 3),
+      assistantMessage("a1", 4),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.id)).toEqual(["u1", "tool-1", "a1", "thought-summary:a1"]);
+  });
+
+  it("does not move active running thoughts before the formal answer exists", () => {
+    const items = [userMessage("u1", 1), thoughtMessage("t1", 2), toolCall("tool-1", 3)];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: true });
+
+    expect(result).toBe(items);
+  });
+
+  it("collapses completed thoughts across the history and live-head boundary", () => {
+    const thought = thoughtMessage("t1", 2, "Inspect project");
+    const assistant = assistantMessage("a1", 3);
+    const model = buildAgentStreamRenderModel({
+      agentStatus: "idle",
+      tail: [userMessage("u1", 1), thought],
+      head: [assistant],
+      platform: "web",
+      isMobileBreakpoint: false,
+    });
+
+    expect(model.segments.historyMounted.map((item) => item.id)).toEqual(["u1"]);
+    expect(model.segments.liveHead.map((item) => item.id)).toEqual(["a1", "thought-summary:a1"]);
+    expect(model.segments.liveHead.at(-1)).toMatchObject({
+      kind: "thought",
+      text: "Inspect project",
+      isCollapsedSummary: true,
+      summaryForAssistantMessageId: "a1",
+    });
   });
 });

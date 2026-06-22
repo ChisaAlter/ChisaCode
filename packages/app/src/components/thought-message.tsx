@@ -10,16 +10,21 @@ import type { ThoughtStatus } from "@/types/stream";
 export interface ThoughtMessageProps {
   text: string;
   status: ThoughtStatus;
+  defaultCollapsed?: boolean;
   isLastInSequence?: boolean;
 }
 
-export const ThoughtMessage = memo(function ThoughtMessage({ text, status }: ThoughtMessageProps) {
+export const ThoughtMessage = memo(function ThoughtMessage({
+  text,
+  status,
+  defaultCollapsed = false,
+}: ThoughtMessageProps) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const content = text.trim();
   const hasContent = content.length > 0;
   const isLoading = status === "loading";
-  const [isExpanded, setIsExpanded] = useState(() => hasContent);
+  const [isExpanded, setIsExpanded] = useState(() => hasContent && !defaultCollapsed);
   const previousStatusRef = useRef(status);
   const label = isLoading ? t("stream.thinkingRunning") : t("stream.thinking");
   const Icon = isExpanded ? ChevronDown : ChevronRight;

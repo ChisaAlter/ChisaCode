@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import {
   getAgentCwdGroupLabel,
@@ -11,6 +12,7 @@ function agent(input: {
   cwd: string | null;
   updatedAt: string;
   pinned?: boolean;
+  projectPlacement?: ProjectPlacementPayload | null;
 }): AggregatedAgent {
   return {
     id: input.id,
@@ -28,6 +30,7 @@ function agent(input: {
     archivedAt: null,
     createdAt: new Date(input.updatedAt),
     labels: input.pinned ? { "chisacode.sidebarPinned": "true" } : {},
+    projectPlacement: input.projectPlacement ?? null,
   };
 }
 
@@ -57,6 +60,32 @@ describe("sidebar session groups", () => {
 
     expect(groups.map((group) => group.label)).toEqual(["b", "a"]);
     expect(groups[1]?.agents.map((entry) => entry.id)).toEqual(["new-a", "old-a"]);
+  });
+
+  it("labels ChisaCode-owned worktree groups with the selected project folder", () => {
+    const groups = groupAgentsForSidebar([
+      agent({
+        id: "owned-worktree",
+        cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+        updatedAt: "2026-01-03T00:00:00.000Z",
+        projectPlacement: {
+          projectKey: "C:\\Ai\\mimocode-desktop",
+          projectName: "mimocode-desktop",
+          checkout: {
+            cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+            isGit: true,
+            currentBranch: "codex/gallant-owl",
+            remoteUrl: null,
+            worktreeRoot: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+            isChisaCodeOwnedWorktree: true,
+            mainRepoRoot: "C:\\Ai\\mimocode-desktop",
+          },
+        },
+      }),
+    ]);
+
+    expect(groups.map((group) => group.label)).toEqual(["mimocode-desktop"]);
+    expect(groups[0]?.key).toBe("c:/ai/mimocode-desktop");
   });
 
   it("extracts pinned sessions into a global top group", () => {

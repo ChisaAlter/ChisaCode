@@ -37,7 +37,7 @@ export function createMarkdownStyles(theme: Theme) {
 
     paragraph: {
       marginTop: 0,
-      marginBottom: theme.spacing[3],
+      marginBottom: theme.spacing[2],
       flexWrap: "wrap" as const,
       flexDirection: "row" as const,
       alignItems: "flex-start" as const,
@@ -167,6 +167,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       paddingHorizontal: theme.spacing[1],
       paddingVertical: 2,
+      marginHorizontal: 1,
       borderRadius: theme.borderRadius.md,
       borderWidth: 0,
       fontFamily: Fonts.mono,
@@ -262,7 +263,8 @@ export function createMarkdownStyles(theme: Theme) {
     },
 
     list_item: {
-      marginBottom: theme.spacing[1],
+      marginBottom: theme.spacing[2],
+      paddingLeft: theme.spacing[1],
       flexDirection: "row" as const,
       alignItems: "flex-start" as const,
       flexShrink: 1,
@@ -317,7 +319,9 @@ export function createMarkdownStyles(theme: Theme) {
     hr: {
       backgroundColor: theme.colors.border,
       height: 1,
-      marginVertical: theme.spacing[6],
+      marginTop: theme.spacing[4],
+      marginBottom: theme.spacing[4],
+      width: "100%" as const,
     },
 
     // =========================================================================

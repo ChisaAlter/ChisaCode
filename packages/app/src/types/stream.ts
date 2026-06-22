@@ -93,6 +93,8 @@ export interface ThoughtItem {
   text: string;
   timestamp: Date;
   status: ThoughtStatus;
+  isCollapsedSummary?: boolean;
+  summaryForAssistantMessageId?: string;
 }
 
 export type OrchestratorToolCallStatus = "executing" | "completed" | "failed";

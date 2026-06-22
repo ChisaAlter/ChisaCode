@@ -93,6 +93,8 @@ import {
 import { PlanCard } from "./plan-card";
 import { useToolCallSheet } from "./tool-call-sheet";
 import { ToolCallDetailsContent } from "./tool-call-details";
+import { getExpandableBadgeLayoutStyles } from "./message-layout";
+import { stripLeadingMarkdownHorizontalRule } from "./message-markdown";
 import {
   AssistantInlineCodePathLink,
   type AssistantFileLinkSource,
@@ -1232,9 +1234,11 @@ export const TurnCopyButton = memo(function TurnCopyButton({
   );
 });
 
+const expandableBadgeBaseLayout = getExpandableBadgeLayoutStyles();
+
 const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   container: {
-    marginHorizontal: -13,
+    ...expandableBadgeBaseLayout.container,
   },
   containerSpacing: {
     marginBottom: theme.spacing[1],
@@ -1322,6 +1326,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     transform: [{ scale: 1.3 }, { rotate: "90deg" }],
   },
   detailWrapper: {
+    ...expandableBadgeBaseLayout.detailWrapper,
     borderBottomLeftRadius: theme.borderRadius.lg,
     borderBottomRightRadius: theme.borderRadius.lg,
     borderWidth: theme.borderWidth[1],
@@ -1851,7 +1856,8 @@ export const AssistantMessage = memo(function AssistantMessage({
     };
   }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot]);
 
-  const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
+  const displayMessage = useMemo(() => stripLeadingMarkdownHorizontalRule(message), [message]);
+  const blocks = useMemo(() => splitMarkdownBlocks(displayMessage), [displayMessage]);
   const keyedBlocks = useMemo(
     () => blocks.map((block, index) => ({ key: `${index}:${block.slice(0, 32)}`, block })),
     [blocks],

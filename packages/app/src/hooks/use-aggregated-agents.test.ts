@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import type { Agent } from "@/stores/session-store";
 import { __private__ } from "./use-aggregated-agents";
 
@@ -115,6 +116,41 @@ describe("buildAggregatedAgentsResult", () => {
         serverLabel: "Local",
       }),
     ]);
+  });
+
+  it("preserves project placement from live session agents", () => {
+    const projectPlacement: ProjectPlacementPayload = {
+      projectKey: "C:\\Ai\\mimocode-desktop",
+      projectName: "mimocode-desktop",
+      checkout: {
+        cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+        isGit: true,
+        currentBranch: "codex/gallant-owl",
+        remoteUrl: null,
+        worktreeRoot: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+        isChisaCodeOwnedWorktree: true,
+        mainRepoRoot: "C:\\Ai\\mimocode-desktop",
+      },
+    };
+
+    const result = __private__.buildAggregatedAgentsResult({
+      hosts: [{ serverId: "server-1", label: "Local", agentDirectoryStatus: "ready" }],
+      sessionAgents: {
+        "server-1": new Map([
+          [
+            "owned-worktree",
+            makeAgent({
+              id: "owned-worktree",
+              cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+              projectPlacement,
+            }),
+          ],
+        ]),
+      },
+      includeArchived: false,
+    });
+
+    expect(result.agents[0]?.projectPlacement).toEqual(projectPlacement);
   });
 
   it("derives initial loading and revalidating states from host directory status", () => {

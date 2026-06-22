@@ -64,6 +64,18 @@ function thought(id: string, seed: number): Extract<StreamItem, { kind: "thought
   };
 }
 
+function collapsedThoughtSummary(
+  id: string,
+  seed: number,
+  assistantId: string,
+): Extract<StreamItem, { kind: "thought" }> {
+  return {
+    ...thought(id, seed),
+    isCollapsedSummary: true,
+    summaryForAssistantMessageId: assistantId,
+  };
+}
+
 function turnChanges(id: string, seed: number): Extract<StreamItem, { kind: "turn_changes" }> {
   return {
     kind: "turn_changes",
@@ -332,5 +344,21 @@ describe("layoutStream", () => {
     expect(layout.auxiliaryTurnFooter?.itemId).toBe(assistant.id);
     expect(findLayoutItem(layout, assistant.id).completedFooter).toBeNull();
     expect(footerOwners(layout)).toEqual([assistant.id]);
+  });
+
+  it("places completed footer after the collapsed thought summary", () => {
+    const assistant = assistantMessage("a1", 2);
+    const summary = collapsedThoughtSummary("thought-summary:a1", 3, assistant.id);
+    const layout = layoutFor({
+      platform: "web",
+      tail: [userMessage("u1", 1), assistant, summary],
+      timingIds: [assistant.id],
+    });
+    const summaryRow = findLayoutItem(layout, summary.id);
+
+    expect(layout.auxiliaryTurnFooter?.itemId).toBe(summary.id);
+    expect(layout.auxiliaryTurnFooter?.timing?.durationMs).toBe(8000);
+    expect(summaryRow.completedFooter).toBeNull();
+    expect(footerOwners(layout)).toEqual([summary.id]);
   });
 });

@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import {
@@ -11,6 +10,7 @@ import {
 import { AssistantTurnFooter } from "@/components/message";
 import type { TurnFooterHost } from "./layout";
 import { RunningTurnFooter } from "./running-turn-footer";
+import { getTurnFooterStreamItemWrapperStyle } from "./turn-footer-layout";
 
 export type TurnContentStrategy = StreamStrategy;
 
@@ -105,12 +105,7 @@ function TurnFooterRow({ children }: { children: ReactNode }) {
 }
 
 const stylesheet = StyleSheet.create((theme) => ({
-  streamItemWrapper: {
-    width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
-    alignSelf: "center",
-    paddingHorizontal: theme.spacing[2],
-  },
+  streamItemWrapper: getTurnFooterStreamItemWrapperStyle(theme.spacing[2]),
   turnFooterRow: {
     marginTop: theme.spacing[4],
   },

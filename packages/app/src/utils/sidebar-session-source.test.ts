@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
-import { mergeSidebarSessionSources } from "./sidebar-session-source";
+import type { Agent } from "@/stores/session-store";
+import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "./sidebar-session-source";
 
 function makeAgent(input: {
   id: string;
@@ -28,7 +30,83 @@ function makeAgent(input: {
   };
 }
 
+const BASE_TIME = new Date("2026-04-02T10:00:00.000Z");
+
+function makeLiveAgent(input: Partial<Agent> & { id: string }): Agent {
+  const { id, ...overrides } = input;
+  return {
+    serverId: "server-1",
+    id,
+    provider: "codex",
+    status: "idle",
+    createdAt: BASE_TIME,
+    updatedAt: BASE_TIME,
+    lastUserMessageAt: null,
+    lastActivityAt: BASE_TIME,
+    capabilities: {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    },
+    currentModeId: null,
+    availableModes: [],
+    pendingPermissions: [],
+    persistence: null,
+    runtimeInfo: undefined,
+    lastUsage: undefined,
+    lastError: null,
+    title: input.id,
+    cwd: "/repo",
+    model: null,
+    thinkingOptionId: undefined,
+    requiresAttention: false,
+    attentionReason: null,
+    attentionTimestamp: null,
+    archivedAt: null,
+    parentAgentId: null,
+    labels: {},
+    projectPlacement: null,
+    ...overrides,
+  };
+}
+
 describe("mergeSidebarSessionSources", () => {
+  it("preserves project placement for live sidebar agents", () => {
+    const projectPlacement: ProjectPlacementPayload = {
+      projectKey: "C:\\Ai\\mimocode-desktop",
+      projectName: "mimocode-desktop",
+      checkout: {
+        cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+        isGit: true,
+        currentBranch: "codex/gallant-owl",
+        remoteUrl: null,
+        worktreeRoot: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+        isChisaCodeOwnedWorktree: true,
+        mainRepoRoot: "C:\\Ai\\mimocode-desktop",
+      },
+    };
+
+    const result = buildSidebarLiveAgents({
+      agents: new Map([
+        [
+          "owned-worktree",
+          makeLiveAgent({
+            id: "owned-worktree",
+            cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+            projectPlacement,
+          }),
+        ],
+      ]),
+      serverId: "server-1",
+      serverLabel: "Local",
+    });
+
+    expect(result[0]?.projectPlacement).toEqual(projectPlacement);
+  });
+
   it("shows live active agents even when history has not loaded them yet", () => {
     const result = mergeSidebarSessionSources({
       liveAgents: [makeAgent({ id: "live-agent" })],

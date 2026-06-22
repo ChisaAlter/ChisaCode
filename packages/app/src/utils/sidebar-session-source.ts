@@ -51,6 +51,7 @@ export function buildSidebarLiveAgents(input: {
       archivedAt: agent.archivedAt ?? null,
       createdAt: agent.createdAt,
       labels: agent.labels,
+      projectPlacement: agent.projectPlacement ?? null,
     });
   }
   liveAgents.sort(compareSidebarLiveAgents);

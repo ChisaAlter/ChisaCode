@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { deriveStreamTurnTiming, type StreamTurnTiming } from "@/timeline/turn-time";
-import type { StreamItem } from "@/types/stream";
+import type { StreamItem, ThoughtItem } from "@/types/stream";
 import {
   findMountedWindowStart,
   getWebMountedRecentStreamItems,
@@ -58,6 +58,141 @@ const turnTimingCache = new WeakMap<
   StreamItem[],
   WeakMap<StreamItem[], Map<string, StreamTurnTiming>>
 >();
+
+function isThoughtItem(item: StreamItem): item is ThoughtItem {
+  return item.kind === "thought";
+}
+
+function collapseCompletedTurn(turnItems: StreamItem[]): StreamItem[] {
+  const thoughts = turnItems.filter(isThoughtItem);
+  if (thoughts.length === 0) {
+    return turnItems;
+  }
+
+  let lastAssistantIndex = -1;
+  for (let index = turnItems.length - 1; index >= 0; index -= 1) {
+    if (turnItems[index]?.kind === "assistant_message") {
+      lastAssistantIndex = index;
+      break;
+    }
+  }
+
+  const lastAssistant = turnItems[lastAssistantIndex];
+  if (lastAssistantIndex < 0 || !lastAssistant || lastAssistant.kind !== "assistant_message") {
+    return turnItems;
+  }
+
+  const summaryText = thoughts
+    .map((thought) => thought.text.trim())
+    .filter((text) => text.length > 0)
+    .join("\n\n");
+  if (!summaryText) {
+    return turnItems.filter((item) => item.kind !== "thought");
+  }
+
+  const lastThought = thoughts.at(-1);
+  const summary: ThoughtItem = {
+    kind: "thought",
+    id: `thought-summary:${lastAssistant.id}`,
+    text: summaryText,
+    timestamp: lastThought?.timestamp ?? lastAssistant.timestamp,
+    status: "ready",
+    isCollapsedSummary: true,
+    summaryForAssistantMessageId: lastAssistant.id,
+  };
+
+  const collapsed: StreamItem[] = [];
+  for (let index = 0; index < turnItems.length; index += 1) {
+    const item = turnItems[index];
+    if (!item || item.kind === "thought") {
+      continue;
+    }
+    collapsed.push(item);
+    if (index === lastAssistantIndex) {
+      collapsed.push(summary);
+    }
+  }
+  return collapsed;
+}
+
+export function collapseCompletedTurnThoughtsForDisplay(
+  items: StreamItem[],
+  input: { isRunning: boolean },
+): StreamItem[] {
+  if (items.length === 0 || input.isRunning) {
+    return items;
+  }
+
+  const collapsed: StreamItem[] = [];
+  let currentTurn: StreamItem[] = [];
+
+  const flushTurn = () => {
+    if (currentTurn.length === 0) {
+      return;
+    }
+    collapsed.push(...collapseCompletedTurn(currentTurn));
+    currentTurn = [];
+  };
+
+  for (const item of items) {
+    if (item.kind === "user_message") {
+      flushTurn();
+    }
+    currentTurn.push(item);
+  }
+  flushTurn();
+
+  return collapsed.length === items.length &&
+    collapsed.every((item, index) => item === items[index])
+    ? items
+    : collapsed;
+}
+
+function collapseCompletedTurnThoughtSegments(input: {
+  tail: StreamItem[];
+  head: StreamItem[];
+  isRunning: boolean;
+}): Pick<BuildAgentStreamRenderModelInput, "tail" | "head"> {
+  if (input.head.length === 0 || input.isRunning) {
+    return {
+      tail: collapseCompletedTurnThoughtsForDisplay(input.tail, { isRunning: false }),
+      head: input.head,
+    };
+  }
+
+  const collapsed = collapseCompletedTurnThoughtsForDisplay([...input.tail, ...input.head], {
+    isRunning: false,
+  });
+  const headItems = new Set(input.head);
+  const headIds = new Set(input.head.map((item) => item.id));
+  const displayTail: StreamItem[] = [];
+  const displayHead: StreamItem[] = [];
+
+  for (const item of collapsed) {
+    const sourceId =
+      item.kind === "thought" && item.summaryForAssistantMessageId
+        ? item.summaryForAssistantMessageId
+        : item.id;
+    if (headItems.has(item) || headIds.has(sourceId)) {
+      displayHead.push(item);
+    } else {
+      displayTail.push(item);
+    }
+  }
+
+  return {
+    tail:
+      displayTail.length === input.tail.length &&
+      displayTail.every((item, index) => item === input.tail[index])
+        ? input.tail
+        : displayTail,
+    head:
+      displayHead.length === input.head.length &&
+      displayHead.every((item, index) => item === input.head[index])
+        ? input.head
+        : displayHead,
+  };
+}
 
 function getOrderedItems(params: {
   cache: WeakMap<StreamItem[], Map<string, StreamItem[]>>;
@@ -162,9 +297,14 @@ export function buildAgentStreamRenderModel(
     isMobileBreakpoint: input.isMobileBreakpoint,
   });
   const orderingCacheKey = `${input.platform}:${input.isMobileBreakpoint}`;
+  const displaySegments = collapseCompletedTurnThoughtSegments({
+    tail: input.tail,
+    head: input.head,
+    isRunning: input.agentStatus === "running",
+  });
   const orderedTail = getOrderedItems({
     cache: orderedTailCache,
-    source: input.tail,
+    source: displaySegments.tail,
     cacheKey: orderingCacheKey,
     order: (items) =>
       orderTailForStreamRenderStrategy({
@@ -174,7 +314,7 @@ export function buildAgentStreamRenderModel(
   });
   const orderedHead = getOrderedItems({
     cache: orderedHeadCache,
-    source: input.head,
+    source: displaySegments.head,
     cacheKey: orderingCacheKey,
     order: (items) =>
       orderHeadForStreamRenderStrategy({

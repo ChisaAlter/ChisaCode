@@ -6,6 +6,16 @@ export interface WorkspaceDraftAutoSubmitConfig {
   model: string | null;
 }
 
+export function shouldWaitForDraftModelReadiness(input: {
+  autoSubmitConfig: WorkspaceDraftAutoSubmitConfig | null;
+  isModelLoading: boolean;
+}): boolean {
+  if (input.autoSubmitConfig?.model) {
+    return false;
+  }
+  return input.isModelLoading;
+}
+
 export function validateDraftSubmission(input: {
   text: string;
   allowsEmptyAutoSubmit: boolean;

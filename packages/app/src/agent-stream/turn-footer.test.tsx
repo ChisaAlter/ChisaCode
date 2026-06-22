@@ -4,6 +4,7 @@
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getTurnFooterStreamItemWrapperStyle } from "./turn-footer-layout";
 
 afterEach(cleanup);
 
@@ -127,5 +128,15 @@ describe("RunningTurnFooter", () => {
     expect(screen.getByTestId("synced-loader").getAttribute("data-color")).toBe("#b45309");
     expect(screen.queryByTestId("brain-icon")).toBeNull();
     expect(screen.getByTestId("turn-working-elapsed")).toBeTruthy();
+  });
+});
+
+describe("TurnFooter layout", () => {
+  it("aligns running and completed footer rows with the message column", () => {
+    expect(getTurnFooterStreamItemWrapperStyle(8)).toMatchObject({
+      width: "100%",
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+    });
   });
 });

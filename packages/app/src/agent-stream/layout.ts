@@ -58,6 +58,10 @@ function isVisibleLayoutItem(item: StreamItem | null | undefined): item is Strea
   return item != null && item.kind !== "turn_changes";
 }
 
+function isCollapsedThoughtSummary(item: StreamItem | null | undefined): boolean {
+  return item?.kind === "thought" && item.isCollapsedSummary === true;
+}
+
 function findLatestVisibleItemIndex(input: {
   strategy: StreamStrategy;
   items: StreamItem[];
@@ -82,10 +86,14 @@ function createTurnFooterHost(input: {
   index: number;
   timingByAssistantId: Map<string, TurnTiming>;
 }): TurnFooterHost {
+  const timingId =
+    input.item.kind === "thought" && input.item.summaryForAssistantMessageId
+      ? input.item.summaryForAssistantMessageId
+      : input.item.id;
   return {
     itemId: input.item.id,
     items: input.items,
-    timing: input.timingByAssistantId.get(input.item.id),
+    timing: input.timingByAssistantId.get(timingId),
     startIndex: input.index,
   };
 }
@@ -105,7 +113,7 @@ function resolveAuxiliaryTurnFooter(input: StreamLayoutInput): TurnFooterHost | 
   }
 
   const item = footerItems[startIndex];
-  if (!item || item.kind !== "assistant_message") {
+  if (!item || (item.kind !== "assistant_message" && !isCollapsedThoughtSummary(item))) {
     return null;
   }
 
@@ -124,7 +132,7 @@ function shouldRenderCompletedFooter(input: {
   auxiliaryTurnFooter: TurnFooterHost | null;
 }): boolean {
   return (
-    input.item.kind === "assistant_message" &&
+    (input.item.kind === "assistant_message" || isCollapsedThoughtSummary(input.item)) &&
     input.auxiliaryTurnFooter?.itemId !== input.item.id &&
     (input.belowItem?.kind === "user_message" ||
       (input.belowItem === null && input.agentStatus !== "running"))

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
-import { validateDraftSubmission } from "./workspace-tab-core";
+import { shouldWaitForDraftModelReadiness, validateDraftSubmission } from "./workspace-tab-core";
 
 const baseComposerState = {
   providerDefinitions: [{ id: "deepseek-tui" }],
@@ -37,6 +37,32 @@ describe("workspace draft agent model validation", () => {
         },
       }),
     ).toBe("Model defaults are still loading");
+  });
+
+  test("allows auto submit with an explicit model while model defaults are loading", () => {
+    expect(
+      validate({
+        allowsEmptyAutoSubmit: true,
+        text: "",
+        autoSubmitConfig: { provider: "codex", model: "mimo-v2.5" },
+        composerState: {
+          ...baseComposerState,
+          selectedProvider: "codex",
+          isModelLoading: true,
+          effectiveModelId: "",
+          availableModels: [],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("does not block pending auto submit when the queued config has an explicit model", () => {
+    expect(
+      shouldWaitForDraftModelReadiness({
+        autoSubmitConfig: { provider: "codex", model: "mimo-v2.5" },
+        isModelLoading: true,
+      }),
+    ).toBe(false);
   });
 
   test("still requires a selected model when the provider exposes models", () => {

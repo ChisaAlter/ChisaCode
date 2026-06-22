@@ -27,7 +27,10 @@ import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submi
 import { encodeImages } from "@/utils/encode-images";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
-import { validateDraftSubmission } from "@/composer/draft/workspace-tab-core";
+import {
+  shouldWaitForDraftModelReadiness,
+  validateDraftSubmission,
+} from "@/composer/draft/workspace-tab-core";
 import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
@@ -516,7 +519,10 @@ export function WorkspaceDraftAgentTab({
     draftInput.isHydrated &&
     draftWorkingDirectory &&
     client &&
-    !composerState.isModelLoading,
+    !shouldWaitForDraftModelReadiness({
+      autoSubmitConfig,
+      isModelLoading: composerState.isModelLoading,
+    }),
   );
   const autoSubmitKeyRef = useRef<string | null>(null);
   useEffect(() => {

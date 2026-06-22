@@ -69,4 +69,24 @@ describe("createMarkdownStyles", () => {
       userSelect: "text",
     });
   });
+
+  it("uses compact chat-friendly spacing for assistant markdown blocks", () => {
+    const styles = createMarkdownStyles(darkTheme);
+
+    expect(styles.paragraph).toMatchObject({
+      marginBottom: darkTheme.spacing[2],
+    });
+    expect(styles.list_item).toMatchObject({
+      marginBottom: darkTheme.spacing[2],
+      paddingLeft: darkTheme.spacing[1],
+    });
+    expect(styles.code_inline).toMatchObject({
+      marginHorizontal: 1,
+    });
+    expect(styles.hr).toMatchObject({
+      marginTop: darkTheme.spacing[4],
+      marginBottom: darkTheme.spacing[4],
+      width: "100%",
+    });
+  });
 });

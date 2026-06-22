@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type {
   DaemonClient,
   FetchAgentHistoryEntry,
   FetchAgentHistoryOptions,
 } from "@chisacode/client/internal/daemon-client";
+import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import { type AgentHistoryClient, fetchAgentHistoryPage } from "./use-agent-history";
+
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => null,
+  useHostRuntimeIsConnected: () => false,
+  useHosts: () => [],
+}));
 
 type FetchAgentHistory = DaemonClient["fetchAgentHistory"];
 type FetchAgentHistoryResult = Awaited<ReturnType<FetchAgentHistory>>;
@@ -66,7 +73,23 @@ function historyEntry(input: {
   updatedAt: string;
   title?: string | null;
   archivedAt?: string | null;
+  project?: ProjectPlacementPayload;
 }): FetchAgentHistoryEntry {
+  const project =
+    input.project ??
+    ({
+      projectKey: input.cwd,
+      projectName: "workspace",
+      checkout: {
+        cwd: input.cwd,
+        isGit: false,
+        currentBranch: null,
+        remoteUrl: null,
+        worktreeRoot: null,
+        isChisaCodeOwnedWorktree: false,
+        mainRepoRoot: null,
+      },
+    } satisfies ProjectPlacementPayload);
   return {
     agent: {
       id: input.id,
@@ -102,19 +125,7 @@ function historyEntry(input: {
       archivedAt: input.archivedAt ?? null,
       labels: {},
     },
-    project: {
-      projectKey: input.cwd,
-      projectName: "workspace",
-      checkout: {
-        cwd: input.cwd,
-        isGit: false,
-        currentBranch: null,
-        remoteUrl: null,
-        worktreeRoot: null,
-        isChisaCodeOwnedWorktree: false,
-        mainRepoRoot: null,
-      },
-    },
+    project,
   };
 }
 
@@ -219,6 +230,38 @@ describe("fetchAgentHistoryPage", () => {
     const page = await fetchAgentHistoryPage({ client, serverId: "server-1", cursor: null });
 
     expect(page.agents[0]?.archivedAt).toEqual(new Date("2026-04-01T10:05:00.000Z"));
+  });
+
+  it("preserves project placement for sidebar workspace grouping", async () => {
+    const project: ProjectPlacementPayload = {
+      projectKey: "C:\\Ai\\mimocode-desktop",
+      projectName: "mimocode-desktop",
+      checkout: {
+        cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+        isGit: true,
+        currentBranch: "codex/gallant-owl",
+        remoteUrl: null,
+        worktreeRoot: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+        isChisaCodeOwnedWorktree: true,
+        mainRepoRoot: "C:\\Ai\\mimocode-desktop",
+      },
+    };
+    const client = createClient([
+      historyPayload({
+        entries: [
+          historyEntry({
+            id: "history-owned-worktree",
+            cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
+            updatedAt: "2026-04-01T10:00:00.000Z",
+            project,
+          }),
+        ],
+      }),
+    ]);
+
+    const page = await fetchAgentHistoryPage({ client, serverId: "server-1", cursor: null });
+
+    expect(page.agents[0]?.projectPlacement).toEqual(project);
   });
 
   it("coalesces concurrent requests for the same server, cursor, and sort", async () => {
