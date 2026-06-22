@@ -114,7 +114,11 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import { shouldShowWorkspaceSetup, useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
+import {
+  shouldAutoOpenWorkspaceSetup,
+  shouldShowWorkspaceSetup,
+  useWorkspaceSetupStore,
+} from "@/stores/workspace-setup-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-workspace-terminal-session-retention";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
@@ -218,7 +222,6 @@ import {
   type WorkspaceEnvironmentDockTab,
 } from "@/screens/workspace/workspace-environment-dock-model";
 
-const WORKSPACE_SETUP_AUTO_OPEN_WINDOW_MS = 30_000;
 const WORKSPACE_FLOATING_PANEL_PORTAL_HOST_PREFIX = "workspace-floating-panels";
 const EMPTY_UI_TABS: WorkspaceTab[] = [];
 const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
@@ -2990,6 +2993,7 @@ function WorkspaceScreenContent({
         upsertWorkspaceSetupProgress({
           serverId: normalizedServerId,
           payload: { workspaceId: response.workspaceId, ...response.snapshot },
+          source: "cached",
         });
         return;
       })
@@ -3076,11 +3080,7 @@ function WorkspaceScreenContent({
       return;
     }
 
-    const snapshotAge = Date.now() - workspaceSetupSnapshot.updatedAt;
-    const shouldAutoOpen =
-      workspaceSetupSnapshot.status === "running" ||
-      snapshotAge <= WORKSPACE_SETUP_AUTO_OPEN_WINDOW_MS;
-    if (!shouldAutoOpen) {
+    if (!shouldAutoOpenWorkspaceSetup(workspaceSetupSnapshot)) {
       return;
     }
     if (hasSetupTab) {

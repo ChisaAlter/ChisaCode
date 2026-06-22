@@ -1,0 +1,11 @@
+
+> chisacode@1.0.1 cli
+> npx tsx packages/cli/src/index.js logs *** --json
+
+[User] 请不要调用任何工具。你好，请只回复“收到”。
+收到
+[User] 请不要调用任何工具。用一句话说明你当前使用的模型名称。
+当前使用的模型是 `mimo-v2.5`，由 xiaomi-codex 提供。
+[User] 请不要调用任何工具。请列出 1、2 两项。
+1. Runtime provider: xiaomi-codex  
+2. Configured model: mimo-v2.5

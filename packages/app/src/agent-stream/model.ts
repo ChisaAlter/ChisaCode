@@ -59,19 +59,46 @@ const turnTimingCache = new WeakMap<
   WeakMap<StreamItem[], Map<string, StreamTurnTiming>>
 >();
 
-function isThoughtItem(item: StreamItem): item is ThoughtItem {
-  return item.kind === "thought";
+function isAssistantMessageItem(
+  item: StreamItem,
+): item is Extract<StreamItem, { kind: "assistant_message" }> {
+  return item.kind === "assistant_message";
+}
+
+function getAssistantMessageGroupKey(
+  item: Extract<StreamItem, { kind: "assistant_message" }>,
+): string {
+  return item.blockGroupId ?? item.messageId ?? item.id;
+}
+
+function trimSummarySourceText(text: string): string {
+  return text
+    .trim()
+    .replace(/^(?:-{3,}|\*{3,}|_{3,})[ \t]*(?:\r?\n)+/, "")
+    .trim();
+}
+
+function getCompletedTurnThoughtSummarySourceText(input: {
+  item: StreamItem;
+  finalAssistantGroupKey: string;
+}): string | null {
+  if (input.item.kind === "thought") {
+    return input.item.text;
+  }
+  if (
+    input.item.kind === "assistant_message" &&
+    getAssistantMessageGroupKey(input.item) !== input.finalAssistantGroupKey
+  ) {
+    return input.item.text;
+  }
+  return null;
 }
 
 function collapseCompletedTurn(turnItems: StreamItem[]): StreamItem[] {
-  const thoughts = turnItems.filter(isThoughtItem);
-  if (thoughts.length === 0) {
-    return turnItems;
-  }
-
   let lastAssistantIndex = -1;
   for (let index = turnItems.length - 1; index >= 0; index -= 1) {
-    if (turnItems[index]?.kind === "assistant_message") {
+    const item = turnItems[index];
+    if (item && isAssistantMessageItem(item)) {
       lastAssistantIndex = index;
       break;
     }
@@ -82,35 +109,68 @@ function collapseCompletedTurn(turnItems: StreamItem[]): StreamItem[] {
     return turnItems;
   }
 
-  const summaryText = thoughts
-    .map((thought) => thought.text.trim())
+  const finalAssistantGroupKey = getAssistantMessageGroupKey(lastAssistant);
+  const summaryText = turnItems
+    .map((item) =>
+      getCompletedTurnThoughtSummarySourceText({
+        item,
+        finalAssistantGroupKey,
+      }),
+    )
+    .filter((text): text is string => text !== null)
+    .map(trimSummarySourceText)
     .filter((text) => text.length > 0)
     .join("\n\n");
   if (!summaryText) {
-    return turnItems.filter((item) => item.kind !== "thought");
+    return turnItems.filter((item) => {
+      if (item.kind === "thought") {
+        return false;
+      }
+      if (item.kind !== "assistant_message") {
+        return true;
+      }
+      return getAssistantMessageGroupKey(item) === finalAssistantGroupKey;
+    });
   }
 
-  const lastThought = thoughts.at(-1);
+  const summarySourceItems = turnItems.filter((item) => {
+    if (item.kind === "thought") {
+      return true;
+    }
+    if (item.kind !== "assistant_message") {
+      return false;
+    }
+    return getAssistantMessageGroupKey(item) !== finalAssistantGroupKey;
+  });
+  const lastSummarySource = summarySourceItems.at(-1);
   const summary: ThoughtItem = {
     kind: "thought",
     id: `thought-summary:${lastAssistant.id}`,
     text: summaryText,
-    timestamp: lastThought?.timestamp ?? lastAssistant.timestamp,
+    timestamp: lastSummarySource?.timestamp ?? lastAssistant.timestamp,
     status: "ready",
     isCollapsedSummary: true,
     summaryForAssistantMessageId: lastAssistant.id,
   };
 
   const collapsed: StreamItem[] = [];
+  let insertedSummary = false;
   for (let index = 0; index < turnItems.length; index += 1) {
     const item = turnItems[index];
     if (!item || item.kind === "thought") {
       continue;
     }
-    collapsed.push(item);
-    if (index === lastAssistantIndex) {
-      collapsed.push(summary);
+    if (
+      item.kind === "assistant_message" &&
+      getAssistantMessageGroupKey(item) !== finalAssistantGroupKey
+    ) {
+      continue;
     }
+    if (item.kind === "assistant_message" && !insertedSummary) {
+      collapsed.push(summary);
+      insertedSummary = true;
+    }
+    collapsed.push(item);
   }
   return collapsed;
 }

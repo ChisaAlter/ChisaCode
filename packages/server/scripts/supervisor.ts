@@ -1,4 +1,4 @@
-import { fork, spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { createStream as createRotatingFileStream } from "rotating-file-stream";
@@ -174,12 +174,13 @@ export function runSupervisor(options: SupervisorOptions): void {
       child = spawn(spawnSpec.command, spawnSpec.args, {
         stdio: ["inherit", "pipe", "pipe", "ipc"],
         env: spawnSpec.env ?? workerEnv,
+        windowsHide: true,
       });
     } else {
-      child = fork(workerEntry, workerArgs, {
+      child = spawn(process.execPath, [...workerExecArgv, workerEntry, ...workerArgs], {
         stdio: ["inherit", "pipe", "pipe", "ipc"],
         env: workerEnv,
-        execArgv: workerExecArgv,
+        windowsHide: true,
       });
     }
 

@@ -229,6 +229,16 @@ function capturedThreadStartConfig(records: CapturedFakeCodexRecord[]): unknown 
   return params?.config;
 }
 
+function capturedThreadStartDeveloperInstructions(
+  records: CapturedFakeCodexRecord[],
+): string | undefined {
+  const threadStart = records.find((record) => record.method === "thread/start");
+  const params = threadStart?.params as Record<string, unknown> | undefined;
+  return typeof params?.developerInstructions === "string"
+    ? params.developerInstructions
+    : undefined;
+}
+
 async function listCommandsFromFakeCodex(
   skills: unknown[],
   configOverrides: Partial<AgentSessionConfig> = {},
@@ -621,6 +631,23 @@ describe("Codex app-server provider", () => {
         }),
       },
     });
+  });
+
+  test("tells custom Codex providers to answer model identity from runtime metadata", async () => {
+    const capturedRequests = await runCustomCodexProviderTurn(
+      "xiaomi-codex",
+      "http://127.0.0.1:6767/api/model-gateways/xiaomi",
+    );
+
+    expect(capturedThreadStartDeveloperInstructions(capturedRequests)).toContain(
+      "Runtime provider: xiaomi-codex.",
+    );
+    expect(capturedThreadStartDeveloperInstructions(capturedRequests)).toContain(
+      "Configured model: custom-model.",
+    );
+    expect(capturedThreadStartDeveloperInstructions(capturedRequests)).toContain(
+      "do not inspect local config files or run shell commands",
+    );
   });
 
   test("resumeSession does not replace a persisted Codex thread when app-server resume fails", async () => {

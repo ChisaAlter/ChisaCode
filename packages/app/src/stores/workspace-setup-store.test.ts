@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { shouldShowWorkspaceSetup, useWorkspaceSetupStore } from "./workspace-setup-store";
+import {
+  shouldAutoOpenWorkspaceSetup,
+  shouldShowWorkspaceSetup,
+  useWorkspaceSetupStore,
+} from "./workspace-setup-store";
 
 describe("workspace-setup-store", () => {
   beforeEach(() => {
-    useWorkspaceSetupStore.setState({ pendingWorkspaceSetup: null });
+    useWorkspaceSetupStore.setState({ pendingWorkspaceSetup: null, snapshots: {} });
   });
 
   it("tracks deferred workspace setup by source directory and optional workspace id", () => {
@@ -50,6 +54,7 @@ describe("workspace-setup-store", () => {
         },
         error: null,
         updatedAt: Date.now(),
+        autoOpenUntil: null,
       }),
     ).toBe(false);
   });
@@ -77,6 +82,7 @@ describe("workspace-setup-store", () => {
         },
         error: null,
         updatedAt: Date.now(),
+        autoOpenUntil: null,
       }),
     ).toBe(true);
 
@@ -93,7 +99,74 @@ describe("workspace-setup-store", () => {
         },
         error: "Failed to parse chisacode.json",
         updatedAt: Date.now(),
+        autoOpenUntil: null,
       }),
     ).toBe(true);
+  });
+
+  it("does not auto-open completed setup loaded from cached status", () => {
+    useWorkspaceSetupStore.getState().upsertProgress({
+      serverId: "server-1",
+      source: "cached",
+      payload: {
+        workspaceId: "workspace-1",
+        status: "completed",
+        detail: {
+          type: "worktree_setup",
+          worktreePath: "/Users/test/project",
+          branchName: "main",
+          log: "done\n",
+          commands: [
+            {
+              index: 1,
+              command: "npm install",
+              cwd: "/Users/test/project",
+              log: "done\n",
+              status: "completed",
+              exitCode: 0,
+            },
+          ],
+        },
+        error: null,
+      },
+    });
+
+    const snapshot = useWorkspaceSetupStore.getState().snapshots["server-1:workspace-1"] ?? null;
+
+    expect(shouldShowWorkspaceSetup(snapshot)).toBe(true);
+    expect(shouldAutoOpenWorkspaceSetup(snapshot)).toBe(false);
+  });
+
+  it("auto-opens recently completed live setup progress", () => {
+    const now = Date.now();
+    useWorkspaceSetupStore.getState().upsertProgress({
+      serverId: "server-1",
+      payload: {
+        workspaceId: "workspace-1",
+        status: "completed",
+        detail: {
+          type: "worktree_setup",
+          worktreePath: "/Users/test/project",
+          branchName: "main",
+          log: "done\n",
+          commands: [
+            {
+              index: 1,
+              command: "npm install",
+              cwd: "/Users/test/project",
+              log: "done\n",
+              status: "completed",
+              exitCode: 0,
+            },
+          ],
+        },
+        error: null,
+      },
+    });
+
+    const snapshot = useWorkspaceSetupStore.getState().snapshots["server-1:workspace-1"] ?? null;
+
+    expect(shouldAutoOpenWorkspaceSetup(snapshot, now)).toBe(true);
+    expect(shouldAutoOpenWorkspaceSetup(snapshot, now + 31_000)).toBe(false);
   });
 });

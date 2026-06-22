@@ -168,6 +168,41 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
     rmSync(cwd, { recursive: true, force: true });
   }, 120_000);
 
+  test("prefixes unqualified gateway models before sending prompts", async () => {
+    const cwd = tmpCwd();
+    const runtime = new TestOpenCodeRuntime();
+    const openCodeClient = new TestOpenCodeClient();
+    openCodeClient.sessionPromptAsyncEvents = assistantTurnEvents();
+    runtime.enqueueClient(openCodeClient);
+    const client = new OpenCodeAgentClient(
+      logger,
+      {
+        env: {
+          CHISACODE_MODEL_PREFIX: "xiaomi",
+          XIAOMI_API_KEY: "sk-xiaomi",
+        },
+      },
+      { runtime },
+    );
+    const session = await client.createSession({
+      provider: "opencode",
+      cwd,
+      model: "mimo-v2.5",
+    });
+
+    const turn = await collectTurnEvents(streamSession(session, "Say hello"));
+
+    expect(turn.turnCompleted).toBe(true);
+    expect(openCodeClient.calls.sessionPromptAsync).toEqual([
+      expect.objectContaining({
+        model: { providerID: "xiaomi", modelID: "mimo-v2.5" },
+      }),
+    ]);
+
+    await session.close();
+    rmSync(cwd, { recursive: true, force: true });
+  }, 120_000);
+
   test("listModels returns models with required fields", async () => {
     const runtime = new TestOpenCodeRuntime();
     const openCodeClient = new TestOpenCodeClient();

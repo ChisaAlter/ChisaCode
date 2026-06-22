@@ -5,6 +5,8 @@ const DESKTOP_CLI_ENV = "CHISACODE_DESKTOP_CLI";
 const IGNORED_ARG_PREFIXES = [
   "-psn_",
   "--fetch-schemes=",
+  "--inspect=",
+  "--inspect-brk=",
   "--remote-debugging-port=",
   "--secure-schemes=",
   "--source-shortcut=",
@@ -13,6 +15,8 @@ const IGNORED_ARG_PREFIXES = [
 const IGNORED_ARGS = new Set([
   "--allow-file-access-from-files",
   "--enable-logging",
+  "--inspect",
+  "--inspect-brk",
   "--no-sandbox",
 ]);
 

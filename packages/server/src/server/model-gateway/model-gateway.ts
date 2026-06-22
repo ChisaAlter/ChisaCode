@@ -97,9 +97,10 @@ function isConfigured(
   return upstream?.enabled === true && upstream.baseUrl.trim().length > 0;
 }
 
-function resolvePath(format: ModelGatewayTargetFormat): string {
+function resolvePath(format: ModelGatewayTargetFormat, baseUrl: string): string {
   if (format === "anthropic") {
-    return "/messages";
+    const path = new URL(baseUrl).pathname.replace(/\/+$/u, "");
+    return path.endsWith("/v1") ? "/messages" : "/v1/messages";
   }
   if (format === "chatCompletions") {
     return "/chat/completions";
@@ -138,7 +139,7 @@ function selectUpstream(
     return {
       format,
       upstream,
-      url: `${trimTrailingSlash(upstream.baseUrl)}${resolvePath(format)}`,
+      url: `${trimTrailingSlash(upstream.baseUrl)}${resolvePath(format, upstream.baseUrl)}`,
     };
   }
   throw new Error(`Model gateway "${gateway.id}" has no enabled upstream`);

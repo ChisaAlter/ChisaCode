@@ -1,0 +1,67 @@
+[
+  {
+    "provider": "xiaomi-codex",
+    "title": "MiMo终验-xiaomi-codex-193004",
+    "agentId": "304514e5-22e4-4ff2-be37-d2203eb54e96",
+    "run": "{\r\n  \"agentId\": \"304514e5-22e4-4ff2-be37-d2203eb54e96\",\r\n  \"status\": \"completed\",\r\n  \"provider\": \"xiaomi-codex\",\r\n  \"cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"title\": \"MiMo终验-xiaomi-codex-193004\"\r\n}",
+    "sends": [
+      "{\r\n  \"agentId\": \"304514e5-22e4-4ff2-be37-d2203eb54e96\",\r\n  \"status\": \"completed\",\r\n  \"message\": \"Agent completed processing the message\"\r\n}",
+      "{\r\n  \"agentId\": \"304514e5-22e4-4ff2-be37-d2203eb54e96\",\r\n  \"status\": \"completed\",\r\n  \"message\": \"Agent completed processing the message\"\r\n}"
+    ],
+    "inspect": "{\r\n  \"Id\": \"304514e5-22e4-4ff2-be37-d2203eb54e96\",\r\n  \"Name\": \"MiMo终验-xiaomi-codex-193004\",\r\n  \"Provider\": \"xiaomi-codex\",\r\n  \"Model\": \"mimo-v2.5\",\r\n  \"Thinking\": \"high\",\r\n  \"Status\": \"idle\",\r\n  \"Archived\": false,\r\n  \"ArchivedAt\": null,\r\n  \"Mode\": \"auto\",\r\n  \"Cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"CreatedAt\": \"2026-06-22T11:30:07.884Z\",\r\n  \"UpdatedAt\": \"2026-06-22T11:30:35.788Z\",\r\n  \"LastUsage\": null,\r\n  \"Capabilities\": {\r\n    \"Streaming\": true,\r\n    \"Persistence\": true,\r\n    \"DynamicModes\": false,\r\n    \"McpServers\": true\r\n  },\r\n  \"AvailableModes\": [\r\n    {\r\n      \"id\": \"auto\",\r\n      \"label\": \"Default Permissions\"\r\n    },\r\n    {\r\n      \"id\": \"auto-review\",\r\n      \"label\": \"Auto-review\"\r\n    },\r\n    {\r\n      \"id\": \"full-access\",\r\n      \"label\": \"Full Access\"\r\n    }\r\n  ],\r\n  \"PendingPermissions\": [],\r\n  \"Worktree\": null,\r\n  \"ParentAgentId\": null\r\n}",
+    "logs": "[User] 请不要调用任何工具。你好，请只回复“收到”。\r\n收到\r\n[User] 请不要调用任何工具。用一句话说明你当前使用的模型名称。\r\n我当前使用的模型是 mimo-v2.5，由 xiaomi-codex 提供。\r\n[User] 请不要调用任何工具。请列出 1、2 两项。\r\n你没有说明要列什么内容。请告诉我具体要列出哪些项。",
+    "error": null
+  },
+  {
+    "provider": "xiaomi-opencode",
+    "title": "MiMo终验-xiaomi-opencode-193038",
+    "agentId": "8d1d2744-d2ad-43b0-a0bf-370fae4c266a",
+    "run": "{\r\n  \"agentId\": \"8d1d2744-d2ad-43b0-a0bf-370fae4c266a\",\r\n  \"status\": \"error\",\r\n  \"provider\": \"xiaomi-opencode\",\r\n  \"cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"title\": \"MiMo终验-xiaomi-opencode-193038\"\r\n}",
+    "sends": [
+      "{\r\n  \"error\": {\r\n    \"code\": \"SEND_FAILED\",\r\n    \"message\": \"Failed to send message: Agent 8d1d2744-d2ad-43b0-a0bf-370fae4c266a failed to start\"\r\n  }\r\n}",
+      "{\r\n  \"error\": {\r\n    \"code\": \"SEND_FAILED\",\r\n    \"message\": \"Failed to send message: Agent 8d1d2744-d2ad-43b0-a0bf-370fae4c266a failed to start\"\r\n  }\r\n}"
+    ],
+    "inspect": "{\r\n  \"Id\": \"8d1d2744-d2ad-43b0-a0bf-370fae4c266a\",\r\n  \"Name\": \"MiMo终验-xiaomi-opencode-193038\",\r\n  \"Provider\": \"xiaomi-opencode\",\r\n  \"Model\": \"mimo-v2.5\",\r\n  \"Thinking\": \"auto\",\r\n  \"Status\": \"error\",\r\n  \"Archived\": false,\r\n  \"ArchivedAt\": null,\r\n  \"Mode\": \"build\",\r\n  \"Cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"CreatedAt\": \"2026-06-22T11:30:43.908Z\",\r\n  \"UpdatedAt\": \"2026-06-22T11:30:46.608Z\",\r\n  \"LastUsage\": null,\r\n  \"Capabilities\": {\r\n    \"Streaming\": true,\r\n    \"Persistence\": true,\r\n    \"DynamicModes\": true,\r\n    \"McpServers\": true\r\n  },\r\n  \"AvailableModes\": [\r\n    {\r\n      \"id\": \"build\",\r\n      \"label\": \"Build\"\r\n    },\r\n    {\r\n      \"id\": \"plan\",\r\n      \"label\": \"Plan\"\r\n    }\r\n  ],\r\n  \"PendingPermissions\": [],\r\n  \"Worktree\": null,\r\n  \"ParentAgentId\": null\r\n}",
+    "logs": "[User] 请不要调用任何工具。你好，请只回复“收到”。\r\n[System Error] {\"name\":\"UnknownError\",\"data\":{\"message\":\"Model not found: opencode/mimo-v2.5. Did you mean: mimo-v2.5-free?\"}}\r\n[User] 请不要调用任何工具。用一句话说明你当前使用的模型名称。\r\n[System Error] {\"name\":\"UnknownError\",\"data\":{\"message\":\"Model not found: opencode/mimo-v2.5. Did you mean: mimo-v2.5-free?\"}}\r\n[User] 请不要调用任何工具。请列出 1、2 两项。\r\n[System Error] {\"name\":\"UnknownError\",\"data\":{\"message\":\"Model not found: opencode/mimo-v2.5. Did you mean: mimo-v2.5-free?\"}}",
+    "error": null
+  },
+  {
+    "provider": "xiaomi-mimocode",
+    "title": "MiMo终验-xiaomi-mimocode-193049",
+    "agentId": "e41e25a9-9e3e-4e97-bae9-1407f8e43d72",
+    "run": "{\r\n  \"agentId\": \"e41e25a9-9e3e-4e97-bae9-1407f8e43d72\",\r\n  \"status\": \"error\",\r\n  \"provider\": \"xiaomi-mimocode\",\r\n  \"cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"title\": \"MiMo终验-xiaomi-mimocode-193049\"\r\n}",
+    "sends": [
+      "{\r\n  \"error\": {\r\n    \"code\": \"SEND_FAILED\",\r\n    \"message\": \"Failed to send message: Agent e41e25a9-9e3e-4e97-bae9-1407f8e43d72 failed to start\"\r\n  }\r\n}",
+      "{\r\n  \"error\": {\r\n    \"code\": \"SEND_FAILED\",\r\n    \"message\": \"Failed to send message: Agent e41e25a9-9e3e-4e97-bae9-1407f8e43d72 failed to start\"\r\n  }\r\n}"
+    ],
+    "inspect": "{\r\n  \"Id\": \"e41e25a9-9e3e-4e97-bae9-1407f8e43d72\",\r\n  \"Name\": \"MiMo终验-xiaomi-mimocode-193049\",\r\n  \"Provider\": \"xiaomi-mimocode\",\r\n  \"Model\": \"mimo-v2.5\",\r\n  \"Thinking\": \"auto\",\r\n  \"Status\": \"error\",\r\n  \"Archived\": false,\r\n  \"ArchivedAt\": null,\r\n  \"Mode\": \"build\",\r\n  \"Cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"CreatedAt\": \"2026-06-22T11:30:58.439Z\",\r\n  \"UpdatedAt\": \"2026-06-22T11:31:07.916Z\",\r\n  \"LastUsage\": null,\r\n  \"Capabilities\": {\r\n    \"Streaming\": true,\r\n    \"Persistence\": true,\r\n    \"DynamicModes\": true,\r\n    \"McpServers\": true\r\n  },\r\n  \"AvailableModes\": [\r\n    {\r\n      \"id\": \"build\",\r\n      \"label\": \"Build\"\r\n    },\r\n    {\r\n      \"id\": \"plan\",\r\n      \"label\": \"Plan\"\r\n    },\r\n    {\r\n      \"id\": \"compose\",\r\n      \"label\": \"Compose\"\r\n    },\r\n    {\r\n      \"id\": \"max\",\r\n      \"label\": \"Max\"\r\n    }\r\n  ],\r\n  \"PendingPermissions\": [],\r\n  \"Worktree\": null,\r\n  \"ParentAgentId\": null\r\n}",
+    "logs": "[User] 请不要调用任何工具。你好，请只回复“收到”。\r\n[System Error] {\"name\":\"UnknownError\",\"data\":{\"message\":\"Model not found: opencode/mimo-v2.5.\"}}\r\n[User] 请不要调用任何工具。用一句话说明你当前使用的模型名称。\r\n[System Error] {\"name\":\"UnknownError\",\"data\":{\"message\":\"Model not found: opencode/mimo-v2.5.\"}}\r\n[User] 请不要调用任何工具。请列出 1、2 两项。\r\n[System Error] {\"name\":\"UnknownError\",\"data\":{\"message\":\"Model not found: opencode/mimo-v2.5.\"}}",
+    "error": null
+  },
+  {
+    "provider": "xiaomi-pi",
+    "title": "MiMo终验-xiaomi-pi-193111",
+    "agentId": "2a7cbaeb-c025-473b-979b-6081dde7e790",
+    "run": "{\r\n  \"agentId\": \"2a7cbaeb-c025-473b-979b-6081dde7e790\",\r\n  \"status\": \"error\",\r\n  \"provider\": \"xiaomi-pi\",\r\n  \"cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"title\": \"MiMo终验-xiaomi-pi-193111\"\r\n}",
+    "sends": [
+      "{\r\n  \"agentId\": \"2a7cbaeb-c025-473b-979b-6081dde7e790\",\r\n  \"status\": \"error\",\r\n  \"message\": \"No API key found for opencode-go.\\n\\nUse /login to log into a provider via OAuth or API key. See:\\n  C:\\\\Users\\\\48818\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@earendil-works\\\\pi-coding-agent\\\\docs\\\\providers.md\\n  C:\\\\Users\\\\48818\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@earendil-works\\\\pi-coding-agent\\\\docs\\\\models.md\"\r\n}",
+      "{\r\n  \"agentId\": \"2a7cbaeb-c025-473b-979b-6081dde7e790\",\r\n  \"status\": \"error\",\r\n  \"message\": \"No API key found for opencode-go.\\n\\nUse /login to log into a provider via OAuth or API key. See:\\n  C:\\\\Users\\\\48818\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@earendil-works\\\\pi-coding-agent\\\\docs\\\\providers.md\\n  C:\\\\Users\\\\48818\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@earendil-works\\\\pi-coding-agent\\\\docs\\\\models.md\"\r\n}"
+    ],
+    "inspect": "{\r\n  \"Id\": \"2a7cbaeb-c025-473b-979b-6081dde7e790\",\r\n  \"Name\": \"MiMo终验-xiaomi-pi-193111\",\r\n  \"Provider\": \"xiaomi-pi\",\r\n  \"Model\": \"opencode-go/mimo-v2.5\",\r\n  \"Thinking\": \"medium\",\r\n  \"Status\": \"error\",\r\n  \"Archived\": false,\r\n  \"ArchivedAt\": null,\r\n  \"Mode\": \"default\",\r\n  \"Cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"CreatedAt\": \"2026-06-22T11:31:17.583Z\",\r\n  \"UpdatedAt\": \"2026-06-22T11:31:19.647Z\",\r\n  \"LastUsage\": null,\r\n  \"Capabilities\": {\r\n    \"Streaming\": true,\r\n    \"Persistence\": true,\r\n    \"DynamicModes\": true,\r\n    \"McpServers\": false\r\n  },\r\n  \"AvailableModes\": [],\r\n  \"PendingPermissions\": [],\r\n  \"Worktree\": null,\r\n  \"ParentAgentId\": null\r\n}",
+    "logs": "[System Error] No API key found for opencode-go.\r\n\r\nUse /login to log into a provider via OAuth or API key. See:\r\n  C:\\Users\\48818\\AppData\\Roaming\\npm\\node_modules\\@earendil-works\\pi-coding-agent\\docs\\providers.md\r\n  C:\\Users\\48818\\AppData\\Roaming\\npm\\node_modules\\@earendil-works\\pi-coding-agent\\docs\\models.md",
+    "error": null
+  },
+  {
+    "provider": "xiaomi-kimi",
+    "title": "MiMo终验-xiaomi-kimi-193122",
+    "agentId": "a28ab6f2-f875-4cc4-8dfd-684758997324",
+    "run": "{\r\n  \"agentId\": \"a28ab6f2-f875-4cc4-8dfd-684758997324\",\r\n  \"status\": \"completed\",\r\n  \"provider\": \"xiaomi-kimi\",\r\n  \"cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"title\": \"MiMo终验-xiaomi-kimi-193122\"\r\n}",
+    "sends": [
+      "{\r\n  \"agentId\": \"a28ab6f2-f875-4cc4-8dfd-684758997324\",\r\n  \"status\": \"completed\",\r\n  \"message\": \"Agent completed processing the message\"\r\n}",
+      "{\r\n  \"agentId\": \"a28ab6f2-f875-4cc4-8dfd-684758997324\",\r\n  \"status\": \"completed\",\r\n  \"message\": \"Agent completed processing the message\"\r\n}"
+    ],
+    "inspect": "{\r\n  \"Id\": \"a28ab6f2-f875-4cc4-8dfd-684758997324\",\r\n  \"Name\": \"MiMo终验-xiaomi-kimi-193122\",\r\n  \"Provider\": \"xiaomi-kimi\",\r\n  \"Model\": \"mimo-v2.5\",\r\n  \"Thinking\": \"auto\",\r\n  \"Status\": \"idle\",\r\n  \"Archived\": false,\r\n  \"ArchivedAt\": null,\r\n  \"Mode\": \"default\",\r\n  \"Cwd\": \"C:\\\\Ai\\\\ChisaCode\",\r\n  \"CreatedAt\": \"2026-06-22T11:31:26.314Z\",\r\n  \"UpdatedAt\": \"2026-06-22T11:31:41.940Z\",\r\n  \"LastUsage\": null,\r\n  \"Capabilities\": {\r\n    \"Streaming\": true,\r\n    \"Persistence\": true,\r\n    \"DynamicModes\": true,\r\n    \"McpServers\": true\r\n  },\r\n  \"AvailableModes\": [\r\n    {\r\n      \"id\": \"default\",\r\n      \"label\": \"Default\"\r\n    },\r\n    {\r\n      \"id\": \"plan\",\r\n      \"label\": \"Plan\"\r\n    },\r\n    {\r\n      \"id\": \"auto\",\r\n      \"label\": \"Auto\"\r\n    },\r\n    {\r\n      \"id\": \"yolo\",\r\n      \"label\": \"YOLO\"\r\n    }\r\n  ],\r\n  \"PendingPermissions\": [],\r\n  \"Worktree\": null,\r\n  \"ParentAgentId\": null\r\n}",
+    "logs": "收到\r\n我是Kimi Code CLI，一个基于Claude的AI代理，但无法在不调用工具的情况下获取具体的模型版本标识。\r\n1. 项目一\r\n2. 项目二\r\n[Thought] 好的，用户说“请不要调用任何工具。你好，请只回复“收到”。”这是一个直接的指令，要求我不要使用任何工具，只回复“收到”。\r\n\r\n首先，我需要确认用户的需求。用户明确要求不调用任何工具，并且只回复“收到”。这意味着我不能使用任何读取文件、执行命令或调用系统功能的工具，只能以文本形式回复。\r\n\r\n用户可能是在测试我是否遵守指令，或者希望我以最简单的方式响应。既然用户强调“请不要调用任何工具”，我必须严格遵守，避免使用任何工具调用。\r\n\r\n接下来，我需要确保我的回复完全符合用户的要求。用户说“只回复“收到””，所以我应该只输出这两个字，不添加任何额外内容。\r\n\r\n考虑到用户使用的是中文，我也应该用中文回复“收到”。这样既简洁又符合用户的要求。\r\n\r\n最后，我确认没有使用任何工具，只是直接回复了“收到”。这样就完全满足了用户的所有要求。\r\n用户再次强调“请不要调用任何工具”，并要求用一句话说明当前使用的模型名称。这仍然是一个直接的指令，不需要调用工具。\r\n\r\n我需要回顾之前的对话历史。第一次用户要求只回复“收到”，我回复了“收到”。现在用户进一步要求说明模型名称。但问题是我并没有明确的上下文信息来确定自己当前使用的具体模型名称。\r\n\r\n作为AI助手，我知道自己是Kimi Code CLI，但具体的模型版本信息可能无法直接从当前对话中获得。用户可能期望我基于系统信息来回答，但根据指示我不能使用任何工具。\r\n\r\n因此，最稳妥的做法是直接回应，说明我无法确定具体模型名称，或者提供已知的标识。根据系统提示，我是Kimi Code CLI，这是一个基于Claude的AI代理。但用户可能想知道更具体的模型标识。\r\n\r\n不过，用户明确禁止使用工具，所以我不能调用任何系统检查工具。在这种情况下，我应该坦诚说明情况，同时保持回复简洁。我可以提到我是Kimi Code CLI，但可能无法提供更具体的模型版本信息。\r\n\r\n最终决定：由于不能使用工具，我无法获取精确的模型标识。最好的方式是直接说明这一点，同时表明我的身份。这样既诚实又遵守了用户的指令。\r\n用户继续要求\"请不要调用任何工具\"，并要求我列出1、2两项。这仍然是一个直接的指令，不需要调用工具。\r\n\r\n我需要理解用户的具体要求。用户可能想要我列出某些项目，但没有指定要列出什么。回顾之前的对话历史，用户先是要求只回复\"收到\"，然后要求说明模型名称，现在要求列出两项。\r\n\r\n这可能是在测试我是否严格遵守\"不要调用工具\"的指令。用户可能期望我直接列出两项内容，而不使用任何工具。\r\n\r\n考虑到之前的对话，我可以简单地列出两个数字项，比如：\r\n\r\n1. 项目一\r\n2. 项目二\r\n\r\n或者更简洁地：\r\n\r\n1. 一项\r\n2. 二项\r\n\r\n这样既满足了用户的要求，又没有调用任何工具。用户没有指定具体内容，所以我可以给出通用的列表。\r\n\r\n不过，我也可以更明确地说明这是对用户要求的直接响应。让我准备一个简洁的回复。",
+    "error": null
+  }
+]

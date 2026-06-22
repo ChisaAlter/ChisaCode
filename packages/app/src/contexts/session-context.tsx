@@ -1066,8 +1066,11 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   );
 
   const applyWorkspaceSetupProgress = useCallback(
-    (payload: WorkspaceSetupProgressPayload) => {
-      upsertWorkspaceSetupProgress({ serverId, payload });
+    (
+      payload: WorkspaceSetupProgressPayload,
+      source?: Parameters<typeof upsertWorkspaceSetupProgress>[0]["source"],
+    ) => {
+      upsertWorkspaceSetupProgress({ serverId, payload, source });
     },
     [serverId, upsertWorkspaceSetupProgress],
   );
@@ -1326,7 +1329,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         if (message.type !== "workspace_setup_status_response") return;
         const { workspaceId, snapshot } = message.payload;
         if (snapshot) {
-          applyWorkspaceSetupProgress({ workspaceId, ...snapshot });
+          applyWorkspaceSetupProgress({ workspaceId, ...snapshot }, "cached");
         }
       },
     );

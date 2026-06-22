@@ -145,6 +145,7 @@ interface PiRpcAgentSessionOptions {
   initialState: PiSessionState;
   capabilities: AgentCapabilityFlags;
   cleanup?: () => void;
+  modelPrefix?: string;
 }
 
 interface PiResumeConfig {
@@ -203,6 +204,25 @@ interface PendingCombinedAskUserResponse {
 interface ExtensionUiMappingOptions {
   combineOptionalComment?: boolean;
   allowFreeform?: boolean;
+}
+
+const CHISACODE_MODEL_PREFIX_ENV = "CHISACODE_MODEL_PREFIX";
+
+function readRuntimeModelPrefix(
+  runtimeSettings: ProviderRuntimeSettings | undefined,
+): string | null {
+  const prefix = runtimeSettings?.env?.[CHISACODE_MODEL_PREFIX_ENV]?.trim();
+  return prefix ? prefix : null;
+}
+
+function applyRuntimeModelPrefix(
+  model: string | undefined,
+  prefix: string | null,
+): string | undefined {
+  if (!model || !prefix || model.includes("/") || model.includes(":")) {
+    return model;
+  }
+  return `${prefix}/${model}`;
 }
 
 function normalizePiModelLabel(label: string): string {
@@ -922,12 +942,14 @@ export class PiRpcAgentSession implements AgentSession {
   private readonly seenUserEntryIds = new Set<string>();
   private readonly pendingUserMessages: PendingPiUserMessage[] = [];
   private readonly pendingExtensionResults = new Map<string, PendingExtensionResult>();
+  private readonly modelPrefix: string | null;
   private state: PiSessionState;
   private closed = false;
 
   constructor(options: PiRpcAgentSessionOptions) {
     this.runtimeSession = options.runtimeSession;
     this.config = options.config;
+    this.modelPrefix = options.modelPrefix ?? null;
     this.state = options.initialState;
     this.capabilities = options.capabilities;
     this.cleanup = options.cleanup;
@@ -1135,7 +1157,8 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async setModel(modelId: string | null): Promise<void> {
-    const parsedReference = parseModelReference(modelId);
+    const prefixedModelId = applyRuntimeModelPrefix(modelId ?? undefined, this.modelPrefix);
+    const parsedReference = parseModelReference(prefixedModelId ?? null);
     if (!parsedReference) {
       return;
     }
@@ -1602,18 +1625,23 @@ export class PiRpcAgentClient implements AgentClient {
     config: AgentSessionConfig,
     launchContext?: AgentLaunchContext,
   ): Promise<AgentSession> {
+    const modelPrefix = readRuntimeModelPrefix(this.runtimeSettings);
+    const normalizedConfig: AgentSessionConfig = {
+      ...config,
+      model: applyRuntimeModelPrefix(config.model, modelPrefix),
+    };
     const mcpConfig = await this.prepareMcpConfig(config.cwd, config.mcpServers);
     const chisacodeExtension = createPiChisaCodeExtensionFile();
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
-        cwd: config.cwd,
-        model: config.model,
+        cwd: normalizedConfig.cwd,
+        model: normalizedConfig.model,
         thinkingOptionId:
-          normalizePiThinkingOption(config.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
+          normalizePiThinkingOption(normalizedConfig.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
         systemPrompt: composeSystemPromptParts(
-          config.systemPrompt,
-          config.daemonAppendSystemPrompt,
+          normalizedConfig.systemPrompt,
+          normalizedConfig.daemonAppendSystemPrompt,
         ),
         env: launchContext?.env,
         mcpConfigPath: mcpConfig?.path,
@@ -1627,10 +1655,11 @@ export class PiRpcAgentClient implements AgentClient {
     try {
       return new PiRpcAgentSession({
         runtimeSession,
-        config,
+        config: normalizedConfig,
         initialState: await runtimeSession.getState(),
         capabilities: withPiMcpCapability(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, chisacodeExtension.cleanup]),
+        modelPrefix: modelPrefix ?? undefined,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);

@@ -346,19 +346,21 @@ describe("layoutStream", () => {
     expect(footerOwners(layout)).toEqual([assistant.id]);
   });
 
-  it("places completed footer after the collapsed thought summary", () => {
+  it("places completed footer after the assistant when collapsed thought summary precedes it", () => {
     const assistant = assistantMessage("a1", 2);
     const summary = collapsedThoughtSummary("thought-summary:a1", 3, assistant.id);
     const layout = layoutFor({
       platform: "web",
-      tail: [userMessage("u1", 1), assistant, summary],
+      tail: [userMessage("u1", 1), summary, assistant],
       timingIds: [assistant.id],
     });
     const summaryRow = findLayoutItem(layout, summary.id);
+    const assistantRow = findLayoutItem(layout, assistant.id);
 
-    expect(layout.auxiliaryTurnFooter?.itemId).toBe(summary.id);
+    expect(layout.auxiliaryTurnFooter?.itemId).toBe(assistant.id);
     expect(layout.auxiliaryTurnFooter?.timing?.durationMs).toBe(8000);
     expect(summaryRow.completedFooter).toBeNull();
-    expect(footerOwners(layout)).toEqual([summary.id]);
+    expect(assistantRow.completedFooter).toBeNull();
+    expect(footerOwners(layout)).toEqual([assistant.id]);
   });
 });

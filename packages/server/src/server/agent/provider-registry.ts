@@ -1,4 +1,6 @@
 import type { Logger } from "pino";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import type {
   AgentClient,
@@ -688,6 +690,10 @@ function buildGatewayRouteBase(baseUrl: string, gatewayId: string): string {
   return `${trimTrailingSlash(baseUrl)}/api/model-gateways/${encodeURIComponent(gatewayId)}`;
 }
 
+function buildClaudeGatewayConfigDir(gatewayId: string): string {
+  return join(homedir(), ".chisacode", "claude-model-gateways", gatewayId);
+}
+
 function buildGatewayProviderModels(
   models: ProviderProfileModel[],
   options?: { modelPrefix?: string; supportsTools?: boolean },
@@ -748,7 +754,10 @@ function resolveNativeXiaomiGatewayEnv(
     return null;
   }
   return {
-    env: { XIAOMI_API_KEY: apiKey },
+    env: {
+      CHISACODE_MODEL_PREFIX: "xiaomi",
+      XIAOMI_API_KEY: apiKey,
+    },
     modelPrefix: "xiaomi",
   };
 }
@@ -771,6 +780,7 @@ function gatewayProviderOverride(params: {
         ANTHROPIC_API_KEY: token,
         ANTHROPIC_AUTH_TOKEN: token,
         ANTHROPIC_BASE_URL: routeBase,
+        CLAUDE_CONFIG_DIR: buildClaudeGatewayConfigDir(gateway.id),
       },
       disallowedTools: ["WebSearch"],
       models,

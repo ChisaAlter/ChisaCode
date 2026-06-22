@@ -95,6 +95,17 @@ const CLAUDE_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
   "project",
   "local",
 ];
+const CLAUDE_GATEWAY_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
+  "project",
+  "local",
+];
+const CLAUDE_MODEL_SELECTION_ENV_KEYS = [
+  "ANTHROPIC_MODEL",
+  "ANTHROPIC_SMALL_FAST_MODEL",
+  "ANTHROPIC_DEFAULT_OPUS_MODEL",
+  "ANTHROPIC_DEFAULT_SONNET_MODEL",
+  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+];
 
 function readNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
@@ -343,6 +354,10 @@ function sanitizeClaudeProjectPath(cwd: string): string {
   return cwd.replace(/[\\/._:]/g, "-");
 }
 
+function resolveClaudeConfigDir(env: NodeJS.ProcessEnv): string {
+  return env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
+}
+
 interface ClaudeOptionsLogSummary {
   cwd: string | null;
   permissionMode: string | null;
@@ -449,7 +464,7 @@ function readRuntimeSettingsEnv(
   return entries.length > 0 ? Object.fromEntries(entries) : null;
 }
 
-const CLAUDE_MODEL_GATEWAY_CARRIER_MODEL = "claude-sonnet-4-5";
+const CLAUDE_MODEL_GATEWAY_CARRIER_MODEL = "sonnet";
 
 function buildModelGatewayOverrideBaseUrl(baseUrl: string, model: string): string | null {
   let parsed: URL;
@@ -474,7 +489,7 @@ function buildModelGatewayOverrideBaseUrl(baseUrl: string, model: string): strin
 function resolveClaudeModelGatewayOverride(input: {
   model: string | undefined;
   env: NodeJS.ProcessEnv;
-}): { env: Record<string, string>; model: string } | null {
+}): { env: Record<string, string>; launchModel: string } | null {
   const selectedModel = input.model?.trim();
   const baseUrl = input.env["ANTHROPIC_BASE_URL"]?.trim();
   if (!selectedModel || !baseUrl) {
@@ -494,7 +509,15 @@ function resolveClaudeModelGatewayOverride(input: {
     env.ANTHROPIC_API_KEY = token;
     env.ANTHROPIC_AUTH_TOKEN = token;
   }
-  return { env, model: CLAUDE_MODEL_GATEWAY_CARRIER_MODEL };
+  return { env, launchModel: CLAUDE_MODEL_GATEWAY_CARRIER_MODEL };
+}
+
+function removeClaudeModelSelectionEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const cleaned = { ...env };
+  for (const key of CLAUDE_MODEL_SELECTION_ENV_KEYS) {
+    delete cleaned[key];
+  }
+  return cleaned;
 }
 
 function isToolResultTextBlock(value: unknown): value is { type: "text"; text: string } {
@@ -1415,7 +1438,8 @@ export class ClaudeAgentClient implements AgentClient {
   async listPersistedAgents(
     options?: ListPersistedAgentsOptions,
   ): Promise<PersistedAgentDescriptor[]> {
-    const configDir = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
+    const env = createProviderEnv({ baseEnv: process.env, runtimeSettings: this.runtimeSettings });
+    const configDir = resolveClaudeConfigDir(env);
     const projectsRoot = path.join(configDir, "projects");
     if (!(await pathExists(projectsRoot))) {
       return [];
@@ -1663,6 +1687,7 @@ class ClaudeAgentSession implements AgentSession {
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private lastOptionsModel: string | null = null;
   private lastRuntimeModel: string | null = null;
+  private modelGatewayOverrideActive = false;
   private compacting = false;
   private queryPumpPromise: Promise<void> | null = null;
   private queryRestartNeeded = false;
@@ -2616,8 +2641,9 @@ class ClaudeAgentSession implements AgentSession {
     const { thinking, effort } = this.resolveThinkingConfig();
     const appendedSystemPrompt = this.buildAppendedSystemPrompt();
     const extraClaudeOptions = this.config.extra?.claude;
-    const { sdkEnv, flagSettingsOptions, launchModel } =
+    const { sdkEnv, flagSettingsOptions, launchModel, modelGatewayOverrideActive } =
       this.buildSdkLaunchOptions(extraClaudeOptions);
+    this.modelGatewayOverrideActive = modelGatewayOverrideActive;
     assertClaudeAutoModeEligible(this.currentMode, sdkEnv);
 
     const claudeBinary = await this.resolveBinary();
@@ -2681,7 +2707,9 @@ class ClaudeAgentSession implements AgentSession {
     if (launchModel) {
       base.model = launchModel;
     }
-    this.lastOptionsModel = base.model ?? null;
+    this.lastOptionsModel = this.modelGatewayOverrideActive
+      ? (this.config.model ?? null)
+      : (base.model ?? null);
     if (this.claudeSessionId && !this.pendingFreshSessionId) {
       base.resume = this.claudeSessionId;
     }
@@ -2696,23 +2724,28 @@ class ClaudeAgentSession implements AgentSession {
 
   private buildSdkLaunchOptions(extraClaudeOptions: Partial<ClaudeOptions> | undefined): {
     sdkEnv: NodeJS.ProcessEnv;
-    flagSettingsOptions: Pick<ClaudeOptions, "settings"> | Record<string, never>;
+    flagSettingsOptions: Partial<Pick<ClaudeOptions, "settings" | "settingSources">>;
     launchModel: string | undefined;
+    modelGatewayOverrideActive: boolean;
   } {
     const baseEnv = this.buildSdkEnv(extraClaudeOptions);
     const modelGatewayOverride = resolveClaudeModelGatewayOverride({
       model: this.config.model,
       env: baseEnv,
     });
-    const sdkEnv = modelGatewayOverride ? { ...baseEnv, ...modelGatewayOverride.env } : baseEnv;
-    const flagSettingsOptions = this.buildFlagSettingsOptions(
-      extraClaudeOptions,
-      modelGatewayOverride?.env,
-    );
+    const sdkEnv = modelGatewayOverride
+      ? removeClaudeModelSelectionEnv({ ...baseEnv, ...modelGatewayOverride.env })
+      : baseEnv;
+    const flagSettingsOptions: Partial<Pick<ClaudeOptions, "settings" | "settingSources">> =
+      this.buildFlagSettingsOptions(extraClaudeOptions, modelGatewayOverride?.env);
+    if (modelGatewayOverride) {
+      flagSettingsOptions.settingSources = CLAUDE_GATEWAY_SETTING_SOURCES;
+    }
     return {
       sdkEnv,
       flagSettingsOptions,
-      launchModel: modelGatewayOverride?.model ?? this.config.model,
+      launchModel: modelGatewayOverride?.launchModel ?? this.config.model,
+      modelGatewayOverrideActive: Boolean(modelGatewayOverride),
     };
   }
 
@@ -3700,7 +3733,10 @@ class ClaudeAgentSession implements AgentSession {
         { runtimeModel: message.model, normalizedRuntimeModel },
         "Captured runtime model from SDK init",
       );
-      if (normalizedRuntimeModel) {
+      if (this.modelGatewayOverrideActive) {
+        this.lastOptionsModel =
+          this.config.model ?? normalizedRuntimeModel ?? this.lastOptionsModel;
+      } else if (normalizedRuntimeModel) {
         this.lastOptionsModel = normalizedRuntimeModel;
       } else if (!this.lastOptionsModel) {
         this.lastOptionsModel = this.config.model ?? null;
@@ -4067,7 +4103,7 @@ class ClaudeAgentSession implements AgentSession {
   private resolveHistoryPath(sessionId: string): string | null {
     const cwd = this.config.cwd;
     if (!cwd) return null;
-    const configDir = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
+    const configDir = resolveClaudeConfigDir(this.buildSdkEnv(this.config.extra?.claude));
     const candidates = [cwd];
     try {
       const realCwd = fs.realpathSync(cwd);

@@ -11,7 +11,12 @@ import {
   convertClaudeHistoryEntry,
   normalizeClaudeAskUserQuestionUpdatedInput,
 } from "./agent.js";
-import type { AgentTimelineItem, AgentUsage, AgentStreamEvent } from "../../agent-sdk-types.js";
+import type {
+  AgentPersistenceHandle,
+  AgentTimelineItem,
+  AgentUsage,
+  AgentStreamEvent,
+} from "../../agent-sdk-types.js";
 
 interface TestClaudeSession {
   translateMessageToEvents(message: SDKMessage): AgentStreamEvent[];
@@ -461,7 +466,11 @@ describe("ClaudeAgentClient binary resolution", () => {
     await session.close();
   });
 
-  test("promotes runtime env to Claude flag settings so provider env wins over user settings", async () => {
+  test("isolates gateway env from Claude user settings and inherited model env", async () => {
+    const previousAnthropicModel = process.env.ANTHROPIC_MODEL;
+    const previousDefaultSonnetModel = process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+    process.env.ANTHROPIC_MODEL = "kimi-k2.6";
+    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = "kimi-k2.6";
     const queryReturn = vi.fn();
     queryReturn.mockResolvedValue(undefined);
     const queryFactory = vi.fn(() => ({
@@ -469,54 +478,137 @@ describe("ClaudeAgentClient binary resolution", () => {
       return: queryReturn,
     }));
 
-    const client = new ClaudeAgentClient({
-      logger,
-      queryFactory,
-      resolveBinary: async () => "/test/claude/bin",
-      runtimeSettings: {
+    try {
+      const client = new ClaudeAgentClient({
+        logger,
+        queryFactory,
+        resolveBinary: async () => "/test/claude/bin",
+        runtimeSettings: {
+          env: {
+            ANTHROPIC_API_KEY: "gateway-token",
+            ANTHROPIC_AUTH_TOKEN: "gateway-token",
+            ANTHROPIC_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/opencode",
+          },
+        },
+      });
+      const session = await client.createSession({
+        provider: "claude",
+        cwd: process.cwd(),
+        model: "GPT6.0",
+      });
+
+      await expect(
+        (
+          session as unknown as {
+            ensureQuery(): Promise<unknown>;
+          }
+        ).ensureQuery(),
+      ).resolves.toBeDefined();
+
+      expect(queryFactory.mock.calls[0]?.[0].options.settingSources).toEqual(["project", "local"]);
+      expect(queryFactory.mock.calls[0]?.[0].options.settings).toMatchObject({
         env: {
           ANTHROPIC_API_KEY: "gateway-token",
           ANTHROPIC_AUTH_TOKEN: "gateway-token",
-          ANTHROPIC_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/opencode",
+          ANTHROPIC_BASE_URL:
+            "http://127.0.0.1:6767/api/model-gateways/opencode/model-overrides/GPT6.0",
         },
-      },
-    });
-    const session = await client.createSession({
-      provider: "claude",
-      cwd: process.cwd(),
-      model: "GPT6.0",
-    });
-
-    await expect(
-      (
-        session as unknown as {
-          ensureQuery(): Promise<unknown>;
-        }
-      ).ensureQuery(),
-    ).resolves.toBeDefined();
-
-    expect(queryFactory.mock.calls[0]?.[0].options.settingSources).toEqual([
-      "user",
-      "project",
-      "local",
-    ]);
-    expect(queryFactory.mock.calls[0]?.[0].options.settings).toMatchObject({
-      env: {
+      });
+      expect(queryFactory.mock.calls[0]?.[0].options.env).toMatchObject({
         ANTHROPIC_API_KEY: "gateway-token",
         ANTHROPIC_AUTH_TOKEN: "gateway-token",
         ANTHROPIC_BASE_URL:
           "http://127.0.0.1:6767/api/model-gateways/opencode/model-overrides/GPT6.0",
-      },
-    });
-    expect(queryFactory.mock.calls[0]?.[0].options.env).toMatchObject({
-      ANTHROPIC_API_KEY: "gateway-token",
-      ANTHROPIC_AUTH_TOKEN: "gateway-token",
-      ANTHROPIC_BASE_URL:
-        "http://127.0.0.1:6767/api/model-gateways/opencode/model-overrides/GPT6.0",
-    });
-    expect(queryFactory.mock.calls[0]?.[0].options.model).toBe("claude-sonnet-4-5");
+      });
+      expect(queryFactory.mock.calls[0]?.[0].options.env?.ANTHROPIC_MODEL).toBeUndefined();
+      expect(
+        queryFactory.mock.calls[0]?.[0].options.env?.ANTHROPIC_DEFAULT_SONNET_MODEL,
+      ).toBeUndefined();
+      expect(queryFactory.mock.calls[0]?.[0].options.model).toBe("sonnet");
+      await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+        model: "GPT6.0",
+        modeId: "default",
+      });
 
-    await session.close();
+      await session.close();
+    } finally {
+      if (previousAnthropicModel === undefined) {
+        delete process.env.ANTHROPIC_MODEL;
+      } else {
+        process.env.ANTHROPIC_MODEL = previousAnthropicModel;
+      }
+      if (previousDefaultSonnetModel === undefined) {
+        delete process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+      } else {
+        process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = previousDefaultSonnetModel;
+      }
+    }
+  });
+
+  test("loads resumed gateway history from launch CLAUDE_CONFIG_DIR", async () => {
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "claude-gateway-config-"));
+    const cwd = process.cwd();
+    const sessionId = "gateway-history-session";
+    const sanitizedCwd = cwd.replace(/[\\/._:]/g, "-");
+    const projectDir = path.join(configDir, "projects", sanitizedCwd);
+    await fs.mkdir(projectDir, { recursive: true });
+    await fs.writeFile(
+      path.join(projectDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          type: "user",
+          uuid: "user-1",
+          timestamp: "2026-06-22T00:00:00.000Z",
+          message: { role: "user", content: "你好" },
+        }),
+        JSON.stringify({
+          type: "assistant",
+          uuid: "assistant-1",
+          timestamp: "2026-06-22T00:00:01.000Z",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "检查请求" },
+              { type: "text", text: "收到" },
+            ],
+          },
+        }),
+      ].join("\n"),
+    );
+
+    const client = new ClaudeAgentClient({
+      logger,
+      resolveBinary: async () => "/test/claude/bin",
+    });
+    const handle: AgentPersistenceHandle = {
+      provider: "claude",
+      sessionId,
+      nativeHandle: sessionId,
+      metadata: {
+        provider: "claude",
+        cwd,
+        model: "mimo-v2.5",
+      },
+    };
+    const session = await client.resumeSession(handle, undefined, {
+      env: { CLAUDE_CONFIG_DIR: configDir },
+    });
+
+    try {
+      const events: AgentStreamEvent[] = [];
+      for await (const event of session.streamHistory()) {
+        events.push(event);
+      }
+
+      expect(events).toMatchObject([
+        { type: "timeline", item: { type: "user_message", text: "你好" } },
+        { type: "timeline", item: { type: "reasoning", text: "检查请求" } },
+        { type: "timeline", item: { type: "assistant_message", text: "收到" } },
+      ]);
+    } finally {
+      await session.close();
+      await fs.rm(configDir, { recursive: true, force: true });
+    }
   });
 
   test("uses the replace-command override binary when claude is not on PATH", async () => {

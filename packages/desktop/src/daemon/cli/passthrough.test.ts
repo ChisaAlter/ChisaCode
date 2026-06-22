@@ -84,6 +84,20 @@ describe("passthrough CLI", () => {
     ).toBeNull();
   });
 
+  it("ignores Playwright Electron automation debug arguments used for GUI launches", () => {
+    expect(
+      parsePassthroughCliArgs({
+        argv: [
+          "C:\\Program Files\\ChisaCode\\ChisaCode.exe",
+          "--inspect=0",
+          "--remote-debugging-port=0",
+        ],
+        isDefaultApp: false,
+        forceCli: false,
+      }),
+    ).toBeNull();
+  });
+
   it("preserves CLI flags for direct app invocations", () => {
     expect(
       parsePassthroughCliArgs({

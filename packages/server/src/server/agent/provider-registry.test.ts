@@ -762,10 +762,17 @@ test("model gateway materializes provider entries for all built-in agents", asyn
         ANTHROPIC_API_KEY: "internal-token",
         ANTHROPIC_AUTH_TOKEN: "internal-token",
         ANTHROPIC_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/zai",
+        CLAUDE_CONFIG_DIR: expect.any(String),
       },
       disallowedTools: ["WebSearch"],
     },
   });
+  const claudeGatewayConfigDir: string | undefined =
+    typeof claudeGatewayArgs?.runtimeSettings === "object" &&
+    claudeGatewayArgs.runtimeSettings !== null
+      ? Reflect.get(Reflect.get(claudeGatewayArgs.runtimeSettings, "env"), "CLAUDE_CONFIG_DIR")
+      : undefined;
+  expect(claudeGatewayConfigDir).toMatch(/[\\/]\.chisacode[\\/]claude-model-gateways[\\/]zai$/u);
 
   const codexGatewayArgs = mockState.constructorArgs.codex.find((entry) => {
     const env =
@@ -954,6 +961,7 @@ test("xiaomi chat gateway uses native Xiaomi provider settings for OpenCode-like
       runtimeSettings: {
         command: undefined,
         env: {
+          CHISACODE_MODEL_PREFIX: "xiaomi",
           XIAOMI_API_KEY: "sk-xiaomi",
         },
       },

@@ -743,6 +743,53 @@ describe("model gateway", () => {
     });
   });
 
+  test("appends v1 for Anthropic-compatible upstream bases that omit it", async () => {
+    await handleModelGatewayRequest({
+      gateway: makeGateway({
+        upstreams: {
+          anthropic: {
+            enabled: true,
+            baseUrl: "https://api.xiaomimimo.com/anthropic",
+            apiKey: "sk-anthropic",
+          },
+          chatCompletions: {
+            enabled: false,
+            baseUrl: "",
+            apiKey: "",
+          },
+          responses: {
+            enabled: false,
+            baseUrl: "",
+            apiKey: "",
+          },
+        },
+      }),
+      targetFormat: "anthropic",
+      requestBody: {
+        model: "mimo-v2.5",
+        messages: [{ role: "user", content: "hello" }],
+        max_tokens: 32,
+      },
+      fetchImpl: async (url, init) => {
+        expect(String(url)).toBe("https://api.xiaomimimo.com/anthropic/v1/messages");
+        expect(init?.body).toBe(
+          JSON.stringify({
+            model: "mimo-v2.5",
+            messages: [{ role: "user", content: "hello" }],
+            max_tokens: 32,
+          }),
+        );
+        return Response.json({
+          id: "msg_1",
+          model: "mimo-v2.5",
+          content: [{ type: "text", text: "hi" }],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 3, output_tokens: 2 },
+        });
+      },
+    });
+  });
+
   test("converts a responses request to chat completions when only chat upstream exists", async () => {
     const response = await handleModelGatewayRequest({
       gateway: makeGatewayWithOnly("chatCompletions"),

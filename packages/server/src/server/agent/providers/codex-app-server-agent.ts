@@ -2988,6 +2988,32 @@ function buildCodexCustomProviderConfig(
   };
 }
 
+function buildRuntimeModelIdentityInstructions(
+  config: AgentSessionConfig,
+  customProvider: CodexAppServerAgentDeps["customProvider"],
+): string | null {
+  const runtimeProvider = config.runtimeProvider?.trim();
+  const customProviderId = customProvider?.id?.trim();
+  const provider =
+    customProviderId ||
+    (runtimeProvider && runtimeProvider !== config.provider ? runtimeProvider : null);
+  const model = config.model?.trim();
+  if (!provider) {
+    return null;
+  }
+
+  const providerLine = provider ? `Runtime provider: ${provider}.` : null;
+  const modelLine = model ? `Configured model: ${model}.` : null;
+  return [
+    "When asked what model or provider you are using, answer from this configured runtime metadata.",
+    providerLine,
+    modelLine,
+    "Do not infer a default vendor/model from the client binary, and do not inspect local config files or run shell commands to answer model-identity questions.",
+  ]
+    .filter((line): line is string => typeof line === "string" && line.length > 0)
+    .join("\n");
+}
+
 interface CodexSubAgentCallState {
   callId: string;
   toolCall: ToolCallTimelineItem;
@@ -3270,6 +3296,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       match.developer_instructions,
       this.config.systemPrompt,
       this.config.daemonAppendSystemPrompt,
+      buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
     );
     if (developerInstructions) settings.developer_instructions = developerInstructions;
     if (this.config.model) settings.model = this.config.model;
@@ -3405,6 +3432,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       const developerInstructions = composeSystemPromptParts(
         this.config.systemPrompt,
         this.config.daemonAppendSystemPrompt,
+        buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
       );
       if (developerInstructions) {
         params.developerInstructions = developerInstructions;
@@ -3548,6 +3576,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const developerInstructions = composeSystemPromptParts(
       this.config.systemPrompt,
       this.config.daemonAppendSystemPrompt,
+      buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
     );
     if (developerInstructions) {
       params.developerInstructions = developerInstructions;
@@ -4291,6 +4320,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const developerInstructions = composeSystemPromptParts(
       this.config.systemPrompt,
       this.config.daemonAppendSystemPrompt,
+      buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
     );
     const params: Record<string, unknown> = {
       model,

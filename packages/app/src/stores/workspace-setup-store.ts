@@ -19,7 +19,10 @@ export type WorkspaceSetupProgressPayload = Extract<
 
 export interface WorkspaceSetupSnapshot extends WorkspaceSetupProgressPayload {
   updatedAt: number;
+  autoOpenUntil: number | null;
 }
+
+const WORKSPACE_SETUP_AUTO_OPEN_WINDOW_MS = 30_000;
 
 export function shouldShowWorkspaceSetup(snapshot: WorkspaceSetupSnapshot | null): boolean {
   if (!snapshot) {
@@ -28,18 +31,49 @@ export function shouldShowWorkspaceSetup(snapshot: WorkspaceSetupSnapshot | null
   return snapshot.error !== null || snapshot.detail.commands.length > 0;
 }
 
+export function shouldAutoOpenWorkspaceSetup(
+  snapshot: WorkspaceSetupSnapshot | null,
+  now: number = Date.now(),
+): boolean {
+  if (!shouldShowWorkspaceSetup(snapshot)) {
+    return false;
+  }
+  if (snapshot.status === "running") {
+    return true;
+  }
+  return snapshot.autoOpenUntil !== null && now <= snapshot.autoOpenUntil;
+}
+
+type WorkspaceSetupProgressSource = "live" | "cached";
+
 interface WorkspaceSetupStoreState {
   pendingWorkspaceSetup: PendingWorkspaceSetup | null;
   snapshots: Record<string, WorkspaceSetupSnapshot>;
   beginWorkspaceSetup: (value: PendingWorkspaceSetup) => void;
   clearWorkspaceSetup: () => void;
-  upsertProgress: (input: { serverId: string; payload: WorkspaceSetupProgressPayload }) => void;
+  upsertProgress: (input: {
+    serverId: string;
+    payload: WorkspaceSetupProgressPayload;
+    source?: WorkspaceSetupProgressSource;
+  }) => void;
   removeWorkspace: (input: { serverId: string; workspaceId: string }) => void;
   clearServer: (serverId: string) => void;
 }
 
 function buildWorkspaceSetupKey(input: { serverId: string; workspaceId: string }): string | null {
   return buildWorkspaceTabPersistenceKey(input);
+}
+
+function resolveAutoOpenUntil(input: {
+  previous: WorkspaceSetupSnapshot | undefined;
+  payload: WorkspaceSetupProgressPayload;
+  source: WorkspaceSetupProgressSource;
+  now: number;
+}): number | null {
+  if (input.source === "cached" || input.payload.status === "running") {
+    return input.previous?.autoOpenUntil ?? null;
+  }
+  return input.now + WORKSPACE_SETUP_AUTO_OPEN_WINDOW_MS;
 }
 
 export const useWorkspaceSetupStore = create<WorkspaceSetupStoreState>()((set) => ({
@@ -51,18 +85,25 @@ export const useWorkspaceSetupStore = create<WorkspaceSetupStoreState>()((set) =
   clearWorkspaceSetup: () => {
     set({ pendingWorkspaceSetup: null });
   },
-  upsertProgress: ({ serverId, payload }) => {
+  upsertProgress: ({ serverId, payload, source = "live" }) => {
     const key = buildWorkspaceSetupKey({ serverId, workspaceId: payload.workspaceId });
     if (!key) {
       return;
     }
 
+    const now = Date.now();
     set((state) => ({
       snapshots: {
         ...state.snapshots,
         [key]: {
           ...payload,
-          updatedAt: Date.now(),
+          updatedAt: now,
+          autoOpenUntil: resolveAutoOpenUntil({
+            previous: state.snapshots[key],
+            payload,
+            source,
+            now,
+          }),
         },
       },
     }));

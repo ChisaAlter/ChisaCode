@@ -10,4 +10,10 @@ describe("supervisor lifecycle intents", () => {
     expect(source).toContain('"chisacode:restart"');
     expect(source).not.toContain(legacyShutdownReason);
   });
+
+  test("keeps supervised workers hidden on Windows", () => {
+    const source = readFileSync(new URL("./supervisor.ts", import.meta.url), "utf8");
+
+    expect(source.match(/windowsHide:\s*true/g)).toHaveLength(2);
+  });
 });

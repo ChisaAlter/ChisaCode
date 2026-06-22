@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { StreamItem } from "@/types/stream";
+import {
+  AGENT_PROVIDER_DEFINITIONS,
+  DEV_AGENT_PROVIDER_DEFINITIONS,
+} from "@chisacode/protocol/provider-manifest";
+import type { AgentStreamEventPayload } from "@chisacode/protocol/messages";
+import { applyStreamEvent, type StreamItem } from "@/types/stream";
 import { buildAgentStreamRenderModel, collapseCompletedTurnThoughtsForDisplay } from "./model";
 
 function createTimestamp(seed: number): Date {
@@ -21,6 +26,35 @@ function assistantMessage(id: string, seed: number): StreamItem {
     id,
     text: id,
     timestamp: createTimestamp(seed),
+  };
+}
+
+function providerAssistantMessage(
+  id: string,
+  seed: number,
+  input: { text: string; messageId?: string },
+): StreamItem {
+  return {
+    kind: "assistant_message",
+    id,
+    text: input.text,
+    timestamp: createTimestamp(seed),
+    ...(input.messageId ? { messageId: input.messageId } : {}),
+  };
+}
+
+function assistantBlockMessage(
+  id: string,
+  seed: number,
+  block: { groupId: string; index: number },
+): StreamItem {
+  return {
+    kind: "assistant_message",
+    id,
+    text: id,
+    timestamp: createTimestamp(seed),
+    blockGroupId: block.groupId,
+    blockIndex: block.index,
   };
 }
 
@@ -51,6 +85,53 @@ function toolCall(id: string, seed: number): StreamItem {
     },
   };
 }
+
+function providerTimelineEvent(
+  provider: AgentStreamEventPayload["provider"],
+  item: Extract<AgentStreamEventPayload, { type: "timeline" }>["item"],
+): AgentStreamEventPayload {
+  return {
+    type: "timeline",
+    provider,
+    item,
+  };
+}
+
+function applyProviderEvents(
+  provider: AgentStreamEventPayload["provider"],
+  events: Array<Extract<AgentStreamEventPayload, { type: "timeline" }>["item"]>,
+): StreamItem[] {
+  let tail: StreamItem[] = [];
+  let head: StreamItem[] = [];
+  for (const [index, item] of events.entries()) {
+    const result = applyStreamEvent({
+      tail,
+      head,
+      event: providerTimelineEvent(provider, item),
+      timestamp: createTimestamp(index + 1),
+    });
+    tail = result.tail;
+    head = result.head;
+  }
+  const completed = applyStreamEvent({
+    tail,
+    head,
+    event: { type: "turn_completed", provider, usage: { inputTokens: 1, outputTokens: 1 } },
+    timestamp: createTimestamp(events.length + 1),
+  });
+  return [...completed.tail, ...completed.head];
+}
+
+const THOUGHT_COLLAPSE_PROVIDER_COVERAGE = [
+  "claude",
+  "codex",
+  "opencode",
+  "mimocode",
+  "pi",
+  "kimi",
+  "mock",
+  "mock-slow",
+] as const;
 
 describe("buildAgentStreamRenderModel", () => {
   it("keeps head separate from committed history on desktop web", () => {
@@ -189,7 +270,7 @@ describe("buildAgentStreamRenderModel", () => {
 });
 
 describe("collapseCompletedTurnThoughtsForDisplay", () => {
-  it("moves all completed thoughts in a turn after the formal assistant answer", () => {
+  it("moves all completed thoughts in a turn above the formal assistant answer", () => {
     const items = [
       userMessage("u1", 1),
       thoughtMessage("t1", 2, "Inspect project"),
@@ -203,16 +284,65 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
     expect(result.map((item) => item.kind)).toEqual([
       "user_message",
       "tool_call",
-      "assistant_message",
       "thought",
+      "assistant_message",
     ]);
-    const summary = result.at(-1);
+    const summary = result.at(-2);
     expect(summary).toMatchObject({
       kind: "thought",
       text: "Inspect project\n\nCompare files",
       status: "ready",
       isCollapsedSummary: true,
       summaryForAssistantMessageId: "a1",
+    });
+  });
+
+  it("collapses pre-answer assistant progress messages into the completed thought summary", () => {
+    const items = [
+      userMessage("u1", 1),
+      assistantMessage("progress-1", 2),
+      toolCall("tool-1", 3),
+      assistantMessage("progress-2", 4),
+      assistantMessage("final-answer", 5),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.id)).toEqual([
+      "u1",
+      "tool-1",
+      "thought-summary:final-answer",
+      "final-answer",
+    ]);
+    expect(result.at(-2)).toMatchObject({
+      kind: "thought",
+      text: "progress-1\n\nprogress-2",
+      status: "ready",
+      isCollapsedSummary: true,
+      summaryForAssistantMessageId: "final-answer",
+    });
+  });
+
+  it("keeps split final assistant blocks together when collapsing progress messages", () => {
+    const items = [
+      userMessage("u1", 1),
+      assistantMessage("progress-1", 2),
+      assistantBlockMessage("final:block:0", 3, { groupId: "final", index: 0 }),
+      assistantBlockMessage("final:block:1", 4, { groupId: "final", index: 1 }),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.id)).toEqual([
+      "u1",
+      "thought-summary:final:block:1",
+      "final:block:0",
+      "final:block:1",
+    ]);
+    expect(result.at(1)).toMatchObject({
+      kind: "thought",
+      text: "progress-1",
+      summaryForAssistantMessageId: "final:block:1",
     });
   });
 
@@ -226,7 +356,7 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
 
     const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
 
-    expect(result.map((item) => item.id)).toEqual(["u1", "tool-1", "a1", "thought-summary:a1"]);
+    expect(result.map((item) => item.id)).toEqual(["u1", "tool-1", "thought-summary:a1", "a1"]);
   });
 
   it("does not move active running thoughts before the formal answer exists", () => {
@@ -249,12 +379,162 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
     });
 
     expect(model.segments.historyMounted.map((item) => item.id)).toEqual(["u1"]);
-    expect(model.segments.liveHead.map((item) => item.id)).toEqual(["a1", "thought-summary:a1"]);
-    expect(model.segments.liveHead.at(-1)).toMatchObject({
+    expect(model.segments.liveHead.map((item) => item.id)).toEqual(["thought-summary:a1", "a1"]);
+    expect(model.segments.liveHead.at(0)).toMatchObject({
       kind: "thought",
       text: "Inspect project",
       isCollapsedSummary: true,
       summaryForAssistantMessageId: "a1",
     });
+  });
+
+  it("collapses Codex pre-answer agent messages from the same turn into one thought summary", () => {
+    const items = [
+      userMessage("u1", 1),
+      providerAssistantMessage("codex-progress-1", 2, {
+        messageId: "codex-progress-1",
+        text: "Inspecting workspace",
+      }),
+      thoughtMessage("codex-reasoning", 3, "Comparing stream events"),
+      toolCall("codex-tool-1", 4),
+      providerAssistantMessage("codex-progress-2", 5, {
+        messageId: "codex-progress-2",
+        text: "Reading provider output",
+      }),
+      providerAssistantMessage("codex-final", 6, {
+        messageId: "codex-final",
+        text: "Final Codex answer",
+      }),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.id)).toEqual([
+      "u1",
+      "codex-tool-1",
+      "thought-summary:codex-final",
+      "codex-final",
+    ]);
+    expect(result.at(-2)).toMatchObject({
+      kind: "thought",
+      text: "Inspecting workspace\n\nComparing stream events\n\nReading provider output",
+      isCollapsedSummary: true,
+      summaryForAssistantMessageId: "codex-final",
+    });
+  });
+
+  it("keeps Claude assistant chunks with the same message id as the formal answer", () => {
+    const items = [
+      userMessage("u1", 1),
+      thoughtMessage("claude-reasoning", 2, "Thinking with Claude"),
+      providerAssistantMessage("claude-answer-1", 3, {
+        messageId: "claude-message",
+        text: "Claude answer part 1",
+      }),
+      thoughtMessage("claude-more-reasoning", 4, "Double-checking"),
+      providerAssistantMessage("claude-answer-2", 5, {
+        messageId: "claude-message",
+        text: "Claude answer part 2",
+      }),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.id)).toEqual([
+      "u1",
+      "thought-summary:claude-answer-2",
+      "claude-answer-1",
+      "claude-answer-2",
+    ]);
+    expect(result.at(1)).toMatchObject({
+      kind: "thought",
+      text: "Thinking with Claude\n\nDouble-checking",
+      isCollapsedSummary: true,
+      summaryForAssistantMessageId: "claude-answer-2",
+    });
+  });
+
+  it.each([
+    { provider: "opencode" as const, label: "OpenCode" },
+    { provider: "mimocode" as const, label: "MiMoCode" },
+    { provider: "pi" as const, label: "Pi" },
+  ])("keeps $label assistant deltas without message ids as one formal answer", ({ provider }) => {
+    const items = [
+      userMessage("u1", 1),
+      ...applyProviderEvents(provider, [
+        { type: "assistant_message", text: "Formal " },
+        { type: "assistant_message", text: "answer" },
+      ]),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.kind)).toEqual(["user_message", "assistant_message"]);
+    expect(result.at(-1)).toMatchObject({
+      kind: "assistant_message",
+      text: "Formal answer",
+    });
+  });
+
+  it("collapses Kimi ACP reasoning after the formal assistant answer", () => {
+    const items = [
+      userMessage("u1", 1),
+      ...applyProviderEvents("kimi", [
+        { type: "reasoning", text: "Kimi ACP reasoning" },
+        { type: "assistant_message", text: "Kimi final answer", messageId: "kimi-message" },
+      ]),
+    ];
+
+    const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+    expect(result.map((item) => item.kind)).toEqual([
+      "user_message",
+      "thought",
+      "assistant_message",
+    ]);
+    expect(result.at(1)).toMatchObject({
+      kind: "thought",
+      text: "Kimi ACP reasoning",
+      isCollapsedSummary: true,
+      summaryForAssistantMessageId: "kimi-message",
+    });
+  });
+
+  it.each(["mock" as const, "mock-slow" as const])(
+    "does not create an empty thought summary for %s assistant-only turns",
+    (provider) => {
+      const items = [
+        userMessage("u1", 1),
+        ...applyProviderEvents(provider, [
+          { type: "assistant_message", text: "Mock final answer" },
+        ]),
+      ];
+
+      const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
+
+      expect(result.map((item) => item.kind)).toEqual(["user_message", "assistant_message"]);
+      expect(result.at(-1)).toMatchObject({
+        kind: "assistant_message",
+        text: "Mock final answer",
+      });
+    },
+  );
+
+  it("documents every built-in and development provider covered by thought collapse tests", () => {
+    expect(THOUGHT_COLLAPSE_PROVIDER_COVERAGE).toEqual([
+      "claude",
+      "codex",
+      "opencode",
+      "mimocode",
+      "pi",
+      "kimi",
+      "mock",
+      "mock-slow",
+    ]);
+    expect(THOUGHT_COLLAPSE_PROVIDER_COVERAGE).toEqual(
+      [...AGENT_PROVIDER_DEFINITIONS, ...DEV_AGENT_PROVIDER_DEFINITIONS].map(
+        (definition) => definition.id,
+      ),
+    );
   });
 });

@@ -5,11 +5,16 @@ import { describe, expect, test } from "vitest";
 import type { AgentSessionConfig, AgentStreamEvent } from "../../agent-sdk-types.js";
 import { PiRpcAgentClient, PiRpcAgentSession, transformPiModels } from "./agent.js";
 import { FakePi } from "./test-utils/fake-pi.js";
+import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
 
-function createClient(pi = new FakePi()): PiRpcAgentClient {
+function createClient(
+  pi = new FakePi(),
+  runtimeSettings?: ProviderRuntimeSettings,
+): PiRpcAgentClient {
   return new PiRpcAgentClient({
     logger: pino({ level: "silent" }),
     runtime: pi,
+    runtimeSettings,
   });
 }
 
@@ -63,6 +68,21 @@ test("forwards launch-context env to the Pi process launch", async () => {
   expect(pi.recordedLaunches[0]?.env).toEqual({
     CHUNK14_PROBE: "expected",
   });
+
+  await session.close();
+});
+
+test("prefixes unqualified gateway models before launching Pi", async () => {
+  const pi = new FakePi();
+  const client = createClient(pi, {
+    env: {
+      CHISACODE_MODEL_PREFIX: "xiaomi",
+      XIAOMI_API_KEY: "sk-xiaomi",
+    },
+  });
+  const session = await client.createSession(createConfig({ model: "mimo-v2.5" }));
+
+  expect(pi.recordedLaunches[0]?.argv).toContain("xiaomi/mimo-v2.5");
 
   await session.close();
 });
@@ -611,6 +631,24 @@ describe("PiRpcAgentSession", () => {
 
     expect(fakeSession.setModelRequests).toEqual([{ provider: "openrouter", modelId: "model-a" }]);
     expect(fakeSession.setThinkingLevelRequests).toEqual(["high"]);
+  });
+
+  test("prefixes unqualified gateway models before Pi setModel", async () => {
+    const pi = new FakePi();
+    const client = createClient(pi, {
+      env: {
+        CHISACODE_MODEL_PREFIX: "xiaomi",
+        XIAOMI_API_KEY: "sk-xiaomi",
+      },
+    });
+    const session = (await client.createSession(createConfig())) as PiRpcAgentSession;
+    const fakeSession = pi.latestSession();
+    fakeSession.setModelResult = { provider: "xiaomi", id: "mimo-v2.5", name: "MiMo v2.5" };
+
+    await session.setModel("mimo-v2.5");
+
+    expect(fakeSession.setModelRequests).toEqual([{ provider: "xiaomi", modelId: "mimo-v2.5" }]);
+    await session.close();
   });
 
   test("fails the active turn when the Pi process exits mid-turn", async () => {

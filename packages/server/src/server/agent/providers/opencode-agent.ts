@@ -569,6 +569,13 @@ function readOpenCodeAgentHexColor(agent: { color?: unknown }): string | undefin
     : undefined;
 }
 
+function formatOpenCodeAgentModeLabel(name: string): string {
+  if (name.startsWith("chisacode")) {
+    return `ChisaCode${name.slice("chisacode".length)}`;
+  }
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 function mapOpenCodeAgentToMode(agent: {
   name: string;
   description?: unknown;
@@ -577,7 +584,7 @@ function mapOpenCodeAgentToMode(agent: {
   const colorTier = readOpenCodeAgentHexColor(agent);
   return {
     id: agent.name,
-    label: agent.name.charAt(0).toUpperCase() + agent.name.slice(1),
+    label: formatOpenCodeAgentModeLabel(agent.name),
     icon: "Bot",
     description:
       typeof agent.description === "string" && agent.description.trim().length > 0
@@ -1295,6 +1302,7 @@ export class OpenCodeAgentClient implements AgentClient {
         acquisition.release,
         options?.persistSession,
         launchContext?.agentId,
+        readRuntimeModelPrefix(this.runtimeSettings) ?? undefined,
       );
     } catch (error) {
       acquisition.release();
@@ -1339,6 +1347,7 @@ export class OpenCodeAgentClient implements AgentClient {
         acquisition.release,
         undefined,
         launchContext?.agentId,
+        readRuntimeModelPrefix(this.runtimeSettings) ?? undefined,
       );
     } catch (error) {
       acquisition.release();
@@ -1581,7 +1590,11 @@ export class OpenCodeAgentClient implements AgentClient {
     if (config.provider !== "opencode") {
       throw new Error(`OpenCodeAgentClient received config for provider '${config.provider}'`);
     }
-    return normalizeOpenCodeConfig({ ...config, provider: "opencode" });
+    return normalizeOpenCodeConfig({
+      ...config,
+      provider: "opencode",
+      model: applyRuntimeModelPrefix(config.model, readRuntimeModelPrefix(this.runtimeSettings)),
+    });
   }
 
   private async populateModelContextWindowCache(
@@ -1674,6 +1687,24 @@ interface OpenCodeSubAgentActivityState {
 
 const MAX_OPENCODE_SUB_AGENT_ACTIONS = 200;
 const MAX_OPENCODE_PENDING_CHILD_TOOL_PARTS = 200;
+const CHISACODE_MODEL_PREFIX_ENV = "CHISACODE_MODEL_PREFIX";
+
+function readRuntimeModelPrefix(
+  runtimeSettings: ProviderRuntimeSettings | undefined,
+): string | null {
+  const prefix = runtimeSettings?.env?.[CHISACODE_MODEL_PREFIX_ENV]?.trim();
+  return prefix ? prefix : null;
+}
+
+function applyRuntimeModelPrefix(
+  model: string | undefined,
+  prefix: string | null,
+): string | undefined {
+  if (!model || !prefix || model.includes("/")) {
+    return model;
+  }
+  return `${prefix}/${model}`;
+}
 
 function stringifyStructuredAssistantMessage(value: unknown): string | null {
   if (value === undefined) {
@@ -2747,6 +2778,7 @@ class OpenCodeAgentSession implements AgentSession {
     releaseServer?: () => void,
     persistSession = true,
     private readonly agentId?: string,
+    private readonly modelPrefix?: string,
   ) {
     this.config = config;
     this.client = client;
@@ -2783,7 +2815,10 @@ class OpenCodeAgentSession implements AgentSession {
   async setModel(modelId: string | null): Promise<void> {
     const normalizedModelId =
       typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
-    this.config.model = normalizedModelId ?? undefined;
+    this.config.model = applyRuntimeModelPrefix(
+      normalizedModelId ?? undefined,
+      this.modelPrefix ?? null,
+    );
     this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
       this.config.model,
     );
@@ -3591,7 +3626,7 @@ class OpenCodeAgentSession implements AgentSession {
     if (parts.length >= 2) {
       return { providerID: parts[0], modelID: parts.slice(1).join("/") };
     }
-    return { providerID: "opencode", modelID: model };
+    return { providerID: this.modelPrefix ?? "opencode", modelID: model };
   }
 
   private async ensureMcpServersConfigured(): Promise<void> {
