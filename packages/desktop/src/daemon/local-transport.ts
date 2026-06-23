@@ -24,6 +24,7 @@ interface Session {
 
 const WS_ENDPOINT_PATH = "/ws";
 const IPC_PREFIXES = ["chisacode"] as const;
+const MAX_TRANSPORT_SESSIONS = 32;
 
 let nextSessionId = 0;
 const sessions = new Map<string, Session>();
@@ -68,6 +69,13 @@ function decodeTransportMessage(input: { text?: string; binaryBase64?: string })
 }
 
 export function openLocalTransportSession(target: TransportTarget): Promise<string> {
+  if (sessions.size >= MAX_TRANSPORT_SESSIONS) {
+    return Promise.reject(
+      new Error(
+        `本地 transport 会话数已达上限（${MAX_TRANSPORT_SESSIONS}）。请先关闭未使用的会话。`,
+      ),
+    );
+  }
   const sessionId = `local-session-${++nextSessionId}`;
   const url = buildLocalWebSocketUrl(target);
 
