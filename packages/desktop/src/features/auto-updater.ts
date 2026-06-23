@@ -179,9 +179,39 @@ function configureAutoUpdater(releaseChannel: AppReleaseChannel): void {
 
   autoUpdater.on("error", (error) => {
     downloading = false;
-    cachedUpdateInfo = null;
+    // Preserve cachedUpdateInfo for transient network errors so users don't
+    // see "no update" flicker on a flaky connection. Only clear it for fatal
+    // errors that indicate the cached info is no longer trustworthy.
+    if (!isTransientNetworkError(error)) {
+      cachedUpdateInfo = null;
+    }
     console.error("[auto-updater] Updater event failed:", error);
   });
+}
+
+/**
+ * Detect transient network errors where retaining cachedUpdateInfo is
+ * preferable to clearing it (which would make the next check report "no
+ * update" until the network recovers).
+ */
+function isTransientNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  // electron-updater / node fetch surface these for DNS, socket hangup,
+  // connection reset, and timeout. Keep the list conservative.
+  return (
+    message.includes("getaddrinfo") ||
+    message.includes("enotfound") ||
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("etimedout") ||
+    message.includes("socket hang up") ||
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("abort")
+  );
 }
 
 function isReadyToInstallVersion(version: string): boolean {

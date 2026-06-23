@@ -44,7 +44,7 @@ const RunningElapsed = memo(function RunningElapsed({
     setElapsedMs(Math.max(0, Date.now() - startedAtMs));
     const handle = setInterval(() => {
       setElapsedMs(Math.max(0, Date.now() - startedAtMs));
-    }, 100);
+    }, 1000);
     return () => clearInterval(handle);
   }, [startedAtMs]);
 

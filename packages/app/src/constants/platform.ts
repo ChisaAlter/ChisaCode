@@ -14,9 +14,11 @@ import { isElectronRuntime, isElectronRuntimeMac } from "@/desktop/host";
 //   isElectron → Desktop wrapper features (file dialogs, titlebar, updates)
 //
 // For layout decisions, use useIsCompactFormFactor() from constants/layout.ts.
-// For hover-tracking, see docs/hover.md — the short answer is `onPointerEnter`/
-// `onPointerLeave` on a plain `View`, with any press behavior on a separate
-// inner `Pressable`. No platform gate needed.
+// For hover-tracking, see docs/hover.md — web-only pattern: `onPointerEnter`/
+// `onPointerLeave` on a plain `View`, with press behavior on a separate inner
+// `Pressable`. On React Native these pointer handlers do not fire, so the code
+// is safe to keep unguarded but hover-revealed affordances MUST also provide an
+// always-visible native/compact path (see AGENTS.md "App Platform Rules").
 // ---------------------------------------------------------------------------
 
 /** Browser or Electron — the JS runtime has access to the DOM. */
