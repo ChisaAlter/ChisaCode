@@ -389,10 +389,14 @@ class AudioEngine (context: Context) {
             audioManager.abandonAudioFocusRequest(request)
         }
         executorServiceMicrophone.shutdownNow()
+        executorServicePlayback.shutdownNow()
     }
 
 
     private fun calculateRMSLevel(buffer: ByteArray): Float {
+        if (buffer.size < 2) {
+            return 0f
+        }
         val epsilon = 1e-5f // To avoid log(0)
 
         // Convert ByteArray to FloatArray by treating each pair of bytes as a single 16-bit PCM sample
