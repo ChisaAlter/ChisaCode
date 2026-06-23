@@ -30,26 +30,6 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
   ".tiff": "image/tiff",
 };
 
-type DesktopDragDropPayload =
-  | {
-      type: "enter";
-      paths: string[];
-    }
-  | {
-      type: "over";
-    }
-  | {
-      type: "drop";
-      paths: string[];
-    }
-  | {
-      type: "leave";
-    };
-
-interface DesktopDragDropEvent {
-  payload: DesktopDragDropPayload;
-}
-
 function isImageFile(file: File): boolean {
   return file.type.startsWith("image/");
 }
@@ -63,10 +43,6 @@ function getFileExtension(path: string): string {
   return normalizedPath.slice(extensionIndex).toLowerCase();
 }
 
-function isImagePath(path: string): boolean {
-  return getFileExtension(path) in IMAGE_MIME_BY_EXTENSION;
-}
-
 async function filePathToImageAttachment(path: string): Promise<ImageAttachment> {
   const extension = getFileExtension(path);
   const mimeType = IMAGE_MIME_BY_EXTENSION[extension] ?? "image/jpeg";
@@ -74,6 +50,15 @@ async function filePathToImageAttachment(path: string): Promise<ImageAttachment>
 }
 
 async function fileToImageAttachment(file: File): Promise<ImageAttachment> {
+  // In the Electron desktop runtime, prefer the native file path via
+  // webUtils.getPathForFile so the attachment store can read the file
+  // directly instead of copying through an in-memory Blob.
+  const desktopHost = getDesktopHost();
+  const nativePath = desktopHost?.webUtils?.getPathForFile?.(file);
+  if (nativePath) {
+    return await filePathToImageAttachment(nativePath);
+  }
+
   return await persistAttachmentFromBlob({
     blob: file,
     mimeType: file.type || "image/jpeg",
@@ -103,177 +88,85 @@ export function useFileDropZone({
     }
   }, [disabled]);
 
-  // Set up event listeners on web
+  // Set up DOM drag-drop event listeners on web.
+  // In the Electron desktop runtime, handleDrop resolves native file paths
+  // via webUtils.getPathForFile (see fileToImageAttachment), so behavior is
+  // equivalent to a native drag-drop IPC without the extra surface area.
   useEffect(() => {
     if (!IS_WEB) return;
 
-    let disposed = false;
-    let cleanup: (() => void) | undefined;
-    let didCleanup = false;
+    const element = containerRef.current;
+    if (!element) {
+      return;
+    }
 
-    function runCleanup(unlisten?: () => void | Promise<void>) {
-      if (didCleanup) return;
-      const cleanupFn = unlisten ?? cleanup;
-      if (!cleanupFn) return;
-      didCleanup = true;
-      try {
-        void Promise.resolve(cleanupFn()).catch((error) => {
-          console.warn("[useFileDropZone] Failed to remove desktop drag-drop listener:", error);
-        });
-      } catch (error) {
-        console.warn("[useFileDropZone] Failed to remove desktop drag-drop listener:", error);
+    function handleDragEnter(e: DragEvent) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (disabled) return;
+
+      dragCounterRef.current++;
+      if (e.dataTransfer?.types.includes("Files")) {
+        setIsDragging(true);
       }
     }
 
-    async function setupDesktopDragDrop(): Promise<boolean> {
-      const desktopHost = getDesktopHost();
-      if (desktopHost === null) {
-        return false;
-      }
+    function handleDragOver(e: DragEvent) {
+      e.preventDefault();
+      e.stopPropagation();
 
-      const desktopWindow = desktopHost.window?.getCurrentWindow?.();
-      if (!desktopWindow || typeof desktopWindow.onDragDropEvent !== "function") {
-        return false;
-      }
+      if (disabled) return;
 
-      try {
-        const unlisten = await desktopWindow.onDragDropEvent((event: DesktopDragDropEvent) => {
-          const payload = event.payload;
-          if (payload.type === "leave") {
-            setIsDragging(false);
-            return;
-          }
-
-          if (payload.type === "enter" || payload.type === "over") {
-            if (!disabled) {
-              setIsDragging(true);
-            }
-            return;
-          }
-
-          // Drop always ends the current drag operation.
-          setIsDragging(false);
-
-          if (disabled) return;
-
-          const imagePaths = payload.paths.filter(isImagePath);
-          if (imagePaths.length === 0) {
-            return;
-          }
-
-          void Promise.all(imagePaths.map(filePathToImageAttachment))
-            .then((attachments) => {
-              if (attachments.length === 0) {
-                return;
-              }
-              onFilesDroppedRef.current(attachments);
-              return;
-            })
-            .catch((error) => {
-              console.error("[useFileDropZone] Failed to persist dropped files:", error);
-            });
-        });
-
-        if (disposed) {
-          runCleanup(unlisten);
-          return true;
-        }
-
-        cleanup = unlisten;
-        return true;
-      } catch (error) {
-        console.warn("[useFileDropZone] Failed to listen for desktop drag-drop:", error);
-        return false;
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
       }
     }
 
-    function setupDomDragDrop() {
-      const element = containerRef.current;
-      if (!element) {
-        return;
-      }
+    function handleDragLeave(e: DragEvent) {
+      e.preventDefault();
+      e.stopPropagation();
 
-      function handleDragEnter(e: DragEvent) {
-        e.preventDefault();
-        e.stopPropagation();
+      if (disabled) return;
 
-        if (disabled) return;
-
-        dragCounterRef.current++;
-        if (e.dataTransfer?.types.includes("Files")) {
-          setIsDragging(true);
-        }
-      }
-
-      function handleDragOver(e: DragEvent) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (disabled) return;
-
-        if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = "copy";
-        }
-      }
-
-      function handleDragLeave(e: DragEvent) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (disabled) return;
-
-        dragCounterRef.current--;
-        if (dragCounterRef.current === 0) {
-          setIsDragging(false);
-        }
-      }
-
-      async function handleDrop(e: DragEvent) {
-        e.preventDefault();
-        e.stopPropagation();
-
+      dragCounterRef.current--;
+      if (dragCounterRef.current === 0) {
         setIsDragging(false);
-        dragCounterRef.current = 0;
-
-        if (disabled) return;
-
-        const files = Array.from(e.dataTransfer?.files ?? []);
-        const imageFiles = files.filter(isImageFile);
-
-        if (imageFiles.length === 0) return;
-
-        try {
-          const attachments = await Promise.all(imageFiles.map(fileToImageAttachment));
-          onFilesDroppedRef.current(attachments);
-        } catch (error) {
-          console.error("[useFileDropZone] Failed to process dropped files:", error);
-        }
       }
-
-      element.addEventListener("dragenter", handleDragEnter);
-      element.addEventListener("dragover", handleDragOver);
-      element.addEventListener("dragleave", handleDragLeave);
-      element.addEventListener("drop", handleDrop);
-
-      cleanup = () => {
-        element.removeEventListener("dragenter", handleDragEnter);
-        element.removeEventListener("dragover", handleDragOver);
-        element.removeEventListener("dragleave", handleDragLeave);
-        element.removeEventListener("drop", handleDrop);
-      };
     }
 
-    void (async () => {
-      const desktopListenersAttached = await setupDesktopDragDrop();
-      if (disposed || desktopListenersAttached) {
-        return;
+    async function handleDrop(e: DragEvent) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      setIsDragging(false);
+      dragCounterRef.current = 0;
+
+      if (disabled) return;
+
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      const imageFiles = files.filter(isImageFile);
+
+      if (imageFiles.length === 0) return;
+
+      try {
+        const attachments = await Promise.all(imageFiles.map(fileToImageAttachment));
+        onFilesDroppedRef.current(attachments);
+      } catch (error) {
+        console.error("[useFileDropZone] Failed to process dropped files:", error);
       }
-      setupDomDragDrop();
-    })();
+    }
+
+    element.addEventListener("dragenter", handleDragEnter);
+    element.addEventListener("dragover", handleDragOver);
+    element.addEventListener("dragleave", handleDragLeave);
+    element.addEventListener("drop", handleDrop);
 
     return () => {
-      disposed = true;
-      runCleanup();
+      element.removeEventListener("dragenter", handleDragEnter);
+      element.removeEventListener("dragover", handleDragOver);
+      element.removeEventListener("dragleave", handleDragLeave);
+      element.removeEventListener("drop", handleDrop);
     };
   }, [disabled]);
 
