@@ -14,6 +14,13 @@ interface AudioEngineTraceOptions {
   traceLabel?: string;
 }
 
+interface Subscriber {
+  callbacks: AudioEngineCallbacks;
+  captureActive: boolean;
+  muted: boolean;
+  destroyed: boolean;
+}
+
 function parsePcmSampleRate(mimeType: string): number | null {
   const match = /rate=(\d+)/i.exec(mimeType);
   if (!match) {
@@ -66,16 +73,181 @@ function resamplePcm16(pcm: Uint8Array, fromRate: number, toRate: number): Uint8
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Shared native engine core (singleton with reference counting)
+// ---------------------------------------------------------------------------
+//
+// The native `ExpoTwoWayAudioModule` is a singleton: a single native audio
+// engine instance serves all JS consumers. If two JS `createAudioEngine`
+// instances each call `addExpoTwoWayAudioEventListener`, the same PCM frame
+// is delivered to both listeners, causing duplicate processing when (for
+// example) VoiceProvider and a dictation hook are both active.
+//
+// `SharedEngineCore` registers native listeners exactly once and fans events
+// out to every active subscriber. Native recording is reference-counted: any
+// active subscriber keeps recording on; only when all subscribers stop
+// capture does native recording turn off.
+
+interface SharedEngineCore {
+  native: typeof import("@chisacode/expo-two-way-audio");
+  subscribers: Set<Subscriber>;
+  initialized: boolean;
+  nativeRecording: boolean;
+  micSubscription: { remove(): void };
+  volumeSubscription: { remove(): void };
+  initPromise: Promise<void> | null;
+  teardownPromise: Promise<void> | null;
+}
+
+let sharedCore: SharedEngineCore | null = null;
+
+function getNativeModule(): typeof import("@chisacode/expo-two-way-audio") {
+  return require("@chisacode/expo-two-way-audio");
+}
+
+function getOrCreateSharedCore(): SharedEngineCore {
+  if (sharedCore) {
+    return sharedCore;
+  }
+
+  const native = getNativeModule();
+  const subscribers = new Set<Subscriber>();
+
+  const micSubscription = native.addExpoTwoWayAudioEventListener(
+    "onMicrophoneData",
+    (event: { data: Uint8Array }) => {
+      const pcm = event.data;
+      for (const sub of subscribers) {
+        if (sub.destroyed || !sub.captureActive || sub.muted) {
+          continue;
+        }
+        sub.callbacks.onCaptureData(pcm);
+      }
+    },
+  );
+
+  const volumeSubscription = native.addExpoTwoWayAudioEventListener(
+    "onInputVolumeLevelData",
+    (event: { data: number }) => {
+      for (const sub of subscribers) {
+        if (sub.destroyed || !sub.captureActive) {
+          continue;
+        }
+        const level = sub.muted ? 0 : event.data;
+        sub.callbacks.onVolumeLevel(level);
+      }
+    },
+  );
+
+  sharedCore = {
+    native,
+    subscribers,
+    initialized: false,
+    nativeRecording: false,
+    micSubscription,
+    volumeSubscription,
+    initPromise: null,
+    teardownPromise: null,
+  };
+  return sharedCore;
+}
+
+function anySubscriberCapturing(subscribers: Set<Subscriber>): boolean {
+  for (const sub of subscribers) {
+    if (!sub.destroyed && sub.captureActive) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function ensureCoreInitialized(core: SharedEngineCore): Promise<void> {
+  if (core.initialized) {
+    return;
+  }
+  if (core.initPromise) {
+    await core.initPromise;
+    return;
+  }
+  core.initPromise = (async () => {
+    if (core.teardownPromise) {
+      await core.teardownPromise;
+      core.teardownPromise = null;
+    }
+    const success = await core.native.initialize();
+    if (!success) {
+      throw new Error("expo-two-way-audio：原生 initialize() 返回 false");
+    }
+    core.initialized = true;
+    core.initPromise = null;
+  })();
+  await core.initPromise;
+}
+
+async function ensureMicrophonePermission(core: SharedEngineCore): Promise<void> {
+  let permission = await core.native.getMicrophonePermissionsAsync().catch(() => null);
+  if (!permission?.granted) {
+    permission = await core.native.requestMicrophonePermissionsAsync().catch(() => null);
+  }
+  if (!permission?.granted) {
+    throw new Error("采集音频需要麦克风权限。请在系统设置中启用麦克风访问。");
+  }
+}
+
+function updateNativeRecording(core: SharedEngineCore): void {
+  const shouldRecord = anySubscriberCapturing(core.subscribers);
+  if (shouldRecord === core.nativeRecording) {
+    return;
+  }
+  core.nativeRecording = shouldRecord;
+  try {
+    core.native.toggleRecording(shouldRecord);
+  } catch {
+    // Best-effort; native will surface errors via events.
+  }
+}
+
+async function teardownCoreIfIdle(core: SharedEngineCore): Promise<void> {
+  if (core.subscribers.size > 0) {
+    return;
+  }
+  if (!core.initialized) {
+    return;
+  }
+  if (core.teardownPromise) {
+    await core.teardownPromise;
+    return;
+  }
+  core.teardownPromise = (async () => {
+    if (core.nativeRecording) {
+      core.native.toggleRecording(false);
+      core.nativeRecording = false;
+    }
+    core.native.tearDown();
+    core.initialized = false;
+    core.teardownPromise = null;
+  })();
+  await core.teardownPromise;
+}
+
+// ---------------------------------------------------------------------------
+// Per-instance engine (subscribes to shared core)
+// -----------------------------------------------------------------
+
 export function createAudioEngine(
   callbacks: AudioEngineCallbacks,
   _options?: AudioEngineTraceOptions,
 ): AudioEngine {
-  const native = require("@chisacode/expo-two-way-audio");
+  const core = getOrCreateSharedCore();
+  const subscriber: Subscriber = {
+    callbacks,
+    captureActive: false,
+    muted: false,
+    destroyed: false,
+  };
+  core.subscribers.add(subscriber);
 
   const refs: {
-    initialized: boolean;
-    captureActive: boolean;
-    muted: boolean;
     queue: QueuedAudio[];
     processingQueue: boolean;
     playbackTimeout: ReturnType<typeof setTimeout> | null;
@@ -84,59 +256,12 @@ export function createAudioEngine(
       reject: (error: Error) => void;
       settled: boolean;
     } | null;
-    destroyed: boolean;
   } = {
-    initialized: false,
-    captureActive: false,
-    muted: false,
     queue: [],
     processingQueue: false,
     playbackTimeout: null,
     activePlayback: null,
-    destroyed: false,
   };
-
-  const microphoneSubscription = native.addExpoTwoWayAudioEventListener(
-    "onMicrophoneData",
-    (event: { data: Uint8Array }) => {
-      if (!refs.captureActive || refs.muted) {
-        return;
-      }
-      const pcm = event.data;
-      callbacks.onCaptureData(pcm);
-    },
-  );
-  const volumeSubscription = native.addExpoTwoWayAudioEventListener(
-    "onInputVolumeLevelData",
-    (event: { data: number }) => {
-      if (!refs.captureActive) {
-        return;
-      }
-      const level = refs.muted ? 0 : event.data;
-      callbacks.onVolumeLevel(level);
-    },
-  );
-
-  async function ensureInitialized(): Promise<void> {
-    if (refs.initialized) {
-      return;
-    }
-    const success = await native.initialize();
-    if (!success) {
-      throw new Error("expo-two-way-audio：原生 initialize() 返回 false");
-    }
-    refs.initialized = true;
-  }
-
-  async function ensureMicrophonePermission(): Promise<void> {
-    let permission = await native.getMicrophonePermissionsAsync().catch(() => null);
-    if (!permission?.granted) {
-      permission = await native.requestMicrophonePermissionsAsync().catch(() => null);
-    }
-    if (!permission?.granted) {
-      throw new Error("采集音频需要麦克风权限。请在系统设置中启用麦克风访问。");
-    }
-  }
 
   function clearPlaybackTimeout(): void {
     if (refs.playbackTimeout) {
@@ -146,7 +271,7 @@ export function createAudioEngine(
   }
 
   async function playAudio(audio: AudioPlaybackSource): Promise<number> {
-    await ensureInitialized();
+    await ensureCoreInitialized(core);
 
     return await new Promise<number>((resolve, reject) => {
       refs.activePlayback = { resolve, reject, settled: false };
@@ -161,8 +286,8 @@ export function createAudioEngine(
           const pcm16k = resamplePcm16(pcm, inputRate, 16000);
           const durationSec = pcm16k.length / 2 / 16000;
 
-          native.resumePlayback();
-          native.playPCMData(pcm16k);
+          core.native.resumePlayback();
+          core.native.playPCMData(pcm16k);
 
           clearPlaybackTimeout();
           refs.playbackTimeout = setTimeout(() => {
@@ -209,41 +334,37 @@ export function createAudioEngine(
 
   return {
     async initialize() {
-      await ensureInitialized();
+      await ensureCoreInitialized(core);
     },
 
     async destroy() {
-      if (refs.destroyed) {
+      if (subscriber.destroyed) {
         return;
       }
-      refs.destroyed = true;
+      subscriber.destroyed = true;
       this.stop();
       this.clearQueue();
-      if (refs.captureActive) {
-        native.toggleRecording(false);
-        refs.captureActive = false;
+      if (subscriber.captureActive) {
+        subscriber.captureActive = false;
+        updateNativeRecording(core);
       }
       clearPlaybackTimeout();
-      refs.muted = false;
+      subscriber.muted = false;
       callbacks.onVolumeLevel(0);
-      if (refs.initialized) {
-        native.tearDown();
-        refs.initialized = false;
-      }
-      microphoneSubscription.remove();
-      volumeSubscription.remove();
+      core.subscribers.delete(subscriber);
+      await teardownCoreIfIdle(core).catch(() => undefined);
     },
 
     async startCapture() {
-      if (refs.captureActive) {
+      if (subscriber.captureActive) {
         return;
       }
 
       try {
-        await ensureMicrophonePermission();
-        await ensureInitialized();
-        native.toggleRecording(true);
-        refs.captureActive = true;
+        await ensureMicrophonePermission(core);
+        await ensureCoreInitialized(core);
+        subscriber.captureActive = true;
+        updateNativeRecording(core);
       } catch (error) {
         const wrapped = error instanceof Error ? error : new Error(String(error));
         callbacks.onError?.(wrapped);
@@ -252,24 +373,25 @@ export function createAudioEngine(
     },
 
     async stopCapture() {
-      if (refs.captureActive) {
-        native.toggleRecording(false);
+      if (!subscriber.captureActive) {
+        return;
       }
-      refs.captureActive = false;
-      refs.muted = false;
+      subscriber.captureActive = false;
+      subscriber.muted = false;
       callbacks.onVolumeLevel(0);
+      updateNativeRecording(core);
     },
 
     toggleMute() {
-      refs.muted = !refs.muted;
-      if (refs.muted) {
+      subscriber.muted = !subscriber.muted;
+      if (subscriber.muted) {
         callbacks.onVolumeLevel(0);
       }
-      return refs.muted;
+      return subscriber.muted;
     },
 
     isMuted() {
-      return refs.muted;
+      return subscriber.muted;
     },
 
     async play(audio: AudioPlaybackSource) {
@@ -282,7 +404,7 @@ export function createAudioEngine(
     },
 
     stop() {
-      native.stopPlayback();
+      core.native.stopPlayback();
       clearPlaybackTimeout();
       const active = refs.activePlayback;
       refs.activePlayback = null;
