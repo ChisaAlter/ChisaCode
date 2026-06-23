@@ -260,4 +260,36 @@ describe("daemon-manager privileged IPC sender validation", () => {
     expect(isMainAppSenderUrl("https://localhost.evil.test")).toBe(false);
     expect(isMainAppSenderUrl("about:blank")).toBe(false);
   });
+
+  it("rejects file:// and localhost in packaged builds", () => {
+    expect(isMainAppSenderUrl("file:///app-dist/index.html", { packaged: true })).toBe(false);
+    expect(isMainAppSenderUrl("http://localhost:8081/h/srv_1/workspace", { packaged: true })).toBe(
+      false,
+    );
+    expect(isMainAppSenderUrl("http://localhost:3000/h/srv_1/workspace", { packaged: true })).toBe(
+      false,
+    );
+  });
+
+  it("trusts file:// and the dev port in dev mode", () => {
+    expect(isMainAppSenderUrl("file:///app-dist/index.html", { packaged: false })).toBe(true);
+    expect(isMainAppSenderUrl("http://localhost:8081/h/srv_1/workspace", { packaged: false })).toBe(
+      true,
+    );
+  });
+
+  it("rejects non-dev localhost ports in dev mode", () => {
+    expect(isMainAppSenderUrl("http://localhost:3000/h/srv_1/workspace", { packaged: false })).toBe(
+      false,
+    );
+  });
+
+  it("honors a custom dev port when provided", () => {
+    expect(
+      isMainAppSenderUrl("http://localhost:3000/h/srv_1/workspace", {
+        packaged: false,
+        devPort: 3000,
+      }),
+    ).toBe(true);
+  });
 });

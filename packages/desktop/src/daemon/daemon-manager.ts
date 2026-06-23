@@ -42,7 +42,7 @@ import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
 import { translateDesktop } from "../i18n.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
-const DAEMON_PID_FILENAMES = ["chisacode.pid", "chisacode.pid"] as const;
+const DAEMON_PID_FILENAMES = ["chisacode.pid"] as const;
 const IPC_PREFIXES = ["chisacode"] as const;
 
 /**
@@ -72,16 +72,48 @@ const STARTUP_POLL_MAX_ATTEMPTS = 150;
 const DETACHED_STARTUP_GRACE_MS = 1200;
 const STARTUP_OUTPUT_CAPTURE_LIMIT_CHARS = 64 * 1024;
 
-export function isMainAppSenderUrl(senderUrl: string): boolean {
+export interface SenderValidationOptions {
+  /**
+   * Whether the desktop app is running from a packaged build. When true,
+   * `file://` and `http(s)://localhost` origins are rejected because the
+   * packaged app loads from the `chisacode://` protocol. When false (dev),
+   * localhost and the dev port are trusted.
+   */
+  packaged: boolean;
+  /**
+   * Optional dev server port. Only consulted in dev mode. Defaults to 8081
+   * (matches DEV_SERVER_URL in main.ts).
+   */
+  devPort?: number;
+}
+
+const DEFAULT_DEV_PORT = 8081;
+
+export function isMainAppSenderUrl(
+  senderUrl: string,
+  options: SenderValidationOptions = { packaged: true },
+): boolean {
   try {
     const url = new URL(senderUrl);
-    if (url.protocol === "file:") {
-      return true;
-    }
     if (url.protocol === "chisacode:" && url.hostname === "app") {
       return true;
     }
-    if ((url.protocol === "http:" || url.protocol === "https:") && url.hostname === "localhost") {
+    // In packaged builds the app loads from chisacode://, so file:// and
+    // localhost are not expected. Reject them to prevent a webview or iframe
+    // with a file:// or localhost origin from invoking privileged IPC.
+    if (options.packaged) {
+      return false;
+    }
+    // Dev mode: trust file:// (static export dev), and localhost on the dev
+    // port. Other localhost ports are rejected to limit blast radius.
+    if (url.protocol === "file:") {
+      return true;
+    }
+    if (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.hostname === "localhost" &&
+      url.port === String(options.devPort ?? DEFAULT_DEV_PORT)
+    ) {
       return true;
     }
     return false;
@@ -670,7 +702,7 @@ export function registerDaemonManager(): void {
           const senderUrl = event.senderFrame?.url ?? event.sender?.getURL?.() ?? "";
           // The main app loads from the app protocol in packaged builds, file:// in
           // static exports, or localhost in dev. Webviews use external origins.
-          if (!isMainAppSenderUrl(senderUrl)) {
+          if (!isMainAppSenderUrl(senderUrl, { packaged: app.isPackaged })) {
             logDesktopDaemonLifecycle("blocked privileged IPC command from non-main sender", {
               command,
               senderUrl: senderUrl.slice(0, 200),
