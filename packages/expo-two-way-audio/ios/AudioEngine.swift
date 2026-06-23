@@ -138,34 +138,45 @@ class AudioEngine {
             print("Error: Could not access channel data")
             return
         }
-        
+
         let frameCount = Int(buffer.frameLength)
+        // installTap requests bufferSize: 2048 but the actual frameCount can
+        // differ. Dynamically grow the ring buffer so we never overwrite
+        // unconsumed samples and volume calculation stays accurate.
+        if frameCount > inputBuffer.count {
+            inputBuffer = [Float](repeating: 0, count: frameCount)
+            inputBufferIndex = 0
+        }
         var int16Samples = [Int16](repeating: 0, count: frameCount)
-        
+
         // Convert float samples to Int16 and update input buffer for volume calculation
         for i in 0..<frameCount {
             let floatSample = max(-1.0, min(1.0, channelData[i]))
             int16Samples[i] = Int16(floatSample * Float(Int16.max))
-            
+
             inputBuffer[inputBufferIndex] = floatSample
             inputBufferIndex = (inputBufferIndex + 1) % inputBuffer.count
         }
-        
+
         // Create Data object from Int16 samples
         let data = Data(bytes: int16Samples, count: frameCount * MemoryLayout<Int16>.size)
-        
+
         // Send the data to the callback
         onMicDataCallback?(data)
     }
-    
+
     func processOutputBuffer(_ buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData?[0] else {
             print("Error: Could not access channel data")
             return
         }
-        
+
         let frameCount = Int(buffer.frameLength)
-        
+        if frameCount > outputBuffer.count {
+            outputBuffer = [Float](repeating: 0, count: frameCount)
+            outputBufferIndex = 0
+        }
+
         // Update output buffer for volume calculation
         for i in 0..<frameCount {
             let floatSample = max(-1.0, min(1.0, channelData[i]))

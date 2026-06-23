@@ -81,7 +81,7 @@ public class ExpoTwoWayAudioModule: Module {
             return ""
         }
 
-        Function("setMicrophoneModeIOS") {
+        Function("showMicrophoneModePickerIOS") {
             if #available(iOS 15, *) {
                 if AVCaptureDevice.preferredMicrophoneMode != .voiceIsolation {
                     AVCaptureDevice.showSystemUserInterface(.microphoneModes)
