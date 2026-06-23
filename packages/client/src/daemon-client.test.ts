@@ -402,6 +402,58 @@ test("keeps the transport connected when a session RPC ping times out", async ()
   expect(client.getConnectionState().status).toBe("connected");
 });
 
+test("allows openProject to finish after slow cold-start workspace initialization", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const mock = createMockTransport();
+
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_unit_test",
+      logger,
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+
+    const connectPromise = client.connect();
+    mock.triggerOpen();
+    await connectPromise;
+
+    const resultPromise = client.openProject("C:\\slow-workspace").then(
+      (value) => ({ status: "resolved" as const, value }),
+      (error) => ({ status: "rejected" as const, error }),
+    );
+
+    expect(mock.sent).toHaveLength(1);
+    const request = parseSentFrame(mock.sent.at(-1));
+
+    await vi.advanceTimersByTimeAsync(10_001);
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "open_project_response",
+        payload: {
+          requestId: request.requestId,
+          workspace: null,
+          error: "late response",
+        },
+      }),
+    );
+
+    await expect(resultPromise).resolves.toEqual({
+      status: "resolved",
+      value: {
+        requestId: request.requestId,
+        workspace: null,
+        error: "late response",
+      },
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("reconnects after repeated top-level liveness checks time out", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

@@ -61,11 +61,15 @@ export function buildSidebarLiveAgents(input: {
 export function mergeSidebarSessionSources(input: {
   liveAgents: AggregatedAgent[];
   historyAgents: AggregatedAgent[];
+  suppressedAgentIds?: ReadonlySet<string>;
   selectedAgentId?: string;
 }): { agents: AggregatedAgent[]; selectedAgentId?: string } {
   const merged: AggregatedAgent[] = [];
   const seen = new Set<string>();
   for (const agent of [...input.liveAgents, ...input.historyAgents]) {
+    if (input.suppressedAgentIds?.has(agent.id)) {
+      continue;
+    }
     const key = getAgentSourceKey(agent);
     if (seen.has(key)) {
       continue;
@@ -74,7 +78,12 @@ export function mergeSidebarSessionSources(input: {
     merged.push(agent);
   }
   const selectedAgentId =
-    input.selectedAgentId && merged.some((agent) => agent.id === input.selectedAgentId)
+    input.selectedAgentId &&
+    merged.some(
+      (agent) =>
+        agent.id === input.selectedAgentId ||
+        `${agent.serverId}:${agent.id}` === input.selectedAgentId,
+    )
       ? input.selectedAgentId
       : undefined;
   return {

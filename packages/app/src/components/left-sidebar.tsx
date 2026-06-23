@@ -56,6 +56,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
 import { useAgentHistory } from "@/hooks/use-agent-history";
+import { useSuppressedArchiveAgentIds } from "@/hooks/use-archive-agent";
 import { useOpenProjectPicker } from "@/hooks/use-open-project-picker";
 import { useSessionStore } from "@/stores/session-store";
 import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
@@ -180,6 +181,7 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
   const activeHostStatus = activeServerId
     ? (activeHostSnapshot?.connectionStatus ?? "connecting")
     : "idle";
+  const suppressedArchiveAgentIds = useSuppressedArchiveAgentIds(activeServerId ?? "");
   let activeHostStatusColor: string;
   if (activeHostStatus === "online") activeHostStatusColor = theme.colors.palette.green[400];
   else if (activeHostStatus === "connecting")
@@ -242,14 +244,26 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
       }),
     [activeHostLabel, activeServerId, liveSessionAgents],
   );
+  const suppressedAgentIds = useMemo(() => {
+    const next = new Set<string>(suppressedArchiveAgentIds);
+    if (liveSessionAgents) {
+      for (const agent of liveSessionAgents.values()) {
+        if (agent.archivedAt) {
+          next.add(agent.id);
+        }
+      }
+    }
+    return next;
+  }, [liveSessionAgents, suppressedArchiveAgentIds]);
   const sidebarSessionSource = useMemo(
     () =>
       mergeSidebarSessionSources({
         liveAgents,
         historyAgents,
+        suppressedAgentIds,
         selectedAgentId,
       }),
-    [historyAgents, liveAgents, selectedAgentId],
+    [historyAgents, liveAgents, selectedAgentId, suppressedAgentIds],
   );
   const agents = sidebarSessionSource.agents;
   const resolvedSelectedAgentId = sidebarSessionSource.selectedAgentId;

@@ -8,7 +8,7 @@ import type {
   AgentProvider,
   ListModelsOptions,
 } from "./agent-sdk-types.js";
-import { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
+import { ProviderSnapshotManager, toErrorMessage } from "./provider-snapshot-manager.js";
 
 const providerToolingMock = vi.hoisted(() => ({
   getProviderToolingDefinition: vi.fn((provider: string) => ({
@@ -181,6 +181,12 @@ describe("ProviderSnapshotManager public surface", () => {
     } finally {
       manager.destroy();
     }
+  });
+
+  test("toErrorMessage preserves JSON-RPC object messages", () => {
+    expect(toErrorMessage({ message: "Authentication required", code: -32000 })).toBe(
+      "Authentication required",
+    );
   });
 
   test("listProviders returns an entry per registered provider", async () => {

@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { useToast } from "@/contexts/toast-context";
-import { useArchiveAgent } from "@/hooks/use-archive-agent";
+import { useArchiveAgent, useSuppressedArchiveAgentIds } from "@/hooks/use-archive-agent";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
@@ -759,10 +759,14 @@ export function SidebarSessionList({
   const queryClient = useQueryClient();
   const toast = useToast();
   const { archiveAgent, isArchivingAgent } = useArchiveAgent();
+  const suppressedArchiveAgentIds = useSuppressedArchiveAgentIds(serverId ?? "");
   const [renamingAgent, setRenamingAgent] = useState<AggregatedAgent | null>(null);
   const [pinningAgentKey, setPinningAgentKey] = useState<string | null>(null);
   const [deletingAgentKey, setDeletingAgentKey] = useState<string | null>(null);
-  const visibleAgents = useMemo(() => agents.filter((agent) => !agent.archivedAt), [agents]);
+  const visibleAgents = useMemo(
+    () => agents.filter((agent) => !agent.archivedAt && !suppressedArchiveAgentIds.has(agent.id)),
+    [agents, suppressedArchiveAgentIds],
+  );
   const resolvedSelectedAgentId = useMemo(() => {
     if (selectedAgentId) {
       return selectedAgentId;
@@ -856,9 +860,11 @@ export function SidebarSessionList({
       if (agent.archivedAt) {
         return;
       }
-      void archiveAgent({ serverId: agent.serverId, agentId: agent.id }).catch(() => {});
+      void archiveAgent({ serverId: agent.serverId, agentId: agent.id }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : t("sidebar.archiveSessionFailed"));
+      });
     },
-    [archiveAgent],
+    [archiveAgent, t, toast],
   );
 
   const handleDelete = useCallback(

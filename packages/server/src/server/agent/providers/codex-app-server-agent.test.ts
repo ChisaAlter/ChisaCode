@@ -300,6 +300,39 @@ process.stdin.on("data", (chunk) => {
 }
 
 describe("Codex app-server provider", () => {
+  test("defaults missing modeId to auto", async () => {
+    const requests: Array<{ method: string; params: unknown }> = [];
+    const session = createSession({ modeId: undefined, thinkingOptionId: "medium" });
+    session.currentThreadId = null;
+    session.activeForegroundTurnId = null;
+    session.client = {
+      request: vi.fn(async (method: string, params: unknown) => {
+        requests.push({ method, params });
+        if (method === "model/list") {
+          return { data: [{ id: "gpt-5.4", isDefault: true }] };
+        }
+        if (method === "thread/start") {
+          return { thread: { id: "default-mode-thread" } };
+        }
+        if (method === "turn/start") {
+          return {};
+        }
+        throw new Error(`Unexpected request: ${method}`);
+      }),
+    };
+
+    await session.startTurn("trigger thread creation");
+
+    expect(await session.getCurrentMode()).toBe("auto");
+    const startCall = requests.find((req) => req.method === "thread/start");
+    expect(startCall?.params).toEqual(
+      expect.objectContaining({
+        approvalPolicy: "on-request",
+        sandbox: "workspace-write",
+      }),
+    );
+  });
+
   test("getAvailableModes includes auto-review when the Codex version supports it", async () => {
     const session = createSession({}, { autoReviewEnabled: true });
 
@@ -2464,6 +2497,30 @@ describe("Codex app-server provider", () => {
         item: { type: "assistant_message", text: "!", messageId: "assistant-item-2" },
       },
     ]);
+  });
+
+  test("fails the turn when Codex returns a tool call transcript as assistant text", () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    asInternals(session).handleNotification("item/completed", {
+      item: {
+        id: "assistant-text-tool-call",
+        type: "agentMessage",
+        text: '<tool_call>\n{"name":"apply_patch","arguments":{"patch":"--- /dev/null\\n+++ b/site.html\\n@@ -0,0 +1 @@\\n+ok"}}\n</tool_call>\n<tool_result>\nPatch applied successfully\n</tool_result>',
+      },
+    });
+    asInternals(session).handleNotification("turn/completed", {
+      turn: { status: "completed", error: null },
+    });
+
+    expect(events.at(-1)).toEqual({
+      type: "turn_failed",
+      provider: "codex",
+      turnId: "test-turn",
+      error: "Codex returned a tool call transcript as plain text, so no tool was executed.",
+    });
   });
 
   test("emits a markdown divider when a new Codex assistant item starts after the previous one completed", () => {

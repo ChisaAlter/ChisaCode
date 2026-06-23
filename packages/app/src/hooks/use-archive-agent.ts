@@ -1,10 +1,13 @@
 import { useCallback, useMemo } from "react";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { agentHistoryQueryKey } from "./agent-history-query-key";
 
 export const ARCHIVE_AGENT_PENDING_QUERY_KEY = ["archive-agent-pending"] as const;
+export const ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY = ["archive-agent-suppressed"] as const;
 const EMPTY_PENDING_ARCHIVE_AGENT_IDS = new Set<string>();
 
 export interface ArchiveAgentInput {
@@ -12,7 +15,10 @@ export interface ArchiveAgentInput {
   agentId: string;
 }
 
+export type ArchiveAgentClient = Pick<DaemonClient, "archiveAgent">;
+
 export type ArchiveAgentPendingState = Record<string, true>;
+export type ArchiveAgentSuppressedState = Record<string, true>;
 
 interface SetAgentArchivingInput extends ArchiveAgentInput {
   queryClient: QueryClient;
@@ -53,8 +59,28 @@ export function readPendingState(queryClient: QueryClient): ArchiveAgentPendingS
   return queryClient.getQueryData<ArchiveAgentPendingState>(ARCHIVE_AGENT_PENDING_QUERY_KEY) ?? {};
 }
 
+export function readSuppressedState(queryClient: QueryClient): ArchiveAgentSuppressedState {
+  return (
+    queryClient.getQueryData<ArchiveAgentSuppressedState>(ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY) ?? {}
+  );
+}
+
 export function selectPendingArchiveAgentIds(
   pendingState: ArchiveAgentPendingState,
+  serverId: string,
+): ReadonlySet<string> {
+  return selectArchiveAgentIdsByServer(pendingState, serverId);
+}
+
+export function selectSuppressedArchiveAgentIds(
+  suppressedState: ArchiveAgentSuppressedState,
+  serverId: string,
+): ReadonlySet<string> {
+  return selectArchiveAgentIdsByServer(suppressedState, serverId);
+}
+
+function selectArchiveAgentIdsByServer(
+  state: ArchiveAgentPendingState | ArchiveAgentSuppressedState,
   serverId: string,
 ): ReadonlySet<string> {
   const normalizedServerId = serverId.trim();
@@ -64,7 +90,7 @@ export function selectPendingArchiveAgentIds(
 
   const prefix = `${normalizedServerId}:`;
   let agentIds: string[] | null = null;
-  for (const key of Object.keys(pendingState)) {
+  for (const key of Object.keys(state)) {
     if (!key.startsWith(prefix)) {
       continue;
     }
@@ -82,17 +108,56 @@ export function selectPendingArchiveAgentIds(
   return new Set(agentIds);
 }
 
+export function resolveArchiveAgentClient(input: {
+  serverId: string;
+  sessionClient: ArchiveAgentClient | null | undefined;
+  runtimeClient: ArchiveAgentClient | null | undefined;
+}): ArchiveAgentClient | null {
+  return input.runtimeClient ?? input.sessionClient ?? null;
+}
+
+export function isArchiveAgentNotFoundError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Agent not found:/i.test(message) && /archive_agent_request/i.test(message);
+}
+
 export function setAgentArchiving(input: SetAgentArchivingInput): void {
+  setArchiveAgentState({
+    queryClient: input.queryClient,
+    queryKey: ARCHIVE_AGENT_PENDING_QUERY_KEY,
+    serverId: input.serverId,
+    agentId: input.agentId,
+    active: input.isArchiving,
+  });
+}
+
+export function setAgentArchiveSuppressed(input: SetAgentArchivingInput): void {
+  setArchiveAgentState({
+    queryClient: input.queryClient,
+    queryKey: ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY,
+    serverId: input.serverId,
+    agentId: input.agentId,
+    active: input.isArchiving,
+  });
+}
+
+function setArchiveAgentState(input: {
+  queryClient: QueryClient;
+  queryKey: typeof ARCHIVE_AGENT_PENDING_QUERY_KEY | typeof ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY;
+  serverId: string;
+  agentId: string;
+  active: boolean;
+}): void {
   const key = toArchiveKey(input);
   if (!key) {
     return;
   }
 
-  input.queryClient.setQueryData<ArchiveAgentPendingState>(
-    ARCHIVE_AGENT_PENDING_QUERY_KEY,
+  input.queryClient.setQueryData<ArchiveAgentPendingState | ArchiveAgentSuppressedState>(
+    input.queryKey,
     (current) => {
       const state = current ?? {};
-      if (input.isArchiving) {
+      if (input.active) {
         if (state[key]) {
           return state;
         }
@@ -116,6 +181,14 @@ export function isAgentArchiving(input: IsAgentArchivingInput): boolean {
     return false;
   }
   return readPendingState(input.queryClient)[key] ?? false;
+}
+
+export function isAgentArchiveSuppressed(input: IsAgentArchivingInput): boolean {
+  const key = toArchiveKey(input);
+  if (!key) {
+    return false;
+  }
+  return readSuppressedState(input.queryClient)[key] ?? false;
 }
 
 export function removeAgentFromListPayload<T extends AgentsListQueryData | undefined>(
@@ -223,6 +296,7 @@ interface ArchivedAgentListCacheSnapshot {
 interface ArchiveAgentMutationContext {
   agent: ReturnType<typeof getStoredAgentSnapshot>;
   lists: ArchivedAgentListCacheSnapshot;
+  wasSuppressed: boolean;
 }
 
 function getStoredAgentSnapshot(input: ArchiveAgentInput) {
@@ -269,6 +343,14 @@ function getArchivedAgentListCacheSnapshot(
       agentHistoryQueryKey(serverId),
     ),
   };
+}
+
+async function cancelArchivedAgentListQueries(queryClient: QueryClient, serverId: string) {
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: ["sidebarAgentsList", serverId] }),
+    queryClient.cancelQueries({ queryKey: ["allAgents", serverId] }),
+    queryClient.cancelQueries({ queryKey: agentHistoryQueryKey(serverId) }),
+  ]);
 }
 
 function restoreCachedQuerySnapshot(
@@ -349,6 +431,12 @@ export function applyArchivedAgentCloseResults(input: ApplyArchivedAgentCloseRes
       agentId: result.agentId,
       archivedAt: result.archivedAt,
     });
+    setAgentArchiveSuppressed({
+      queryClient: input.queryClient,
+      serverId: input.serverId,
+      agentId: result.agentId,
+      isArchiving: true,
+    });
   }
 
   if (input.invalidateQueries ?? true) {
@@ -374,12 +462,38 @@ function useArchiveAgentPendingQuery() {
   });
 }
 
+function useArchiveAgentSuppressedQuery() {
+  return useQuery({
+    queryKey: ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY,
+    queryFn: async (): Promise<ArchiveAgentSuppressedState> => ({}),
+    initialData: {} as ArchiveAgentSuppressedState,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
 export function usePendingArchiveAgentIds(serverId: string): ReadonlySet<string> {
   const pendingQuery = useArchiveAgentPendingQuery();
   return useMemo(
     () => selectPendingArchiveAgentIds(pendingQuery.data ?? {}, serverId),
     [pendingQuery.data, serverId],
   );
+}
+
+export function useSuppressedArchiveAgentIds(serverId: string): ReadonlySet<string> {
+  const pendingQuery = useArchiveAgentPendingQuery();
+  const suppressedQuery = useArchiveAgentSuppressedQuery();
+  return useMemo(() => {
+    const pendingIds = selectPendingArchiveAgentIds(pendingQuery.data ?? {}, serverId);
+    const suppressedIds = selectSuppressedArchiveAgentIds(suppressedQuery.data ?? {}, serverId);
+    if (pendingIds.size === 0) {
+      return suppressedIds;
+    }
+    if (suppressedIds.size === 0) {
+      return pendingIds;
+    }
+    return new Set([...pendingIds, ...suppressedIds]);
+  }, [pendingQuery.data, serverId, suppressedQuery.data]);
 }
 
 export function useArchiveAgent() {
@@ -389,16 +503,29 @@ export function useArchiveAgent() {
 
   const archiveMutation = useMutation({
     mutationFn: async (input: ArchiveAgentInput): Promise<{ archivedAt: string }> => {
-      const client = useSessionStore.getState().sessions[input.serverId]?.client ?? null;
+      const client = resolveArchiveAgentClient({
+        serverId: input.serverId,
+        sessionClient: useSessionStore.getState().sessions[input.serverId]?.client ?? null,
+        runtimeClient: getHostRuntimeStore().getClient(input.serverId),
+      });
       if (!client) {
         throw new Error("Daemon client not available");
       }
-      return await client.archiveAgent(input.agentId);
+      try {
+        return await client.archiveAgent(input.agentId);
+      } catch (error) {
+        if (isArchiveAgentNotFoundError(error)) {
+          return { archivedAt: new Date().toISOString() };
+        }
+        throw error;
+      }
     },
-    onMutate: (input) => {
+    onMutate: async (input) => {
+      await cancelArchivedAgentListQueries(queryClient, input.serverId);
       const context: ArchiveAgentMutationContext = {
         agent: getStoredAgentSnapshot(input),
         lists: getArchivedAgentListCacheSnapshot(queryClient, input.serverId),
+        wasSuppressed: isAgentArchiveSuppressed({ queryClient, ...input }),
       };
       const archivedAt = new Date().toISOString();
 
@@ -417,10 +544,11 @@ export function useArchiveAgent() {
       return context;
     },
     onSuccess: (result, input) => {
-      markAgentArchivedInStore({
+      applyArchivedAgentCloseResults({
+        queryClient,
         serverId: input.serverId,
-        agentId: input.agentId,
-        archivedAt: result.archivedAt,
+        results: [{ agentId: input.agentId, archivedAt: result.archivedAt }],
+        invalidateQueries: false,
       });
     },
     onError: (_error, input, context) => {
@@ -433,6 +561,14 @@ export function useArchiveAgent() {
         agent: context.agent,
       });
       restoreArchivedAgentListCacheSnapshot(queryClient, input.serverId, context.lists);
+      if (!context.wasSuppressed) {
+        setAgentArchiveSuppressed({
+          queryClient,
+          serverId: input.serverId,
+          agentId: input.agentId,
+          isArchiving: false,
+        });
+      }
     },
     onSettled: (_result, _error, input) => {
       clearArchiveAgentPending({

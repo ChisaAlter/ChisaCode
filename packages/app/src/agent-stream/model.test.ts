@@ -283,14 +283,13 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
 
     expect(result.map((item) => item.kind)).toEqual([
       "user_message",
-      "tool_call",
       "thought",
       "assistant_message",
     ]);
     const summary = result.at(-2);
     expect(summary).toMatchObject({
       kind: "thought",
-      text: "Inspect project\n\nCompare files",
+      text: "Inspect project\n\n工具调用：Shell pwd\n\nCompare files",
       status: "ready",
       isCollapsedSummary: true,
       summaryForAssistantMessageId: "a1",
@@ -310,13 +309,12 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
 
     expect(result.map((item) => item.id)).toEqual([
       "u1",
-      "tool-1",
       "thought-summary:final-answer",
       "final-answer",
     ]);
     expect(result.at(-2)).toMatchObject({
       kind: "thought",
-      text: "progress-1\n\nprogress-2",
+      text: "progress-1\n\n工具调用：Shell pwd\n\nprogress-2",
       status: "ready",
       isCollapsedSummary: true,
       summaryForAssistantMessageId: "final-answer",
@@ -346,7 +344,7 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
     });
   });
 
-  it("keeps tool calls in place when collapsing completed thoughts", () => {
+  it("collapses completed tool calls into the thought summary", () => {
     const items = [
       userMessage("u1", 1),
       thoughtMessage("t1", 2),
@@ -356,7 +354,13 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
 
     const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: false });
 
-    expect(result.map((item) => item.id)).toEqual(["u1", "tool-1", "thought-summary:a1", "a1"]);
+    expect(result.map((item) => item.id)).toEqual(["u1", "thought-summary:a1", "a1"]);
+    expect(result.at(1)).toMatchObject({
+      kind: "thought",
+      text: "t1\n\n工具调用：Shell pwd",
+      isCollapsedSummary: true,
+      summaryForAssistantMessageId: "a1",
+    });
   });
 
   it("does not move active running thoughts before the formal answer exists", () => {
@@ -365,6 +369,7 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
     const result = collapseCompletedTurnThoughtsForDisplay(items, { isRunning: true });
 
     expect(result).toBe(items);
+    expect(result.map((item) => item.kind)).toEqual(["user_message", "thought", "tool_call"]);
   });
 
   it("collapses completed thoughts across the history and live-head boundary", () => {
@@ -411,13 +416,12 @@ describe("collapseCompletedTurnThoughtsForDisplay", () => {
 
     expect(result.map((item) => item.id)).toEqual([
       "u1",
-      "codex-tool-1",
       "thought-summary:codex-final",
       "codex-final",
     ]);
     expect(result.at(-2)).toMatchObject({
       kind: "thought",
-      text: "Inspecting workspace\n\nComparing stream events\n\nReading provider output",
+      text: "Inspecting workspace\n\nComparing stream events\n\n工具调用：Shell pwd\n\nReading provider output",
       isCollapsedSummary: true,
       summaryForAssistantMessageId: "codex-final",
     });

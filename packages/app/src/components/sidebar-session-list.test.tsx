@@ -26,6 +26,7 @@ const {
   toastErrorMock,
   confirmDialogMock,
   isCompactFormFactorMock,
+  pendingArchiveAgentIdsMock,
 } = vi.hoisted(() => ({
   theme: {
     spacing: { 1: 4, 2: 8, 3: 12, 4: 16, 8: 32 },
@@ -79,6 +80,7 @@ const {
   toastErrorMock: vi.fn(),
   confirmDialogMock: vi.fn(),
   isCompactFormFactorMock: vi.fn(() => false),
+  pendingArchiveAgentIdsMock: vi.fn((_serverId: string) => new Set<string>()),
 }));
 
 vi.hoisted(() => {
@@ -126,6 +128,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.pinSessionFailed": "Failed to pin session",
         "sidebar.archive": "Archive",
         "sidebar.archiveSessionLabel": `Archive ${values?.title ?? "session"}`,
+        "sidebar.archiveSessionFailed": "Failed to archive session",
         "sidebar.archiving": "Archiving...",
         "sidebar.newSessionInWorkspace": `New session in ${values?.workspace ?? "workspace"}`,
         "sidebar.deleteSession": "Delete",
@@ -303,6 +306,7 @@ vi.mock("@/hooks/use-archive-agent", () => ({
     archiveAgent: archiveAgentMock,
     isArchivingAgent: () => false,
   }),
+  useSuppressedArchiveAgentIds: (serverId: string) => pendingArchiveAgentIdsMock(serverId),
 }));
 
 vi.mock("@/hooks/agent-history-query-key", () => ({
@@ -422,6 +426,8 @@ describe("SidebarSessionList", () => {
     confirmDialogMock.mockResolvedValue(true);
     isCompactFormFactorMock.mockReset();
     isCompactFormFactorMock.mockReturnValue(false);
+    pendingArchiveAgentIdsMock.mockReset();
+    pendingArchiveAgentIdsMock.mockReturnValue(new Set<string>());
   });
 
   it("groups sessions by cwd basename and renders provider icons", () => {
@@ -501,6 +507,20 @@ describe("SidebarSessionList", () => {
 
     expect(screen.queryByText("Archived session")).toBeNull();
     expect(screen.getByText("Active session")).not.toBeNull();
+  });
+
+  it("hides sessions while their archive mutation is pending", () => {
+    pendingArchiveAgentIdsMock.mockReturnValue(new Set(["agent-1"]));
+    const agents = [
+      agent({ id: "agent-1", cwd: "/repo/project", title: "Pending archive session" }),
+      agent({ id: "agent-2", cwd: "/repo/project", title: "Still visible session" }),
+    ];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    expect(pendingArchiveAgentIdsMock).toHaveBeenCalledWith("server-1");
+    expect(screen.queryByText("Pending archive session")).toBeNull();
+    expect(screen.getByText("Still visible session")).not.toBeNull();
   });
 
   it("navigates to visible sessions", () => {
@@ -780,6 +800,18 @@ describe("SidebarSessionList", () => {
     expect(archiveAgentMock).toHaveBeenCalledWith({
       serverId: "server-1",
       agentId: "agent-1",
+    });
+  });
+
+  it("shows the archive failure instead of silently restoring the row", async () => {
+    archiveAgentMock.mockRejectedValueOnce(new Error("Daemon client not available"));
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project" })];
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    fireEvent.click(screen.getByTestId("sidebar-session-quick-archive-server-1-agent-1"));
+
+    await vi.waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith("Daemon client not available");
     });
   });
 

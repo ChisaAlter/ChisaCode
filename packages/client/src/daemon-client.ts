@@ -775,6 +775,7 @@ const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
+const DEFAULT_OPEN_PROJECT_TIMEOUT_MS = 60000;
 const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
 
 /** Default timeout for waiting for connection before sending queued messages */
@@ -1834,7 +1835,7 @@ export class DaemonClient {
         cwd,
       },
       responseType: "open_project_response",
-      timeout: 10000,
+      timeout: DEFAULT_OPEN_PROJECT_TIMEOUT_MS,
     });
   }
 

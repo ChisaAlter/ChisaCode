@@ -35,7 +35,7 @@ export function shouldAutoOpenWorkspaceSetup(
   snapshot: WorkspaceSetupSnapshot | null,
   now: number = Date.now(),
 ): boolean {
-  if (!shouldShowWorkspaceSetup(snapshot)) {
+  if (!snapshot || !shouldShowWorkspaceSetup(snapshot)) {
     return false;
   }
   if (snapshot.status === "running") {

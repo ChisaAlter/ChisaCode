@@ -901,7 +901,7 @@ function SplitPaneView({
   showCreateBrowserTab,
   buildPaneContentModel,
   onFocusPane,
-  onSplitPane: _onSplitPane,
+  onSplitPane,
   onSplitPaneEmpty,
   onReorderTabsInPane,
   renderPaneEmptyState,
@@ -1005,14 +1005,28 @@ function SplitPaneView({
     },
     [onReorderTabsInPane, paneId],
   );
-  const handleSplitRight = useCallback(
-    () => onSplitPaneEmpty({ targetPaneId: paneId, position: "right" }),
-    [onSplitPaneEmpty, paneId],
-  );
-  const handleSplitDown = useCallback(
-    () => onSplitPaneEmpty({ targetPaneId: paneId, position: "bottom" }),
-    [onSplitPaneEmpty, paneId],
-  );
+  const handleSplitRight = useCallback(() => {
+    if (!activeTabDescriptor) {
+      onSplitPaneEmpty({ targetPaneId: paneId, position: "right" });
+      return;
+    }
+    onSplitPane({
+      tabId: activeTabDescriptor.tabId,
+      targetPaneId: paneId,
+      position: "right",
+    });
+  }, [activeTabDescriptor, onSplitPane, onSplitPaneEmpty, paneId]);
+  const handleSplitDown = useCallback(() => {
+    if (!activeTabDescriptor) {
+      onSplitPaneEmpty({ targetPaneId: paneId, position: "bottom" });
+      return;
+    }
+    onSplitPane({
+      tabId: activeTabDescriptor.tabId,
+      targetPaneId: paneId,
+      position: "bottom",
+    });
+  }, [activeTabDescriptor, onSplitPane, onSplitPaneEmpty, paneId]);
   const paneTabsStyle = useMemo(
     () => [
       styles.paneTabs,

@@ -24,6 +24,7 @@ import {
   ArrowRightToLine,
   Columns2,
   Copy,
+  Globe2,
   Pencil,
   Plus,
   RotateCw,
@@ -80,6 +81,7 @@ const ThemedSquarePen = withUnistyles(SquarePen);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
 const ThemedColumns2 = withUnistyles(Columns2);
 const ThemedPlus = withUnistyles(Plus);
+const ThemedGlobe2 = withUnistyles(Globe2);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -483,8 +485,8 @@ export function WorkspaceDesktopTabsRow({
   onCloseOtherTabs,
   onCreateDraftTab,
   onCreateTerminalTab,
-  onCreateBrowserTab: _onCreateBrowserTab,
-  showCreateBrowserTab: _showCreateBrowserTab = false,
+  onCreateBrowserTab,
+  showCreateBrowserTab = false,
   disableCreateTerminal = false,
   isWaitingOnTerminalReadiness = false,
   onReorderTabs,
@@ -575,6 +577,9 @@ export function WorkspaceDesktopTabsRow({
   const handleCreateTerminal = useCallback(() => {
     onCreateTerminalTab({ paneId });
   }, [onCreateTerminalTab, paneId]);
+  const handleCreateBrowserTab = useCallback(() => {
+    onCreateBrowserTab({ paneId });
+  }, [onCreateBrowserTab, paneId]);
 
   const terminalDisabled = disableCreateTerminal || isWaitingOnTerminalReadiness;
   const newTerminalActionButtonStyle = useCallback(
@@ -761,6 +766,24 @@ export function WorkspaceDesktopTabsRow({
             </View>
           </TooltipContent>
         </Tooltip>
+        {showCreateBrowserTab ? (
+          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+            <TooltipTrigger
+              testID="workspace-new-browser"
+              onPress={handleCreateBrowserTab}
+              accessibilityRole="button"
+              accessibilityLabel={t("workspace.newBrowserTab")}
+              style={newTabActionButtonStyle}
+            >
+              <ThemedGlobe2 size={16} uniProps={mutedColorMapping} />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" offset={8}>
+              <View style={styles.newTabTooltipRow}>
+                <Text style={styles.newTabTooltipText}>{t("workspace.newBrowserTab")}</Text>
+              </View>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         {showPaneSplitActions ? (
           <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
             <TooltipTrigger

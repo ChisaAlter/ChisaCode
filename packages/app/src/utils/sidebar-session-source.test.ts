@@ -7,6 +7,7 @@ import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "./sidebar-se
 function makeAgent(input: {
   id: string;
   serverId?: string;
+  title?: string;
   status?: AggregatedAgent["status"];
   lastActivityAt?: Date;
   archivedAt?: Date | null;
@@ -15,7 +16,7 @@ function makeAgent(input: {
     id: input.id,
     serverId: input.serverId ?? "server-1",
     serverLabel: input.serverId ?? "server-1",
-    title: input.id,
+    title: input.title ?? input.id,
     status: input.status ?? "idle",
     lastActivityAt: input.lastActivityAt ?? new Date("2026-04-02T10:00:00.000Z"),
     cwd: "/repo",
@@ -138,6 +139,22 @@ describe("mergeSidebarSessionSources", () => {
       selectedAgentId: "missing-agent",
     });
 
+    expect(result.selectedAgentId).toBeUndefined();
+  });
+
+  it("suppresses stale history copies of archived or pending archive agents", () => {
+    const result = mergeSidebarSessionSources({
+      liveAgents: [makeAgent({ id: "agent-1" })],
+      historyAgents: [
+        makeAgent({ id: "agent-archived", title: "Stale archived history" }),
+        makeAgent({ id: "agent-pending", title: "Stale pending history" }),
+        makeAgent({ id: "agent-2" }),
+      ],
+      suppressedAgentIds: new Set(["agent-archived", "agent-pending"]),
+      selectedAgentId: "agent-archived",
+    });
+
+    expect(result.agents.map((agent) => agent.id)).toEqual(["agent-1", "agent-2"]);
     expect(result.selectedAgentId).toBeUndefined();
   });
 });

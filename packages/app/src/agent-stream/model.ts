@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { deriveStreamTurnTiming, type StreamTurnTiming } from "@/timeline/turn-time";
-import type { StreamItem, ThoughtItem } from "@/types/stream";
+import type { StreamItem, ThoughtItem, ToolCallItem } from "@/types/stream";
 import {
   findMountedWindowStart,
   getWebMountedRecentStreamItems,
@@ -47,6 +47,7 @@ const EMPTY_AUXILIARY: StreamRenderAuxiliary = {
   pendingPermissions: null,
   turnFooter: null,
 };
+const TOOL_CALL_ARGUMENT_SUMMARY_MAX_LENGTH = 120;
 
 const orderedTailCache = new WeakMap<StreamItem[], Map<string, StreamItem[]>>();
 const orderedHeadCache = new WeakMap<StreamItem[], Map<string, StreamItem[]>>();
@@ -78,12 +79,71 @@ function trimSummarySourceText(text: string): string {
     .trim();
 }
 
+function normalizeInlineSummaryText(text: string): string {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  if (normalized.length <= TOOL_CALL_ARGUMENT_SUMMARY_MAX_LENGTH) {
+    return normalized;
+  }
+  return `${normalized.slice(0, TOOL_CALL_ARGUMENT_SUMMARY_MAX_LENGTH - 1)}...`;
+}
+
+function stringifyUnknownForSummary(value: unknown): string {
+  if (typeof value === "string") {
+    return normalizeInlineSummaryText(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  try {
+    return normalizeInlineSummaryText(JSON.stringify(value));
+  } catch {
+    return "";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getPreferredArgumentSummary(value: unknown): string {
+  if (!isRecord(value)) {
+    return stringifyUnknownForSummary(value);
+  }
+  for (const key of ["command", "cmd", "input", "query", "path"]) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return normalizeInlineSummaryText(candidate);
+    }
+  }
+  return stringifyUnknownForSummary(value);
+}
+
+function getToolCallSummarySourceText(item: ToolCallItem): string {
+  const isFailed = item.payload.data.status === "failed";
+  const prefix = isFailed ? "工具调用失败" : "工具调用";
+  const name =
+    item.payload.source === "agent" ? item.payload.data.name : item.payload.data.toolName;
+  const argumentSummary =
+    item.payload.source === "orchestrator"
+      ? getPreferredArgumentSummary(item.payload.data.arguments)
+      : "";
+  return [prefix, `${name}${argumentSummary ? ` ${argumentSummary}` : ""}`].join("：");
+}
+
 function getCompletedTurnThoughtSummarySourceText(input: {
   item: StreamItem;
   finalAssistantGroupKey: string;
+  itemIndex: number;
+  finalAssistantIndex: number;
 }): string | null {
   if (input.item.kind === "thought") {
     return input.item.text;
+  }
+  if (input.item.kind === "tool_call" && input.itemIndex < input.finalAssistantIndex) {
+    return getToolCallSummarySourceText(input.item);
   }
   if (
     input.item.kind === "assistant_message" &&
@@ -111,10 +171,12 @@ function collapseCompletedTurn(turnItems: StreamItem[]): StreamItem[] {
 
   const finalAssistantGroupKey = getAssistantMessageGroupKey(lastAssistant);
   const summaryText = turnItems
-    .map((item) =>
+    .map((item, itemIndex) =>
       getCompletedTurnThoughtSummarySourceText({
         item,
         finalAssistantGroupKey,
+        itemIndex,
+        finalAssistantIndex: lastAssistantIndex,
       }),
     )
     .filter((text): text is string => text !== null)
@@ -133,9 +195,12 @@ function collapseCompletedTurn(turnItems: StreamItem[]): StreamItem[] {
     });
   }
 
-  const summarySourceItems = turnItems.filter((item) => {
+  const summarySourceItems = turnItems.filter((item, itemIndex) => {
     if (item.kind === "thought") {
       return true;
+    }
+    if (item.kind === "tool_call") {
+      return itemIndex < lastAssistantIndex;
     }
     if (item.kind !== "assistant_message") {
       return false;
@@ -158,6 +223,9 @@ function collapseCompletedTurn(turnItems: StreamItem[]): StreamItem[] {
   for (let index = 0; index < turnItems.length; index += 1) {
     const item = turnItems[index];
     if (!item || item.kind === "thought") {
+      continue;
+    }
+    if (item.kind === "tool_call" && index < lastAssistantIndex) {
       continue;
     }
     if (

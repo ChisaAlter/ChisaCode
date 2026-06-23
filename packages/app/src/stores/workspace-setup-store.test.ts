@@ -41,6 +41,9 @@ describe("workspace-setup-store", () => {
   });
 
   it("hides empty successful setup snapshots", () => {
+    expect(shouldShowWorkspaceSetup(null)).toBe(false);
+    expect(shouldAutoOpenWorkspaceSetup(null)).toBe(false);
+
     expect(
       shouldShowWorkspaceSetup({
         workspaceId: "workspace-1",

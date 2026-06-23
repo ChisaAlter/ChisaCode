@@ -116,6 +116,8 @@ const CODEX_TOOL_THREAD_ITEM_TYPES = new Set([
 const CODEX_CONTEXT_COMPACTION_TYPE = "contextCompaction";
 const CODEX_PLAN_IMPLEMENTATION_PROMPT_PREFIX =
   "The user approved the plan. Implement it now. Do not restate or revise the plan unless blocked.";
+const CODEX_TEXTUAL_TOOL_CALL_ERROR =
+  "Codex returned a tool call transcript as plain text, so no tool was executed.";
 
 // Codex's experimental `goals` feature ships in 0.128.0+. Older binaries reject
 // `--enable goals` at launch, so we gate by version and silently skip the flag
@@ -290,6 +292,18 @@ function normalizeCodexThinkingOptionId(
     return undefined;
   }
   return normalized;
+}
+
+function looksLikeTextualCodexToolCallTranscript(text: string): boolean {
+  if (!text.includes("<tool_call>") || !text.includes("</tool_call>")) {
+    return false;
+  }
+  if (!text.includes("<tool_result>") && !text.includes("</tool_result>")) {
+    return false;
+  }
+  return /"name"\s*:\s*"(?:apply_patch|apply_diff|write_file|create_file|shell|exec|command|bash|Bash)"/.test(
+    text,
+  );
 }
 
 function normalizeCodexModelId(modelId: string | null | undefined): string | undefined {
@@ -3067,6 +3081,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
   private warnedIncompleteEditToolCallIds = new Set<string>();
+  private textualToolCallError: string | null = null;
   private latestUsage: AgentUsage | undefined;
   private latestPlanResult: { callId: string; text: string; turnId: string | null } | null = null;
   private readonly userMessageTurnIndexes = new Map<string, number>();
@@ -3108,12 +3123,10 @@ export class CodexAppServerAgentSession implements AgentSession {
       provider: CODEX_PROVIDER,
       agentId: this.agentId,
     });
-    if (config.modeId === undefined) {
-      throw new Error("Codex agent requires modeId to be specified");
-    }
-    validateCodexMode(config.modeId);
-    this.currentMode = config.modeId;
-    this.config = config;
+    const modeId = config.modeId ?? DEFAULT_CODEX_MODE_ID;
+    validateCodexMode(modeId);
+    this.currentMode = modeId;
+    this.config = { ...config, modeId };
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
     if (this.config.featureValues?.fast_mode && codexModelSupportsFastMode(this.config.model)) {
       this.serviceTier = "fast";
@@ -4731,7 +4744,13 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitSubAgentActivityUpdate(subAgentCallId, status);
       return;
     }
-    if (parsed.status === "failed") {
+    if (this.textualToolCallError) {
+      this.emitEvent({
+        type: "turn_failed",
+        provider: CODEX_PROVIDER,
+        error: this.textualToolCallError,
+      });
+    } else if (parsed.status === "failed") {
       this.emitEvent({
         type: "turn_failed",
         provider: CODEX_PROVIDER,
@@ -4755,6 +4774,7 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   private resetTurnTrackingState(): void {
     this.latestPlanResult = null;
+    this.textualToolCallError = null;
     this.emittedItemStartedIds.clear();
     this.emittedItemCompletedIds.clear();
     this.emittedExecCommandStartedCallIds.clear();
@@ -4767,6 +4787,22 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.warnedIncompleteEditToolCallIds.clear();
     this.unpairedCompactionNotificationCompletions = 0;
     this.unpairedCompactionItemCompletions = 0;
+  }
+
+  private rememberTextualToolCallFailure(text: string): void {
+    if (this.textualToolCallError || !looksLikeTextualCodexToolCallTranscript(text)) {
+      return;
+    }
+    this.textualToolCallError = CODEX_TEXTUAL_TOOL_CALL_ERROR;
+    this.logger.warn(
+      {
+        agentId: this.agentId,
+        provider: CODEX_PROVIDER,
+        sessionId: this.currentThreadId,
+        turnId: this.activeForegroundTurnId ?? undefined,
+      },
+      "provider.codex.textual_tool_call_detected",
+    );
   }
 
   private handlePlanUpdatedNotification(
@@ -5076,6 +5112,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (timelineItem.type === "assistant_message" && this.pendingAgentMessages.has(itemId)) {
       const streamedText = this.pendingAgentMessages.get(itemId) ?? "";
       this.pendingAgentMessages.delete(itemId);
+      this.rememberTextualToolCallFailure(timelineItem.text);
       this.emitMissingFinalTextSuffix(timelineItem, streamedText);
       return true;
     }
@@ -5126,6 +5163,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (buffered && buffered.length > 0) {
         timelineItem.text = buffered;
       }
+      this.rememberTextualToolCallFailure(timelineItem.text);
       return;
     }
     if (timelineItem.type === "reasoning") {
