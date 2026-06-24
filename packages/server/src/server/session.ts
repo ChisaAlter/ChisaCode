@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
 import { basename, resolve, sep } from "path";
-import { homedir } from "node:os";
 import { z } from "zod";
 import type { ToolSet } from "ai";
 import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
@@ -24,12 +23,8 @@ import {
   type AgentMcpServersUpsertRequest,
   type AgentMcpServersPolicyPatchRequest,
   type AgentMcpServersDeleteRequest,
-  type CheckoutRenameBranchRequest,
   type StartWorkspaceScriptRequest,
   type CloseItemsRequest,
-  type SubscribeCheckoutDiffRequest,
-  type UnsubscribeCheckoutDiffRequest,
-  type DirectorySuggestionsRequest,
   type EditorTargetDescriptorPayload,
   type EditorTargetId,
   type ProjectPlacementPayload,
@@ -99,11 +94,7 @@ import {
   pruneUsageEvents,
   type UsageStore,
 } from "./usage/usage-store.js";
-import type {
-  WorkspaceGitRuntimeSnapshot,
-  WorkspaceGitService,
-  WorkspaceGitSnapshotOptions,
-} from "./workspace-git-service.js";
+import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
 
 import { AgentManager } from "./agent/agent-manager.js";
 import {
@@ -218,19 +209,9 @@ import type { ScriptRouteStore } from "./script-proxy.js";
 import {
   checkoutResolvedBranch,
   type CheckoutExistingBranchResult,
-  commitChanges,
-  mergeToBase,
-  mergeFromBase,
-  pullCurrentBranch,
-  pushCurrentBranch,
-  createPullRequest,
-  renameCurrentBranch,
 } from "../utils/checkout-git.js";
-import { validateBranchSlug } from "@chisacode/protocol/branch-slug";
 import { getProjectIcon } from "../utils/project-icon.js";
 import { expandTilde } from "../utils/path.js";
-import { searchHomeDirectories, searchWorkspaceEntries } from "../utils/directory-suggestions.js";
-import { toCheckoutError } from "./checkout-git-utils.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import {
   buildCheckoutPrStatusPayloadFromSnapshot,
@@ -248,13 +229,7 @@ import { notifyChatMentions, prepareChatMentionFanout } from "./chat/chat-mentio
 import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
 import { execCommand } from "../utils/spawn.js";
-import {
-  assertPullRequestAutoMergeDisableReady,
-  assertPullRequestAutoMergeEnableReady,
-  createGitHubService,
-  type GitHubService,
-  type PullRequestTimelineItem,
-} from "../services/github-service.js";
+import { createGitHubService, type GitHubService } from "../services/github-service.js";
 import {
   summarizeFetchWorkspacesEntries,
   WorkspaceDirectory,
@@ -283,7 +258,6 @@ import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dis
 import {
   WORKSPACE_GIT_WATCH_REMOVED_STATE_KEY,
   FETCH_AGENTS_SORT_KEYS,
-  type CurrentWorkspacePullRequest,
   resolveKnownProjectRootForConfig,
   type GitMutationRefreshReason,
   LEGACY_PROVIDER_IDS,
@@ -466,12 +440,6 @@ export type SessionLifecycleIntent =
       reason?: string;
     };
 
-type PullRequestTimelinePayload = Extract<
-  SessionOutboundMessage,
-  { type: "pull_request_timeline_response" }
->["payload"];
-type PullRequestTimelinePayloadItem = PullRequestTimelinePayload["items"][number];
-
 function parseClientCapabilities(
   capabilities: Record<string, unknown> | null | undefined,
 ): ReadonlySet<ClientCapability> {
@@ -591,7 +559,6 @@ export class Session {
       cacheKey: () => AVAILABLE_EDITOR_TARGETS_CACHE_KEY,
     },
   );
-  private readonly checkoutDiffSubscriptions = new Map<string, () => void>();
   private readonly workspaceGitWatchTargets = new Map<string, WorkspaceGitWatchTarget>();
   private readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
   private readonly workspaceGitFetchSubscriptions = new Map<string, () => void>();
@@ -1866,46 +1833,46 @@ export class Session {
   private dispatchCheckoutMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       case "checkout_status_request":
-        return this.handleCheckoutStatusRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutStatusRequest(msg);
       case "validate_branch_request":
-        return this.handleValidateBranchRequest(msg);
+        return this.checkoutGitHandler.handleValidateBranchRequest(msg);
       case "branch_suggestions_request":
-        return this.handleBranchSuggestionsRequest(msg);
+        return this.checkoutGitHandler.handleBranchSuggestionsRequest(msg);
       case "directory_suggestions_request":
-        return this.handleDirectorySuggestionsRequest(msg);
+        return this.checkoutGitHandler.handleDirectorySuggestionsRequest(msg);
       case "subscribe_checkout_diff_request":
-        return this.handleSubscribeCheckoutDiffRequest(msg);
+        return this.checkoutGitHandler.handleSubscribeCheckoutDiffRequest(msg);
       case "unsubscribe_checkout_diff_request":
-        this.handleUnsubscribeCheckoutDiffRequest(msg);
+        this.checkoutGitHandler.handleUnsubscribeCheckoutDiffRequest(msg);
         return undefined;
       case "checkout_switch_branch_request":
-        return this.handleCheckoutSwitchBranchRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutSwitchBranchRequest(msg);
       case "checkout.rename_branch.request":
-        return this.handleCheckoutRenameBranchRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutRenameBranchRequest(msg);
       case "checkout_commit_request":
-        return this.handleCheckoutCommitRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutCommitRequest(msg);
       case "checkout_merge_request":
-        return this.handleCheckoutMergeRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutMergeRequest(msg);
       case "checkout_merge_from_base_request":
-        return this.handleCheckoutMergeFromBaseRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutMergeFromBaseRequest(msg);
       case "checkout_pull_request":
-        return this.handleCheckoutPullRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutPullRequest(msg);
       case "checkout_push_request":
-        return this.handleCheckoutPushRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutPushRequest(msg);
       case "checkout.refresh.request":
-        return this.handleCheckoutRefreshRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutRefreshRequest(msg);
       case "checkout_pr_create_request":
-        return this.handleCheckoutPrCreateRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutPrCreateRequest(msg);
       case "checkout_pr_merge_request":
-        return this.handleCheckoutPrMergeRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutPrMergeRequest(msg);
       case "checkout.github.set_auto_merge.request":
-        return this.handleCheckoutGithubSetAutoMergeRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutGithubSetAutoMergeRequest(msg);
       case "checkout_pr_status_request":
-        return this.handleCheckoutPrStatusRequest(msg);
+        return this.checkoutGitHandler.handleCheckoutPrStatusRequest(msg);
       case "pull_request_timeline_request":
-        return this.handlePullRequestTimelineRequest(msg);
+        return this.checkoutGitHandler.handlePullRequestTimelineRequest(msg);
       case "github_search_request":
-        return this.handleGitHubSearchRequest(msg);
+        return this.checkoutGitHandler.handleGitHubSearchRequest(msg);
       case "stash_save_request":
         return this.checkoutGitHandler.handleStashSaveRequest(msg);
       case "stash_pop_request":
@@ -4849,225 +4816,6 @@ export class Session {
     }
   }
 
-  private async handleCheckoutStatusRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_status_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-    const resolvedCwd = expandTilde(cwd);
-
-    try {
-      const snapshot = await this.workspaceGitService.getSnapshot(resolvedCwd);
-      this.emit({
-        type: "checkout_status_response",
-        payload: buildCheckoutStatusPayloadFromSnapshot({
-          cwd,
-          requestId,
-          snapshot,
-        }),
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_status_response",
-        payload: {
-          cwd,
-          isGit: false,
-          repoRoot: null,
-          currentBranch: null,
-          isDirty: null,
-          baseRef: null,
-          aheadBehind: null,
-          aheadOfOrigin: null,
-          behindOfOrigin: null,
-          hasRemote: false,
-          remoteUrl: null,
-          isChisaCodeOwnedWorktree: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleValidateBranchRequest(
-    msg: Extract<SessionInboundMessage, { type: "validate_branch_request" }>,
-  ): Promise<void> {
-    const { cwd, branchName, requestId } = msg;
-
-    try {
-      const resolvedCwd = expandTilde(cwd);
-      this.assertSafeGitRef(branchName, "branch");
-
-      const resolution = await this.workspaceGitService.validateBranchRef(resolvedCwd, branchName);
-      switch (resolution.kind) {
-        case "local":
-          this.emit({
-            type: "validate_branch_response",
-            payload: {
-              exists: true,
-              resolvedRef: resolution.name,
-              isRemote: false,
-              error: null,
-              requestId,
-            },
-          });
-          return;
-        case "remote-only":
-          this.emit({
-            type: "validate_branch_response",
-            payload: {
-              exists: true,
-              resolvedRef: resolution.remoteRef,
-              isRemote: true,
-              error: null,
-              requestId,
-            },
-          });
-          return;
-        case "not-found":
-          this.emit({
-            type: "validate_branch_response",
-            payload: {
-              exists: false,
-              resolvedRef: null,
-              isRemote: false,
-              error: null,
-              requestId,
-            },
-          });
-          return;
-        default: {
-          const exhaustiveCheck: never = resolution;
-          throw new Error(`Unhandled branch resolution: ${getErrorMessage(exhaustiveCheck)}`);
-        }
-      }
-    } catch (error) {
-      this.emit({
-        type: "validate_branch_response",
-        payload: {
-          exists: false,
-          resolvedRef: null,
-          isRemote: false,
-          error: error instanceof Error ? error.message : String(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleBranchSuggestionsRequest(
-    msg: Extract<SessionInboundMessage, { type: "branch_suggestions_request" }>,
-  ): Promise<void> {
-    const { cwd, query, limit, requestId } = msg;
-
-    try {
-      const resolvedCwd = expandTilde(cwd);
-      const branchDetails = await this.workspaceGitService.suggestBranchesForCwd(resolvedCwd, {
-        query,
-        limit,
-      });
-      this.emit({
-        type: "branch_suggestions_response",
-        payload: {
-          branches: branchDetails.map((branch) => branch.name),
-          branchDetails,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "branch_suggestions_response",
-        payload: {
-          branches: [],
-          branchDetails: [],
-          error: error instanceof Error ? error.message : String(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleGitHubSearchRequest(
-    msg: Extract<SessionInboundMessage, { type: "github_search_request" }>,
-  ): Promise<void> {
-    const { cwd, query, limit, kinds, requestId } = msg;
-
-    try {
-      const resolvedCwd = expandTilde(cwd);
-      const result = await this.github.searchIssuesAndPrs({
-        cwd: resolvedCwd,
-        query,
-        limit,
-        kinds,
-      });
-      this.emit({
-        type: "github_search_response",
-        payload: {
-          items: result.items,
-          githubFeaturesEnabled: result.githubFeaturesEnabled,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "github_search_response",
-        payload: {
-          items: [],
-          githubFeaturesEnabled: true,
-          error: error instanceof Error ? error.message : String(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleDirectorySuggestionsRequest(msg: DirectorySuggestionsRequest): Promise<void> {
-    const { query, limit, requestId, cwd, includeFiles, includeDirectories, matchMode } = msg;
-
-    try {
-      const workspaceCwd = cwd?.trim();
-      const entries = workspaceCwd
-        ? await searchWorkspaceEntries({
-            cwd: expandTilde(workspaceCwd),
-            query,
-            limit,
-            includeFiles,
-            includeDirectories,
-            matchMode,
-          })
-        : (
-            await searchHomeDirectories({
-              homeDir: process.env.HOME ?? homedir(),
-              query,
-              limit,
-            })
-          ).map((path) => ({ path, kind: "directory" as const }));
-      const directories = entries
-        .filter((entry) => entry.kind === "directory")
-        .map((entry) => entry.path);
-      this.emit({
-        type: "directory_suggestions_response",
-        payload: {
-          directories,
-          entries,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "directory_suggestions_response",
-        payload: {
-          directories: [],
-          entries: [],
-          error: error instanceof Error ? error.message : String(error),
-          requestId,
-        },
-      });
-    }
-  }
-
   private closeWorkspaceGitWatchTarget(target: WorkspaceGitWatchTarget): void {
     if (target.debounceTimer) {
       clearTimeout(target.debounceTimer);
@@ -5206,41 +4954,6 @@ export class Session {
     this.workspaceGitSubscriptions.set(normalizedCwd, subscription.unsubscribe);
   }
 
-  private async handleSubscribeCheckoutDiffRequest(
-    msg: SubscribeCheckoutDiffRequest,
-  ): Promise<void> {
-    const cwd = expandTilde(msg.cwd);
-    this.checkoutDiffSubscriptions.get(msg.subscriptionId)?.();
-    this.checkoutDiffSubscriptions.delete(msg.subscriptionId);
-    const subscription = await this.checkoutDiffManager.subscribe(
-      { cwd, compare: msg.compare },
-      (snapshot) => {
-        this.emit({
-          type: "checkout_diff_update",
-          payload: {
-            subscriptionId: msg.subscriptionId,
-            ...snapshot,
-          },
-        });
-      },
-    );
-    this.checkoutDiffSubscriptions.set(msg.subscriptionId, subscription.unsubscribe);
-
-    this.emit({
-      type: "subscribe_checkout_diff_response",
-      payload: {
-        subscriptionId: msg.subscriptionId,
-        ...subscription.initial,
-        requestId: msg.requestId,
-      },
-    });
-  }
-
-  private handleUnsubscribeCheckoutDiffRequest(msg: UnsubscribeCheckoutDiffRequest): void {
-    this.checkoutDiffSubscriptions.get(msg.subscriptionId)?.();
-    this.checkoutDiffSubscriptions.delete(msg.subscriptionId);
-  }
-
   private emitCheckoutStatusUpdate(cwd: string, snapshot: WorkspaceGitRuntimeSnapshot): void {
     try {
       const requestId = `subscription:${cwd}`;
@@ -5264,632 +4977,6 @@ export class Session {
         { err: error, cwd },
         "Failed to emit workspace checkout status update",
       );
-    }
-  }
-
-  private async handleCheckoutSwitchBranchRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_switch_branch_request" }>,
-  ): Promise<void> {
-    const { cwd, branch, requestId } = msg;
-
-    try {
-      const checkoutResult = await this.checkoutExistingBranch(cwd, branch);
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-
-      // Push a workspace_update immediately so the sidebar/header reflect
-      // the new branch name without waiting for the background git watcher.
-      await this.emitWorkspaceUpdateForCwd(cwd);
-
-      this.emit({
-        type: "checkout_switch_branch_response",
-        payload: {
-          cwd,
-          success: true,
-          branch,
-          source: checkoutResult.source,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_switch_branch_response",
-        payload: {
-          cwd,
-          success: false,
-          branch,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutRenameBranchRequest(msg: CheckoutRenameBranchRequest): Promise<void> {
-    const { cwd, branch, requestId } = msg;
-    const validation = validateBranchSlug(branch);
-
-    if (!validation.valid) {
-      this.emit({
-        type: "checkout.rename_branch.response",
-        payload: {
-          cwd,
-          success: false,
-          currentBranch: null,
-          error: toCheckoutError(new Error(validation.error ?? "Invalid branch name")),
-          requestId,
-        },
-      });
-      return;
-    }
-
-    try {
-      const result = await renameCurrentBranch(cwd, branch);
-      await this.notifyGitMutation(cwd, "rename-branch", { invalidateGithub: true });
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-      this.handleWorkspaceGitBranchSnapshot(cwd, result.currentBranch);
-
-      // Push a workspace_update immediately so the sidebar/header reflect
-      // the new branch name without waiting for the background git watcher.
-      await this.emitWorkspaceUpdateForCwd(cwd);
-
-      this.emit({
-        type: "checkout.rename_branch.response",
-        payload: {
-          cwd,
-          success: true,
-          currentBranch: result.currentBranch,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout.rename_branch.response",
-        payload: {
-          cwd,
-          success: false,
-          currentBranch: null,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutCommitRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_commit_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      let message = msg.message?.trim() ?? "";
-      if (!message) {
-        message = await this.generateCommitMessage(cwd);
-      }
-      if (!message) {
-        throw new Error("Commit message is required");
-      }
-
-      await commitChanges(cwd, {
-        message,
-        addAll: msg.addAll ?? true,
-      });
-      await this.notifyGitMutation(cwd, "commit-changes");
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-
-      this.emit({
-        type: "checkout_commit_response",
-        payload: {
-          cwd,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_commit_response",
-        payload: {
-          cwd,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutMergeRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_merge_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      const snapshot = await this.workspaceGitService.getSnapshot(cwd);
-      if (!snapshot.git.isGit) {
-        throw new Error(`Not a git repository: ${cwd}`);
-      }
-
-      if (msg.requireCleanTarget) {
-        if (snapshot.git.isDirty) {
-          throw new Error("Working directory has uncommitted changes.");
-        }
-      }
-
-      let baseRef = msg.baseRef ?? snapshot.git.baseRef;
-      if (!baseRef) {
-        throw new Error("Base branch is required for merge");
-      }
-      if (baseRef.startsWith("origin/")) {
-        baseRef = baseRef.slice("origin/".length);
-      }
-
-      const mutatedCwd = await mergeToBase(
-        cwd,
-        {
-          baseRef,
-          mode: msg.strategy === "squash" ? "squash" : "merge",
-        },
-        { chisacodeHome: this.chisacodeHome },
-      );
-      await Promise.all([
-        this.notifyGitMutation(mutatedCwd, "merge-to-base", { invalidateGithub: true }),
-        ...(mutatedCwd !== cwd ? [this.notifyGitMutation(cwd, "merge-to-base")] : []),
-      ]);
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-
-      this.emit({
-        type: "checkout_merge_response",
-        payload: {
-          cwd,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_merge_response",
-        payload: {
-          cwd,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutMergeFromBaseRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_merge_from_base_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      if (msg.requireCleanTarget ?? true) {
-        const snapshot = await this.workspaceGitService.getSnapshot(cwd);
-        if (snapshot.git.isDirty) {
-          throw new Error("Working directory has uncommitted changes.");
-        }
-      }
-
-      await mergeFromBase(cwd, {
-        baseRef: msg.baseRef,
-        requireCleanTarget: msg.requireCleanTarget ?? true,
-      });
-      await this.notifyGitMutation(cwd, "merge-from-base", { invalidateGithub: true });
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-
-      this.emit({
-        type: "checkout_merge_from_base_response",
-        payload: {
-          cwd,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_merge_from_base_response",
-        payload: {
-          cwd,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutPullRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_pull_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      await pullCurrentBranch(cwd);
-      await this.notifyGitMutation(cwd, "pull", { invalidateGithub: true });
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-
-      this.emit({
-        type: "checkout_pull_response",
-        payload: {
-          cwd,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_pull_response",
-        payload: {
-          cwd,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutPushRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_push_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      await pushCurrentBranch(cwd);
-      await this.notifyGitMutation(cwd, "push", { invalidateGithub: true });
-      this.emit({
-        type: "checkout_push_response",
-        payload: {
-          cwd,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_push_response",
-        payload: {
-          cwd,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutRefreshRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout.refresh.request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      this.github.invalidate({ cwd });
-      await this.workspaceGitService.getSnapshot(cwd, {
-        force: true,
-        includeGitHub: true,
-        reason: "manual-refresh",
-      });
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-      this.emit({
-        type: "checkout.refresh.response",
-        payload: {
-          cwd,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout.refresh.response",
-        payload: {
-          cwd,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutPrCreateRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_pr_create_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      let title = msg.title?.trim() ?? "";
-      let body = msg.body?.trim() ?? "";
-
-      if (!title || !body) {
-        const generated = await this.generatePullRequestText(cwd, msg.baseRef);
-        if (!title) title = generated.title;
-        if (!body) body = generated.body;
-      }
-
-      const result = await createPullRequest(
-        cwd,
-        {
-          title,
-          body,
-          base: msg.baseRef,
-        },
-        this.github,
-      );
-      await this.notifyGitMutation(cwd, "create-pr", { invalidateGithub: true });
-
-      this.emit({
-        type: "checkout_pr_create_response",
-        payload: {
-          cwd,
-          url: result.url ?? null,
-          number: result.number ?? null,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_pr_create_response",
-        payload: {
-          cwd,
-          url: null,
-          number: null,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handleCheckoutPrMergeRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_pr_merge_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      const pullRequest = await this.resolveCurrentPullRequest(cwd, "merge", {
-        force: true,
-        includeGitHub: true,
-        reason: "merge-pr-validation",
-      });
-      this.assertCurrentPullRequestHasGithubMergeFacts(pullRequest);
-      await this.github.mergePullRequest({
-        cwd,
-        prNumber: pullRequest.number,
-        mergeMethod: msg.mergeMethod,
-        status: pullRequest,
-      });
-      await this.notifyGitMutation(cwd, "merge-pr", { invalidateGithub: true });
-
-      this.emit({
-        type: "checkout_pr_merge_response",
-        payload: {
-          cwd,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_pr_merge_response",
-        payload: {
-          cwd,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private assertCurrentPullRequestHasGithubMergeFacts(
-    pullRequest: CurrentWorkspacePullRequest,
-  ): void {
-    if (!pullRequest.github) {
-      throw new Error("GitHub merge facts are unavailable for this pull request");
-    }
-  }
-
-  private async handleCheckoutGithubSetAutoMergeRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout.github.set_auto_merge.request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      const pullRequest = await this.resolveCurrentPullRequest(cwd, "auto-merge", {
-        force: true,
-        includeGitHub: true,
-        reason: "auto-merge-validation",
-      });
-      if (msg.enabled) {
-        const mergeMethod = msg.mergeMethod;
-        if (!mergeMethod) {
-          throw new Error("mergeMethod is required when enabling auto-merge");
-        }
-        assertPullRequestAutoMergeEnableReady({
-          mergeMethod,
-          status: pullRequest,
-        });
-        await this.github.enablePullRequestAutoMerge({
-          cwd,
-          prNumber: pullRequest.number,
-          mergeMethod,
-          status: pullRequest,
-        });
-      } else {
-        if (msg.mergeMethod) {
-          throw new Error("mergeMethod is not allowed when disabling auto-merge");
-        }
-        assertPullRequestAutoMergeDisableReady({ status: pullRequest });
-        await this.github.disablePullRequestAutoMerge({
-          cwd,
-          prNumber: pullRequest.number,
-          status: pullRequest,
-        });
-      }
-      await this.notifyGitMutation(
-        cwd,
-        msg.enabled ? "enable-pr-auto-merge" : "disable-pr-auto-merge",
-        {
-          invalidateGithub: true,
-        },
-      );
-
-      this.emit({
-        type: "checkout.github.set_auto_merge.response",
-        payload: {
-          cwd,
-          enabled: msg.enabled,
-          success: true,
-          error: null,
-          requestId,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout.github.set_auto_merge.response",
-        payload: {
-          cwd,
-          enabled: msg.enabled,
-          success: false,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async resolveCurrentPullRequest(
-    cwd: string,
-    operation: "merge" | "auto-merge",
-    options?: WorkspaceGitSnapshotOptions,
-  ): Promise<CurrentWorkspacePullRequest> {
-    const snapshot = await this.workspaceGitService.getSnapshot(cwd, options);
-    const pullRequest = snapshot.github.pullRequest;
-    if (!pullRequest || typeof pullRequest.number !== "number") {
-      throw new Error(`Unable to determine GitHub pull request number for ${operation}`);
-    }
-    return { ...pullRequest, number: pullRequest.number };
-  }
-
-  private async handleCheckoutPrStatusRequest(
-    msg: Extract<SessionInboundMessage, { type: "checkout_pr_status_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      const snapshot = await this.workspaceGitService.getSnapshot(cwd);
-      this.emit({
-        type: "checkout_pr_status_response",
-        payload: buildCheckoutPrStatusPayloadFromSnapshot({
-          cwd,
-          requestId,
-          snapshot,
-        }),
-      });
-    } catch (error) {
-      this.emit({
-        type: "checkout_pr_status_response",
-        payload: {
-          cwd,
-          status: null,
-          githubFeaturesEnabled: true,
-          error: toCheckoutError(error),
-          requestId,
-        },
-      });
-    }
-  }
-
-  private async handlePullRequestTimelineRequest(
-    msg: Extract<SessionInboundMessage, { type: "pull_request_timeline_request" }>,
-  ): Promise<void> {
-    const { cwd, prNumber, repoOwner, repoName, requestId } = msg;
-
-    if (!isValidPullRequestTimelineIdentity({ prNumber, repoOwner, repoName })) {
-      this.emit({
-        type: "pull_request_timeline_response",
-        payload: {
-          cwd,
-          prNumber,
-          items: [],
-          truncated: false,
-          error: {
-            kind: "unknown",
-            message: "Pull request timeline request has invalid PR identity",
-          },
-          requestId,
-          githubFeaturesEnabled: true,
-        },
-      });
-      return;
-    }
-
-    const githubFeaturesEnabled = await this.github.isAuthenticated({ cwd });
-    if (!githubFeaturesEnabled) {
-      this.emit({
-        type: "pull_request_timeline_response",
-        payload: {
-          cwd,
-          prNumber,
-          items: [],
-          truncated: false,
-          error: {
-            kind: "unknown",
-            message: "GitHub CLI is unavailable or not authenticated",
-          },
-          requestId,
-          githubFeaturesEnabled: false,
-        },
-      });
-      return;
-    }
-
-    try {
-      const timeline = await this.github.getPullRequestTimeline({
-        cwd,
-        prNumber,
-        repoOwner,
-        repoName,
-      });
-      this.emit({
-        type: "pull_request_timeline_response",
-        payload: {
-          cwd,
-          prNumber: timeline.prNumber,
-          items: timeline.items.map(toPullRequestTimelinePayloadItem),
-          truncated: timeline.truncated,
-          error: timeline.error,
-          requestId,
-          githubFeaturesEnabled: true,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "pull_request_timeline_response",
-        payload: {
-          cwd,
-          prNumber,
-          items: [],
-          truncated: false,
-          error: {
-            kind: "unknown",
-            message: error instanceof Error ? error.message : String(error),
-          },
-          requestId,
-          githubFeaturesEnabled: true,
-        },
-      });
     }
   }
 
@@ -8836,10 +7923,7 @@ export class Session {
 
     this.terminalController.dispose();
 
-    for (const unsubscribe of this.checkoutDiffSubscriptions.values()) {
-      unsubscribe();
-    }
-    this.checkoutDiffSubscriptions.clear();
+    this.checkoutGitHandler.dispose();
 
     for (const unsubscribe of this.workspaceGitSubscriptions.values()) {
       unsubscribe();
@@ -9400,26 +8484,4 @@ export class Session {
       this.emitLoopRpcError(request, error);
     }
   }
-}
-
-function isValidPullRequestTimelineIdentity(options: {
-  prNumber: number;
-  repoOwner: string;
-  repoName: string;
-}): boolean {
-  if (!Number.isInteger(options.prNumber) || options.prNumber <= 0) {
-    return false;
-  }
-  return isValidGitHubRepoSegment(options.repoOwner) && isValidGitHubRepoSegment(options.repoName);
-}
-
-function isValidGitHubRepoSegment(value: string): boolean {
-  return /^[A-Za-z0-9._-]+$/.test(value);
-}
-
-function toPullRequestTimelinePayloadItem(
-  item: PullRequestTimelineItem,
-): PullRequestTimelinePayloadItem {
-  const { authorUrl: _authorUrl, ...payload } = item;
-  return payload;
 }
