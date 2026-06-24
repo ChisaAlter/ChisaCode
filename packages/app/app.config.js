@@ -2,10 +2,25 @@ const fs = require("node:fs");
 const path = require("node:path");
 const pkg = require("./package.json");
 const appVariant = process.env.APP_VARIANT ?? "production";
-const parsedPatchVersion = Number.parseInt(pkg.version.split(".")[2] ?? "1", 10);
-const androidVersionCode = Number.isFinite(parsedPatchVersion)
-  ? Math.max(parsedPatchVersion, 1)
-  : 1;
+
+// Android versionCode must be a monotonically increasing integer and must be
+// unique per uploaded APK/AAB. Google Play rejects uploads whose versionCode
+// is not greater than every previously uploaded build.
+//
+// Derive it from the semver as `major*10000 + minor*100 + patch` so that any
+// version bump produces a strictly larger code (e.g. 1.0.1 -> 10001,
+// 1.2.3 -> 10203, 2.5.1 -> 20501). The 10000/100 multipliers leave headroom
+// for up to 99 minors per major and 99 patches per minor, which is well
+// beyond any realistic release cadence.
+//
+// EAS Build's `autoIncrement: versionCode` (see eas.json) still works on top
+// of this baseline: it increments the remote value by 1 each build, so the
+// final uploaded code is always >= this computed floor.
+const versionParts = pkg.version.split(".");
+const major = Number.parseInt(versionParts[0] ?? "0", 10) || 0;
+const minor = Number.parseInt(versionParts[1] ?? "0", 10) || 0;
+const patch = Number.parseInt(versionParts[2] ?? "0", 10) || 0;
+const androidVersionCode = major * 10000 + minor * 100 + patch;
 
 function resolveSecretFile(params) {
   const fromEnv = process.env[params.envKey];
