@@ -51,13 +51,11 @@ async function syncDirectoryFiles(srcDir: string, dstDir: string): Promise<numbe
       changed++;
     }
   }
-  const dstFiles = await listFilesRecursive(dstDir);
-  for (const rel of dstFiles) {
-    if (!files.includes(rel)) {
-      await fs.rm(path.join(dstDir, rel));
-      changed++;
-    }
-  }
+  // Intentionally do NOT delete files on disk that are absent from the bundle.
+  // sync is an additive/overwriting mirror: users (or prior app versions) may
+  // have added custom reference files under a skill directory, and removing
+  // them during sync would silently destroy user content. Skill removals are
+  // handled explicitly via removeSkill().
   return changed;
 }
 
