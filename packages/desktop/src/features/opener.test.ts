@@ -8,6 +8,17 @@ vi.mock("electron", () => ({
   shell: { openExternal: vi.fn() },
 }));
 
+// opener.ts reads the configured language via getDesktopSettingsStore() to
+// translate the "unsupported external URL" error. Mock the settings module so
+// the test does not pull in `app.getPath("userData")` (which the electron mock
+// above does not expose). Use English so the thrown message matches the
+// assertion below.
+vi.mock("../settings/desktop-settings-electron.js", () => ({
+  getDesktopSettingsStore: () => ({
+    get: async () => ({ language: "en" }),
+  }),
+}));
+
 function getRegisteredOpenUrlHandler(): (_event: unknown, url: unknown) => Promise<void> {
   registerOpenerHandlers();
   const handler = vi.mocked(ipcMain.handle).mock.calls.find(([channel]) => {
