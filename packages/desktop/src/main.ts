@@ -248,16 +248,54 @@ if (process.platform === "linux" && process.env.APPIMAGE) {
   app.commandLine.appendSwitch("no-sandbox");
 }
 
-// Allow users to pass Chromium flags via CHISACODE_ELECTRON_FLAGS for debugging
-// rendering issues (e.g. "--disable-gpu --ozone-platform=x11").
+// Allow users to pass a curated set of Chromium flags via CHISACODE_ELECTRON_FLAGS
+// for debugging rendering issues (e.g. "--disable-gpu --ozone-platform=x11").
 // Must run before app.whenReady().
+//
+// SECURITY: the allowlist avoids flags that weaken web security
+// (--disable-web-security, --ignore-certificate-errors, etc.). Users who need
+// those can still pass them directly on the command line when launching from a
+// terminal; the env var is the convenience path and must stay safe.
+const ALLOWED_ELECTRON_FLAGS = new Set([
+  // GPU / rendering
+  "disable-gpu",
+  "disable-gpu-compositing",
+  "disable-software-rasterizer",
+  "enable-gpu-rasterization",
+  "use-gl",
+  "use-angle",
+  // Display / compositor
+  "ozone-platform",
+  "disable-features",
+  "enable-features",
+  "disable-dev-shm-usage",
+  // Logging
+  "enable-logging",
+  "v",
+  "log-level",
+  // Input
+  "disable-pinch",
+  "disable-overscroll-edge-effect",
+]);
+
 const electronFlags = process.env.CHISACODE_ELECTRON_FLAGS?.trim();
 if (electronFlags) {
+  const rejected: string[] = [];
   for (const token of electronFlags.split(/\s+/)) {
     const [key, ...rest] = token.replace(/^--/, "").split("=");
+    if (!ALLOWED_ELECTRON_FLAGS.has(key)) {
+      rejected.push(token);
+      continue;
+    }
     app.commandLine.appendSwitch(key, rest.join("=") || undefined);
   }
-  log.info("[electron-flags]", electronFlags);
+  if (rejected.length > 0) {
+    log.warn(
+      "[electron-flags] rejected non-allowlisted flags (use the command line directly if truly needed):",
+      rejected,
+    );
+  }
+  log.info("[electron-flags] applied:", electronFlags);
 }
 
 let pendingOpenProjectPath = parseOpenProjectPathFromArgv({
