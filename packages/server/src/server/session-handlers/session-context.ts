@@ -14,6 +14,7 @@
  */
 
 import type { AgentManager } from "../agent/agent-manager.js";
+import type { AgentStorage } from "../agent/agent-storage.js";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { SessionOutboundMessage } from "../messages.js";
@@ -21,6 +22,9 @@ import type { CheckoutDiffManager } from "../checkout-diff-manager.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { ProviderSnapshotManager } from "../agent/provider-snapshot-manager.js";
+import type { FileBackedChatService } from "../chat/chat-service.js";
+import type { ScheduleService } from "../schedule/service.js";
+import type { LoopService } from "../loop-service.js";
 import type { GitMutationRefreshReason } from "../session-helpers.js";
 import type pino from "pino";
 
@@ -44,6 +48,12 @@ export interface SessionContext {
 
   // --- Lifecycle state (core-owned, shared) ---
   readonly abortController: AbortController;
+  readonly agentStorage: AgentStorage;
+
+  // --- Chat / Schedule / Loop services (used by ChatScheduleLoopHandler) ---
+  readonly chatService: FileBackedChatService;
+  readonly scheduleService: ScheduleService;
+  readonly loopService: LoopService;
 
   // --- Message emission (every handler needs this) ---
   emit(message: SessionOutboundMessage): void;
@@ -65,6 +75,10 @@ export interface SessionContext {
   generateCommitMessage(cwd: string): Promise<string>;
   /** Generate PR title/body via structured generation (owned by Session core). */
   generatePullRequestText(cwd: string, baseRef?: string): Promise<{ title: string; body: string }>;
+  /** Resolve an agent identifier to an agent id (owned by Session core). */
+  resolveAgentIdentifier(
+    identifier: string,
+  ): Promise<{ ok: true; agentId: string } | { ok: false; error: string }>;
 }
 
 /**
