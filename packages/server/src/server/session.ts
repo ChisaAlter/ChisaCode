@@ -2,7 +2,6 @@ import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
-import { realpathSync } from "node:fs";
 import type { FSWatcher } from "node:fs";
 import { basename, resolve, sep } from "path";
 import { homedir } from "node:os";
@@ -283,191 +282,26 @@ import {
 } from "./worktree-session.js";
 import { toWorktreeWireError } from "./worktree-errors.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
+import {
+  WORKSPACE_GIT_WATCH_REMOVED_STATE_KEY,
+  FETCH_AGENTS_SORT_KEYS,
+  type CurrentWorkspacePullRequest,
+  resolveKnownProjectRootForConfig,
+  type GitMutationRefreshReason,
+  LEGACY_PROVIDER_IDS,
+  LEGACY_MODE_ICONS,
+  errorToFriendlyMessage,
+  resolveSubscriptionId,
+  diffChangeTypeFor,
+  buildWorkspaceCheckout,
+  clientSupportsAllProviders,
+  clientSupportsFlexibleEditorIds,
+  beginAgentDeleteIfSupported,
+  resolveWaitForFinishError,
+} from "./session-helpers.js";
 
-const WORKSPACE_GIT_WATCH_REMOVED_STATE_KEY = "__removed__";
-
-type CurrentWorkspacePullRequest = NonNullable<
-  WorkspaceGitRuntimeSnapshot["github"]["pullRequest"]
-> & {
-  number: number;
-};
-
-interface ResolveKnownProjectRootForConfigInput {
-  repoRoot: string;
-  projectRegistry: Pick<ProjectRegistry, "list">;
-}
-
-async function resolveKnownProjectRootForConfig(
-  input: ResolveKnownProjectRootForConfigInput,
-): Promise<string | null> {
-  const requestedRoot = canonicalizeConfigRoot(input.repoRoot);
-  const projects = await input.projectRegistry.list();
-  for (const project of projects) {
-    if (project.archivedAt !== null) {
-      continue;
-    }
-    const projectRoot = canonicalizeConfigRoot(project.rootPath);
-    if (requestedRoot === projectRoot) {
-      return projectRoot;
-    }
-  }
-  return null;
-}
-
-function canonicalizeConfigRoot(repoRoot: string): string {
-  const resolved = resolve(repoRoot);
-  try {
-    return stripTrailingPathSeparators(realpathSync(resolved));
-  } catch {
-    return stripTrailingPathSeparators(resolved);
-  }
-}
-
-function stripTrailingPathSeparators(path: string): string {
-  let normalized = path;
-  while (normalized.length > 1 && normalized.endsWith(sep)) {
-    normalized = normalized.slice(0, -1);
-  }
-  return normalized;
-}
-
-type GitMutationRefreshReason =
-  | "commit-changes"
-  | "pull"
-  | "push"
-  | "merge-to-base"
-  | "merge-from-base"
-  | "merge-pr"
-  | "enable-pr-auto-merge"
-  | "disable-pr-auto-merge"
-  | "create-pr"
-  | "switch-branch"
-  | "rename-branch"
-  | "create-branch"
-  | "stash-push"
-  | "stash-pop"
-  | "create-worktree";
-
-// TODO: Remove once all app store clients are on >=0.1.45 and understand arbitrary provider strings.
-// Clients before 0.1.45 validate providers with z.enum(["claude", "codex", "opencode"]) and reject
-// the entire session message if they encounter an unknown provider.
-const LEGACY_PROVIDER_IDS = new Set(["claude", "codex", "opencode"]);
-// COMPAT(customModeIcons): the only mode icons known to clients before v0.1.84. Any
-// other icon name is downgraded to "ShieldCheck" for those clients.
-const LEGACY_MODE_ICONS = new Set<string>([
-  "ShieldCheck",
-  "ShieldAlert",
-  "ShieldOff",
-  "ShieldQuestionMark",
-]);
-const MIN_VERSION_ALL_PROVIDERS = "0.1.45";
-const MIN_VERSION_FLEXIBLE_EDITOR_IDS = "0.1.50";
-
-function errorToFriendlyMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return "Unknown error";
-}
-
-function resolveSubscriptionId(
-  subscribe: unknown,
-  requestedSubscriptionId: string | undefined,
-): string | null {
-  if (!subscribe) return null;
-  if (requestedSubscriptionId && requestedSubscriptionId.length > 0) {
-    return requestedSubscriptionId;
-  }
-  return uuidv4();
-}
-
-function diffChangeTypeFor(file: { isNew?: boolean; isDeleted?: boolean }): "A" | "D" | "M" {
-  if (file.isNew) return "A";
-  if (file.isDeleted) return "D";
-  return "M";
-}
-
-function buildWorkspaceCheckout(
-  workspace: PersistedWorkspaceRecord,
-  project: PersistedProjectRecord,
-): ProjectPlacementPayload["checkout"] {
-  if (project.kind !== "git") {
-    return {
-      cwd: workspace.cwd,
-      isGit: false,
-      currentBranch: null,
-      remoteUrl: null,
-      worktreeRoot: null,
-      isChisaCodeOwnedWorktree: false,
-      mainRepoRoot: null,
-    };
-  }
-  if (workspace.kind === "worktree") {
-    return {
-      cwd: workspace.cwd,
-      isGit: true,
-      currentBranch: workspace.displayName,
-      remoteUrl: null,
-      worktreeRoot: workspace.cwd,
-      isChisaCodeOwnedWorktree: true,
-      mainRepoRoot: project.rootPath,
-    };
-  }
-  return {
-    cwd: workspace.cwd,
-    isGit: true,
-    currentBranch: workspace.displayName,
-    remoteUrl: null,
-    worktreeRoot: workspace.cwd,
-    isChisaCodeOwnedWorktree: false,
-    mainRepoRoot: null,
-  };
-}
-
-function isAppVersionAtLeast(appVersion: string | null, minVersion: string): boolean {
-  if (!appVersion) return false;
-  // Strip prerelease suffix: "0.1.45-beta.4" -> "0.1.45"
-  const base = appVersion.replace(/-.*$/, "");
-  const parts = base.split(".").map(Number);
-  const minParts = minVersion.split(".").map(Number);
-  for (let i = 0; i < minParts.length; i++) {
-    const a = parts[i] ?? 0;
-    const b = minParts[i] ?? 0;
-    if (a > b) return true;
-    if (a < b) return false;
-  }
-  return true;
-}
-
-function clientSupportsAllProviders(appVersion: string | null): boolean {
-  return isAppVersionAtLeast(appVersion, MIN_VERSION_ALL_PROVIDERS);
-}
-
-function clientSupportsFlexibleEditorIds(appVersion: string | null): boolean {
-  return isAppVersionAtLeast(appVersion, MIN_VERSION_FLEXIBLE_EDITOR_IDS);
-}
-
-type DeleteFencedAgentStorage = AgentStorage & {
-  beginDelete(agentId: string): void;
-};
-
-function beginAgentDeleteIfSupported(agentStorage: AgentStorage, agentId: string): void {
-  if ("beginDelete" in agentStorage && typeof agentStorage.beginDelete === "function") {
-    (agentStorage as DeleteFencedAgentStorage).beginDelete(agentId);
-  }
-}
-
-const FETCH_AGENTS_SORT_KEYS = ["status_priority", "created_at", "updated_at", "title"] as const;
-
-export function resolveWaitForFinishError(options: {
-  status: "permission" | "error" | "idle";
-  final: AgentSnapshotPayload | null;
-}): string | null {
-  if (options.status !== "error") {
-    return null;
-  }
-  const message = options.final?.lastError;
-  return typeof message === "string" && message.trim().length > 0 ? message : "Agent failed";
-}
+// Re-export so existing imports from "./session.js" keep working.
+export { resolveWaitForFinishError } from "./session-helpers.js";
 
 type ProcessingPhase = "idle" | "transcribing";
 
