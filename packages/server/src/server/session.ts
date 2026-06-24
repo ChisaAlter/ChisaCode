@@ -2,7 +2,6 @@ import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
-import type { FSWatcher } from "node:fs";
 import { basename, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { z } from "zod";
@@ -237,7 +236,6 @@ import {
   buildCheckoutPrStatusPayloadFromSnapshot,
   buildCheckoutStatusPayloadFromSnapshot,
 } from "./checkout/status-projection.js";
-import type { LocalSpeechModelId } from "./speech/providers/local/models.js";
 import { toResolver, type Resolvable } from "./speech/provider-resolver.js";
 import type { SpeechReadinessSnapshot, SpeechReadinessState } from "./speech/speech-runtime.js";
 import type pino from "pino";
@@ -302,26 +300,28 @@ import {
 
 // Re-export so existing imports from "./session.js" keep working.
 export { resolveWaitForFinishError } from "./session-helpers.js";
+export { type SessionRuntimeMetrics } from "./session-internal-types.js";
 
-type ProcessingPhase = "idle" | "transcribing";
-
-interface WorkspaceGitWatchTarget {
-  cwd: string;
-  workspaceId: string;
-  watchers: FSWatcher[];
-  debounceTimer: ReturnType<typeof setTimeout> | null;
-  refreshPromise: Promise<void> | null;
-  refreshQueued: boolean;
-  latestDescriptorStateKey: string | null;
-  lastBranchName: string | null;
-}
-
-export interface SessionRuntimeMetrics {
-  terminalDirectorySubscriptionCount: number;
-  terminalSubscriptionCount: number;
-  inflightRequests: number;
-  peakInflightRequests: number;
-}
+import {
+  type ProcessingPhase,
+  type WorkspaceGitWatchTarget,
+  type SessionRuntimeMetrics,
+  type AgentMcpTransportFactory,
+  type VoiceTranscriptionResultPayload,
+  type VoiceFeatureUnavailableContext,
+  type VoiceFeatureUnavailableResponseMetadata,
+  VoiceFeatureUnavailableError,
+} from "./session-internal-types.js";
+import {
+  PCM_SAMPLE_RATE,
+  PCM_CHANNELS,
+  PCM_BITS_PER_SAMPLE,
+  MIN_STREAMING_SEGMENT_DURATION_MS,
+  MIN_STREAMING_SEGMENT_BYTES,
+  type VoiceModeBaseConfig,
+  type AudioBufferState,
+  convertPCMToWavBuffer,
+} from "./session-audio.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
 type FetchAgentHistoryRequestMessage = Extract<
@@ -378,43 +378,9 @@ class SessionRequestError extends Error {
   }
 }
 
-const PCM_SAMPLE_RATE = 16000;
-const PCM_CHANNELS = 1;
-const PCM_BITS_PER_SAMPLE = 16;
-const PCM_BYTES_PER_MS = (PCM_SAMPLE_RATE * PCM_CHANNELS * (PCM_BITS_PER_SAMPLE / 8)) / 1000;
-const MIN_STREAMING_SEGMENT_DURATION_MS = 1000;
-const MIN_STREAMING_SEGMENT_BYTES = Math.round(
-  PCM_BYTES_PER_MS * MIN_STREAMING_SEGMENT_DURATION_MS,
-);
 const AgentIdSchema = z.string().uuid();
 const AVAILABLE_EDITOR_TARGETS_CACHE_TTL_MS = 60_000;
 const AVAILABLE_EDITOR_TARGETS_CACHE_KEY = "available";
-
-interface VoiceModeBaseConfig {
-  systemPrompt?: string;
-}
-
-interface AudioBufferState {
-  chunks: Buffer[];
-  format: string;
-  isPCM: boolean;
-  totalPCMBytes: number;
-}
-
-// Stub types for features under development (modules not yet available)
-type AgentMcpTransportFactory = () => Promise<unknown>;
-
-interface VoiceTranscriptionResultPayload {
-  text: string;
-  requestId: string;
-  language?: string;
-  duration?: number;
-  avgLogprob?: number;
-  isLowConfidence?: boolean;
-  byteLength?: number;
-  format?: string;
-  debugRecordingPath?: string;
-}
 
 export interface SessionOptions {
   clientId: string;
@@ -504,62 +470,6 @@ type PullRequestTimelinePayload = Extract<
   { type: "pull_request_timeline_response" }
 >["payload"];
 type PullRequestTimelinePayloadItem = PullRequestTimelinePayload["items"][number];
-
-interface VoiceFeatureUnavailableContext {
-  reasonCode: SpeechReadinessSnapshot["voiceFeature"]["reasonCode"];
-  message: string;
-  retryable: boolean;
-  missingModelIds: LocalSpeechModelId[];
-}
-
-interface VoiceFeatureUnavailableResponseMetadata {
-  reasonCode?: SpeechReadinessSnapshot["voiceFeature"]["reasonCode"];
-  retryable?: boolean;
-  missingModelIds?: LocalSpeechModelId[];
-}
-
-class VoiceFeatureUnavailableError extends Error {
-  readonly reasonCode: SpeechReadinessSnapshot["voiceFeature"]["reasonCode"];
-  readonly retryable: boolean;
-  readonly missingModelIds: LocalSpeechModelId[];
-
-  constructor(context: VoiceFeatureUnavailableContext) {
-    super(context.message);
-    this.name = "VoiceFeatureUnavailableError";
-    this.reasonCode = context.reasonCode;
-    this.retryable = context.retryable;
-    this.missingModelIds = [...context.missingModelIds];
-  }
-}
-
-function convertPCMToWavBuffer(
-  pcmBuffer: Buffer,
-  sampleRate: number,
-  channels: number,
-  bitsPerSample: number,
-): Buffer {
-  const headerSize = 44;
-  const wavBuffer = Buffer.alloc(headerSize + pcmBuffer.length);
-  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
-  const blockAlign = (channels * bitsPerSample) / 8;
-
-  wavBuffer.write("RIFF", 0);
-  wavBuffer.writeUInt32LE(36 + pcmBuffer.length, 4);
-  wavBuffer.write("WAVE", 8);
-  wavBuffer.write("fmt ", 12);
-  wavBuffer.writeUInt32LE(16, 16);
-  wavBuffer.writeUInt16LE(1, 20);
-  wavBuffer.writeUInt16LE(channels, 22);
-  wavBuffer.writeUInt32LE(sampleRate, 24);
-  wavBuffer.writeUInt32LE(byteRate, 28);
-  wavBuffer.writeUInt16LE(blockAlign, 32);
-  wavBuffer.writeUInt16LE(bitsPerSample, 34);
-  wavBuffer.write("data", 36);
-  wavBuffer.writeUInt32LE(pcmBuffer.length, 40);
-  pcmBuffer.copy(wavBuffer, 44);
-
-  return wavBuffer;
-}
 
 function parseClientCapabilities(
   capabilities: Record<string, unknown> | null | undefined,
