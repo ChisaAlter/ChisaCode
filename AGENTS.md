@@ -57,6 +57,12 @@
 - Guard DOM APIs with `isWeb`; raw `document`, `window`, DOM refs, and browser event APIs crash native.
 - Hover is web-only; for hover-revealed controls use an always-visible native/compact path. Do not use `onPointerEnter`/`onPointerLeave` for native behavior.
 
+## Desktop Security Decisions
+
+- **AppImage disables Chromium sandbox** (`packages/desktop/src/main.ts`): Linux AppImage runs from a FUSE-mounted `/tmp` path where the SUID `chrome-sandbox` helper cannot function. Only AppImage sets `--no-sandbox`; `.deb`/`.rpm` keep the sandbox on. This is consistent with VS Code and accepted across the Electron ecosystem. The remaining defense-in-depth layers (contextIsolation, nodeIntegration:false, webview will-attach validation, privileged IPC sender checks) must not be weakened. Do not extend `--no-sandbox` to other distributions.
+- **Privileged IPC commands validate sender URL** (`packages/desktop/src/daemon/daemon-manager.ts`): commands that start/stop the daemon or write attachments check `event.senderFrame.url` against `chisacode://app` (packaged) or `localhost:8081`/`file://` (dev). New privileged commands must be added to `PRIVILEGED_COMMANDS` and use `isMainAppSenderUrl`.
+- **Webview attachment is hardened** (`packages/desktop/src/main.ts` `will-attach-webview`): `src` must be `http`/`https`/`about:blank`; `sandbox`, `webSecurity`, `disableDialogs` are forced true; preload is stripped. Do not relax these.
+
 ## Style
 
 - Formatting is oxfmt: 2 spaces, double quotes, semicolons, trailing commas, 100-column width; generated `*.gen.ts(x)` files are ignored by formatter config.

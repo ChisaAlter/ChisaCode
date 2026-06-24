@@ -220,9 +220,29 @@ if (forcedUserDataDir) {
   }
 }
 
-// AppImage runtimes mount the app from /tmp under the user's UID, so the SUID
-// chrome-sandbox helper we ship in .deb/.rpm cannot work there. Disable the
-// sandbox only in that case; .deb/.rpm keep the sandbox on, matching VS Code.
+// Linux AppImage runtimes mount the app from /tmp under the user's UID, so the
+// SUID chrome-sandbox helper we ship in .deb/.rpm cannot work there (FUSE
+// mounts do not support setuid). Disable the sandbox only for AppImage; .deb
+// and .rpm keep the sandbox enabled, matching VS Code's approach.
+//
+// SECURITY NOTE: this removes the Chromium renderer sandbox as a defense-in-
+// depth layer. The remaining protections that prevent a compromised renderer
+// from escaping are:
+//   - contextIsolation: true (no direct Node.js access from page context)
+//   - nodeIntegration: false
+//   - strict webview will-attach validation (src must be http/https/about:blank,
+//     sandbox:true, webSecurity:true, preload stripped)
+//   - privileged IPC commands validate sender frame URL (chisacode:// only)
+// A renderer compromise first requires bypassing contextIsolation; only then
+// does the missing sandbox become relevant. This is an accepted tradeoff for
+// AppImage compatibility, consistent with VS Code and the broader Electron
+// ecosystem. Do NOT extend `no-sandbox` to .deb/.rpm builds.
+//
+// Alternatives considered:
+//   - user namespace sandbox: fails on hardened kernels that disable
+//     unprivileged_userns_clone (common in enterprise Linux)
+//   - zypak (Flatpak-style sandbox wrapper): adds runtime dependency and
+//     packaging complexity not justified for the AppImage distribution
 if (process.platform === "linux" && process.env.APPIMAGE) {
   app.commandLine.appendSwitch("no-sandbox");
 }
