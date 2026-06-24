@@ -39,7 +39,7 @@ export interface SessionContext {
 
   // --- Git services (used by CheckoutGit + WorkspaceProject handlers) ---
   readonly workspaceGitService: WorkspaceGitService;
-  readonly github: GitHubService | undefined;
+  readonly github: GitHubService;
   readonly checkoutDiffManager: CheckoutDiffManager;
 
   // --- Lifecycle state (core-owned, shared) ---
@@ -61,6 +61,10 @@ export interface SessionContext {
   emitWorkspaceUpdateForWorkspaceId(workspaceId: string): Promise<void>;
   /** Handle a git branch snapshot change observed by the watcher. */
   handleWorkspaceGitBranchSnapshot(cwd: string, branchName: string | null): void;
+  /** Generate a commit message via structured generation (owned by Session core). */
+  generateCommitMessage(cwd: string): Promise<string>;
+  /** Generate PR title/body via structured generation (owned by Session core). */
+  generatePullRequestText(cwd: string, baseRef?: string): Promise<{ title: string; body: string }>;
 }
 
 /**

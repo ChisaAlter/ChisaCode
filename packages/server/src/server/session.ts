@@ -776,6 +776,8 @@ export class Session {
         this.emitWorkspaceUpdateForWorkspaceId(workspaceId),
       handleWorkspaceGitBranchSnapshot: (cwd, branchName) =>
         this.handleWorkspaceGitBranchSnapshot(cwd, branchName),
+      generateCommitMessage: (cwd) => this.generateCommitMessage(cwd),
+      generatePullRequestText: (cwd, baseRef) => this.generatePullRequestText(cwd, baseRef),
     });
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
