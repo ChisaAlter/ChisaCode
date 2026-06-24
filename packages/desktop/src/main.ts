@@ -45,6 +45,7 @@ import { getDesktopSettingsStore } from "./settings/desktop-settings-electron.js
 import {
   isDesktopManagedDaemonRunningSync,
   stopDesktopDaemonViaCli,
+  isMainAppSenderUrl,
 } from "./daemon/daemon-manager.js";
 import {
   createBeforeQuitHandler,
@@ -301,7 +302,13 @@ for (const prefix of IPC_PREFIXES) {
   ipcMain.handle(`${prefix}:browser:set-workspace-active-browser`, handleSetWorkspaceActiveBrowser);
 }
 
-function handleOpenBrowserDevtools(_event: unknown, browserId: unknown) {
+function handleOpenBrowserDevtools(event: Electron.IpcMainInvokeEvent, browserId: unknown) {
+  if (!isMainAppSenderUrl(event.senderFrame?.url ?? "", { packaged: app.isPackaged })) {
+    log.warn("[browser-devtools] blocked open-devtools from non-main sender", {
+      senderUrl: (event.senderFrame?.url ?? "").slice(0, 200),
+    });
+    return { ok: false, reason: "not-allowed" };
+  }
   if (typeof browserId !== "string" || browserId.trim().length === 0) {
     const result = {
       ok: false,
@@ -346,7 +353,16 @@ for (const prefix of IPC_PREFIXES) {
   ipcMain.handle(`${prefix}:browser:open-devtools`, handleOpenBrowserDevtools);
 }
 
-async function handleClearBrowserPartition(_event: unknown, browserId: unknown): Promise<void> {
+async function handleClearBrowserPartition(
+  event: Electron.IpcMainInvokeEvent,
+  browserId: unknown,
+): Promise<void> {
+  if (!isMainAppSenderUrl(event.senderFrame?.url ?? "", { packaged: app.isPackaged })) {
+    log.warn("[browser-partition] blocked clear-partition from non-main sender", {
+      senderUrl: (event.senderFrame?.url ?? "").slice(0, 200),
+    });
+    return;
+  }
   if (typeof browserId !== "string" || browserId.trim().length === 0) {
     return;
   }
