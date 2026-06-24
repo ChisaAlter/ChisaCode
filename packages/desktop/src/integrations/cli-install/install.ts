@@ -39,7 +39,13 @@ export async function installCli(): Promise<InstallStatus> {
     // Generate a thin .cmd trampoline that delegates to the bundled shim.
     // Only the app install path is baked in — internal details (asar layout,
     // entrypoint scripts) live in the bundled shim and update with the app.
-    const escapedShimPath = shimPath.replace(/[)&]/g, "^$&");
+    //
+    // Escape the shim path for the `set "BUNDLED_CLI=..."` line below. Inside
+    // a double-quoted set value, cmd still expands `%VAR%` references, so `%`
+    // must be doubled. A literal `"` would break the quoting and is escaped to
+    // `""`. Other cmd metacharacters (`& | < > ( )`) are inert inside double
+    // quotes and need no further escaping.
+    const escapedShimPath = shimPath.replace(/%/g, "%%").replace(/"/g, '""');
     const cmdContent = [
       "@echo off",
       `set "BUNDLED_CLI=${escapedShimPath}"`,
