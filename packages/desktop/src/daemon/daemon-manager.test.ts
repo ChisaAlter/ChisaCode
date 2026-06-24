@@ -2,7 +2,11 @@ import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
-import { createDaemonCommandHandlers, isMainAppSenderUrl } from "./daemon-manager";
+import {
+  createDaemonCommandHandlers,
+  assertTransportPathAllowed,
+  isMainAppSenderUrl,
+} from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
   settings: {
@@ -291,5 +295,41 @@ describe("daemon-manager privileged IPC sender validation", () => {
         devPort: 3000,
       }),
     ).toBe(true);
+  });
+});
+
+describe("assertTransportPathAllowed", () => {
+  // resolveChisaCodeHome is mocked to "/tmp/chisacode-home" (see top of file).
+
+  it("accepts a POSIX socket under ChisaCode home", () => {
+    expect(() =>
+      assertTransportPathAllowed("socket", "/tmp/chisacode-home/daemon.sock"),
+    ).not.toThrow();
+  });
+
+  it("rejects a POSIX socket outside ChisaCode home", () => {
+    expect(() => assertTransportPathAllowed("socket", "/var/run/docker.sock")).toThrow(
+      /must be under ChisaCode home/,
+    );
+  });
+
+  it("rejects a POSIX socket that escapes via .. traversal", () => {
+    expect(() =>
+      assertTransportPathAllowed("socket", "/tmp/chisacode-home/../../var/run/docker.sock"),
+    ).toThrow(/must be under ChisaCode home/);
+  });
+
+  it("accepts a Windows named pipe with chisacode prefix ( UNC form )", () => {
+    expect(() => assertTransportPathAllowed("pipe", "\\\\.\\pipe\\chisacode-daemon")).not.toThrow();
+  });
+
+  it("accepts a Windows named pipe with chisacode prefix ( pipe:// form )", () => {
+    expect(() => assertTransportPathAllowed("pipe", "pipe://chisacode-daemon")).not.toThrow();
+  });
+
+  it("rejects a Windows named pipe without chisacode prefix", () => {
+    expect(() => assertTransportPathAllowed("pipe", "\\\\.\\pipe\\docker")).toThrow(
+      /must start with "chisacode"/,
+    );
   });
 });

@@ -122,6 +122,47 @@ export function isMainAppSenderUrl(
   }
 }
 
+/**
+ * Validate that a local transport path points at a ChisaCode-owned socket or
+ * pipe, not an arbitrary IPC endpoint (e.g. Docker's socket, another app's
+ * named pipe). A compromised renderer that has already passed sender
+ * validation could otherwise use `open_local_daemon_transport` to connect to
+ * and read/write any local IPC endpoint the user has access to.
+ *
+ * POSIX sockets must resolve under `$CHISACODE_HOME`. Windows named pipes must
+ * have a name starting with `chisacode` (matching the daemon's pipe naming).
+ */
+export function assertTransportPathAllowed(
+  transportType: "socket" | "pipe",
+  transportPath: string,
+): void {
+  if (transportType === "socket") {
+    const home = path.resolve(getChisaCodeHome());
+    const resolved = path.resolve(transportPath);
+    const prefix = home.endsWith(path.sep) ? home : home + path.sep;
+    if (!resolved.startsWith(prefix)) {
+      throw new Error(
+        `Local transport socket path must be under ChisaCode home (${home}). Received: ${transportPath}`,
+      );
+    }
+    return;
+  }
+
+  // Windows named pipe. Normalize the various forms:
+  //   \\.\pipe\chisacode-...  →  \\.\pipe\chisacode-...
+  //   pipe://chisacode-...    →  chisacode-...
+  let pipeName = transportPath;
+  if (pipeName.startsWith("pipe://")) {
+    pipeName = pipeName.slice("pipe://".length);
+  } else if (pipeName.startsWith("\\\\.\\pipe\\")) {
+    pipeName = pipeName.slice("\\\\.\\pipe\\".length);
+  }
+  if (!pipeName.startsWith("chisacode")) {
+    throw new Error(
+      `Local transport pipe name must start with "chisacode". Received: ${transportPath}`,
+    );
+  }
+}
 type DesktopDaemonState = "starting" | "running" | "stopped" | "errored";
 
 export interface DesktopDaemonStatus {
@@ -641,6 +682,7 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
         throw new Error("Invalid arguments for open_local_daemon_transport");
       }
       const target = args as { transportType: "socket" | "pipe"; transportPath: string };
+      assertTransportPathAllowed(target.transportType, target.transportPath);
       return await openLocalTransportSession(target);
     },
     send_local_daemon_transport_message: async (args) => {
