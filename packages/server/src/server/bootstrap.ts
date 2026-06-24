@@ -91,6 +91,33 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
   return listenTarget.path;
 }
 
+/**
+ * Refuse to start when the daemon is bound to a wildcard address
+ * (`0.0.0.0` or `::`) without a password configured. Without authentication,
+ * any host on the same network can invoke privileged daemon APIs (shell
+ * execution, file access, agent control). Loopback and explicit interface
+ * binds are unaffected.
+ */
+export function assertWildcardAuth(
+  listenTarget: ListenTarget,
+  auth: DaemonAuthConfig | undefined,
+): void {
+  if (listenTarget.type !== "tcp") {
+    return;
+  }
+  const isWildcard = listenTarget.host === "0.0.0.0" || listenTarget.host === "::";
+  if (!isWildcard) {
+    return;
+  }
+  if (!auth?.password) {
+    throw new Error(
+      `Refusing to listen on wildcard address ${listenTarget.host}:${listenTarget.port} without a password. ` +
+        "Set CHISACODE_PASSWORD (or persist a password in config) before binding to 0.0.0.0/::, " +
+        "or bind to 127.0.0.1 / a specific interface instead.",
+    );
+  }
+}
+
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { createGitHubService } from "../services/github-service.js";
 import { createChisaCodeWorktree as createRegisteredChisaCodeWorktree } from "./chisacode-worktree-service.js";
@@ -378,6 +405,7 @@ export async function createChisaCodeDaemon(
   });
 
   const listenTarget = parseListenString(config.listen);
+  assertWildcardAuth(listenTarget, config.auth);
   const modelGatewayToken = config.modelGatewayToken ?? randomUUID();
   const modelGatewayBaseUrl = createModelGatewayBaseUrl(listenTarget);
 

@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { assertWildcardAuth, parseListenString } from "./bootstrap.js";
 import { createTestChisaCodeDaemon } from "./test-utils/chisacode-daemon.js";
 
 const originalEnv = { ...process.env };
@@ -129,5 +130,45 @@ describe("daemon bearer auth", () => {
     } finally {
       await daemonHandle.close();
     }
+  });
+});
+
+describe("assertWildcardAuth", () => {
+  // Use parseListenString for formats it supports, and construct ListenTarget
+  // directly for IPv6 (parseListenString's host:port split does not handle
+  // bracketed IPv6 addresses).
+
+  it("allows loopback without password", () => {
+    expect(() => assertWildcardAuth(parseListenString("127.0.0.1:6767"), undefined)).not.toThrow();
+  });
+
+  it("allows wildcard 0.0.0.0 with password", () => {
+    expect(() =>
+      assertWildcardAuth(parseListenString("0.0.0.0:6767"), { password: "hash" }),
+    ).not.toThrow();
+  });
+
+  it("rejects 0.0.0.0 without password", () => {
+    expect(() => assertWildcardAuth(parseListenString("0.0.0.0:6767"), undefined)).toThrow(
+      /Refusing to listen on wildcard address/,
+    );
+  });
+
+  it("rejects IPv6 :: wildcard without password", () => {
+    expect(() => assertWildcardAuth({ type: "tcp", host: "::", port: 6767 }, undefined)).toThrow(
+      /Refusing to listen on wildcard address/,
+    );
+  });
+
+  it("allows IPv6 :: wildcard with password", () => {
+    expect(() =>
+      assertWildcardAuth({ type: "tcp", host: "::", port: 6767 }, { password: "hash" }),
+    ).not.toThrow();
+  });
+
+  it("allows unix socket without password", () => {
+    expect(() =>
+      assertWildcardAuth(parseListenString("unix:///tmp/chisacode/daemon.sock"), undefined),
+    ).not.toThrow();
   });
 });
