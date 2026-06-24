@@ -8,13 +8,17 @@
     "expo-two-way-audio",
     "react-native"
   ],
-  "homepage": "https://github.com/boudra/expo-two-way-audio",
+  "homepage": "https://chisacode.sh",
   "bugs": {
-    "url": "https://github.com/speechmatics/expo-two-way-audio/issues"
+    "url": "https://github.com/ChisaAlter/ChisaCode/issues"
   },
   "license": "MIT",
-  "author": "Speechmatics <devrel@speechmatics.com> (https://github.com/speechmatics)",
-  "repository": "https://github.com/boudra/expo-two-way-audio",
+  "author": "Ayase <48818288@qq.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChisaAlter/ChisaCode.git",
+    "directory": "packages/expo-two-way-audio"
+  },
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
