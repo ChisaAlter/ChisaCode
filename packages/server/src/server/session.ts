@@ -322,6 +322,7 @@ import {
   type AudioBufferState,
   convertPCMToWavBuffer,
 } from "./session-audio.js";
+import { CheckoutGitHandler } from "./session-handlers/checkout-git-handler.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
 type FetchAgentHistoryRequestMessage = Extract<
@@ -608,6 +609,7 @@ export class Session {
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
   private voiceModeAgentId: string | null = null;
   private voiceModeBaseConfig: VoiceModeBaseConfig | null = null;
+  private readonly checkoutGitHandler: CheckoutGitHandler;
 
   constructor(options: SessionOptions) {
     const {
@@ -752,6 +754,29 @@ export class Session {
     // Initialize agent MCP client asynchronously
     void this.initializeAgentMcp();
     this.subscribeToAgentEvents();
+
+    // Initialize handlers with a SessionContext facade.
+    this.checkoutGitHandler = new CheckoutGitHandler({
+      clientId: this.clientId,
+      sessionId: this.sessionId,
+      sessionLogger: this.sessionLogger,
+      chisacodeHome: this.chisacodeHome,
+      agentManager: this.agentManager,
+      daemonConfigStore: this.daemonConfigStore,
+      projectRegistry: this.projectRegistry,
+      providerSnapshotManager: this.providerSnapshotManager,
+      workspaceGitService: this.workspaceGitService,
+      github: this.github,
+      checkoutDiffManager: this.checkoutDiffManager,
+      abortController: this.abortController,
+      emit: (message) => this.emit(message),
+      notifyGitMutation: (cwd, reason, opts) => this.notifyGitMutation(cwd, reason, opts),
+      emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
+      emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>
+        this.emitWorkspaceUpdateForWorkspaceId(workspaceId),
+      handleWorkspaceGitBranchSnapshot: (cwd, branchName) =>
+        this.handleWorkspaceGitBranchSnapshot(cwd, branchName),
+    });
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -1880,11 +1905,11 @@ export class Session {
       case "github_search_request":
         return this.handleGitHubSearchRequest(msg);
       case "stash_save_request":
-        return this.handleStashSaveRequest(msg);
+        return this.checkoutGitHandler.handleStashSaveRequest(msg);
       case "stash_pop_request":
-        return this.handleStashPopRequest(msg);
+        return this.checkoutGitHandler.handleStashPopRequest(msg);
       case "stash_list_request":
-        return this.handleStashListRequest(msg);
+        return this.checkoutGitHandler.handleStashListRequest(msg);
       default:
         return undefined;
     }
@@ -5326,80 +5351,6 @@ export class Session {
           error: toCheckoutError(error),
           requestId,
         },
-      });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Stash handlers
-  // ---------------------------------------------------------------------------
-
-  private static readonly CHISACODE_STASH_PREFIX = "chisacode-auto-stash:";
-
-  private async handleStashSaveRequest(
-    msg: Extract<SessionInboundMessage, { type: "stash_save_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-    try {
-      const branchLabel = msg.branch?.trim() ?? "";
-      const message = branchLabel
-        ? `${Session.CHISACODE_STASH_PREFIX} ${branchLabel}`
-        : `${Session.CHISACODE_STASH_PREFIX} unnamed`;
-      await execCommand("git", ["stash", "push", "--include-untracked", "-m", message], {
-        cwd,
-      });
-      await this.notifyGitMutation(cwd, "stash-push");
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-      this.emit({
-        type: "stash_save_response",
-        payload: { cwd, success: true, error: null, requestId },
-      });
-    } catch (error) {
-      this.emit({
-        type: "stash_save_response",
-        payload: { cwd, success: false, error: toCheckoutError(error), requestId },
-      });
-    }
-  }
-
-  private async handleStashPopRequest(
-    msg: Extract<SessionInboundMessage, { type: "stash_pop_request" }>,
-  ): Promise<void> {
-    const { cwd, stashIndex, requestId } = msg;
-    try {
-      await execCommand("git", ["stash", "pop", `stash@{${stashIndex}}`], {
-        cwd,
-      });
-      await this.notifyGitMutation(cwd, "stash-pop");
-      this.checkoutDiffManager.scheduleRefreshForCwd(cwd);
-      this.emit({
-        type: "stash_pop_response",
-        payload: { cwd, success: true, error: null, requestId },
-      });
-    } catch (error) {
-      this.emit({
-        type: "stash_pop_response",
-        payload: { cwd, success: false, error: toCheckoutError(error), requestId },
-      });
-    }
-  }
-
-  private async handleStashListRequest(
-    msg: Extract<SessionInboundMessage, { type: "stash_list_request" }>,
-  ): Promise<void> {
-    const { cwd, requestId } = msg;
-    const chisacodeOnly = msg.chisacodeOnly !== false;
-    try {
-      const entries = await this.workspaceGitService.listStashes(cwd, { chisacodeOnly });
-
-      this.emit({
-        type: "stash_list_response",
-        payload: { cwd, entries, error: null, requestId },
-      });
-    } catch (error) {
-      this.emit({
-        type: "stash_list_response",
-        payload: { cwd, entries: [], error: toCheckoutError(error), requestId },
       });
     }
   }

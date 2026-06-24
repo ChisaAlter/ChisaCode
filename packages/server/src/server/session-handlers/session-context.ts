@@ -21,6 +21,7 @@ import type { CheckoutDiffManager } from "../checkout-diff-manager.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { ProviderSnapshotManager } from "../agent/provider-snapshot-manager.js";
+import type { GitMutationRefreshReason } from "../session-helpers.js";
 import type pino from "pino";
 
 export interface SessionContext {
@@ -46,6 +47,20 @@ export interface SessionContext {
 
   // --- Message emission (every handler needs this) ---
   emit(message: SessionOutboundMessage): void;
+
+  // --- Cross-domain methods (called by CheckoutGitHandler but owned by Session core) ---
+  /** Force-refresh workspace git snapshot after a mutation. */
+  notifyGitMutation(
+    cwd: string,
+    reason: GitMutationRefreshReason,
+    options?: { invalidateGithub?: boolean },
+  ): Promise<void>;
+  /** Emit a workspace_update message for the workspace owning this cwd. */
+  emitWorkspaceUpdateForCwd(cwd: string): Promise<void>;
+  /** Emit a workspace_update message for a specific workspace id. */
+  emitWorkspaceUpdateForWorkspaceId(workspaceId: string): Promise<void>;
+  /** Handle a git branch snapshot change observed by the watcher. */
+  handleWorkspaceGitBranchSnapshot(cwd: string, branchName: string | null): void;
 }
 
 /**
