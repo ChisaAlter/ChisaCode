@@ -8,8 +8,8 @@
 
 ## Package Map
 
-- `packages/server`: local daemon, WebSocket API, MCP server, agent lifecycle, file-backed state under `$CHISACODE_HOME/agents/`.
-- `packages/protocol`: shared WebSocket schemas/types and binary frame codecs; server, app, CLI, and client depend on it.
+- `packages/server`: local daemon, WebSocket API, MCP server, agent lifecycle, file-backed state under `$CHISACODE_HOME/agents/`. Session class is being decomposed into per-domain handlers under `src/server/session-handlers/` (see `docs/refactors/session-decomposition-plan.md`).
+- `packages/protocol`: shared WebSocket schemas/types and binary frame codecs; server, app, CLI, and client depend on it. Uses explicit exports map (not wildcard) — new public entries must be added to `package.json` `exports`.
 - `packages/client`: daemon WebSocket driver plus `ChisaCodeClient`; app/CLI may still import internal daemon client paths during migration.
 - `packages/app`: Expo app for iOS, Android, browser web, and the desktop renderer UI.
 - `packages/cli`: Commander CLI; run the checkout version with `npm run cli -- ...`, not a globally installed `chisacode`.

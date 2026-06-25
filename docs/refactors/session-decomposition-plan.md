@@ -147,3 +147,48 @@ Parameterize the 4 setter envelopes `handleSetAgentMode/Model/Feature/Thinking` 
 - `cleanup()` stays the single ordered teardown orchestrator on the shell.
 - Move domain error emitters **verbatim**; treat any cross-domain emitter merge as a separate, test-guarded change.
 - Per-slice typecheck/lint/format via `npm run` scripts; never re-run the full suite locally (run only the listed files with `--bail=1`).
+
+---
+
+## Implementation Progress (2026-06-24/25 session)
+
+### Strategy adaptation
+
+The original plan called for "controller-context" (per-domain option-bag controllers with owned-type `ReadonlySet` dispatch). Implementation adopted a **simplified variant**: handlers are plain classes receiving a shared `SessionContext` interface, and dispatch stays in Session's existing `dispatchXMessage` methods (delegating to `this.xHandler.handle*`). This avoids the owned-type set machinery while achieving the same separation. The `SessionContext` interface is populated incrementally — each handler extraction adds only the members it needs.
+
+### Completed slices
+
+| Step  | Handler file                                     | Lines | Methods moved                                                      | session.ts reduction |
+| ----- | ------------------------------------------------ | ----- | ------------------------------------------------------------------ | -------------------- |
+| Pre   | `session-helpers.ts`                             | 202   | 20 pure functions/types/constants                                  | 9728→9562            |
+| Pre   | `session-audio.ts`                               | 55    | PCM constants + `convertPCMToWavBuffer`                            | 9562→9474            |
+| Pre   | `session-internal-types.ts`                      | 69    | 8 internal types + `VoiceFeatureUnavailableError`                  | 9474→9474            |
+| Infra | `session-handlers/session-context.ts`            | 111   | `SessionContext` + `DisposableHandler` interfaces                  | —                    |
+| 1     | `session-handlers/checkout-git-handler.ts`       | 968   | 20 checkout/PR/stash handlers + 7 helpers + 3 file-level functions | 9474→8496            |
+| 2     | `session-handlers/chat-schedule-loop-handler.ts` | 523   | 26 chat/schedule/loop handlers                                     | 8496→7943            |
+| 3     | `session-handlers/provider-handler.ts`           | 431   | 14 provider/preset/gateway handlers + 4 helpers                    | 7943→7535            |
+| 4     | `session-handlers/terminal-script-handler.ts`    | 93    | `handleStartWorkspaceScriptRequest` + terminal dispatch            | 7535→7477            |
+
+**Total: session.ts 9728 → 7477 lines (-2251, -23%).** 4 handlers, 2015 lines of extracted code, 61 methods moved.
+
+### Key design decisions
+
+- **`createSessionContext()` factory**: Session builds one context object shared by all handlers, eliminating per-handler duplication.
+- **Cross-domain methods on SessionContext**: `notifyGitMutation`, `emitWorkspaceUpdateForCwd`, `generateCommitMessage`, `resolveAgentIdentifier`, `supports`, `emitWorkspaceScriptStatusUpdate` — owned by Session core, exposed via interface.
+- **Duplicate helpers accepted**: `assertSafeGitRef`, `isWorkingTreeDirty`, `ensureCleanWorkingTree`, `checkoutExistingBranch` kept in both Session (called by non-checkout code) and CheckoutGitHandler (independent copy). Acceptable tradeoff to avoid over-exposing Session internals.
+- **`github` field non-optional**: SessionContext declares `github: GitHubService` (not `| undefined`) because Session's constructor always creates one via `github ?? createGitHubService()`.
+
+### Remaining slices (future work)
+
+| Step | Handler                             | Est. reduction | Risk   | Blocker                                                                                                               |
+| ---- | ----------------------------------- | -------------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
+| 5    | `WorkspaceProjectHandler`           | ~450           | medium | Methods deeply coupled to `workspaceUpdatesSubscription`, `workspaceGitWatchTargets`, `workspaceDirectory` core state |
+| 6    | `ConfigControlHandler` (skills/mcp) | ~300           | medium | skills/mcp share `daemonConfigStore`; control sub-domain (restart/shutdown) affects lifecycle                         |
+| 7    | `VoiceHandler`                      | ~800           | high   | Delayed initialization timing, ~25 voice fields                                                                       |
+| 8    | `AgentLifecycleHandler`             | ~1500          | high   | Largest domain, `createAgentRequest` spans 6 services                                                                 |
+
+Steps 5-6 require more SessionContext surface or state refactoring; 7-8 are the hardest and should be planned as dedicated efforts with comprehensive test coverage first.
+
+### Verification
+
+All commits passed: `typecheck` (full workspace) ✔, `lint` (oxlint) ✔, `format` (oxfmt) ✔, `session.wait-for-finish.test.ts` ✔.
