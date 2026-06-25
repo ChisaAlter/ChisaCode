@@ -23,7 +23,6 @@ import {
   type AgentMcpServersUpsertRequest,
   type AgentMcpServersPolicyPatchRequest,
   type AgentMcpServersDeleteRequest,
-  type StartWorkspaceScriptRequest,
   type CloseItemsRequest,
   type EditorTargetDescriptorPayload,
   type EditorTargetId,
@@ -81,7 +80,6 @@ import {
 } from "./script-status-projection.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
-import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
 import { getErrorMessage, getErrorMessageOr } from "@chisacode/protocol/error-utils";
@@ -291,6 +289,7 @@ import {
 import { CheckoutGitHandler } from "./session-handlers/checkout-git-handler.js";
 import { ChatScheduleLoopHandler } from "./session-handlers/chat-schedule-loop-handler.js";
 import { ProviderHandler } from "./session-handlers/provider-handler.js";
+import { TerminalScriptHandler } from "./session-handlers/terminal-script-handler.js";
 import type { SessionContext } from "./session-handlers/session-context.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
@@ -574,6 +573,7 @@ export class Session {
   private readonly checkoutGitHandler: CheckoutGitHandler;
   private readonly chatScheduleLoopHandler: ChatScheduleLoopHandler;
   private readonly providerHandler: ProviderHandler;
+  private readonly terminalScriptHandler: TerminalScriptHandler;
 
   constructor(options: SessionOptions) {
     const {
@@ -724,6 +724,7 @@ export class Session {
     this.checkoutGitHandler = new CheckoutGitHandler(sessionContext);
     this.chatScheduleLoopHandler = new ChatScheduleLoopHandler(sessionContext);
     this.providerHandler = new ProviderHandler(sessionContext);
+    this.terminalScriptHandler = new TerminalScriptHandler(sessionContext);
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -747,6 +748,14 @@ export class Session {
       scheduleService: this.scheduleService,
       loopService: this.loopService,
       agentPresetStore: this.agentPresetStore,
+      terminalManager: this.terminalManager,
+      terminalController: this.terminalController,
+      scriptRouteStore: this.scriptRouteStore,
+      scriptRuntimeStore: this.scriptRuntimeStore,
+      workspaceRegistry: this.workspaceRegistry,
+      getDaemonTcpPort: this.getDaemonTcpPort,
+      getDaemonTcpHost: this.getDaemonTcpHost,
+      resolveScriptHealth: this.resolveScriptHealth,
       emit: (message) => this.emit(message),
       notifyGitMutation: (cwd, reason, opts) => this.notifyGitMutation(cwd, reason, opts),
       emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
@@ -758,6 +767,8 @@ export class Session {
       generatePullRequestText: (cwd, baseRef) => this.generatePullRequestText(cwd, baseRef),
       resolveAgentIdentifier: (identifier) => this.resolveAgentIdentifier(identifier),
       supports: (capability) => this.supports(capability as ClientCapability),
+      emitWorkspaceScriptStatusUpdate: (workspaceId, workspaceDirectory) =>
+        this.emitWorkspaceScriptStatusUpdate(workspaceId, workspaceDirectory),
     };
   }
 
@@ -1956,10 +1967,7 @@ export class Session {
   }
 
   private dispatchTerminalMessage(msg: SessionInboundMessage): Promise<void> | undefined {
-    if (msg.type === "start_workspace_script_request") {
-      return this.handleStartWorkspaceScriptRequest(msg);
-    }
-    return this.terminalController.dispatch(msg);
+    return this.terminalScriptHandler.dispatchTerminalMessage(msg);
   }
 
   private dispatchChatScheduleLoopMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -6145,71 +6153,6 @@ export class Session {
     await openInEditorTarget(options);
   }
 
-  private async handleStartWorkspaceScriptRequest(
-    request: StartWorkspaceScriptRequest,
-  ): Promise<void> {
-    try {
-      if (!this.terminalManager || !this.scriptRouteStore || !this.scriptRuntimeStore) {
-        throw new Error("Workspace scripts are not available on this daemon");
-      }
-
-      const workspace = await this.workspaceRegistry.get(request.workspaceId);
-      if (!workspace) {
-        throw new Error(`Workspace not found: ${request.workspaceId}`);
-      }
-      const gitMetadata = await this.workspaceGitService.getWorkspaceGitMetadata(workspace.cwd);
-
-      const serviceResult = await spawnWorkspaceScript({
-        repoRoot: workspace.cwd,
-        workspaceId: workspace.workspaceId,
-        projectSlug: gitMetadata.projectSlug,
-        branchName: gitMetadata.currentBranch,
-        scriptName: request.scriptName,
-        daemonPort: this.getDaemonTcpPort?.() ?? null,
-        daemonListenHost: this.getDaemonTcpHost?.() ?? null,
-        routeStore: this.scriptRouteStore,
-        runtimeStore: this.scriptRuntimeStore,
-        terminalManager: this.terminalManager,
-        logger: this.sessionLogger,
-        onLifecycleChanged: () => {
-          this.emitWorkspaceScriptStatusUpdate(workspace.workspaceId, workspace.cwd);
-        },
-      });
-
-      this.emitWorkspaceScriptStatusUpdate(workspace.workspaceId, workspace.cwd);
-      this.emit({
-        type: "start_workspace_script_response",
-        payload: {
-          requestId: request.requestId,
-          workspaceId: request.workspaceId,
-          scriptName: request.scriptName,
-          terminalId: serviceResult.terminalId,
-          error: null,
-        },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to start workspace script";
-      this.sessionLogger.error(
-        {
-          err: error,
-          workspaceId: request.workspaceId,
-          scriptName: request.scriptName,
-        },
-        "Failed to start workspace script",
-      );
-      this.emit({
-        type: "start_workspace_script_response",
-        payload: {
-          requestId: request.requestId,
-          workspaceId: request.workspaceId,
-          scriptName: request.scriptName,
-          terminalId: null,
-          error: message,
-        },
-      });
-    }
-  }
-
   private async handleListAvailableEditorsRequest(
     request: Extract<SessionInboundMessage, { type: "list_available_editors_request" }>,
   ): Promise<void> {
@@ -7524,6 +7467,7 @@ export class Session {
     this.checkoutGitHandler.dispose();
     this.chatScheduleLoopHandler.dispose();
     this.providerHandler.dispose();
+    this.terminalScriptHandler.dispose();
 
     for (const unsubscribe of this.workspaceGitSubscriptions.values()) {
       unsubscribe();

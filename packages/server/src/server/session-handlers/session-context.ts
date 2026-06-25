@@ -26,6 +26,11 @@ import type { ProviderSnapshotManager } from "../agent/provider-snapshot-manager
 import type { FileBackedChatService } from "../chat/chat-service.js";
 import type { ScheduleService } from "../schedule/service.js";
 import type { LoopService } from "../loop-service.js";
+import type { TerminalManager } from "../../terminal/terminal-manager.js";
+import type { TerminalSessionController } from "../../terminal/terminal-session-controller.js";
+import type { ScriptRouteStore } from "../script-proxy.js";
+import type { WorkspaceScriptRuntimeStore } from "../workspace-script-runtime-store.js";
+import type { WorkspaceRegistry } from "../workspace-registry.js";
 import type { GitMutationRefreshReason } from "../session-helpers.js";
 import type pino from "pino";
 
@@ -57,6 +62,16 @@ export interface SessionContext {
   readonly loopService: LoopService;
   readonly agentPresetStore: AgentPresetStore;
 
+  // --- Terminal / Script services (used by TerminalScriptHandler) ---
+  readonly terminalManager: TerminalManager | null;
+  readonly terminalController: TerminalSessionController;
+  readonly scriptRouteStore: ScriptRouteStore | null;
+  readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
+  readonly workspaceRegistry: WorkspaceRegistry;
+  readonly getDaemonTcpPort: (() => number | null) | null;
+  readonly getDaemonTcpHost: (() => string | null) | null;
+  readonly resolveScriptHealth: ((hostname: string) => unknown) | null;
+
   // --- Message emission (every handler needs this) ---
   emit(message: SessionOutboundMessage): void;
 
@@ -83,6 +98,8 @@ export interface SessionContext {
   ): Promise<{ ok: true; agentId: string } | { ok: false; error: string }>;
   /** Check if the client supports a capability. */
   supports(capability: string): boolean;
+  /** Emit a workspace script status update (owned by Session core). */
+  emitWorkspaceScriptStatusUpdate(workspaceId: string, workspaceDirectory: string): void;
 }
 
 /**
