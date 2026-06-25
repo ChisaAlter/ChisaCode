@@ -84,7 +84,6 @@ import type { ScriptHealthState } from "./script-health-monitor.js";
 import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
-import { runSyntheticModelTest } from "./model-gateway/model-gateway.js";
 import { getErrorMessage, getErrorMessageOr } from "@chisacode/protocol/error-utils";
 import { getAgentStatusPriority } from "@chisacode/protocol/agent-state-bucket";
 import {
@@ -151,7 +150,6 @@ import {
   getAgentStreamEventTurnId,
   type AgentPersistenceHandle,
   type AgentPermissionResponse,
-  type AgentProvider,
   type AgentPromptContentBlock,
   type AgentPromptInput,
   type AgentRunOptions,
@@ -292,6 +290,7 @@ import {
 } from "./session-audio.js";
 import { CheckoutGitHandler } from "./session-handlers/checkout-git-handler.js";
 import { ChatScheduleLoopHandler } from "./session-handlers/chat-schedule-loop-handler.js";
+import { ProviderHandler } from "./session-handlers/provider-handler.js";
 import type { SessionContext } from "./session-handlers/session-context.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
@@ -574,6 +573,7 @@ export class Session {
   private voiceModeBaseConfig: VoiceModeBaseConfig | null = null;
   private readonly checkoutGitHandler: CheckoutGitHandler;
   private readonly chatScheduleLoopHandler: ChatScheduleLoopHandler;
+  private readonly providerHandler: ProviderHandler;
 
   constructor(options: SessionOptions) {
     const {
@@ -723,6 +723,7 @@ export class Session {
     const sessionContext = this.createSessionContext();
     this.checkoutGitHandler = new CheckoutGitHandler(sessionContext);
     this.chatScheduleLoopHandler = new ChatScheduleLoopHandler(sessionContext);
+    this.providerHandler = new ProviderHandler(sessionContext);
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -745,6 +746,7 @@ export class Session {
       chatService: this.chatService,
       scheduleService: this.scheduleService,
       loopService: this.loopService,
+      agentPresetStore: this.agentPresetStore,
       emit: (message) => this.emit(message),
       notifyGitMutation: (cwd, reason, opts) => this.notifyGitMutation(cwd, reason, opts),
       emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
@@ -755,6 +757,7 @@ export class Session {
       generateCommitMessage: (cwd) => this.generateCommitMessage(cwd),
       generatePullRequestText: (cwd, baseRef) => this.generatePullRequestText(cwd, baseRef),
       resolveAgentIdentifier: (identifier) => this.resolveAgentIdentifier(identifier),
+      supports: (capability) => this.supports(capability as ClientCapability),
     };
   }
 
@@ -1928,25 +1931,25 @@ export class Session {
   private dispatchProviderMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       case "list_provider_models_request":
-        return this.handleListProviderModelsRequest(msg);
+        return this.providerHandler.handleListProviderModelsRequest(msg);
       case "list_provider_modes_request":
-        return this.handleListProviderModesRequest(msg);
+        return this.providerHandler.handleListProviderModesRequest(msg);
       case "list_provider_features_request":
-        return this.handleListProviderFeaturesRequest(msg);
+        return this.providerHandler.handleListProviderFeaturesRequest(msg);
       case "list_available_providers_request":
-        return this.handleListAvailableProvidersRequest(msg);
+        return this.providerHandler.handleListAvailableProvidersRequest(msg);
       case "get_providers_snapshot_request":
-        return this.handleGetProvidersSnapshotRequest(msg);
+        return this.providerHandler.handleGetProvidersSnapshotRequest(msg);
       case "refresh_providers_snapshot_request":
-        return this.handleRefreshProvidersSnapshotRequest(msg);
+        return this.providerHandler.handleRefreshProvidersSnapshotRequest(msg);
       case "provider_diagnostic_request":
-        return this.handleProviderDiagnosticRequest(msg);
+        return this.providerHandler.handleProviderDiagnosticRequest(msg);
       case "provider.tooling.run.request":
-        return this.handleProviderToolingActionRequest(msg);
+        return this.providerHandler.handleProviderToolingActionRequest(msg);
       case "agent.presets.list.request":
-        return this.handleAgentPresetsListRequest(msg);
+        return this.providerHandler.handleAgentPresetsListRequest(msg);
       case "model_gateway.moa.test.request":
-        return this.handleModelGatewayMoaTestRequest(msg);
+        return this.providerHandler.handleModelGatewayMoaTestRequest(msg);
       default:
         return undefined;
     }
@@ -3393,209 +3396,6 @@ export class Session {
     return updatedWorkspace;
   }
 
-  private emitProviderDisabledResponse(
-    kind: "models" | "modes",
-    provider: AgentProvider,
-    requestId: string,
-    fetchedAt: string,
-  ): void {
-    const payload = {
-      provider,
-      error: `Provider ${provider} is disabled`,
-      fetchedAt,
-      requestId,
-    };
-    if (kind === "models") {
-      this.emit({ type: "list_provider_models_response", payload });
-    } else {
-      this.emit({ type: "list_provider_modes_response", payload });
-    }
-  }
-
-  private async handleListProviderModelsRequest(
-    msg: Extract<SessionInboundMessage, { type: "list_provider_models_request" }>,
-  ): Promise<void> {
-    const cwd = resolveSnapshotCwd(msg.cwd ? expandTilde(msg.cwd) : undefined);
-    const fetchedAt = new Date().toISOString();
-
-    const entry = await this.getProviderSnapshotEntryForRead(cwd, msg.provider);
-
-    if (!entry) {
-      this.emit({
-        type: "list_provider_models_response",
-        payload: {
-          provider: msg.provider,
-          error: `Unknown provider: ${msg.provider}`,
-          fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-      return;
-    }
-
-    if (!entry.enabled) {
-      this.emitProviderDisabledResponse("models", msg.provider, msg.requestId, fetchedAt);
-      return;
-    }
-
-    if (entry.status === "ready") {
-      this.emit({
-        type: "list_provider_models_response",
-        payload: {
-          provider: msg.provider,
-          models: entry.models ?? [],
-          error: null,
-          fetchedAt: entry.fetchedAt ?? fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-      return;
-    }
-
-    const errorMessage =
-      entry.status === "error"
-        ? (entry.error ?? `Failed to list models for ${msg.provider}`)
-        : `Provider ${msg.provider} is not available`;
-
-    this.emit({
-      type: "list_provider_models_response",
-      payload: {
-        provider: msg.provider,
-        error: errorMessage,
-        fetchedAt,
-        requestId: msg.requestId,
-      },
-    });
-  }
-
-  private async handleListProviderModesRequest(
-    msg: Extract<SessionInboundMessage, { type: "list_provider_modes_request" }>,
-  ): Promise<void> {
-    const fetchedAt = new Date().toISOString();
-    const cwd = resolveSnapshotCwd(msg.cwd ? expandTilde(msg.cwd) : undefined);
-    const entry = await this.getProviderSnapshotEntryForRead(cwd, msg.provider);
-
-    if (!entry) {
-      this.emit({
-        type: "list_provider_modes_response",
-        payload: {
-          provider: msg.provider,
-          error: `Unknown provider: ${msg.provider}`,
-          fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-      return;
-    }
-
-    if (!entry.enabled) {
-      this.emitProviderDisabledResponse("modes", msg.provider, msg.requestId, fetchedAt);
-      return;
-    }
-
-    if (entry.status === "ready") {
-      this.emit({
-        type: "list_provider_modes_response",
-        payload: {
-          provider: msg.provider,
-          modes: this.downgradeModeIconsForClient(entry.modes ?? []),
-          error: null,
-          fetchedAt: entry.fetchedAt ?? fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-      return;
-    }
-
-    const errorMessage =
-      entry.status === "error"
-        ? (entry.error ?? `Failed to list modes for ${msg.provider}`)
-        : `Provider ${msg.provider} is not available`;
-
-    this.emit({
-      type: "list_provider_modes_response",
-      payload: {
-        provider: msg.provider,
-        error: errorMessage,
-        fetchedAt,
-        requestId: msg.requestId,
-      },
-    });
-  }
-
-  private async getProviderSnapshotEntryForRead(
-    cwd: string,
-    provider: AgentProvider,
-  ): Promise<ProviderSnapshotEntry | undefined> {
-    const manager = this.providerSnapshotManager;
-    const findEntry = () =>
-      manager.getSnapshot(cwd).find((candidate) => candidate.provider === provider);
-
-    let entry = findEntry();
-    if (entry && !entry.enabled) {
-      return entry;
-    }
-    if (!entry || entry.status === "loading") {
-      // Awaits the in-flight warmup (deduped per-cwd) so old clients still get
-      // a resolved answer rather than a loading placeholder.
-      await manager.warmUpSnapshotForCwd({ cwd, providers: [provider] });
-      entry = findEntry();
-    }
-    return entry;
-  }
-
-  private buildDraftAgentSessionConfig(draftConfig: {
-    provider: AgentProvider;
-    cwd: string;
-    modeId?: string;
-    model?: string;
-    thinkingOptionId?: string;
-    featureValues?: Record<string, unknown>;
-  }): AgentSessionConfig {
-    return {
-      provider: draftConfig.provider,
-      cwd: expandTilde(draftConfig.cwd),
-      ...(draftConfig.modeId ? { modeId: draftConfig.modeId } : {}),
-      ...(draftConfig.model ? { model: draftConfig.model } : {}),
-      ...(draftConfig.thinkingOptionId ? { thinkingOptionId: draftConfig.thinkingOptionId } : {}),
-      ...(draftConfig.featureValues ? { featureValues: draftConfig.featureValues } : {}),
-    };
-  }
-
-  private async handleListProviderFeaturesRequest(
-    msg: Extract<SessionInboundMessage, { type: "list_provider_features_request" }>,
-  ): Promise<void> {
-    const fetchedAt = new Date().toISOString();
-    try {
-      const sessionConfig = this.buildDraftAgentSessionConfig(msg.draftConfig);
-      const features = await this.agentManager.listDraftFeatures(sessionConfig);
-      this.emit({
-        type: "list_provider_features_response",
-        payload: {
-          provider: msg.draftConfig.provider,
-          features,
-          error: null,
-          fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-    } catch (error) {
-      this.sessionLogger.error(
-        { err: error, provider: msg.draftConfig.provider, draftConfig: msg.draftConfig },
-        `Failed to list features for ${msg.draftConfig.provider}`,
-      );
-      this.emit({
-        type: "list_provider_features_response",
-        payload: {
-          provider: msg.draftConfig.provider,
-          error: getErrorMessage(error),
-          fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-    }
-  }
-
   private async handleDaemonGetStatusRequest(
     msg: Extract<SessionInboundMessage, { type: "daemon.get_status.request" }>,
   ): Promise<void> {
@@ -3671,216 +3471,6 @@ export class Session {
           requestId: msg.requestId,
           requestType: "daemon.get_pairing_offer.request",
           error: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-  }
-
-  private async handleListAvailableProvidersRequest(
-    msg: Extract<SessionInboundMessage, { type: "list_available_providers_request" }>,
-  ): Promise<void> {
-    const fetchedAt = new Date().toISOString();
-    try {
-      const providers = (await this.agentManager.listProviderAvailability()).filter((provider) =>
-        this.isProviderVisibleToClient(provider.provider),
-      );
-      this.emit({
-        type: "list_available_providers_response",
-        payload: {
-          providers,
-          error: null,
-          fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-    } catch (error) {
-      this.sessionLogger.error({ err: error }, "Failed to list provider availability");
-      this.emit({
-        type: "list_available_providers_response",
-        payload: {
-          providers: [],
-          error: getErrorMessage(error),
-          fetchedAt,
-          requestId: msg.requestId,
-        },
-      });
-    }
-  }
-
-  private async handleGetProvidersSnapshotRequest(
-    msg: Extract<SessionInboundMessage, { type: "get_providers_snapshot_request" }>,
-  ): Promise<void> {
-    // COMPAT(providersSnapshot): keep legacy provider-list RPCs alongside snapshot flow.
-    const entries = this.providerSnapshotManager
-      .getSnapshot(msg.cwd ? expandTilde(msg.cwd) : undefined)
-      .filter((entry) => this.isProviderVisibleToClient(entry.provider));
-
-    this.emit({
-      type: "get_providers_snapshot_response",
-      payload: {
-        entries: this.downgradeEntryModesForClient(entries),
-        generatedAt: new Date().toISOString(),
-        requestId: msg.requestId,
-      },
-    });
-  }
-
-  private async handleRefreshProvidersSnapshotRequest(
-    msg: Extract<SessionInboundMessage, { type: "refresh_providers_snapshot_request" }>,
-  ): Promise<void> {
-    if (msg.cwd) {
-      await this.providerSnapshotManager.refreshSnapshotForCwd({
-        cwd: expandTilde(msg.cwd),
-        providers: msg.providers,
-      });
-    } else {
-      await this.providerSnapshotManager.refreshSettingsSnapshot({
-        providers: msg.providers,
-      });
-    }
-    this.emit({
-      type: "refresh_providers_snapshot_response",
-      payload: {
-        acknowledged: true,
-        requestId: msg.requestId,
-      },
-    });
-  }
-
-  private async handleProviderDiagnosticRequest(
-    msg: Extract<SessionInboundMessage, { type: "provider_diagnostic_request" }>,
-  ): Promise<void> {
-    try {
-      const { diagnostic, details } = await this.providerSnapshotManager.getProviderDiagnostic(
-        msg.provider,
-      );
-      this.emit({
-        type: "provider_diagnostic_response",
-        payload: {
-          provider: msg.provider,
-          diagnostic,
-          details,
-          requestId: msg.requestId,
-        },
-      });
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.sessionLogger.error(
-        { err, provider: msg.provider },
-        `Failed to get provider diagnostic for ${msg.provider}`,
-      );
-      this.emit({
-        type: "rpc_error",
-        payload: {
-          requestId: msg.requestId,
-          requestType: msg.type,
-          error: `Failed to get provider diagnostic: ${err.message}`,
-          code: "provider_diagnostic_failed",
-        },
-      });
-    }
-  }
-
-  private async handleProviderToolingActionRequest(
-    msg: Extract<SessionInboundMessage, { type: "provider.tooling.run.request" }>,
-  ): Promise<void> {
-    try {
-      const result = await this.providerSnapshotManager.runProviderToolingAction(
-        msg.provider,
-        msg.action,
-      );
-      this.emit({
-        type: "provider.tooling.run.response",
-        payload: {
-          ...result,
-          requestId: msg.requestId,
-        },
-      });
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.sessionLogger.error(
-        { err, provider: msg.provider, action: msg.action },
-        `Failed to run provider tooling action for ${msg.provider}`,
-      );
-      this.emit({
-        type: "rpc_error",
-        payload: {
-          requestId: msg.requestId,
-          requestType: msg.type,
-          error: `Failed to ${msg.action} provider: ${err.message}`,
-          code: "provider_tooling_action_failed",
-        },
-      });
-    }
-  }
-
-  private async handleAgentPresetsListRequest(
-    msg: Extract<SessionInboundMessage, { type: "agent.presets.list.request" }>,
-  ): Promise<void> {
-    try {
-      const presets = await this.agentPresetStore.list();
-      this.emit({
-        type: "agent.presets.list.response",
-        payload: {
-          presets,
-          requestId: msg.requestId,
-        },
-      });
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.sessionLogger.error({ err }, "Failed to list agent presets");
-      this.emit({
-        type: "rpc_error",
-        payload: {
-          requestId: msg.requestId,
-          requestType: msg.type,
-          error: `Failed to list agent presets: ${err.message}`,
-          code: "agent_presets_list_failed",
-        },
-      });
-    }
-  }
-
-  private async handleModelGatewayMoaTestRequest(
-    msg: Extract<SessionInboundMessage, { type: "model_gateway.moa.test.request" }>,
-  ): Promise<void> {
-    const gateway = this.daemonConfigStore.get().modelGateways[msg.gatewayId];
-    if (!gateway || gateway.enabled === false) {
-      this.emit({
-        type: "model_gateway.moa.test.response",
-        payload: {
-          requestId: msg.requestId,
-          gatewayId: msg.gatewayId,
-          result: null,
-          error: "Unknown model gateway",
-        },
-      });
-      return;
-    }
-
-    try {
-      const result = await runSyntheticModelTest({
-        gateway,
-        syntheticModel: msg.syntheticModel,
-        prompt: msg.prompt,
-      });
-      this.emit({
-        type: "model_gateway.moa.test.response",
-        payload: {
-          requestId: msg.requestId,
-          gatewayId: msg.gatewayId,
-          result,
-          error: null,
-        },
-      });
-    } catch (error) {
-      this.emit({
-        type: "model_gateway.moa.test.response",
-        payload: {
-          requestId: msg.requestId,
-          gatewayId: msg.gatewayId,
-          result: null,
-          error: getErrorMessage(error),
         },
       });
     }
@@ -7933,6 +7523,7 @@ export class Session {
 
     this.checkoutGitHandler.dispose();
     this.chatScheduleLoopHandler.dispose();
+    this.providerHandler.dispose();
 
     for (const unsubscribe of this.workspaceGitSubscriptions.values()) {
       unsubscribe();

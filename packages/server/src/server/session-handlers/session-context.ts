@@ -15,6 +15,7 @@
 
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { AgentStorage } from "../agent/agent-storage.js";
+import type { AgentPresetStore } from "../agent/agent-preset-store.js";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { SessionOutboundMessage } from "../messages.js";
@@ -54,6 +55,7 @@ export interface SessionContext {
   readonly chatService: FileBackedChatService;
   readonly scheduleService: ScheduleService;
   readonly loopService: LoopService;
+  readonly agentPresetStore: AgentPresetStore;
 
   // --- Message emission (every handler needs this) ---
   emit(message: SessionOutboundMessage): void;
@@ -79,6 +81,8 @@ export interface SessionContext {
   resolveAgentIdentifier(
     identifier: string,
   ): Promise<{ ok: true; agentId: string } | { ok: false; error: string }>;
+  /** Check if the client supports a capability. */
+  supports(capability: string): boolean;
 }
 
 /**
