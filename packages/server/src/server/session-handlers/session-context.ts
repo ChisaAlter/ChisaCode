@@ -43,6 +43,7 @@ import type {
 } from "../messages.js";
 import type { PersistedWorkspaceRecord } from "../workspace-registry.js";
 import type { CreateChisaCodeWorktreeResult } from "../chisacode-worktree-service.js";
+import type { StructuredGenerationDaemonConfig } from "../agent/structured-generation-providers.js";
 import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.js";
 import type { CreateAgentLifecycleDispatch } from "../agent/create-agent-lifecycle-dispatch.js";
 import type { WorkspaceUpdatesFilter } from "../workspace-directory.js";
@@ -168,6 +169,16 @@ export interface SessionContext {
   isProviderVisibleToClient(provider: string): boolean;
   /** Build a workspace descriptor from input. */
   buildWorkspaceDescriptor(input: unknown): Promise<unknown>;
+
+  // --- Agent selection helpers (for workspace auto-name) ---
+  getFocusedAgentSelectionForCwd(cwd: string):
+    | {
+        provider?: string | null;
+        model?: string | null;
+        thinkingOptionId?: string | null;
+      }
+    | undefined;
+  readStructuredGenerationDaemonConfig(): StructuredGenerationDaemonConfig;
 
   // --- Additional shared services ---
   readonly downloadTokenStore: DownloadTokenStore;

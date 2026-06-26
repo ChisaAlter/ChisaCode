@@ -74,7 +74,6 @@ import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
-import { getErrorMessage, getErrorMessageOr } from "@chisacode/protocol/error-utils";
 import { getAgentStatusPriority } from "@chisacode/protocol/agent-state-bucket";
 import {
   buildUsageSummary,
@@ -170,10 +169,6 @@ import { buildMetadataPrompt } from "../utils/build-metadata-prompt.js";
 import { archivePersistedWorkspaceRecord } from "./workspace-archive-service.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import type { ScriptRouteStore } from "./script-proxy.js";
-import {
-  checkoutResolvedBranch,
-  type CheckoutExistingBranchResult,
-} from "../utils/checkout-git.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import {
   buildCheckoutPrStatusPayloadFromSnapshot,
@@ -185,7 +180,6 @@ import type pino from "pino";
 import type { FileBackedChatService } from "./chat/chat-service.js";
 import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
-import { execCommand } from "../utils/spawn.js";
 import { createGitHubService, type GitHubService } from "../services/github-service.js";
 import {
   summarizeFetchWorkspacesEntries,
@@ -193,14 +187,11 @@ import {
   type WorkspaceUpdatesFilter,
 } from "./workspace-directory.js";
 import {
-  attemptFirstAgentBranchAutoName,
   createChisaCodeWorktree,
   type CreateChisaCodeWorktreeInput,
   type CreateChisaCodeWorktreeResult,
 } from "./chisacode-worktree-service.js";
-import { generateBranchNameFromFirstAgentContext } from "./worktree-branch-name-generator.js";
 import {
-  assertSafeGitRef as assertWorktreeSafeGitRef,
   buildAgentSessionConfig as buildWorktreeAgentSessionConfig,
   createChisaCodeWorktreeWorkflow as createWorktreeWorkflow,
   type CreateChisaCodeWorktreeSetupContinuationInput,
@@ -837,6 +828,11 @@ export class Session {
       openEditorTarget: (options) => (this.openEditorTarget as any)(options),
       hasBinaryChannel: () => this.onBinaryMessage !== null,
       emitBinary: (frame) => this.emitBinary(frame),
+
+      // Agent selection helpers for workspace auto-name
+      getFocusedAgentSelectionForCwd: (cwd) => this.getFocusedAgentSelectionForCwd(cwd),
+      readStructuredGenerationDaemonConfig: () => this.readStructuredGenerationDaemonConfig(),
+
       serverId: this.serverId,
       daemonVersion: this.daemonVersion,
       daemonRuntimeConfig: this.daemonRuntimeConfig,
@@ -1973,8 +1969,8 @@ export class Session {
               logger: this.sessionLogger,
             },
           }),
-        checkoutExistingBranch: (cwd, branch) => this.checkoutExistingBranch(cwd, branch),
-        createBranchFromBase: (params) => this.createBranchFromBase(params),
+        checkoutExistingBranch: (cwd, branch) => this.checkoutGitHandler.checkoutExistingBranch(cwd, branch),
+        createBranchFromBase: (params) => this.checkoutGitHandler.createBranchFromBase(params),
         github: this.github,
       },
       config,
@@ -1989,55 +1985,13 @@ export class Session {
     firstAgentContext: FirstAgentContext;
   }): void {
     setTimeout(() => {
-      void this.maybeAutoNameWorkspaceBranchForFirstAgent(input).catch((error) => {
+      void this.workspaceProjectHandler.maybeAutoNameWorkspaceBranchForFirstAgent(input).catch((error) => {
         this.sessionLogger.warn(
           { err: error, cwd: input.workspace.cwd },
           "Failed to auto-name worktree branch",
         );
       });
     }, 0);
-  }
-
-  private async maybeAutoNameWorkspaceBranchForFirstAgent(input: {
-    workspace: PersistedWorkspaceRecord;
-    firstAgentContext: FirstAgentContext;
-  }): Promise<PersistedWorkspaceRecord> {
-    const result = await attemptFirstAgentBranchAutoName({
-      cwd: input.workspace.cwd,
-      firstAgentContext: input.firstAgentContext,
-      generateBranchNameFromContext: ({ cwd, firstAgentContext }) => {
-        return generateBranchNameFromFirstAgentContext({
-          agentManager: this.agentManager,
-          cwd,
-          workspaceGitService: this.workspaceGitService,
-          providerSnapshotManager: this.providerSnapshotManager,
-          daemonConfig: this.readStructuredGenerationDaemonConfig(),
-          currentSelection: this.getFocusedAgentSelectionForCwd(cwd),
-          firstAgentContext,
-          logger: this.sessionLogger,
-        });
-      },
-    });
-    if (!result.renamed || !result.branchName) {
-      return input.workspace;
-    }
-
-    const updatedWorkspace: PersistedWorkspaceRecord = {
-      ...input.workspace,
-      displayName: result.branchName,
-      updatedAt: new Date().toISOString(),
-    };
-    await this.workspaceRegistry.upsert(updatedWorkspace);
-    await this.notifyGitMutation(input.workspace.cwd, "rename-branch");
-    await this.emitWorkspaceUpdateForCwd(input.workspace.cwd);
-    return updatedWorkspace;
-  }
-
-  private assertSafeGitRef(ref: string, label: string): void {
-    if (!/^[A-Za-z0-9._/-]+$/.test(ref)) {
-      throw new Error(`Invalid ${label}: ${ref}`);
-    }
-    assertWorktreeSafeGitRef(ref, label);
   }
 
   private isPathWithinRoot(rootPath: string, candidatePath: string): boolean {
@@ -2201,75 +2155,6 @@ export class Session {
       }
       throw error;
     }
-  }
-
-  private async ensureCleanWorkingTree(cwd: string): Promise<void> {
-    const dirty = await this.isWorkingTreeDirty(cwd);
-    if (dirty) {
-      throw new Error(
-        "Working directory has uncommitted changes. Commit or stash before switching branches.",
-      );
-    }
-  }
-
-  private async isWorkingTreeDirty(cwd: string): Promise<boolean> {
-    try {
-      const snapshot = await this.workspaceGitService.getSnapshot(cwd);
-      return snapshot.git.isDirty === true;
-    } catch (error) {
-      throw new Error(`Unable to inspect git status for ${cwd}: ${getErrorMessage(error)}`, {
-        cause: error,
-      });
-    }
-  }
-
-  private async checkoutExistingBranch(
-    cwd: string,
-    branch: string,
-  ): Promise<CheckoutExistingBranchResult> {
-    this.assertSafeGitRef(branch, "branch");
-    const resolution = await this.workspaceGitService.validateBranchRef(cwd, branch);
-    if (resolution.kind === "not-found") {
-      throw new Error(`Branch not found: ${branch}`);
-    }
-    await this.ensureCleanWorkingTree(cwd);
-    const result = await checkoutResolvedBranch({
-      cwd,
-      resolution,
-    });
-    await this.notifyGitMutation(cwd, "switch-branch", { invalidateGithub: true });
-    return result;
-  }
-
-  private async createBranchFromBase(params: {
-    cwd: string;
-    baseBranch: string;
-    newBranchName: string;
-  }): Promise<void> {
-    const { cwd, baseBranch, newBranchName } = params;
-    this.assertSafeGitRef(baseBranch, "base branch");
-    this.assertSafeGitRef(newBranchName, "new branch");
-
-    const baseResolution = await this.workspaceGitService.validateBranchRef(cwd, baseBranch);
-    if (baseResolution.kind === "not-found") {
-      throw new Error(`Base branch not found: ${baseBranch}`);
-    }
-
-    const exists = await this.doesLocalBranchExist(cwd, newBranchName);
-    if (exists) {
-      throw new Error(`Branch already exists: ${newBranchName}`);
-    }
-
-    await this.ensureCleanWorkingTree(cwd);
-    await execCommand("git", ["checkout", "-b", newBranchName, baseBranch], {
-      cwd,
-    });
-    await this.notifyGitMutation(cwd, "create-branch");
-  }
-
-  private async doesLocalBranchExist(cwd: string, branch: string): Promise<boolean> {
-    this.assertSafeGitRef(branch, "branch");
-    return this.workspaceGitService.hasLocalBranch(cwd, branch);
   }
 
   private async notifyGitMutation(
@@ -3553,6 +3438,7 @@ export class Session {
     this.providerHandler.dispose();
     this.terminalScriptHandler.dispose();
     this.workspaceProjectHandler.dispose();
+    this.agentLifecycleHandler.dispose();
 
     for (const unsubscribe of this.workspaceGitSubscriptions.values()) {
       unsubscribe();

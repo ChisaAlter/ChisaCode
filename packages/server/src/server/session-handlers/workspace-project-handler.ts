@@ -30,12 +30,16 @@ import {
   type WorkspaceUpdatesFilter,
 } from "../workspace-directory.js";
 import { resolveSubscriptionId } from "../session-helpers.js";
+import { attemptFirstAgentBranchAutoName } from "../chisacode-worktree-service.js";
+import { generateBranchNameFromFirstAgentContext } from "../worktree-branch-name-generator.js";
 import type {
   SessionInboundMessage,
   SessionOutboundMessage,
   FileExplorerRequest,
   FileDownloadTokenRequest,
+  FirstAgentContext,
 } from "../messages.js";
+import type { PersistedWorkspaceRecord } from "../workspace-registry.js";
 import type { SessionContext, DisposableHandler } from "./session-context.js";
 
 type FetchWorkspacesRequestMessage = Extract<
@@ -750,5 +754,42 @@ export class WorkspaceProjectHandler implements DisposableHandler {
       type: "workspace_update",
       payload,
     });
+  }
+
+  // --- Workspace auto-name ---
+
+  async maybeAutoNameWorkspaceBranchForFirstAgent(input: {
+    workspace: PersistedWorkspaceRecord;
+    firstAgentContext: FirstAgentContext;
+  }): Promise<PersistedWorkspaceRecord> {
+    const result = await attemptFirstAgentBranchAutoName({
+      cwd: input.workspace.cwd,
+      firstAgentContext: input.firstAgentContext,
+      generateBranchNameFromContext: ({ cwd, firstAgentContext }) => {
+        return generateBranchNameFromFirstAgentContext({
+          agentManager: this.context.agentManager,
+          cwd,
+          workspaceGitService: this.context.workspaceGitService,
+          providerSnapshotManager: this.context.providerSnapshotManager,
+          daemonConfig: this.context.readStructuredGenerationDaemonConfig(),
+          currentSelection: this.context.getFocusedAgentSelectionForCwd(cwd),
+          firstAgentContext,
+          logger: this.context.sessionLogger,
+        });
+      },
+    });
+    if (!result.renamed || !result.branchName) {
+      return input.workspace;
+    }
+
+    const updatedWorkspace: PersistedWorkspaceRecord = {
+      ...input.workspace,
+      displayName: result.branchName,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.context.workspaceRegistry.upsert(updatedWorkspace);
+    await this.context.notifyGitMutation(input.workspace.cwd, "rename-branch");
+    await this.context.emitWorkspaceUpdateForCwd(input.workspace.cwd);
+    return updatedWorkspace;
   }
 }

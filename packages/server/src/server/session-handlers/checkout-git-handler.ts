@@ -101,14 +101,14 @@ export class CheckoutGitHandler implements DisposableHandler {
 
   // --- Branch safety helpers ---
 
-  private assertSafeGitRef(ref: string, label: string): void {
+  assertSafeGitRef(ref: string, label: string): void {
     if (!/^[A-Za-z0-9._/-]+$/.test(ref)) {
       throw new Error(`Invalid ${label}: ${ref}`);
     }
     assertWorktreeSafeGitRef(ref, label);
   }
 
-  private async isWorkingTreeDirty(cwd: string): Promise<boolean> {
+  async isWorkingTreeDirty(cwd: string): Promise<boolean> {
     try {
       const snapshot = await this.context.workspaceGitService.getSnapshot(cwd);
       return snapshot.git.isDirty === true;
@@ -119,7 +119,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
-  private async ensureCleanWorkingTree(cwd: string): Promise<void> {
+  async ensureCleanWorkingTree(cwd: string): Promise<void> {
     if (await this.isWorkingTreeDirty(cwd)) {
       throw new Error(
         "Working directory has uncommitted changes. Commit or stash before switching branches.",
@@ -127,7 +127,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
-  private async checkoutExistingBranch(
+  async checkoutExistingBranch(
     cwd: string,
     branch: string,
   ): Promise<CheckoutExistingBranchResult> {
@@ -140,6 +140,37 @@ export class CheckoutGitHandler implements DisposableHandler {
     const result = await checkoutResolvedBranch({ cwd, resolution });
     await this.notifyGitMutation(cwd, "switch-branch", { invalidateGithub: true });
     return result;
+  }
+
+  async createBranchFromBase(params: {
+    cwd: string;
+    baseBranch: string;
+    newBranchName: string;
+  }): Promise<void> {
+    const { cwd, baseBranch, newBranchName } = params;
+    this.assertSafeGitRef(baseBranch, "base branch");
+    this.assertSafeGitRef(newBranchName, "new branch");
+
+    const baseResolution = await this.context.workspaceGitService.validateBranchRef(cwd, baseBranch);
+    if (baseResolution.kind === "not-found") {
+      throw new Error(`Base branch not found: ${baseBranch}`);
+    }
+
+    const exists = await this.doesLocalBranchExist(cwd, newBranchName);
+    if (exists) {
+      throw new Error(`Branch already exists: ${newBranchName}`);
+    }
+
+    await this.ensureCleanWorkingTree(cwd);
+    await execCommand("git", ["checkout", "-b", newBranchName, baseBranch], {
+      cwd,
+    });
+    await this.notifyGitMutation(cwd, "create-branch");
+  }
+
+  async doesLocalBranchExist(cwd: string, branch: string): Promise<boolean> {
+    this.assertSafeGitRef(branch, "branch");
+    return this.context.workspaceGitService.hasLocalBranch(cwd, branch);
   }
 
   // --- Stash handlers ---
