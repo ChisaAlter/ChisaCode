@@ -44,6 +44,7 @@ import type {
 import type { PersistedWorkspaceRecord } from "../workspace-registry.js";
 import type { CreateChisaCodeWorktreeResult } from "../chisacode-worktree-service.js";
 import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.js";
+import type { CreateAgentLifecycleDispatch } from "../agent/create-agent-lifecycle-dispatch.js";
 import type { WorkspaceUpdatesFilter } from "../workspace-directory.js";
 import type pino from "pino";
 
@@ -53,6 +54,7 @@ export interface SessionContext {
   readonly sessionId: string;
   readonly sessionLogger: pino.Logger;
   readonly chisacodeHome: string;
+  readonly appVersion: string | null;
 
   // --- Shared services (used by multiple handlers) ---
   readonly agentManager: AgentManager;
@@ -140,6 +142,7 @@ export interface SessionContext {
   setWorkspaceUpdatesSubscription(subscription: unknown | null): void;
 
   // --- Agent lifecycle (for AgentLifecycleHandler) ---
+  readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
   /** Flush bootstrapped agent updates after initial fetch completes. */
   flushBootstrappedAgentUpdates(options?: unknown): void;
   /** Check if an agent matches the subscription filter. */
@@ -150,10 +153,15 @@ export interface SessionContext {
   buildStoredAgentPayload(record: unknown): unknown;
   /** Build a project placement for a cwd. */
   buildProjectPlacementForCwd(cwd: string): Promise<unknown>;
-  /** Build an agent session config. */
-  buildAgentSessionConfig(agentId: string): Promise<unknown>;
+  /** Build an agent session config (full signature for create_agent flow). */
+  buildAgentSessionConfig(
+    config: unknown,
+    gitOptions?: unknown,
+    legacyWorktreeName?: string,
+    firstAgentContext?: unknown,
+  ): Promise<unknown>;
   /** Resolve the workspace for creating an agent. */
-  resolveCreateAgentWorkspace(options: unknown): Promise<unknown>;
+  resolveCreateAgentWorkspace(cwd: string, workspaceId?: string): Promise<unknown>;
   /** Build an agent payload from a managed agent. */
   buildAgentPayload(agent: unknown): Promise<unknown>;
   /** Check if a provider is visible to the client. */
