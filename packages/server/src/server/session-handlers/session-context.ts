@@ -32,6 +32,19 @@ import type { ScriptRouteStore } from "../script-proxy.js";
 import type { WorkspaceScriptRuntimeStore } from "../workspace-script-runtime-store.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
 import type { GitMutationRefreshReason } from "../session-helpers.js";
+import type { DownloadTokenStore } from "../file-download/token-store.js";
+import type { PushTokenStore } from "../push/token-store.js";
+import type { UsageStore } from "../usage/usage-store.js";
+import type {
+  WorkspaceSetupSnapshot,
+  WorkspaceDescriptorPayload,
+  EditorTargetDescriptorPayload,
+  EditorTargetId,
+} from "../messages.js";
+import type { PersistedWorkspaceRecord } from "../workspace-registry.js";
+import type { CreateChisaCodeWorktreeResult } from "../chisacode-worktree-service.js";
+import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.js";
+import type { WorkspaceUpdatesFilter } from "../workspace-directory.js";
 import type pino from "pino";
 
 export interface SessionContext {
@@ -86,6 +99,11 @@ export interface SessionContext {
   emitWorkspaceUpdateForCwd(cwd: string): Promise<void>;
   /** Emit a workspace_update message for a specific workspace id. */
   emitWorkspaceUpdateForWorkspaceId(workspaceId: string): Promise<void>;
+  /** Emit workspace_update messages for multiple workspace ids. */
+  emitWorkspaceUpdatesForWorkspaceIds(
+    workspaceIds: Iterable<string>,
+    options?: { skipReconcile?: boolean; dedupeGitState?: boolean },
+  ): Promise<void>;
   /** Handle a git branch snapshot change observed by the watcher. */
   handleWorkspaceGitBranchSnapshot(cwd: string, branchName: string | null): void;
   /** Generate a commit message via structured generation (owned by Session core). */
@@ -100,6 +118,101 @@ export interface SessionContext {
   supports(capability: string): boolean;
   /** Emit a workspace script status update (owned by Session core). */
   emitWorkspaceScriptStatusUpdate(workspaceId: string, workspaceDirectory: string): void;
+
+  // --- Config control (for ConfigControlHandler) ---
+  /** Emit a lifecycle intent (restart/shutdown). */
+  emitLifecycleIntent(intent: unknown): void;
+
+  // --- Workspace subscription state machine (owned by Session, used by WorkspaceProjectHandler) ---
+  /** Buffer or emit an agent update — called by workspace domain to push agent changes. */
+  bufferOrEmitAgentUpdate(subscription: unknown, payload: unknown): void;
+  /** Buffer or emit a workspace update. */
+  bufferOrEmitWorkspaceUpdate(subscription: unknown, payload: unknown): void;
+  /** Flush bootstrapped workspace updates after initial fetch completes. */
+  flushBootstrappedWorkspaceUpdates(options?: unknown): void;
+  /** Check if a workspace matches the subscription filter. */
+  matchesWorkspaceFilter(input: unknown): boolean;
+  /** Reconcile and emit all pending workspace updates. */
+  reconcileAndEmitWorkspaceUpdates(): Promise<void>;
+  /** Get the current workspace updates subscription state. */
+  getWorkspaceUpdatesSubscription(): unknown;
+  /** Set the workspace updates subscription state. */
+  setWorkspaceUpdatesSubscription(subscription: unknown | null): void;
+
+  // --- Agent lifecycle (for AgentLifecycleHandler) ---
+  /** Flush bootstrapped agent updates after initial fetch completes. */
+  flushBootstrappedAgentUpdates(options?: unknown): void;
+  /** Check if an agent matches the subscription filter. */
+  matchesAgentFilter(options: unknown): boolean;
+  /** Forward an agent update to subscribers. */
+  forwardAgentUpdate(agent: unknown): Promise<void>;
+  /** Build a stored agent payload. */
+  buildStoredAgentPayload(record: unknown): unknown;
+  /** Build a project placement for a cwd. */
+  buildProjectPlacementForCwd(cwd: string): Promise<unknown>;
+  /** Build an agent session config. */
+  buildAgentSessionConfig(agentId: string): Promise<unknown>;
+  /** Resolve the workspace for creating an agent. */
+  resolveCreateAgentWorkspace(options: unknown): Promise<unknown>;
+  /** Build an agent payload from a managed agent. */
+  buildAgentPayload(agent: unknown): Promise<unknown>;
+  /** Check if a provider is visible to the client. */
+  isProviderVisibleToClient(provider: string): boolean;
+  /** Build a workspace descriptor from input. */
+  buildWorkspaceDescriptor(input: unknown): Promise<unknown>;
+
+  // --- Additional shared services ---
+  readonly downloadTokenStore: DownloadTokenStore;
+  readonly pushTokenStore: PushTokenStore;
+  readonly usageStore: UsageStore | null;
+  readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
+  readonly sttLanguage: string;
+
+  // --- Workspace helpers (WorkspaceProjectHandler) ---
+  resolveKnownProjectRootForConfig(repoRoot: string): Promise<string | null>;
+  listFetchWorkspacesEntries(request: unknown): Promise<{
+    entries: WorkspaceDescriptorPayload[];
+    pageInfo: { hasNextPage: boolean; cursor: string | null };
+  }>;
+  syncWorkspaceGitObservers(workspaces: Iterable<WorkspaceDescriptorPayload>): void;
+  syncWorkspaceGitObserverForWorkspace(workspace: PersistedWorkspaceRecord): Promise<void>;
+  findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord>;
+  describeWorkspaceRecord(
+    workspace: PersistedWorkspaceRecord,
+    projectRecord?: unknown,
+  ): Promise<WorkspaceDescriptorPayload>;
+  describeCreatedWorktreeWorkspace(
+    result: CreateChisaCodeWorktreeResult,
+  ): Promise<WorkspaceDescriptorPayload>;
+  createChisaCodeWorktreeWorkflow(
+    input: unknown,
+    options?: unknown,
+  ): Promise<CreateChisaCodeWorktreeWorkflowResult>;
+  archiveWorkspaceRecord(workspaceId: string, archivedAt?: string): Promise<void>;
+  markWorkspaceArchiving(workspaceIds: Iterable<string>, archivingAt: string): void;
+  clearWorkspaceArchiving(workspaceIds: Iterable<string>): void;
+  isPathWithinRoot(rootPath: string, candidatePath: string): boolean;
+  getAvailableEditorTargets(): Promise<EditorTargetDescriptorPayload[]>;
+  openEditorTarget(options: { editorId: EditorTargetId; path: string }): Promise<void>;
+  hasBinaryChannel(): boolean;
+  emitBinary(frame: Uint8Array): void;
+
+  // --- Daemon runtime info (for ConfigControlHandler) ---
+  readonly serverId: string | undefined;
+  readonly daemonVersion: string | undefined;
+  readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
+  readonly mcpBaseUrl: string | null;
+}
+
+export interface DaemonRuntimeConfig {
+  listen: string | null;
+  relay: {
+    enabled: boolean;
+    endpoint: string;
+    publicEndpoint: string;
+    useTls: boolean;
+    publicUseTls: boolean;
+  } | null;
 }
 
 /**
