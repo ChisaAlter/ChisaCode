@@ -364,9 +364,6 @@ export class VoiceAssistantWebSocketServer {
   private getDaemonTcpPort!: (() => number | null) | null;
   private getDaemonTcpHost!: (() => string | null) | null;
   private resolveScriptHealth!: ((hostname: string) => ScriptHealthState | null) | null;
-  private dictation!: {
-    finalTimeoutMs?: number;
-  } | null;
   private readonly voiceSpeakHandlers = new Map<string, VoiceSpeakHandler>();
   private readonly voiceCallerContexts = new Map<string, VoiceCallerContext>();
   private readonly workspaceSetupSnapshots = new Map<string, WorkspaceSetupSnapshot>();
@@ -395,9 +392,6 @@ export class VoiceAssistantWebSocketServer {
     auth?: DaemonAuthConfig,
     speech?: SpeechService | null,
     terminalManager?: TerminalManager | null,
-    dictation?: {
-      finalTimeoutMs?: number;
-    },
     daemonVersion?: string,
     onLifecycleIntent?: (intent: SessionLifecycleIntent) => void,
     projectRegistry?: ProjectRegistry,
@@ -463,7 +457,6 @@ export class VoiceAssistantWebSocketServer {
     this.assignOptionalServices({
       speech,
       terminalManager,
-      dictation,
       onLifecycleIntent,
       scriptRouteStore,
       scriptRuntimeStore,
@@ -512,7 +505,6 @@ export class VoiceAssistantWebSocketServer {
   private assignOptionalServices(params: {
     speech: SpeechService | null | undefined;
     terminalManager: TerminalManager | null | undefined;
-    dictation: { finalTimeoutMs?: number } | undefined;
     onLifecycleIntent: ((intent: SessionLifecycleIntent) => void) | undefined;
     scriptRouteStore: ScriptRouteStore | null | undefined;
     scriptRuntimeStore: WorkspaceScriptRuntimeStore | null | undefined;
@@ -525,7 +517,6 @@ export class VoiceAssistantWebSocketServer {
   }): void {
     this.speech = params.speech ?? null;
     this.terminalManager = params.terminalManager ?? null;
-    this.dictation = params.dictation ?? null;
     this.onLifecycleIntent = params.onLifecycleIntent ?? null;
     this.scriptRouteStore = params.scriptRouteStore ?? null;
     this.scriptRuntimeStore = params.scriptRuntimeStore ?? null;

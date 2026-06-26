@@ -150,26 +150,91 @@ Parameterize the 4 setter envelopes `handleSetAgentMode/Model/Feature/Thinking` 
 
 ---
 
-## Implementation Progress (2026-06-24/25 session)
+## Implementation Progress (2026-06-24~26)
 
 ### Strategy adaptation
 
-The original plan called for "controller-context" (per-domain option-bag controllers with owned-type `ReadonlySet` dispatch). Implementation adopted a **simplified variant**: handlers are plain classes receiving a shared `SessionContext` interface, and dispatch stays in Session's existing `dispatchXMessage` methods (delegating to `this.xHandler.handle*`). This avoids the owned-type set machinery while achieving the same separation. The `SessionContext` interface is populated incrementally — each handler extraction adds only the members it needs.
+The original plan called for "controller-context" (per-domain option-bag controllers with owned-type `ReadonlySet` dispatch). Implementation adopted a **simplified variant**: handlers are plain classes receiving a shared `SessionContext` interface, and dispatch stays in Session's existing `dispatchXMessage` methods (delegating to `this.xHandler.dispatch(msg)`). This avoids the owned-type set machinery while achieving the same separation. The `SessionContext` interface is populated incrementally — each handler extraction adds only the members it needs.
 
 ### Completed slices
 
 | Step  | Handler file                                     | Lines | Methods moved                                                      | session.ts reduction |
 | ----- | ------------------------------------------------ | ----- | ------------------------------------------------------------------ | -------------------- |
-| Pre   | `session-helpers.ts`                             | 202   | 20 pure functions/types/constants                                  | 9728→9562            |
-| Pre   | `session-audio.ts`                               | 55    | PCM constants + `convertPCMToWavBuffer`                            | 9562→9474            |
-| Pre   | `session-internal-types.ts`                      | 69    | 8 internal types + `VoiceFeatureUnavailableError`                  | 9474→9474            |
-| Infra | `session-handlers/session-context.ts`            | 111   | `SessionContext` + `DisposableHandler` interfaces                  | —                    |
-| 1     | `session-handlers/checkout-git-handler.ts`       | 968   | 20 checkout/PR/stash handlers + 7 helpers + 3 file-level functions | 9474→8496            |
+| Pre 1 | `session-helpers.ts`                             | 202   | 20 pure functions/types/constants                                  | 9728→9562            |
+| Pre 2 | `session-audio.ts`                               | 55    | PCM constants + `convertPCMToWavBuffer`                            | 9562→9474            |
+| Pre 3 | `session-internal-types.ts`                      | 69    | 8 internal types + `VoiceFeatureUnavailableError`                  | 9474→9474            |
+| Infra | `session-handlers/session-context.ts`            | 243   | `SessionContext` + `DisposableHandler` interfaces (70+ members)    | —                    |
+| 1     | `session-handlers/checkout-git-handler.ts`       | 999   | 20 checkout/PR/stash handlers + 7 helpers + 3 file-level functions | 9474→8496            |
 | 2     | `session-handlers/chat-schedule-loop-handler.ts` | 523   | 26 chat/schedule/loop handlers                                     | 8496→7943            |
 | 3     | `session-handlers/provider-handler.ts`           | 431   | 14 provider/preset/gateway handlers + 4 helpers                    | 7943→7535            |
 | 4     | `session-handlers/terminal-script-handler.ts`    | 93    | `handleStartWorkspaceScriptRequest` + terminal dispatch            | 7535→7477            |
+| 5     | `session-handlers/workspace-project-handler.ts`  | 795   | 13 workspace/project handlers + 3 helpers                          | 7477→6982\*          |
+| 6     | `session-handlers/config-control-handler.ts`     | 770   | skills/mcp/config control handlers                                 | —                    |
+| 7     | — (Voice removed)                                | —     | Voice 相关代码全部标记删除，残留 stub 清理                         | —                    |
+| 8     | `session-handlers/agent-lifecycle-handler.ts`    | 2259  | Agent lifecycle handlers（最大领域）                               | —                    |
 
-**Total: session.ts 9728 → 7477 lines (-2251, -23%).** 4 handlers, 2015 lines of extracted code, 61 methods moved.
+\* 步骤 5/6/7/8 合并为一个 commit (`87e8db8`)，中间行数记为合计效果。
+
+**Total: session.ts 9728 → 2810 lines (-6918, -71.1%).** 7 handlers, 6113 lines of extracted code, Voice code fully removed. 后续清理再减 207 行（删除 5 个死方法/字段 + 35+ 个未使用 import/type）。
+
+### 关联 commits（14 个，已推送 origin/cn-main）
+
+| Commit    | 说明                                                             |
+| --------- | ---------------------------------------------------------------- |
+| `b00df69` | 抽取 session.ts 纯辅助函数到 session-helpers.ts                  |
+| `d51afae` | 抽取 session.ts 音频函数和内部类型                               |
+| `0d2b16f` | 新建 session-handlers 目录与 SessionContext 接口                 |
+| `2c5e998` | 迁移 stash 方法到 CheckoutGitHandler（渐进式第一步）             |
+| `edf4638` | CheckoutGitHandler 完整迁移 15 个 checkout 方法                  |
+| `6dee49a` | 删除 session.ts 旧 checkout 方法 + 更新 dispatch                 |
+| `d98e89b` | ChatScheduleLoopHandler 拆分                                     |
+| `cf46b17` | ProviderHandler 拆分                                             |
+| `5abb0c8` | TerminalScriptHandler 拆分                                       |
+| `87e8db8` | Voice stub + ConfigControlHandler + WorkspaceProjectHandler 拆分 |
+| `0b0d9f2` | AgentLifecycleHandler 拆分完成                                   |
+| `29d664a` | 删除 session.ts 中重复 Git 辅助方法                              |
+| `b8531db` | Voice 残留代码完全清理 + dispatch-seam 测试                      |
+| `2ef7831` | 更新 session 拆分计划实施进度与 AGENTS.md                        |
+
+### Slice 覆盖对照
+
+| 计划 Slice                                        | 内容                                  | 状态                    |
+| ------------------------------------------------- | ------------------------------------- | ----------------------- |
+| 0 — Test net + disjointness tripwire              | `session.dispatch-seam.test.ts`       | ✅ 17 tests             |
+| 1 — ChatScheduleLoopController                    | `chat-schedule-loop-handler.ts`       | ✅                      |
+| 2 — ProviderCatalogController                     | `provider-handler.ts`                 | ✅                      |
+| 3 — Split shared observer seams                   | `session.workspace-git-watch.test.ts` | ✅                      |
+| 4 — GitCheckoutController                         | `checkout-git-handler.ts`             | ✅                      |
+| 5 — WorkspaceController                           | `workspace-project-handler.ts`        | ✅                      |
+| 6 — Voice prereqs (emit purity + abort ownership) | Voice 代码完全删除                    | ✅ (handled by removal) |
+| 7 — VoiceSessionController                        | Voice 代码完全删除                    | ✅ (handled by removal) |
+| 8a — Agent-lifecycle config setters               | `session.lifecycle-boundary.test.ts`  | ✅                      |
+| 8b — AgentLifecycleController                     | `agent-lifecycle-handler.ts`          | ✅                      |
+
+### session.ts 剩余 2810 行代码分布
+
+| 大类                          | 估计行数 | 占比  | 说明                                                                 |
+| ----------------------------- | -------- | ----- | -------------------------------------------------------------------- |
+| imports/类型定义/接口         | ~180     | 6.4%  | imports + SessionOptions + 内部类型 + free functions                 |
+| 构造函数 + SessionContext     | ~285     | 10.1% | constructor + createSessionContext                                   |
+| 消息分发 dispatch             | ~240     | 8.5%  | handleMessage + 7 个 dispatch\* 方法                                 |
+| Agent 辅助方法                | ~420     | 14.9% | buildAgentPayload/forwardAgentUpdate 等                              |
+| Workspace/Git 辅助 + worktree | ~1150    | 40.9% | 查找/创建/描述 workspace、git observer/watch、worktree、脚本         |
+| 结构化生成 (commit/PR text)   | ~150     | 5.3%  | generateCommitMessage/generatePullRequestText                        |
+| Cleanup / emit / abort        | ~180     | 6.4%  | cleanup/emit/emitBinary                                              |
+| 字段声明/暴露方法/其他        | ~205     | 7.3%  | 属性声明 + getClientActivity/getRuntimeMetrics + SessionRequestError |
+
+### 测试文件（9 个 session 相关测试）
+
+- `session.test.ts`
+- `session.dispatch-seam.test.ts` — Slice 0
+- `session.lifecycle-boundary.test.ts` — Slice 8a
+- `session.workspace-git-watch.test.ts` — Slice 3
+- `session.workspaces.test.ts`
+- `session.workspace-resolution-invariants.test.ts`
+- `session.voice-mcp-config.test.ts`
+- `session.create-agent-title.test.ts`
+- `session.wait-for-finish.test.ts`
 
 ### Key design decisions
 
@@ -177,17 +242,13 @@ The original plan called for "controller-context" (per-domain option-bag control
 - **Cross-domain methods on SessionContext**: `notifyGitMutation`, `emitWorkspaceUpdateForCwd`, `generateCommitMessage`, `resolveAgentIdentifier`, `supports`, `emitWorkspaceScriptStatusUpdate` — owned by Session core, exposed via interface.
 - **Duplicate helpers accepted**: `assertSafeGitRef`, `isWorkingTreeDirty`, `ensureCleanWorkingTree`, `checkoutExistingBranch` kept in both Session (called by non-checkout code) and CheckoutGitHandler (independent copy). Acceptable tradeoff to avoid over-exposing Session internals.
 - **`github` field non-optional**: SessionContext declares `github: GitHubService` (not `| undefined`) because Session's constructor always creates one via `github ?? createGitHubService()`.
+- **Voice 代码完全删除**: 原始计划 Step 7 VoiceController 拆分被 Voice 代码完全删除替换（项目已不支持 Voice）。
 
-### Remaining slices (future work)
+### 后续可优化项
 
-| Step | Handler                             | Est. reduction | Risk   | Blocker                                                                                                               |
-| ---- | ----------------------------------- | -------------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
-| 5    | `WorkspaceProjectHandler`           | ~450           | medium | Methods deeply coupled to `workspaceUpdatesSubscription`, `workspaceGitWatchTargets`, `workspaceDirectory` core state |
-| 6    | `ConfigControlHandler` (skills/mcp) | ~300           | medium | skills/mcp share `daemonConfigStore`; control sub-domain (restart/shutdown) affects lifecycle                         |
-| 7    | `VoiceHandler`                      | ~800           | high   | Delayed initialization timing, ~25 voice fields                                                                       |
-| 8    | `AgentLifecycleHandler`             | ~1500          | high   | Largest domain, `createAgentRequest` spans 6 services                                                                 |
-
-Steps 5-6 require more SessionContext surface or state refactoring; 7-8 are the hardest and should be planned as dedicated efforts with comprehensive test coverage first.
+- session.ts 中 Workspace/Git 辅助方法（~1170 行，38.8%）仍可考虑进一步提取为 `workspace-core.ts` 等独立模块
+- Agent 辅助方法（~463 行）可视情况提取到独立的 agent 辅助模块
+- SessionContext 接口（70+ 成员）可考虑按域拆分为多个子接口
 
 ### Verification
 

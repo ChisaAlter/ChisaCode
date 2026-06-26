@@ -42,11 +42,6 @@ import type {
 import type { PersistedWorkspaceRecord } from "../workspace-registry.js";
 import type { SessionContext, DisposableHandler } from "./session-context.js";
 
-type FetchWorkspacesRequestMessage = Extract<
-  SessionInboundMessage,
-  { type: "fetch_workspaces_request" }
->;
-type FetchWorkspacesRequestFilter = NonNullable<FetchWorkspacesRequestMessage["filter"]>;
 type FetchWorkspacesResponsePayload = Extract<
   SessionOutboundMessage,
   { type: "fetch_workspaces_response" }
@@ -728,7 +723,10 @@ export class WorkspaceProjectHandler implements DisposableHandler {
     pageInfo: FetchWorkspacesResponsePageInfo;
   }> {
     try {
-      return (await this.context.listFetchWorkspacesEntries(request)) as any;
+      return (await this.context.listFetchWorkspacesEntries(request)) as unknown as {
+        entries: FetchWorkspacesResponseEntry[];
+        pageInfo: FetchWorkspacesResponsePageInfo;
+      };
     } catch (error) {
       if (error instanceof CursorError) {
         throw new SessionRequestError("invalid_cursor", error.message);

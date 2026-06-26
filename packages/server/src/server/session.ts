@@ -10,14 +10,10 @@ import {
   isLegacyEditorTargetId,
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
-  type AgentAttachment,
   type FirstAgentContext,
   type SessionInboundMessage,
   type SessionOutboundMessage,
-  type FileExplorerRequest,
-  type FileDownloadTokenRequest,
   type GitSetupOptions,
-  type CloseItemsRequest,
   type EditorTargetDescriptorPayload,
   type EditorTargetId,
   type ProjectPlacementPayload,
@@ -26,25 +22,12 @@ import {
 } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
-import {
-  encodeFileTransferFrame,
-  FileTransferOpcode,
-  type TerminalStreamFrame,
-} from "@chisacode/protocol/binary-frames/index";
+import { type TerminalStreamFrame } from "@chisacode/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
-import { SortablePager, type SortSpec } from "./pagination/sortable-pager.js";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech/speech-provider.js";
 import { listAvailableEditorTargets, openInEditorTarget } from "./editor-targets.js";
-import {
-  buildConfigOverrides,
-  extractTimestamps,
-  isStoredAgentProviderAvailable,
-  toAgentPersistenceHandle,
-} from "./persistence-hooks.js";
-import { ensureAgentLoaded } from "./agent/agent-loading.js";
-import { resolveCreateAgentTitles } from "./agent/create-agent-title.js";
+import { isStoredAgentProviderAvailable } from "./persistence-hooks.js";
 import { AgentPresetStore } from "./agent/agent-preset-store.js";
-import { respondToAgentPermission } from "./agent/permission-response.js";
 import { experimental_createMCPClient } from "ai";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import {
@@ -55,31 +38,13 @@ import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
-import { getAgentStatusPriority } from "@chisacode/protocol/agent-state-bucket";
-import {
-  buildUsageSummary,
-  exportUsageEvents,
-  pruneUsageEvents,
-  type UsageStore,
-} from "./usage/usage-store.js";
+import { type UsageStore } from "./usage/usage-store.js";
 import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
 
 import { AgentManager } from "./agent/agent-manager.js";
-import { ProviderSnapshotManager, resolveSnapshotCwd } from "./agent/provider-snapshot-manager.js";
-import type {
-  AgentManagerEvent,
-  AgentTimelineCursor,
-  AgentTimelineFetchDirection,
-  ManagedAgent,
-} from "./agent/agent-manager.js";
-import { createAgentCommand } from "./agent/create-agent/create.js";
-import {
-  archiveAgentCommand,
-  cancelAgentRunCommand,
-  closeAgentCommand,
-  setAgentModeCommand,
-  updateAgentCommand,
-} from "./agent/lifecycle-command.js";
+import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
+import type { AgentManagerEvent, ManagedAgent } from "./agent/agent-manager.js";
+import { archiveAgentCommand } from "./agent/lifecycle-command.js";
 import {
   buildStoredAgentPayload,
   resolveEffectiveThinkingOptionId,
@@ -91,11 +56,6 @@ import {
   emitLiveTimelineItemIfAgentKnown,
 } from "./agent/timeline-append.js";
 import {
-  projectTimelineRows,
-  selectTimelineWindowByProjectedLimit,
-  type TimelineProjectionMode,
-} from "./agent/timeline-projection.js";
-import {
   StructuredAgentFallbackError,
   StructuredAgentResponseError,
   generateStructuredAgentResponseWithFallback,
@@ -104,24 +64,9 @@ import {
   resolveStructuredGenerationProviders,
   type StructuredGenerationDaemonConfig,
 } from "./agent/structured-generation-providers.js";
-import {
-  getAgentStreamEventTurnId,
-  type AgentPersistenceHandle,
-  type AgentPermissionResponse,
-  type AgentPromptContentBlock,
-  type AgentPromptInput,
-  type AgentRunOptions,
-  type AgentSessionConfig,
-  type ProviderSnapshotEntry,
-} from "./agent/agent-sdk-types.js";
+import { getAgentStreamEventTurnId, type AgentSessionConfig } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
-import {
-  ImportSessionsRequestError,
-  importProviderSession,
-  listImportableProviderSessions,
-  normalizeImportAgentRequest,
-} from "./agent/import-sessions.js";
 import {
   checkoutLiteFromGitSnapshot,
   normalizeWorkspaceId as normalizePersistedWorkspaceId,
@@ -149,17 +94,13 @@ import {
   buildCheckoutPrStatusPayloadFromSnapshot,
   buildCheckoutStatusPayloadFromSnapshot,
 } from "./checkout/status-projection.js";
-import { toResolver, type Resolvable } from "./speech/provider-resolver.js";
+import { type Resolvable } from "./speech/provider-resolver.js";
 import type pino from "pino";
 import type { FileBackedChatService } from "./chat/chat-service.js";
 import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
 import { createGitHubService, type GitHubService } from "../services/github-service.js";
-import {
-  summarizeFetchWorkspacesEntries,
-  WorkspaceDirectory,
-  type WorkspaceUpdatesFilter,
-} from "./workspace-directory.js";
+import { WorkspaceDirectory, type WorkspaceUpdatesFilter } from "./workspace-directory.js";
 import {
   createChisaCodeWorktree,
   type CreateChisaCodeWorktreeInput,
@@ -170,28 +111,17 @@ import {
   createChisaCodeWorktreeWorkflow as createWorktreeWorkflow,
   type CreateChisaCodeWorktreeSetupContinuationInput,
   type CreateChisaCodeWorktreeWorkflowResult,
-  handleCreateChisaCodeWorktreeRequest as handleCreateWorktreeRequest,
-  handleChisaCodeWorktreeArchiveRequest as handleWorktreeArchiveRequest,
-  handleChisaCodeWorktreeListRequest as handleWorktreeListRequest,
-  handleWorkspaceSetupStatusRequest as handleWorkspaceSetupStatusRequestMessage,
 } from "./worktree-session.js";
-import { toWorktreeWireError } from "./worktree-errors.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
 import {
   WORKSPACE_GIT_WATCH_REMOVED_STATE_KEY,
-  FETCH_AGENTS_SORT_KEYS,
   resolveKnownProjectRootForConfig,
   type GitMutationRefreshReason,
   LEGACY_PROVIDER_IDS,
-  LEGACY_MODE_ICONS,
-  errorToFriendlyMessage,
-  resolveSubscriptionId,
   diffChangeTypeFor,
   buildWorkspaceCheckout,
   clientSupportsAllProviders,
   clientSupportsFlexibleEditorIds,
-  beginAgentDeleteIfSupported,
-  resolveWaitForFinishError,
 } from "./session-helpers.js";
 
 // Re-export so existing imports from "./session.js" keep working.
@@ -214,19 +144,7 @@ import { AgentLifecycleHandler } from "./session-handlers/agent-lifecycle-handle
 import type { SessionContext } from "./session-handlers/session-context.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
-type FetchAgentHistoryRequestMessage = Extract<
-  SessionInboundMessage,
-  { type: "fetch_agent_history_request" }
->;
-type AgentDirectoryRequestMessage = FetchAgentsRequestMessage | FetchAgentHistoryRequestMessage;
 type FetchAgentsRequestFilter = NonNullable<FetchAgentsRequestMessage["filter"]>;
-type FetchAgentsRequestSort = NonNullable<FetchAgentsRequestMessage["sort"]>[number];
-type FetchAgentsResponsePayload = Extract<
-  SessionOutboundMessage,
-  { type: "fetch_agents_response" }
->["payload"];
-type FetchAgentsResponseEntry = FetchAgentsResponsePayload["entries"][number];
-type FetchAgentsResponsePageInfo = FetchAgentsResponsePayload["pageInfo"];
 type AgentUpdatePayload = Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
 type AgentUpdatesFilter = FetchAgentsRequestFilter;
 interface AgentUpdatesSubscriptionState {
@@ -268,7 +186,6 @@ class SessionRequestError extends Error {
   }
 }
 
-const AgentIdSchema = z.string().uuid();
 const AVAILABLE_EDITOR_TARGETS_CACHE_TTL_MS = 60_000;
 const AVAILABLE_EDITOR_TARGETS_CACHE_KEY = "available";
 
@@ -708,30 +625,27 @@ export class Session {
           repoRoot,
           projectRegistry: this.projectRegistry,
         }),
-      // WorkspaceProjectHandler additions (cast as any to avoid structural type mismatch)
-      listFetchWorkspacesEntries: (request) => (this.listFetchWorkspacesEntries as any)(request),
-      syncWorkspaceGitObservers: (workspaces) =>
-        (this.syncWorkspaceGitObservers as any)(workspaces),
+      // WorkspaceProjectHandler additions
+      listFetchWorkspacesEntries: (
+        request: Extract<SessionInboundMessage, { type: "fetch_workspaces_request" }>,
+      ) => this.listFetchWorkspacesEntries(request),
+      syncWorkspaceGitObservers: (workspaces) => this.syncWorkspaceGitObservers(workspaces),
       syncWorkspaceGitObserverForWorkspace: (workspace) =>
-        (this.syncWorkspaceGitObserverForWorkspace as any)(workspace),
-      findOrCreateWorkspaceForDirectory: (cwd) =>
-        (this.findOrCreateWorkspaceForDirectory as any)(cwd),
+        this.syncWorkspaceGitObserverForWorkspace(workspace),
+      findOrCreateWorkspaceForDirectory: (cwd) => this.findOrCreateWorkspaceForDirectory(cwd),
       describeWorkspaceRecord: (workspace, projectRecord) =>
-        (this.describeWorkspaceRecord as any)(workspace, projectRecord),
-      describeCreatedWorktreeWorkspace: (result) =>
-        (this.describeCreatedWorktreeWorkspace as any)(result),
+        this.describeWorkspaceRecord(workspace, projectRecord),
+      describeCreatedWorktreeWorkspace: (result) => this.describeCreatedWorktreeWorkspace(result),
       createChisaCodeWorktreeWorkflow: (input, options) =>
-        (this.createChisaCodeWorktreeWorkflow as any)(input, options),
+        this.createChisaCodeWorktreeWorkflow(input, options),
       archiveWorkspaceRecord: (workspaceId, archivedAt) =>
-        (this.archiveWorkspaceRecord as any)(workspaceId, archivedAt),
+        this.archiveWorkspaceRecord(workspaceId, archivedAt),
       markWorkspaceArchiving: (workspaceIds, archivingAt) =>
-        (this.markWorkspaceArchiving as any)(workspaceIds, archivingAt),
-      clearWorkspaceArchiving: (workspaceIds) =>
-        (this.clearWorkspaceArchiving as any)(workspaceIds),
-      isPathWithinRoot: (rootPath, candidatePath) =>
-        (this.isPathWithinRoot as any)(rootPath, candidatePath),
-      getAvailableEditorTargets: () => (this.getAvailableEditorTargets as any)(),
-      openEditorTarget: (options) => (this.openEditorTarget as any)(options),
+        this.markWorkspaceArchiving(workspaceIds, archivingAt),
+      clearWorkspaceArchiving: (workspaceIds) => this.clearWorkspaceArchiving(workspaceIds),
+      isPathWithinRoot: (rootPath, candidatePath) => this.isPathWithinRoot(rootPath, candidatePath),
+      getAvailableEditorTargets: () => this.getAvailableEditorTargets(),
+      openEditorTarget: (options) => this.openEditorTarget(options),
       hasBinaryChannel: () => this.onBinaryMessage !== null,
       emitBinary: (frame) => this.emitBinary(frame),
 
@@ -758,25 +672,6 @@ export class Session {
 
   supports(capability: ClientCapability): boolean {
     return this.clientCapabilities.has(capability);
-  }
-
-  // COMPAT(customModeIcons): rewrite icons unknown to v0.1.83 clients (whose MODE_ICONS
-  // map is a closed enum and would render `undefined`, crashing in render). Drop
-  // this and the cap gate when floor >= v0.1.84.
-  private downgradeModeIconsForClient<T extends { icon?: string }>(modes: T[]): T[] {
-    if (this.supports(CLIENT_CAPS.customModeIcons)) return modes;
-    return modes.map((mode) =>
-      mode.icon && !LEGACY_MODE_ICONS.has(mode.icon) ? { ...mode, icon: "ShieldCheck" } : mode,
-    );
-  }
-
-  private downgradeEntryModesForClient<T extends { modes?: { icon?: string }[] }>(
-    entries: T[],
-  ): T[] {
-    if (this.supports(CLIENT_CAPS.customModeIcons)) return entries;
-    return entries.map((entry) =>
-      entry.modes ? { ...entry, modes: this.downgradeModeIconsForClient(entry.modes) } : entry,
-    );
   }
 
   async syncWorkspaceGitObserverForWorkspace(workspace: PersistedWorkspaceRecord): Promise<void> {
@@ -879,77 +774,6 @@ export class Session {
    */
   public async sendInitialState(): Promise<void> {
     // No unsolicited agent list hydration. Callers must use fetch_agents_request.
-  }
-
-  /**
-   * Normalize a user prompt (with optional image metadata) for AgentManager
-   */
-  private buildAgentPrompt(
-    text: string,
-    images?: Array<{ data: string; mimeType: string }>,
-    attachments?: AgentAttachment[],
-  ): AgentPromptInput {
-    const normalized = text?.trim() ?? "";
-    const hasImages = Boolean(images && images.length > 0);
-    const hasAttachments = Boolean(attachments && attachments.length > 0);
-    if (!hasImages && !hasAttachments) {
-      return normalized;
-    }
-    const blocks: AgentPromptContentBlock[] = [];
-    if (normalized.length > 0) {
-      blocks.push({ type: "text", text: normalized });
-    }
-    for (const image of images ?? []) {
-      blocks.push({ type: "image", data: image.data, mimeType: image.mimeType });
-    }
-    for (const attachment of attachments ?? []) {
-      blocks.push(attachment);
-    }
-    return blocks;
-  }
-
-  /**
-   * Interrupt the agent's active run so the next prompt starts a fresh turn.
-   * Returns once the manager confirms the stream has been cancelled.
-   */
-  private async interruptAgentIfRunning(agentId: string): Promise<void> {
-    const snapshot = this.agentManager.getAgent(agentId);
-    if (!snapshot) {
-      this.sessionLogger.trace({ agentId }, "agent.session.interrupt.not_found");
-      throw new Error(`Agent ${agentId} not found`);
-    }
-
-    const hasInFlightRun = this.agentManager.hasInFlightRun(agentId);
-    if (!hasInFlightRun) {
-      this.sessionLogger.trace(
-        {
-          agentId,
-          provider: snapshot.provider,
-          lifecycle: snapshot.lifecycle,
-          hasInFlightRun,
-        },
-        "agent.session.interrupt.skip_not_running",
-      );
-      return;
-    }
-
-    this.sessionLogger.debug(
-      { agentId, lifecycle: snapshot.lifecycle, hasInFlightRun },
-      "interruptAgentIfRunning: interrupting",
-    );
-
-    const t0 = Date.now();
-    const cancelled = await this.agentManager.cancelAgentRun(agentId);
-    this.sessionLogger.debug(
-      { agentId, cancelled, durationMs: Date.now() - t0 },
-      "interruptAgentIfRunning: cancelAgentRun completed",
-    );
-    if (!cancelled) {
-      this.sessionLogger.warn(
-        { agentId },
-        "interruptAgentIfRunning: reported running but no active run was cancelled",
-      );
-    }
   }
 
   /**
@@ -2205,33 +2029,6 @@ export class Session {
     return { ok: false, error: `Agent not found: ${trimmed}` };
   }
 
-  private readonly agentsPager = new SortablePager<
-    AgentSnapshotPayload,
-    FetchAgentsRequestSort["key"]
-  >({
-    validKeys: FETCH_AGENTS_SORT_KEYS,
-    defaultSort: [{ key: "updated_at", direction: "desc" }],
-    label: "fetch_agents",
-    getId: (agent) => agent.id,
-    getSortValue: (agent, key): number | string => {
-      switch (key) {
-        case "status_priority":
-          return getAgentStatusPriority({
-            status: agent.status,
-            pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
-            requiresAttention: agent.requiresAttention,
-            attentionReason: agent.attentionReason ?? null,
-          });
-        case "created_at":
-          return Date.parse(agent.createdAt);
-        case "updated_at":
-          return Date.parse(agent.updatedAt);
-        case "title":
-          return agent.title?.toLocaleLowerCase() ?? "";
-      }
-    },
-  });
-
   private async describeWorkspaceRecord(
     workspace: PersistedWorkspaceRecord,
     projectRecord?: PersistedProjectRecord | null,
@@ -2928,13 +2725,6 @@ export class Session {
 
     this.abortController.abort();
     this.setPhase("idle");
-  }
-
-  /**
-   * Create new AbortController, aborting the previous one
-   */
-  private createAbortController(): void {
-    this.abortController = new AbortController();
   }
 
   /**

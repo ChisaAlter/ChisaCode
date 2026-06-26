@@ -41,12 +41,17 @@ import type {
   EditorTargetDescriptorPayload,
   EditorTargetId,
 } from "../messages.js";
-import type { PersistedWorkspaceRecord } from "../workspace-registry.js";
-import type { CreateChisaCodeWorktreeResult } from "../chisacode-worktree-service.js";
+import type { PersistedWorkspaceRecord, PersistedProjectRecord } from "../workspace-registry.js";
+import type {
+  CreateChisaCodeWorktreeInput,
+  CreateChisaCodeWorktreeResult,
+} from "../chisacode-worktree-service.js";
 import type { StructuredGenerationDaemonConfig } from "../agent/structured-generation-providers.js";
-import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.js";
+import type {
+  CreateChisaCodeWorktreeSetupContinuationInput,
+  CreateChisaCodeWorktreeWorkflowResult,
+} from "../worktree-session.js";
 import type { CreateAgentLifecycleDispatch } from "../agent/create-agent-lifecycle-dispatch.js";
-import type { WorkspaceUpdatesFilter } from "../workspace-directory.js";
 import type pino from "pino";
 
 export interface SessionContext {
@@ -191,21 +196,24 @@ export interface SessionContext {
   resolveKnownProjectRootForConfig(repoRoot: string): Promise<string | null>;
   listFetchWorkspacesEntries(request: unknown): Promise<{
     entries: WorkspaceDescriptorPayload[];
-    pageInfo: { hasNextPage: boolean; cursor: string | null };
+    pageInfo: { nextCursor: string | null; prevCursor: string | null; hasMore: boolean };
   }>;
   syncWorkspaceGitObservers(workspaces: Iterable<WorkspaceDescriptorPayload>): void;
   syncWorkspaceGitObserverForWorkspace(workspace: PersistedWorkspaceRecord): Promise<void>;
   findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord>;
   describeWorkspaceRecord(
     workspace: PersistedWorkspaceRecord,
-    projectRecord?: unknown,
+    projectRecord?: PersistedProjectRecord | null,
   ): Promise<WorkspaceDescriptorPayload>;
   describeCreatedWorktreeWorkspace(
     result: CreateChisaCodeWorktreeResult,
   ): Promise<WorkspaceDescriptorPayload>;
   createChisaCodeWorktreeWorkflow(
-    input: unknown,
-    options?: unknown,
+    input: CreateChisaCodeWorktreeInput,
+    options?: {
+      resolveDefaultBranch?: (repoRoot: string) => Promise<string>;
+      setupContinuation?: CreateChisaCodeWorktreeSetupContinuationInput;
+    },
   ): Promise<CreateChisaCodeWorktreeWorkflowResult>;
   archiveWorkspaceRecord(workspaceId: string, archivedAt?: string): Promise<void>;
   markWorkspaceArchiving(workspaceIds: Iterable<string>, archivingAt: string): void;

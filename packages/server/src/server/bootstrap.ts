@@ -119,6 +119,7 @@ export function assertWildcardAuth(
 }
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import type { SessionLifecycleIntent } from "./session.js";
 import { createGitHubService } from "../services/github-service.js";
 import { createChisaCodeWorktree as createRegisteredChisaCodeWorktree } from "./chisacode-worktree-service.js";
 import { createChisaCodeWorktreeWorkflow } from "./worktree-session.js";
@@ -1126,11 +1127,8 @@ export async function createChisaCodeDaemon(
             config.auth,
             speechService,
             terminalManager,
-            {
-              finalTimeoutMs: config.dictationFinalTimeoutMs,
-            },
             daemonVersion,
-            (intent) => {
+            (intent: SessionLifecycleIntent) => {
               try {
                 config.onLifecycleIntent?.(intent);
               } catch (error) {
@@ -1148,7 +1146,7 @@ export async function createChisaCodeDaemon(
             handleBranchChange,
             () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
             () => (boundListenTarget?.type === "tcp" ? boundListenTarget.host : null),
-            (hostname) => scriptHealthMonitor.getHealthForHostname(hostname),
+            (hostname: string) => scriptHealthMonitor.getHealthForHostname(hostname),
             workspaceGitService,
             github,
             config.pushNotificationSender,
