@@ -4,6 +4,8 @@
  * Handles provider list/snapshot/diagnostic/tooling RPC requests.
  */
 
+import { homedir } from "node:os";
+
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 
 import { expandTilde } from "../../utils/path.js";
@@ -26,7 +28,7 @@ const LEGACY_MODE_ICONS = new Set<string>([
 ]);
 
 function resolveSnapshotCwd(cwd: string | undefined): string {
-  return cwd ?? "";
+  return cwd ?? homedir();
 }
 
 export class ProviderHandler implements DisposableHandler {
