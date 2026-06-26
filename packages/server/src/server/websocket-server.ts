@@ -889,32 +889,6 @@ export class VoiceAssistantWebSocketServer {
       getDaemonTcpPort: this.getDaemonTcpPort ?? undefined,
       getDaemonTcpHost: this.getDaemonTcpHost ?? undefined,
       resolveScriptHealth: this.resolveScriptHealth ?? undefined,
-      voice: {
-        turnDetection: () => this.speech?.resolveTurnDetection() ?? null,
-      },
-      voiceBridge: {
-        registerVoiceSpeakHandler: (agentId, handler) => {
-          this.voiceSpeakHandlers.set(agentId, handler);
-        },
-        unregisterVoiceSpeakHandler: (agentId) => {
-          this.voiceSpeakHandlers.delete(agentId);
-        },
-        registerVoiceCallerContext: (agentId, context) => {
-          this.voiceCallerContexts.set(agentId, context);
-        },
-        unregisterVoiceCallerContext: (agentId) => {
-          this.voiceCallerContexts.delete(agentId);
-        },
-      },
-      dictation:
-        this.dictation || this.speech
-          ? {
-              finalTimeoutMs: this.dictation?.finalTimeoutMs,
-              stt: () => this.speech?.resolveDictationStt() ?? null,
-              sttLanguage: this.speech?.resolveDictationSttLanguage() ?? "en",
-              getSpeechReadiness: () => this.speech!.getReadiness(),
-            }
-          : undefined,
       serverId: this.serverId,
       daemonVersion: this.daemonVersion,
       daemonRuntimeConfig: this.daemonRuntimeConfig,

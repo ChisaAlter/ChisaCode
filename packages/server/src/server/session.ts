@@ -33,21 +33,8 @@ import {
 } from "@chisacode/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
 import { SortablePager, type SortSpec } from "./pagination/sortable-pager.js";
-import { TTSManager } from "./agent/tts-manager.js";
-import { STTManager } from "./agent/stt-manager.js";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech/speech-provider.js";
-import type { TurnDetectionProvider } from "./speech/turn-detection-provider.js";
-import { maybePersistTtsDebugAudio } from "./agent/tts-debug.js";
-import { isChisaCodeDictationDebugEnabled } from "./agent/recordings-debug.js";
 import { listAvailableEditorTargets, openInEditorTarget } from "./editor-targets.js";
-import {
-  DictationStreamManager,
-  type DictationStreamOutboundMessage,
-} from "./dictation/dictation-stream-manager.js";
-import {
-  createVoiceTurnController,
-  type VoiceTurnController,
-} from "./voice/voice-turn-controller.js";
 import {
   buildConfigOverrides,
   extractTimestamps,
@@ -55,17 +42,11 @@ import {
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
 import { ensureAgentLoaded } from "./agent/agent-loading.js";
-import {
-  sendPromptToAgent,
-  waitForAgentRunStartWithTimeout,
-  unarchiveAgentState,
-} from "./agent/agent-prompt.js";
 import { resolveCreateAgentTitles } from "./agent/create-agent-title.js";
 import { AgentPresetStore } from "./agent/agent-preset-store.js";
 import { respondToAgentPermission } from "./agent/permission-response.js";
 import { experimental_createMCPClient } from "ai";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import {
   buildWorkspaceScriptPayloads,
   readChisaCodeConfigForProjection,
@@ -157,12 +138,6 @@ import {
   type ProjectRegistry,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
-import {
-  buildVoiceModeSystemPrompt,
-  stripVoiceModeSystemPrompt,
-  wrapSpokenInput,
-} from "./voice-config.js";
-import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import { PushTokenStore } from "./push/token-store.js";
 import { buildMetadataPrompt } from "../utils/build-metadata-prompt.js";
@@ -175,7 +150,6 @@ import {
   buildCheckoutStatusPayloadFromSnapshot,
 } from "./checkout/status-projection.js";
 import { toResolver, type Resolvable } from "./speech/provider-resolver.js";
-import type { SpeechReadinessSnapshot, SpeechReadinessState } from "./speech/speech-runtime.js";
 import type pino from "pino";
 import type { FileBackedChatService } from "./chat/chat-service.js";
 import { LoopService } from "./loop-service.js";
@@ -229,21 +203,7 @@ import {
   type WorkspaceGitWatchTarget,
   type SessionRuntimeMetrics,
   type AgentMcpTransportFactory,
-  type VoiceTranscriptionResultPayload,
-  type VoiceFeatureUnavailableContext,
-  type VoiceFeatureUnavailableResponseMetadata,
-  VoiceFeatureUnavailableError,
 } from "./session-internal-types.js";
-import {
-  PCM_SAMPLE_RATE,
-  PCM_CHANNELS,
-  PCM_BITS_PER_SAMPLE,
-  MIN_STREAMING_SEGMENT_DURATION_MS,
-  MIN_STREAMING_SEGMENT_BYTES,
-  type VoiceModeBaseConfig,
-  type AudioBufferState,
-  convertPCMToWavBuffer,
-} from "./session-audio.js";
 import { CheckoutGitHandler } from "./session-handlers/checkout-git-handler.js";
 import { ChatScheduleLoopHandler } from "./session-handlers/chat-schedule-loop-handler.js";
 import { ConfigControlHandler } from "./session-handlers/config-control-handler.js";
@@ -353,21 +313,6 @@ export interface SessionOptions {
   getDaemonTcpPort?: () => number | null;
   getDaemonTcpHost?: () => string | null;
   resolveScriptHealth?: (hostname: string) => ScriptHealthState | null;
-  voice?: {
-    turnDetection?: Resolvable<TurnDetectionProvider | null>;
-  };
-  voiceBridge?: {
-    registerVoiceSpeakHandler?: (agentId: string, handler: VoiceSpeakHandler) => void;
-    unregisterVoiceSpeakHandler?: (agentId: string) => void;
-    registerVoiceCallerContext?: (agentId: string, context: VoiceCallerContext) => void;
-    unregisterVoiceCallerContext?: (agentId: string) => void;
-  };
-  dictation?: {
-    finalTimeoutMs?: number;
-    stt?: Resolvable<SpeechToTextProvider | null>;
-    sttLanguage?: string;
-    getSpeechReadiness?: () => SpeechReadinessSnapshot;
-  };
   serverId?: string;
   daemonVersion?: string;
   daemonRuntimeConfig?: {
@@ -430,29 +375,6 @@ export class Session {
   // State machine
   private abortController: AbortController;
   private processingPhase: ProcessingPhase = "idle";
-
-  // Voice mode state
-  private isVoiceMode = false;
-  private speechInProgress = false;
-
-  private dictationStreamManager!: DictationStreamManager;
-  private resolveVoiceTurnDetection!: () => TurnDetectionProvider | null;
-  private voiceTurnController: VoiceTurnController | null = null;
-  private voiceInputChunkCount = 0;
-  private voiceInputBytes = 0;
-  private voiceInputWindowStartedAt = Date.now();
-
-  // Audio buffering for interruption handling
-  private pendingAudioSegments: Array<{ audio: Buffer; format: string }> = [];
-  private bufferTimeout: ReturnType<typeof setTimeout> | null = null;
-  private audioBuffer: AudioBufferState | null = null;
-
-  // Optional TTS debug capture (persisted per utterance)
-  private readonly ttsDebugStreams = new Map<string, { format: string; chunks: Buffer[] }>();
-
-  // Per-session managers
-  private ttsManager!: TTSManager;
-  private sttManager!: STTManager;
 
   // Per-session MCP client and tools
   private agentMcpClient: Awaited<ReturnType<typeof experimental_createMCPClient>> | null = null;
@@ -519,18 +441,11 @@ export class Session {
   private readonly workspaceGitFetchSubscriptions = new Map<string, () => void>();
   private readonly workspaceGitSubscriptions = new Map<string, () => void>();
   private readonly workspaceDirectory: WorkspaceDirectory;
-  private registerVoiceSpeakHandler?: (agentId: string, handler: VoiceSpeakHandler) => void;
-  private unregisterVoiceSpeakHandler?: (agentId: string) => void;
-  private registerVoiceCallerContext?: (agentId: string, context: VoiceCallerContext) => void;
-  private unregisterVoiceCallerContext?: (agentId: string) => void;
-  private getSpeechReadiness?: () => SpeechReadinessSnapshot;
   private readonly sttLanguage: string;
   private readonly serverId: string | undefined;
   private readonly daemonVersion: string | undefined;
   private readonly daemonRuntimeConfig: SessionOptions["daemonRuntimeConfig"];
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
-  private voiceModeAgentId: string | null = null;
-  private voiceModeBaseConfig: VoiceModeBaseConfig | null = null;
   private readonly checkoutGitHandler: CheckoutGitHandler;
   private readonly chatScheduleLoopHandler: ChatScheduleLoopHandler;
   private readonly configControlHandler: ConfigControlHandler;
@@ -564,9 +479,7 @@ export class Session {
       workspaceGitService,
       daemonConfigStore,
       mcpBaseUrl,
-      stt,
       sttLanguage,
-      tts,
       terminalManager,
       providerSnapshotManager,
       scriptRouteStore,
@@ -576,9 +489,6 @@ export class Session {
       getDaemonTcpPort,
       getDaemonTcpHost,
       resolveScriptHealth,
-      voice,
-      voiceBridge,
-      dictation,
       serverId,
       daemonVersion,
       daemonRuntimeConfig,
@@ -662,8 +572,6 @@ export class Session {
     this.getDaemonTcpHost = getDaemonTcpHost ?? null;
     this.resolveScriptHealth = resolveScriptHealth ?? null;
     this.sttLanguage = sttLanguage ?? "en";
-    this.subscribeToOptionalManagers();
-    this.bindVoiceBridges({ voice, voiceBridge, dictation });
     this.serverId = serverId;
     this.daemonVersion = daemonVersion;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
@@ -676,8 +584,6 @@ export class Session {
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
       buildWorkspaceDescriptor: (input) => this.buildWorkspaceDescriptor(input),
     });
-
-    this.initializePerSessionManagers({ tts, stt, sttLanguage, dictation });
 
     // Initialize agent MCP client asynchronously
     void this.initializeAgentMcp();
@@ -1074,29 +980,6 @@ export class Session {
   /**
    * Subscribe to AgentManager events and forward them to the client
    */
-  private subscribeToOptionalManagers(): void {
-    // VOICE_DISABLED — was used for voice provider lifecycle
-  }
-
-  // VOICE_DISABLED: bindVoiceBridges is a no-op stub.
-  private bindVoiceBridges(_params: {
-    voice?: SessionOptions["voice"];
-    voiceBridge?: SessionOptions["voiceBridge"];
-    dictation?: SessionOptions["dictation"];
-  }): void {
-    // Voice feature disabled — no-op.
-  }
-
-  // VOICE_DISABLED: initializePerSessionManagers is a no-op stub.
-  private initializePerSessionManagers(_params: {
-    tts?: SessionOptions["tts"];
-    stt?: SessionOptions["stt"];
-    sttLanguage?: SessionOptions["sttLanguage"];
-    dictation?: SessionOptions["dictation"];
-  }): void {
-    // Voice feature disabled — no-op.
-  }
-
   private subscribeToAgentEvents(): void {
     if (this.unsubscribeAgentEvents) {
       this.unsubscribeAgentEvents();
@@ -1117,29 +1000,6 @@ export class Session {
           );
           void this.forwardAgentUpdate(event.agent);
           return;
-        }
-
-        if (
-          this.isVoiceMode &&
-          this.voiceModeAgentId === event.agentId &&
-          event.event.type === "permission_requested" &&
-          isVoicePermissionAllowed(event.event.request)
-        ) {
-          const requestId = event.event.request.id;
-          void this.agentManager
-            .respondToPermission(event.agentId, requestId, {
-              behavior: "allow",
-            })
-            .catch((error) => {
-              this.sessionLogger.warn(
-                {
-                  err: error,
-                  agentId: event.agentId,
-                  requestId,
-                },
-                "Failed to auto-allow speak tool permission in voice mode",
-              );
-            });
         }
 
         const serializedEvent = serializeAgentStreamEvent(event.event);
@@ -1545,7 +1405,6 @@ export class Session {
 
   private async dispatchInboundMessage(msg: SessionInboundMessage): Promise<void> {
     const promise =
-      this.dispatchVoiceAndControlMessage(msg) ??
       this.dispatchAgentLifecycleMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg) ??
@@ -1554,40 +1413,6 @@ export class Session {
       this.dispatchChatScheduleLoopMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
-  }
-
-  private dispatchVoiceAndControlMessage(msg: SessionInboundMessage): Promise<void> | undefined {
-    switch (msg.type) {
-      // Voice cases: silently ignored (voice feature disabled)
-      case "voice_audio_chunk":
-      case "audio_played":
-      case "set_voice_mode":
-      case "dictation_stream_start":
-      case "dictation_stream_chunk":
-      case "dictation_stream_finish":
-      case "dictation_stream_cancel":
-        return undefined;
-      case "abort_request":
-        return this.handleAbort();
-      case "client_heartbeat":
-        this.handleClientHeartbeat(msg);
-        return undefined;
-      case "ping": {
-        const now = Date.now();
-        this.emit({
-          type: "pong",
-          payload: {
-            requestId: msg.requestId,
-            clientSentAt: msg.clientSentAt,
-            serverReceivedAt: now,
-            serverSentAt: now,
-          },
-        });
-        return undefined;
-      }
-      default:
-        return undefined;
-    }
   }
 
   private dispatchAgentLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -1743,7 +1568,28 @@ export class Session {
   }
 
   private async dispatchMiscMessage(msg: SessionInboundMessage): Promise<void> {
-    return this.configControlHandler.dispatch(msg);
+    switch (msg.type) {
+      case "abort_request":
+        return this.handleAbort();
+      case "client_heartbeat":
+        this.handleClientHeartbeat(msg);
+        return;
+      case "ping": {
+        const now = Date.now();
+        this.emit({
+          type: "pong",
+          payload: {
+            requestId: msg.requestId,
+            clientSentAt: msg.clientSentAt,
+            serverReceivedAt: now,
+            serverSentAt: now,
+          },
+        });
+        return;
+      }
+      default:
+        return this.configControlHandler.dispatch(msg);
+    }
   }
 
   public resetPeakInflight(): void {
@@ -1811,112 +1657,6 @@ export class Session {
     return { agentId, archivedAt };
   }
 
-  private toVoiceFeatureUnavailableContext(_state: unknown): unknown {
-    throw new Error("VOICE_DISABLED");
-  }
-
-  private resolveModeReadinessState(_readiness: unknown, _mode: string): unknown {
-    throw new Error("VOICE_DISABLED");
-  }
-
-  private getVoiceFeatureUnavailableResponseMetadata(_error: unknown): unknown {
-    throw new Error("VOICE_DISABLED");
-  }
-
-  private resolveVoiceFeatureUnavailableContext(_mode: string): unknown {
-    throw new Error("VOICE_DISABLED");
-  }
-
-  /**
-   * Handle voice mode toggle
-   */
-  private async handleSetVoiceMode(
-    _enabled: boolean,
-    _agentId?: string,
-    _requestId?: string,
-  ): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private parseVoiceTargetAgentId(_rawId: string, _source: string): string {
-    throw new Error("VOICE_DISABLED");
-  }
-
-  private async enableVoiceModeForAgent(_agentId: string): Promise<string> {
-    throw new Error("VOICE_DISABLED");
-  }
-
-  private async disableVoiceModeForActiveAgent(_restoreAgentConfig: boolean): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private handleDictationManagerMessage(_msg: unknown): void {
-    // VOICE_DISABLED
-  }
-
-  private async startVoiceTurnController(): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private async stopVoiceTurnController(): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private handleVoiceSpeechStopped(): void {
-    // VOICE_DISABLED
-  }
-
-  /**
-   * Handle text message to agent (with optional image attachments)
-   */
-  private async handleSendAgentMessage(
-    agentId: string,
-    text: string,
-    messageId?: string,
-    images?: Array<{ data: string; mimeType: string }>,
-    attachments?: AgentAttachment[],
-    runOptions?: AgentRunOptions,
-    options?: { spokenInput?: boolean },
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    this.sessionLogger.info(
-      {
-        agentId,
-        textPreview: text.substring(0, 50),
-        imageCount: images?.length ?? 0,
-        attachmentCount: attachments?.length ?? 0,
-      },
-      `Sending text to agent ${agentId}${
-        images && images.length > 0 ? ` with ${images.length} image attachment(s)` : ""
-      }${
-        attachments && attachments.length > 0
-          ? ` and ${attachments.length} structured attachment(s)`
-          : ""
-      }`,
-    );
-
-    const promptText = options?.spokenInput ? wrapSpokenInput(text) : text;
-    const prompt = this.buildAgentPrompt(promptText, images, attachments);
-
-    try {
-      await sendPromptToAgent({
-        agentManager: this.agentManager,
-        agentStorage: this.agentStorage,
-        agentId,
-        prompt,
-        messageId,
-        runOptions,
-        logger: this.sessionLogger,
-      });
-      return { ok: true };
-    } catch (error) {
-      this.agentLifecycleHandler.handleAgentRunError(agentId, error, "Failed to send agent message");
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
   /**
    * Handle create agent request
    */
@@ -1969,7 +1709,8 @@ export class Session {
               logger: this.sessionLogger,
             },
           }),
-        checkoutExistingBranch: (cwd, branch) => this.checkoutGitHandler.checkoutExistingBranch(cwd, branch),
+        checkoutExistingBranch: (cwd, branch) =>
+          this.checkoutGitHandler.checkoutExistingBranch(cwd, branch),
         createBranchFromBase: (params) => this.checkoutGitHandler.createBranchFromBase(params),
         github: this.github,
       },
@@ -1985,12 +1726,14 @@ export class Session {
     firstAgentContext: FirstAgentContext;
   }): void {
     setTimeout(() => {
-      void this.workspaceProjectHandler.maybeAutoNameWorkspaceBranchForFirstAgent(input).catch((error) => {
-        this.sessionLogger.warn(
-          { err: error, cwd: input.workspace.cwd },
-          "Failed to auto-name worktree branch",
-        );
-      });
+      void this.workspaceProjectHandler
+        .maybeAutoNameWorkspaceBranchForFirstAgent(input)
+        .catch((error) => {
+          this.sessionLogger.warn(
+            { err: error, cwd: input.workspace.cwd },
+            "Failed to auto-name worktree branch",
+          );
+        });
     }, 0);
   }
 
@@ -2488,7 +2231,6 @@ export class Session {
       }
     },
   });
-
 
   private async describeWorkspaceRecord(
     workspace: PersistedWorkspaceRecord,
@@ -3176,56 +2918,6 @@ export class Session {
   }
 
   /**
-   * Handle audio chunk for buffering and transcription
-   */
-  private async ensureAudioBufferForFormat(
-    _chunkFormat: string,
-    _isPCMChunk: boolean,
-  ): Promise<unknown> {
-    throw new Error("VOICE_DISABLED");
-  }
-
-  private async forwardAudioChunkToVoiceTurn(
-    _msg: Extract<SessionInboundMessage, { type: "voice_audio_chunk" }>,
-    _chunkFormat: string,
-  ): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private async handleAudioChunk(
-    _msg: Extract<SessionInboundMessage, { type: "voice_audio_chunk" }>,
-  ): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private finalizeBufferedAudio(): { audio: Buffer; format: string } | null {
-    return null;
-  }
-
-  private async processCompletedAudio(_audio: Buffer, _format: string): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private async flushPendingAudioSegments(_reason: string): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  /**
-   * Process audio through STT and then LLM
-   */
-  private async processAudio(_audio: Buffer, _format: string): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private async handleTranscriptionResultPayload(_result: unknown): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  private registerVoiceBridgeForAgent(_agentId: string): void {
-    // VOICE_DISABLED
-  }
-
-  /**
    * Handle abort request from client
    */
   private async handleAbort(): Promise<void> {
@@ -3235,52 +2927,7 @@ export class Session {
     );
 
     this.abortController.abort();
-    this.ttsManager.cancelPendingPlaybacks("abort request");
-
-    // Voice abort should always interrupt active agent output immediately.
-    if (this.isVoiceMode && this.voiceModeAgentId) {
-      try {
-        await this.interruptAgentIfRunning(this.voiceModeAgentId);
-      } catch (error) {
-        this.sessionLogger.warn(
-          { err: error, agentId: this.voiceModeAgentId },
-          "Failed to interrupt active voice-mode agent on abort",
-        );
-      }
-    }
-
-    if (this.processingPhase === "transcribing") {
-      // Still in STT phase - we'll buffer the next audio
-      this.sessionLogger.debug("Will buffer next audio (currently transcribing)");
-      // Phase stays as 'transcribing', handleAudioChunk will handle buffering
-      return;
-    }
-
-    // Reset phase to idle and clear pending non-voice buffers.
     this.setPhase("idle");
-    this.pendingAudioSegments = [];
-    this.clearBufferTimeout();
-  }
-
-  /**
-   * Handle audio playback confirmation from client
-   */
-  private handleAudioPlayed(_id: string): void {
-    // VOICE_DISABLED
-  }
-
-  /**
-   * Mark speech detection start and abort any active playback/agent run.
-   */
-  private async handleVoiceSpeechStart(): Promise<void> {
-    // VOICE_DISABLED
-  }
-
-  /**
-   * Clear speech-in-progress flag once the user turn has completed
-   */
-  private clearSpeechInProgress(_reason: string): void {
-    // VOICE_DISABLED
   }
 
   /**
@@ -3299,20 +2946,6 @@ export class Session {
   }
 
   /**
-   * Set timeout to process buffered audio segments
-   */
-  private setBufferTimeout(_durationMs: number): void {
-    // VOICE_DISABLED
-  }
-
-  /**
-   * Clear buffer timeout
-   */
-  private clearBufferTimeout(): void {
-    // VOICE_DISABLED
-  }
-
-  /**
    * Emit a message to the client
    */
   private emit(msg: SessionOutboundMessage): void {
@@ -3323,54 +2956,6 @@ export class Session {
       },
       "agent.session.outbound",
     );
-    if (
-      msg.type === "audio_output" &&
-      (process.env.TTS_DEBUG_AUDIO_DIR || isChisaCodeDictationDebugEnabled()) &&
-      msg.payload.groupId &&
-      typeof msg.payload.audio === "string"
-    ) {
-      const groupId = msg.payload.groupId;
-      const existing =
-        this.ttsDebugStreams.get(groupId) ??
-        ({ format: msg.payload.format, chunks: [] } satisfies {
-          format: string;
-          chunks: Buffer[];
-        });
-
-      try {
-        existing.chunks.push(Buffer.from(msg.payload.audio, "base64"));
-        existing.format = msg.payload.format;
-        this.ttsDebugStreams.set(groupId, existing);
-      } catch {
-        // ignore malformed base64
-      }
-
-      if (msg.payload.isLastChunk) {
-        const final = this.ttsDebugStreams.get(groupId);
-        this.ttsDebugStreams.delete(groupId);
-        if (final && final.chunks.length > 0) {
-          void (async () => {
-            const recordingPath = await maybePersistTtsDebugAudio(
-              Buffer.concat(final.chunks),
-              { sessionId: this.sessionId, groupId, format: final.format },
-              this.sessionLogger,
-            );
-            if (recordingPath) {
-              this.onMessage({
-                type: "activity_log",
-                payload: {
-                  id: uuidv4(),
-                  timestamp: new Date(),
-                  type: "system",
-                  content: `Saved TTS audio: ${recordingPath}`,
-                  metadata: { recordingPath, format: final.format, groupId },
-                },
-              });
-            }
-          })();
-        }
-      }
-    }
     this.onMessage(msg);
   }
 
@@ -3403,19 +2988,6 @@ export class Session {
     // Abort any ongoing operations
     this.abortController.abort();
 
-    // Clear timeouts
-    this.clearBufferTimeout();
-
-    // Clear buffers
-    this.pendingAudioSegments = [];
-    this.audioBuffer = null;
-    await this.stopVoiceTurnController();
-
-    // Cleanup managers
-    this.ttsManager.cleanup();
-    this.sttManager.cleanup();
-    this.dictationStreamManager.cleanupAll();
-
     // Close MCP clients
     if (this.agentMcpClient) {
       try {
@@ -3426,9 +2998,6 @@ export class Session {
       this.agentMcpClient = null;
       this.agentTools = null;
     }
-
-    await this.disableVoiceModeForActiveAgent(true);
-    this.isVoiceMode = false;
 
     this.terminalController.dispose();
 
