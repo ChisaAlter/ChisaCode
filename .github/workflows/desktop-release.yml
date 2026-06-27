@@ -436,21 +436,21 @@ jobs:
 
       - name: Download mac manifest artifacts
         if: env.IS_SMOKE_TAG != 'true' && needs.publish-macos.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: mac-manifest-*
           path: release-manifests
 
       - name: Download Linux manifest artifact
         if: env.IS_SMOKE_TAG != 'true' && needs.publish-linux.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-manifest
           path: release-manifests/linux-manifest
 
       - name: Download Windows manifest artifact
         if: env.IS_SMOKE_TAG != 'true' && needs.publish-windows.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: windows-manifest
           path: release-manifests/windows-manifest
