@@ -19,6 +19,8 @@ import type { ScriptRouteStore } from "./script-proxy.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type pino from "pino";
+import type { WorkspaceGitWatchTarget } from "./session-internal-types.js";
+import { normalizeWorkspaceId as normalizePersistedWorkspaceId } from "./workspace-registry-model.js";
 
 /**
  * Check whether candidatePath is at or under rootPath using
@@ -164,4 +166,68 @@ export function emitWorkspaceScriptStatusUpdate(
       scripts: buildWorkspaceScriptPayloadSnapshot(workspaceId, workspaceDirectory, deps),
     },
   });
+}
+
+/**
+ * Close all watchers and clear timers on a WorkspaceGitWatchTarget.
+ * Does not remove the target from any maps — callers handle map cleanup.
+ */
+export function closeWorkspaceGitWatchTarget(target: WorkspaceGitWatchTarget): void {
+  if (target.debounceTimer) {
+    clearTimeout(target.debounceTimer);
+    target.debounceTimer = null;
+  }
+  for (const watcher of target.watchers) {
+    try {
+      watcher.close();
+    } catch {
+      // Ignore watcher close errors
+    }
+  }
+  target.watchers.length = 0;
+}
+
+/**
+ * Remove a single workspace git watch target from the targets map.
+ *
+ * @param cwd The workspace directory
+ * @param targets The targets map to mutate
+ */
+export function removeWorkspaceGitWatchTarget(
+  cwd: string,
+  targets: Map<string, WorkspaceGitWatchTarget>,
+): void {
+  const normalizedCwd = normalizePersistedWorkspaceId(cwd);
+  const target = targets.get(normalizedCwd);
+  if (target) {
+    closeWorkspaceGitWatchTarget(target);
+    targets.delete(normalizedCwd);
+  }
+}
+
+/**
+ * Remove all git-related subscriptions for a workspace directory.
+ *
+ * @param cwd The workspace directory
+ * @param targets The targets map to mutate
+ * @param fetchSubscriptions The fetch subscriptions map to mutate
+ * @param subscriptions The general git subscriptions map to mutate
+ */
+export function removeWorkspaceGitSubscription(
+  cwd: string,
+  targets: Map<string, WorkspaceGitWatchTarget>,
+  fetchSubscriptions: Map<string, () => void>,
+  subscriptions: Map<string, () => void>,
+): void {
+  const normalizedCwd = normalizePersistedWorkspaceId(cwd);
+  const target = targets.get(normalizedCwd);
+  if (target) {
+    const unsubscribeFetch = fetchSubscriptions.get(normalizedCwd);
+    unsubscribeFetch?.();
+    fetchSubscriptions.delete(normalizedCwd);
+    closeWorkspaceGitWatchTarget(target);
+    targets.delete(normalizedCwd);
+  }
+  subscriptions.get(normalizedCwd)?.();
+  subscriptions.delete(normalizedCwd);
 }

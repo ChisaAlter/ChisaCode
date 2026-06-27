@@ -146,6 +146,8 @@ import {
   buildWorkspaceGitHubRuntimePayload as buildWorkspaceGitHubRuntimePayloadCore,
   buildWorkspaceScriptPayloadSnapshot as buildWorkspaceScriptPayloadSnapshotCore,
   emitWorkspaceScriptStatusUpdate as emitWorkspaceScriptStatusUpdateCore,
+  removeWorkspaceGitWatchTarget as removeWorkspaceGitWatchTargetCore,
+  removeWorkspaceGitSubscription as removeWorkspaceGitSubscriptionCore,
 } from "./workspace-core.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
@@ -1716,42 +1718,17 @@ export class Session {
   /**
    * Handle agent permission response from user
    */
-  private closeWorkspaceGitWatchTarget(target: WorkspaceGitWatchTarget): void {
-    if (target.debounceTimer) {
-      clearTimeout(target.debounceTimer);
-      target.debounceTimer = null;
-    }
-    for (const watcher of target.watchers) {
-      try {
-        watcher.close();
-      } catch {
-        // Ignore watcher close errors
-      }
-    }
-    target.watchers.length = 0;
-  }
-
   private async removeWorkspaceGitWatchTarget(cwd: string): Promise<void> {
-    const normalizedCwd = normalizePersistedWorkspaceId(cwd);
-    const target = this.workspaceGitWatchTargets.get(normalizedCwd);
-    if (target) {
-      this.closeWorkspaceGitWatchTarget(target);
-      this.workspaceGitWatchTargets.delete(normalizedCwd);
-    }
+    removeWorkspaceGitWatchTargetCore(cwd, this.workspaceGitWatchTargets);
   }
 
   private removeWorkspaceGitSubscription(cwd: string): void {
-    const normalizedCwd = normalizePersistedWorkspaceId(cwd);
-    const target = this.workspaceGitWatchTargets.get(normalizedCwd);
-    if (target) {
-      const unsubscribeFetch = this.workspaceGitFetchSubscriptions.get(normalizedCwd);
-      unsubscribeFetch?.();
-      this.workspaceGitFetchSubscriptions.delete(normalizedCwd);
-      this.closeWorkspaceGitWatchTarget(target);
-      this.workspaceGitWatchTargets.delete(normalizedCwd);
-    }
-    this.workspaceGitSubscriptions.get(normalizedCwd)?.();
-    this.workspaceGitSubscriptions.delete(normalizedCwd);
+    removeWorkspaceGitSubscriptionCore(
+      cwd,
+      this.workspaceGitWatchTargets,
+      this.workspaceGitFetchSubscriptions,
+      this.workspaceGitSubscriptions,
+    );
   }
 
   private workspaceGitDescriptorStateKey(workspace: WorkspaceDescriptorPayload | null): string {
