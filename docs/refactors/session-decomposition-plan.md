@@ -175,7 +175,7 @@ The original plan called for "controller-context" (per-domain option-bag control
 
 \* 步骤 5/6/7/8 合并为一个 commit (`87e8db8`)，中间行数记为合计效果。
 
-**Total: session.ts 9728 → 2810 lines (-6918, -71.1%).** 7 handlers, 6113 lines of extracted code, Voice code fully removed. 后续清理再减 207 行（删除 5 个死方法/字段 + 35+ 个未使用 import/type）。
+**Total: session.ts 9728 → 2885 lines (-6843, -70.4%).** 7 handlers, 6113 lines of extracted code, Voice code fully removed. 后续清理再减 207 行（删除 5 个死方法/字段 + 35+ 个未使用 import/type）。
 
 ### 关联 commits（14 个，已推送 origin/cn-main）
 
@@ -211,15 +211,15 @@ The original plan called for "controller-context" (per-domain option-bag control
 | 8a — Agent-lifecycle config setters               | `session.lifecycle-boundary.test.ts`  | ✅                      |
 | 8b — AgentLifecycleController                     | `agent-lifecycle-handler.ts`          | ✅                      |
 
-### session.ts 剩余 2810 行代码分布
+### session.ts 剩余 2885 行代码分布
 
 | 大类                          | 估计行数 | 占比  | 说明                                                                 |
 | ----------------------------- | -------- | ----- | -------------------------------------------------------------------- |
 | imports/类型定义/接口         | ~180     | 6.4%  | imports + SessionOptions + 内部类型 + free functions                 |
 | 构造函数 + SessionContext     | ~285     | 10.1% | constructor + createSessionContext                                   |
 | 消息分发 dispatch             | ~240     | 8.5%  | handleMessage + 7 个 dispatch\* 方法                                 |
-| Agent 辅助方法                | ~420     | 14.9% | buildAgentPayload/forwardAgentUpdate 等                              |
-| Workspace/Git 辅助 + worktree | ~1150    | 40.9% | 查找/创建/描述 workspace、git observer/watch、worktree、脚本         |
+| Agent 辅助方法                | ~350     | 12.1% | buildAgentPayload/forwardAgentUpdate 等                              |
+| Workspace/Git 辅助 + worktree | ~1030    | 35.7% | 查找/创建/描述 workspace、git observer/watch、worktree、脚本         |
 | 结构化生成 (commit/PR text)   | ~150     | 5.3%  | generateCommitMessage/generatePullRequestText                        |
 | Cleanup / emit / abort        | ~180     | 6.4%  | cleanup/emit/emitBinary                                              |
 | 字段声明/暴露方法/其他        | ~205     | 7.3%  | 属性声明 + getClientActivity/getRuntimeMetrics + SessionRequestError |
@@ -246,8 +246,8 @@ The original plan called for "controller-context" (per-domain option-bag control
 
 ### 后续可优化项
 
-- session.ts 中 Workspace/Git 辅助方法（~1170 行，38.8%）仍可考虑进一步提取为 `workspace-core.ts` 等独立模块
-- Agent 辅助方法（~463 行）可视情况提取到独立的 agent 辅助模块
+- session.ts 中 Workspace/Git 辅助方法（~1030 行，35.7%）仍可考虑进一步提取为 `workspace-core.ts` 等独立模块
+- Agent 辅助方法（~350 行）可视情况提取到独立的 agent 辅助模块
 - SessionContext 接口（70+ 成员）可考虑按域拆分为多个子接口
 
 ### Verification

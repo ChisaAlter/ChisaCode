@@ -1,0 +1,235 @@
+{
+  "recommendedPattern": "B",
+  "patternRationale": "推荐方案 B：Session 持有 handler，handler 通过构造函数接收所需依赖。理由：(1) 显式依赖，每个 handler 构造签名即文档化其协作对象，消除 A 方案中 handler 可任意穿透 Session 内部的隐式耦合；(2) 可测试性高，handler 单测只需注入 mock 依赖而非整个 Session；(3) 相比 C 方案，避免引入额外 context 层导致 33 个核心字段被二次封装成 god object。关键约束：为 6/8 handler 共享的 agentManager、daemonConfigStore、projectRegistry、abortController、emit、sessionLogger、clientCapabilities 提取一个 SessionContext 接口，Session 实现该接口，handler 依赖接口而非具体类——既保留 B 的显式注入，又获得 C 的解耦收益，但不增加实体数量。A 方案因无法阻止 handler 反向访问 Session 全部状态、且测试需 mock 整个 Session 而否决；C 方案因 33 字段的 context 易退化为新的 god object、且与 Session 字段重复维护成本高而否决。",
+  "steps": [
+    {
+      "order": 1,
+      "handler": "CheckoutGitHandler",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/checkout-git-handler.ts",
+        "packages/server/src/session/handlers/session-context.ts"
+      ],
+      "methodsMoved": [
+        "handleCheckoutStatusRequest",
+        "handleValidateBranchRequest",
+        "handleBranchSuggestionsRequest",
+        "handleDirectorySuggestionsRequest",
+        "handleSubscribeCheckoutDiffRequest",
+        "handleUnsubscribeCheckoutDiffRequest",
+        "handleCheckoutSwitchBranchRequest",
+        "handleCheckoutRenameBranchRequest",
+        "handleCheckoutCommitRequest",
+        "handleCheckoutMergeRequest",
+        "handleCheckoutMergeFromBaseRequest",
+        "handleCheckoutPullRequest",
+        "handleCheckoutPushRequest",
+        "handleCheckoutRefreshRequest",
+        "handleCheckoutPrCreateRequest",
+        "handleCheckoutPrMergeRequest",
+        "handleCheckoutGithubSetAutoMergeRequest",
+        "handleCheckoutPrStatusRequest",
+        "handlePullRequestTimelineRequest",
+        "handleGitHubSearchRequest",
+        "handleStashSaveRequest",
+        "handleStashPopRequest",
+        "handleStashListRequest",
+        "assertSafeGitRef",
+        "syncWorkspaceGitObserverForWorkspace",
+        "warmWorkspaceGitDataForWorkspace"
+      ],
+      "expectedLineReduction": 700,
+      "riskLevel": "low",
+      "verificationSteps": "1) 先建立 SessionContext 接口（emit/sessionLogger/agentManager/abortController/clientCapabilities 等共享字段）；2) 新建单测覆盖 assertSafeGitRef 与各 handler happy/error path；3) e2e：npx vitest run packages/server/test/e2e/checkout*.e2e.test.ts --bail=1；4) 桌面端真机冒烟：分支切换、commit、push、PR 创建/合并、stash save/pop（不用 web preview 替代）；5) npm run typecheck && npm run lint -- packages/server/src/session/handlers/checkout-git-handler.ts；6) 验证 onBranchChanged 回调仍被 WorkspaceProjectHandler 正确接收"
+    },
+    {
+      "order": 2,
+      "handler": "ChatScheduleLoopHandler",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/chat-schedule-loop-handler.ts"
+      ],
+      "methodsMoved": [
+        "handleChatCreateRequest",
+        "handleChatListRequest",
+        "handleChatInspectRequest",
+        "handleChatDeleteRequest",
+        "handleChatPostRequest",
+        "handleChatReadRequest",
+        "handleChatWaitRequest",
+        "emitChatRpcError",
+        "handleScheduleCreateRequest",
+        "handleScheduleListRequest",
+        "handleScheduleInspectRequest",
+        "handleScheduleLogsRequest",
+        "handleSchedulePauseRequest",
+        "handleScheduleResumeRequest",
+        "handleScheduleDeleteRequest",
+        "handleScheduleRunOnceRequest",
+        "handleScheduleUpdateRequest",
+        "emitScheduleRpcError",
+        "toScheduleSummary",
+        "handleLoopRunRequest",
+        "handleLoopListRequest",
+        "handleLoopInspectRequest",
+        "handleLoopLogsRequest",
+        "handleLoopStopRequest",
+        "emitLoopRpcError",
+        "toLoopSummary"
+      ],
+      "expectedLineReduction": 600,
+      "riskLevel": "low",
+      "verificationSteps": "1) 三个 service 已封装，handler 仅 RPC 转发，单测 mock service 验证转发与 error emit；2) e2e：npx vitest run packages/server/test/e2e/chat*.e2e.test.ts 及 schedule/loop 同类 --bail=1；3) 桌面端真机冒烟：创建 chat、创建 schedule、run once、loop run/stop；4) typecheck + lint"
+    },
+    {
+      "order": 3,
+      "handler": "ProviderHandler",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/provider-handler.ts"
+      ],
+      "methodsMoved": [
+        "handleListProviderModelsRequest",
+        "handleListProviderModesRequest",
+        "handleListProviderFeaturesRequest",
+        "handleListAvailableProvidersRequest",
+        "handleGetProvidersSnapshotRequest",
+        "handleRefreshProvidersSnapshotRequest",
+        "handleProviderDiagnosticRequest",
+        "handleProviderToolingActionRequest",
+        "handleAgentPresetsListRequest",
+        "handleModelGatewayMoaTestRequest",
+        "downgradeModeIconsForClient",
+        "downgradeEntryModesForClient",
+        "isProviderVisibleToClient",
+        "getProviderSnapshotEntryForRead"
+      ],
+      "expectedLineReduction": 350,
+      "riskLevel": "low",
+      "verificationSteps": "1) 单测覆盖 downgradeModeIconsForClient/downgradeEntryModesForClient 的 clientCapabilities 分支与 isProviderVisibleToClient；2) e2e：provider list/snapshot/refresh/diagnostic；3) 关键：unsubscribeProviderSnapshotEvents 必须仍在 Session.dispose 中调用，handler 暴露 dispose() 返回该句柄；4) 桌面端真机冒烟：provider 列表刷新、model gateway moa test；5) typecheck + lint"
+    },
+    {
+      "order": 4,
+      "handler": "TerminalScriptHandler",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/terminal-script-handler.ts"
+      ],
+      "methodsMoved": ["handleStartWorkspaceScriptRequest", "terminalController.dispatch"],
+      "expectedLineReduction": 120,
+      "riskLevel": "low",
+      "verificationSteps": "1) 单测覆盖 script 启动路径与 daemon TCP 端口解析（getDaemonTcpPort/getDaemonTcpHost/resolveScriptHealth）；2) e2e：workspace script start；3) 桌面端真机冒烟：在 workspace 中启动脚本、查看 script 健康；4) typecheck + lint"
+    },
+    {
+      "order": 5,
+      "handler": "WorkspaceProjectHandler",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/workspace-project-handler.ts"
+      ],
+      "methodsMoved": [
+        "handleFetchWorkspacesRequest",
+        "handleChisaCodeWorktreeListRequest",
+        "handleChisaCodeWorktreeArchiveRequest",
+        "handleCreateChisaCodeWorktreeRequest",
+        "handleWorkspaceSetupStatusRequest",
+        "handleListAvailableEditorsRequest",
+        "handleOpenInEditorRequest",
+        "handleOpenProjectRequest",
+        "handleArchiveWorkspaceRequest",
+        "handleFileExplorerRequest",
+        "handleProjectIconRequest",
+        "handleFileDownloadTokenRequest",
+        "emitWorkspaceUpdateForWorkspaceId",
+        "emitWorkspaceUpdatesForExternalWorkspaceIds",
+        "emitWorkspaceUpdatesForExternalCwds",
+        "archiveWorkspaceRecordForExternalMutation",
+        "markWorkspaceArchivingForExternalMutation",
+        "clearWorkspaceArchivingForExternalMutation",
+        "resolveAvailableEditorTargets",
+        "isPathWithinRoot",
+        "createChisaCodeWorktreeWorkflow"
+      ],
+      "expectedLineReduction": 450,
+      "riskLevel": "medium",
+      "verificationSteps": "1) 重点验证 worktree 创建/归档仍与 CheckoutGitHandler 共享 workspaceGitService（WorkspaceProject 借用而非持有，CheckoutGit 拥有所有权）；2) 验证 workspaceUpdatesSubscription 与 agentManager 事件流联动仍正常；3) e2e：workspace list/worktree create/archive、open in editor、file explorer、project icon；4) 单测 isPathWithinRoot 边界；5) 桌面端真机冒烟：打开 workspace、创建 worktree、在编辑器中打开；6) typecheck + lint"
+    },
+    {
+      "order": 6,
+      "handler": "ConfigSkillsMcpHandler（仅 skills/mcp 子域）",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/config-skills-mcp-handler.ts"
+      ],
+      "methodsMoved": [
+        "handleAgentSkillsListRequest",
+        "handleAgentSkillsPolicyPatchRequest",
+        "handleAgentSkillsInstallRequest",
+        "handleAgentSkillsUninstallRequest",
+        "handleAgentMcpServersListRequest",
+        "handleAgentMcpServersUpsertRequest",
+        "handleAgentMcpServersPolicyPatchRequest",
+        "handleAgentMcpServersDeleteRequest",
+        "handleListCommandsRequest"
+      ],
+      "expectedLineReduction": 300,
+      "riskLevel": "medium",
+      "verificationSteps": "1) 与 AgentHandler 共享 daemonConfigStore——保留在 SessionContext 中而非独占；2) 单测覆盖 skills install/uninstall、mcp upsert/delete 的 config 写入与 policy patch；3) e2e：skills list/install/uninstall、mcp servers list/upsert/delete；4) 桌面端真机冒烟：安装/卸载 skill、增删 mcp server；5) typecheck + lint"
+    },
+    {
+      "order": 7,
+      "handler": "AgentHandler（最大组，分两批迁移）",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/agent-handler.ts"
+      ],
+      "methodsMoved": [
+        "批次7a（agent-config/usage 只读子域）: handleUsageSummaryGet, handleUsageExport, handleUsageClear, listRetainedUsageEvents, handleFetchAgents, handleFetchAgentHistory, handleFetchRecentProviderSessions, handleFetchAgent, handleFetchAgentTimelineRequest, handleDaemonGetStatusRequest, handleDaemonGetPairingOfferRequest, handleReadProjectConfigRequest, handleWriteProjectConfigRequest, resolveKnownProjectRootForConfig, emitProjectConfigReadFailure, emitProjectConfigWriteFailure, readStructuredGenerationDaemonConfig, getFocusedAgentSelectionForCwd; 批次7b（agent 生命周期写入子域）: handleAgentRewindRequest, handleDeleteAgentRequest, handleArchiveAgentRequest, handleCloseItemsRequest, handleUpdateAgentRequest, handleProjectRenameRequest, handleSendAgentMessageRequest, handleWaitForFinish, handleCreateAgentRequest, handleResumeAgentRequest, handleImportAgentRequest, handleRefreshAgentRequest, handleCancelAgentRequest, handleAgentPermissionResponse, handleClearAgentAttention, listFetchAgentsEntries, flushBootstrappedAgentUpdates, archiveAgentForClose, sendPromptToAgent, buildDraftAgentSessionConfig, handleSetAgentModeRequest, handleSetAgentModelRequest, handleSetAgentFeatureRequest, handleSetAgentThinkingRequest"
+      ],
+      "expectedLineReduction": 1200,
+      "riskLevel": "high",
+      "verificationSteps": "1) 分两批：7a 先迁只读方法（低风险），7b 再迁写入方法（高风险）；2) createAgentRequest 跨六域，保留在 AgentHandler 但通过构造函数注入 workspaceGitService/workspaceRegistry/projectRegistry/github 协作对象；3) sendPromptToAgent 是核心写入路径，迁移后必须跑全量 agent e2e；4) e2e：npx vitest run packages/server/test/e2e/agent*.e2e.test.ts --bail=1；5) 桌面端真机冒烟：创建/恢复/导入/归档/删除 agent、发送消息、rewind、permission 响应、set mode/model/feature/thinking；6) 验证 agentUpdatesSubscription/unsubscribeAgentEvents 在 Session.dispose 中清理；7) typecheck + lint；8) 7b 完成后建议跑一次 real-provider e2e（如有凭证）"
+    },
+    {
+      "order": 8,
+      "handler": "VoiceHandler（最后迁，时序最敏感）",
+      "files": [
+        "packages/server/src/session/session.ts",
+        "packages/server/src/session/handlers/voice-handler.ts"
+      ],
+      "methodsMoved": [
+        "handleAudioChunk",
+        "handleAbort",
+        "handleAudioPlayed",
+        "handleSetVoiceMode",
+        "handleDictationStreamStart",
+        "bindVoiceBridges",
+        "initializePerSessionManagers",
+        "resolveVoiceFeatureUnavailableContext",
+        "registerVoiceSpeakHandler",
+        "unregisterVoiceSpeakHandler",
+        "registerVoiceCallerContext",
+        "unregisterVoiceCallerContext",
+        "getSpeechReadiness",
+        "resolveVoiceTurnDetection"
+      ],
+      "expectedLineReduction": 500,
+      "riskLevel": "high",
+      "verificationSteps": "1) 9 个延迟初始化字段（!/?）必须在 handler 构造时统一管理，bindVoiceBridges 时序不变；2) abortController 被 VoiceHandler(handleAbort) 与 AgentHandler(handleCancelAgentRequest) 共享——保留在 SessionContext 中，handler 通过接口访问；3) voiceTurnController 与 agentManager 双向回调：handler 暴露 onAgentEvent 回调接口供 Session 转发；4) 单测覆盖 bindVoiceBridges 初始化顺序、handleAbort 取消语义；5) e2e：voice mode 切换、audio chunk 流式、dictation stream、abort；6) 桌面端真机冒烟（关键）：语音模式开关、录音、TTS 播放、打断、dictation；7) 必须用真机验证，不可用 web preview 替代；8) typecheck + lint；9) CHISACODE_LOG_LEVEL=trace 观察 voice manager 初始化日志"
+    }
+  ],
+  "doNotSplit": [
+    "abortController 及 processingPhase：生命周期状态，被 Voice/Agent 共享，必须留在 SessionContext 核心而非任一 handler",
+    "agentManager：6/8 handler 依赖的最大耦合枢纽，必须核心持有并注入",
+    "daemonConfigStore：被 AgentHandler(agent-config) 与 ConfigSkillsMcpHandler(skills/mcp) 共享，保留为核心字段",
+    "projectRegistry：被 AgentHandler(project config) 与 WorkspaceProjectHandler(open_project/project_icon) 共享，需核心持有",
+    "clientCapabilities 及 updateClientCapabilities：downgrade 逻辑跨 ProviderHandler，且 supports 被 ConfigControl 使用，核心持有",
+    "emit/emitServerMessage：所有 handler 公共出口，作为核心基础设施通过构造函数注入",
+    "Session.dispose 中的订阅清理（agentUpdatesSubscription/workspaceUpdatesSubscription/unsubscribeAgentEvents/unsubscribeProviderSnapshotEvents）：跨 handler 资源释放，必须集中管理",
+    "sendInitialState/getRuntimeMetrics/getClientActivity：核心状态查询方法，多 handler 依赖，保留在 Session",
+    "ConfigControl 子域的 restart/shutdown/heartbeat/onLifecycleIntent：高危操作影响整个 Session 生命周期，不应外移到 handler，保留在 Session 核心",
+    "inflightRequests/peakInflightRequests：请求追踪属基础设施，保留在 Session"
+  ],
+  "testStrategy": "分三层：(1) Handler 单测——每个 handler 独立单测，mock SessionContext 接口（emit/sessionLogger/agentManager/abortController 等），覆盖 happy path、error path、边界条件；禁用 vi.mock，使用真实端口/fake 注入。重点单测：assertSafeGitRef(CheckoutGit)、isPathWithinRoot(WorkspaceProject)、downgrade 逻辑(Provider)、bindVoiceBridges 初始化顺序(Voice)、createAgentRequest 跨域协作(Agent)。(2) 集成 e2e——每步迁移后运行该域 e2e：npx vitest run <域 e2e 路径> --bail=1，重定向输出到文件后检查。禁止本地跑全量 suite。(3) 桌面端真机冒烟——每步完成后在 Electron 桌面 app 中执行核心用户流程，不用 web preview 替代桌面/移动验证。回滚策略：每步独立提交，若 typecheck/lint/e2e 任一失败立即回滚该步，不影响已迁移的低风险 handler。Voice/Agent 高风险步建议在独立 git worktree 中进行。",
+  "overallAssessment": "8 步迁移预计从 session.ts 移出约 4220 行，覆盖 288 个方法。推荐方案 B（构造函数注入 + SessionContext 接口）平衡了显式依赖、可测试性与解耦，避免 A 的隐式耦合与 C 的 god object 风险。按风险递增排序：4 个低风险 handler（CheckoutGit/ChatScheduleLoop/Provider/TerminalScript）先行，可独立验证且无跨域副作用，预计减少约 1770 行；2 个中风险（WorkspaceProject/ConfigSkillsMcp）随后，需处理共享 service 借用与 daemonConfigStore 共享；2 个高风险（Agent/Voice）最后，Agent 分两批迁移降低单步风险，Voice 因 9 个延迟初始化字段与双向回调时序最敏感必须压轴。关键约束：agentManager/abortController/daemonConfigStore/projectRegistry/clientCapabilities/emit 保留在 SessionContext 核心而非任何 handler 独占；ConfigControl 的 restart/shutdown/heartbeat 保留在 Session 核心；Session.dispose 集中管理所有订阅清理。每步可独立验证、独立提交、独立回滚。最大风险点在 Agent 批次 7b（createAgentRequest 跨六域）与 Voice（bindVoiceBridges 时序），建议这两步在独立 worktree 中进行并配合 real-provider e2e。"
+}

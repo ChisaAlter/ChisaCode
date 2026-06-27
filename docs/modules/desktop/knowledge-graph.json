@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T03:13:08.189Z",
+  "generatedAt": "2026-06-27T10:03:06.701Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "desktop",
@@ -19,7 +19,7 @@
     "types": null,
     "exports": null,
     "scripts": {
-      "build": "npm --prefix ../.. run build:server && npm run build:main && electron-builder --config electron-builder.yml",
+      "build": "npm --prefix ../.. run build:server && npm run build:main && node scripts/build.js",
       "build:main": "tsc -p tsconfig.json",
       "dev": "./scripts/dev.sh",
       "dev:win": "powershell ./scripts/dev.ps1",
@@ -28,19 +28,21 @@
     }
   },
   "stats": {
-    "files": 68,
+    "files": 70,
     "categories": {
       "config": 3,
       "docs": 1,
-      "support": 4,
+      "support": 6,
       "source": 40,
       "test": 20
     },
-    "internalImportEdges": 87,
+    "internalImportEdges": 88,
     "workspaceDependencies": ["server"],
     "externalDependencies": [
+      "app-builder-lib",
       "builder-util-runtime",
       "electron",
+      "electron-builder",
       "electron-log",
       "electron-updater",
       "fs",
@@ -54,6 +56,7 @@
       "node:process",
       "node:timers",
       "node:url",
+      "node:util",
       "path",
       "playwright",
       "unzip-crx-3",
@@ -96,8 +99,27 @@
       "id": "file:packages/desktop/scripts/after-sign.js",
       "type": "support",
       "path": "packages/desktop/scripts/after-sign.js",
-      "lines": 20,
-      "imports": ["./smoke-packaged-desktop-app.js", "node:path"]
+      "lines": 23,
+      "imports": ["./asar-integrity-resource.js", "./smoke-packaged-desktop-app.js", "node:path"]
+    },
+    {
+      "id": "file:packages/desktop/scripts/asar-integrity-resource.js",
+      "type": "support",
+      "path": "packages/desktop/scripts/asar-integrity-resource.js",
+      "lines": 33,
+      "imports": [
+        "app-builder-lib/out/asar/integrity",
+        "app-builder-lib/out/electron/electronWin",
+        "node:fs",
+        "node:path"
+      ]
+    },
+    {
+      "id": "file:packages/desktop/scripts/build.js",
+      "type": "support",
+      "path": "packages/desktop/scripts/build.js",
+      "lines": 42,
+      "imports": ["app-builder-lib", "electron-builder", "node:path"]
     },
     {
       "id": "file:packages/desktop/scripts/smoke-packaged-desktop-app.js",
@@ -151,28 +173,28 @@
       "id": "file:packages/desktop/src/daemon/cli/passthrough.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/cli/passthrough.test.ts",
-      "lines": 123,
+      "lines": 156,
       "imports": ["./passthrough", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/daemon/cli/passthrough.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/cli/passthrough.ts",
-      "lines": 57,
+      "lines": 73,
       "imports": ["./entrypoints.js", "node:url"]
     },
     {
       "id": "file:packages/desktop/src/daemon/daemon-manager.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/daemon-manager.test.ts",
-      "lines": 255,
+      "lines": 336,
       "imports": ["../settings/desktop-settings", "./daemon-manager", "node:events", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/daemon/daemon-manager.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/daemon-manager.ts",
-      "lines": 635,
+      "lines": 765,
       "imports": [
         "../features/attachments.js",
         "../features/auto-updater.js",
@@ -199,14 +221,14 @@
       "id": "file:packages/desktop/src/daemon/desktop-packaging.test.ts",
       "type": "test",
       "path": "packages/desktop/src/daemon/desktop-packaging.test.ts",
-      "lines": 46,
+      "lines": 68,
       "imports": ["node:fs", "node:path", "node:url", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/daemon/local-transport.ts",
       "type": "source",
       "path": "packages/desktop/src/daemon/local-transport.ts",
-      "lines": 229,
+      "lines": 237,
       "imports": ["electron", "ws"]
     },
     {
@@ -310,7 +332,7 @@
       "id": "file:packages/desktop/src/features/auto-updater.test.ts",
       "type": "test",
       "path": "packages/desktop/src/features/auto-updater.test.ts",
-      "lines": 190,
+      "lines": 228,
       "imports": [
         "./auto-updater",
         "builder-util-runtime",
@@ -324,7 +346,7 @@
       "id": "file:packages/desktop/src/features/auto-updater.ts",
       "type": "source",
       "path": "packages/desktop/src/features/auto-updater.ts",
-      "lines": 362,
+      "lines": 388,
       "imports": [
         "../i18n.js",
         "../settings/desktop-settings-electron.js",
@@ -374,7 +396,7 @@
       "id": "file:packages/desktop/src/features/opener.test.ts",
       "type": "test",
       "path": "packages/desktop/src/features/opener.test.ts",
-      "lines": 54,
+      "lines": 65,
       "imports": ["./opener", "electron", "vitest"]
     },
     {
@@ -409,7 +431,7 @@
       "id": "file:packages/desktop/src/integrations/cli-install/install.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/cli-install/install.ts",
-      "lines": 79,
+      "lines": 85,
       "imports": [
         "./path.js",
         "./paths.js",
@@ -458,15 +480,24 @@
       "id": "file:packages/desktop/src/integrations/skills/operations.test.ts",
       "type": "test",
       "path": "packages/desktop/src/integrations/skills/operations.test.ts",
-      "lines": 306,
+      "lines": 443,
       "imports": ["./operations", "node:fs", "node:os", "node:path", "vitest"]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/operations.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/skills/operations.ts",
-      "lines": 165,
-      "imports": ["./paths.js", "./sync.js", "node:crypto", "node:fs", "node:path"]
+      "lines": 425,
+      "imports": [
+        "./paths.js",
+        "./sync.js",
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "node:util"
+      ]
     },
     {
       "id": "file:packages/desktop/src/integrations/skills/paths.ts",
@@ -486,7 +517,7 @@
       "id": "file:packages/desktop/src/integrations/skills/sync.ts",
       "type": "source",
       "path": "packages/desktop/src/integrations/skills/sync.ts",
-      "lines": 116,
+      "lines": 114,
       "imports": ["node:fs", "node:path"]
     },
     {
@@ -500,7 +531,7 @@
       "id": "file:packages/desktop/src/main.ts",
       "type": "source",
       "path": "packages/desktop/src/main.ts",
-      "lines": 756,
+      "lines": 830,
       "imports": [
         "./daemon/cli/passthrough.js",
         "./daemon/daemon-manager.js",
@@ -646,6 +677,12 @@
       "target": "file:packages/desktop/scripts/smoke-packaged-desktop-app.js",
       "type": "imports",
       "specifier": "./smoke-packaged-desktop-app.js"
+    },
+    {
+      "source": "file:packages/desktop/scripts/after-sign.js",
+      "target": "file:packages/desktop/scripts/asar-integrity-resource.js",
+      "type": "imports",
+      "specifier": "./asar-integrity-resource.js"
     },
     {
       "source": "file:packages/desktop/scripts/after-sign.js",

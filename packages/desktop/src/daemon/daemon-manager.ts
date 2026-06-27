@@ -46,6 +46,15 @@ const DAEMON_PID_FILENAMES = ["chisacode.pid"] as const;
 const IPC_PREFIXES = ["chisacode"] as const;
 
 /**
+ * SECURITY: When adding a new IPC handler that performs privileged operations
+ * (file I/O, process management, transport, installation), you MUST:
+ * 1. Add the command name to PRIVILEGED_COMMANDS below
+ * 2. Ensure isMainAppSenderUrl() validates the sender origin
+ * 3. Review the blast radius of path arguments (see assertTransportPathAllowed)
+ *
+ * Non-privileged handlers (pure data retrieval) do NOT need to be added,
+ * but should be documented inline to avoid ambiguous intent.
+ *
  * Commands that require the sender to be the main application window.
  * These perform privileged operations (starting/stopping the daemon, writing
  * attachments, opening transport sessions, etc.) that should not be callable
@@ -148,7 +157,10 @@ export function assertTransportPathAllowed(
     return;
   }
 
-  // Windows named pipe. Normalize the various forms:
+  // Windows named pipe. Windows named pipes do not support directory
+  // traversal — the pipe name is a flat namespace. A prefix check is
+  // sufficient to ensure the pipe belongs to ChisaCode.
+  // Normalize the various forms:
   //   \\.\pipe\chisacode-...  →  \\.\pipe\chisacode-...
   //   pipe://chisacode-...    →  chisacode-...
   let pipeName = transportPath;

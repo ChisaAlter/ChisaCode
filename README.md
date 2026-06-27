@@ -1,154 +1,143 @@
-<p align="center">
-  <img alt="ChisaCode" src="packages/desktop/assets/128x128@2x.png" width="96" />
-</p>
+# ChisaCode
 
-<h1 align="center">ChisaCode</h1>
+**Local-first, multi-provider agent control surface.** Run, monitor, and interact with coding agents from desktop, mobile, web, and CLI — your code never leaves your machine.
 
-<p align="center"><strong>用桌面端、移动端、网页端和 CLI 控制本地 AI 编程代理。</strong></p>
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 
-> 语言：**简体中文** | [中文镜像](README.zh-CN.md)
+## Features
 
-<p align="center">
-  <a href="https://chisacode.sh">Website</a>
-  ·
-  <a href="https://github.com/ChisaAlter/ChisaCode/actions/workflows/ci.yml">CI</a>
-  ·
-  <a href="docs/cli.md">CLI</a>
-  ·
-  <a href="docs/custom-providers.md">Providers</a>
-</p>
+- **Multi-provider** — Built-in support for Claude, Codex, OpenCode, MiMoCode, Pi, and Kimi Code. Custom providers extend built-in ones or use the ACP (Agent Client Protocol) command interface. Pick the right model for each job, switch freely.
+- **Cross-platform** — Desktop (macOS, Linux, Windows via Electron), mobile (iOS, Android via Expo), web, and CLI. Start work at your desk, check progress from your phone, script from the terminal.
+- **Local-first** — The daemon runs on your machine. Your code, your keys, your environment. No cloud dependency, no telemetry.
+- **E2E encrypted relay** — Remote access via an untrusted relay with Curve25519 + XSalsa20-Poly1305 encryption. The relay routes bytes, cannot read content.
+- **BYOK** — Bring your own API keys. Use your subsidized plans and first-party provider pricing. ChisaCode adds zero markup.
+- **Agent orchestration** — Launch multiple agents side-by-side in split panes, mix providers, delegate sub-agent tasks, schedule cron-triggered runs.
+- **Voice mode** — Dictate prompts or talk through problems hands-free with built-in dictation and voice agent support.
+- **MCP integration** — Daemon exposes an MCP server; agents get a scoped companion MCP server for delegation to child agents.
+- **Workspaces & worktrees** — Isolated git worktree workspaces so agents can work without affecting your main checkout.
 
----
+## Quick Start
 
-ChisaCode 是一个本地优先的编程代理控制面。它在你的机器上运行 daemon，
-在你自己的开发环境里启动当前支持的 agent CLI，然后让桌面端、移动端、网页端和 CLI
-连接并控制同一批任务。
-
-ChisaCode 不提供自己的模型，也不是托管式 coding agent。你需要自己安装并登录底层 agent CLI；
-ChisaCode 负责启动、托管、展示和编排。
-
-## 当前 Provider 支持
-
-当前内置 provider ID 以 `packages/protocol/src/provider-manifest.ts` 为准：
-
-| Provider ID | 显示名称  | ChisaCode 期望的运行时                  |
-| ----------- | --------- | --------------------------------------- |
-| `claude`    | Claude    | `claude` CLI                            |
-| `codex`     | Codex     | `codex` CLI                             |
-| `opencode`  | OpenCode  | `opencode` CLI / server                 |
-| `mimocode`  | MiMoCode  | `mimo` CLI / OpenCode-compatible server |
-| `pi`        | Pi        | `pi` CLI                                |
-| `kimi`      | Kimi Code | `kimi acp` CLI                          |
-
-自定义 provider 通过 `agents.providers` 配置。自定义 provider 必须继承上面的某个内置
-provider ID，或者继承 `acp` 来运行通用 Agent Client Protocol 命令。见
-[自定义 provider 文档](docs/custom-providers.md)。
-
-## ChisaCode 做什么
-
-- 通过本地 daemon 启动和托管 agent 进程。
-- 向已连接客户端流式同步 agent 输出、工具调用、权限请求和状态。
-- 允许多个客户端连接同一个 daemon。
-- 创建和归档由 ChisaCode 管理的 git worktree。
-- 提供 CLI 命令管理 agent、provider、worktree、schedule、terminal、loop、chat、
-  permission、speech model 和 daemon。
-- 暴露 MCP 工具，让 agent 自己创建或控制 ChisaCode agent。
-- 支持 relay 远程连接，但不会把 ChisaCode 变成托管 agent 服务。
-
-## 快速开始
-
-安装仓库依赖：
+**Prerequisites:** Node.js >= 20, npm workspaces.
 
 ```bash
+# Clone and install
+git clone https://github.com/ChisaAlter/ChisaCode.git
+cd ChisaCode
 npm ci
-```
 
-启动开发环境：
+# Start development (daemon + Expo app)
+npm run dev          # macOS / Linux
+npm run dev:win      # Windows
 
-```bash
-npm run dev        # macOS/Linux
-npm run dev:win    # Windows
-```
+# Or run focused surfaces
+npm run dev:server   # Daemon only
+npm run dev:app      # Expo app only
+npm run dev:desktop  # Electron desktop app
 
-运行仓库内 CLI：
-
-```bash
-npm run cli -- provider ls
+# CLI from the checkout (not the globally installed binary)
+npm run cli -- ls -a -g
 npm run cli -- daemon status
-npm run cli -- run --provider codex "检查这个仓库"
 ```
 
-如果使用打包版或全局安装的 CLI：
+The daemon logs to `$CHISACODE_HOME/daemon.log`. Set `CHISACODE_LOG_LEVEL=trace` for verbose provider and session traces.
+
+## Project Structure
+
+This is an npm workspace monorepo:
+
+```
+packages/
+├── protocol/       # Shared WebSocket schemas, provider manifests, protocol types
+├── client/         # Daemon WebSocket driver and SDK facade
+├── server/         # Daemon: agent lifecycle, WebSocket API, MCP server, relay transport
+├── app/            # Expo client for iOS, Android, web, and desktop renderer
+├── cli/            # Docker-style CLI (chisacode run/ls/logs/wait)
+├── relay/          # E2E encrypted relay for remote access
+├── desktop/        # Electron desktop wrapper
+├── highlight/      # Shared syntax highlighting engine
+└── expo-two-way-audio/  # Native two-way audio module
+```
+
+Key build dependency chains:
 
 ```bash
-chisacode daemon start
-chisacode provider ls
-chisacode run --provider codex "检查这个仓库"
+npm run build:client       # protocol → client
+npm run build:server-deps  # highlight → relay → protocol → client
+npm run build:server       # server-deps → server → cli
+npm run build:app-deps     # highlight → protocol → client → expo-two-way-audio
 ```
 
-对正在运行的 daemon 执行 `chisacode provider ls`，可以看到当前环境里启用且可用的 provider。
+Package imports resolve through compiled `dist/` output. Rebuild producer packages before diagnosing cross-package type errors.
 
-## 常用 CLI 命令
+## Architecture
+
+```
+┌──────────┐   ┌──────────┐   ┌──────────┐
+│  Mobile   │   │   CLI    │   │ Desktop  │
+│  (Expo)   │   │(Commander)│   │(Electron)│
+└─────┬─────┘   └─────┬────┘   └─────┬────┘
+      │               │              │
+      │  WebSocket    │              │  Managed subprocess
+      │  (direct or   │              │  + WebSocket
+      │   via relay)  │              │
+      └───────┬───────┴──────────────┘
+              │
+       ┌──────▼──────┐
+       │   Daemon    │
+       │  (Node.js)  │
+       └──────┬──────┘
+              │
+ ┌────────────┼────────────┬────────────┬────────────┬────────────┐
+ │            │            │            │            │            │
+Claude      Codex     OpenCode     MiMoCode       Pi       Kimi Code
+Agent       Agent      Agent        Agent        RPC         ACP
+ SDK       Server
+```
+
+**Data flow:** Client sends agent creation request → daemon spawns provider process → events stream over WebSocket to all connected clients → tool calls normalized to `ToolCallDetail` → permissions flow through user approval.
+
+Agent state persists to `$CHISACODE_HOME/agents/` as file-backed JSON. Timeline is append-only with epoch-based sequencing. An optional SQLite index accelerates cross-agent queries.
+
+## Development
+
+Key commands for contributors:
 
 ```bash
-chisacode ls
-chisacode run --provider codex "修复失败的测试"
-chisacode attach <agent-id>
-chisacode send <agent-id> "顺手更新文档"
-chisacode wait <agent-id>
-
-chisacode provider ls
-chisacode provider models codex
-
-chisacode worktree ls
-chisacode worktree create --mode branch-off --new-branch fix-docs
-
-chisacode schedule create --every 5m "检查 CI 是否仍然通过"
-chisacode terminal create --cwd .
+npm run typecheck    # Run after every change
+npm run lint         # Lint with oxlint
+npm run format       # Auto-format with oxfmt
 ```
 
-完整 CLI 说明见 [docs/cli.md](docs/cli.md)。
+See the `docs/` directory for detailed guides:
 
-## 本地开发
+| Document                                           | Topic                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| [docs/product.md](docs/product.md)                 | Product philosophy, target user, strategic bets              |
+| [docs/architecture.md](docs/architecture.md)       | System design, packages, WebSocket protocol, agent lifecycle |
+| [docs/development.md](docs/development.md)         | Dev server, build sync gotchas, CLI reference                |
+| [docs/testing.md](docs/testing.md)                 | TDD workflow, test organization                              |
+| [docs/providers.md](docs/providers.md)             | Adding a new agent provider                                  |
+| [docs/rpc-namespacing.md](docs/rpc-namespacing.md) | WebSocket RPC naming convention                              |
+| [docs/design.md](docs/design.md)                   | Theme tokens, colors, fonts, spacing                         |
+| [docs/release.md](docs/release.md)                 | Release playbook and checklist                               |
 
-本仓库是 npm workspace monorepo。使用当前 `PATH` 中的 Node.js；仓库不强制精确 Node 版本。
+**Important rules for contributors:**
 
-常用根命令：
+- The WebSocket protocol is append-only. Never remove fields or make optional fields required.
+- New features gate on `server_info.features.*` capability flags. No degradation fallbacks.
+- Do not run full test suites locally — run only the changed test file: `npx vitest run <file> --bail=1`
+- Always format with `npm run format` before committing.
 
-```bash
-npm run build:client       # protocol -> client
-npm run build:server-deps  # highlight -> relay -> protocol -> client
-npm run build:server       # server-deps -> server -> cli
-npm run build:app-deps     # highlight -> protocol -> client -> expo-two-way-audio
+## Security
 
-npm run typecheck
-npm run lint
-npm run format:check
-```
+- **E2E encryption** — Relay traffic is encrypted with Curve25519 ECDH + XSalsa20-Poly1305. The relay is zero-knowledge.
+- **DNS rebinding protection** — Host header validation on every HTTP request and WebSocket upgrade.
+- **Agent isolation** — Providers handle their own authentication. ChisaCode never stores or transmits API keys.
+- **Local trust boundary** — Daemon binds `127.0.0.1` by default. Optional password auth via bearer token for TCP exposure.
 
-包结构：
+See [SECURITY.md](SECURITY.md) for the full threat model and vulnerability reporting.
 
-| 包                              | 职责                                                      |
-| ------------------------------- | --------------------------------------------------------- |
-| `@chisacode/protocol`           | 共享协议 schema、provider manifest、wire types            |
-| `@chisacode/client`             | daemon client 和 SDK facade                               |
-| `@chisacode/server`             | 本地 daemon、provider runtime、存储、MCP、relay、schedule |
-| `@chisacode/app`                | Expo app，覆盖 native、web 和桌面 renderer                |
-| `@chisacode/desktop`            | Electron 壳和桌面打包集成                                 |
-| `@chisacode/cli`                | daemon 和 agent 工作流的命令行入口                        |
-| `@chisacode/relay`              | 端到端加密 relay transport                                |
-| `@chisacode/highlight`          | 语法高亮                                                  |
-| `@chisacode/expo-two-way-audio` | 原生音频桥接                                              |
+## License
 
-## 文档
-
-- [开发指南](docs/development.md)
-- [架构地图](docs/ARCHITECTURE_MAP.md)
-- [Provider 内部说明](docs/providers.md)
-- [自定义 Provider](docs/custom-providers.md)
-- [发布指南](docs/release.md)
-- [安全策略](SECURITY.md)
-
-## 许可证
-
-AGPL-3.0-or-later
+AGPL-3.0-or-later. See [LICENSE](LICENSE) for details.

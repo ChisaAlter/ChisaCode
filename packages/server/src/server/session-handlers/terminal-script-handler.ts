@@ -8,6 +8,7 @@ import { spawnWorkspaceScript } from "../worktree-bootstrap.js";
 import type { StartWorkspaceScriptRequest, SessionInboundMessage } from "../messages.js";
 import type { SessionContext, DisposableHandler } from "./session-context.js";
 
+/** Handles workspace script spawning and terminal message dispatch. */
 export class TerminalScriptHandler implements DisposableHandler {
   private readonly context: SessionContext;
 
@@ -19,6 +20,7 @@ export class TerminalScriptHandler implements DisposableHandler {
     // terminalController.dispose() is called by Session directly.
   }
 
+  /** Handle starting a workspace script — spawns a terminal process for the given script. */
   async handleStartWorkspaceScriptRequest(request: StartWorkspaceScriptRequest): Promise<void> {
     try {
       if (
@@ -84,6 +86,7 @@ export class TerminalScriptHandler implements DisposableHandler {
     }
   }
 
+  /** Dispatch terminal-related messages (script start or delegate to terminal controller). */
   dispatchTerminalMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     if (msg.type === "start_workspace_script_request") {
       return this.handleStartWorkspaceScriptRequest(msg);

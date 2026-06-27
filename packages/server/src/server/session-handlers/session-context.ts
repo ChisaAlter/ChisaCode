@@ -149,6 +149,17 @@ export interface SessionContext {
 
   // --- Agent lifecycle (for AgentLifecycleHandler) ---
   readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
+  /** Get the current agent payload list (live + persisted). */
+  listAgentPayloads(filter?: {
+    labels?: Record<string, string>;
+    includeUnavailablePersisted?: boolean;
+  }): Promise<unknown[]>;
+  /** Get a single agent payload by ID across live + persisted storage. */
+  getAgentPayloadById(agentId: string): Promise<unknown>;
+  /** Get the current agent updates subscription state. */
+  getAgentUpdatesSubscription(): unknown;
+  /** Set the agent updates subscription state. */
+  setAgentUpdatesSubscription(subscription: unknown | null): void;
   /** Flush bootstrapped agent updates after initial fetch completes. */
   flushBootstrappedAgentUpdates(options?: unknown): void;
   /** Check if an agent matches the subscription filter. */
@@ -231,6 +242,7 @@ export interface SessionContext {
   readonly mcpBaseUrl: string | null;
 }
 
+/** Daemon runtime configuration passed from the process launcher (listen address, relay details). */
 export interface DaemonRuntimeConfig {
   listen: string | null;
   relay: {

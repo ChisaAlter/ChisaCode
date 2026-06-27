@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T03:13:08.036Z",
+  "generatedAt": "2026-06-27T10:03:06.498Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "app",
@@ -47,15 +47,15 @@
     }
   },
   "stats": {
-    "files": 1085,
+    "files": 1128,
     "categories": {
       "config": 39,
-      "test": 338,
-      "support": 51,
+      "test": 355,
+      "support": 52,
       "docs": 2,
-      "source": 655
+      "source": 680
     },
-    "internalImportEdges": 2819,
+    "internalImportEdges": 2938,
     "workspaceDependencies": ["client", "expo-two-way-audio", "highlight", "protocol"],
     "externalDependencies": [
       "@dnd-kit/core",
@@ -166,7 +166,7 @@
       "id": "file:packages/app/app.config.js",
       "type": "config",
       "path": "packages/app/app.config.js",
-      "lines": 163,
+      "lines": 178,
       "imports": ["./package.json", "node:fs", "node:path"]
     },
     {
@@ -182,6 +182,18 @@
       "path": "packages/app/e2e/00-sessions-empty.spec.ts",
       "lines": 35,
       "imports": ["./fixtures", "./helpers/archive-tab", "./helpers/seed-client"]
+    },
+    {
+      "id": "file:packages/app/e2e/agent-idle-status.spec.ts",
+      "type": "test",
+      "path": "packages/app/e2e/agent-idle-status.spec.ts",
+      "lines": 35,
+      "imports": [
+        "./fixtures",
+        "./helpers/agent-stream",
+        "./helpers/composer",
+        "./helpers/mock-agent"
+      ]
     },
     {
       "id": "file:packages/app/e2e/agent-stream-ui.spec.ts",
@@ -300,7 +312,7 @@
       "id": "file:packages/app/e2e/global-setup.ts",
       "type": "support",
       "path": "packages/app/e2e/global-setup.ts",
-      "lines": 826,
+      "lines": 852,
       "imports": [
         "./helpers/chisacode-home-fork",
         "child_process",
@@ -341,7 +353,7 @@
       "id": "file:packages/app/e2e/helpers/archive-tab.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/archive-tab.ts",
-      "lines": 269,
+      "lines": 295,
       "imports": [
         "./daemon-port",
         "./daemon-registry",
@@ -521,7 +533,7 @@
       "id": "file:packages/app/e2e/helpers/settings.ts",
       "type": "support",
       "path": "packages/app/e2e/helpers/settings.ts",
-      "lines": 246,
+      "lines": 274,
       "imports": ["./regex", "./server-id", "@playwright/test"]
     },
     {
@@ -735,7 +747,7 @@
       "id": "file:packages/app/e2e/settings-navigation.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/settings-navigation.spec.ts",
-      "lines": 157,
+      "lines": 162,
       "imports": ["./fixtures", "./helpers/app", "./helpers/settings"]
     },
     {
@@ -868,7 +880,7 @@
       "id": "file:packages/app/e2e/workspace-agent-tab-rename.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/workspace-agent-tab-rename.spec.ts",
-      "lines": 76,
+      "lines": 81,
       "imports": [
         "./fixtures",
         "./helpers/archive-tab",
@@ -920,7 +932,7 @@
       "id": "file:packages/app/e2e/workspace-navigation-regression.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/workspace-navigation-regression.spec.ts",
-      "lines": 429,
+      "lines": 435,
       "imports": [
         "./fixtures",
         "./helpers/app",
@@ -953,7 +965,7 @@
       "id": "file:packages/app/e2e/workspace-pane-remount.spec.ts",
       "type": "test",
       "path": "packages/app/e2e/workspace-pane-remount.spec.ts",
-      "lines": 52,
+      "lines": 58,
       "imports": [
         "./fixtures",
         "./helpers/archive-tab",
@@ -1333,7 +1345,7 @@
       "id": "file:packages/app/src/agent-stream/layout.test.ts",
       "type": "test",
       "path": "packages/app/src/agent-stream/layout.test.ts",
-      "lines": 335,
+      "lines": 367,
       "imports": [
         "./layout",
         "./strategy",
@@ -1347,21 +1359,27 @@
       "id": "file:packages/app/src/agent-stream/layout.ts",
       "type": "source",
       "path": "packages/app/src/agent-stream/layout.ts",
-      "lines": 279,
+      "lines": 287,
       "imports": ["./spacing", "./strategy", "@/timeline/turn-time", "@/types/stream"]
     },
     {
       "id": "file:packages/app/src/agent-stream/model.test.ts",
       "type": "test",
       "path": "packages/app/src/agent-stream/model.test.ts",
-      "lines": 162,
-      "imports": ["./model", "@/types/stream", "vitest"]
+      "lines": 545,
+      "imports": [
+        "./model",
+        "@/types/stream",
+        "@chisacode/protocol/messages",
+        "@chisacode/protocol/provider-manifest",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/app/src/agent-stream/model.ts",
       "type": "source",
       "path": "packages/app/src/agent-stream/model.ts",
-      "lines": 211,
+      "lines": 479,
       "imports": [
         "./strategy",
         "./strategy-resolver",
@@ -1379,10 +1397,23 @@
       "imports": ["./strategy", "./strategy-resolver", "@/types/stream", "vitest"]
     },
     {
+      "id": "file:packages/app/src/agent-stream/running-turn-footer.tsx",
+      "type": "source",
+      "path": "packages/app/src/agent-stream/running-turn-footer.tsx",
+      "lines": 85,
+      "imports": [
+        "@/components/synced-loader",
+        "@/utils/time",
+        "react",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
       "id": "file:packages/app/src/agent-stream/spacing.test.ts",
       "type": "test",
       "path": "packages/app/src/agent-stream/spacing.test.ts",
-      "lines": 124,
+      "lines": 145,
       "imports": ["./spacing", "@/types/stream", "vitest"]
     },
     {
@@ -1455,17 +1486,36 @@
       ]
     },
     {
+      "id": "file:packages/app/src/agent-stream/turn-footer-layout.ts",
+      "type": "source",
+      "path": "packages/app/src/agent-stream/turn-footer-layout.ts",
+      "lines": 11,
+      "imports": ["@/constants/layout"]
+    },
+    {
+      "id": "file:packages/app/src/agent-stream/turn-footer.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/agent-stream/turn-footer.test.tsx",
+      "lines": 143,
+      "imports": [
+        "./running-turn-footer",
+        "./turn-footer-layout",
+        "@testing-library/react",
+        "react",
+        "vitest"
+      ]
+    },
+    {
       "id": "file:packages/app/src/agent-stream/turn-footer.tsx",
       "type": "source",
       "path": "packages/app/src/agent-stream/turn-footer.tsx",
-      "lines": 178,
+      "lines": 120,
       "imports": [
         "./layout",
+        "./running-turn-footer",
         "./strategy",
+        "./turn-footer-layout",
         "@/components/message",
-        "@/components/synced-loader",
-        "@/constants/layout",
-        "@/styles/theme",
         "@/timeline/turn-time",
         "@/types/stream",
         "react",
@@ -1477,7 +1527,7 @@
       "id": "file:packages/app/src/agent-stream/view.tsx",
       "type": "source",
       "path": "packages/app/src/agent-stream/view.tsx",
-      "lines": 1226,
+      "lines": 1230,
       "imports": [
         "./bottom-anchor-controller",
         "./layout",
@@ -1489,6 +1539,7 @@
         "@/components/message",
         "@/components/plan-card",
         "@/components/question-form-card",
+        "@/components/thought-message",
         "@/components/toast-host",
         "@/components/tool-call-details",
         "@/components/tool-call-sheet",
@@ -1497,6 +1548,7 @@
         "@/hooks/use-agent-screen-state-machine",
         "@/hooks/use-file-explorer-actions",
         "@/hooks/use-load-older-agent-history",
+        "@/hooks/use-settings",
         "@/hooks/use-stable-event",
         "@/stores/panel-store",
         "@/stores/session-store",
@@ -1540,11 +1592,11 @@
       "id": "file:packages/app/src/app/_layout.tsx",
       "type": "source",
       "path": "packages/app/src/app/_layout.tsx",
-      "lines": 1102,
+      "lines": 1117,
       "imports": [
-        "@/app/host-runtime-bootstrap",
         "@/components/command-center",
         "@/components/download-toast",
+        "@/components/error-boundary",
         "@/components/keyboard-shortcuts-dialog",
         "@/components/left-sidebar",
         "@/components/liquid-neon-backdrop",
@@ -1594,6 +1646,7 @@
         "@/utils/desktop-sidebar-toggle",
         "@/utils/desktop-window",
         "@/utils/host-routes",
+        "@/utils/host-runtime-bootstrap",
         "@/utils/navigate-to-agent",
         "@/utils/notification-routing",
         "@/utils/os-notifications",
@@ -1618,7 +1671,7 @@
       "id": "file:packages/app/src/app/h/[serverId]/agent/[agentId].tsx",
       "type": "source",
       "path": "packages/app/src/app/h/[serverId]/agent/[agentId].tsx",
-      "lines": 131,
+      "lines": 119,
       "imports": [
         "@/components/host-route-bootstrap-boundary",
         "@/runtime/host-runtime",
@@ -1626,7 +1679,6 @@
         "@/stores/session-store-hooks",
         "@/utils/host-routes",
         "@/utils/workspace-execution",
-        "@/utils/workspace-navigation",
         "expo-router",
         "react"
       ]
@@ -1642,8 +1694,14 @@
       "id": "file:packages/app/src/app/h/[serverId]/new.tsx",
       "type": "source",
       "path": "packages/app/src/app/h/[serverId]/new.tsx",
-      "lines": 29,
-      "imports": ["@/screens/new-workspace-screen", "expo-router"]
+      "lines": 40,
+      "imports": [
+        "@/screens/new-workspace-default-directory",
+        "@/screens/new-workspace-screen",
+        "@/stores/navigation-active-workspace-store",
+        "@/stores/session-store-hooks",
+        "expo-router"
+      ]
     },
     {
       "id": "file:packages/app/src/app/h/[serverId]/open-project.tsx",
@@ -1699,36 +1757,17 @@
       ]
     },
     {
-      "id": "file:packages/app/src/app/host-runtime-bootstrap.test.ts",
-      "type": "test",
-      "path": "packages/app/src/app/host-runtime-bootstrap.test.ts",
-      "lines": 301,
-      "imports": ["./host-runtime-bootstrap", "vitest"]
-    },
-    {
-      "id": "file:packages/app/src/app/host-runtime-bootstrap.ts",
-      "type": "source",
-      "path": "packages/app/src/app/host-runtime-bootstrap.ts",
-      "lines": 130,
-      "imports": [
-        "@/runtime/daemon-start-service",
-        "@/stores/navigation-active-workspace-store",
-        "@/utils/host-routes",
-        "expo-router"
-      ]
-    },
-    {
       "id": "file:packages/app/src/app/index.tsx",
       "type": "source",
       "path": "packages/app/src/app/index.tsx",
       "lines": 57,
       "imports": [
         "@/app/_layout",
-        "@/app/host-runtime-bootstrap",
         "@/desktop/daemon/desktop-daemon",
         "@/screens/startup-splash-screen",
         "@/stores/navigation-active-workspace-store",
         "@/utils/host-routes",
+        "@/utils/host-runtime-bootstrap",
         "expo-router",
         "react"
       ]
@@ -1759,8 +1798,14 @@
       "id": "file:packages/app/src/app/settings/[section].tsx",
       "type": "source",
       "path": "packages/app/src/app/settings/[section].tsx",
-      "lines": 14,
-      "imports": ["@/screens/settings-screen", "@/utils/host-routes", "expo-router", "react"]
+      "lines": 19,
+      "imports": [
+        "@/components/host-route-bootstrap-boundary",
+        "@/screens/settings-screen",
+        "@/utils/host-routes",
+        "expo-router",
+        "react"
+      ]
     },
     {
       "id": "file:packages/app/src/app/settings/hosts/[serverId].tsx",
@@ -1778,8 +1823,9 @@
       "id": "file:packages/app/src/app/settings/index.tsx",
       "type": "source",
       "path": "packages/app/src/app/settings/index.tsx",
-      "lines": 17,
+      "lines": 28,
       "imports": [
+        "@/components/host-route-bootstrap-boundary",
         "@/constants/layout",
         "@/screens/settings-screen",
         "@/utils/host-routes",
@@ -1790,15 +1836,20 @@
       "id": "file:packages/app/src/app/settings/projects/[projectKey].tsx",
       "type": "source",
       "path": "packages/app/src/app/settings/projects/[projectKey].tsx",
-      "lines": 13,
-      "imports": ["@/screens/settings-screen", "expo-router", "react"]
+      "lines": 18,
+      "imports": [
+        "@/components/host-route-bootstrap-boundary",
+        "@/screens/settings-screen",
+        "expo-router",
+        "react"
+      ]
     },
     {
       "id": "file:packages/app/src/app/settings/projects/index.tsx",
       "type": "source",
       "path": "packages/app/src/app/settings/projects/index.tsx",
-      "lines": 8,
-      "imports": ["@/screens/settings-screen"]
+      "lines": 13,
+      "imports": ["@/components/host-route-bootstrap-boundary", "@/screens/settings-screen"]
     },
     {
       "id": "file:packages/app/src/app/welcome.tsx",
@@ -2074,7 +2125,7 @@
       "id": "file:packages/app/src/components/adaptive-modal-sheet.tsx",
       "type": "source",
       "path": "packages/app/src/components/adaptive-modal-sheet.tsx",
-      "lines": 609,
+      "lines": 617,
       "imports": [
         "../lib/overlay-root",
         "@/components/file-drop-zone",
@@ -2108,10 +2159,23 @@
       ]
     },
     {
+      "id": "file:packages/app/src/components/add-host-modal.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/components/add-host-modal.test.tsx",
+      "lines": 233,
+      "imports": [
+        "./add-host-modal",
+        "@/types/host-connection",
+        "@testing-library/react",
+        "react",
+        "vitest"
+      ]
+    },
+    {
       "id": "file:packages/app/src/components/add-host-modal.tsx",
       "type": "source",
       "path": "packages/app/src/components/add-host-modal.tsx",
-      "lines": 644,
+      "lines": 681,
       "imports": [
         "./adaptive-modal-sheet",
         "@/components/ui/button",
@@ -2334,7 +2398,7 @@
       "id": "file:packages/app/src/components/command-center.tsx",
       "type": "source",
       "path": "packages/app/src/components/command-center.tsx",
-      "lines": 566,
+      "lines": 562,
       "imports": [
         "@/components/agent-status-dot",
         "@/components/ui/shortcut",
@@ -2553,6 +2617,13 @@
       ]
     },
     {
+      "id": "file:packages/app/src/components/error-boundary.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/error-boundary.tsx",
+      "lines": 121,
+      "imports": ["@/i18n", "react", "react-native", "react-native-unistyles"]
+    },
+    {
       "id": "file:packages/app/src/components/explorer-sidebar.tsx",
       "type": "source",
       "path": "packages/app/src/components/explorer-sidebar.tsx",
@@ -2671,6 +2742,43 @@
         "react",
         "react-native",
         "react-native-markdown-display",
+        "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/generative-html-preview-frame.native.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/generative-html-preview-frame.native.tsx",
+      "lines": 39,
+      "imports": ["react", "react-native-webview", "react-native-webview/lib/WebViewTypes"]
+    },
+    {
+      "id": "file:packages/app/src/components/generative-html-preview-frame.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/generative-html-preview-frame.tsx",
+      "lines": 2,
+      "imports": ["./generative-html-preview-frame.web"]
+    },
+    {
+      "id": "file:packages/app/src/components/generative-html-preview-frame.web.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/generative-html-preview-frame.web.tsx",
+      "lines": 26,
+      "imports": ["react"]
+    },
+    {
+      "id": "file:packages/app/src/components/generative-html-preview.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/generative-html-preview.tsx",
+      "lines": 180,
+      "imports": [
+        "./generative-html-preview-frame",
+        "@/components/highlighted-code-block",
+        "@/constants/theme",
+        "@/utils/generative-ui-html",
+        "lucide-react-native",
+        "react",
+        "react-native",
         "react-native-unistyles"
       ]
     },
@@ -2913,7 +3021,7 @@
       "id": "file:packages/app/src/components/import-session-sheet.test.tsx",
       "type": "test",
       "path": "packages/app/src/components/import-session-sheet.test.tsx",
-      "lines": 939,
+      "lines": 976,
       "imports": [
         "@/components/import-session-sheet",
         "@chisacode/client/internal/daemon-client",
@@ -2928,17 +3036,19 @@
       "id": "file:packages/app/src/components/import-session-sheet.tsx",
       "type": "source",
       "path": "packages/app/src/components/import-session-sheet.tsx",
-      "lines": 599,
+      "lines": 603,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/import-session-sheet-view-model",
         "@/components/provider-icons",
         "@/components/ui/loading-spinner",
         "@/components/ui/segmented-control",
+        "@/constants/layout",
         "@/hooks/use-providers-snapshot",
         "@/utils/time",
         "@chisacode/client/internal/daemon-client",
         "@chisacode/protocol/agent-types",
+        "@gorhom/bottom-sheet",
         "@tanstack/react-query",
         "lucide-react-native",
         "react",
@@ -2969,7 +3079,7 @@
       "id": "file:packages/app/src/components/left-sidebar.tsx",
       "type": "source",
       "path": "packages/app/src/components/left-sidebar.tsx",
-      "lines": 1723,
+      "lines": 1782,
       "imports": [
         "./sidebar-agent-list-skeleton",
         "./sidebar-session-list",
@@ -2980,10 +3090,13 @@
         "@/constants/platform",
         "@/contexts/sidebar-animation-context",
         "@/hooks/use-agent-history",
+        "@/hooks/use-archive-agent",
         "@/hooks/use-open-project-picker",
         "@/runtime/host-runtime",
+        "@/stores/draft-keys",
         "@/stores/keyboard-shortcuts-store",
         "@/stores/panel-store",
+        "@/stores/session-store",
         "@/stores/session-store-hooks",
         "@/utils/active-host",
         "@/utils/daemons",
@@ -2992,6 +3105,7 @@
         "@/utils/mobile-sidebar-quick-actions",
         "@/utils/navigate-to-agent",
         "@/utils/sidebar-animation-state",
+        "@/utils/sidebar-session-source",
         "expo-router",
         "lucide-react-native",
         "react",
@@ -3066,12 +3180,42 @@
       "imports": []
     },
     {
+      "id": "file:packages/app/src/components/message-layout.ts",
+      "type": "source",
+      "path": "packages/app/src/components/message-layout.ts",
+      "lines": 15,
+      "imports": []
+    },
+    {
+      "id": "file:packages/app/src/components/message-markdown.ts",
+      "type": "source",
+      "path": "packages/app/src/components/message-markdown.ts",
+      "lines": 4,
+      "imports": []
+    },
+    {
+      "id": "file:packages/app/src/components/message.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/components/message.test.tsx",
+      "lines": 220,
+      "imports": [
+        "./message-layout",
+        "./message-markdown",
+        "./thought-message",
+        "@testing-library/react",
+        "react",
+        "vitest"
+      ]
+    },
+    {
       "id": "file:packages/app/src/components/message.tsx",
       "type": "source",
       "path": "packages/app/src/components/message.tsx",
-      "lines": 3124,
+      "lines": 3190,
       "imports": [
         "./message-compaction-label",
+        "./message-layout",
+        "./message-markdown",
         "./plan-card",
         "./tool-call-details",
         "./tool-call-sheet",
@@ -3079,6 +3223,7 @@
         "@/attachments/service",
         "@/attachments/use-attachment-preview-url",
         "@/attachments/utils",
+        "@/components/generative-html-preview",
         "@/components/highlighted-code-block",
         "@/components/markdown-text",
         "@/components/rewind/rewind-menu",
@@ -3094,6 +3239,7 @@
         "@/utils/assistant-image-metadata",
         "@/utils/assistant-image-source",
         "@/utils/assistant-message-height-estimate",
+        "@/utils/generative-ui-html",
         "@/utils/markdown-list",
         "@/utils/rich-clipboard",
         "@/utils/rich-clipboard-default-environment",
@@ -3161,10 +3307,12 @@
       "id": "file:packages/app/src/components/project-picker-modal.tsx",
       "type": "source",
       "path": "packages/app/src/components/project-picker-modal.tsx",
-      "lines": 342,
+      "lines": 438,
       "imports": [
         "@/constants/platform",
+        "@/desktop/pick-directory",
         "@/hooks/use-active-server-id",
+        "@/hooks/use-is-local-daemon",
         "@/hooks/use-open-project",
         "@/runtime/host-runtime",
         "@/stores/keyboard-shortcuts-store",
@@ -3332,8 +3480,22 @@
       "id": "file:packages/app/src/components/resize-handle.tsx",
       "type": "source",
       "path": "packages/app/src/components/resize-handle.tsx",
-      "lines": 199,
-      "imports": ["react", "react-native", "react-native-unistyles"]
+      "lines": 45,
+      "imports": ["./resize-handle.types", "react", "react-native", "react-native-unistyles"]
+    },
+    {
+      "id": "file:packages/app/src/components/resize-handle.types.ts",
+      "type": "source",
+      "path": "packages/app/src/components/resize-handle.types.ts",
+      "lines": 8,
+      "imports": []
+    },
+    {
+      "id": "file:packages/app/src/components/resize-handle.web.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/resize-handle.web.tsx",
+      "lines": 193,
+      "imports": ["./resize-handle.types", "react", "react-native", "react-native-unistyles"]
     },
     {
       "id": "file:packages/app/src/components/rewind/composer-restore.test.ts",
@@ -3469,7 +3631,7 @@
       "id": "file:packages/app/src/components/sidebar-session-list.test.tsx",
       "type": "test",
       "path": "packages/app/src/components/sidebar-session-list.test.tsx",
-      "lines": 1072,
+      "lines": 1177,
       "imports": [
         "@/components/sidebar-session-list",
         "@/hooks/use-aggregated-agents",
@@ -3483,7 +3645,7 @@
       "id": "file:packages/app/src/components/sidebar-session-list.tsx",
       "type": "source",
       "path": "packages/app/src/components/sidebar-session-list.tsx",
-      "lines": 1257,
+      "lines": 1280,
       "imports": [
         "@/components/provider-icons",
         "@/components/rename-modal",
@@ -3495,8 +3657,9 @@
         "@/hooks/agent-history-query-key",
         "@/hooks/use-aggregated-agents",
         "@/hooks/use-archive-agent",
+        "@/stores/draft-keys",
         "@/stores/session-store",
-        "@/stores/session-store-hooks",
+        "@/stores/workspace-layout-store",
         "@/utils/agent-history-navigation",
         "@/utils/confirm-dialog",
         "@/utils/host-routes",
@@ -3539,7 +3702,7 @@
       "id": "file:packages/app/src/components/sidebar-workspace-list.tsx",
       "type": "source",
       "path": "packages/app/src/components/sidebar-workspace-list.tsx",
-      "lines": 3016,
+      "lines": 3018,
       "imports": [
         "./draggable-list",
         "./draggable-list.types",
@@ -3567,6 +3730,7 @@
         "@/hooks/use-show-shortcut-badges",
         "@/hooks/use-sidebar-workspaces-list",
         "@/runtime/host-runtime",
+        "@/stores/draft-keys",
         "@/stores/navigation-active-workspace-store",
         "@/stores/session-store",
         "@/stores/session-store-hooks",
@@ -3684,7 +3848,7 @@
       "id": "file:packages/app/src/components/split-container.tsx",
       "type": "source",
       "path": "packages/app/src/components/split-container.tsx",
-      "lines": 1223,
+      "lines": 1237,
       "imports": [
         "@/components/desktop/titlebar-drag-region",
         "@/components/resize-handle",
@@ -3796,6 +3960,22 @@
         "react",
         "react-native",
         "react-native-reanimated",
+        "react-native-unistyles"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/components/thought-message.tsx",
+      "type": "source",
+      "path": "packages/app/src/components/thought-message.tsx",
+      "lines": 158,
+      "imports": [
+        "@/components/synced-loader",
+        "@/constants/theme",
+        "@/types/stream",
+        "lucide-react-native",
+        "react",
+        "react-i18next",
+        "react-native",
         "react-native-unistyles"
       ]
     },
@@ -3924,7 +4104,7 @@
       "id": "file:packages/app/src/components/ui/button.tsx",
       "type": "source",
       "path": "packages/app/src/components/ui/button.tsx",
-      "lines": 312,
+      "lines": 313,
       "imports": ["react", "react-native", "react-native-unistyles"]
     },
     {
@@ -4395,7 +4575,7 @@
       "id": "file:packages/app/src/composer/agent-controls/index.tsx",
       "type": "source",
       "path": "packages/app/src/composer/agent-controls/index.tsx",
-      "lines": 2145,
+      "lines": 2199,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/combined-model-selector",
@@ -4404,12 +4584,14 @@
         "@/components/ui/dropdown-menu",
         "@/components/ui/tooltip",
         "@/composer/agent-controls/mode-control",
+        "@/composer/agent-controls/model-loading",
         "@/composer/agent-controls/utils",
         "@/constants/layout",
         "@/contexts/toast-context",
         "@/hooks/use-form-preferences",
         "@/hooks/use-providers-snapshot",
         "@/provider-selection/provider-selection",
+        "@/provider-selection/provider-snapshot-loading",
         "@/stores/session-store",
         "@/utils/error-messages",
         "@/utils/provider-capability-hints",
@@ -4468,15 +4650,18 @@
       "id": "file:packages/app/src/composer/agent-controls/model-loading.test.ts",
       "type": "test",
       "path": "packages/app/src/composer/agent-controls/model-loading.test.ts",
-      "lines": 32,
+      "lines": 121,
       "imports": ["./model-loading", "@tanstack/react-query", "vitest"]
     },
     {
       "id": "file:packages/app/src/composer/agent-controls/model-loading.ts",
       "type": "source",
       "path": "packages/app/src/composer/agent-controls/model-loading.ts",
-      "lines": 9,
-      "imports": []
+      "lines": 49,
+      "imports": [
+        "@/provider-selection/provider-snapshot-loading",
+        "@chisacode/protocol/agent-types"
+      ]
     },
     {
       "id": "file:packages/app/src/composer/agent-controls/utils.test.ts",
@@ -4627,14 +4812,14 @@
       "id": "file:packages/app/src/composer/draft/workspace-tab-core.ts",
       "type": "source",
       "path": "packages/app/src/composer/draft/workspace-tab-core.ts",
-      "lines": 49,
+      "lines": 59,
       "imports": ["@/provider-selection/provider-selection"]
     },
     {
       "id": "file:packages/app/src/composer/draft/workspace-tab.test.ts",
       "type": "test",
       "path": "packages/app/src/composer/draft/workspace-tab.test.ts",
-      "lines": 68,
+      "lines": 94,
       "imports": [
         "./workspace-tab-core",
         "@/screens/workspace/workspace-draft-agent-config",
@@ -4645,7 +4830,7 @@
       "id": "file:packages/app/src/composer/draft/workspace-tab.tsx",
       "type": "source",
       "path": "packages/app/src/composer/draft/workspace-tab.tsx",
-      "lines": 800,
+      "lines": 811,
       "imports": [
         "@/agent-stream/view",
         "@/attachments/types",
@@ -4903,7 +5088,7 @@
       "id": "file:packages/app/src/constants/platform.ts",
       "type": "source",
       "path": "packages/app/src/constants/platform.ts",
-      "lines": 56,
+      "lines": 61,
       "imports": ["@/desktop/host", "react-native"]
     },
     {
@@ -4951,7 +5136,7 @@
       "id": "file:packages/app/src/contexts/session-context.tsx",
       "type": "source",
       "path": "packages/app/src/contexts/session-context.tsx",
-      "lines": 1931,
+      "lines": 1947,
       "imports": [
         "@/attachments/types",
         "@/composer/attachments/submit",
@@ -4971,6 +5156,7 @@
         "@/stores/draft-keys",
         "@/stores/draft-store",
         "@/stores/session-store",
+        "@/stores/workspace-layout-store",
         "@/stores/workspace-setup-store",
         "@/timeline/session-stream-reducers",
         "@/timeline/timeline-sync-plan",
@@ -5464,7 +5650,7 @@
       "id": "file:packages/app/src/desktop/host.ts",
       "type": "source",
       "path": "packages/app/src/desktop/host.ts",
-      "lines": 150,
+      "lines": 147,
       "imports": ["@/desktop/electron/host", "react-native"]
     },
     {
@@ -5513,14 +5699,14 @@
       "id": "file:packages/app/src/desktop/updates/desktop-app-updater.test.ts",
       "type": "test",
       "path": "packages/app/src/desktop/updates/desktop-app-updater.test.ts",
-      "lines": 284,
+      "lines": 297,
       "imports": ["./desktop-app-updater", "./test-utils/fake-desktop-app-updater-port", "vitest"]
     },
     {
       "id": "file:packages/app/src/desktop/updates/desktop-app-updater.ts",
       "type": "source",
       "path": "packages/app/src/desktop/updates/desktop-app-updater.ts",
-      "lines": 294,
+      "lines": 299,
       "imports": ["@/desktop/updates/desktop-updates"]
     },
     {
@@ -5596,7 +5782,7 @@
       "id": "file:packages/app/src/desktop/updates/use-desktop-app-updater.ts",
       "type": "source",
       "path": "packages/app/src/desktop/updates/use-desktop-app-updater.ts",
-      "lines": 140,
+      "lines": 142,
       "imports": [
         "@/desktop/hooks/desktop-ipc-error",
         "@/desktop/settings/desktop-settings",
@@ -6162,6 +6348,13 @@
       "imports": ["@/desktop/host", "@/utils/path"]
     },
     {
+      "id": "file:packages/app/src/hooks/local-daemon-hosts.ts",
+      "type": "source",
+      "path": "packages/app/src/hooks/local-daemon-hosts.ts",
+      "lines": 38,
+      "imports": ["@/types/host-connection", "@chisacode/protocol/daemon-endpoints"]
+    },
+    {
       "id": "file:packages/app/src/hooks/open-project.ts",
       "type": "source",
       "path": "packages/app/src/hooks/open-project.ts",
@@ -6243,10 +6436,11 @@
       "id": "file:packages/app/src/hooks/use-active-worktree-new-action.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-active-worktree-new-action.ts",
-      "lines": 59,
+      "lines": 61,
       "imports": [
         "@/hooks/use-keyboard-action-handler",
         "@/keyboard/keyboard-action-dispatcher",
+        "@/stores/draft-keys",
         "@/stores/navigation-active-workspace-store",
         "@/stores/session-store",
         "@/utils/host-routes",
@@ -6315,11 +6509,13 @@
       "id": "file:packages/app/src/hooks/use-agent-form-state.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-agent-form-state.ts",
-      "lines": 662,
+      "lines": 660,
       "imports": [
         "./use-form-preferences",
         "./use-providers-snapshot",
         "@/provider-selection/provider-selection",
+        "@/provider-selection/provider-snapshot-loading",
+        "@/provider-selection/provider-snapshot-models",
         "@/provider-selection/resolve-agent-form",
         "@/runtime/host-runtime",
         "@/utils/provider-definitions",
@@ -6333,14 +6529,19 @@
       "id": "file:packages/app/src/hooks/use-agent-history.test.ts",
       "type": "test",
       "path": "packages/app/src/hooks/use-agent-history.test.ts",
-      "lines": 210,
-      "imports": ["./use-agent-history", "@chisacode/client/internal/daemon-client", "vitest"]
+      "lines": 316,
+      "imports": [
+        "./use-agent-history",
+        "@chisacode/client/internal/daemon-client",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/app/src/hooks/use-agent-history.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-agent-history.ts",
-      "lines": 152,
+      "lines": 177,
       "imports": [
         "./agent-history-query-key",
         "@/hooks/use-aggregated-agents",
@@ -6381,7 +6582,7 @@
       "id": "file:packages/app/src/hooks/use-agent-screen-state-machine.test.ts",
       "type": "test",
       "path": "packages/app/src/hooks/use-agent-screen-state-machine.test.ts",
-      "lines": 503,
+      "lines": 522,
       "imports": ["./use-agent-screen-state-machine", "@/contexts/session-context", "vitest"]
     },
     {
@@ -6395,14 +6596,19 @@
       "id": "file:packages/app/src/hooks/use-aggregated-agents.test.ts",
       "type": "test",
       "path": "packages/app/src/hooks/use-aggregated-agents.test.ts",
-      "lines": 158,
-      "imports": ["./use-aggregated-agents", "@/stores/session-store", "vitest"]
+      "lines": 194,
+      "imports": [
+        "./use-aggregated-agents",
+        "@/stores/session-store",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/app/src/hooks/use-aggregated-agents.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-aggregated-agents.ts",
-      "lines": 157,
+      "lines": 158,
       "imports": [
         "@/runtime/host-runtime",
         "@/stores/session-store",
@@ -6441,13 +6647,16 @@
       "id": "file:packages/app/src/hooks/use-archive-agent.test.ts",
       "type": "test",
       "path": "packages/app/src/hooks/use-archive-agent.test.ts",
-      "lines": 218,
+      "lines": 452,
       "imports": [
         "./agent-history-query-key",
         "./use-archive-agent",
         "@/stores/session-store",
+        "@/stores/workspace-layout-store",
         "@chisacode/client/internal/daemon-client",
         "@tanstack/react-query",
+        "@testing-library/react",
+        "react",
         "vitest"
       ]
     },
@@ -6455,10 +6664,13 @@
       "id": "file:packages/app/src/hooks/use-archive-agent.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-archive-agent.ts",
-      "lines": 478,
+      "lines": 616,
       "imports": [
         "./agent-history-query-key",
+        "@/runtime/host-runtime",
         "@/stores/session-store",
+        "@/stores/workspace-layout-store",
+        "@chisacode/client/internal/daemon-client",
         "@tanstack/react-query",
         "react"
       ]
@@ -6748,7 +6960,7 @@
       "id": "file:packages/app/src/hooks/use-file-drop-zone.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-file-drop-zone.ts",
-      "lines": 285,
+      "lines": 178,
       "imports": [
         "@/attachments/service",
         "@/composer/types",
@@ -6835,11 +7047,23 @@
       ]
     },
     {
+      "id": "file:packages/app/src/hooks/use-is-local-daemon.test.ts",
+      "type": "test",
+      "path": "packages/app/src/hooks/use-is-local-daemon.test.ts",
+      "lines": 81,
+      "imports": ["@/hooks/local-daemon-hosts", "@/types/host-connection", "vitest"]
+    },
+    {
       "id": "file:packages/app/src/hooks/use-is-local-daemon.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-is-local-daemon.ts",
-      "lines": 51,
-      "imports": ["@/desktop/daemon/desktop-daemon", "@tanstack/react-query"]
+      "lines": 53,
+      "imports": [
+        "@/desktop/daemon/desktop-daemon",
+        "@/hooks/local-daemon-hosts",
+        "@/runtime/host-runtime",
+        "@tanstack/react-query"
+      ]
     },
     {
       "id": "file:packages/app/src/hooks/use-keyboard-action-handler.ts",
@@ -6933,17 +7157,23 @@
       ]
     },
     {
+      "id": "file:packages/app/src/hooks/use-open-project-picker.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/hooks/use-open-project-picker.test.tsx",
+      "lines": 71,
+      "imports": [
+        "./use-open-project-picker",
+        "@/stores/keyboard-shortcuts-store",
+        "@testing-library/react",
+        "vitest"
+      ]
+    },
+    {
       "id": "file:packages/app/src/hooks/use-open-project-picker.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-open-project-picker.ts",
-      "lines": 31,
-      "imports": [
-        "./use-is-local-daemon",
-        "./use-open-project",
-        "@/desktop/pick-directory",
-        "@/stores/keyboard-shortcuts-store",
-        "react"
-      ]
+      "lines": 16,
+      "imports": ["@/stores/keyboard-shortcuts-store", "react"]
     },
     {
       "id": "file:packages/app/src/hooks/use-open-project.test.ts",
@@ -7097,12 +7327,14 @@
       "id": "file:packages/app/src/hooks/use-settings/index.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-settings/index.ts",
-      "lines": 220,
+      "lines": 227,
       "imports": [
         "./storage",
+        "@/constants/platform",
         "@/desktop/host",
         "@/desktop/settings/desktop-settings",
         "@/query/query-client",
+        "@/styles/theme",
         "@react-native-async-storage/async-storage",
         "@tanstack/react-query",
         "react"
@@ -7112,14 +7344,14 @@
       "id": "file:packages/app/src/hooks/use-settings/storage.test.ts",
       "type": "test",
       "path": "packages/app/src/hooks/use-settings/storage.test.ts",
-      "lines": 371,
+      "lines": 508,
       "imports": ["./fakes", "./storage", "@tanstack/react-query", "vitest"]
     },
     {
       "id": "file:packages/app/src/hooks/use-settings/storage.ts",
       "type": "source",
       "path": "packages/app/src/hooks/use-settings/storage.ts",
-      "lines": 248,
+      "lines": 286,
       "imports": ["@/desktop/settings/desktop-settings", "@/styles/theme", "@tanstack/react-query"]
     },
     {
@@ -7206,14 +7438,14 @@
       "id": "file:packages/app/src/i18n/index.test.ts",
       "type": "test",
       "path": "packages/app/src/i18n/index.test.ts",
-      "lines": 86,
+      "lines": 91,
       "imports": ["./index", "vitest"]
     },
     {
       "id": "file:packages/app/src/i18n/index.ts",
       "type": "source",
       "path": "packages/app/src/i18n/index.ts",
-      "lines": 2876,
+      "lines": 3113,
       "imports": ["@/hooks/use-settings", "i18next", "react-i18next"]
     },
     {
@@ -7283,7 +7515,7 @@
       "id": "file:packages/app/src/keyboard/route-shortcut.test.ts",
       "type": "test",
       "path": "packages/app/src/keyboard/route-shortcut.test.ts",
-      "lines": 346,
+      "lines": 349,
       "imports": ["./route-shortcut", "vitest"]
     },
     {
@@ -7337,7 +7569,7 @@
       "id": "file:packages/app/src/panels/agent-panel.tsx",
       "type": "source",
       "path": "packages/app/src/panels/agent-panel.tsx",
-      "lines": 1628,
+      "lines": 1633,
       "imports": [
         "@/agent-stream/view",
         "@/attachments/types",
@@ -7556,7 +7788,7 @@
       "id": "file:packages/app/src/provider-selection/provider-selection.test.ts",
       "type": "test",
       "path": "packages/app/src/provider-selection/provider-selection.test.ts",
-      "lines": 467,
+      "lines": 590,
       "imports": [
         "./provider-selection",
         "@chisacode/protocol/agent-types",
@@ -7568,7 +7800,7 @@
       "id": "file:packages/app/src/provider-selection/provider-selection.ts",
       "type": "source",
       "path": "packages/app/src/provider-selection/provider-selection.ts",
-      "lines": 439,
+      "lines": 477,
       "imports": [
         "@/hooks/use-agent-commands-query",
         "@/hooks/use-form-preferences",
@@ -7578,10 +7810,38 @@
       ]
     },
     {
+      "id": "file:packages/app/src/provider-selection/provider-snapshot-loading.test.ts",
+      "type": "test",
+      "path": "packages/app/src/provider-selection/provider-snapshot-loading.test.ts",
+      "lines": 81,
+      "imports": ["./provider-snapshot-loading", "@chisacode/protocol/agent-types", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/provider-selection/provider-snapshot-loading.ts",
+      "type": "source",
+      "path": "packages/app/src/provider-selection/provider-snapshot-loading.ts",
+      "lines": 31,
+      "imports": ["@chisacode/protocol/agent-types"]
+    },
+    {
+      "id": "file:packages/app/src/provider-selection/provider-snapshot-models.test.ts",
+      "type": "test",
+      "path": "packages/app/src/provider-selection/provider-snapshot-models.test.ts",
+      "lines": 112,
+      "imports": ["./provider-snapshot-models", "@chisacode/protocol/agent-types", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/provider-selection/provider-snapshot-models.ts",
+      "type": "source",
+      "path": "packages/app/src/provider-selection/provider-snapshot-models.ts",
+      "lines": 15,
+      "imports": ["@chisacode/protocol/agent-types"]
+    },
+    {
       "id": "file:packages/app/src/provider-selection/resolve-agent-form.test.ts",
       "type": "test",
       "path": "packages/app/src/provider-selection/resolve-agent-form.test.ts",
-      "lines": 985,
+      "lines": 1019,
       "imports": [
         "./resolve-agent-form",
         "@/utils/provider-definitions",
@@ -7594,7 +7854,7 @@
       "id": "file:packages/app/src/provider-selection/resolve-agent-form.ts",
       "type": "source",
       "path": "packages/app/src/provider-selection/resolve-agent-form.ts",
-      "lines": 658,
+      "lines": 663,
       "imports": [
         "@/hooks/use-form-preferences",
         "@chisacode/protocol/agent-types",
@@ -7740,7 +8000,7 @@
       "id": "file:packages/app/src/runtime/host-runtime.test.ts",
       "type": "test",
       "path": "packages/app/src/runtime/host-runtime.test.ts",
-      "lines": 1946,
+      "lines": 2034,
       "imports": [
         "./host-runtime",
         "@/stores/session-store",
@@ -7754,7 +8014,7 @@
       "id": "file:packages/app/src/runtime/host-runtime.ts",
       "type": "source",
       "path": "packages/app/src/runtime/host-runtime.ts",
-      "lines": 2125,
+      "lines": 2168,
       "imports": [
         "@/desktop/daemon/desktop-daemon",
         "@/desktop/daemon/desktop-daemon-transport",
@@ -7786,6 +8046,52 @@
       "path": "packages/app/src/screens/agent/agent-ready-screen.bottom-anchor.test.ts",
       "lines": 71,
       "imports": ["./agent-ready-screen-bottom-anchor", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-default-directory.test.ts",
+      "type": "test",
+      "path": "packages/app/src/screens/new-workspace-default-directory.test.ts",
+      "lines": 50,
+      "imports": ["./new-workspace-default-directory", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-default-directory.ts",
+      "type": "source",
+      "path": "packages/app/src/screens/new-workspace-default-directory.ts",
+      "lines": 24,
+      "imports": []
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-directory-options.test.ts",
+      "type": "test",
+      "path": "packages/app/src/screens/new-workspace-directory-options.test.ts",
+      "lines": 41,
+      "imports": ["./new-workspace-directory-options", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-directory-options.ts",
+      "type": "source",
+      "path": "packages/app/src/screens/new-workspace-directory-options.ts",
+      "lines": 41,
+      "imports": [
+        "@/components/ui/combobox",
+        "@/utils/shorten-path",
+        "@/utils/working-directory-suggestions"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-draft-reset.test.ts",
+      "type": "test",
+      "path": "packages/app/src/screens/new-workspace-draft-reset.test.ts",
+      "lines": 61,
+      "imports": ["./new-workspace-draft-reset", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/new-workspace-draft-reset.ts",
+      "type": "source",
+      "path": "packages/app/src/screens/new-workspace-draft-reset.ts",
+      "lines": 54,
+      "imports": []
     },
     {
       "id": "file:packages/app/src/screens/new-workspace-empty.test.ts",
@@ -7838,8 +8144,10 @@
       "id": "file:packages/app/src/screens/new-workspace-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/new-workspace-screen.tsx",
-      "lines": 1108,
+      "lines": 1689,
       "imports": [
+        "./new-workspace-directory-options",
+        "./new-workspace-draft-reset",
         "./new-workspace-empty",
         "./new-workspace-picker-item",
         "./new-workspace-picker-state",
@@ -7848,6 +8156,7 @@
         "@/components/file-drop-zone",
         "@/components/headers/menu-header",
         "@/components/headers/screen-header",
+        "@/components/import-session-sheet",
         "@/components/ui/combobox",
         "@/components/ui/tooltip",
         "@/composer",
@@ -7857,21 +8166,29 @@
         "@/composer/types",
         "@/constants/layout",
         "@/contexts/toast-context",
+        "@/desktop/pick-directory",
         "@/git/use-github-search-query",
+        "@/hooks/use-is-local-daemon",
+        "@/hooks/use-open-project",
         "@/runtime/host-runtime",
         "@/stores/create-flow-store",
         "@/stores/draft-keys",
         "@/stores/draft-store",
         "@/stores/navigation-active-workspace-store",
+        "@/stores/panel-store",
         "@/stores/session-store",
+        "@/stores/session-store-hooks",
         "@/stores/workspace-draft-submission-store",
         "@/types/stream",
         "@/utils/error-messages",
+        "@/utils/host-routes",
+        "@/utils/shorten-path",
         "@/utils/workspace-navigation",
         "@chisacode/client/internal/daemon-client",
         "@chisacode/protocol/agent-types",
         "@chisacode/protocol/messages",
         "@tanstack/react-query",
+        "expo-router",
         "lucide-react-native",
         "mnemonic-id",
         "react",
@@ -7882,11 +8199,26 @@
       ]
     },
     {
+      "id": "file:packages/app/src/screens/open-project-screen-layout.ts",
+      "type": "source",
+      "path": "packages/app/src/screens/open-project-screen-layout.ts",
+      "lines": 4,
+      "imports": []
+    },
+    {
+      "id": "file:packages/app/src/screens/open-project-screen.test.ts",
+      "type": "test",
+      "path": "packages/app/src/screens/open-project-screen.test.ts",
+      "lines": 13,
+      "imports": ["./open-project-screen-layout", "vitest"]
+    },
+    {
       "id": "file:packages/app/src/screens/open-project-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/open-project-screen.tsx",
-      "lines": 231,
+      "lines": 232,
       "imports": [
+        "./open-project-screen-layout",
         "@/components/desktop/titlebar-drag-region",
         "@/components/headers/menu-header",
         "@/components/icons/chisacode-logo",
@@ -7910,7 +8242,7 @@
       "id": "file:packages/app/src/screens/project-settings-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/project-settings-screen.tsx",
-      "lines": 1477,
+      "lines": 1489,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/project-icon-view",
@@ -7961,7 +8293,7 @@
       "id": "file:packages/app/src/screens/projects-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/projects-screen.tsx",
-      "lines": 209,
+      "lines": 212,
       "imports": [
         "@/components/project-icon-view",
         "@/components/ui/loading-spinner",
@@ -8001,7 +8333,7 @@
       "id": "file:packages/app/src/screens/settings-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/settings-screen.tsx",
-      "lines": 1673,
+      "lines": 1760,
       "imports": [
         "@/components/add-host-method-modal",
         "@/components/add-host-modal",
@@ -8016,7 +8348,9 @@
         "@/components/ui/button",
         "@/components/ui/dropdown-menu",
         "@/components/ui/segmented-control",
+        "@/components/ui/switch",
         "@/constants/layout",
+        "@/constants/platform",
         "@/contexts/voice-context",
         "@/desktop/components/desktop-permissions-section",
         "@/desktop/components/integrations-section",
@@ -8031,8 +8365,11 @@
         "@/screens/settings/custom-model-providers-section",
         "@/screens/settings/host-page",
         "@/screens/settings/keyboard-shortcuts-section",
+        "@/screens/settings/mcp-servers-section",
         "@/screens/settings/settings-section",
+        "@/screens/settings/skills-section",
         "@/screens/settings/synthetic-models-section",
+        "@/screens/settings/usage-statistics-section",
         "@/stores/navigation-active-workspace-store",
         "@/styles/settings",
         "@/styles/theme",
@@ -8060,7 +8397,7 @@
       "id": "file:packages/app/src/screens/settings/custom-model-providers-section.test.tsx",
       "type": "test",
       "path": "packages/app/src/screens/settings/custom-model-providers-section.test.tsx",
-      "lines": 461,
+      "lines": 463,
       "imports": [
         "@/screens/settings/custom-model-providers-section",
         "@chisacode/protocol/agent-types",
@@ -8118,7 +8455,7 @@
       "id": "file:packages/app/src/screens/settings/custom-models-section.test.tsx",
       "type": "test",
       "path": "packages/app/src/screens/settings/custom-models-section.test.tsx",
-      "lines": 396,
+      "lines": 398,
       "imports": [
         "@/screens/settings/custom-models-section",
         "@chisacode/protocol/agent-types",
@@ -8175,7 +8512,7 @@
       "id": "file:packages/app/src/screens/settings/host-page.tsx",
       "type": "source",
       "path": "packages/app/src/screens/settings/host-page.tsx",
-      "lines": 865,
+      "lines": 869,
       "imports": [
         "@/components/adaptive-modal-sheet",
         "@/components/rename-modal",
@@ -8227,10 +8564,45 @@
       ]
     },
     {
+      "id": "file:packages/app/src/screens/settings/mcp-servers-section.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/screens/settings/mcp-servers-section.test.tsx",
+      "lines": 347,
+      "imports": [
+        "./mcp-servers-section",
+        "@chisacode/protocol/messages",
+        "react",
+        "react-dom/client",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "type": "source",
+      "path": "packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "lines": 1005,
+      "imports": [
+        "@/components/adaptive-modal-sheet",
+        "@/components/ui/button",
+        "@/components/ui/loading-spinner",
+        "@/components/ui/switch",
+        "@/runtime/host-runtime",
+        "@/screens/settings/settings-section",
+        "@/styles/settings",
+        "@chisacode/protocol/messages",
+        "@react-navigation/native",
+        "lucide-react-native",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
       "id": "file:packages/app/src/screens/settings/providers-section.test.tsx",
       "type": "test",
       "path": "packages/app/src/screens/settings/providers-section.test.tsx",
-      "lines": 408,
+      "lines": 476,
       "imports": [
         "./providers-section",
         "@chisacode/protocol/agent-types",
@@ -8244,11 +8616,12 @@
       "id": "file:packages/app/src/screens/settings/providers-section.tsx",
       "type": "source",
       "path": "packages/app/src/screens/settings/providers-section.tsx",
-      "lines": 479,
+      "lines": 619,
       "imports": [
         "@/components/provider-icons",
         "@/components/ui/loading-spinner",
         "@/components/ui/switch",
+        "@/constants/layout",
         "@/hooks/use-daemon-config",
         "@/hooks/use-providers-snapshot",
         "@/runtime/host-runtime",
@@ -8285,10 +8658,45 @@
       "imports": ["@/styles/settings", "react", "react-native", "react-native-unistyles"]
     },
     {
+      "id": "file:packages/app/src/screens/settings/skills-section.test.tsx",
+      "type": "test",
+      "path": "packages/app/src/screens/settings/skills-section.test.tsx",
+      "lines": 391,
+      "imports": [
+        "./skills-section",
+        "@chisacode/protocol/messages",
+        "react",
+        "react-dom/client",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "type": "source",
+      "path": "packages/app/src/screens/settings/skills-section.tsx",
+      "lines": 743,
+      "imports": [
+        "@/components/adaptive-modal-sheet",
+        "@/components/ui/button",
+        "@/components/ui/loading-spinner",
+        "@/components/ui/switch",
+        "@/runtime/host-runtime",
+        "@/screens/settings/settings-section",
+        "@/styles/settings",
+        "@chisacode/protocol/messages",
+        "@react-navigation/native",
+        "lucide-react-native",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-unistyles"
+      ]
+    },
+    {
       "id": "file:packages/app/src/screens/settings/synthetic-models-section.test.tsx",
       "type": "test",
       "path": "packages/app/src/screens/settings/synthetic-models-section.test.tsx",
-      "lines": 816,
+      "lines": 818,
       "imports": [
         "@/screens/settings/synthetic-models-section",
         "@chisacode/protocol/messages",
@@ -8338,6 +8746,43 @@
       "path": "packages/app/src/screens/settings/synthetic-models.ts",
       "lines": 242,
       "imports": ["@chisacode/protocol/messages", "@chisacode/protocol/provider-config"]
+    },
+    {
+      "id": "file:packages/app/src/screens/settings/usage-statistics-model.test.ts",
+      "type": "test",
+      "path": "packages/app/src/screens/settings/usage-statistics-model.test.ts",
+      "lines": 117,
+      "imports": ["./usage-statistics-model", "@chisacode/protocol/messages", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/screens/settings/usage-statistics-model.ts",
+      "type": "source",
+      "path": "packages/app/src/screens/settings/usage-statistics-model.ts",
+      "lines": 110,
+      "imports": ["@chisacode/protocol/messages"]
+    },
+    {
+      "id": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "type": "source",
+      "path": "packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "lines": 867,
+      "imports": [
+        "./usage-statistics-model",
+        "@/components/ui/button",
+        "@/components/ui/segmented-control",
+        "@/constants/layout",
+        "@/constants/platform",
+        "@/runtime/host-runtime",
+        "@/screens/settings/settings-section",
+        "@/utils/confirm-dialog",
+        "@chisacode/protocol/messages",
+        "lucide-react-native",
+        "react",
+        "react-i18next",
+        "react-native",
+        "react-native-svg",
+        "react-native-unistyles"
+      ]
     },
     {
       "id": "file:packages/app/src/screens/startup-splash-screen.tsx",
@@ -8458,7 +8903,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx",
-      "lines": 1113,
+      "lines": 1137,
       "imports": [
         "@/components/desktop/titlebar-drag-region",
         "@/components/draggable-list.types",
@@ -8729,7 +9174,7 @@
       "id": "file:packages/app/src/screens/workspace/workspace-screen.tsx",
       "type": "source",
       "path": "packages/app/src/screens/workspace/workspace-screen.tsx",
-      "lines": 5404,
+      "lines": 5414,
       "imports": [
         "@/components/branch-switcher",
         "@/components/explorer-sidebar",
@@ -9306,7 +9751,7 @@
       "id": "file:packages/app/src/stores/workspace-layout-actions.ts",
       "type": "source",
       "path": "packages/app/src/stores/workspace-layout-actions.ts",
-      "lines": 1874,
+      "lines": 1885,
       "imports": [
         "@/stores/workspace-layout-ids",
         "@/stores/workspace-tabs-store",
@@ -9325,14 +9770,14 @@
       "id": "file:packages/app/src/stores/workspace-layout-store.test.ts",
       "type": "test",
       "path": "packages/app/src/stores/workspace-layout-store.test.ts",
-      "lines": 1693,
+      "lines": 1854,
       "imports": ["@/stores/workspace-layout-store", "@/stores/workspace-tabs-store", "vitest"]
     },
     {
       "id": "file:packages/app/src/stores/workspace-layout-store.ts",
       "type": "source",
       "path": "packages/app/src/stores/workspace-layout-store.ts",
-      "lines": 1166,
+      "lines": 1308,
       "imports": [
         "@/stores/workspace-layout-actions",
         "@/stores/workspace-layout-ids",
@@ -9348,14 +9793,14 @@
       "id": "file:packages/app/src/stores/workspace-setup-store.test.ts",
       "type": "test",
       "path": "packages/app/src/stores/workspace-setup-store.test.ts",
-      "lines": 100,
+      "lines": 176,
       "imports": ["./workspace-setup-store", "vitest"]
     },
     {
       "id": "file:packages/app/src/stores/workspace-setup-store.ts",
       "type": "source",
       "path": "packages/app/src/stores/workspace-setup-store.ts",
-      "lines": 97,
+      "lines": 138,
       "imports": ["@/stores/workspace-tabs-store", "@chisacode/protocol/messages", "zustand"]
     },
     {
@@ -9406,21 +9851,21 @@
       "id": "file:packages/app/src/styles/markdown-styles.test.ts",
       "type": "test",
       "path": "packages/app/src/styles/markdown-styles.test.ts",
-      "lines": 73,
+      "lines": 93,
       "imports": ["./markdown-styles", "./theme", "vitest"]
     },
     {
       "id": "file:packages/app/src/styles/markdown-styles.ts",
       "type": "source",
       "path": "packages/app/src/styles/markdown-styles.ts",
-      "lines": 407,
+      "lines": 411,
       "imports": ["./theme", "@/constants/platform", "@/constants/theme"]
     },
     {
       "id": "file:packages/app/src/styles/settings.ts",
       "type": "source",
       "path": "packages/app/src/styles/settings.ts",
-      "lines": 67,
+      "lines": 70,
       "imports": ["react-native-unistyles"]
     },
     {
@@ -9434,14 +9879,14 @@
       "id": "file:packages/app/src/styles/theme.test.ts",
       "type": "test",
       "path": "packages/app/src/styles/theme.test.ts",
-      "lines": 12,
+      "lines": 38,
       "imports": ["./theme", "vitest"]
     },
     {
       "id": "file:packages/app/src/styles/theme.ts",
       "type": "source",
       "path": "packages/app/src/styles/theme.ts",
-      "lines": 873,
+      "lines": 912,
       "imports": ["@chisacode/highlight"]
     },
     {
@@ -9869,7 +10314,7 @@
       "id": "file:packages/app/src/types/agent-directory.ts",
       "type": "source",
       "path": "packages/app/src/types/agent-directory.ts",
-      "lines": 21,
+      "lines": 22,
       "imports": ["@/stores/session-store"]
     },
     {
@@ -9907,7 +10352,7 @@
       "id": "file:packages/app/src/types/stream-event.test.ts",
       "type": "test",
       "path": "packages/app/src/types/stream-event.test.ts",
-      "lines": 203,
+      "lines": 226,
       "imports": ["@/types/stream", "@chisacode/protocol/messages", "vitest"]
     },
     {
@@ -9941,7 +10386,7 @@
       "id": "file:packages/app/src/types/stream.ts",
       "type": "source",
       "path": "packages/app/src/types/stream.ts",
-      "lines": 1216,
+      "lines": 1218,
       "imports": [
         "../utils/tool-call-parsers",
         "@/attachments/types",
@@ -9968,7 +10413,7 @@
       "id": "file:packages/app/src/updates/github-release-updates.test.ts",
       "type": "test",
       "path": "packages/app/src/updates/github-release-updates.test.ts",
-      "lines": 159,
+      "lines": 164,
       "imports": ["./github-release-updates", "vitest"]
     },
     {
@@ -10471,6 +10916,20 @@
       "imports": []
     },
     {
+      "id": "file:packages/app/src/utils/generative-ui-html.test.ts",
+      "type": "test",
+      "path": "packages/app/src/utils/generative-ui-html.test.ts",
+      "lines": 50,
+      "imports": ["./generative-ui-html", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/utils/generative-ui-html.ts",
+      "type": "source",
+      "path": "packages/app/src/utils/generative-ui-html.ts",
+      "lines": 114,
+      "imports": []
+    },
+    {
       "id": "file:packages/app/src/utils/github-refs.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/github-refs.test.ts",
@@ -10502,15 +10961,34 @@
       "id": "file:packages/app/src/utils/host-routes.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/host-routes.test.ts",
-      "lines": 231,
+      "lines": 258,
       "imports": ["./host-routes", "vitest"]
     },
     {
       "id": "file:packages/app/src/utils/host-routes.ts",
       "type": "source",
       "path": "packages/app/src/utils/host-routes.ts",
-      "lines": 492,
+      "lines": 552,
       "imports": ["buffer"]
+    },
+    {
+      "id": "file:packages/app/src/utils/host-runtime-bootstrap.test.ts",
+      "type": "test",
+      "path": "packages/app/src/utils/host-runtime-bootstrap.test.ts",
+      "lines": 301,
+      "imports": ["./host-runtime-bootstrap", "vitest"]
+    },
+    {
+      "id": "file:packages/app/src/utils/host-runtime-bootstrap.ts",
+      "type": "source",
+      "path": "packages/app/src/utils/host-runtime-bootstrap.ts",
+      "lines": 130,
+      "imports": [
+        "@/runtime/daemon-start-service",
+        "@/stores/navigation-active-workspace-store",
+        "@/utils/host-routes",
+        "expo-router"
+      ]
     },
     {
       "id": "file:packages/app/src/utils/image-attachments-from-files.test.ts",
@@ -10570,7 +11048,7 @@
       "id": "file:packages/app/src/utils/left-sidebar-drafts.ts",
       "type": "source",
       "path": "packages/app/src/utils/left-sidebar-drafts.ts",
-      "lines": 52,
+      "lines": 48,
       "imports": ["@/stores/workspace-layout-store", "@/utils/host-routes", "expo-router"]
     },
     {
@@ -11010,15 +11488,40 @@
       "id": "file:packages/app/src/utils/sidebar-session-groups.test.ts",
       "type": "test",
       "path": "packages/app/src/utils/sidebar-session-groups.test.ts",
-      "lines": 125,
-      "imports": ["@/hooks/use-aggregated-agents", "@/utils/sidebar-session-groups", "vitest"]
+      "lines": 154,
+      "imports": [
+        "@/hooks/use-aggregated-agents",
+        "@/utils/sidebar-session-groups",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
     },
     {
       "id": "file:packages/app/src/utils/sidebar-session-groups.ts",
       "type": "source",
       "path": "packages/app/src/utils/sidebar-session-groups.ts",
-      "lines": 139,
+      "lines": 172,
       "imports": ["@/hooks/use-aggregated-agents"]
+    },
+    {
+      "id": "file:packages/app/src/utils/sidebar-session-source.test.ts",
+      "type": "test",
+      "path": "packages/app/src/utils/sidebar-session-source.test.ts",
+      "lines": 161,
+      "imports": [
+        "./sidebar-session-source",
+        "@/hooks/use-aggregated-agents",
+        "@/stores/session-store",
+        "@chisacode/protocol/messages",
+        "vitest"
+      ]
+    },
+    {
+      "id": "file:packages/app/src/utils/sidebar-session-source.ts",
+      "type": "source",
+      "path": "packages/app/src/utils/sidebar-session-source.ts",
+      "lines": 94,
+      "imports": ["@/hooks/use-aggregated-agents", "@/stores/session-store"]
     },
     {
       "id": "file:packages/app/src/utils/sidebar-shortcuts.test.ts",
@@ -11401,7 +11904,7 @@
       "id": "file:packages/app/src/voice/audio-engine.native.ts",
       "type": "source",
       "path": "packages/app/src/voice/audio-engine.native.ts",
-      "lines": 307,
+      "lines": 429,
       "imports": ["@/voice/audio-engine-types", "@chisacode/expo-two-way-audio"]
     },
     {
@@ -11449,14 +11952,14 @@
       "id": "file:packages/app/src/workspace-tabs/agent-visibility.test.ts",
       "type": "test",
       "path": "packages/app/src/workspace-tabs/agent-visibility.test.ts",
-      "lines": 369,
+      "lines": 371,
       "imports": ["@/stores/session-store", "@/workspace-tabs/agent-visibility", "vitest"]
     },
     {
       "id": "file:packages/app/src/workspace-tabs/agent-visibility.ts",
       "type": "source",
       "path": "packages/app/src/workspace-tabs/agent-visibility.ts",
-      "lines": 114,
+      "lines": 116,
       "imports": [
         "@/stores/session-store",
         "@/stores/workspace-layout-actions",
@@ -11524,6 +12027,13 @@
       "imports": []
     },
     {
+      "id": "file:packages/app/test-stubs/react-native-svg-web.ts",
+      "type": "support",
+      "path": "packages/app/test-stubs/react-native-svg-web.ts",
+      "lines": 35,
+      "imports": ["react"]
+    },
+    {
       "id": "file:packages/app/test-stubs/xterm-addon-ligatures.ts",
       "type": "support",
       "path": "packages/app/test-stubs/xterm-addon-ligatures.ts",
@@ -11541,7 +12051,7 @@
       "id": "file:packages/app/vitest.config.ts",
       "type": "config",
       "path": "packages/app/vitest.config.ts",
-      "lines": 110,
+      "lines": 114,
       "imports": ["@vitest/browser-playwright", "fs", "path", "vitest/config"]
     },
     {
@@ -11576,6 +12086,30 @@
       "target": "file:packages/app/e2e/helpers/seed-client.ts",
       "type": "imports",
       "specifier": "./helpers/seed-client"
+    },
+    {
+      "source": "file:packages/app/e2e/agent-idle-status.spec.ts",
+      "target": "file:packages/app/e2e/fixtures.ts",
+      "type": "imports",
+      "specifier": "./fixtures"
+    },
+    {
+      "source": "file:packages/app/e2e/agent-idle-status.spec.ts",
+      "target": "file:packages/app/e2e/helpers/agent-stream.ts",
+      "type": "imports",
+      "specifier": "./helpers/agent-stream"
+    },
+    {
+      "source": "file:packages/app/e2e/agent-idle-status.spec.ts",
+      "target": "file:packages/app/e2e/helpers/composer.ts",
+      "type": "imports",
+      "specifier": "./helpers/composer"
+    },
+    {
+      "source": "file:packages/app/e2e/agent-idle-status.spec.ts",
+      "target": "file:packages/app/e2e/helpers/mock-agent.ts",
+      "type": "imports",
+      "specifier": "./helpers/mock-agent"
     },
     {
       "source": "file:packages/app/e2e/agent-stream-ui.spec.ts",
@@ -13222,6 +13756,18 @@
       "specifier": "@/types/stream"
     },
     {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/provider-manifest"
+    },
+    {
       "source": "file:packages/app/src/agent-stream/model.ts",
       "target": "file:packages/app/src/agent-stream/strategy.ts",
       "type": "imports",
@@ -13268,6 +13814,18 @@
       "target": "file:packages/app/src/types/stream.ts",
       "type": "imports",
       "specifier": "@/types/stream"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/running-turn-footer.tsx",
+      "target": "file:packages/app/src/components/synced-loader.tsx",
+      "type": "imports",
+      "specifier": "@/components/synced-loader"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/running-turn-footer.tsx",
+      "target": "file:packages/app/src/utils/time.ts",
+      "type": "imports",
+      "specifier": "@/utils/time"
     },
     {
       "source": "file:packages/app/src/agent-stream/spacing.test.ts",
@@ -13390,10 +13948,34 @@
       "specifier": "@/types/stream"
     },
     {
+      "source": "file:packages/app/src/agent-stream/turn-footer-layout.ts",
+      "target": "file:packages/app/src/constants/layout.ts",
+      "type": "imports",
+      "specifier": "@/constants/layout"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/turn-footer.test.tsx",
+      "target": "file:packages/app/src/agent-stream/running-turn-footer.tsx",
+      "type": "imports",
+      "specifier": "./running-turn-footer"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/turn-footer.test.tsx",
+      "target": "file:packages/app/src/agent-stream/turn-footer-layout.ts",
+      "type": "imports",
+      "specifier": "./turn-footer-layout"
+    },
+    {
       "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
       "target": "file:packages/app/src/agent-stream/layout.ts",
       "type": "imports",
       "specifier": "./layout"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
+      "target": "file:packages/app/src/agent-stream/running-turn-footer.tsx",
+      "type": "imports",
+      "specifier": "./running-turn-footer"
     },
     {
       "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
@@ -13403,27 +13985,15 @@
     },
     {
       "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
+      "target": "file:packages/app/src/agent-stream/turn-footer-layout.ts",
+      "type": "imports",
+      "specifier": "./turn-footer-layout"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
       "target": "file:packages/app/src/components/message.tsx",
       "type": "imports",
       "specifier": "@/components/message"
-    },
-    {
-      "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
-      "target": "file:packages/app/src/components/synced-loader.tsx",
-      "type": "imports",
-      "specifier": "@/components/synced-loader"
-    },
-    {
-      "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
-      "target": "file:packages/app/src/constants/layout.ts",
-      "type": "imports",
-      "specifier": "@/constants/layout"
-    },
-    {
-      "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
-      "target": "file:packages/app/src/styles/theme.ts",
-      "type": "imports",
-      "specifier": "@/styles/theme"
     },
     {
       "source": "file:packages/app/src/agent-stream/turn-footer.tsx",
@@ -13499,6 +14069,12 @@
     },
     {
       "source": "file:packages/app/src/agent-stream/view.tsx",
+      "target": "file:packages/app/src/components/thought-message.tsx",
+      "type": "imports",
+      "specifier": "@/components/thought-message"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/view.tsx",
       "target": "file:packages/app/src/components/toast-host.tsx",
       "type": "imports",
       "specifier": "@/components/toast-host"
@@ -13544,6 +14120,12 @@
       "target": "file:packages/app/src/hooks/use-load-older-agent-history.ts",
       "type": "imports",
       "specifier": "@/hooks/use-load-older-agent-history"
+    },
+    {
+      "source": "file:packages/app/src/agent-stream/view.tsx",
+      "target": "file:packages/app/src/hooks/use-settings/index.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-settings"
     },
     {
       "source": "file:packages/app/src/agent-stream/view.tsx",
@@ -13643,12 +14225,6 @@
     },
     {
       "source": "file:packages/app/src/app/_layout.tsx",
-      "target": "file:packages/app/src/app/host-runtime-bootstrap.ts",
-      "type": "imports",
-      "specifier": "@/app/host-runtime-bootstrap"
-    },
-    {
-      "source": "file:packages/app/src/app/_layout.tsx",
       "target": "file:packages/app/src/components/command-center.tsx",
       "type": "imports",
       "specifier": "@/components/command-center"
@@ -13658,6 +14234,12 @@
       "target": "file:packages/app/src/components/download-toast.tsx",
       "type": "imports",
       "specifier": "@/components/download-toast"
+    },
+    {
+      "source": "file:packages/app/src/app/_layout.tsx",
+      "target": "file:packages/app/src/components/error-boundary.tsx",
+      "type": "imports",
+      "specifier": "@/components/error-boundary"
     },
     {
       "source": "file:packages/app/src/app/_layout.tsx",
@@ -13955,6 +14537,12 @@
     },
     {
       "source": "file:packages/app/src/app/_layout.tsx",
+      "target": "file:packages/app/src/utils/host-runtime-bootstrap.ts",
+      "type": "imports",
+      "specifier": "@/utils/host-runtime-bootstrap"
+    },
+    {
+      "source": "file:packages/app/src/app/_layout.tsx",
       "target": "file:packages/app/src/utils/navigate-to-agent/index.ts",
       "type": "imports",
       "specifier": "@/utils/navigate-to-agent"
@@ -14014,12 +14602,6 @@
       "specifier": "@/utils/workspace-execution"
     },
     {
-      "source": "file:packages/app/src/app/h/[serverId]/agent/[agentId].tsx",
-      "target": "file:packages/app/src/utils/workspace-navigation.ts",
-      "type": "imports",
-      "specifier": "@/utils/workspace-navigation"
-    },
-    {
       "source": "file:packages/app/src/app/h/[serverId]/index.tsx",
       "target": "file:packages/app/src/utils/host-routes.ts",
       "type": "imports",
@@ -14027,9 +14609,27 @@
     },
     {
       "source": "file:packages/app/src/app/h/[serverId]/new.tsx",
+      "target": "file:packages/app/src/screens/new-workspace-default-directory.ts",
+      "type": "imports",
+      "specifier": "@/screens/new-workspace-default-directory"
+    },
+    {
+      "source": "file:packages/app/src/app/h/[serverId]/new.tsx",
       "target": "file:packages/app/src/screens/new-workspace-screen.tsx",
       "type": "imports",
       "specifier": "@/screens/new-workspace-screen"
+    },
+    {
+      "source": "file:packages/app/src/app/h/[serverId]/new.tsx",
+      "target": "file:packages/app/src/stores/navigation-active-workspace-store/index.ts",
+      "type": "imports",
+      "specifier": "@/stores/navigation-active-workspace-store"
+    },
+    {
+      "source": "file:packages/app/src/app/h/[serverId]/new.tsx",
+      "target": "file:packages/app/src/stores/session-store-hooks/index.ts",
+      "type": "imports",
+      "specifier": "@/stores/session-store-hooks"
     },
     {
       "source": "file:packages/app/src/app/h/[serverId]/open-project.tsx",
@@ -14116,40 +14716,10 @@
       "specifier": "@/utils/workspace-navigation"
     },
     {
-      "source": "file:packages/app/src/app/host-runtime-bootstrap.test.ts",
-      "target": "file:packages/app/src/app/host-runtime-bootstrap.ts",
-      "type": "imports",
-      "specifier": "./host-runtime-bootstrap"
-    },
-    {
-      "source": "file:packages/app/src/app/host-runtime-bootstrap.ts",
-      "target": "file:packages/app/src/runtime/daemon-start-service.ts",
-      "type": "imports",
-      "specifier": "@/runtime/daemon-start-service"
-    },
-    {
-      "source": "file:packages/app/src/app/host-runtime-bootstrap.ts",
-      "target": "file:packages/app/src/stores/navigation-active-workspace-store/index.ts",
-      "type": "imports",
-      "specifier": "@/stores/navigation-active-workspace-store"
-    },
-    {
-      "source": "file:packages/app/src/app/host-runtime-bootstrap.ts",
-      "target": "file:packages/app/src/utils/host-routes.ts",
-      "type": "imports",
-      "specifier": "@/utils/host-routes"
-    },
-    {
       "source": "file:packages/app/src/app/index.tsx",
       "target": "file:packages/app/src/app/_layout.tsx",
       "type": "imports",
       "specifier": "@/app/_layout"
-    },
-    {
-      "source": "file:packages/app/src/app/index.tsx",
-      "target": "file:packages/app/src/app/host-runtime-bootstrap.ts",
-      "type": "imports",
-      "specifier": "@/app/host-runtime-bootstrap"
     },
     {
       "source": "file:packages/app/src/app/index.tsx",
@@ -14174,6 +14744,12 @@
       "target": "file:packages/app/src/utils/host-routes.ts",
       "type": "imports",
       "specifier": "@/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/src/app/index.tsx",
+      "target": "file:packages/app/src/utils/host-runtime-bootstrap.ts",
+      "type": "imports",
+      "specifier": "@/utils/host-runtime-bootstrap"
     },
     {
       "source": "file:packages/app/src/app/pair-scan.tsx",
@@ -14219,6 +14795,12 @@
     },
     {
       "source": "file:packages/app/src/app/settings/[section].tsx",
+      "target": "file:packages/app/src/components/host-route-bootstrap-boundary.tsx",
+      "type": "imports",
+      "specifier": "@/components/host-route-bootstrap-boundary"
+    },
+    {
+      "source": "file:packages/app/src/app/settings/[section].tsx",
       "target": "file:packages/app/src/screens/settings-screen.tsx",
       "type": "imports",
       "specifier": "@/screens/settings-screen"
@@ -14243,6 +14825,12 @@
     },
     {
       "source": "file:packages/app/src/app/settings/index.tsx",
+      "target": "file:packages/app/src/components/host-route-bootstrap-boundary.tsx",
+      "type": "imports",
+      "specifier": "@/components/host-route-bootstrap-boundary"
+    },
+    {
+      "source": "file:packages/app/src/app/settings/index.tsx",
       "target": "file:packages/app/src/constants/layout.ts",
       "type": "imports",
       "specifier": "@/constants/layout"
@@ -14261,9 +14849,21 @@
     },
     {
       "source": "file:packages/app/src/app/settings/projects/[projectKey].tsx",
+      "target": "file:packages/app/src/components/host-route-bootstrap-boundary.tsx",
+      "type": "imports",
+      "specifier": "@/components/host-route-bootstrap-boundary"
+    },
+    {
+      "source": "file:packages/app/src/app/settings/projects/[projectKey].tsx",
       "target": "file:packages/app/src/screens/settings-screen.tsx",
       "type": "imports",
       "specifier": "@/screens/settings-screen"
+    },
+    {
+      "source": "file:packages/app/src/app/settings/projects/index.tsx",
+      "target": "file:packages/app/src/components/host-route-bootstrap-boundary.tsx",
+      "type": "imports",
+      "specifier": "@/components/host-route-bootstrap-boundary"
     },
     {
       "source": "file:packages/app/src/app/settings/projects/index.tsx",
@@ -14762,6 +15362,18 @@
       "target": "file:packages/app/src/constants/platform.ts",
       "type": "imports",
       "specifier": "@/constants/platform"
+    },
+    {
+      "source": "file:packages/app/src/components/add-host-modal.test.tsx",
+      "target": "file:packages/app/src/components/add-host-modal.tsx",
+      "type": "imports",
+      "specifier": "./add-host-modal"
+    },
+    {
+      "source": "file:packages/app/src/components/add-host-modal.test.tsx",
+      "target": "file:packages/app/src/types/host-connection.ts",
+      "type": "imports",
+      "specifier": "@/types/host-connection"
     },
     {
       "source": "file:packages/app/src/components/add-host-modal.tsx",
@@ -15340,6 +15952,12 @@
       "specifier": "./use-web-scrollbar"
     },
     {
+      "source": "file:packages/app/src/components/error-boundary.tsx",
+      "target": "file:packages/app/src/i18n/index.ts",
+      "type": "imports",
+      "specifier": "@/i18n"
+    },
+    {
       "source": "file:packages/app/src/components/explorer-sidebar.tsx",
       "target": "file:packages/app/src/components/file-explorer-pane.tsx",
       "type": "imports",
@@ -15646,6 +16264,36 @@
       "specifier": "@chisacode/highlight"
     },
     {
+      "source": "file:packages/app/src/components/generative-html-preview-frame.tsx",
+      "target": "file:packages/app/src/components/generative-html-preview-frame.web.tsx",
+      "type": "imports",
+      "specifier": "./generative-html-preview-frame.web"
+    },
+    {
+      "source": "file:packages/app/src/components/generative-html-preview.tsx",
+      "target": "file:packages/app/src/components/generative-html-preview-frame.tsx",
+      "type": "imports",
+      "specifier": "./generative-html-preview-frame"
+    },
+    {
+      "source": "file:packages/app/src/components/generative-html-preview.tsx",
+      "target": "file:packages/app/src/components/highlighted-code-block.tsx",
+      "type": "imports",
+      "specifier": "@/components/highlighted-code-block"
+    },
+    {
+      "source": "file:packages/app/src/components/generative-html-preview.tsx",
+      "target": "file:packages/app/src/constants/theme.ts",
+      "type": "imports",
+      "specifier": "@/constants/theme"
+    },
+    {
+      "source": "file:packages/app/src/components/generative-html-preview.tsx",
+      "target": "file:packages/app/src/utils/generative-ui-html.ts",
+      "type": "imports",
+      "specifier": "@/utils/generative-ui-html"
+    },
+    {
       "source": "file:packages/app/src/components/headers/back-header.tsx",
       "target": "file:packages/app/src/components/headers/screen-header.tsx",
       "type": "imports",
@@ -15947,6 +16595,12 @@
     },
     {
       "source": "file:packages/app/src/components/import-session-sheet.tsx",
+      "target": "file:packages/app/src/constants/layout.ts",
+      "type": "imports",
+      "specifier": "@/constants/layout"
+    },
+    {
+      "source": "file:packages/app/src/components/import-session-sheet.tsx",
       "target": "file:packages/app/src/hooks/use-providers-snapshot.ts",
       "type": "imports",
       "specifier": "@/hooks/use-providers-snapshot"
@@ -16067,6 +16721,12 @@
     },
     {
       "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/hooks/use-archive-agent.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-archive-agent"
+    },
+    {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
       "target": "file:packages/app/src/hooks/use-open-project-picker.ts",
       "type": "imports",
       "specifier": "@/hooks/use-open-project-picker"
@@ -16079,6 +16739,12 @@
     },
     {
       "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/stores/draft-keys.ts",
+      "type": "imports",
+      "specifier": "@/stores/draft-keys"
+    },
+    {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
       "target": "file:packages/app/src/stores/keyboard-shortcuts-store.ts",
       "type": "imports",
       "specifier": "@/stores/keyboard-shortcuts-store"
@@ -16088,6 +16754,12 @@
       "target": "file:packages/app/src/stores/panel-store/index.ts",
       "type": "imports",
       "specifier": "@/stores/panel-store"
+    },
+    {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/stores/session-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/session-store"
     },
     {
       "source": "file:packages/app/src/components/left-sidebar.tsx",
@@ -16138,6 +16810,12 @@
       "specifier": "@/utils/sidebar-animation-state"
     },
     {
+      "source": "file:packages/app/src/components/left-sidebar.tsx",
+      "target": "file:packages/app/src/utils/sidebar-session-source.ts",
+      "type": "imports",
+      "specifier": "@/utils/sidebar-session-source"
+    },
+    {
       "source": "file:packages/app/src/components/markdown-text.d.ts",
       "target": "file:packages/app/src/components/markdown-text.ios.tsx",
       "type": "imports",
@@ -16150,10 +16828,40 @@
       "specifier": "./message-compaction-label"
     },
     {
+      "source": "file:packages/app/src/components/message.test.tsx",
+      "target": "file:packages/app/src/components/message-layout.ts",
+      "type": "imports",
+      "specifier": "./message-layout"
+    },
+    {
+      "source": "file:packages/app/src/components/message.test.tsx",
+      "target": "file:packages/app/src/components/message-markdown.ts",
+      "type": "imports",
+      "specifier": "./message-markdown"
+    },
+    {
+      "source": "file:packages/app/src/components/message.test.tsx",
+      "target": "file:packages/app/src/components/thought-message.tsx",
+      "type": "imports",
+      "specifier": "./thought-message"
+    },
+    {
       "source": "file:packages/app/src/components/message.tsx",
       "target": "file:packages/app/src/components/message-compaction-label.ts",
       "type": "imports",
       "specifier": "./message-compaction-label"
+    },
+    {
+      "source": "file:packages/app/src/components/message.tsx",
+      "target": "file:packages/app/src/components/message-layout.ts",
+      "type": "imports",
+      "specifier": "./message-layout"
+    },
+    {
+      "source": "file:packages/app/src/components/message.tsx",
+      "target": "file:packages/app/src/components/message-markdown.ts",
+      "type": "imports",
+      "specifier": "./message-markdown"
     },
     {
       "source": "file:packages/app/src/components/message.tsx",
@@ -16196,6 +16904,12 @@
       "target": "file:packages/app/src/attachments/utils.ts",
       "type": "imports",
       "specifier": "@/attachments/utils"
+    },
+    {
+      "source": "file:packages/app/src/components/message.tsx",
+      "target": "file:packages/app/src/components/generative-html-preview.tsx",
+      "type": "imports",
+      "specifier": "@/components/generative-html-preview"
     },
     {
       "source": "file:packages/app/src/components/message.tsx",
@@ -16286,6 +17000,12 @@
       "target": "file:packages/app/src/utils/assistant-message-height-estimate.ts",
       "type": "imports",
       "specifier": "@/utils/assistant-message-height-estimate"
+    },
+    {
+      "source": "file:packages/app/src/components/message.tsx",
+      "target": "file:packages/app/src/utils/generative-ui-html.ts",
+      "type": "imports",
+      "specifier": "@/utils/generative-ui-html"
     },
     {
       "source": "file:packages/app/src/components/message.tsx",
@@ -16415,9 +17135,21 @@
     },
     {
       "source": "file:packages/app/src/components/project-picker-modal.tsx",
+      "target": "file:packages/app/src/desktop/pick-directory.ts",
+      "type": "imports",
+      "specifier": "@/desktop/pick-directory"
+    },
+    {
+      "source": "file:packages/app/src/components/project-picker-modal.tsx",
       "target": "file:packages/app/src/hooks/use-active-server-id.ts",
       "type": "imports",
       "specifier": "@/hooks/use-active-server-id"
+    },
+    {
+      "source": "file:packages/app/src/components/project-picker-modal.tsx",
+      "target": "file:packages/app/src/hooks/use-is-local-daemon.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-is-local-daemon"
     },
     {
       "source": "file:packages/app/src/components/project-picker-modal.tsx",
@@ -16696,6 +17428,18 @@
       "specifier": "@/constants/platform"
     },
     {
+      "source": "file:packages/app/src/components/resize-handle.tsx",
+      "target": "file:packages/app/src/components/resize-handle.types.ts",
+      "type": "imports",
+      "specifier": "./resize-handle.types"
+    },
+    {
+      "source": "file:packages/app/src/components/resize-handle.web.tsx",
+      "target": "file:packages/app/src/components/resize-handle.types.ts",
+      "type": "imports",
+      "specifier": "./resize-handle.types"
+    },
+    {
       "source": "file:packages/app/src/components/rewind/composer-restore.test.ts",
       "target": "file:packages/app/src/components/rewind/composer-restore.tsx",
       "type": "imports",
@@ -16907,15 +17651,21 @@
     },
     {
       "source": "file:packages/app/src/components/sidebar-session-list.tsx",
+      "target": "file:packages/app/src/stores/draft-keys.ts",
+      "type": "imports",
+      "specifier": "@/stores/draft-keys"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-session-list.tsx",
       "target": "file:packages/app/src/stores/session-store.ts",
       "type": "imports",
       "specifier": "@/stores/session-store"
     },
     {
       "source": "file:packages/app/src/components/sidebar-session-list.tsx",
-      "target": "file:packages/app/src/stores/session-store-hooks/index.ts",
+      "target": "file:packages/app/src/stores/workspace-layout-store.ts",
       "type": "imports",
-      "specifier": "@/stores/session-store-hooks"
+      "specifier": "@/stores/workspace-layout-store"
     },
     {
       "source": "file:packages/app/src/components/sidebar-session-list.tsx",
@@ -17168,6 +17918,12 @@
       "target": "file:packages/app/src/runtime/host-runtime.ts",
       "type": "imports",
       "specifier": "@/runtime/host-runtime"
+    },
+    {
+      "source": "file:packages/app/src/components/sidebar-workspace-list.tsx",
+      "target": "file:packages/app/src/stores/draft-keys.ts",
+      "type": "imports",
+      "specifier": "@/stores/draft-keys"
     },
     {
       "source": "file:packages/app/src/components/sidebar-workspace-list.tsx",
@@ -17678,6 +18434,24 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/terminal-key-input"
+    },
+    {
+      "source": "file:packages/app/src/components/thought-message.tsx",
+      "target": "file:packages/app/src/components/synced-loader.tsx",
+      "type": "imports",
+      "specifier": "@/components/synced-loader"
+    },
+    {
+      "source": "file:packages/app/src/components/thought-message.tsx",
+      "target": "file:packages/app/src/constants/theme.ts",
+      "type": "imports",
+      "specifier": "@/constants/theme"
+    },
+    {
+      "source": "file:packages/app/src/components/thought-message.tsx",
+      "target": "file:packages/app/src/types/stream.ts",
+      "type": "imports",
+      "specifier": "@/types/stream"
     },
     {
       "source": "file:packages/app/src/components/toast-host.tsx",
@@ -18569,6 +19343,12 @@
     },
     {
       "source": "file:packages/app/src/composer/agent-controls/index.tsx",
+      "target": "file:packages/app/src/composer/agent-controls/model-loading.ts",
+      "type": "imports",
+      "specifier": "@/composer/agent-controls/model-loading"
+    },
+    {
+      "source": "file:packages/app/src/composer/agent-controls/index.tsx",
       "target": "file:packages/app/src/composer/agent-controls/utils.ts",
       "type": "imports",
       "specifier": "@/composer/agent-controls/utils"
@@ -18602,6 +19382,12 @@
       "target": "file:packages/app/src/provider-selection/provider-selection.ts",
       "type": "imports",
       "specifier": "@/provider-selection/provider-selection"
+    },
+    {
+      "source": "file:packages/app/src/composer/agent-controls/index.tsx",
+      "target": "file:packages/app/src/provider-selection/provider-snapshot-loading.ts",
+      "type": "imports",
+      "specifier": "@/provider-selection/provider-snapshot-loading"
     },
     {
       "source": "file:packages/app/src/composer/agent-controls/index.tsx",
@@ -18722,6 +19508,18 @@
       "target": "file:packages/app/src/composer/agent-controls/model-loading.ts",
       "type": "imports",
       "specifier": "./model-loading"
+    },
+    {
+      "source": "file:packages/app/src/composer/agent-controls/model-loading.ts",
+      "target": "file:packages/app/src/provider-selection/provider-snapshot-loading.ts",
+      "type": "imports",
+      "specifier": "@/provider-selection/provider-snapshot-loading"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
     },
     {
       "source": "file:packages/app/src/composer/agent-controls/utils.test.ts",
@@ -19880,6 +20678,12 @@
       "target": "file:packages/app/src/stores/session-store.ts",
       "type": "imports",
       "specifier": "@/stores/session-store"
+    },
+    {
+      "source": "file:packages/app/src/contexts/session-context.tsx",
+      "target": "file:packages/app/src/stores/workspace-layout-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/workspace-layout-store"
     },
     {
       "source": "file:packages/app/src/contexts/session-context.tsx",
@@ -21730,6 +22534,18 @@
       "specifier": "@/utils/path"
     },
     {
+      "source": "file:packages/app/src/hooks/local-daemon-hosts.ts",
+      "target": "file:packages/app/src/types/host-connection.ts",
+      "type": "imports",
+      "specifier": "@/types/host-connection"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/daemon-endpoints"
+    },
+    {
       "source": "file:packages/app/src/hooks/open-project.ts",
       "target": "file:packages/app/src/stores/session-store.ts",
       "type": "imports",
@@ -21842,6 +22658,12 @@
       "target": "file:packages/app/src/keyboard/keyboard-action-dispatcher.ts",
       "type": "imports",
       "specifier": "@/keyboard/keyboard-action-dispatcher"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-active-worktree-new-action.ts",
+      "target": "file:packages/app/src/stores/draft-keys.ts",
+      "type": "imports",
+      "specifier": "@/stores/draft-keys"
     },
     {
       "source": "file:packages/app/src/hooks/use-active-worktree-new-action.ts",
@@ -21995,6 +22817,18 @@
     },
     {
       "source": "file:packages/app/src/hooks/use-agent-form-state.ts",
+      "target": "file:packages/app/src/provider-selection/provider-snapshot-loading.ts",
+      "type": "imports",
+      "specifier": "@/provider-selection/provider-snapshot-loading"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-agent-form-state.ts",
+      "target": "file:packages/app/src/provider-selection/provider-snapshot-models.ts",
+      "type": "imports",
+      "specifier": "@/provider-selection/provider-snapshot-models"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-agent-form-state.ts",
       "target": "file:packages/app/src/provider-selection/resolve-agent-form.ts",
       "type": "imports",
       "specifier": "@/provider-selection/resolve-agent-form"
@@ -22034,6 +22868,12 @@
       "target": "module:client",
       "type": "depends_on",
       "specifier": "@chisacode/client/internal/daemon-client"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
     },
     {
       "source": "file:packages/app/src/hooks/use-agent-history.ts",
@@ -22144,6 +22984,12 @@
       "specifier": "@/stores/session-store"
     },
     {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
       "source": "file:packages/app/src/hooks/use-aggregated-agents.ts",
       "target": "file:packages/app/src/runtime/host-runtime.ts",
       "type": "imports",
@@ -22222,6 +23068,12 @@
       "specifier": "@/stores/session-store"
     },
     {
+      "source": "file:packages/app/src/hooks/use-archive-agent.test.ts",
+      "target": "file:packages/app/src/stores/workspace-layout-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/workspace-layout-store"
+    },
+    {
       "source": "module:app",
       "target": "module:client",
       "type": "depends_on",
@@ -22235,9 +23087,27 @@
     },
     {
       "source": "file:packages/app/src/hooks/use-archive-agent.ts",
+      "target": "file:packages/app/src/runtime/host-runtime.ts",
+      "type": "imports",
+      "specifier": "@/runtime/host-runtime"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-archive-agent.ts",
       "target": "file:packages/app/src/stores/session-store.ts",
       "type": "imports",
       "specifier": "@/stores/session-store"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-archive-agent.ts",
+      "target": "file:packages/app/src/stores/workspace-layout-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/workspace-layout-store"
+    },
+    {
+      "source": "module:app",
+      "target": "module:client",
+      "type": "depends_on",
+      "specifier": "@chisacode/client/internal/daemon-client"
     },
     {
       "source": "file:packages/app/src/hooks/use-audio-recorder.d.ts",
@@ -22798,10 +23668,34 @@
       "specifier": "@/utils/server-info-capabilities"
     },
     {
+      "source": "file:packages/app/src/hooks/use-is-local-daemon.test.ts",
+      "target": "file:packages/app/src/hooks/local-daemon-hosts.ts",
+      "type": "imports",
+      "specifier": "@/hooks/local-daemon-hosts"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-is-local-daemon.test.ts",
+      "target": "file:packages/app/src/types/host-connection.ts",
+      "type": "imports",
+      "specifier": "@/types/host-connection"
+    },
+    {
       "source": "file:packages/app/src/hooks/use-is-local-daemon.ts",
       "target": "file:packages/app/src/desktop/daemon/desktop-daemon.ts",
       "type": "imports",
       "specifier": "@/desktop/daemon/desktop-daemon"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-is-local-daemon.ts",
+      "target": "file:packages/app/src/hooks/local-daemon-hosts.ts",
+      "type": "imports",
+      "specifier": "@/hooks/local-daemon-hosts"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-is-local-daemon.ts",
+      "target": "file:packages/app/src/runtime/host-runtime.ts",
+      "type": "imports",
+      "specifier": "@/runtime/host-runtime"
     },
     {
       "source": "file:packages/app/src/hooks/use-keyboard-action-handler.ts",
@@ -22948,22 +23842,16 @@
       "specifier": "@/timeline/timeline-sync-plan"
     },
     {
-      "source": "file:packages/app/src/hooks/use-open-project-picker.ts",
-      "target": "file:packages/app/src/hooks/use-is-local-daemon.ts",
+      "source": "file:packages/app/src/hooks/use-open-project-picker.test.tsx",
+      "target": "file:packages/app/src/hooks/use-open-project-picker.ts",
       "type": "imports",
-      "specifier": "./use-is-local-daemon"
+      "specifier": "./use-open-project-picker"
     },
     {
-      "source": "file:packages/app/src/hooks/use-open-project-picker.ts",
-      "target": "file:packages/app/src/hooks/use-open-project.ts",
+      "source": "file:packages/app/src/hooks/use-open-project-picker.test.tsx",
+      "target": "file:packages/app/src/stores/keyboard-shortcuts-store.ts",
       "type": "imports",
-      "specifier": "./use-open-project"
-    },
-    {
-      "source": "file:packages/app/src/hooks/use-open-project-picker.ts",
-      "target": "file:packages/app/src/desktop/pick-directory.ts",
-      "type": "imports",
-      "specifier": "@/desktop/pick-directory"
+      "specifier": "@/stores/keyboard-shortcuts-store"
     },
     {
       "source": "file:packages/app/src/hooks/use-open-project-picker.ts",
@@ -23219,6 +24107,12 @@
     },
     {
       "source": "file:packages/app/src/hooks/use-settings/index.ts",
+      "target": "file:packages/app/src/constants/platform.ts",
+      "type": "imports",
+      "specifier": "@/constants/platform"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-settings/index.ts",
       "target": "file:packages/app/src/desktop/host.ts",
       "type": "imports",
       "specifier": "@/desktop/host"
@@ -23234,6 +24128,12 @@
       "target": "file:packages/app/src/query/query-client.ts",
       "type": "imports",
       "specifier": "@/query/query-client"
+    },
+    {
+      "source": "file:packages/app/src/hooks/use-settings/index.ts",
+      "target": "file:packages/app/src/styles/theme.ts",
+      "type": "imports",
+      "specifier": "@/styles/theme"
     },
     {
       "source": "file:packages/app/src/hooks/use-settings/storage.test.ts",
@@ -24040,6 +24940,42 @@
       "specifier": "@chisacode/protocol/provider-manifest"
     },
     {
+      "source": "file:packages/app/src/provider-selection/provider-snapshot-loading.test.ts",
+      "target": "file:packages/app/src/provider-selection/provider-snapshot-loading.ts",
+      "type": "imports",
+      "specifier": "./provider-snapshot-loading"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "file:packages/app/src/provider-selection/provider-snapshot-models.test.ts",
+      "target": "file:packages/app/src/provider-selection/provider-snapshot-models.ts",
+      "type": "imports",
+      "specifier": "./provider-snapshot-models"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/agent-types"
+    },
+    {
       "source": "file:packages/app/src/provider-selection/resolve-agent-form.test.ts",
       "target": "file:packages/app/src/provider-selection/resolve-agent-form.ts",
       "type": "imports",
@@ -24412,6 +25348,42 @@
       "specifier": "./agent-ready-screen-bottom-anchor"
     },
     {
+      "source": "file:packages/app/src/screens/new-workspace-default-directory.test.ts",
+      "target": "file:packages/app/src/screens/new-workspace-default-directory.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-default-directory"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-directory-options.test.ts",
+      "target": "file:packages/app/src/screens/new-workspace-directory-options.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-directory-options"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-directory-options.ts",
+      "target": "file:packages/app/src/components/ui/combobox.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/combobox"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-directory-options.ts",
+      "target": "file:packages/app/src/utils/shorten-path.ts",
+      "type": "imports",
+      "specifier": "@/utils/shorten-path"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-directory-options.ts",
+      "target": "file:packages/app/src/utils/working-directory-suggestions.ts",
+      "type": "imports",
+      "specifier": "@/utils/working-directory-suggestions"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-draft-reset.test.ts",
+      "target": "file:packages/app/src/screens/new-workspace-draft-reset.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-draft-reset"
+    },
+    {
       "source": "file:packages/app/src/screens/new-workspace-empty.test.ts",
       "target": "file:packages/app/src/screens/new-workspace-empty.ts",
       "type": "imports",
@@ -24503,6 +25475,18 @@
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/screens/new-workspace-directory-options.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-directory-options"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/screens/new-workspace-draft-reset.ts",
+      "type": "imports",
+      "specifier": "./new-workspace-draft-reset"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
       "target": "file:packages/app/src/screens/new-workspace-empty.ts",
       "type": "imports",
       "specifier": "./new-workspace-empty"
@@ -24548,6 +25532,12 @@
       "target": "file:packages/app/src/components/headers/screen-header.tsx",
       "type": "imports",
       "specifier": "@/components/headers/screen-header"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/components/import-session-sheet.tsx",
+      "type": "imports",
+      "specifier": "@/components/import-session-sheet"
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
@@ -24605,9 +25595,27 @@
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/desktop/pick-directory.ts",
+      "type": "imports",
+      "specifier": "@/desktop/pick-directory"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
       "target": "file:packages/app/src/git/use-github-search-query.ts",
       "type": "imports",
       "specifier": "@/git/use-github-search-query"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/hooks/use-is-local-daemon.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-is-local-daemon"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/hooks/use-open-project.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-open-project"
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
@@ -24641,9 +25649,21 @@
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/stores/panel-store/index.ts",
+      "type": "imports",
+      "specifier": "@/stores/panel-store"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
       "target": "file:packages/app/src/stores/session-store.ts",
       "type": "imports",
       "specifier": "@/stores/session-store"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/stores/session-store-hooks/index.ts",
+      "type": "imports",
+      "specifier": "@/stores/session-store-hooks"
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
@@ -24662,6 +25682,18 @@
       "target": "file:packages/app/src/utils/error-messages.ts",
       "type": "imports",
       "specifier": "@/utils/error-messages"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "@/utils/host-routes"
+    },
+    {
+      "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
+      "target": "file:packages/app/src/utils/shorten-path.ts",
+      "type": "imports",
+      "specifier": "@/utils/shorten-path"
     },
     {
       "source": "file:packages/app/src/screens/new-workspace-screen.tsx",
@@ -24686,6 +25718,18 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/app/src/screens/open-project-screen.test.ts",
+      "target": "file:packages/app/src/screens/open-project-screen-layout.ts",
+      "type": "imports",
+      "specifier": "./open-project-screen-layout"
+    },
+    {
+      "source": "file:packages/app/src/screens/open-project-screen.tsx",
+      "target": "file:packages/app/src/screens/open-project-screen-layout.ts",
+      "type": "imports",
+      "specifier": "./open-project-screen-layout"
     },
     {
       "source": "file:packages/app/src/screens/open-project-screen.tsx",
@@ -25067,9 +26111,21 @@
     },
     {
       "source": "file:packages/app/src/screens/settings-screen.tsx",
+      "target": "file:packages/app/src/components/ui/switch.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/switch"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings-screen.tsx",
       "target": "file:packages/app/src/constants/layout.ts",
       "type": "imports",
       "specifier": "@/constants/layout"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings-screen.tsx",
+      "target": "file:packages/app/src/constants/platform.ts",
+      "type": "imports",
+      "specifier": "@/constants/platform"
     },
     {
       "source": "file:packages/app/src/screens/settings-screen.tsx",
@@ -25157,15 +26213,33 @@
     },
     {
       "source": "file:packages/app/src/screens/settings-screen.tsx",
+      "target": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "type": "imports",
+      "specifier": "@/screens/settings/mcp-servers-section"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings-screen.tsx",
       "target": "file:packages/app/src/screens/settings/settings-section.tsx",
       "type": "imports",
       "specifier": "@/screens/settings/settings-section"
     },
     {
       "source": "file:packages/app/src/screens/settings-screen.tsx",
+      "target": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "type": "imports",
+      "specifier": "@/screens/settings/skills-section"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings-screen.tsx",
       "target": "file:packages/app/src/screens/settings/synthetic-models-section.tsx",
       "type": "imports",
       "specifier": "@/screens/settings/synthetic-models-section"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings-screen.tsx",
+      "target": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "type": "imports",
+      "specifier": "@/screens/settings/usage-statistics-section"
     },
     {
       "source": "file:packages/app/src/screens/settings-screen.tsx",
@@ -25654,6 +26728,66 @@
       "specifier": "@/utils/shortcut-platform"
     },
     {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.test.tsx",
+      "target": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "type": "imports",
+      "specifier": "./mcp-servers-section"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "target": "file:packages/app/src/components/adaptive-modal-sheet.tsx",
+      "type": "imports",
+      "specifier": "@/components/adaptive-modal-sheet"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "target": "file:packages/app/src/components/ui/button.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/button"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "target": "file:packages/app/src/components/ui/loading-spinner.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/loading-spinner"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "target": "file:packages/app/src/components/ui/switch.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/switch"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "target": "file:packages/app/src/runtime/host-runtime.ts",
+      "type": "imports",
+      "specifier": "@/runtime/host-runtime"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "target": "file:packages/app/src/screens/settings/settings-section.tsx",
+      "type": "imports",
+      "specifier": "@/screens/settings/settings-section"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/mcp-servers-section.tsx",
+      "target": "file:packages/app/src/styles/settings.ts",
+      "type": "imports",
+      "specifier": "@/styles/settings"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
       "source": "file:packages/app/src/screens/settings/providers-section.test.tsx",
       "target": "file:packages/app/src/screens/settings/providers-section.tsx",
       "type": "imports",
@@ -25688,6 +26822,12 @@
       "target": "file:packages/app/src/components/ui/switch.tsx",
       "type": "imports",
       "specifier": "@/components/ui/switch"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/providers-section.tsx",
+      "target": "file:packages/app/src/constants/layout.ts",
+      "type": "imports",
+      "specifier": "@/constants/layout"
     },
     {
       "source": "file:packages/app/src/screens/settings/providers-section.tsx",
@@ -25742,6 +26882,66 @@
       "target": "file:packages/app/src/styles/settings.ts",
       "type": "imports",
       "specifier": "@/styles/settings"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.test.tsx",
+      "target": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "type": "imports",
+      "specifier": "./skills-section"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "target": "file:packages/app/src/components/adaptive-modal-sheet.tsx",
+      "type": "imports",
+      "specifier": "@/components/adaptive-modal-sheet"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "target": "file:packages/app/src/components/ui/button.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/button"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "target": "file:packages/app/src/components/ui/loading-spinner.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/loading-spinner"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "target": "file:packages/app/src/components/ui/switch.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/switch"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "target": "file:packages/app/src/runtime/host-runtime.ts",
+      "type": "imports",
+      "specifier": "@/runtime/host-runtime"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "target": "file:packages/app/src/screens/settings/settings-section.tsx",
+      "type": "imports",
+      "specifier": "@/screens/settings/settings-section"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/skills-section.tsx",
+      "target": "file:packages/app/src/styles/settings.ts",
+      "type": "imports",
+      "specifier": "@/styles/settings"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
     },
     {
       "source": "file:packages/app/src/screens/settings/synthetic-models-section.test.tsx",
@@ -25868,6 +27068,78 @@
       "target": "module:protocol",
       "type": "depends_on",
       "specifier": "@chisacode/protocol/provider-config"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-model.test.ts",
+      "target": "file:packages/app/src/screens/settings/usage-statistics-model.ts",
+      "type": "imports",
+      "specifier": "./usage-statistics-model"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/screens/settings/usage-statistics-model.ts",
+      "type": "imports",
+      "specifier": "./usage-statistics-model"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/components/ui/button.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/button"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/components/ui/segmented-control.tsx",
+      "type": "imports",
+      "specifier": "@/components/ui/segmented-control"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/constants/layout.ts",
+      "type": "imports",
+      "specifier": "@/constants/layout"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/constants/platform.ts",
+      "type": "imports",
+      "specifier": "@/constants/platform"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/runtime/host-runtime.ts",
+      "type": "imports",
+      "specifier": "@/runtime/host-runtime"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/screens/settings/settings-section.tsx",
+      "type": "imports",
+      "specifier": "@/screens/settings/settings-section"
+    },
+    {
+      "source": "file:packages/app/src/screens/settings/usage-statistics-section.tsx",
+      "target": "file:packages/app/src/utils/confirm-dialog.ts",
+      "type": "imports",
+      "specifier": "@/utils/confirm-dialog"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
     },
     {
       "source": "file:packages/app/src/screens/startup-splash-screen.tsx",
@@ -28948,6 +30220,12 @@
       "specifier": "./format-shortcut"
     },
     {
+      "source": "file:packages/app/src/utils/generative-ui-html.test.ts",
+      "target": "file:packages/app/src/utils/generative-ui-html.ts",
+      "type": "imports",
+      "specifier": "./generative-ui-html"
+    },
+    {
       "source": "file:packages/app/src/utils/github-refs.test.ts",
       "target": "file:packages/app/src/utils/github-refs.ts",
       "type": "imports",
@@ -28976,6 +30254,30 @@
       "target": "file:packages/app/src/utils/host-routes.ts",
       "type": "imports",
       "specifier": "./host-routes"
+    },
+    {
+      "source": "file:packages/app/src/utils/host-runtime-bootstrap.test.ts",
+      "target": "file:packages/app/src/utils/host-runtime-bootstrap.ts",
+      "type": "imports",
+      "specifier": "./host-runtime-bootstrap"
+    },
+    {
+      "source": "file:packages/app/src/utils/host-runtime-bootstrap.ts",
+      "target": "file:packages/app/src/runtime/daemon-start-service.ts",
+      "type": "imports",
+      "specifier": "@/runtime/daemon-start-service"
+    },
+    {
+      "source": "file:packages/app/src/utils/host-runtime-bootstrap.ts",
+      "target": "file:packages/app/src/stores/navigation-active-workspace-store/index.ts",
+      "type": "imports",
+      "specifier": "@/stores/navigation-active-workspace-store"
+    },
+    {
+      "source": "file:packages/app/src/utils/host-runtime-bootstrap.ts",
+      "target": "file:packages/app/src/utils/host-routes.ts",
+      "type": "imports",
+      "specifier": "@/utils/host-routes"
     },
     {
       "source": "file:packages/app/src/utils/image-attachments-from-files.test.ts",
@@ -29518,10 +30820,52 @@
       "specifier": "@/utils/sidebar-session-groups"
     },
     {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
       "source": "file:packages/app/src/utils/sidebar-session-groups.ts",
       "target": "file:packages/app/src/hooks/use-aggregated-agents.ts",
       "type": "imports",
       "specifier": "@/hooks/use-aggregated-agents"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-session-source.test.ts",
+      "target": "file:packages/app/src/utils/sidebar-session-source.ts",
+      "type": "imports",
+      "specifier": "./sidebar-session-source"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-session-source.test.ts",
+      "target": "file:packages/app/src/hooks/use-aggregated-agents.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-aggregated-agents"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-session-source.test.ts",
+      "target": "file:packages/app/src/stores/session-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/session-store"
+    },
+    {
+      "source": "module:app",
+      "target": "module:protocol",
+      "type": "depends_on",
+      "specifier": "@chisacode/protocol/messages"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-session-source.ts",
+      "target": "file:packages/app/src/hooks/use-aggregated-agents.ts",
+      "type": "imports",
+      "specifier": "@/hooks/use-aggregated-agents"
+    },
+    {
+      "source": "file:packages/app/src/utils/sidebar-session-source.ts",
+      "target": "file:packages/app/src/stores/session-store.ts",
+      "type": "imports",
+      "specifier": "@/stores/session-store"
     },
     {
       "source": "file:packages/app/src/utils/sidebar-shortcuts.test.ts",

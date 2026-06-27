@@ -1,0 +1,93 @@
+{
+  "currentState": "README: 完整(9/10), 154行含logo/简介/provider表格/快速开始/包结构/CLI命令/开发指南, 缺贡献入口和版本说明。CHANGELOG: 已有(8/10), 1521行按Keep a Changelog格式覆盖0.1.85→1.0.1, Added/Improved/Fixed/Security分区规范。CONTRIBUTING: 偏保守(6/10), 32行强调单人维护且核心产品改动不接受, 缺本地setup步骤, 社区心理门槛高。docs/目录: 丰富(9/10), 48+个md文件覆盖架构/产品/开发/测试/发布/模块README×9/交叉关注点×6/重构计划, 体系完整。社区友好度: 可改进(7/10), 有bug-report.yml/feature-request.yml/PR模板, 但CONTRIBUTING排外、无CODE_OF_CONDUCT、无标签系统。AGENTS.md: 优秀(9/10), 71行含来源真相/包映射/命令速查/构建陷阱/测试守则/协议兼容/平台规则/安全决策/风格, 与CLAUDE.md互补。代码注释: 偏低(5/10), ~1800个TS/TSX源文件中注释稀疏, 177个TODO/FIXME/HACK残留, 无统一JSDoc标准。总体评分: 8/10。",
+  "targetScore": 9,
+  "estimatedTotalWeeks": 8,
+  "quickWins": [
+    {
+      "taskId": "DOC-1",
+      "description": "在 README 底部添加贡献入口区块，链接 CONTRIBUTING 和 issue 表单，1 小时内可完成。"
+    },
+    {
+      "taskId": "DOC-2",
+      "description": "为 CONTRIBUTING.md 添加 setup 步骤（npm ci、dev 启动），让新贡献者 10 分钟内跑起本地环境。"
+    },
+    {
+      "taskId": "DOC-3",
+      "description": "在 AGENTS.md 末尾添加 '在此见到的不清楚的文档请 open issue' 一段，形成文档反馈闭环。"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "DOC-1",
+      "title": "README 增加贡献入口区块",
+      "description": "在 README 许可证前增加 ## 贡献 区块：链接 CONTRIBUTING.md、issue 表单、PR 模板路径。降低新贡献者发现门槛。",
+      "effort": "hours",
+      "priority": "high",
+      "dependsOn": [],
+      "successMetric": "README 贡献区块包含 3 条以上的链接入口"
+    },
+    {
+      "id": "DOC-2",
+      "title": "CONTRIBUTING 增加本地开发 setup 步骤",
+      "description": "在 CONTRIBUTING.md 顶部增加 ## Quick Setup：npm ci、npm run dev:win (Windows)、npm run dev (macOS/Linux)、typecheck/lint 验证。让新人在 10 分钟内跑起开发环境。",
+      "effort": "hours",
+      "priority": "high",
+      "dependsOn": [],
+      "successMetric": "新贡献者从 clone 到 dev 成功 ≤10 分钟"
+    },
+    {
+      "id": "DOC-3",
+      "title": "AGENTS.md 增加文档反馈闭环",
+      "description": "在 AGENTS.md 末尾增加 Documentation Feedback 段落：'If any doc reference in this file is missing, out-of-date, or unclear, flag it and suggest a fix.'",
+      "effort": "hours",
+      "priority": "medium",
+      "dependsOn": [],
+      "successMetric": "AGENTS.md 增加了文档反馈指引"
+    },
+    {
+      "id": "DOC-4",
+      "title": "制定 JSDoc 注释标准并覆盖核心模块导出",
+      "description": "创建 docs/jsdoc-standards.md 定义注释规范（公共 API 必须有 @param/@returns，内部函数可选）。首先覆盖 packages/server/src/server/session-handlers/ 下的 handler 接口（当前 session 拆分中）、packages/client 的公开 API、packages/protocol 的 schema 导出。",
+      "effort": "weeks",
+      "priority": "high",
+      "dependsOn": [],
+      "successMetric": "server/client/protocol 包中新增 ≥200 个有意义的 JSDoc 注释；核心 handler 接口覆盖率 ≥80%"
+    },
+    {
+      "id": "DOC-5",
+      "title": "CHANGELOG 增加升级指南章节",
+      "description": "在 CHANGELOG 每个 major/minor 版本增加 ## Upgrade Guide 子章节，列举 breaking changes 及迁移步骤。当前从 0.x 到 1.0.1 的变更已有，但缺少用户侧的升级指引。",
+      "effort": "days",
+      "priority": "medium",
+      "dependsOn": [],
+      "successMetric": "1.0.1 版本和后续版本都有 Upgrade Guide 章节"
+    },
+    {
+      "id": "DOC-6",
+      "title": "CODE_OF_CONDUCT 和社区健康文件补齐",
+      "description": "添加 CODE_OF_CONDUCT.md（引用 Contributor Covenant）、GOVERNANCE.md 说明项目 BDFL 决策模型。提升社区信任度和完成度。",
+      "effort": "days",
+      "priority": "low",
+      "dependsOn": [],
+      "successMetric": "root 下新增 CODE_OF_CONDUCT.md 和 GOVERNANCE.md 两个文件"
+    },
+    {
+      "id": "DOC-7",
+      "title": "创建 docs/TROUBLESHOOTING.md 常见问题排查指南",
+      "description": "从 daemon.log 诊断、provider 配置问题、跨包构建错误、AppImage sandbox 问题等高频问题入手，整理排查指南。每个条目包含症状、诊断命令、解决方案。",
+      "effort": "weeks",
+      "priority": "medium",
+      "dependsOn": [],
+      "successMetric": "TROUBLESHOOTING.md 覆盖 ≥10 个常见问题场景"
+    },
+    {
+      "id": "DOC-8",
+      "title": "无注释页面补充中文注释（packages/server 核心模块）",
+      "description": "对 packages/server/src 下当前注释覆盖率低的重点文件（agent-lifecycle、provider-runtime、mcp-server、session-handlers）补充模块级文件和关键函数的中文注释。每文件控制在 3-5 条以内，不影响可读性。",
+      "effort": "weeks",
+      "priority": "medium",
+      "dependsOn": ["DOC-4"],
+      "successMetric": "server/src 下 60% 的非测试文件包含 ≥1 条模块级注释"
+    }
+  ]
+}

@@ -7,7 +7,6 @@ import { z } from "zod";
 import type { ToolSet } from "ai";
 import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
-  isLegacyEditorTargetId,
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
   type FirstAgentContext,
@@ -47,7 +46,6 @@ import type { AgentManagerEvent, ManagedAgent } from "./agent/agent-manager.js";
 import { archiveAgentCommand } from "./agent/lifecycle-command.js";
 import {
   buildStoredAgentPayload,
-  resolveEffectiveThinkingOptionId,
   resolveStoredAgentPayloadUpdatedAt,
   toAgentPayload,
 } from "./agent/agent-projections.js";
@@ -117,11 +115,8 @@ import {
   WORKSPACE_GIT_WATCH_REMOVED_STATE_KEY,
   resolveKnownProjectRootForConfig,
   type GitMutationRefreshReason,
-  LEGACY_PROVIDER_IDS,
   diffChangeTypeFor,
   buildWorkspaceCheckout,
-  clientSupportsAllProviders,
-  clientSupportsFlexibleEditorIds,
 } from "./session-helpers.js";
 
 // Re-export so existing imports from "./session.js" keep working.
@@ -134,14 +129,22 @@ import {
   type SessionRuntimeMetrics,
   type AgentMcpTransportFactory,
 } from "./session-internal-types.js";
-import { CheckoutGitHandler } from "./session-handlers/checkout-git-handler.js";
-import { ChatScheduleLoopHandler } from "./session-handlers/chat-schedule-loop-handler.js";
-import { ConfigControlHandler } from "./session-handlers/config-control-handler.js";
-import { ProviderHandler } from "./session-handlers/provider-handler.js";
-import { TerminalScriptHandler } from "./session-handlers/terminal-script-handler.js";
-import { WorkspaceProjectHandler } from "./session-handlers/workspace-project-handler.js";
-import { AgentLifecycleHandler } from "./session-handlers/agent-lifecycle-handler.js";
-import type { SessionContext } from "./session-handlers/session-context.js";
+import {
+  AgentLifecycleHandler,
+  ChatScheduleLoopHandler,
+  CheckoutGitHandler,
+  ConfigControlHandler,
+  ProviderHandler,
+  TerminalScriptHandler,
+  WorkspaceProjectHandler,
+  type SessionContext,
+} from "./session-handlers/index.js";
+import {
+  isProviderVisibleToClient as isProviderVisibleToClientFunc,
+  filterEditorsForClient as filterEditorsForClientFunc,
+  matchesAgentFilter as matchesAgentFilterFunc,
+  resolveAgentIdentifier as resolveAgentIdentifierFunc,
+} from "./agent-session-helpers.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
 type FetchAgentsRequestFilter = NonNullable<FetchAgentsRequestMessage["filter"]>;
@@ -189,6 +192,7 @@ class SessionRequestError extends Error {
 const AVAILABLE_EDITOR_TARGETS_CACHE_TTL_MS = 60_000;
 const AVAILABLE_EDITOR_TARGETS_CACHE_KEY = "available";
 
+/** Configuration options passed to the Session constructor. */
 export interface SessionOptions {
   clientId: string;
   appVersion?: string | null;
@@ -244,6 +248,7 @@ export interface SessionOptions {
   };
 }
 
+/** Lifecycle intent emitted by Session when the client requests a shutdown or restart. */
 export type SessionLifecycleIntent =
   | {
       type: "shutdown";
@@ -257,6 +262,7 @@ export type SessionLifecycleIntent =
       reason?: string;
     };
 
+/** Parse raw client capability flags from the wire into a normalized set. */
 function parseClientCapabilities(
   capabilities: Record<string, unknown> | null | undefined,
 ): ReadonlySet<ClientCapability> {
@@ -586,6 +592,10 @@ export class Session {
         this.workspaceUpdatesSubscription =
           subscription as WorkspaceUpdatesSubscriptionState | null;
       },
+      getAgentUpdatesSubscription: () => this.agentUpdatesSubscription,
+      setAgentUpdatesSubscription: (subscription) => {
+        this.agentUpdatesSubscription = subscription as AgentUpdatesSubscriptionState | null;
+      },
       flushBootstrappedAgentUpdates: (options) =>
         this.flushBootstrappedAgentUpdates(
           options as Parameters<typeof this.flushBootstrappedAgentUpdates>[0],
@@ -610,6 +620,9 @@ export class Session {
           workspaceId as Parameters<typeof this.resolveCreateAgentWorkspace>[1],
         ),
       createAgentLifecycleDispatch: this.createAgentLifecycleDispatch,
+      listAgentPayloads: (filter) =>
+        this.listAgentPayloads(filter as Parameters<typeof this.listAgentPayloads>[0]),
+      getAgentPayloadById: (agentId) => this.getAgentPayloadById(agentId),
       buildAgentPayload: (agent) =>
         this.buildAgentPayload(agent as Parameters<typeof this.buildAgentPayload>[0]),
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
@@ -660,16 +673,19 @@ export class Session {
     };
   }
 
+  /** Update the connected client's app version. */
   updateAppVersion(appVersion: string | null): void {
     if (appVersion && appVersion !== this.appVersion) {
       this.appVersion = appVersion;
     }
   }
 
+  /** Update the connected client's capability flags. */
   updateClientCapabilities(capabilities: Record<string, unknown> | null): void {
     this.clientCapabilities = parseClientCapabilities(capabilities);
   }
 
+  /** Check whether the connected client supports a given capability. */
   supports(capability: ClientCapability): boolean {
     return this.clientCapabilities.has(capability);
   }
@@ -714,6 +730,7 @@ export class Session {
   /**
    * Get the client's current activity state
    */
+  /** Get the current client activity state (device type, focused agent, visibility). */
   public getClientActivity(): {
     deviceType: "web" | "mobile";
     focusedAgentId: string | null;
@@ -755,6 +772,7 @@ export class Session {
     };
   }
 
+  /** Get current runtime metrics (inflight requests, peak, subscriptions). */
   public getRuntimeMetrics(): SessionRuntimeMetrics {
     const terminalMetrics = this.terminalController.getMetrics();
     return {
@@ -765,6 +783,7 @@ export class Session {
     };
   }
 
+  /** Emit a server-originated message to the client (used by external systems). */
   public emitServerMessage(message: SessionOutboundMessage): void {
     this.emit(message);
   }
@@ -772,6 +791,7 @@ export class Session {
   /**
    * Send initial state to client after connection
    */
+  /** Send the initial state payload to the newly connected client. */
   public async sendInitialState(): Promise<void> {
     // No unsolicited agent list hydration. Callers must use fetch_agents_request.
   }
@@ -909,66 +929,13 @@ export class Session {
   }
 
   private isProviderVisibleToClient(provider: string): boolean {
-    if (clientSupportsAllProviders(this.appVersion)) {
-      return true;
-    }
-    return LEGACY_PROVIDER_IDS.has(provider);
+    return isProviderVisibleToClientFunc(provider, this.appVersion);
   }
 
   private filterEditorsForClient(
     editors: EditorTargetDescriptorPayload[],
   ): EditorTargetDescriptorPayload[] {
-    if (clientSupportsFlexibleEditorIds(this.appVersion)) {
-      return editors;
-    }
-    return editors.filter((editor) => isLegacyEditorTargetId(editor.id));
-  }
-
-  private agentThinkingOptionMatchesFilter(
-    agent: AgentSnapshotPayload,
-    filter: AgentUpdatesFilter,
-  ): boolean {
-    if (filter.thinkingOptionId === undefined) {
-      return true;
-    }
-    const expectedThinkingOptionId = resolveEffectiveThinkingOptionId({
-      configuredThinkingOptionId: filter.thinkingOptionId ?? null,
-    });
-    const resolvedThinkingOptionId =
-      agent.effectiveThinkingOptionId ??
-      resolveEffectiveThinkingOptionId({
-        runtimeInfo: agent.runtimeInfo,
-        configuredThinkingOptionId: agent.thinkingOptionId ?? null,
-      });
-    return resolvedThinkingOptionId === expectedThinkingOptionId;
-  }
-
-  private matchesAgentStructuralFilter(
-    agent: AgentSnapshotPayload,
-    project: ProjectPlacementPayload,
-    filter: AgentUpdatesFilter,
-  ): boolean {
-    if (filter.statuses && filter.statuses.length > 0) {
-      const statuses = new Set(filter.statuses);
-      if (!statuses.has(agent.status)) {
-        return false;
-      }
-    }
-
-    if (typeof filter.requiresAttention === "boolean") {
-      const requiresAttention = agent.requiresAttention ?? false;
-      if (requiresAttention !== filter.requiresAttention) {
-        return false;
-      }
-    }
-
-    if (filter.projectKeys && filter.projectKeys.length > 0) {
-      const projectKeys = new Set(filter.projectKeys.filter((item) => item.trim().length > 0));
-      if (projectKeys.size > 0 && !projectKeys.has(project.projectKey)) {
-        return false;
-      }
-    }
-    return true;
+    return filterEditorsForClientFunc(editors, this.appVersion);
   }
 
   private matchesAgentFilter(options: {
@@ -976,31 +943,7 @@ export class Session {
     project: ProjectPlacementPayload;
     filter?: AgentUpdatesFilter;
   }): boolean {
-    const { agent, project, filter } = options;
-
-    if (filter?.labels) {
-      const matchesLabels = Object.entries(filter.labels).every(
-        ([key, value]) => agent.labels[key] === value,
-      );
-      if (!matchesLabels) {
-        return false;
-      }
-    }
-
-    const includeArchived = filter?.includeArchived ?? false;
-    if (!includeArchived && agent.archivedAt) {
-      return false;
-    }
-
-    if (filter && !this.agentThinkingOptionMatchesFilter(agent, filter)) {
-      return false;
-    }
-
-    if (filter && !this.matchesAgentStructuralFilter(agent, project, filter)) {
-      return false;
-    }
-
-    return true;
+    return matchesAgentFilterFunc(options);
   }
 
   private getAgentUpdateTargetId(update: AgentUpdatePayload): string {
@@ -1174,6 +1117,10 @@ export class Session {
 
   /**
    * Main entry point for processing session messages
+   */
+  /**
+   * Handle an inbound message from the client.
+   * Tracks inflight request count and dispatches to the appropriate handler.
    */
   public async handleMessage(msg: SessionInboundMessage): Promise<void> {
     this.inflightRequests++;
@@ -1416,10 +1363,12 @@ export class Session {
     }
   }
 
+  /** Reset peak inflight count (useful after a surge). */
   public resetPeakInflight(): void {
     this.peakInflightRequests = this.inflightRequests;
   }
 
+  /** Handle a binary frame (terminal stream) from the client. */
   public handleBinaryFrame(frame: TerminalStreamFrame): void {
     this.terminalController.handleBinaryFrame(frame);
   }
@@ -1935,6 +1884,24 @@ export class Session {
   }
 
   /**
+   * Look up a single agent payload by ID across live + persisted storage.
+   */
+  private async getAgentPayloadById(agentId: string): Promise<AgentSnapshotPayload | null> {
+    const live = this.agentManager.getAgent(agentId);
+    if (live) {
+      const payload = await this.buildAgentPayload(live);
+      return this.isProviderVisibleToClient(payload.provider) ? payload : null;
+    }
+
+    const record = await this.agentStorage.get(agentId);
+    if (!record || record.internal) {
+      return null;
+    }
+    const payload = this.buildStoredAgentPayload(record);
+    return this.isProviderVisibleToClient(payload.provider) ? payload : null;
+  }
+
+  /**
    * Build the current agent list payload (live + persisted), optionally filtered by labels.
    */
   private async listAgentPayloads(filter?: {
@@ -1976,57 +1943,49 @@ export class Session {
     return agents;
   }
 
+  /**
+   * Public delegation to the agent lifecycle handler for paginated agent listing.
+   * The handler's implementation is the canonical one; this keeps backward
+   * compatibility for tests that call the method directly on Session.
+   */
+  async listFetchAgentsEntries(
+    request: Parameters<AgentLifecycleHandler["listFetchAgentsEntries"]>[0],
+  ): ReturnType<AgentLifecycleHandler["listFetchAgentsEntries"]> {
+    return this.agentLifecycleHandler.listFetchAgentsEntries(request);
+  }
+
+  /**
+   * Handle archive_agent_request by dispatching through the normal message chain.
+   */
+  async handleArchiveAgentRequest(agentId: string, requestId: string): Promise<void> {
+    await this.handleMessage({
+      type: "archive_agent_request",
+      agentId,
+      requestId,
+    } as SessionInboundMessage);
+  }
+
+  /**
+   * Handle create_chisacode_worktree_request by dispatching through the normal
+   * message chain.
+   */
+  async handleCreateChisaCodeWorktreeRequest(params: Record<string, unknown>): Promise<void> {
+    await this.handleMessage(params as SessionInboundMessage);
+  }
+
   private async resolveAgentIdentifier(
     identifier: string,
   ): Promise<{ ok: true; agentId: string } | { ok: false; error: string }> {
-    const trimmed = identifier.trim();
-    if (!trimmed) {
-      return { ok: false, error: "Agent identifier cannot be empty" };
-    }
-
-    const stored = await this.agentStorage.list();
-    const storedRecords = stored.filter((record) => !record.internal);
-    const knownIds = new Set<string>();
-    for (const record of storedRecords) {
-      knownIds.add(record.id);
-    }
-    for (const agent of this.agentManager.listAgents()) {
-      knownIds.add(agent.id);
-    }
-
-    if (knownIds.has(trimmed)) {
-      return { ok: true, agentId: trimmed };
-    }
-
-    const prefixMatches = Array.from(knownIds).filter((id) => id.startsWith(trimmed));
-    if (prefixMatches.length === 1) {
-      return { ok: true, agentId: prefixMatches[0] };
-    }
-    if (prefixMatches.length > 1) {
-      return {
-        ok: false,
-        error: `Agent identifier "${trimmed}" is ambiguous (${prefixMatches
-          .slice(0, 5)
-          .map((id) => id.slice(0, 8))
-          .join(", ")}${prefixMatches.length > 5 ? ", …" : ""})`,
-      };
-    }
-
-    const titleMatches = storedRecords.filter((record) => record.title === trimmed);
-    if (titleMatches.length === 1) {
-      return { ok: true, agentId: titleMatches[0].id };
-    }
-    if (titleMatches.length > 1) {
-      return {
-        ok: false,
-        error: `Agent title "${trimmed}" is ambiguous (${titleMatches
-          .slice(0, 5)
-          .map((r) => r.id.slice(0, 8))
-          .join(", ")}${titleMatches.length > 5 ? ", …" : ""})`,
-      };
-    }
-
-    return { ok: false, error: `Agent not found: ${trimmed}` };
+    return resolveAgentIdentifierFunc(
+      {
+        listLiveAgentIds: () => this.agentManager.listAgents().map((a) => a.id),
+        listStoredRecords: async () => {
+          const records = await this.agentStorage.list();
+          return records.filter((r) => !r.internal).map((r) => ({ id: r.id, title: r.title }));
+        },
+      },
+      identifier,
+    );
   }
 
   private async describeWorkspaceRecord(
@@ -2762,6 +2721,10 @@ export class Session {
 
   /**
    * Clean up session resources
+   */
+  /**
+   * Clean up the session: dispose handlers, tear down subscriptions,
+   * abort ongoing work, and close watchers/observers.
    */
   public async cleanup(): Promise<void> {
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T03:13:08.736Z",
+  "generatedAt": "2026-06-27T10:03:07.453Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "project": {
     "name": "chisacode",
@@ -24,13 +24,13 @@
       "handoffPath": "docs/modules/app/README.md",
       "dependsOn": ["client", "expo-two-way-audio", "highlight", "protocol"],
       "dependedOnBy": [],
-      "fileCount": 1085,
+      "fileCount": 1128,
       "categories": {
         "config": 39,
-        "test": 338,
-        "support": 51,
+        "test": 355,
+        "support": 52,
         "docs": 2,
-        "source": 655
+        "source": 680
       }
     },
     {
@@ -96,11 +96,11 @@
       "handoffPath": "docs/modules/desktop/README.md",
       "dependsOn": ["server"],
       "dependedOnBy": [],
-      "fileCount": 68,
+      "fileCount": 70,
       "categories": {
         "config": 3,
         "docs": 1,
-        "support": 4,
+        "support": 6,
         "source": 40,
         "test": 20
       }
@@ -187,9 +187,9 @@
       "handoffPath": "docs/modules/relay/README.md",
       "dependsOn": [],
       "dependedOnBy": ["client", "server"],
-      "fileCount": 71,
+      "fileCount": 185,
       "categories": {
-        "support": 54,
+        "support": 168,
         "config": 3,
         "docs": 1,
         "source": 7,
@@ -211,13 +211,13 @@
       "handoffPath": "docs/modules/server/README.md",
       "dependsOn": ["client", "highlight", "protocol", "relay"],
       "dependedOnBy": ["cli", "desktop"],
-      "fileCount": 574,
+      "fileCount": 597,
       "categories": {
         "docs": 4,
-        "config": 19,
+        "config": 20,
         "support": 15,
-        "test": 283,
-        "source": 253
+        "test": 289,
+        "source": 269
       }
     }
   ],

@@ -46,31 +46,6 @@ async function dumpTestIds(page, prefix) {
   }, prefix);
 }
 
-async function scrollTranscriptToBottom(page) {
-  await page.evaluate(() => {
-    const candidates = Array.from(document.querySelectorAll("*"))
-      .map((node) => {
-        const element = node;
-        const style = window.getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        return {
-          element,
-          score:
-            (element.scrollHeight > element.clientHeight ? 1000 : 0) +
-            Math.max(0, rect.width) +
-            Math.max(0, rect.height) +
-            (style.overflowY === "auto" || style.overflowY === "scroll" ? 500 : 0),
-        };
-      })
-      .sort((left, right) => right.score - left.score);
-    for (const candidate of candidates.slice(0, 8)) {
-      candidate.element.scrollTop = candidate.element.scrollHeight;
-    }
-    window.scrollTo(0, document.body.scrollHeight);
-  });
-  await sleep(500);
-}
-
 async function openAgent(page, item) {
   const tabTestId = `workspace-tab-agent_${item.agentId}`;
   await page.goto(`chisacode://app/h/${item.serverId}/agent/${item.agentId}`);
@@ -167,6 +142,93 @@ async function collectMainText(page) {
   });
 }
 
+function collectChecks(mainText, thoughtEntries, assistantEntries, containsExpectedText) {
+  const failedChecks = [];
+  const containsSettingsSetup =
+    mainText.includes("Workspace Setup") ||
+    mainText.includes("工作区设置") ||
+    mainText.includes("设置工作区");
+  const containsRunning =
+    mainText.includes("运行中") ||
+    mainText.includes("正在运行") ||
+    mainText.includes("Running") ||
+    mainText.includes("running");
+  const thoughtBeforeAssistant =
+    thoughtEntries.length > 0 && assistantEntries.length > 0
+      ? thoughtEntries[0].y < assistantEntries[0].y
+      : null;
+  const collapsedThoughtRows = thoughtEntries.filter((entry) => entry.height <= 44).length;
+  if (assistantEntries.length < 3) {
+    failedChecks.push(`expected at least 3 assistant messages, saw ${assistantEntries.length}`);
+  }
+  if (!containsExpectedText) {
+    failedChecks.push("expected assistant text not found in main transcript");
+  }
+  if (containsSettingsSetup) {
+    failedChecks.push("workspace setup/settings text appeared in transcript area");
+  }
+  if (containsRunning) {
+    failedChecks.push("running text appeared in completed transcript area");
+  }
+  if (thoughtEntries.length > 0 && thoughtBeforeAssistant !== true) {
+    failedChecks.push("thought row is not above assistant answer");
+  }
+  if (thoughtEntries.length > 0 && collapsedThoughtRows !== thoughtEntries.length) {
+    failedChecks.push(
+      `not all thought rows are collapsed: ${collapsedThoughtRows}/${thoughtEntries.length}`,
+    );
+  }
+  return {
+    failedChecks,
+    containsSettingsSetup,
+    containsRunning,
+    thoughtBeforeAssistant,
+    collapsedThoughtRows,
+  };
+}
+
+function buildCheckResult(
+  item,
+  page,
+  mainText,
+  screenshot,
+  openResult,
+  thoughtEntries,
+  assistantEntries,
+  containsExpectedText,
+  compactMain,
+  compactBody,
+  checks,
+) {
+  return {
+    provider: item.provider,
+    title: item.title,
+    agentId: item.agentId,
+    serverId: item.serverId,
+    status: item.status,
+    model: item.model,
+    url: page.url(),
+    screenshot,
+    switchedBy: openResult.switchedBy,
+    containsExpectedText,
+    containsSettingsSetupText: checks.containsSettingsSetup,
+    containsRunningText: checks.containsRunning,
+    containsThoughtLabel:
+      mainText.text.includes("思考") ||
+      mainText.text.includes("推理") ||
+      mainText.text.includes("Thought"),
+    thoughtCount: thoughtEntries.length,
+    assistantCount: assistantEntries.length,
+    collapsedThoughtRows: checks.collapsedThoughtRows,
+    firstThoughtY: thoughtEntries[0]?.y ?? null,
+    firstAssistantY: assistantEntries[0]?.y ?? null,
+    thoughtBeforeAssistant: checks.thoughtBeforeAssistant,
+    failedChecks: checks.failedChecks,
+    mainPreview: compactMain.slice(0, 1800),
+    bodyPreview: compactBody.slice(0, 1000),
+  };
+}
+
 async function main() {
   const records = JSON.parse(fs.readFileSync(validationPath, "utf8"));
   const expectedByProvider = {
@@ -215,76 +277,36 @@ async function main() {
     for (const item of items) {
       const openResult = await openAgent(page, item);
       const body = await page.locator("body").innerText({ timeout: 10000 });
-      const main = await collectMainText(page);
+      const mainText = await collectMainText(page);
       const screenshot = path.resolve(`tmp-electron-final3-${item.provider}.png`);
       await page.screenshot({ path: screenshot, fullPage: false });
       const compactBody = body.replace(/\s+/g, " ");
-      const compactMain = main.text.replace(/\s+/g, " ");
-      const thoughtEntries = main.entries.filter((entry) => entry.testId === "thought-message");
-      const assistantEntries = main.entries.filter(
+      const compactMain = mainText.text.replace(/\s+/g, " ");
+      const thoughtEntries = mainText.entries.filter((entry) => entry.testId === "thought-message");
+      const assistantEntries = mainText.entries.filter(
         (entry) => entry.testId === "assistant-message",
       );
-      const containsExpectedText = item.expectedTexts.some((text) => main.text.includes(text));
-      const containsSettingsSetupText =
-        main.text.includes("Workspace Setup") ||
-        main.text.includes("工作区设置") ||
-        main.text.includes("设置工作区");
-      const containsRunningText =
-        main.text.includes("运行中") ||
-        main.text.includes("正在运行") ||
-        main.text.includes("Running") ||
-        main.text.includes("running");
-      const thoughtBeforeAssistant =
-        thoughtEntries.length > 0 && assistantEntries.length > 0
-          ? thoughtEntries[0].y < assistantEntries[0].y
-          : null;
-      const collapsedThoughtRows = thoughtEntries.filter((entry) => entry.height <= 44).length;
-      const failedChecks = [];
-      if (assistantEntries.length < 3) {
-        failedChecks.push(`expected at least 3 assistant messages, saw ${assistantEntries.length}`);
-      }
-      if (!containsExpectedText) {
-        failedChecks.push("expected assistant text not found in main transcript");
-      }
-      if (containsSettingsSetupText) {
-        failedChecks.push("workspace setup/settings text appeared in transcript area");
-      }
-      if (containsRunningText) {
-        failedChecks.push("running text appeared in completed transcript area");
-      }
-      if (thoughtEntries.length > 0 && thoughtBeforeAssistant !== true) {
-        failedChecks.push("thought row is not above assistant answer");
-      }
-      if (thoughtEntries.length > 0 && collapsedThoughtRows !== thoughtEntries.length) {
-        failedChecks.push(
-          `not all thought rows are collapsed: ${collapsedThoughtRows}/${thoughtEntries.length}`,
-        );
-      }
-      results.push({
-        provider: item.provider,
-        title: item.title,
-        agentId: item.agentId,
-        serverId: item.serverId,
-        status: item.status,
-        model: item.model,
-        url: page.url(),
-        screenshot,
-        switchedBy: openResult.switchedBy,
+      const containsExpectedText = item.expectedTexts.some((text) => mainText.text.includes(text));
+      const checks = collectChecks(
+        mainText.text,
+        thoughtEntries,
+        assistantEntries,
         containsExpectedText,
-        containsSettingsSetupText,
-        containsRunningText,
-        containsThoughtLabel:
-          main.text.includes("思考") || main.text.includes("推理") || main.text.includes("Thought"),
-        thoughtCount: thoughtEntries.length,
-        assistantCount: assistantEntries.length,
-        collapsedThoughtRows,
-        firstThoughtY: thoughtEntries[0]?.y ?? null,
-        firstAssistantY: assistantEntries[0]?.y ?? null,
-        thoughtBeforeAssistant,
-        failedChecks,
-        mainPreview: compactMain.slice(0, 1800),
-        bodyPreview: compactBody.slice(0, 1000),
-      });
+      );
+      const result = buildCheckResult(
+        item,
+        page,
+        mainText,
+        screenshot,
+        openResult,
+        thoughtEntries,
+        assistantEntries,
+        containsExpectedText,
+        compactMain,
+        compactBody,
+        checks,
+      );
+      results.push(result);
     }
 
     fs.writeFileSync(outPath, JSON.stringify(results, null, 2));
@@ -292,7 +314,9 @@ async function main() {
     if (failures.length > 0) {
       throw new Error(`packaged validation failed: ${JSON.stringify(failures, null, 2)}`);
     }
-    console.log(JSON.stringify({ outPath, screenshots: results.map((r) => r.screenshot) }, null, 2));
+    console.log(
+      JSON.stringify({ outPath, screenshots: results.map((r) => r.screenshot) }, null, 2),
+    );
   } finally {
     await app.close().catch(() => undefined);
   }

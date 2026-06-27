@@ -2700,6 +2700,14 @@ class ClaudeAgentSession implements AgentSession {
       env: sdkEnv,
     };
 
+    return this.applyPostOptions(base, launchModel, modelGatewayOverrideActive);
+  }
+
+  private applyPostOptions(
+    base: ClaudeOptions,
+    launchModel: string | undefined,
+    modelGatewayOverrideActive: boolean,
+  ): ClaudeOptions {
     if (this.config.mcpServers) {
       base.mcpServers = this.normalizeMcpServers(this.config.mcpServers);
     }
@@ -2707,7 +2715,7 @@ class ClaudeAgentSession implements AgentSession {
     if (launchModel) {
       base.model = launchModel;
     }
-    this.lastOptionsModel = this.modelGatewayOverrideActive
+    this.lastOptionsModel = modelGatewayOverrideActive
       ? (this.config.model ?? null)
       : (base.model ?? null);
     if (this.claudeSessionId && !this.pendingFreshSessionId) {

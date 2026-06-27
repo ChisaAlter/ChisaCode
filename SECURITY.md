@@ -26,6 +26,16 @@ The relay is designed to be untrusted. All traffic between your phone and daemon
 
 The relay sees only: IP addresses, timing, message sizes, session IDs, and the plaintext `e2ee_hello` / `e2ee_ready` handshake frames (which contain only public keys). It cannot read message contents, forge messages, or derive encryption keys from observing the handshake.
 
+### Relay Encryption Security Semantics
+
+- **Key exchange**: Static ECDH (Elliptic Curve Diffie-Hellman) with Curve25519. The daemon generates a persistent key pair on first run. Each client connection generates a fresh ephemeral key pair. The shared secret is derived from the daemon's private key and the client's public key (and vice versa).
+
+- **Forward secrecy**: NOT provided. If a long-term private key is compromised, ALL past sessions encrypted with that key can be decrypted. This is the standard limitation of static ECDH. We accept this trade-off because: (1) keys are generated per-daemon-installation, not per-device or per-account; (2) the relay itself is untrusted and cannot decrypt messages regardless; (3) adding ephemeral key exchange (ECDHE) would require additional round-trips per connection, conflicting with the QR-based pairing UX that completes in a single scan.
+
+- **Message authentication**: Provided by Poly1305 MAC embedded in XSalsa20-Poly1305 (NaCl box). Tampered ciphertext will fail authenticated decryption with an error.
+
+- **Nonce selection**: Random 24-byte nonces from the OS CSPRNG (`nacl.randomBytes`, fallback to `crypto.getRandomValues`). No nonce counter or monotonic enforcement — relies on 192-bit randomness space for collision avoidance (risk of collision is negligible with a properly seeded CSPRNG).
+
 ### Why the relay can't attack you
 
 The daemon requires a valid cryptographic handshake before processing any commands. A compromised relay cannot:

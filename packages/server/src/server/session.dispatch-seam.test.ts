@@ -8,6 +8,8 @@
  * 验证正确的 dispatcher 被调用，且其他 dispatcher 未被调用。
  */
 
+/* eslint-disable typescript-eslint/no-explicit-any */
+
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { Session } from "./session.js";

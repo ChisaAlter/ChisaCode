@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-06-17T03:13:08.151Z",
+  "generatedAt": "2026-06-27T10:03:06.650Z",
   "generator": "scripts/generate-modular-knowledge-graphs.mjs",
   "module": {
     "id": "cli",
@@ -707,7 +707,7 @@
       "id": "file:packages/cli/src/commands/open.ts",
       "type": "source",
       "path": "packages/cli/src/commands/open.ts",
-      "lines": 110,
+      "lines": 102,
       "imports": ["@chisacode/server", "node:fs", "node:os", "node:path"]
     },
     {

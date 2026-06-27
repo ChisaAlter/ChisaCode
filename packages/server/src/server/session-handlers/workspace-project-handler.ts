@@ -71,6 +71,7 @@ class SessionRequestError extends Error {
   }
 }
 
+/** Handles workspace/project CRUD, worktree operations, file explorer, editors, and workspace subscription state machine. */
 export class WorkspaceProjectHandler implements DisposableHandler {
   private readonly context: SessionContext;
 
@@ -84,6 +85,7 @@ export class WorkspaceProjectHandler implements DisposableHandler {
 
   // --- Dispatch ---
 
+  /** Dispatch workspace/project messages to the appropriate handler. Returns undefined for unhandled messages. */
   dispatch(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       case "fetch_workspaces_request":
@@ -737,6 +739,7 @@ export class WorkspaceProjectHandler implements DisposableHandler {
 
   // --- Workspace subscription state machine ---
 
+  /** Emit or buffer a workspace update through the subscription state machine. */
   bufferOrEmitWorkspaceUpdate(
     subscription: WorkspaceUpdatesSubscriptionState,
     payload: WorkspaceUpdatePayload,
@@ -756,6 +759,7 @@ export class WorkspaceProjectHandler implements DisposableHandler {
 
   // --- Workspace auto-name ---
 
+  /** Attempt to auto-name a workspace's git branch from the first agent context, returning the updated workspace record. */
   async maybeAutoNameWorkspaceBranchForFirstAgent(input: {
     workspace: PersistedWorkspaceRecord;
     firstAgentContext: FirstAgentContext;

@@ -70,6 +70,9 @@ async function main() {
 }
 
 main().catch((error) => {
-  fs.writeFileSync(path.resolve("tmp-electron-route-dump-error.txt"), String(error?.stack || error));
+  fs.writeFileSync(
+    path.resolve("tmp-electron-route-dump-error.txt"),
+    String(error?.stack || error),
+  );
   process.exit(1);
 });

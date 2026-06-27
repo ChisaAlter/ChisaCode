@@ -39,6 +39,7 @@ import type {
 } from "../messages.js";
 import type { AgentSessionConfig } from "../agent/agent-sdk-types.js";
 
+/** Handles daemon/project config, skills, MCP servers, restart, shutdown, and push token RPC operations. */
 export class ConfigControlHandler implements DisposableHandler {
   private readonly context: SessionContext;
 
@@ -50,6 +51,7 @@ export class ConfigControlHandler implements DisposableHandler {
     // No subscriptions to clean up
   }
 
+  /** Dispatch config/control messages to the appropriate handler. Returns undefined for unhandled messages. */
   dispatch(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       // --- From dispatchMiscMessage ---

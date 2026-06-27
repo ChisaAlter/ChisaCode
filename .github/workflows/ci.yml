@@ -56,6 +56,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Audit dependencies for known vulnerabilities
+        run: npm audit --audit-level=high
+
   test-audit:
     runs-on: ubuntu-latest
     steps:
@@ -406,3 +409,14 @@ jobs:
           CHISACODE_VOICE_MODE_ENABLED: "0"
           CHISACODE_CLI_TEST_SHARD: ${{ matrix.shard }}
           CHISACODE_CLI_TEST_SHARD_TOTAL: "3"
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified --no-update

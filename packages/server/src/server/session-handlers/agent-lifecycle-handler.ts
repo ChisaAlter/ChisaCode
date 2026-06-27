@@ -1,3 +1,14 @@
+/**
+ * AgentLifecycleHandler — extracted from Session.
+ *
+ * Handles all agent-related RPC operations: create, delete, archive, cancel,
+ * resume, import, rewind, fetch (list/detail/timeline/history), agent updates
+ * subscription, permission responses, and usage statistics.
+ *
+ * This is the largest Session handler, owning nearly all agent lifecycle
+ * state transitions and read/write dispatch paths.
+ */
+
 import { v4 as uuidv4 } from "uuid";
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 import {
@@ -25,14 +36,12 @@ import {
   type TimelineProjectionMode,
 } from "../agent/timeline-projection.js";
 import { respondToAgentPermission } from "../agent/permission-response.js";
-import { listImportableProviderSessions, ImportSessionsRequestError } from "../agent/import-sessions.js";
 import {
-  importProviderSession,
-  normalizeImportAgentRequest,
+  listImportableProviderSessions,
+  ImportSessionsRequestError,
 } from "../agent/import-sessions.js";
-import {
-  unarchiveAgentState,
-} from "../agent/agent-prompt.js";
+import { importProviderSession, normalizeImportAgentRequest } from "../agent/import-sessions.js";
+import { unarchiveAgentState } from "../agent/agent-prompt.js";
 import { ensureAgentLoaded } from "../agent/agent-loading.js";
 import {
   buildConfigOverrides,
@@ -81,11 +90,7 @@ import { resolveCreateAgentTitles } from "../agent/create-agent-title.js";
 import { toWorktreeWireError } from "../worktree-errors.js";
 import type { FirstAgentContext } from "../messages.js";
 import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.js";
-import {
-  buildUsageSummary,
-  exportUsageEvents,
-  pruneUsageEvents,
-} from "../usage/usage-store.js";
+import { buildUsageSummary, exportUsageEvents, pruneUsageEvents } from "../usage/usage-store.js";
 
 // --- Local types mirroring session.ts private types ---
 
@@ -127,7 +132,14 @@ class SessionRequestError extends Error {
 
 export class AgentLifecycleHandler implements DisposableHandler {
   private readonly context: SessionContext;
-  private agentUpdatesSubscription: AgentUpdatesSubscriptionState | null = null;
+
+  private get agentUpdatesSubscription(): AgentUpdatesSubscriptionState | null {
+    return this.context.getAgentUpdatesSubscription() as AgentUpdatesSubscriptionState | null;
+  }
+
+  private set agentUpdatesSubscription(value: AgentUpdatesSubscriptionState | null) {
+    this.context.setAgentUpdatesSubscription(value);
+  }
 
   private readonly agentsPager = new SortablePager<
     AgentSnapshotPayload,
@@ -167,7 +179,12 @@ export class AgentLifecycleHandler implements DisposableHandler {
     this.agentUpdatesSubscription = null;
   }
 
+  /** Dispatch an inbound message to the appropriate handler. Returns undefined for unhandled messages. */
   dispatch(msg: SessionInboundMessage): Promise<void> | undefined {
+    return this.dispatchReadOps(msg) ?? this.dispatchWriteOps(msg) ?? undefined;
+  }
+
+  private dispatchReadOps(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       case "fetch_agents_request":
         return this.handleFetchAgents(msg);
@@ -177,19 +194,27 @@ export class AgentLifecycleHandler implements DisposableHandler {
         return this.handleFetchAgentHistory(msg);
       case "fetch_recent_provider_sessions_request":
         return this.handleFetchRecentProviderSessions(msg);
-      case "update_agent_request":
-        return this.handleUpdateAgentRequest(msg.agentId, msg.name, msg.labels, msg.requestId);
-      case "send_agent_message_request":
-        return this.handleSendAgentMessageRequest(msg);
-      case "wait_for_finish_request":
-        return this.handleWaitForFinish(msg.agentId, msg.requestId, msg.timeoutMs);
       case "fetch_agent_timeline_request":
         return this.handleFetchAgentTimelineRequest(msg);
+      case "wait_for_finish_request":
+        return this.handleWaitForFinish(msg.agentId, msg.requestId, msg.timeoutMs);
       case "agent_permission_response":
         return this.handleAgentPermissionResponse(msg.agentId, msg.requestId, msg.response);
       case "clear_agent_attention":
         return this.handleClearAgentAttention(msg.agentId, msg.requestId);
-      // Sub-step 3: AgentLifecycle 写操作
+      case "update_agent_request":
+        return this.handleUpdateAgentRequest(msg.agentId, msg.name, msg.labels, msg.requestId);
+      case "send_agent_message_request":
+        return this.handleSendAgentMessageRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchWriteOps(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "create_agent_request":
+        return this.handleCreateAgentRequest(msg);
       case "delete_agent_request":
         return this.handleDeleteAgentRequest(msg.agentId, msg.requestId);
       case "archive_agent_request":
@@ -206,10 +231,6 @@ export class AgentLifecycleHandler implements DisposableHandler {
         return this.handleRefreshAgentRequest(msg);
       case "agent.rewind.request":
         return this.handleAgentRewindRequest(msg);
-      // Sub-step 4: create_agent
-      case "create_agent_request":
-        return this.handleCreateAgentRequest(msg);
-      // Sub-step 5: Config + Usage
       case "usage.summary.get.request":
         return this.handleUsageSummaryGet(msg);
       case "usage.export.request":
@@ -312,7 +333,10 @@ export class AgentLifecycleHandler implements DisposableHandler {
     } catch (error) {
       const code = error instanceof SessionRequestError ? error.code : "fetch_agent_history_failed";
       const message = error instanceof Error ? error.message : "Failed to fetch agent history";
-      this.context.sessionLogger.error({ err: error }, "Failed to handle fetch_agent_history_request");
+      this.context.sessionLogger.error(
+        { err: error },
+        "Failed to handle fetch_agent_history_request",
+      );
       this.context.emit({
         type: "rpc_error",
         payload: {
@@ -392,7 +416,9 @@ export class AgentLifecycleHandler implements DisposableHandler {
       return;
     }
 
-    const project = await this.context.buildProjectPlacementForCwd(agent.cwd) as ProjectPlacementPayload | null;
+    const project = (await this.context.buildProjectPlacementForCwd(
+      agent.cwd,
+    )) as ProjectPlacementPayload | null;
     this.context.emit({
       type: "fetch_agent_response",
       payload: { requestId, agent, project, error: null },
@@ -404,9 +430,13 @@ export class AgentLifecycleHandler implements DisposableHandler {
     direction: AgentTimelineFetchDirection;
     cursor: AgentTimelineCursor | undefined;
     requestedLimit: number;
-    timeline: ReturnType<typeof import("../agent/agent-manager.js").AgentManager.prototype.fetchTimeline>;
+    timeline: ReturnType<
+      typeof import("../agent/agent-manager.js").AgentManager.prototype.fetchTimeline
+    >;
   }): {
-    timeline: ReturnType<typeof import("../agent/agent-manager.js").AgentManager.prototype.fetchTimeline>;
+    timeline: ReturnType<
+      typeof import("../agent/agent-manager.js").AgentManager.prototype.fetchTimeline
+    >;
     selectedRows: ReturnType<typeof selectTimelineWindowByProjectedLimit>["selectedRows"];
     minSeq: number | null;
     maxSeq: number | null;
@@ -846,9 +876,13 @@ export class AgentLifecycleHandler implements DisposableHandler {
     }
   }
 
+  /** Log and emit an error notification for an agent run failure. Called by Session on agent run errors. */
   handleAgentRunError(agentId: string, error: unknown, context: string): void {
     const message = errorToFriendlyMessage(error);
-    this.context.sessionLogger.error({ err: error, agentId, context }, `${context} for agent ${agentId}`);
+    this.context.sessionLogger.error(
+      { err: error, agentId, context },
+      `${context} for agent ${agentId}`,
+    );
     this.context.emit({
       type: "activity_log",
       payload: {
@@ -866,8 +900,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
     return update.kind === "remove" ? update.agentId : update.agent.id;
   }
 
-  // Used by context wrapper in session.ts after Sub-step 6 wiring
-  // @ts-ignore TS6133
+  /** Emit an agent update to active subscription (or buffer during bootstrapping). */
   private bufferOrEmitAgentUpdate(
     subscription: AgentUpdatesSubscriptionState,
     payload: AgentUpdatePayload,
@@ -1030,57 +1063,14 @@ export class AgentLifecycleHandler implements DisposableHandler {
   // --- Internal helpers (moved from Session) ---
 
   private async getAgentPayloadById(agentId: string): Promise<AgentSnapshotPayload | null> {
-    const live = this.context.agentManager.getAgent(agentId);
-    if (live) {
-      const payload = await this.buildAgentPayload(live);
-      return this.isProviderVisibleToClient(payload.provider) ? payload : null;
-    }
-
-    const record = await this.context.agentStorage.get(agentId);
-    if (!record || record.internal) {
-      return null;
-    }
-    const payload = this.buildStoredAgentPayload(record);
-    return this.isProviderVisibleToClient(payload.provider) ? payload : null;
+    return this.context.getAgentPayloadById(agentId) as Promise<AgentSnapshotPayload | null>;
   }
 
   private async listAgentPayloads(filter?: {
     labels?: Record<string, string>;
     includeUnavailablePersisted?: boolean;
   }): Promise<AgentSnapshotPayload[]> {
-    // Get live agents with session modes
-    const agentSnapshots = this.context.agentManager.listAgents();
-    const liveAgents = await Promise.all(
-      agentSnapshots.map((agent) => this.buildAgentPayload(agent)),
-    );
-
-    // Add persisted agents that have not been lazily initialized yet
-    // (excluding internal agents which are for ephemeral system tasks)
-    const registryRecords = await this.context.agentStorage.list();
-    const liveIds = new Set(agentSnapshots.map((a) => a.id));
-    const registeredProviderIds = this.context.providerSnapshotManager.listRegisteredProviderIds();
-    const persistedAgents = registryRecords
-      .filter((record) => !liveIds.has(record.id) && !record.internal)
-      .filter(
-        (record) =>
-          filter?.includeUnavailablePersisted === true ||
-          isStoredAgentProviderAvailable(record, registeredProviderIds),
-      )
-      .map((record) => this.buildStoredAgentPayload(record, registeredProviderIds));
-
-    let agents = [...liveAgents, ...persistedAgents];
-
-    agents = agents.filter((agent) => this.isProviderVisibleToClient(agent.provider));
-
-    // Filter by labels if filter provided
-    if (filter?.labels) {
-      const filterLabels = filter.labels;
-      agents = agents.filter((agent) =>
-        Object.entries(filterLabels).every(([key, value]) => agent.labels[key] === value),
-      );
-    }
-
-    return agents;
+    return this.context.listAgentPayloads(filter) as Promise<AgentSnapshotPayload[]>;
   }
 
   private async buildActiveProjectPlacementsByWorkspaceCwd(): Promise<
@@ -1174,7 +1164,12 @@ export class AgentLifecycleHandler implements DisposableHandler {
     return matchedEntries;
   }
 
-  private async listFetchAgentsEntries(request: AgentDirectoryRequestMessage): Promise<{
+  /**
+   * Fetch agents (live and/or persisted), paginate, and return matching entries
+   * with their project placements. Used by both handleFetchAgents and
+   * handleFetchAgentHistory.
+   */
+  async listFetchAgentsEntries(request: AgentDirectoryRequestMessage): Promise<{
     entries: FetchAgentsResponseEntry[];
     pageInfo: FetchAgentsResponsePageInfo;
   }> {
@@ -1210,7 +1205,9 @@ export class AgentLifecycleHandler implements DisposableHandler {
       if (existing) {
         return existing;
       }
-      const placementPromise = this.context.buildProjectPlacementForCwd(cwd) as Promise<ProjectPlacementPayload | null>;
+      const placementPromise = this.context.buildProjectPlacementForCwd(
+        cwd,
+      ) as Promise<ProjectPlacementPayload | null>;
       placementByCwd.set(cwd, placementPromise);
       return placementPromise;
     };
@@ -1288,7 +1285,9 @@ export class AgentLifecycleHandler implements DisposableHandler {
     cwd: string,
     _options?: { refreshGit?: boolean; fallback?: boolean },
   ): Promise<ProjectPlacementPayload | null> {
-    const placement = (await this.context.buildProjectPlacementForCwd(cwd)) as ProjectPlacementPayload | null;
+    const placement = (await this.context.buildProjectPlacementForCwd(
+      cwd,
+    )) as ProjectPlacementPayload | null;
     if (!placement && _options?.fallback) {
       const normalizedCwd = normalizePersistedWorkspaceId(cwd);
       return {
@@ -1387,12 +1386,13 @@ export class AgentLifecycleHandler implements DisposableHandler {
         ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
         ...(attachments && attachments.length > 0 ? { attachments } : {}),
       };
-      const createdWorktree = await this.context.createAgentLifecycleDispatch.createWorktreeForRequest({
-        cwd: config.cwd,
-        target: worktree,
-        firstAgentContext,
-        hasLegacyGitOptions: Boolean(git),
-      });
+      const createdWorktree =
+        await this.context.createAgentLifecycleDispatch.createWorktreeForRequest({
+          cwd: config.cwd,
+          target: worktree,
+          firstAgentContext,
+          hasLegacyGitOptions: Boolean(git),
+        });
       createdWorktreeForCleanup = createdWorktree;
       const createAgentConfig: AgentSessionConfig = createdWorktree
         ? { ...config, cwd: createdWorktree.worktree.worktreePath }
@@ -1426,9 +1426,17 @@ export class AgentLifecycleHandler implements DisposableHandler {
           explicitTitle,
           firstAgentContext,
           buildSessionConfig: (sessionConfig, gitOptions, legacyWorktreeName, ctx) =>
-            this.context.buildAgentSessionConfig(sessionConfig, gitOptions, legacyWorktreeName, ctx) as Promise<CreateAgentSessionWorktreeResult>,
+            this.context.buildAgentSessionConfig(
+              sessionConfig,
+              gitOptions,
+              legacyWorktreeName,
+              ctx,
+            ) as Promise<CreateAgentSessionWorktreeResult>,
           resolveWorkspace: ({ cwd, workspaceId }) =>
-            this.context.resolveCreateAgentWorkspace(cwd, workspaceId) as Promise<CreateAgentWorkspace>,
+            this.context.resolveCreateAgentWorkspace(
+              cwd,
+              workspaceId,
+            ) as Promise<CreateAgentWorkspace>,
         },
       );
       createdAgentId = snapshot.id;
@@ -1514,7 +1522,10 @@ export class AgentLifecycleHandler implements DisposableHandler {
       await this.context.agentStorage.remove(agentId);
       await this.context.agentManager.deleteCommittedTimeline(agentId);
     } catch (error) {
-      this.context.sessionLogger.error({ err: error, agentId }, `Failed to fully delete agent ${agentId}`);
+      this.context.sessionLogger.error(
+        { err: error, agentId },
+        `Failed to fully delete agent ${agentId}`,
+      );
     }
 
     this.context.emit({
@@ -1688,7 +1699,10 @@ export class AgentLifecycleHandler implements DisposableHandler {
     );
     try {
       await this.unarchiveAgentByHandle(handle);
-      const snapshot = await this.context.agentManager.resumeAgentFromPersistence(handle, overrides);
+      const snapshot = await this.context.agentManager.resumeAgentFromPersistence(
+        handle,
+        overrides,
+      );
       await unarchiveAgentState(this.context.agentStorage, this.context.agentManager, snapshot.id);
       await this.context.agentManager.hydrateTimelineFromProvider(snapshot.id);
       await this.forwardAgentUpdate(snapshot);
@@ -1820,7 +1834,8 @@ export class AgentLifecycleHandler implements DisposableHandler {
         if (!record) {
           throw new Error(`Agent not found: ${agentId}`);
         }
-        const registeredProviderIds = this.context.providerSnapshotManager.listRegisteredProviderIds();
+        const registeredProviderIds =
+          this.context.providerSnapshotManager.listRegisteredProviderIds();
         if (!isStoredAgentProviderAvailable(record, registeredProviderIds)) {
           throw new Error(`Agent ${agentId} references unavailable provider '${record.provider}'`);
         }
@@ -1851,7 +1866,10 @@ export class AgentLifecycleHandler implements DisposableHandler {
       }
     } catch (error) {
       const message = getErrorMessage(error);
-      this.context.sessionLogger.error({ err: error, agentId }, `Failed to refresh agent ${agentId}`);
+      this.context.sessionLogger.error(
+        { err: error, agentId },
+        `Failed to refresh agent ${agentId}`,
+      );
       if (requestId) {
         this.context.emit({
           type: "rpc_error",
@@ -1982,7 +2000,10 @@ export class AgentLifecycleHandler implements DisposableHandler {
     modeId: string,
     requestId: string,
   ): Promise<void> {
-    this.context.sessionLogger.info({ agentId, modeId, requestId }, "session: set_agent_mode_request");
+    this.context.sessionLogger.info(
+      { agentId, modeId, requestId },
+      "session: set_agent_mode_request",
+    );
 
     try {
       await setAgentModeCommand({ agentManager: this.context.agentManager }, { agentId, modeId });
@@ -2190,7 +2211,10 @@ export class AgentLifecycleHandler implements DisposableHandler {
         },
       });
     } catch (error) {
-      this.context.sessionLogger.error({ err: error }, "Failed to handle usage.summary.get.request");
+      this.context.sessionLogger.error(
+        { err: error },
+        "Failed to handle usage.summary.get.request",
+      );
       this.context.emit({
         type: "rpc_error",
         payload: {

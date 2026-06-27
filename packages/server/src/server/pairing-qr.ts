@@ -1,6 +1,5 @@
-import * as QRCode from "qrcode";
-import type { QRCodeToStringOptionsTerminal, QRCodeToStringOptionsOther } from "qrcode";
 import type { Logger } from "pino";
+import { QRCode } from "../share/QRCode.js";
 
 function parseBooleanEnv(value: string | undefined): boolean | undefined {
   if (value === undefined) return undefined;
@@ -17,19 +16,14 @@ function shouldPrintPairingQr(): boolean {
 }
 
 export async function renderPairingQr(url: string): Promise<string> {
-  const terminalOptions: QRCodeToStringOptionsTerminal = {
-    type: "terminal",
-    small: true,
-  };
-
-  const utf8Options: QRCodeToStringOptionsOther = {
-    type: "utf8",
-  };
+  const qr = new QRCode(url);
 
   try {
-    return await QRCode.toString(url, terminalOptions);
+    // Try terminal format first (best for TTY output)
+    return await qr.toString({ type: "terminal", small: true });
   } catch {
-    return await QRCode.toString(url, utf8Options);
+    // Fall back to UTF-8 format if terminal rendering fails
+    return await qr.toString({ type: "utf8" });
   }
 }
 

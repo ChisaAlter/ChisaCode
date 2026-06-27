@@ -31,6 +31,7 @@ function resolveSnapshotCwd(cwd: string | undefined): string {
   return cwd ?? homedir();
 }
 
+/** Handles provider list/snapshot/diagnostic, mode/feature/command discovery, presets, and model gateway test RPC operations. */
 export class ProviderHandler implements DisposableHandler {
   private readonly context: SessionContext;
 
@@ -125,6 +126,7 @@ export class ProviderHandler implements DisposableHandler {
 
   // --- Provider handlers ---
 
+  /** Handle listing models available for a provider. */
   async handleListProviderModelsRequest(
     msg: Extract<SessionInboundMessage, { type: "list_provider_models_request" }>,
   ): Promise<void> {
@@ -170,6 +172,7 @@ export class ProviderHandler implements DisposableHandler {
     });
   }
 
+  /** Handle listing modes available for a provider. */
   async handleListProviderModesRequest(
     msg: Extract<SessionInboundMessage, { type: "list_provider_modes_request" }>,
   ): Promise<void> {
@@ -215,6 +218,7 @@ export class ProviderHandler implements DisposableHandler {
     });
   }
 
+  /** Handle listing features available for a provider with a draft config. */
   async handleListProviderFeaturesRequest(
     msg: Extract<SessionInboundMessage, { type: "list_provider_features_request" }>,
   ): Promise<void> {
@@ -249,6 +253,7 @@ export class ProviderHandler implements DisposableHandler {
     }
   }
 
+  /** Handle listing all available providers with their availability status. */
   async handleListAvailableProvidersRequest(
     msg: Extract<SessionInboundMessage, { type: "list_available_providers_request" }>,
   ): Promise<void> {
@@ -275,6 +280,7 @@ export class ProviderHandler implements DisposableHandler {
     }
   }
 
+  /** Handle getting the current providers snapshot (models, modes, status per provider). */
   async handleGetProvidersSnapshotRequest(
     msg: Extract<SessionInboundMessage, { type: "get_providers_snapshot_request" }>,
   ): Promise<void> {
@@ -291,6 +297,7 @@ export class ProviderHandler implements DisposableHandler {
     });
   }
 
+  /** Handle refreshing the providers snapshot for a cwd or global settings. */
   async handleRefreshProvidersSnapshotRequest(
     msg: Extract<SessionInboundMessage, { type: "refresh_providers_snapshot_request" }>,
   ): Promise<void> {
@@ -310,6 +317,7 @@ export class ProviderHandler implements DisposableHandler {
     });
   }
 
+  /** Handle provider diagnostic request — detailed health check for a specific provider. */
   async handleProviderDiagnosticRequest(
     msg: Extract<SessionInboundMessage, { type: "provider_diagnostic_request" }>,
   ): Promise<void> {
@@ -338,6 +346,7 @@ export class ProviderHandler implements DisposableHandler {
     }
   }
 
+  /** Handle provider tooling action request — run provider-specific tooling like setup or auth. */
   async handleProviderToolingActionRequest(
     msg: Extract<SessionInboundMessage, { type: "provider.tooling.run.request" }>,
   ): Promise<void> {
@@ -368,6 +377,7 @@ export class ProviderHandler implements DisposableHandler {
     }
   }
 
+  /** Handle listing agent presets. */
   async handleAgentPresetsListRequest(
     msg: Extract<SessionInboundMessage, { type: "agent.presets.list.request" }>,
   ): Promise<void> {
@@ -392,6 +402,7 @@ export class ProviderHandler implements DisposableHandler {
     }
   }
 
+  /** Handle model gateway MoA test request — run a synthetic model test against a gateway. */
   async handleModelGatewayMoaTestRequest(
     msg: Extract<SessionInboundMessage, { type: "model_gateway.moa.test.request" }>,
   ): Promise<void> {

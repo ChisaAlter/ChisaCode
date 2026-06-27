@@ -3,7 +3,7 @@
     "setup": [
       "npm ci",
       "npm run build:server",
-      "cp \"$CHISACODE_SOURCE_CHECKOUT_PATH/packages/server/.env\" \"$CHISACODE_WORKTREE_PATH/packages/server/.env\""
+      "node -e \"const fs=require('node:fs'); const src=path.join(process.env.CHISACODE_SOURCE_CHECKOUT_PATH||'','packages/server/.env'); const dst=path.join(process.env.CHISACODE_WORKTREE_PATH||'','packages/server/.env'); if (fs.existsSync(src)) fs.copyFileSync(src, dst)\""
     ]
   },
   "scripts": {

@@ -25,7 +25,10 @@ async function main() {
     await page.goto(targetUrl);
     for (let attempt = 0; attempt < 30; attempt += 1) {
       await sleep(1000);
-      const body = await page.locator("body").innerText().catch(() => "");
+      const body = await page
+        .locator("body")
+        .innerText()
+        .catch(() => "");
       console.log("attempt", attempt, page.url(), body.slice(0, 240).replace(/\s+/g, " "));
       if (body.includes("我是MiMo-v2.5") || body.includes("小米LLM核心团队")) {
         break;

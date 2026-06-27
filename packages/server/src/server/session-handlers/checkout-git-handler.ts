@@ -36,7 +36,7 @@ import {
   buildCheckoutStatusPayloadFromSnapshot,
   buildCheckoutPrStatusPayloadFromSnapshot,
 } from "../checkout/status-projection.js";
-import { assertSafeGitRef as assertWorktreeSafeGitRef } from "../worktree-session.js";
+import { assertSafeGitRef } from "../worktree-session.js";
 import type {
   SessionInboundMessage,
   SessionOutboundMessage,
@@ -60,6 +60,7 @@ type PullRequestTimelinePayloadItem = PullRequestTimelinePayload["items"][number
 
 const CHISACODE_STASH_PREFIX = "chisacode-auto-stash:";
 
+/** Handles all checkout, git branch/stash/PR, and diff subscription RPC operations. */
 export class CheckoutGitHandler implements DisposableHandler {
   private readonly context: SessionContext;
   private readonly checkoutDiffSubscriptions = new Map<string, () => void>();
@@ -101,13 +102,7 @@ export class CheckoutGitHandler implements DisposableHandler {
 
   // --- Branch safety helpers ---
 
-  assertSafeGitRef(ref: string, label: string): void {
-    if (!/^[A-Za-z0-9._/-]+$/.test(ref)) {
-      throw new Error(`Invalid ${label}: ${ref}`);
-    }
-    assertWorktreeSafeGitRef(ref, label);
-  }
-
+  /** Check whether the working tree has uncommitted changes. */
   async isWorkingTreeDirty(cwd: string): Promise<boolean> {
     try {
       const snapshot = await this.context.workspaceGitService.getSnapshot(cwd);
@@ -119,6 +114,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Ensure the working tree is clean — throws if there are uncommitted changes. */
   async ensureCleanWorkingTree(cwd: string): Promise<void> {
     if (await this.isWorkingTreeDirty(cwd)) {
       throw new Error(
@@ -127,11 +123,9 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
-  async checkoutExistingBranch(
-    cwd: string,
-    branch: string,
-  ): Promise<CheckoutExistingBranchResult> {
-    this.assertSafeGitRef(branch, "branch");
+  /** Checkout a branch that already exists (local or remote). */
+  async checkoutExistingBranch(cwd: string, branch: string): Promise<CheckoutExistingBranchResult> {
+    assertSafeGitRef(branch, "branch");
     const resolution = await this.context.workspaceGitService.validateBranchRef(cwd, branch);
     if (resolution.kind === "not-found") {
       throw new Error(`Branch not found: ${branch}`);
@@ -142,16 +136,20 @@ export class CheckoutGitHandler implements DisposableHandler {
     return result;
   }
 
+  /** Create a new branch from a base branch reference. */
   async createBranchFromBase(params: {
     cwd: string;
     baseBranch: string;
     newBranchName: string;
   }): Promise<void> {
     const { cwd, baseBranch, newBranchName } = params;
-    this.assertSafeGitRef(baseBranch, "base branch");
-    this.assertSafeGitRef(newBranchName, "new branch");
+    assertSafeGitRef(baseBranch, "base branch");
+    assertSafeGitRef(newBranchName, "new branch");
 
-    const baseResolution = await this.context.workspaceGitService.validateBranchRef(cwd, baseBranch);
+    const baseResolution = await this.context.workspaceGitService.validateBranchRef(
+      cwd,
+      baseBranch,
+    );
     if (baseResolution.kind === "not-found") {
       throw new Error(`Base branch not found: ${baseBranch}`);
     }
@@ -168,13 +166,15 @@ export class CheckoutGitHandler implements DisposableHandler {
     await this.notifyGitMutation(cwd, "create-branch");
   }
 
+  /** Check whether a local branch exists. */
   async doesLocalBranchExist(cwd: string, branch: string): Promise<boolean> {
-    this.assertSafeGitRef(branch, "branch");
+    assertSafeGitRef(branch, "branch");
     return this.context.workspaceGitService.hasLocalBranch(cwd, branch);
   }
 
   // --- Stash handlers ---
 
+  /** Handle stash save request — push uncommitted changes to a git stash. */
   async handleStashSaveRequest(
     msg: Extract<SessionInboundMessage, { type: "stash_save_request" }>,
   ): Promise<void> {
@@ -201,6 +201,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle stash pop request — apply and drop a stash by index. */
   async handleStashPopRequest(
     msg: Extract<SessionInboundMessage, { type: "stash_pop_request" }>,
   ): Promise<void> {
@@ -223,6 +224,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle stash list request — list ChisaCode-managed stashes in the repository. */
   async handleStashListRequest(
     msg: Extract<SessionInboundMessage, { type: "stash_list_request" }>,
   ): Promise<void> {
@@ -245,6 +247,7 @@ export class CheckoutGitHandler implements DisposableHandler {
 
   // --- Checkout status / validate / suggestions ---
 
+  /** Handle checkout status request — returns current branch, dirty state, PR status, etc. */
   async handleCheckoutStatusRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_status_request" }>,
   ): Promise<void> {
@@ -279,13 +282,14 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle branch validation request — resolve a branch name to local/remote/not-found. */
   async handleValidateBranchRequest(
     msg: Extract<SessionInboundMessage, { type: "validate_branch_request" }>,
   ): Promise<void> {
     const { cwd, branchName, requestId } = msg;
     try {
       const resolvedCwd = expandTilde(cwd);
-      this.assertSafeGitRef(branchName, "branch");
+      assertSafeGitRef(branchName, "branch");
       const resolution = await this.context.workspaceGitService.validateBranchRef(
         resolvedCwd,
         branchName,
@@ -340,6 +344,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle branch suggestions request — fuzzy match branch names for autocomplete. */
   async handleBranchSuggestionsRequest(
     msg: Extract<SessionInboundMessage, { type: "branch_suggestions_request" }>,
   ): Promise<void> {
@@ -372,6 +377,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle GitHub issue/PR search request. */
   async handleGitHubSearchRequest(
     msg: Extract<SessionInboundMessage, { type: "github_search_request" }>,
   ): Promise<void> {
@@ -406,6 +412,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle directory suggestions request — fuzzy match directories for workspace paths. */
   async handleDirectorySuggestionsRequest(msg: DirectorySuggestionsRequest): Promise<void> {
     const { query, limit, requestId, cwd, includeFiles, includeDirectories, matchMode } = msg;
     try {
@@ -442,6 +449,7 @@ export class CheckoutGitHandler implements DisposableHandler {
 
   // --- Checkout diff subscriptions ---
 
+  /** Handle checkout diff subscription request — subscribe to live diff updates for a workspace. */
   async handleSubscribeCheckoutDiffRequest(msg: SubscribeCheckoutDiffRequest): Promise<void> {
     const cwd = expandTilde(msg.cwd);
     this.checkoutDiffSubscriptions.get(msg.subscriptionId)?.();
@@ -466,11 +474,13 @@ export class CheckoutGitHandler implements DisposableHandler {
     });
   }
 
+  /** Handle checkout diff unsubscription request. */
   handleUnsubscribeCheckoutDiffRequest(msg: UnsubscribeCheckoutDiffRequest): void {
     this.checkoutDiffSubscriptions.get(msg.subscriptionId)?.();
     this.checkoutDiffSubscriptions.delete(msg.subscriptionId);
   }
 
+  /** Emit a checkout status update message to the client for a given cwd and git snapshot. */
   emitCheckoutStatusUpdate(cwd: string, snapshot: WorkspaceGitRuntimeSnapshot): void {
     try {
       const requestId = `subscription:${cwd}`;
@@ -491,6 +501,7 @@ export class CheckoutGitHandler implements DisposableHandler {
 
   // --- Branch operations ---
 
+  /** Handle switching to a different branch. */
   async handleCheckoutSwitchBranchRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_switch_branch_request" }>,
   ): Promise<void> {
@@ -518,6 +529,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle renaming the current branch. */
   async handleCheckoutRenameBranchRequest(msg: CheckoutRenameBranchRequest): Promise<void> {
     const { cwd, branch, requestId } = msg;
     const validation = validateBranchSlug(branch);
@@ -564,6 +576,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle commit request — stage and commit with optional auto-generated message. */
   async handleCheckoutCommitRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_commit_request" }>,
   ): Promise<void> {
@@ -593,6 +606,7 @@ export class CheckoutGitHandler implements DisposableHandler {
 
   // --- Merge / pull / push / refresh ---
 
+  /** Handle merge-to-base request — merge current branch into a base branch. */
   async handleCheckoutMergeRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_merge_request" }>,
   ): Promise<void> {
@@ -634,6 +648,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle merge-from-base request — merge a base branch into the current branch. */
   async handleCheckoutMergeFromBaseRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_merge_from_base_request" }>,
   ): Promise<void> {
@@ -663,6 +678,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle pull request — fetch and merge remote changes into the current branch. */
   async handleCheckoutPullRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_pull_request" }>,
   ): Promise<void> {
@@ -683,6 +699,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle push request — push the current branch to the remote. */
   async handleCheckoutPushRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_push_request" }>,
   ): Promise<void> {
@@ -702,6 +719,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle checkout refresh request — force-refresh git snapshot and GitHub status for a workspace. */
   async handleCheckoutRefreshRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout.refresh.request" }>,
   ): Promise<void> {
@@ -728,6 +746,7 @@ export class CheckoutGitHandler implements DisposableHandler {
 
   // --- PR operations ---
 
+  /** Handle PR create request — create a GitHub pull request from the current branch. */
   async handleCheckoutPrCreateRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_pr_create_request" }>,
   ): Promise<void> {
@@ -764,6 +783,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle PR merge request — merge a GitHub pull request with the chosen method. */
   async handleCheckoutPrMergeRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_pr_merge_request" }>,
   ): Promise<void> {
@@ -794,6 +814,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle GitHub auto-merge toggle request — enable or disable auto-merge for a PR. */
   async handleCheckoutGithubSetAutoMergeRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout.github.set_auto_merge.request" }>,
   ): Promise<void> {
@@ -850,6 +871,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle PR status request — return the current PR status for a workspace. */
   async handleCheckoutPrStatusRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_pr_status_request" }>,
   ): Promise<void> {
@@ -874,6 +896,7 @@ export class CheckoutGitHandler implements DisposableHandler {
     }
   }
 
+  /** Handle pull request timeline request — fetch the timeline of events for a GitHub PR. */
   async handlePullRequestTimelineRequest(
     msg: Extract<SessionInboundMessage, { type: "pull_request_timeline_request" }>,
   ): Promise<void> {
@@ -976,6 +999,7 @@ export class CheckoutGitHandler implements DisposableHandler {
 
 // --- File-level helpers ---
 
+/** Validate that a pull request timeline request has a valid PR identity. */
 function isValidPullRequestTimelineIdentity(options: {
   prNumber: number;
   repoOwner: string;
@@ -987,10 +1011,12 @@ function isValidPullRequestTimelineIdentity(options: {
   return isValidGitHubRepoSegment(options.repoOwner) && isValidGitHubRepoSegment(options.repoName);
 }
 
+/** Validate that a GitHub repo segment (owner or name) is safe. */
 function isValidGitHubRepoSegment(value: string): boolean {
   return /^[A-Za-z0-9._-]+$/.test(value);
 }
 
+/** Convert a pull request timeline item to its wire payload (strip author URL). */
 function toPullRequestTimelinePayloadItem(
   item: PullRequestTimelineItem,
 ): PullRequestTimelinePayloadItem {

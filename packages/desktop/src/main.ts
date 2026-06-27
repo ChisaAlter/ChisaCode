@@ -509,6 +509,31 @@ async function createMainWindow(): Promise<void> {
   setupWindowResizeEvents(mainWindow);
   setupDefaultContextMenu(mainWindow);
   setupDragDropPrevention(mainWindow);
+
+  /**
+   * Webview hardening — defense-in-depth layers enforced on every webview:
+   *
+   * Current protections:
+   * - nodeIntegration / nodeIntegrationInSubFrames / nodeIntegrationInWorker: false
+   * - contextIsolation: true
+   * - sandbox: true
+   * - webSecurity: true
+   * - webviewTag: false (prevent nested webviews)
+   * - allowRunningInsecureContent: false
+   * - preload stripped (no custom preload scripts)
+   * - src limited to http/https/about:blank (isAllowedBrowserWebviewUrl)
+   * - partition must be named chisacode-browser-* (getBrowserIdFromWebviewPartition)
+   * - Navigation guarded: will-navigate / will-frame-navigate / will-redirect
+   * - window.open intercepted (setWindowOpenHandler)
+   *
+   * TODO(security): Audit webview-loaded resource origins (scripts, styles,
+   * images, fonts, connect targets), then inject a Content-Security-Policy
+   * header via webRequest.onHeadersReceived for frames that lack their own CSP.
+   * Conservative starting point:
+   *   default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';
+   *   img-src 'self' data: https:; connect-src 'self' https: wss:;
+   *   frame-src 'self' https:; font-src 'self' data:
+   */
   mainWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
     if (!isAllowedBrowserWebviewUrl(params.src)) {
       event.preventDefault();

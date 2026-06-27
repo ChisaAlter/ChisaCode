@@ -32,6 +32,23 @@
 - On macOS/Linux `npm run dev` uses portless names such as `https://daemon.localhost` / `https://app.localhost` with ephemeral ports; Windows dev binds the daemon to `localhost:6767`.
 - Daemon logs are in `$CHISACODE_HOME/daemon.log`; set `CHISACODE_LOG_LEVEL=trace` before launch for provider/session/agent-manager traces.
 
+## Improvement Tracking
+
+The master improvement roadmap lives at `docs/refactors/comprehensive-improvement-roadmap.md`. It tracks known tech debt, refactors, and quality improvements across packages with priorities and status.
+
+### How to Update
+
+- When you identify a systemic issue worth tracking (not a one-line bugfix), add an entry to the roadmap: describe the problem, affected packages, suggested approach, and current status.
+- When starting work on a tracked item, move it to in-progress and link the branch/PR.
+- When completing a tracked item, move it to done with a brief note on the resolution.
+- Do not delete entries; completed items stay for historical context.
+
+### Quick Check Before Any Change
+
+- [ ] Is there already a roadmap entry for the area you're touching? Read it first.
+- [ ] Could your change create new tech debt (e.g., workaround for a known limitation)? Add a roadmap entry before moving on.
+- [ ] Did your change resolve a tracked item? Update the roadmap entry to done.
+
 ## Testing
 
 - Never run full workspace/package test suites locally unless explicitly asked; they are heavy and can freeze the machine.
@@ -42,6 +59,20 @@
 - App Playwright E2E is `npm run test:e2e --workspace=@chisacode/app`; do not run the full Playwright suite locally, only targeted specs when needed.
 - Tests should be either unit tests with injected real-world ports/fakes or real E2E; avoid `vi.mock`, JSDOM/component mounting, private-state assertions, and auth/env skips in normal tests.
 - Surface-specific UI verification must use the real target surface. Desktop testing means the Electron desktop app only; mobile testing means the native mobile app/device or emulator only. Do not use the web app/browser preview as a substitute for desktop or mobile verification, and do not claim desktop/mobile validation from web results.
+
+### Client Test Coverage
+
+- The `packages/client` test suite (`daemon-client.test.ts`, `daemon-client-transport.test.ts`, `terminal-stream-router.test.ts`, `index.test.ts`) currently has gaps around edge-case error paths, reconnection state machines, and binary frame encoding boundaries. When working in client code, add targeted unit tests for the changed paths.
+- Priority order for new client tests: (1) error/reconnect paths that could cause silent failures in production, (2) binary frame encode/decode edge cases, (3) public `ChisaCodeClient` method contracts that app/CLI depend on.
+
+### Fixed Waits
+
+- Avoid `setTimeout` / `sleep`-based fixed delays in tests. They make suites slower, flaky under CI load, and hide real timing bugs.
+- Prefer deterministic alternatives:
+  - `vi.waitFor(() => expect(...))` for assertion polling (built into Vitest)
+  - Event/observable-driven resolution: `await new Promise(r => emitter.once("ready", r))`
+  - Mock clock (`vi.useFakeTimers()`) when testing timeout/deadline logic itself
+- When a fixed wait is truly unavoidable (e.g. waiting for an OS-level side effect with no event hook), wrap it in a `vi.waitFor` with a generous timeout and document why polling is not possible.
 
 ## Protocol And Compatibility
 
@@ -69,3 +100,21 @@
 - Prefer `function` declarations and `interface` when both work; oxlint enforces no explicit `any`, no array index keys, no nested ternaries, React hook rules, and low nesting/complexity.
 - Do not add barrel `index.ts` re-export files just for convenience.
 - If a Zod schema exists, derive the type with `z.infer<typeof schema>` instead of hand-writing a parallel type.
+
+### JSDoc
+
+- Add JSDoc for public APIs exported from packages: functions, classes, interfaces, and type aliases that other packages or external consumers depend on.
+- Required tags: `@param` for each non-obvious parameter, `@returns` for non-void functions, `@throws` when a function explicitly throws errors callers should handle.
+- Omit JSDoc on React component props (self-documenting via TypeScript), trivial getters/setters, and internal helpers whose name and signature are unambiguous.
+- Format: `/** ... */` style, each tag on its own line, description in sentence case, no trailing period on `@param`/`@returns` single-line descriptions. Example:
+
+```typescript
+/**
+ * Connects to the daemon and establishes a WebSocket session.
+ * @param url The daemon WebSocket URL
+ * @param options Connection options including auth token and reconnect policy
+ * @returns A promise that resolves once the handshake completes
+ * @throws {ConnectionError} If the daemon is unreachable or rejects the handshake
+ */
+export async function connect(url: string, options: ConnectOptions): Promise<Session> { ... }
+```

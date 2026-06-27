@@ -12,6 +12,7 @@ import type { SessionInboundMessage, SessionOutboundMessage } from "../messages.
 import type { ScheduleService } from "../schedule/service.js";
 import type { SessionContext, DisposableHandler } from "./session-context.js";
 
+/** Handles chat room, schedule, and loop RPC operations. */
 export class ChatScheduleLoopHandler implements DisposableHandler {
   private readonly context: SessionContext;
 
@@ -38,6 +39,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     });
   }
 
+  /** Handle chat room creation. */
   async handleChatCreateRequest(
     request: Extract<SessionInboundMessage, { type: "chat/create" }>,
   ): Promise<void> {
@@ -55,6 +57,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle chat room listing. */
   async handleChatListRequest(
     request: Extract<SessionInboundMessage, { type: "chat/list" }>,
   ): Promise<void> {
@@ -69,6 +72,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle chat room inspection (detail view plus recent messages). */
   async handleChatInspectRequest(
     request: Extract<SessionInboundMessage, { type: "chat/inspect" }>,
   ): Promise<void> {
@@ -83,6 +87,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle chat room deletion. */
   async handleChatDeleteRequest(
     request: Extract<SessionInboundMessage, { type: "chat/delete" }>,
   ): Promise<void> {
@@ -97,6 +102,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle posting a message to a chat room, including mention fan-out. */
   async handleChatPostRequest(
     request: Extract<SessionInboundMessage, { type: "chat/post" }>,
   ): Promise<void> {
@@ -152,6 +158,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle reading messages from a chat room with optional pagination. */
   async handleChatReadRequest(
     request: Extract<SessionInboundMessage, { type: "chat/read" }>,
   ): Promise<void> {
@@ -171,6 +178,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle long-polling wait for new messages in a chat room. */
   async handleChatWaitRequest(
     request: Extract<SessionInboundMessage, { type: "chat/wait" }>,
   ): Promise<void> {
@@ -240,6 +248,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     });
   }
 
+  /** Handle schedule creation. */
   async handleScheduleCreateRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/create" }>,
   ): Promise<void> {
@@ -270,6 +279,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle listing all schedules. */
   async handleScheduleListRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/list" }>,
   ): Promise<void> {
@@ -288,6 +298,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle inspecting a specific schedule including its run history. */
   async handleScheduleInspectRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/inspect" }>,
   ): Promise<void> {
@@ -302,6 +313,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle fetching schedule run logs. */
   async handleScheduleLogsRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/logs" }>,
   ): Promise<void> {
@@ -316,6 +328,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle pausing a schedule. */
   async handleSchedulePauseRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/pause" }>,
   ): Promise<void> {
@@ -334,6 +347,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle resuming a paused schedule. */
   async handleScheduleResumeRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/resume" }>,
   ): Promise<void> {
@@ -352,6 +366,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle deleting a schedule. */
   async handleScheduleDeleteRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/delete" }>,
   ): Promise<void> {
@@ -366,6 +381,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle triggering a single run of a schedule immediately. */
   async handleScheduleRunOnceRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/run-once" }>,
   ): Promise<void> {
@@ -380,6 +396,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle updating an existing schedule's configuration. */
   async handleScheduleUpdateRequest(
     request: Extract<SessionInboundMessage, { type: "schedule/update" }>,
   ): Promise<void> {
@@ -427,6 +444,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     });
   }
 
+  /** Handle starting a new loop run. */
   async handleLoopRunRequest(
     request: Extract<SessionInboundMessage, { type: "loop/run" }>,
   ): Promise<void> {
@@ -459,6 +477,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle listing all loops. */
   async handleLoopListRequest(
     request: Extract<SessionInboundMessage, { type: "loop/list" }>,
   ): Promise<void> {
@@ -473,6 +492,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle inspecting a specific loop's status and iteration history. */
   async handleLoopInspectRequest(
     request: Extract<SessionInboundMessage, { type: "loop/inspect" }>,
   ): Promise<void> {
@@ -487,6 +507,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle fetching loop iteration logs with cursor-based pagination. */
   async handleLoopLogsRequest(
     request: Extract<SessionInboundMessage, { type: "loop/logs" }>,
   ): Promise<void> {
@@ -507,6 +528,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     }
   }
 
+  /** Handle stopping a running loop. */
   async handleLoopStopRequest(
     request: Extract<SessionInboundMessage, { type: "loop/stop" }>,
   ): Promise<void> {

@@ -88,9 +88,8 @@ function createQueryClient() {
 }
 
 function createQueryClientWrapper(queryClient: QueryClient) {
-  const Wrapper = ({ children }: { children: ReactNode }) => (
-    React.createElement(QueryClientProvider, { client: queryClient }, children)
-  );
+  const Wrapper = ({ children }: { children: ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
   return Wrapper;
 }
 
@@ -329,9 +328,7 @@ describe("useArchiveAgent", () => {
 
   it("archive mutation cancels stale list queries and keeps the server archivedAt in caches", async () => {
     const queryClient = createQueryClient();
-    const archiveAgent = vi
-      .fn()
-      .mockResolvedValue({ archivedAt: "2026-04-01T05:00:00.000Z" });
+    const archiveAgent = vi.fn().mockResolvedValue({ archivedAt: "2026-04-01T05:00:00.000Z" });
     const cancelQueriesSpy = vi.spyOn(queryClient, "cancelQueries");
     useSessionStore.getState().initializeSession("server-a", {
       archiveAgent,

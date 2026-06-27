@@ -1,13 +1,19 @@
-// Internal types extracted from session.ts that have minimal external dependencies.
-// These are implementation details of the Session class and not part of its public API.
+/**
+ * Internal types extracted from Session.
+ *
+ * These types have minimal external dependencies and are implementation
+ * details of the Session class. They are NOT part of Session's public API.
+ */
 
 import type { FSWatcher } from "node:fs";
 
 import type { LocalSpeechModelId } from "./speech/providers/local/models.js";
 import type { SpeechReadinessSnapshot } from "./speech/speech-runtime.js";
 
+/** Current phase of the speech processing pipeline. */
 export type ProcessingPhase = "idle" | "transcribing";
 
+/** Describes a workspace directory being watched by the Session for git changes. */
 export interface WorkspaceGitWatchTarget {
   cwd: string;
   workspaceId: string;
@@ -19,6 +25,7 @@ export interface WorkspaceGitWatchTarget {
   lastBranchName: string | null;
 }
 
+/** Runtime metrics collected by the Session for monitoring. */
 export interface SessionRuntimeMetrics {
   terminalDirectorySubscriptionCount: number;
   terminalSubscriptionCount: number;
@@ -26,9 +33,10 @@ export interface SessionRuntimeMetrics {
   peakInflightRequests: number;
 }
 
-// Stub type for a feature under development (module not yet available)
+/** Factory that creates an MCP transport. Stub for a feature under development. */
 export type AgentMcpTransportFactory = () => Promise<unknown>;
 
+/** Payload emitted when speech-to-text transcription completes. */
 export interface VoiceTranscriptionResultPayload {
   text: string;
   requestId: string;
@@ -41,6 +49,7 @@ export interface VoiceTranscriptionResultPayload {
   debugRecordingPath?: string;
 }
 
+/** Context describing why a voice feature (STT/TTS) is currently unavailable. */
 export interface VoiceFeatureUnavailableContext {
   reasonCode: SpeechReadinessSnapshot["voiceFeature"]["reasonCode"];
   message: string;
@@ -48,12 +57,17 @@ export interface VoiceFeatureUnavailableContext {
   missingModelIds: LocalSpeechModelId[];
 }
 
+/** Metadata returned in RPC responses when a voice feature is unavailable. */
 export interface VoiceFeatureUnavailableResponseMetadata {
   reasonCode?: SpeechReadinessSnapshot["voiceFeature"]["reasonCode"];
   retryable?: boolean;
   missingModelIds?: LocalSpeechModelId[];
 }
 
+/**
+ * Error thrown when a voice feature (STT/TTS) is unavailable,
+ * carrying structured metadata for client-side handling.
+ */
 export class VoiceFeatureUnavailableError extends Error {
   readonly reasonCode: SpeechReadinessSnapshot["voiceFeature"]["reasonCode"];
   readonly retryable: boolean;
