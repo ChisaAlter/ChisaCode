@@ -2,7 +2,7 @@ import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
-import { basename, resolve, sep } from "path";
+import { basename } from "path";
 import { z } from "zod";
 import type { ToolSet } from "ai";
 import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
@@ -29,11 +29,6 @@ import { isStoredAgentProviderAvailable } from "./persistence-hooks.js";
 import { AgentPresetStore } from "./agent/agent-preset-store.js";
 import { experimental_createMCPClient } from "ai";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import {
-  buildWorkspaceScriptPayloads,
-  readChisaCodeConfigForProjection,
-} from "./script-status-projection.js";
-import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
@@ -112,7 +107,6 @@ import {
 } from "./worktree-session.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
 import {
-  WORKSPACE_GIT_WATCH_REMOVED_STATE_KEY,
   resolveKnownProjectRootForConfig,
   type GitMutationRefreshReason,
   diffChangeTypeFor,
@@ -145,6 +139,14 @@ import {
   matchesAgentFilter as matchesAgentFilterFunc,
   resolveAgentIdentifier as resolveAgentIdentifierFunc,
 } from "./agent-session-helpers.js";
+import {
+  isPathWithinRoot as isPathWithinRootCore,
+  workspaceGitDescriptorStateKey as workspaceGitDescriptorStateKeyCore,
+  buildWorkspaceGitRuntimePayload as buildWorkspaceGitRuntimePayloadCore,
+  buildWorkspaceGitHubRuntimePayload as buildWorkspaceGitHubRuntimePayloadCore,
+  buildWorkspaceScriptPayloadSnapshot as buildWorkspaceScriptPayloadSnapshotCore,
+  emitWorkspaceScriptStatusUpdate as emitWorkspaceScriptStatusUpdateCore,
+} from "./workspace-core.js";
 
 type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
 type FetchAgentsRequestFilter = NonNullable<FetchAgentsRequestMessage["filter"]>;
@@ -1511,12 +1513,7 @@ export class Session {
   }
 
   private isPathWithinRoot(rootPath: string, candidatePath: string): boolean {
-    const resolvedRoot = resolve(rootPath);
-    const resolvedCandidate = resolve(candidatePath);
-    if (resolvedCandidate === resolvedRoot) {
-      return true;
-    }
-    return resolvedCandidate.startsWith(resolvedRoot + sep);
+    return isPathWithinRootCore(rootPath, candidatePath);
   }
 
   private async generateCommitMessage(cwd: string): Promise<string> {
@@ -1758,13 +1755,7 @@ export class Session {
   }
 
   private workspaceGitDescriptorStateKey(workspace: WorkspaceDescriptorPayload | null): string {
-    if (!workspace) {
-      return WORKSPACE_GIT_WATCH_REMOVED_STATE_KEY;
-    }
-    return JSON.stringify([
-      workspace.name,
-      workspace.diffStat ? [workspace.diffStat.additions, workspace.diffStat.deletions] : null,
-    ]);
+    return workspaceGitDescriptorStateKeyCore(workspace);
   }
 
   private shouldSkipWorkspaceGitWatchUpdate(
@@ -2019,16 +2010,7 @@ export class Session {
       diffStat,
       scripts:
         this.scriptRouteStore && this.scriptRuntimeStore
-          ? buildWorkspaceScriptPayloads({
-              workspaceId: workspace.workspaceId,
-              workspaceDirectory: workspace.cwd,
-              chisacodeConfig: readChisaCodeConfigForProjection(workspace.cwd, this.sessionLogger),
-              routeStore: this.scriptRouteStore,
-              runtimeStore: this.scriptRuntimeStore,
-              daemonPort: this.getDaemonTcpPort?.() ?? null,
-              gitMetadata: this.resolveWorkspaceScriptGitMetadata(workspace.cwd),
-              resolveHealth: this.resolveScriptHealth ?? undefined,
-            })
+          ? this.buildWorkspaceScriptPayloadSnapshot(workspace.workspaceId, workspace.cwd)
           : [],
       ...(resolvedProjectRecord
         ? {
@@ -2041,29 +2023,13 @@ export class Session {
   private buildWorkspaceGitRuntimePayload(
     snapshot: WorkspaceGitRuntimeSnapshot,
   ): NonNullable<WorkspaceDescriptorPayload["gitRuntime"]> | null {
-    if (!snapshot.git.isGit) {
-      return null;
-    }
-
-    return {
-      currentBranch: snapshot.git.currentBranch,
-      remoteUrl: snapshot.git.remoteUrl,
-      isChisaCodeOwnedWorktree: snapshot.git.isChisaCodeOwnedWorktree,
-      isDirty: snapshot.git.isDirty,
-      aheadBehind: snapshot.git.aheadBehind,
-      aheadOfOrigin: snapshot.git.aheadOfOrigin,
-      behindOfOrigin: snapshot.git.behindOfOrigin,
-    };
+    return buildWorkspaceGitRuntimePayloadCore(snapshot);
   }
 
   private buildWorkspaceGitHubRuntimePayload(
     snapshot: WorkspaceGitRuntimeSnapshot,
   ): NonNullable<WorkspaceDescriptorPayload["githubRuntime"]> {
-    return {
-      featuresEnabled: snapshot.github.featuresEnabled,
-      pullRequest: snapshot.github.pullRequest,
-      error: snapshot.github.error,
-    };
+    return buildWorkspaceGitHubRuntimePayloadCore(snapshot);
   }
 
   private async describeWorkspaceRecordWithGitData(
@@ -2583,44 +2549,25 @@ export class Session {
     workspaceId: string,
     workspaceDirectory: string,
   ): WorkspaceDescriptorPayload["scripts"] {
-    if (!this.scriptRouteStore || !this.scriptRuntimeStore) {
-      return [];
-    }
-    return buildWorkspaceScriptPayloads({
-      workspaceId,
-      workspaceDirectory,
-      chisacodeConfig: readChisaCodeConfigForProjection(workspaceDirectory, this.sessionLogger),
-      routeStore: this.scriptRouteStore,
-      runtimeStore: this.scriptRuntimeStore,
-      daemonPort: this.getDaemonTcpPort?.() ?? null,
-      gitMetadata: this.resolveWorkspaceScriptGitMetadata(workspaceDirectory),
-      resolveHealth: this.resolveScriptHealth ?? undefined,
+    return buildWorkspaceScriptPayloadSnapshotCore(workspaceId, workspaceDirectory, {
+      scriptRouteStore: this.scriptRouteStore,
+      scriptRuntimeStore: this.scriptRuntimeStore,
+      getDaemonTcpPort: this.getDaemonTcpPort,
+      resolveScriptHealth: this.resolveScriptHealth,
+      workspaceGitService: this.workspaceGitService,
+      sessionLogger: this.sessionLogger,
     });
   }
 
-  private resolveWorkspaceScriptGitMetadata(
-    workspaceDirectory: string,
-  ): { projectSlug: string; currentBranch: string | null } | undefined {
-    const snapshot = this.workspaceGitService.peekSnapshot(workspaceDirectory);
-    if (!snapshot) {
-      return undefined;
-    }
-    return {
-      projectSlug: deriveProjectSlug(
-        workspaceDirectory,
-        snapshot.git.isGit ? snapshot.git.remoteUrl : null,
-      ),
-      currentBranch: snapshot.git.currentBranch,
-    };
-  }
-
   private emitWorkspaceScriptStatusUpdate(workspaceId: string, workspaceDirectory: string): void {
-    this.emit({
-      type: "script_status_update",
-      payload: {
-        workspaceId,
-        scripts: this.buildWorkspaceScriptPayloadSnapshot(workspaceId, workspaceDirectory),
-      },
+    emitWorkspaceScriptStatusUpdateCore(workspaceId, workspaceDirectory, {
+      scriptRouteStore: this.scriptRouteStore,
+      scriptRuntimeStore: this.scriptRuntimeStore,
+      getDaemonTcpPort: this.getDaemonTcpPort,
+      resolveScriptHealth: this.resolveScriptHealth,
+      workspaceGitService: this.workspaceGitService,
+      sessionLogger: this.sessionLogger,
+      emit: (message) => this.emit(message),
     });
   }
 
