@@ -327,6 +327,7 @@ describe("DaemonConfigStore", () => {
     expect(persisted.agents?.modelGateways?.zai).toEqual({
       id: "zai",
       label: "ZAI",
+      syntheticModels: [],
       enabled: true,
       models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
       upstreams: {
