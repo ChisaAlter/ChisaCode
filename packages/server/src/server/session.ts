@@ -5,7 +5,7 @@ import pMemoize from "p-memoize";
 import { basename } from "path";
 import { z } from "zod";
 import type { ToolSet } from "ai";
-import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
+import type { ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
@@ -138,6 +138,15 @@ import {
   filterEditorsForClient as filterEditorsForClientFunc,
   matchesAgentFilter as matchesAgentFilterFunc,
   resolveAgentIdentifier as resolveAgentIdentifierFunc,
+  parseClientCapabilities as parseClientCapabilitiesFunc,
+  buildAgentStreamPayload as buildAgentStreamPayloadFunc,
+  getFocusedAgentSelectionForCwd as getFocusedAgentSelectionForCwdFunc,
+  readStructuredGenerationDaemonConfig as readStructuredGenerationDaemonConfigFunc,
+  bufferOrEmitAgentUpdate as bufferOrEmitAgentUpdateFunc,
+  flushBootstrappedAgentUpdates as flushBootstrappedAgentUpdatesFunc,
+  type AgentUpdatePayload,
+  type AgentUpdatesSubscriptionState,
+  type AgentUpdatesFilter,
 } from "./agent-session-helpers.js";
 import {
   isPathWithinRoot as isPathWithinRootCore,
@@ -150,16 +159,6 @@ import {
   removeWorkspaceGitSubscription as removeWorkspaceGitSubscriptionCore,
 } from "./workspace-core.js";
 
-type FetchAgentsRequestMessage = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
-type FetchAgentsRequestFilter = NonNullable<FetchAgentsRequestMessage["filter"]>;
-type AgentUpdatePayload = Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
-type AgentUpdatesFilter = FetchAgentsRequestFilter;
-interface AgentUpdatesSubscriptionState {
-  subscriptionId: string;
-  filter?: AgentUpdatesFilter;
-  isBootstrapping: boolean;
-  pendingUpdatesByAgentId: Map<string, AgentUpdatePayload>;
-}
 type FetchWorkspacesRequestMessage = Extract<
   SessionInboundMessage,
   { type: "fetch_workspaces_request" }
@@ -265,23 +264,6 @@ export type SessionLifecycleIntent =
       requestId: string;
       reason?: string;
     };
-
-/** Parse raw client capability flags from the wire into a normalized set. */
-function parseClientCapabilities(
-  capabilities: Record<string, unknown> | null | undefined,
-): ReadonlySet<ClientCapability> {
-  if (!capabilities) {
-    return new Set();
-  }
-  const known = new Set<ClientCapability>(Object.values(CLIENT_CAPS));
-  const result: ClientCapability[] = [];
-  for (const [key, value] of Object.entries(capabilities)) {
-    if (value === true && known.has(key as ClientCapability)) {
-      result.push(key as ClientCapability);
-    }
-  }
-  return new Set(result);
-}
 
 /**
  * Session represents a single connected client session.
@@ -422,7 +404,7 @@ export class Session {
     } = options;
     this.clientId = clientId;
     this.appVersion = appVersion ?? null;
-    this.clientCapabilities = parseClientCapabilities(clientCapabilities);
+    this.clientCapabilities = parseClientCapabilitiesFunc(clientCapabilities);
     this.sessionId = uuidv4();
     this.onMessage = onMessage;
     this.onBinaryMessage = onBinaryMessage ?? null;
@@ -686,7 +668,7 @@ export class Session {
 
   /** Update the connected client's capability flags. */
   updateClientCapabilities(capabilities: Record<string, unknown> | null): void {
-    this.clientCapabilities = parseClientCapabilities(capabilities);
+    this.clientCapabilities = parseClientCapabilitiesFunc(capabilities);
   }
 
   /** Check whether the connected client supports a given capability. */
@@ -752,28 +734,14 @@ export class Session {
         thinkingOptionId?: string | null;
       }
     | undefined {
-    const focusedAgentId = this.clientActivity?.focusedAgentId;
-    if (!focusedAgentId) {
-      return undefined;
-    }
-
-    const agent = this.agentManager.getAgent(focusedAgentId);
-    if (!agent || agent.cwd !== cwd) {
-      return undefined;
-    }
-
-    return {
-      provider: agent.provider,
-      model: agent.runtimeInfo?.model ?? agent.config.model ?? null,
-      thinkingOptionId:
-        agent.runtimeInfo?.thinkingOptionId ?? agent.config.thinkingOptionId ?? null,
-    };
+    return getFocusedAgentSelectionForCwdFunc(cwd, {
+      clientActivity: this.clientActivity,
+      agentManager: this.agentManager,
+    });
   }
 
   private readStructuredGenerationDaemonConfig(): StructuredGenerationDaemonConfig {
-    return {
-      metadataGeneration: this.daemonConfigStore.get().metadataGeneration,
-    };
+    return readStructuredGenerationDaemonConfigFunc(this.daemonConfigStore);
   }
 
   /** Get current runtime metrics (inflight requests, peak, subscriptions). */
@@ -900,13 +868,7 @@ export class Session {
     event: Extract<AgentManagerEvent, { type: "agent_stream" }>,
     serializedEvent: Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"]["event"],
   ): Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"] {
-    return {
-      agentId: event.agentId,
-      event: serializedEvent,
-      timestamp: event.timestamp ?? new Date().toISOString(),
-      ...(typeof event.seq === "number" ? { seq: event.seq } : {}),
-      ...(typeof event.epoch === "string" ? { epoch: event.epoch } : {}),
-    };
+    return buildAgentStreamPayloadFunc(event, serializedEvent);
   }
 
   private async buildAgentPayload(agent: ManagedAgent): Promise<AgentSnapshotPayload> {
@@ -950,56 +912,27 @@ export class Session {
     return matchesAgentFilterFunc(options);
   }
 
-  private getAgentUpdateTargetId(update: AgentUpdatePayload): string {
-    return update.kind === "remove" ? update.agentId : update.agent.id;
-  }
-
   private bufferOrEmitAgentUpdate(
     subscription: AgentUpdatesSubscriptionState,
     payload: AgentUpdatePayload,
   ): void {
-    if (payload.kind === "upsert" && !this.isProviderVisibleToClient(payload.agent.provider)) {
-      return;
-    }
-    if (subscription.isBootstrapping) {
-      subscription.pendingUpdatesByAgentId.set(this.getAgentUpdateTargetId(payload), payload);
-      return;
-    }
-
-    this.emit({
-      type: "agent_update",
-      payload,
+    return bufferOrEmitAgentUpdateFunc(subscription, payload, {
+      isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
+      emit: (msg) => this.emit(msg),
     });
   }
 
   private flushBootstrappedAgentUpdates(options?: {
     snapshotUpdatedAtByAgentId?: Map<string, number>;
   }): void {
-    const subscription = this.agentUpdatesSubscription;
-    if (!subscription || !subscription.isBootstrapping) {
-      return;
-    }
-
-    subscription.isBootstrapping = false;
-    const pending = Array.from(subscription.pendingUpdatesByAgentId.values());
-    subscription.pendingUpdatesByAgentId.clear();
-
-    for (const payload of pending) {
-      if (payload.kind === "upsert") {
-        const snapshotUpdatedAt = options?.snapshotUpdatedAtByAgentId?.get(payload.agent.id);
-        if (typeof snapshotUpdatedAt === "number") {
-          const updateUpdatedAt = Date.parse(payload.agent.updatedAt);
-          if (!Number.isNaN(updateUpdatedAt) && updateUpdatedAt <= snapshotUpdatedAt) {
-            continue;
-          }
-        }
-      }
-
-      this.emit({
-        type: "agent_update",
-        payload,
-      });
-    }
+    return flushBootstrappedAgentUpdatesFunc(
+      {
+        isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
+        emit: (msg) => this.emit(msg),
+        getAgentUpdatesSubscription: () => this.agentUpdatesSubscription,
+      },
+      options,
+    );
   }
 
   private async findWorkspaceByDirectory(

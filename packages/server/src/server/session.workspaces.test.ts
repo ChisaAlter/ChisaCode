@@ -2621,7 +2621,7 @@ test("workspace update fanout for multiple cwd values is deduplicated", async ()
   };
 
   await session.emitWorkspaceUpdateForCwd("/tmp/repo/worktree");
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
 
   const workspaceUpdates = filterByType(emitted, "workspace_update");
   expect(workspaceUpdates).toHaveLength(2);

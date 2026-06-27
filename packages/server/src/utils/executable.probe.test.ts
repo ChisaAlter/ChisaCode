@@ -95,9 +95,12 @@ function missingAbsolutePath(): string {
 
 async function waitForFile(filePath: string): Promise<void> {
   const deadline = performance.now() + timeoutSlackMs;
-  while (!existsSync(filePath) && performance.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
+  await vi.waitFor(
+    () => {
+      expect(existsSync(filePath) || performance.now() >= deadline).toBeTruthy();
+    },
+    { timeout: timeoutSlackMs },
+  );
 }
 
 const fixtures: ProbeFixture[] = [

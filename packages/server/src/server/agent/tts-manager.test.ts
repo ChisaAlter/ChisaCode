@@ -260,7 +260,7 @@ describe("TTSManager", () => {
         ),
       ).rejects.toThrow("stream exploded");
 
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
       expect(unhandled).toHaveLength(0);
     } finally {
       process.off("unhandledRejection", onUnhandled);

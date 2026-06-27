@@ -1595,7 +1595,7 @@ describe("handleCreateChisaCodeWorktreeRequest", () => {
       });
       expect(registeredWorktreePath).toBeTruthy();
       expect(existsSync(registeredWorktreePath!)).toBe(true);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
       expect(warmWorkspaceGitData).toHaveBeenCalledWith(
         expect.objectContaining({
           workspaceId: response?.payload.workspace?.id,
@@ -1741,6 +1741,7 @@ describe("archiveChisaCodeWorktree", () => {
     const teardownEndTimes: Record<string, number> = {};
     const archiveAgentSpy = vi.fn(async (agentId: string) => {
       teardownStartTimes[agentId] = Date.now();
+      // FIXME: keep setTimeout — simulates realistic agent archive I/O latency for concurrency test
       await new Promise((resolve) => setTimeout(resolve, 100));
       teardownEndTimes[agentId] = Date.now();
       return { archivedAt: new Date().toISOString() };
@@ -1750,6 +1751,7 @@ describe("archiveChisaCodeWorktree", () => {
     });
     const killTerminalsUnderPath = vi.fn(async () => {
       teardownStartTimes.__terminals = Date.now();
+      // FIXME: keep setTimeout — simulates realistic teardown I/O latency for concurrency test
       await new Promise((resolve) => setTimeout(resolve, 100));
       teardownEndTimes.__terminals = Date.now();
     });

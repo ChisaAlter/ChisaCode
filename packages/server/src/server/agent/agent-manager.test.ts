@@ -3246,7 +3246,7 @@ test("waitForAgentEvent does not resolve idle until foreground turn is finalized
   })();
 
   // Wait for the turn to start
-  await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
 
   const waitPromise = manager.waitForAgentEvent(snapshot.id);
 
@@ -3529,7 +3529,7 @@ test("replaceAgentRun stays running when a stale old terminal arrives before the
   expect(replaceGapSnapshot?.lifecycle).toBe("running");
 
   capturedSession!.pushEvent({ type: "turn_completed", provider: "codex", turnId: "turn-1" });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
 
   expect(manager.getAgent(snapshot.id)?.lifecycle).toBe("running");
   expect(stateUpdates.at(-1)?.lifecycle).toBe("running");

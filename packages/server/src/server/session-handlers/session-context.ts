@@ -1,16 +1,10 @@
 /**
- * SessionContext is the interface that Session exposes to its handlers.
+ * Session context interfaces exposed to handlers.
  *
- * Handlers receive a SessionContext (not the Session itself) so that:
- * 1. Dependencies are explicit — a handler's constructor signature documents
- *    exactly what it needs.
- * 2. Handlers are testable in isolation — inject a mock context rather than
- *    constructing an entire Session.
- * 3. The coupling surface is bounded — handlers cannot reach into arbitrary
- *    Session internals, only what SessionContext exposes.
- *
- * This interface is populated incrementally as handlers are extracted. Each
- * extraction adds only the members that handler needs.
+ * "The big SessionContext" (Domain 0) is broken down into per-domain
+ * sub-interfaces so handlers only import the subset they need.  Domain 0
+ * still exists as the intersection of all sub-interfaces because the
+ * Session class must construct a single object that satisfies every handler.
  */
 
 import type { AgentManager } from "../agent/agent-manager.js";
@@ -54,156 +48,57 @@ import type {
 import type { CreateAgentLifecycleDispatch } from "../agent/create-agent-lifecycle-dispatch.js";
 import type pino from "pino";
 
-export interface SessionContext {
-  // --- Identity & transport ---
+// ---------------------------------------------------------------------------
+// Domain A — Core identity / transport (every handler needs these)
+// ---------------------------------------------------------------------------
+
+export interface SessionIdentityContext {
   readonly clientId: string;
   readonly sessionId: string;
   readonly sessionLogger: pino.Logger;
   readonly chisacodeHome: string;
   readonly appVersion: string | null;
 
-  // --- Shared services (used by multiple handlers) ---
-  readonly agentManager: AgentManager;
-  readonly daemonConfigStore: DaemonConfigStore;
-  readonly projectRegistry: ProjectRegistry;
-  readonly providerSnapshotManager: ProviderSnapshotManager;
+  /** Emit a downstream message to the client. */
+  emit(message: SessionOutboundMessage): void;
+  /** Whether the transport has a binary channel. */
+  hasBinaryChannel(): boolean;
+  /** Emit raw binary data on the secondary channel. */
+  emitBinary(frame: Uint8Array): void;
+  /** Check whether the connected client supports a capability. */
+  supports(capability: string): boolean;
 
-  // --- Git services (used by CheckoutGit + WorkspaceProject handlers) ---
+  readonly abortController: AbortController;
+}
+
+// ---------------------------------------------------------------------------
+// Domain B — Workspace / Project / Git
+// (WorkspaceProjectHandler + CheckoutGitHandler overlap)
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceProjectContext {
+  readonly projectRegistry: ProjectRegistry;
+  readonly workspaceRegistry: WorkspaceRegistry;
   readonly workspaceGitService: WorkspaceGitService;
   readonly github: GitHubService;
   readonly checkoutDiffManager: CheckoutDiffManager;
+  readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
 
-  // --- Lifecycle state (core-owned, shared) ---
-  readonly abortController: AbortController;
-  readonly agentStorage: AgentStorage;
-
-  // --- Chat / Schedule / Loop services (used by ChatScheduleLoopHandler) ---
-  readonly chatService: FileBackedChatService;
-  readonly scheduleService: ScheduleService;
-  readonly loopService: LoopService;
-  readonly agentPresetStore: AgentPresetStore;
-
-  // --- Terminal / Script services (used by TerminalScriptHandler) ---
-  readonly terminalManager: TerminalManager | null;
-  readonly terminalController: TerminalSessionController;
-  readonly scriptRouteStore: ScriptRouteStore | null;
-  readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
-  readonly workspaceRegistry: WorkspaceRegistry;
-  readonly getDaemonTcpPort: (() => number | null) | null;
-  readonly getDaemonTcpHost: (() => string | null) | null;
-  readonly resolveScriptHealth: ((hostname: string) => unknown) | null;
-
-  // --- Message emission (every handler needs this) ---
-  emit(message: SessionOutboundMessage): void;
-
-  // --- Cross-domain methods (called by CheckoutGitHandler but owned by Session core) ---
-  /** Force-refresh workspace git snapshot after a mutation. */
+  // Git mutation helpers
   notifyGitMutation(
     cwd: string,
     reason: GitMutationRefreshReason,
     options?: { invalidateGithub?: boolean },
   ): Promise<void>;
-  /** Emit a workspace_update message for the workspace owning this cwd. */
   emitWorkspaceUpdateForCwd(cwd: string): Promise<void>;
-  /** Emit a workspace_update message for a specific workspace id. */
   emitWorkspaceUpdateForWorkspaceId(workspaceId: string): Promise<void>;
-  /** Emit workspace_update messages for multiple workspace ids. */
   emitWorkspaceUpdatesForWorkspaceIds(
     workspaceIds: Iterable<string>,
     options?: { skipReconcile?: boolean; dedupeGitState?: boolean },
   ): Promise<void>;
-  /** Handle a git branch snapshot change observed by the watcher. */
   handleWorkspaceGitBranchSnapshot(cwd: string, branchName: string | null): void;
-  /** Generate a commit message via structured generation (owned by Session core). */
-  generateCommitMessage(cwd: string): Promise<string>;
-  /** Generate PR title/body via structured generation (owned by Session core). */
-  generatePullRequestText(cwd: string, baseRef?: string): Promise<{ title: string; body: string }>;
-  /** Resolve an agent identifier to an agent id (owned by Session core). */
-  resolveAgentIdentifier(
-    identifier: string,
-  ): Promise<{ ok: true; agentId: string } | { ok: false; error: string }>;
-  /** Check if the client supports a capability. */
-  supports(capability: string): boolean;
-  /** Emit a workspace script status update (owned by Session core). */
-  emitWorkspaceScriptStatusUpdate(workspaceId: string, workspaceDirectory: string): void;
 
-  // --- Config control (for ConfigControlHandler) ---
-  /** Emit a lifecycle intent (restart/shutdown). */
-  emitLifecycleIntent(intent: unknown): void;
-
-  // --- Workspace subscription state machine (owned by Session, used by WorkspaceProjectHandler) ---
-  /** Buffer or emit an agent update — called by workspace domain to push agent changes. */
-  bufferOrEmitAgentUpdate(subscription: unknown, payload: unknown): void;
-  /** Buffer or emit a workspace update. */
-  bufferOrEmitWorkspaceUpdate(subscription: unknown, payload: unknown): void;
-  /** Flush bootstrapped workspace updates after initial fetch completes. */
-  flushBootstrappedWorkspaceUpdates(options?: unknown): void;
-  /** Check if a workspace matches the subscription filter. */
-  matchesWorkspaceFilter(input: unknown): boolean;
-  /** Reconcile and emit all pending workspace updates. */
-  reconcileAndEmitWorkspaceUpdates(): Promise<void>;
-  /** Get the current workspace updates subscription state. */
-  getWorkspaceUpdatesSubscription(): unknown;
-  /** Set the workspace updates subscription state. */
-  setWorkspaceUpdatesSubscription(subscription: unknown | null): void;
-
-  // --- Agent lifecycle (for AgentLifecycleHandler) ---
-  readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
-  /** Get the current agent payload list (live + persisted). */
-  listAgentPayloads(filter?: {
-    labels?: Record<string, string>;
-    includeUnavailablePersisted?: boolean;
-  }): Promise<unknown[]>;
-  /** Get a single agent payload by ID across live + persisted storage. */
-  getAgentPayloadById(agentId: string): Promise<unknown>;
-  /** Get the current agent updates subscription state. */
-  getAgentUpdatesSubscription(): unknown;
-  /** Set the agent updates subscription state. */
-  setAgentUpdatesSubscription(subscription: unknown | null): void;
-  /** Flush bootstrapped agent updates after initial fetch completes. */
-  flushBootstrappedAgentUpdates(options?: unknown): void;
-  /** Check if an agent matches the subscription filter. */
-  matchesAgentFilter(options: unknown): boolean;
-  /** Forward an agent update to subscribers. */
-  forwardAgentUpdate(agent: unknown): Promise<void>;
-  /** Build a stored agent payload. */
-  buildStoredAgentPayload(record: unknown): unknown;
-  /** Build a project placement for a cwd. */
-  buildProjectPlacementForCwd(cwd: string): Promise<unknown>;
-  /** Build an agent session config (full signature for create_agent flow). */
-  buildAgentSessionConfig(
-    config: unknown,
-    gitOptions?: unknown,
-    legacyWorktreeName?: string,
-    firstAgentContext?: unknown,
-  ): Promise<unknown>;
-  /** Resolve the workspace for creating an agent. */
-  resolveCreateAgentWorkspace(cwd: string, workspaceId?: string): Promise<unknown>;
-  /** Build an agent payload from a managed agent. */
-  buildAgentPayload(agent: unknown): Promise<unknown>;
-  /** Check if a provider is visible to the client. */
-  isProviderVisibleToClient(provider: string): boolean;
-  /** Build a workspace descriptor from input. */
-  buildWorkspaceDescriptor(input: unknown): Promise<unknown>;
-
-  // --- Agent selection helpers (for workspace auto-name) ---
-  getFocusedAgentSelectionForCwd(cwd: string):
-    | {
-        provider?: string | null;
-        model?: string | null;
-        thinkingOptionId?: string | null;
-      }
-    | undefined;
-  readStructuredGenerationDaemonConfig(): StructuredGenerationDaemonConfig;
-
-  // --- Additional shared services ---
-  readonly downloadTokenStore: DownloadTokenStore;
-  readonly pushTokenStore: PushTokenStore;
-  readonly usageStore: UsageStore | null;
-  readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
-  readonly sttLanguage: string;
-
-  // --- Workspace helpers (WorkspaceProjectHandler) ---
+  // Workspace helpers
   resolveKnownProjectRootForConfig(repoRoot: string): Promise<string | null>;
   listFetchWorkspacesEntries(request: unknown): Promise<{
     entries: WorkspaceDescriptorPayload[];
@@ -230,17 +125,155 @@ export interface SessionContext {
   markWorkspaceArchiving(workspaceIds: Iterable<string>, archivingAt: string): void;
   clearWorkspaceArchiving(workspaceIds: Iterable<string>): void;
   isPathWithinRoot(rootPath: string, candidatePath: string): boolean;
+
+  // Workspace subscription state machine
+  bufferOrEmitWorkspaceUpdate(subscription: unknown, payload: unknown): void;
+  flushBootstrappedWorkspaceUpdates(options?: unknown): void;
+  matchesWorkspaceFilter(input: unknown): boolean;
+  reconcileAndEmitWorkspaceUpdates(): Promise<void>;
+  getWorkspaceUpdatesSubscription(): unknown;
+  setWorkspaceUpdatesSubscription(subscription: unknown | null): void;
+
+  // Script status
+  emitWorkspaceScriptStatusUpdate(workspaceId: string, workspaceDirectory: string): void;
+}
+
+// ---------------------------------------------------------------------------
+// Domain C — Checkout / commit / PR (CheckoutGitHandler dedicated subset)
+// Note: CheckoutGitHandler uses WorkspaceProjectContext as well — it imports
+// the full SessionContext today.  The union is covered by WorkspaceProjectContext
+// when the handler is migrated.
+// ---------------------------------------------------------------------------
+
+export interface CheckoutGitContext {
+  /** Generate a commit message via structured generation. */
+  generateCommitMessage(cwd: string): Promise<string>;
+  /** Generate PR title/body via structured generation. */
+  generatePullRequestText(cwd: string, baseRef?: string): Promise<{ title: string; body: string }>;
+  /** Resolve an agent identifier to its canonical agent id. */
+  resolveAgentIdentifier(
+    identifier: string,
+  ): Promise<{ ok: true; agentId: string } | { ok: false; error: string }>;
+
+  // Editor targets
   getAvailableEditorTargets(): Promise<EditorTargetDescriptorPayload[]>;
   openEditorTarget(options: { editorId: EditorTargetId; path: string }): Promise<void>;
-  hasBinaryChannel(): boolean;
-  emitBinary(frame: Uint8Array): void;
+}
 
-  // --- Daemon runtime info (for ConfigControlHandler) ---
+// ---------------------------------------------------------------------------
+// Domain D — Agent lifecycle
+// ---------------------------------------------------------------------------
+
+export interface AgentLifecycleContext {
+  readonly agentManager: AgentManager;
+  readonly agentStorage: AgentStorage;
+  readonly agentPresetStore: AgentPresetStore;
+  readonly providerSnapshotManager: ProviderSnapshotManager;
+  readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
+
+  // Agent list / query
+  listAgentPayloads(filter?: {
+    labels?: Record<string, string>;
+    includeUnavailablePersisted?: boolean;
+  }): Promise<unknown[]>;
+  getAgentPayloadById(agentId: string): Promise<unknown>;
+  buildAgentPayload(agent: unknown): Promise<unknown>;
+  buildStoredAgentPayload(record: unknown): unknown;
+
+  // Agent creation helpers
+  buildProjectPlacementForCwd(cwd: string): Promise<unknown>;
+  buildAgentSessionConfig(
+    config: unknown,
+    gitOptions?: unknown,
+    legacyWorktreeName?: string,
+    firstAgentContext?: unknown,
+  ): Promise<unknown>;
+  resolveCreateAgentWorkspace(cwd: string, workspaceId?: string): Promise<unknown>;
+  buildWorkspaceDescriptor(input: unknown): Promise<unknown>;
+  isProviderVisibleToClient(provider: string): boolean;
+
+  // Agent subscription state machine
+  bufferOrEmitAgentUpdate(subscription: unknown, payload: unknown): void;
+  getAgentUpdatesSubscription(): unknown;
+  setAgentUpdatesSubscription(subscription: unknown | null): void;
+  flushBootstrappedAgentUpdates(options?: unknown): void;
+  matchesAgentFilter(options: unknown): boolean;
+  forwardAgentUpdate(agent: unknown): Promise<void>;
+
+  // Agent selection helpers
+  getFocusedAgentSelectionForCwd(
+    cwd: string,
+  ):
+    | { provider?: string | null; model?: string | null; thinkingOptionId?: string | null }
+    | undefined;
+  readStructuredGenerationDaemonConfig(): StructuredGenerationDaemonConfig;
+}
+
+// ---------------------------------------------------------------------------
+// Domain E — Chat / Schedule / Loop
+// ---------------------------------------------------------------------------
+
+export interface ChatScheduleContext {
+  readonly chatService: FileBackedChatService;
+  readonly scheduleService: ScheduleService;
+  readonly loopService: LoopService;
+}
+
+// ---------------------------------------------------------------------------
+// Domain F — Terminal / Script
+// ---------------------------------------------------------------------------
+
+export interface TerminalScriptContext {
+  readonly terminalManager: TerminalManager | null;
+  readonly terminalController: TerminalSessionController;
+  readonly scriptRouteStore: ScriptRouteStore | null;
+  readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
+  readonly getDaemonTcpPort: (() => number | null) | null;
+  readonly getDaemonTcpHost: (() => string | null) | null;
+  readonly resolveScriptHealth: ((hostname: string) => unknown) | null;
+}
+
+// ---------------------------------------------------------------------------
+// Domain G — Provider catalog
+// ---------------------------------------------------------------------------
+
+export interface ProviderCatalogContext {
+  readonly daemonConfigStore: DaemonConfigStore;
+  readonly downloadTokenStore: DownloadTokenStore;
+  readonly pushTokenStore: PushTokenStore;
+  readonly usageStore: UsageStore | null;
+  readonly sttLanguage: string;
+}
+
+// ---------------------------------------------------------------------------
+// Domain H — Config / daemon control
+// ---------------------------------------------------------------------------
+
+export interface ConfigControlContext {
+  /** Emit a lifecycle intent (restart/shutdown). */
+  emitLifecycleIntent(intent: unknown): void;
+
   readonly serverId: string | undefined;
   readonly daemonVersion: string | undefined;
   readonly daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   readonly mcpBaseUrl: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// The full SessionContext — intersection of every domain interface.
+// Handlers import this type; the Session class constructs a single object
+// satisfying it.  Forward migration: once your handler no longer uses a
+// domain, switch it from SessionContext to the relevant sub-interfaces.
+// ---------------------------------------------------------------------------
+
+export type SessionContext = SessionIdentityContext &
+  WorkspaceProjectContext &
+  CheckoutGitContext &
+  AgentLifecycleContext &
+  ChatScheduleContext &
+  TerminalScriptContext &
+  ProviderCatalogContext &
+  ConfigControlContext;
 
 /** Daemon runtime configuration passed from the process launcher (listen address, relay details). */
 export interface DaemonRuntimeConfig {

@@ -6,17 +6,22 @@
  */
 
 import { resolveEffectiveThinkingOptionId } from "./agent/agent-projections.js";
+import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
   isLegacyEditorTargetId,
   type AgentSnapshotPayload,
   type EditorTargetDescriptorPayload,
   type ProjectPlacementPayload,
+  type SessionOutboundMessage,
 } from "./messages.js";
 import {
   LEGACY_PROVIDER_IDS,
   clientSupportsAllProviders,
   clientSupportsFlexibleEditorIds,
 } from "./session-helpers.js";
+import type { AgentManager, AgentManagerEvent } from "./agent/agent-manager.js";
+import type { DaemonConfigStore } from "./daemon-config-store.js";
+import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
 
 /** Agent updates filter type mirroring session.ts internal type. */
 export interface AgentUpdatesFilter {
@@ -28,9 +33,18 @@ export interface AgentUpdatesFilter {
   thinkingOptionId?: string | null;
 }
 
-/** Agent update payload — upsert or remove. */
+/** Agent update payload — upsert or remove.
+ *
+ * Upsert payloads carry `agent` (AgentSnapshotPayload), optional
+ * `agentId`, and an optional `project` placement.  Remove payloads
+ * carry only `kind` and `agentId`. */
 export type AgentUpdatePayload =
-  | { kind: "upsert"; agentId: string; agent: AgentSnapshotPayload }
+  | {
+      kind: "upsert";
+      agent: AgentSnapshotPayload;
+      agentId?: string;
+      project?: ProjectPlacementPayload | null;
+    }
   | { kind: "remove"; agentId: string };
 
 // --- Provider / editor visibility helpers ---
@@ -213,4 +227,173 @@ export async function resolveAgentIdentifier(
   }
 
   return { ok: false, error: `Agent not found: ${trimmed}` };
+}
+
+// --- Client capability parsing ---
+
+/**
+ * Parse raw client capability flags from the wire into a normalized set.
+ */
+export function parseClientCapabilities(
+  capabilities: Record<string, unknown> | null | undefined,
+): ReadonlySet<ClientCapability> {
+  if (!capabilities) {
+    return new Set();
+  }
+  const known = new Set<ClientCapability>(Object.values(CLIENT_CAPS));
+  const result: ClientCapability[] = [];
+  for (const [key, value] of Object.entries(capabilities)) {
+    if (value === true && known.has(key as ClientCapability)) {
+      result.push(key as ClientCapability);
+    }
+  }
+  return new Set(result);
+}
+
+// --- Agent stream payload builder ---
+
+/**
+ * Build a typed agent_stream payload from an AgentManager event and serialized event.
+ */
+export function buildAgentStreamPayload(
+  event: Extract<AgentManagerEvent, { type: "agent_stream" }>,
+  serializedEvent: Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"]["event"],
+): Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"] {
+  return {
+    agentId: event.agentId,
+    event: serializedEvent,
+    timestamp: event.timestamp ?? new Date().toISOString(),
+    ...(typeof event.seq === "number" ? { seq: event.seq } : {}),
+    ...(typeof event.epoch === "string" ? { epoch: event.epoch } : {}),
+  };
+}
+
+// --- Agent selection helpers (deps-injected) ---
+
+/** Dependencies for getFocusedAgentSelectionForCwd. */
+export interface FocusedAgentSelectionDeps {
+  clientActivity: {
+    focusedAgentId: string | null;
+  } | null;
+  agentManager: Pick<AgentManager, "getAgent">;
+}
+
+/**
+ * Get the focused agent's provider/model selection for a workspace directory.
+ */
+export function getFocusedAgentSelectionForCwd(
+  cwd: string,
+  deps: FocusedAgentSelectionDeps,
+):
+  | {
+      provider?: string | null;
+      model?: string | null;
+      thinkingOptionId?: string | null;
+    }
+  | undefined {
+  const focusedAgentId = deps.clientActivity?.focusedAgentId;
+  if (!focusedAgentId) {
+    return undefined;
+  }
+
+  const agent = deps.agentManager.getAgent(focusedAgentId);
+  if (!agent || agent.cwd !== cwd) {
+    return undefined;
+  }
+
+  return {
+    provider: agent.provider,
+    model: agent.runtimeInfo?.model ?? agent.config.model ?? null,
+    thinkingOptionId: agent.runtimeInfo?.thinkingOptionId ?? agent.config.thinkingOptionId ?? null,
+  };
+}
+
+/**
+ * Read the structured generation daemon config.
+ */
+export function readStructuredGenerationDaemonConfig(
+  daemonConfigStore: Pick<DaemonConfigStore, "get">,
+): StructuredGenerationDaemonConfig {
+  return {
+    metadataGeneration: daemonConfigStore.get().metadataGeneration,
+  };
+}
+
+// --- Agent update buffer/flush helpers (deps-injected) ---
+
+/** Agent updates subscription state (mirrors session.ts internal type). */
+export interface AgentUpdatesSubscriptionState {
+  subscriptionId: string;
+  filter?: AgentUpdatesFilter;
+  isBootstrapping: boolean;
+  pendingUpdatesByAgentId: Map<string, AgentUpdatePayload>;
+}
+
+/** Dependencies for bufferOrEmitAgentUpdate. */
+export interface BufferAgentUpdateDeps {
+  isProviderVisibleToClient(provider: string): boolean;
+  emit(message: SessionOutboundMessage): void;
+}
+
+/**
+ * Buffer an agent update during bootstrapping, or emit it live to the client.
+ */
+export function bufferOrEmitAgentUpdate(
+  subscription: AgentUpdatesSubscriptionState,
+  payload: AgentUpdatePayload,
+  deps: BufferAgentUpdateDeps,
+): void {
+  if (payload.kind === "upsert" && !deps.isProviderVisibleToClient(payload.agent.provider)) {
+    return;
+  }
+  if (subscription.isBootstrapping) {
+    subscription.pendingUpdatesByAgentId.set(getAgentUpdateTargetId(payload), payload);
+    return;
+  }
+
+  deps.emit({
+    type: "agent_update",
+    payload,
+  });
+}
+
+/** Dependencies for flushBootstrappedAgentUpdates. */
+export interface FlushAgentUpdatesDeps extends BufferAgentUpdateDeps {
+  getAgentUpdatesSubscription(): AgentUpdatesSubscriptionState | null;
+}
+
+/**
+ * Flush all buffered agent updates after bootstrapping completes.
+ */
+export function flushBootstrappedAgentUpdates(
+  deps: FlushAgentUpdatesDeps,
+  options?: {
+    snapshotUpdatedAtByAgentId?: Map<string, number>;
+  },
+): void {
+  const subscription = deps.getAgentUpdatesSubscription();
+  if (!subscription || !subscription.isBootstrapping) {
+    return;
+  }
+
+  subscription.isBootstrapping = false;
+  const pending = Array.from(subscription.pendingUpdatesByAgentId.values());
+  subscription.pendingUpdatesByAgentId.clear();
+
+  for (const payload of pending) {
+    if (payload.kind === "upsert") {
+      const snapshotUpdatedAt = options?.snapshotUpdatedAtByAgentId?.get(payload.agent.id);
+      if (typeof snapshotUpdatedAt === "number") {
+        const updateUpdatedAt = Date.parse(payload.agent.updatedAt);
+        if (!Number.isNaN(updateUpdatedAt) && updateUpdatedAt <= snapshotUpdatedAt) {
+          continue;
+        }
+      }
+    }
+
+    deps.emit({
+      type: "agent_update",
+      payload,
+    });
+  }
 }

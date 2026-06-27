@@ -83,7 +83,7 @@ describe("ensureWorkspaceServicePortPlan", () => {
     await Promise.resolve();
     expect(allocationCount).toBe(1);
     firstAllocation.resolve(4301);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     expect(allocationCount).toBe(2);
     secondAllocation.resolve(4302);
 

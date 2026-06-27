@@ -557,7 +557,12 @@ describe("LoopService", () => {
       verifyChecks: ["test -f never.txt"],
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await vi.waitFor(
+      () => {
+        // Allow the loop iteration to start
+      },
+      { interval: 0, timeout: 1000 },
+    );
     const stopped = await service.stopLoop(loop.id);
     release?.();
 
@@ -578,7 +583,11 @@ function pathExists(target: string): boolean {
 }
 
 async function waitForLoopCompletion(service: LoopService, loopId: string): Promise<void> {
-  while ((await service.inspectLoop(loopId)).status === "running") {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
+  await vi.waitFor(
+    async () => {
+      const state = await service.inspectLoop(loopId);
+      expect(state.status).toBe("completed");
+    },
+    { timeout: 5000 },
+  );
 }

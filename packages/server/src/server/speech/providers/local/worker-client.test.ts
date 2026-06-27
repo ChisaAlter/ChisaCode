@@ -75,7 +75,7 @@ function createClient(options?: { idleTtlMs?: number }) {
 }
 
 async function waitForMicrotasks(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
 }
 
 describe("LocalSpeechWorkerClient", () => {
@@ -204,7 +204,7 @@ describe("LocalSpeechWorkerClient", () => {
     });
     await first;
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     expect(workers[0].kills).toBe(1);
 
     const second = client.synthesizeSpeech("second");

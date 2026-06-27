@@ -1184,7 +1184,7 @@ describe("create_agent MCP tool", () => {
         .trim();
       expect(initialBranch).not.toBe("");
       expect(initialBranch).not.toBe("main");
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
       expect(workspaceGitService.getSnapshot).not.toHaveBeenCalled();
       expect(broadcasts).toHaveLength(1);
     } finally {
@@ -1266,7 +1266,7 @@ describe("create_agent MCP tool", () => {
           .toString()
           .trim(),
       ).toBe("existing-feature");
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
       expect(workspaceGitService.getSnapshot).not.toHaveBeenCalled();
       expect(broadcasts).toHaveLength(1);
     } finally {
@@ -1366,7 +1366,7 @@ describe("create_agent MCP tool", () => {
       undefined,
       undefined,
     );
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     expect(workspaceGitService.getSnapshot).not.toHaveBeenCalled();
   });
 

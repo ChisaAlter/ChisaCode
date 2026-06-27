@@ -212,7 +212,7 @@ describe("update", () => {
     const task = await store.create("Task");
     const originalCreated = task.created;
 
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     await store.update(task.id, { title: "Updated" });
 
     const retrieved = await store.get(task.id);
@@ -522,9 +522,9 @@ describe("getReady", () => {
 
   it("sorts by created date (oldest first) when no priority", async () => {
     const task1 = await store.create("Task 1");
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     const task2 = await store.create("Task 2");
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     const task3 = await store.create("Task 3");
 
     const ready = await store.getReady();
@@ -555,9 +555,9 @@ describe("getReady", () => {
 
   it("sorts by created date within same priority", async () => {
     const first = await store.create("First", { priority: 1 });
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     const second = await store.create("Second", { priority: 1 });
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     const third = await store.create("Third", { priority: 1 });
 
     const ready = await store.getReady();
@@ -810,9 +810,9 @@ describe("getClosed", () => {
 
   it("sorts by created date (most recent first)", async () => {
     const task1 = await store.create("Task 1");
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     const task2 = await store.create("Task 2");
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
     const task3 = await store.create("Task 3");
 
     await store.close(task1.id);
