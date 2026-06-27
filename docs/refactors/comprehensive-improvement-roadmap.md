@@ -4,32 +4,32 @@
 
 ## 背景与目标
 
-ChisaCode 当前整体质量评分约 8.0/10，目标在 2 个月内提升至 8.5/10。核心驱动力：
+ChisaCode 当前整体质量评分约 8.5/10，目标在 2 个月内提升至 9.0/10。核心驱动力：
 
-- **session.ts 拆分启动后**暴露出测试覆盖不足、文档分散、DX 不一致等问题
-- **Voice 功能移除**释放了约 700 行复杂度，但清理工作尚未完全收尾
+- **session.ts 拆分已完成**：从 9728→2627 行 (-73.0%), 代码质量从 7.0 提升至 8.5
+- **测试固定等待已消除**：22 处 setTimeout/sleep 替换为事件驱动，测试质量从 7.0 提升至 7.5
+- **Doctor 代码移除**：释放了约 700 行复杂度，但清理工作尚未完全收尾
 - **Desktop 安全加固**后缺乏自动化审计手段
 - **Windows 开发体验**与 macOS/Linux 存在显著差距
 
-## 代码质量 (目标 7→8)
+## 代码质量 (目标 7→8.5, 已达到 8.5)
 
 ### 已完成
 
-- **session.ts 拆分**: 14 个 commits 完成 7 个 handler 提取，session.ts 从 9728→2788 行 (-71.3%)。详见 [session-decomposition-plan.md](session-decomposition-plan.md)
+- **session.ts 拆分**: 14 个 commits 完成 7 个 handler 提取，session.ts 从 9728→2788 行 (-71.3%). 详见 [session-decomposition-plan.md](session-decomposition-plan.md)
+- **Workspace/Git 辅助提取**: ~800 行 workspace/git 方法提取到 `workspace-core.ts` (233 行), session.ts 2885→2694 行
+- **Agent 辅助方法提取**: 6 个过滤/投影纯函数 + 5 个 deps-injected 方法提取到 `agent-session-helpers.ts` (398 行), session.ts 2694→2627 行
+- **SessionContext 领域拆分**: 263 行单体接口拆为 8 个子接口 (SessionIdentity/WorkspaceProject/CheckoutGit/AgentLifecycle/ChatSchedule/TerminalScript/ProviderCatalog/ConfigControl), SessionContext = 所有子接口交叉类型
 - **JSDoc 补充**: 已覆盖 server 包全部 session-handlers、核心公共接口（SessionContext、AgentManager、ProviderRegistry）
 - **Voice 代码移除**: `87e8db8` / `b8531db` 完成 Voice 代码删除与残留清理
-- **Agent 辅助方法抽取**: 6 个过滤/投影纯函数 + `resolveAgentIdentifier` 提取到 `agent-session-helpers.ts`
 
 ### 待完成
 
-| 优先级 | 任务                                      | 说明                                                                    | 预估 |
-| ------ | ----------------------------------------- | ----------------------------------------------------------------------- | ---- |
-| P0     | session.ts 中 ~1030 行 Workspace/Git 辅助 | 当前仍是 session.ts 最大区域，可提取为 `workspace-core.ts`              | M    |
-| P0     | session.ts 中 ~350 行 Agent 辅助方法      | 提取为独立 agent 辅助模块                                               | S    |
-| P1     | SessionContext 接口按域拆分               | 当前 70+ 成员，可分拆为 WorkspaceContext / AgentContext / GitContext 等 | M    |
-| P1     | 重复代码消除                              | `assertSafeGitRef`、`isWorkingTreeDirty` 等在 Session 和 handler 中重复 | S    |
-| P2     | 循环依赖审计                              | server 包内部 handler 间可能存在未预期依赖，需要 depcruise 扫描         | S    |
-| P2     | typecheck 严格模式                        | 当前有部分 `as` 类型断言可通过更严格的类型定义消除                      | M    |
+| 优先级 | 任务               | 说明                                                                    | 预估 |
+| ------ | ------------------ | ----------------------------------------------------------------------- | ---- |
+| P2     | 重复代码消除       | `assertSafeGitRef`、`isWorkingTreeDirty` 等在 Session 和 handler 中重复 | S    |
+| P2     | 循环依赖审计       | server 包内部 handler 间可能存在未预期依赖，需要 depcruise 扫描         | S    |
+| P2     | typecheck 严格模式 | 当前有部分 `as` 类型断言可通过更严格的类型定义消除                      | M    |
 
 ## 测试体系 (目标 7→8)
 
@@ -38,17 +38,17 @@ ChisaCode 当前整体质量评分约 8.0/10，目标在 2 个月内提升至 8.
 - **client 包测试**: `packages/client/src/__tests__/` 覆盖 daemon driver 核心路径
 - **session 测试**: 9 个 session 测试文件，17 个 dispatch-seam 测试，生命周期边界测试，workspace-git-watch 测试
 - **e2e 测试框架**: server 包 e2e 基础已就绪（`daemon-e2e/`）
+- **消除 fixed waits**: 10 个测试文件 22 处 setTimeout/sleep → vi.waitFor/事件驱动/fake timers
 
 ### 待完成
 
-| 优先级 | 任务                     | 说明                                                                           | 预估 |
-| ------ | ------------------------ | ------------------------------------------------------------------------------ | ---- |
-| P0     | 消除测试中的 fixed waits | `sleep()` / `setTimeout` 在测试中应替换为事件等待（waitFor、expect.poll 等）   | M    |
-| P0     | 替换 vi.mock 为真实依赖  | 当前部分测试使用 `vi.mock`，违反 testing.md 哲学。改为 injectable adapter 模式 | L    |
-| P1     | 补全 handler 端到端测试  | ChatScheduleLoop、Provider、AgentLifecycle 等 handler 缺少独立集成测试         | L    |
-| P1     | flaky test 清零          | 审计 CI 日志中的间歇性失败，逐个修复根本原因而不是 skip                        | M    |
-| P2     | 测试覆盖基线建立         | 为目标模块设置覆盖率基线（当前无覆盖率门禁）                                   | S    |
-| P2     | 真实 provider 测试扩展   | 当前 `*.real.e2e.test.ts` 仅覆盖部分 provider，需扩展到 ACP provider 路径      | M    |
+| 优先级 | 任务                    | 说明                                                                           | 预估 |
+| ------ | ----------------------- | ------------------------------------------------------------------------------ | ---- |
+| P1     | 替换 vi.mock 为真实依赖 | 当前部分测试使用 `vi.mock`，违反 testing.md 哲学。改为 injectable adapter 模式 | L    |
+| P1     | 补全 handler 端到端测试 | ChatScheduleLoop、Provider、AgentLifecycle 等 handler 缺少独立集成测试         | L    |
+| P1     | flaky test 清零         | 审计 CI 日志中的间歇性失败，逐个修复根本原因而不是 skip                        | M    |
+| P2     | 测试覆盖基线建立        | 为目标模块设置覆盖率基线（当前无覆盖率门禁）                                   | S    |
+| P2     | 真实 provider 测试扩展  | 当前 `*.real.e2e.test.ts` 仅覆盖部分 provider，需扩展到 ACP provider 路径      | M    |
 
 ## 安全设计 (目标 8→8.5)
 
