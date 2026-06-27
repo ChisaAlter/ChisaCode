@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload APK to workflow artifacts
         if: env.SHOULD_PUBLISH != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.build_apk.outputs.asset_name }}
           path: ${{ steps.build_apk.outputs.asset_path }}
