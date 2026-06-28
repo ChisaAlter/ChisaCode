@@ -35,6 +35,7 @@
   "scripts": {
     "dev": "./scripts/dev.sh",
     "dev:win": "powershell ./scripts/dev.ps1",
+    "setup:dev": "powershell ./scripts/setup-dev.ps1",
     "dev:server": "npm run build:server-deps && concurrently --kill-others --names protocol,client,server --prefix-colors yellow,blue,cyan \"npm run watch:protocol\" \"npm run watch:client\" \"npm run dev:server:raw\"",
     "dev:server:raw": "npm run dev --workspace=@chisacode/server",
     "dev:app": "npm run start --workspace=@chisacode/app",
