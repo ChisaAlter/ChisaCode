@@ -119,6 +119,8 @@ async function waitForAssistantWaitingOnSleep(
       return;
     }
 
+    // Poll daemon timeline — real network I/O with Codex provider.
+    // Explicit interval avoids busy-looping inside vi.waitFor's evaluate callback.
     await sleep(500);
   }
 
