@@ -91,6 +91,12 @@ packages/server/src/server/fixtures/dictation/dictation-debug-largest.transcript
 /tmp-*.jpg
 /tmp-*.jpeg
 /tmp-*.webp
+/tmp-*.cjs
+/tmp-*.json
+/tmp-*.log
+/temp/
+/docs_doc_quality_assessment.json
+/*head-diff.txt
 
 /artifacts
 packages/app/*.apk
