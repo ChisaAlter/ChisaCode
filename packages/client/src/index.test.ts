@@ -678,9 +678,22 @@ test("config actions delegate to existing daemon config RPCs", async () => {
     config: {
       mcp: { injectIntoAgents: true },
       providers: {},
+      modelGateways: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
       appendSystemPrompt: "",
+      skills: {
+        global: { disabledSkillNames: [] },
+        providers: {},
+        agents: {},
+        installedSources: {},
+      },
+      mcpServers: {
+        servers: {},
+        global: { disabledServerNames: [] },
+        providers: {},
+        agents: {},
+      },
     },
   });
 
@@ -731,9 +744,22 @@ test("config actions delegate to existing daemon config RPCs", async () => {
           enabled: false,
         },
       },
+      modelGateways: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
       appendSystemPrompt: "",
+      skills: {
+        global: { disabledSkillNames: [] },
+        providers: {},
+        agents: {},
+        installedSources: {},
+      },
+      mcpServers: {
+        servers: {},
+        global: { disabledServerNames: [] },
+        providers: {},
+        agents: {},
+      },
     },
   });
 
