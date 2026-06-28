@@ -9,6 +9,11 @@ import type { AgentSnapshotPayload } from "./messages.js";
 import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
 import { PRESENCE_THRESHOLD_MS } from "./agent-attention-policy.js";
 
+/** Yield the event loop so enqueued microtasks/events flush before the next assertion. */
+function yieldEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 class RecordingPushNotificationSender implements PushNotificationSender {
   readonly sent: PushPayload[] = [];
 
@@ -144,7 +149,7 @@ describe("client activity tracking", () => {
         appVisible: true,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attentionPromise = waitForAttentionRequired(client1, agent.id);
       await client1.sendMessage(agent.id, "Say 'hello' and nothing else");
@@ -170,7 +175,7 @@ describe("client activity tracking", () => {
         appVisible: true,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attentionPromise = waitForAttentionRequired(client1, agent1.id);
       await client1.sendMessage(agent1.id, "Say 'hello' and nothing else");
@@ -197,7 +202,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attentionPromise = waitForAttentionRequired(client1, agent.id);
       await client1.sendMessage(agent.id, "Say 'hello' and nothing else");
@@ -225,7 +230,7 @@ describe("client activity tracking", () => {
         appVisible: true,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attentionPromise = waitForAttentionRequired(client1, agent.id);
       await client1.sendMessage(agent.id, "Say 'hello' and nothing else");
@@ -288,7 +293,7 @@ describe("client activity tracking", () => {
         appVisible: true,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -327,7 +332,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -364,7 +369,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -400,7 +405,7 @@ describe("client activity tracking", () => {
         appVisibilityChangedAt: new Date(Date.now() - 120_000).toISOString(),
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const mobileStream = waitForAssistantTimeline(client2, agent.id);
       await client1.sendMessage(agent.id, "Say 'hello' and nothing else");
@@ -433,7 +438,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -471,7 +476,7 @@ describe("client activity tracking", () => {
         appVisible: true,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -509,7 +514,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -546,7 +551,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent1.id);
       const attention2Promise = waitForAttentionRequired(client2, agent1.id);
@@ -587,7 +592,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -625,7 +630,7 @@ describe("client activity tracking", () => {
 
       // Mobile: never sent heartbeat (new connection)
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);
@@ -654,7 +659,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attentionPromise = waitForAttentionRequired(client1, agent.id);
       await client1.sendMessage(agent.id, "Say 'hello' and nothing else");
@@ -691,7 +696,7 @@ describe("client activity tracking", () => {
         appVisible: false,
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      await yieldEventLoop();
 
       const attention1Promise = waitForAttentionRequired(client1, agent.id);
       const attention2Promise = waitForAttentionRequired(client2, agent.id);

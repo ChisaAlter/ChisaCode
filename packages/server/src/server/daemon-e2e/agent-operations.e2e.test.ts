@@ -50,7 +50,8 @@ describe("timestamp behavior", () => {
     const initialUpdatedAt = agent.updatedAt;
     expect(initialUpdatedAt).toBeTruthy();
 
-    // Wait a bit to ensure any timestamp update would be visible
+    // Real time needed — timestamp-based assertions require measurable clock drift.
+    // Not pollable: we must verify that the agent's updatedAt does NOT change by itself.
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Clear captured messages before the "click" action
@@ -106,7 +107,8 @@ describe("timestamp behavior", () => {
     // Record the initial updatedAt timestamp
     const initialUpdatedAt = new Date(agent.updatedAt);
 
-    // Wait a bit to ensure timestamp difference is visible
+    // Real time needed — timestamp-based assertions require measurable clock drift.
+    // Not pollable: we must verify the timestamp did change after sending a message.
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Send a message (this SHOULD update the timestamp)

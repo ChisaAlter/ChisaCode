@@ -1,4 +1,4 @@
-import { test, expect, beforeAll, afterAll } from "vitest";
+import { test, expect, beforeAll, afterAll, vi } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir, homedir } from "node:os";
@@ -163,10 +163,12 @@ test("createAgent with background initialPrompt returns a running snapshot befor
     const fetchedWhileRunning = await client.fetchAgent(agent.id);
     expect(fetchedWhileRunning?.agent.status).toBe("running");
 
-    await new Promise((resolve) => setTimeout(resolve, 350));
-
-    const fetchedAfterCompletion = await client.fetchAgent(agent.id);
-    expect(fetchedAfterCompletion?.agent.status).toBe("idle");
+    await vi.waitFor(
+      () => {
+        expect(fetchedAfterCompletion?.agent.status).toBe("idle");
+      },
+      { timeout: 5000, interval: 100 },
+    );
   } finally {
     await client.close();
     await daemon.close();
@@ -1285,6 +1287,8 @@ speechTest(
     const wav = await readFixture("recording.wav");
     await ctx.client.sendVoiceAudioChunk(wav.toString("base64"), "audio/wav", true);
     await transcriptSeen;
+    // Wait for voice pipeline to finish processing (real time needed — not pollable).
+    // This ensures any stray assistant chunks/logs/activity would have been emitted by now.
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     expect(sawTranscriptLog).toBe(true);
