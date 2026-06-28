@@ -17,7 +17,9 @@ const nodeMajor = Number((process.versions.node ?? "0").split(".")[0] ?? "0");
 const shouldRunRelayE2e = process.env.FORCE_RELAY_E2E === "1" || nodeMajor < 25;
 const wranglerCliPath = createRequire(import.meta.url).resolve("wrangler/bin/wrangler.js");
 const STARTUP_HOOK_TIMEOUT_MS = 90_000;
-const SHUTDOWN_TIMEOUT_MS = 10_000;
+const TERMINATION_GRACE_TIMEOUT_MS = 10_000;
+const KILL_EXIT_TIMEOUT_MS = 2_000;
+const SHUTDOWN_HOOK_TIMEOUT_MS = TERMINATION_GRACE_TIMEOUT_MS + KILL_EXIT_TIMEOUT_MS + 3_000;
 
 async function getAvailablePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -156,28 +158,32 @@ async function waitForRelayWebSocketReady(
 }
 
 async function waitForProcessExit(relayProcess: ChildProcess, deadline: number): Promise<void> {
-  if (relayProcess.exitCode !== null) return;
+  if (hasProcessExited(relayProcess)) return;
   if (Date.now() >= deadline) return;
   await sleep(50);
   return waitForProcessExit(relayProcess, deadline);
 }
 
+function hasProcessExited(relayProcess: ChildProcess): boolean {
+  return relayProcess.exitCode !== null || relayProcess.signalCode !== null;
+}
+
 async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
-  if (relayProcess.exitCode !== null) {
+  if (hasProcessExited(relayProcess)) {
     return;
   }
 
   relayProcess.kill("SIGTERM");
-  await waitForProcessExit(relayProcess, Date.now() + SHUTDOWN_TIMEOUT_MS);
+  await waitForProcessExit(relayProcess, Date.now() + TERMINATION_GRACE_TIMEOUT_MS);
 
-  if (relayProcess.exitCode !== null) {
+  if (hasProcessExited(relayProcess)) {
     return;
   }
 
   relayProcess.kill("SIGKILL");
-  await waitForProcessExit(relayProcess, Date.now() + 2000);
+  await waitForProcessExit(relayProcess, Date.now() + KILL_EXIT_TIMEOUT_MS);
 
-  if (relayProcess.exitCode === null) {
+  if (!hasProcessExited(relayProcess)) {
     throw new Error("relay process did not exit after SIGTERM/SIGKILL");
   }
 }
@@ -221,7 +227,7 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
       await stopRelayProcess(relayProcess);
       relayProcess = null;
     }
-  }, SHUTDOWN_TIMEOUT_MS);
+  }, SHUTDOWN_HOOK_TIMEOUT_MS);
 
   it(
     "full flow: daemon and client exchange encrypted messages through relay",
