@@ -616,7 +616,11 @@ async function measureRepeatCadenceForTerminal(input: {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     if (input.setupInput) {
       sendRawTerminalInput(ws, slot, input.setupInput);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await waitForRawBinaryFrame(
+        ws,
+        (frame) => frame.slot === slot && frame.opcode === TerminalStreamOpcode.Output,
+        10000,
+      );
     }
 
     const enterCapture = startTerminalOutputCapture(ws, slot);
@@ -633,8 +637,6 @@ async function measureRepeatCadenceForTerminal(input: {
       frames: enterCapture.frames,
       stoppedAtMs: enterRepeat.stoppedAtMs,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const keyCapture = startTerminalOutputCapture(ws, slot);
     const keyRepeat = await repeatRawTerminalInput({
@@ -749,7 +751,6 @@ test("client connects and receives a snapshot of the current terminal state", as
     type: "input",
     data: "printf 'hello\\n'\r",
   });
-  await new Promise((resolve) => setTimeout(resolve, 300));
 
   const snapshotPromise = waitForTerminalSnapshot(ctx.client, terminalId, (state) =>
     extractStateText(state).includes("hello"),
@@ -773,7 +774,6 @@ test("live terminal restore skips the initial snapshot", async () => {
       type: "input",
       data: "printf 'before-live\\n'\r",
     });
-    await new Promise((resolve) => setTimeout(resolve, 300));
 
     const slot = await subscribeRawTerminal(ws, terminalId, "subscribe-live", { mode: "live" });
     const outputFramesPromise = collectRawBinaryFrames(
@@ -895,7 +895,6 @@ test("subscribe response is sent before the initial snapshot frame", async () =>
       type: "input",
       data: "printf 'hello-ordering\\n'\r",
     });
-    await new Promise((resolve) => setTimeout(resolve, 300));
 
     const observed = await new Promise<Array<"response" | "snapshot">>((resolve, reject) => {
       const events: Array<"response" | "snapshot"> = [];
@@ -1054,7 +1053,6 @@ test("disconnect and reconnect both receive the current snapshot", async () => {
     type: "input",
     data: "echo while-detached\r",
   });
-  await new Promise((resolve) => setTimeout(resolve, 300));
 
   const snapshotPromise = waitForTerminalSnapshot(ctx.client, terminalId, (state) =>
     extractStateText(state).includes("while-detached"),
@@ -1163,7 +1161,18 @@ test("fast output to a slow websocket client falls back to a snapshot", async ()
     data: `node -e 'process.stdout.write("A".repeat(${8 * 1024 * 1024}))'\r`,
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 750));
+  // Wait for the terminal process to handle the bulk input using condition polling
+  await waitForCondition(
+    async () => {
+      const state = ctx.daemon.daemon.terminalManager?.getTerminal(terminalId)?.getState();
+      if (!state) return false;
+      // When the terminal has processed output, grid or scrollback will contain data
+      return extractStateText(state).length > 0;
+    },
+    5000,
+    100,
+  );
+
   const catchUpFramePromise = waitForRawBinaryFrame(
     ws,
     (frame) => frame.opcode === TerminalStreamOpcode.Snapshot,
@@ -1221,7 +1230,14 @@ test("resize updates server dimensions without sending a live snapshot", async (
     cols: 40,
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await waitForCondition(
+    () => {
+      const state = ctx.daemon.daemon.terminalManager?.getTerminal(terminalId)?.getState();
+      return state?.rows === 10 && state?.cols === 40;
+    },
+    5000,
+    25,
+  );
 
   const state = ctx.daemon.daemon.terminalManager?.getTerminal(terminalId)?.getState();
   expect(state?.rows).toBe(10);
@@ -1334,7 +1350,15 @@ test("websocket terminate then new connection gets snapshot with all prior outpu
         type: "input",
         data: "printf 'while-dead\\n'\r",
       });
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Verify the daemon is still responsive after sending input to a dead session
+      await waitForCondition(
+        async () => {
+          const list = await ctx.client.listTerminals(cwd);
+          return list.terminals.some((t) => t.id === terminalId);
+        },
+        5000,
+        50,
+      );
     } finally {
       await secondClient.close();
     }
@@ -1381,7 +1405,7 @@ test("two clients can both send input and each sees its own output", async () =>
       type: "input",
       data: "echo from-a\r",
     });
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await waitForTerminalOutput(ctx.client, terminalId, (text) => text.includes("from-a"), 5000);
     secondClient.sendTerminalInput(terminalId, {
       type: "input",
       data: "echo from-b\r",
@@ -1404,7 +1428,6 @@ test("snapshot fidelity through websocket decode preserves dimensions and visibl
     type: "input",
     data: "printf 'line1\\nline2\\nline3\\n'\r",
   });
-  await new Promise((resolve) => setTimeout(resolve, 300));
 
   const ws = await connectRawWebSocket(ctx.daemon.port);
   try {
@@ -1488,7 +1511,8 @@ test("empty input frame does not crash the server", async () => {
         slot,
       }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Verify the server doesn't crash by checking it's still listening after a short wait
+    await waitForCondition(() => ws.readyState === WebSocket.OPEN, 3000, 25);
     expect(ws.readyState).toBe(WebSocket.OPEN);
 
     ctx.client.sendTerminalInput(terminalId, {

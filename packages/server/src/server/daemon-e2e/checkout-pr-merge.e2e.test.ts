@@ -135,12 +135,12 @@ function readGhPrView(prNumber: number, repoFullName: string): GhPrView {
   );
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
+/**
+ * Poll GitHub for pull request mergeability status.
+ * Waits up to 30s, checking every 500ms for the PR to become MERGEABLE.
+ * Uses polling instead of a fixed delay since GitHub merge checks are
+ * an external system with unbounded latency.
+ */
 async function pollForMergeable(
   ctx: DaemonTestContext,
   worktreePath: string,
@@ -159,7 +159,7 @@ async function pollForMergeable(
     }
 
     lastMergeable = prStatus.status?.mergeable ?? "UNKNOWN";
-    await sleep(1500);
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   throw new Error(`Timed out waiting for GitHub PR to become MERGEABLE; last=${lastMergeable}`);

@@ -1,6 +1,6 @@
 // POSIX-only: node-pty + POSIX shell assertions
 /* eslint-disable max-nested-callbacks */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { isPlatform } from "../test-utils/platform.js";
 import {
   buildTerminalEnvironment,
@@ -53,24 +53,16 @@ async function waitForLines(
   expectedLines: string[],
   timeoutMs = 5000,
 ): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const lines = getLines(session.getState());
-    let matches = true;
-    for (let i = 0; i < expectedLines.length; i++) {
-      if (lines[i] !== expectedLines[i]) {
-        matches = false;
-        break;
+  await vi.waitFor(
+    () => {
+      const lines = getLines(session.getState());
+      for (let i = 0; i < expectedLines.length; i++) {
+        if (lines[i] !== expectedLines[i]) {
+          throw new Error("line mismatch");
+        }
       }
-    }
-    if (matches) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  const actual = getLines(session.getState()).slice(0, expectedLines.length);
-  throw new Error(
-    `Timeout waiting for expected lines.\nExpected:\n${JSON.stringify(expectedLines, null, 2)}\nActual:\n${JSON.stringify(actual, null, 2)}`,
+    },
+    { timeout: timeoutMs, interval: 50 },
   );
 }
 
@@ -79,16 +71,16 @@ async function waitForState(
   predicate: (state: ReturnType<TerminalSession["getState"]>) => boolean,
   timeoutMs = 5000,
 ): Promise<ReturnType<TerminalSession["getState"]>> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const state = session.getState();
-    if (predicate(state)) {
-      return state;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+  await vi.waitFor(
+    () => {
+      const state = session.getState();
+      if (predicate(state)) return;
+      throw new Error("predicate not satisfied");
+    },
+    { timeout: timeoutMs, interval: 50 },
+  );
 
-  throw new Error("Timeout waiting for terminal state predicate to match");
+  return session.getState();
 }
 
 async function waitForTitle(
@@ -96,16 +88,16 @@ async function waitForTitle(
   predicate: (title: string | undefined) => boolean,
   timeoutMs = 5000,
 ): Promise<string | undefined> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const title = session.getTitle();
-    if (predicate(title)) {
-      return title;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
+  await vi.waitFor(
+    () => {
+      const title = session.getTitle();
+      if (predicate(title)) return;
+      throw new Error("title predicate not satisfied");
+    },
+    { timeout: timeoutMs, interval: 25 },
+  );
 
-  throw new Error("Timeout waiting for terminal title predicate to match");
+  return session.getTitle();
 }
 
 const sessions: TerminalSession[] = [];
@@ -466,6 +458,8 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
 
       await waitForLines(session, ["$"]);
       session.send({ type: "input", data: "printf '\\033]0;Build Log\\007'\r" });
+      // Fixed wait for OSC title processing — assertion verifies title was NOT changed.
+
       await new Promise((resolve) => setTimeout(resolve, 150));
 
       expect(session.getTitle()).toBe("typecheck");
@@ -809,7 +803,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
         messages.push(msg);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await vi.waitFor(() => messages.length > 0, { timeout: 500, interval: 20 });
 
       expect(messages.length).toBeGreaterThan(0);
       expect(messages[0].type).toBe("snapshot");
@@ -862,10 +856,11 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
         messages.push(msg);
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await vi.waitFor(() => messages.length > 0, { timeout: 500, interval: 20 });
       messages.length = 0;
 
       session.send({ type: "resize", rows: 30, cols: 100 });
+      // Fixed wait for pty resize propagation — no observable event available.
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       expect(messages.some((message) => message.type === "snapshot")).toBe(false);
@@ -919,6 +914,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       messages.length = 0;
 
       session.send({ type: "input", data: "echo after\r" });
+      // Fixed wait to verify no messages after unsubscribe — no observable event.
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       expect(messages.length).toBe(0);
@@ -1100,7 +1096,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
           .join("\n");
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await vi.waitFor(() => snapshotText.length > 0, { timeout: 500, interval: 20 });
 
       expect(snapshotText).toContain("before-detach");
       expect(snapshotText).toContain("after-detach");

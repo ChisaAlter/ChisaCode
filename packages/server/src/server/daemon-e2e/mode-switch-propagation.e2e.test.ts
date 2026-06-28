@@ -7,8 +7,25 @@ type AgentUpdateMessage = Extract<SessionOutboundMessage, { type: "agent_update"
 type AgentUpdatePayload = AgentUpdateMessage["payload"];
 type AgentUpsertPayload = Extract<AgentUpdatePayload, { kind: "upsert" }>;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+/**
+ * Poll for a condition on the collected agent updates array, re-checking up
+ * to `timeoutMs` every `intervalMs` milliseconds.  Replaces fixed-delay sleeps
+ * that blindly waited for agent state changes to propagate.
+ */
+async function waitForAgentUpdate(
+  updates: AgentUpdatePayload[],
+  predicate: (updates: AgentUpdatePayload[]) => boolean,
+  timeoutMs = 5000,
+  intervalMs = 50,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate(updates)) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for agent update condition`);
 }
 
 function collectAgentUpdates(client: DaemonClient): {
@@ -33,6 +50,35 @@ function lastUpsertFor(
   );
 }
 
+function hasAnyUpsert(updates: AgentUpdatePayload[], agentId: string): boolean {
+  return updates.some((u) => u.kind === "upsert" && u.agent.id === agentId);
+}
+
+function hasModeUpsert(updates: AgentUpdatePayload[], agentId: string, modeId: string): boolean {
+  return updates.some(
+    (u) => u.kind === "upsert" && u.agent.id === agentId && u.agent.currentModeId === modeId,
+  );
+}
+
+function sliceHasModeUpsert(
+  updates: AgentUpdatePayload[],
+  beforeIndex: number,
+  agentId: string,
+  modeId: string,
+): boolean {
+  return hasModeUpsert(updates.slice(beforeIndex), agentId, modeId);
+}
+
+function hasTimestampChange(
+  updates: AgentUpdatePayload[],
+  agentId: string,
+  before: string | undefined,
+): boolean {
+  return updates.some(
+    (u) => u.kind === "upsert" && u.agent.id === agentId && u.agent.updatedAt !== before,
+  );
+}
+
 describe("mode-switch update propagation", () => {
   let ctx: DaemonTestContext;
 
@@ -54,11 +100,13 @@ describe("mode-switch update propagation", () => {
     });
     expect(agent.currentModeId).toBe("default");
 
-    await sleep(300);
+    await waitForAgentUpdate(updates, (u) => hasAnyUpsert(u, agent.id));
     const beforeCount = updates.length;
 
     await ctx.client.setAgentMode(agent.id, "bypassPermissions");
-    await sleep(500);
+    await waitForAgentUpdate(updates, (u) =>
+      sliceHasModeUpsert(u, beforeCount, agent.id, "bypassPermissions"),
+    );
 
     const modeUpdate = updates
       .slice(beforeCount)
@@ -82,12 +130,12 @@ describe("mode-switch update propagation", () => {
       modeId: "default",
     });
 
-    await sleep(300);
+    await waitForAgentUpdate(updates, (u) => hasAnyUpsert(u, agent.id));
 
     const updatedAtBefore = lastUpsertFor(updates, agent.id)?.agent.updatedAt;
 
     await ctx.client.setAgentMode(agent.id, "bypassPermissions");
-    await sleep(500);
+    await waitForAgentUpdate(updates, (u) => hasTimestampChange(u, agent.id, updatedAtBefore));
 
     const updatedAtAfter = lastUpsertFor(updates, agent.id)?.agent.updatedAt;
 
@@ -104,10 +152,10 @@ describe("mode-switch update propagation", () => {
       cwd: "/tmp",
       modeId: "default",
     });
-    await sleep(200);
+    await waitForAgentUpdate(updates, (u) => hasAnyUpsert(u, agent.id));
 
     await ctx.client.setAgentMode(agent.id, "plan");
-    await sleep(200);
+    await waitForAgentUpdate(updates, (u) => hasModeUpsert(u, agent.id, "plan"));
 
     const client2 = new DaemonClient({
       url: `ws://127.0.0.1:${ctx.daemon.port}/ws`,
@@ -124,7 +172,7 @@ describe("mode-switch update propagation", () => {
     const { updates: client2Updates, unsub } = collectAgentUpdates(client2);
 
     await ctx.client.setAgentMode(agent.id, "acceptEdits");
-    await sleep(500);
+    await waitForAgentUpdate(client2Updates, (u) => hasModeUpsert(u, agent.id, "acceptEdits"));
 
     const modeUpdate = client2Updates.find(
       (u): u is AgentUpsertPayload =>
@@ -149,7 +197,7 @@ describe("mode-switch update propagation", () => {
     await ctx.client.setAgentMode(agent.id, "plan");
     await ctx.client.setAgentMode(agent.id, "acceptEdits");
 
-    await sleep(500);
+    await waitForAgentUpdate(updates, (u) => hasModeUpsert(u, agent.id, "acceptEdits"));
 
     expect(lastUpsertFor(updates, agent.id)?.agent.currentModeId).toBe("acceptEdits");
 
@@ -166,7 +214,7 @@ describe("mode-switch update propagation", () => {
     });
     await ctx.client.setAgentMode(agent.id, "bypassPermissions");
 
-    await sleep(500);
+    await waitForAgentUpdate(updates, (u) => hasModeUpsert(u, agent.id, "bypassPermissions"));
 
     expect(lastUpsertFor(updates, agent.id)?.agent.currentModeId).toBe("bypassPermissions");
 

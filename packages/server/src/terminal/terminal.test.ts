@@ -53,24 +53,16 @@ async function waitForLines(
   expectedLines: string[],
   timeoutMs = 5000,
 ): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const lines = getLines(session.getState());
-    let matches = true;
-    for (let i = 0; i < expectedLines.length; i++) {
-      if (lines[i] !== expectedLines[i]) {
-        matches = false;
-        break;
+  await vi.waitFor(
+    () => {
+      const lines = getLines(session.getState());
+      for (let i = 0; i < expectedLines.length; i++) {
+        if (lines[i] !== expectedLines[i]) {
+          throw new Error("line mismatch");
+        }
       }
-    }
-    if (matches) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  const actual = getLines(session.getState()).slice(0, expectedLines.length);
-  throw new Error(
-    `Timeout waiting for expected lines.\nExpected:\n${JSON.stringify(expectedLines, null, 2)}\nActual:\n${JSON.stringify(actual, null, 2)}`,
+    },
+    { timeout: timeoutMs, interval: 50 },
   );
 }
 
@@ -79,16 +71,16 @@ async function waitForState(
   predicate: (state: ReturnType<TerminalSession["getState"]>) => boolean,
   timeoutMs = 5000,
 ): Promise<ReturnType<TerminalSession["getState"]>> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const state = session.getState();
-    if (predicate(state)) {
-      return state;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+  await vi.waitFor(
+    () => {
+      const state = session.getState();
+      if (predicate(state)) return;
+      throw new Error("predicate not satisfied");
+    },
+    { timeout: timeoutMs, interval: 50 },
+  );
 
-  throw new Error("Timeout waiting for terminal state predicate to match");
+  return session.getState();
 }
 
 async function waitForTitle(
@@ -96,16 +88,16 @@ async function waitForTitle(
   predicate: (title: string | undefined) => boolean,
   timeoutMs = 5000,
 ): Promise<string | undefined> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const title = session.getTitle();
-    if (predicate(title)) {
-      return title;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
+  await vi.waitFor(
+    () => {
+      const title = session.getTitle();
+      if (predicate(title)) return;
+      throw new Error("title predicate not satisfied");
+    },
+    { timeout: timeoutMs, interval: 25 },
+  );
 
-  throw new Error("Timeout waiting for terminal title predicate to match");
+  return session.getTitle();
 }
 
 if (isPlatform("win32") && !process.env.ComSpec && !process.env.COMSPEC) {
@@ -448,6 +440,8 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
 
     await waitForLines(session, ["$"]);
     session.send({ type: "input", data: "printf '\\033]0;Build Log\\007'\r" });
+    // Fixed wait for OSC title processing — no observable condition since
+    // the assertion verifies that title was NOT changed.
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(session.getTitle()).toBe("typecheck");
@@ -722,6 +716,7 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
 
     session.setTitle("User terminal");
     session.send({ type: "input", data: "printf '\\033]0;Later Shell Title\\007'\r" });
+    // Fixed wait for OSC title processing — assertion verifies title was NOT changed.
     await new Promise((resolve) => setTimeout(resolve, 250));
 
     expect(seenTitles).toEqual(["Build Log", "User terminal"]);
@@ -855,6 +850,7 @@ describe("resize", () => {
 
     session.send({ type: "resize", rows: 40, cols: 120 });
 
+    // Fixed wait for pty resize propagation — no observable event available.
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const state = session.getState();
@@ -872,6 +868,7 @@ describe("resize", () => {
     );
 
     session.send({ type: "resize", rows: 10, cols: 40 });
+    // Fixed wait for pty resize propagation — no observable event available.
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const state = session.getState();
@@ -891,6 +888,7 @@ describe("resize", () => {
     expect(session.getSize()).toEqual({ rows: 24, cols: 80 });
 
     session.send({ type: "resize", rows: 10, cols: 40 });
+    // Fixed wait for pty resize propagation — no observable event available.
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(session.getSize()).toEqual({ rows: 10, cols: 40 });

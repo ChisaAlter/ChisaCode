@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -24,14 +24,7 @@ async function waitForCondition(
   timeoutMs: number,
   intervalMs = 25,
 ): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await predicate()) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  throw new Error(`Timed out after ${timeoutMs}ms waiting for condition`);
+  await vi.waitFor(predicate, { timeout: timeoutMs, interval: intervalMs });
 }
 
 function getVisibleText(session: TerminalSession): string {
@@ -158,7 +151,7 @@ it("creates a terminal through the worker and streams output", async () => {
       snapshots += 1;
     }
   });
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForCondition(() => snapshots > 0, 500);
   const snapshotsBeforeOutput = snapshots;
 
   session.send({ type: "input", data: "hello\r" });
@@ -169,7 +162,7 @@ it("creates a terminal through the worker and streams output", async () => {
       getVisibleText(session).includes("worker-output:hello"),
     10000,
   );
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForCondition(() => snapshots > 0, 500);
   unsubscribe();
 
   expect(messages.join("") + getVisibleText(session)).toContain("worker-output:hello");
@@ -276,7 +269,7 @@ it("does not surface fire-and-forget send timeouts as unhandled rejections", asy
   process.on("unhandledRejection", onUnhandledRejection);
   try {
     session?.send({ type: "input", data: "x" });
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await waitForCondition(() => worker.sentMessages.length > 0, 500);
   } finally {
     process.off("unhandledRejection", onUnhandledRejection);
   }

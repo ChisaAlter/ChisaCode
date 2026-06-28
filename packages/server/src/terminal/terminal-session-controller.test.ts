@@ -121,6 +121,8 @@ describe("terminal-session-controller restore", () => {
     terminalListener?.({ type: "output", data: "restore-after\n", revision: 2 });
     snapshot.resolve({ state: terminalState("restore-before"), revision: 1 });
     await snapshot.promise;
+    // CAUTION: Fixed delay waits for internal message queue flush.
+    // Cannot be replaced with vi.waitFor — no observable condition.
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(outboundMessages).toContainEqual({

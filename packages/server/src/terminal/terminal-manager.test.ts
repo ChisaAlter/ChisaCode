@@ -1,4 +1,4 @@
-import { it, expect, afterEach } from "vitest";
+import { it, expect, afterEach, vi } from "vitest";
 import { isPlatform } from "../test-utils/platform.js";
 import { createTerminalManager, type TerminalManager } from "./terminal-manager.js";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
@@ -14,14 +14,7 @@ async function waitForCondition(
   timeoutMs: number,
   intervalMs = 25,
 ): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (predicate()) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  throw new Error(`Timed out after ${timeoutMs}ms waiting for condition`);
+  await vi.waitFor(predicate, { timeout: timeoutMs, interval: intervalMs });
 }
 
 let manager: TerminalManager;
