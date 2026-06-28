@@ -7,60 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.0.2 - 2026-06-28
+
 ### Added
 
-- Local usage statistics settings for tracking agent activity and usage patterns.
-- `.nvmrc` and `engines.node` constraint for consistent Node.js versioning across contributors.
+- Local usage statistics make recent agent activity and usage history easier to review
+- Agent and workspace lists now show running, finished, error, and permission-needed states at a glance
 
 ### Changed
 
-- **Session handler decomposition**: The god-file `session.ts` has been progressively split into domain-specific handlers under `packages/server/src/server/session-handlers/`. This improves maintainability and test isolation.
-  - Extracted pure helper functions to `session-helpers.ts`.
-  - Migrated audio functions and internal types out of `session.ts`.
-  - Created `SessionContext` interface and handler directory scaffold.
-  - Completed `CheckoutGitHandler` migration (15 checkout methods + stash support).
-  - Completed `ChatScheduleLoopHandler` split.
-  - Completed `ProviderHandler` split.
-  - Completed `TerminalScriptHandler` split.
-  - Completed `Voice stub`, `ConfigControlHandler`, and `WorkspaceProjectHandler` splits.
-  - Completed `AgentLifecycleHandler` split.
-  - Removed dead code from `session.ts` after all extractions.
-- `@chisacode/client` moved from `dependencies` to `devDependencies` in server package.
-- `expo-two-way-audio` package metadata unified under ChisaCode org.
-- Protocol package `./*` wildcard export replaced with explicit exports map.
-- Improved tool call summaries and archive handling for better agent session context.
-- Agent session flow and UI state handling refactored for stability.
-- Completed assistant thoughts collapsed into summaries for cleaner timeline display.
-- Host bootstrap refactored and assistant spacing tightened in UI.
-- Documentation aligned with current codebase state.
+- Message, markdown, shortcut, and diff views are easier to scan with clearer spacing and themed colors
+- User and assistant messages can be copied from the message context menu
+- Windows development startup handles occupied daemon ports more smoothly
+- Agent sessions are more reliable across checkout, provider, terminal, schedule, and workspace actions
+- Release checks now cover more publishable packages before a version is shipped
 
 ### Fixed
 
-- 57 `session.test.ts` failures repaired after handler split refactor.
-- CLI install `.cmd` trampoline properly escapes `%` and `"` characters.
-- Desktop `CHISACODE_ELECTRON_FLAGS` restricted to whitelist to prevent security flag injection.
-- Desktop `browser:open-devtools` and `clear-partition` IPC commands now validate sender frames.
-- Server wildcard (`0.0.0.0`) binding enforces password requirement to prevent unauthenticated LAN access.
-- Desktop `transportPath` scoped to `CHISACODE_HOME` to prevent IPC endpoint path traversal.
-- Android `versionCode` mapped from full version string to prevent Google Play upload conflicts.
-- Test `opener.test.ts` no longer fails when Electron desktop-settings module is absent.
-- Skills sync no longer deletes user-created files in the target directory.
-- Auto-updater retains transient error cache with throttled polling timers.
-- Desktop `local-transport` sessions `Map` now has an upper bound to prevent memory leaks.
-- Desktop `isMainAppSenderUrl` validation tightened and PID filenames deduplicated.
-- iOS `AudioEngine` buffers made dynamic; `setMicrophoneModeIOS` method renamed.
-- Android `AudioEngine` tear-down properly closes the playback executor; RMS division-by-zero protected.
-- Desktop drag-and-drop uses `webUtils.getPathForFile` to obtain native file paths.
-- Voice `AudioEngine` converted to native singleton to prevent duplicate event dispatching.
-- App resize handle split by platform to avoid native crashes.
-- macOS `entitlements` file added to fix notarized builds.
-- Agent lifecycle reconciliation improved for correctness.
-- `syntheticModels` added to daemon config store gateway test expectations.
-
-### Removed
-
-- Obsolete Claude skills symbolic links and Trae planning documents.
-- Accidentally committed temporary screenshots (`.gitignore` rule added).
+- Windows CLI installs handle special characters in npm command shims correctly
+- Desktop security checks now reject unsafe Electron flags, untrusted IPC senders, and transport paths outside `CHISACODE_HOME`
+- Daemons bound to `0.0.0.0` now require a password before exposing access on the local network
+- Android uploads use stable version codes to avoid Google Play conflicts
+- Voice and audio cleanup is more reliable on iOS and Android
+- Desktop drag-and-drop, auto-updates, and local transport cleanup are safer
+- Skills sync preserves user-created files in the target directory
+- Native resize handles no longer crash non-web app surfaces
+- macOS builds include the entitlements needed for notarization
 
 ## [1.0.1] - 2026-06-18
 
@@ -114,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Turn changes dock state corrected.
 - Local desktop runtime fixes synced.
 
-[Unreleased]: https://github.com/ChisaAlter/ChisaCode/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ChisaAlter/ChisaCode/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/ChisaAlter/ChisaCode/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ChisaAlter/ChisaCode/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ChisaAlter/ChisaCode/releases/tag/v1.0.0
