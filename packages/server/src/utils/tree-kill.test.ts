@@ -5,15 +5,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { terminateWithTreeKill } from "./tree-kill.js";
 
-const pollIntervalMs = 50;
-
 let tempDir: string | null = null;
 let ownerProcess: ChildProcess | null = null;
 let descendantPid: number | null = null;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function isProcessRunning(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) {
@@ -37,7 +31,7 @@ async function waitFor(
   async function poll(): Promise<void> {
     if (await check()) return;
     if (Date.now() >= deadline) throw new Error(message);
-    await sleep(pollIntervalMs);
+    await new Promise((resolve) => setImmediate(resolve));
     return poll();
   }
   return poll();

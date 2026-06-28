@@ -51,7 +51,7 @@ async function waitForTimelineToolCall(
     if (existing && existing.type === "tool_call") {
       return existing;
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setImmediate(resolve));
   }
   const recentToolCalls: Array<{ name: string; status?: string; callId?: string }> = [];
   for (let i = messages.length - 1; i >= 0 && recentToolCalls.length < 10; i -= 1) {
@@ -93,7 +93,7 @@ async function waitForCondition(options: {
     if (await options.predicate()) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setImmediate(resolve));
   }
   throw new Error(`Timed out after ${options.timeoutMs}ms waiting for ${options.label}`);
 }

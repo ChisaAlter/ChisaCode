@@ -44,7 +44,7 @@ async function waitForPathExists(options: {
     if (existsSync(options.targetPath)) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setImmediate(resolve));
   }
   throw new Error(`Timed out after ${options.timeoutMs}ms waiting for path: ${options.targetPath}`);
 }
