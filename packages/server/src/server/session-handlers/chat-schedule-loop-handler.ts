@@ -10,13 +10,13 @@ import { notifyChatMentions, prepareChatMentionFanout } from "../chat/chat-menti
 import { sendPromptToAgent, formatSystemNotificationPrompt } from "../agent/agent-prompt.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../messages.js";
 import type { ScheduleService } from "../schedule/service.js";
-import type { SessionContext, DisposableHandler } from "./session-context.js";
+import type { ChatScheduleLoopHandlerContext, DisposableHandler } from "./session-context.js";
 
 /** Handles chat room, schedule, and loop RPC operations. */
 export class ChatScheduleLoopHandler implements DisposableHandler {
-  private readonly context: SessionContext;
+  private readonly context: ChatScheduleLoopHandlerContext;
 
-  constructor(context: SessionContext) {
+  constructor(context: ChatScheduleLoopHandlerContext) {
     this.context = context;
   }
 

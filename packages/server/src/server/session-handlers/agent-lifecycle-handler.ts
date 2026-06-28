@@ -77,7 +77,7 @@ import type {
   AgentSessionConfig,
 } from "../agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "../agent/agent-storage.js";
-import type { SessionContext, DisposableHandler } from "./session-context.js";
+import type { AgentLifecycleHandlerContext, DisposableHandler } from "./session-context.js";
 import { resolveProjectDisplayName } from "../workspace-registry.js";
 import type { PersistedProjectRecord } from "../workspace-registry.js";
 import type { StructuredGenerationDaemonConfig } from "../agent/structured-generation-providers.js";
@@ -131,7 +131,7 @@ class SessionRequestError extends Error {
 }
 
 export class AgentLifecycleHandler implements DisposableHandler {
-  private readonly context: SessionContext;
+  private readonly context: AgentLifecycleHandlerContext;
 
   private get agentUpdatesSubscription(): AgentUpdatesSubscriptionState | null {
     return this.context.getAgentUpdatesSubscription() as AgentUpdatesSubscriptionState | null;
@@ -171,7 +171,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
     },
   });
 
-  constructor(context: SessionContext) {
+  constructor(context: AgentLifecycleHandlerContext) {
     this.context = context;
   }
 

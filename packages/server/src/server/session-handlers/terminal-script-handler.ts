@@ -6,13 +6,13 @@
 
 import { spawnWorkspaceScript } from "../worktree-bootstrap.js";
 import type { StartWorkspaceScriptRequest, SessionInboundMessage } from "../messages.js";
-import type { SessionContext, DisposableHandler } from "./session-context.js";
+import type { TerminalScriptHandlerContext, DisposableHandler } from "./session-context.js";
 
 /** Handles workspace script spawning and terminal message dispatch. */
 export class TerminalScriptHandler implements DisposableHandler {
-  private readonly context: SessionContext;
+  private readonly context: TerminalScriptHandlerContext;
 
-  constructor(context: SessionContext) {
+  constructor(context: TerminalScriptHandlerContext) {
     this.context = context;
   }
 

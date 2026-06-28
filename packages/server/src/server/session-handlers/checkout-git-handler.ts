@@ -50,7 +50,7 @@ import type {
   WorkspaceGitSnapshotOptions,
 } from "../workspace-git-service.js";
 import type { CurrentWorkspacePullRequest, GitMutationRefreshReason } from "../session-helpers.js";
-import type { SessionContext, DisposableHandler } from "./session-context.js";
+import type { CheckoutGitHandlerContext, DisposableHandler } from "./session-context.js";
 
 type PullRequestTimelinePayload = Extract<
   SessionOutboundMessage,
@@ -62,10 +62,10 @@ const CHISACODE_STASH_PREFIX = "chisacode-auto-stash:";
 
 /** Handles all checkout, git branch/stash/PR, and diff subscription RPC operations. */
 export class CheckoutGitHandler implements DisposableHandler {
-  private readonly context: SessionContext;
+  private readonly context: CheckoutGitHandlerContext;
   private readonly checkoutDiffSubscriptions = new Map<string, () => void>();
 
-  constructor(context: SessionContext) {
+  constructor(context: CheckoutGitHandlerContext) {
     this.context = context;
   }
 

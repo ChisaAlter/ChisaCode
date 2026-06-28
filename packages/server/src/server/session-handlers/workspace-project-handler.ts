@@ -40,7 +40,7 @@ import type {
   FirstAgentContext,
 } from "../messages.js";
 import type { PersistedWorkspaceRecord } from "../workspace-registry.js";
-import type { SessionContext, DisposableHandler } from "./session-context.js";
+import type { WorkspaceProjectHandlerContext, DisposableHandler } from "./session-context.js";
 
 type FetchWorkspacesResponsePayload = Extract<
   SessionOutboundMessage,
@@ -73,9 +73,9 @@ class SessionRequestError extends Error {
 
 /** Handles workspace/project CRUD, worktree operations, file explorer, editors, and workspace subscription state machine. */
 export class WorkspaceProjectHandler implements DisposableHandler {
-  private readonly context: SessionContext;
+  private readonly context: WorkspaceProjectHandlerContext;
 
-  constructor(context: SessionContext) {
+  constructor(context: WorkspaceProjectHandlerContext) {
     this.context = context;
   }
 

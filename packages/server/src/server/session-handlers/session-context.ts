@@ -291,6 +291,80 @@ export interface DaemonRuntimeConfig {
  * A handler that can be disposed. Session.cleanup() calls dispose() on every
  * registered handler so they can release subscriptions and timers.
  */
+// ---------------------------------------------------------------------------
+// Handler-specific context types
+//
+// Each handler receives a precise context type that describes exactly what it
+// needs.  These are intersections of the domain interfaces above so the
+// Session class can still construct a single SessionContext value.
+// ---------------------------------------------------------------------------
+
+/** Context needed by CheckoutGitHandler. */
+export type CheckoutGitHandlerContext = SessionIdentityContext &
+  WorkspaceProjectContext &
+  CheckoutGitContext;
+
+/** Context needed by ChatScheduleLoopHandler. */
+export type ChatScheduleLoopHandlerContext = SessionIdentityContext &
+  ChatScheduleContext &
+  Pick<AgentLifecycleContext, "agentManager" | "agentStorage"> &
+  Pick<CheckoutGitContext, "resolveAgentIdentifier"> &
+  Pick<SessionIdentityContext, "clientId">;
+
+/** Context needed by ConfigControlHandler. */
+export type ConfigControlHandlerContext = SessionIdentityContext &
+  ConfigControlContext &
+  Pick<AgentLifecycleContext, "agentManager"> &
+  Pick<ProviderCatalogContext, "daemonConfigStore" | "pushTokenStore"> &
+  Pick<ConfigControlContext, "mcpBaseUrl"> &
+  Pick<WorkspaceProjectContext, "resolveKnownProjectRootForConfig">;
+
+/** Context needed by ProviderHandler. */
+export type ProviderHandlerContext = SessionIdentityContext &
+  ProviderCatalogContext &
+  Pick<AgentLifecycleContext, "agentManager" | "agentPresetStore" | "providerSnapshotManager"> &
+  Pick<SessionIdentityContext, "supports">;
+
+/** Context needed by TerminalScriptHandler. */
+export type TerminalScriptHandlerContext = SessionIdentityContext &
+  TerminalScriptContext &
+  Pick<
+    WorkspaceProjectContext,
+    "workspaceRegistry" | "workspaceGitService" | "emitWorkspaceScriptStatusUpdate"
+  >;
+
+/** Context needed by AgentLifecycleHandler. */
+export type AgentLifecycleHandlerContext = SessionIdentityContext &
+  AgentLifecycleContext &
+  Pick<
+    WorkspaceProjectContext,
+    | "workspaceGitService"
+    | "workspaceRegistry"
+    | "projectRegistry"
+    | "findOrCreateWorkspaceForDirectory"
+    | "syncWorkspaceGitObserverForWorkspace"
+    | "describeWorkspaceRecord"
+    | "emitWorkspaceUpdateForCwd"
+  > &
+  Pick<CheckoutGitContext, "resolveAgentIdentifier"> &
+  Pick<ProviderCatalogContext, "daemonConfigStore" | "usageStore"> &
+  Pick<TerminalScriptContext, "terminalController">;
+
+/** Context needed by WorkspaceProjectHandler. */
+export type WorkspaceProjectHandlerContext = SessionIdentityContext &
+  WorkspaceProjectContext &
+  CheckoutGitContext &
+  Pick<
+    AgentLifecycleContext,
+    | "agentManager"
+    | "agentStorage"
+    | "providerSnapshotManager"
+    | "getFocusedAgentSelectionForCwd"
+    | "readStructuredGenerationDaemonConfig"
+  > &
+  Pick<ProviderCatalogContext, "downloadTokenStore"> &
+  Pick<TerminalScriptContext, "terminalController">;
+
 export interface DisposableHandler {
   dispose(): void;
 }

@@ -17,7 +17,7 @@ import type {
   AgentSessionConfig,
   ProviderSnapshotEntry,
 } from "../agent/agent-sdk-types.js";
-import type { SessionContext, DisposableHandler } from "./session-context.js";
+import type { ProviderHandlerContext, DisposableHandler } from "./session-context.js";
 
 const LEGACY_PROVIDER_IDS = new Set(["claude", "codex", "opencode"]);
 const LEGACY_MODE_ICONS = new Set<string>([
@@ -33,9 +33,9 @@ function resolveSnapshotCwd(cwd: string | undefined): string {
 
 /** Handles provider list/snapshot/diagnostic, mode/feature/command discovery, presets, and model gateway test RPC operations. */
 export class ProviderHandler implements DisposableHandler {
-  private readonly context: SessionContext;
+  private readonly context: ProviderHandlerContext;
 
-  constructor(context: SessionContext) {
+  constructor(context: ProviderHandlerContext) {
     this.context = context;
   }
 

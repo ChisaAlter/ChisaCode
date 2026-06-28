@@ -27,7 +27,7 @@ import {
   writeChisaCodeConfigForEdit,
   type ProjectConfigRpcError,
 } from "../../utils/chisacode-config-file.js";
-import type { SessionContext, DisposableHandler } from "./session-context.js";
+import type { ConfigControlHandlerContext, DisposableHandler } from "./session-context.js";
 import type {
   SessionInboundMessage,
   AgentSkillsPolicyPatchRequest,
@@ -41,9 +41,9 @@ import type { AgentSessionConfig } from "../agent/agent-sdk-types.js";
 
 /** Handles daemon/project config, skills, MCP servers, restart, shutdown, and push token RPC operations. */
 export class ConfigControlHandler implements DisposableHandler {
-  private readonly context: SessionContext;
+  private readonly context: ConfigControlHandlerContext;
 
-  constructor(context: SessionContext) {
+  constructor(context: ConfigControlHandlerContext) {
     this.context = context;
   }
 
