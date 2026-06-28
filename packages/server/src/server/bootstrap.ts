@@ -91,31 +91,36 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
   return listenTarget.path;
 }
 
+function getWildcardAuthWarning(
+  listenTarget: ListenTarget,
+  auth: DaemonAuthConfig | undefined,
+): string | null {
+  if (listenTarget.type !== "tcp") {
+    return null;
+  }
+  const isWildcard = listenTarget.host === "0.0.0.0" || listenTarget.host === "::";
+  if (!isWildcard) {
+    return null;
+  }
+  if (!auth?.password) {
+    return (
+      `Listening on wildcard address ${listenTarget.host}:${listenTarget.port} without a password exposes the daemon to the local network. ` +
+      "Set CHISACODE_PASSWORD (or persist a password in config), or bind to 127.0.0.1 / a specific interface instead."
+    );
+  }
+  return null;
+}
+
 /**
- * Refuse to start when the daemon is bound to a wildcard address
- * (`0.0.0.0` or `::`) without a password configured. Without authentication,
- * any host on the same network can invoke privileged daemon APIs (shell
- * execution, file access, agent control). Loopback and explicit interface
- * binds are unaffected.
+ * Compatibility shim for the original startup guard. Patch releases must not
+ * make existing LAN/self-hosted daemons fail to start, so the daemon logs the
+ * warning from `getWildcardAuthWarning` during bootstrap instead.
  */
 export function assertWildcardAuth(
   listenTarget: ListenTarget,
   auth: DaemonAuthConfig | undefined,
 ): void {
-  if (listenTarget.type !== "tcp") {
-    return;
-  }
-  const isWildcard = listenTarget.host === "0.0.0.0" || listenTarget.host === "::";
-  if (!isWildcard) {
-    return;
-  }
-  if (!auth?.password) {
-    throw new Error(
-      `Refusing to listen on wildcard address ${listenTarget.host}:${listenTarget.port} without a password. ` +
-        "Set CHISACODE_PASSWORD (or persist a password in config) before binding to 0.0.0.0/::, " +
-        "or bind to 127.0.0.1 / a specific interface instead.",
-    );
-  }
+  void getWildcardAuthWarning(listenTarget, auth);
 }
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
@@ -451,6 +456,16 @@ export async function createChisaCodeDaemon(
 
   const listenTarget = parseListenString(config.listen);
   assertWildcardAuth(listenTarget, config.auth);
+  const wildcardAuthWarning = getWildcardAuthWarning(listenTarget, config.auth);
+  if (wildcardAuthWarning) {
+    logger.warn(
+      {
+        listen: formatListenTarget(listenTarget),
+        authRequired: false,
+      },
+      wildcardAuthWarning,
+    );
+  }
   const modelGatewayToken = config.modelGatewayToken ?? randomUUID();
   const modelGatewayBaseUrl = createModelGatewayBaseUrl(listenTarget);
 

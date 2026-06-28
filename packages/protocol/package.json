@@ -9,6 +9,10 @@
   ],
   "type": "module",
   "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
     "./agent-attention-notification": {
       "types": "./dist/agent-attention-notification.d.ts",
       "default": "./dist/agent-attention-notification.js"

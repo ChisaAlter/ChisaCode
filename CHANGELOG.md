@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Windows CLI installs handle special characters in npm command shims correctly
 - Desktop security checks now reject unsafe Electron flags, untrusted IPC senders, and transport paths outside `CHISACODE_HOME`
-- Daemons bound to `0.0.0.0` now require a password before exposing access on the local network
+- Daemons bound to `0.0.0.0` now warn when access is exposed without a password
 - Android uploads use stable version codes to avoid Google Play conflicts
 - Voice and audio cleanup is more reliable on iOS and Android
 - Desktop drag-and-drop, auto-updates, and local transport cleanup are safer

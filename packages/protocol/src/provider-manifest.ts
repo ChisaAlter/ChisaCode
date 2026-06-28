@@ -256,6 +256,12 @@ export function getAgentProviderDefinition(
 
 export const BUILTIN_PROVIDER_IDS = AGENT_PROVIDER_DEFINITIONS.map((d) => d.id);
 
+/**
+ * Legacy alias kept for consumers that imported provider IDs before
+ * BUILTIN_PROVIDER_IDS was introduced.
+ */
+export const AGENT_PROVIDER_IDS = BUILTIN_PROVIDER_IDS;
+
 export const AgentProviderSchema = z.string();
 
 export function isValidAgentProvider(
