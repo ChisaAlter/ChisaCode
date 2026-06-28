@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "nod
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import pino from "pino";
-import { beforeAll, beforeEach, describe, expect, test } from "vitest";
+import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { WebSocket } from "ws";
 import { ClaudeAgentClient } from "../agent/providers/claude/agent.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
@@ -14,6 +14,9 @@ function tmpCwd(): string {
 }
 
 function sleep(ms: number): Promise<void> {
+  // Real e2e tests rely on actual time passing for provider interaction.
+  // vi.waitFor would evaluate on vi timers which do not advance real-world
+  // network / process time.
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -368,6 +371,9 @@ async function waitForTranscriptRaceEvidence(params: {
     if (evidence) {
       break;
     }
+    // Wait for external Claude process to append to transcript file.
+    // vi.waitFor would busy-poll inside an evaluate loop; explicit interval
+    // with real I/O yield is the right trade-off here.
     await sleep(250);
   }
   if (!evidence) {
@@ -418,6 +424,8 @@ async function waitForAssistantTextCombined(params: {
     ) {
       break;
     }
+    // Poll the daemon timeline — requires real network I/O; explicit
+    // interval avoids busy-polling inside vi.waitFor's evaluate loop.
     await sleep(250);
   }
   return assistantTextCombined;
@@ -492,14 +500,21 @@ describe("daemon E2E (real claude) - autonomous wake from background task", () =
         timelineAtIdle.entries.length,
       );
       let sawTimelineGrowth = timelineAfterWake.entries.length > timelineAtIdle.entries.length;
-      const growthDeadline = Date.now() + 20_000;
-      while (!sawTimelineGrowth && Date.now() < growthDeadline) {
-        await sleep(250);
-        const nextTimeline = await client.fetchAgentTimeline(agent.id, {
-          direction: "tail",
-          limit: 0,
-        });
-        sawTimelineGrowth = nextTimeline.entries.length > timelineAtIdle.entries.length;
+      if (!sawTimelineGrowth) {
+        await vi.waitFor(
+          async () => {
+            const nextTimeline = await client.fetchAgentTimeline(agent.id, {
+              direction: "tail",
+              limit: 0,
+            });
+            const grown = nextTimeline.entries.length > timelineAtIdle.entries.length;
+            if (grown) {
+              sawTimelineGrowth = true;
+            }
+            return grown;
+          },
+          { timeout: 20_000, interval: 250 },
+        );
       }
       expect(sawTimelineGrowth).toBe(true);
     } finally {
@@ -561,14 +576,21 @@ describe("daemon E2E (real claude) - autonomous wake from background task", () =
           timelineAtIdle.entries.length,
         );
         let sawTimelineGrowth = timelineAfterWake.entries.length > timelineAtIdle.entries.length;
-        const growthDeadline = Date.now() + 20_000;
-        while (!sawTimelineGrowth && Date.now() < growthDeadline) {
-          await sleep(250);
-          const nextTimeline = await client.fetchAgentTimeline(agent.id, {
-            direction: "tail",
-            limit: 0,
-          });
-          sawTimelineGrowth = nextTimeline.entries.length > timelineAtIdle.entries.length;
+        if (!sawTimelineGrowth) {
+          await vi.waitFor(
+            async () => {
+              const nextTimeline = await client.fetchAgentTimeline(agent.id, {
+                direction: "tail",
+                limit: 0,
+              });
+              const grown = nextTimeline.entries.length > timelineAtIdle.entries.length;
+              if (grown) {
+                sawTimelineGrowth = true;
+              }
+              return grown;
+            },
+            { timeout: 20_000, interval: 250 },
+          );
         }
         expect(sawTimelineGrowth).toBe(true);
       } else {

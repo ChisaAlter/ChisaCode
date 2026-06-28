@@ -19,6 +19,10 @@ function tmpCwd(): string {
 }
 
 function sleep(ms: number): Promise<void> {
+  // Real e2e tests require actual time passage for OpenCode provider interaction.
+  // vi.waitFor / vi.advanceTimersByTime cannot replace these because:
+  // - vi.advanceTimersByTime requires fake timers which break real network I/O
+  // - vi.waitFor busy-polls inside an evaluate loop instead of yielding to I/O
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -149,6 +153,7 @@ async function waitForRunningBashToolCall(
       return;
     }
 
+    // Wait briefly between polling daemon state — real network round-trip.
     await sleep(500);
   }
 
@@ -183,6 +188,8 @@ async function waitForSleepToolCallTerminal(
         callId: sleepToolCall.callId,
       };
     }
+    // Poll daemon timeline — real network I/O, explicit interval avoids
+    // busy-looping inside vi.waitFor's evaluate callback.
     await sleep(300);
   }
 

@@ -17,6 +17,9 @@ function tmpCwd(): string {
 }
 
 function sleep(ms: number): Promise<void> {
+  // Real e2e tests require actual time passage for Codex provider interaction.
+  // vi.waitFor / vi.advanceTimersByTime cannot replace these — see rationale in
+  // claude-autonomous-wake.real.e2e.test.ts sleep() docstring.
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -257,6 +260,8 @@ describe("daemon E2E (real codex) - send message during tool call", () => {
           messageId: generateClientMessageId(),
         },
       );
+      // Brief delay to let the first send message reach Codex before the second.
+      // Real provider I/O — vi.advanceTimersByTime would interfere with daemon timers.
       await sleep(200);
 
       collector.clear();

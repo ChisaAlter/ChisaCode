@@ -17,6 +17,9 @@ function tmpCwd(): string {
 }
 
 function sleep(ms: number): Promise<void> {
+  // Real e2e tests require actual time passage for Claude provider interaction.
+  // vi.waitFor / vi.advanceTimersByTime cannot replace these — see rationale in
+  // claude-autonomous-wake.real.e2e.test.ts sleep() docstring.
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 

@@ -79,14 +79,12 @@ describe.skipIf(isPlatform("win32"))("worktree-bootstrap POSIX-only", () => {
     let realTerminalManagers: TerminalManager[];
 
     async function waitForPathExists(targetPath: string, timeoutMs = 10000): Promise<void> {
-      const startedAt = Date.now();
-      while (Date.now() - startedAt < timeoutMs) {
-        if (existsSync(targetPath)) {
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-      throw new Error(`Timed out waiting for path: ${targetPath}`);
+      await vi.waitFor(
+        () => {
+          expect(existsSync(targetPath)).toBe(true);
+        },
+        { timeout: timeoutMs, interval: 25 },
+      );
     }
 
     function readEnvFile(path: string): Record<string, string> {

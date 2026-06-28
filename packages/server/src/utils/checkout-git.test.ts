@@ -96,8 +96,8 @@ function initRepo(): { tempDir: string; repoDir: string } {
   return { tempDir, repoDir };
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function tick(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function createGitHubServiceForStatus(
@@ -959,16 +959,13 @@ const x = 1;
     warmCheckoutShortstatInBackground(repoDir);
 
     // A repo with no origin/main computes to null, but null should still be cached.
-    for (let attempts = 0; attempts < 20; attempts += 1) {
-      const cached = getCachedCheckoutShortstat(repoDir);
-      if (cached !== undefined) {
-        expect(cached).toBeNull();
-        return;
-      }
-      await sleep(25);
-    }
-
-    throw new Error("shortstat background warm did not populate cache in time");
+    await vi.waitFor(
+      () => {
+        expect(getCachedCheckoutShortstat(repoDir)).toBeDefined();
+      },
+      { timeout: 2000, interval: 25 },
+    );
+    expect(getCachedCheckoutShortstat(repoDir)).toBeNull();
   });
 
   it("commits messages with quotes safely", async () => {
@@ -1988,7 +1985,7 @@ const x = 1;
       },
     );
 
-    __setPullRequestStatusCacheTtlForTests(50);
+    __setPullRequestStatusCacheTtlForTests(0);
     try {
       let callCount = 0;
       const github = createGitHubServiceForStatus(null, {
@@ -2003,7 +2000,7 @@ const x = 1;
         });
       };
       const first = await getPullRequestStatus(repoDir, github);
-      await sleep(80);
+      await tick();
       const second = await getPullRequestStatus(repoDir, github);
       expect(first.status?.url).toContain("/pull/1");
       expect(second.status?.url).toContain("/pull/2");
@@ -2023,7 +2020,7 @@ const x = 1;
       },
     );
 
-    __setPullRequestStatusCacheTtlForTests(50);
+    __setPullRequestStatusCacheTtlForTests(0);
     try {
       let callCount = 0;
       const github = createGitHubServiceForStatus(null);
@@ -2043,7 +2040,7 @@ const x = 1;
       };
 
       const fresh = await getPullRequestStatus(repoDir, github);
-      await sleep(80);
+      await tick();
       const stale = await getPullRequestStatus(repoDir, github);
 
       expect(stale).toEqual(fresh);
@@ -2102,7 +2099,7 @@ const x = 1;
       },
     );
 
-    __setPullRequestStatusCacheTtlForTests(50);
+    __setPullRequestStatusCacheTtlForTests(0);
     try {
       let callCount = 0;
       const github = createGitHubServiceForStatus(null);
@@ -2117,7 +2114,7 @@ const x = 1;
       };
 
       const fresh = await getPullRequestStatus(repoDir, github);
-      await sleep(80);
+      await tick();
       const cleared = await getPullRequestStatus(repoDir, github);
 
       expect(fresh.status?.url).toContain("/pull/123");
