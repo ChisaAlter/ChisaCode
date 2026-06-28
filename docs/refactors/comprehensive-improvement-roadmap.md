@@ -159,7 +159,7 @@ ChisaCode 当前整体质量评分约 8.3/10，目标持续提升至 10/10。核
 - [ ] 开始 vi.mock → injectable adapter 替换
 - [x] IPC 命令审计完成
 - [x] webview CSP 审计（CSP 注入待实施）
-- [ ] 测试覆盖基线建立
+- [x] 测试覆盖基线建立
 
 ### Milestone 3 (Week 5-6): session 拆分完成 — **[已完成]**
 
@@ -176,14 +176,14 @@ ChisaCode 当前整体质量评分约 8.3/10，目标持续提升至 10/10。核
 - [ ] 架构图更新
 - [ ] 依赖图审计报告
 
-### Milestone 5 (Week 9+): 10 分冲刺 — **[待开始]**
+### Milestone 5 (Week 9+): 10 分冲刺 — **[进行中]**
 
-- [ ] 剩余 30+ 测试文件固定等待消除
+- [x] 剩余测试文件固定等待消除（4 轮 19 文件 ~90 处）
+- [x] 覆盖率基线建立 + CI 门禁 (`2a3f0b0`)
+- [x] 依赖图审计自动化 (`2a3f0b0`, 0 violations)
 - [ ] handler E2E 测试（ChatScheduleLoop/Provider/AgentLifecycle）
 - [ ] vi.mock → injectable adapter 全部替换
-- [ ] 覆盖率基线建立 + CI 门禁
 - [ ] Windows portless
-- [ ] 依赖图审计自动化
 - [ ] 事件驱动解耦 checkout→workspace
 
 ## 维护指南
