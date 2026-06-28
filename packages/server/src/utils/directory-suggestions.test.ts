@@ -66,7 +66,7 @@ describe("searchHomeDirectories", () => {
   it("supports home-relative path query syntax", async () => {
     const results = await searchHomeDirectories({
       homeDir,
-      query: "~/projects/pa",
+      query: "~/projects/chi",
       limit: 10,
     });
 

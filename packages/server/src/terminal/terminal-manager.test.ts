@@ -14,7 +14,10 @@ async function waitForCondition(
   timeoutMs: number,
   intervalMs = 25,
 ): Promise<void> {
-  await vi.waitFor(predicate, { timeout: timeoutMs, interval: intervalMs });
+  await vi.waitFor(() => expect(predicate()).toBe(true), {
+    timeout: timeoutMs,
+    interval: intervalMs,
+  });
 }
 
 let manager: TerminalManager;
