@@ -74,9 +74,17 @@ describe("worktree shell selection", () => {
           "-ExecutionPolicy",
           "Bypass",
           "-Command",
-          "Write-Output 'teardown'",
+          "$global:LASTEXITCODE = $null; & { Write-Output 'teardown' }; if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }",
         ],
-        expect.objectContaining({ cwd: worktreePath }),
+        expect.objectContaining({
+          cwd: worktreePath,
+          env: expect.objectContaining({
+            CHISACODE_BRANCH_NAME: "main",
+            CHISACODE_ROOT_PATH: worktreePath,
+            CHISACODE_SOURCE_CHECKOUT_PATH: worktreePath,
+            CHISACODE_WORKTREE_PATH: worktreePath,
+          }),
+        }),
         expect.any(Function),
       );
     } finally {
