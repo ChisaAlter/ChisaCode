@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { AgentStatusIndicator } from "@/components/ui/agent-status-indicator";
 import { formatTimeAgo } from "@/utils/time";
 import { shortenPath } from "@/utils/shorten-path";
 import { type AggregatedAgent } from "@/hooks/use-aggregated-agents";
@@ -201,6 +202,13 @@ function SessionRow({
               {projectPath}
             </Text>
             <Text style={styles.sessionMetaSeparator}>·</Text>
+            <AgentStatusIndicator
+              status={agent.status}
+              requiresAttention={agent.requiresAttention}
+              attentionReason={agent.attentionReason}
+              pendingPermissionCount={agent.pendingPermissionCount}
+              size="md"
+            />
             <Text style={styles.sessionMetaText}>{statusLabel}</Text>
             <Text style={styles.sessionMetaSeparator}>·</Text>
             <Text style={styles.sessionMetaText}>{timeAgo}</Text>
@@ -220,7 +228,16 @@ function SessionRow({
           <Text style={styles.columnMeta} numberOfLines={1}>
             {projectPath}
           </Text>
-          <Text style={styles.columnMetaFixed}>{statusLabel}</Text>
+          <View style={styles.columnStatusCell}>
+            <AgentStatusIndicator
+              status={agent.status}
+              requiresAttention={agent.requiresAttention}
+              attentionReason={agent.attentionReason}
+              pendingPermissionCount={agent.pendingPermissionCount}
+              size="md"
+            />
+            <Text style={styles.columnMetaFixed}>{statusLabel}</Text>
+          </View>
           <Text style={styles.columnMetaFixed}>{timeAgo}</Text>
         </>
       )}
@@ -550,6 +567,14 @@ const styles = StyleSheet.create((theme) => ({
     width: 72,
     textAlign: "right" as const,
   },
+  columnStatusCell: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+    flexShrink: 0,
+    width: 72,
+  },
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -560,10 +585,10 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   badgeWarning: {
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    backgroundColor: theme.colors.statusWarningBg,
   },
   badgeDanger: {
-    backgroundColor: "rgba(239, 68, 68, 0.14)",
+    backgroundColor: theme.colors.statusDangerBg,
   },
   badgeText: {
     fontSize: theme.fontSize.xs,
@@ -586,7 +611,7 @@ const styles = StyleSheet.create((theme) => ({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: theme.colors.overlay,
   },
   sheetContainer: {
     backgroundColor: theme.colors.surface2,

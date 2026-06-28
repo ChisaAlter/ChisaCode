@@ -22,7 +22,12 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { ArrowUp, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
 import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
@@ -137,7 +142,7 @@ export interface MessageInputRef {
   getNativeElement?: () => HTMLElement | null;
 }
 
-const MIN_INPUT_HEIGHT_MOBILE = 30;
+const MIN_INPUT_HEIGHT_MOBILE = 36;
 const MIN_INPUT_HEIGHT_DESKTOP = 46;
 const DEFAULT_MAX_INPUT_HEIGHT = 160;
 const MAX_INPUT_VIEWPORT_RATIO = 0.5;
@@ -1251,6 +1256,18 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const focusInputKeys = useShortcutKeys("focus-message-input");
     const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
     const [isInputFocused, setIsInputFocused] = useState(false);
+    const animatedHeight = useSharedValue(MIN_INPUT_HEIGHT);
+
+    useEffect(() => {
+      animatedHeight.value = withTiming(inputHeight, {
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+      });
+    }, [animatedHeight, inputHeight]);
+
+    const animatedHeightStyle = useAnimatedStyle(() => ({
+      height: animatedHeight.value,
+    }));
     const rootRef = useRef<View | null>(null);
     const inputWrapperRef = useRef<View | null>(null);
     const textInputRef = useRef<TextInput | (TextInput & { getNativeRef?: () => unknown }) | null>(
@@ -1764,8 +1781,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     }, [handleStopRealtimeVoice]);
 
     const inputWrapperCombinedStyle = useMemo(
-      () => [styles.inputWrapper, inputWrapperStyle, inputAnimatedStyle],
-      [inputWrapperStyle, inputAnimatedStyle],
+      () => [styles.inputWrapper, inputWrapperStyle, inputAnimatedStyle, animatedHeightStyle],
+      [inputWrapperStyle, inputAnimatedStyle, animatedHeightStyle],
     );
     const textInputStyle = useMemo(
       () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
@@ -1926,7 +1943,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
       md: theme.spacing[4],
     },
     paddingHorizontal: {
-      xs: theme.spacing[3],
+      xs: theme.spacing[4],
       md: theme.spacing[4],
     },
     ...(isWeb

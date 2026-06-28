@@ -283,9 +283,21 @@ export function ComboboxItem({
     [description],
   );
   const labelCombinedStyle = useMemo(() => [styles.comboboxItemLabel, labelStyle], [labelStyle]);
+  const a11yState = useMemo(
+    () => ({ selected: !!selected, disabled: !!disabled }),
+    [selected, disabled],
+  );
 
   return (
-    <Pressable testID={testID} disabled={disabled} onPress={onPress} style={itemPressableStyle}>
+    <Pressable
+      testID={testID}
+      disabled={disabled}
+      onPress={onPress}
+      style={itemPressableStyle}
+      accessibilityRole="button"
+      accessibilityState={a11yState}
+      accessibilityLabel={label}
+    >
       {leadingContent}
       <View style={itemContentStyle}>
         <Text numberOfLines={1} style={labelCombinedStyle}>
@@ -1666,7 +1678,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   comboboxItemPressed: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface2,
   },
   comboboxItemPressedElevated: {
     backgroundColor: theme.colors.surface2,
@@ -1744,7 +1756,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopContainer: {
     backgroundColor: theme.colors.surface0,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     borderColor: theme.colors.border,
     ...theme.shadow.md,

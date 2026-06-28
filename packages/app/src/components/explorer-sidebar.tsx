@@ -29,7 +29,7 @@ import {
   type ExplorerTab,
 } from "@/stores/panel-store";
 import { useExplorerSidebarAnimation } from "@/contexts/explorer-sidebar-animation-context";
-import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
+import { HEADER_INNER_HEIGHT, useIsCompactFormFactor, MIN_CHAT_WIDTH } from "@/constants/layout";
 import { GitDiffPane } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
@@ -39,7 +39,6 @@ import { isWeb } from "@/constants/platform";
 import { useTranslation } from "react-i18next";
 import { getMobileSidebarWidth } from "@/utils/sidebar-animation-state";
 
-const MIN_CHAT_WIDTH = 400;
 const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
   duration: 180,
   easing: Easing.out(Easing.cubic),

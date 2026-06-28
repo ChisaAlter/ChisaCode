@@ -8,9 +8,8 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import { useUnistyles } from "react-native-unistyles";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
-
-const WHITE_TEXT = { color: "#ffffff" } as const;
 
 export function ProjectIconView({
   iconDataUri,
@@ -27,12 +26,16 @@ export function ProjectIconView({
   fallbackStyle: StyleProp<ViewStyle>;
   textStyle: StyleProp<TextStyle>;
 }) {
+  const { theme } = useUnistyles();
   const imageSource = useMemo(() => ({ uri: iconDataUri ?? "" }), [iconDataUri]);
   const fallbackStyles = useMemo(
     () => [fallbackStyle, { backgroundColor: deriveProjectIconColor(projectKey) }],
     [fallbackStyle, projectKey],
   );
-  const textStyles = useMemo(() => [textStyle, WHITE_TEXT], [textStyle]);
+  const textStyles = useMemo(
+    () => [textStyle, { color: theme.colors.accentForeground }],
+    [textStyle, theme.colors.accentForeground],
+  );
 
   if (iconDataUri) {
     return <Image source={imageSource} style={imageStyle} />;

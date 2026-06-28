@@ -50,7 +50,7 @@ import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TITLEBAR_NO_DRAG_VIEW_STYLE } from "@/components/desktop/titlebar-drag-region";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { WORKSPACE_SECONDARY_HEADER_HEIGHT, TAB_DROPDOWN_WIDTH } from "@/constants/layout";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
 import {
   WorkspaceTabPresentationResolver,
@@ -66,7 +66,6 @@ import {
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { Theme } from "@/styles/theme";
 
-const DROPDOWN_WIDTH = 220;
 const LOADING_TAB_LABEL_SKELETON_WIDTH = 80;
 
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
@@ -453,7 +452,7 @@ function TabChip({
           </TooltipContent>
         </Tooltip>
 
-        <ContextMenuContent align="start" width={DROPDOWN_WIDTH} testID={contextMenuTestId}>
+        <ContextMenuContent align="start" width={TAB_DROPDOWN_WIDTH} testID={contextMenuTestId}>
           {menuEntries.map((entry) =>
             entry.kind === "separator" ? (
               <ContextMenuSeparator key={entry.key} />

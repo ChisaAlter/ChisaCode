@@ -29,7 +29,7 @@ import {
 import { router, usePathname, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import { type GestureType } from "react-native-gesture-handler";
 import * as Clipboard from "expo-clipboard";
@@ -881,13 +881,14 @@ function ProjectLeadingVisualStatus({
 }
 
 function ProjectInlineChevron({ chevron }: { chevron: "expand" | "collapse" | null }) {
+  const { theme } = useUnistyles();
   if (chevron === null) {
     return null;
   }
   if (chevron === "collapse") {
-    return <ChevronDown size={14} color="#9ca3af" />;
+    return <ChevronDown size={14} color={theme.colors.foregroundMuted} />;
   }
-  return <ChevronRight size={14} color="#9ca3af" />;
+  return <ChevronRight size={14} color={theme.colors.foregroundMuted} />;
 }
 
 function NewWorktreeButton({

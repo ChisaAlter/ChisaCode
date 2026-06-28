@@ -512,6 +512,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   previewImage: {
     width: "100%",
-    height: 420,
+    maxHeight: 420,
   },
 }));

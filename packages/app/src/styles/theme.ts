@@ -120,12 +120,24 @@ export type ThemeName =
 const lightDiffColors = {
   diffAddition: "#15803d", // green-700 — readable on white without screaming
   diffDeletion: "#b91c1c", // red-700
+  diffAdditionBg: "rgba(21, 128, 61, 0.12)", // green-700 at 12% opacity
+  diffDeletionBg: "rgba(185, 28, 28, 0.10)", // red-700 at 10% opacity
+  diffAdditionHighlightBg: "rgba(21, 128, 61, 0.35)", // green-700 at 35%
+  diffDeletionHighlightBg: "rgba(185, 28, 28, 0.30)", // red-700 at 30%
 };
 
 const darkDiffColors = {
   diffAddition: "#4ade80", // green-400
   diffDeletion: "#ef4444", // red-500
+  diffAdditionBg: "rgba(74, 222, 128, 0.15)", // green-400 at 15% opacity
+  diffDeletionBg: "rgba(239, 68, 68, 0.10)", // red-500 at 10% opacity
+  diffAdditionHighlightBg: "rgba(74, 222, 128, 0.40)", // green-400 at 40%
+  diffDeletionHighlightBg: "rgba(239, 68, 68, 0.35)", // red-500 at 35%
 };
+
+// Overlay / backdrop mask — used by modals, sheets, and dropdown backdrops
+const lightOverlay = "rgba(0, 0, 0, 0.25)";
+const darkOverlay = "rgba(0, 0, 0, 0.50)";
 
 // Status colors — semantic signals for success/danger/warning/merged. Used by
 // check statuses, PR states, and review decisions. Kept a step darker than the
@@ -135,6 +147,9 @@ const lightStatusColors = {
   statusDanger: "#b91c1c", // red-700
   statusWarning: "#d97706", // amber-600
   statusMerged: "#7c3aed", // purple-600
+  statusSuccessBg: "rgba(21, 128, 61, 0.12)", // green-700 at 12%
+  statusWarningBg: "rgba(217, 119, 6, 0.12)", // amber-600 at 12%
+  statusDangerBg: "rgba(185, 28, 28, 0.14)", // red-700 at 14%
 };
 
 const darkStatusColors = {
@@ -142,6 +157,9 @@ const darkStatusColors = {
   statusDanger: "#dc2626", // red-600
   statusWarning: "#f59e0b", // amber-500
   statusMerged: "#9333ea", // purple-600
+  statusSuccessBg: "rgba(22, 163, 74, 0.12)", // green-600 at 12%
+  statusWarningBg: "rgba(245, 158, 11, 0.12)", // amber-500 at 12%
+  statusDangerBg: "rgba(220, 38, 38, 0.14)", // red-600 at 14%
 };
 
 // Semantic color tokens - Layer-based system
@@ -178,6 +196,8 @@ const lightSemanticColors = {
   destructiveForeground: "#ffffff",
   success: "#20744A",
   successForeground: "#ffffff",
+  overlay: lightOverlay,
+  blockquoteBorder: "#20744A", // accent green — distinct from text foreground
 
   // Legacy aliases (for gradual migration)
   background: "#ffffff",
@@ -248,6 +268,13 @@ const chisakiSemanticColors = {
   accent: "#b51d2a",
   accentBright: "#e04755",
   accentForeground: "#ffffff",
+  destructive: "#991b1b",
+  destructiveForeground: "#ffffff",
+  success: "#15803d",
+  successForeground: "#ffffff",
+
+  overlay: lightOverlay,
+  blockquoteBorder: "#b51d2a", // chisaki accent — warm red
 
   background: "#fff8f8",
   popover: "#fffafa",
@@ -298,6 +325,7 @@ interface DarkThemeConfig {
   accentBright: string;
   accentForeground?: string;
   destructive: string;
+  ringColor?: string;
 }
 
 const darkTerminalAnsi = {
@@ -345,6 +373,8 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
     destructiveForeground: "#ffffff",
     success: tint.accent,
     successForeground: "#ffffff",
+    overlay: darkOverlay,
+    blockquoteBorder: tint.accent, // match the theme accent color
 
     // Legacy aliases (for gradual migration)
     background: tint.surface0,
@@ -358,7 +388,7 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
     mutedForeground: tint.foregroundMuted,
     accentBorder: tint.borderAccent,
     input: tint.surface2,
-    ring: "#d4d4d8",
+    ring: tint.ringColor ?? "#d4d4d8",
 
     ...darkDiffColors,
     ...darkStatusColors,
@@ -398,6 +428,7 @@ const chisacodeDarkColors = buildDarkSemanticColors({
   accent: "#20744A",
   accentBright: "#7ccba0",
   destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
+  ringColor: "#2F3534", // match borderAccent
 });
 
 // Zinc — neutral gray, no tint
@@ -418,6 +449,7 @@ const zincDarkColors = buildDarkSemanticColors({
   accentBright: "#fafafa",
   accentForeground: "#18181b", // monochrome zinc accent is near-white — needs dark text
   destructive: "#c44a4a", // neutral red, hue 0 — clearly red without screaming
+  ringColor: "#303036", // match borderAccent
 });
 
 // Midnight — subtle blue tint
@@ -437,6 +469,7 @@ const midnightDarkColors = buildDarkSemanticColors({
   accent: "#3b6fcf",
   accentBright: "#7eaaeb",
   destructive: "#c44a52", // red with a hint of cool lean against the blue tint
+  ringColor: "#2e3040", // match borderAccent
 });
 
 // Claude — warm neutral with subtle orange undertone
@@ -456,6 +489,7 @@ const claudeDarkColors = buildDarkSemanticColors({
   accent: "#d97757",
   accentBright: "#e89a7f",
   destructive: "#cf513e", // warm orange-red, hue ~10 — sits with the Claude orange accent
+  ringColor: "#36332f", // match borderAccent
 });
 
 // Ghostty — blue-tinted dark based on Ghostty default background
@@ -475,6 +509,7 @@ const ghosttyDarkColors = buildDarkSemanticColors({
   accent: "#89b4fa",
   accentBright: "#b4d0fc",
   destructive: "#c44a55", // red with slight cool lean against the slate-blue surfaces
+  ringColor: "#3f4454", // match borderAccent
 });
 
 const liquidNeonWorkspaceSurface = "#f8fafc";
@@ -502,6 +537,8 @@ const liquidNeonLightColors = {
   destructiveForeground: "#ffffff",
   success: "#047857",
   successForeground: "#ffffff",
+  overlay: lightOverlay,
+  blockquoteBorder: "#007aff", // liquid neon accent blue
   background: liquidNeonWorkspaceSurface,
   popover: "rgba(255, 255, 255, 0.82)",
   popoverForeground: "#1d1d1f",
@@ -548,6 +585,7 @@ const liquidNeonLightColors = {
 
 export const SPACING = {
   0: 0,
+  0.5: 2,
   1: 4,
   1.5: 6,
   2: 8,
@@ -565,6 +603,7 @@ export const SPACING = {
 export const FONT_SIZE = {
   xs: 12,
   code: 12,
+  codeInline: 13, // base - 3 — inline code is slightly smaller than body text
   sm: 14,
   base: 16,
   lg: 18,
@@ -576,6 +615,15 @@ export const FONT_SIZE = {
 
 export const LINE_HEIGHT = {
   diff: 22,
+  // Markdown heading/body line heights (fixed px values for consistent rendering)
+  heading1: 32,
+  heading2: 28,
+  heading3: 26,
+  heading4: 24,
+  heading5: 22,
+  heading6: 20,
+  body: 22,
+  listItem: 22,
 } as const;
 
 export const ICON_SIZE = {
@@ -899,7 +947,7 @@ export const THEME_PREVIEWS: Record<
   "liquid-neon": {
     surface: liquidNeonLightColors.surfaceWorkspace,
     border: liquidNeonLightColors.borderAccent,
-    line: "#f2f4f8",
+    line: liquidNeonLightColors.border,
     accent: liquidNeonLightColors.accent,
   },
   chisaki: {

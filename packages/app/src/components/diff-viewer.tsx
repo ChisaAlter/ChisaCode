@@ -1,7 +1,14 @@
 import React from "react";
-import { View, Text, ScrollView as RNScrollView } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView as RNScrollView,
+  type PressableStateCallbackType,
+} from "react-native";
 import { ScrollView as GHScrollView } from "react-native-gesture-handler";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { ExternalLink } from "lucide-react-native";
 import { Fonts } from "@/constants/theme";
 import type { DiffLine } from "@/utils/tool-call-parsers";
 import { diffLinePrefix } from "@/utils/diff-highlight";
@@ -13,14 +20,38 @@ import { isWeb } from "@/constants/platform";
 
 const ScrollView = isWeb ? RNScrollView : GHScrollView;
 
-interface DiffViewerProps {
-  diffLines: DiffLine[];
-  maxHeight?: number;
-  emptyLabel?: string;
-  fillAvailableHeight?: boolean;
+// ---------------------------------------------------------------------------
+// DiffStatsBadge – shows +N / -M counts above the diff
+// ---------------------------------------------------------------------------
+
+function DiffStatsBadge({ addCount, removeCount }: { addCount: number; removeCount: number }) {
+  if (addCount === 0 && removeCount === 0) return null;
+
+  return (
+    <View style={styles.statsBadge}>
+      <Text style={styles.statsAddText}>+{addCount}</Text>
+      <Text style={styles.statsRemoveText}> -{removeCount}</Text>
+    </View>
+  );
 }
 
-function DiffLineRow({ line }: { line: DiffLine }) {
+// ---------------------------------------------------------------------------
+// DiffLineRow – single diff line (with optional line number & hover)
+// ---------------------------------------------------------------------------
+
+function DiffLineRow({
+  line,
+  showLineNumbers,
+  lineNumber,
+  totalLines,
+}: {
+  line: DiffLine;
+  showLineNumbers?: boolean;
+  lineNumber?: number;
+  totalLines?: number;
+}) {
+  const [isHovered, setIsHovered] = React.useState(false);
+
   const lineContainerStyle = React.useMemo(
     () => [
       styles.line,
@@ -28,8 +59,9 @@ function DiffLineRow({ line }: { line: DiffLine }) {
       line.type === "add" && styles.addLine,
       line.type === "remove" && styles.removeLine,
       line.type === "context" && styles.contextLine,
+      isHovered && styles.lineHovered,
     ],
-    [line.type],
+    [line.type, isHovered],
   );
   const plainLineTextStyle = React.useMemo(
     () => [
@@ -51,37 +83,71 @@ function DiffLineRow({ line }: { line: DiffLine }) {
     [line.type],
   );
 
-  if (line.tokens) {
-    return (
-      <View style={lineContainerStyle}>
+  const lineWidth =
+    showLineNumbers && totalLines ? Math.max(String(totalLines).length * 8, 24) : undefined;
+  const lineNumberStyle = React.useMemo(
+    () =>
+      lineWidth !== undefined
+        ? [styles.lineNumberText, inlineUnistylesStyle({ minWidth: lineWidth })]
+        : undefined,
+    [lineWidth],
+  );
+  const lineBodyStyle = lineNumberStyle ? styles.lineWithNumbers : undefined;
+
+  // Pick the correct wrapper: Pressable on web for hover, plain View on native
+  const Wrapper = isWeb ? Pressable : View;
+
+  const wrapperProps: Record<string, unknown> = isWeb
+    ? {
+        onHoverIn: () => setIsHovered(true),
+        onHoverOut: () => setIsHovered(false),
+        style: lineContainerStyle,
+      }
+    : { style: lineContainerStyle };
+
+  const lineContent = line.tokens ? (
+    <View style={lineBodyStyle}>
+      {showLineNumbers && lineNumberStyle && lineNumber != null && (
+        <Text style={lineNumberStyle} numberOfLines={1}>
+          {lineNumber}
+        </Text>
+      )}
+      <View style={styles.lineContentArea}>
         <Text style={styles.lineText}>
           <Text style={prefixStyle}>{diffLinePrefix(line)}</Text>
           <DiffTokens tokens={line.tokens} />
         </Text>
       </View>
-    );
-  }
-
-  return (
-    <View style={lineContainerStyle}>
-      {line.segments ? (
-        <Text style={styles.lineText}>
-          <Text style={line.type === "add" ? styles.addText : styles.removeText}>
-            {line.content[0]}
-          </Text>
-          {line.segments.map((segment) => (
-            <DiffSegment
-              key={`${segment.changed ? "c" : "u"}:${segment.text}`}
-              segment={segment}
-              lineType={line.type}
-            />
-          ))}
+    </View>
+  ) : (
+    <View style={lineBodyStyle}>
+      {showLineNumbers && lineNumberStyle && lineNumber != null && (
+        <Text style={lineNumberStyle} numberOfLines={1}>
+          {lineNumber}
         </Text>
-      ) : (
-        <Text style={plainLineTextStyle}>{line.content}</Text>
       )}
+      <View style={styles.lineContentArea}>
+        {line.segments ? (
+          <Text style={styles.lineText}>
+            <Text style={line.type === "add" ? styles.addText : styles.removeText}>
+              {line.content[0]}
+            </Text>
+            {line.segments.map((segment) => (
+              <DiffSegment
+                key={`${segment.changed ? "c" : "u"}:${segment.text}`}
+                segment={segment}
+                lineType={line.type}
+              />
+            ))}
+          </Text>
+        ) : (
+          <Text style={plainLineTextStyle}>{line.content}</Text>
+        )}
+      </View>
     </View>
   );
+
+  return <Wrapper {...wrapperProps}>{lineContent}</Wrapper>;
 }
 
 function DiffTokens({ tokens }: { tokens: NonNullable<DiffLine["tokens"]> }) {
@@ -117,13 +183,29 @@ function DiffSegment({
   return <Text style={segmentStyle}>{segment.text}</Text>;
 }
 
+// ---------------------------------------------------------------------------
+// DiffViewerProps & DiffViewer
+// ---------------------------------------------------------------------------
+
+interface DiffViewerProps {
+  diffLines: DiffLine[];
+  maxHeight?: number;
+  emptyLabel?: string;
+  fillAvailableHeight?: boolean;
+  onOpenInDiffPane?: () => void;
+  showLineNumbers?: boolean;
+}
+
 export function DiffViewer({
   diffLines,
   maxHeight,
   emptyLabel = "No changes to display",
   fillAvailableHeight = false,
+  onOpenInDiffPane,
+  showLineNumbers = false,
 }: DiffViewerProps) {
   const [scrollViewWidth, setScrollViewWidth] = React.useState(0);
+  const { theme } = useUnistyles();
   const webScrollbarStyle = useWebScrollbarStyle();
   const handleInnerLayout = React.useCallback(
     (e: { nativeEvent: { layout: { width: number } } }) =>
@@ -147,13 +229,41 @@ export function DiffViewer({
     ],
     [scrollViewWidth],
   );
-  const keyedDiffLines = React.useMemo(
-    () => diffLines.map((line, index) => ({ key: `${index}-${line.type}-${line.content}`, line })),
-    [diffLines],
-  );
+
+  // Compute stats and keyed lines with optional line numbers
+  const { addCount, removeCount, keyedWithLineNumbers, totalLines } = React.useMemo(() => {
+    let add = 0;
+    let remove = 0;
+    let lineCounter = 0;
+    const keyed = diffLines.map((line, index) => {
+      if (line.type === "add") add++;
+      if (line.type === "remove") remove++;
+      const isHeader = line.type === "header";
+      if (!isHeader) lineCounter++;
+      return {
+        key: `${index}-${line.type}-${line.content}`,
+        line,
+        lineNumber: isHeader ? undefined : lineCounter,
+      };
+    });
+    return {
+      addCount: add,
+      removeCount: remove,
+      keyedWithLineNumbers: keyed,
+      totalLines: lineCounter,
+    };
+  }, [diffLines]);
+
   const webVerticalContentStyle = React.useMemo(
     () => [styles.verticalContent, fillAvailableHeight && styles.fillHeight],
     [fillAvailableHeight],
+  );
+  const openInDiffPaneButtonStyle = React.useCallback(
+    ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.openInDiffPaneButton,
+      hovered && styles.openInDiffPaneButtonHovered,
+    ],
+    [],
   );
 
   if (!diffLines.length) {
@@ -166,8 +276,15 @@ export function DiffViewer({
 
   const lines = (
     <View style={linesContainerStyle}>
-      {keyedDiffLines.map(({ key, line }) => (
-        <DiffLineRow key={key} line={line} />
+      <DiffStatsBadge addCount={addCount} removeCount={removeCount} />
+      {keyedWithLineNumbers.map(({ key, line, lineNumber }) => (
+        <DiffLineRow
+          key={key}
+          line={line}
+          showLineNumbers={showLineNumbers}
+          lineNumber={lineNumber}
+          totalLines={totalLines}
+        />
       ))}
     </View>
   );
@@ -186,23 +303,43 @@ export function DiffViewer({
   );
 
   const content = (
-    <ScrollView
-      style={outerScrollStyle}
-      contentContainerStyle={webVerticalContentStyle}
-      nestedScrollEnabled
-      showsVerticalScrollIndicator
-    >
-      {horizontalScroll}
-    </ScrollView>
+    <View style={styles.wrapper}>
+      <ScrollView
+        style={outerScrollStyle}
+        contentContainerStyle={webVerticalContentStyle}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+      >
+        {horizontalScroll}
+      </ScrollView>
+      {onOpenInDiffPane && (
+        <Pressable
+          style={openInDiffPaneButtonStyle}
+          onPress={onOpenInDiffPane}
+          accessibilityRole="button"
+          accessibilityLabel="Open in DiffPane"
+        >
+          <ExternalLink size={12} color={theme.colors.foregroundMuted} />
+          <Text style={styles.openInDiffPaneText}>打开</Text>
+        </Pressable>
+      )}
+    </View>
   );
 
   return content;
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
 const styles = StyleSheet.create((theme) => {
   const insets = getCodeInsets(theme);
 
   return {
+    wrapper: {
+      position: "relative" as const,
+    },
     verticalScroll: {},
     fillHeight: {
       flex: 1,
@@ -220,10 +357,50 @@ const styles = StyleSheet.create((theme) => {
       alignSelf: "flex-start",
       padding: insets.padding,
     },
+
+    // -- DiffStatsBadge --
+    statsBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      marginBottom: theme.spacing[2],
+      paddingHorizontal: theme.spacing[1],
+    },
+    statsAddText: {
+      fontSize: theme.fontSize.xs,
+      fontWeight: theme.fontWeight.medium,
+      color: theme.colors.diffAddition,
+    },
+    statsRemoveText: {
+      fontSize: theme.fontSize.xs,
+      fontWeight: theme.fontWeight.medium,
+      color: theme.colors.diffDeletion,
+    },
+
+    // -- DiffLineRow --
     line: {
       minWidth: "100%",
       paddingHorizontal: 0,
       paddingVertical: theme.spacing[1],
+    },
+    lineWithNumbers: {
+      flexDirection: "row" as const,
+    },
+    lineHovered: {
+      backgroundColor: isWeb ? `${theme.colors.surface2}88` : undefined,
+    },
+    lineNumberText: {
+      fontFamily: Fonts.mono,
+      fontSize: theme.fontSize.code,
+      color: theme.colors.foregroundMuted,
+      textAlign: "right" as const,
+      paddingRight: theme.spacing[2],
+      borderRightWidth: 1,
+      borderRightColor: theme.colors.borderAccent,
+      marginRight: theme.spacing[2],
+      userSelect: "none" as const,
+    },
+    lineContentArea: {
+      flex: 1,
     },
     lineText: {
       fontFamily: Fonts.mono,
@@ -243,22 +420,22 @@ const styles = StyleSheet.create((theme) => {
       color: theme.colors.foregroundMuted,
     },
     addLine: {
-      backgroundColor: "rgba(46, 160, 67, 0.15)",
+      backgroundColor: theme.colors.diffAdditionBg,
     },
     addText: {
       color: theme.colors.foreground,
     },
     removeLine: {
-      backgroundColor: "rgba(248, 81, 73, 0.1)",
+      backgroundColor: theme.colors.diffDeletionBg,
     },
     removeText: {
       color: theme.colors.foreground,
     },
     addHighlight: {
-      backgroundColor: "rgba(46, 160, 67, 0.4)",
+      backgroundColor: theme.colors.diffAdditionHighlightBg,
     },
     removeHighlight: {
-      backgroundColor: "rgba(248, 81, 73, 0.35)",
+      backgroundColor: theme.colors.diffDeletionHighlightBg,
     },
     contextLine: {
       backgroundColor: theme.colors.surface1,
@@ -266,6 +443,8 @@ const styles = StyleSheet.create((theme) => {
     contextText: {
       color: theme.colors.foregroundMuted,
     },
+
+    // -- Empty state --
     emptyState: {
       padding: theme.spacing[4],
       alignItems: "center" as const,
@@ -274,6 +453,27 @@ const styles = StyleSheet.create((theme) => {
     emptyText: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.foregroundMuted,
+    },
+
+    // -- Open in DiffPane button --
+    openInDiffPaneButton: {
+      position: "absolute" as const,
+      top: theme.spacing[1],
+      right: theme.spacing[1],
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      padding: 4,
+      borderRadius: theme.borderRadius.lg,
+      backgroundColor: theme.colors.surface2,
+    },
+    openInDiffPaneButtonHovered: {
+      backgroundColor: theme.colors.surface3,
+    },
+    openInDiffPaneText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.foregroundMuted,
+      ...(isWeb ? { cursor: "pointer" as const } : null),
     },
   };
 });

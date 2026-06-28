@@ -49,7 +49,7 @@ import {
   MicVocal,
   FileSymlink,
 } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import Animated, {
@@ -109,6 +109,12 @@ import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/atta
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { RewindMenu, type RewindMode } from "@/components/rewind/rewind-menu";
 import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mutation";
 export type { InlinePathTarget } from "@/assistant-file-links";
@@ -129,6 +135,9 @@ interface UserMessageProps {
   isLastInGroup?: boolean;
   disableOuterSpacing?: boolean;
 }
+
+const EMPTY_USER_MESSAGE_IMAGES: UserMessageImageAttachment[] = [];
+const EMPTY_USER_MESSAGE_ATTACHMENTS: AgentAttachment[] = [];
 
 const MessageOuterSpacingContext = createContext(false);
 
@@ -468,13 +477,54 @@ function getUserMessageAttachmentLabel(attachment: AgentAttachment): string {
   }
 }
 
+function UserMessageImagePreviews({
+  images,
+  style,
+}: {
+  images: UserMessageImageAttachment[];
+  style: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={style}>
+      {images.map((image) => (
+        <View key={image.id} style={userMessageStylesheet.imagePill}>
+          <UserMessageAttachmentThumbnail image={image} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function UserMessageAttachmentPreviews({
+  attachments,
+  style,
+}: {
+  attachments: AgentAttachment[];
+  style: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={style}>
+      {attachments.map((attachment, index) => (
+        <View
+          key={`${attachment.type}:${"number" in attachment ? attachment.number : index}`}
+          style={userMessageStylesheet.structuredAttachmentPill}
+        >
+          <Text style={userMessageStylesheet.structuredAttachmentText} numberOfLines={1}>
+            {getUserMessageAttachmentLabel(attachment)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export const UserMessage = memo(function UserMessage({
   serverId,
   agentId,
   messageId,
   message,
-  images = [],
-  attachments = [],
+  images,
+  attachments,
   timestamp,
   capabilities,
   client,
@@ -485,9 +535,11 @@ export const UserMessage = memo(function UserMessage({
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const resolvedImages = images ?? EMPTY_USER_MESSAGE_IMAGES;
+  const resolvedAttachments = attachments ?? EMPTY_USER_MESSAGE_ATTACHMENTS;
   const hasText = message.trim().length > 0;
-  const hasImages = images.length > 0;
-  const hasAttachments = attachments.length > 0;
+  const hasImages = resolvedImages.length > 0;
+  const hasAttachments = resolvedAttachments.length > 0;
   const showTrailingRow = hasText && (isCompact || isNative || isHovered);
   const formattedTimestamp = useMemo(
     () => formatMessageTimestamp(new Date(timestamp)),
@@ -540,63 +592,69 @@ export const UserMessage = memo(function UserMessage({
     [showTrailingRow],
   );
 
+  const handleCopyMessage = useCallback(async () => {
+    const content = message;
+    if (!content) return;
+    await writeMarkdownToRichClipboard(content, getDefaultMarkdownClipboardEnvironment());
+  }, [message]);
+
+  const copyIcon = useMemo(() => <Copy size={16} />, []);
+
   return (
-    <View style={containerStyle} testID="user-message">
-      <View
-        style={userMessageStylesheet.content}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-      >
-        <View style={userMessageStylesheet.bubble}>
-          {hasImages ? (
-            <View style={imagePreviewContainerStyle}>
-              {images.map((image) => (
-                <View key={image.id} style={userMessageStylesheet.imagePill}>
-                  <UserMessageAttachmentThumbnail image={image} />
-                </View>
-              ))}
+    <ContextMenu>
+      <ContextMenuTrigger style={containerStyle} enabled={hasText} enabledOnMobile>
+        <View testID="user-message">
+          <View
+            style={userMessageStylesheet.content}
+            onPointerEnter={handlePointerEnter}
+            onPointerLeave={handlePointerLeave}
+          >
+            <View style={userMessageStylesheet.bubble}>
+              {hasImages ? (
+                <UserMessageImagePreviews
+                  images={resolvedImages}
+                  style={imagePreviewContainerStyle}
+                />
+              ) : null}
+              {hasAttachments ? (
+                <UserMessageAttachmentPreviews
+                  attachments={resolvedAttachments}
+                  style={attachmentPreviewContainerStyle}
+                />
+              ) : null}
+              {hasText ? (
+                <Text selectable style={userMessageStylesheet.text}>
+                  {message}
+                </Text>
+              ) : null}
             </View>
-          ) : null}
-          {hasAttachments ? (
-            <View style={attachmentPreviewContainerStyle}>
-              {attachments.map((attachment, index) => (
-                <View
-                  key={`${attachment.type}:${"number" in attachment ? attachment.number : index}`}
-                  style={userMessageStylesheet.structuredAttachmentPill}
-                >
-                  <Text style={userMessageStylesheet.structuredAttachmentText} numberOfLines={1}>
-                    {getUserMessageAttachmentLabel(attachment)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-          {hasText ? (
-            <Text selectable style={userMessageStylesheet.text}>
-              {message}
-            </Text>
-          ) : null}
-        </View>
-        {hasText ? (
-          <View style={trailingRowStyle} pointerEvents={showTrailingRow ? "auto" : "none"}>
-            <Text style={userMessageStylesheet.timestampText}>{formattedTimestamp}</Text>
-            {capabilities ? (
-              <RewindMenu
-                capabilities={capabilities}
-                isPending={rewindMutation.isPending}
-                rewoundText={message}
-                onRewind={handleRewind}
-              />
+            {hasText ? (
+              <View style={trailingRowStyle} pointerEvents={showTrailingRow ? "auto" : "none"}>
+                <Text style={userMessageStylesheet.timestampText}>{formattedTimestamp}</Text>
+                {capabilities ? (
+                  <RewindMenu
+                    capabilities={capabilities}
+                    isPending={rewindMutation.isPending}
+                    rewoundText={message}
+                    onRewind={handleRewind}
+                  />
+                ) : null}
+                <TurnCopyButton
+                  getContent={getMessageContent}
+                  containerStyle={userMessageStylesheet.copyButton}
+                  accessibilityLabel="复制消息"
+                />
+              </View>
             ) : null}
-            <TurnCopyButton
-              getContent={getMessageContent}
-              containerStyle={userMessageStylesheet.copyButton}
-              accessibilityLabel="复制消息"
-            />
           </View>
-        ) : null}
-      </View>
-    </View>
+        </View>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={handleCopyMessage} leading={copyIcon}>
+          复制
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 });
 
@@ -1884,25 +1942,46 @@ export const AssistantMessage = memo(function AssistantMessage({
     [spacing],
   );
 
+  const handleCopyMessage = useCallback(async () => {
+    const content = displayMessage;
+    if (!content) return;
+    await writeMarkdownToRichClipboard(content, getDefaultMarkdownClipboardEnvironment());
+  }, [displayMessage]);
+
+  const assistantCopyIcon = useMemo(() => <Copy size={16} />, []);
+
   return (
-    <View testID="assistant-message" style={assistantContainerStyle}>
-      <View testID="assistant-message-surface" style={assistantSurfaceStyle}>
-        {keyedBlocks.map(({ key, block }, index) => (
-          <AssistantMessageBlockContainer
-            key={key}
-            block={block}
-            marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
-          >
-            <MemoizedMarkdownBlock
-              text={block}
-              rules={markdownRules}
-              parser={markdownParser}
-              onLinkPress={handleMarkdownLinkPress}
-            />
-          </AssistantMessageBlockContainer>
-        ))}
-      </View>
-    </View>
+    <ContextMenu>
+      <ContextMenuTrigger
+        style={assistantContainerStyle}
+        enabled={Boolean(displayMessage)}
+        enabledOnMobile
+      >
+        <View testID="assistant-message">
+          <View testID="assistant-message-surface" style={assistantSurfaceStyle}>
+            {keyedBlocks.map(({ key, block }, index) => (
+              <AssistantMessageBlockContainer
+                key={key}
+                block={block}
+                marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
+              >
+                <MemoizedMarkdownBlock
+                  text={block}
+                  rules={markdownRules}
+                  parser={markdownParser}
+                  onLinkPress={handleMarkdownLinkPress}
+                />
+              </AssistantMessageBlockContainer>
+            ))}
+          </View>
+        </View>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={handleCopyMessage} leading={assistantCopyIcon}>
+          复制
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 });
 
@@ -2033,7 +2112,7 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
   },
   metadataContainer: {
     marginTop: theme.spacing[2],
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: theme.colors.overlay,
     borderRadius: theme.borderRadius.base,
     padding: theme.spacing[2],
     borderWidth: theme.borderWidth[1],
@@ -2058,29 +2137,30 @@ export const ActivityLog = memo(function ActivityLog({
   onArtifactClick,
   disableOuterSpacing,
 }: ActivityLogProps) {
+  const { theme } = useUnistyles();
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const typeConfig = {
     system: {
       bg: activityLogStylesheet.systemBg,
-      color: "#a1a1aa",
+      color: theme.colors.foregroundMuted,
       Icon: Circle,
     },
-    info: { bg: activityLogStylesheet.infoBg, color: "#60a5fa", Icon: Info },
+    info: { bg: activityLogStylesheet.infoBg, color: theme.colors.palette.blue[400], Icon: Info },
     success: {
       bg: activityLogStylesheet.successBg,
-      color: "#4ade80",
+      color: theme.colors.palette.green[400],
       Icon: CheckCircle,
     },
     error: {
       bg: activityLogStylesheet.errorBg,
-      color: "#f87171",
+      color: theme.colors.palette.red[500],
       Icon: XCircle,
     },
     artifact: {
       bg: activityLogStylesheet.artifactBg,
-      color: "#93c5fd",
+      color: theme.colors.palette.blue[300],
       Icon: FileText,
     },
   };
@@ -2129,9 +2209,9 @@ export const ActivityLog = memo(function ActivityLog({
               <View style={activityLogStylesheet.detailsRow}>
                 <Text style={activityLogStylesheet.detailsText}>详情</Text>
                 {isExpanded ? (
-                  <ChevronDown size={12} color="#71717a" />
+                  <ChevronDown size={12} color={theme.colors.foregroundMuted} />
                 ) : (
-                  <ChevronRight size={12} color="#71717a" />
+                  <ChevronRight size={12} color={theme.colors.foregroundMuted} />
                 )}
               </View>
             )}
@@ -2185,6 +2265,7 @@ export const CompactionMarker = memo(function CompactionMarker({
   trigger,
   preTokens,
 }: CompactionMarkerProps) {
+  const { theme } = useUnistyles();
   const label = getCompactionMarkerLabel({ status, trigger, preTokens });
 
   return (
@@ -2192,9 +2273,9 @@ export const CompactionMarker = memo(function CompactionMarker({
       <View style={compactionStylesheet.line} />
       <View style={compactionStylesheet.label}>
         {status === "loading" ? (
-          <ActivityIndicator size="small" color="#a1a1aa" />
+          <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
         ) : (
-          <Scissors size={12} color="#a1a1aa" />
+          <Scissors size={12} color={theme.colors.foregroundMuted} />
         )}
         <Text style={compactionStylesheet.text}>{label}</Text>
       </View>

@@ -265,6 +265,7 @@ function DirectoryTrigger({
 }
 
 function ImportSessionCard({ onPress, disabled }: { onPress: () => void; disabled: boolean }) {
+  const { theme } = useUnistyles();
   const cardStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.importCard,
@@ -284,7 +285,7 @@ function ImportSessionCard({ onPress, disabled }: { onPress: () => void; disable
       style={cardStyle}
     >
       <View style={styles.importCardIcon}>
-        <Inbox size={18} color="#e24a4a" />
+        <Inbox size={18} color={theme.colors.destructive} />
       </View>
       <View style={styles.importCardContent}>
         <Text style={styles.importCardTitle} numberOfLines={1}>

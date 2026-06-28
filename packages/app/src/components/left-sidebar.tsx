@@ -52,7 +52,7 @@ import { useTranslation } from "react-i18next";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { GlassSurface } from "@/components/ui/glass-surface";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor, MIN_CHAT_WIDTH, DESKTOP_SIDEBAR_GAP } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
 import { useAgentHistory } from "@/hooks/use-agent-history";
@@ -99,8 +99,6 @@ import { generateDraftId } from "@/stores/draft-keys";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
 
-const MIN_CHAT_WIDTH = 400;
-const DESKTOP_SIDEBAR_GAP = 12;
 const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
   duration: 180,
   easing: Easing.out(Easing.cubic),
@@ -1450,7 +1448,11 @@ function DesktopSidebar({
 
           {/* Resize handle - absolutely positioned over right border */}
           <GestureDetector gesture={resizeGesture}>
-            <View style={resizeHandleStyle} />
+            <View
+              style={resizeHandleStyle}
+              accessibilityRole="adjustable"
+              accessibilityLabel="拖拽调整侧边栏宽度"
+            />
           </GestureDetector>
         </View>
       </Animated.View>

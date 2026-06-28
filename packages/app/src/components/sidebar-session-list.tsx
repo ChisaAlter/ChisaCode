@@ -28,6 +28,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Button } from "@/components/ui/button";
+import { AgentStatusIndicator } from "@/components/ui/agent-status-indicator";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
   ContextMenu,
@@ -495,6 +496,13 @@ function SidebarSessionRow({
         <Text style={titleStyle} numberOfLines={1}>
           {agent.title || t("session.newSession")}
         </Text>
+        <AgentStatusIndicator
+          status={agent.status}
+          requiresAttention={agent.requiresAttention}
+          attentionReason={agent.attentionReason}
+          pendingPermissionCount={agent.pendingPermissionCount}
+          size="sm"
+        />
       </View>
     </>
   );
@@ -1164,10 +1172,16 @@ const styles = StyleSheet.create((theme) => ({
   rowContent: {
     flex: 1,
     minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   desktopRowContent: {
     flex: 1,
     minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   rowMenuButton: {
     width: 26,

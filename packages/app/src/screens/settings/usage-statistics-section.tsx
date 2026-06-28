@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import Svg, { Circle } from "react-native-svg";
 import { Download, RefreshCw, Trash2 } from "lucide-react-native";
 import type { UsageSummaryPayload } from "@chisacode/protocol/messages";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -27,15 +27,16 @@ const RANGE_OPTIONS = [7, 30, 180] as const;
 type RangeOption = (typeof RANGE_OPTIONS)[number];
 type ExportFormat = "json" | "csv";
 
-const CHART_COLORS = [
-  "#2563eb",
-  "#16a34a",
-  "#f59e0b",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-  "#db2777",
-  "#64748b",
+/** Chart color palette — uses theme tokens where palette equivalents exist; hardcodes otherwise. */
+const CHART_COLOR_KEYS = [
+  "blue600",
+  "green600",
+  "amber500",
+  "red600",
+  "violet700", // No palette equivalent — closest purple tokens differ significantly
+  "cyan600", // No palette equivalent
+  "pink600", // No palette equivalent
+  "slate500", // No palette equivalent — palette gray/zinc differ noticeably
 ] as const;
 
 interface UsageStatisticsSectionProps {
@@ -369,15 +370,16 @@ function TrendBar({ bar, maxTokens }: { bar: UsageTrendBar; maxTokens: number })
 }
 
 function TrendBarSegment({ segment }: { segment: UsageTrendSegment }) {
+  const { theme } = useUnistyles();
   const segmentStyle = useMemo(
     () => [
       styles.trendBarSegment,
       {
         flexGrow: Math.max(segment.totalTokens, 1),
-        backgroundColor: chartColor(segment.colorIndex),
+        backgroundColor: chartColor(segment.colorIndex, theme),
       },
     ],
-    [segment.colorIndex, segment.totalTokens],
+    [segment.colorIndex, segment.totalTokens, theme],
   );
   return <View style={segmentStyle} />;
 }
@@ -437,6 +439,7 @@ function ModelDonut({
   segments: UsageModelSegment[];
   activeModel: string | null;
 }) {
+  const { theme } = useUnistyles();
   const size = 148;
   const strokeWidth = 18;
   const radius = (size - strokeWidth) / 2;
@@ -463,7 +466,7 @@ function ModelDonut({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={chartColor(segment.colorIndex)}
+            stroke={chartColor(segment.colorIndex, theme)}
             strokeWidth={segment.model === activeModel ? strokeWidth + 4 : strokeWidth}
             strokeLinecap="butt"
             strokeDasharray={dashArray}
@@ -488,14 +491,15 @@ function ModelRow({
   active: boolean;
   onActivate: (model: string) => void;
 }) {
+  const { theme } = useUnistyles();
   const handleActivate = useCallback(() => onActivate(segment.model), [onActivate, segment.model]);
   const rowStyle = useMemo(
     () => [styles.modelRow, active ? styles.modelRowActive : null],
     [active],
   );
   const swatchStyle = useMemo(
-    () => [styles.modelSwatch, { backgroundColor: chartColor(segment.colorIndex) }],
-    [segment.colorIndex],
+    () => [styles.modelSwatch, { backgroundColor: chartColor(segment.colorIndex, theme) }],
+    [segment.colorIndex, theme],
   );
   return (
     <TooltipTarget tooltip={segment.tooltip} onShow={handleActivate}>
@@ -588,8 +592,27 @@ function groupIntoWeeks(cells: UsageHeatmapCell[]): UsageHeatmapCell[][] {
   return weeks;
 }
 
-function chartColor(index: number): string {
-  return CHART_COLORS[index % CHART_COLORS.length];
+function chartColor(index: number, theme: ReturnType<typeof useUnistyles>["theme"]): string {
+  const key = CHART_COLOR_KEYS[index % CHART_COLOR_KEYS.length];
+  switch (key) {
+    case "blue600":
+      return theme.colors.palette.blue[600];
+    case "green600":
+      return theme.colors.palette.green[600];
+    case "amber500":
+      return theme.colors.palette.amber[500];
+    case "red600":
+      return theme.colors.palette.red[600];
+    // Hardcoded — no close palette equivalent exists
+    case "violet700":
+      return "#7c3aed";
+    case "cyan600":
+      return "#0891b2";
+    case "pink600":
+      return "#db2777";
+    case "slate500":
+      return "#64748b";
+  }
 }
 
 function heatmapLevelStyle(level: number): ViewStyle {
@@ -705,16 +728,16 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   heatmapLevel1: {
-    backgroundColor: "#bfdbfe",
+    backgroundColor: theme.colors.palette.blue[200],
   },
   heatmapLevel2: {
-    backgroundColor: "#60a5fa",
+    backgroundColor: theme.colors.palette.blue[400],
   },
   heatmapLevel3: {
-    backgroundColor: "#2563eb",
+    backgroundColor: theme.colors.palette.blue[600],
   },
   heatmapLevel4: {
-    backgroundColor: "#1e3a8a",
+    backgroundColor: theme.colors.palette.blue[900],
   },
   trendChart: {
     minHeight: 150,

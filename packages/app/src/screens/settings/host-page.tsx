@@ -108,11 +108,11 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
   }
   let statusPillBg: string;
   if (statusTone === "success") {
-    statusPillBg = "rgba(74, 222, 128, 0.1)";
+    statusPillBg = theme.colors.statusSuccessBg;
   } else if (statusTone === "warning") {
-    statusPillBg = "rgba(245, 158, 11, 0.1)";
+    statusPillBg = theme.colors.statusWarningBg;
   } else if (statusTone === "error") {
-    statusPillBg = "rgba(248, 113, 113, 0.1)";
+    statusPillBg = theme.colors.statusDangerBg;
   } else {
     statusPillBg = "rgba(161, 161, 170, 0.1)";
   }

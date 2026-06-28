@@ -79,19 +79,19 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.borderAccent,
     backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 3,
+    paddingVertical: theme.spacing[1],
     ...theme.shadow.sm,
   },
   pillSuccess: {
-    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    backgroundColor: theme.colors.statusSuccessBg,
     borderColor: "rgba(34, 197, 94, 0.22)",
   },
   pillWarning: {
-    backgroundColor: "rgba(245, 158, 11, 0.1)",
+    backgroundColor: theme.colors.statusWarningBg,
     borderColor: "rgba(245, 158, 11, 0.22)",
   },
   pillError: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    backgroundColor: theme.colors.statusDangerBg,
     borderColor: "rgba(239, 68, 68, 0.22)",
   },
   pillText: {

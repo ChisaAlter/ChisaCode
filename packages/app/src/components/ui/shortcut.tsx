@@ -4,6 +4,8 @@ import { StyleSheet } from "react-native-unistyles";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 
+const EMPTY_CHORD: ShortcutKey[][] = [];
+
 export function Shortcut({
   keys,
   chord,
@@ -15,7 +17,7 @@ export function Shortcut({
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
 }): ReactElement {
-  const displayChord = chord ?? (keys ? [keys] : []);
+  const displayChord = useMemo(() => chord ?? (keys ? [keys] : EMPTY_CHORD), [chord, keys]);
   const shortcutOs = getShortcutOs();
   const singleCombo = displayChord[0];
 
@@ -23,20 +25,25 @@ export function Shortcut({
   const textCombinedStyle = useMemo(() => [styles.text, textStyle], [textStyle]);
   const sequenceStyle = useMemo(() => [styles.sequence, style], [style]);
 
+  const accessibilityLabel = useMemo(
+    () => displayChord.map((combo) => formatShortcut(combo, shortcutOs)).join(", "),
+    [displayChord, shortcutOs],
+  );
+
   if (!singleCombo) {
     return <View style={style} />;
   }
 
   if (displayChord.length === 1) {
     return (
-      <View style={badgeStyle}>
+      <View style={badgeStyle} accessibilityLabel={accessibilityLabel}>
         <Text style={textCombinedStyle}>{formatShortcut(singleCombo, shortcutOs)}</Text>
       </View>
     );
   }
 
   return (
-    <View style={sequenceStyle}>
+    <View style={sequenceStyle} accessibilityLabel={accessibilityLabel}>
       {displayChord.map(function (combo) {
         return (
           <View key={combo.join("+")} style={styles.badge}>
@@ -51,7 +58,7 @@ export function Shortcut({
 const styles = StyleSheet.create((theme) => ({
   badge: {
     paddingHorizontal: theme.spacing[1],
-    paddingVertical: 2,
+    paddingVertical: theme.spacing[0.5],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surface2,
     borderWidth: 0,

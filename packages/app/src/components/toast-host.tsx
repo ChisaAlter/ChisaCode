@@ -301,7 +301,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     backgroundColor: theme.colors.surface0,
-    borderRadius: theme.borderRadius["2xl"],
+    borderRadius: theme.borderRadius.xl,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     paddingVertical: theme.spacing[2],

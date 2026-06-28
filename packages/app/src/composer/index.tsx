@@ -1932,8 +1932,10 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "100%",
     paddingLeft: 14,
     paddingRight: 14,
-    // Negative margin pulls the footer up against the input area's paddingBottom.
-    // On mobile, leave a 3px gap (no token sits below spacing[1]); desktop keeps more.
+    // Negative margin collapses the gap between input area and footer toolbar.
+    // Mobile (xs): spacing[4] (16px) minus 3px leaves a 3px visual gap — the
+    // smallest value below spacing[1] (4px) that still provides breathing room.
+    // Desktop (md): uses -spacing[3] (-12px) for a tighter collapse.
     marginTop: {
       xs: -(theme.spacing[4] - 3),
       md: -theme.spacing[3],

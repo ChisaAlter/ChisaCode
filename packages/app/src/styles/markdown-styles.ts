@@ -1,6 +1,7 @@
 import type { Theme } from "./theme";
 import { Fonts } from "@/constants/theme";
 import { isWeb } from "@/constants/platform";
+import { LINE_HEIGHT } from "./theme";
 
 const webSelectableTextStyle = isWeb ? { userSelect: "text" as const } : {};
 
@@ -21,7 +22,7 @@ export function createMarkdownStyles(theme: Theme) {
       ...webSelectableTextStyle,
       color: theme.colors.foreground,
       fontSize: theme.fontSize.base,
-      lineHeight: 22,
+      lineHeight: LINE_HEIGHT.body,
       flexShrink: 1,
       minWidth: 0,
       width: "100%" as const,
@@ -58,7 +59,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[6],
       marginBottom: theme.spacing[3],
-      lineHeight: 32,
+      lineHeight: LINE_HEIGHT.heading1,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
       paddingBottom: theme.spacing[2],
@@ -71,7 +72,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[6],
       marginBottom: theme.spacing[3],
-      lineHeight: 28,
+      lineHeight: LINE_HEIGHT.heading2,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
       paddingBottom: theme.spacing[2],
@@ -84,7 +85,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[4],
       marginBottom: theme.spacing[2],
-      lineHeight: 26,
+      lineHeight: LINE_HEIGHT.heading3,
     },
 
     heading4: {
@@ -94,7 +95,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[4],
       marginBottom: theme.spacing[2],
-      lineHeight: 24,
+      lineHeight: LINE_HEIGHT.heading4,
     },
 
     heading5: {
@@ -104,7 +105,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[3],
       marginBottom: theme.spacing[1],
-      lineHeight: 22,
+      lineHeight: LINE_HEIGHT.heading5,
     },
 
     heading6: {
@@ -114,7 +115,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foregroundMuted,
       marginTop: theme.spacing[3],
       marginBottom: theme.spacing[1],
-      lineHeight: 20,
+      lineHeight: LINE_HEIGHT.heading6,
       textTransform: "uppercase" as const,
       letterSpacing: 0.5,
     },
@@ -171,7 +172,7 @@ export function createMarkdownStyles(theme: Theme) {
       borderRadius: theme.borderRadius.md,
       borderWidth: 0,
       fontFamily: Fonts.mono,
-      fontSize: theme.fontSize.base - 3,
+      fontSize: theme.fontSize.codeInline,
     },
 
     code_block: {
@@ -283,18 +284,18 @@ export function createMarkdownStyles(theme: Theme) {
     bullet_list_icon: {
       ...webSelectableTextStyle,
       color: theme.colors.foregroundMuted,
-      marginRight: 4,
+      marginRight: theme.spacing[1],
       fontSize: theme.fontSize.base,
-      lineHeight: 22,
+      lineHeight: LINE_HEIGHT.listItem,
     },
 
     ordered_list_icon: {
       ...webSelectableTextStyle,
       color: theme.colors.foregroundMuted,
-      marginRight: 4,
+      marginRight: theme.spacing[1],
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.normal,
-      lineHeight: 22,
+      lineHeight: LINE_HEIGHT.listItem,
       minWidth: 12,
     },
 
@@ -305,7 +306,7 @@ export function createMarkdownStyles(theme: Theme) {
     blockquote: {
       backgroundColor: theme.colors.surface2,
       borderLeftWidth: 4,
-      borderLeftColor: theme.colors.primary,
+      borderLeftColor: theme.colors.blockquoteBorder,
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[3],
       marginVertical: theme.spacing[3],
