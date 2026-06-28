@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import { buildStringCommandShellInvocation } from "./string-command-shell.js";
+
+const execFileAsync = promisify(execFile);
+
+function quotePowerShellLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
 
 describe("buildStringCommandShellInvocation", () => {
   it("uses bash login-command semantics on unix platforms", () => {
@@ -29,8 +37,22 @@ describe("buildStringCommandShellInvocation", () => {
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "Write-Output 'hello'",
+        "$global:LASTEXITCODE = $null; & { Write-Output 'hello' }; if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }",
       ],
     });
   });
+
+  it.skipIf(process.platform !== "win32")(
+    "preserves native command exit codes on windows",
+    async () => {
+      const invocation = buildStringCommandShellInvocation({
+        command: `& ${quotePowerShellLiteral(process.execPath)} -e "process.exit(7)"`,
+        platform: "win32",
+      });
+
+      await expect(execFileAsync(invocation.shell, invocation.args)).rejects.toMatchObject({
+        code: 7,
+      });
+    },
+  );
 });

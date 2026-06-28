@@ -473,6 +473,7 @@ async function execSetupCommandStreamed(options: {
     const child = spawnProcess(shellInvocation.shell, shellInvocation.args, {
       cwd: options.cwd,
       env: options.env,
+      shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
 

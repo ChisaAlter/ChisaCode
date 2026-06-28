@@ -36,6 +36,35 @@ function fixturePath(fileName: string): string {
   return path.join(appE2eFixturesDir, fileName);
 }
 
+function isPathInsideRoot(root: string, target: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function mkdtempOutsideHomeSync(prefix: string): string {
+  const homeRoot = path.resolve(homedir());
+  const candidateRoots = [
+    tmpdir(),
+    process.cwd(),
+    path.dirname(homeRoot),
+    path.parse(homeRoot).root,
+  ];
+
+  for (const candidateRoot of candidateRoots) {
+    const resolvedRoot = path.resolve(candidateRoot);
+    if (isPathInsideRoot(homeRoot, resolvedRoot)) {
+      continue;
+    }
+    try {
+      return mkdtempSync(path.join(resolvedRoot, prefix));
+    } catch {
+      // Try the next writable root outside the user's home.
+    }
+  }
+
+  throw new Error(`Unable to create a temporary directory outside ${homeRoot}`);
+}
+
 async function readFixture(fileName: string): Promise<Buffer> {
   return readFile(fixturePath(fileName));
 }
@@ -64,6 +93,10 @@ const speechTest = hasAnySpeech ? test : test.skip;
 
 function tmpCwd(): string {
   return mkdtempSync(path.join(tmpdir(), "daemon-client-"));
+}
+
+function removeTempDirSync(directory: string): void {
+  rmSync(directory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }
 
 test("DaemonClient connects to a password-protected daemon", async () => {
@@ -164,7 +197,8 @@ test("createAgent with background initialPrompt returns a running snapshot befor
     expect(fetchedWhileRunning?.agent.status).toBe("running");
 
     await vi.waitFor(
-      () => {
+      async () => {
+        const fetchedAfterCompletion = await client.fetchAgent(agent.id);
         expect(fetchedAfterCompletion?.agent.status).toBe("idle");
       },
       { timeout: 5000, interval: 100 },
@@ -173,7 +207,7 @@ test("createAgent with background initialPrompt returns a running snapshot befor
     await client.close();
     await daemon.close();
   }
-});
+}, 30000);
 
 test("createAgent fails when the initial turn cannot start", async () => {
   class StartTurnFailureSession implements AgentSession {
@@ -549,7 +583,7 @@ test("handles session actions", async () => {
   });
 
   await ctx.client.deleteAgent(randomUUID());
-  rmSync(cwd, { recursive: true, force: true });
+  removeTempDirSync(cwd);
 }, 30000);
 
 test("archives agents and excludes them from default listings", async () => {
@@ -572,7 +606,7 @@ test("archives agents and excludes them from default listings", async () => {
     });
     expect(withArchived.entries.some((entry) => entry.agent.id === created.id)).toBe(true);
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 }, 30000);
 
@@ -617,7 +651,7 @@ test("interrupts a running agent before archiving", async () => {
     });
     expect(runningAgents.entries.some((entry) => entry.agent.id === created.id)).toBe(false);
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 }, 60000);
 
@@ -640,7 +674,7 @@ test("send_agent_message auto-unarchives archived agents", async () => {
     expect(refreshed).not.toBeNull();
     expect(refreshed?.agent.archivedAt).toBeNull();
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 }, 180000);
 
@@ -660,7 +694,7 @@ test("refresh_agent auto-unarchives archived agents", async () => {
     expect(refreshed).not.toBeNull();
     expect(refreshed?.agent.archivedAt).toBeNull();
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 }, 120000);
 
@@ -692,7 +726,7 @@ test("refresh_agent rebuilds a live agent even when it has no persistence handle
     expect(client.closeCalls).toBe(1);
   } finally {
     await localCtx.cleanup();
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 });
 
@@ -722,7 +756,7 @@ test("refresh_agent rejects when persisted session resume fails", async () => {
     expect(client.resumeSessionCalls).toBe(1);
   } finally {
     await localCtx.cleanup();
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 });
 
@@ -752,7 +786,7 @@ test("resume_agent auto-unarchives archived agents", async () => {
       await ctx.client.deleteAgent(resumed.id);
     }
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 }, 180000);
 
@@ -788,13 +822,13 @@ test("update_agent persists unloaded title and labels across auto-unarchive", as
     expect(unarchived?.agent.title).toBe("Pinned Title");
     expect(unarchived?.agent.labels).toMatchObject({ lane: "phase-1a" });
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 }, 180000);
 
 test("returns home-scoped directory suggestions", async () => {
   const insideHomeDir = mkdtempSync(path.join(homedir(), "chisacode-dir-suggestion-"));
-  const outsideHomeDir = mkdtempSync(path.join(tmpdir(), "chisacode-dir-suggestion-outside-"));
+  const outsideHomeDir = mkdtempOutsideHomeSync("chisacode-dir-suggestion-outside-");
 
   try {
     const insideQuery = path.basename(insideHomeDir);
@@ -813,8 +847,8 @@ test("returns home-scoped directory suggestions", async () => {
     expect(outsideResult.error).toBeNull();
     expect(outsideResult.directories).not.toContain(outsideHomeDir);
   } finally {
-    rmSync(insideHomeDir, { recursive: true, force: true });
-    rmSync(outsideHomeDir, { recursive: true, force: true });
+    removeTempDirSync(insideHomeDir);
+    removeTempDirSync(outsideHomeDir);
   }
 }, 30000);
 
@@ -1148,7 +1182,7 @@ test("creates agent and exercises lifecycle", async () => {
     await ctx.client.deleteAgent(resumed.id);
   }
 
-  rmSync(cwd, { recursive: true, force: true });
+  removeTempDirSync(cwd);
 }, 300000);
 
 test("handles permission flow", async () => {
@@ -1221,7 +1255,7 @@ test("handles permission flow", async () => {
     await permissionRequestPromise.catch(() => {});
     await permissionResolvedPromise.catch(() => {});
     await ctx.client.deleteAgent(agent.id);
-    rmSync(cwd, { recursive: true, force: true });
+    removeTempDirSync(cwd);
   }
 }, 180000);
 
@@ -1243,7 +1277,7 @@ test("exposes raw session events for reachable screens", async () => {
   expect(timeline.entries.length).toBeGreaterThan(0);
 
   await ctx.client.deleteAgent(agent.id);
-  rmSync(cwd, { recursive: true, force: true });
+  removeTempDirSync(cwd);
 }, 120000);
 
 speechTest(
@@ -1396,7 +1430,7 @@ speechTest(
     } finally {
       await Promise.allSettled([transcription, errorSignal]);
       await ctx.client.setVoiceMode(false);
-      rmSync(voiceCwd, { recursive: true, force: true });
+      removeTempDirSync(voiceCwd);
     }
   },
   90_000,
@@ -1480,16 +1514,16 @@ test("supports git and file operations", async () => {
   const cwd = tmpCwd();
 
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "original content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgSign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgSign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -1510,7 +1544,7 @@ test("supports git and file operations", async () => {
   const checkoutStatus = await ctx.client.getCheckoutStatus(cwd);
   expect(checkoutStatus.error).toBeNull();
   expect(checkoutStatus.isGit).toBe(true);
-  expect(checkoutStatus.repoRoot).toContain(cwd);
+  expect(path.normalize(checkoutStatus.repoRoot ?? "")).toContain(path.normalize(cwd));
 
   const diffResult = await ctx.client.getCheckoutDiff(cwd, { mode: "uncommitted" });
   expect(diffResult.error).toBeNull();
@@ -1607,5 +1641,5 @@ test("supports git and file operations", async () => {
   expect(body).toBe(downloadContents);
 
   await ctx.client.deleteAgent(agent.id);
-  rmSync(cwd, { recursive: true, force: true });
+  removeTempDirSync(cwd);
 }, 120000);

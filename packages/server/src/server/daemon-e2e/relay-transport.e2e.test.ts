@@ -6,6 +6,7 @@ import net from "node:net";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Buffer } from "node:buffer";
+import { fileURLToPath } from "node:url";
 
 import { generateLocalPairingOffer } from "../pairing-offer.js";
 import { createTestChisaCodeDaemon } from "../test-utils/chisacode-daemon.js";
@@ -24,6 +25,18 @@ import { WSOutboundMessageSchema } from "@chisacode/protocol/messages";
 
 const nodeMajor = Number((process.versions.node ?? "0").split(".")[0] ?? "0");
 const shouldRunRelayE2e = process.env.FORCE_RELAY_E2E === "1" || nodeMajor < 25;
+const relayTestDir = path.dirname(fileURLToPath(import.meta.url));
+const relayPackageDir = path.resolve(relayTestDir, "../../../../relay");
+
+function buildNpxSpawnArgs(args: string[]): { command: string; args: string[] } {
+  if (process.platform !== "win32") {
+    return { command: "npx", args };
+  }
+  return {
+    command: process.env.ComSpec ?? "cmd.exe",
+    args: ["/d", "/s", "/c", "npx.cmd", ...args],
+  };
+}
 
 function createCapturingLogger() {
   const lines: string[] = [];
@@ -172,27 +185,23 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
   const startRelay = async () => {
     relayStdoutLines = [];
     relayPort = await getAvailablePort();
-    const relayDir = path.resolve(process.cwd(), "../relay");
-    relayProcess = spawn(
-      "npx",
-      [
-        "wrangler",
-        "dev",
-        "--local",
-        "--ip",
-        "127.0.0.1",
-        "--port",
-        String(relayPort),
-        "--live-reload=false",
-        "--show-interactive-dev-session=false",
-      ],
-      {
-        cwd: relayDir,
-        env: { ...process.env },
-        stdio: ["ignore", "pipe", "pipe"],
-        detached: false,
-      },
-    );
+    const npx = buildNpxSpawnArgs([
+      "wrangler",
+      "dev",
+      "--local",
+      "--ip",
+      "127.0.0.1",
+      "--port",
+      String(relayPort),
+      "--live-reload=false",
+      "--show-interactive-dev-session=false",
+    ]);
+    relayProcess = spawn(npx.command, npx.args, {
+      cwd: relayPackageDir,
+      env: { ...process.env },
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: false,
+    });
 
     relayProcess.stdout?.on("data", (data: Buffer) => {
       const lines = data

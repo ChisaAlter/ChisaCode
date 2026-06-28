@@ -41,7 +41,11 @@ import {
   ImportSessionsRequestError,
 } from "../agent/import-sessions.js";
 import { importProviderSession, normalizeImportAgentRequest } from "../agent/import-sessions.js";
-import { unarchiveAgentState } from "../agent/agent-prompt.js";
+import {
+  sendPromptToAgent,
+  unarchiveAgentState,
+  waitForAgentRunStartWithTimeout,
+} from "../agent/agent-prompt.js";
 import { ensureAgentLoaded } from "../agent/agent-loading.js";
 import {
   buildConfigOverrides,
@@ -81,7 +85,7 @@ import type { AgentLifecycleHandlerContext, DisposableHandler } from "./session-
 import { resolveProjectDisplayName } from "../workspace-registry.js";
 import type { PersistedProjectRecord } from "../workspace-registry.js";
 import type { StructuredGenerationDaemonConfig } from "../agent/structured-generation-providers.js";
-import { createAgentCommand } from "../agent/create-agent/create.js";
+import { buildAgentPrompt, createAgentCommand } from "../agent/create-agent/create.js";
 import type {
   CreateAgentWorkspace,
   CreateAgentSessionWorktreeResult,
@@ -621,9 +625,107 @@ export class AgentLifecycleHandler implements DisposableHandler {
   }
 
   private async handleSendAgentMessageRequest(
-    _msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
+    msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
   ): Promise<void> {
-    // VOICE_DISABLED
+    const resolved = await this.context.resolveAgentIdentifier(msg.agentId);
+    if (!resolved.ok) {
+      this.context.emit({
+        type: "send_agent_message_response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          accepted: false,
+          error: resolved.error,
+        },
+      });
+      return;
+    }
+
+    const agentId = resolved.agentId;
+    try {
+      const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
+      this.context.sessionLogger.trace(
+        {
+          agentId,
+          messageId: msg.messageId,
+          textPrefix: msg.text.slice(0, 80),
+        },
+        "agent.session.send_agent_message",
+      );
+
+      let dispatchResult: { outOfBand: boolean };
+      try {
+        dispatchResult = await sendPromptToAgent({
+          agentManager: this.context.agentManager,
+          agentStorage: this.context.agentStorage,
+          agentId,
+          prompt,
+          messageId: msg.messageId,
+          logger: this.context.sessionLogger,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.handleAgentRunError(agentId, error, "Failed to send agent message");
+        this.context.emit({
+          type: "send_agent_message_response",
+          payload: {
+            requestId: msg.requestId,
+            agentId,
+            accepted: false,
+            error: message,
+          },
+        });
+        return;
+      }
+
+      if (dispatchResult.outOfBand) {
+        this.context.emit({
+          type: "send_agent_message_response",
+          payload: {
+            requestId: msg.requestId,
+            agentId,
+            accepted: true,
+            error: null,
+          },
+        });
+        return;
+      }
+
+      try {
+        await waitForAgentRunStartWithTimeout(this.context.agentManager, agentId);
+      } catch (error) {
+        this.context.emit({
+          type: "send_agent_message_response",
+          payload: {
+            requestId: msg.requestId,
+            agentId,
+            accepted: false,
+            error: errorToFriendlyMessage(error),
+          },
+        });
+        return;
+      }
+
+      this.context.emit({
+        type: "send_agent_message_response",
+        payload: {
+          requestId: msg.requestId,
+          agentId,
+          accepted: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.context.emit({
+        type: "send_agent_message_response",
+        payload: {
+          requestId: msg.requestId,
+          agentId,
+          accepted: false,
+          error: errorToFriendlyMessage(error),
+        },
+      });
+    }
   }
 
   private async handleWaitForFinish(

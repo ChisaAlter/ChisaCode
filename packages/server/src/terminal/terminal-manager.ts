@@ -183,8 +183,8 @@ export function createTerminalManager(): TerminalManager {
     }): Promise<TerminalSession> {
       assertAbsolutePath(options.cwd);
 
-      const terminals = terminalsByCwd.get(options.cwd) ?? [];
-      const defaultName = `Terminal ${terminals.length + 1}`;
+      const existingTerminals = terminalsByCwd.get(options.cwd) ?? [];
+      const defaultName = `Terminal ${existingTerminals.length + 1}`;
       const inheritedEnv = resolveDefaultEnvForCwd(options.cwd);
       const mergedEnv =
         inheritedEnv || options.env ? { ...inheritedEnv, ...options.env } : undefined;
@@ -200,8 +200,9 @@ export function createTerminalManager(): TerminalManager {
         }),
       );
 
-      terminals.push(session);
-      terminalsByCwd.set(options.cwd, terminals);
+      const currentTerminals = terminalsByCwd.get(options.cwd) ?? [];
+      currentTerminals.push(session);
+      terminalsByCwd.set(options.cwd, currentTerminals);
       emitTerminalsChanged({ cwd: options.cwd });
 
       return session;

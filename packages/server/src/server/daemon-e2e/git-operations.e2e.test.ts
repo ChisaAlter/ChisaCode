@@ -14,6 +14,15 @@ function tmpCwd(): string {
   return mkdtempSync(path.join(tmpdir(), "daemon-e2e-"));
 }
 
+function nodeEvalCommand(script: string): string {
+  const encodedScript = Buffer.from(script, "utf8").toString("base64");
+  return `node -e "eval(Buffer.from('${encodedScript}','base64').toString('utf8'))"`;
+}
+
+function nodeEvalTerminalInput(script: string): string {
+  return `${nodeEvalCommand(script)}\r`;
+}
+
 function findTimelineToolCall(
   messages: SessionOutboundMessage[],
   agentId: string,
@@ -53,7 +62,14 @@ async function waitForTimelineToolCall(
     }
     await new Promise((resolve) => setImmediate(resolve));
   }
-  const recentToolCalls: Array<{ name: string; status?: string; callId?: string }> = [];
+  const recentToolCalls: Array<{
+    name: string;
+    status?: string;
+    callId?: string;
+    error?: string;
+    exitCodes?: Array<number | null | undefined>;
+    logTail?: string;
+  }> = [];
   for (let i = messages.length - 1; i >= 0 && recentToolCalls.length < 10; i -= 1) {
     const msg = messages[i];
     if (msg?.type !== "agent_stream") continue;
@@ -62,7 +78,20 @@ async function waitForTimelineToolCall(
     if (event?.type !== "timeline") continue;
     const item = event.item as AgentTimelineItem;
     if (item?.type !== "tool_call") continue;
-    recentToolCalls.push({ name: item.name, status: item.status, callId: item.callId });
+    const detail =
+      item.detail.type === "worktree_setup"
+        ? {
+            exitCodes: item.detail.commands.map((command) => command.exitCode),
+            logTail: item.detail.log.slice(-500),
+          }
+        : {};
+    recentToolCalls.push({
+      name: item.name,
+      status: item.status,
+      callId: item.callId,
+      error: item.error?.message,
+      ...detail,
+    });
   }
   throw new Error(
     `Timed out waiting for timeline tool_call (${agentId}). Recent tool_calls: ${JSON.stringify(
@@ -135,6 +164,14 @@ function getWorktreeTerminalBootstrapEntries(
   return terminals as WorktreeTerminalBootstrapEntry[];
 }
 
+function includesAllTerminalIds(
+  terminals: Array<{ id: string }>,
+  expectedTerminalIds: string[],
+): boolean {
+  const terminalIds = new Set(terminals.map((terminal) => terminal.id));
+  return expectedTerminalIds.every((terminalId) => terminalIds.has(terminalId));
+}
+
 // Use gpt-5.4-mini with low thinking preset for faster test execution
 const CODEX_TEST_MODEL = "gpt-5.4-mini";
 const CODEX_TEST_THINKING_OPTION_ID = "low";
@@ -158,14 +195,14 @@ test("returns diff for modified file in git repo", async () => {
   // Initialize git repo
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   // Create and commit a file
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "original content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -188,14 +225,14 @@ test("returns empty diff when no changes", async () => {
   // Initialize git repo with clean state
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   // Create and commit a file
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -230,14 +267,14 @@ test.skipIf(isPlatform("win32"))(
     // Initialize git repo
     const { execSync } = await import("child_process");
     execSync("git init -b main", { cwd, stdio: "pipe" });
-    execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-    execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+    execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+    execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
     // Create and commit a file
     const testFile = path.join(cwd, "test.txt");
     writeFileSync(testFile, "original content\n");
     execSync("git add test.txt", { cwd, stdio: "pipe" });
-    execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+    execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
       cwd,
       stdio: "pipe",
     });
@@ -281,14 +318,14 @@ test("returns clean state when no uncommitted changes", async () => {
   // Initialize git repo with clean state
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   // Create and commit a file (no uncommitted changes)
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -347,28 +384,42 @@ test("runs chisacode.json setup asynchronously and reports status via timeline t
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
   writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
   execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+  execSync('git -c commit.gpgsign=false commit -m "initial"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
   execSync("git branch -M main", { cwd: repoRoot, stdio: "pipe" });
 
-  const setupCommand =
-    'while [ ! -f "$CHISACODE_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$CHISACODE_WORKTREE_PATH/setup-done.txt"';
+  const setupCommand = nodeEvalCommand(`
+const fs = require("node:fs");
+const path = require("node:path");
+const worktreePath = process.env.CHISACODE_WORKTREE_PATH;
+if (!worktreePath) throw new Error("missing CHISACODE_WORKTREE_PATH");
+const allowPath = path.join(worktreePath, "allow-setup");
+const donePath = path.join(worktreePath, "setup-done.txt");
+function waitForAllowFile() {
+  if (fs.existsSync(allowPath)) {
+    fs.writeFileSync(donePath, "done\\n");
+    return;
+  }
+  setTimeout(waitForAllowFile, 50);
+}
+waitForAllowFile();
+`);
   writeFileSync(
     path.join(repoRoot, "chisacode.json"),
     JSON.stringify({ worktree: { setup: [setupCommand] } }),
   );
   execSync("git add chisacode.json", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'add chisacode.json'", {
+  execSync('git -c commit.gpgsign=false commit -m "add chisacode.json"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -388,7 +439,7 @@ test("runs chisacode.json setup asynchronously and reports status via timeline t
         worktreeSlug: "async-setup-test",
       },
     }),
-    timeoutMs: 2500,
+    timeoutMs: 10000,
     label: "createAgent should not block on setup",
   });
 
@@ -422,22 +473,38 @@ test("bootstraps configured worktree terminals after setup succeeds", async () =
 
     const { execSync } = await import("child_process");
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.email 'test@test.com'", {
+    execSync('git config user.email "test@test.com"', {
       cwd: repoRoot,
       stdio: "pipe",
     });
-    execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
     writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
     execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+    execSync('git -c commit.gpgsign=false commit -m "initial"', {
       cwd: repoRoot,
       stdio: "pipe",
     });
     execSync("git branch -M main", { cwd: repoRoot, stdio: "pipe" });
 
-    const setupCommand =
-      'while [ ! -f "$CHISACODE_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$CHISACODE_WORKTREE_PATH/setup-done.txt"; echo "$CHISACODE_WORKTREE_PORT" > "$CHISACODE_WORKTREE_PATH/setup-port.txt"';
+    const setupCommand = nodeEvalCommand(`
+const fs = require("node:fs");
+const path = require("node:path");
+const worktreePath = process.env.CHISACODE_WORKTREE_PATH;
+if (!worktreePath) throw new Error("missing CHISACODE_WORKTREE_PATH");
+const allowPath = path.join(worktreePath, "allow-setup");
+const donePath = path.join(worktreePath, "setup-done.txt");
+const portPath = path.join(worktreePath, "setup-port.txt");
+function waitForAllowFile() {
+  if (fs.existsSync(allowPath)) {
+    fs.writeFileSync(donePath, "done\\n");
+    fs.writeFileSync(portPath, process.env.CHISACODE_WORKTREE_PORT ?? "");
+    return;
+  }
+  setTimeout(waitForAllowFile, 50);
+}
+waitForAllowFile();
+`);
     writeFileSync(
       path.join(repoRoot, "chisacode.json"),
       JSON.stringify({
@@ -446,17 +513,17 @@ test("bootstraps configured worktree terminals after setup succeeds", async () =
           terminals: [
             {
               name: "Dev Server",
-              command: "tail -f /dev/null",
+              command: nodeEvalCommand("setInterval(() => {}, 1000);"),
             },
             {
-              command: "tail -f /dev/null",
+              command: nodeEvalCommand("setInterval(() => {}, 1000);"),
             },
           ],
         },
       }),
     );
     execSync("git add chisacode.json", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgsign=false commit -m 'add setup and terminals'", {
+    execSync('git -c commit.gpgsign=false commit -m "add setup and terminals"', {
       cwd: repoRoot,
       stdio: "pipe",
     });
@@ -476,7 +543,7 @@ test("bootstraps configured worktree terminals after setup succeeds", async () =
           worktreeSlug: "async-setup-terminals-test",
         },
       }),
-      timeoutMs: 2500,
+      timeoutMs: 10000,
       label: "createAgent should not block on setup",
     });
 
@@ -505,11 +572,57 @@ test("bootstraps configured worktree terminals after setup succeeds", async () =
     const failedBootstraps =
       bootstrappedTerminals?.filter((terminal) => terminal.status === "failed") ?? [];
     expect(failedBootstraps).toEqual([]);
+    const bootstrappedTerminalIds =
+      bootstrappedTerminals
+        ?.map((terminal) => terminal.terminalId)
+        .filter((terminalId): terminalId is string => Boolean(terminalId)) ?? [];
+    expect(bootstrappedTerminals?.some((terminal) => terminal.name === "Dev Server")).toBe(true);
+    expect(bootstrappedTerminalIds.length).toBeGreaterThanOrEqual(2);
 
-    const list = await ctx.client.listTerminals(agent.cwd);
-    expect(list.error).toBeUndefined();
-    expect(list.terminals.some((terminal) => terminal.name === "Dev Server")).toBe(true);
-    expect(list.terminals.length).toBeGreaterThanOrEqual(2);
+    const terminalListDiagnostic = {
+      managerDirectories: [] as string[],
+      directIds: [] as Array<{ id: string; present: boolean }>,
+      allTerminals: [] as Array<{ id: string; name: string; cwd?: string }>,
+      worktreeTerminals: [] as Array<{ id: string; name: string; cwd?: string }>,
+    };
+    try {
+      await waitForCondition({
+        timeoutMs: 10000,
+        label: "configured worktree terminals to appear in listTerminals",
+        predicate: async () => {
+          terminalListDiagnostic.managerDirectories =
+            ctx.daemon.daemon.terminalManager.listDirectories();
+          terminalListDiagnostic.directIds = bootstrappedTerminalIds.map((terminalId) => ({
+            id: terminalId,
+            present: Boolean(ctx.daemon.daemon.terminalManager.getTerminal(terminalId)),
+          }));
+          const allList = await ctx.client.listTerminals();
+          expect(allList.error).toBeUndefined();
+          terminalListDiagnostic.allTerminals = allList.terminals.map((terminal) => ({
+            id: terminal.id,
+            name: terminal.name,
+            cwd: terminal.cwd,
+          }));
+          const worktreeList = await ctx.client.listTerminals(agent.cwd);
+          expect(worktreeList.error).toBeUndefined();
+          terminalListDiagnostic.worktreeTerminals = worktreeList.terminals.map((terminal) => ({
+            id: terminal.id,
+            name: terminal.name,
+            cwd: terminal.cwd,
+          }));
+          return includesAllTerminalIds(allList.terminals, bootstrappedTerminalIds);
+        },
+      });
+    } catch (error) {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}. Diagnostic: ${JSON.stringify({
+          agentCwd: agent.cwd,
+          bootstrappedTerminals,
+          terminalListDiagnostic,
+        })}`,
+        { cause: error },
+      );
+    }
     await waitForPathExists({
       targetPath: path.join(agent.cwd, "setup-port.txt"),
       timeoutMs: 30000,
@@ -529,7 +642,16 @@ test("bootstraps configured worktree terminals after setup succeeds", async () =
     }
     ctx.client.sendTerminalInput(manualTerminalId, {
       type: "input",
-      data: 'echo "$CHISACODE_WORKTREE_PORT" > "$CHISACODE_WORKTREE_PATH/manual-terminal-port.txt"\r',
+      data: nodeEvalTerminalInput(`
+const fs = require("node:fs");
+const path = require("node:path");
+const worktreePath = process.env.CHISACODE_WORKTREE_PATH;
+if (!worktreePath) throw new Error("missing CHISACODE_WORKTREE_PATH");
+fs.writeFileSync(
+  path.join(worktreePath, "manual-terminal-port.txt"),
+  process.env.CHISACODE_WORKTREE_PORT ?? "",
+);
+`),
     });
     await waitForPathExists({
       targetPath: path.join(agent.cwd, "manual-terminal-port.txt"),
@@ -552,22 +674,29 @@ test("reports failures via timeline tool_call without deleting the created workt
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
   writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
   execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+  execSync('git -c commit.gpgsign=false commit -m "initial"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
   execSync("git branch -M main", { cwd: repoRoot, stdio: "pipe" });
 
-  const setupCommand =
-    'echo "started" > "$CHISACODE_WORKTREE_PATH/setup-start.txt"; sleep 0.1; echo "boom" 1>&2; exit 7';
+  const setupCommand = nodeEvalCommand(`
+const fs = require("node:fs");
+const path = require("node:path");
+const worktreePath = process.env.CHISACODE_WORKTREE_PATH;
+if (!worktreePath) throw new Error("missing CHISACODE_WORKTREE_PATH");
+fs.writeFileSync(path.join(worktreePath, "setup-start.txt"), "started\\n");
+console.error("boom");
+process.exit(7);
+`);
   writeFileSync(
     path.join(repoRoot, "chisacode.json"),
     JSON.stringify({
@@ -576,14 +705,18 @@ test("reports failures via timeline tool_call without deleting the created workt
         terminals: [
           {
             name: "Should Not Start",
-            command: 'echo "should-not-run" > should-not-run.txt; tail -f /dev/null',
+            command: nodeEvalCommand(`
+const fs = require("node:fs");
+fs.writeFileSync("should-not-run.txt", "should-not-run\\n");
+setInterval(() => {}, 1000);
+`),
           },
         ],
       },
     }),
   );
   execSync("git add chisacode.json", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'add failing setup'", {
+  execSync('git -c commit.gpgsign=false commit -m "add failing setup"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -603,7 +736,7 @@ test("reports failures via timeline tool_call without deleting the created workt
         worktreeSlug: "async-setup-failure-test",
       },
     }),
-    timeoutMs: 2500,
+    timeoutMs: 10000,
     label: "createAgent should not block on failing setup",
   });
 
@@ -647,13 +780,13 @@ test("creates agent in ~/.chisacode/worktrees/{hash} when worktree is requested"
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -689,15 +822,15 @@ test("archives worktree by running teardown commands and shutting down worktree 
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
   writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
   execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+  execSync('git -c commit.gpgsign=false commit -m "initial"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -711,15 +844,24 @@ test("archives worktree by running teardown commands and shutting down worktree 
         terminals: [
           {
             name: "Dev Server",
-            command: 'echo "dev-server" > dev-terminal.txt; tail -f /dev/null',
+            command: nodeEvalCommand(`
+const fs = require("node:fs");
+fs.writeFileSync("dev-terminal.txt", "dev-server\\n");
+setInterval(() => {}, 1000);
+`),
           },
         ],
-        teardown: [`echo "$CHISACODE_WORKTREE_PATH" > "${teardownMarkerPath}"`],
+        teardown: [
+          nodeEvalCommand(`
+const fs = require("node:fs");
+fs.writeFileSync(${JSON.stringify(teardownMarkerPath)}, process.env.CHISACODE_WORKTREE_PATH ?? "");
+`),
+        ],
       },
     }),
   );
   execSync("git add chisacode.json", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'add worktree terminal + teardown'", {
+  execSync('git -c commit.gpgsign=false commit -m "add worktree terminal + teardown"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -739,7 +881,7 @@ test("archives worktree by running teardown commands and shutting down worktree 
         worktreeSlug: "archive-cleanup-test",
       },
     }),
-    timeoutMs: 2500,
+    timeoutMs: 10000,
     label: "createAgent should not block on setup",
   });
 

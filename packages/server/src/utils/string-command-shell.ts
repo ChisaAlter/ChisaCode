@@ -8,6 +8,14 @@ export interface StringCommandShellInvocation {
   args: string[];
 }
 
+function buildPowerShellCommand(command: string): string {
+  return [
+    "$global:LASTEXITCODE = $null",
+    `& { ${command} }`,
+    "if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }",
+  ].join("; ");
+}
+
 export function buildStringCommandShellInvocation(
   options: BuildStringCommandShellInvocationOptions,
 ): StringCommandShellInvocation {
@@ -22,7 +30,7 @@ export function buildStringCommandShellInvocation(
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        options.command,
+        buildPowerShellCommand(options.command),
       ],
     };
   }

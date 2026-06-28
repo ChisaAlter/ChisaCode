@@ -104,6 +104,29 @@ it("creates additional terminal with auto-incrementing name", async () => {
   expect(terminals.length).toBe(2);
 });
 
+it("keeps concurrently created terminals for the same cwd", async () => {
+  manager = createTerminalManager();
+  const cwd = mkdtempSync(join(tmpdir(), "terminal-manager-concurrent-"));
+  temporaryDirs.push(cwd);
+
+  const [first, second] = await Promise.all([
+    manager.createTerminal({
+      cwd,
+      name: "Dev Server",
+      command: process.execPath,
+      args: ["-e", "setInterval(() => {}, 1000);"],
+    }),
+    manager.createTerminal({
+      cwd,
+      command: process.execPath,
+      args: ["-e", "setInterval(() => {}, 1000);"],
+    }),
+  ]);
+
+  const terminals = await manager.getTerminals(cwd);
+  expect(terminals.map((terminal) => terminal.id).sort()).toEqual([first.id, second.id].sort());
+});
+
 it("uses custom name when provided", async () => {
   manager = createTerminalManager();
   const session = await manager.createTerminal({ cwd: realpathSync(tmpdir()), name: "Dev Server" });

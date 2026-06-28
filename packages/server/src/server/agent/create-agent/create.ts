@@ -343,7 +343,7 @@ async function sendInitialPrompt(
   }
 }
 
-function buildAgentPrompt(
+export function buildAgentPrompt(
   text: string,
   images?: Array<{ data: string; mimeType: string }>,
   attachments?: AgentAttachment[],
