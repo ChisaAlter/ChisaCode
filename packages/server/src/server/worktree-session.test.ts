@@ -708,12 +708,12 @@ describe("runWorktreeSetupInBackground", () => {
     expect(progressMessages[0]?.payload.error).toBeNull();
     expect(progressMessages[1]?.payload.status).toBe("failed");
     expect(progressMessages[1]?.payload.error).toMatch(
-      /Failed to parse chisacode\.json at .*chisacode\.json/,
+      /Failed to parse project config at .*chisacode\.json/,
     );
     expect(progressMessages[1]?.payload.detail.commands).toEqual([]);
     expect(snapshots.get(workspaceId)).toMatchObject({
       status: "failed",
-      error: expect.stringMatching(/Failed to parse chisacode\.json at .*chisacode\.json/),
+      error: expect.stringMatching(/Failed to parse project config at .*chisacode\.json/),
     });
     expect(archiveWorkspaceRecord).toHaveBeenCalledWith(workspaceId);
     expect(emitWorkspaceUpdateForCwd).toHaveBeenCalledWith(worktreePath);
@@ -1595,12 +1595,16 @@ describe("handleCreateChisaCodeWorktreeRequest", () => {
       });
       expect(registeredWorktreePath).toBeTruthy();
       expect(existsSync(registeredWorktreePath!)).toBe(true);
-      await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
-      expect(warmWorkspaceGitData).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspaceId: response?.payload.workspace?.id,
-          cwd: registeredWorktreePath,
-        }),
+      await vi.waitFor(
+        () => {
+          expect(warmWorkspaceGitData).toHaveBeenCalledWith(
+            expect.objectContaining({
+              workspaceId: response?.payload.workspace?.id,
+              cwd: registeredWorktreePath,
+            }),
+          );
+        },
+        { timeout: 1000 },
       );
       const backgroundInput = backgroundWork.mock.calls[0]?.[0];
       expect(backgroundInput).toEqual(

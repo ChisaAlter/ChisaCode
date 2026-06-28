@@ -73,15 +73,6 @@ const LegacyAgentSnapshotPayloadSchema = AgentSnapshotPayloadSchema.extend({
   capabilities: LegacyAgentCapabilityFlagsSchema,
 });
 
-interface SessionInternals {
-  handleFetchAgentTimelineRequest: (
-    message: Extract<
-      z.infer<typeof SessionInboundMessageSchema>,
-      { type: "fetch_agent_timeline_request" }
-    >,
-  ) => Promise<void>;
-}
-
 class InMemoryAgentManager {
   constructor(private readonly rows: AgentTimelineRow[]) {}
 
@@ -307,9 +298,8 @@ async function emitTimelineResponse(
 ): Promise<Extract<SessionOutboundMessage, { type: "fetch_agent_timeline_response" }>> {
   const messages: SessionOutboundMessage[] = [];
   const session = createSessionForWireCompatTest({ clientCapabilities, messages });
-  const internals = session as unknown as SessionInternals;
 
-  await internals.handleFetchAgentTimelineRequest({
+  await session.handleMessage({
     type: "fetch_agent_timeline_request",
     requestId: "req-timeline",
     agentId: "agent-1",

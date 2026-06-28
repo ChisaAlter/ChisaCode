@@ -831,9 +831,19 @@ export async function getMainRepoRoot(cwd: string): Promise<string> {
   return getMainRepoRootFromCommonDir(cwd, resolveGitRevParsePath(cwd, commonDirOut));
 }
 
+function isChisaCodeWorktreeListEntry(path: string, context?: CheckoutContext): boolean {
+  if (isChisaCodeWorktreePath(path)) {
+    return true;
+  }
+  return context?.chisacodeHome
+    ? isDescendantPath(path, resolve(context.chisacodeHome, "worktrees"))
+    : false;
+}
+
 async function getMainRepoRootFromCommonDir(
   cwd: string,
   commonDir: string | null,
+  context?: CheckoutContext,
 ): Promise<string> {
   if (!commonDir) {
     throw new Error("Not in a git repository");
@@ -850,7 +860,7 @@ async function getMainRepoRootFromCommonDir(
   });
   const worktrees = parseWorktreeList(worktreeOut);
   const nonBareNonChisaCode = worktrees.filter(
-    (wt) => !wt.isBare && !isChisaCodeWorktreePath(wt.path),
+    (wt) => !wt.isBare && !isChisaCodeWorktreeListEntry(wt.path, context),
   );
   const childrenOfBareRepo = nonBareNonChisaCode.filter((wt) =>
     isDescendantPath(wt.path, normalized),
@@ -1508,9 +1518,11 @@ export async function getCheckoutSnapshotFacts(
     ? readChisaCodeWorktreeBaseRef(inspected.chisacodeWorktree.worktreeRoot)
     : null;
   const resolvedBaseRef = storedBaseRef ?? (await resolveBaseRef(cwd));
-  const mainRepoRoot = await getMainRepoRootFromCommonDir(cwd, inspected.gitCommonDir).catch(
-    () => null,
-  );
+  const mainRepoRoot = await getMainRepoRootFromCommonDir(
+    cwd,
+    inspected.gitCommonDir,
+    context,
+  ).catch(() => null);
   let comparisonBaseRef: string | null = null;
   if (
     resolvedBaseRef &&

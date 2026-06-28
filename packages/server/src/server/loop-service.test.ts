@@ -558,13 +558,16 @@ describe("LoopService", () => {
     });
 
     await vi.waitFor(
-      () => {
-        // Allow the loop iteration to start
+      async () => {
+        const state = await service.inspectLoop(loop.id);
+        expect(state.activeWorkerAgentId).not.toBeNull();
       },
-      { interval: 0, timeout: 1000 },
+      { timeout: 1000 },
     );
-    const stopped = await service.stopLoop(loop.id);
+
+    const stoppedPromise = service.stopLoop(loop.id);
     release?.();
+    const stopped = await stoppedPromise;
 
     expect(stopped.status).toBe("stopped");
     const finalLoop = await service.inspectLoop(loop.id);
@@ -586,7 +589,7 @@ async function waitForLoopCompletion(service: LoopService, loopId: string): Prom
   await vi.waitFor(
     async () => {
       const state = await service.inspectLoop(loopId);
-      expect(state.status).toBe("completed");
+      expect(state.status).toBe("succeeded");
     },
     { timeout: 5000 },
   );

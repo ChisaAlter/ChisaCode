@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { execFileSync, execSync } from "child_process";
 import {
   existsSync,
@@ -94,10 +94,6 @@ function initRepo(): { tempDir: string; repoDir: string } {
   execFileSync("git", ["add", "."], { cwd: repoDir });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], { cwd: repoDir });
   return { tempDir, repoDir };
-}
-
-function tick(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function createGitHubServiceForStatus(
@@ -1985,7 +1981,8 @@ const x = 1;
       },
     );
 
-    __setPullRequestStatusCacheTtlForTests(0);
+    vi.useFakeTimers();
+    __setPullRequestStatusCacheTtlForTests(1);
     try {
       let callCount = 0;
       const github = createGitHubServiceForStatus(null, {
@@ -2000,12 +1997,13 @@ const x = 1;
         });
       };
       const first = await getPullRequestStatus(repoDir, github);
-      await tick();
+      await vi.advanceTimersByTimeAsync(2);
       const second = await getPullRequestStatus(repoDir, github);
       expect(first.status?.url).toContain("/pull/1");
       expect(second.status?.url).toContain("/pull/2");
       expect(callCount).toBe(2);
     } finally {
+      vi.useRealTimers();
       __resetPullRequestStatusCacheForTests();
     }
   });
@@ -2020,7 +2018,8 @@ const x = 1;
       },
     );
 
-    __setPullRequestStatusCacheTtlForTests(0);
+    vi.useFakeTimers();
+    __setPullRequestStatusCacheTtlForTests(1);
     try {
       let callCount = 0;
       const github = createGitHubServiceForStatus(null);
@@ -2040,7 +2039,7 @@ const x = 1;
       };
 
       const fresh = await getPullRequestStatus(repoDir, github);
-      await tick();
+      await vi.advanceTimersByTimeAsync(2);
       const stale = await getPullRequestStatus(repoDir, github);
 
       expect(stale).toEqual(fresh);
@@ -2048,6 +2047,7 @@ const x = 1;
       expect(stale.status?.url).toContain("/pull/123");
       expect(callCount).toBe(2);
     } finally {
+      vi.useRealTimers();
       __resetPullRequestStatusCacheForTests();
     }
   });
@@ -2099,7 +2099,8 @@ const x = 1;
       },
     );
 
-    __setPullRequestStatusCacheTtlForTests(0);
+    vi.useFakeTimers();
+    __setPullRequestStatusCacheTtlForTests(1);
     try {
       let callCount = 0;
       const github = createGitHubServiceForStatus(null);
@@ -2114,7 +2115,7 @@ const x = 1;
       };
 
       const fresh = await getPullRequestStatus(repoDir, github);
-      await tick();
+      await vi.advanceTimersByTimeAsync(2);
       const cleared = await getPullRequestStatus(repoDir, github);
 
       expect(fresh.status?.url).toContain("/pull/123");
@@ -2124,6 +2125,7 @@ const x = 1;
       });
       expect(callCount).toBe(2);
     } finally {
+      vi.useRealTimers();
       __resetPullRequestStatusCacheForTests();
     }
   });
