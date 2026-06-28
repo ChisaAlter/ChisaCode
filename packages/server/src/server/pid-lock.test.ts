@@ -5,16 +5,35 @@ import { describe, expect, test } from "vitest";
 
 import { acquirePidLock, getPidLockInfo, releasePidLock, updatePidLock } from "./pid-lock.js";
 
+function isPidRunningForTest(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function findUnusedPid(): number {
+  for (let pid = 2_000_000_000; pid > 1_999_999_000; pid -= 1) {
+    if (!isPidRunningForTest(pid)) {
+      return pid;
+    }
+  }
+  throw new Error("Could not find an unused pid for pid-lock test");
+}
+
 describe("pid-lock ownership", () => {
-  test("reclaims lock when the recorded pid was reused by another process", async () => {
+  test("reclaims lock when the recorded pid is no longer running", async () => {
     const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-pid-lock-reused-"));
-    const ownerPid = process.pid + 10_000;
+    const stalePid = findUnusedPid();
+    const ownerPid = stalePid - 1;
 
     try {
       await writeFile(
         join(chisacodeHome, "chisacode.pid"),
         JSON.stringify({
-          pid: process.pid,
+          pid: stalePid,
           startedAt: "2000-01-01T00:00:00.000Z",
           hostname: "old-host",
           uid: 0,
@@ -40,7 +59,7 @@ describe("pid-lock ownership", () => {
 
   test("writes and releases lock for explicit owner pid", async () => {
     const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-pid-lock-owner-"));
-    const ownerPid = process.pid + 10_000;
+    const ownerPid = findUnusedPid();
 
     try {
       await (

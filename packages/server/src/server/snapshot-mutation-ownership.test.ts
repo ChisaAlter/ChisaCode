@@ -11,12 +11,6 @@ import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js
 
 interface SessionInternals {
   archiveAgentForClose(agentId: string): Promise<{ archivedAt: string }>;
-  handleUpdateAgentRequest(
-    agentId: string,
-    title: string,
-    labels: Record<string, string>,
-    requestId: string,
-  ): Promise<unknown>;
 }
 
 describe("snapshot mutation ownership boundary", () => {
@@ -32,19 +26,18 @@ describe("snapshot mutation ownership boundary", () => {
       const snapshot = await daemonHandle.daemon.agentManager.createAgent({
         provider: "codex",
         cwd,
-        model: "gpt-5.2-codex",
       });
       await daemonHandle.daemon.agentManager.flush();
 
       const applySnapshotSpy = vi.spyOn(daemonHandle.daemon.agentStorage, "applySnapshot");
 
-      await daemonHandle.daemon.agentManager.setAgentModel(snapshot.id, "gpt-5.4");
+      await daemonHandle.daemon.agentManager.setAgentModel(snapshot.id, "gpt-5.4-mini");
       await daemonHandle.daemon.agentManager.flush();
 
       expect(applySnapshotSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
 
       const persisted = await daemonHandle.daemon.agentStorage.get(snapshot.id);
-      expect(persisted?.config?.model).toBe("gpt-5.4");
+      expect(persisted?.config?.model).toBe("gpt-5.4-mini");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
       await daemonHandle.close();
@@ -145,12 +138,13 @@ describe("snapshot mutation ownership boundary", () => {
     expect(archiveSnapshot).toHaveBeenCalledTimes(1);
     expect(archiveResult.archivedAt).toBeTruthy();
 
-    await session.handleUpdateAgentRequest(
-      "agent-1",
-      "Renamed agent",
-      { lane: "phase-1a" },
-      "req-1",
-    );
+    await session.handleMessage({
+      type: "update_agent_request",
+      agentId: "agent-1",
+      name: "Renamed agent",
+      labels: { lane: "phase-1a" },
+      requestId: "req-1",
+    });
     expect(updateAgentMetadata).toHaveBeenCalledWith("agent-1", {
       title: "Renamed agent",
       labels: { lane: "phase-1a" },

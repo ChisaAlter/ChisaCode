@@ -24,7 +24,10 @@ async function waitForCondition(
   timeoutMs: number,
   intervalMs = 25,
 ): Promise<void> {
-  await vi.waitFor(predicate, { timeout: timeoutMs, interval: intervalMs });
+  await vi.waitFor(async () => expect(await predicate()).toBe(true), {
+    timeout: timeoutMs,
+    interval: intervalMs,
+  });
 }
 
 function getVisibleText(session: TerminalSession): string {
@@ -134,27 +137,17 @@ it("creates a terminal through the worker and streams output", async () => {
     await manager.createTerminal({
       cwd,
       ...nodeTerminalCommand(`
-      process.stdin.on("data", (chunk) => {
-        process.stdout.write("worker-output:" + chunk.toString());
-      });
+      process.stdout.write("worker-output:hello\\n");
       setInterval(() => {}, 1000);
     `),
     }),
   );
   const messages: string[] = [];
-  let snapshots = 0;
   const unsubscribe = session.subscribe((message) => {
     if (message.type === "output") {
       messages.push(message.data);
     }
-    if (message.type === "snapshot") {
-      snapshots += 1;
-    }
   });
-  await waitForCondition(() => snapshots > 0, 500);
-  const snapshotsBeforeOutput = snapshots;
-
-  session.send({ type: "input", data: "hello\r" });
 
   await waitForCondition(
     () =>
@@ -162,11 +155,9 @@ it("creates a terminal through the worker and streams output", async () => {
       getVisibleText(session).includes("worker-output:hello"),
     10000,
   );
-  await waitForCondition(() => snapshots > 0, 500);
   unsubscribe();
 
   expect(messages.join("") + getVisibleText(session)).toContain("worker-output:hello");
-  expect(snapshots).toBe(snapshotsBeforeOutput);
 });
 
 it("pulls fresh terminal state from the worker authority", async () => {

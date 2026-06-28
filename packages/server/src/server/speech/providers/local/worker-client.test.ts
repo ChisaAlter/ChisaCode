@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { once } from "node:events";
 import pino from "pino";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   LocalSpeechWorkerClient,
@@ -74,8 +74,11 @@ function createClient(options?: { idleTtlMs?: number }) {
   return { client, workers };
 }
 
-async function waitForMicrotasks(): Promise<void> {
-  await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+async function waitForSentCount(worker: FakeLocalSpeechWorker, count: number): Promise<void> {
+  await vi.waitFor(() => expect(worker.sent.length).toBeGreaterThanOrEqual(count), {
+    interval: 0,
+    timeout: 1000,
+  });
 }
 
 describe("LocalSpeechWorkerClient", () => {
@@ -130,7 +133,7 @@ describe("LocalSpeechWorkerClient", () => {
     await connect;
 
     session.appendPcm16(Buffer.from([9, 8, 7, 6]));
-    await waitForMicrotasks();
+    await waitForSentCount(workers[0], 2);
     const appendRequest = workers[0].sent[1];
     expect(appendRequest).toMatchObject({
       type: "session.append",
@@ -143,7 +146,7 @@ describe("LocalSpeechWorkerClient", () => {
     expect(workerBytesToBuffer(appendRequest.audio).byteOffset).toBe(0);
 
     session.commit();
-    await waitForMicrotasks();
+    await waitForSentCount(workers[0], 3);
     expect(workers[0].sent[2]).toMatchObject({
       type: "session.commit",
       sessionId: createRequest.sessionId,
@@ -204,8 +207,10 @@ describe("LocalSpeechWorkerClient", () => {
     });
     await first;
 
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
-    expect(workers[0].kills).toBe(1);
+    await vi.waitFor(() => expect(workers[0].kills).toBe(1), {
+      interval: 0,
+      timeout: 1000,
+    });
 
     const second = client.synthesizeSpeech("second");
     expect(workers).toHaveLength(2);

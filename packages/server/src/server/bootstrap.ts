@@ -351,6 +351,50 @@ export interface ChisaCodeDaemon {
   getListenTarget(): ListenTarget | null;
 }
 
+interface SpeechServiceBootstrapCleanupResources {
+  logger: Logger;
+  config: ChisaCodeDaemonConfig;
+  scriptHealthMonitor: ScriptHealthMonitor;
+  detachAgentStoragePersistence: () => void;
+  agentStorage: AgentStorage;
+  providerSnapshotManager: ProviderSnapshotManager;
+  agentIndex: ReturnType<typeof createSqliteAgentIndex>;
+  terminalManager: TerminalManager;
+  scheduleService: ScheduleService;
+}
+
+async function createSpeechServiceWithBootstrapCleanup(
+  resources: SpeechServiceBootstrapCleanupResources,
+): Promise<ReturnType<typeof createSpeechService>> {
+  try {
+    return createSpeechService({
+      logger: resources.logger,
+      mimoConfig: resources.config.mimo,
+      openaiConfig: resources.config.openai,
+      speechConfig: resources.config.speech,
+    });
+  } catch (error) {
+    await cleanupFailedSpeechBootstrap(resources);
+    throw error;
+  }
+}
+
+async function cleanupFailedSpeechBootstrap(
+  resources: SpeechServiceBootstrapCleanupResources,
+): Promise<void> {
+  resources.scriptHealthMonitor.stop();
+  resources.detachAgentStoragePersistence();
+  await resources.agentStorage.flush().catch(() => undefined);
+  await resources.providerSnapshotManager.shutdown().catch(() => undefined);
+  try {
+    resources.agentIndex?.close();
+  } catch {
+    // Preserve the original bootstrap error; startup cleanup is best-effort.
+  }
+  resources.terminalManager.killAll();
+  await resources.scheduleService.stop().catch(() => undefined);
+}
+
 export async function createChisaCodeDaemon(
   config: ChisaCodeDaemonConfig,
   rootLogger: Logger,
@@ -1045,11 +1089,16 @@ export async function createChisaCodeDaemon(
     logger.info("Agent MCP HTTP endpoint disabled");
   }
 
-  const speechService = createSpeechService({
+  const speechService = await createSpeechServiceWithBootstrapCleanup({
     logger,
-    mimoConfig: config.mimo,
-    openaiConfig: config.openai,
-    speechConfig: config.speech,
+    config,
+    scriptHealthMonitor,
+    detachAgentStoragePersistence,
+    agentStorage,
+    providerSnapshotManager,
+    agentIndex,
+    terminalManager,
+    scheduleService,
   });
   logger.info({ elapsed: elapsed() }, "Speech service created");
 

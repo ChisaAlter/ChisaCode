@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +6,13 @@ import { FileTaskStore } from "./task-store.js";
 
 let tempDir: string;
 let store: FileTaskStore;
+
+async function waitUntilClockAfter(isoTimestamp: string): Promise<void> {
+  await vi.waitFor(() => expect(Date.now()).toBeGreaterThan(Date.parse(isoTimestamp)), {
+    interval: 0,
+    timeout: 1000,
+  });
+}
 
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), "task-store-test-"));
@@ -212,7 +219,7 @@ describe("update", () => {
     const task = await store.create("Task");
     const originalCreated = task.created;
 
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+    await waitUntilClockAfter(originalCreated);
     await store.update(task.id, { title: "Updated" });
 
     const retrieved = await store.get(task.id);
@@ -522,9 +529,9 @@ describe("getReady", () => {
 
   it("sorts by created date (oldest first) when no priority", async () => {
     const task1 = await store.create("Task 1");
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+    await waitUntilClockAfter(task1.created);
     const task2 = await store.create("Task 2");
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+    await waitUntilClockAfter(task2.created);
     const task3 = await store.create("Task 3");
 
     const ready = await store.getReady();
@@ -555,9 +562,9 @@ describe("getReady", () => {
 
   it("sorts by created date within same priority", async () => {
     const first = await store.create("First", { priority: 1 });
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+    await waitUntilClockAfter(first.created);
     const second = await store.create("Second", { priority: 1 });
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+    await waitUntilClockAfter(second.created);
     const third = await store.create("Third", { priority: 1 });
 
     const ready = await store.getReady();
@@ -810,9 +817,9 @@ describe("getClosed", () => {
 
   it("sorts by created date (most recent first)", async () => {
     const task1 = await store.create("Task 1");
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+    await waitUntilClockAfter(task1.created);
     const task2 = await store.create("Task 2");
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
+    await waitUntilClockAfter(task2.created);
     const task3 = await store.create("Task 3");
 
     await store.close(task1.id);

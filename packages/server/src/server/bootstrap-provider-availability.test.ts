@@ -5,6 +5,34 @@ import pino from "pino";
 import { afterEach, describe, expect, test } from "vitest";
 import { ensureAgentLoaded } from "./agent/agent-loading.js";
 import type { ChisaCodeDaemonConfig } from "./bootstrap.js";
+import type { AgentClient } from "./agent/agent-sdk-types.js";
+
+const unavailableCodexClient: AgentClient = {
+  provider: "codex",
+  capabilities: {
+    supportsStreaming: true,
+    supportsSessionPersistence: true,
+    supportsDynamicModes: true,
+    supportsMcpServers: false,
+    supportsReasoningStream: true,
+    supportsToolInvocations: true,
+    supportsRewindConversation: false,
+    supportsRewindFiles: false,
+    supportsRewindBoth: false,
+  },
+  async createSession() {
+    throw new Error("codex is intentionally unavailable in this test");
+  },
+  async resumeSession() {
+    throw new Error("codex is intentionally unavailable in this test");
+  },
+  async listModels() {
+    return [];
+  },
+  async isAvailable() {
+    return false;
+  },
+};
 
 const originalEnv = {
   PATH: process.env.PATH,
@@ -72,7 +100,7 @@ describe("bootstrap provider availability", () => {
       mcpEnabled: false,
       staticDir,
       mcpDebug: false,
-      agentClients: {},
+      agentClients: { codex: unavailableCodexClient },
       agentStoragePath,
       relayEnabled: false,
       appBaseUrl: "https://app.chisacode.sh",

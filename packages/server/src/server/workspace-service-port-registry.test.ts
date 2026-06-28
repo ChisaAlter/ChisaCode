@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   ensureWorkspaceServicePortPlan,
@@ -83,8 +83,7 @@ describe("ensureWorkspaceServicePortPlan", () => {
     await Promise.resolve();
     expect(allocationCount).toBe(1);
     firstAllocation.resolve(4301);
-    await vi.waitFor(() => {}, { interval: 0, timeout: 1000 });
-    expect(allocationCount).toBe(2);
+    await vi.waitFor(() => expect(allocationCount).toBe(2), { interval: 0, timeout: 1000 });
     secondAllocation.resolve(4302);
 
     const [firstPlan, secondPlan] = await Promise.all([firstPlanPromise, secondPlanPromise]);
