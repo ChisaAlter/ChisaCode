@@ -1,6 +1,6 @@
 {
   "name": "chisacode",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "ChisaCode: voice-controlled development environment with OpenAI Realtime API",
   "keywords": [
