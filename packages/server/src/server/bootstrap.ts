@@ -164,6 +164,7 @@ import { startRelayTransport, type RelayTransportController } from "./relay-tran
 import type { PushNotificationSender } from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
+import { CHISACODE_SOURCE_OFFER } from "./legal-source.js";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProviderRuntimeSettingsMap,
@@ -566,6 +567,15 @@ export async function createChisaCodeDaemon(
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  app.get("/api/source", (_req, res) => {
+    res.json({
+      status: "source_info",
+      name: "ChisaCode",
+      version: daemonVersion,
+      ...CHISACODE_SOURCE_OFFER,
+    });
+  });
+
   app.get("/api/status", (_req, res) => {
     res.json({
       status: "server_info",
@@ -573,6 +583,7 @@ export async function createChisaCodeDaemon(
       hostname: getHostname(),
       version: daemonVersion,
       listen: formatListenTarget(boundListenTarget ?? listenTarget),
+      sourceCode: CHISACODE_SOURCE_OFFER,
     });
   });
 

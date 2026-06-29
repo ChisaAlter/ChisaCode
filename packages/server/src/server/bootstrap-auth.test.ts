@@ -97,6 +97,16 @@ describe("daemon bearer auth", () => {
       const health = await fetch(`http://127.0.0.1:${daemonHandle.port}/api/health`);
       expect(health.status).toBe(200);
 
+      const source = await fetch(`http://127.0.0.1:${daemonHandle.port}/api/source`);
+      expect(source.status).toBe(200);
+      await expect(source.json()).resolves.toMatchObject({
+        status: "source_info",
+        license: "AGPL-3.0-or-later",
+        repositoryUrl: "https://github.com/ChisaAlter/ChisaCode",
+        originalProjectUrl: "https://github.com/getpaseo/paseo",
+        correspondingSourceRequired: true,
+      });
+
       const status = await fetch(`http://127.0.0.1:${daemonHandle.port}/api/status`);
       expect(status.status).toBe(401);
     } finally {

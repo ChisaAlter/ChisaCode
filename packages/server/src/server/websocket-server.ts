@@ -47,6 +47,7 @@ import {
   findLatestPermissionRequest,
 } from "@chisacode/protocol/agent-attention-notification";
 import { createGitHubService, type GitHubService } from "../services/github-service.js";
+import { CHISACODE_SOURCE_OFFER } from "./legal-source.js";
 import {
   extractWsBearerProtocol,
   extractWsBearerToken,
@@ -1009,6 +1010,7 @@ export class VoiceAssistantWebSocketServer {
       serverId: this.serverId,
       hostname: getHostname(),
       version: this.daemonVersion,
+      sourceCode: CHISACODE_SOURCE_OFFER,
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.

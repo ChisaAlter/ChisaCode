@@ -109,12 +109,6 @@ import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/atta
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import { RewindMenu, type RewindMode } from "@/components/rewind/rewind-menu";
 import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mutation";
 export type { InlinePathTarget } from "@/assistant-file-links";
@@ -592,23 +586,13 @@ export const UserMessage = memo(function UserMessage({
     [showTrailingRow],
   );
 
-  const handleCopyMessage = useCallback(async () => {
-    const content = message;
-    if (!content) return;
-    await writeMarkdownToRichClipboard(content, getDefaultMarkdownClipboardEnvironment());
-  }, [message]);
-
-  const copyIcon = useMemo(() => <Copy size={16} />, []);
-
   return (
-    <ContextMenu>
-      <ContextMenuTrigger style={containerStyle} enabled={hasText} enabledOnMobile>
-        <View testID="user-message">
-          <View
-            style={userMessageStylesheet.content}
-            onPointerEnter={handlePointerEnter}
-            onPointerLeave={handlePointerLeave}
-          >
+    <View style={containerStyle} testID="user-message">
+      <View
+        style={userMessageStylesheet.content}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+      >
             <View style={userMessageStylesheet.bubble}>
               {hasImages ? (
                 <UserMessageImagePreviews
@@ -646,15 +630,8 @@ export const UserMessage = memo(function UserMessage({
                 />
               </View>
             ) : null}
-          </View>
-        </View>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={handleCopyMessage} leading={copyIcon}>
-          复制
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+      </View>
+    </View>
   );
 });
 
@@ -1942,23 +1919,9 @@ export const AssistantMessage = memo(function AssistantMessage({
     [spacing],
   );
 
-  const handleCopyMessage = useCallback(async () => {
-    const content = displayMessage;
-    if (!content) return;
-    await writeMarkdownToRichClipboard(content, getDefaultMarkdownClipboardEnvironment());
-  }, [displayMessage]);
-
-  const assistantCopyIcon = useMemo(() => <Copy size={16} />, []);
-
   return (
-    <ContextMenu>
-      <ContextMenuTrigger
-        style={assistantContainerStyle}
-        enabled={Boolean(displayMessage)}
-        enabledOnMobile
-      >
-        <View testID="assistant-message">
-          <View testID="assistant-message-surface" style={assistantSurfaceStyle}>
+    <View testID="assistant-message" style={assistantContainerStyle}>
+      <View testID="assistant-message-surface" style={assistantSurfaceStyle}>
             {keyedBlocks.map(({ key, block }, index) => (
               <AssistantMessageBlockContainer
                 key={key}
@@ -1973,15 +1936,8 @@ export const AssistantMessage = memo(function AssistantMessage({
                 />
               </AssistantMessageBlockContainer>
             ))}
-          </View>
-        </View>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={handleCopyMessage} leading={assistantCopyIcon}>
-          复制
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+      </View>
+    </View>
   );
 });
 

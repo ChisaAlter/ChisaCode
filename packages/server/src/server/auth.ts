@@ -122,5 +122,5 @@ export function shouldBypassBearerAuth(method: string, path: string): boolean {
   if (method === "OPTIONS") {
     return true;
   }
-  return path === "/api/health";
+  return path === "/api/health" || path === "/api/source";
 }

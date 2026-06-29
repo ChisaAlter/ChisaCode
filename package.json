@@ -14,9 +14,14 @@
   "homepage": "https://chisacode.sh",
   "license": "AGPL-3.0-or-later",
   "author": {
-    "name": "Mohamed Boudra",
-    "email": "hello@moboudra.com"
+    "name": "ChisaCode contributors"
   },
+  "contributors": [
+    {
+      "name": "Mohamed Boudra",
+      "url": "https://github.com/getpaseo/paseo"
+    }
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/ChisaAlter/ChisaCode.git"

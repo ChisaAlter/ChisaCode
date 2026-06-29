@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   FileExplorerRequestSchema,
   MutableDaemonConfigSchema,
+  ServerInfoStatusPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
 } from "./messages.js";
@@ -180,6 +181,30 @@ describe("agent skill management protocol", () => {
       providers: {},
       agents: {},
       installedSources: {},
+    });
+  });
+
+  test("accepts AGPL source offer metadata in server info", () => {
+    expect(
+      ServerInfoStatusPayloadSchema.parse({
+        status: "server_info",
+        serverId: "server-1",
+        sourceCode: {
+          license: "AGPL-3.0-or-later",
+          repositoryUrl: "https://github.com/ChisaAlter/ChisaCode",
+          noticePath: "NOTICE",
+          originalProjectUrl: "https://github.com/getpaseo/paseo",
+          offerPath: "/api/source",
+          correspondingSourceRequired: true,
+        },
+      }).sourceCode,
+    ).toEqual({
+      license: "AGPL-3.0-or-later",
+      repositoryUrl: "https://github.com/ChisaAlter/ChisaCode",
+      noticePath: "NOTICE",
+      originalProjectUrl: "https://github.com/getpaseo/paseo",
+      offerPath: "/api/source",
+      correspondingSourceRequired: true,
     });
   });
 

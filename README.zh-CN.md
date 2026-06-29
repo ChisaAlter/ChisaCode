@@ -151,4 +151,10 @@ npm run format:check
 
 ## 许可证
 
-AGPL-3.0-or-later
+ChisaCode 使用 AGPL-3.0-or-later 许可。完整许可文本见 [LICENSE](LICENSE)。
+
+ChisaCode 是基于 [Paseo](https://github.com/getpaseo/paseo) 修改而来的独立改名版本。
+来源、修改和署名说明见 [NOTICE](NOTICE)。
+
+当 ChisaCode 以二进制形式分发，或作为可远程网络交互的服务提供时，应按
+AGPL-3.0-or-later 提供该精确版本对应的源代码。

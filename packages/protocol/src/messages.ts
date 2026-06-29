@@ -2448,12 +2448,22 @@ const ServerCapabilitiesFromUnknownSchema = z
     return parsed.data;
   });
 
+const SourceCodeOfferSchema = z.object({
+  license: z.literal("AGPL-3.0-or-later"),
+  repositoryUrl: z.string().url(),
+  noticePath: z.string().min(1),
+  originalProjectUrl: z.string().url(),
+  offerPath: z.string().min(1),
+  correspondingSourceRequired: z.boolean(),
+});
+
 export const ServerInfoStatusPayloadSchema = z
   .object({
     status: z.literal("server_info"),
     serverId: z.string().trim().min(1),
     hostname: ServerInfoHostnameSchema.optional(),
     version: ServerInfoVersionSchema.optional(),
+    sourceCode: SourceCodeOfferSchema.optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema,
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z

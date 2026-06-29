@@ -140,4 +140,13 @@ See [SECURITY.md](SECURITY.md) for the full threat model and vulnerability repor
 
 ## License
 
-AGPL-3.0-or-later. See [LICENSE](LICENSE) for details.
+ChisaCode is licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE) for the
+full license text.
+
+ChisaCode is a modified version derived from
+[Paseo](https://github.com/getpaseo/paseo). See [NOTICE](NOTICE) for source,
+modification, and attribution notices.
+
+When ChisaCode is distributed as binaries or made available for remote network
+interaction, publish the corresponding source code for that exact version under
+AGPL-3.0-or-later.
