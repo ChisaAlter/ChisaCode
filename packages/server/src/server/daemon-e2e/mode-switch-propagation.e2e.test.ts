@@ -147,6 +147,8 @@ describe("mode-switch update propagation", () => {
   });
 
   test("mode switch is visible in second client bootstrap snapshot", async () => {
+    const { updates, unsub: unsubscribePrimary } = collectAgentUpdates(ctx.client);
+
     const agent = await ctx.client.createAgent({
       provider: "claude",
       cwd: "/tmp",
@@ -181,6 +183,7 @@ describe("mode-switch update propagation", () => {
     expect(modeUpdate).toBeDefined();
 
     unsub();
+    unsubscribePrimary();
     await client2.close();
   });
 

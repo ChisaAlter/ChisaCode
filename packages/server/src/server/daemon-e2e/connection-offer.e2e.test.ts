@@ -3,9 +3,11 @@ import pino from "pino";
 import net from "node:net";
 import path from "node:path";
 import os from "node:os";
+import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { Writable } from "node:stream";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { generateLocalPairingOffer } from "../pairing-offer.js";
 import { createTestChisaCodeDaemon } from "../test-utils/chisacode-daemon.js";
@@ -67,6 +69,37 @@ async function getAvailablePort(): Promise<number> {
       server.close(() => resolve(address.port));
     });
   });
+}
+
+async function stopChildProcess(proc: ChildProcessWithoutNullStreams): Promise<void> {
+  if (proc.exitCode !== null || proc.signalCode !== null) {
+    return;
+  }
+
+  const forceKillController = new AbortController();
+  const forceKill = delay(5_000, undefined, { signal: forceKillController.signal })
+    .then(() => {
+      if (proc.exitCode === null && proc.signalCode === null) {
+        proc.kill("SIGKILL");
+      }
+      return undefined;
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      throw error;
+    });
+
+  try {
+    proc.kill();
+    if (proc.exitCode === null && proc.signalCode === null) {
+      await once(proc, "exit");
+    }
+  } finally {
+    forceKillController.abort();
+    await forceKill;
+  }
 }
 
 describe("ConnectionOfferV2 (daemon E2E)", () => {
@@ -203,7 +236,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
 
     const serverRoot = path.resolve(import.meta.dirname, "../../..");
     const supervisorPath = path.join(serverRoot, "scripts/supervisor-entrypoint.ts");
-    const tsxBin = path.resolve(serverRoot, "../../node_modules/.bin/tsx");
+    const tsxCli = path.resolve(serverRoot, "../../node_modules/tsx/dist/cli.mjs");
 
     const env = {
       ...process.env,
@@ -216,7 +249,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
     };
 
     const stdoutLines: string[] = [];
-    const proc = spawn(tsxBin, [supervisorPath, "--dev", "--no-relay"], {
+    const proc = spawn(process.execPath, [tsxCli, supervisorPath, "--dev", "--no-relay"], {
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -264,8 +297,8 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
         cause: err,
       });
     } finally {
-      proc.kill();
-      await rm(tempHome, { recursive: true, force: true });
+      await stopChildProcess(proc);
+      await rm(tempHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30000);
 });

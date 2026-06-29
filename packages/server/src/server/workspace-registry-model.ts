@@ -35,9 +35,16 @@ export function normalizeWorkspaceId(cwd: string): string {
   return resolve(trimmed);
 }
 
+function normalizeGitWorktreeRoot(worktreeRoot: string): string {
+  if (/^[A-Za-z]:[\\/]/.test(worktreeRoot)) {
+    return normalizeWorkspaceId(worktreeRoot);
+  }
+  return worktreeRoot;
+}
+
 export function deriveWorkspaceId(cwd: string, checkout: ProjectCheckoutLitePayload): string {
   const worktreeRoot = checkout.worktreeRoot ? parseGitRevParsePath(checkout.worktreeRoot) : null;
-  return worktreeRoot ?? normalizeWorkspaceId(cwd);
+  return worktreeRoot ? normalizeGitWorktreeRoot(worktreeRoot) : normalizeWorkspaceId(cwd);
 }
 
 function deriveRemoteProjectKey(remoteUrl: string | null): string | null {

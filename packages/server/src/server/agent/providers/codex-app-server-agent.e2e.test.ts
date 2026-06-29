@@ -16,7 +16,8 @@ const CODEX_TEST_THINKING_OPTION_ID = agentConfigs.codex.thinkingOptionId;
 
 function isCodexInstalled(): boolean {
   try {
-    const out = execFileSync("which", ["codex"], { encoding: "utf8" }).trim();
+    const command = process.platform === "win32" ? "where.exe" : "which";
+    const out = execFileSync(command, ["codex"], { encoding: "utf8" }).trim();
     return out.length > 0;
   } catch {
     return false;

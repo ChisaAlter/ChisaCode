@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
@@ -58,22 +58,17 @@ function hasGitHubCliDeleteRepoScope(): boolean {
 const hasRequiredGitHubCliAuth = hasGitHubCliAuth() && hasGitHubCliDeleteRepoScope();
 const testWithGitHubCliAuth = hasRequiredGitHubCliAuth ? test : test.skip;
 
+function git(cwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd, stdio: "pipe" });
+}
+
 function initGitRepo(repoDir: string): void {
-  execSync("git init -b main", { cwd: repoDir, stdio: "pipe" });
-  execSync("git config user.email 'chisacode-test@example.com'", {
-    cwd: repoDir,
-    stdio: "pipe",
-  });
-  execSync("git config user.name 'ChisaCode Test'", {
-    cwd: repoDir,
-    stdio: "pipe",
-  });
+  git(repoDir, ["init", "-b", "main"]);
+  git(repoDir, ["config", "user.email", "chisacode-test@example.com"]);
+  git(repoDir, ["config", "user.name", "ChisaCode Test"]);
   writeFileSync(path.join(repoDir, "README.md"), "init\n");
-  execSync("git add README.md", { cwd: repoDir, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
-    cwd: repoDir,
-    stdio: "pipe",
-  });
+  git(repoDir, ["add", "README.md"]);
+  git(repoDir, ["-c", "commit.gpgsign=false", "commit", "-m", "Initial commit"]);
 }
 
 function getGhLogin(): string {

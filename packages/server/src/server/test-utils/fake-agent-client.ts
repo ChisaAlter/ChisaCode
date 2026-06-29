@@ -18,6 +18,7 @@ import type {
   AgentSessionConfig,
   AgentStreamEvent,
   AgentSlashCommand,
+  AgentTimelineItem,
   AgentUsage,
   ListModelsOptions,
 } from "../agent/agent-sdk-types.js";
@@ -434,6 +435,16 @@ class FakeAgentSession implements AgentSession {
     }
   }
 
+  private withTurnMessageId(item: AgentTimelineItem): AgentTimelineItem {
+    if (item.type !== "assistant_message" || item.messageId || !this.activeForegroundTurnId) {
+      return item;
+    }
+    return {
+      ...item,
+      messageId: `${this.activeForegroundTurnId}:assistant`,
+    };
+  }
+
   private async emitSlashCommandTurn(slashCommand: {
     commandName: string;
     args?: string;
@@ -458,7 +469,7 @@ class FakeAgentSession implements AgentSession {
       const timelineEvent: AgentStreamEvent = {
         type: "timeline",
         provider: this.providerName,
-        item,
+        item: this.withTurnMessageId(item),
       };
       await this.appendHistoryEvent(timelineEvent);
       this.notifySubscribers(timelineEvent);
@@ -741,7 +752,10 @@ class FakeAgentSession implements AgentSession {
       const assistantChunkA: AgentStreamEvent = {
         type: "timeline",
         provider: this.providerName,
-        item: { type: "assistant_message", text: assistantText.slice(0, 6) },
+        item: this.withTurnMessageId({
+          type: "assistant_message",
+          text: assistantText.slice(0, 6),
+        }),
       };
       await this.appendHistoryEvent(assistantChunkA);
       this.notifySubscribers(assistantChunkA);
@@ -751,7 +765,10 @@ class FakeAgentSession implements AgentSession {
         const assistantChunkB: AgentStreamEvent = {
           type: "timeline",
           provider: this.providerName,
-          item: { type: "assistant_message", text: assistantChunkBText },
+          item: this.withTurnMessageId({
+            type: "assistant_message",
+            text: assistantChunkBText,
+          }),
         };
         await this.appendHistoryEvent(assistantChunkB);
         this.notifySubscribers(assistantChunkB);

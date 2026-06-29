@@ -17,6 +17,60 @@ let ctx: DaemonTestContext;
 let messages: SessionOutboundMessage[] = [];
 let unsubscribe: (() => void) | null = null;
 
+function isPermissionResolvedMessage(
+  message: SessionOutboundMessage,
+  agentId: string,
+  requestId: string,
+  behavior: "allow" | "deny",
+): boolean {
+  if (message.type === "agent_permission_resolved") {
+    return (
+      message.payload.agentId === agentId &&
+      message.payload.requestId === requestId &&
+      message.payload.resolution.behavior === behavior
+    );
+  }
+
+  if (message.type !== "agent_stream" || message.payload.agentId !== agentId) {
+    return false;
+  }
+  return (
+    message.payload.event.type === "permission_resolved" &&
+    message.payload.event.requestId === requestId &&
+    message.payload.event.resolution.behavior === behavior
+  );
+}
+
+function waitForPermissionResolved(
+  agentId: string,
+  requestId: string,
+  behavior: "allow" | "deny",
+  timeoutMs = 5_000,
+): Promise<void> {
+  if (
+    messages.some((message) => isPermissionResolvedMessage(message, agentId, requestId, behavior))
+  ) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    let unsubscribePermission: (() => void) | null = null;
+    const timer = setTimeout(() => {
+      unsubscribePermission?.();
+      reject(new Error(`Timed out waiting for ${behavior} permission resolution ${requestId}`));
+    }, timeoutMs);
+
+    unsubscribePermission = ctx.client.subscribeRawMessages((message) => {
+      if (!isPermissionResolvedMessage(message, agentId, requestId, behavior)) {
+        return;
+      }
+      clearTimeout(timer);
+      unsubscribePermission?.();
+      resolve();
+    });
+  });
+}
+
 beforeEach(async () => {
   ctx = await createDaemonTestContext();
   messages = [];
@@ -68,6 +122,7 @@ describe("permission flow: Codex", () => {
     expect(permission.kind).toBe("tool");
 
     // Approve the permission
+    const permissionResolved = waitForPermissionResolved(agent.id, permission.id, "allow");
     await ctx.client.respondToPermission(agent.id, permission.id, {
       behavior: "allow",
     });
@@ -80,18 +135,7 @@ describe("permission flow: Codex", () => {
     expect(existsSync(filePath)).toBe(true);
 
     // Verify permission_resolved event was received
-    const queue = messages;
-    const hasPermissionResolved = queue.some((m) => {
-      if (m.type === "agent_stream" && m.payload.agentId === agent.id) {
-        return (
-          m.payload.event.type === "permission_resolved" &&
-          m.payload.event.requestId === permission.id &&
-          m.payload.event.resolution.behavior === "allow"
-        );
-      }
-      return false;
-    });
-    expect(hasPermissionResolved).toBe(true);
+    await permissionResolved;
 
     rmSync(cwd, { recursive: true, force: true });
   }, 30_000);
@@ -131,6 +175,7 @@ describe("permission flow: Codex", () => {
     expect(permission.id).toBeTruthy();
 
     // Deny the permission
+    const permissionResolved = waitForPermissionResolved(agent.id, permission.id, "deny");
     await ctx.client.respondToPermission(agent.id, permission.id, {
       behavior: "deny",
       message: "Not allowed.",
@@ -144,18 +189,7 @@ describe("permission flow: Codex", () => {
     expect(existsSync(filePath)).toBe(false);
 
     // Verify permission_resolved event was received with deny
-    const queue = messages;
-    const hasPermissionDenied = queue.some((m) => {
-      if (m.type === "agent_stream" && m.payload.agentId === agent.id) {
-        return (
-          m.payload.event.type === "permission_resolved" &&
-          m.payload.event.requestId === permission.id &&
-          m.payload.event.resolution.behavior === "deny"
-        );
-      }
-      return false;
-    });
-    expect(hasPermissionDenied).toBe(true);
+    await permissionResolved;
 
     rmSync(cwd, { recursive: true, force: true });
   }, 30_000);

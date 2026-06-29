@@ -7,7 +7,10 @@ import type {
   PersistedWorkspaceRecord,
 } from "./workspace-registry.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
-import { normalizeWorkspaceId } from "./workspace-registry-model.js";
+import {
+  classifyDirectoryForProjectMembership,
+  normalizeWorkspaceId,
+} from "./workspace-registry-model.js";
 
 const DEFAULT_RECONCILE_INTERVAL_MS = 60_000;
 
@@ -64,7 +67,8 @@ export interface WorkspaceReconciliationServiceOptions {
   logger: pino.Logger;
   intervalMs?: number;
   onChanges?: (changes: ReconciliationChange[]) => void;
-  workspaceGitService?: Pick<WorkspaceGitService, "getWorkspaceGitMetadata">;
+  workspaceGitService?: Pick<WorkspaceGitService, "getWorkspaceGitMetadata"> &
+    Partial<Pick<WorkspaceGitService, "getCheckout">>;
 }
 
 export class WorkspaceReconciliationService {
@@ -73,7 +77,10 @@ export class WorkspaceReconciliationService {
   private readonly logger: pino.Logger;
   private readonly intervalMs: number;
   private readonly onChanges: ((changes: ReconciliationChange[]) => void) | null;
-  private readonly workspaceGitService: Pick<WorkspaceGitService, "getWorkspaceGitMetadata"> | null;
+  private readonly workspaceGitService:
+    | (Pick<WorkspaceGitService, "getWorkspaceGitMetadata"> &
+        Partial<Pick<WorkspaceGitService, "getCheckout">>)
+    | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -193,7 +200,12 @@ export class WorkspaceReconciliationService {
     });
     await Promise.all(
       projectsToReconcile.map((project) =>
-        this.reconcileProject(project, workspacesByProject.get(project.projectId) ?? [], changes),
+        this.reconcileProject(
+          project,
+          workspacesByProject.get(project.projectId) ?? [],
+          activeProjects,
+          changes,
+        ),
       ),
     );
 
@@ -292,6 +304,7 @@ export class WorkspaceReconciliationService {
   private async reconcileProject(
     project: PersistedProjectRecord,
     siblings: PersistedWorkspaceRecord[],
+    activeProjects: PersistedProjectRecord[],
     changes: ReconciliationChange[],
   ): Promise<void> {
     const directoryName = project.rootPath.split(/[\\/]/).findLast(Boolean) ?? project.rootPath;
@@ -336,11 +349,20 @@ export class WorkspaceReconciliationService {
       existingSiblings.map(async (workspace) => {
         const wsDirName = workspace.cwd.split(/[\\/]/).findLast(Boolean) ?? workspace.cwd;
         const wsGit = await this.readWorkspaceGitMetadata(workspace.cwd, wsDirName);
+        const expectedProjectId = await this.resolveWorkspaceProjectId({
+          cwd: workspace.cwd,
+          activeProjects,
+        });
 
         const expectedKind = deriveWorkspaceKindFromMetadata(wsGit);
 
-        const workspaceUpdates: Partial<Pick<PersistedWorkspaceRecord, "displayName" | "kind">> =
-          {};
+        const workspaceUpdates: Partial<
+          Pick<PersistedWorkspaceRecord, "projectId" | "displayName" | "kind">
+        > = {};
+
+        if (expectedProjectId && workspace.projectId !== expectedProjectId) {
+          workspaceUpdates.projectId = expectedProjectId;
+        }
 
         if (wsGit.projectKind === "git" && workspace.displayName !== wsGit.workspaceDisplayName) {
           workspaceUpdates.displayName = wsGit.workspaceDisplayName;
@@ -368,6 +390,31 @@ export class WorkspaceReconciliationService {
         });
       }),
     );
+  }
+
+  private async resolveWorkspaceProjectId(input: {
+    cwd: string;
+    activeProjects: PersistedProjectRecord[];
+  }): Promise<string | null> {
+    if (!this.workspaceGitService?.getCheckout) {
+      return null;
+    }
+
+    const checkout = await this.workspaceGitService.getCheckout(input.cwd);
+    if (!checkout.isGit) {
+      return null;
+    }
+
+    const membership = classifyDirectoryForProjectMembership({ cwd: input.cwd, checkout });
+    const projectRootPath = normalizeWorkspaceId(membership.projectRootPath);
+    const existingProject =
+      input.activeProjects.find(
+        (project) => normalizeWorkspaceId(project.rootPath) === projectRootPath,
+      ) ??
+      input.activeProjects.find((project) => project.projectId === membership.projectKey) ??
+      null;
+
+    return existingProject?.projectId ?? null;
   }
 
   private async readWorkspaceGitMetadata(cwd: string, directoryName: string) {

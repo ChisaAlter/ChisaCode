@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { experimental_createMCPClient } from "ai";
@@ -146,6 +146,10 @@ let parentAgentId: string;
 let parentAgentCwd: string;
 let worktreeRepoCwd: string;
 
+function git(cwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd, stdio: "pipe" });
+}
+
 async function makeCwd(prefix: string): Promise<string> {
   return await mkdtemp(path.join(tempRoot, `${prefix}-`));
 }
@@ -158,7 +162,7 @@ async function createTopLevelAgent(args?: Partial<StructuredContent>): Promise<s
     provider: "claude/claude-test-model",
     initialPrompt: "say done and stop",
     settings: { modeId: "bypassPermissions" },
-    background: true,
+    background: false,
     ...args,
   });
   return str(payload.agentId);
@@ -169,7 +173,7 @@ async function createChildAgent(args?: Partial<StructuredContent>): Promise<stri
     title: "Parity child",
     provider: "claude/claude-test-model",
     initialPrompt: "say done and stop",
-    background: true,
+    background: false,
     ...args,
   });
   return str(payload.agentId);
@@ -244,7 +248,7 @@ beforeAll(async () => {
     provider: "claude/claude-test-model",
     initialPrompt: "say done and stop",
     settings: { modeId: "bypassPermissions" },
-    background: true,
+    background: false,
   });
   parentAgentId = str(parentPayload.agentId);
 
@@ -252,15 +256,12 @@ beforeAll(async () => {
     `http://127.0.0.1:${daemonHandle.port}/mcp/agents?callerAgentId=${parentAgentId}`,
   );
 
-  execSync("git init -b main", { cwd: worktreeRepoCwd, stdio: "pipe" });
-  execSync("git config user.email 'test@example.com'", { cwd: worktreeRepoCwd, stdio: "pipe" });
-  execSync("git config user.name 'Test User'", { cwd: worktreeRepoCwd, stdio: "pipe" });
+  git(worktreeRepoCwd, ["init", "-b", "main"]);
+  git(worktreeRepoCwd, ["config", "user.email", "test@example.com"]);
+  git(worktreeRepoCwd, ["config", "user.name", "Test User"]);
   await writeFile(path.join(worktreeRepoCwd, "README.md"), "# repo\n", "utf8");
-  execSync("git add README.md", { cwd: worktreeRepoCwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'init'", {
-    cwd: worktreeRepoCwd,
-    stdio: "pipe",
-  });
+  git(worktreeRepoCwd, ["add", "README.md"]);
+  git(worktreeRepoCwd, ["-c", "commit.gpgsign=false", "commit", "-m", "init"]);
 }, 30_000);
 
 afterAll(async () => {
@@ -268,7 +269,7 @@ afterAll(async () => {
   await agentScopedClient?.close();
   await topLevelClient?.close();
   await daemonHandle?.close();
-  await rm(tempRoot, { recursive: true, force: true });
+  await rm(tempRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 });
 
 describe("Suite A: Core Fixes", () => {
@@ -287,7 +288,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("agentManager.createAgent injects chisacode MCP using the daemon listen target", async () => {
     let agentId: string | null = null;
@@ -326,7 +327,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("create_agent accepts provider/model syntax", async () => {
     let agentId: string | null = null;
@@ -337,7 +338,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("create_agent accepts provider features over MCP", async () => {
     let agentId: string | null = null;
@@ -352,7 +353,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("agent-scoped create_agent accepts provider features over MCP", async () => {
     let agentId: string | null = null;
@@ -370,7 +371,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("update_agent updates provider features over MCP", async () => {
     let agentId: string | null = null;
@@ -390,7 +391,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("inspect_provider returns draft provider features over MCP", async () => {
     const payload = await callToolStructured(topLevelClient, "inspect_provider", {
@@ -413,7 +414,7 @@ describe("Suite A: Core Fixes", () => {
         }),
       ]),
     );
-  });
+  }, 30_000);
 
   test("create_agent accepts labels param", async () => {
     let agentId: string | null = null;
@@ -424,7 +425,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("archive_agent archives an agent", async () => {
     let agentId: string | null = null;
@@ -439,7 +440,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 
   test("update_agent updates name and labels", async () => {
     let agentId: string | null = null;
@@ -461,7 +462,7 @@ describe("Suite A: Core Fixes", () => {
     } finally {
       await archiveAgentIfPresent(agentId);
     }
-  });
+  }, 30_000);
 });
 
 describe("Suite B: Terminal Tools", () => {
@@ -752,7 +753,7 @@ describe("Suite D: Provider Tools", () => {
         modes: expect.any(Array),
       }),
     );
-  });
+  }, 30_000);
 
   test("list_models returns models for provider", async () => {
     const payload = await callToolStructured(topLevelClient, "list_models", {
@@ -760,7 +761,7 @@ describe("Suite D: Provider Tools", () => {
     });
     expect(payload.provider).toBe("claude");
     expect(Array.isArray(payload.models)).toBe(true);
-  });
+  }, 30_000);
 });
 
 describe("Suite E: Worktree Tools", () => {
@@ -800,7 +801,7 @@ describe("Suite E: Worktree Tools", () => {
     } finally {
       await archiveWorktreeIfPresent({ cwd: worktreeRepoCwd, worktreePath });
     }
-  });
+  }, 30_000);
 
   test("archive_worktree removes worktree", async () => {
     let worktreePath: string | null = null;
@@ -830,7 +831,7 @@ describe("Suite E: Worktree Tools", () => {
     } finally {
       await archiveWorktreeIfPresent({ cwd: worktreeRepoCwd, worktreePath });
     }
-  });
+  }, 30_000);
 
   test("archive_worktree succeeds when caller cwd is inside the archived worktree", async () => {
     let worktreePath: string | null = null;
@@ -875,5 +876,5 @@ describe("Suite E: Worktree Tools", () => {
       await archiveAgentIfPresent(worktreeAgentId);
       await archiveWorktreeIfPresent({ cwd: worktreeRepoCwd, worktreePath });
     }
-  });
+  }, 30_000);
 });

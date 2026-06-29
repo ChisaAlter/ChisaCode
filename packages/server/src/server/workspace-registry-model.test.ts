@@ -106,6 +106,25 @@ describe("deriveWorkspaceId", () => {
     ).toBe("/tmp/repo");
   });
 
+  test.runIf(process.platform === "win32")(
+    "normalizes Windows git worktree roots before using them as workspace ids",
+    () => {
+      const cwd = String.raw`C:\Users\48818\AppData\Local\Temp\repo-worktree`;
+
+      expect(
+        deriveWorkspaceId(cwd, {
+          cwd,
+          isGit: true,
+          currentBranch: "feature/windows-paths",
+          remoteUrl: null,
+          worktreeRoot: "C:/Users/48818/AppData/Local/Temp/repo-worktree",
+          isChisaCodeOwnedWorktree: false,
+          mainRepoRoot: String.raw`C:\Users\48818\AppData\Local\Temp\repo`,
+        }),
+      ).toBe(normalizeWorkspaceId(cwd));
+    },
+  );
+
   test("falls back to normalized cwd when git worktree root contains multiple lines", () => {
     const cwd = String.raw`E:\project\node-ai`;
 

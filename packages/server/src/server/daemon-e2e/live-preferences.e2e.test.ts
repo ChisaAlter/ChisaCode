@@ -49,7 +49,8 @@ function pickTwoDistinctModels(models: Array<{ id: string }>): [string, string] 
 
 function isBinaryInstalled(binary: string): boolean {
   try {
-    const out = execFileSync("which", [binary], { encoding: "utf8" }).trim();
+    const command = process.platform === "win32" ? "where.exe" : "which";
+    const out = execFileSync(command, [binary], { encoding: "utf8" }).trim();
     return out.length > 0;
   } catch {
     return false;

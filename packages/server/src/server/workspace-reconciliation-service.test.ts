@@ -81,10 +81,26 @@ function createWorkspaceGitServiceStub(
       projectDisplayName: string;
       workspaceDisplayName: string;
       gitRemote?: string | null;
+      isWorktree?: boolean;
+      repoRoot?: string | null;
+      currentBranch?: string | null;
+      remoteUrl?: string | null;
+    }
+  >,
+  checkoutByCwd?: Record<
+    string,
+    {
+      cwd: string;
+      isGit: boolean;
+      currentBranch: string | null;
+      remoteUrl: string | null;
+      worktreeRoot: string | null;
+      isChisaCodeOwnedWorktree: boolean;
+      mainRepoRoot: string | null;
     }
   >,
 ) {
-  return {
+  const stub = {
     getWorkspaceGitMetadata: vi.fn(async (cwd: string, options?: { directoryName?: string }) => {
       const metadata = metadataByCwd[cwd];
       const directoryName = options?.directoryName ?? path.basename(cwd);
@@ -103,12 +119,33 @@ function createWorkspaceGitServiceStub(
       }
       return {
         gitRemote: metadata.gitRemote ?? null,
-        isWorktree: false,
+        isWorktree: metadata.isWorktree ?? false,
         projectSlug: "repo",
-        repoRoot: cwd,
-        currentBranch: metadata.workspaceDisplayName,
-        remoteUrl: metadata.gitRemote ?? null,
+        repoRoot: metadata.repoRoot ?? cwd,
+        currentBranch: metadata.currentBranch ?? metadata.workspaceDisplayName,
+        remoteUrl: metadata.remoteUrl ?? metadata.gitRemote ?? null,
         ...metadata,
+      };
+    }),
+  };
+  if (!checkoutByCwd) {
+    return stub;
+  }
+  return {
+    ...stub,
+    getCheckout: vi.fn(async (cwd: string) => {
+      const checkout = checkoutByCwd[cwd];
+      if (checkout) {
+        return checkout;
+      }
+      return {
+        cwd,
+        isGit: false,
+        currentBranch: null,
+        remoteUrl: null,
+        worktreeRoot: null,
+        isChisaCodeOwnedWorktree: false,
+        mainRepoRoot: null,
       };
     }),
   };
@@ -334,6 +371,124 @@ describe("WorkspaceReconciliationService", () => {
 
     expect(projects.get("p1")!.kind).toBe("git");
     expect(workspaces.get("w1")!.kind).toBe("local_checkout");
+  });
+
+  test("moves a stale directory workspace into an existing parent git project", async () => {
+    const repoRoot = createTempGitRepo("reconcile-parent-repo-");
+    const worktreeRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "reconcile-worktree-")));
+    tempDirs.push(repoRoot, worktreeRoot);
+
+    const { projects, workspaces, projectRegistry, workspaceRegistry } = createTestRegistries();
+    const branchName = "feature/desktop-daemon-settings";
+
+    projects.set(
+      repoRoot,
+      createPersistedProjectRecord({
+        projectId: repoRoot,
+        rootPath: repoRoot,
+        kind: "git",
+        displayName: path.basename(repoRoot),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    projects.set(
+      worktreeRoot,
+      createPersistedProjectRecord({
+        projectId: worktreeRoot,
+        rootPath: worktreeRoot,
+        kind: "non_git",
+        displayName: path.basename(worktreeRoot),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    workspaces.set(
+      repoRoot,
+      createPersistedWorkspaceRecord({
+        workspaceId: repoRoot,
+        projectId: repoRoot,
+        cwd: repoRoot,
+        kind: "local_checkout",
+        displayName: "main",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+    workspaces.set(
+      worktreeRoot,
+      createPersistedWorkspaceRecord({
+        workspaceId: worktreeRoot,
+        projectId: worktreeRoot,
+        cwd: worktreeRoot,
+        kind: "directory",
+        displayName: path.basename(worktreeRoot),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    );
+
+    const service = new WorkspaceReconciliationService({
+      projectRegistry,
+      workspaceRegistry,
+      logger: createTestLogger(),
+      workspaceGitService: createWorkspaceGitServiceStub(
+        {
+          [repoRoot]: {
+            projectKind: "git",
+            projectDisplayName: path.basename(repoRoot),
+            workspaceDisplayName: "main",
+          },
+          [worktreeRoot]: {
+            projectKind: "git",
+            projectDisplayName: path.basename(repoRoot),
+            workspaceDisplayName: branchName,
+            isWorktree: true,
+            repoRoot: worktreeRoot,
+            currentBranch: branchName,
+          },
+        },
+        {
+          [repoRoot]: {
+            cwd: repoRoot,
+            isGit: true,
+            currentBranch: "main",
+            remoteUrl: null,
+            worktreeRoot: repoRoot,
+            isChisaCodeOwnedWorktree: false,
+            mainRepoRoot: null,
+          },
+          [worktreeRoot]: {
+            cwd: worktreeRoot,
+            isGit: true,
+            currentBranch: branchName,
+            remoteUrl: null,
+            worktreeRoot,
+            isChisaCodeOwnedWorktree: false,
+            mainRepoRoot: repoRoot,
+          },
+        },
+      ),
+    });
+
+    const result = await service.runOnce();
+
+    expect(result.changesApplied).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "workspace_updated",
+          workspaceId: worktreeRoot,
+          fields: expect.objectContaining({
+            projectId: repoRoot,
+            kind: "worktree",
+            displayName: branchName,
+          }),
+        }),
+      ]),
+    );
+    expect(workspaces.get(worktreeRoot)!.projectId).toBe(repoRoot);
+    expect(workspaces.get(worktreeRoot)!.kind).toBe("worktree");
+    expect(workspaces.get(worktreeRoot)!.displayName).toBe(branchName);
   });
 
   test("moves workspaces from a path-keyed duplicate project to the existing remote-keyed project", async () => {

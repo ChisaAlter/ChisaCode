@@ -5,9 +5,68 @@ import path from "node:path";
 
 import { createDaemonTestContext, type DaemonTestContext } from "../test-utils/index.js";
 import { createMessageCollector, type MessageCollector } from "../test-utils/message-collector.js";
+import type { SessionOutboundMessage } from "../messages.js";
 
 function tmpCwd(): string {
   return mkdtempSync(path.join(tmpdir(), "daemon-e2e-"));
+}
+
+function isPermissionResolvedMessage(
+  message: SessionOutboundMessage,
+  agentId: string,
+  requestId: string,
+  behavior: "allow" | "deny",
+): boolean {
+  if (message.type === "agent_permission_resolved") {
+    return (
+      message.payload.agentId === agentId &&
+      message.payload.requestId === requestId &&
+      message.payload.resolution.behavior === behavior
+    );
+  }
+
+  if (message.type !== "agent_stream" || message.payload.agentId !== agentId) {
+    return false;
+  }
+  return (
+    message.payload.event.type === "permission_resolved" &&
+    message.payload.event.requestId === requestId &&
+    message.payload.event.resolution.behavior === behavior
+  );
+}
+
+function waitForPermissionResolved(
+  ctx: DaemonTestContext,
+  collector: MessageCollector,
+  agentId: string,
+  requestId: string,
+  behavior: "allow" | "deny",
+  timeoutMs = 5_000,
+): Promise<void> {
+  if (
+    collector.messages.some((message) =>
+      isPermissionResolvedMessage(message, agentId, requestId, behavior),
+    )
+  ) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    let unsubscribe: (() => void) | null = null;
+    const timer = setTimeout(() => {
+      unsubscribe?.();
+      reject(new Error(`Timed out waiting for ${behavior} permission resolution ${requestId}`));
+    }, timeoutMs);
+
+    unsubscribe = ctx.client.subscribeRawMessages((message) => {
+      if (!isPermissionResolvedMessage(message, agentId, requestId, behavior)) {
+        return;
+      }
+      clearTimeout(timer);
+      unsubscribe?.();
+      resolve();
+    });
+  });
 }
 
 describe("daemon E2E - permission flow: Claude", () => {
@@ -48,22 +107,20 @@ describe("daemon E2E - permission flow: Claude", () => {
       expect(permissionState.final?.pendingPermissions?.length).toBeGreaterThan(0);
       const permission = permissionState.final!.pendingPermissions[0];
 
+      const permissionResolved = waitForPermissionResolved(
+        ctx,
+        collector,
+        agent.id,
+        permission.id,
+        "allow",
+      );
       await ctx.client.respondToPermission(agent.id, permission.id, { behavior: "allow" });
 
       const finalState = await ctx.client.waitForFinish(agent.id, 5_000);
       expect(finalState.status).toBe("idle");
       expect(existsSync(filePath)).toBe(false);
 
-      const hasPermissionResolved = collector.messages.some((m) => {
-        if (m.type !== "agent_stream") return false;
-        if (m.payload.agentId !== agent.id) return false;
-        return (
-          m.payload.event.type === "permission_resolved" &&
-          m.payload.event.requestId === permission.id &&
-          m.payload.event.resolution.behavior === "allow"
-        );
-      });
-      expect(hasPermissionResolved).toBe(true);
+      await permissionResolved;
 
       await ctx.client.deleteAgent(agent.id);
     } finally {
@@ -95,6 +152,13 @@ describe("daemon E2E - permission flow: Claude", () => {
       expect(permissionState.final?.pendingPermissions?.length).toBeGreaterThan(0);
       const permission = permissionState.final!.pendingPermissions[0];
 
+      const permissionResolved = waitForPermissionResolved(
+        ctx,
+        collector,
+        agent.id,
+        permission.id,
+        "deny",
+      );
       await ctx.client.respondToPermission(agent.id, permission.id, {
         behavior: "deny",
         message: "Not allowed.",
@@ -104,16 +168,7 @@ describe("daemon E2E - permission flow: Claude", () => {
       expect(finalState.status).toBe("idle");
       expect(existsSync(filePath)).toBe(true);
 
-      const hasPermissionResolved = collector.messages.some((m) => {
-        if (m.type !== "agent_stream") return false;
-        if (m.payload.agentId !== agent.id) return false;
-        return (
-          m.payload.event.type === "permission_resolved" &&
-          m.payload.event.requestId === permission.id &&
-          m.payload.event.resolution.behavior === "deny"
-        );
-      });
-      expect(hasPermissionResolved).toBe(true);
+      await permissionResolved;
 
       await ctx.client.deleteAgent(agent.id);
     } finally {

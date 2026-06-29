@@ -1837,6 +1837,39 @@ test("setTitle bumps updatedAt and persists title in the same snapshot write", a
   expect(live!.updatedAt.getTime()).toBeGreaterThan(Date.parse(before!.updatedAt));
 });
 
+test("updateAgentMetadata persists title and labels for live agents", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-live-metadata-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const manager = new AgentManager({
+    clients: {
+      codex: new TestAgentClient(),
+    },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000138",
+  });
+
+  const snapshot = await manager.createAgent({
+    provider: "codex",
+    cwd: workdir,
+    title: "Original title",
+  });
+
+  await manager.updateAgentMetadata(snapshot.id, {
+    title: "Renamed title",
+    labels: { role: "worker" },
+  });
+
+  const after = await storage.get(snapshot.id);
+  expect(after?.title).toBe("Renamed title");
+  expect(after?.labels).toEqual({ role: "worker" });
+
+  const live = manager.getAgent(snapshot.id);
+  expect(live?.config.title).toBe("Renamed title");
+  expect(live?.labels).toEqual({ role: "worker" });
+});
+
 test("updateAgentMetadata bumps updatedAt for stored agents", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-stored-metadata-updated-at-"));
   const storagePath = join(workdir, "agents");

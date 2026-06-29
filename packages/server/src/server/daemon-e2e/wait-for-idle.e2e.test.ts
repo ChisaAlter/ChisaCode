@@ -71,15 +71,15 @@ test("rapid fire messages then single wait", async () => {
   const state = await ctx.client.waitForFinish(agent.id, 30000);
   expect(state.status).toBe("idle");
 
-  // Verify all 3 messages were recorded
-  const userMessages = collector.messages.filter(
+  // Verify all 3 rapid-fire turns completed. The fake Claude provider used in
+  // this E2E emits assistant output, not user-message echo events.
+  const completedTurns = collector.messages.filter(
     (m) =>
       m.type === "agent_stream" &&
       m.payload.agentId === agent.id &&
-      m.payload.event.type === "timeline" &&
-      m.payload.event.item.type === "user_message",
+      m.payload.event.type === "turn_completed",
   );
-  expect(userMessages.length).toBe(3);
+  expect(completedTurns.length).toBe(3);
 
   await ctx.client.deleteAgent(agent.id);
   rmSync(cwd, { recursive: true, force: true });

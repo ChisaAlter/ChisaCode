@@ -1453,6 +1453,7 @@ export class AgentManager {
     ) {
       return;
     }
+    agent.config = { ...agent.config, title: normalizedTitle };
     this.touchUpdatedAt(agent);
     await this.persistSnapshot(agent, { title: normalizedTitle, titleSource: "explicit" });
     this.emitState(agent, { persist: false });
@@ -1568,14 +1569,23 @@ export class AgentManager {
       labels?: Record<string, string>;
     },
   ): Promise<void> {
-    const liveAgent = this.getAgent(agentId);
+    const liveAgent = this.agents.get(agentId);
     if (liveAgent) {
-      if (updates.title) {
-        await this.setTitle(agentId, updates.title);
+      const normalizedTitle = updates.title?.trim();
+      const labels = updates.labels;
+
+      if (normalizedTitle) {
+        liveAgent.config = { ...liveAgent.config, title: normalizedTitle };
       }
-      if (updates.labels) {
-        await this.setLabels(agentId, updates.labels);
+      if (labels) {
+        liveAgent.labels = { ...liveAgent.labels, ...labels };
       }
+      const snapshotUpdates = normalizedTitle
+        ? { title: normalizedTitle, titleSource: "explicit" as const }
+        : {};
+      this.touchUpdatedAt(liveAgent);
+      await this.persistSnapshot(liveAgent, snapshotUpdates);
+      this.emitState(liveAgent, { persist: false });
       return;
     }
 
@@ -2007,6 +2017,7 @@ export class AgentManager {
 
     try {
       const result = await agent.session.respondToPermission(requestId, response);
+      await this.sessionEventTails.get(agent.id)?.catch(() => undefined);
       agent.pendingPermissions.delete(requestId);
 
       try {

@@ -1,4 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createDaemonTestContext, type DaemonTestContext } from "../test-utils/index.js";
 import { createMessageCollector, type MessageCollector } from "../test-utils/message-collector.js";
 
@@ -21,12 +24,14 @@ describe("daemon E2E", () => {
   }, 60000);
 
   test("creates agent and receives response", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "chisacode-agent-basics-"));
+
     // Create a Codex agent
     const agent = await ctx.client.createAgent({
       provider: "codex",
       model: CODEX_TEST_MODEL,
       thinkingOptionId: CODEX_TEST_THINKING_OPTION_ID,
-      cwd: "/tmp",
+      cwd,
       title: "Test Agent",
     });
 
@@ -34,7 +39,7 @@ describe("daemon E2E", () => {
     expect(agent.provider).toBe("codex");
     expect(agent.status).toBe("idle");
     // Title may or may not be set depending on timing
-    expect(agent.cwd).toBe("/tmp");
+    expect(agent.cwd).toBe(cwd);
 
     // Send a simple message
     await ctx.client.sendMessage(agent.id, "Say 'hello world' and nothing else");
@@ -78,7 +83,7 @@ describe("daemon E2E", () => {
   }, 180000); // 3 minute timeout for E2E test
 
   test("fails to create agent with non-existent cwd", async () => {
-    const nonExistentCwd = "/this/path/does/not/exist/12345";
+    const nonExistentCwd = path.join(tmpdir(), "chisacode-does-not-exist-12345");
 
     await expect(
       ctx.client.createAgent({

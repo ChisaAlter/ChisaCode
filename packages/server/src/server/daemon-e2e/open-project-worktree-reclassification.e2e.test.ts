@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -20,12 +20,24 @@ import {
 const cleanupPaths = new Set<string>();
 const cleanupDaemons = new Set<TestChisaCodeDaemon>();
 const cleanupClients = new Set<DaemonClient>();
+const cleanupGitWorktrees: Array<{ repoRoot: string; worktreeRoot: string }> = [];
+
+function git(cwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd, stdio: "pipe" });
+}
 
 afterEach(async () => {
   await Promise.all(Array.from(cleanupClients, (client) => client.close().catch(() => undefined)));
   cleanupClients.clear();
   await Promise.all(Array.from(cleanupDaemons, (daemon) => daemon.close().catch(() => undefined)));
   cleanupDaemons.clear();
+  for (const worktree of cleanupGitWorktrees.splice(0)) {
+    try {
+      git(worktree.repoRoot, ["worktree", "remove", "--force", worktree.worktreeRoot]);
+    } catch {
+      // The recursive temp cleanup below still handles already-removed worktrees.
+    }
+  }
   await Promise.all(
     Array.from(cleanupPaths, (target) => rm(target, { recursive: true, force: true })),
   );
@@ -49,17 +61,15 @@ test("openProject reclassifies an existing directory workspace into its parent g
     cleanupPaths.add(worktreeRoot);
     cleanupPaths.add(chisacodeHomeRoot);
 
-    execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.email 'test@chisacode.dev'", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.name 'ChisaCode Test'", { cwd: repoRoot, stdio: "pipe" });
+    git(repoRoot, ["init", "-b", "main"]);
+    git(repoRoot, ["config", "user.email", "test@chisacode.dev"]);
+    git(repoRoot, ["config", "user.name", "ChisaCode Test"]);
     writeFileSync(path.join(repoRoot, "README.md"), "# repo\n", "utf8");
-    execSync("git add README.md", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgSign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git branch feature/desktop-daemon-settings", { cwd: repoRoot, stdio: "pipe" });
-    execSync(`git worktree add ${JSON.stringify(worktreeRoot)} feature/desktop-daemon-settings`, {
-      cwd: repoRoot,
-      stdio: "pipe",
-    });
+    git(repoRoot, ["add", "README.md"]);
+    git(repoRoot, ["-c", "commit.gpgSign=false", "commit", "-m", "initial"]);
+    git(repoRoot, ["branch", "feature/desktop-daemon-settings"]);
+    git(repoRoot, ["worktree", "add", worktreeRoot, "feature/desktop-daemon-settings"]);
+    cleanupGitWorktrees.push({ repoRoot, worktreeRoot });
 
     const chisacodeHome = path.join(chisacodeHomeRoot, ".chisacode");
     const projectsPath = path.join(chisacodeHome, "projects", "projects.json");

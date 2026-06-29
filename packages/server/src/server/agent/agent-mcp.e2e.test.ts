@@ -1,6 +1,7 @@
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
@@ -33,6 +34,10 @@ interface McpToolResult {
 interface McpClient {
   callTool: (input: { name: string; args?: StructuredContent }) => Promise<McpToolResult>;
   close: () => Promise<void>;
+}
+
+function git(cwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd, stdio: "pipe" });
 }
 
 async function waitForPathExists(options: {
@@ -588,13 +593,12 @@ describe("agent MCP end-to-end (offline)", () => {
 
     let agentId: string | null = null;
     try {
-      const { execSync } = await import("node:child_process");
-      execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git config user.email 'test@test.com'", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+      git(repoRoot, ["init", "-b", "main"]);
+      git(repoRoot, ["config", "user.email", "test@test.com"]);
+      git(repoRoot, ["config", "user.name", "Test"]);
       await writeFile(path.join(repoRoot, "file.txt"), "hello\n", "utf8");
-      execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git -c commit.gpgsign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
+      git(repoRoot, ["add", "."]);
+      git(repoRoot, ["-c", "commit.gpgsign=false", "commit", "-m", "initial"]);
 
       const setupCommand =
         'while [ ! -f "$CHISACODE_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$CHISACODE_WORKTREE_PATH/setup-done.txt"';
@@ -613,11 +617,8 @@ describe("agent MCP end-to-end (offline)", () => {
         }),
         "utf8",
       );
-      execSync("git add chisacode.json", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git -c commit.gpgsign=false commit -m 'add worktree config'", {
-        cwd: repoRoot,
-        stdio: "pipe",
-      });
+      git(repoRoot, ["add", "chisacode.json"]);
+      git(repoRoot, ["-c", "commit.gpgsign=false", "commit", "-m", "add worktree config"]);
 
       const result = await withTimeout({
         promise: client.callTool({

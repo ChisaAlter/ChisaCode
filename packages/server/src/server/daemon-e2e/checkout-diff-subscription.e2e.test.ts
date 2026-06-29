@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from "vitest";
-import { execSync } from "child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
@@ -15,20 +15,21 @@ function tmpCwd(): string {
   return mkdtempSync(path.join(tmpdir(), "daemon-e2e-checkout-diff-"));
 }
 
+function git(cwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd, stdio: "pipe" });
+}
+
 function initGitRepo(cwd: string): void {
-  execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  git(cwd, ["init", "-b", "main"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "Test"]);
 }
 
 function commitFile(cwd: string, fileName: string, content: string): void {
   const filePath = path.join(cwd, fileName);
   writeFileSync(filePath, content);
-  execSync(`git add "${fileName}"`, { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
-    cwd,
-    stdio: "pipe",
-  });
+  git(cwd, ["add", fileName]);
+  git(cwd, ["-c", "commit.gpgsign=false", "commit", "-m", "Initial commit"]);
 }
 
 async function waitForCheckoutDiffUpdate(
