@@ -1,6 +1,20 @@
 # Release
 
-All workspaces share one version and release together.
+All versioned workspaces share one version. The default shipped artifacts are now **Windows
+desktop** and the **Android APK** only.
+
+## Default release target
+
+Unless the user explicitly asks for npm, macOS, Linux, iOS, TestFlight, App Store, Play Store, or
+EAS, a ChisaCode release means:
+
+- publish Windows desktop assets through `Desktop Release`
+- publish the Android APK through `Android APK Release`
+- sync GitHub release notes from `CHANGELOG.md`
+
+Do not run `npm run release:patch` or `npm run release:promote` for the default release path. Those
+commands publish npm packages and push the broad `v*` tag path, which triggers extra surfaces that
+are not part of the default release.
 
 ## Two steps
 
@@ -32,21 +46,37 @@ There are two supported ways to ship from `main`:
 1. **Direct stable release**: you are ready to ship the current `main` commit to everyone immediately.
 2. **Beta flow**: silent release candidates. Betas don't touch the changelog, and don't publish npm or production mobile builds.
 
-## Standard release (patch)
+## Standard release (Windows desktop + Android APK)
 
 Before running any stable patch release command:
 
 - Make sure the intended release commit is already committed to `main` and the working tree is clean.
 - Use the active Node.js installation from `PATH`. `npm run check:node` is advisory only and release checks do not enforce an exact Node version.
-- **Run `npm run format`, `npm run lint`, and `npm run typecheck` and commit any resulting changes BEFORE you start any `release:*` command.** `release:check` runs `npm install --workspaces --include-workspace-root` as part of `release:prepare`, which can mutate `package-lock.json` (e.g. churning `"dev": true` markers on optional deps). The next step, `version:all:*`, runs `npm version` which aborts when the working tree is dirty. If this happens mid-flight you have to commit the lockfile churn before retrying — and the pre-commit format hook will reject a lockfile-only commit because oxfmt internally skips `package-lock.json` while lefthook's glob still matches it. Avoid the whole mess by running format/lint/typecheck first, then `release:prepare` once on its own to absorb any lockfile churn into a normal commit, then start the release.
-- Run security audits against the official npm registry: `npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/`. The default mirror used on some Windows machines may not implement npm's audit endpoint.
-- Do not use `npm run release:patch` as a substitute for checking whether the current commit is actually ready.
+- Run `npm run format:check`, `npm run lint`, and `npm run typecheck` and commit any resulting changes before versioning.
+- Do not run `npm run release:check` for the default Windows + Android release unless the user asks for the old npm package release gate. It performs npm package dry-runs and can waste time on surfaces outside this release target.
+- Do not run `npm run release:patch` as a substitute for checking whether the current commit is actually ready.
 
-```bash
-npm run release:patch
+PowerShell flow from the repo root:
+
+```powershell
+npm run typecheck
+npm run version:all:patch
+$version = node -p "require('./package.json').version"
+git tag "desktop-windows-v$version" HEAD
+git tag "android-v$version" HEAD
+git push origin HEAD:cn-main "desktop-windows-v$version" "android-v$version"
+gh workflow run release-notes-sync.yml -f tag="v$version" -f create_if_missing=true
 ```
 
-This bumps the version across all workspaces, runs checks, publishes to npm, and pushes the branch + tag. The tag push triggers `Desktop Release`, `Android APK Release`, and `Release Notes Sync` on GitHub Actions. EAS picks up the same tag via the EAS GitHub app and starts the iOS + Android store builds in parallel (see "Mobile builds (EAS)" below) — there is no `release-mobile.yml` in this repo.
+This bumps the version across workspaces, creates the version commit, then pushes only the targeted
+tags:
+
+- `desktop-windows-vX.Y.Z` builds and uploads Windows desktop assets to the `vX.Y.Z` GitHub Release
+- `android-vX.Y.Z` builds and uploads the Android APK to the same `vX.Y.Z` GitHub Release
+- `release-notes-sync.yml` fills the GitHub Release body from `CHANGELOG.md`
+
+Do not push the broad `vX.Y.Z` tag for the default release. It triggers macOS, Linux, Android APK,
+release-note sync, and any tag-based external integrations.
 
 **Releases are always patch.** "Release chisacode", "release stable", "ship stable", and similar always mean a patch bump from the previous stable. Never bump minor or major to trigger a build, ever — minor and major bumps are reserved for genuinely larger product cuts and require an explicit user instruction with the word "minor" or "major". If you find yourself reaching for `release:minor` to retrigger a failed build, you are doing the wrong thing — push a retry tag instead (see "Fixing a failed release build" below).
 
@@ -56,24 +86,27 @@ This bumps the version across all workspaces, runs checks, publishes to npm, and
 
 ```bash
 npm run typecheck            # Verify the exact commit you intend to release
-npm run release:check        # Typecheck, build, dry-run pack
 npm run version:all:patch    # Bump version, create commit + tag
-npm run release:publish      # Publish to npm
-npm run release:push         # Push HEAD + tag (triggers CI workflows)
+git tag desktop-windows-vX.Y.Z HEAD
+git tag android-vX.Y.Z HEAD
+git push origin HEAD:cn-main desktop-windows-vX.Y.Z android-vX.Y.Z
 ```
+
+Only use `npm run release:check`, `npm run release:publish`, and `npm run release:push` when the
+user explicitly asks for the old all-package npm release path.
 
 ## Beta flow
 
 ```bash
-npm run release:beta:patch       # Bump to X.Y.Z-beta.1, push commit + tag
-# ... test desktop and APK prerelease assets from GitHub Releases ...
-npm run release:beta:next        # Optional: cut X.Y.Z-beta.2, beta.3, ...
-npm run release:promote          # Promote X.Y.Z-beta.N to stable X.Y.Z
+npm run version:all:beta:patch       # Bump to X.Y.Z-beta.1 and create the version commit
+git tag desktop-windows-vX.Y.Z-beta.1 HEAD
+git tag android-vX.Y.Z-beta.1 HEAD
+git push origin HEAD:cn-main desktop-windows-vX.Y.Z-beta.1 android-vX.Y.Z-beta.1
 ```
 
-- Beta tags are published GitHub prereleases like `v0.1.41-beta.1`
+- Beta assets are published to GitHub prereleases like `v0.1.41-beta.1`
 - Betas publish desktop assets and APKs for testing, but they do not publish npm packages and do not trigger the production web/mobile release flows
-- `release:promote` creates a fresh stable tag like `v0.1.41`; the final release never reuses the beta tag
+- Promote by running `npm run version:all:promote`, then pushing fresh `desktop-windows-vX.Y.Z` and `android-vX.Y.Z` tags
 - Desktop assets now come from the Electron package at `packages/desktop`
 - Beta releases use Electron's `beta` update channel. Users on the stable channel only receive stable releases; users on the beta channel receive beta releases and the final stable release when it is published.
 - **Betas don't touch `CHANGELOG.md`.** Beta GitHub releases ship with empty notes — that's intentional. The changelog entry is written once, at promotion time, covering the full stable-to-stable diff. The release-notes sync script skips betas cleanly because no matching section exists.
@@ -81,26 +114,26 @@ npm run release:promote          # Promote X.Y.Z-beta.N to stable X.Y.Z
 Use the beta path when you need to:
 
 - smoke a build yourself before promoting it to everyone
-- test a build manually in a Linux or Windows VM
+- test a Windows desktop build manually
 - send a build to a user who is hitting a specific problem
 - iterate on `beta.1`, `beta.2`, `beta.3`, and so on before deciding to ship broadly
 
 ## Staged rollout (stable channel)
 
-Stable desktop releases go out via a linear time-based rollout: 0% admitted when the updater manifests appear, 100% admitted 36 hours later, linear ramp in between. Beta releases bypass the rollout entirely — beta users always receive updates immediately.
+Stable Windows desktop releases go out via a linear time-based rollout: 0% admitted when the updater manifest appears, 100% admitted 36 hours later, linear ramp in between. Beta releases bypass the rollout entirely — beta users always receive updates immediately.
 
-The rollout is driven by a `rolloutHours` field stamped into the GitHub Release manifests (`latest-mac.yml`, `latest-linux.yml`, `latest.yml`) by the `finalize-rollout` job in `desktop-release.yml`.
+The rollout is driven by a `rolloutHours` field stamped into the Windows GitHub Release manifest (`latest.yml`) by the `finalize-rollout` job in `desktop-release.yml`.
 
 Desktop release builds now publish in two phases:
 
-- Platform build jobs upload the installers/packages (`.dmg`, `.zip`, `.exe`, `.AppImage`, etc.) to the GitHub release.
-- The final job merges/stamps the manifests and uploads all `.yml` files only after they already contain the final `releaseDate` and `rolloutHours`.
+- The Windows build job uploads the installers/packages to the GitHub release.
+- The final job stamps the Windows `.yml` manifest only after it already contains the final `releaseDate` and `rolloutHours`.
 
 Updater clients only discover a release through those `.yml` manifests, so there is no silent 100% admission window before rollout metadata is present.
 
 ### Default behavior
 
-`npm run release:patch` → tag push → 36h ramp. No extra action needed.
+`desktop-windows-vX.Y.Z` tag push → 36h ramp. No extra action needed.
 
 The `rollout_hours` input on `desktop-release.yml` is **only read on `workflow_dispatch`** — tag-push runs always default to 36. To get any other rollout duration on a fresh release, use the post-publish flip below.
 
@@ -109,8 +142,8 @@ The `rollout_hours` input on `desktop-release.yml` is **only read on `workflow_d
 For a fresh release that should admit everyone immediately (low-risk change, doc-only, hotfix, or just a release you want out fast), cut the release normally and queue the rollout flip immediately after:
 
 ```bash
-# 1. Cut and publish (default 36h ramp from tag push).
-npm run release:patch
+# 1. Cut and publish with the default Windows + Android tag flow.
+git push origin HEAD:cn-main desktop-windows-v0.1.64 android-v0.1.64
 
 # 2. Immediately queue the flip — runs as soon as finalize-rollout completes.
 gh workflow run desktop-rollout.yml \
@@ -120,7 +153,7 @@ gh workflow run desktop-rollout.yml \
 
 **Why this is gap-free:** `desktop-release.yml`'s `finalize-rollout` job and `desktop-rollout.yml` share the concurrency group `desktop-rollout-<tag>`. Dispatching `desktop-rollout.yml` while the tag-push pipeline is still running queues it safely behind `finalize-rollout`. The first public manifests already carry `rolloutHours=36`, then `desktop-rollout.yml` flips them to `rolloutHours=0` shortly afterward. The renderer polls every 30 minutes, so active stable users pick up the new manifest on their next check.
 
-Run the dispatch right after `release:patch` returns. Don't wait for the tag-push CI to finish.
+Run the dispatch right after pushing the targeted release tags. Don't wait for the tag-push CI to finish.
 
 ### Adjusting an already-published release
 
@@ -158,7 +191,7 @@ gh workflow run desktop-release.yml \
   -f rollout_hours=6
 ```
 
-This does **not** apply to fresh releases cut via `npm run release:patch` — that path always tag-pushes and stamps 36. For a fresh release with a custom ramp, cut normally and then dispatch `desktop-rollout.yml` (same pattern as the instant-admit flow above, with your chosen `rollout_hours`).
+This does **not** apply to fresh releases cut by targeted tag push — that path always stamps 36. For a fresh release with a custom ramp, cut normally and then dispatch `desktop-rollout.yml` (same pattern as the instant-admit flow above, with your chosen `rollout_hours`).
 
 ### Releasing during an active rollout
 
@@ -173,46 +206,31 @@ If N+1 is a hotfix for a bug in N, dispatch `desktop-rollout.yml -f tag=v0.1.<N+
 - **Bootstrap caveat.** Clients running a build older than the rollout feature ignore `rolloutHours` and admit immediately. Rollout protection only applies to clients running the rollout-aware version or later.
 - **Up to ~30 min admission latency.** Renderer polls every 30 minutes, so a stable user may take up to that long to be evaluated against the rollout window.
 
-## Mobile builds (EAS)
+## Android build
 
-iOS and Android store builds are not in `.github/workflows`. They are triggered by the EAS GitHub app the moment the `v*` tag is pushed:
+The default mobile artifact is the Android APK uploaded to GitHub Releases:
 
-- **Android (Play Store)** — EAS builds with profile `production` and auto-submits to the Play Store via `eas submit` (EAS-managed credentials, no Fastlane).
-- **iOS (TestFlight + App Store)** — EAS builds with profile `production`, uploads to TestFlight, and a Fastlane lane submits the build for App Store review.
-- **Android APK (GitHub Release asset)** — separate, via `.github/workflows/android-apk-release.yml`. This workflow builds the APK locally on GitHub Actions with Gradle and does not require `EXPO_TOKEN`.
+- **Android APK (GitHub Release asset)** — `.github/workflows/android-apk-release.yml` builds the APK locally on GitHub Actions with Gradle and does not require `EXPO_TOKEN`.
 
-There is no `release-mobile.yml` in this repo. Earlier versions of these docs referenced one — that workflow was removed and the EAS GitHub app handles tag triggering directly.
+Do not wait for iOS, TestFlight, App Store, Play Store, or EAS in the default release path. Only do
+those when the user explicitly asks for store releases.
 
-Desktop macOS release artifacts are signed and notarized when the Apple certificate secrets are configured. If those secrets are absent, the GitHub workflow still builds and uploads unsigned, unnotarized macOS artifacts.
+There is no `release-mobile.yml` in this repo. Earlier versions of these docs referenced one — that workflow was removed.
 
-### Watching mobile builds from the terminal
+### Watching Android builds from the terminal
 
-Use the EAS CLI from `packages/app/`:
+Use GitHub Actions as the ground truth for the default Android APK:
 
 ```bash
-cd packages/app
-
-# Recent builds (newest first). Pipe to jq for status only.
-npx eas build:list --limit 8 --non-interactive --json | jq '.[] | {platform, status, appVersion, gitCommitHash}'
-
-# Filter by platform.
-npx eas build:list --platform ios --limit 5 --non-interactive --json
-npx eas build:list --platform android --limit 5 --non-interactive --json
-
-# Inspect a specific build.
-npx eas build:view <build-id>
-
-# Stream logs for a build.
-npx eas build:view <build-id> --json | jq '.logFiles[]'
+gh run list --workflow android-apk-release.yml --limit 5
+gh run watch <run-id>
 ```
 
-A build's `gitCommitHash` must match the release tag commit. `status` walks through `NEW` → `IN_QUEUE` → `IN_PROGRESS` → `FINISHED` (or `ERRORED`/`CANCELED`).
+### Babysitting Android after a release
 
-Once a build is `FINISHED`, EAS auto-submits it to the store: Android via the `submit` block in `eas.json` (EAS-managed Play Console credentials), iOS via the Fastlane `submit_review` lane (uploads to TestFlight, then submits for App Store review). To confirm the submission landed, run `npx eas build:view <build-id>` and open the `Logs` URL it prints — the build's Expo dashboard page has a Submissions section listing each attempt with its store response. App Store Connect (TestFlight tab → ready for review) and the Play Console (Internal testing / Production tracks) are the final ground truth.
-
-### Babysitting mobile after a release
-
-The user rarely opens the Expo dashboard. A failed EAS build can sit silently until users complain about a stale version. After every stable release, set up a long-delay babysit that re-checks both EAS builds and GitHub Actions for the release tag. If anything is `ERRORED` or `FAILED`, surface it immediately. If everything is `FINISHED`/`SUCCESS`, confirm and stop.
+After every stable release, re-check the Windows desktop and Android APK GitHub Actions runs for
+the release tag. If anything is `ERRORED` or `FAILED`, surface it immediately. If everything is
+`SUCCESS`, confirm and stop.
 
 **Use a heartbeat schedule, never a new-agent schedule.** Babysitting fires back into the current conversation as a wake-up prompt — `target: "self"` in `mcp__chisacode__create_schedule`. Never use `target: "new-agent"`. A new agent spawns a fresh conversation the user has to find and read; a heartbeat surfaces the build status inline in the conversation that owns the release, where it is impossible to miss. If you find yourself reaching for `new-agent` for a release babysit, you are about to ship a status report into a void.
 
@@ -226,15 +244,21 @@ Pattern:
   "maxRuns": 8, // covers ~2h of build + store-submission window
   "target": "self", // heartbeat, NOT "new-agent"
   "cwd": "/path/to/chisacode",
-  "prompt": "Heartbeat: check vX.Y.Z release builds. Run gh run list + eas build:list, report concisely; flag any ERRORED/FAILED/CANCELED.",
+  "prompt": "Heartbeat: check vX.Y.Z Windows desktop and Android APK release builds. Run gh run list, report concisely; flag any ERRORED/FAILED/CANCELED.",
 }
 ```
 
-Tight cadence on purpose. The first run fires immediately, giving a near-real-time status check before the conversation closes. Subsequent runs at 15-minute intervals catch transitions quickly: a failed EAS build that errors at +20m should not wait until +50m to surface. Keep the prompt short — the heartbeat is a status probe, not a research task — and have it bail out as soon as everything is green so the remaining runs do not generate noise.
+Tight cadence on purpose. The first run fires immediately, giving a near-real-time status check before the conversation closes. Subsequent runs at 15-minute intervals catch transitions quickly. Keep the prompt short — the heartbeat is a status probe, not a research task — and have it bail out as soon as everything is green so the remaining runs do not generate noise.
 
 ## Release notes on GitHub
 
-The GitHub Release body is populated automatically by the `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). It triggers on every `v*` tag push and on any push to `main` that touches `CHANGELOG.md`, then runs `scripts/sync-release-notes-from-changelog.mjs` to mirror the matching changelog entry into the release body. You don't need to write release notes on GitHub manually — keep `CHANGELOG.md` correct and the workflow will sync it. To force a re-sync, dispatch the workflow with the tag input.
+The GitHub Release body is populated by the `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). The default Windows + Android tag flow does not push the broad `v*` tag, so dispatch this workflow with the release tag after pushing `desktop-windows-vX.Y.Z` and `android-vX.Y.Z`:
+
+```bash
+gh workflow run release-notes-sync.yml -f tag=vX.Y.Z -f create_if_missing=true
+```
+
+Keep `CHANGELOG.md` correct and the workflow will mirror the matching changelog entry into the release body.
 
 ## Fixing a failed release build
 
@@ -246,29 +270,23 @@ To retry a failed workflow, **always push a retry tag** on the commit you want t
 
 Prefer a tag push over `workflow_dispatch` whenever you are rebuilding release code or release assets.
 
-The retry tag patterns below still work and remain the supported way to rebuild specific release targets:
+The retry tag patterns below are the supported way to rebuild the default release targets:
 
 ```bash
-# Desktop (all platforms)
-git tag -f desktop-v0.1.28 HEAD && git push origin desktop-v0.1.28 --force
-
-# Desktop (single platform)
-git tag -f desktop-macos-v0.1.28 HEAD && git push origin desktop-macos-v0.1.28 --force
-git tag -f desktop-linux-v0.1.28 HEAD && git push origin desktop-linux-v0.1.28 --force
+# Windows desktop
 git tag -f desktop-windows-v0.1.28 HEAD && git push origin desktop-windows-v0.1.28 --force
 
 # Android APK
 git tag -f android-v0.1.28 HEAD && git push origin android-v0.1.28 --force
 
 # Beta
-git tag -f v0.1.29-beta.2 HEAD && git push origin v0.1.29-beta.2 --force
+git tag -f desktop-windows-v0.1.29-beta.2 HEAD && git push origin desktop-windows-v0.1.29-beta.2 --force
+git tag -f android-v0.1.29-beta.2 HEAD && git push origin android-v0.1.29-beta.2 --force
 ```
 
 This ensures the checkout ref matches the actual code on `main` with the fix included.
 
-- `vX.Y.Z` or `vX.Y.Z-beta.N` rebuilds the full tagged release
-- `desktop-vX.Y.Z` rebuilds desktop for all desktop platforms only
-- `desktop-macos-vX.Y.Z`, `desktop-linux-vX.Y.Z`, and `desktop-windows-vX.Y.Z` rebuild only that desktop platform
+- `desktop-windows-vX.Y.Z` rebuilds only the Windows desktop release
 - `android-vX.Y.Z` rebuilds the Android APK release only
 
 ## Notes
@@ -277,7 +295,7 @@ This ensures the checkout ref matches the actual code on `main` with the fix inc
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - `npm run dev:desktop` and `npm run build:desktop` target the Electron desktop package in `packages/desktop`
 - Keep desktop build outputs under ignored `packages/desktop/release/` or `packages/desktop/release-*` directories. Move or delete old local release directories before broad source scans so release artifacts do not pollute audits.
-- If `release:publish` partially fails, re-run it — npm skips already-published versions
+- npm publishing is explicit-only. If a user specifically asks for npm and `release:publish` partially fails, re-run it — npm skips already-published versions
 
 ## Changelog format
 
@@ -400,22 +418,21 @@ The changelog covers **stable-to-stable**. Betas are not represented. When you p
 ### Beta release
 
 - [ ] Working tree is clean and the intended commit is on `main`
-- [ ] `npm run release:beta:patch` (or `:next`) completes successfully
-- [ ] GitHub `Desktop Release` workflow for the `v*-beta.N` tag is green
-- [ ] GitHub `Android APK Release` workflow for the same tag is green
+- [ ] Version is bumped with `npm run version:all:beta:patch` (or `:next`)
+- [ ] `desktop-windows-v*-beta.N` and `android-v*-beta.N` tags are pushed
+- [ ] GitHub `Desktop Release` workflow for the Windows beta tag is green
+- [ ] GitHub `Android APK Release` workflow for the Android beta tag is green
 
 ### Stable release (or promotion)
 
 - [ ] Run the pre-release sanity check (see above) and address any findings
-- [ ] Ensure the intended release commit is already committed and the git worktree is clean before running any `release:*` patch/promote command
+- [ ] Ensure the intended release commit is already committed and the git worktree is clean before versioning
 - [ ] Optionally run `npm run check:node` to print the active Node.js version
-- [ ] Ensure local `npm run typecheck` passes on that exact commit before running any `release:*` patch/promote command
-- [ ] Verify desktop package artifacts exist and the packaged asar path resolves before publishing desktop release assets
-- [ ] Verify GitHub desktop release manifests exist and point to the intended version after release workflows finish
+- [ ] Ensure local `npm run format:check`, `npm run lint`, and `npm run typecheck` pass on that exact commit
 - [ ] Update `CHANGELOG.md` with user-facing release notes (features, fixes — not refactors)
 - [ ] Verify the changelog heading follows strict `## X.Y.Z - YYYY-MM-DD` format
-- [ ] `npm run release:patch` or `npm run release:promote` completes successfully
-- [ ] GitHub `Desktop Release` workflow for the `v*` tag is green
-- [ ] GitHub `Android APK Release` workflow for the same tag is green
-- [ ] EAS iOS production build for the same tag completes and submits via Fastlane
-- [ ] EAS Android production build for the same tag completes and auto-submits to the Play Store
+- [ ] Version is bumped with `npm run version:all:patch` or `npm run version:all:promote`
+- [ ] `desktop-windows-vX.Y.Z` and `android-vX.Y.Z` tags are pushed
+- [ ] GitHub `Desktop Release` workflow for the Windows tag is green
+- [ ] GitHub `Android APK Release` workflow for the Android tag is green
+- [ ] GitHub Release `vX.Y.Z` exists and contains the Windows desktop assets, Android APK, and synced changelog notes
