@@ -67,7 +67,7 @@
     "expo-constants": "~18.0.9",
     "expo-crypto": "^15.0.8",
     "expo-dev-client": "^6.0.15",
-    "expo-file-system": "~19.0.17",
+    "expo-file-system": "~56.0.8",
     "expo-haptics": "~15.0.7",
     "expo-image": "~3.0.10",
     "expo-image-manipulator": "~14.0.8",
