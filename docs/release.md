@@ -252,7 +252,7 @@ Tight cadence on purpose. The first run fires immediately, giving a near-real-ti
 
 ## Release notes on GitHub
 
-The GitHub Release body is populated by the `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). The default Windows + Android tag flow does not push the broad `v*` tag, so dispatch this workflow with the release tag after pushing `desktop-windows-vX.Y.Z` and `android-vX.Y.Z`:
+The GitHub Release body is populated by the `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). The default Windows + Android tag flow triggers it from `desktop-windows-vX.Y.Z` and `android-vX.Y.Z` tags. If a retry is needed, dispatch it with the release tag:
 
 ```bash
 gh workflow run release-notes-sync.yml -f tag=vX.Y.Z -f create_if_missing=true

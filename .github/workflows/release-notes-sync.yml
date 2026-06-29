@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+      - "desktop-windows-v*"
+      - "android-v*"
     branches:
       - main
     paths:
