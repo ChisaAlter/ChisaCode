@@ -593,7 +593,9 @@ function SidebarContent({
             onOpenFile={onOpenFile}
           />
         )}
-        {resolvedTab === "pr" && prPane.data && <PrPane data={prPane.data} />}
+        {resolvedTab === "pr" && prPane.data && (
+          <PrPane data={prPane.data} onRefresh={prPane.refetch} />
+        )}
       </View>
     </View>
   );

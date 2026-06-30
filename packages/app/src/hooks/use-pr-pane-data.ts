@@ -28,6 +28,8 @@ export interface UsePrPaneDataResult {
   isRefreshing: boolean;
   error: Error | null;
   githubFeaturesEnabled: boolean;
+  /** Trigger a manual refresh of PR status and timeline data. */
+  refetch: () => void;
 }
 
 export interface PrRepoIdentity {
@@ -153,6 +155,7 @@ export interface SelectPrPaneStateInput {
   timelineError: Error | null;
   timelineIsLoading: boolean;
   timelineIsFetching: boolean;
+  refetch: () => void;
 }
 
 export function selectPrPaneState(input: SelectPrPaneStateInput): UsePrPaneDataResult {
@@ -178,6 +181,7 @@ export function selectPrPaneState(input: SelectPrPaneStateInput): UsePrPaneDataR
       timelinePayloadError: input.timelinePayload?.error ?? null,
     }),
     githubFeaturesEnabled: input.githubFeaturesEnabled,
+    refetch: input.refetch,
   };
 }
 
@@ -255,6 +259,14 @@ export function usePrPaneData({
     timelineError: timelineQuery.error,
     timelineIsLoading: timelineQuery.isLoading,
     timelineIsFetching: timelineQuery.isFetching,
+    refetch: () => {
+      if (checkoutPrStatus.refetch) {
+        checkoutPrStatus.refetch();
+      }
+      if (shouldFetchTimeline && timelineQuery.refetch) {
+        timelineQuery.refetch();
+      }
+    },
   });
 }
 

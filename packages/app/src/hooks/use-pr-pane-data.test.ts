@@ -111,6 +111,7 @@ const baseSelectInput = {
   timelineError: null as Error | null,
   timelineIsLoading: false,
   timelineIsFetching: false,
+  refetch: () => {},
 };
 
 describe("extractPrRepoIdentity", () => {

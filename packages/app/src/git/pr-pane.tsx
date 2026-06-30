@@ -15,6 +15,7 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft,
   MessageSquare,
+  RotateCw,
 } from "lucide-react-native";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { getActivityVerb, getStateLabel } from "@/git/pr-pane-data";
@@ -34,7 +35,7 @@ function activityPressableStyle({ hovered }: { hovered?: boolean }) {
   return [styles.activityRow, Boolean(hovered) && styles.hoverable];
 }
 
-export function PrPane({ data }: { data: PrPaneData }) {
+export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () => void }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const [checksOpen, setChecksOpen] = useState(true);
@@ -115,6 +116,12 @@ export function PrPane({ data }: { data: PrPaneData }) {
           </>
         )}
       </Pressable>
+
+      {onRefresh ? (
+        <Pressable onPress={onRefresh} style={styles.refreshButton} testID="pr-pane-refresh">
+          <RotateCw size={14} color={theme.colors.foregroundMuted} />
+        </Pressable>
+      ) : null}
 
       <View style={styles.divider} />
 
@@ -344,6 +351,13 @@ const styles = StyleSheet.create((theme) => ({
   divider: {
     height: 1,
     backgroundColor: theme.colors.border,
+  },
+  refreshButton: {
+    position: "absolute",
+    top: theme.spacing[3],
+    right: theme.spacing[3],
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
   },
   sectionOpen: {
     flexShrink: 1,
