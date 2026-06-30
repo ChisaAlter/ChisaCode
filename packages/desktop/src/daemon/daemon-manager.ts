@@ -75,7 +75,12 @@ const PRIVILEGED_COMMANDS: ReadonlySet<string> = new Set([
   "close_local_daemon_transport",
   "install_cli",
   "install_app_update",
+  "install_skills",
+  "update_skills",
+  "uninstall_skills",
 ]);
+
+export { PRIVILEGED_COMMANDS };
 const STARTUP_POLL_INTERVAL_MS = 200;
 const STARTUP_POLL_MAX_ATTEMPTS = 150;
 const DETACHED_STARTUP_GRACE_MS = 1200;

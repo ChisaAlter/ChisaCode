@@ -11,11 +11,13 @@ vi.mock("electron", () => ({
 }));
 
 import {
+  cleanupRetiredSkills,
   getSkillsStatus,
   installSkills,
   installUserSkillsFromLocalDirectory,
   normalizeGitHubSkillSource,
   CHISACODE_SKILL_NAMES,
+  RETIRED_SKILL_NAMES,
   type SkillTargets,
   uninstallSkills,
   uninstallUserInstalledSkills,
@@ -144,7 +146,7 @@ describe("getSkillsStatus", () => {
     expect(status.ops).toEqual([{ kind: "add", name: "chisacode-loop" }]);
   });
 
-  it("returns drift with a delete op for a legacy skill name still on disk", async () => {
+  it("ignores retired skill names left on disk — diff does not touch them", async () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
     await writeOnDiskSkill(sandbox.targets.agentsDir, "chisacode", { "SKILL.md": "chisacode-v1" });
     await writeOnDiskSkill(sandbox.targets.agentsDir, "chisacode-loop", { "SKILL.md": "loop-v1" });
@@ -152,11 +154,12 @@ describe("getSkillsStatus", () => {
 
     const status = await getSkillsStatus(sandbox.targets);
 
-    expect(status.state).toBe("drift");
-    expect(status.ops).toEqual([{ kind: "delete", name: "chisacode-chat" }]);
+    expect(status.state).toBe("up-to-date");
+    expect(status.ops).toEqual([]);
+    expect(await pathExists(path.join(sandbox.targets.agentsDir, "chisacode-chat"))).toBe(true);
   });
 
-  it("emits add + update + delete ops sorted by name when state is mixed", async () => {
+  it("emits add + update ops sorted by name when state is mixed (retired names excluded)", async () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
     await writeOnDiskSkill(sandbox.targets.agentsDir, "chisacode", { "SKILL.md": "stale" });
     await writeOnDiskSkill(sandbox.targets.agentsDir, "chisacode-chat", { "SKILL.md": "chat-old" });
@@ -166,9 +169,9 @@ describe("getSkillsStatus", () => {
     expect(status.state).toBe("drift");
     expect(status.ops).toEqual([
       { kind: "update", name: "chisacode" },
-      { kind: "delete", name: "chisacode-chat" },
       { kind: "add", name: "chisacode-loop" },
     ]);
+    expect(await pathExists(path.join(sandbox.targets.agentsDir, "chisacode-chat"))).toBe(true);
   });
 });
 
@@ -303,6 +306,62 @@ describe("uninstallSkills", () => {
       sandbox.targets.codexDir,
     ]) {
       expect(await pathExists(path.join(dir, "chisacode-chat"))).toBe(false);
+    }
+  });
+});
+
+describe("cleanupRetiredSkills", () => {
+  let sandbox: Sandbox;
+
+  beforeEach(async () => {
+    sandbox = await makeSandbox();
+  });
+
+  afterEach(async () => {
+    await fs.rm(sandbox.root, { recursive: true, force: true });
+  });
+
+  it("removes retired skill directories from all three targets", async () => {
+    for (const name of RETIRED_SKILL_NAMES) {
+      await writeOnDiskSkill(sandbox.targets.agentsDir, name, { "SKILL.md": "old" });
+      await writeOnDiskSkill(sandbox.targets.claudeDir, name, { "SKILL.md": "old" });
+      await writeOnDiskSkill(sandbox.targets.codexDir, name, { "SKILL.md": "old" });
+    }
+
+    await cleanupRetiredSkills(sandbox.targets);
+
+    for (const name of RETIRED_SKILL_NAMES) {
+      expect(await pathExists(path.join(sandbox.targets.agentsDir, name))).toBe(false);
+      expect(await pathExists(path.join(sandbox.targets.claudeDir, name))).toBe(false);
+      expect(await pathExists(path.join(sandbox.targets.codexDir, name))).toBe(false);
+    }
+  });
+
+  it("leaves user-installed skills and current ChisaCode skills untouched", async () => {
+    await writeCurrentBundle(sandbox.targets.sourceDir);
+    await installSkills(sandbox.targets);
+    await writeOnDiskSkill(sandbox.targets.agentsDir, "unslop", { "SKILL.md": "user-unslop" });
+
+    await cleanupRetiredSkills(sandbox.targets);
+
+    // Bundle only contains chisacode and chisacode-loop in this sandbox;
+    // both should still be present after retired cleanup.
+    for (const name of ["chisacode", "chisacode-loop"]) {
+      expect(await pathExists(path.join(sandbox.targets.agentsDir, name))).toBe(true);
+    }
+    expect(
+      await fs.readFile(path.join(sandbox.targets.agentsDir, "unslop", "SKILL.md"), "utf-8"),
+    ).toBe("user-unslop");
+  });
+
+  it("is a no-op when no retired skills are present", async () => {
+    await writeCurrentBundle(sandbox.targets.sourceDir);
+    await installSkills(sandbox.targets);
+
+    await cleanupRetiredSkills(sandbox.targets);
+
+    for (const name of ["chisacode", "chisacode-loop"]) {
+      expect(await pathExists(path.join(sandbox.targets.agentsDir, name))).toBe(true);
     }
   });
 });

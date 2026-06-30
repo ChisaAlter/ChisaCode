@@ -70,14 +70,22 @@ export interface NormalizedGitHubSkillSource {
 export const CHISACODE_SKILL_NAMES = [
   "chisacode",
   "chisacode-advisor",
-  "chisacode-chat",
   "chisacode-committee",
   "chisacode-epic",
   "chisacode-handoff",
   "chisacode-loop",
   "chisacode-orchestrate",
-  "chisacode-orchestrator",
 ] as const;
+
+/**
+ * Skill names that were previously bundled but have since been removed from
+ * the bundle. These are no longer tracked by {@link diff} (so they do not
+ * surface as `delete` ops in {@link getSkillsStatus}), but they still need to
+ * be cleaned off disk if a prior app version installed them. The cleanup runs
+ * as an explicit side effect of {@link installSkills}, {@link updateSkills},
+ * and {@link uninstallSkills} via {@link cleanupRetiredSkills}.
+ */
+export const RETIRED_SKILL_NAMES = ["chisacode-chat", "chisacode-orchestrator"] as const;
 
 type SkillFiles = Map<string, string>;
 
@@ -272,6 +280,8 @@ async function applySkills(targets: SkillTargets): Promise<SkillsStatus> {
     });
   }
 
+  await cleanupRetiredSkills(targets);
+
   return getSkillsStatus(targets);
 }
 
@@ -292,7 +302,27 @@ export async function uninstallSkills(targets?: SkillTargets): Promise<SkillsSta
       codexDir: t.codexDir,
     });
   }
+  await cleanupRetiredSkills(t);
   return getSkillsStatus(t);
+}
+
+/**
+ * Removes any retired ChisaCode skill directories left over from prior app
+ * versions. Unlike {@link diff}, this does not depend on the current bundle —
+ * it unconditionally deletes the directories named in {@link RETIRED_SKILL_NAMES}
+ * from all three target locations. User-installed skills (anything not in
+ * {@link CHISACODE_SKILL_NAMES} or {@link RETIRED_SKILL_NAMES}) are left alone.
+ */
+export async function cleanupRetiredSkills(
+  targets: Pick<SkillTargets, "agentsDir" | "claudeDir" | "codexDir">,
+): Promise<void> {
+  for (const name of RETIRED_SKILL_NAMES) {
+    await removeSkill(name, {
+      agentsDir: targets.agentsDir,
+      claudeDir: targets.claudeDir,
+      codexDir: targets.codexDir,
+    });
+  }
 }
 
 export async function installUserSkillsFromLocalDirectory(

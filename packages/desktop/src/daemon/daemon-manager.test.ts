@@ -6,6 +6,7 @@ import {
   createDaemonCommandHandlers,
   assertTransportPathAllowed,
   isMainAppSenderUrl,
+  PRIVILEGED_COMMANDS,
 } from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
@@ -295,6 +296,19 @@ describe("daemon-manager privileged IPC sender validation", () => {
         devPort: 3000,
       }),
     ).toBe(true);
+  });
+
+  it("classifies skills write commands as privileged (sender must be main app)", () => {
+    // These commands write files into the user's home directory
+    // (~/.agents/skills, ~/.claude/skills, ~/.codex/skills) and must only be
+    // invocable from the main application window, not from webviews/iframes.
+    expect(PRIVILEGED_COMMANDS.has("install_skills")).toBe(true);
+    expect(PRIVILEGED_COMMANDS.has("update_skills")).toBe(true);
+    expect(PRIVILEGED_COMMANDS.has("uninstall_skills")).toBe(true);
+  });
+
+  it("does not classify the read-only skills status command as privileged", () => {
+    expect(PRIVILEGED_COMMANDS.has("get_skills_status")).toBe(false);
   });
 });
 
