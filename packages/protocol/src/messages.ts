@@ -1438,6 +1438,16 @@ export const ProviderDiagnosticRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const ProviderUsageListRequestMessageSchema = z.object({
+  type: z.literal("provider.usage.list.request"),
+  requestId: z.string(),
+});
+
+export const DiagnosticsRequestSchema = z.object({
+  type: z.literal("diagnostics.request"),
+  requestId: z.string(),
+});
+
 export const ProviderToolingActionRequestMessageSchema = z.object({
   type: z.literal("provider.tooling.run.request"),
   provider: AgentProviderSchema,
@@ -1935,6 +1945,30 @@ export const ArchiveWorkspaceRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspaceCreateRequestSchema = z.object({
+  type: z.literal("workspace.create.request"),
+  requestId: z.string(),
+  title: z.string().optional(),
+  firstAgentContext: FirstAgentContextSchema.optional(),
+  source: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("directory"),
+      path: z.string(),
+      projectId: z.string().optional(),
+    }),
+    z.object({
+      kind: z.literal("worktree"),
+      cwd: z.string().optional(),
+      projectId: z.string().optional(),
+      action: z.enum(["branch-off", "checkout"]).optional(),
+      refName: z.string().min(1).optional(),
+      baseBranch: z.string().optional(),
+      githubPrNumber: z.number().int().positive().optional(),
+      worktreeSlug: z.string().optional(),
+    }),
+  ]),
+});
+
 // Highlighted diff token schema
 // Note: style can be a compound class name (e.g., "heading meta") from the syntax highlighter
 const HighlightTokenSchema = z.object({
@@ -2294,6 +2328,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectRequestSchema,
   LoopLogsRequestSchema,
   LoopStopRequestSchema,
+  ProviderUsageListRequestMessageSchema,
+  DiagnosticsRequestSchema,
+  WorkspaceCreateRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -2482,6 +2519,10 @@ export const ServerInfoStatusPayloadSchema = z
         agentSkillManagement: z.boolean().optional(),
         // COMPAT(agentMcpServerManagement): added in v0.1.X, remove gate when all clients support it.
         agentMcpServerManagement: z.boolean().optional(),
+        // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
+        providerUsageList: z.boolean().optional(),
+        // COMPAT(daemonDiagnostics): added in v0.1.100, remove gate after 2026-12-25 once daemon floor >= v0.1.100.
+        daemonDiagnostics: z.boolean().optional(),
       })
       .optional(),
   })
@@ -3024,6 +3065,17 @@ export const ArchiveWorkspaceResponseMessageSchema = z.object({
   }),
 });
 
+export const WorkspaceCreateResponseSchema = z.object({
+  type: z.literal("workspace.create.response"),
+  payload: z.object({
+    workspace: WorkspaceDescriptorPayloadSchema.nullable(),
+    setupTerminalId: z.string().nullable(),
+    error: z.string().nullable(),
+    errorCode: z.string().optional(),
+    requestId: z.string(),
+  }),
+});
+
 export const FetchAgentResponseMessageSchema = z.object({
   type: z.literal("fetch_agent_response"),
   payload: z.object({
@@ -3164,6 +3216,16 @@ export const DaemonGetPairingOfferResponseSchema = z.object({
       url: z.string(),
       qr: z.string().nullable().optional(),
       relayEnabled: z.boolean(),
+    })
+    .passthrough(),
+});
+
+export const DiagnosticsResponseSchema = z.object({
+  type: z.literal("diagnostics.response"),
+  payload: z
+    .object({
+      requestId: z.string(),
+      diagnostic: z.string(),
     })
     .passthrough(),
 });
@@ -3913,6 +3975,61 @@ export const ProviderDiagnosticResponseMessageSchema = z.object({
   }),
 });
 
+export const ProviderUsageToneSchema = z.enum(["default", "ok", "warning", "danger"]);
+export const ProviderUsageStatusSchema = z.enum(["available", "unavailable", "error"]);
+
+export const ProviderUsageWindowSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  usedPct: z.number().nullable().optional(),
+  remainingPct: z.number().nullable().optional(),
+  resetsAt: z.string().nullable().optional(),
+  runsOutAt: z.string().nullable().optional(),
+  shortfallPct: z.number().nullable().optional(),
+  tone: ProviderUsageToneSchema.optional(),
+});
+
+export const ProviderUsageBalanceSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  used: z.number().nullable().optional(),
+  remaining: z.number().nullable().optional(),
+  limit: z.number().nullable().optional(),
+  unit: z.enum(["usd", "credits", "requests", "tokens"]),
+  resetsAt: z.string().nullable().optional(),
+  tone: ProviderUsageToneSchema.optional(),
+});
+
+export const ProviderUsageDetailSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  value: z.string(),
+  tone: ProviderUsageToneSchema.optional(),
+});
+
+export const ProviderUsageSchema = z.object({
+  providerId: z.string(),
+  displayName: z.string(),
+  status: ProviderUsageStatusSchema,
+  planLabel: z.string().nullable(),
+  sourceLabel: z.string().nullable().optional(),
+  fetchedAt: z.string().nullable().optional(),
+  nextRefreshAt: z.string().nullable().optional(),
+  windows: z.array(ProviderUsageWindowSchema),
+  balances: z.array(ProviderUsageBalanceSchema).optional(),
+  details: z.array(ProviderUsageDetailSchema).optional(),
+  error: z.string().nullable().optional(),
+});
+
+export const ProviderUsageListResponseMessageSchema = z.object({
+  type: z.literal("provider.usage.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    fetchedAt: z.string(),
+    providers: z.array(ProviderUsageSchema),
+  }),
+});
+
 export const AgentPresetsListResponseMessageSchema = z.object({
   type: z.literal("agent.presets.list.response"),
   payload: AgentPresetsPayloadSchema.extend({
@@ -4439,6 +4556,9 @@ type SessionOutboundMessageSchemaOptions = [
   typeof LoopInspectResponseSchema,
   typeof LoopLogsResponseSchema,
   typeof LoopStopResponseSchema,
+  typeof ProviderUsageListResponseMessageSchema,
+  typeof DiagnosticsResponseSchema,
+  typeof WorkspaceCreateResponseSchema,
 ];
 
 export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
@@ -4582,6 +4702,9 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   LoopInspectResponseSchema,
   LoopLogsResponseSchema,
   LoopStopResponseSchema,
+  ProviderUsageListResponseMessageSchema,
+  DiagnosticsResponseSchema,
+  WorkspaceCreateResponseSchema,
 ]);
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;
@@ -4683,6 +4806,15 @@ export type ProviderDiagnosticResponseMessage = z.infer<
 export type ProviderToolingActionResponseMessage = z.infer<
   typeof ProviderToolingActionResponseMessageSchema
 >;
+export type ProviderUsageTone = z.infer<typeof ProviderUsageToneSchema>;
+export type ProviderUsageStatus = z.infer<typeof ProviderUsageStatusSchema>;
+export type ProviderUsageWindow = z.infer<typeof ProviderUsageWindowSchema>;
+export type ProviderUsageBalance = z.infer<typeof ProviderUsageBalanceSchema>;
+export type ProviderUsageDetail = z.infer<typeof ProviderUsageDetailSchema>;
+export type ProviderUsage = z.infer<typeof ProviderUsageSchema>;
+export type ProviderUsageListResponse = z.infer<typeof ProviderUsageListResponseMessageSchema>;
+export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
+export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type AgentPresetsListResponseMessage = z.infer<typeof AgentPresetsListResponseMessageSchema>;
 export type ModelGatewayMoaTestResponseMessage = z.infer<
   typeof ModelGatewayMoaTestResponseMessageSchema
@@ -4753,6 +4885,9 @@ export type ProviderDiagnosticRequestMessage = z.infer<
 export type ProviderToolingActionRequestMessage = z.infer<
   typeof ProviderToolingActionRequestMessageSchema
 >;
+export type ProviderUsageListRequest = z.infer<typeof ProviderUsageListRequestMessageSchema>;
+export type DiagnosticsRequest = z.infer<typeof DiagnosticsRequestSchema>;
+export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type AgentPresetsListRequestMessage = z.infer<typeof AgentPresetsListRequestMessageSchema>;
 export type ModelGatewayMoaTestRequestMessage = z.infer<
   typeof ModelGatewayMoaTestRequestMessageSchema

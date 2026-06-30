@@ -115,6 +115,7 @@ const DEFAULT_SHORTCUT_HELP_COPY: KeyboardShortcutHelpCopy = {
   },
   labels: {
     "new-agent": "打开项目",
+    "new-workspace": "新建工作区",
     "new-worktree": "新建 worktree",
     "archive-worktree": "归档 worktree",
     "workspace-tab-new": "新建标签页",
@@ -154,6 +155,7 @@ const DEFAULT_SHORTCUT_HELP_COPY: KeyboardShortcutHelpCopy = {
     "message-input-send": "发送消息",
     "message-input-queue": "排队发送消息",
     "voice-mute-toggle": "静音/取消静音语音模式",
+    "cycle-agent-mode": "切换智能体模式",
   },
   notes: {
     "show-shortcuts": "焦点不在文本框或终端时可用。",
@@ -238,6 +240,32 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "projects",
       label: "Archive worktree",
       keys: ["mod", "shift", "Backspace"],
+    },
+  },
+
+  // --- New workspace ---
+  {
+    id: "workspace-new-cmd-n-mac",
+    action: "workspace.new",
+    combo: "Cmd+N",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "new-workspace",
+      section: "projects",
+      label: "New workspace",
+      keys: ["mod", "N"],
+    },
+  },
+  {
+    id: "workspace-new-ctrl-n-non-mac",
+    action: "workspace.new",
+    combo: "Ctrl+N",
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "new-workspace",
+      section: "projects",
+      label: "New workspace",
+      keys: ["mod", "N"],
     },
   },
 
@@ -954,6 +982,20 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "agent-input",
       label: "Focus message input",
       keys: ["mod", "L"],
+    },
+  },
+  {
+    id: "message-input-mode-cycle-shift-tab",
+    action: "message-input.action",
+    combo: "Shift+Tab",
+    repeat: false,
+    when: { commandCenter: false, focusScope: "message-input" },
+    payload: { type: "message-input", kind: "mode-cycle" },
+    help: {
+      id: "cycle-agent-mode",
+      section: "agent-input",
+      label: "Cycle agent mode",
+      keys: ["shift", "Tab"],
     },
   },
   {

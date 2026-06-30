@@ -128,6 +128,18 @@ describe("keyboard-shortcuts", () => {
       action: "agent.new",
     },
     {
+      name: "matches Cmd+N to create new workspace on mac",
+      event: { key: "n", code: "KeyN", metaKey: true },
+      context: { isMac: true, commandCenterOpen: false },
+      action: "workspace.new",
+    },
+    {
+      name: "matches Ctrl+N to create new workspace on non-mac",
+      event: { key: "n", code: "KeyN", ctrlKey: true },
+      context: { isMac: false, commandCenterOpen: false, focusScope: "other" },
+      action: "workspace.new",
+    },
+    {
       name: "matches question-mark shortcut to toggle the shortcuts dialog",
       event: { key: "?", code: "Slash", shiftKey: true },
       context: { focusScope: "other" },
@@ -310,6 +322,13 @@ describe("keyboard-shortcuts", () => {
       payload: { kind: "dictation-toggle" },
     },
     {
+      name: "routes Shift+Tab to cycle agent mode from the message input",
+      event: { key: "Tab", code: "Tab", shiftKey: true },
+      context: { focusScope: "message-input" },
+      action: "message-input.action",
+      payload: { kind: "mode-cycle" },
+    },
+    {
       name: "routes space to voice mute toggle outside editable scopes",
       event: { key: " ", code: "Space" },
       context: { focusScope: "other" },
@@ -432,6 +451,16 @@ describe("keyboard-shortcuts", () => {
       name: "does not route message-input actions when terminal is focused",
       event: { key: "d", code: "KeyD", metaKey: true },
       context: { isMac: true, focusScope: "terminal" },
+    },
+    {
+      name: "does not cycle agent mode outside the message input",
+      event: { key: "Tab", code: "Tab", shiftKey: true },
+      context: { focusScope: "other" },
+    },
+    {
+      name: "does not repeat agent mode cycling while Shift+Tab is held",
+      event: { key: "Tab", code: "Tab", shiftKey: true, repeat: true },
+      context: { focusScope: "message-input" },
     },
     {
       name: "does not interrupt agent when terminal is focused",
@@ -566,6 +595,7 @@ describe("keyboard-shortcut help sections", () => {
         "workspace-tab-close-current": ["alt", "shift", "W"],
         "workspace-pane-split-right": ["mod", "\\"],
         "workspace-pane-close": ["mod", "shift", "W"],
+        "cycle-agent-mode": ["shift", "Tab"],
       },
     },
     {
@@ -573,6 +603,7 @@ describe("keyboard-shortcut help sections", () => {
       context: { isMac: true, isDesktop: true },
       expectedKeys: {
         "new-agent": ["mod", "shift", "O"],
+        "new-workspace": ["mod", "N"],
         "workspace-tab-new": ["mod", "T"],
         "workspace-jump-index": ["mod", "1-9"],
         "workspace-tab-jump-index": ["mod", "alt", "1-9"],

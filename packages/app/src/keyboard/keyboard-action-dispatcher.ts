@@ -9,6 +9,7 @@ export type KeyboardActionId =
   | "message-input.dictation-confirm"
   | "message-input.voice-toggle"
   | "message-input.voice-mute-toggle"
+  | "message-input.mode-cycle"
   | "workspace.tab.new"
   | "workspace.tab.close-current"
   | "workspace.tab.navigate-index"
@@ -32,6 +33,7 @@ export type KeyboardActionId =
   | "workspace.environment.toggle"
   | "workspace.resume.copy"
   | "sidebar.toggle.right"
+  | "workspace.new"
   | "worktree.new"
   | "worktree.archive";
 
@@ -44,6 +46,7 @@ export type KeyboardActionDefinition =
   | { id: "message-input.dictation-confirm"; scope: KeyboardActionScope }
   | { id: "message-input.voice-toggle"; scope: KeyboardActionScope }
   | { id: "message-input.voice-mute-toggle"; scope: KeyboardActionScope }
+  | { id: "message-input.mode-cycle"; scope: KeyboardActionScope }
   | { id: "workspace.tab.new"; scope: KeyboardActionScope }
   | { id: "workspace.tab.close-current"; scope: KeyboardActionScope }
   | { id: "workspace.tab.navigate-index"; scope: KeyboardActionScope; index: number }
@@ -67,6 +70,7 @@ export type KeyboardActionDefinition =
   | { id: "workspace.environment.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.resume.copy"; scope: KeyboardActionScope }
   | { id: "sidebar.toggle.right"; scope: KeyboardActionScope }
+  | { id: "workspace.new"; scope: KeyboardActionScope }
   | { id: "worktree.new"; scope: KeyboardActionScope }
   | { id: "worktree.archive"; scope: KeyboardActionScope };
 
