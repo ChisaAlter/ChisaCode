@@ -391,6 +391,7 @@ interface DispatchComposerKeyboardActionArgs {
   isConnected: boolean;
   handleCancelAgent: () => void;
   focusMessageInputForKeyboardAction: () => void;
+  onCycleAgentMode: () => void;
 }
 
 function dispatchComposerKeyboardAction(args: DispatchComposerKeyboardActionArgs): boolean {
@@ -415,6 +416,11 @@ function dispatchComposerKeyboardAction(args: DispatchComposerKeyboardActionArgs
 
   if (action.id === "message-input.focus") {
     focusMessageInputForKeyboardAction();
+    return true;
+  }
+
+  if (action.id === "message-input.mode-cycle") {
+    args.onCycleAgentMode();
     return true;
   }
 
@@ -443,6 +449,8 @@ function resolveMessageInputPassthroughAction(
       return "voice-toggle";
     case "message-input.voice-mute-toggle":
       return "voice-mute-toggle";
+    case "message-input.mode-cycle":
+      return "mode-cycle";
     default:
       return null;
   }
@@ -1408,6 +1416,20 @@ export function Composer({
     focusMessageInputWithPlatformStrategy(messageInputRef);
   }, []);
 
+  const onCycleAgentMode = useCallback(() => {
+    const agent = useSessionStore.getState().sessions[serverId]?.agents?.get(agentId);
+    if (!agent) return;
+    const modes = agent.availableModes;
+    if (modes.length <= 1) return;
+    const currentIndex = modes.findIndex((m) => m.id === agent.currentModeId);
+    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % modes.length;
+    const next = modes[nextIndex];
+    if (!next || !client) return;
+    void client.setAgentMode(agentId, next.id).catch((error: Error) => {
+      console.warn("[Composer] cycleAgentMode failed", error);
+    });
+  }, [agentId, client, serverId]);
+
   const handleKeyboardAction = useCallback(
     (action: KeyboardActionDefinition): boolean =>
       dispatchComposerKeyboardAction({
@@ -1419,6 +1441,7 @@ export function Composer({
         isConnected,
         handleCancelAgent,
         focusMessageInputForKeyboardAction,
+        onCycleAgentMode,
       }),
     [
       focusMessageInputForKeyboardAction,
@@ -1427,6 +1450,7 @@ export function Composer({
       isCancellingAgent,
       isConnected,
       isPaneFocused,
+      onCycleAgentMode,
     ],
   );
 
@@ -1441,6 +1465,7 @@ export function Composer({
       "message-input.dictation-confirm",
       "message-input.voice-toggle",
       "message-input.voice-mute-toggle",
+      "message-input.mode-cycle",
     ],
     enabled: isPaneFocused,
     priority: resolveKeyboardPriority(isMessageInputFocused),
