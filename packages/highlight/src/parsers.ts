@@ -1,3 +1,6 @@
+import { StreamLanguage } from "@codemirror/language";
+import { dart } from "@codemirror/legacy-modes/mode/clike";
+import { swift } from "@codemirror/legacy-modes/mode/swift";
 import { parser as jsParser } from "@lezer/javascript";
 import { parser as jsonParser } from "@lezer/json";
 import { parser as cssParser } from "@lezer/css";
@@ -11,6 +14,7 @@ import { parser as phpParser } from "@lezer/php";
 import { parser as rustParser } from "@lezer/rust";
 import { parser as xmlParser } from "@lezer/xml";
 import { parser as yamlParser } from "@lezer/yaml";
+import { csharpLanguage } from "@replit/codemirror-lang-csharp";
 import { parser as elixirParser } from "lezer-elixir";
 import type { Parser } from "@lezer/common";
 
@@ -55,6 +59,12 @@ const parsersByExtension: Record<string, Parser> = {
   yml: yamlParser,
   // Rust
   rs: rustParser,
+  // Swift
+  swift: StreamLanguage.define(swift).parser,
+  // Dart
+  dart: StreamLanguage.define(dart).parser,
+  // C#
+  cs: csharpLanguage.parser,
   // Elixir
   ex: elixirParser,
   exs: elixirParser,
