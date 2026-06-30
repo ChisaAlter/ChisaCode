@@ -1,4 +1,4 @@
-import { AlertTriangle, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
+import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,6 +17,7 @@ import {
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import * as Clipboard from "expo-clipboard";
 import { isWeb } from "@/constants/platform";
 import { Fonts } from "@/constants/theme";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
@@ -359,33 +360,52 @@ function DiagnosticSubSheet({
     void fetchDiagnostic();
   }, [fetchDiagnostic]);
 
+  const handleCopyPress = useCallback(async () => {
+    if (!diagnostic) return;
+    await Clipboard.setStringAsync(diagnostic);
+  }, [diagnostic]);
+
   const header = useMemo<SheetHeader>(
     () => ({
       title: t("providerDiagnostics.diagnostic"),
       actions: (
-        <Pressable
-          onPress={handleRefreshPress}
-          disabled={loading}
-          hitSlop={8}
-          style={refreshButtonStyle}
-          accessibilityRole="button"
-          accessibilityLabel={
-            loading
-              ? t("providerDiagnostics.refreshingDiagnostic")
-              : t("providerDiagnostics.refreshDiagnostic")
-          }
-        >
-          {loading ? (
-            <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-          ) : (
-            <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-          )}
-        </Pressable>
+        <>
+          <Pressable
+            onPress={handleCopyPress}
+            disabled={!diagnostic}
+            hitSlop={8}
+            style={refreshButtonStyle}
+            accessibilityRole="button"
+            accessibilityLabel={t("providerDiagnostics.copyDiagnostic")}
+          >
+            <Copy size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          </Pressable>
+          <Pressable
+            onPress={handleRefreshPress}
+            disabled={loading}
+            hitSlop={8}
+            style={refreshButtonStyle}
+            accessibilityRole="button"
+            accessibilityLabel={
+              loading
+                ? t("providerDiagnostics.refreshingDiagnostic")
+                : t("providerDiagnostics.refreshDiagnostic")
+            }
+          >
+            {loading ? (
+              <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            ) : (
+              <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            )}
+          </Pressable>
+        </>
       ),
     }),
     [
+      handleCopyPress,
       handleRefreshPress,
       loading,
+      diagnostic,
       refreshButtonStyle,
       t,
       theme.colors.foregroundMuted,
