@@ -2604,15 +2604,19 @@ class ClaudeAgentSession implements AgentSession {
   private resolveThinkingConfig(): {
     thinking: ClaudeOptions["thinking"];
     effort: ClaudeOptions["effort"];
+    ultracode: boolean;
   } {
     const thinkingOptionId =
       this.config.thinkingOptionId && this.config.thinkingOptionId !== "default"
         ? this.config.thinkingOptionId
         : undefined;
-    if (thinkingOptionId && isClaudeThinkingEffort(thinkingOptionId)) {
-      return { thinking: { type: "adaptive" }, effort: thinkingOptionId };
+    if (thinkingOptionId === "ultracode") {
+      return { thinking: { type: "adaptive" }, effort: "xhigh", ultracode: true };
     }
-    return { thinking: undefined, effort: undefined };
+    if (thinkingOptionId && isClaudeThinkingEffort(thinkingOptionId)) {
+      return { thinking: { type: "adaptive" }, effort: thinkingOptionId, ultracode: false };
+    }
+    return { thinking: undefined, effort: undefined, ultracode: false };
   }
 
   private buildAppendedSystemPrompt(): string {
@@ -2638,11 +2642,14 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   private async buildOptions(): Promise<ClaudeOptions> {
-    const { thinking, effort } = this.resolveThinkingConfig();
+    const { thinking, effort, ultracode } = this.resolveThinkingConfig();
     const appendedSystemPrompt = this.buildAppendedSystemPrompt();
     const extraClaudeOptions = this.config.extra?.claude;
     const { sdkEnv, flagSettingsOptions, launchModel, modelGatewayOverrideActive } =
       this.buildSdkLaunchOptions(extraClaudeOptions);
+    const settingsOptions = ultracode
+      ? { settings: mergeClaudeSettings(extraClaudeOptions?.settings, { ultracode: true }) }
+      : flagSettingsOptions;
     this.modelGatewayOverrideActive = modelGatewayOverrideActive;
     assertClaudeAutoModeEligible(this.currentMode, sdkEnv);
 
@@ -2695,7 +2702,7 @@ class ClaudeAgentSession implements AgentSession {
       ...(thinking ? { thinking } : {}),
       ...(effort ? { effort } : {}),
       ...extraClaudeOptions,
-      ...flagSettingsOptions,
+      ...settingsOptions,
       ...(this.persistSession === undefined ? {} : { persistSession: this.persistSession }),
       env: sdkEnv,
     };
@@ -2760,16 +2767,18 @@ class ClaudeAgentSession implements AgentSession {
   private buildFlagSettingsOptions(
     extraClaudeOptions: Partial<ClaudeOptions> | undefined,
     envOverride?: Record<string, string>,
+    extra?: { ultracode?: boolean },
   ): Pick<ClaudeOptions, "settings"> | Record<string, never> {
     const runtimeEnv = readRuntimeSettingsEnv(this.runtimeSettings);
     const fastMode = this.resolveFastModeSetting();
     const env = runtimeEnv || envOverride ? { ...runtimeEnv, ...envOverride } : null;
-    if (!env && fastMode === null) {
+    if (!env && fastMode === null && !extra?.ultracode) {
       return {};
     }
     const updates: NonNullable<Exclude<ClaudeOptions["settings"], string>> = {
       ...(env ? { env } : {}),
       ...(fastMode === null ? {} : { fastMode }),
+      ...(extra?.ultracode ? { ultracode: true } : {}),
     };
     return { settings: mergeClaudeSettings(extraClaudeOptions?.settings, updates) };
   }

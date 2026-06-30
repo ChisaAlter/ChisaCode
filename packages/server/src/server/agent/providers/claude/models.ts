@@ -20,13 +20,18 @@ const CLAUDE_OPUS_EXTENDED_THINKING_OPTIONS = [
   { id: "max", label: "Max" },
 ] as const;
 
+const CLAUDE_ULTRACODE_THINKING_OPTIONS = [
+  ...CLAUDE_OPUS_EXTENDED_THINKING_OPTIONS,
+  { id: "ultracode", label: "Ultracode" },
+] as const;
+
 const CLAUDE_MODELS: AgentModelDefinition[] = [
   {
     provider: "claude",
     id: "claude-opus-4-8[1m]",
     label: "Opus 4.8 1M",
     description: "Opus 4.8 with 1M context window",
-    thinkingOptions: [...CLAUDE_OPUS_EXTENDED_THINKING_OPTIONS],
+    thinkingOptions: [...CLAUDE_ULTRACODE_THINKING_OPTIONS],
   },
   {
     provider: "claude",
@@ -34,7 +39,7 @@ const CLAUDE_MODELS: AgentModelDefinition[] = [
     label: "Opus 4.8",
     description: "Opus 4.8 · Latest release",
     isDefault: true,
-    thinkingOptions: [...CLAUDE_OPUS_EXTENDED_THINKING_OPTIONS],
+    thinkingOptions: [...CLAUDE_ULTRACODE_THINKING_OPTIONS],
   },
   {
     provider: "claude",
