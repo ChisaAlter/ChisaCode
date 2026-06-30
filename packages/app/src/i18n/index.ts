@@ -1342,6 +1342,13 @@ export const resources = {
             title: "模型用量占比",
             empty: "无模型",
           },
+          tab: {
+            local: "本地用量",
+            provider: "Provider 配额",
+          },
+          providerComingSoon: "Provider 配额功能即将推出",
+          providerHint:
+            "查看各 Provider 的 plan 用量配额状态、剩余额度和用量窗口。更多详情请关注后续更新。",
         },
         skills: {
           title: "技能",
@@ -2906,6 +2913,13 @@ export const resources = {
             title: "Model usage share",
             empty: "No model",
           },
+          tab: {
+            local: "Local usage",
+            provider: "Provider quota",
+          },
+          providerComingSoon: "Provider quota view coming soon",
+          providerHint:
+            "See plan usage, quotas, remaining balance, and usage windows for each provider. Check back soon for updates.",
         },
         skills: {
           title: "Skills",

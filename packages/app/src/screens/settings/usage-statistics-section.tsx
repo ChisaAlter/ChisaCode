@@ -26,6 +26,12 @@ import {
 const RANGE_OPTIONS = [7, 30, 180] as const;
 type RangeOption = (typeof RANGE_OPTIONS)[number];
 type ExportFormat = "json" | "csv";
+type UsageTab = "local" | "provider";
+
+const TAB_OPTIONS = [
+  { value: "local", label: "本地用量" },
+  { value: "provider", label: "Provider 配额" },
+] as const;
 
 /** Chart color palette — uses theme tokens where palette equivalents exist; hardcodes otherwise. */
 const CHART_COLOR_KEYS = [
@@ -53,6 +59,7 @@ export function UsageStatisticsSection({ serverId }: UsageStatisticsSectionProps
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [activeTab, setActiveTab] = useState<UsageTab>("local");
 
   const rangeOptions = useMemo(
     () =>
@@ -162,6 +169,20 @@ export function UsageStatisticsSection({ serverId }: UsageStatisticsSectionProps
 
   const canQuery = Boolean(serverId && client && isConnected);
 
+  const handleTabChange = useCallback((value: string) => {
+    if (value === "local" || value === "provider") {
+      setActiveTab(value);
+    }
+  }, []);
+
+  const tabOptions = useMemo(
+    () =>
+      TAB_OPTIONS.map((opt) =>
+        Object.assign({}, opt, { label: t(`settings.usage.tab.${opt.value}`) }),
+      ),
+    [t],
+  );
+
   return (
     <SettingsSection
       title={t("settings.usage.title")}
@@ -174,63 +195,87 @@ export function UsageStatisticsSection({ serverId }: UsageStatisticsSectionProps
         </View>
       ) : (
         <>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <UsageMetricGrid summary={summary} isLoading={isLoading} />
-          <UsageHeatmap summary={summary} />
-          <UsageTrendChart summary={summary} />
-          <UsageModelChart summary={summary} />
-          <View style={styles.actions}>
-            <Button
-              size="sm"
-              variant="secondary"
-              leftIcon={RefreshCw}
-              onPress={loadSummary}
-              loading={isLoading}
-              testID="settings-usage-refresh"
-            >
-              {t("settings.usage.refresh")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              leftIcon={Download}
-              onPress={handleExportJson}
-              loading={isExporting}
-              testID="settings-usage-export-json"
-            >
-              {t("settings.usage.exportJson")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              leftIcon={Download}
-              onPress={handleExportCsv}
-              loading={isExporting}
-              testID="settings-usage-export-csv"
-            >
-              {t("settings.usage.exportCsv")}
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              leftIcon={Trash2}
-              onPress={handleClear}
-              loading={isClearing}
-              testID="settings-usage-clear"
-            >
-              {t("settings.usage.clear")}
-            </Button>
-          </View>
-          {summary?.generatedAt ? (
-            <Text style={styles.updatedAt}>
-              {t("settings.usage.updatedAt", {
-                time: new Date(summary.generatedAt).toLocaleString(),
-              })}
-            </Text>
-          ) : null}
+          <SegmentedControl
+            size="sm"
+            value={activeTab}
+            onValueChange={handleTabChange}
+            options={tabOptions}
+            testID="settings-usage-tab"
+          />
+          {activeTab === "local" ? (
+            <>
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              <UsageMetricGrid summary={summary} isLoading={isLoading} />
+              <UsageHeatmap summary={summary} />
+              <UsageTrendChart summary={summary} />
+              <UsageModelChart summary={summary} />
+              <View style={styles.actions}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={RefreshCw}
+                  onPress={loadSummary}
+                  loading={isLoading}
+                  testID="settings-usage-refresh"
+                >
+                  {t("settings.usage.refresh")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={Download}
+                  onPress={handleExportJson}
+                  loading={isExporting}
+                  testID="settings-usage-export-json"
+                >
+                  {t("settings.usage.exportJson")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={Download}
+                  onPress={handleExportCsv}
+                  loading={isExporting}
+                  testID="settings-usage-export-csv"
+                >
+                  {t("settings.usage.exportCsv")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  leftIcon={Trash2}
+                  onPress={handleClear}
+                  loading={isClearing}
+                  testID="settings-usage-clear"
+                >
+                  {t("settings.usage.clear")}
+                </Button>
+              </View>
+              {summary?.generatedAt ? (
+                <Text style={styles.updatedAt}>
+                  {t("settings.usage.updatedAt", {
+                    time: new Date(summary.generatedAt).toLocaleString(),
+                  })}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <ProviderUsageView />
+          )}
         </>
       )}
     </SettingsSection>
+  );
+}
+
+function ProviderUsageView() {
+  const { t } = useTranslation();
+
+  return (
+    <View style={providerUsageStyles.placeholder}>
+      <Text style={providerUsageStyles.title}>{t("settings.usage.providerComingSoon")}</Text>
+      <Text style={providerUsageStyles.hint}>{t("settings.usage.providerHint")}</Text>
+    </View>
   );
 }
 
@@ -885,5 +930,25 @@ const styles = StyleSheet.create((theme) => ({
   updatedAt: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+  },
+}));
+
+const providerUsageStyles = StyleSheet.create((theme) => ({
+  placeholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: theme.spacing[12],
+    paddingHorizontal: theme.spacing[4],
+    gap: theme.spacing[3],
+  },
+  title: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  hint: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    textAlign: "center",
   },
 }));
