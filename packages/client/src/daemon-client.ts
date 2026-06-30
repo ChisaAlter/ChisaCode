@@ -2317,6 +2317,55 @@ export class DaemonClient {
     await this.sendAgentMessage(agentId, text, options);
   }
 
+  /**
+   * Sends a generative UI user-interaction callback to the server.
+   * The server formats the action as system context and injects it into the
+   * next turn's conversation.
+   *
+   * @param agentId Target agent session ID
+   * @param instanceId Generative UI component instance ID
+   * @param action Action name as defined in the component's actions
+   * @param payload Action-specific payload
+   * @param options Optional configuration (timeout etc.)
+   * @throws {DaemonRpcError} If the server rejects the action or times out
+   */
+  async sendGenerativeUiAction(
+    agentId: string,
+    instanceId: string,
+    action: string,
+    payload: unknown,
+    options?: { timeout?: number },
+  ): Promise<void> {
+    const requestId = this.createRequestId();
+    const message = SessionInboundMessageSchema.parse({
+      type: "generative_ui.action",
+      requestId,
+      agentId,
+      instanceId,
+      action,
+      payload,
+      timestamp: Date.now(),
+    });
+    const result = await this.sendRequest({
+      requestId,
+      message,
+      timeout: options?.timeout ?? 10000,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "generative_ui.action.response") return null;
+        if (msg.payload.requestId !== requestId) return null;
+        return msg.payload;
+      },
+    });
+    if (!result.received) {
+      throw new DaemonRpcError({
+        requestId,
+        error: result.error ?? "generative_ui.action rejected",
+        requestType: "generative_ui.action",
+      });
+    }
+  }
+
   async rewindAgent(
     agentId: string,
     messageId: string,

@@ -273,7 +273,8 @@ export type SessionContext = SessionIdentityContext &
   ChatScheduleContext &
   TerminalScriptContext &
   ProviderCatalogContext &
-  ConfigControlContext;
+  ConfigControlContext &
+  GenerativeUiContext;
 
 /** Daemon runtime configuration passed from the process launcher (listen address, relay details). */
 export interface DaemonRuntimeConfig {
@@ -368,3 +369,19 @@ export type WorkspaceProjectHandlerContext = SessionIdentityContext &
 export interface DisposableHandler {
   dispose(): void;
 }
+
+// ---------------------------------------------------------------------------
+// Domain I — Generative UI
+// ---------------------------------------------------------------------------
+
+export interface GenerativeUiContext {
+  getAgent(agentId: string): { status: string } | undefined;
+  sendPromptToAgent(
+    agentId: string,
+    text: string,
+    options?: { unarchive?: boolean; systemNotification?: boolean },
+  ): Promise<void>;
+  emit(message: Record<string, unknown>): void;
+}
+
+export type GenerativeUiHandlerContext = SessionIdentityContext & GenerativeUiContext;

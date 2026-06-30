@@ -51,7 +51,8 @@ export type StreamItem =
   | TodoListItem
   | ActivityLogItem
   | CompactionItem
-  | TurnChangesItem;
+  | TurnChangesItem
+  | GenerativeUiItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -184,6 +185,20 @@ export interface TodoListItem {
   timestamp: Date;
   provider: AgentProvider;
   items: TodoEntry[];
+}
+
+export type GenerativeUiStatus = "rendering" | "interactive" | "error";
+
+export interface GenerativeUiItem {
+  kind: "generative_ui";
+  id: string;
+  instanceId: string;
+  componentId: string;
+  props: Record<string, unknown>;
+  title?: string;
+  source: "tool_call" | "fence";
+  status: GenerativeUiStatus;
+  timestamp: Date;
 }
 
 export type StreamUpdateSource = "live" | "canonical";
@@ -820,6 +835,30 @@ function reduceTimelineEvent(
       } as TurnChangesItem;
       return [...finalizedState, turnChangesItem];
     }
+    case "generative_ui": {
+      const finalizedState = finalizeActiveThoughts(state);
+      if ("componentId" in item && "instanceId" in item) {
+        const genUiItem: GenerativeUiItem = {
+          kind: "generative_ui",
+          id: createUniqueTimelineId(
+            finalizedState,
+            "genui",
+            (item as Record<string, unknown>).instanceId as string,
+            timestamp,
+          ),
+          instanceId: (item as Record<string, unknown>).instanceId as string,
+          componentId: (item as Record<string, unknown>).componentId as string,
+          props: ((item as Record<string, unknown>).props as Record<string, unknown>) ?? {},
+          title: (item as Record<string, unknown>).title as string | undefined,
+          source:
+            ((item as Record<string, unknown>).source as "tool_call" | "fence") ?? "tool_call",
+          status: ((item as Record<string, unknown>).status as GenerativeUiStatus) ?? "rendering",
+          timestamp,
+        };
+        return [...finalizedState, genUiItem];
+      }
+      return finalizedState;
+    }
     default:
       return state;
   }
@@ -847,6 +886,27 @@ export function reduceStreamUpdate(
     case "permission_resolved":
     case "attention_required":
       return finalizeActiveThoughts(state);
+    case "generative_ui_update": {
+      const finalized = finalizeActiveThoughts(state);
+      const idx = finalized.findLastIndex(
+        (s) => s.kind === "generative_ui" && s.instanceId === event.instanceId,
+      );
+      if (idx === -1) return finalized;
+      const updated = { ...finalized[idx] } as GenerativeUiItem;
+      Object.assign(updated.props, event.props);
+      if (event.status) updated.status = event.status;
+      return [...finalized.slice(0, idx), updated, ...finalized.slice(idx + 1)];
+    }
+    case "generative_ui_remove": {
+      const finalized = finalizeActiveThoughts(state);
+      const idx = finalized.findLastIndex(
+        (s) => s.kind === "generative_ui" && s.instanceId === event.instanceId,
+      );
+      if (idx === -1) return finalized;
+      const removed = { ...finalized[idx] } as GenerativeUiItem;
+      removed.status = "error"; // "removed" lifecycle expressed as error status
+      return [...finalized.slice(0, idx), removed, ...finalized.slice(idx + 1)];
+    }
     default:
       return state;
   }

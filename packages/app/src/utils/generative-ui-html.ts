@@ -98,6 +98,57 @@ function trimFenceContent(content: string): string {
   return content.trim();
 }
 
+// ─── Structured generative UI fence detection ────────────────────────────────
+
+interface GenerativeUiFenceResult {
+  componentId: string;
+  props: Record<string, unknown>;
+  source: "fence";
+}
+
+const GEN_UI_FENCE_PATTERN = /^chisacode-ui\s+component=(\S+)/;
+
+/**
+ * 检测代码块是否包含 chisacode-ui 结构化组件声明
+ * 格式: chisacode-ui component=<id>\n{ JSON }
+ *
+ * 返回 null 表示不匹配，此时回退到现有 HTML fence 检测
+ */
+export function getGenerativeUiFence(
+  sourceInfo: string | null | undefined,
+  content: string,
+): GenerativeUiFenceResult | null {
+  if (!sourceInfo || !content) {
+    return null;
+  }
+
+  const firstLine = sourceInfo.trim();
+  const match = GEN_UI_FENCE_PATTERN.exec(firstLine);
+  if (!match) {
+    return null;
+  }
+
+  const componentId = match[1] ?? "";
+  if (!componentId) {
+    return null;
+  }
+
+  try {
+    const trimmed = content.trim();
+    const props = JSON.parse(trimmed) as unknown;
+    if (typeof props !== "object" || props === null || Array.isArray(props)) {
+      return null;
+    }
+    return {
+      componentId,
+      props: props as Record<string, unknown>,
+      source: "fence",
+    };
+  } catch {
+    return null;
+  }
+}
+
 function injectCspMeta(html: string): string {
   if (/http-equiv=["']Content-Security-Policy["']/i.test(html)) {
     return html;

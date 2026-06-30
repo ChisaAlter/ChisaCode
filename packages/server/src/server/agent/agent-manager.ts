@@ -71,6 +71,7 @@ import { getAgentProviderDefinition } from "@chisacode/protocol/provider-manifes
 import { IMPORTABLE_PROVIDERS } from "./provider-registry.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
+import { generateComponentPromptSection } from "@chisacode/protocol/generative-ui/component-manifest";
 import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
@@ -3775,7 +3776,9 @@ export class AgentManager {
   }
 
   private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
+    const genUiSection = generateComponentPromptSection();
+    const parts = [this.appendSystemPrompt.trim(), genUiSection].filter(Boolean);
+    const daemonAppendSystemPrompt = parts.join("\n\n");
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 

@@ -60,6 +60,10 @@ import {
 } from "@chisacode/protocol/loop/rpc-schemas";
 import { AgentPresetSchema, AgentPresetsPayloadSchema } from "@chisacode/protocol/agent-presets";
 import {
+  GenerativeUiActionRequestSchema,
+  GenerativeUiActionResponseSchema,
+} from "@chisacode/protocol/generative-ui/rpc-schemas";
+import {
   ChisaCodeConfigRawSchema,
   ChisaCodeLifecycleCommandRawSchema,
   ChisaCodeMetadataGenerationEntrySchema,
@@ -666,6 +670,16 @@ const ToolCallTimelineItemPayloadSchema: z.ZodType<ToolCallTimelineItem, z.ZodTy
     ToolCallCanceledPayloadSchema,
   ]);
 
+export const GenerativeUiTimelineItemPayloadSchema = z.object({
+  type: z.literal("generative_ui"),
+  instanceId: z.string(),
+  componentId: z.string(),
+  props: z.record(z.string(), z.unknown()),
+  title: z.string().optional(),
+  source: z.enum(["tool_call", "fence"]),
+  status: z.enum(["rendering", "interactive", "error"]),
+});
+
 export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, z.ZodTypeDef, unknown> =
   z.union([
     z.object({
@@ -683,6 +697,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, z.ZodT
       text: z.string(),
     }),
     ToolCallTimelineItemPayloadSchema,
+    GenerativeUiTimelineItemPayloadSchema,
     z.object({
       type: z.literal("todo"),
       items: z.array(
@@ -776,6 +791,18 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
         }),
       })
       .optional(),
+  }),
+  z.object({
+    type: z.literal("generative_ui_update"),
+    instanceId: z.string(),
+    props: z.record(z.string(), z.unknown()),
+    status: z.enum(["rendering", "interactive", "error"]).optional(),
+    timestamp: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("generative_ui_remove"),
+    instanceId: z.string(),
+    timestamp: z.string().optional(),
   }),
 ]);
 
@@ -2331,6 +2358,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProviderUsageListRequestMessageSchema,
   DiagnosticsRequestSchema,
   WorkspaceCreateRequestSchema,
+  GenerativeUiActionRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -4558,6 +4586,7 @@ type SessionOutboundMessageSchemaOptions = [
   typeof LoopStopResponseSchema,
   typeof ProviderUsageListResponseMessageSchema,
   typeof DiagnosticsResponseSchema,
+  typeof GenerativeUiActionResponseSchema,
   typeof WorkspaceCreateResponseSchema,
 ];
 
@@ -4704,6 +4733,7 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   LoopStopResponseSchema,
   ProviderUsageListResponseMessageSchema,
   DiagnosticsResponseSchema,
+  GenerativeUiActionResponseSchema,
   WorkspaceCreateResponseSchema,
 ]);
 

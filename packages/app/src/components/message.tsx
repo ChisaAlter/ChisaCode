@@ -63,7 +63,7 @@ import Animated, {
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import { createMarkdownStyles } from "@/styles/markdown-styles";
 import { Fonts } from "@/constants/theme";
-import type { TodoEntry, UserMessageImageAttachment } from "@/types/stream";
+import type { GenerativeUiItem, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
 import type { AgentAttachment } from "@chisacode/protocol/messages";
 import type { ToolCallDetail } from "@chisacode/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
@@ -72,8 +72,9 @@ import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { GenerativeHtmlPreview } from "@/components/generative-html-preview";
+import { GenerativeUiRenderer } from "@/generative-ui/generative-ui-renderer";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
-import { getGenerativeHtmlFence } from "@/utils/generative-ui-html";
+import { getGenerativeHtmlFence, getGenerativeUiFence } from "@/utils/generative-ui-html";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
@@ -114,6 +115,22 @@ import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mut
 export type { InlinePathTarget } from "@/assistant-file-links";
 
 type MarkdownStyles = Record<string, TextStyle & ViewStyle & { [key: string]: unknown }>;
+
+function buildGenerativeUiItem(
+  nodeKey: string,
+  fence: NonNullable<ReturnType<typeof getGenerativeUiFence>>,
+): GenerativeUiItem {
+  return {
+    kind: "generative_ui",
+    id: `genui_${nodeKey}`,
+    instanceId: `genui_${nodeKey}`,
+    componentId: fence.componentId,
+    props: fence.props,
+    source: fence.source,
+    status: "interactive",
+    timestamp: new Date(),
+  };
+}
 
 interface UserMessageProps {
   serverId?: string;
@@ -593,43 +610,40 @@ export const UserMessage = memo(function UserMessage({
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
       >
-            <View style={userMessageStylesheet.bubble}>
-              {hasImages ? (
-                <UserMessageImagePreviews
-                  images={resolvedImages}
-                  style={imagePreviewContainerStyle}
-                />
-              ) : null}
-              {hasAttachments ? (
-                <UserMessageAttachmentPreviews
-                  attachments={resolvedAttachments}
-                  style={attachmentPreviewContainerStyle}
-                />
-              ) : null}
-              {hasText ? (
-                <Text selectable style={userMessageStylesheet.text}>
-                  {message}
-                </Text>
-              ) : null}
-            </View>
-            {hasText ? (
-              <View style={trailingRowStyle} pointerEvents={showTrailingRow ? "auto" : "none"}>
-                <Text style={userMessageStylesheet.timestampText}>{formattedTimestamp}</Text>
-                {capabilities ? (
-                  <RewindMenu
-                    capabilities={capabilities}
-                    isPending={rewindMutation.isPending}
-                    rewoundText={message}
-                    onRewind={handleRewind}
-                  />
-                ) : null}
-                <TurnCopyButton
-                  getContent={getMessageContent}
-                  containerStyle={userMessageStylesheet.copyButton}
-                  accessibilityLabel="复制消息"
-                />
-              </View>
+        <View style={userMessageStylesheet.bubble}>
+          {hasImages ? (
+            <UserMessageImagePreviews images={resolvedImages} style={imagePreviewContainerStyle} />
+          ) : null}
+          {hasAttachments ? (
+            <UserMessageAttachmentPreviews
+              attachments={resolvedAttachments}
+              style={attachmentPreviewContainerStyle}
+            />
+          ) : null}
+          {hasText ? (
+            <Text selectable style={userMessageStylesheet.text}>
+              {message}
+            </Text>
+          ) : null}
+        </View>
+        {hasText ? (
+          <View style={trailingRowStyle} pointerEvents={showTrailingRow ? "auto" : "none"}>
+            <Text style={userMessageStylesheet.timestampText}>{formattedTimestamp}</Text>
+            {capabilities ? (
+              <RewindMenu
+                capabilities={capabilities}
+                isPending={rewindMutation.isPending}
+                rewoundText={message}
+                onRewind={handleRewind}
+              />
             ) : null}
+            <TurnCopyButton
+              getContent={getMessageContent}
+              containerStyle={userMessageStylesheet.copyButton}
+              accessibilityLabel="复制消息"
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -791,6 +805,7 @@ interface AssistantMessageProps {
   timestamp: number;
   workspaceRoot?: string;
   serverId?: string;
+  agentId?: string;
   client?: DaemonClient | null;
   spacing?: "default" | "compactTop" | "compactBottom" | "compactBoth";
 }
@@ -1631,6 +1646,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   timestamp: _timestamp,
   workspaceRoot,
   serverId,
+  agentId,
   client,
   spacing = "default",
 }: AssistantMessageProps) {
@@ -1709,6 +1725,19 @@ export const AssistantMessage = memo(function AssistantMessage({
         styles: MarkdownStyles,
         inheritedStyles: TextStyle = {},
       ) => {
+        const generativeUi = getGenerativeUiFence(node.sourceInfo, node.content ?? "");
+        if (generativeUi) {
+          const genUiItem = buildGenerativeUiItem(node.key, generativeUi);
+          return (
+            <GenerativeUiRenderer
+              key={node.key}
+              item={genUiItem}
+              serverId={serverId ?? ""}
+              agentId={agentId ?? ""}
+            />
+          );
+        }
+
         const generativeHtml = getGenerativeHtmlFence(node.sourceInfo, node.content ?? "");
         if (generativeHtml) {
           return (
@@ -1889,7 +1918,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         );
       },
     };
-  }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot]);
+  }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot, agentId]);
 
   const displayMessage = useMemo(() => stripLeadingMarkdownHorizontalRule(message), [message]);
   const blocks = useMemo(() => splitMarkdownBlocks(displayMessage), [displayMessage]);
@@ -1922,20 +1951,20 @@ export const AssistantMessage = memo(function AssistantMessage({
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
       <View testID="assistant-message-surface" style={assistantSurfaceStyle}>
-            {keyedBlocks.map(({ key, block }, index) => (
-              <AssistantMessageBlockContainer
-                key={key}
-                block={block}
-                marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
-              >
-                <MemoizedMarkdownBlock
-                  text={block}
-                  rules={markdownRules}
-                  parser={markdownParser}
-                  onLinkPress={handleMarkdownLinkPress}
-                />
-              </AssistantMessageBlockContainer>
-            ))}
+        {keyedBlocks.map(({ key, block }, index) => (
+          <AssistantMessageBlockContainer
+            key={key}
+            block={block}
+            marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
+          >
+            <MemoizedMarkdownBlock
+              text={block}
+              rules={markdownRules}
+              parser={markdownParser}
+              onLinkPress={handleMarkdownLinkPress}
+            />
+          </AssistantMessageBlockContainer>
+        ))}
       </View>
     </View>
   );

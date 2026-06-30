@@ -119,6 +119,8 @@ import {
   buildWorkspaceCheckout,
 } from "./session-helpers.js";
 
+import { sendPromptToAgent } from "./agent/agent-prompt.js";
+
 // Re-export so existing imports from "./session.js" keep working.
 export { resolveWaitForFinishError } from "./session-helpers.js";
 export { type SessionRuntimeMetrics } from "./session-internal-types.js";
@@ -134,6 +136,7 @@ import {
   ChatScheduleLoopHandler,
   CheckoutGitHandler,
   ConfigControlHandler,
+  GenerativeUiHandler,
   ProviderHandler,
   TerminalScriptHandler,
   WorkspaceProjectHandler,
@@ -373,6 +376,7 @@ export class Session {
   private readonly terminalScriptHandler: TerminalScriptHandler;
   private readonly workspaceProjectHandler: WorkspaceProjectHandler;
   private readonly agentLifecycleHandler: AgentLifecycleHandler;
+  private readonly generativeUiHandler: GenerativeUiHandler;
 
   constructor(options: SessionOptions) {
     const {
@@ -529,6 +533,7 @@ export class Session {
     this.terminalScriptHandler = new TerminalScriptHandler(sessionContext);
     this.workspaceProjectHandler = new WorkspaceProjectHandler(sessionContext);
     this.agentLifecycleHandler = new AgentLifecycleHandler(sessionContext);
+    this.generativeUiHandler = new GenerativeUiHandler(sessionContext);
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -561,7 +566,7 @@ export class Session {
       getDaemonTcpPort: this.getDaemonTcpPort,
       getDaemonTcpHost: this.getDaemonTcpHost,
       resolveScriptHealth: this.resolveScriptHealth,
-      emit: (message) => this.emit(message),
+      emit: (message) => this.emit(message as SessionOutboundMessage),
       notifyGitMutation: (cwd, reason, opts) => this.notifyGitMutation(cwd, reason, opts),
       emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
       emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>
@@ -678,6 +683,23 @@ export class Session {
       daemonVersion: this.daemonVersion,
       daemonRuntimeConfig: this.daemonRuntimeConfig,
       mcpBaseUrl: this.mcpBaseUrl,
+
+      // GenerativeUiContext
+      getAgent: (agentId) => {
+        const agent = this.agentManager.getAgent(agentId);
+        if (!agent) return undefined;
+        return { status: agent.lifecycle };
+      },
+      sendPromptToAgent: async (agentId, text, options) => {
+        await sendPromptToAgent({
+          agentManager: this.agentManager,
+          agentStorage: this.agentStorage,
+          agentId,
+          prompt: text,
+          unarchive: options?.unarchive ?? true,
+          logger: this.sessionLogger,
+        });
+      },
     };
   }
 
@@ -1137,6 +1159,7 @@ export class Session {
     const promise =
       this.dispatchVoiceAndDictationMessage(msg) ??
       this.dispatchAgentLifecycleMessage(msg) ??
+      (await this.dispatchGenerativeUiMessage(msg)) ??
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg) ??
       this.dispatchProviderMessage(msg) ??
@@ -1175,6 +1198,10 @@ export class Session {
 
   private dispatchAgentLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     return this.agentLifecycleHandler.dispatch(msg);
+  }
+
+  private async dispatchGenerativeUiMessage(msg: SessionInboundMessage): Promise<undefined> {
+    return this.generativeUiHandler.dispatch(msg);
   }
 
   // eslint-disable-next-line complexity
@@ -2812,6 +2839,7 @@ export class Session {
     this.terminalScriptHandler.dispose();
     this.workspaceProjectHandler.dispose();
     this.agentLifecycleHandler.dispose();
+    this.generativeUiHandler.dispose();
 
     for (const unsubscribe of this.workspaceGitSubscriptions.values()) {
       unsubscribe();
