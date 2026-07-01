@@ -71,3 +71,5 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+electronDownload:
+  cache: "${env.ELECTRON_CACHE}"

@@ -632,8 +632,8 @@ test("createAgent injects daemon append system prompt at runtime only", async ()
   const record = await storage.get(snapshot.id);
 
   expect(client.createdConfigs[0]?.systemPrompt).toBe("Agent instructions.");
-  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
-  expect(snapshot.config.daemonAppendSystemPrompt).toBe("Daemon instructions.");
+  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toContain("Daemon instructions.");
+  expect(snapshot.config.daemonAppendSystemPrompt).toContain("Daemon instructions.");
   expect(record?.config?.systemPrompt).toBe("Agent instructions.");
   expect(record?.config).not.toHaveProperty("daemonAppendSystemPrompt");
 });
@@ -662,7 +662,39 @@ test("daemon append system prompt is injected into Pi configs", async () => {
     systemPrompt: "Agent instructions.",
   });
 
-  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
+  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toContain("Daemon instructions.");
+});
+
+test("daemon append system prompt includes generative UI chisacode-ui fence instructions", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: {
+      codex: client,
+    },
+    registry: storage,
+    logger,
+    appendSystemPrompt: "Daemon instructions.",
+    idFactory: () => "00000000-0000-4000-8000-000000000105",
+  });
+
+  await manager.createAgent({
+    provider: "codex",
+    cwd: workdir,
+  });
+
+  const daemonAppend = client.createdConfigs[0]?.daemonAppendSystemPrompt;
+  expect(daemonAppend).toBeDefined();
+  expect(daemonAppend).toContain("Daemon instructions.");
+  expect(daemonAppend).toContain("chisacode-ui");
+  expect(daemonAppend).toContain("component=<componentId>");
+  expect(daemonAppend).not.toContain("render_ui");
+  expect(daemonAppend).toContain("line_chart");
+  expect(daemonAppend).toContain("bar_chart");
+  expect(daemonAppend).toContain("table");
+  expect(daemonAppend).toContain("form");
 });
 
 test("setAgentMode persists the selected mode across session reload", async () => {
@@ -983,7 +1015,7 @@ test("createAgent passes daemon launch env through the provider launch context",
     cwd: workdir,
   });
 
-  expect(client.lastConfig).toEqual({
+  expect(client.lastConfig).toMatchObject({
     provider: "codex",
     cwd: workdir,
     model: "gpt-5.4",

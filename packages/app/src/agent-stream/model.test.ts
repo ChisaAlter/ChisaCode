@@ -87,7 +87,7 @@ function toolCall(id: string, seed: number): StreamItem {
 }
 
 function providerTimelineEvent(
-  provider: AgentStreamEventPayload["provider"],
+  provider: string,
   item: Extract<AgentStreamEventPayload, { type: "timeline" }>["item"],
 ): AgentStreamEventPayload {
   return {
@@ -98,7 +98,7 @@ function providerTimelineEvent(
 }
 
 function applyProviderEvents(
-  provider: AgentStreamEventPayload["provider"],
+  provider: string,
   events: Array<Extract<AgentStreamEventPayload, { type: "timeline" }>["item"]>,
 ): StreamItem[] {
   let tail: StreamItem[] = [];

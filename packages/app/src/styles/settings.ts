@@ -1,3 +1,4 @@
+import type { ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 export const settingsStyles = StyleSheet.create((theme) => ({
@@ -36,10 +37,22 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
   },
   card: {
-    backgroundColor: theme.colors.surface1,
+    ...(theme.glass.enabled
+      ? {
+          backgroundColor: theme.glass.panel,
+          borderColor: theme.glass.cardBorder,
+          backdropFilter: theme.glass
+            .cssBackdropFilter as unknown as ViewStyle["backfaceVisibility"],
+          // react-native-web needs WebkitBackdropFilter prefix
+          WebkitBackdropFilter: theme.glass
+            .cssBackdropFilter as unknown as ViewStyle["backfaceVisibility"],
+        }
+      : {
+          backgroundColor: theme.colors.surface1,
+          borderColor: theme.colors.border,
+        }),
     borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   row: {

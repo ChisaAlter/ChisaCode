@@ -110,7 +110,8 @@
     "release:major": "npm run release:check && npm run version:all:major && npm run release:publish && npm run release:push"
   },
   "dependencies": {
-    "markdown-it": "14.2.0"
+    "markdown-it": "14.2.0",
+    "react-refresh": "^0.14.2"
   },
   "devDependencies": {
     "@types/ws": "^8.5.14",

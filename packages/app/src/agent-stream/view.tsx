@@ -53,6 +53,7 @@ import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import type { ToastApi } from "@/components/toast-host";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
+import { GenerativeUiRenderer } from "@/generative-ui/generative-ui-renderer";
 import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
@@ -450,13 +451,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               timestamp={item.timestamp.getTime()}
               workspaceRoot={workspaceRoot}
               serverId={resolvedServerId}
+              agentId={agentId}
               client={client}
               spacing={layoutItem.assistantSpacing}
             />
           </AssistantFileLinkResolverProvider>
         );
       },
-      [client, handleInlinePathPress, resolvedServerId, toast, workspaceRoot],
+      [client, handleInlinePathPress, resolvedServerId, toast, workspaceRoot, agentId],
     );
 
     const renderThoughtItem = useCallback(
@@ -565,11 +567,23 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               />
             );
 
+          case "generative_ui":
+            return (
+              <GenerativeUiRenderer item={item} serverId={resolvedServerId} agentId={agentId} />
+            );
+
           default:
             return null;
         }
       },
-      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
+      [
+        renderUserMessageItem,
+        renderAssistantMessageItem,
+        renderThoughtItem,
+        renderToolCallItem,
+        agentId,
+        resolvedServerId,
+      ],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;

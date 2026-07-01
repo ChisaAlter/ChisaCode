@@ -99,14 +99,17 @@ export function generateComponentPromptSection(): string {
   lines.push("## Generative UI Components");
   lines.push("");
   lines.push(
-    "You can render interactive UI components by outputting a `render_ui` tool call. " +
-      "The user will see these as interactive cards in the chat. " +
-      "User interactions will be relayed back to you as context in subsequent turns.",
+    "You can render interactive UI components by outputting a Markdown code fence " +
+      "with the language identifier `chisacode-ui`. The user will see these as " +
+      "interactive cards in the chat. User interactions will be relayed back to " +
+      "you as context in subsequent turns.",
   );
   lines.push("");
-  lines.push(
-    "Format: output a tool call with name `render_ui` and parameters: `{ componentId: string, props: { ... } }`",
-  );
+  lines.push("Format:");
+  lines.push("");
+  lines.push("```chisacode-ui component=<componentId>");
+  lines.push('{"prop1": "value1", "prop2": "value2"}');
+  lines.push("```");
   lines.push("");
 
   const grouped = new Map<string, string[]>();

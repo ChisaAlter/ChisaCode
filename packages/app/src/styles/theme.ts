@@ -512,19 +512,17 @@ const ghosttyDarkColors = buildDarkSemanticColors({
   ringColor: "#3f4454", // match borderAccent
 });
 
-const liquidNeonWorkspaceSurface = "#f8fafc";
-
 const liquidNeonLightColors = {
   ...lightSemanticColors,
-  surface0: liquidNeonWorkspaceSurface,
+  surface0: "transparent",
   surface1: "rgba(255, 255, 255, 0.72)",
   surface2: "rgba(255, 255, 255, 0.82)",
   surface3: "rgba(245, 248, 252, 0.90)",
   surface4: "rgba(233, 238, 245, 0.94)",
   surfaceDiffEmpty: "rgba(255, 255, 255, 0.72)",
-  surfaceSidebar: liquidNeonWorkspaceSurface,
+  surfaceSidebar: "rgba(255, 255, 255, 0.28)",
   surfaceSidebarHover: "rgba(255, 255, 255, 0.76)",
-  surfaceWorkspace: liquidNeonWorkspaceSurface,
+  surfaceWorkspace: "transparent",
   foreground: "#1d1d1f",
   foregroundMuted: "#6e6e73",
   scrollbarHandle: "rgba(60, 60, 67, 0.34)",
@@ -539,7 +537,7 @@ const liquidNeonLightColors = {
   successForeground: "#ffffff",
   overlay: lightOverlay,
   blockquoteBorder: "#007aff", // liquid neon accent blue
-  background: liquidNeonWorkspaceSurface,
+  background: "transparent",
   popover: "rgba(255, 255, 255, 0.82)",
   popoverForeground: "#1d1d1f",
   primary: "#1d1d1f",
@@ -711,6 +709,8 @@ const defaultGlass = {
   specular: "transparent",
   refraction: "transparent",
   caustic: "transparent",
+  cssBackdropFilter: "none",
+  cardBorder: "transparent",
 } as const;
 
 const liquidNeonGlass = {
@@ -729,6 +729,8 @@ const liquidNeonGlass = {
   specular: "rgba(255, 255, 255, 0.88)",
   refraction: "rgba(130, 170, 220, 0.18)",
   caustic: "rgba(255, 255, 255, 0.42)",
+  cssBackdropFilter: "blur(16px) saturate(1.08)",
+  cardBorder: "rgba(255, 255, 255, 0.72)",
 } as const;
 
 const liquidNeonShadow = {
@@ -784,67 +786,46 @@ export const liquidNeonTheme = {
   ...commonTheme,
 } as const;
 
-export const lightTheme = {
-  colorScheme: "light" as const,
-  colors: {
-    ...lightSemanticColors,
-    palette: baseColors,
-    syntax: lightHighlightColors,
+const lightShadow = {
+  sm: {
+    shadowColor: "rgba(0, 0, 0, 0.02)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
-  glass: defaultGlass,
-  shadow: {
-    sm: {
-      shadowColor: "rgba(0, 0, 0, 0.02)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    md: {
-      shadowColor: "rgba(0, 0, 0, 0.04)",
-      shadowOffset: { width: 0, height: 4 },
-      shadowRadius: 16,
-      elevation: 4,
-    },
-    lg: {
-      shadowColor: "rgba(0, 0, 0, 0.08)",
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 24,
-      elevation: 8,
-    },
+  md: {
+    shadowColor: "rgba(0, 0, 0, 0.04)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 16,
+    elevation: 4,
   },
-  ...commonTheme,
+  lg: {
+    shadowColor: "rgba(0, 0, 0, 0.08)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
+  },
 } as const;
 
-export const chisakiTheme = {
-  colorScheme: "light" as const,
-  colors: {
-    ...chisakiSemanticColors,
-    palette: baseColors,
-    syntax: lightHighlightColors,
-  },
-  glass: defaultGlass,
-  shadow: {
-    sm: {
-      shadowColor: "rgba(0, 0, 0, 0.02)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowRadius: 8,
-      elevation: 2,
+/** Widens literal string types to string while preserving object structure */
+type Widened<T> = T extends string ? string : { [K in keyof T]: Widened<T[K]> };
+
+function buildLightTheme(semanticColors: Widened<typeof lightSemanticColors>) {
+  return {
+    colorScheme: "light" as const,
+    colors: {
+      ...semanticColors,
+      palette: baseColors,
+      syntax: lightHighlightColors,
     },
-    md: {
-      shadowColor: "rgba(0, 0, 0, 0.04)",
-      shadowOffset: { width: 0, height: 4 },
-      shadowRadius: 16,
-      elevation: 4,
-    },
-    lg: {
-      shadowColor: "rgba(0, 0, 0, 0.08)",
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 24,
-      elevation: 8,
-    },
-  },
-  ...commonTheme,
-} as const;
+    glass: defaultGlass,
+    shadow: lightShadow,
+    ...commonTheme,
+  } as const;
+}
+
+export const lightTheme = buildLightTheme(lightSemanticColors);
+export const chisakiTheme = buildLightTheme(chisakiSemanticColors);
 
 // Keep compatibility with existing code
 export const theme = darkTheme;

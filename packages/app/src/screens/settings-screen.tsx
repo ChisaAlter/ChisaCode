@@ -67,6 +67,7 @@ import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1092,6 +1093,7 @@ function SettingsSidebar({
   const insets = useSafeAreaInsets();
   const padding = useWindowControlsPadding("sidebar");
   const isDesktop = layout === "desktop";
+  const isGlassDesktop = isDesktop && theme.glass.enabled;
   const containerStyle = useMemo(
     () => [
       isDesktop ? sidebarStyles.desktopContainer : sidebarStyles.mobileContainer,
@@ -1104,8 +1106,8 @@ function SettingsSidebar({
   const isProjectsSelected = view.kind === "projects" || view.kind === "project";
   const paddingTopStyle = useMemo(() => ({ height: padding.top }), [padding.top]);
 
-  return (
-    <View style={containerStyle} testID="settings-sidebar">
+  const innerContent = (
+    <>
       {isDesktop ? (
         <>
           <TitlebarDragRegion />
@@ -1161,6 +1163,20 @@ function SettingsSidebar({
           </Text>
         </Pressable>
       </View>
+    </>
+  );
+
+  if (isGlassDesktop) {
+    return (
+      <GlassSurface variant="chrome" style={containerStyle}>
+        {innerContent}
+      </GlassSurface>
+    );
+  }
+
+  return (
+    <View style={containerStyle} testID="settings-sidebar">
+      {innerContent}
     </View>
   );
 }
@@ -1612,7 +1628,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
 const styles = StyleSheet.create((theme) => ({
   loadingContainer: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surface0,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1622,7 +1638,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surface0,
   },
   scrollView: {
     flex: 1,
@@ -1708,9 +1724,9 @@ const desktopStyles = StyleSheet.create((theme) => ({
 const sidebarStyles = StyleSheet.create((theme) => ({
   desktopContainer: {
     width: 320,
-    borderRightWidth: 1,
+    borderRightWidth: theme.glass.enabled ? 0 : 1,
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceWorkspace,
+    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surfaceWorkspace,
   },
   mobileContainer: {
     paddingVertical: theme.spacing[2],

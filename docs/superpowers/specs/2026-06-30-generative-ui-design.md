@@ -38,13 +38,13 @@ ChisaCode 已有一个基础"生成式 HTML 预览"功能（`packages/app/src/co
 
 ## 2. 设计决策
 
-| 维度          | 决策                | 说明                                                  |
-| ------------- | ------------------- | ----------------------------------------------------- |
-| 功能范围      | 完整 AI→UI 框架     | 结构化组件 + 双向交互 + HTML fallback                 |
-| 交互模式      | 双向交互 + 单向展示 | 同时支持，不区分 MVP 阶段                             |
-| 安全模型      | 组件白名单 + 沙箱   | 结构化组件走注册表白名单；自由 HTML 走沙箱 + 标签标识 |
-| 触发机制      | 混合方案            | Tool Call 主路径 + Markdown Fence fallback            |
-| Provider 适配 | System Prompt 注入  | 零适配，所有模型自动兼容                              |
+| 维度          | 决策                  | 说明                                                                           |
+| ------------- | --------------------- | ------------------------------------------------------------------------------ |
+| 功能范围      | 完整 AI→UI 框架       | 结构化组件 + 双向交互 + HTML fallback                                          |
+| 交互模式      | 双向交互 + 单向展示   | 同时支持，不区分 MVP 阶段                                                      |
+| 安全模型      | 组件白名单 + 沙箱     | 结构化组件走注册表白名单；自由 HTML 走沙箱 + 标签标识                          |
+| 触发机制      | Markdown Fence 主路径 | `chisacode-ui` fence → 服务端检测 + App 端检测 → `generative_ui` timeline item |
+| Provider 适配 | System Prompt 注入    | 零适配，所有模型自动兼容                                                       |
 
 ---
 
@@ -58,7 +58,7 @@ ChisaCode 已有一个基础"生成式 HTML 预览"功能（`packages/app/src/co
 │ 注入 gen_ui  │                              │  ├ component-manifest │
 │              │                              │  └ agent-types 扩展   │
 └──────┬───────┘                              └──────────┬───────────┘
-       │ render_ui tool call                             │
+       │ chisacode-ui fence (Markdown)                   │
        ▼                                                 ▼
 ┌──────────────┐                              ┌──────────────────────┐
 │  Server 层   │                              │      App 层          │
@@ -152,30 +152,37 @@ agent-manager.ts applyDaemonAppendSystemPromptWithGenUi()
 
 注入内容示例（AI 视角）：
 
-```
+````
 ## Generative UI Components
 
-You can render interactive UI components by outputting a `generative_ui`
-tool call. Format: output a tool call with name `render_ui` and parameters:
-{ componentId, props }
+You can render interactive UI components by outputting a Markdown code fence
+with the language identifier `chisacode-ui`. Format:
 
-### chart
+```chisacode-ui component=<componentId>
+{"prop1": "value1", "prop2": "value2"}
+````
+
+### Charts
+
 line_chart: 折线图...
-    Props: title, data, xAxis, yAxis, height, color
-    Actions: "point_click" (payload: { index, point })
+Props: title, data, xAxis, yAxis, height, color
+Actions: "point_click" (payload: { index, point })
 bar_chart: 柱状图...
 ...
 
-### table
+### Tables
+
 table: 数据表格...
-    Props: title, columns, rows, pageSize
-    Actions: "row_click", "sort"
+Props: title, columns, rows, pageSize
+Actions: "row_click", "sort"
 ...
 
-### form
+### Forms
+
 form: 表单...
-    Props: title, fields, submitLabel
-    Actions: "change", "submit"
+Props: title, fields, submitLabel
+Actions: "change", "submit"
+
 ```
 
 该注入在 agent 创建/恢复时触发，不持久化到 agent storage。如果未来新增组件，重启 daemon 后自动更新。
@@ -203,6 +210,7 @@ form: 表单...
 ## 6. 回调闭环
 
 ```
+
 1. AI 产出 generative_ui timeline item
 2. Server → App emit timeline 事件
 3. App StreamReducer → GenerativeUiItem → AgentStreamView 渲染
@@ -213,6 +221,7 @@ form: 表单...
 8. Server sendPromptToAgent → 注入下一轮对话上下文
 9. AI 下一轮看到上下文 → 可产出新文本/新 gen_ui/update 原组件
 10. Server → App generative_ui_update / generative_ui_remove 生命周期事件
+
 ```
 
 回调关键点：
@@ -254,48 +263,52 @@ form: 表单...
 ### 新增文件
 
 ```
+
 packages/protocol/src/generative-ui/
-├── rpc-schemas.ts              # Zod schema (RPC 对)
-└── component-manifest.ts       # 共享组件元数据清单 + prompt 生成
+├── rpc-schemas.ts # Zod schema (RPC 对)
+└── component-manifest.ts # 共享组件元数据清单 + prompt 生成
 
 packages/app/src/generative-ui/
 ├── registry/
-│   ├── types.ts                # 组件注册条目类型
-│   ├── registry.ts             # GenerativeUiRegistry 单例
-│   └── components.ts           # 注册 entry（MVP: line_chart, bar_chart, table, form）
+│ ├── types.ts # 组件注册条目类型
+│ ├── registry.ts # GenerativeUiRegistry 单例
+│ └── components.ts # 注册 entry（MVP: line_chart, bar_chart, table, form）
 ├── use-generative-ui-action.ts # useGenUiAction Hook
-├── generative-ui-renderer.tsx   # 通用渲染分发器
+├── generative-ui-renderer.tsx # 通用渲染分发器
 ├── generative-ui-error-boundary.tsx
-├── errors.ts                   # 错误类型
+├── errors.ts # 错误类型
 └── components/
-    ├── line-chart.tsx
-    ├── bar-chart.tsx
-    ├── data-table.tsx
-    └── generative-form-card.tsx
+├── line-chart.tsx
+├── bar-chart.tsx
+├── data-table.tsx
+└── generative-form-card.tsx
 
 packages/server/src/server/session-handlers/
-└── generative-ui-handler.ts    # RPC 处理 + 上下文注入
+└── generative-ui-handler.ts # RPC 处理 + 上下文注入
+
 ```
 
 ### 修改文件
 
 ```
+
 packages/protocol/src/
-├── agent-types.ts              # +GenerativeUiTimelineItem, +AgentStreamEvent 事件
-├── messages.ts                 # +Schema 注册到 union
+├── agent-types.ts # +GenerativeUiTimelineItem, +AgentStreamEvent 事件
+├── messages.ts # +Schema 注册到 union
 
 packages/client/src/
-└── daemon-client.ts            # +sendGenerativeUiAction 方法
+└── daemon-client.ts # +sendGenerativeUiAction 方法
 
 packages/app/src/
-├── types/stream.ts             # +GenerativeUiItem StreamItem 类型
-├── components/message.tsx       # fence 回调中新增 gen_ui fence 检测
+├── types/stream.ts # +GenerativeUiItem StreamItem 类型
+├── components/message.tsx # fence 回调中新增 gen_ui fence 检测
 └── utils/generative-ui-html.ts # +getGenerativeUiFence 结构化检测
 
 packages/server/src/server/
-├── session.ts                  # +generativeUiHandler 分发
-├── session-handlers/index.ts   # +export GenerativeUiHandler
-└── session-handlers/session-context.ts  # +GenerativeUiContext 接口
+├── session.ts # +generativeUiHandler 分发
+├── session-handlers/index.ts # +export GenerativeUiHandler
+└── session-handlers/session-context.ts # +GenerativeUiContext 接口
+
 ```
 
 ---
@@ -331,4 +344,5 @@ packages/server/src/server/
 
 1. **流式渲染**: 当前设计中等整个组件声明完成后才渲染。未来是否支持 incremental partial props 更新（类似 assistant_message 的流式追加）？—— 暂不处理，留作后续。
 2. **组件版本管理**: 如果后续新增/移除组件，已渲染的历史消息中组件如何处理？—— MVP 中历史消息的 gen_ui 组件不保证持续可用，显示退化信息。
-3. **非 tool-use 模型**: 仅靠 fence fallback 检测，结构化组件路径不可用。—— 可接受，AI 不主动生成 gen_ui 则不渲染。
+3. **非 tool-use 模型**: 通过 Markdown fence 检测（服务端 `AgentStreamCoalescer.onFlush` + App 端 `message.tsx` 渲染）已覆盖所有 provider 类型，结构化组件路径通用可用。
+```

@@ -29,6 +29,11 @@ class GenerativeUiRegistry {
     }
   }
 
+  /** Clear all registered components. Intended for testing only. */
+  clear(): void {
+    this.components.clear();
+  }
+
   get(id: string): GenerativeUiComponentEntry | null {
     return this.components.get(id) ?? null;
   }

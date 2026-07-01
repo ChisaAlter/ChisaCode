@@ -351,11 +351,25 @@ export interface CompactionTimelineItem {
   preTokens?: number;
 }
 
+export type GenerativeUiStatus = "rendering" | "interactive" | "error";
+
+export interface GenerativeUiTimelineItem {
+  [key: string]: unknown;
+  type: "generative_ui";
+  instanceId: string;
+  componentId: string;
+  props: Record<string, unknown>;
+  title?: string;
+  source: "tool_call" | "fence";
+  status: GenerativeUiStatus;
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
   | { type: "reasoning"; text: string }
   | ToolCallTimelineItem
+  | GenerativeUiTimelineItem
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
   | CompactionTimelineItem
@@ -417,6 +431,20 @@ export type AgentStreamEvent =
       provider: AgentProvider;
       reason: "finished" | "error" | "permission";
       timestamp: string;
+    }
+  | {
+      type: "generative_ui_update";
+      instanceId: string;
+      props: Record<string, unknown>;
+      status?: GenerativeUiStatus;
+      provider?: AgentProvider;
+      timestamp?: string;
+    }
+  | {
+      type: "generative_ui_remove";
+      instanceId: string;
+      provider?: AgentProvider;
+      timestamp?: string;
     };
 
 export function getAgentStreamEventTurnId(event: AgentStreamEvent): string | undefined {

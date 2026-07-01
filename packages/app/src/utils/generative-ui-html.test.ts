@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGenerativeHtmlDocument,
   getGenerativeHtmlFence,
+  getGenerativeUiFence,
   isGenerativeHtmlFence,
 } from "./generative-ui-html";
 
@@ -45,5 +46,44 @@ describe("generative UI HTML", () => {
     expect(documentHtml.indexOf("Content-Security-Policy")).toBeLessThan(
       documentHtml.indexOf("<title>Dash</title>"),
     );
+  });
+});
+
+describe("getGenerativeUiFence", () => {
+  it("detects structured gen_ui fence from sourceInfo + content", () => {
+    const result = getGenerativeUiFence(
+      "chisacode-ui component=line_chart",
+      '{"title": "Sales","data": [{"month": "Jan","amount": 100}]}',
+    );
+    expect(result).toEqual({
+      componentId: "line_chart",
+      props: { title: "Sales", data: [{ month: "Jan", amount: 100 }] },
+      source: "fence",
+    });
+  });
+
+  it("returns null for non-gen-ui code blocks", () => {
+    expect(getGenerativeUiFence("json", '{"key": "value"}')).toBeNull();
+    expect(getGenerativeUiFence("html", "<div>hello</div>")).toBeNull();
+    expect(getGenerativeUiFence("typescript", "const x = 1;")).toBeNull();
+  });
+
+  it("returns null when sourceInfo is null or empty", () => {
+    expect(getGenerativeUiFence(null, "{}")).toBeNull();
+    expect(getGenerativeUiFence(undefined, "{}")).toBeNull();
+    expect(getGenerativeUiFence("", "")).toBeNull();
+  });
+
+  it("returns null when JSON parsing fails", () => {
+    expect(getGenerativeUiFence("chisacode-ui component=form", "{invalid json}")).toBeNull();
+  });
+
+  it("returns null when payload is an array", () => {
+    expect(getGenerativeUiFence("chisacode-ui component=table", "[1, 2, 3]")).toBeNull();
+  });
+
+  it("returns null when payload is a primitive", () => {
+    expect(getGenerativeUiFence("chisacode-ui component=chart", '"string"')).toBeNull();
+    expect(getGenerativeUiFence("chisacode-ui component=chart", "42")).toBeNull();
   });
 });

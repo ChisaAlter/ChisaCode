@@ -85,6 +85,14 @@
       "types": "./dist/error-utils.d.ts",
       "default": "./dist/error-utils.js"
     },
+    "./generative-ui/component-manifest": {
+      "types": "./dist/generative-ui/component-manifest.d.ts",
+      "default": "./dist/generative-ui/component-manifest.js"
+    },
+    "./generative-ui/rpc-schemas": {
+      "types": "./dist/generative-ui/rpc-schemas.d.ts",
+      "default": "./dist/generative-ui/rpc-schemas.js"
+    },
     "./git-remote": {
       "types": "./dist/git-remote.d.ts",
       "default": "./dist/git-remote.js"
