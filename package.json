@@ -111,23 +111,23 @@
   },
   "dependencies": {
     "markdown-it": "14.2.0",
-    "react-refresh": "^0.14.2"
+    "react-refresh": "^0.18.0"
   },
   "devDependencies": {
     "@types/ws": "^8.5.14",
     "@typescript/native-preview": "7.0.0-dev.20260423.1",
-    "@vercel/nft": "^1.5.0",
+    "@vercel/nft": "^1.10.2",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "get-port-cli": "^3.0.0",
     "js-yaml": "^4.1.1",
     "knip": "^5.82.1",
-    "lefthook": "^2.1.6",
-    "oxfmt": "0.46.0",
-    "oxlint": "1.61.0",
-    "oxlint-tsgolint": "^0.22.1",
+    "lefthook": "^2.1.9",
+    "oxfmt": "0.57.0",
+    "oxlint": "1.72.0",
+    "oxlint-tsgolint": "^0.24.0",
     "patch-package": "^8.0.1",
-    "playwright": "^1.56.1",
+    "playwright": "^1.61.1",
     "typescript": "^5.9.3",
     "ws": "8.21.0"
   },
