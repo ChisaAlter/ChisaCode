@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
-import { getIsElectron, isWeb, isNative } from "@/constants/platform";
+import { getIsElectron, isAndroid, isWeb, isNative } from "@/constants/platform";
 import { readDesktopSystemIdleTimeMs } from "@/desktop/electron/idle";
 import { invokeDesktopCommand } from "@/desktop/electron/invoke";
 import {
@@ -144,4 +144,38 @@ export function useClientActivity({
       stop();
     };
   }, [client, tracker]);
+
+  // Android foreground service: keeps WebSocket alive when app is in background.
+  useEffect(() => {
+    if (!isAndroid) return;
+
+    let disposed = false;
+
+    const startService = () => {
+      import("@/native/android-runtime.android")
+        .then((m) => m.startForegroundService("ChisaCode"))
+        .catch(() => {});
+    };
+
+    const stopService = () => {
+      import("@/native/android-runtime.android")
+        .then((m) => m.stopForegroundService())
+        .catch(() => {});
+    };
+
+    const unsubscribe = client.subscribeConnectionStatus((state) => {
+      if (disposed) return;
+      if (state.status === "connected") {
+        startService();
+      } else {
+        stopService();
+      }
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+      stopService();
+    };
+  }, [client]);
 }

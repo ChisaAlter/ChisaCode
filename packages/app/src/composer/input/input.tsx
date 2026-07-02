@@ -53,7 +53,7 @@ import { formatShortcut } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
 import { useComposerHeightMirror } from "./height-mirror";
@@ -427,6 +427,34 @@ function handleDesktopKeyPressImpl(
   if (ctx.isSubmitDisabled || ctx.isSubmitLoading || ctx.disabled) return;
   event.preventDefault();
   ctx.handleDefaultSendAction();
+}
+
+function handleNativeKeyPress(
+  event: NativeSyntheticEvent<TextInputKeyPressEventData>,
+  ctx: DesktopKeyPressContext,
+): void {
+  if (event.nativeEvent.key !== "Enter") return;
+  if (!ctx.submitOnEnter) return;
+  if (ctx.isSubmitDisabled || ctx.isSubmitLoading || ctx.disabled) return;
+  ctx.handleDefaultSendAction();
+}
+
+function computeShouldSubmitOnEnter(web: boolean, compact: boolean, native: boolean): boolean {
+  if (web && !compact) return true;
+  return native;
+}
+
+function resolveKeyPressHandler(
+  web: boolean,
+  native: boolean,
+  desktop: (event: WebTextInputKeyPressEvent) => void,
+  nativeHandler: (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => void,
+):
+  | ((event: WebTextInputKeyPressEvent | NativeSyntheticEvent<TextInputKeyPressEventData>) => void)
+  | undefined {
+  if (web) return desktop;
+  if (native) return nativeHandler;
+  return undefined;
 }
 
 interface KeyboardActionHandlers {
@@ -1640,7 +1668,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     );
 
     const shouldHandleWebKeyPress = isWeb;
-    const shouldSubmitOnEnter = isWeb && !isCompact;
+    const shouldSubmitOnEnter = computeShouldSubmitOnEnter(isWeb, isCompact, isNative);
 
     function handleDesktopKeyPress(event: WebTextInputKeyPressEvent) {
       if (!shouldHandleWebKeyPress) return;
@@ -1656,6 +1684,28 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         handleDefaultSendAction,
       });
     }
+
+    function handleNativeKeyPressEvent(event: NativeSyntheticEvent<TextInputKeyPressEventData>) {
+      const ctx: DesktopKeyPressContext = {
+        onKeyPressCallback,
+        submitOnEnter: shouldSubmitOnEnter,
+        isAgentRunning,
+        onQueue,
+        isSubmitDisabled,
+        isSubmitLoading,
+        disabled,
+        handleAlternateSendAction,
+        handleDefaultSendAction,
+      };
+      handleNativeKeyPress(event, ctx);
+    }
+
+    const keyPressHandler = resolveKeyPressHandler(
+      isWeb,
+      isNative,
+      handleDesktopKeyPress,
+      handleNativeKeyPressEvent,
+    );
 
     const { shouldShowSendButton } = computeSendableContent({
       value,
@@ -1825,7 +1875,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
               onContentSizeChange={handleContentSizeChange}
               editable={!isDictating && !isRealtimeVoiceForCurrentAgent && !disabled}
-              onKeyPress={shouldHandleWebKeyPress ? handleDesktopKeyPress : undefined}
+              onKeyPress={keyPressHandler}
               onSelectionChange={handleSelectionChange}
               autoFocus={isWeb && autoFocus}
             />

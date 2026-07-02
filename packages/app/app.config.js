@@ -98,7 +98,7 @@ export default {
         foregroundImage: "./assets/images/android-icon-foreground.png",
       },
       edgeToEdgeEnabled: true,
-      predictiveBackGestureEnabled: false,
+      predictiveBackGestureEnabled: true,
       softwareKeyboardLayoutMode: "resize",
       // Allow HTTP connections for local network hosts (required for release builds)
       usesCleartextTraffic: true,
@@ -108,6 +108,9 @@ export default {
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "CAMERA",
         "android.permission.CAMERA",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.POST_NOTIFICATIONS",
       ],
       package: variant.packageId,
       versionCode: androidVersionCode,
@@ -118,7 +121,7 @@ export default {
       favicon: "./assets/images/favicon.png",
     },
     autolinking: {
-      searchPaths: ["../../node_modules", "./node_modules"],
+      searchPaths: ["../../node_modules", "./node_modules", "./modules"],
     },
     plugins: [
       "./plugins/with-android-export-embed-cli",
