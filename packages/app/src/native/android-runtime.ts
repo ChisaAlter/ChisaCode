@@ -1,0 +1,24 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
+/**
+ * No-op stub for platforms that don't support the Android runtime module.
+ */
+export async function startForegroundService(_text: string): Promise<void> {
+  // no-op on non-Android platforms
+}
+
+export async function updateForegroundServiceText(_text: string): Promise<void> {
+  // no-op on non-Android platforms
+}
+
+export async function stopForegroundService(): Promise<void> {
+  // no-op on non-Android platforms
+}
+
+export async function sendLocalNotification(
+  _title: string,
+  _body: string,
+  _data?: Record<string, unknown>,
+): Promise<void> {
+  // no-op on non-Android platforms
+}

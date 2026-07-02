@@ -841,11 +841,7 @@ export function isLiquidNeonThemeName(themeName: ThemeName | "auto"): boolean {
   return themeName === "liquid-neon";
 }
 
-export const ANDROID_THEME_OPTIONS = [
-  "liquid-neon",
-  "dark",
-  "light",
-] as const satisfies readonly ThemeName[];
+export const ANDROID_THEME_OPTIONS = ["auto", "liquid-neon", "dark", "light"] as const;
 export const ANDROID_FALLBACK_THEME: ThemeName = "liquid-neon";
 
 type UnistylesThemeKey =

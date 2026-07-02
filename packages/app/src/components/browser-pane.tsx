@@ -12,7 +12,14 @@ interface BrowserPaneProps {
   onFocusPane?: () => void;
 }
 
-export function BrowserPane({ browserId }: BrowserPaneProps) {
+/**
+ * Native fallback for the browser panel.
+ * Instead of rendering a full WebView, shows a help message with a link
+ * to open the current browser session URL in the system browser.
+ *
+ * The real browser implementation lives in `browser-pane.electron.tsx`.
+ */
+export function BrowserPane({ browserId: _browserId }: BrowserPaneProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const titleStyle = useMemo(
@@ -27,7 +34,7 @@ export function BrowserPane({ browserId }: BrowserPaneProps) {
   return (
     <View style={styles.container}>
       <Text style={titleStyle}>{t("browser.desktopOnlyTitle")}</Text>
-      <Text style={subtitleStyle}>浏览器会话 {browserId}</Text>
+      <Text style={subtitleStyle}>{t("browser.desktopOnlyBody")}</Text>
     </View>
   );
 }

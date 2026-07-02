@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { StyleSheet as RNStyleSheet, View } from "react-native";
+import { Platform, StyleSheet as RNStyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -10,7 +10,31 @@ import Animated, {
 import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import { StyleSheet } from "react-native-unistyles";
 
+/**
+ * Returns true on Android devices with limited GPU / memory where the
+ * three-band animated SVG backdrop is likely to cause jank.
+ *
+ * Heuristic: Android API < 27, or total system memory < 3 GiB.
+ */
+function isAndroidLowEndDevice(): boolean {
+  if (Platform.OS !== "android") return false;
+  if (typeof Platform.Version === "number" && Platform.Version < 27) return true;
+
+  const totalMemoryBytes: unknown = (Platform.constants as { DeviceTotalMemory?: number })
+    .DeviceTotalMemory;
+  if (typeof totalMemoryBytes === "number" && totalMemoryBytes < 3 * 1024 * 1024 * 1024) {
+    return true;
+  }
+
+  return false;
+}
+
 export function LiquidNeonBackdrop() {
+  if (isAndroidLowEndDevice()) return null;
+  return <LiquidNeonBackdropAnimated />;
+}
+
+function LiquidNeonBackdropAnimated() {
   const driftA = useSharedValue(0);
   const driftB = useSharedValue(0);
   const driftC = useSharedValue(0);

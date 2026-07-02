@@ -1,5 +1,6 @@
+import { Dimensions } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
-import { isWeb } from "@/constants/platform";
+import { isAndroid, isWeb } from "@/constants/platform";
 
 export const FOOTER_HEIGHT = 75;
 
@@ -58,6 +59,12 @@ export function useIsCompactFormFactor(): boolean {
 // SplitContainer relies on dnd-kit and DOM-backed accessibility helpers.
 // Keep that capability distinct from desktop-width layout so touch tablets
 // can use the desktop shell without entering web-only code paths.
+// Android tablets (>= 768dp width) also support pane splits for multi-pane UX.
 export function supportsDesktopPaneSplits(): boolean {
-  return isWeb;
+  if (isWeb) return true;
+  if (isAndroid) {
+    const { width } = Dimensions.get("window");
+    return width >= 768;
+  }
+  return false;
 }

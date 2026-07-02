@@ -23,7 +23,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Pressable, View, type PressableStateCallbackType } from "react-native";
+import { LayoutAnimation, Pressable, View, type PressableStateCallbackType } from "react-native";
 import { PanelLeft } from "lucide-react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -79,6 +79,7 @@ import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-
 import { useOpenProject } from "@/hooks/use-open-project";
 import { useAppSettings, useSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { useStatusBarTheme } from "@/hooks/use-status-bar-theme";
 import { appI18n } from "@/i18n";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
 import { polyfillCrypto } from "@/polyfills/crypto";
@@ -720,6 +721,9 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   // Apply theme setting on mount and when it changes
   useEffect(() => {
     if (settingsLoading) return;
+    if (isNative) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     if (settings.theme === "auto") {
       UnistylesRuntime.setAdaptiveThemes(true);
     } else {
@@ -740,6 +744,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
         <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
         <HostSessionManager />
         <FaviconStatusSync />
+        <StatusBarThemeSync />
         {children}
       </VoiceProvider>
     </I18nextProvider>
@@ -968,6 +973,22 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
 
 function FaviconStatusSync() {
   useFaviconStatus();
+  return null;
+}
+
+/**
+ * Syncs the Android status bar appearance with the active theme.
+ * On non-native platforms, renders nothing (no-op).
+ */
+function StatusBarThemeSync() {
+  if (isNative) {
+    return <InnerStatusBarThemeSync />;
+  }
+  return null;
+}
+
+function InnerStatusBarThemeSync() {
+  useStatusBarTheme();
   return null;
 }
 

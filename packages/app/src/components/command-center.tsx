@@ -25,7 +25,7 @@ import { formatTimeAgo } from "@/utils/time";
 import { shortenPath } from "@/utils/shorten-path";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { Shortcut } from "@/components/ui/shortcut";
-import { isNative } from "@/constants/platform";
+
 import { useTranslation } from "react-i18next";
 
 function agentKey(agent: Pick<AggregatedAgent, "serverId" | "id">): string {
@@ -379,7 +379,10 @@ export function CommandCenter() {
     [theme.colors.border],
   );
 
-  if (isNative || !open) return null;
+  // On mobile native, the command center modal renders but has no trigger yet
+  // (keyboard shortcuts are disabled on compact/mobile). A UI trigger button
+  // in the workspace header is planned for a follow-up.
+  if (!open) return null;
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={handleClose}>

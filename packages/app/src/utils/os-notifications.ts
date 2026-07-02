@@ -1,7 +1,7 @@
 import { Asset } from "expo-asset";
 import { getDesktopHost } from "@/desktop/host";
 import { buildNotificationRoute, resolveNotificationTarget } from "./notification-routing";
-import { isNative } from "@/constants/platform";
+import { isAndroid, isNative } from "@/constants/platform";
 
 interface OsNotificationPayload {
   title: string;
@@ -169,7 +169,18 @@ function attachWebClickHandler(
 }
 
 export async function sendOsNotification(payload: OsNotificationPayload): Promise<boolean> {
-  // Mobile/native notifications should be remote push only.
+  // Android: use expo module for local notifications
+  if (isAndroid) {
+    try {
+      const { sendLocalNotification } = await import("@/native/android-runtime.android");
+      await sendLocalNotification(payload.title, payload.body ?? "", payload.data);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // iOS / other native: no local notification support yet
   if (isNative) {
     return false;
   }
