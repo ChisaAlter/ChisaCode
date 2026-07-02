@@ -7,7 +7,10 @@ import {
   assertTransportPathAllowed,
   isMainAppSenderUrl,
   PRIVILEGED_COMMANDS,
+  resolveDesktopDaemonStatus,
+  shouldRestartForVersion,
 } from "./daemon-manager";
+import type { DesktopDaemonStatus } from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
   settings: {
@@ -345,5 +348,124 @@ describe("assertTransportPathAllowed", () => {
     expect(() => assertTransportPathAllowed("pipe", "\\\\.\\pipe\\docker")).toThrow(
       /must start with "chisacode"/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lifecycle tests
+// ---------------------------------------------------------------------------
+
+function runningDaemonStatus(overrides?: Partial<DesktopDaemonStatus>): DesktopDaemonStatus {
+  return {
+    serverId: "server-1",
+    status: "running",
+    listen: "127.0.0.1:6767",
+    hostname: "dev-host",
+    pid: 4242,
+    home: "/tmp/chisacode-home",
+    // resolveDesktopAppVersion() reads the real package.json (1.0.2) in dev mode
+    version: "1.0.2",
+    desktopManaged: true,
+    error: null,
+    ...overrides,
+  };
+}
+
+describe("resolveDesktopDaemonStatus", () => {
+  it("resolves a running daemon from valid JSON output", async () => {
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "running",
+      connectedDaemon: "reachable",
+      serverId: "server-1",
+      pid: 4242,
+      listen: "127.0.0.1:6767",
+      hostname: "dev-host",
+      daemonVersion: "1.2.3",
+      desktopManaged: true,
+    });
+
+    const status = await resolveDesktopDaemonStatus();
+
+    expect(status).toMatchObject({
+      serverId: "server-1",
+      status: "running",
+      listen: "127.0.0.1:6767",
+      hostname: "dev-host",
+      pid: 4242,
+      version: "1.2.3",
+      desktopManaged: true,
+    });
+  });
+
+  it("returns stopped when localDaemon is missing", async () => {
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      connectedDaemon: "unreachable",
+      serverId: "",
+    });
+
+    const status = await resolveDesktopDaemonStatus();
+    expect(status.status).toBe("stopped");
+    expect(status.desktopManaged).toBe(false);
+    expect(status.error).toBeNull();
+  });
+
+  it("returns errored when localDaemon is unresponsive and API is unreachable", async () => {
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "unresponsive",
+      connectedDaemon: "unreachable",
+      serverId: "",
+    });
+
+    const status = await resolveDesktopDaemonStatus();
+    expect(status.status).toBe("errored");
+  });
+
+  it("classifies a daemon as running when API is reachable even with stale local pid", async () => {
+    mocks.runExternalCliJsonCommand.mockResolvedValue({
+      localDaemon: "stale_pid",
+      connectedDaemon: "reachable",
+      serverId: "server-1",
+      pid: 0,
+      listen: "127.0.0.1:6767",
+      hostname: "dev-host",
+    });
+
+    const status = await resolveDesktopDaemonStatus();
+    expect(status.status).toBe("running");
+  });
+
+  it("returns stopped with error on JSON parse failure", async () => {
+    mocks.runExternalCliJsonCommand.mockRejectedValue(new Error("CLI crash"));
+
+    const status = await resolveDesktopDaemonStatus();
+    expect(status.status).toBe("stopped");
+    expect(status.error).toBe("CLI crash");
+  });
+});
+
+describe("shouldRestartForVersion", () => {
+  it("returns false when versions match", () => {
+    // resolveDesktopAppVersion reads the real workspace package.json (1.0.2)
+    const matched = runningDaemonStatus({ version: "1.0.2" });
+    expect(shouldRestartForVersion(matched)).toBe(false);
+    expect(shouldRestartForVersion(runningDaemonStatus({ version: "v1.0.2" }))).toBe(false);
+  });
+
+  it("returns true when versions differ", () => {
+    expect(shouldRestartForVersion(runningDaemonStatus({ version: "1.0.1" }))).toBe(true);
+    expect(shouldRestartForVersion(runningDaemonStatus({ version: "2.0.0" }))).toBe(true);
+  });
+
+  it("returns false when daemon is not desktop-managed", () => {
+    const status = runningDaemonStatus({ desktopManaged: false, version: "1.0.0" });
+    expect(shouldRestartForVersion(status)).toBe(false);
+  });
+
+  it("returns false when daemon version is null", () => {
+    expect(shouldRestartForVersion(runningDaemonStatus({ version: null }))).toBe(false);
+  });
+
+  it("returns false when daemon version is empty", () => {
+    expect(shouldRestartForVersion(runningDaemonStatus({ version: "" }))).toBe(false);
   });
 });

@@ -1,84 +1,151 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { WebUtils } from "electron";
 
 type EventHandler = (payload: unknown) => void;
 
-function createDesktopBridge(channelPrefix: "chisacode") {
+export interface ChisaCodeDesktopApi {
+  platform: NodeJS.Platform;
+  invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+  getPendingOpenProject: () => Promise<string | null>;
+  events: {
+    on: (event: string, handler: EventHandler) => Promise<() => void>;
+  };
+  window: {
+    getCurrentWindow: () => {
+      toggleMaximize: () => Promise<unknown>;
+      isFullscreen: () => Promise<unknown>;
+      updateWindowControls: (update: {
+        height?: number;
+        backgroundColor?: string;
+        foregroundColor?: string;
+      }) => Promise<unknown>;
+      onResized: (handler: EventHandler) => () => void;
+      setBadgeCount: (count?: number) => Promise<unknown>;
+    };
+  };
+  dialog: {
+    ask: (message: string, options?: Record<string, unknown>) => Promise<unknown>;
+    askWithCheckbox: (message: string, options: Record<string, unknown>) => Promise<unknown>;
+    open: (options?: Record<string, unknown>) => Promise<unknown>;
+  };
+  notification: {
+    isSupported: () => Promise<unknown>;
+    sendNotification: (payload: {
+      title: string;
+      body?: string;
+      data?: Record<string, unknown>;
+    }) => Promise<unknown>;
+  };
+  opener: {
+    openUrl: (url: string) => Promise<unknown>;
+  };
+  webUtils: {
+    getPathForFile: (file: File) => string;
+  };
+  menu: {
+    showContextMenu: (input?: Record<string, unknown>) => Promise<unknown>;
+  };
+  browser: {
+    setWorkspaceActiveBrowser: (browserId: string | null) => Promise<unknown>;
+    openDevTools: (browserId: string) => Promise<unknown>;
+    clearPartition: (browserId: string) => Promise<unknown>;
+  };
+}
+
+/**
+ * Builds the desktop bridge API object from injectable dependencies so
+ * the contract can be tested without spinning up a real Electron preload
+ * context.
+ */
+export function createDesktopBridge(
+  channelPrefix: "chisacode",
+  deps: {
+    ipcRenderer: Pick<Electron.IpcRenderer, "invoke" | "on" | "removeListener">;
+    platform: NodeJS.Platform;
+    getPathForFile: WebUtils["getPathForFile"];
+  },
+): ChisaCodeDesktopApi {
+  const { ipcRenderer: ipc, platform, getPathForFile } = deps;
   const channel = (name: string) => `${channelPrefix}:${name}`;
 
   return {
-    platform: process.platform,
+    platform,
     invoke: (command: string, args?: Record<string, unknown>) =>
-      ipcRenderer.invoke(channel("invoke"), command, args),
+      ipc.invoke(channel("invoke"), command, args),
     getPendingOpenProject: () =>
-      ipcRenderer.invoke(channel("get-pending-open-project")) as Promise<string | null>,
+      ipc.invoke(channel("get-pending-open-project")) as Promise<string | null>,
     events: {
       on: (event: string, handler: EventHandler): Promise<() => void> => {
         const listener = (_ipcEvent: Electron.IpcRendererEvent, payload: unknown) => {
           handler(payload);
         };
-        ipcRenderer.on(channel(`event:${event}`), listener);
+        ipc.on(channel(`event:${event}`), listener);
         return Promise.resolve(() => {
-          ipcRenderer.removeListener(channel(`event:${event}`), listener);
+          ipc.removeListener(channel(`event:${event}`), listener);
         });
       },
     },
     window: {
       getCurrentWindow: () => ({
-        toggleMaximize: () => ipcRenderer.invoke(channel("window:toggleMaximize")),
-        isFullscreen: () => ipcRenderer.invoke(channel("window:isFullscreen")),
+        toggleMaximize: () => ipc.invoke(channel("window:toggleMaximize")),
+        isFullscreen: () => ipc.invoke(channel("window:isFullscreen")),
         updateWindowControls: (update: {
           height?: number;
           backgroundColor?: string;
           foregroundColor?: string;
-        }) => ipcRenderer.invoke(channel("window:updateWindowControls"), update),
+        }) => ipc.invoke(channel("window:updateWindowControls"), update),
         onResized: (handler: EventHandler): (() => void) => {
           const listener = (_ipcEvent: Electron.IpcRendererEvent, payload: unknown) => {
             handler(payload);
           };
-          ipcRenderer.on(channel("window:resized"), listener);
+          ipc.on(channel("window:resized"), listener);
           return () => {
-            ipcRenderer.removeListener(channel("window:resized"), listener);
+            ipc.removeListener(channel("window:resized"), listener);
           };
         },
-        setBadgeCount: (count?: number) =>
-          ipcRenderer.invoke(channel("window:setBadgeCount"), count),
+        setBadgeCount: (count?: number) => ipc.invoke(channel("window:setBadgeCount"), count),
       }),
     },
     dialog: {
       ask: (message: string, options?: Record<string, unknown>) =>
-        ipcRenderer.invoke(channel("dialog:ask"), message, options),
+        ipc.invoke(channel("dialog:ask"), message, options),
       askWithCheckbox: (message: string, options: Record<string, unknown>) =>
-        ipcRenderer.invoke(channel("dialog:askWithCheckbox"), message, options),
-      open: (options?: Record<string, unknown>) =>
-        ipcRenderer.invoke(channel("dialog:open"), options),
+        ipc.invoke(channel("dialog:askWithCheckbox"), message, options),
+      open: (options?: Record<string, unknown>) => ipc.invoke(channel("dialog:open"), options),
     },
     notification: {
-      isSupported: () => ipcRenderer.invoke(channel("notification:isSupported")),
+      isSupported: () => ipc.invoke(channel("notification:isSupported")),
       sendNotification: (payload: {
         title: string;
         body?: string;
         data?: Record<string, unknown>;
-      }) => ipcRenderer.invoke(channel("notification:send"), payload),
+      }) => ipc.invoke(channel("notification:send"), payload),
     },
     opener: {
-      openUrl: (url: string) => ipcRenderer.invoke(channel("opener:openUrl"), url),
+      openUrl: (url: string) => ipc.invoke(channel("opener:openUrl"), url),
     },
     webUtils: {
-      getPathForFile: (file: File) => webUtils.getPathForFile(file),
+      getPathForFile: (file: File) => getPathForFile(file),
     },
     menu: {
       showContextMenu: (input?: Record<string, unknown>) =>
-        ipcRenderer.invoke(channel("menu:showContextMenu"), input),
+        ipc.invoke(channel("menu:showContextMenu"), input),
     },
     browser: {
       setWorkspaceActiveBrowser: (browserId: string | null) =>
-        ipcRenderer.invoke(channel("browser:set-workspace-active-browser"), browserId),
-      openDevTools: (browserId: string) =>
-        ipcRenderer.invoke(channel("browser:open-devtools"), browserId),
+        ipc.invoke(channel("browser:set-workspace-active-browser"), browserId),
+      openDevTools: (browserId: string) => ipc.invoke(channel("browser:open-devtools"), browserId),
       clearPartition: (browserId: string) =>
-        ipcRenderer.invoke(channel("browser:clear-partition"), browserId),
+        ipc.invoke(channel("browser:clear-partition"), browserId),
     },
   };
 }
 
-contextBridge.exposeInMainWorld("chisacodeDesktop", createDesktopBridge("chisacode"));
+contextBridge.exposeInMainWorld(
+  "chisacodeDesktop",
+  createDesktopBridge("chisacode", {
+    ipcRenderer,
+    platform: process.platform,
+    getPathForFile: webUtils.getPathForFile.bind(webUtils),
+  }),
+);
