@@ -417,7 +417,7 @@ function normalizeVersion(version: string | null): string | null {
   return trimmed.replace(/^v/i, "");
 }
 
-function shouldRestartForVersion(current: DesktopDaemonStatus): boolean {
+export function shouldRestartForVersion(current: DesktopDaemonStatus): boolean {
   if (!current.desktopManaged) return false;
   const appVersion = normalizeVersion(resolveDesktopAppVersion());
   const daemonVersion = normalizeVersion(current.version);

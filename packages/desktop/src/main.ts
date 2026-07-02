@@ -1,10 +1,24 @@
-process.emitWarning = (() => {}) as typeof process.emitWarning;
+/**
+ * Filter noisy Electron/Chromium process warnings instead of silently
+ * dropping every warning. Known noise codes (e.g. DEP0062 — Chromium
+ * internal pending-deprecation churn) are suppressed; everything else
+ * passes through to the default stderr emitter so real deprecations
+ * and V8 memory pressure signals remain visible during development.
+ *
+ * This MUST sit at line 1 to intercept warnings from all subsequent
+ * imports, including Electron and its dependencies.
+ */
+const _originalEmitWarning = process.emitWarning.bind(process);
+process.emitWarning = ((warning: string | Error, type: string, code?: string) => {
+  if (code === "DEP0062") return;
+  _originalEmitWarning(warning, type, code);
+}) as typeof process.emitWarning;
 
 import log from "electron-log/main";
 log.transports.console.level = "info";
 log.initialize({ spyRendererConsole: true });
 
-import { inheritLoginShellEnv } from "./login-shell-env.js";
+import { inheritLoginShellEnv, inheritLoginShellEnvAsync } from "./login-shell-env.js";
 
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -52,6 +66,12 @@ import {
   stopDesktopManagedDaemonOnQuitIfNeeded,
 } from "./daemon/quit-lifecycle.js";
 import { runDesktopStartup } from "./desktop-startup.js";
+import {
+  isAllowedBrowserWebviewUrl,
+  isBrowserRefreshInput,
+  isBrowserLocationInput,
+  isForwardableChisaCodeShortcutInput,
+} from "./browser-webview-security.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEMES = ["chisacode"] as const;
@@ -59,20 +79,6 @@ const APP_SCHEME = APP_SCHEMES[0];
 const CHISACODE_DEBUG = process.env.CHISACODE_DEBUG === "1";
 const DISABLE_SINGLE_INSTANCE_LOCK = process.env.CHISACODE_DISABLE_SINGLE_INSTANCE_LOCK === "1";
 const APP_NAME = process.env.CHISACODE_TEST_APP_NAME?.trim() || "ChisaCode";
-
-function isAllowedBrowserWebviewUrl(value: string | undefined): boolean {
-  if (!value) {
-    return true;
-  }
-  try {
-    const parsed = new URL(value);
-    return (
-      parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.href === "about:blank"
-    );
-  } catch {
-    return false;
-  }
-}
 
 function preventUnsafeBrowserWebviewNavigation(
   event: Electron.Event,
@@ -84,31 +90,6 @@ function preventUnsafeBrowserWebviewNavigation(
 }
 const IPC_PREFIXES = ["chisacode"] as const;
 
-const FORWARDED_CHISACODE_SHORTCUT_KEYS = new Set([
-  "b",
-  "e",
-  "w",
-  "t",
-  "k",
-  "/",
-  "\\",
-  ",",
-  ".",
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-  "enter",
-  "arrowleft",
-  "arrowright",
-  "arrowup",
-  "arrowdown",
-]);
 const DESKTOP_SMOKE_ENV = "CHISACODE_DESKTOP_SMOKE";
 const DESKTOP_SMOKE_STOP_REQUEST = "chisacode-smoke-stop";
 app.setName(APP_NAME);
@@ -123,30 +104,6 @@ function getBrowserIdFromWebviewPartition(partition: string | undefined): string
 }
 
 const pendingBrowserWebviewIds: string[] = [];
-
-function isBrowserRefreshInput(input: Electron.Input): boolean {
-  if (input.type !== "keyDown" || input.alt || input.shift) {
-    return false;
-  }
-  return (input.meta || input.control) && input.key.toLowerCase() === "r";
-}
-
-function isBrowserLocationInput(input: Electron.Input): boolean {
-  if (input.type !== "keyDown" || input.alt || input.shift) {
-    return false;
-  }
-  return (input.meta || input.control) && input.key.toLowerCase() === "l";
-}
-
-function isForwardableChisaCodeShortcutInput(input: Electron.Input): boolean {
-  if (input.type !== "keyDown") {
-    return false;
-  }
-  if (!input.meta && !input.control) {
-    return false;
-  }
-  return FORWARDED_CHISACODE_SHORTCUT_KEYS.has(input.key.toLowerCase());
-}
 
 async function showBrowserWebviewContextMenu(
   win: BrowserWindow,
@@ -816,6 +773,7 @@ void runDesktopStartup({
   hasPendingOpenProjectPath: Boolean(pendingOpenProjectPath),
   runCliPassthroughIfRequested,
   inheritLoginShellEnv,
+  inheritLoginShellEnvAsync,
   bootstrapGui: bootstrap,
 }).catch((error) => {
   const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
