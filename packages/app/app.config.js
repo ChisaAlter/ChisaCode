@@ -167,7 +167,7 @@ export default {
     experiments: {
       typedRoutes: true,
       reactCompiler: true,
-      autolinkingModuleResolution: true,
+      autolinkingModuleResolution: process.env.CHISACODE_WEB_PLATFORM !== "electron",
     },
     extra: {
       router: {},

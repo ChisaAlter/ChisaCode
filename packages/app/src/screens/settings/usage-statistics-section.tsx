@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Alert, Pressable, Share, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable, Share, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 import Svg, { Circle } from "react-native-svg";
 import { Download, RefreshCw, Trash2 } from "lucide-react-native";
@@ -9,6 +9,7 @@ import { SettingsSection } from "@/screens/settings/settings-section";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { useToast } from "@/contexts/toast-context";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -51,6 +52,7 @@ interface UsageStatisticsSectionProps {
 
 export function UsageStatisticsSection({ serverId }: UsageStatisticsSectionProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const client = useHostRuntimeClient(serverId ?? "");
   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
   const [rangeDays, setRangeDays] = useState<RangeOption>(30);
@@ -120,7 +122,10 @@ export function UsageStatisticsSection({ serverId }: UsageStatisticsSectionProps
       setError(null);
       try {
         const payload = await client.exportUsage({ format });
-        await exportUsagePayload(payload.filename, payload.content);
+        const shared = await exportUsagePayload(payload.filename, payload.content);
+        if (!shared && !isWeb) {
+          toast.show(t("settings.usage.shareUnavailable"), { variant: "error" });
+        }
       } catch (exportError) {
         const message = exportError instanceof Error ? exportError.message : String(exportError);
         setError(t("settings.usage.exportFailed", { message }));
@@ -128,7 +133,7 @@ export function UsageStatisticsSection({ serverId }: UsageStatisticsSectionProps
         setIsExporting(false);
       }
     },
-    [client, isExporting, t],
+    [client, isExporting, toast, t],
   );
 
   const handleExportJson = useCallback(() => {
@@ -668,7 +673,7 @@ function heatmapLevelStyle(level: number): ViewStyle {
   return styles.heatmapLevel0;
 }
 
-async function exportUsagePayload(filename: string, content: string): Promise<void> {
+async function exportUsagePayload(filename: string, content: string): Promise<boolean> {
   if (isWeb && typeof document !== "undefined" && typeof URL !== "undefined") {
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const href = URL.createObjectURL(blob);
@@ -677,13 +682,14 @@ async function exportUsagePayload(filename: string, content: string): Promise<vo
     anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(href);
-    return;
+    return true;
   }
 
   try {
     await Share.share({ title: filename, message: content });
+    return true;
   } catch {
-    Alert.alert(filename, content.slice(0, 1000));
+    return false;
   }
 }
 

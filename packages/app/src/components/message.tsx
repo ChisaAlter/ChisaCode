@@ -32,6 +32,7 @@ import Markdown, {
   type RenderRules,
 } from "react-native-markdown-display";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import MaskedView from "@react-native-masked-view/masked-view";
 import {
   Circle,
@@ -544,6 +545,7 @@ export const UserMessage = memo(function UserMessage({
   disableOuterSpacing,
 }: UserMessageProps) {
   const isCompact = useIsCompactFormFactor();
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const resolvedImages = images ?? EMPTY_USER_MESSAGE_IMAGES;
@@ -640,7 +642,7 @@ export const UserMessage = memo(function UserMessage({
             <TurnCopyButton
               getContent={getMessageContent}
               containerStyle={userMessageStylesheet.copyButton}
-              accessibilityLabel="复制消息"
+              accessibilityLabel={t("message.copyMessage")}
             />
           </View>
         ) : null}
@@ -894,6 +896,7 @@ const AssistantMarkdownResolvedImage = memo(function AssistantMarkdownResolvedIm
   workspaceRoot?: string;
   serverId?: string;
 }) {
+  const { t } = useTranslation();
   const cachedMetadata = useMemo(
     () => getAssistantImageMetadata({ source, workspaceRoot, serverId }),
     [serverId, source, workspaceRoot],
@@ -969,7 +972,9 @@ const AssistantMarkdownResolvedImage = memo(function AssistantMarkdownResolvedIm
         <View style={stateSurfaceStyle}>
           {loadState.status === "loading" ? <ActivityIndicator size="small" /> : null}
           {loadState.status === "error" ? (
-            <Text style={assistantMessageStylesheet.imageErrorText}>图片不可用</Text>
+            <Text style={assistantMessageStylesheet.imageErrorText}>
+              {t("files.imageUnavailable")}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -1226,6 +1231,7 @@ export const TurnCopyButton = memo(function TurnCopyButton({
   accessibilityLabel,
   copiedAccessibilityLabel,
 }: TurnCopyButtonProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1267,7 +1273,9 @@ export const TurnCopyButton = memo(function TurnCopyButton({
       style={pressableStyle}
       accessibilityRole="button"
       accessibilityLabel={
-        copied ? (copiedAccessibilityLabel ?? "已复制") : (accessibilityLabel ?? "复制回合")
+        copied
+          ? (copiedAccessibilityLabel ?? t("common.copied"))
+          : (accessibilityLabel ?? t("message.copyTurn"))
       }
     >
       {({ hovered }) => {
@@ -2519,6 +2527,7 @@ function ExpandableBadgeLabelRow({
   onOpenFileHoverIn,
   onOpenFileHoverOut,
 }: ExpandableBadgeLabelRowProps) {
+  const { t } = useTranslation();
   return (
     <View
       style={expandableBadgeStylesheet.labelRow}
@@ -2543,7 +2552,7 @@ function ExpandableBadgeLabelRow({
           onHoverIn={onOpenFileHoverIn}
           onHoverOut={onOpenFileHoverOut}
           accessibilityRole="button"
-          accessibilityLabel="打开文件"
+          accessibilityLabel={t("message.openFile")}
           testID="tool-call-open-file"
           style={expandableBadgeStylesheet.openFileButton}
           hitSlop={6}

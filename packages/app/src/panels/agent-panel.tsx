@@ -1153,7 +1153,7 @@ function ChatAgentReadyContent({
             ) : null}
 
             <ToastViewport
-              toast={panelToast.toast}
+              toasts={panelToast.toasts}
               onDismiss={panelToast.dismiss}
               placement="panel"
             />

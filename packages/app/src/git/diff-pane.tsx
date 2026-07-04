@@ -78,6 +78,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { GitHubIcon } from "@/components/icons/github-icon";
 import { lineNumberGutterWidth } from "@/components/code-insets";
+import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 import { useWebScrollViewScrollbar } from "@/components/use-web-scrollbar";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
 import { useGitActions } from "@/git/use-actions";
@@ -849,6 +850,8 @@ const DiffFileHeader = memo(function DiffFileHeader({
     [isExpanded],
   );
 
+  const fileAccessibilityState = useMemo(() => ({ expanded: isExpanded }), [isExpanded]);
+
   return (
     <View style={containerStyle} onLayout={handleLayout} testID={testID}>
       <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
@@ -856,6 +859,9 @@ const DiffFileHeader = memo(function DiffFileHeader({
           <Pressable
             testID={testID ? `${testID}-toggle` : undefined}
             style={fileHeaderPressableStyle}
+            accessibilityRole="button"
+            accessibilityLabel={isExpanded ? t("git.collapseFile") : t("git.expandFile")}
+            accessibilityState={fileAccessibilityState}
             // Android: prevent parent pan/scroll gestures from canceling the tap release.
             cancelable={false}
             onPressIn={handlePressIn}
@@ -1202,7 +1208,12 @@ function DiffFilesToolbar({
     <View style={styles.diffStatusButtons}>
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
-          <Pressable style={wrapLinesToggleStyle} onPress={onToggleWrapLines}>
+          <Pressable
+            style={wrapLinesToggleStyle}
+            onPress={onToggleWrapLines}
+            accessibilityRole="button"
+            accessibilityLabel={wrapLines ? t("git.scrollLongLines") : t("git.wrapLongLines")}
+          >
             <WrapText
               size={isMobile ? 18 : 14}
               color={wrapLines ? theme.colors.foreground : theme.colors.foregroundMuted}
@@ -1217,7 +1228,12 @@ function DiffFilesToolbar({
       </Tooltip>
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
-          <Pressable style={expandAllToggleStyle} onPress={onToggleExpandAll}>
+          <Pressable
+            style={expandAllToggleStyle}
+            onPress={onToggleExpandAll}
+            accessibilityRole="button"
+            accessibilityLabel={allExpanded ? t("git.collapseAllFiles") : t("git.expandAllFiles")}
+          >
             {allExpanded ? (
               <ListChevronsDownUp size={isMobile ? 18 : 14} color={theme.colors.foregroundMuted} />
             ) : (
@@ -2171,107 +2187,121 @@ export function GitDiffPane({
     />
   );
 
-  return (
-    <View style={styles.container}>
-      {!hideHeaderRow ? (
-        <View style={styles.header} testID="changes-header">
-          <View style={styles.headerLeft}>
-            <GitBranch size={16} color={theme.colors.foregroundMuted} />
-            <Text style={styles.branchLabel} testID="changes-branch" numberOfLines={1}>
-              {branchLabel}
-            </Text>
-          </View>
-          {isGit ? <GitActionsSplitButton gitActions={gitActions} /> : null}
-        </View>
-      ) : null}
+  const diffFallback = useCallback(
+    (error: unknown, resetError: () => void) => (
+      <SectionErrorFallback
+        error={error}
+        onReset={resetError}
+        sectionLabel={t("errors.sectionDiff")}
+        compact
+      />
+    ),
+    [t],
+  );
 
-      {isGit ? (
-        <View style={styles.diffStatusContainer}>
-          <View style={styles.diffStatusInner}>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                style={diffModeTriggerStyle}
-                testID="changes-diff-status"
-                accessibilityRole="button"
-                accessibilityLabel={t("git.diffMode")}
-              >
-                <Text style={styles.diffStatusText} numberOfLines={1}>
-                  {diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
-                </Text>
-                <ChevronDown size={12} color={theme.colors.foregroundMuted} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" width={260} testID="changes-diff-status-menu">
-                <DropdownMenuItem
-                  testID="changes-diff-mode-uncommitted"
-                  selected={diffMode === "uncommitted"}
-                  onSelect={handleSelectUncommitted}
+  return (
+    <ErrorBoundary fallback={diffFallback}>
+      <View style={styles.container}>
+        {!hideHeaderRow ? (
+          <View style={styles.header} testID="changes-header">
+            <View style={styles.headerLeft}>
+              <GitBranch size={16} color={theme.colors.foregroundMuted} />
+              <Text style={styles.branchLabel} testID="changes-branch" numberOfLines={1}>
+                {branchLabel}
+              </Text>
+            </View>
+            {isGit ? <GitActionsSplitButton gitActions={gitActions} /> : null}
+          </View>
+        ) : null}
+
+        {isGit ? (
+          <View style={styles.diffStatusContainer}>
+            <View style={styles.diffStatusInner}>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  style={diffModeTriggerStyle}
+                  testID="changes-diff-status"
+                  accessibilityRole="button"
+                  accessibilityLabel={t("git.diffMode")}
                 >
-                  {t("git.uncommitted")}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  testID="changes-diff-mode-committed"
-                  selected={diffMode === "base"}
-                  description={committedDiffDescription}
-                  onSelect={handleSelectBase}
-                >
-                  {t("git.committed")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <View style={styles.diffStatusButtons}>
-              {canUseSplitLayout ? (
-                <DiffLayoutToggleGroup
-                  layout={changesPreferences.layout}
-                  unifiedToggleStyle={unifiedToggleStyle}
-                  splitToggleStyle={splitToggleStyle}
-                  onUnified={handleLayoutUnified}
-                  onSplit={handleLayoutSplit}
-                />
-              ) : null}
-              <DiffWhitespaceToggle
-                hideWhitespace={changesPreferences.hideWhitespace}
-                isMobile={isMobile}
-                toggleStyle={hideWhitespaceToggleStyle}
-                onToggle={handleToggleHideWhitespace}
-              />
-              {files.length > 0 ? (
-                <DiffFilesToolbar
-                  wrapLines={wrapLines}
-                  allExpanded={allExpanded}
+                  <Text style={styles.diffStatusText} numberOfLines={1}>
+                    {diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
+                  </Text>
+                  <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" width={260} testID="changes-diff-status-menu">
+                  <DropdownMenuItem
+                    testID="changes-diff-mode-uncommitted"
+                    selected={diffMode === "uncommitted"}
+                    onSelect={handleSelectUncommitted}
+                  >
+                    {t("git.uncommitted")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    testID="changes-diff-mode-committed"
+                    selected={diffMode === "base"}
+                    description={committedDiffDescription}
+                    onSelect={handleSelectBase}
+                  >
+                    {t("git.committed")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <View style={styles.diffStatusButtons}>
+                {canUseSplitLayout ? (
+                  <DiffLayoutToggleGroup
+                    layout={changesPreferences.layout}
+                    unifiedToggleStyle={unifiedToggleStyle}
+                    splitToggleStyle={splitToggleStyle}
+                    onUnified={handleLayoutUnified}
+                    onSplit={handleLayoutSplit}
+                  />
+                ) : null}
+                <DiffWhitespaceToggle
+                  hideWhitespace={changesPreferences.hideWhitespace}
                   isMobile={isMobile}
-                  wrapLinesToggleStyle={wrapLinesToggleStyle}
-                  expandAllToggleStyle={expandAllToggleStyle}
-                  onToggleWrapLines={handleToggleWrapLines}
-                  onToggleExpandAll={handleToggleExpandAll}
+                  toggleStyle={hideWhitespaceToggleStyle}
+                  onToggle={handleToggleHideWhitespace}
                 />
-              ) : null}
-              {refreshSupported ? (
-                <DiffRefreshButton
-                  isRefreshing={isRefreshing}
-                  toggleStyle={refreshToggleStyle}
-                  onPress={handleRefresh}
-                />
-              ) : null}
+                {files.length > 0 ? (
+                  <DiffFilesToolbar
+                    wrapLines={wrapLines}
+                    allExpanded={allExpanded}
+                    isMobile={isMobile}
+                    wrapLinesToggleStyle={wrapLinesToggleStyle}
+                    expandAllToggleStyle={expandAllToggleStyle}
+                    onToggleWrapLines={handleToggleWrapLines}
+                    onToggleExpandAll={handleToggleExpandAll}
+                  />
+                ) : null}
+                {refreshSupported ? (
+                  <DiffRefreshButton
+                    isRefreshing={isRefreshing}
+                    toggleStyle={refreshToggleStyle}
+                    onPress={handleRefresh}
+                  />
+                ) : null}
+              </View>
             </View>
           </View>
+        ) : null}
+
+        {prErrorMessage ? <Text style={styles.actionErrorText}>{prErrorMessage}</Text> : null}
+        {shouldShowReviewSummary ? (
+          <ReviewSummaryBand
+            model={reviewSummaryModel}
+            diffModeLabel={diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
+            gitActions={gitActions}
+          />
+        ) : null}
+
+        <View style={styles.diffContainer} accessibilityLabel={t("git.changesPanel")}>
+          {bodyContent}
+          {hasChanges ? scrollbar.overlay : null}
         </View>
-      ) : null}
-
-      {prErrorMessage ? <Text style={styles.actionErrorText}>{prErrorMessage}</Text> : null}
-      {shouldShowReviewSummary ? (
-        <ReviewSummaryBand
-          model={reviewSummaryModel}
-          diffModeLabel={diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
-          gitActions={gitActions}
-        />
-      ) : null}
-
-      <View style={styles.diffContainer}>
-        {bodyContent}
-        {hasChanges ? scrollbar.overlay : null}
       </View>
-    </View>
+    </ErrorBoundary>
   );
 }
 

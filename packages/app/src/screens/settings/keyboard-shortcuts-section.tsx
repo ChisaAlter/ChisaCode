@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
@@ -36,6 +37,7 @@ function ShortcutSequence({
   chord: string[] | null;
   heldModifiers: string | null;
 }) {
+  const { t } = useTranslation();
   const displayChord = useMemo(() => {
     const combos = [...(chord ?? [])];
     if (heldModifiers) {
@@ -45,7 +47,7 @@ function ShortcutSequence({
   }, [chord, heldModifiers]);
 
   if ((!chord || chord.length === 0) && !heldModifiers) {
-    return <Text style={styles.capturingText}>按下快捷键...</Text>;
+    return <Text style={styles.capturingText}>{t("shortcuts.capturingPlaceholder")}</Text>;
   }
 
   return <Shortcut chord={displayChord} />;
@@ -123,6 +125,7 @@ function ShortcutRow({
   onCancel: () => void;
   onReset: () => void;
 }) {
+  const { t } = useTranslation();
   const displayChord = useMemo(
     () => (overrideCombo ? chordStringToShortcutKeys(overrideCombo) : [row.keys]),
     [overrideCombo, row.keys],
@@ -142,17 +145,17 @@ function ShortcutRow({
           <>
             {isCapturing && capturedCombos.length > 0 ? (
               <Button variant="ghost" size="sm" onPress={onDone}>
-                完成
+                {t("shortcuts.done")}
               </Button>
             ) : null}
             <Button variant="ghost" size="sm" onPress={isCapturing ? onCancel : onRebind}>
-              {isCapturing ? "取消" : "重新绑定"}
+              {isCapturing ? t("common.cancel") : t("shortcuts.rebind")}
             </Button>
           </>
         )}
         {overrideCombo !== undefined && !isCapturing && (
           <Button variant="ghost" size="sm" onPress={onReset}>
-            <Text style={styles.resetText}>重置</Text>
+            <Text style={styles.resetText}>{t("shortcuts.reset")}</Text>
           </Button>
         )}
       </View>
@@ -161,6 +164,7 @@ function ShortcutRow({
 }
 
 export function KeyboardShortcutsSection() {
+  const { t } = useTranslation();
   const [capturingBindingId, setCapturingBindingId] = useState<string | null>(null);
   const [capturedCombos, setCapturedCombos] = useState<string[]>([]);
   const [heldModifiers, setHeldModifiers] = useState<string | null>(null);
@@ -257,9 +261,9 @@ export function KeyboardShortcutsSection() {
 
   if (isNative) {
     return (
-      <SettingsSection title="快捷键">
+      <SettingsSection title={t("shortcuts.title")}>
         <View style={mobileCardStyle}>
-          <Text style={styles.mobileText}>键盘快捷键仅在桌面端可用</Text>
+          <Text style={styles.mobileText}>{t("shortcuts.desktopOnly")}</Text>
         </View>
       </SettingsSection>
     );
@@ -267,7 +271,7 @@ export function KeyboardShortcutsSection() {
 
   const resetAllButton = hasOverrides ? (
     <Button variant="ghost" size="sm" onPress={handleResetAll}>
-      全部重置
+      {t("shortcuts.resetAll")}
     </Button>
   ) : undefined;
 

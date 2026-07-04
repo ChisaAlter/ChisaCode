@@ -1,5 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -13,6 +14,7 @@ import { ConnectionOfferSchema } from "@chisacode/protocol/connection-offer";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { isWeb } from "@/constants/platform";
 import { BackHeader } from "@/components/headers/back-header";
+import { useToast } from "@/contexts/toast-context";
 
 const styles = StyleSheet.create((theme) => ({
   container: {
@@ -122,6 +124,7 @@ function extractOfferUrlFromScan(result: BarcodeScanningResult): string | null {
 export default function PairScanScreen() {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const toast = useToast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -193,12 +196,12 @@ export default function PairScanScreen() {
       } catch (error) {
         lastScannedRef.current = null;
         const message = error instanceof Error ? error.message : t("pairing.unableToPairHost");
-        Alert.alert(t("common.error"), message);
+        toast.error(message);
       } finally {
         setIsPairing(false);
       }
     },
-    [isPairing, navigateToPairedHost, t, upsertDaemonFromOfferUrl],
+    [isPairing, navigateToPairedHost, toast, t, upsertDaemonFromOfferUrl],
   );
 
   const handleRouterBack = useCallback(() => router.back(), [router]);

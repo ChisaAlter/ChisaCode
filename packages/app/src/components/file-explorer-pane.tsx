@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactElement, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
   ActivityIndicator,
@@ -45,6 +46,7 @@ import { formatTimeAgo } from "@/utils/time";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { useWebScrollViewScrollbar } from "@/components/use-web-scrollbar";
 import { isWeb } from "@/constants/platform";
+import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "name", label: "名称" },
@@ -230,6 +232,7 @@ export function FileExplorerPane({
   workspaceRoot,
   onOpenFile,
 }: FileExplorerPaneProps) {
+  const { t: paneT } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const showDesktopWebScrollbar = isWeb && !isMobile;
 
@@ -276,8 +279,13 @@ export function FileExplorerPane({
   );
 
   const explorerDerived = useMemo(() => deriveExplorerFields(explorerState), [explorerState]);
-  const { directories, pendingRequest, isExplorerLoading, error, selectedEntryPath } =
-    explorerDerived;
+  const {
+    directories,
+    pendingRequest,
+    isExplorerLoading,
+    error: explorerError,
+    selectedEntryPath,
+  } = explorerDerived;
 
   const isDirectoryLoading = useCallback(
     (path: string) => isPendingListForPath({ isExplorerLoading, pendingRequest, path }),
@@ -408,7 +416,7 @@ export function FileExplorerPane({
     isExplorerLoading,
     pendingRequest,
   });
-  const showBackFromError = Boolean(error && selectedEntryPath);
+  const showBackFromError = Boolean(explorerError && selectedEntryPath);
   const errorRecoveryPath = useMemo(() => getErrorRecoveryPath(explorerState), [explorerState]);
 
   const renderTreeRow = useCallback(
@@ -451,6 +459,18 @@ export function FileExplorerPane({
     });
   }, [requestDirectoryListing]);
 
+  const renderErrorFallback = useCallback(
+    (error: unknown, resetError: () => void) => (
+      <SectionErrorFallback
+        error={error}
+        onReset={resetError}
+        sectionLabel={paneT("errors.sectionFileExplorer")}
+        compact
+      />
+    ),
+    [paneT],
+  );
+
   if (!hasWorkspaceScope) {
     return (
       <View style={styles.centerState}>
@@ -460,26 +480,28 @@ export function FileExplorerPane({
   }
 
   return (
-    <View style={styles.container}>
-      <FileExplorerPaneContent
-        error={error}
-        showInitialLoading={showInitialLoading}
-        showBackFromError={showBackFromError}
-        treeRows={treeRows}
-        currentSortLabel={currentSortLabel}
-        isRefreshFetching={isRefreshFetching}
-        showDesktopWebScrollbar={showDesktopWebScrollbar}
-        treeListRef={treeListRef}
-        scrollbar={scrollbar}
-        renderTreeRow={renderTreeRow}
-        handleSortCycle={handleSortCycle}
-        handleRefresh={handleRefresh}
-        handleBackFromError={handleBackFromError}
-        handleRetry={handleRetry}
-        sortTriggerStyle={sortTriggerStyle}
-        iconButtonStyle={iconButtonStyle}
-      />
-    </View>
+    <ErrorBoundary fallback={renderErrorFallback}>
+      <View style={styles.container}>
+        <FileExplorerPaneContent
+          error={explorerError}
+          showInitialLoading={showInitialLoading}
+          showBackFromError={showBackFromError}
+          treeRows={treeRows}
+          currentSortLabel={currentSortLabel}
+          isRefreshFetching={isRefreshFetching}
+          showDesktopWebScrollbar={showDesktopWebScrollbar}
+          treeListRef={treeListRef}
+          scrollbar={scrollbar}
+          renderTreeRow={renderTreeRow}
+          handleSortCycle={handleSortCycle}
+          handleRefresh={handleRefresh}
+          handleBackFromError={handleBackFromError}
+          handleRetry={handleRetry}
+          sortTriggerStyle={sortTriggerStyle}
+          iconButtonStyle={iconButtonStyle}
+        />
+      </View>
+    </ErrorBoundary>
   );
 }
 
@@ -503,6 +525,7 @@ interface FileExplorerPaneContentProps {
 }
 
 function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const {
     error,
@@ -545,7 +568,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     return (
       <View style={styles.centerState}>
         <ActivityIndicator size="small" />
-        <Text style={styles.loadingText}>Loading files…</Text>
+        <Text style={styles.loadingText}>{t("fileExplorer.loading")}</Text>
       </View>
     );
   }

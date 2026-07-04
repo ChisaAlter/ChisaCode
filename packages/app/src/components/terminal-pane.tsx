@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
@@ -47,6 +48,7 @@ import {
   type OpenFileDisposition,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
+import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 
 interface TerminalPaneProps {
   serverId: string;
@@ -130,8 +132,16 @@ function ModifierButton({ modifier, active, onToggle }: ModifierButtonProps) {
     () => [styles.keyButtonText, active && styles.keyButtonTextActive],
     [active],
   );
+  const modifierAccessibilityState = useMemo(() => ({ selected: active }), [active]);
   return (
-    <Pressable testID={`terminal-key-${modifier}`} onPress={handlePress} style={pressableStyle}>
+    <Pressable
+      testID={`terminal-key-${modifier}`}
+      onPress={handlePress}
+      style={pressableStyle}
+      accessibilityRole="button"
+      accessibilityLabel={MODIFIER_LABELS[modifier]}
+      accessibilityState={modifierAccessibilityState}
+    >
       <Text style={textStyle}>{MODIFIER_LABELS[modifier]}</Text>
     </Pressable>
   );
@@ -154,7 +164,13 @@ function VirtualKeyButton({ id, label, keyValue, onSend }: VirtualKeyButtonProps
     [],
   );
   return (
-    <Pressable testID={`terminal-key-${id}`} onPress={handlePress} style={pressableStyle}>
+    <Pressable
+      testID={`terminal-key-${id}`}
+      onPress={handlePress}
+      style={pressableStyle}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <Text style={styles.keyButtonText}>{label}</Text>
     </Pressable>
   );
@@ -169,6 +185,7 @@ export function TerminalPane({
   onOpenFileExplorer,
   onOpenWorkspaceFile,
 }: TerminalPaneProps) {
+  const { t: terminalT } = useTranslation();
   const isAppVisible = useAppVisible();
   const { theme } = useUnistyles();
   const { settings } = useAppSettings();
@@ -738,118 +755,140 @@ export function TerminalPane({
     terminalStreamKey,
   });
 
+  const renderErrorFallback = useCallback(
+    (error: unknown, resetError: () => void) => (
+      <SectionErrorFallback
+        error={error}
+        onReset={resetError}
+        sectionLabel={terminalT("errors.sectionTerminal")}
+        compact
+      />
+    ),
+    [terminalT],
+  );
+
   if (!client || !isConnected) {
     return (
       <View style={styles.centerState}>
-        <Text style={styles.stateText}>主机未连接</Text>
+        <Text style={styles.stateText}>{terminalT("errors.hostDisconnected")}</Text>
       </View>
     );
   }
 
   return (
-    <Animated.View style={containerStyle}>
-      <View style={styles.outputContainer}>
-        {isWorkspaceFocused ? (
-          <View style={styles.terminalGestureContainer}>
-            <TerminalEmulator
-              ref={emulatorRef}
-              dom={TERMINAL_EMULATOR_DOM_PROPS}
-              streamKey={terminalStreamKey}
-              testId="terminal-surface"
-              xtermTheme={xtermTheme}
-              scrollbackLines={settings.terminalScrollbackLines}
-              swipeGesturesEnabled={swipeGesturesEnabled}
-              initialSnapshot={initialSnapshot}
-              onRendererReadyChange={handleRendererReadyChange}
-              onSwipeRight={handleSwipeRight}
-              onSwipeLeft={handleSwipeLeft}
-              onInput={handleTerminalData}
-              onResize={handleTerminalResize}
-              onTerminalKey={handleTerminalKey}
-              onInputModeChange={handleInputModeChange}
-              onResolveLocalFileLink={handleResolveLocalFileLink}
-              onOpenLocalFileLink={handleOpenLocalFileLink}
-              onPendingModifiersConsumed={handlePendingModifiersConsumed}
-              pendingModifiers={modifiers}
-              focusRequestToken={focusRequestToken}
-              resizeRequestToken={resizeRequestToken}
-            />
-          </View>
-        ) : (
-          <View style={styles.terminalGestureContainer} />
-        )}
+    <ErrorBoundary fallback={renderErrorFallback}>
+      <Animated.View style={containerStyle} accessibilityLabel={terminalT("terminal.title")}>
+        <View style={styles.outputContainer} accessibilityLabel={terminalT("terminal.output")}>
+          {isWorkspaceFocused ? (
+            <View style={styles.terminalGestureContainer}>
+              <TerminalEmulator
+                ref={emulatorRef}
+                dom={TERMINAL_EMULATOR_DOM_PROPS}
+                streamKey={terminalStreamKey}
+                testId="terminal-surface"
+                xtermTheme={xtermTheme}
+                scrollbackLines={settings.terminalScrollbackLines}
+                swipeGesturesEnabled={swipeGesturesEnabled}
+                initialSnapshot={initialSnapshot}
+                onRendererReadyChange={handleRendererReadyChange}
+                onSwipeRight={handleSwipeRight}
+                onSwipeLeft={handleSwipeLeft}
+                onInput={handleTerminalData}
+                onResize={handleTerminalResize}
+                onTerminalKey={handleTerminalKey}
+                onInputModeChange={handleInputModeChange}
+                onResolveLocalFileLink={handleResolveLocalFileLink}
+                onOpenLocalFileLink={handleOpenLocalFileLink}
+                onPendingModifiersConsumed={handlePendingModifiersConsumed}
+                pendingModifiers={modifiers}
+                focusRequestToken={focusRequestToken}
+                resizeRequestToken={resizeRequestToken}
+              />
+            </View>
+          ) : (
+            <View style={styles.terminalGestureContainer} />
+          )}
 
-        {showLoadingOverlay ? (
-          <View style={styles.attachOverlay} pointerEvents="none" testID="terminal-attach-loading">
-            <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+          {showLoadingOverlay ? (
+            <View
+              style={styles.attachOverlay}
+              pointerEvents="none"
+              testID="terminal-attach-loading"
+            >
+              <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+            </View>
+          ) : null}
+        </View>
+
+        {streamError ? (
+          <View style={styles.errorRow}>
+            <Text style={styles.statusError} numberOfLines={2}>
+              {streamError}
+            </Text>
           </View>
         ) : null}
-      </View>
 
-      {streamError ? (
-        <View style={styles.errorRow}>
-          <Text style={styles.statusError} numberOfLines={2}>
-            {streamError}
-          </Text>
-        </View>
-      ) : null}
+        {isMobile ? (
+          <View style={styles.keyboardContainer} testID="terminal-virtual-keyboard">
+            <View style={styles.keyboardRows}>
+              <View style={styles.keyboardRow}>
+                {[KEY_BUTTONS.esc, KEY_BUTTONS.tab].map((button) => (
+                  <VirtualKeyButton
+                    key={button.id}
+                    id={button.id}
+                    label={button.label}
+                    keyValue={button.key}
+                    onSend={sendVirtualKey}
+                  />
+                ))}
 
-      {isMobile ? (
-        <View style={styles.keyboardContainer} testID="terminal-virtual-keyboard">
-          <View style={styles.keyboardRows}>
-            <View style={styles.keyboardRow}>
-              {[KEY_BUTTONS.esc, KEY_BUTTONS.tab].map((button) => (
+                <ModifierButton modifier="ctrl" active={modifiers.ctrl} onToggle={toggleModifier} />
+
                 <VirtualKeyButton
-                  key={button.id}
-                  id={button.id}
-                  label={button.label}
-                  keyValue={button.key}
+                  id={KEY_BUTTONS.up.id}
+                  label={KEY_BUTTONS.up.label}
+                  keyValue={KEY_BUTTONS.up.key}
                   onSend={sendVirtualKey}
                 />
-              ))}
 
-              <ModifierButton modifier="ctrl" active={modifiers.ctrl} onToggle={toggleModifier} />
+                <ModifierButton
+                  modifier="shift"
+                  active={modifiers.shift}
+                  onToggle={toggleModifier}
+                />
 
-              <VirtualKeyButton
-                id={KEY_BUTTONS.up.id}
-                label={KEY_BUTTONS.up.label}
-                keyValue={KEY_BUTTONS.up.key}
-                onSend={sendVirtualKey}
-              />
-
-              <ModifierButton modifier="shift" active={modifiers.shift} onToggle={toggleModifier} />
-
-              <VirtualKeyButton
-                id={KEY_BUTTONS.backspace.id}
-                label={KEY_BUTTONS.backspace.label}
-                keyValue={KEY_BUTTONS.backspace.key}
-                onSend={sendVirtualKey}
-              />
-            </View>
-
-            <View style={styles.keyboardRow}>
-              <ModifierButton modifier="alt" active={modifiers.alt} onToggle={toggleModifier} />
-
-              {[
-                KEY_BUTTONS.space,
-                KEY_BUTTONS.left,
-                KEY_BUTTONS.down,
-                KEY_BUTTONS.right,
-                KEY_BUTTONS.enter,
-              ].map((button) => (
                 <VirtualKeyButton
-                  key={button.id}
-                  id={button.id}
-                  label={button.label}
-                  keyValue={button.key}
+                  id={KEY_BUTTONS.backspace.id}
+                  label={KEY_BUTTONS.backspace.label}
+                  keyValue={KEY_BUTTONS.backspace.key}
                   onSend={sendVirtualKey}
                 />
-              ))}
+              </View>
+
+              <View style={styles.keyboardRow}>
+                <ModifierButton modifier="alt" active={modifiers.alt} onToggle={toggleModifier} />
+
+                {[
+                  KEY_BUTTONS.space,
+                  KEY_BUTTONS.left,
+                  KEY_BUTTONS.down,
+                  KEY_BUTTONS.right,
+                  KEY_BUTTONS.enter,
+                ].map((button) => (
+                  <VirtualKeyButton
+                    key={button.id}
+                    id={button.id}
+                    label={button.label}
+                    keyValue={button.key}
+                    onSend={sendVirtualKey}
+                  />
+                ))}
+              </View>
             </View>
           </View>
-        </View>
-      ) : null}
-    </Animated.View>
+        ) : null}
+      </Animated.View>
+    </ErrorBoundary>
   );
 }
 

@@ -1,6 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useCallback, useMemo, useState } from "react";
 import {
-  Alert,
   Pressable,
   Text,
   View,
@@ -17,6 +17,7 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/screens/settings/settings-section";
+import { useToast } from "@/contexts/toast-context";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { ChevronRight, Download, RefreshCw } from "lucide-react-native";
@@ -422,6 +423,7 @@ export interface ProvidersSectionProps {
 
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { entries, isLoading } = useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
@@ -443,15 +445,12 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        Alert.alert(
-          t("providers.updateFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setPendingProviderId((current) => (current === providerId ? null : current));
       }
     },
-    [patchConfig, t],
+    [patchConfig, toast],
   );
 
   return (

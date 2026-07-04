@@ -54,6 +54,7 @@ import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
 import invariant from "tiny-invariant";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
+import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { BranchSwitcher } from "@/components/branch-switcher";
@@ -933,14 +934,28 @@ function useStableTabDescriptorMap(tabDescriptors: WorkspaceTabDescriptor[]) {
 export function WorkspaceScreen({ serverId, workspaceId, isRouteFocused }: WorkspaceScreenProps) {
   const navigationFocused = useIsFocused();
   const effectiveRouteFocused = isRouteFocused ?? navigationFocused;
+  const { t: wsT } = useTranslation();
+
+  const renderErrorFallback = useCallback(
+    (error: unknown, resetError: () => void) => (
+      <SectionErrorFallback
+        error={error}
+        onReset={resetError}
+        sectionLabel={wsT("errors.sectionWorkspace")}
+      />
+    ),
+    [wsT],
+  );
 
   return (
     <ExplorerSidebarAnimationProvider>
-      <WorkspaceScreenContent
-        serverId={serverId}
-        workspaceId={workspaceId}
-        isRouteFocused={effectiveRouteFocused}
-      />
+      <ErrorBoundary fallback={renderErrorFallback}>
+        <WorkspaceScreenContent
+          serverId={serverId}
+          workspaceId={workspaceId}
+          isRouteFocused={effectiveRouteFocused}
+        />
+      </ErrorBoundary>
     </ExplorerSidebarAnimationProvider>
   );
 }

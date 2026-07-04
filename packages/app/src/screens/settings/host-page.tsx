@@ -1,6 +1,6 @@
 import { ChevronRight, Globe, Monitor, Pencil, RotateCw, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
@@ -27,6 +27,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { useToast } from "@/contexts/toast-context";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { formatLatency } from "@/utils/latency";
 
@@ -224,6 +225,7 @@ export function HostRenameButton({ host }: { host: HostProfile }) {
 }
 
 function ConnectionsSection({ host }: { host: HostProfile }) {
+  const toast = useToast();
   const { removeConnection } = useHostMutations();
   const snapshot = useHostRuntimeSnapshot(host.serverId);
   const probeByConnectionId = snapshot?.probeByConnectionId ?? new Map();
@@ -257,10 +259,10 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
       .then(() => setPendingRemoveConnection(null))
       .catch((error) => {
         console.error("[HostPage] Failed to remove connection", error);
-        Alert.alert("错误", "无法移除连接");
+        toast.error("无法移除连接");
       })
       .finally(() => setIsRemovingConnection(false));
-  }, [pendingRemoveConnection, removeConnection, host.serverId]);
+  }, [pendingRemoveConnection, removeConnection, host.serverId, toast]);
 
   return (
     <SettingsSection title="连接">
@@ -405,6 +407,7 @@ const delay = (ms: number) =>
 
 function RestartDaemonCard({ host }: { host: HostProfile }) {
   const { theme } = useUnistyles();
+  const toast = useToast();
   const daemonClient = useHostRuntimeClient(host.serverId);
   const isConnected = useHostRuntimeIsConnected(host.serverId);
   const runtime = getHostRuntimeStore();
@@ -445,18 +448,18 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
     if (isMountedRef.current) {
       setIsRestarting(false);
       if (!reconnected) {
-        Alert.alert("无法重新连接", `${host.label} 没有恢复在线。请确认它已经重启。`);
+        toast.error(`${host.label} 没有恢复在线。请确认它已经重启。`);
       }
     }
-  }, [host.label, isHostConnected, waitForCondition]);
+  }, [host.label, isHostConnected, waitForCondition, toast]);
 
   const handleRestart = useCallback(() => {
     if (!daemonClient) {
-      Alert.alert("主机不可用", "此主机尚未连接。请等待它上线后再重启。");
+      toast.error("此主机尚未连接。请等待它上线后再重启。");
       return;
     }
     if (!isHostConnected()) {
-      Alert.alert("主机离线", "此主机已离线。ChisaCode会自动重连，请等待它恢复在线后再重启。");
+      toast.error("此主机已离线。ChisaCode会自动重连，请等待它恢复在线后再重启。");
       return;
     }
 
@@ -476,16 +479,16 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
             console.error(`[HostPage] Failed to restart daemon ${host.label}`, error);
             if (!isMountedRef.current) return;
             setIsRestarting(false);
-            Alert.alert("错误", "发送重启请求失败。ChisaCode会自动重连，请在主机显示在线后重试。");
+            toast.error("发送重启请求失败。ChisaCode会自动重连，请在主机显示在线后重试。");
           });
         void waitForDaemonRestart();
         return;
       })
       .catch((error) => {
         console.error(`[HostPage] Failed to open restart confirmation for ${host.label}`, error);
-        Alert.alert("错误", "无法打开重启确认对话框。");
+        toast.error("无法打开重启确认对话框。");
       });
-  }, [daemonClient, host.label, host.serverId, isHostConnected, waitForDaemonRestart]);
+  }, [daemonClient, host.label, host.serverId, isHostConnected, waitForDaemonRestart, toast]);
 
   const restartIcon = useMemo(
     () => <RotateCw size={theme.iconSize.sm} color={theme.colors.foreground} />,
@@ -686,6 +689,7 @@ function PairDeviceRow() {
 
 function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?: () => void }) {
   const { theme } = useUnistyles();
+  const toast = useToast();
   const { removeHost } = useHostMutations();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -711,10 +715,10 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
       })
       .catch((error) => {
         console.error("[HostPage] Failed to remove host", error);
-        Alert.alert("错误", "无法移除主机");
+        toast.error("无法移除主机");
       })
       .finally(() => setIsRemoving(false));
-  }, [host.serverId, onRemoved, removeHost]);
+  }, [host.serverId, onRemoved, removeHost, toast]);
 
   const removeIcon = useMemo(
     () => <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />,

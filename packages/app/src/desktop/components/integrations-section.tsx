@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ArrowUpRight, Terminal, Blocks, Check, Download } from "lucide-react-native";
@@ -19,6 +19,7 @@ import { useCliInstall, useSkillsStatus } from "@/desktop/hooks/use-install-stat
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { useToast } from "@/contexts/toast-context";
 import {
   getAcpProviderCatalog,
   type AcpProviderCatalogItem,
@@ -521,6 +522,7 @@ function AgentToolRow({
 
 function AgentToolsSection() {
   const { t } = useTranslation();
+  const toast = useToast();
   const localServerId = useLocalDaemonServerId();
   const client = useHostRuntimeClient(localServerId ?? "");
   const isConnected = useHostRuntimeIsConnected(localServerId ?? "");
@@ -552,21 +554,18 @@ function AgentToolsSection() {
         .runProviderToolingAction(providerId, action)
         .then((result) => {
           if (!result.success) {
-            Alert.alert(t("providers.installFailed"), result.stderr || result.stdout);
+            toast.error(result.stderr || result.stdout || t("providers.installFailed"));
           }
           return refresh([providerId]);
         })
         .catch((error) => {
-          Alert.alert(
-            t("providers.installFailed"),
-            error instanceof Error ? error.message : String(error),
-          );
+          toast.error(error instanceof Error ? error.message : String(error));
         })
         .finally(() => {
           setWorkingProviderId((current) => (current === providerId ? null : current));
         });
     },
-    [checkingProviderId, client, refresh, t, workingProviderId],
+    [checkingProviderId, client, refresh, toast, t, workingProviderId],
   );
 
   return (

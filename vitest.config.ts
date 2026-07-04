@@ -58,5 +58,6 @@ export default defineConfig({
   },
   test: {
     exclude: [...configDefaults.exclude, "**/.claude/**"],
+    setupFiles: [path.resolve(__dirname, "vitest.setup.ts")],
   },
 });

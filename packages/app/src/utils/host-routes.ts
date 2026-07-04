@@ -463,6 +463,7 @@ export const SETTINGS_SECTION_SLUGS = [
   "integrations",
   "permissions",
   "diagnostics",
+  "feedback",
   "about",
 ] as const;
 

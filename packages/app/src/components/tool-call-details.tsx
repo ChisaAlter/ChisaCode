@@ -20,6 +20,7 @@ import { HighlightedLines } from "./highlighted-content";
 import { DiffViewer } from "./diff-viewer";
 import { getCodeInsets } from "./code-insets";
 import { isWeb } from "@/constants/platform";
+import { appI18n } from "@/i18n";
 
 const ScrollView = isWeb ? RNScrollView : GHScrollView;
 
@@ -608,8 +609,8 @@ function buildUnknownSections(detail: UnknownDetail, ds: DetailStyles): ReactNod
   }
 
   const sectionsFromTopLevel = [
-    { title: "输入", value: detail.input },
-    { title: "输出", value: detail.output },
+    { title: appI18n.t("toolCall.input"), value: detail.input },
+    { title: appI18n.t("toolCall.output"), value: detail.output },
   ].filter((entry) =>
     hasMeaningfulToolCallDetail({
       type: "unknown",
@@ -730,7 +731,7 @@ function buildDetailSections(
 function ErrorSection({ errorText, ds }: { errorText: string; ds: DetailStyles }) {
   return (
     <View style={styles.section}>
-      <Text style={SECTION_TITLE_ERROR_STYLE}>错误</Text>
+      <Text style={SECTION_TITLE_ERROR_STYLE}>{appI18n.t("common.error")}</Text>
       <ScrollView
         horizontal
         nestedScrollEnabled
@@ -777,7 +778,7 @@ export function ToolCallDetailsContent({
     if (showLoadingSkeleton) {
       return <LoadingSkeleton containerStyle={ds.loadingContainerStyle} />;
     }
-    return <Text style={styles.emptyStateText}>没有更多详细信息</Text>;
+    return <Text style={styles.emptyStateText}>{appI18n.t("host.noMoreDetails")}</Text>;
   }
 
   return <View style={ds.fullBleedContainerStyle}>{sections}</View>;

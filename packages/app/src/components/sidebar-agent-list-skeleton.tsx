@@ -33,7 +33,7 @@ function SkeletonSection({
     [sectionOpacity],
   );
   return (
-    <View style={sectionStyle}>
+    <View style={sectionStyle} accessibilityElementsHidden={true}>
       <View style={styles.sectionHeader}>
         <SkeletonPulse pulse={pulse} style={styles.chevron} />
         <SkeletonPulse pulse={pulse} style={styles.projectIcon} />
@@ -77,7 +77,11 @@ export function SidebarAgentListSkeleton() {
   }, [pulse]);
 
   return (
-    <View style={styles.container}>
+    <View
+      accessibilityRole="list"
+      accessibilityLabel="正在加载 agent 列表"
+      style={styles.container}
+    >
       {SECTION_OPACITIES.map((sectionOpacity, sectionIdx) => (
         <SkeletonSection
           key={SECTION_KEYS[sectionIdx]}

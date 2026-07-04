@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, type PressableStateCallbackType, ScrollView, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import type {
@@ -104,36 +105,40 @@ function SheetStatusMessages({
   erroredProviderLabels,
   importErrored,
 }: SheetStatusMessagesProps) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   if (!isClientReady) {
-    return <Text style={styles.statusText}>连接到主机以导入会话</Text>;
+    return <Text style={styles.statusText}>{t("session.connectToImport")}</Text>;
   }
   if (isSnapshotUnsupported) {
-    return <Text style={styles.statusText}>更新主机后即可导入会话。</Text>;
+    return <Text style={styles.statusText}>{t("session.updateHostToImport")}</Text>;
   }
   return (
     <>
       {hasNoImportableProviders ? (
-        <Text style={styles.statusText}>没有启用可导入的提供商。</Text>
+        <Text style={styles.statusText}>{t("session.noImportableProviders")}</Text>
       ) : null}
       {isLoadingSessions ? (
         <View style={styles.statusRow}>
           <LoadingSpinner color={theme.colors.foregroundMuted} />
-          <Text style={styles.statusText}>正在加载最近会话...</Text>
+          <Text style={styles.statusText}>{t("session.loadingRecentSessions")}</Text>
         </View>
       ) : null}
-      {allQueriesErrored ? <Text style={styles.statusText}>无法加载最近会话。</Text> : null}
+      {allQueriesErrored ? (
+        <Text style={styles.statusText}>{t("session.loadSessionsFailed")}</Text>
+      ) : null}
       {!allQueriesErrored && erroredProviderLabels.length > 0 ? (
         <Text style={styles.statusText}>
-          Could not load sessions for {erroredProviderLabels.join(", ")}.
+          {t("session.couldNotLoadSessionsFor", { providers: erroredProviderLabels.join(", ") })}
         </Text>
       ) : null}
-      {importErrored ? <Text style={styles.statusText}>无法导入所选会话。</Text> : null}
+      {importErrored ? <Text style={styles.statusText}>{t("session.importFailed")}</Text> : null}
     </>
   );
 }
 
 function RefreshAction({ isRefreshing, onPress }: { isRefreshing: boolean; onPress: () => void }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const pressableStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
@@ -146,7 +151,7 @@ function RefreshAction({ isRefreshing, onPress }: { isRefreshing: boolean; onPre
     <Pressable
       onPress={onPress}
       disabled={isRefreshing}
-      accessibilityLabel="刷新会话"
+      accessibilityLabel={t("session.refreshSessions")}
       accessibilityRole="button"
       testID="import-session-refresh"
       style={pressableStyle}
@@ -177,9 +182,10 @@ function SheetEmptyState({ title }: { title: string }) {
 function buildProviderFilterOptions(
   providers: ReadonlyArray<string>,
   providerLabelById: ReadonlyMap<string, string>,
+  t: (key: string) => string,
 ): SegmentedControlOption<string>[] {
   const options: SegmentedControlOption<string>[] = [
-    { value: ALL_FILTER_VALUE, label: "全部", testID: "import-session-filter-all" },
+    { value: ALL_FILTER_VALUE, label: t("session.filterAll"), testID: "import-session-filter-all" },
   ];
   for (const provider of providers) {
     const ProviderIcon = getProviderIcon(provider);
@@ -206,6 +212,7 @@ function ImportSessionSheetRow({
   showCwd: boolean;
   onImportSession: (entry: FetchRecentProviderSessionEntry) => void;
 }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const title = getSessionTitle(entry);
   const promptPreview = getPromptPreview(entry);
@@ -244,7 +251,7 @@ function ImportSessionSheetRow({
           <Text style={styles.rowTitle} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={styles.rowMeta}>{importing ? "导入中..." : lastActivity}</Text>
+          <Text style={styles.rowMeta}>{importing ? t("session.importing") : lastActivity}</Text>
         </View>
         <Text style={styles.rowPreview} numberOfLines={2}>
           {promptPreview}
@@ -268,6 +275,7 @@ export function ImportSessionSheet({
   onImportedAgent,
   onImported,
 }: ImportSessionSheetProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const isCompact = useIsCompactFormFactor();
   const ResultsScrollView = isCompact ? BottomSheetScrollView : ScrollView;
@@ -331,18 +339,18 @@ export function ImportSessionSheet({
   }, [aggregatedEntries, selectedProvider]);
 
   const filterOptions = useMemo(
-    () => buildProviderFilterOptions(filterProviders, providerLabelById),
-    [filterProviders, providerLabelById],
+    () => buildProviderFilterOptions(filterProviders, providerLabelById, t),
+    [filterProviders, providerLabelById, t],
   );
 
   const importMutation = useMutation({
     mutationFn: async (entry: FetchRecentProviderSessionEntry) => {
       if (!client) {
-        throw new Error("主机未连接");
+        throw new Error(t("session.hostNotConnected"));
       }
       const effectiveCwd = cwd ?? entry.cwd;
       if (!effectiveCwd) {
-        throw new Error("会话缺少工作目录");
+        throw new Error(t("session.missingCwd"));
       }
       const agent = await client.importAgent({
         providerId: entry.providerId,
@@ -384,10 +392,10 @@ export function ImportSessionSheet({
 
   const header = useMemo<SheetHeader>(
     () => ({
-      title: "导入会话",
+      title: t("session.importSession"),
       actions: <RefreshAction isRefreshing={isRefreshing} onPress={handleRefresh} />,
     }),
-    [isRefreshing, handleRefresh],
+    [isRefreshing, handleRefresh, t],
   );
 
   const isSnapshotUnsupported = !supportsSnapshot;

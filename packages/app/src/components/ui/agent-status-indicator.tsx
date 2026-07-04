@@ -10,6 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 import type { AgentLifecycleStatus } from "@chisacode/protocol/agent-lifecycle";
 import { AlertCircle, CheckCircle, ShieldAlert } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
@@ -42,6 +43,7 @@ export function AgentStatusIndicator({
   pendingPermissionCount = 0,
   size = "sm",
 }: AgentStatusIndicatorProps) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const needsAttention = requiresAttention || pendingPermissionCount > 0;
   const isRunning = status === "running";
@@ -116,21 +118,21 @@ export function AgentStatusIndicator({
         return (
           <View style={styles.attentionBadge}>
             <CheckCircle size={14} color={theme.colors.statusSuccess} />
-            <Text style={dynamicStyles.successText}>已完成</Text>
+            <Text style={dynamicStyles.successText}>{t("agentStatus.completed")}</Text>
           </View>
         );
       case "error":
         return (
           <View style={styles.attentionBadge}>
             <AlertCircle size={14} color={theme.colors.statusDanger} />
-            <Text style={dynamicStyles.dangerText}>出错</Text>
+            <Text style={dynamicStyles.dangerText}>{t("agentStatus.errored")}</Text>
           </View>
         );
       case "permission":
         return (
           <View style={styles.attentionBadge}>
             <ShieldAlert size={14} color={theme.colors.statusWarning} />
-            <Text style={dynamicStyles.warningText}>需要权限</Text>
+            <Text style={dynamicStyles.warningText}>{t("agentStatus.needsPermission")}</Text>
           </View>
         );
     }

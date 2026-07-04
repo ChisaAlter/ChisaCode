@@ -1,13 +1,6 @@
 import { Pencil, Plus, RotateCw, Trash2 } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-  type PressableStateCallbackType,
-} from "react-native";
+import { Pressable, Text, TextInput, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import {
@@ -24,6 +17,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { useToast } from "@/contexts/toast-context";
 import {
   buildDisableCustomModelProviderPatch,
   buildModelGatewayProviderIdList,
@@ -658,6 +652,7 @@ function ProviderEditorSheet({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const toast = useToast();
   const [values, setValues] = useState<ProviderEditorValues>(createEmptyEditorValues);
   const [modelEditor, setModelEditor] = useState<ModelEditorState | null>(null);
   const [modelTestMessage, setModelTestMessage] = useState<string | null>(null);
@@ -772,7 +767,7 @@ function ProviderEditorSheet({
     }
     const model = normalizeModelDraft(modelEditor.draft);
     if (!model) {
-      Alert.alert(t("customModelProviders.modelRequired"));
+      toast.error(t("customModelProviders.modelRequired"));
       return;
     }
     setValues((current) => {
@@ -783,7 +778,7 @@ function ProviderEditorSheet({
       return { ...current, models };
     });
     setModelEditor(null);
-  }, [modelEditor, t]);
+  }, [modelEditor, toast, t]);
   const handleTestModel = useCallback(
     (model: CustomModelProviderModelInput) => {
       const gatewayId = values.id.trim();
@@ -938,6 +933,7 @@ function ProviderEditorSheet({
 export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const toast = useToast();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const { entries, refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingProviderState | null>(null);
@@ -1022,13 +1018,10 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
         await patchConfig(patch);
         await refresh(buildModelGatewayProviderIdList(provider.id) as AgentProvider[]);
       })().catch((error) => {
-        Alert.alert(
-          t("customModelProviders.deleteFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       });
     },
-    [patchConfig, refresh, t],
+    [patchConfig, refresh, toast, t],
   );
   const headerActions = useMemo(
     () => (

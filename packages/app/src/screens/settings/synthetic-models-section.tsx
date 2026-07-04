@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import type { ModelGatewayMoaTestResponseMessage } from "@chisacode/protocol/messages";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import type {
@@ -7,14 +8,7 @@ import type {
 } from "@chisacode/protocol/provider-config";
 import { Brain, FlaskConical, Pencil, Play, Plus, Trash2 } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-  type PressableStateCallbackType,
-} from "react-native";
+import { Pressable, Text, TextInput, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import {
@@ -40,6 +34,7 @@ import {
 } from "@/screens/settings/synthetic-models";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { useToast } from "@/contexts/toast-context";
 
 interface SyntheticModelsSectionProps {
   serverId: string;
@@ -1162,6 +1157,7 @@ function GatewayModelRadioRow({
 export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const toast = useToast();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const { refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingSyntheticModelState | null>(null);
@@ -1225,13 +1221,10 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           console.warn("[SyntheticModels] Failed to refresh providers after save", error);
         });
       } catch (error) {
-        Alert.alert(
-          t("syntheticModels.saveFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       }
     },
-    [config?.modelGateways, patchConfig, refreshGatewayProviders, t],
+    [config?.modelGateways, patchConfig, refreshGatewayProviders, toast, t],
   );
   const handleDelete = useCallback(
     (model: SyntheticModelEntry) => {
@@ -1258,13 +1251,10 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           console.warn("[SyntheticModels] Failed to refresh providers after delete", error);
         });
       })().catch((error) => {
-        Alert.alert(
-          t("syntheticModels.deleteFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       });
     },
-    [config?.modelGateways, patchConfig, refreshGatewayProviders, t],
+    [config?.modelGateways, patchConfig, refreshGatewayProviders, toast, t],
   );
   const headerActions = useMemo(
     () => (

@@ -1,6 +1,7 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { Pencil, Plus, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, type PressableStateCallbackType, Text, View } from "react-native";
+import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import {
@@ -16,6 +17,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { useToast } from "@/contexts/toast-context";
 import {
   buildDeleteCustomModelPatch,
   buildSaveCustomModelPatch,
@@ -304,6 +306,7 @@ function CustomModelEditorSheet({
 export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const toast = useToast();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const { entries, refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingModelState | null>(null);
@@ -345,13 +348,10 @@ export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
         }
         setEditorState(null);
       } catch (error) {
-        Alert.alert(
-          t("customModels.saveFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       }
     },
-    [config?.providers, patchConfig, refresh, t],
+    [config?.providers, patchConfig, refresh, toast],
   );
 
   const handleDelete = useCallback(
@@ -381,16 +381,13 @@ export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
             await refresh(changedProviderIds as AgentProvider[]);
           }
         } catch (error) {
-          Alert.alert(
-            t("customModels.deleteFailed"),
-            error instanceof Error ? error.message : String(error),
-          );
+          toast.error(error instanceof Error ? error.message : String(error));
         } finally {
           setDeletingModelId((current) => (current === model.id ? null : current));
         }
       })();
     },
-    [config?.providers, patchConfig, refresh, t],
+    [config?.providers, patchConfig, refresh, toast],
   );
 
   const headerActions = useMemo(

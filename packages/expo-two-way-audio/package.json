@@ -27,6 +27,8 @@
     "dev": "expo-module build",
     "lint": "expo-module lint",
     "test": "expo-module test",
+    "test:unit": "vitest run --config ../../vitest.config.ts",
+    "test:watch": "vitest --config ../../vitest.config.ts",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "typecheck": "tsgo --noEmit",

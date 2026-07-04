@@ -2,6 +2,7 @@ import { View, Text } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import Animated, { useAnimatedStyle, withTiming, useSharedValue } from "react-native-reanimated";
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Upload } from "lucide-react-native";
 import { useFileDropZone } from "@/hooks/use-file-drop-zone";
 import type { ImageAttachment } from "@/composer/types";
@@ -16,6 +17,7 @@ interface FileDropZoneProps {
 const IS_WEB = isWeb;
 
 export function FileDropZone({ children, onFilesDropped, disabled = false }: FileDropZoneProps) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const { isDragging, containerRef } = useFileDropZone({
     onFilesDropped,
@@ -58,7 +60,7 @@ export function FileDropZone({ children, onFilesDropped, disabled = false }: Fil
         {/* Content */}
         <View style={styles.overlayContent}>
           <Upload size={32} color={theme.colors.primary} />
-          <Text style={styles.overlayText}>将图片拖放到这里</Text>
+          <Text style={styles.overlayText}>{t("files.dropImagesHere")}</Text>
         </View>
       </Animated.View>
     </View>

@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback, useEffect } from "react";
 import { View, Text } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ChevronLeft } from "lucide-react-native";
 import { MenuHeader } from "@/components/headers/menu-header";
@@ -22,6 +23,7 @@ export function SessionsScreen({ serverId }: { serverId: string }) {
 }
 
 function SessionsScreenContent({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const { agents, hasMore, isInitialLoad, isLoadingMore, isRevalidating, loadMore, refreshAll } =
     useAgentHistory({
@@ -56,16 +58,16 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
       hasMore ? (
         <View style={styles.footer}>
           <Button variant="ghost" onPress={loadMore} disabled={isLoadingMore}>
-            {isLoadingMore ? "加载中..." : "加载更多"}
+            {isLoadingMore ? t("common.loading") : t("common.loadMore")}
           </Button>
         </View>
       ) : null,
-    [hasMore, loadMore, isLoadingMore],
+    [hasMore, loadMore, isLoadingMore, t],
   );
 
   return (
     <View style={styles.container}>
-      <MenuHeader title="会话" />
+      <MenuHeader title={t("sidebar.sessions")} />
       {isInitialLoad ? (
         <View style={styles.loadingContainer}>
           <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
@@ -73,9 +75,9 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
       ) : null}
       {!isInitialLoad && sortedAgents.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>还没有会话</Text>
+          <Text style={styles.emptyText}>{t("sidebar.noSessions")}</Text>
           <Button variant="ghost" leftIcon={ChevronLeft} onPress={handleBack}>
-            返回
+            {t("common.back")}
           </Button>
         </View>
       ) : null}

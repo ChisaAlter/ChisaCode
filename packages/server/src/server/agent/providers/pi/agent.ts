@@ -146,6 +146,7 @@ interface PiRpcAgentSessionOptions {
   capabilities: AgentCapabilityFlags;
   cleanup?: () => void;
   modelPrefix?: string;
+  logger: Logger;
 }
 
 interface PiResumeConfig {
@@ -953,6 +954,7 @@ export class PiRpcAgentSession implements AgentSession {
     this.state = options.initialState;
     this.capabilities = options.capabilities;
     this.cleanup = options.cleanup;
+    this.logger = options.logger;
     this.lastKnownThinkingOptionId =
       normalizePiThinkingOption(options.config.thinkingOptionId) ??
       this.state.thinkingLevel ??
@@ -966,6 +968,7 @@ export class PiRpcAgentSession implements AgentSession {
   private readonly runtimeSession: PiRuntimeSession;
   private readonly config: AgentSessionConfig;
   private readonly cleanup?: () => void;
+  private readonly logger: Logger;
 
   get id(): string | null {
     return this.state.sessionId;
@@ -1109,7 +1112,9 @@ export class PiRpcAgentSession implements AgentSession {
     if (this.activeTurnId) {
       throw new Error("Cannot rewind the Pi conversation while a Pi turn is active");
     }
-    await this.refreshState().catch(() => undefined);
+    await this.refreshState().catch((err) => {
+      this.logger.warn({ err }, "Pi refreshState failed before rewind");
+    });
     await this.requestEntryCapture("rewind");
     const targetEntry = this.capturedUserEntriesById.get(input.messageId);
     if (!targetEntry) {
@@ -1591,7 +1596,9 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   private async refreshAfterTurn(turnId: string | undefined): Promise<void> {
-    await this.refreshState().catch(() => undefined);
+    await this.refreshState().catch((err) => {
+      this.logger.warn({ err }, "Pi refreshState failed after turn");
+    });
     const usage = await this.runtimeSession
       .getSessionStats()
       .then(toAgentUsage)
@@ -1660,6 +1667,7 @@ export class PiRpcAgentClient implements AgentClient {
         capabilities: withPiMcpCapability(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, chisacodeExtension.cleanup]),
         modelPrefix: modelPrefix ?? undefined,
+        logger: this.logger,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
@@ -1710,6 +1718,7 @@ export class PiRpcAgentClient implements AgentClient {
         initialState: await runtimeSession.getState(),
         capabilities: withPiMcpCapability(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, chisacodeExtension.cleanup]),
+        logger: this.logger,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);

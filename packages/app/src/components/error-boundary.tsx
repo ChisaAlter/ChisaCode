@@ -1,6 +1,7 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, useCallback, useMemo, type ErrorInfo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { appI18n } from "@/i18n";
 
 interface ErrorBoundaryProps {
@@ -73,7 +74,7 @@ function DefaultErrorFallback({ error, onReset }: { error: unknown; onReset: () 
         accessibilityRole="button"
         accessibilityLabel={appI18n.t("common.retry", { defaultValue: "重试" })}
         onPress={onReset}
-        style={retryButtonStyle}
+        style={defaultRetryButtonStyle}
       >
         <Text style={fallbackStyles.retryText}>
           {appI18n.t("common.retry", { defaultValue: "重试" })}
@@ -83,7 +84,7 @@ function DefaultErrorFallback({ error, onReset }: { error: unknown; onReset: () 
   );
 }
 
-function retryButtonStyle({ pressed }: PressableStateCallbackType) {
+function defaultRetryButtonStyle({ pressed }: PressableStateCallbackType) {
   return [fallbackStyles.retryButton, pressed && fallbackStyles.retryButtonPressed];
 }
 
@@ -115,6 +116,154 @@ const fallbackStyles = StyleSheet.create({
   },
   retryText: {
     fontSize: 14,
+    fontWeight: "500",
+  },
+});
+
+/**
+ * 分级 ErrorBoundary 使用的局部 fallback。与根级 DefaultErrorFallback 不同，
+ * 这里通过 useUnistyles 读取 theme token，避免硬编码 fontSize/color，样式随主题变化。
+ * 作为真正的函数组件渲染（由 ErrorBoundary 的 fallback render callback 返回对应元素），
+ * 因此可以使用 hooks。
+ */
+interface SectionErrorFallbackProps {
+  error: unknown;
+  onReset: () => void;
+  /**
+   * 可选的自定义标题，默认走 i18n generic 错误标题。
+   * 传入区域名（如 "工作区"）时会拼成 "工作区渲染异常" 之类的语义。
+   */
+  sectionLabel?: string;
+  /**
+   * 紧凑模式：用于 pane 级局部兜底，避免占满整屏。
+   * true 时容器不撑满、内边距更小，适合嵌入到面板内部。
+   */
+  compact?: boolean;
+}
+
+export function SectionErrorFallback({
+  error,
+  onReset,
+  sectionLabel,
+  compact = false,
+}: SectionErrorFallbackProps) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const message =
+    error instanceof Error
+      ? error.message
+      : appI18n.t("errors.generic", { defaultValue: "出了点问题。" });
+  const title = sectionLabel
+    ? t("errors.sectionTitle", {
+        defaultValue: "{{section}} 渲染异常",
+        section: sectionLabel,
+      })
+    : t("startup.errorTitle", { defaultValue: "出错了" });
+
+  const containerStyle = useMemo(
+    () =>
+      compact
+        ? [
+            sectionStyles.compactContainer,
+            {
+              padding: theme.spacing[3],
+              gap: theme.spacing[2],
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface1,
+            },
+          ]
+        : [
+            sectionStyles.container,
+            {
+              padding: theme.spacing[4],
+              gap: theme.spacing[3],
+              backgroundColor: theme.colors.background,
+            },
+          ],
+    [compact, theme],
+  );
+
+  const titleStyle = useMemo(
+    () => [sectionStyles.title, { color: theme.colors.foreground, fontSize: theme.fontSize.sm }],
+    [theme],
+  );
+
+  const messageStyle = useMemo(
+    () => [
+      sectionStyles.message,
+      { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.xs },
+    ],
+    [theme],
+  );
+
+  const retryTextStyle = useMemo(
+    () => [
+      sectionStyles.retryText,
+      { color: theme.colors.foreground, fontSize: theme.fontSize.xs },
+    ],
+    [theme],
+  );
+
+  const sectionRetryButtonStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      sectionStyles.retryButton,
+      {
+        paddingHorizontal: theme.spacing[3],
+        paddingVertical: theme.spacing[2],
+        borderRadius: theme.borderRadius.md,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2,
+      },
+      pressed && sectionStyles.retryButtonPressed,
+    ],
+    [theme],
+  );
+
+  return (
+    <View style={containerStyle}>
+      <Text style={titleStyle} numberOfLines={2}>
+        {title}
+      </Text>
+      <Text style={messageStyle} numberOfLines={compact ? 3 : 5}>
+        {message}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("common.retry", { defaultValue: "重试" })}
+        onPress={onReset}
+        style={sectionRetryButtonStyle}
+      >
+        <Text style={retryTextStyle}>{t("common.retry", { defaultValue: "重试" })}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const sectionStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  compactContainer: {
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  message: {
+    textAlign: "center",
+  },
+  retryButton: {
+    borderWidth: 1,
+  },
+  retryButtonPressed: {
+    opacity: 0.7,
+  },
+  retryText: {
     fontWeight: "500",
   },
 });

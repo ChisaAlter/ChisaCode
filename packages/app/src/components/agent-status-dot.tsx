@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import {
   AGENT_LIFECYCLE_STATUSES,
@@ -22,6 +23,7 @@ export function AgentStatusDot({
   showInactive?: boolean;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
 
   if (!status) {
     return null;
@@ -42,12 +44,38 @@ export function AgentStatusDot({
     return null;
   }
 
-  return <AgentStatusDotView color={color} />;
+  return <AgentStatusDotView color={color} accessibilityLabel={labelForBucket(bucket, t)} />;
 }
 
-function AgentStatusDotView({ color }: { color: string }) {
+function labelForBucket(
+  bucket: ReturnType<typeof deriveSidebarStateBucket>,
+  t: (key: string) => string,
+): string {
+  switch (bucket) {
+    case "done":
+      return t("agentStatus.completed");
+    case "failed":
+      return t("agentStatus.errored");
+    case "needs_input":
+      return t("agentStatus.needsPermission");
+    case "running":
+      return t("agentStatus.running");
+    case "attention":
+      return t("agentStatus.idle");
+  }
+}
+
+function AgentStatusDotView({
+  color,
+  accessibilityLabel,
+}: {
+  color: string;
+  accessibilityLabel: string;
+}) {
   const dotStyle = useMemo(() => [styles.dot, { backgroundColor: color }], [color]);
-  return <View style={dotStyle} />;
+  return (
+    <View accessibilityLabel={accessibilityLabel} accessibilityRole="image" style={dotStyle} />
+  );
 }
 
 function isAgentLifecycleStatus(value: string): value is AgentLifecycleStatus {

@@ -32,6 +32,7 @@ import {
   Bot,
   Blocks,
   ChartNoAxesColumnIncreasing,
+  Bug,
 } from "lucide-react-native";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
@@ -100,6 +101,10 @@ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { useToast } from "@/contexts/toast-context";
+import { getDesktopDaemonLogs } from "@/desktop/daemon/desktop-daemon";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import {
   buildHostOpenProjectRoute,
   buildProjectsSettingsRoute,
@@ -144,6 +149,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   },
   { id: "permissions", labelKey: "settings.sections.permissions", icon: Shield, desktopOnly: true },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
+  { id: "feedback", labelKey: "settings.sections.feedback", icon: Bug },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -571,6 +577,78 @@ function DiagnosticsSection({
             {isPlaybackTestRunning
               ? t("settings.diagnostics.playing")
               : t("settings.diagnostics.playTest")}
+          </Button>
+        </View>
+      </View>
+    </SettingsSection>
+  );
+}
+
+function FeedbackSection({ isDesktopApp }: { isDesktopApp: boolean }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleReportIssue = useCallback(() => {
+    void openExternalUrl("https://github.com/ChisaAlter/ChisaCode/issues/new/choose");
+  }, []);
+
+  const handleExportLogs = useCallback(async () => {
+    if (!isDesktopApp) {
+      toast.error(t("settings.feedback.exportLogsDesktopOnly"));
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const logs = await getDesktopDaemonLogs();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const fileName = `chisacode-daemon-${timestamp}.log`;
+      const fileUri = `${FileSystem.cacheDirectory ?? ""}${fileName}`;
+      await FileSystem.writeAsStringAsync(fileUri, logs.contents ?? "", {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/plain",
+          dialogTitle: fileName,
+        });
+        toast.show(t("settings.feedback.exportSuccess"), { variant: "success" });
+      } else {
+        toast.error(t("settings.feedback.shareUnavailable"));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[Settings] Failed to export daemon logs", error);
+      toast.error(t("settings.feedback.exportFailed", { message }));
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isDesktopApp, t, toast]);
+
+  return (
+    <SettingsSection title={t("settings.feedback.title")}>
+      <View style={settingsStyles.card}>
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.feedback.reportIssue")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.feedback.reportIssueHint")}</Text>
+          </View>
+          <Button variant="outline" size="sm" onPress={handleReportIssue}>
+            {t("settings.feedback.openIssues")}
+          </Button>
+        </View>
+        <View style={ROW_WITH_BORDER_STYLE}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.feedback.exportLogs")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.feedback.exportLogsHint")}</Text>
+          </View>
+          <Button
+            variant="secondary"
+            size="sm"
+            onPress={handleExportLogs}
+            disabled={isExporting || !isDesktopApp}
+          >
+            {isExporting ? t("settings.feedback.exporting") : t("settings.feedback.export")}
           </Button>
         </View>
       </View>
@@ -1493,6 +1571,8 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
               handlePlaybackTest={handlePlaybackTest}
             />
           );
+        case "feedback":
+          return <FeedbackSection isDesktopApp={isDesktopApp} />;
         case "about":
           return <AboutSection isDesktopApp={isDesktopApp} />;
       }

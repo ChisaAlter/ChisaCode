@@ -38,6 +38,7 @@ import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isWeb } from "@/constants/platform";
 import { useTranslation } from "react-i18next";
 import { getMobileSidebarWidth } from "@/utils/sidebar-animation-state";
+import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 
 const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
   duration: 180,
@@ -61,6 +62,7 @@ export function ExplorerSidebar({
   onOpenFile,
 }: ExplorerSidebarProps) {
   const { theme } = useUnistyles();
+  const { t: sidebarT } = useTranslation();
   const isScreenFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const isMobile = useIsCompactFormFactor();
@@ -314,6 +316,18 @@ export function ExplorerSidebar({
     [resizeAnimatedStyle, insets.top, desktopWindowControlsPadding.top],
   );
 
+  const renderErrorFallback = useCallback(
+    (error: unknown, resetError: () => void) => (
+      <SectionErrorFallback
+        error={error}
+        onReset={resetError}
+        sectionLabel={sidebarT("errors.sectionSidebar")}
+        compact
+      />
+    ),
+    [sidebarT],
+  );
+
   // Mobile: full-screen overlay with gesture.
   // On web, keep it interactive only while open so closed sidebars don't eat taps.
   let overlayPointerEvents: "auto" | "none" | "box-none";
@@ -354,27 +368,29 @@ export function ExplorerSidebar({
   }
 
   return (
-    <Animated.View style={desktopSidebarStyle} pointerEvents={isOpen ? "auto" : "none"}>
-      <View style={DESKTOP_SIDEBAR_BORDER_STYLE}>
-        {/* Resize handle - absolutely positioned over left border */}
-        <GestureDetector gesture={resizeGesture}>
-          <View style={RESIZE_HANDLE_STYLE} />
-        </GestureDetector>
+    <ErrorBoundary fallback={renderErrorFallback}>
+      <Animated.View style={desktopSidebarStyle} pointerEvents={isOpen ? "auto" : "none"}>
+        <View style={DESKTOP_SIDEBAR_BORDER_STYLE}>
+          {/* Resize handle - absolutely positioned over left border */}
+          <GestureDetector gesture={resizeGesture}>
+            <View style={RESIZE_HANDLE_STYLE} />
+          </GestureDetector>
 
-        <SidebarContent
-          activeTab={explorerTab}
-          onTabPress={handleTabPress}
-          onClose={handleDesktopClose}
-          serverId={serverId}
-          workspaceId={workspaceId}
-          workspaceRoot={workspaceRoot}
-          isGit={isGit}
-          isMobile={false}
-          isOpen={isOpen}
-          onOpenFile={onOpenFile}
-        />
-      </View>
-    </Animated.View>
+          <SidebarContent
+            activeTab={explorerTab}
+            onTabPress={handleTabPress}
+            onClose={handleDesktopClose}
+            serverId={serverId}
+            workspaceId={workspaceId}
+            workspaceRoot={workspaceRoot}
+            isGit={isGit}
+            isMobile={false}
+            isOpen={isOpen}
+            onOpenFile={onOpenFile}
+          />
+        </View>
+      </Animated.View>
+    </ErrorBoundary>
   );
 }
 

@@ -24,7 +24,7 @@ import { isElectronRuntime, isElectronRuntimeMac } from "@/desktop/host";
 /** Browser or Electron — the JS runtime has access to the DOM. */
 export const isWeb = Platform.OS === "web";
 
-/** iOS or Android — the JS runtime is React Native. */
+/** Android — the JS runtime is React Native. iOS build is currently paused but isNative still matches it. */
 export const isNative = Platform.OS !== "web";
 
 /** Android native runtime. */

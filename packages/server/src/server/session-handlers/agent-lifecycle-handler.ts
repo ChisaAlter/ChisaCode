@@ -2087,14 +2087,6 @@ export class AgentLifecycleHandler implements DisposableHandler {
     }
   }
 
-  // @ts-ignore TS6133 — will be used in Sub-step 4 (create_agent)
-  private hasActiveAgentRun(agentId: string | null): boolean {
-    if (!agentId) {
-      return false;
-    }
-    return this.context.agentManager.hasInFlightRun(agentId);
-  }
-
   // --- Sub-step 5: Agent Config handlers ---
 
   private async handleSetAgentModeRequest(

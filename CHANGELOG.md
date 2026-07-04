@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- File explorer pane no longer crashes on initial load (`useTranslation` was called without destructuring `t`)
+- Toast dismiss callback type mismatch (`string` vs `number` id) that could leave toasts stuck and leak timers
+- `synthetic-models-section` referenced an undeclared `toast` in `useMemo` dependencies, blocking the app typecheck/build
+- `.dockerignore` excluded entire package directories, breaking `COPY packages/*/package.json` in the Dockerfile
+- `helpers.ts` could not name the `ToolCallBase` return type; `ToolCallBase` is now exported from `agent-sdk-types`
+- `vitest.config.ts` `define: { __DEV__: "true" }` conflicted with the repo-wide `__DEV__ === false` convention
+- Binary-frame 0xffff boundary test was a no-op (payload under the threshold, assertion guarded by an always-false `if`)
+- `connect()` dedup test only asserted `instanceof Promise`; now verifies a concurrent connect creates no extra transport
+- Reconnect test did not verify `lastError` is cleared after a successful reconnect
+- `settings.usage.shareUnavailable` i18n key was missing (referenced but only defined under `settings.feedback`)
+- `docker-compose.yml` exposed port 6767 on all interfaces by default; now binds to `127.0.0.1` only
+- `knip.json` listed a non-existent `src/index.ts` entry for the protocol package
+- Hardcoded Chinese strings in `sectionLabel`, accessibility labels, and `agent-status-dot` bypassed i18n; all now route through `t()`
+- Toast animate-out callback could fire `onDismiss` after `ToastItem` unmount; animation is now stopped in cleanup
+- Reconnect test could leak a pending connect timeout across the fake→real timer boundary; `vi.clearAllTimers()` added
+
+### Changed
+
+- Root `package.json` `overrides` now pins `@types/node` to `^22.10.0` to eliminate cross-package type drift
+- `ci.yml` adds a top-level `permissions: { contents: read, actions: read }` block and a `knip` job
+- `Dockerfile` adds a `HEALTHCHECK` probing `GET /api/health`
+- `.gitignore` covers local agent tooling directories (`.omc/`, `.understand-anything/`, etc.) and `.tmp-*` captures
+- `comprehensive-improvement-roadmap.md` reopened as the active improvement source of truth and registers the two draft plans
+
+### Removed
+
+- Tracked debug artifacts (`query.js`, `spawn.js`, `.tmp-*.png`, `ChisaCode.lnk`) and local agent state directories (`.omc/`, `.understand-anything/`, `.workbuddy/`)
+
 ## 1.0.2 - 2026-06-28
 
 ### Added

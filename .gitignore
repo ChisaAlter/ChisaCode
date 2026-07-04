@@ -72,6 +72,13 @@ CLAUDE.local.md
 
 # Local agent/tooling artifacts (do not commit)
 .tmp/
+.omc/
+.understand-anything/
+.workbuddy/
+.uploads/
+.superpowers/
+.codex/
+.trae/
 PLAN.md
 .valknut/
 valknut-report.html/
@@ -94,6 +101,11 @@ packages/server/src/server/fixtures/dictation/dictation-debug-largest.transcript
 /tmp-*.cjs
 /tmp-*.json
 /tmp-*.log
+/.tmp-*.png
+/.tmp-*.jpg
+/.tmp-*.jpeg
+/.tmp-*.webp
+/.tmp-*.log
 /temp/
 /docs_doc_quality_assessment.json
 /*head-diff.txt

@@ -1,7 +1,9 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { type ReactElement, useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useToast } from "@/contexts/toast-context";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { ArrowUpRight, Copy, FileText, Activity } from "lucide-react-native";
@@ -40,6 +42,7 @@ function useKeepRunningAfterQuitToggle(args: {
 
 function useDaemonCliStatusModal() {
   const { t } = useTranslation();
+  const toast = useToast();
   const [cliStatusOutput, setCliStatusOutput] = useState<string | null>(null);
   const [isCliStatusModalOpen, setIsCliStatusModalOpen] = useState(false);
   const [isLoadingCliStatus, setIsLoadingCliStatus] = useState(false);
@@ -64,13 +67,13 @@ function useDaemonCliStatusModal() {
     }
     void Clipboard.setStringAsync(cliStatusOutput)
       .then(() => {
-        Alert.alert(t("common.copied"), t("settings.daemon.copiedStatus"));
+        toast.show(t("settings.daemon.copiedStatus"), { variant: "success" });
         return;
       })
       .catch((error) => {
         console.error("[Settings] Failed to copy daemon status", error);
       });
-  }, [cliStatusOutput, t]);
+  }, [cliStatusOutput, toast, t]);
 
   const handleCloseCliStatusModal = useCallback(() => setIsCliStatusModalOpen(false), []);
 
@@ -86,6 +89,7 @@ function useDaemonCliStatusModal() {
 
 function useDaemonLogsModal(daemonLogs: { logPath?: string } | null) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
 
   const handleCopyLogPath = useCallback(() => {
@@ -96,14 +100,14 @@ function useDaemonLogsModal(daemonLogs: { logPath?: string } | null) {
 
     void Clipboard.setStringAsync(logPath)
       .then(() => {
-        Alert.alert(t("common.copied"), t("settings.daemon.copiedLogPath"));
+        toast.show(t("settings.daemon.copiedLogPath"), { variant: "success" });
         return;
       })
       .catch((error) => {
         console.error("[Settings] Failed to copy log path", error);
-        Alert.alert(t("common.error"), t("settings.daemon.copyLogPathFailed"));
+        toast.error(t("settings.daemon.copyLogPathFailed"));
       });
-  }, [daemonLogs?.logPath, t]);
+  }, [daemonLogs?.logPath, toast, t]);
 
   const handleOpenLogs = useCallback(() => {
     if (!daemonLogs) {

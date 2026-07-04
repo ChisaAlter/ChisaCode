@@ -1,5 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  // Alert.alert is retained for blocking confirm dialogs (e.g. server removal);
+  // toasts are used for transient error/success feedback only.
   Alert,
   Dimensions,
   Modal,
@@ -14,6 +17,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Edit3, Globe2, Plus, RefreshCw, Search, Terminal, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
+import { useToast } from "@/contexts/toast-context";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
@@ -329,6 +333,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
+  const toast = useToast();
   const [scopes, setScopes] = useState<AgentMcpServerScopePayload[]>([]);
   const [servers, setServers] = useState<AgentMcpServerPayload[]>([]);
   const [policy, setPolicy] = useState<McpServerManagementConfig | null>(null);
@@ -358,10 +363,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         setSelectedScope({ type: "global" });
       }
     } catch (error) {
-      Alert.alert(
-        t("settings.mcpServers.loadFailed"),
-        error instanceof Error ? error.message : String(error),
-      );
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
@@ -415,15 +417,12 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
           setPolicy(response.policy);
         }
       } catch (error) {
-        Alert.alert(
-          t("settings.mcpServers.saveFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setWorkingServer(null);
       }
     },
-    [client, policy, selectedScope, t],
+    [client, policy, selectedScope, toast, t],
   );
 
   const handleCloseCreateMenu = useCallback(() => {
@@ -562,15 +561,12 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         await client.deleteAgentMcpServer({ name: server.name });
         await refresh();
       } catch (error) {
-        Alert.alert(
-          t("settings.mcpServers.deleteFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setIsLoading(false);
       }
     },
-    [client, refresh, t],
+    [client, refresh, toast, t],
   );
 
   const handleCloseForm = useCallback(() => {
@@ -590,10 +586,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
       setForm(null);
       await refresh();
     } catch (error) {
-      Alert.alert(
-        t("settings.mcpServers.saveFailed"),
-        error instanceof Error ? error.message : String(error),
-      );
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
@@ -620,7 +613,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         {createMenu}
       </View>
     ),
-    [createButton, createMenu, refresh, t],
+    [createButton, createMenu, refresh, toast, t],
   );
 
   const scopeButtons = useMemo(
@@ -633,7 +626,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
           label: scope.label,
         })),
     ],
-    [scopes, t],
+    [scopes, toast, t],
   );
 
   const filteredServers = useMemo(
@@ -678,7 +671,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
     () => ({
       title: formTitle(form, t),
     }),
-    [form, t],
+    [form, toast, t],
   );
 
   const formFooter = useMemo(
@@ -692,7 +685,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         </Button>
       </View>
     ),
-    [form?.name, handleCloseForm, handleSaveForm, isLoading, t],
+    [form?.name, handleCloseForm, handleSaveForm, isLoading, toast, t],
   );
 
   let serverContent: ReactNode;

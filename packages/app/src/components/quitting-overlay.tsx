@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { listenToDesktopEvent } from "@/desktop/electron/events";
 
 export function QuittingOverlay() {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const [quitting, setQuitting] = useState(false);
 
@@ -37,8 +39,8 @@ export function QuittingOverlay() {
   return (
     <View style={styles.overlay}>
       <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
-      <Text style={styles.title}>Quitting ChisaCode...</Text>
-      <Text style={styles.detail}>正在停止本地 daemon。</Text>
+      <Text style={styles.title}>{t("desktop.quittingTitle")}</Text>
+      <Text style={styles.detail}>{t("desktop.stoppingDaemon")}</Text>
     </View>
   );
 }

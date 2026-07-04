@@ -8,6 +8,12 @@ on:
   merge_group:
   workflow_dispatch:
 
+# Least-privilege: CI only needs to read code and actions metadata. Jobs that
+# need to write (artifacts) grant that at the job level.
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -409,6 +415,22 @@ jobs:
           CHISACODE_VOICE_MODE_ENABLED: "0"
           CHISACODE_CLI_TEST_SHARD: ${{ matrix.shard }}
           CHISACODE_CLI_TEST_SHARD_TOTAL: "3"
+
+  knip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Detect unused exports and dependencies
+        run: npm run knip
 
   secret-scan:
     runs-on: ubuntu-latest

@@ -308,7 +308,7 @@ export type ToolCallDetail =
       output: unknown;
     };
 
-interface ToolCallBase {
+export interface ToolCallBase {
   [key: string]: unknown;
   type: "tool_call";
   callId: string;

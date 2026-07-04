@@ -64,6 +64,19 @@ import { mapOpencodeToolCall } from "./opencode/tool-call-mapper.js";
 import { OpenCodeServerManager } from "./opencode/server-manager.js";
 import type { OpenCodeLikeProviderConfig } from "./opencode/server-manager.js";
 import {
+  MCP_ALREADY_PRESENT_ERROR_TOKENS,
+  OPENCODE_AGENT_HEX_COLOR_PATTERN,
+  OPENCODE_AUTO_ACCEPT_FEATURE_ID,
+  OPENCODE_BUILD_MODE_ID,
+  OPENCODE_HEADERS_TIMEOUT_TOKENS,
+  OPENCODE_LEGACY_FULL_ACCESS_MODE_ID,
+  OPENCODE_PENDING_ABORT_START_TIMEOUT_MS,
+  OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS,
+  OPENCODE_PERMISSION_ACTION_ALLOW_ONCE,
+  OPENCODE_PERSISTED_SESSION_LIMIT,
+  OPENCODE_PROVIDER_LIST_TIMEOUT_MS,
+} from "./opencode/constants.js";
+import {
   formatDiagnosticStatus,
   formatProviderDiagnostic,
   formatProviderDiagnosticError,
@@ -73,11 +86,7 @@ import {
 import { runProviderTurn } from "./provider-runner.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
-import {
-  createSdkOpenCodeClient,
-  type OpenCodeRuntime,
-  type OpenCodeServerAcquisition,
-} from "./opencode/runtime.js";
+import { ProductionOpenCodeRuntime, type OpenCodeRuntime } from "./opencode/runtime.js";
 import { normalizeProviderReplayTimestamp } from "../provider-history-timestamps.js";
 import { revertOpenCodeConversationAndFiles } from "./opencode/rewind.js";
 
@@ -112,14 +121,6 @@ const MIMOCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
   ignoreSystemEnvForDedicatedServer: true,
   installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
 };
-
-const OPENCODE_BUILD_MODE_ID = "build";
-const OPENCODE_LEGACY_FULL_ACCESS_MODE_ID = "full-access";
-const OPENCODE_AUTO_ACCEPT_FEATURE_ID = "auto_accept";
-const OPENCODE_PERSISTED_SESSION_LIMIT = 200;
-const OPENCODE_PENDING_ABORT_START_TIMEOUT_MS = 10_000;
-const OPENCODE_PERMISSION_ACTION_ALLOW_ONCE = "allow_once";
-const OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS = "allow_always";
 
 const DEFAULT_MODES: AgentMode[] = [
   {
@@ -260,18 +261,10 @@ type OpenCodeMcpConfig =
       enabled?: boolean;
     };
 
-const MCP_ALREADY_PRESENT_ERROR_TOKENS = ["already", "exists", "connected"] as const;
-const OPENCODE_PROVIDER_LIST_TIMEOUT_MS = 30_000;
 const OPENCODE_HANDLED_BUILTIN_SLASH_COMMANDS: AgentSlashCommand[] = [
   { name: "compact", description: "Compact the current session", argumentHint: "" },
   { name: "summarize", description: "Compact the current session", argumentHint: "" },
 ];
-const OPENCODE_HEADERS_TIMEOUT_TOKENS = [
-  "headers timeout",
-  "headers timeout error",
-  "headers_timeout",
-  "und_err_headers_timeout",
-] as const;
 
 const OpencodeToolStateSchema = z
   .object({
@@ -560,8 +553,6 @@ function normalizeOpenCodeConfig(config: OpenCodeAgentConfig): OpenCodeAgentConf
 function isSelectableOpenCodeAgent(agent: { mode?: string; hidden?: boolean }): boolean {
   return (agent.mode === "primary" || agent.mode === "all") && agent.hidden !== true;
 }
-
-const OPENCODE_AGENT_HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 function readOpenCodeAgentHexColor(agent: { color?: unknown }): string | undefined {
   return typeof agent.color === "string" && OPENCODE_AGENT_HEX_COLOR_PATTERN.test(agent.color)
@@ -1202,29 +1193,6 @@ export const __openCodeInternals = {
 
 export interface OpenCodeAgentClientDeps {
   runtime?: OpenCodeRuntime;
-}
-
-class ProductionOpenCodeRuntime implements OpenCodeRuntime {
-  constructor(private readonly serverManager: OpenCodeServerManager) {}
-
-  async acquireServer(options: {
-    force: boolean;
-    env?: Record<string, string>;
-  }): Promise<OpenCodeServerAcquisition> {
-    return this.serverManager.acquire(options);
-  }
-
-  async ensureServerRunning(): Promise<{ port: number; url: string }> {
-    return this.serverManager.ensureRunning();
-  }
-
-  createClient(options: { baseUrl: string; directory: string }): OpencodeClient {
-    return createSdkOpenCodeClient(options);
-  }
-
-  async shutdown(): Promise<void> {
-    await this.serverManager.shutdown();
-  }
 }
 
 export class OpenCodeAgentClient implements AgentClient {

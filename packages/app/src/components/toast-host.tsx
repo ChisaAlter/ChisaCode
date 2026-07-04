@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Animated, Easing, Platform, Text, ToastAndroid, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -12,6 +13,7 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
+import { createToastQueue, type ToastQueue } from "./toast-queue";
 
 export type ToastVariant = "default" | "success" | "error";
 
@@ -42,15 +44,28 @@ export interface ToastApi {
 type ToastViewportPlacement = "app-shell" | "panel";
 
 const DEFAULT_DURATION_MS = 2200;
+const TOAST_VERTICAL_GAP = 8;
 
 export function useToastHost(): {
   api: ToastApi;
-  toast: ToastState | null;
-  dismiss: () => void;
+  toasts: ToastState[];
+  dismiss: (id?: number) => void;
 } {
+  const { t: toastT } = useTranslation();
   const { theme } = useUnistyles();
-  const [toast, setToast] = useState<ToastState | null>(null);
+  const [toasts, setToasts] = useState<ToastState[]>([]);
   const idRef = useRef(0);
+  const queueRef = useRef<ToastQueue | null>(null);
+
+  if (!queueRef.current) {
+    queueRef.current = createToastQueue(3, (visible) => setToasts(visible));
+  }
+
+  useEffect(() => {
+    return () => {
+      queueRef.current?.clear();
+    };
+  }, []);
 
   const show = useCallback((content: ReactNode, options?: ToastShowOptions) => {
     const nativeMessage = typeof content === "string" ? content.trim() : null;
@@ -70,7 +85,7 @@ export function useToastHost(): {
     }
 
     idRef.current += 1;
-    setToast({
+    queueRef.current!.push({
       id: idRef.current,
       content,
       nativeMessage,
@@ -85,39 +100,34 @@ export function useToastHost(): {
     () => ({
       show,
       copied: (label?: string) =>
-        show(label ? `已复制${label}` : "已复制", {
+        show(label ? toastT("common.copiedWithLabel", { label }) : toastT("common.copied"), {
           variant: "success",
           icon: <CheckCircle2 size={18} color={theme.colors.foreground} />,
         }),
       error: (message: string) => show(message, { variant: "error", durationMs: 3200 }),
     }),
-    [show, theme.colors.foreground],
+    [show, theme.colors.foreground, toastT],
   );
 
-  const dismiss = useCallback(() => {
-    setToast(null);
+  const dismiss = useCallback((id?: number) => {
+    if (id === undefined) {
+      queueRef.current?.clear();
+    } else {
+      queueRef.current?.remove(id);
+    }
   }, []);
 
-  return { api, toast, dismiss };
+  return { api, toasts, dismiss };
 }
 
-export function ToastViewport({
-  toast,
-  onDismiss,
-  placement = "app-shell",
-}: {
-  toast: ToastState | null;
-  onDismiss: () => void;
-  placement?: ToastViewportPlacement;
-}) {
+function ToastItem({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
   const { theme } = useUnistyles();
-  const insets = useSafeAreaInsets();
-  const isMobile = useIsCompactFormFactor();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-8)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissDeadlineRef = useRef<number | null>(null);
   const remainingDurationRef = useRef(0);
+  const animationRef = useRef<{ stop: () => void } | null>(null);
 
   const clearTimer = useCallback(() => {
     if (timeoutRef.current) {
@@ -128,7 +138,7 @@ export function ToastViewport({
 
   const animateOut = useCallback(() => {
     clearTimer();
-    Animated.parallel([
+    const animation = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
         duration: 140,
@@ -141,7 +151,10 @@ export function ToastViewport({
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start(({ finished }) => {
+    ]);
+    animationRef.current = animation;
+    animation.start(({ finished }) => {
+      animationRef.current = null;
       if (finished) {
         onDismiss();
       }
@@ -175,23 +188,13 @@ export function ToastViewport({
   }, [clearTimer]);
 
   const resumeDismiss = useCallback(() => {
-    if (!toast || toast.durationMs === null) {
+    if (toast.durationMs === null) {
       return;
     }
     scheduleDismiss(remainingDurationRef.current || toast.durationMs);
-  }, [scheduleDismiss, toast]);
+  }, [scheduleDismiss, toast.durationMs]);
 
   useEffect(() => {
-    if (!toast) {
-      clearTimer();
-      dismissDeadlineRef.current = null;
-      remainingDurationRef.current = 0;
-      opacity.setValue(0);
-      translateY.setValue(-8);
-      return;
-    }
-
-    clearTimer();
     opacity.setValue(0);
     translateY.setValue(-8);
 
@@ -214,38 +217,27 @@ export function ToastViewport({
 
     return () => {
       clearTimer();
+      // Stop any in-flight animate-out so its callback does not fire onDismiss
+      // after the ToastItem has unmounted.
+      animationRef.current?.stop();
+      animationRef.current = null;
     };
-  }, [clearTimer, opacity, scheduleDismiss, toast, translateY]);
+  }, [clearTimer, opacity, scheduleDismiss, toast.durationMs, translateY]);
 
-  const headerHeight = isMobile ? HEADER_INNER_HEIGHT_MOBILE : HEADER_INNER_HEIGHT;
-  const headerTopPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
-  const topOffset =
-    placement === "app-shell"
-      ? insets.top + headerTopPadding + headerHeight + theme.spacing[2]
-      : theme.spacing[3];
-
-  const toastVariant = toast?.variant;
-  const toastAnimatedStyle = useMemo(
+  const animatedStyle = useMemo(
     () => [
       styles.toast,
-      toastVariant === "success" ? styles.toastSuccess : null,
-      toastVariant === "error" ? styles.toastError : null,
-      {
-        marginTop: topOffset,
-        opacity,
-        transform: [{ translateY }],
-      },
+      toast.variant === "success" ? styles.toastSuccess : null,
+      toast.variant === "error" ? styles.toastError : null,
+      { opacity, transform: [{ translateY }], marginBottom: TOAST_VERTICAL_GAP },
     ],
-    [toastVariant, topOffset, opacity, translateY],
-  );
-  const toastMessageStyle = useMemo(
-    () => [styles.message, toastVariant === "error" ? styles.messageError : null],
-    [toastVariant],
+    [toast.variant, opacity, translateY],
   );
 
-  if (!toast) {
-    return null;
-  }
+  const messageStyle = useMemo(
+    () => [styles.message, toast.variant === "error" ? styles.messageError : null],
+    [toast.variant],
+  );
 
   let defaultIcon: ReactNode = null;
   if (toast.variant === "success") {
@@ -255,26 +247,61 @@ export function ToastViewport({
   }
   const icon = toast.icon ?? defaultIcon;
 
+  return (
+    <Animated.View
+      testID={toast.testID ?? "app-toast"}
+      onPointerEnter={isWeb ? pauseDismiss : undefined}
+      onPointerLeave={isWeb ? resumeDismiss : undefined}
+      style={animatedStyle}
+      accessibilityRole="alert"
+    >
+      {icon ? <View style={styles.iconSlot}>{icon}</View> : null}
+      {typeof toast.content === "string" ? (
+        <Text testID="app-toast-message" style={messageStyle}>
+          {toast.content}
+        </Text>
+      ) : (
+        <View testID="app-toast-message" style={styles.contentSlot}>
+          {toast.content}
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+export function ToastViewport({
+  toasts,
+  onDismiss,
+  placement = "app-shell",
+}: {
+  toasts: ToastState[];
+  onDismiss: (id: number) => void;
+  placement?: ToastViewportPlacement;
+}) {
+  const { theme } = useUnistyles();
+  const insets = useSafeAreaInsets();
+  const isMobile = useIsCompactFormFactor();
+
+  const headerHeight = isMobile ? HEADER_INNER_HEIGHT_MOBILE : HEADER_INNER_HEIGHT;
+  const headerTopPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
+  const topOffset =
+    placement === "app-shell"
+      ? insets.top + headerTopPadding + headerHeight + theme.spacing[2]
+      : theme.spacing[3];
+
+  const containerStyle = useMemo(() => [styles.container, { marginTop: topOffset }], [topOffset]);
+
+  const handleToastDismiss = useCallback((id: number) => () => onDismiss(id), [onDismiss]);
+
+  if (toasts.length === 0) {
+    return null;
+  }
+
   const content = (
-    <View style={styles.container} pointerEvents="box-none">
-      <Animated.View
-        testID={toast.testID ?? "app-toast"}
-        onPointerEnter={isWeb ? pauseDismiss : undefined}
-        onPointerLeave={isWeb ? resumeDismiss : undefined}
-        style={toastAnimatedStyle}
-        accessibilityRole="alert"
-      >
-        {icon ? <View style={styles.iconSlot}>{icon}</View> : null}
-        {typeof toast.content === "string" ? (
-          <Text testID="app-toast-message" style={toastMessageStyle}>
-            {toast.content}
-          </Text>
-        ) : (
-          <View testID="app-toast-message" style={styles.contentSlot}>
-            {toast.content}
-          </View>
-        )}
-      </Animated.View>
+    <View style={containerStyle} pointerEvents="box-none">
+      {toasts.map((toast) => (
+        <ToastItem key={toast.id} toast={toast} onDismiss={handleToastDismiss(toast.id)} />
+      ))}
     </View>
   );
 

@@ -1,8 +1,37 @@
 # ChisaCode 综合改进路线图
 
-> **状态：已完成并归档**
+> **状态：活跃维护**（2026-07-04 重启）
 >
-> 详细执行记录见 [archive/comprehensive-improvement-roadmap-2026-06-28.md](archive/comprehensive-improvement-roadmap-2026-06-28.md)
+> 历史执行记录见 [archive/comprehensive-improvement-roadmap-2026-06-28.md](archive/comprehensive-improvement-roadmap-2026-06-28.md)。
+> 归档后新增的系统性改进在此登记，作为单一事实源。
+
+---
+
+## 进行中
+
+### 错误提示机制统一设计（草案，2026-07-03 起草）
+
+- **计划**：[error-handling-unification-plan.md](error-handling-unification-plan.md)
+- **背景**：app 包存在五套错误展示机制并存，无明确边界规则，是 P2 粗糙点。
+- **状态**：草案，本批次未执行代码改动，仅设计文档。
+- **后续**：待排期执行。
+
+### Provider God-File 拆分（草案 + 部分执行，2026-07-03 起草）
+
+- **计划**：[provider-god-file-decomposition-plan.md](provider-god-file-decomposition-plan.md)
+- **背景**：codex/claude/opencode 三个 provider agent 实现仍是 god-file（5000+ 行），无共享基类。
+- **已完成的子步骤**：
+  - opencode 常量提取到 `opencode/constants.ts`（`OPENCODE_BUILD_MODE_ID` 等）
+  - `ProductionOpenCodeRuntime` 类从 `opencode-agent.ts` 迁移到 `opencode/runtime.ts`
+  - `opencode/helpers.ts` 提取（含 `OpencodeToolPartToTimelineItemSchema`）
+  - `providers/base/` 基类目录已创建（`BaseAgentClient`/`BaseAgentSession`/`index.ts`）——**尚未接入**，待各 provider 继承
+- **状态**：草案，基类下沉与各 provider 迁移待排期。
+
+---
+
+## 归档批次（2026-06-28）
+
+以下为已归档的执行记录摘要，详细见 [archive/comprehensive-improvement-roadmap-2026-06-28.md](archive/comprehensive-improvement-roadmap-2026-06-28.md)。
 
 ---
 
@@ -24,7 +53,7 @@
 
 ### 架构改进
 
-- **session.ts 拆分** — 9728 → 2627 行 (-73.0%)，god-file 彻底瓦解
+- **session.ts 拆分** — 9728 → ~2.8k 行 (-71%)，god-file 彻底瓦解
 - **SessionContext 领域拆分** — 8 个领域子接口，7 个 handler 使用精确 `Pick<T>` 交叉类型
 - **辅助模块提取** — `workspace-core.ts` (233 行) · `agent-session-helpers.ts` (400 行)
 

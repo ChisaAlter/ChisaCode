@@ -1,5 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  // Alert.alert is retained for blocking uninstall confirm dialogs;
+  // toasts are used for transient error/success feedback only.
   Alert,
   Dimensions,
   Modal,
@@ -14,6 +17,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Download, FolderInput, Plus, RefreshCw, Search, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
+import { useToast } from "@/contexts/toast-context";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
@@ -186,6 +190,7 @@ function SkillRow({ skill, index, selectedScope, working, onToggle, onUninstall 
 export function SkillsSection({ serverId }: SkillsSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const toast = useToast();
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
   const [scopes, setScopes] = useState<AgentSkillScopePayload[]>([]);
@@ -225,10 +230,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
         setSelectedScope({ type: "global" });
       }
     } catch (error) {
-      Alert.alert(
-        t("settings.skills.loadFailed"),
-        error instanceof Error ? error.message : String(error),
-      );
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
@@ -282,10 +284,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
           setPolicy(response.policy);
         }
       } catch (error) {
-        Alert.alert(
-          t("settings.skills.saveFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setWorkingSkill(null);
       }
@@ -426,10 +425,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
       handleCloseInstall();
       await refresh();
     } catch (error) {
-      Alert.alert(
-        t("settings.skills.installFailed"),
-        error instanceof Error ? error.message : String(error),
-      );
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
@@ -454,10 +450,7 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
         await client.uninstallAgentSkill({ sourceId });
         await refresh();
       } catch (error) {
-        Alert.alert(
-          t("settings.skills.uninstallFailed"),
-          error instanceof Error ? error.message : String(error),
-        );
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setIsLoading(false);
       }

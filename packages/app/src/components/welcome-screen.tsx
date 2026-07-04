@@ -9,6 +9,7 @@ import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime
 import { AddHostModal } from "./add-host-modal";
 import { PairLinkModal } from "./pair-link-modal";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { buildHostRootRoute } from "@/utils/host-routes";
@@ -156,6 +157,7 @@ export interface WelcomeScreenProps {
 }
 
 export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -206,7 +208,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     ? [
         {
           key: "direct-connection",
-          label: "直接连接",
+          label: t("onboarding.directConnection"),
           testID: "welcome-direct-connection",
           primary: true,
           icon: Link2,
@@ -214,7 +216,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         },
         {
           key: "paste-pairing-link",
-          label: "粘贴配对链接",
+          label: t("onboarding.pastePairingLink"),
           testID: "welcome-paste-pairing-link",
           primary: false,
           icon: ClipboardPaste,
@@ -224,7 +226,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     : [
         {
           key: "scan-qr",
-          label: "扫描二维码",
+          label: t("onboarding.scanQr"),
           testID: "welcome-scan-qr",
           primary: true,
           icon: QrCode,
@@ -232,7 +234,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         },
         {
           key: "direct-connection",
-          label: "直接连接",
+          label: t("onboarding.directConnection"),
           testID: "welcome-direct-connection",
           primary: false,
           icon: Link2,
@@ -240,7 +242,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         },
         {
           key: "paste-pairing-link",
-          label: "粘贴配对链接",
+          label: t("onboarding.pastePairingLink"),
           testID: "welcome-paste-pairing-link",
           primary: false,
           icon: ClipboardPaste,
@@ -264,8 +266,8 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         <View style={styles.content}>
           <ChisaCodeLogo size={96} />
           <View style={styles.copyBlock}>
-            <Text style={styles.title}>欢迎使用ChisaCode</Text>
-            <Text style={styles.subtitle}>连接你的电脑即可开始</Text>
+            <Text style={styles.title}>{t("onboarding.welcome")}</Text>
+            <Text style={styles.subtitle}>{t("onboarding.connectToStart")}</Text>
             {isNative ? (
               <Pressable style={styles.setupLink} onPress={handleOpenChisaCodeSite}>
                 <Text style={styles.setupLinkText}>chisacode.sh</Text>
@@ -288,7 +290,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
             style={styles.settingsButton}
             testID="welcome-open-settings"
           >
-            设置
+            {t("onboarding.settings")}
           </Button>
         </View>
         <Text style={styles.versionLabel}>{appVersionText}</Text>
