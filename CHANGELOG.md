@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - atomic-write 0o600 mode test now uses `test.skipIf` so Windows runs report the POSIX-mode assertion as skipped rather than an empty pass
 - `cleanupStaleCodexImageAttachments` is now annotated `@internal` to make its test-only export status explicit
 - Desktop transport path tests now include Windows same-drive case-insensitivity and cross-drive rejection regression locks using `path.win32`
+- Relay no longer accepts unauthenticated v1 WebSocket upgrades by default. The v1 protocol has no E2EE and no relay-layer authentication, so anyone who knew a `serverId` could read/write all session traffic. `resolveRelayVersion` now defaults a missing/empty `v` to v2 (the current protocol) and rejects an explicit `v=1` unless `RELAY_ALLOW_V1=1` is set on the Worker (compat opt-in for staged rollouts). Current client and daemon source always emit `v=2`, so no active caller is affected; only legacy `< v0.1.76` deployments that omit `v` are now routed to v2 instead of v1.
 
 - File explorer pane no longer crashes on initial load (`useTranslation` was called without destructuring `t`)
 - Toast dismiss callback type mismatch (`string` vs `number` id) that could leave toasts stuck and leak timers

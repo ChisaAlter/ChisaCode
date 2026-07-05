@@ -74,7 +74,7 @@ async function withMockWebSocketPair(
 const swallow = () => undefined;
 
 describe("RelayDurableObject versioning", () => {
-  it("accepts legacy v1 client sockets without connectionId", async () => {
+  it("rejects legacy v1 sockets by default (v1 has no E2EE / no relay auth)", async () => {
     const { state } = createMockState();
     await withMockWebSocketPair(async () => {
       const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
@@ -83,8 +83,48 @@ describe("RelayDurableObject versioning", () => {
           Upgrade: "websocket",
         },
       });
+      const res = await relay.fetch(req).catch(swallow);
+      expect(state.acceptWebSocket).not.toHaveBeenCalled();
+      // The relay returns 400 (Invalid v parameter) when v1 is not allowed.
+      expect(res?.status ?? 0).toBe(400);
+    });
+  });
+
+  it("accepts legacy v1 sockets when RELAY_ALLOW_V1=1 is set (compat opt-in)", async () => {
+    const { state } = createMockState();
+    const previous = (globalThis as unknown as { RELAY_ALLOW_V1?: unknown }).RELAY_ALLOW_V1;
+    (globalThis as unknown as { RELAY_ALLOW_V1: unknown }).RELAY_ALLOW_V1 = "1";
+    try {
+      await withMockWebSocketPair(async () => {
+        const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+        const req = new Request("https://relay.test/ws?role=client&serverId=srv_test&v=1", {
+          headers: {
+            Upgrade: "websocket",
+          },
+        });
+        await relay.fetch(req).catch(swallow);
+        expect(state.acceptWebSocket).toHaveBeenCalled();
+      });
+    } finally {
+      if (previous === undefined) {
+        delete (globalThis as unknown as { RELAY_ALLOW_V1?: unknown }).RELAY_ALLOW_V1;
+      } else {
+        (globalThis as unknown as { RELAY_ALLOW_V1: unknown }).RELAY_ALLOW_V1 = previous;
+      }
+    }
+  });
+
+  it("defaults a missing v parameter to v2 (not legacy v1)", async () => {
+    const { state } = createMockState();
+    await withMockWebSocketPair(async ({ serverWs }) => {
+      const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+      const req = new Request("https://relay.test/ws?role=client&serverId=srv_test", {
+        headers: { Upgrade: "websocket" },
+      });
       await relay.fetch(req).catch(swallow);
       expect(state.acceptWebSocket).toHaveBeenCalled();
+      const attachment = serverWs.deserializeAttachment();
+      expect(attachment).toMatchObject({ role: "client", version: "2" });
     });
   });
 
@@ -231,7 +271,7 @@ describe("RelayDurableObject control nudge/reset behavior", () => {
 });
 
 describe("relay worker endpoint routing", () => {
-  it("routes missing v to legacy v1 isolated DO ids", async () => {
+  it("routes missing v to the current v2 DO id (not legacy v1)", async () => {
     const fetch = vi.fn(
       async (request: Request) => new Response(`ok:${new URL(request.url).searchParams.get("v")}`),
     );
@@ -243,9 +283,24 @@ describe("relay worker endpoint routing", () => {
       { RELAY: { idFromName, get } } as unknown as RelayEnvArg,
     );
 
-    expect(idFromName).toHaveBeenCalledWith("relay-v1:srv_test");
+    expect(idFromName).toHaveBeenCalledWith("relay-v2:srv_test");
     expect(fetch).toHaveBeenCalledTimes(1);
-    await expect(response.text()).resolves.toBe("ok:1");
+    await expect(response.text()).resolves.toBe("ok:2");
+  });
+
+  it("rejects explicit v=1 when RELAY_ALLOW_V1 is not set", async () => {
+    const fetch = vi.fn();
+    const get = vi.fn(() => ({ fetch }));
+    const idFromName = vi.fn(() => ({ toString: () => "id" }));
+
+    const response = await relayWorker.fetch(
+      new Request("https://relay.test/ws?serverId=srv_test&role=server&v=1"),
+      { RELAY: { idFromName, get } } as unknown as RelayEnvArg,
+    );
+
+    expect(response.status).toBe(400);
+    expect(idFromName).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("routes v=2 to v2 isolated DO ids", async () => {
@@ -276,7 +331,9 @@ describe("relay worker endpoint routing", () => {
     );
 
     expect(response.status).toBe(400);
-    await expect(response.text()).resolves.toBe("Invalid v parameter (expected 1 or 2)");
+    await expect(response.text()).resolves.toBe(
+      "Invalid v parameter (expected 2; v1 requires RELAY_ALLOW_V1=1)",
+    );
     expect(idFromName).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });

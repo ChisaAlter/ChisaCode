@@ -24,14 +24,29 @@ type RelayProtocolVersion = "1" | "2";
 const LEGACY_RELAY_VERSION: RelayProtocolVersion = "1";
 const CURRENT_RELAY_VERSION: RelayProtocolVersion = "2";
 
+// v1 has no E2EE and no authentication on the relay route layer — anyone who
+// knows a serverId can read/write all traffic for v1 sessions. Current client
+// and daemon source always emit v=2 (see packages/protocol/src/daemon-endpoints.ts
+// normalizeRelayProtocolVersion, fallback "2"). v1 is retained ONLY for
+// backwards-compat with old deployments that omit `v`. To shut down the v1
+// attack surface without breaking old clients in dev, the relay defaults a
+// missing/empty `v` to v2 (the current protocol) and rejects an explicit `v=1`
+// in production. Set RELAY_ALLOW_V1=1 on the Worker to re-enable v1 (e.g. for
+// staged rollouts or local compat testing).
 function resolveRelayVersion(rawValue: string | null): RelayProtocolVersion | null {
-  if (rawValue == null) return LEGACY_RELAY_VERSION;
+  if (rawValue == null || rawValue.trim() === "") return CURRENT_RELAY_VERSION;
   const value = rawValue.trim();
-  if (!value) return LEGACY_RELAY_VERSION;
-  if (value === LEGACY_RELAY_VERSION || value === CURRENT_RELAY_VERSION) {
-    return value;
+  if (value === CURRENT_RELAY_VERSION) return CURRENT_RELAY_VERSION;
+  if (value === LEGACY_RELAY_VERSION) {
+    if (allowLegacyV1()) return LEGACY_RELAY_VERSION;
+    return null;
   }
   return null;
+}
+
+function allowLegacyV1(): boolean {
+  const flag = Reflect.get(globalThis, "RELAY_ALLOW_V1");
+  return flag === "1" || flag === 1 || flag === true;
 }
 
 // serverId is a bearer credential (72-bit `srv_<base64url>` from server-id.ts)
@@ -445,7 +460,9 @@ export class RelayDurableObject {
     }
 
     if (!version) {
-      return new Response("Invalid v parameter (expected 1 or 2)", { status: 400 });
+      return new Response("Invalid v parameter (expected 2; v1 requires RELAY_ALLOW_V1=1)", {
+        status: 400,
+      });
     }
 
     if (version === LEGACY_RELAY_VERSION) {
@@ -609,7 +626,9 @@ export default {
 
       const version = resolveRelayVersion(url.searchParams.get("v"));
       if (!version) {
-        return new Response("Invalid v parameter (expected 1 or 2)", { status: 400 });
+        return new Response("Invalid v parameter (expected 2; v1 requires RELAY_ALLOW_V1=1)", {
+          status: 400,
+        });
       }
 
       // Route to a version-isolated Durable Object instance.
