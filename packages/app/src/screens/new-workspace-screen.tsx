@@ -381,11 +381,15 @@ function NewWorkspaceComposerFooter({
           onSelect={handleSelectDirectoryOption}
           searchable
           allowCustomValue={!isLocalDaemon}
-          customValuePrefix="使用"
-          customValueDescription="使用这个工作目录"
+          customValuePrefix={t("workspace.directoryPicker.customValuePrefix")}
+          customValueDescription={t("workspace.directoryPicker.customValueDescription")}
           customValueKind="directory"
-          searchPlaceholder={isLocalDaemon ? "搜索项目" : "搜索或输入工作目录"}
-          title="工作目录"
+          searchPlaceholder={
+            isLocalDaemon
+              ? t("workspace.directoryPicker.searchProjects")
+              : t("workspace.directoryPicker.searchOrInputDirectory")
+          }
+          title={t("workspace.directoryPicker.title")}
           open={directoryPickerOpen}
           onOpenChange={handleDirectoryPickerOpenChange}
           onSearchQueryChange={setDirectorySearchQuery}
@@ -1463,7 +1467,7 @@ export function NewWorkspaceScreen({
         <View style={contentStyle}>
           <TitlebarDragRegion />
           <View style={styles.centered}>
-            <Text style={styles.draftTitle}>开始使用ChisaCode</Text>
+            <Text style={styles.draftTitle}>{t("workspace.startUsingChisaCode")}</Text>
             <Composer
               agentId={`new-workspace:${serverId}:${sourceDirectory}`}
               serverId={serverId}

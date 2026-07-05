@@ -27,6 +27,9 @@ const DEFAULT_PI_COMMAND: [string, ...string[]] = [
 ];
 const DEFAULT_TIMEOUT_MS = 30_000;
 const STDERR_BUFFER_LIMIT = 8192;
+// Cap stdoutBuffer too: a misbehaving pi process that emits non-newline-
+// terminated output would otherwise grow this buffer without bound.
+const STDOUT_BUFFER_LIMIT = 1024 * 1024;
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 2_000;
 const FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
 
@@ -230,6 +233,11 @@ class PiCliRuntimeSession implements PiRuntimeSession {
 
   private handleStdoutChunk(chunk: string): void {
     this.stdoutBuffer += chunk;
+    // Guard against a misbehaving pi process that never emits a newline:
+    // drop the front of the buffer so it cannot grow unbounded.
+    if (this.stdoutBuffer.length > STDOUT_BUFFER_LIMIT) {
+      this.stdoutBuffer = this.stdoutBuffer.slice(-STDOUT_BUFFER_LIMIT);
+    }
     for (;;) {
       const newlineIndex = this.stdoutBuffer.indexOf("\n");
       if (newlineIndex === -1) {

@@ -11,6 +11,7 @@ import {
   type ChatRoom,
   type ChatRoomDetail,
 } from "@chisacode/protocol/chat/types";
+import { writeFileAtomic } from "../../utils/atomic-write.js";
 
 const ChatStorePayloadSchema = z.object({
   rooms: z.array(ChatRoomSchema),
@@ -364,10 +365,7 @@ export class FileBackedChatService {
         .flat()
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     };
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
-    await fs.writeFile(tempPath, JSON.stringify(payload, null, 2), "utf8");
-    await fs.rename(tempPath, this.filePath);
+    await writeFileAtomic(this.filePath, JSON.stringify(payload, null, 2));
   }
 
   private findRoomByName(name: string): ChatRoom | null {

@@ -14,6 +14,7 @@ import type {
   AgentProvider,
 } from "./agent/agent-sdk-types.js";
 import { execCommand, platformShell } from "../utils/spawn.js";
+import { writeFileAtomic } from "../utils/atomic-write.js";
 import { getUnattendedModeId } from "@chisacode/protocol/provider-manifest";
 
 const LOOP_ID_LENGTH = 8;
@@ -891,11 +892,10 @@ export class LoopService {
 
   private async persist(): Promise<void> {
     const nextPersist = this.persistQueue.then(async () => {
-      await fs.mkdir(path.dirname(this.storePath), { recursive: true });
       const records = Array.from(this.loops.values()).sort((left, right) =>
         left.createdAt.localeCompare(right.createdAt),
       );
-      await fs.writeFile(this.storePath, JSON.stringify(records, null, 2), "utf8");
+      await writeFileAtomic(this.storePath, JSON.stringify(records, null, 2));
       return;
     });
     this.persistQueue = nextPersist.catch(() => {});

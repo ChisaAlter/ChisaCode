@@ -7,5 +7,10 @@ export {
   importPublicKey,
   exportSecretKey,
   importSecretKey,
+  encrypt,
+  decrypt,
+  deriveSharedKey,
+  SALT_LENGTH,
+  SEQ_LENGTH,
 } from "./crypto.js";
-export type { KeyPair, SharedKey } from "./crypto.js";
+export type { KeyPair, SharedKey, DecryptResult } from "./crypto.js";

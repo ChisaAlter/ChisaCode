@@ -34,6 +34,17 @@ function resolveRelayVersion(rawValue: string | null): RelayProtocolVersion | nu
   return null;
 }
 
+// serverId is a bearer credential (72-bit `srv_<base64url>` from server-id.ts)
+// but is also interpolated into a Durable Object id, so it must be constrained
+// to a safe length/charset to avoid memory exhaustion or injection into the DO
+// id namespace. Accept the legacy `srv_...` shape plus any reasonable short
+// opaque token used by tests/overrides.
+const SERVER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+function isValidServerId(serverId: string): boolean {
+  return SERVER_ID_PATTERN.test(serverId);
+}
+
 interface WebSocketPair {
   0: WebSocket;
   1: WebSocket;
@@ -429,6 +440,10 @@ export class RelayDurableObject {
       return new Response("Missing serverId parameter", { status: 400 });
     }
 
+    if (!isValidServerId(serverId)) {
+      return new Response("Invalid serverId parameter", { status: 400 });
+    }
+
     if (!version) {
       return new Response("Invalid v parameter (expected 1 or 2)", { status: 400 });
     }
@@ -586,6 +601,10 @@ export default {
       const serverId = url.searchParams.get("serverId");
       if (!serverId) {
         return new Response("Missing serverId parameter", { status: 400 });
+      }
+
+      if (!isValidServerId(serverId)) {
+        return new Response("Invalid serverId parameter", { status: 400 });
       }
 
       const version = resolveRelayVersion(url.searchParams.get("v"));

@@ -78,6 +78,16 @@ const PRIVILEGED_COMMANDS: ReadonlySet<string> = new Set([
   "install_skills",
   "update_skills",
   "uninstall_skills",
+  // Writes desktop-settings.json (releaseChannel, daemon management). Any
+  // webview could otherwise flip the release channel or disable the built-in
+  // daemon manager. Read-only get_desktop_settings is intentionally NOT here.
+  "patch_desktop_settings",
+  "migrate_legacy_desktop_settings",
+  // Initiates an outbound network request to GitHub release metadata. While
+  // it cannot install an update (install_app_update is separately privileged),
+  // restricting it keeps the privileged surface consistent and prevents a
+  // compromised frame from triggering update probes.
+  "check_app_update",
 ]);
 
 export { PRIVILEGED_COMMANDS };
@@ -273,7 +283,11 @@ function isProcessRunning(pid: number): boolean {
     return true;
   } catch (err) {
     if (typeof err === "object" && err !== null && "code" in err && err.code === "EPERM") {
-      return false;
+      // EPERM means the process exists but we lack permission to signal it
+      // (e.g. owned by another user). It is still running — returning false
+      // here would misreport a live daemon as dead and trigger spurious
+      // restarts. Mirrors packages/cli/.../local-daemon.ts EPERM handling.
+      return true;
     }
     return false;
   }

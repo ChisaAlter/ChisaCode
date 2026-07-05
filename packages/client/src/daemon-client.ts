@@ -1159,7 +1159,13 @@ export class DaemonClient {
         event: "CONNECT_FAILED",
         reasonCode: "connect_failed",
       });
-      this.rejectConnect(error instanceof Error ? error : new Error(message));
+      // scheduleReconnect may already rejectConnect (e.g. when disposed) before
+      // reaching here; only reject if the connect promise is still pending so we
+      // don't double-reject. rejectConnect itself no-ops on a null connectReject,
+      // but guarding keeps the control flow explicit.
+      if (this.connectReject) {
+        this.rejectConnect(error instanceof Error ? error : new Error(message));
+      }
     }
   }
 
@@ -1225,7 +1231,13 @@ export class DaemonClient {
     ) {
       return;
     }
-    void this.connect();
+    // connect() handles its own failures via scheduleReconnect + rejectConnect,
+    // but a rejection here would otherwise become an unhandled promise rejection.
+    // Surface it to the logger so the failure is at least observable.
+    void this.connect().catch((error: unknown) => {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.warn({ err }, "ensureConnected connect() rejected");
+    });
   }
 
   getConnectionState(): ConnectionState {

@@ -131,9 +131,16 @@ export function createEncryptedTransport(
   return {
     send: (data) => {
       if (!channel) {
-        throw new Error("Encrypted channel not ready");
+        // Programming error: caller sent before the e2ee handshake completed.
+        // Log it so the failure is observable even if the caller swallows the
+        // throw, then surface it as an error event too.
+        logger.warn({}, "relay_e2ee_send_before_ready");
+        const error = new Error("Encrypted channel not ready");
+        emitError(error);
+        throw error;
       }
       void channel.send(normalizeTransportPayload(data)).catch((error) => {
+        logger.warn({ err: normalizeTransportError(error) }, "relay_e2ee_send_failed");
         emitError(error);
       });
     },

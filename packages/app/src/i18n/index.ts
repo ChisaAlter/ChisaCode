@@ -55,8 +55,35 @@ export const resources = {
         openGithubIssue: "打开 GitHub issue",
         docs: "文档",
       },
+      openProject: {
+        addProject: {
+          title: "添加项目",
+          description: "打开本机上的文件夹",
+        },
+        importSession: {
+          title: "导入会话",
+          description: "导入最近的外部 CLI 会话",
+        },
+        setupProviders: {
+          title: "设置模型与工具",
+          description: "配置 Claude Code、Codex 等",
+        },
+        pairDevice: {
+          title: "配对设备",
+          description: "将手机连接到这台主机服务",
+        },
+      },
       workspace: {
         title: "工作区",
+        hostProjectLoadError: "无法从主机 {{serverName}} 加载项目：{{message}}",
+        directoryPicker: {
+          title: "工作目录",
+          searchProjects: "搜索项目",
+          searchOrInputDirectory: "搜索或输入工作目录",
+          customValuePrefix: "使用",
+          customValueDescription: "使用这个工作目录",
+        },
+        startUsingChisaCode: "开始使用 ChisaCode",
         newWorkspace: "新工作区",
         newAgent: "新建智能体",
         newTerminal: "新建终端",
@@ -324,6 +351,7 @@ export const resources = {
       },
       sidebar: {
         projectActions: "项目操作",
+        agentListLoading: "正在加载 agent 列表",
         openProjectSettings: "打开项目设置",
         removing: "移除中...",
         removeProject: "移除项目",
@@ -1474,6 +1502,78 @@ export const resources = {
           headersPlaceholder: '请求头 JSON，例如 {"Authorization":"Bearer ..."}',
           nextLoad: "下次加载生效",
         },
+        hostPage: {
+          hostNotFound: "找不到主机",
+          connectionType: {
+            relay: "中继",
+            local: "本地",
+          },
+          removeConnection: {
+            title: "移除连接",
+            failed: "无法移除连接",
+            confirm: "要移除 {{name}} 吗？此操作无法撤销。",
+          },
+          editLabel: "编辑标签",
+          renameHost: {
+            title: "重命名主机",
+            placeholder: "我的主机",
+            submit: "保存",
+          },
+          connections: {
+            title: "连接",
+          },
+          latency: {
+            timeout: "超时",
+          },
+          daemonSettings: {
+            title: "主机服务设置",
+          },
+          pairDevice: {
+            sectionTitle: "配对设备",
+            rowTitle: "配对设备",
+            rowHint: "扫描二维码或复制链接，将手机连接到此主机",
+          },
+          restart: {
+            title: "重启主机服务",
+            hint: "重启主机服务进程。应用会自动重新连接",
+            button: "重启",
+            restarting: "正在重启...",
+            confirmationMessage:
+              "这会重启主机服务。正在运行的智能体会继续执行，应用会自动重新连接。",
+            confirmTitle: "重启 {{host}}",
+            confirmLabel: "重启",
+            notRestored: "{{host}} 没有恢复在线。请确认它已经重启。",
+            notConnected: "此主机尚未连接。请等待它上线后再重启。",
+            offline: "此主机已离线。ChisaCode会自动重连，请等待它恢复在线后再重启。",
+            requestFailed: "发送重启请求失败。ChisaCode会自动重连，请在主机显示在线后重试。",
+            dialogFailed: "无法打开重启确认对话框。",
+          },
+          injectTools: {
+            title: "启用 ChisaCode 工具",
+            hint: "智能体将能够管理 worktree、智能体和计划任务",
+            a11yLabel: "注入ChisaCode工具",
+          },
+          systemPrompt: {
+            title: "系统提示词",
+            hint: "为所有智能体追加系统提示词",
+            edit: "编辑",
+            sheetTitle: "追加系统提示词",
+            a11yLabel: "追加系统提示词",
+            reset: "重置",
+            save: "保存",
+            saving: "保存中...",
+          },
+          dangerZone: {
+            title: "危险操作",
+          },
+          removeHost: {
+            title: "移除主机",
+            rowTitle: "移除主机",
+            rowHint: "从此设备移除该主机及其保存的连接",
+            confirmMessage: "要移除 {{host}} 吗？这会删除它保存的连接。",
+            failed: "无法移除主机",
+          },
+        },
         diagnostics: {
           title: "诊断",
           testAudio: "测试音频",
@@ -1667,8 +1767,35 @@ export const resources = {
         openGithubIssue: "Open GitHub issue",
         docs: "Docs",
       },
+      openProject: {
+        addProject: {
+          title: "Open project",
+          description: "Open a folder on this machine",
+        },
+        importSession: {
+          title: "Import session",
+          description: "Import a recent external CLI session",
+        },
+        setupProviders: {
+          title: "Set up models & tools",
+          description: "Configure Claude Code, Codex, etc.",
+        },
+        pairDevice: {
+          title: "Pair device",
+          description: "Connect your phone to this host service",
+        },
+      },
       workspace: {
         title: "Workspace",
+        hostProjectLoadError: "Failed to load projects from host {{serverName}}: {{message}}",
+        directoryPicker: {
+          title: "Working directory",
+          searchProjects: "Search projects",
+          searchOrInputDirectory: "Search or enter a working directory",
+          customValuePrefix: "Use",
+          customValueDescription: "Use this working directory",
+        },
+        startUsingChisaCode: "Get started with ChisaCode",
         newWorkspace: "New workspace",
         newAgent: "New Agent",
         newTerminal: "New terminal",
@@ -1938,6 +2065,7 @@ export const resources = {
       },
       sidebar: {
         projectActions: "Project actions",
+        agentListLoading: "Loading agent list",
         openProjectSettings: "Open project settings",
         removing: "Removing...",
         removeProject: "Remove project",
@@ -3127,6 +3255,81 @@ export const resources = {
           urlPlaceholder: "URL, for example http://127.0.0.1:3000/mcp",
           headersPlaceholder: 'Headers JSON, for example {"Authorization":"Bearer ..."}',
           nextLoad: "Applies on next load",
+        },
+        hostPage: {
+          hostNotFound: "Host not found",
+          connectionType: {
+            relay: "Relay",
+            local: "Local",
+          },
+          removeConnection: {
+            title: "Remove connection",
+            failed: "Failed to remove connection",
+            confirm: "Remove {{name}}? This action cannot be undone.",
+          },
+          editLabel: "Edit label",
+          renameHost: {
+            title: "Rename host",
+            placeholder: "My host",
+            submit: "Save",
+          },
+          connections: {
+            title: "Connections",
+          },
+          latency: {
+            timeout: "Timeout",
+          },
+          daemonSettings: {
+            title: "Host service settings",
+          },
+          pairDevice: {
+            sectionTitle: "Pair device",
+            rowTitle: "Pair device",
+            rowHint: "Scan the QR code or copy the link to connect your phone to this host",
+          },
+          restart: {
+            title: "Restart host service",
+            hint: "Restart the host service process. The app will reconnect automatically",
+            button: "Restart",
+            restarting: "Restarting...",
+            confirmationMessage:
+              "This restarts the host service. Running agents will continue and the app will reconnect automatically.",
+            confirmTitle: "Restart {{host}}",
+            confirmLabel: "Restart",
+            notRestored: "{{host}} did not come back online. Confirm it has restarted.",
+            notConnected:
+              "This host is not connected yet. Wait for it to come online before restarting.",
+            offline:
+              "This host is offline. ChisaCode will reconnect automatically; wait for it to come back online before restarting.",
+            requestFailed:
+              "Failed to send restart request. ChisaCode will reconnect automatically; retry once the host shows online.",
+            dialogFailed: "Failed to open restart confirmation dialog.",
+          },
+          injectTools: {
+            title: "Enable ChisaCode tools",
+            hint: "Agents will be able to manage worktrees, agents, and scheduled tasks",
+            a11yLabel: "Inject ChisaCode tools",
+          },
+          systemPrompt: {
+            title: "System prompt",
+            hint: "Append a system prompt for all agents",
+            edit: "Edit",
+            sheetTitle: "Append system prompt",
+            a11yLabel: "Append system prompt",
+            reset: "Reset",
+            save: "Save",
+            saving: "Saving...",
+          },
+          dangerZone: {
+            title: "Danger zone",
+          },
+          removeHost: {
+            title: "Remove host",
+            rowTitle: "Remove host",
+            rowHint: "Remove this host and its saved connections from this device",
+            confirmMessage: "Remove {{host}}? This will delete its saved connections.",
+            failed: "Failed to remove host",
+          },
         },
         diagnostics: {
           title: "Diagnostics",

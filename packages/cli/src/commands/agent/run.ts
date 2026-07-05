@@ -107,6 +107,22 @@ function toRunResult(
   };
 }
 
+/**
+ * Loads a structured-output schema from `--output-schema`.
+ *
+ * Accepts either an inline JSON object (value starts with `{`) or a file path
+ * to read. The path is resolved relative to the current working directory and
+ * may be any path readable by the CLI's invoking user — the CLI runs with the
+ * caller's own filesystem permissions, so this is intentionally permissive
+ * (matching the behaviour of common CLI tools that accept a `--config <path>`).
+ * The daemon re-validates the schema via Zod before use, so a malformed or
+ * overly-permissive file cannot compromise the daemon.
+ *
+ * @param value Inline JSON or a file path
+ * @returns Parsed schema object
+ * @throws {CommandError} If the value is empty, the file cannot be read, or the
+ *   content is not a valid JSON object
+ */
 function loadOutputSchema(value: string): Record<string, unknown> {
   const trimmed = value.trim();
   if (!trimmed) {

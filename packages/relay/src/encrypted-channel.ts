@@ -15,7 +15,9 @@ import {
   decrypt,
   type KeyPair,
   type SharedKey,
+  SALT_LENGTH,
 } from "./crypto.js";
+import nacl from "tweetnacl";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./base64.js";
 
 export interface Transport {
@@ -94,6 +96,10 @@ const HANDSHAKE_RETRY_MS = 1000;
 const MAX_PENDING_SENDS = 200;
 const REHANDSHAKE_KEY_MISMATCH_CLOSE_CODE = 1008;
 const REHANDSHAKE_KEY_MISMATCH_CLOSE_REASON = "E2EE re-handshake key mismatch";
+// Fatal close used when a received frame violates replay protection (replayed
+// or out-of-order seq, or a salt that differs from the first frame's salt).
+const REPLAY_PROTECTION_CLOSE_CODE = 1011;
+const REPLAY_PROTECTION_CLOSE_REASON = "E2EE replay protection violation";
 
 interface TimeoutWithUnref {
   unref(): void;
@@ -160,19 +166,23 @@ export async function createClientChannel(
   channel.onClose(() => clearRetry());
 
   sendHello();
-  retry = setInterval(() => {
-    if (channel.isOpen()) {
-      clearRetry();
-      return;
+  try {
+    retry = setInterval(() => {
+      if (channel.isOpen()) {
+        clearRetry();
+        return;
+      }
+      sendHello();
+    }, HANDSHAKE_RETRY_MS);
+    // Avoid keeping Node processes alive (e.g. tests) if the handshake is stuck.
+    if (hasUnref(retry)) {
+      retry.unref();
     }
-    sendHello();
-  }, HANDSHAKE_RETRY_MS);
-  // Avoid keeping Node processes alive (e.g. tests) if the handshake is stuck.
-  if (hasUnref(retry)) {
-    retry.unref();
+    return channel;
+  } catch (error) {
+    clearRetry();
+    throw error;
   }
-
-  return channel;
 }
 
 /**
@@ -270,6 +280,14 @@ export class EncryptedChannel {
   private pendingSends: Array<string | ArrayBuffer> = [];
   private onOpenCallbacks: Array<() => void> = [];
   private onCloseCallbacks: Array<() => void> = [];
+  // Replay protection state, maintained per channel direction.
+  // Each side has its own send counter + send salt (random, generated when
+  // the channel transitions to open) and tracks the peer's receive counter +
+  // receive salt (locked to the first encrypted frame observed).
+  private sendSeq = 0n;
+  private recvSeq: bigint | null = null;
+  private sendSalt: Uint8Array | null = null;
+  private recvSalt: Uint8Array | null = null;
 
   constructor(
     transport: Transport,
@@ -297,6 +315,12 @@ export class EncryptedChannel {
 
   setState(state: ChannelState): void {
     this.state = state;
+    if (state === "open") {
+      // Initialise the send direction when entering open. The receive
+      // direction is locked to the peer's first encrypted frame.
+      this.sendSalt = nacl.randomBytes(SALT_LENGTH);
+      this.sendSeq = 0n;
+    }
   }
 
   private async handleMessage(data: string | ArrayBuffer): Promise<void> {
@@ -305,7 +329,8 @@ export class EncryptedChannel {
         const text = typeof data === "string" ? data : new TextDecoder().decode(data);
         const parsed: unknown = JSON.parse(text);
         if (isE2EEReadyMessage(parsed)) {
-          this.state = "open";
+          // Use setState so the send direction (salt + seq) is initialised.
+          this.setState("open");
           this.events.onopen?.();
           for (const cb of this.onOpenCallbacks) cb();
           await this.flushPendingSends();
@@ -365,7 +390,8 @@ export class EncryptedChannel {
       })();
 
       if (ciphertext) {
-        const plaintext = decrypt(this.sharedKey, ciphertext);
+        const { plaintext, seq, salt } = decrypt(this.sharedKey, ciphertext);
+        this.enforceReplayProtection(seq, salt);
         this.events.onmessage?.(plaintext);
       }
     } catch (error) {
@@ -375,11 +401,42 @@ export class EncryptedChannel {
       // re-handshake. Emitting an error event here can cause higher-level code
       // to tear down the session without triggering a clean reconnect.
       try {
-        this.transport.close(1011, err.message);
+        this.transport.close(
+          err.message.includes("replay") ? REPLAY_PROTECTION_CLOSE_CODE : 1011,
+          err.message.includes("replay") ? REPLAY_PROTECTION_CLOSE_REASON : err.message,
+        );
       } catch {
         // ignore
       }
     }
+  }
+
+  /**
+   * Rejects replayed or out-of-order frames. The first received frame locks
+   * the per-direction salt and seeds the recv counter; every subsequent frame
+   * must carry the same salt and a strictly greater seq. A violation closes
+   * the channel fatally so the peer must re-handshake.
+   */
+  private enforceReplayProtection(seq: bigint, salt: Uint8Array): void {
+    if (this.recvSalt === null || this.recvSeq === null) {
+      this.recvSalt = salt;
+      this.recvSeq = seq;
+      return;
+    }
+    if (salt.byteLength !== this.recvSalt.byteLength) {
+      throw new Error("E2EE replay protection violation: salt length changed");
+    }
+    let saltMismatch = 0;
+    for (let i = 0; i < this.recvSalt.byteLength; i += 1) {
+      saltMismatch |= salt[i] ^ this.recvSalt[i];
+    }
+    if (saltMismatch !== 0) {
+      throw new Error("E2EE replay protection violation: salt changed");
+    }
+    if (seq <= this.recvSeq) {
+      throw new Error("E2EE replay protection violation: seq not strictly increasing");
+    }
+    this.recvSeq = seq;
   }
 
   async send(data: string | ArrayBuffer): Promise<void> {
@@ -395,7 +452,13 @@ export class EncryptedChannel {
       throw new Error("Channel not open");
     }
 
-    const ciphertext = encrypt(this.sharedKey, data);
+    if (!this.sendSalt) {
+      throw new Error("Channel open without send salt initialised");
+    }
+
+    const seq = this.sendSeq;
+    this.sendSeq += 1n;
+    const ciphertext = encrypt(this.sharedKey, data, seq, this.sendSalt);
     // Send as base64 for WebSocket text compatibility
     this.transport.send(arrayBufferToBase64(ciphertext));
   }

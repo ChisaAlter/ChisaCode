@@ -1,6 +1,7 @@
 import { ChevronRight, Globe, Monitor, Pencil, RotateCw, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
@@ -31,9 +32,6 @@ import { useToast } from "@/contexts/toast-context";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { formatLatency } from "@/utils/latency";
 
-const RESTART_CONFIRMATION_MESSAGE =
-  "这会重启主机服务。正在运行的智能体会继续执行，应用会自动重新连接。";
-
 function formatHostConnectionLabel(connection: HostConnection): string {
   if (connection.type === "relay") {
     return `Relay (${connection.relayEndpoint})`;
@@ -47,18 +45,19 @@ function formatHostConnectionLabel(connection: HostConnection): string {
 function formatActiveConnectionBadge(
   activeConnection: { type: HostConnection["type"]; display: string } | null,
   theme: ReturnType<typeof useUnistyles>["theme"],
+  t: (key: string) => string,
 ): { icon: React.ReactNode; text: string } | null {
   if (!activeConnection) return null;
   if (activeConnection.type === "relay") {
     return {
       icon: <Globe size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-      text: "中继",
+      text: t("settings.hostPage.connectionType.relay"),
     };
   }
   if (activeConnection.type === "directSocket" || activeConnection.type === "directPipe") {
     return {
       icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-      text: "本地",
+      text: t("settings.hostPage.connectionType.local"),
     };
   }
   return {
@@ -73,8 +72,13 @@ function formatDaemonVersionBadge(version: string | null): string | null {
   return trimmed.startsWith("v") ? trimmed : `v${trimmed}`;
 }
 
-const REMOVE_CONNECTION_HEADER: SheetHeader = { title: "移除连接" };
-const REMOVE_HOST_HEADER: SheetHeader = { title: "移除主机" };
+function RemoveConnectionSheetHeader(t: (key: string) => string): SheetHeader {
+  return { title: t("settings.hostPage.removeConnection.title") };
+}
+
+function RemoveHostSheetHeader(t: (key: string) => string): SheetHeader {
+  return { title: t("settings.hostPage.removeHost.title") };
+}
 
 export interface HostPageProps {
   serverId: string;
@@ -82,6 +86,7 @@ export interface HostPageProps {
 }
 
 export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
+  const { t } = useTranslation();
   const daemons = useHosts();
   const host = daemons.find((entry) => entry.serverId === serverId) ?? null;
   const { theme } = useUnistyles();
@@ -117,7 +122,7 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
   } else {
     statusPillBg = "rgba(161, 161, 170, 0.1)";
   }
-  const connectionBadge = formatActiveConnectionBadge(activeConnection, theme);
+  const connectionBadge = formatActiveConnectionBadge(activeConnection, theme, t);
   const versionBadgeText = formatDaemonVersionBadge(daemonVersion);
   const connectionError =
     typeof lastError === "string" && lastError.trim().length > 0 ? lastError.trim() : null;
@@ -136,7 +141,7 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
     return (
       <View testID={`settings-host-page-${serverId}`}>
         <View style={EMPTY_CARD_STYLE}>
-          <Text style={styles.emptyText}>找不到主机</Text>
+          <Text style={styles.emptyText}>{t("settings.hostPage.hostNotFound")}</Text>
         </View>
       </View>
     );
@@ -181,6 +186,7 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
 }
 
 export function HostRenameButton({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const { renameHost } = useHostMutations();
   const [isEditing, setIsEditing] = useState(false);
@@ -204,7 +210,7 @@ export function HostRenameButton({ host }: { host: HostProfile }) {
         hitSlop={8}
         style={styles.identityEditButton}
         accessibilityRole="button"
-        accessibilityLabel="编辑标签"
+        accessibilityLabel={t("settings.hostPage.editLabel")}
         testID="host-page-label-edit-button"
       >
         <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
@@ -212,10 +218,10 @@ export function HostRenameButton({ host }: { host: HostProfile }) {
 
       <AdaptiveRenameModal
         visible={isEditing}
-        title="重命名主机"
+        title={t("settings.hostPage.renameHost.title")}
         initialValue={host.label}
-        placeholder="我的主机"
-        submitLabel="保存"
+        placeholder={t("settings.hostPage.renameHost.placeholder")}
+        submitLabel={t("settings.hostPage.renameHost.submit")}
         onClose={closeEditor}
         onSubmit={handleSubmit}
         testID="host-page-rename-modal"
@@ -225,6 +231,7 @@ export function HostRenameButton({ host }: { host: HostProfile }) {
 }
 
 function ConnectionsSection({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
   const toast = useToast();
   const { removeConnection } = useHostMutations();
   const snapshot = useHostRuntimeSnapshot(host.serverId);
@@ -259,13 +266,13 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
       .then(() => setPendingRemoveConnection(null))
       .catch((error) => {
         console.error("[HostPage] Failed to remove connection", error);
-        toast.error("无法移除连接");
+        toast.error(t("settings.hostPage.removeConnection.failed"));
       })
       .finally(() => setIsRemovingConnection(false));
-  }, [pendingRemoveConnection, removeConnection, host.serverId, toast]);
+  }, [pendingRemoveConnection, removeConnection, host.serverId, toast, t]);
 
   return (
-    <SettingsSection title="连接">
+    <SettingsSection title={t("settings.hostPage.connections.title")}>
       <View style={settingsStyles.card} testID="host-page-connections-card">
         {host.connections.map((conn, index) => {
           const probe = probeByConnectionId.get(conn.id);
@@ -285,13 +292,15 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
 
       {pendingRemoveConnection ? (
         <AdaptiveModalSheet
-          header={REMOVE_CONNECTION_HEADER}
+          header={RemoveConnectionSheetHeader(t)}
           visible
           onClose={handleCloseConfirm}
           testID="remove-connection-confirm-modal"
         >
           <Text style={styles.confirmText}>
-            要移除 {pendingRemoveConnection.title} 吗？此操作无法撤销。
+            {t("settings.hostPage.removeConnection.confirm", {
+              name: pendingRemoveConnection.title,
+            })}
           </Text>
           <View style={styles.confirmActions}>
             <Button
@@ -301,7 +310,7 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
               onPress={handleCancelConfirm}
               disabled={isRemovingConnection}
             >
-              取消
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -311,7 +320,7 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
               disabled={isRemovingConnection}
               testID="remove-connection-confirm"
             >
-              移除
+              {t("common.remove")}
             </Button>
           </View>
         </AdaptiveModalSheet>
@@ -336,11 +345,12 @@ function ConnectionRow({
   onRemove: (connection: HostConnection) => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const title = formatHostConnectionLabel(connection);
 
   const latencyText = (() => {
     if (latencyLoading) return "...";
-    if (latencyError) return "超时";
+    if (latencyError) return t("settings.hostPage.latency.timeout");
     if (latencyMs != null) return formatLatency(latencyMs);
     return "\u2014";
   })();
@@ -377,21 +387,22 @@ function ConnectionRow({
         textStyle={destructiveTextStyle}
         onPress={handlePressRemove}
       >
-        移除
+        {t("common.remove")}
       </Button>
     </View>
   );
 }
 
 function DaemonSection({ host, isLocalDaemon }: { host: HostProfile; isLocalDaemon: boolean }) {
+  const { t } = useTranslation();
   return (
     <>
-      <SettingsSection title="主机服务设置">
+      <SettingsSection title={t("settings.hostPage.daemonSettings.title")}>
         <InjectChisaCodeToolsCard serverId={host.serverId} />
         <AppendSystemPromptCard serverId={host.serverId} />
       </SettingsSection>
       {isLocalDaemon ? (
-        <SettingsSection title="配对设备">
+        <SettingsSection title={t("settings.hostPage.pairDevice.sectionTitle")}>
           <PairDeviceRow />
         </SettingsSection>
       ) : null}
@@ -407,6 +418,7 @@ const delay = (ms: number) =>
 
 function RestartDaemonCard({ host }: { host: HostProfile }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const toast = useToast();
   const daemonClient = useHostRuntimeClient(host.serverId);
   const isConnected = useHostRuntimeIsConnected(host.serverId);
@@ -448,26 +460,26 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
     if (isMountedRef.current) {
       setIsRestarting(false);
       if (!reconnected) {
-        toast.error(`${host.label} 没有恢复在线。请确认它已经重启。`);
+        toast.error(t("settings.hostPage.restart.notRestored", { host: host.label }));
       }
     }
-  }, [host.label, isHostConnected, waitForCondition, toast]);
+  }, [host.label, isHostConnected, waitForCondition, toast, t]);
 
   const handleRestart = useCallback(() => {
     if (!daemonClient) {
-      toast.error("此主机尚未连接。请等待它上线后再重启。");
+      toast.error(t("settings.hostPage.restart.notConnected"));
       return;
     }
     if (!isHostConnected()) {
-      toast.error("此主机已离线。ChisaCode会自动重连，请等待它恢复在线后再重启。");
+      toast.error(t("settings.hostPage.restart.offline"));
       return;
     }
 
     void confirmDialog({
-      title: `重启 ${host.label}`,
-      message: RESTART_CONFIRMATION_MESSAGE,
-      confirmLabel: "重启",
-      cancelLabel: "取消",
+      title: t("settings.hostPage.restart.confirmTitle", { host: host.label }),
+      message: t("settings.hostPage.restart.confirmationMessage"),
+      confirmLabel: t("settings.hostPage.restart.confirmLabel"),
+      cancelLabel: t("common.cancel"),
       destructive: true,
     })
       .then((confirmed) => {
@@ -479,16 +491,16 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
             console.error(`[HostPage] Failed to restart daemon ${host.label}`, error);
             if (!isMountedRef.current) return;
             setIsRestarting(false);
-            toast.error("发送重启请求失败。ChisaCode会自动重连，请在主机显示在线后重试。");
+            toast.error(t("settings.hostPage.restart.requestFailed"));
           });
         void waitForDaemonRestart();
         return;
       })
       .catch((error) => {
         console.error(`[HostPage] Failed to open restart confirmation for ${host.label}`, error);
-        toast.error("无法打开重启确认对话框。");
+        toast.error(t("settings.hostPage.restart.dialogFailed"));
       });
-  }, [daemonClient, host.label, host.serverId, isHostConnected, waitForDaemonRestart, toast]);
+  }, [daemonClient, host.label, host.serverId, isHostConnected, waitForDaemonRestart, toast, t]);
 
   const restartIcon = useMemo(
     () => <RotateCw size={theme.iconSize.sm} color={theme.colors.foreground} />,
@@ -499,8 +511,8 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
     <View style={settingsStyles.card} testID="host-page-restart-card">
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>重启主机服务</Text>
-          <Text style={settingsStyles.rowHint}>重启主机服务进程。应用会自动重新连接</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.hostPage.restart.title")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.hostPage.restart.hint")}</Text>
         </View>
         <Button
           variant="outline"
@@ -510,7 +522,9 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
           disabled={isRestarting || !daemonClient || !isConnected}
           testID="host-page-restart-button"
         >
-          {isRestarting ? "正在重启..." : "重启"}
+          {isRestarting
+            ? t("settings.hostPage.restart.restarting")
+            : t("settings.hostPage.restart.button")}
         </Button>
       </View>
     </View>
@@ -518,6 +532,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
 }
 
 function InjectChisaCodeToolsCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
 
@@ -538,13 +553,13 @@ function InjectChisaCodeToolsCard({ serverId }: { serverId: string }) {
     <View style={settingsStyles.card} testID="host-page-inject-mcp-card">
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>启用 ChisaCode 工具</Text>
-          <Text style={settingsStyles.rowHint}>智能体将能够管理 worktree、智能体和计划任务</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.hostPage.injectTools.title")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.hostPage.injectTools.hint")}</Text>
         </View>
         <Switch
           value={config?.mcp.injectIntoAgents !== false}
           onValueChange={handleValueChange}
-          accessibilityLabel="注入ChisaCode工具"
+          accessibilityLabel={t("settings.hostPage.injectTools.a11yLabel")}
         />
       </View>
     </View>
@@ -552,13 +567,17 @@ function InjectChisaCodeToolsCard({ serverId }: { serverId: string }) {
 }
 
 function AppendSystemPromptCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
   const persistedPrompt = config?.appendSystemPrompt ?? "";
   const [draft, setDraft] = useState(persistedPrompt);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const header = useMemo<SheetHeader>(() => ({ title: "追加系统提示词" }), []);
+  const header = useMemo<SheetHeader>(
+    () => ({ title: t("settings.hostPage.systemPrompt.sheetTitle") }),
+    [t],
+  );
 
   useEffect(() => {
     setDraft(persistedPrompt);
@@ -601,8 +620,8 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
       <View style={settingsStyles.card} testID="host-page-append-system-prompt-card">
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>系统提示词</Text>
-            <Text style={settingsStyles.rowHint}>为所有智能体追加系统提示词</Text>
+            <Text style={settingsStyles.rowTitle}>{t("settings.hostPage.systemPrompt.title")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.hostPage.systemPrompt.hint")}</Text>
           </View>
           <Button
             variant="outline"
@@ -610,7 +629,7 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
             onPress={handleOpen}
             testID="host-page-append-system-prompt-edit"
           >
-            编辑
+            {t("settings.hostPage.systemPrompt.edit")}
           </Button>
         </View>
       </View>
@@ -625,7 +644,7 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
         >
           <SettingsTextAreaCard
             testID="host-page-append-system-prompt-input"
-            accessibilityLabel="追加系统提示词"
+            accessibilityLabel={t("settings.hostPage.systemPrompt.a11yLabel")}
             value={draft}
             onChangeText={setDraft}
             placeholder="Always keep replies concise."
@@ -638,7 +657,7 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
               disabled={!hasChanges || isSaving}
               testID="host-page-append-system-prompt-reset"
             >
-              重置
+              {t("settings.hostPage.systemPrompt.reset")}
             </Button>
             <Button
               variant="default"
@@ -647,7 +666,9 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
               disabled={!hasChanges || isSaving}
               testID="host-page-append-system-prompt-save"
             >
-              {isSaving ? "保存中..." : "保存"}
+              {isSaving
+                ? t("settings.hostPage.systemPrompt.saving")
+                : t("settings.hostPage.systemPrompt.save")}
             </Button>
           </View>
         </AdaptiveModalSheet>
@@ -657,6 +678,7 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
 }
 
 function PairDeviceRow() {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -672,8 +694,8 @@ function PairDeviceRow() {
         testID="host-page-pair-device-row"
       >
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>配对设备</Text>
-          <Text style={settingsStyles.rowHint}>扫描二维码或复制链接，将手机连接到此主机</Text>
+          <Text style={settingsStyles.rowTitle}>{t("settings.hostPage.pairDevice.rowTitle")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.hostPage.pairDevice.rowHint")}</Text>
         </View>
         <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
       </Pressable>
@@ -688,6 +710,7 @@ function PairDeviceRow() {
 }
 
 function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?: () => void }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const toast = useToast();
   const { removeHost } = useHostMutations();
@@ -715,10 +738,10 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
       })
       .catch((error) => {
         console.error("[HostPage] Failed to remove host", error);
-        toast.error("无法移除主机");
+        toast.error(t("settings.hostPage.removeHost.failed"));
       })
       .finally(() => setIsRemoving(false));
-  }, [host.serverId, onRemoved, removeHost, toast]);
+  }, [host.serverId, onRemoved, removeHost, toast, t]);
 
   const removeIcon = useMemo(
     () => <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />,
@@ -726,14 +749,19 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
   );
 
   return (
-    <SettingsSection title="危险操作" testID="host-page-remove-host-card">
+    <SettingsSection
+      title={t("settings.hostPage.dangerZone.title")}
+      testID="host-page-remove-host-card"
+    >
       <RestartDaemonCard host={host} />
 
       <View style={settingsStyles.card}>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>移除主机</Text>
-            <Text style={settingsStyles.rowHint}>从此设备移除该主机及其保存的连接</Text>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.hostPage.removeHost.rowTitle")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.hostPage.removeHost.rowHint")}</Text>
           </View>
           <Button
             variant="outline"
@@ -743,19 +771,21 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
             onPress={handleOpenConfirm}
             testID="host-page-remove-host-button"
           >
-            移除
+            {t("common.remove")}
           </Button>
         </View>
       </View>
 
       {isConfirming ? (
         <AdaptiveModalSheet
-          header={REMOVE_HOST_HEADER}
+          header={RemoveHostSheetHeader(t)}
           visible
           onClose={handleCloseConfirm}
           testID="remove-host-confirm-modal"
         >
-          <Text style={styles.confirmText}>要移除 {host.label} 吗？这会删除它保存的连接。</Text>
+          <Text style={styles.confirmText}>
+            {t("settings.hostPage.removeHost.confirmMessage", { host: host.label })}
+          </Text>
           <View style={styles.confirmActions}>
             <Button
               variant="secondary"
@@ -764,7 +794,7 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
               onPress={handleCancel}
               disabled={isRemoving}
             >
-              取消
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -774,7 +804,7 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
               disabled={isRemoving}
               testID="remove-host-confirm"
             >
-              移除
+              {t("common.remove")}
             </Button>
           </View>
         </AdaptiveModalSheet>

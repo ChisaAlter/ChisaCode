@@ -151,6 +151,26 @@ function resolveTerminalCommand(
   return { command: shell.command, args: [...shell.flag, command] };
 }
 
+/**
+ * Resolves `target` against `base` and returns the resolved path only if it
+ * stays inside `base`. This is an INTENT constraint (keeps ACP fs/terminal
+ * requests inside the project directory so agent typos don't write outside
+ * the workspace), NOT a security boundary — the ACP agent runs as the same
+ * OS user with the same privileges as the daemon and could spawn its own
+ * processes to escape this check.
+ *
+ * @throws Error if the resolved path escapes `base`
+ */
+function resolvePathInsideBase(target: string, base: string): string {
+  const resolvedTarget = path.resolve(target);
+  const resolvedBase = path.resolve(base);
+  const relative = path.relative(resolvedBase, resolvedTarget);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Path "${target}" escapes the project directory "${base}"`);
+  }
+  return resolvedTarget;
+}
+
 const DEFAULT_ACP_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
   supportsSessionPersistence: true,
@@ -836,6 +856,11 @@ export class ACPAgentClient implements AgentClient {
         return { outcome: { outcome: "cancelled" } };
       },
       async sessionUpdate(): Promise<void> {},
+      // Probe path: agents do not issue fs requests during model/mode probing,
+      // so these are protocol placeholders. The cwd-bounded
+      // resolvePathInsideBase guard is applied on the live session path
+      // (ACPAgentSession.readTextFile/writeTextFile/createTerminal) where real
+      // agent requests arrive.
       async readTextFile(params: ReadTextFileRequest) {
         const content = await fs.readFile(params.path, "utf8");
         return { content };
@@ -1710,7 +1735,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async readTextFile(params: ReadTextFileRequest): Promise<{ content: string }> {
-    const raw = await fs.readFile(params.path, "utf8");
+    const resolvedPath = resolvePathInsideBase(params.path, this.config.cwd);
+    const raw = await fs.readFile(resolvedPath, "utf8");
     if (!params.line && !params.limit) {
       return { content: raw };
     }
@@ -1721,8 +1747,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async writeTextFile(params: WriteTextFileRequest): Promise<Record<string, never>> {
-    await fs.mkdir(path.dirname(params.path), { recursive: true });
-    await fs.writeFile(params.path, params.content, "utf8");
+    const resolvedPath = resolvePathInsideBase(params.path, this.config.cwd);
+    await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+    await fs.writeFile(resolvedPath, params.content, "utf8");
     return {};
   }
 
@@ -1731,9 +1758,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     const env = Object.fromEntries(
       (params.env ?? []).map((entry: EnvVariable) => [entry.name, entry.value]),
     );
+    const cwd = params.cwd ? resolvePathInsideBase(params.cwd, this.config.cwd) : this.config.cwd;
     const terminalCommand = resolveTerminalCommand(params.command, params.args);
     const child = spawnProcess(terminalCommand.command, terminalCommand.args, {
-      cwd: params.cwd ?? this.config.cwd,
+      cwd,
       ...createProviderEnvSpec({
         runtimeSettings: this.runtimeSettings,
         overlays: [env],

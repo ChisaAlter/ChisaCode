@@ -5,8 +5,18 @@
  * - Key exchange: Curve25519 (nacl.box.before)
  * - Encryption: XSalsa20-Poly1305 (nacl.box.after / open.after)
  *
- * Bundle format (binary):
+ * Bundle format (binary), unchanged since the replay-protection refactor:
  *   [nonce (24 bytes)] [ciphertext...]
+ *
+ * Replay protection: the 24-byte nonce is no longer fully random. It is
+ * composed of a per-direction random 16-byte salt followed by an 8-byte
+ * little-endian sequence counter. Each direction (client→daemon and
+ * daemon→client) maintains its own monotonic counter and salt. The receiver
+ * reads seq out of the nonce before decryption and enforces strict
+ * monotonic increase, rejecting replays and out-of-order frames. Because the
+ * nonce is part of the Poly1305 authentication input (via XSalsa20 key
+ * derivation), an attacker cannot tamper with seq without invalidating the
+ * MAC.
  *
  * Transport format:
  *   The encrypted-channel sends the bundle as base64 text over WebSocket.
@@ -23,6 +33,8 @@ export interface KeyPair {
 export type SharedKey = Uint8Array; // 32 bytes (box.before)
 
 const NONCE_LENGTH = nacl.box.nonceLength; // 24
+export const SALT_LENGTH = 16;
+export const SEQ_LENGTH = 8;
 
 let prngReady = false;
 
@@ -125,12 +137,80 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
 }
 
 /**
- * Encrypts data and returns the binary bundle:
- *   [nonce (24)] [ciphertext...]
+ * Encodes a non-negative BigInt into an 8-byte little-endian Uint8Array.
+ * Values larger than 2^64 - 1 are reduced mod 2^64 (the counter wraps at the
+ * 64-bit boundary, which is well beyond any realistic message volume for a
+ * single channel session).
  */
-export function encrypt(sharedKey: SharedKey, data: string | ArrayBuffer): ArrayBuffer {
+function seqToLEBytes(seq: bigint): Uint8Array {
+  const masked = seq & 0xffffffffffffffffn;
+  const out = new Uint8Array(SEQ_LENGTH);
+  for (let i = 0; i < SEQ_LENGTH; i += 1) {
+    out[i] = Number((masked >> BigInt(i * 8)) & 0xffn);
+  }
+  return out;
+}
+
+/** Decodes an 8-byte little-endian Uint8Array into a BigInt. */
+function seqFromLEBytes(bytes: Uint8Array): bigint {
+  let value = 0n;
+  for (let i = 0; i < SEQ_LENGTH; i += 1) {
+    value |= BigInt(bytes[i]) << BigInt(i * 8);
+  }
+  return value;
+}
+
+/**
+ * Builds the 24-byte nonce from a 16-byte per-direction salt and an 8-byte
+ * little-endian sequence counter. The salt is fixed for the lifetime of one
+ * direction of a channel; the sequence counter increments per message.
+ */
+function buildNonce(salt: Uint8Array, seq: bigint): Uint8Array {
+  const nonce = new Uint8Array(NONCE_LENGTH);
+  nonce.set(salt, 0);
+  nonce.set(seqToLEBytes(seq), SALT_LENGTH);
+  return nonce;
+}
+
+export interface DecryptResult {
+  plaintext: string | ArrayBuffer;
+  /** The sequence counter embedded in this frame's nonce. */
+  seq: bigint;
+  /** The per-direction salt embedded in this frame's nonce. */
+  salt: Uint8Array;
+}
+
+/**
+ * Encrypts data with a per-direction salt and monotonic sequence counter and
+ * returns the binary bundle:
+ *   [nonce (24)] [ciphertext...]
+ *
+ * The caller must supply a salt unique to this channel direction (generated
+ * once when the channel transitions to open) and a strictly increasing seq
+ * (typically a counter incremented after each send). Reusing the same
+ * (salt, seq) pair under the same shared key would expose the XSalsa20
+ * keystream — the caller MUST guarantee monotonic seq.
+ *
+ * @param sharedKey The ECDH-derived shared key (nacl.box.before output)
+ * @param data Plaintext to encrypt
+ * @param seq Monotonic sequence counter for this channel direction
+ * @param salt 16-byte per-direction random salt
+ * @returns ArrayBuffer bundle [nonce(24)][ciphertext]
+ */
+export function encrypt(
+  sharedKey: SharedKey,
+  data: string | ArrayBuffer,
+  seq: bigint,
+  salt: Uint8Array,
+): ArrayBuffer {
+  if (!(salt instanceof Uint8Array) || salt.byteLength !== SALT_LENGTH) {
+    throw new Error(`Invalid salt length (expected ${SALT_LENGTH})`);
+  }
+  if (seq < 0n) {
+    throw new Error("seq must be a non-negative BigInt");
+  }
   ensurePrng();
-  const nonce = nacl.randomBytes(NONCE_LENGTH);
+  const nonce = buildNonce(salt, seq);
   const plaintext = toUint8(data);
   const ciphertext = nacl.box.after(plaintext, nonce, sharedKey);
   const out = new Uint8Array(nonce.byteLength + ciphertext.byteLength);
@@ -139,23 +219,37 @@ export function encrypt(sharedKey: SharedKey, data: string | ArrayBuffer): Array
   return toArrayBuffer(out);
 }
 
-export function decrypt(sharedKey: SharedKey, data: ArrayBuffer): string | ArrayBuffer {
+/**
+ * Decrypts a binary bundle and returns the plaintext plus the seq and salt
+ * extracted from the nonce, so the caller can enforce replay protection
+ * (strict monotonic seq and stable per-direction salt).
+ *
+ * @param sharedKey The ECDH-derived shared key
+ * @param data ArrayBuffer bundle [nonce(24)][ciphertext]
+ * @returns DecryptResult with plaintext, seq, and salt
+ * @throws If the bundle is too short or Poly1305 authentication fails
+ */
+export function decrypt(sharedKey: SharedKey, data: ArrayBuffer): DecryptResult {
   const bytes = new Uint8Array(data);
   if (bytes.byteLength < NONCE_LENGTH) {
     throw new Error("Ciphertext bundle too short");
   }
 
   const nonce = bytes.slice(0, NONCE_LENGTH);
+  const salt = nonce.slice(0, SALT_LENGTH);
+  const seq = seqFromLEBytes(nonce.slice(SALT_LENGTH));
   const ciphertext = bytes.slice(NONCE_LENGTH);
   const opened = nacl.box.open.after(ciphertext, nonce, sharedKey);
   if (!opened) {
     throw new Error("Decryption failed");
   }
 
-  const plaintext = toArrayBuffer(opened);
+  const plaintextBuffer = toArrayBuffer(opened);
+  let plaintext: string | ArrayBuffer;
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(plaintext);
+    plaintext = new TextDecoder("utf-8", { fatal: true }).decode(plaintextBuffer);
   } catch {
-    return plaintext;
+    plaintext = plaintextBuffer;
   }
+  return { plaintext, seq, salt };
 }

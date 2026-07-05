@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { WebSocket } from "ws";
+import nacl from "tweetnacl";
 import {
   generateKeyPair,
   exportPublicKey,
@@ -7,6 +8,7 @@ import {
   deriveSharedKey,
   encrypt,
   decrypt,
+  SALT_LENGTH,
 } from "./crypto.js";
 
 // This live test uses the hosted relay's real TLS endpoint. Self-hosted relay TLS
@@ -153,8 +155,15 @@ describe("Live relay (relay.chisacode.sh) E2E", () => {
           const daemonSharedKey = deriveSharedKey(daemonKeyPair.secretKey, clientPubKeyOnDaemon);
 
           // === Encrypted exchange ===
+          const clientSalt = nacl.randomBytes(SALT_LENGTH);
+          const daemonSalt = nacl.randomBytes(SALT_LENGTH);
           const plaintextFromClient = "hello-from-client";
-          const ciphertextFromClient = encrypt(clientSharedKey, plaintextFromClient);
+          const ciphertextFromClient = encrypt(
+            clientSharedKey,
+            plaintextFromClient,
+            0n,
+            clientSalt,
+          );
           clientWs.send(Buffer.from(ciphertextFromClient));
 
           const daemonReceivedCiphertext = await waitForOnceMessage(
@@ -170,10 +179,15 @@ describe("Live relay (relay.chisacode.sh) E2E", () => {
               daemonReceivedCiphertext.byteOffset + daemonReceivedCiphertext.byteLength,
             ),
           );
-          expect(decryptedOnDaemon).toBe(plaintextFromClient);
+          expect(decryptedOnDaemon.plaintext).toBe(plaintextFromClient);
 
           const plaintextFromDaemon = "hello-from-daemon";
-          const ciphertextFromDaemon = encrypt(daemonSharedKey, plaintextFromDaemon);
+          const ciphertextFromDaemon = encrypt(
+            daemonSharedKey,
+            plaintextFromDaemon,
+            0n,
+            daemonSalt,
+          );
           daemonWs.send(Buffer.from(ciphertextFromDaemon));
 
           const clientReceivedCiphertext = await waitForOnceMessage(
@@ -189,7 +203,7 @@ describe("Live relay (relay.chisacode.sh) E2E", () => {
               clientReceivedCiphertext.byteOffset + clientReceivedCiphertext.byteLength,
             ),
           );
-          expect(decryptedOnClient).toBe(plaintextFromDaemon);
+          expect(decryptedOnClient.plaintext).toBe(plaintextFromDaemon);
         } finally {
           daemonControlWs.close();
           daemonWs?.close();

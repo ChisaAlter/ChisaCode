@@ -18,6 +18,7 @@ import {
   exportPublicKey,
   generateKeyPair,
   importPublicKey,
+  SALT_LENGTH,
 } from "@chisacode/relay";
 import { buildRelayWebSocketUrl } from "@chisacode/protocol/daemon-endpoints";
 import { ConnectionOfferSchema } from "@chisacode/protocol/connection-offer";
@@ -96,7 +97,7 @@ function decodeCiphertext(text: string): ArrayBuffer {
 }
 
 function parseEncryptedJson(sharedKey: Uint8Array, text: string): unknown {
-  const plaintext = decrypt(sharedKey, decodeCiphertext(text));
+  const { plaintext } = decrypt(sharedKey, decodeCiphertext(text));
   if (typeof plaintext !== "string") {
     throw new Error("Expected encrypted relay frame to contain UTF-8 JSON");
   }
@@ -583,6 +584,10 @@ async function waitForRelayWebSocketReady(port: number, timeout = 60000): Promis
                   clientType: "cli",
                   protocolVersion: 1,
                 }),
+                0n,
+                // Test-only salt; the daemon's parseEncryptedJson only reads
+                // plaintext and does not enforce replay protection here.
+                new Uint8Array(SALT_LENGTH),
               ),
             ),
           );

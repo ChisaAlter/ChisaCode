@@ -2807,6 +2807,39 @@ async function writeImageAttachment(mimeType: string, data: string): Promise<str
   return filePath;
 }
 
+/**
+ * Best-effort cleanup of stale Codex image attachments written to os.tmpdir().
+ * Files older than {@link STALE_ATTACHMENT_TTL_MS} are removed. Called on
+ * session close so a long-lived daemon does not leak temp files indefinitely.
+ * Errors are swallowed — temp dir cleanup is opportunistic.
+ */
+const STALE_ATTACHMENT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function cleanupStaleCodexImageAttachments(): Promise<void> {
+  const attachmentsDir = path.join(os.tmpdir(), CODEX_IMAGE_ATTACHMENT_DIR);
+  let entries: fsSync.Dirent[];
+  try {
+    entries = await fs.readdir(attachmentsDir, { withFileTypes: true });
+  } catch {
+    return; // directory does not exist yet — nothing to clean
+  }
+  const now = Date.now();
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.isFile()) return;
+      const filePath = path.join(attachmentsDir, entry.name);
+      try {
+        const stat = await fs.stat(filePath);
+        if (now - stat.mtimeMs > STALE_ATTACHMENT_TTL_MS) {
+          await fs.unlink(filePath);
+        }
+      } catch {
+        // ignore individual file failures
+      }
+    }),
+  );
+}
+
 async function readCodexConfiguredDefaults(
   client: CodexAppServerClient,
   logger: Logger,
@@ -4093,6 +4126,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.connected = false;
     this.currentThreadId = null;
     this.currentTurnId = null;
+    // Best-effort: clean up image attachments older than the TTL so temp files
+    // do not accumulate across long-lived daemon sessions.
+    void cleanupStaleCodexImageAttachments();
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {

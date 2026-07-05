@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { View, Text, Pressable } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { useRouter } from "expo-router";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react-native";
 import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
@@ -24,6 +25,7 @@ import { shouldShowOpenProjectMenuHeader } from "./open-project-screen-layout";
 import type { Href } from "expo-router";
 
 export function OpenProjectScreen({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const openDesktopAgentList = usePanelStore((s) => s.openDesktopAgentList);
   const openProjectPicker = useOpenProjectPicker(serverId);
@@ -76,31 +78,31 @@ export function OpenProjectScreen({ serverId }: { serverId: string }) {
         <View style={styles.tiles}>
           <HomeTile
             icon={FolderOpen}
-            title="添加项目"
-            description="打开本机上的文件夹"
+            title={t("openProject.addProject.title")}
+            description={t("openProject.addProject.description")}
             onPress={handleOpenPicker}
             testID="open-project-submit"
             accent
           />
           <HomeTile
             icon={Inbox}
-            title="导入会话"
-            description="导入最近的外部 CLI 会话"
+            title={t("openProject.importSession.title")}
+            description={t("openProject.importSession.description")}
             onPress={handleOpenImportSession}
             testID="open-project-import-session"
           />
           <HomeTile
             icon={Plug}
-            title="设置模型与工具"
-            description="配置 Claude Code、Codex 等"
+            title={t("openProject.setupProviders.title")}
+            description={t("openProject.setupProviders.description")}
             onPress={handleOpenProviders}
             testID="open-project-setup-providers"
           />
           {isLocalDaemon ? (
             <HomeTile
               icon={Smartphone}
-              title="配对设备"
-              description="将手机连接到这台主机服务"
+              title={t("openProject.pairDevice.title")}
+              description={t("openProject.pairDevice.description")}
               onPress={handleOpenPairDevice}
               testID="open-project-pair-device"
             />

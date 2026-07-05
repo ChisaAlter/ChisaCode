@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { hostname } from "node:os";
 import { promisify } from "node:util";
 import { z } from "zod";
+import { writeFileAtomic } from "../utils/atomic-write.js";
 
 const execFileAsync = promisify(execFile);
 const PID_START_TIME_TOLERANCE_MS = 60_000;
@@ -265,13 +266,10 @@ export async function updatePidLock(
     ...patch,
   };
 
-  const fd = await open(pidPath, "r+");
-  try {
-    await fd.truncate(0);
-    await fd.writeFile(JSON.stringify(updatedLock));
-  } finally {
-    await fd.close();
-  }
+  // Atomically write the updated lock so a crash during write never leaves
+  // the lock file truncated/empty (which would prevent the next daemon start
+  // from parsing it). The temp file + fsync + rename pattern is crash-safe.
+  await writeFileAtomic(pidPath, JSON.stringify(updatedLock));
 }
 
 export async function releasePidLock(

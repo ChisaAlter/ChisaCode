@@ -510,6 +510,9 @@ async function createMainWindow(): Promise<void> {
     webPreferences.webSecurity = true;
     webPreferences.webviewTag = false;
     webPreferences.allowRunningInsecureContent = false;
+    // Suppress native alert/confirm/prompt dialogs from webview content so a
+    // loaded page cannot phish via OS-level modal dialogs.
+    webPreferences.disableDialogs = true;
     delete webPreferences.preload;
     delete params.preload;
     delete (webPreferences as { preloadURL?: string }).preloadURL;
@@ -718,7 +721,13 @@ async function bootstrap(): Promise<void> {
   const appDistDir = getAppDistDir();
   const handleAppSchemeRequest = (request: Request) => {
     const { pathname, search, hash } = new URL(request.url);
-    const decodedPath = decodeURIComponent(pathname);
+    let decodedPath: string;
+    try {
+      decodedPath = decodeURIComponent(pathname);
+    } catch {
+      // Malformed percent-encoding (e.g. stray "%") would throw URIError.
+      return new Response("Not found", { status: 404 });
+    }
 
     // Chromium can occasionally request the exported entrypoint directly.
     // Canonicalize it back to the route URL so Expo Router sees `/`, not `/index.html`.

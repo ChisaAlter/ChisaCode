@@ -269,4 +269,56 @@ describe("EncryptedChannel", () => {
 
     expect(daemonTransport.close).toHaveBeenCalledWith(1008, "E2EE re-handshake key mismatch");
   });
+
+  it("rejects a replayed encrypted frame and closes the channel fatally", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+
+    const daemonMessages: (string | ArrayBuffer)[] = [];
+
+    let clientOpenedResolve: (() => void) | null = null;
+    const clientOpened = new Promise<void>((resolve) => {
+      clientOpenedResolve = resolve;
+    });
+
+    const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair, {
+      onmessage: (data) => daemonMessages.push(data),
+    });
+
+    const clientChannel = await createClientChannel(clientTransport, daemonPubKeyB64, {
+      onopen: () => clientOpenedResolve?.(),
+    });
+    const daemonChannel = await daemonChannelPromise;
+    await clientOpened;
+
+    // Send one legitimate frame (seq=0) and capture the exact bytes on the wire.
+    await clientChannel.send("first message");
+    await waitForAsyncDelivery();
+    expect(daemonMessages).toEqual(["first message"]);
+
+    const clientSends = (clientTransport.send as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0])
+      .filter((data): data is string => typeof data === "string" && !data.includes('"e2ee_hello"'));
+    expect(clientSends.length).toBeGreaterThan(0);
+    const replayFrame = clientSends[clientSends.length - 1];
+
+    // Reset close mock to observe the replay-triggered fatal close.
+    (daemonTransport.close as ReturnType<typeof vi.fn>).mockClear();
+
+    // Replay the exact same bytes. The channel must reject it (seq=0 is not
+    // strictly greater than the already-seen recvSeq=0) and close fatally.
+    daemonTransport.onmessage?.(replayFrame);
+    await waitForAsyncDelivery();
+
+    expect(daemonTransport.close).toHaveBeenCalled();
+    const closeCall = (daemonTransport.close as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(closeCall[0]).toBe(1011);
+    expect(String(closeCall[1])).toContain("replay");
+
+    // No further messages were delivered.
+    expect(daemonMessages).toEqual(["first message"]);
+    void daemonChannel;
+  });
 });

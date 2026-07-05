@@ -280,4 +280,21 @@ describe("relay worker endpoint routing", () => {
     expect(idFromName).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("rejects an invalid serverId (bad charset or too long)", async () => {
+    const fetch = vi.fn();
+    const get = vi.fn(() => ({ fetch }));
+    const idFromName = vi.fn(() => ({ toString: () => "id" }));
+
+    // Contains a space and a slash — rejected by SERVER_ID_PATTERN.
+    const response = await relayWorker.fetch(
+      new Request("https://relay.test/ws?serverId=bad%2Fid%20here&role=server&v=2"),
+      { RELAY: { idFromName, get } } as unknown as RelayEnvArg,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.text()).resolves.toBe("Invalid serverId parameter");
+    expect(idFromName).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });

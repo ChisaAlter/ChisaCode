@@ -479,9 +479,46 @@ export async function installUserSkillsFromGitHub(
   const archivePath = path.join(tempRoot, "repo.tar.gz");
   const extractDir = path.join(tempRoot, "extract");
   await fs.mkdir(extractDir, { recursive: true });
-  const response = await fetch(source.archiveUrl);
+  // Bound the download: 60s timeout and 256MB cap to prevent a malicious or
+  // oversized repo from exhausting memory or hanging the daemon.
+  const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
+  const response = await fetch(source.archiveUrl, {
+    signal: AbortSignal.timeout(60_000),
+  });
   if (!response.ok) throw new Error(`Failed to download ${source.url}: HTTP ${response.status}`);
-  await fs.writeFile(archivePath, new Uint8Array(await response.arrayBuffer()));
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_ARCHIVE_BYTES) {
+    throw new Error(`GitHub archive for ${source.url} exceeds the ${MAX_ARCHIVE_BYTES} byte cap`);
+  }
+  // Stream the body to disk with a running byte cap so we are not reliant on
+  // a trustworthy Content-Length header.
+  const reader = response.body?.getReader();
+  if (!reader) {
+    // Fallback: no streaming reader available, read whole body with cap via
+    // arrayBuffer (still bounded by the fetch runtime's own limits).
+    await fs.writeFile(archivePath, new Uint8Array(await response.arrayBuffer()));
+  } else {
+    const fileHandle = await fs.open(archivePath, "w");
+    let received = 0;
+    try {
+      for (;;) {
+        const { done, value: chunk } = await reader.read();
+        if (done) break;
+        received += chunk.byteLength;
+        if (received > MAX_ARCHIVE_BYTES) {
+          throw new Error(`GitHub archive for ${source.url} exceeded ${MAX_ARCHIVE_BYTES} bytes`);
+        }
+        await fileHandle.write(chunk);
+      }
+    } finally {
+      await fileHandle.close();
+      try {
+        reader.cancel();
+      } catch {
+        // ignore
+      }
+    }
+  }
   await execFileAsync("tar", ["-xzf", archivePath, "-C", extractDir]);
   const entries = await fs.readdir(extractDir, { withFileTypes: true });
   const repoRoot = entries.find((entry) => entry.isDirectory());

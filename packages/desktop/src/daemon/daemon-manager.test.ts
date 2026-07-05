@@ -313,6 +313,17 @@ describe("daemon-manager privileged IPC sender validation", () => {
   it("does not classify the read-only skills status command as privileged", () => {
     expect(PRIVILEGED_COMMANDS.has("get_skills_status")).toBe(false);
   });
+
+  it("classifies desktop settings write commands as privileged", () => {
+    // These write desktop-settings.json (releaseChannel, daemon management)
+    // and could otherwise let a compromised frame flip the release channel or
+    // disable the built-in daemon manager. Read-only get_desktop_settings
+    // is intentionally not privileged.
+    expect(PRIVILEGED_COMMANDS.has("patch_desktop_settings")).toBe(true);
+    expect(PRIVILEGED_COMMANDS.has("migrate_legacy_desktop_settings")).toBe(true);
+    expect(PRIVILEGED_COMMANDS.has("check_app_update")).toBe(true);
+    expect(PRIVILEGED_COMMANDS.has("get_desktop_settings")).toBe(false);
+  });
 });
 
 describe("assertTransportPathAllowed", () => {

@@ -1,4 +1,13 @@
-import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -46,6 +55,14 @@ export function writePrivateFileAtomicSync(
   );
   try {
     writeFileSync(tmpPath, data, { mode: PRIVATE_FILE_MODE });
+    // fsync the file contents before the rename so a post-rename crash cannot
+    // expose an empty file at the target path.
+    const fd = openSync(tmpPath, "r");
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     renameSync(tmpPath, filePath);
     ensurePrivateFile(filePath);
   } catch (error) {

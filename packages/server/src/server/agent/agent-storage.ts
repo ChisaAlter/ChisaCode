@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
@@ -9,6 +8,7 @@ import { AgentFeatureSchema, AgentStatusSchema, McpServerConfigSchema } from "..
 import { toStoredAgentRecord } from "./agent-projections.js";
 import type { ManagedAgent } from "./agent-manager.js";
 import type { AgentSessionConfig } from "./agent-sdk-types.js";
+import { writeFileAtomic } from "../../utils/atomic-write.js";
 
 const SERIALIZABLE_CONFIG_SCHEMA = z
   .object({
@@ -225,8 +225,7 @@ export class AgentStorage {
     const nextPath = this.buildRecordPath(record);
     const previousPath = this.pathById.get(agentId);
 
-    await fs.mkdir(path.dirname(nextPath), { recursive: true });
-    await writeFileAtomically(nextPath, JSON.stringify(record, null, 2));
+    await writeFileAtomic(nextPath, JSON.stringify(record, null, 2));
     this.addIndexedPath(agentId, nextPath);
 
     if (previousPath && previousPath !== nextPath) {
@@ -485,11 +484,4 @@ function projectDirNameFromCwd(cwd: string): string {
     return sanitizedRoot || "root";
   }
   return prefix + withoutRoot.replace(/[\\/]+/g, "-");
-}
-
-async function writeFileAtomically(targetPath: string, payload: string) {
-  const directory = path.dirname(targetPath);
-  const tempPath = path.join(directory, `.agent.tmp-${process.pid}-${Date.now()}-${randomUUID()}`);
-  await fs.writeFile(tempPath, payload, "utf8");
-  await fs.rename(tempPath, targetPath);
 }

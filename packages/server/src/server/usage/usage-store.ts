@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { writeFileAtomic } from "../../utils/atomic-write.js";
 
 export const USAGE_RETENTION_DAYS = 180;
 export type UsageSummaryRangeDays = 7 | 30 | 180;
@@ -122,18 +123,16 @@ export class FileBackedUsageStore implements UsageStore {
   }
 
   async replace(records: UsageEventRecord[]): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     const body = records
       .map((record) => sanitizeUsageEvent(record))
       .filter((record): record is UsageEventRecord => record !== null)
       .map((record) => JSON.stringify(record))
       .join("\n");
-    await fs.writeFile(this.filePath, body.length > 0 ? `${body}\n` : "", "utf8");
+    await writeFileAtomic(this.filePath, body.length > 0 ? `${body}\n` : "");
   }
 
   async clear(): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fs.writeFile(this.filePath, "", "utf8");
+    await writeFileAtomic(this.filePath, "");
   }
 }
 

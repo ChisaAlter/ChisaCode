@@ -59,5 +59,24 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, "**/.claude/**"],
     setupFiles: [path.resolve(__dirname, "vitest.setup.ts")],
+    // v8 coverage provider. Thresholds are intentionally NOT enforced here so
+    // `vitest run` without `--coverage` stays green; run `vitest run --coverage`
+    // to produce a report. Enforcing thresholds is tracked as a follow-up
+    // (see docs/refactors/comprehensive-improvement-roadmap.md).
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+      exclude: [
+        "**/dist/**",
+        "**/node_modules/**",
+        "**/.claude/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.e2e.test.ts",
+        "**/*.real.e2e.test.ts",
+        "**/test-stubs/**",
+        "packages/app/src/i18n/index.ts",
+      ],
+    },
   },
 });

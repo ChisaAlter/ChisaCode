@@ -72,15 +72,15 @@ function deriveDateSectionKey(lastActivityAt: Date): DateSectionKey {
 function formatStatusLabel(status: AggregatedAgent["status"]): string {
   switch (status) {
     case "initializing":
-      return "启动中";
+      return "Starting";
     case "idle":
-      return "空闲";
+      return "Idle";
     case "running":
-      return "运行中";
+      return "Running";
     case "error":
-      return "错误";
+      return "Error";
     case "closed":
-      return "已关闭";
+      return "Closed";
     default:
       return status;
   }

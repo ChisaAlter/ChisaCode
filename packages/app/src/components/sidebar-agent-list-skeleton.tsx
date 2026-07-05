@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, View, type StyleProp, type ViewStyle } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 
 const SECTION_OPACITIES: readonly number[] = [1, 0.7, 0.4];
@@ -54,6 +55,7 @@ function SkeletonSection({
 }
 
 export function SidebarAgentListSkeleton() {
+  const { t } = useTranslation();
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -79,7 +81,7 @@ export function SidebarAgentListSkeleton() {
   return (
     <View
       accessibilityRole="list"
-      accessibilityLabel="正在加载 agent 列表"
+      accessibilityLabel={t("sidebar.agentListLoading")}
       style={styles.container}
     >
       {SECTION_OPACITIES.map((sectionOpacity, sectionIdx) => (

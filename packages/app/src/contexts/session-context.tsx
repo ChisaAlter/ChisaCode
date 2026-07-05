@@ -1212,8 +1212,14 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     wasConnectedRef.current = isConnected;
     if (!wasConnected && isConnected) {
       scheduleAuthoritativeRevalidation();
+    } else if (wasConnected && !isConnected) {
+      // Just disconnected: clear any in-flight assistant message so a stale
+      // half-streamed chunk cannot linger across the reconnect. The
+      // authoritative revalidation on reconnect will repopulate the timeline
+      // from the server snapshot.
+      setCurrentAssistantMessage(serverId, "");
     }
-  }, [isConnected, scheduleAuthoritativeRevalidation]);
+  }, [isConnected, scheduleAuthoritativeRevalidation, serverId, setCurrentAssistantMessage]);
 
   useEffect(() => {
     return () => {

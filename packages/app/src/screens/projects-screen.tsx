@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { router, type Href } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -55,11 +56,15 @@ export default function ProjectsScreen({ view, returnTo }: ProjectsScreenProps) 
 }
 
 function HostErrorsBanner({ errors }: { errors: ProjectHostError[] }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.errorsBanner} testID="projects-host-errors">
       {errors.map((error) => (
         <Text key={error.serverId} style={styles.errorsBannerText}>
-          {`无法从主机 ${error.serverName} 加载项目：${error.message}`}
+          {t("workspace.hostProjectLoadError", {
+            serverName: error.serverName,
+            message: error.message,
+          })}
         </Text>
       ))}
     </View>

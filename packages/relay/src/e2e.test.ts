@@ -11,7 +11,9 @@ import {
   deriveSharedKey,
   encrypt,
   decrypt,
+  SALT_LENGTH,
 } from "./crypto.js";
+import nacl from "tweetnacl";
 
 const nodeMajor = Number((process.versions.node ?? "0").split(".")[0] ?? "0");
 const shouldRunRelayE2e = process.env.FORCE_RELAY_E2E === "1" || nodeMajor < 25;
@@ -335,9 +337,13 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
 
       // === VERIFY BOTH HAVE SAME KEY - Exchange encrypted messages ===
 
+      // Each direction has its own random salt; seqs are per-direction.
+      const daemonSalt = nacl.randomBytes(SALT_LENGTH);
+      const clientSalt = nacl.randomBytes(SALT_LENGTH);
+
       // Daemon sends encrypted "ready" message
       const readyPlaintext = JSON.stringify({ type: "ready" });
-      const readyCiphertext = encrypt(daemonSharedKey, readyPlaintext);
+      const readyCiphertext = encrypt(daemonSharedKey, readyPlaintext, 0n, daemonSalt);
       daemonWs.send(Buffer.from(readyCiphertext));
 
       // Client receives and decrypts
@@ -351,11 +357,11 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
           clientReceivedReady.byteOffset + clientReceivedReady.byteLength,
         ),
       );
-      expect(JSON.parse(decryptedReady as string)).toEqual({ type: "ready" });
+      expect(JSON.parse(decryptedReady.plaintext as string)).toEqual({ type: "ready" });
 
       // Client sends encrypted message
       const clientMessage = "Hello from client!";
-      const clientCiphertext = encrypt(clientSharedKey, clientMessage);
+      const clientCiphertext = encrypt(clientSharedKey, clientMessage, 0n, clientSalt);
       clientWs.send(Buffer.from(clientCiphertext));
 
       // Daemon receives and decrypts
@@ -369,11 +375,11 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
           daemonReceivedMsg.byteOffset + daemonReceivedMsg.byteLength,
         ),
       );
-      expect(decryptedClientMsg).toBe(clientMessage);
+      expect(decryptedClientMsg.plaintext).toBe(clientMessage);
 
-      // Daemon sends encrypted response
+      // Daemon sends encrypted response (second message in this direction, seq=1)
       const daemonMessage = "Hello from daemon!";
-      const daemonCiphertext = encrypt(daemonSharedKey, daemonMessage);
+      const daemonCiphertext = encrypt(daemonSharedKey, daemonMessage, 1n, daemonSalt);
       daemonWs.send(Buffer.from(daemonCiphertext));
 
       // Client receives and decrypts
@@ -387,7 +393,7 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
           clientReceivedMsg.byteOffset + clientReceivedMsg.byteLength,
         ),
       );
-      expect(decryptedDaemonMsg).toBe(daemonMessage);
+      expect(decryptedDaemonMsg.plaintext).toBe(daemonMessage);
 
       // Cleanup
       daemonWs.close();
@@ -464,7 +470,7 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
 
     // Send encrypted secret
     const secret = "This is a secret that relay cannot read";
-    const ciphertext = encrypt(clientSharedKey, secret);
+    const ciphertext = encrypt(clientSharedKey, secret, 0n, nacl.randomBytes(SALT_LENGTH));
     clientWs.send(Buffer.from(ciphertext));
 
     // Daemon receives
@@ -481,7 +487,7 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
       daemonSharedKey,
       received.buffer.slice(received.byteOffset, received.byteOffset + received.byteLength),
     );
-    expect(decrypted).toBe(secret);
+    expect(decrypted.plaintext).toBe(secret);
 
     daemonControlWs.close();
     daemonWs.close();
@@ -503,7 +509,7 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
 
     // Encrypt with daemon's key
     const secret = "Top secret message";
-    const ciphertext = encrypt(daemonSharedKey, secret);
+    const ciphertext = encrypt(daemonSharedKey, secret, 0n, nacl.randomBytes(SALT_LENGTH));
 
     // Attacker cannot decrypt
     expect(() => decrypt(attackerKey, ciphertext)).toThrow();

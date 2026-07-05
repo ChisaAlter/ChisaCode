@@ -334,7 +334,9 @@ jobs:
           exit 1
 
       - name: Run Android Maestro chain
-        uses: reactivecircus/android-emulator-runner@v2
+        # Pinned to v2.37.0 for supply-chain safety. Update by bumping both
+        # the SHA and the trailing tag comment together.
+        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
         env:
           CHISACODE_MAESTRO_APP_ID: sh.chisacode.debug
           CHISACODE_MAESTRO_DIRECT_ENDPOINT: 127.0.0.1:6767
@@ -439,6 +441,8 @@ jobs:
         with:
           fetch-depth: 0
       - name: Secret scanning
-        uses: trufflesecurity/trufflehog@main
+        # Pinned to v3.95.8 for supply-chain safety. Update by bumping both
+        # the SHA and the trailing tag comment together.
+        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
         with:
           extra_args: --only-verified --no-update
