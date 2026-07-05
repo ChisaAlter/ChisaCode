@@ -112,15 +112,37 @@ function getWildcardAuthWarning(
 }
 
 /**
- * Compatibility shim for the original startup guard. Patch releases must not
- * make existing LAN/self-hosted daemons fail to start, so the daemon logs the
- * warning from `getWildcardAuthWarning` during bootstrap instead.
+ * Refuse to start when the daemon is bound to a wildcard address
+ * (`0.0.0.0` or `::`) without a password configured. Without authentication,
+ * any host on the same network can invoke privileged daemon APIs (shell
+ * execution via loop verify-checks, file access, agent control). Loopback and
+ * explicit interface binds are unaffected.
+ *
+ * Opt-in compat escape hatch: set `CHISACODE_ALLOW_WILDCARD_NO_AUTH=1` to
+ * preserve the pre-1.0.3 behavior (warn-and-continue). This is intended only
+ * for staged rollouts and self-hosted deployments that accept the LAN-exposure
+ * risk; the default remains fail-closed so new deployments are safe by default.
+ *
+ * History: `95400d5bf` introduced fail-closed semantics; `d1dcd2d3c` weakened
+ * them to warn-only for patch compatibility (root cause A/D in the audit
+ * roadmap). This restores fail-closed with an explicit opt-in so "compatibility"
+ * and "safe by default" are no longer mutually exclusive.
  */
 export function assertWildcardAuth(
   listenTarget: ListenTarget,
   auth: DaemonAuthConfig | undefined,
 ): void {
-  void getWildcardAuthWarning(listenTarget, auth);
+  const warning = getWildcardAuthWarning(listenTarget, auth);
+  if (warning === null) return;
+  if (allowWildcardNoAuth()) return;
+  throw new Error(
+    `${warning} Set CHISACODE_ALLOW_WILDCARD_NO_AUTH=1 to opt in to the legacy warn-and-continue behavior (not recommended).`,
+  );
+}
+
+function allowWildcardNoAuth(): boolean {
+  const flag = process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH;
+  return flag === "1" || flag === "true";
 }
 
 import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
@@ -459,12 +481,16 @@ export async function createChisaCodeDaemon(
   assertWildcardAuth(listenTarget, config.auth);
   const wildcardAuthWarning = getWildcardAuthWarning(listenTarget, config.auth);
   if (wildcardAuthWarning) {
+    // Only reachable when CHISACODE_ALLOW_WILDCARD_NO_AUTH=1 (otherwise
+    // assertWildcardAuth above would have thrown). Log the warning so the
+    // operator sees the risk they opted into.
     logger.warn(
       {
         listen: formatListenTarget(listenTarget),
         authRequired: false,
+        optIn: "CHISACODE_ALLOW_WILDCARD_NO_AUTH",
       },
-      wildcardAuthWarning,
+      `${wildcardAuthWarning} (running because CHISACODE_ALLOW_WILDCARD_NO_AUTH=1)`,
     );
   }
   const modelGatewayToken = config.modelGatewayToken ?? randomUUID();

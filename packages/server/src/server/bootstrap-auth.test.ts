@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { assertWildcardAuth, parseListenString } from "./bootstrap.js";
 import { createTestChisaCodeDaemon } from "./test-utils/chisacode-daemon.js";
@@ -147,6 +147,19 @@ describe("assertWildcardAuth", () => {
   // Use parseListenString for formats it supports, and construct ListenTarget
   // directly for IPv6 (parseListenString's host:port split does not handle
   // bracketed IPv6 addresses).
+  //
+  // History: 95400d5bf introduced fail-closed semantics; d1dcd2d3c weakened
+  // them to warn-only (root cause A/D). These tests restore fail-closed as the
+  // default and verify the CHISACODE_ALLOW_WILDCARD_NO_AUTH opt-in escape hatch.
+
+  const originalAllowFlag = process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH;
+  afterEach(() => {
+    if (originalAllowFlag === undefined) {
+      delete process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH;
+    } else {
+      process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH = originalAllowFlag;
+    }
+  });
 
   test("allows loopback without password", () => {
     expect(() => assertWildcardAuth(parseListenString("127.0.0.1:6767"), undefined)).not.toThrow();
@@ -158,11 +171,27 @@ describe("assertWildcardAuth", () => {
     ).not.toThrow();
   });
 
-  test("allows 0.0.0.0 without password for patch-release compatibility", () => {
+  test("rejects 0.0.0.0 without password by default (fail-closed)", () => {
+    delete process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH;
+    expect(() => assertWildcardAuth(parseListenString("0.0.0.0:6767"), undefined)).toThrow(
+      /exposes the daemon to the local network/,
+    );
+  });
+
+  test("allows 0.0.0.0 without password when CHISACODE_ALLOW_WILDCARD_NO_AUTH=1 (opt-in)", () => {
+    process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH = "1";
     expect(() => assertWildcardAuth(parseListenString("0.0.0.0:6767"), undefined)).not.toThrow();
   });
 
-  test("allows IPv6 :: wildcard without password for patch-release compatibility", () => {
+  test("rejects IPv6 :: wildcard without password by default (fail-closed)", () => {
+    delete process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH;
+    expect(() => assertWildcardAuth({ type: "tcp", host: "::", port: 6767 }, undefined)).toThrow(
+      /exposes the daemon to the local network/,
+    );
+  });
+
+  test("allows IPv6 :: wildcard without password when opt-in is set", () => {
+    process.env.CHISACODE_ALLOW_WILDCARD_NO_AUTH = "1";
     expect(() =>
       assertWildcardAuth({ type: "tcp", host: "::", port: 6767 }, undefined),
     ).not.toThrow();

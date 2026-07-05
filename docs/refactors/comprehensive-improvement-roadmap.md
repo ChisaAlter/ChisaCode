@@ -23,8 +23,8 @@
 **进度**：
 
 - [x] CRITICAL #2: relay v1 生产禁用 — `resolveRelayVersion` 缺省改 v2，显式 `v=1` 需 `RELAY_ALLOW_V1=1` opt-in（commit 待提交）
+- [x] CRITICAL 根因 A/D: wildcard 硬语义恢复 — `assertWildcardAuth` 改回 fail-closed，`CHISACODE_ALLOW_WILDCARD_NO_AUTH=1` opt-in 兼容，测试恢复双语义（commit 待提交）
 - [ ] CRITICAL #1: relay v2 role=server 无鉴权 — 完整修复需 daemon Ed25519 signing key + serverId↔pubkey 绑定 + relay 签名挑战，属 minor 破坏性变更（offer schema 加 optional 字段），下一阶段执行
-- [ ] CRITICAL 根因 A/D: wildcard 硬语义恢复 + opt-in 兼容
 - [ ] HIGH #3/#5/#6/#7/#8/#9/#10/#11 + MEDIUM #12-#20 + 测试覆盖 M-TC1-9 + LOW #1-8
 
 **防回滚机制**：每项修复提交时在 commit message 引用根因诊断；安全测试不得改 `not.toThrow`，硬语义降级必须经 opt-in flag 而非默认。
