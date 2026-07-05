@@ -64,10 +64,23 @@ const RATE_LIMIT_WINDOW_MS = 10_000;
 const RATE_LIMIT_MAX_REQUESTS = 600;
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
-function rateLimitKey(req: express.Request): string {
-  const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string" && xff.length > 0) {
-    return xff.split(",")[0].trim();
+// Whether to honor client-supplied forwarding headers (X-Forwarded-For, etc.).
+// Default false: a direct daemon has no trusted upstream proxy, so the socket
+// remote address is the only honest client identifier. Setting this to `1`
+// is appropriate when the daemon sits behind a reverse proxy that overwrites
+// these headers. Trusting client-supplied XFF otherwise lets any peer forge
+// a fresh rate-limit bucket per request by rotating the header value, defeating
+// per-IP limiting (especially dangerous for wildcard-no-auth deployments).
+export function isTrustForwardHeadersEnabled(): boolean {
+  return process.env.CHISACODE_TRUST_FORWARD_HEADERS === "1";
+}
+
+export function rateLimitKey(req: express.Request): string {
+  if (isTrustForwardHeadersEnabled()) {
+    const xff = req.headers["x-forwarded-for"];
+    if (typeof xff === "string" && xff.length > 0) {
+      return xff.split(",")[0].trim();
+    }
   }
   return req.ip ?? req.socket?.remoteAddress ?? "unknown";
 }
@@ -778,9 +791,21 @@ export async function createChisaCodeDaemon(
         return;
       }
 
-      const safeFileName = entry.fileName.replace(/["\r\n]/g, "_");
+      // RFC 6266: prefer `filename*` with percent-encoded UTF-8 so downstream
+      // clients/ proxies cannot misparse backslashes, control chars, or quotes
+      // in a user-supplied file name. A best-effort ASCII fallback is included
+      // for legacy clients. The name is already bounded by path rules; this
+      // only neutralizes header-injection and parse-confusion characters.
+      // Avoid regex control-char matching (lint: no-control-regex).
+      const asciiFallbackName = entry.fileName
+        .replace(/["\\;]/g, "_")
+        .replace(/./g, (ch) => ((ch.codePointAt(0) ?? 0x20) < 0x20 ? "_" : ch));
+      const encodedName = encodeURIComponent(entry.fileName);
       res.setHeader("Content-Type", entry.mimeType);
-      res.setHeader("Content-Disposition", `attachment; filename="${safeFileName}"`);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${asciiFallbackName}"; filename*=UTF-8''${encodedName}`,
+      );
       res.setHeader("Content-Length", fileStats.size.toString());
 
       const stream = fileHandle.createReadStream();

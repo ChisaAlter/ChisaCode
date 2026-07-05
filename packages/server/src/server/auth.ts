@@ -22,6 +22,17 @@ export function isBearerTokenValid(input: BearerValidationInput): boolean {
   return isBearerTokenValidSync(input);
 }
 
+/**
+ * Validates a bearer token against the daemon bcrypt hash synchronously.
+ *
+ * Use ONLY at startup or in CLI contexts — `compareSync` blocks the event loop
+ * and will stall concurrent requests in a daemon handler. For request-path
+ * validation use {@link isBearerTokenValidAsync} instead.
+ *
+ * @param input The configured password hash and the candidate token
+ * @returns `true` if no password is configured (auth disabled) or the token matches
+ */
+
 export async function isBearerTokenValidAsync(input: BearerValidationInput): Promise<boolean> {
   if (!input.password) {
     return true;
@@ -83,7 +94,15 @@ export function extractWsBearerToken(protocol: string | null): string | null {
   if (segments[0] !== "chisacode" || segments[1] !== "bearer" || segments.length < 3) {
     return null;
   }
-  return segments.slice(2).join(".");
+  const token = segments.slice(2).join(".");
+  // Reject empty token segments — `compare("", hash)` always returns false but
+  // still burns a bcrypt round (cost=12), so a peer spamming
+  // `chisacode.bearer.` subprotocol headers amplifies CPU cost. Cap length too
+  // (bcryptjs only uses the first 72 bytes, longer inputs just waste memory).
+  if (token.length === 0 || token.length > 1024) {
+    return null;
+  }
+  return token;
 }
 
 export function createRequireBearerMiddleware(
@@ -122,5 +141,12 @@ export function shouldBypassBearerAuth(method: string, path: string): boolean {
   if (method === "OPTIONS") {
     return true;
   }
-  return path === "/api/health" || path === "/api/source";
+  // Prefix match so future sub-paths (e.g. `/api/health/:section`) stay bypassed
+  // without forcing every router addition to also revisit this gate.
+  return (
+    path === "/api/health" ||
+    path.startsWith("/api/health/") ||
+    path === "/api/source" ||
+    path.startsWith("/api/source/")
+  );
 }
