@@ -47,7 +47,7 @@ function getGlobalCrypto(): Crypto | undefined {
   return g.crypto;
 }
 
-function ensurePrng(): void {
+export function ensurePrng(): void {
   if (prngReady) return;
 
   try {

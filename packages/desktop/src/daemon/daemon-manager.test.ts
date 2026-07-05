@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
@@ -359,6 +360,40 @@ describe("assertTransportPathAllowed", () => {
     expect(() => assertTransportPathAllowed("pipe", "\\\\.\\pipe\\docker")).toThrow(
       /must start with "chisacode"/,
     );
+  });
+
+  it("accepts a socket nested in a subdirectory of ChisaCode home", () => {
+    // path.relative yields "sub/daemon.sock" — not `..`-prefixed, not absolute —
+    // so the socket is correctly treated as inside home. Locks the
+    // path.relative-based check against regressions to a flat prefix compare.
+    expect(() =>
+      assertTransportPathAllowed("socket", "/tmp/chisacode-home/sub/daemon.sock"),
+    ).not.toThrow();
+  });
+
+  it("treats Windows same-drive paths differing only by case as inside (regression lock)", () => {
+    // The socket branch uses path.relative + path.isAbsolute instead of a
+    // case-sensitive startsWith prefix check. On Windows the filesystem is
+    // case-insensitive, so `C:\Users\Foo\ChisaCode` and `c:\users\foo\chisacode`
+    // must be treated as the same directory. We assert this directly with
+    // path.win32 (independent of the POSIX-mocked getChisaCodeHome) so a future
+    // revert to startsWith would fail this test, not just silently pass on
+    // POSIX CI.
+    const rel = path.win32.relative(
+      "C:\\Users\\Foo\\ChisaCode",
+      "c:\\users\\foo\\chisacode\\daemon.sock",
+    );
+    expect(rel.startsWith("..")).toBe(false);
+    expect(path.win32.isAbsolute(rel)).toBe(false);
+  });
+
+  it("rejects a cross-drive Windows socket path as outside home", () => {
+    // path.win32.relative returns an absolute path when the target is on a
+    // different drive; path.isAbsolute catches it. Locks the cross-drive
+    // rejection so a case-insensitive fix does not also let cross-drive paths
+    // through.
+    const rel = path.win32.relative("C:\\Users\\Foo", "D:\\users\\foo\\sock");
+    expect(path.win32.isAbsolute(rel)).toBe(true);
   });
 });
 

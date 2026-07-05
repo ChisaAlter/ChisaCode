@@ -10,9 +10,21 @@ process.on("unhandledRejection", (error: unknown) => {
   process.exitCode = 1;
 });
 
+// Per Node's guidance, an uncaughtException means the process is in an
+// undefined state and must not keep running. We log the normalised message and
+// exit with code 1. (unhandledRejection above is left non-fatal so an
+// unrelated background rejection does not abort an interactive command such
+// as `onboard` or `agent attach`.)
+//
+// Trade-off: `process.exit` does not wait for async stderr to flush, so when
+// stderr is redirected to a pipe/file (e.g. CI logs) the final error line can
+// be truncated. We accept this for the CLI because uncaughtException is
+// extremely rare, TTY output (the common case) is synchronous, and the
+// alternative (only setting exitCode) leaves the process running in a
+// corrupted state, which is worse.
 process.on("uncaughtException", (error: unknown) => {
   process.stderr.write(`${getErrorMessage(error)}\n`);
-  process.exitCode = 1;
+  process.exit(1);
 });
 
 try {

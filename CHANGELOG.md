@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Codex image attachments written to `os.tmpdir()` now use private permissions (file `0o600`, directory `0o700`) via `private-files.ts` helpers instead of the umask default, preventing other local users from reading user-supplied image content
+- Stale Codex image attachments (older than 1h TTL) in `os.tmpdir()` are now cleaned up on session close, preventing unbounded temp file growth on long-lived daemons
+- `assertTransportPathAllowed` socket branch now uses `path.relative` + `path.isAbsolute` instead of a case-sensitive `startsWith` prefix check, so legitimate Windows socket paths with mixed-case drive letters are no longer misrejected (mirrors the ACP `resolvePathInsideBase` guard)
+- CLI `uncaughtException` handler now calls `process.exit(1)` instead of only setting `process.exitCode`, per Node's guidance that a process is in an undefined state after an uncaught exception and must not keep running
+- `writeFileAtomic` now fsyncs the parent directory after the rename so the rename's directory-entry update is durable across crashes (POSIX only; best-effort on filesystems that do not support directory fsync)
+- `EncryptedChannel.setState("open")` now calls `ensurePrng()` before generating the per-direction salt, so the salt is always produced with a configured PRNG even on runtimes without a default tweetnacl PRNG
+- atomic-write mock test factory now imports `node:path` inside the `vi.mock` factory instead of closing over the outer `path` binding, removing a fragile dependency on vitest's hoist timing
+- atomic-write 0o600 mode test now uses `test.skipIf` so Windows runs report the POSIX-mode assertion as skipped rather than an empty pass
+- `cleanupStaleCodexImageAttachments` is now annotated `@internal` to make its test-only export status explicit
+- Desktop transport path tests now include Windows same-drive case-insensitivity and cross-drive rejection regression locks using `path.win32`
+
 - File explorer pane no longer crashes on initial load (`useTranslation` was called without destructuring `t`)
 - Toast dismiss callback type mismatch (`string` vs `number` id) that could leave toasts stuck and leak timers
 - `synthetic-models-section` referenced an undeclared `toast` in `useMemo` dependencies, blocking the app typecheck/build

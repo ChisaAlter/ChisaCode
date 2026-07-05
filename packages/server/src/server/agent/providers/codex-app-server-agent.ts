@@ -60,6 +60,7 @@ import {
 import { findExecutable, probeExecutable } from "../../../utils/executable.js";
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { spawnProcess } from "../../../utils/spawn.js";
+import { ensurePrivateDirectory, writePrivateFileSync } from "../../private-files.js";
 import { extractCodexTerminalSessionId, nonEmptyString } from "./tool-call-mapper-utils.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "./codex-feature-definitions.js";
 import {
@@ -1718,12 +1719,12 @@ function codexImageOutputFromResult(result: unknown): ProviderImageOutput | null
 
 function writeImageAttachmentSync(mimeType: string, data: string): string {
   const attachmentsDir = path.join(os.tmpdir(), CODEX_IMAGE_ATTACHMENT_DIR);
-  fsSync.mkdirSync(attachmentsDir, { recursive: true });
+  ensurePrivateDirectory(attachmentsDir);
   const normalized = normalizeImageData(mimeType, data);
   const extension = getImageExtension(normalized.mimeType);
   const filename = `${randomUUID()}.${extension}`;
   const filePath = path.join(attachmentsDir, filename);
-  fsSync.writeFileSync(filePath, Buffer.from(normalized.data, "base64"));
+  writePrivateFileSync(filePath, Buffer.from(normalized.data, "base64"));
   return filePath;
 }
 
@@ -2797,14 +2798,10 @@ const CodexNotificationSchema = z.union([
 ]);
 
 async function writeImageAttachment(mimeType: string, data: string): Promise<string> {
-  const attachmentsDir = path.join(os.tmpdir(), CODEX_IMAGE_ATTACHMENT_DIR);
-  await fs.mkdir(attachmentsDir, { recursive: true });
-  const normalized = normalizeImageData(mimeType, data);
-  const extension = getImageExtension(normalized.mimeType);
-  const filename = `${randomUUID()}.${extension}`;
-  const filePath = path.join(attachmentsDir, filename);
-  await fs.writeFile(filePath, Buffer.from(normalized.data, "base64"));
-  return filePath;
+  // private-files.ts only exposes sync helpers; the payload is a single image
+  // (small, bounded), so a sync write inside an async wrapper is acceptable
+  // and lets both call sites share the same 0o600/0o700 permission tightening.
+  return writeImageAttachmentSync(mimeType, data);
 }
 
 /**
@@ -2815,7 +2812,11 @@ async function writeImageAttachment(mimeType: string, data: string): Promise<str
  */
 const STALE_ATTACHMENT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-async function cleanupStaleCodexImageAttachments(): Promise<void> {
+/**
+ * Best-effort cleanup of stale Codex image attachments in os.tmpdir().
+ * @internal Exported for targeted unit testing only; not part of the provider's public API.
+ */
+export async function cleanupStaleCodexImageAttachments(): Promise<void> {
   const attachmentsDir = path.join(os.tmpdir(), CODEX_IMAGE_ATTACHMENT_DIR);
   let entries: fsSync.Dirent[];
   try {

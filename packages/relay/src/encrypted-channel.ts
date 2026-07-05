@@ -13,6 +13,7 @@ import {
   deriveSharedKey,
   encrypt,
   decrypt,
+  ensurePrng,
   type KeyPair,
   type SharedKey,
   SALT_LENGTH,
@@ -318,6 +319,7 @@ export class EncryptedChannel {
     if (state === "open") {
       // Initialise the send direction when entering open. The receive
       // direction is locked to the peer's first encrypted frame.
+      ensurePrng();
       this.sendSalt = nacl.randomBytes(SALT_LENGTH);
       this.sendSeq = 0n;
     }

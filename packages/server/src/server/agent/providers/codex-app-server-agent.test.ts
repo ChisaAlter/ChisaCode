@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { mkdtemp } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtemp, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -18,6 +18,7 @@ import {
   buildCodexAppServerEnv,
   CodexAppServerAgentClient,
   CodexAppServerAgentSession,
+  cleanupStaleCodexImageAttachments,
   codexAppServerTurnInputFromPrompt,
   listCodexSkills,
   mapCodexPatchNotificationToToolCall,
@@ -2342,6 +2343,15 @@ describe("Codex app-server provider", () => {
     const source = markdownImageSource(event.item.text);
     expect(source).toMatch(/chisacode-attachments[\\/].+\.png$/);
     expect(existsSync(source)).toBe(true);
+    // The attachment must be written with private permissions: file 0o600,
+    // directory 0o700. On Windows POSIX modes do not apply, so skip the mode
+    // assertions there.
+    if (process.platform !== "win32") {
+      const fileMode = statSync(source).mode & 0o777;
+      const dirMode = statSync(path.dirname(source)).mode & 0o777;
+      expect(fileMode).toBe(0o600);
+      expect(dirMode).toBe(0o700);
+    }
     rmSync(source, { force: true });
   });
 
@@ -2371,6 +2381,40 @@ describe("Codex app-server provider", () => {
         usage: undefined,
       },
     ]);
+  });
+
+  test("cleanupStaleCodexImageAttachments removes files older than the TTL and keeps fresh ones", async () => {
+    // NOTE: this test writes into the shared os.tmpdir()/chisacode-attachments
+    // directory (cleanupStaleCodexImageAttachments reads a hardcoded path and
+    // cannot be injected with an alternate directory). It assumes test
+    // isolation: vitest runs tests in this file serially, and the finally
+    // block removes both files. A concurrent writer to the same directory
+    // could in theory interact, but the fresh file (current mtime) is never
+    // removed by the TTL check, and the stale file uses a unique name.
+    const attachmentsDir = path.join(tmpdir(), "chisacode-attachments");
+    mkdirSync(attachmentsDir, { recursive: true });
+
+    // Fresh file — should survive cleanup.
+    const freshPath = path.join(attachmentsDir, `fresh-${Date.now()}.png`);
+    writeFileSync(freshPath, Buffer.from("fresh"));
+    // Stale file — mtime set 2 hours in the past, beyond the 1h TTL.
+    const stalePath = path.join(attachmentsDir, `stale-${Date.now()}.png`);
+    writeFileSync(stalePath, Buffer.from("stale"));
+    const twoHoursAgo = Date.now() / 1000 - 2 * 60 * 60;
+    await utimes(stalePath, twoHoursAgo, twoHoursAgo);
+
+    try {
+      expect(existsSync(freshPath)).toBe(true);
+      expect(existsSync(stalePath)).toBe(true);
+
+      await cleanupStaleCodexImageAttachments();
+
+      expect(existsSync(freshPath)).toBe(true);
+      expect(existsSync(stalePath)).toBe(false);
+    } finally {
+      rmSync(freshPath, { force: true });
+      rmSync(stalePath, { force: true });
+    }
   });
 
   test("emits usage_updated on token usage updates and keeps usage on turn completion", () => {

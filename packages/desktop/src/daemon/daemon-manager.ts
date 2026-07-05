@@ -163,8 +163,15 @@ export function assertTransportPathAllowed(
   if (transportType === "socket") {
     const home = path.resolve(getChisaCodeHome());
     const resolved = path.resolve(transportPath);
-    const prefix = home.endsWith(path.sep) ? home : home + path.sep;
-    if (!resolved.startsWith(prefix)) {
+    // Use path.relative + path.isAbsolute instead of a case-sensitive
+    // `startsWith` prefix check: on Windows the filesystem is case-insensitive
+    // and `path.relative` (win32) treats same-drive paths differing only by
+    // case as equivalent, so a legitimate socket path with mixed-case drive
+    // letters is not misrejected as escaping ChisaCode home. Traversal via
+    // `..` resolves to an absolute path or a `..`-prefixed relative and is
+    // rejected, mirroring the ACP resolvePathInsideBase guard.
+    const relative = path.relative(home, resolved);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
       throw new Error(
         `Local transport socket path must be under ChisaCode home (${home}). Received: ${transportPath}`,
       );

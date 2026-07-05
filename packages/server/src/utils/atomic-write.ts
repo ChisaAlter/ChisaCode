@@ -25,9 +25,9 @@ export interface WriteFileAtomicOptions {
  *
  * The temp file is created in the same directory as the target (so rename is
  * atomic on POSIX, and stays on the same filesystem). Contents are fsync'd
- * before the rename so that a post-rename crash cannot expose an empty file
- * (the rename is durable in the directory, but the data must be durable first).
- * The temp file is best-effort cleaned up on failure.
+ * before the rename so the directory entry never points at an empty file. The
+ * parent directory is fsync'd after the rename so the rename itself is durable
+ * across crashes. The temp file is best-effort cleaned up on failure.
  *
  * @param targetPath Final path to write
  * @param data String or buffer payload
@@ -60,6 +60,23 @@ export async function writeFileAtomic(
     await handle.close();
     handle = null;
     await fs.rename(tempPath, targetPath);
+    // fsync the parent directory so the rename's directory-entry update is
+    // durable across crashes. On Windows, fsync on directory handles is not
+    // supported, so skip it there; failures elsewhere are best-effort (some
+    // filesystems do not support directory fsync). The file data is already
+    // durable from the datasync above.
+    if (process.platform !== "win32") {
+      try {
+        const dirHandle = await fs.open(directory, "r");
+        try {
+          await dirHandle.datasync();
+        } finally {
+          await dirHandle.close();
+        }
+      } catch {
+        // best-effort; directory fsync unsupported on this filesystem
+      }
+    }
   } catch (error) {
     if (handle !== null) {
       try {
