@@ -78,6 +78,12 @@ async function startDaemonWithTimeout(
 export async function createTestChisaCodeDaemon(
   options: TestChisaCodeDaemonOptions = {},
 ): Promise<TestChisaCodeDaemon> {
+  // E2E/tests drive many requests in tight bursts that would exceed the
+  // daemon's per-IP rate limit. Disable it for the test daemon process unless
+  // the operator explicitly opts in (e.g. to test the limiter itself).
+  if (process.env.CHISACODE_TEST_RATE_LIMIT !== "1") {
+    process.env.CHISACODE_DISABLE_RATE_LIMIT = "1";
+  }
   const maxAttempts = 8;
   let lastError: unknown;
 

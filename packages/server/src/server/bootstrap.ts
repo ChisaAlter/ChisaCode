@@ -41,7 +41,64 @@ function resolveBoundListenTarget(
 
 // Matches a Windows drive-letter path like C:\ or D:\
 const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
-const DAEMON_JSON_LIMIT = "512mb";
+// Body size limits per route class. The previous 512mb default on every RPC
+// route let any authenticated client (or, under wildcard-no-auth, any LAN
+// peer) exhaust daemon memory with a few concurrent POSTs. Model-gateway
+// routes legitimately carry image attachments and long prompts, so they get a
+// generous but still bounded 50mb cap; ordinary control RPCs (agent, loop,
+// settings, chat) never need more than 1mb.
+const DEFAULT_JSON_LIMIT = "1mb";
+const MODEL_GATEWAY_JSON_LIMIT = "50mb";
+
+// Lightweight per-IP fixed-window rate limiter (no new dependency). Bounds the
+// request rate from any single source so a compromised or runaway client
+// cannot flood the daemon with cheap-but-numerous requests. Health checks and
+// CORS preflight bypass the limiter. Tuned for interactive agent workloads:
+// 600 requests / 10s / IP — well above any legitimate burst, low enough to
+// stop a tight infinite loop from saturating the event loop.
+//
+// Env overrides (mainly for e2e tests that drive many requests in bursts):
+//   CHISACODE_DISABLE_RATE_LIMIT=1 — bypass entirely
+//   CHISACODE_RATE_LIMIT_MAX=<n>   — override max requests per window
+const RATE_LIMIT_WINDOW_MS = 10_000;
+const RATE_LIMIT_MAX_REQUESTS = 600;
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimitKey(req: express.Request): string {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.length > 0) {
+    return xff.split(",")[0].trim();
+  }
+  return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+}
+
+function createRateLimitMiddleware(): express.RequestHandler {
+  if (process.env.CHISACODE_DISABLE_RATE_LIMIT === "1") {
+    return (_req, _res, next) => next();
+  }
+  const max =
+    Number.parseInt(process.env.CHISACODE_RATE_LIMIT_MAX ?? "", 10) || RATE_LIMIT_MAX_REQUESTS;
+  return (req, res, next) => {
+    if (req.method === "OPTIONS" || req.path === "/api/health") {
+      next();
+      return;
+    }
+    const key = rateLimitKey(req);
+    const now = Date.now();
+    const bucket = rateLimitBuckets.get(key);
+    if (!bucket || now >= bucket.resetAt) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      next();
+      return;
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      res.status(429).json({ error: "Too Many Requests" });
+      return;
+    }
+    next();
+  };
+}
 
 export function parseListenString(listen: string): ListenTarget {
   // 1. Windows named pipes: \\.\pipe\... or pipe://...
@@ -570,6 +627,10 @@ export async function createChisaCodeDaemon(
     next();
   });
 
+  // Per-IP rate limit before bearer auth so a flood does not pay the bcrypt
+  // cost. Health/OPTIONS bypass inside the middleware.
+  app.use(createRateLimitMiddleware());
+
   app.use(
     createRequireBearerMiddleware(config.auth, (context) => {
       logger.warn(context, "Rejected HTTP request with invalid daemon password");
@@ -585,8 +646,8 @@ export async function createChisaCodeDaemon(
   app.use("/public", express.static(staticDir));
 
   // Middleware
-  const defaultJsonParser = express.json({ limit: DAEMON_JSON_LIMIT });
-  const modelGatewayJsonParser = express.json({ limit: DAEMON_JSON_LIMIT });
+  const defaultJsonParser = express.json({ limit: DEFAULT_JSON_LIMIT });
+  const modelGatewayJsonParser = express.json({ limit: MODEL_GATEWAY_JSON_LIMIT });
 
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
