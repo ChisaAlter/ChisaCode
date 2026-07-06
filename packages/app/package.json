@@ -69,7 +69,7 @@
     "expo-dev-client": "^6.0.15",
     "expo-file-system": "~19.0.17",
     "expo-haptics": "~15.0.7",
-    "expo-image": "~3.0.10",
+    "expo-image": "~57.0.0",
     "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "^17.0.8",
     "expo-keep-awake": "^15.0.7",
