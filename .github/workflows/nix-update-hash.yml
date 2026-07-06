@@ -24,7 +24,7 @@ jobs:
   update-hash:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.CHISACODE_BOT_APP_ID }}
