@@ -8,3 +8,4 @@ node_modules/
 
 # TypeScript
 *.tsbuildinfo
+${env.ELECTRON_CACHE}/
