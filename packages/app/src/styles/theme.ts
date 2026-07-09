@@ -661,30 +661,23 @@ const defaultGlass = {
 } as const;
 
 const liquidNeonGlass = {
-  sm: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderRadius: 12,
-    blur: 22,
-    elevation: 2,
-  },
-  md: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderColor: "rgba(255,255,255,0.12)",
-    borderWidth: 1,
-    borderRadius: 16,
-    blur: 26,
-    elevation: 4,
-  },
-  lg: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderRadius: 20,
-    blur: 30,
-    elevation: 8,
-  },
+  enabled: true,
+  blurIntensity: 22,
+  panel: "rgba(255,255,255,0.08)",
+  popover: "rgba(255,255,255,0.06)",
+  sheet: "rgba(255,255,255,0.06)",
+  chrome: "rgba(255,255,255,0.04)",
+  border: "rgba(255,255,255,0.16)",
+  highlight: "rgba(255,255,255,0.20)",
+  glow: "rgba(99,230,255,0.12)",
+  tint: "rgba(0,163,255,0.06)",
+  edge: "rgba(99,230,255,0.24)",
+  innerShadow: "rgba(0,163,255,0.08)",
+  specular: "rgba(255,255,255,0.32)",
+  refraction: "rgba(168,85,247,0.08)",
+  caustic: "rgba(0,163,255,0.10)",
+  cssBackdropFilter: "blur(22px) saturate(1.4)",
+  cardBorder: "rgba(255,255,255,0.12)",
 } as const;
 
 const liquidNeonShadow = {
@@ -897,12 +890,12 @@ export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
 
 export const THEME_SWATCHES: Record<ThemeName, string> = {
   light: "#ffffff",
-  dark: "#2D8B62",
+  dark: "#6366F1",
   zinc: "#808080",
   midnight: "#4A6BA8",
   claude: "#D97757",
   ghostty: "#8caaee",
-  "liquid-neon": "#ffffff",
+  "liquid-neon": "#00A3FF",
   chisaki: "#B7132F",
   aemeath: "#E87BA8",
 };

@@ -8,6 +8,7 @@ import {
   darkGhosttyTheme,
   liquidNeonTheme,
   chisakiTheme,
+  aemeathTheme,
 } from "./theme";
 
 StyleSheet.configure({
@@ -20,6 +21,7 @@ StyleSheet.configure({
     darkGhostty: darkGhosttyTheme,
     liquidNeon: liquidNeonTheme,
     chisaki: chisakiTheme,
+    aemeath: aemeathTheme,
   },
   breakpoints: {
     xs: 0,
@@ -43,6 +45,7 @@ interface AppThemes {
   darkGhostty: typeof darkGhosttyTheme;
   liquidNeon: typeof liquidNeonTheme;
   chisaki: typeof chisakiTheme;
+  aemeath: typeof aemeathTheme;
 }
 
 interface AppBreakpoints {
