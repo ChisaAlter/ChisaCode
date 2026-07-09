@@ -454,6 +454,81 @@ test("allows openProject to finish after slow cold-start workspace initializatio
   }
 });
 
+test("allows fetchAgentTimeline to finish after slow cold-start restoration", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const mock = createMockTransport();
+
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_unit_test",
+      logger,
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+
+    const connectPromise = client.connect();
+    mock.triggerOpen();
+    await connectPromise;
+
+    const resultPromise = client.fetchAgentTimeline("agent-slow", {
+      requestId: "timeline-slow",
+      limit: 50,
+    });
+    const settled = vi.fn();
+    void resultPromise.then(
+      () => settled("resolved"),
+      () => settled("rejected"),
+    );
+
+    expect(mock.sent).toHaveLength(1);
+    expect(parseSentFrame(mock.sent.at(-1))).toMatchObject({
+      type: "fetch_agent_timeline_request",
+      agentId: "agent-slow",
+      requestId: "timeline-slow",
+      limit: 50,
+    });
+
+    await vi.advanceTimersByTimeAsync(15_001);
+    expect(settled).not.toHaveBeenCalled();
+
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "fetch_agent_timeline_response",
+        payload: {
+          requestId: "timeline-slow",
+          agentId: "agent-slow",
+          agent: null,
+          direction: "tail",
+          projection: "projected",
+          epoch: "epoch-1",
+          reset: false,
+          staleCursor: false,
+          gap: false,
+          window: { minSeq: 0, maxSeq: 0, nextSeq: 1 },
+          startCursor: null,
+          endCursor: null,
+          hasOlder: false,
+          hasNewer: false,
+          entries: [],
+          error: null,
+        },
+      }),
+    );
+
+    await expect(resultPromise).resolves.toMatchObject({
+      requestId: "timeline-slow",
+      agentId: "agent-slow",
+      entries: [],
+      error: null,
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("reconnects after repeated top-level liveness checks time out", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

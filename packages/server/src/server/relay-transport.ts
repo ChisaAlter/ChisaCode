@@ -1,5 +1,6 @@
 /// <reference lib="dom" />
 import { EventEmitter } from "node:events";
+import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 import type pino from "pino";
 import {
@@ -7,6 +8,9 @@ import {
   type EncryptedChannel,
   type Transport as RelayTransport,
   type KeyPair,
+  type RelayAuthKeyPair,
+  exportRelayAuthPublicKey,
+  signRelayServerAuth,
 } from "@chisacode/relay/e2ee";
 import { buildRelayWebSocketUrl } from "@chisacode/protocol/daemon-endpoints";
 import type { ExternalSocketMetadata } from "./websocket-server.js";
@@ -18,6 +22,7 @@ interface RelayTransportOptions {
   relayUseTls: boolean;
   serverId: string;
   daemonKeyPair?: KeyPair;
+  daemonRelayAuthKeyPair?: RelayAuthKeyPair;
   createWebSocket?: RelayWebSocketFactory;
 }
 
@@ -123,6 +128,7 @@ export function startRelayTransport({
   relayUseTls,
   serverId,
   daemonKeyPair,
+  daemonRelayAuthKeyPair,
   createWebSocket = createDefaultRelayWebSocket,
 }: RelayTransportOptions): RelayTransportController {
   const relayLogger = logger.child({ module: "relay-transport" });
@@ -178,6 +184,13 @@ export function startRelayTransport({
       useTls: relayUseTls,
       serverId,
       role: "server",
+      relayAuth: daemonRelayAuthKeyPair
+        ? createRelayAuthQuery({
+            keyPair: daemonRelayAuthKeyPair,
+            serverId,
+            connectionId: "",
+          })
+        : undefined,
     });
     const socket = createWebSocket(url);
     controlWs = socket;
@@ -363,6 +376,13 @@ export function startRelayTransport({
       serverId,
       role: "server",
       connectionId,
+      relayAuth: daemonRelayAuthKeyPair
+        ? createRelayAuthQuery({
+            keyPair: daemonRelayAuthKeyPair,
+            serverId,
+            connectionId,
+          })
+        : undefined,
     });
     const socket = createWebSocket(url);
     dataSockets.set(connectionId, socket);
@@ -420,6 +440,25 @@ export function startRelayTransport({
   connectControl();
 
   return { stop };
+}
+
+function createRelayAuthQuery(params: {
+  readonly keyPair: RelayAuthKeyPair;
+  readonly serverId: string;
+  readonly connectionId: string;
+}): { readonly publicKeyB64: string; readonly nonce: string; readonly signatureB64: string } {
+  const nonce = randomUUID();
+  return {
+    publicKeyB64: exportRelayAuthPublicKey(params.keyPair.publicKey),
+    nonce,
+    signatureB64: signRelayServerAuth({
+      secretKey: params.keyPair.secretKey,
+      serverId: params.serverId,
+      role: "server",
+      connectionId: params.connectionId,
+      nonce,
+    }),
+  };
 }
 
 async function attachEncryptedSocket(

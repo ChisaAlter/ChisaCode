@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check, ChevronDown, X } from "lucide-react-native";
@@ -160,8 +160,10 @@ function renderListEmptyComponent(input: {
   renderModel: AgentStreamRenderModel;
   emptyStateStyle: StyleProp<ViewStyle>;
   emptyText: string;
+  isAuthoritativeHistoryReady: boolean;
 }): ReactNode {
   if (
+    !input.isAuthoritativeHistoryReady ||
     input.renderModel.boundary.hasVirtualizedHistory ||
     input.renderModel.boundary.hasMountedHistory ||
     input.renderModel.boundary.hasLiveHead ||
@@ -649,8 +651,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           renderModel,
           emptyStateStyle,
           emptyText: t("session.startChat"),
+          isAuthoritativeHistoryReady,
         }),
-      [emptyStateStyle, renderModel, t],
+      [emptyStateStyle, isAuthoritativeHistoryReady, renderModel, t],
     );
 
     const { boundary, auxiliary } = renderModel;
@@ -1071,8 +1074,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   contentWrapper: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
     paddingHorizontal: theme.spacing[2],
   },
   listContentContainer: {
@@ -1092,8 +1094,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   streamItemWrapper: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
     paddingHorizontal: theme.spacing[2],
   },
   emptyState: {
@@ -1138,7 +1139,6 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   scrollToBottomInner: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
     alignItems: "center",
   },

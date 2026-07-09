@@ -3,6 +3,10 @@ import net from "node:net";
 import type { IncomingMessage } from "node:http";
 import type { Logger } from "pino";
 import type { RequestHandler } from "express";
+import type { DaemonAuthConfig } from "./auth.js";
+import { extractWsBearerProtocol, extractWsBearerToken, isBearerTokenValidAsync } from "./auth.js";
+import type { HostnamesConfig } from "./hostnames.js";
+import { isHostnameAllowed } from "./hostnames.js";
 
 // ---------------------------------------------------------------------------
 // Hop-by-hop headers that must not be forwarded
@@ -33,6 +37,19 @@ export interface ScriptRouteEntry extends ScriptRoute {
   workspaceId: string;
   projectSlug: string;
   scriptName: string;
+}
+
+export interface ScriptProxyUpgradeDecision {
+  readonly allowed: boolean;
+  readonly statusCode: number;
+  readonly reason: string;
+}
+
+export interface ScriptProxyUpgradeGuard {
+  readonly auth?: DaemonAuthConfig;
+  readonly allowedOrigins: ReadonlySet<string>;
+  readonly hostnames?: HostnamesConfig;
+  readonly allowUpgradeRequest?: (req: IncomingMessage) => ScriptProxyUpgradeDecision;
 }
 
 export class ScriptRouteStore {
@@ -160,6 +177,74 @@ function stripHopByHopHeaders(
   return out;
 }
 
+function sameOrigin(origin: string | undefined, hostHeader: string | undefined): boolean {
+  if (!origin || !hostHeader) return false;
+  return origin === `http://${hostHeader}` || origin === `https://${hostHeader}`;
+}
+
+function rejectUpgrade(socket: net.Socket, statusCode: number, reason: string): void {
+  const body = `${statusCode} ${reason}`;
+  socket.end(
+    [
+      `HTTP/1.1 ${statusCode} ${reason}`,
+      "Connection: close",
+      "Content-Type: text/plain; charset=utf-8",
+      `Content-Length: ${Buffer.byteLength(body)}`,
+      "",
+      body,
+    ].join("\r\n"),
+  );
+  socket.destroy();
+}
+
+async function authorizeScriptProxyUpgrade(params: {
+  req: IncomingMessage;
+  hostHeader: string;
+  guard: ScriptProxyUpgradeGuard | undefined;
+}): Promise<ScriptProxyUpgradeDecision> {
+  const { req, hostHeader, guard } = params;
+  if (!guard) {
+    return { allowed: true, statusCode: 200, reason: "OK" };
+  }
+
+  if (!isHostnameAllowed(hostHeader, guard.hostnames)) {
+    return { allowed: false, statusCode: 403, reason: "Host not allowed" };
+  }
+
+  const limitDecision = guard.allowUpgradeRequest?.(req);
+  if (limitDecision && !limitDecision.allowed) {
+    return limitDecision;
+  }
+
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  if (
+    origin &&
+    !guard.allowedOrigins.has("*") &&
+    !guard.allowedOrigins.has(origin) &&
+    !sameOrigin(origin, hostHeader)
+  ) {
+    return { allowed: false, statusCode: 403, reason: "Origin not allowed" };
+  }
+
+  const password = guard.auth?.password;
+  if (!password) {
+    return { allowed: true, statusCode: 200, reason: "OK" };
+  }
+
+  const protocol = extractWsBearerProtocol(req.headers["sec-websocket-protocol"]);
+  const token = extractWsBearerToken(protocol);
+  const isAuthorized = await isBearerTokenValidAsync({ password, token });
+  if (!isAuthorized) {
+    return {
+      allowed: false,
+      statusCode: 401,
+      reason: token === null ? "Password required" : "Incorrect password",
+    };
+  }
+
+  return { allowed: true, statusCode: 200, reason: "OK" };
+}
+
 // ---------------------------------------------------------------------------
 // createScriptProxyMiddleware
 // ---------------------------------------------------------------------------
@@ -226,9 +311,11 @@ export function createScriptProxyMiddleware({
 export function createScriptProxyUpgradeHandler({
   routeStore,
   logger,
+  guard,
 }: {
   routeStore: ScriptRouteStore;
   logger: Logger;
+  guard?: ScriptProxyUpgradeGuard;
 }): (req: IncomingMessage, socket: net.Socket, head: Buffer) => void {
   return (req, socket, head) => {
     const hostHeader = req.headers.host;
@@ -241,54 +328,86 @@ export function createScriptProxyUpgradeHandler({
       return;
     }
 
-    const targetSocket = net.connect({ host: "127.0.0.1", port: route.port }, () => {
-      // Reconstruct the raw HTTP upgrade request to send to the target
-      const forwardedHeaders = stripHopByHopHeaders(req.headers);
-      forwardedHeaders["x-forwarded-for"] = req.socket.remoteAddress ?? "127.0.0.1";
-      forwardedHeaders["x-forwarded-host"] = hostHeader.replace(/:\d+$/, "");
-      forwardedHeaders["x-forwarded-proto"] = "http";
-
-      // Re-include upgrade and connection headers — they are required for
-      // WebSocket handshake even though they are hop-by-hop.
-      forwardedHeaders["connection"] = "Upgrade";
-      forwardedHeaders["upgrade"] = req.headers.upgrade ?? "websocket";
-
-      const headerLines: string[] = [];
-      headerLines.push(`${req.method ?? "GET"} ${req.url ?? "/"} HTTP/${req.httpVersion}`);
-      for (const [key, value] of Object.entries(forwardedHeaders)) {
-        if (Array.isArray(value)) {
-          for (const v of value) {
-            headerLines.push(`${key}: ${v}`);
-          }
-        } else {
-          headerLines.push(`${key}: ${value}`);
-        }
-      }
-      headerLines.push("\r\n");
-
-      targetSocket.write(headerLines.join("\r\n"));
-
-      if (head.length > 0) {
-        targetSocket.write(head);
+    void (async () => {
+      const decision = await authorizeScriptProxyUpgrade({ req, hostHeader, guard });
+      if (!decision.allowed) {
+        logger.warn(
+          {
+            hostname: route.hostname,
+            statusCode: decision.statusCode,
+            reason: decision.reason,
+            origin: req.headers.origin,
+          },
+          "Script proxy: rejected WebSocket upgrade",
+        );
+        rejectUpgrade(socket, decision.statusCode, decision.reason);
+        return;
       }
 
-      // Pipe in both directions
-      targetSocket.pipe(socket);
-      socket.pipe(targetSocket);
-    });
-
-    targetSocket.on("error", (err) => {
-      logger.warn(
-        { err, hostname: route.hostname, port: route.port },
-        "Script proxy: WebSocket upstream unreachable",
-      );
-      socket.end();
-    });
-
-    socket.on("error", () => {
-      targetSocket.destroy();
+      forwardScriptProxyUpgrade({ req, socket, head, hostHeader, route, logger });
+    })().catch((error: unknown) => {
+      logger.warn({ err: error, hostname: route.hostname }, "Script proxy: upgrade guard failed");
+      rejectUpgrade(socket, 500, "Internal Server Error");
     });
   };
+}
+
+function forwardScriptProxyUpgrade(params: {
+  req: IncomingMessage;
+  socket: net.Socket;
+  head: Buffer;
+  hostHeader: string;
+  route: ScriptRoute;
+  logger: Logger;
+}): void {
+  const { req, socket, head, hostHeader, route, logger } = params;
+  const targetSocket = net.connect({ host: "127.0.0.1", port: route.port }, () => {
+    // Reconstruct the raw HTTP upgrade request to send to the target
+    const forwardedHeaders = stripHopByHopHeaders(req.headers);
+    forwardedHeaders["x-forwarded-for"] = req.socket.remoteAddress ?? "127.0.0.1";
+    forwardedHeaders["x-forwarded-host"] = hostHeader.replace(/:\d+$/, "");
+    forwardedHeaders["x-forwarded-proto"] = "http";
+
+    // Re-include upgrade and connection headers — they are required for
+    // WebSocket handshake even though they are hop-by-hop.
+    forwardedHeaders["connection"] = "Upgrade";
+    forwardedHeaders["upgrade"] = req.headers.upgrade ?? "websocket";
+
+    const headerLines: string[] = [];
+    headerLines.push(`${req.method ?? "GET"} ${req.url ?? "/"} HTTP/${req.httpVersion}`);
+    for (const [key, value] of Object.entries(forwardedHeaders)) {
+      if (Array.isArray(value)) {
+        for (const v of value) {
+          headerLines.push(`${key}: ${v}`);
+        }
+      } else {
+        headerLines.push(`${key}: ${value}`);
+      }
+    }
+    headerLines.push("\r\n");
+
+    targetSocket.write(headerLines.join("\r\n"));
+
+    if (head.length > 0) {
+      targetSocket.write(head);
+    }
+
+    // Pipe in both directions
+    targetSocket.pipe(socket);
+    socket.pipe(targetSocket);
+  });
+
+  targetSocket.on("error", (err) => {
+    logger.warn(
+      { err, hostname: route.hostname, port: route.port },
+      "Script proxy: WebSocket upstream unreachable",
+    );
+    socket.end();
+  });
+
+  socket.on("error", () => {
+    targetSocket.destroy();
+  });
 }
 
 // ---------------------------------------------------------------------------

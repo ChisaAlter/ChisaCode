@@ -33,12 +33,14 @@ export function buildOfferEndpoints({ listenHost, port }: BuildOfferEndpointsArg
 export async function createConnectionOfferV2(args: {
   serverId: string;
   daemonPublicKeyB64: string;
+  relayAuthPublicKeyB64?: string;
   relay: { endpoint: string; useTls?: boolean };
 }): Promise<ConnectionOffer> {
   return ConnectionOfferV2Schema.parse({
     v: 2,
     serverId: args.serverId,
     daemonPublicKeyB64: args.daemonPublicKeyB64,
+    relayAuthPublicKeyB64: args.relayAuthPublicKeyB64,
     relay: args.relay,
   });
 }

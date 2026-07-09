@@ -63,6 +63,8 @@ export interface ResolveStartupRedirectInput {
   anyOnlineHostServerId: string | null;
   workspaceSelection: ActiveWorkspaceSelection | null;
   isWorkspaceSelectionLoaded: boolean;
+  isWorkspaceSelectionValidationPending?: boolean;
+  workspaceSelectionExists?: boolean;
   hasGivenUpWaitingForHost: boolean;
 }
 
@@ -88,6 +90,12 @@ export function resolveStartupWorkspaceSelection(
   if (!input.workspaceSelection) {
     return null;
   }
+  if (input.isWorkspaceSelectionValidationPending === true) {
+    return null;
+  }
+  if (input.workspaceSelectionExists === false) {
+    return null;
+  }
   return input.workspaceSelection;
 }
 
@@ -101,6 +109,9 @@ export function resolveStartupRedirectRoute(input: ResolveStartupRedirectInput):
 
   if (input.anyOnlineHostServerId) {
     if (resolveStartupWorkspaceSelection(input)) {
+      return null;
+    }
+    if (input.isWorkspaceSelectionValidationPending === true) {
       return null;
     }
     return buildHostRootRoute(input.anyOnlineHostServerId);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, Share, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 import Svg, { Circle } from "react-native-svg";
 import { Download, RefreshCw, Trash2 } from "lucide-react-native";
@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/toast-context";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { downloadTextFile } from "@/utils/download-text-file";
 import {
   buildHeatmapCells,
   buildModelUsageSegments,
@@ -122,7 +123,7 @@ export function UsageStatisticsSection({ serverId }: UsageStatisticsSectionProps
       setError(null);
       try {
         const payload = await client.exportUsage({ format });
-        const shared = await exportUsagePayload(payload.filename, payload.content);
+        const shared = await exportUsagePayload(payload.filename, payload.content, format);
         if (!shared && !isWeb) {
           toast.show(t("settings.usage.shareUnavailable"), { variant: "error" });
         }
@@ -673,24 +674,13 @@ function heatmapLevelStyle(level: number): ViewStyle {
   return styles.heatmapLevel0;
 }
 
-async function exportUsagePayload(filename: string, content: string): Promise<boolean> {
-  if (isWeb && typeof document !== "undefined" && typeof URL !== "undefined") {
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const href = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = href;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(href);
-    return true;
-  }
-
-  try {
-    await Share.share({ title: filename, message: content });
-    return true;
-  } catch {
-    return false;
-  }
+function exportUsagePayload(
+  filename: string,
+  content: string,
+  format: ExportFormat,
+): Promise<boolean> {
+  const mimeType = format === "json" ? "application/json;charset=utf-8" : "text/csv;charset=utf-8";
+  return downloadTextFile(filename, content, mimeType);
 }
 
 const styles = StyleSheet.create((theme) => ({

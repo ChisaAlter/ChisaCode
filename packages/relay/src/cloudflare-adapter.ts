@@ -18,6 +18,7 @@
  */
 
 import type { ConnectionRole, RelaySessionAttachment } from "./types.js";
+import { verifyRelayServerAuth } from "./crypto.js";
 
 type RelayProtocolVersion = "1" | "2";
 
@@ -46,6 +47,11 @@ function resolveRelayVersion(rawValue: string | null): RelayProtocolVersion | nu
 
 function allowLegacyV1(): boolean {
   const flag = Reflect.get(globalThis, "RELAY_ALLOW_V1");
+  return flag === "1" || flag === 1 || flag === true;
+}
+
+function allowUnsignedServerAuth(): boolean {
+  const flag = Reflect.get(globalThis, "RELAY_ALLOW_UNSIGNED_SERVER_AUTH");
   return flag === "1" || flag === 1 || flag === true;
 }
 
@@ -109,6 +115,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getString(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key];
   return typeof value === "string" ? value : undefined;
+}
+
+function getRelayAuthPublicKeyFromAttachment(ws: WebSocket): string | null {
+  const attachment = deserializeAttachment(ws);
+  if (!isRecord(attachment)) return null;
+  return getString(attachment, "relayAuthPublicKeyB64") ?? null;
 }
 
 function getGlobalWebSocketPair(): (new () => WebSocketPair) | undefined {
@@ -216,6 +228,68 @@ export class RelayDurableObject {
         ws.close(1008, "Replaced by new connection");
       }
     }
+  }
+
+  private getBoundRelayAuthPublicKeyB64(): string | null {
+    for (const ws of this.state.getWebSockets()) {
+      const publicKeyB64 = getRelayAuthPublicKeyFromAttachment(ws);
+      if (publicKeyB64) return publicKeyB64;
+    }
+    return null;
+  }
+
+  private verifyServerRelayAuth(params: {
+    request: Request;
+    serverId: string;
+    connectionId: string;
+  }): { allowed: true; publicKeyB64: string | null } | { allowed: false; response: Response } {
+    if (allowUnsignedServerAuth()) {
+      return { allowed: true, publicKeyB64: null };
+    }
+
+    const url = new URL(params.request.url);
+    const publicKeyB64 = url.searchParams.get("relayAuthPublicKeyB64")?.trim() ?? "";
+    const nonce = url.searchParams.get("relayAuthNonce")?.trim() ?? "";
+    const signatureB64 = url.searchParams.get("relayAuthSignatureB64")?.trim() ?? "";
+
+    if (!publicKeyB64 || !nonce || !signatureB64) {
+      return {
+        allowed: false,
+        response: new Response("Relay server auth required", { status: 401 }),
+      };
+    }
+
+    const boundPublicKeyB64 = this.getBoundRelayAuthPublicKeyB64();
+    if (boundPublicKeyB64 && boundPublicKeyB64 !== publicKeyB64) {
+      return {
+        allowed: false,
+        response: new Response("Relay server auth key mismatch", { status: 401 }),
+      };
+    }
+
+    try {
+      const verified = verifyRelayServerAuth({
+        publicKeyB64,
+        signatureB64,
+        serverId: params.serverId,
+        role: "server",
+        connectionId: params.connectionId,
+        nonce,
+      });
+      if (!verified) {
+        return {
+          allowed: false,
+          response: new Response("Relay server auth failed", { status: 401 }),
+        };
+      }
+    } catch {
+      return {
+        allowed: false,
+        response: new Response("Relay server auth failed", { status: 401 }),
+      };
+    }
+
+    return { allowed: true, publicKeyB64 };
   }
 
   // COMPAT(relay-json-ping): Old daemons (< v0.1.76) send JSON {type:"ping"} on the control
@@ -377,6 +451,18 @@ export class RelayDurableObject {
     const isServerControl = role === "server" && !resolvedConnectionId;
     const isServerData = role === "server" && !!resolvedConnectionId;
 
+    const serverAuth =
+      role === "server"
+        ? this.verifyServerRelayAuth({
+            request,
+            serverId,
+            connectionId: resolvedConnectionId,
+          })
+        : { allowed: true as const, publicKeyB64: null };
+    if (!serverAuth.allowed) {
+      return serverAuth.response;
+    }
+
     // Close any existing server-side connection with the same identity.
     // - server-control: single per serverId
     // - server-data: single per connectionId
@@ -401,6 +487,7 @@ export class RelayDurableObject {
       role,
       version: CURRENT_RELAY_VERSION,
       connectionId: resolvedConnectionId || null,
+      relayAuthPublicKeyB64: serverAuth.publicKeyB64,
       createdAt: Date.now(),
     };
     serializeAttachment(server, attachment);

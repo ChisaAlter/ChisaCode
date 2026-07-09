@@ -262,19 +262,19 @@ describe("selectorOpenRefetchDecision", () => {
     ).toBe("refetch-stale");
   });
 
-  it("forces a refetch when the selected provider has no entry", () => {
+  it("refreshes the snapshot when the selected provider has no entry", () => {
     expect(selectorOpenRefetchDecision({ entries: [], selectedProvider: "codex" })).toBe(
-      "refetch-always",
+      "refresh-now",
     );
   });
 
-  it("forces a refetch when the selected provider is still loading", () => {
+  it("refreshes the snapshot when the selected provider is still loading", () => {
     expect(
       selectorOpenRefetchDecision({
         entries: [codexEntry("loading")],
         selectedProvider: "codex",
       }),
-    ).toBe("refetch-always");
+    ).toBe("refresh-now");
   });
 
   it("keeps a stale-only refetch when the selected provider is ready with no models", () => {

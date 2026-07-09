@@ -95,6 +95,25 @@ describe("resolveWorkspaceMapKeyByIdentity", () => {
     ).toBe("workspace-1");
   });
 
+  it("matches Windows path workspace identities across slash variants", () => {
+    const workspaces = new Map<string, WorkspaceDescriptor>([
+      [
+        "C:/repo/feature",
+        createWorkspace({
+          id: "C:/repo/feature",
+          workspaceDirectory: "C:\\repo\\feature",
+        }),
+      ],
+    ]);
+
+    expect(
+      resolveWorkspaceMapKeyByIdentity({
+        workspaces,
+        workspaceId: "C:\\repo\\feature",
+      }),
+    ).toBe("C:/repo/feature");
+  });
+
   it("does not resolve workspace directories when an id is required", () => {
     const workspaces = new Map<string, WorkspaceDescriptor>([
       [

@@ -31,6 +31,7 @@ export interface AgentScreenMachineInput {
   needsAuthoritativeSync: boolean;
   continuity: AgentScreenContinuity;
   hasHydratedHistoryBefore: boolean;
+  hasCachedStreamItems: boolean;
 }
 
 export type AgentScreenContinuity =
@@ -43,6 +44,7 @@ function hasOptimisticCreateContinuity(input: AgentScreenMachineInput): boolean 
 
 function shouldBlockInitialAuthoritativeReadyState(input: AgentScreenMachineInput): boolean {
   return (
+    !input.agent &&
     !hasOptimisticCreateContinuity(input) &&
     !input.hasHydratedHistoryBefore &&
     (input.needsAuthoritativeSync || input.isHistorySyncing)
@@ -62,7 +64,7 @@ export type AgentScreenReadySyncState =
       status: "catching_up";
       ui: "overlay" | "silent";
     }
-  | { status: "sync_error" };
+  | { status: "sync_error"; message: string };
 
 export type AgentScreenViewState =
   | {
@@ -133,10 +135,12 @@ function resolveCatchingUpUi(args: {
   hasOptimisticCreateContinuity: boolean;
   hasHydratedHistoryBefore: boolean;
   hadInitialSyncFailure: boolean;
+  hasCachedStreamItems: boolean;
 }): "overlay" | "silent" {
   if (args.hasOptimisticCreateContinuity) return "silent";
   if (args.hasHydratedHistoryBefore) return "silent";
   if (args.hadInitialSyncFailure) return "silent";
+  if (args.hasCachedStreamItems) return "silent";
   return "overlay";
 }
 
@@ -149,7 +153,7 @@ function resolveAgentScreenSync(args: {
     return { status: "reconnecting" };
   }
   if (input.missingAgentState.kind === "error") {
-    return { status: "sync_error" };
+    return { status: "sync_error", message: input.missingAgentState.message };
   }
   if (input.needsAuthoritativeSync || input.isHistorySyncing) {
     return {
@@ -158,6 +162,7 @@ function resolveAgentScreenSync(args: {
         hasOptimisticCreateContinuity: hasOptimisticCreateContinuity(input),
         hasHydratedHistoryBefore: input.hasHydratedHistoryBefore,
         hadInitialSyncFailure,
+        hasCachedStreamItems: input.hasCachedStreamItems,
       }),
     };
   }
@@ -193,7 +198,7 @@ export function deriveAgentScreenViewState({
     };
   }
 
-  if (input.missingAgentState.kind === "error" && !nextMemory.hasRenderedReady) {
+  if (input.missingAgentState.kind === "error" && !candidateAgent && !nextMemory.hasRenderedReady) {
     return {
       state: {
         tag: "error",

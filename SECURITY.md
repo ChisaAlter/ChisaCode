@@ -26,6 +26,9 @@ The relay is designed to be untrusted. All traffic between your phone and daemon
 
 The relay sees only: IP addresses, timing, message sizes, session IDs, and the plaintext `e2ee_hello` / `e2ee_ready` handshake frames (which contain only public keys). It cannot read message contents, forge messages, or derive encryption keys from observing the handshake.
 
+Relay v2 daemon sockets are authenticated before the relay accepts them as `role=server`.
+Each daemon persists an Ed25519 relay-auth signing key alongside its E2EE keypair. Server-control and server-data WebSocket URLs include a nonce and signature over the server id, role, and connection id; the relay rejects missing or invalid signatures by default and will not let a socket signed by a different relay-auth public key replace an existing daemon socket for the same relay session. Legacy unsigned server sockets require the explicit `RELAY_ALLOW_UNSIGNED_SERVER_AUTH=1` Worker opt-in.
+
 ### Relay Encryption Security Semantics
 
 - **Key exchange**: Static ECDH (Elliptic Curve Diffie-Hellman) with Curve25519. The daemon generates a persistent key pair on first run. Each client connection generates a fresh ephemeral key pair. The shared secret is derived from the daemon's private key and the client's public key (and vice versa).

@@ -124,7 +124,7 @@ function resolveSelectedProviderModes(input: {
   providerDefinitionMap: Map<AgentProvider, AgentProviderDefinition>;
 }): AgentMode[] {
   const { selectedEntry, provider, providerDefinitionMap } = input;
-  if (selectedEntry?.modes) {
+  if (selectedEntry?.modes?.length) {
     return selectedEntry.modes;
   }
   if (provider) {

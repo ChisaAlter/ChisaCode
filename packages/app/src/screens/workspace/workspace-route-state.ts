@@ -24,6 +24,8 @@ export function resolveWorkspaceRouteState(input: {
   lastError: string | null;
   workspace: WorkspaceDescriptor | null;
   hasHydratedWorkspaces: boolean;
+  workspaceLookupTimedOut?: boolean;
+  routeMatchesHostName?: boolean;
 }): WorkspaceRouteState {
   if (input.workspace) {
     if (input.connectionStatus === "online") {
@@ -39,7 +41,11 @@ export function resolveWorkspaceRouteState(input: {
   }
 
   if (input.connectionStatus === "online") {
-    if (input.hasHydratedWorkspaces) {
+    if (
+      input.hasHydratedWorkspaces ||
+      input.workspaceLookupTimedOut === true ||
+      input.routeMatchesHostName === true
+    ) {
       return { kind: "missing", hostName: input.hostName };
     }
 

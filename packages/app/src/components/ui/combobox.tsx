@@ -19,6 +19,7 @@ import {
   StatusBar,
   useWindowDimensions,
   type LayoutChangeEvent,
+  type AccessibilityRole,
   type PressableStateCallbackType,
   type StyleProp,
   type TextStyle,
@@ -232,6 +233,7 @@ export interface ComboboxItemProps {
   elevated?: boolean;
   onPress: () => void;
   testID?: string;
+  accessibilityRole?: AccessibilityRole;
 }
 
 export function ComboboxItem({
@@ -247,6 +249,7 @@ export function ComboboxItem({
   elevated,
   onPress,
   testID,
+  accessibilityRole = "button",
 }: ComboboxItemProps): ReactElement {
   const { theme } = useUnistyles();
 
@@ -294,7 +297,7 @@ export function ComboboxItem({
       disabled={disabled}
       onPress={onPress}
       style={itemPressableStyle}
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       accessibilityState={a11yState}
       accessibilityLabel={label}
     >
@@ -852,7 +855,7 @@ function buildFloatingMiddleware(input: FloatingMiddlewareInput) {
   const { collisionPadding, isDesktopAboveSearch, setAvailableSize, setReferenceWidth } = input;
   return [
     floatingOffset(isWeb ? 5 : 4),
-    ...(isWeb ? [] : [flip({ padding: collisionPadding })]),
+    flip({ padding: collisionPadding }),
     ...(isDesktopAboveSearch ? [] : [shift({ padding: collisionPadding })]),
     floatingSize({
       padding: collisionPadding,

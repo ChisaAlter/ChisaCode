@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  exportRelayAuthPublicKey,
+  generateRelayAuthKeyPair,
+  signRelayServerAuth,
+} from "./crypto.js";
 import relayWorker, { RelayDurableObject } from "./cloudflare-adapter.js";
 
 type DurableObjectStateArg = ConstructorParameters<typeof RelayDurableObject>[0];
@@ -73,6 +78,41 @@ async function withMockWebSocketPair(
 
 const swallow = () => undefined;
 
+function signedServerUrl(params?: {
+  readonly serverId?: string;
+  readonly connectionId?: string;
+  readonly keyPair?: ReturnType<typeof generateRelayAuthKeyPair>;
+  readonly nonce?: string;
+  readonly signatureOverride?: string;
+}): string {
+  const serverId = params?.serverId ?? "srv_test";
+  const role = "server";
+  const connectionId = params?.connectionId ?? "";
+  const nonce = params?.nonce ?? "nonce-test";
+  const keyPair = params?.keyPair ?? generateRelayAuthKeyPair();
+  const publicKeyB64 = exportRelayAuthPublicKey(keyPair.publicKey);
+  const signatureB64 =
+    params?.signatureOverride ??
+    signRelayServerAuth({
+      secretKey: keyPair.secretKey,
+      serverId,
+      role,
+      connectionId,
+      nonce,
+    });
+  const url = new URL("https://relay.test/ws");
+  url.searchParams.set("role", role);
+  url.searchParams.set("serverId", serverId);
+  url.searchParams.set("v", "2");
+  if (connectionId) {
+    url.searchParams.set("connectionId", connectionId);
+  }
+  url.searchParams.set("relayAuthPublicKeyB64", publicKeyB64);
+  url.searchParams.set("relayAuthNonce", nonce);
+  url.searchParams.set("relayAuthSignatureB64", signatureB64);
+  return url.toString();
+}
+
 describe("RelayDurableObject versioning", () => {
   it("rejects legacy v1 sockets by default (v1 has no E2EE / no relay auth)", async () => {
     const { state } = createMockState();
@@ -125,6 +165,64 @@ describe("RelayDurableObject versioning", () => {
       expect(state.acceptWebSocket).toHaveBeenCalled();
       const attachment = serverWs.deserializeAttachment();
       expect(attachment).toMatchObject({ role: "client", version: "2" });
+    });
+  });
+
+  it("rejects unsigned v2 server sockets by default", async () => {
+    const { state } = createMockState();
+    await withMockWebSocketPair(async () => {
+      const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+      const req = new Request("https://relay.test/ws?role=server&serverId=srv_test&v=2", {
+        headers: { Upgrade: "websocket" },
+      });
+
+      const response = await relay.fetch(req);
+
+      expect(response.status).toBe(401);
+      expect(state.acceptWebSocket).not.toHaveBeenCalled();
+    });
+  });
+
+  it("accepts v2 server sockets with a valid relay auth signature", async () => {
+    const { state } = createMockState();
+    await withMockWebSocketPair(async ({ serverWs }) => {
+      const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+      const req = new Request(signedServerUrl(), { headers: { Upgrade: "websocket" } });
+
+      await relay.fetch(req).catch(swallow);
+
+      expect(state.acceptWebSocket).toHaveBeenCalled();
+      expect(serverWs.deserializeAttachment()).toMatchObject({
+        role: "server",
+        relayAuthPublicKeyB64: expect.any(String),
+      });
+    });
+  });
+
+  it("rejects a second v2 server socket signed by a different relay auth key", async () => {
+    const firstKeyPair = generateRelayAuthKeyPair();
+    const existingControl = createMockSocket({
+      version: "2",
+      role: "server",
+      connectionId: null,
+      serverId: "srv_test",
+      relayAuthPublicKeyB64: exportRelayAuthPublicKey(firstKeyPair.publicKey),
+      createdAt: Date.now(),
+    });
+    const { state, setTagSockets } = createMockState();
+    setTagSockets("server-control", [existingControl]);
+
+    await withMockWebSocketPair(async () => {
+      const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+      const req = new Request(signedServerUrl({ keyPair: generateRelayAuthKeyPair() }), {
+        headers: { Upgrade: "websocket" },
+      });
+
+      const response = await relay.fetch(req);
+
+      expect(response.status).toBe(401);
+      expect(existingControl.close).not.toHaveBeenCalled();
+      expect(state.acceptWebSocket).not.toHaveBeenCalled();
     });
   });
 

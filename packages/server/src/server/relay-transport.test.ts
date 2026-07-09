@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type pino from "pino";
+import { generateRelayAuthKeyPair } from "@chisacode/relay/e2ee";
 import { startRelayTransport } from "./relay-transport";
 
 function createMockLogger() {
@@ -257,5 +258,32 @@ describe("relay-transport control lifecycle", () => {
 
     expect(relay.sockets[0]?.url).toMatch(/^wss:\/\/\[::1\]\/ws\?/);
     expect(relay.sockets[1]?.url).toMatch(/^wss:\/\/\[::1\]\/ws\?/);
+  });
+
+  test("signs relay server control and data socket URLs when relay auth key is present", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      daemonRelayAuthKeyPair: generateRelayAuthKeyPair(),
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "connected", connectionId: "clt_test" }));
+
+    const controlUrl = new URL(relay.sockets[0]?.url ?? "");
+    const dataUrl = new URL(relay.sockets[1]?.url ?? "");
+    expect(controlUrl.searchParams.get("relayAuthPublicKeyB64")).toBeTruthy();
+    expect(controlUrl.searchParams.get("relayAuthNonce")).toBeTruthy();
+    expect(controlUrl.searchParams.get("relayAuthSignatureB64")).toBeTruthy();
+    expect(dataUrl.searchParams.get("relayAuthPublicKeyB64")).toBeTruthy();
+    expect(dataUrl.searchParams.get("relayAuthNonce")).toBeTruthy();
+    expect(dataUrl.searchParams.get("relayAuthSignatureB64")).toBeTruthy();
   });
 });

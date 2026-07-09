@@ -41,6 +41,7 @@ export async function generateLocalPairingOffer(args: {
   const offer = await createConnectionOfferV2({
     serverId,
     daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
+    relayAuthPublicKeyB64: daemonKeyPair.relayAuthPublicKeyB64,
     relay: { endpoint: relayPublicEndpoint, useTls: relayPublicUseTls },
   });
   const url = encodeOfferToFragmentUrl({ offer, appBaseUrl });

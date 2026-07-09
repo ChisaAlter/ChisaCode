@@ -4,6 +4,7 @@ import {
   applyWindowControlsOverlayUpdate,
   createWindowControlsOverlayState,
   getMainWindowChromeOptions,
+  getMainWindowSizingOptions,
   getTitleBarOverlayOptions,
   readBadgeCount,
   readWindowControlsOverlayUpdate,
@@ -79,6 +80,10 @@ describe("window-manager", () => {
       expect(readWindowControlsOverlayUpdate({})).toBeNull();
       expect(readWindowControlsOverlayUpdate({ height: 0 })).toBeNull();
       expect(readWindowControlsOverlayUpdate({ backgroundColor: 12 })).toBeNull();
+      expect(readWindowControlsOverlayUpdate({ backgroundColor: "transparent" })).toBeNull();
+      expect(
+        readWindowControlsOverlayUpdate({ backgroundColor: "rgba(255, 255, 255, 0.7)" }),
+      ).toBeNull();
     });
   });
 
@@ -137,6 +142,13 @@ describe("window-manager", () => {
   });
 
   describe("getMainWindowChromeOptions", () => {
+    it("sets a usable minimum size for the desktop shell", () => {
+      expect(getMainWindowSizingOptions()).toEqual({
+        minWidth: 980,
+        minHeight: 720,
+      });
+    });
+
     it("uses frameless hidden title bars with overlay on windows", () => {
       expect(
         getMainWindowChromeOptions({

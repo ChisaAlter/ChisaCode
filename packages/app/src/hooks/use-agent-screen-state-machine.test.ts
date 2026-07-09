@@ -64,6 +64,7 @@ function createBaseInput(): AgentScreenMachineInput {
     isHistorySyncing: false,
     needsAuthoritativeSync: false,
     hasHydratedHistoryBefore: false,
+    hasCachedStreamItems: false,
   };
 }
 
@@ -94,8 +95,12 @@ function expectCatchingUpSync(state: ReadyState): CatchingUpSyncState {
   return state.sync;
 }
 
-function expectSyncErrorSync(state: ReadyState): void {
+function expectSyncErrorSync(state: ReadyState, message = "network timeout"): void {
   expect(state.sync.status).toBe("sync_error");
+  if (state.sync.status !== "sync_error") {
+    throw new Error("expected sync_error sync state");
+  }
+  expect(state.sync.message).toContain(message);
 }
 
 function stateMachineLabel(state: AgentScreenViewState): "loading" | "resolving" | Agent["status"] {
@@ -202,7 +207,7 @@ describe("deriveAgentScreenViewState", () => {
 
     const result = deriveAgentScreenViewState({ input, memory });
     const ready = expectReadyState(result.state);
-    expectSyncErrorSync(ready);
+    expectSyncErrorSync(ready, "network timeout");
   });
 
   it("remembers first-load sync failure and keeps catch-up overlay off after error clears", () => {
@@ -252,7 +257,7 @@ describe("deriveAgentScreenViewState", () => {
 
     const result = deriveAgentScreenViewState({ input, memory });
     const ready = expectReadyState(result.state);
-    expectSyncErrorSync(ready);
+    expectSyncErrorSync(ready, "network timeout");
 
     expect(ready.source).toBe("stale");
     expect(ready.agent.id).toBe("agent-1");
@@ -307,7 +312,7 @@ describe("deriveAgentScreenViewState", () => {
     expect(ready.sync.status).toBe("idle");
   });
 
-  it("keeps first route entry blocked until authoritative history is applied", () => {
+  it("overlays first history sync for a persisted agent before showing empty chat", () => {
     const memory = createBaseMemory();
     const input: AgentScreenMachineInput = {
       ...createBaseInput(),
@@ -318,14 +323,53 @@ describe("deriveAgentScreenViewState", () => {
     };
 
     const result = deriveAgentScreenViewState({ input, memory });
+    const ready = expectReadyState(result.state);
+    const sync = expectCatchingUpSync(ready);
 
-    expect(result.state).toEqual({
-      tag: "boot",
-      reason: "loading",
-      source: "none",
-    });
-    expect(result.memory.hasRenderedReady).toBe(false);
-    expect(result.memory.lastReadyAgent).toBeNull();
+    expect(ready.source).toBe("authoritative");
+    expect(ready.agent.id).toBe("agent-1");
+    expect(sync.ui).toBe("overlay");
+    expect(result.memory.hasRenderedReady).toBe(true);
+    expect(result.memory.lastReadyAgent?.id).toBe("agent-1");
+  });
+
+  it("keeps cached stream visible while first history sync catches up", () => {
+    const memory = createBaseMemory();
+    const input: AgentScreenMachineInput = {
+      ...createBaseInput(),
+      agent: createAgent("agent-1"),
+      needsAuthoritativeSync: true,
+      isHistorySyncing: true,
+      hasHydratedHistoryBefore: false,
+      hasCachedStreamItems: true,
+    };
+
+    const result = deriveAgentScreenViewState({ input, memory });
+    const ready = expectReadyState(result.state);
+    const sync = expectCatchingUpSync(ready);
+
+    expect(ready.source).toBe("authoritative");
+    expect(ready.agent.id).toBe("agent-1");
+    expect(sync.ui).toBe("silent");
+    expect(result.memory.hasRenderedReady).toBe(true);
+    expect(result.memory.lastReadyAgent?.id).toBe("agent-1");
+  });
+
+  it("keeps a persisted agent usable when first history sync fails", () => {
+    const memory = createBaseMemory();
+    const input: AgentScreenMachineInput = {
+      ...createBaseInput(),
+      agent: createAgent("agent-1"),
+      missingAgentState: { kind: "error", message: "History sync timed out after 30s" },
+    };
+
+    const result = deriveAgentScreenViewState({ input, memory });
+    const ready = expectReadyState(result.state);
+
+    expect(ready.source).toBe("authoritative");
+    expect(ready.agent.id).toBe("agent-1");
+    expectSyncErrorSync(ready, "History sync timed out");
+    expect(result.memory.hasRenderedReady).toBe(true);
   });
 
   it("still allows optimistic create flow to render before authoritative history arrives", () => {

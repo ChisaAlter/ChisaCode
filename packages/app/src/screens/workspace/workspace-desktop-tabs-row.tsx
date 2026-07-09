@@ -25,6 +25,7 @@ import {
   Columns2,
   Copy,
   Globe2,
+  MoreHorizontal,
   Pencil,
   Plus,
   RotateCw,
@@ -46,12 +47,19 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TITLEBAR_NO_DRAG_VIEW_STYLE } from "@/components/desktop/titlebar-drag-region";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT, TAB_DROPDOWN_WIDTH } from "@/constants/layout";
 import { useWorkspaceTabLayout } from "@/screens/workspace/use-workspace-tab-layout";
+import { computeWorkspaceVisibleTabWindow } from "@/screens/workspace/workspace-tab-layout";
 import {
   WorkspaceTabPresentationResolver,
   WorkspaceTabIcon,
@@ -67,6 +75,9 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import type { Theme } from "@/styles/theme";
 
 const LOADING_TAB_LABEL_SKELETON_WIDTH = 80;
+const OVERFLOW_MENU_RESERVED_WIDTH = 40;
+const OVERFLOW_MENU_MAX_HEIGHT = 520;
+const OVERFLOW_TAB_WIDTH = 132;
 
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedX = withUnistyles(X);
@@ -81,6 +92,7 @@ const ThemedSquareTerminal = withUnistyles(SquareTerminal);
 const ThemedColumns2 = withUnistyles(Columns2);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedGlobe2 = withUnistyles(Globe2);
+const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -199,6 +211,254 @@ function getFallbackTabLabel(
     return tab.target.path.split("/").findLast(Boolean) ?? tab.target.path;
   }
   return labels.agent;
+}
+
+function WorkspaceOverflowTabMenuItem({
+  tab,
+  normalizedServerId,
+  normalizedWorkspaceId,
+  onNavigateTab,
+}: {
+  tab: WorkspaceDesktopTabRowItem;
+  normalizedServerId: string;
+  normalizedWorkspaceId: string;
+  onNavigateTab: (tabId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handleSelect = useCallback(() => {
+    onNavigateTab(tab.tab.tabId);
+  }, [onNavigateTab, tab.tab.tabId]);
+
+  return (
+    <WorkspaceTabPresentationResolver
+      tab={tab.tab}
+      serverId={normalizedServerId}
+      workspaceId={normalizedWorkspaceId}
+    >
+      {(presentation) => (
+        <WorkspaceOverflowResolvedTabMenuItem
+          tab={tab}
+          presentation={presentation}
+          label={presentation.titleState === "loading" ? t("common.loading") : presentation.label}
+          onSelect={handleSelect}
+        />
+      )}
+    </WorkspaceTabPresentationResolver>
+  );
+}
+
+function WorkspaceOverflowResolvedTabMenuItem({
+  tab,
+  presentation,
+  label,
+  onSelect,
+}: {
+  tab: WorkspaceDesktopTabRowItem;
+  presentation: WorkspaceTabPresentation;
+  label: string;
+  onSelect: () => void;
+}) {
+  const leading = useMemo(
+    () => <WorkspaceTabIcon presentation={presentation} active={tab.isActive} />,
+    [presentation, tab.isActive],
+  );
+
+  return (
+    <DropdownMenuItem
+      testID={`workspace-tabs-overflow-item-${buildDeterministicWorkspaceTabId(tab.tab.target)}`}
+      description={presentation.subtitle}
+      leading={leading}
+      selected={tab.isActive}
+      onSelect={onSelect}
+    >
+      {label}
+    </DropdownMenuItem>
+  );
+}
+
+function WorkspaceTabsOverflowMenu({
+  hiddenTabs,
+  normalizedServerId,
+  normalizedWorkspaceId,
+  onNavigateTab,
+}: {
+  hiddenTabs: WorkspaceDesktopTabRowItem[];
+  normalizedServerId: string;
+  normalizedWorkspaceId: string;
+  onNavigateTab: (tabId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const overflowLabel = t("workspace.desktopTabs.moreTabs", { count: hiddenTabs.length });
+
+  if (hiddenTabs.length === 0) {
+    return null;
+  }
+
+  return (
+    <DropdownMenu>
+      <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+        <TooltipTrigger asChild triggerRefProp="triggerRef">
+          <DropdownMenuTrigger
+            testID="workspace-tabs-overflow-menu"
+            accessibilityRole="button"
+            accessibilityLabel={overflowLabel}
+            style={newTabActionButtonStyle}
+          >
+            <ThemedMoreHorizontal size={16} uniProps={mutedColorMapping} />
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="center" offset={8}>
+          <Text style={styles.newTabTooltipText}>{overflowLabel}</Text>
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent
+        align="end"
+        maxHeight={OVERFLOW_MENU_MAX_HEIGHT}
+        scrollable
+        width={TAB_DROPDOWN_WIDTH}
+        testID="workspace-tabs-overflow-content"
+      >
+        {hiddenTabs.map((tab) => (
+          <WorkspaceOverflowTabMenuItem
+            key={tabKeyExtractor(tab)}
+            tab={tab}
+            normalizedServerId={normalizedServerId}
+            normalizedWorkspaceId={normalizedWorkspaceId}
+            onNavigateTab={onNavigateTab}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function useVisibleWorkspaceTabs({
+  requiresOverflow,
+  tabs,
+  tabsActionsWidth,
+  tabsContainerWidth,
+}: {
+  requiresOverflow: boolean;
+  tabs: readonly WorkspaceDesktopTabRowItem[];
+  tabsActionsWidth: number;
+  tabsContainerWidth: number;
+}): {
+  visibleTabs: WorkspaceDesktopTabRowItem[];
+  hiddenTabs: WorkspaceDesktopTabRowItem[];
+} {
+  const visibleTabWindow = useMemo(() => {
+    if (!requiresOverflow) {
+      return computeWorkspaceVisibleTabWindow({
+        tabCount: tabs.length,
+        activeIndex: 0,
+        maxVisibleTabs: tabs.length,
+      });
+    }
+
+    const activeIndex = Math.max(
+      0,
+      tabs.findIndex((tab) => tab.isActive),
+    );
+    const availableTabsWidth = Math.max(
+      OVERFLOW_TAB_WIDTH,
+      tabsContainerWidth - tabsActionsWidth - OVERFLOW_MENU_RESERVED_WIDTH,
+    );
+    const maxVisibleTabs = Math.max(1, Math.floor(availableTabsWidth / OVERFLOW_TAB_WIDTH));
+
+    return computeWorkspaceVisibleTabWindow({
+      tabCount: tabs.length,
+      activeIndex,
+      maxVisibleTabs,
+    });
+  }, [requiresOverflow, tabs, tabsActionsWidth, tabsContainerWidth]);
+
+  const visibleTabs = useMemo(
+    () => tabs.slice(visibleTabWindow.startIndex, visibleTabWindow.endIndex),
+    [tabs, visibleTabWindow.endIndex, visibleTabWindow.startIndex],
+  );
+  const hiddenTabs = useMemo(
+    () =>
+      requiresOverflow
+        ? tabs.filter(
+            (_tab, index) =>
+              index < visibleTabWindow.startIndex || index >= visibleTabWindow.endIndex,
+          )
+        : [],
+    [requiresOverflow, tabs, visibleTabWindow.endIndex, visibleTabWindow.startIndex],
+  );
+
+  return { visibleTabs, hiddenTabs };
+}
+
+function WorkspaceOptionalBrowserTabButton({
+  showCreateBrowserTab,
+  onCreateBrowserTab,
+}: {
+  showCreateBrowserTab: boolean;
+  onCreateBrowserTab: () => void;
+}) {
+  const { t } = useTranslation();
+
+  if (!showCreateBrowserTab) {
+    return null;
+  }
+
+  return (
+    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+      <TooltipTrigger
+        testID="workspace-new-browser"
+        onPress={onCreateBrowserTab}
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.newBrowserTab")}
+        style={newTabActionButtonStyle}
+      >
+        <ThemedGlobe2 size={16} uniProps={mutedColorMapping} />
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center" offset={8}>
+        <View style={styles.newTabTooltipRow}>
+          <Text style={styles.newTabTooltipText}>{t("workspace.newBrowserTab")}</Text>
+        </View>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function WorkspaceOptionalSplitRightButton({
+  showPaneSplitActions,
+  onSplitRight,
+  splitRightKeys,
+}: {
+  showPaneSplitActions: boolean;
+  onSplitRight: () => void;
+  splitRightKeys: ReturnType<typeof useShortcutKeys>;
+}) {
+  const { t } = useTranslation();
+
+  if (!showPaneSplitActions) {
+    return null;
+  }
+
+  return (
+    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+      <TooltipTrigger
+        testID="workspace-split-right"
+        onPress={onSplitRight}
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.desktopTabs.splitPaneRight")}
+        style={newTabActionButtonStyle}
+      >
+        <ThemedColumns2 size={16} uniProps={mutedColorMapping} />
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center" offset={8}>
+        <View style={styles.newTabTooltipRow}>
+          <Text style={styles.newTabTooltipText}>{t("workspace.desktopTabs.splitPaneRight")}</Text>
+          {splitRightKeys ? (
+            <Shortcut chord={splitRightKeys} style={styles.newTabTooltipShortcut} />
+          ) : null}
+        </View>
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 function useMiddleClickClose(onClose: () => void) {
@@ -552,6 +812,12 @@ export function WorkspaceDesktopTabsRow({
     viewportWidthOverride: tabsContainerWidth > 0 ? tabsContainerWidth : null,
     metrics: layoutMetrics,
   });
+  const { visibleTabs, hiddenTabs } = useVisibleWorkspaceTabs({
+    requiresOverflow: layout.requiresHorizontalScrollFallback,
+    tabs,
+    tabsActionsWidth,
+    tabsContainerWidth,
+  });
 
   const handleDragEnd = useCallback(
     (nextTabs: WorkspaceDesktopTabRowItem[]) => {
@@ -598,21 +864,24 @@ export function WorkspaceDesktopTabsRow({
       isActive,
     }: DraggableRenderItemInfo<WorkspaceDesktopTabRowItem>) => {
       const shouldShowCloseButton = layout.closeButtonPolicy === "all";
-      const layoutItem = layout.items[index] ?? null;
+      const originalIndex = tabs.findIndex((tab) => tab.tab.tabId === item.tab.tabId);
+      const layoutItem = layout.items[originalIndex >= 0 ? originalIndex : index] ?? null;
       const resolvedTabWidth = layoutItem?.width ?? 150;
       const showLabel = layoutItem?.showLabel ?? true;
-      const showDropIndicatorBefore = activeDragTabId !== null && tabDropPreviewIndex === index;
+      const resolvedIndex = originalIndex >= 0 ? originalIndex : index;
+      const showDropIndicatorBefore =
+        activeDragTabId !== null && tabDropPreviewIndex === resolvedIndex;
       const showDropIndicatorAfter =
         activeDragTabId !== null &&
         tabDropPreviewIndex === tabs.length &&
-        index === tabs.length - 1;
+        resolvedIndex === tabs.length - 1;
 
       return (
         <ResolvedDesktopTabChip
           key={`${item.tab.key}:${item.tab.kind}`}
           item={item}
           isDragging={isActive}
-          index={index}
+          index={resolvedIndex}
           tabCount={tabs.length}
           normalizedServerId={normalizedServerId}
           normalizedWorkspaceId={normalizedWorkspaceId}
@@ -654,7 +923,7 @@ export function WorkspaceDesktopTabsRow({
       setHoveredCloseTabKey,
       setHoveredTabKey,
       tabDropPreviewIndex,
-      tabs.length,
+      tabs,
     ],
   );
 
@@ -676,18 +945,20 @@ export function WorkspaceDesktopTabsRow({
     >
       <ScrollView
         horizontal
-        scrollEnabled={layout.requiresHorizontalScrollFallback}
+        scrollEnabled={false}
         testID="workspace-tabs-scroll"
         style={tabsScrollStyle}
         contentContainerStyle={styles.tabsContent}
         showsHorizontalScrollIndicator={false}
       >
         <SortableInlineList
-          data={tabs}
+          data={visibleTabs}
           keyExtractor={tabKeyExtractor}
           useDragHandle
-          disabled={!externalDndContext && tabs.length < 2}
-          onDragEnd={handleDragEnd}
+          disabled={
+            layout.requiresHorizontalScrollFallback || (!externalDndContext && tabs.length < 2)
+          }
+          onDragEnd={layout.requiresHorizontalScrollFallback ? undefined : handleDragEnd}
           externalDndContext={externalDndContext}
           activeId={activeDragTabId}
           getItemData={getTabDragData}
@@ -718,6 +989,12 @@ export function WorkspaceDesktopTabsRow({
         style={TABS_ACTIONS_STYLE}
         onLayout={handleTabsActionsLayout}
       >
+        <WorkspaceTabsOverflowMenu
+          hiddenTabs={hiddenTabs}
+          normalizedServerId={normalizedServerId}
+          normalizedWorkspaceId={normalizedWorkspaceId}
+          onNavigateTab={onNavigateTab}
+        />
         <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
           <TooltipTrigger
             testID="workspace-new-agent-tab"
@@ -765,47 +1042,15 @@ export function WorkspaceDesktopTabsRow({
             </View>
           </TooltipContent>
         </Tooltip>
-        {showCreateBrowserTab ? (
-          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-            <TooltipTrigger
-              testID="workspace-new-browser"
-              onPress={handleCreateBrowserTab}
-              accessibilityRole="button"
-              accessibilityLabel={t("workspace.newBrowserTab")}
-              style={newTabActionButtonStyle}
-            >
-              <ThemedGlobe2 size={16} uniProps={mutedColorMapping} />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" offset={8}>
-              <View style={styles.newTabTooltipRow}>
-                <Text style={styles.newTabTooltipText}>{t("workspace.newBrowserTab")}</Text>
-              </View>
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-        {showPaneSplitActions ? (
-          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-            <TooltipTrigger
-              testID="workspace-split-right"
-              onPress={onSplitRight}
-              accessibilityRole="button"
-              accessibilityLabel={t("workspace.desktopTabs.splitPaneRight")}
-              style={newTabActionButtonStyle}
-            >
-              <ThemedColumns2 size={16} uniProps={mutedColorMapping} />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" offset={8}>
-              <View style={styles.newTabTooltipRow}>
-                <Text style={styles.newTabTooltipText}>
-                  {t("workspace.desktopTabs.splitPaneRight")}
-                </Text>
-                {splitRightKeys ? (
-                  <Shortcut chord={splitRightKeys} style={styles.newTabTooltipShortcut} />
-                ) : null}
-              </View>
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
+        <WorkspaceOptionalBrowserTabButton
+          showCreateBrowserTab={showCreateBrowserTab}
+          onCreateBrowserTab={handleCreateBrowserTab}
+        />
+        <WorkspaceOptionalSplitRightButton
+          showPaneSplitActions={showPaneSplitActions}
+          onSplitRight={onSplitRight}
+          splitRightKeys={splitRightKeys}
+        />
         {trailingControls}
       </View>
     </View>

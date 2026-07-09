@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -70,6 +70,24 @@ class FakeDaemonRuntime implements DaemonLaunchRuntime {
 
 const tempRoots: string[] = [];
 
+function isPidRunningForTest(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function findUnusedPid(): number {
+  for (let pid = 2_000_000_000; pid > 1_999_999_000; pid -= 1) {
+    if (!isPidRunningForTest(pid)) {
+      return pid;
+    }
+  }
+  throw new Error("Could not find an unused pid for local daemon test");
+}
+
 async function createChisaCodeHome(config: unknown): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "chisacode-local-daemon-"));
   tempRoots.push(root);
@@ -77,6 +95,25 @@ async function createChisaCodeHome(config: unknown): Promise<string> {
   await mkdir(chisacodeHome, { recursive: true });
   await writeFile(path.join(chisacodeHome, "config.json"), JSON.stringify(config, null, 2));
   return chisacodeHome;
+}
+
+async function writePidFile(
+  home: string,
+  pidInfo: { pid: number; desktopManaged?: boolean },
+): Promise<string> {
+  const pidPath = path.join(home, "chisacode.pid");
+  await writeFile(
+    pidPath,
+    JSON.stringify({
+      pid: pidInfo.pid,
+      startedAt: "2000-01-01T00:00:00.000Z",
+      hostname: "old-host",
+      uid: 0,
+      listen: "127.0.0.1:6767",
+      ...(pidInfo.desktopManaged === true ? { desktopManaged: true } : {}),
+    }),
+  );
+  return pidPath;
 }
 
 function expectSupervisorLaunch(argv: string[]): void {
@@ -127,7 +164,10 @@ describe("local daemon launch supervision", () => {
     await vi.advanceTimersByTimeAsync(1200);
     const result = await resultPromise;
 
-    expect(result).toEqual({ pid: 4242, logPath: "/tmp/chisacode-test/daemon.log" });
+    expect(result).toEqual({
+      pid: 4242,
+      logPath: path.join("/tmp/chisacode-test", "daemon.log"),
+    });
     expect(runtime.daemonProcess.wasUnreferenced).toBe(true);
     expect(runtime.recordedLaunches.map((launch) => launch.mode)).toEqual(["detached"]);
     const launch = runtime.recordedLaunches[0];
@@ -174,5 +214,30 @@ describe("local daemon launch supervision", () => {
     expect(state.relayEndpoint).toBe("chisacode.example.com");
     expect(state.relayUseTls).toBe(false);
     expect(state.relayPublicUseTls).toBe(true);
+  });
+
+  test("local daemon state removes stale desktop-managed PID files", async () => {
+    const home = await createChisaCodeHome({ version: 1 });
+    const pidPath = await writePidFile(home, { pid: findUnusedPid(), desktopManaged: true });
+
+    const state = resolveLocalDaemonState({ home });
+
+    expect(state.pidInfo).toBeNull();
+    expect(state.running).toBe(false);
+    expect(state.stalePidFile).toBe(false);
+    await expect(access(pidPath)).rejects.toThrow();
+  });
+
+  test("local daemon state preserves stale non-desktop PID files", async () => {
+    const home = await createChisaCodeHome({ version: 1 });
+    const pid = findUnusedPid();
+    const pidPath = await writePidFile(home, { pid });
+
+    const state = resolveLocalDaemonState({ home });
+
+    expect(state.pidInfo?.pid).toBe(pid);
+    expect(state.running).toBe(false);
+    expect(state.stalePidFile).toBe(true);
+    await expect(access(pidPath)).resolves.toBeUndefined();
   });
 });

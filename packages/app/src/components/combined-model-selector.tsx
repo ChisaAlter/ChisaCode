@@ -218,6 +218,7 @@ function ModelRow({
       onPress={onPress}
       leadingSlot={leadingSlot}
       trailingSlot={trailingSlot}
+      accessibilityRole={onToggleFavorite ? "menuitem" : "button"}
     />
   );
 }
@@ -354,7 +355,12 @@ function GroupProviderButton({ provider, onDrillDown }: GroupProviderButtonProps
   }
 
   return (
-    <Pressable onPress={handlePress} style={drillDownRowStyle}>
+    <Pressable
+      onPress={handlePress}
+      style={drillDownRowStyle}
+      accessibilityRole="button"
+      accessibilityLabel={provider.label}
+    >
       <ProvIcon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
       <Text style={styles.drillDownText}>{provider.label}</Text>
       <View style={styles.drillDownTrailing}>

@@ -62,6 +62,7 @@ import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
 import type { Theme } from "@/styles/theme";
 import { useArchiveSubagent, useSubagentsForParent } from "@/subagents";
 import { SubagentsTrack } from "@/subagents/track";
+import { loadCachedAgentStreamTail } from "@/timeline/agent-stream-tail-cache";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem } from "@/types/stream";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
@@ -726,6 +727,13 @@ function ChatAgentContent({
       ? state.sessions[serverId]?.agentAuthoritativeHistoryApplied?.get(agentId) === true
       : false,
   );
+  const hasCachedStreamItems = useSessionStore((state) => {
+    if (!agentId) {
+      return false;
+    }
+    const streamItems = state.sessions[serverId]?.agentStreamTail?.get(agentId);
+    return Boolean(streamItems && streamItems.length > 0);
+  });
   const agentHistorySyncGeneration = useSessionStore((state) =>
     agentId ? (state.sessions[serverId]?.agentHistorySyncGeneration?.get(agentId) ?? -1) : -1,
   );
@@ -881,6 +889,7 @@ function ChatAgentContent({
       needsAuthoritativeSync,
       continuity,
       hasHydratedHistoryBefore,
+      hasCachedStreamItems,
     },
   });
 
@@ -918,6 +927,51 @@ function ChatAgentContent({
   }, [agentId]);
 
   useEffect(() => {
+    if (!agentId || !hasSession) {
+      return;
+    }
+
+    const cachedAgentId = agentId;
+    const currentTail = useSessionStore
+      .getState()
+      .sessions[serverId]?.agentStreamTail.get(cachedAgentId);
+    if (currentTail && currentTail.length > 0) {
+      return;
+    }
+
+    let cancelled = false;
+    async function hydrateCachedStreamTail(): Promise<void> {
+      try {
+        const cachedItems = await loadCachedAgentStreamTail({ serverId, agentId: cachedAgentId });
+        if (cancelled || cachedItems.length === 0) {
+          return;
+        }
+        useSessionStore.getState().setAgentStreamTail(serverId, (prev) => {
+          const latestTail = prev.get(cachedAgentId);
+          if (latestTail && latestTail.length > 0) {
+            return prev;
+          }
+          const next = new Map(prev);
+          next.set(cachedAgentId, cachedItems);
+          return next;
+        });
+      } catch (error) {
+        console.warn("[AgentPanel] failed to hydrate cached agent stream tail", {
+          serverId,
+          agentId: cachedAgentId,
+          error,
+        });
+      }
+    }
+
+    void hydrateCachedStreamTail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, hasSession, serverId]);
+
+  useEffect(() => {
     if (!agentId) {
       return;
     }
@@ -948,7 +1002,7 @@ function ChatAgentContent({
       return;
     }
     if (agentState.id) {
-      if (missingAgentState.kind !== "idle") {
+      if (missingAgentState.kind === "resolving" || missingAgentState.kind === "not_found") {
         setMissingAgentState({ kind: "idle" });
       }
       return;
@@ -1013,6 +1067,12 @@ function ChatAgentContent({
     serverId,
   ]);
 
+  useEffect(() => {
+    if (missingAgentState.kind === "error" && hasAppliedAuthoritativeHistory) {
+      setMissingAgentState({ kind: "idle" });
+    }
+  }, [hasAppliedAuthoritativeHistory, missingAgentState.kind]);
+
   const animatedContentStyle = useMemo(
     () => [styles.content, animatedKeyboardStyle],
     [animatedKeyboardStyle],
@@ -1035,6 +1095,10 @@ function ChatAgentContent({
     viewState.tag === "ready" &&
     viewState.sync.status === "catching_up" &&
     viewState.sync.ui === "overlay";
+  const historySyncErrorMessage =
+    viewState.tag === "ready" && viewState.sync.status === "sync_error"
+      ? viewState.sync.message
+      : null;
 
   return (
     <ChatAgentReadyContent
@@ -1054,6 +1118,7 @@ function ChatAgentContent({
       handleComposerHeightChange={handleComposerHeightChange}
       handleMessageSent={handleMessageSent}
       showHistorySyncOverlay={showHistorySyncOverlay}
+      historySyncErrorMessage={historySyncErrorMessage}
       cwd={agentCwd}
       attentionController={attentionController}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
@@ -1078,6 +1143,7 @@ function ChatAgentReadyContent({
   handleComposerHeightChange,
   handleMessageSent,
   showHistorySyncOverlay,
+  historySyncErrorMessage,
   cwd,
   attentionController,
   onOpenWorkspaceFile,
@@ -1098,6 +1164,7 @@ function ChatAgentReadyContent({
   handleComposerHeightChange: (height: number) => void;
   handleMessageSent: () => void;
   showHistorySyncOverlay: boolean;
+  historySyncErrorMessage: string | null;
   cwd: string;
   attentionController: ReturnType<typeof useAgentAttentionClear>;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
@@ -1128,7 +1195,21 @@ function ChatAgentReadyContent({
                   onOpenWorkspaceFile={onOpenWorkspaceFile}
                 />
               </ReanimatedAnimated.View>
+
+              {showHistorySyncOverlay ? (
+                <HistorySyncProgressBanner
+                  title={t("panels.agent.historySyncingTitle")}
+                  subtitle={t("panels.agent.historySyncingSubtitle")}
+                />
+              ) : null}
             </View>
+
+            {historySyncErrorMessage ? (
+              <HistorySyncErrorBanner
+                title={t("panels.agent.historySyncFailed")}
+                message={historySyncErrorMessage}
+              />
+            ) : null}
 
             <AgentComposerSection
               agentId={agentId}
@@ -1145,12 +1226,6 @@ function ChatAgentReadyContent({
               onComposerHeightChange={handleComposerHeightChange}
               onMessageSent={handleMessageSent}
             />
-
-            {showHistorySyncOverlay ? (
-              <View style={styles.historySyncOverlay} testID="agent-history-overlay">
-                <ThemedActivityIndicator size="large" uniProps={foregroundMutedColorMapping} />
-              </View>
-            ) : null}
 
             <ToastViewport
               toasts={panelToast.toasts}
@@ -1169,6 +1244,37 @@ function ChatAgentReadyContent({
         ) : null}
       </View>
     </RewindComposerRestoreProvider>
+  );
+}
+
+function HistorySyncErrorBanner({ title, message }: { title: string; message: string }) {
+  return (
+    <View style={styles.historySyncErrorBanner} testID="agent-history-sync-error">
+      <Text style={styles.historySyncErrorTitle}>{title}</Text>
+      <Text style={styles.historySyncErrorMessage} numberOfLines={2}>
+        {message}
+      </Text>
+    </View>
+  );
+}
+
+function HistorySyncProgressBanner({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={styles.historySyncProgressBanner}
+      testID="agent-history-syncing-banner"
+    >
+      <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
+      <View style={styles.historySyncProgressText}>
+        <Text style={styles.historySyncProgressTitle} testID="agent-history-syncing-banner-title">
+          {title}
+        </Text>
+        <Text style={styles.historySyncProgressSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -1551,16 +1657,58 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: 0,
     ...theme.shadow.sm,
   },
-  historySyncOverlay: {
+  historySyncProgressBanner: {
     position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: theme.colors.surface0,
+    top: theme.spacing[4],
+    alignSelf: "center",
+    maxWidth: "92%",
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+    ...theme.shadow.sm,
     zIndex: 40,
+  },
+  historySyncProgressText: {
+    minWidth: 0,
+  },
+  historySyncProgressTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  historySyncProgressSubtitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  historySyncErrorBanner: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 960,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.destructive,
+    backgroundColor: theme.colors.surface1,
+  },
+  historySyncErrorTitle: {
+    color: theme.colors.destructive,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  historySyncErrorMessage: {
+    marginTop: theme.spacing[1],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: Math.round(theme.fontSize.xs * 1.4),
   },
   archivingOverlay: {
     position: "absolute",

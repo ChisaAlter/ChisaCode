@@ -44,6 +44,28 @@ export function resolveWorkspaceIdByExecutionDirectory(input: {
   return null;
 }
 
+function isPathLikeWorkspaceIdentity(value: string): boolean {
+  return value.includes("/") || value.includes("\\") || /^[A-Za-z]:[\\/]/.test(value);
+}
+
+function workspaceIdentityMatches(left: string, right: string): boolean {
+  const normalizedLeft = normalizeWorkspaceOpaqueId(left);
+  const normalizedRight = normalizeWorkspaceOpaqueId(right);
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+  if (
+    !isPathLikeWorkspaceIdentity(normalizedLeft) ||
+    !isPathLikeWorkspaceIdentity(normalizedRight)
+  ) {
+    return false;
+  }
+  return normalizeWorkspacePath(normalizedLeft) === normalizeWorkspacePath(normalizedRight);
+}
+
 export function resolveWorkspaceMapKeyByIdentity(input: {
   workspaces: Map<string, WorkspaceDescriptor> | null | undefined;
   workspaceId: string | null | undefined;
@@ -63,7 +85,10 @@ export function resolveWorkspaceMapKeyByIdentity(input: {
   }
 
   for (const [workspaceKey, workspace] of workspaces) {
-    if (normalizeWorkspaceOpaqueId(workspace.id) === normalizedWorkspaceId) {
+    if (
+      workspaceIdentityMatches(workspace.id, normalizedWorkspaceId) ||
+      workspaceIdentityMatches(workspaceKey, normalizedWorkspaceId)
+    ) {
       return workspaceKey;
     }
   }

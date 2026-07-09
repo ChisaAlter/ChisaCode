@@ -369,6 +369,8 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   content: {
     alignItems: "flex-end",
     maxWidth: "100%",
+    minWidth: 0,
+    flexShrink: 1,
     cursor: "auto",
   },
   containerSpacing: {
@@ -394,7 +396,11 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     lineHeight: 22,
+    minWidth: 0,
+    maxWidth: "100%",
+    flexShrink: 1,
     overflowWrap: "anywhere",
+    ...(isWeb ? { wordBreak: "break-word" as const } : {}),
   },
   imagePreviewContainer: {
     flexDirection: "row",

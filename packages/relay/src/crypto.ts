@@ -30,6 +30,11 @@ export interface KeyPair {
   secretKey: Uint8Array; // 32 bytes
 }
 
+export interface RelayAuthKeyPair {
+  publicKey: Uint8Array; // 32 bytes
+  secretKey: Uint8Array; // 64 bytes
+}
+
 export type SharedKey = Uint8Array; // 32 bytes (box.before)
 
 const NONCE_LENGTH = nacl.box.nonceLength; // 24
@@ -124,6 +129,103 @@ export function importSecretKey(base64: string): Uint8Array {
     throw new Error(`Invalid secret key length (expected ${nacl.box.secretKeyLength})`);
   }
   return bytes;
+}
+
+export function generateRelayAuthKeyPair(): RelayAuthKeyPair {
+  ensurePrng();
+  const { publicKey, secretKey } = nacl.sign.keyPair();
+  return { publicKey, secretKey };
+}
+
+export function exportRelayAuthPublicKey(publicKey: Uint8Array): string {
+  if (!(publicKey instanceof Uint8Array) || publicKey.byteLength !== nacl.sign.publicKeyLength) {
+    throw new Error(`Invalid relay auth public key length (expected ${nacl.sign.publicKeyLength})`);
+  }
+  return encodeBase64(publicKey);
+}
+
+export function importRelayAuthPublicKey(base64: string): Uint8Array {
+  const bytes = decodeBase64(base64);
+  if (bytes.byteLength !== nacl.sign.publicKeyLength) {
+    throw new Error(`Invalid relay auth public key length (expected ${nacl.sign.publicKeyLength})`);
+  }
+  return bytes;
+}
+
+export function exportRelayAuthSecretKey(secretKey: Uint8Array): string {
+  if (!(secretKey instanceof Uint8Array) || secretKey.byteLength !== nacl.sign.secretKeyLength) {
+    throw new Error(`Invalid relay auth secret key length (expected ${nacl.sign.secretKeyLength})`);
+  }
+  return encodeBase64(secretKey);
+}
+
+export function importRelayAuthSecretKey(base64: string): Uint8Array {
+  const bytes = decodeBase64(base64);
+  if (bytes.byteLength !== nacl.sign.secretKeyLength) {
+    throw new Error(`Invalid relay auth secret key length (expected ${nacl.sign.secretKeyLength})`);
+  }
+  return bytes;
+}
+
+function relayServerAuthMessage(params: {
+  readonly serverId: string;
+  readonly role: "server";
+  readonly connectionId: string;
+  readonly nonce: string;
+}): Uint8Array {
+  return new TextEncoder().encode(
+    [
+      "chisacode-relay-v2-server-auth",
+      params.serverId,
+      params.role,
+      params.connectionId,
+      params.nonce,
+    ].join("\n"),
+  );
+}
+
+export function signRelayServerAuth(params: {
+  readonly secretKey: Uint8Array;
+  readonly serverId: string;
+  readonly role: "server";
+  readonly connectionId?: string;
+  readonly nonce: string;
+}): string {
+  if (
+    !(params.secretKey instanceof Uint8Array) ||
+    params.secretKey.byteLength !== nacl.sign.secretKeyLength
+  ) {
+    throw new Error(`Invalid relay auth secret key length (expected ${nacl.sign.secretKeyLength})`);
+  }
+  const message = relayServerAuthMessage({
+    serverId: params.serverId,
+    role: params.role,
+    connectionId: params.connectionId ?? "",
+    nonce: params.nonce,
+  });
+  return encodeBase64(nacl.sign.detached(message, params.secretKey));
+}
+
+export function verifyRelayServerAuth(params: {
+  readonly publicKeyB64: string;
+  readonly signatureB64: string;
+  readonly serverId: string;
+  readonly role: "server";
+  readonly connectionId?: string;
+  readonly nonce: string;
+}): boolean {
+  const publicKey = importRelayAuthPublicKey(params.publicKeyB64);
+  const signature = decodeBase64(params.signatureB64);
+  if (signature.byteLength !== nacl.sign.signatureLength) {
+    return false;
+  }
+  const message = relayServerAuthMessage({
+    serverId: params.serverId,
+    role: params.role,
+    connectionId: params.connectionId ?? "",
+    nonce: params.nonce,
+  });
+  return nacl.sign.detached.verify(message, signature, publicKey);
 }
 
 export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Array): SharedKey {

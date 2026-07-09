@@ -69,6 +69,26 @@ describe("workspace navigation", () => {
     expect(remembered).toEqual([{ serverId: "server-1", workspaceId: "workspace-a" }]);
   });
 
+  it("does not navigate to or remember an unknown workspace when workspaces are loaded", () => {
+    const workspaces = new Map<string, WorkspaceDescriptor>([
+      [
+        "workspace-a",
+        {
+          id: "workspace-a",
+          workspaceDirectory: "/repo/workspace-a",
+        } as WorkspaceDescriptor,
+      ],
+    ]);
+    const { deps, navigations, remembered } = createFakeDeps({
+      getSessionWorkspaces: () => workspaces,
+    });
+
+    expect(navigateToWorkspace("server-1", "DESKTOP-TFK2NTA", deps)).toBe(false);
+
+    expect(navigations).toEqual([]);
+    expect(remembered).toEqual([]);
+  });
+
   it("focuses the attention agent's tab when a workspace has one", () => {
     const workspace = {
       id: "workspace-a",
@@ -110,7 +130,7 @@ describe("workspace navigation", () => {
 
     expect(selection).toEqual({
       serverId: "server-1",
-      workspaceId: "/tmp/chisacode-missing-workspace",
+      workspaceId: "/tmp/paseo-missing-workspace",
     });
   });
 

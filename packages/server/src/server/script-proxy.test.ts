@@ -377,6 +377,7 @@ it("returns 502 when upstream is down", async () => {
 const httpServers: http.Server[] = [];
 const wsServers: WebSocketServer[] = [];
 const wsClients: WebSocket[] = [];
+const CORRECT_PASSWORD_HASH = "$2b$12$OLxyuuP9uLK30Uzc4wQX0O6liuU/Q1t5P2b0Ebf36mULvpVK3DRZW";
 
 afterEach(async () => {
   for (const ws of wsClients) {
@@ -453,6 +454,158 @@ it("proxies WebSocket connections to the correct upstream", async () => {
   });
 
   expect(reply).toBe("echo: hello proxy");
+});
+
+async function startWsEchoUpstream(): Promise<{ port: number }> {
+  const upstreamPort = await findFreePort();
+  const upstreamServer = http.createServer();
+  const wss = new WebSocketServer({ server: upstreamServer });
+  wsServers.push(wss);
+
+  wss.on("connection", (ws) => {
+    ws.on("message", (data) => {
+      ws.send(`echo: ${data.toString()}`);
+    });
+  });
+
+  await new Promise<void>((resolve) => upstreamServer.listen(upstreamPort, "127.0.0.1", resolve));
+  httpServers.push(upstreamServer);
+  return { port: upstreamPort };
+}
+
+async function startGuardedWsProxy(params: {
+  routeStore: ScriptRouteStore;
+  allowedOrigins?: Set<string>;
+  allowUpgradeRequest?: () => { allowed: boolean; statusCode: number; reason: string };
+}): Promise<{ port: number }> {
+  const proxyPort = await findFreePort();
+  const proxyServer = http.createServer((_req, res) => {
+    res.writeHead(404);
+    res.end();
+  });
+
+  proxyServer.on(
+    "upgrade",
+    createScriptProxyUpgradeHandler({
+      routeStore: params.routeStore,
+      logger,
+      guard: {
+        auth: { password: CORRECT_PASSWORD_HASH },
+        allowedOrigins: params.allowedOrigins ?? new Set(["https://app.chisacode.sh"]),
+        allowUpgradeRequest: params.allowUpgradeRequest,
+      },
+    }),
+  );
+
+  await new Promise<void>((resolve) => proxyServer.listen(proxyPort, "127.0.0.1", resolve));
+  httpServers.push(proxyServer);
+  return { port: proxyPort };
+}
+
+function createWsRouteStore(port: number): ScriptRouteStore {
+  const routeStore = new ScriptRouteStore();
+  routeStore.registerRoute({
+    hostname: "guarded-ws.localhost",
+    port,
+    workspaceId: "workspace-guarded-ws",
+    projectSlug: "guarded",
+    scriptName: "service",
+  });
+  return routeStore;
+}
+
+function connectGuardedWs(params: {
+  proxyPort: number;
+  protocol?: string;
+  origin?: string;
+}): WebSocket {
+  const ws = new WebSocket(
+    `ws://127.0.0.1:${params.proxyPort}`,
+    params.protocol ? [params.protocol] : undefined,
+    {
+      headers: {
+        host: `guarded-ws.localhost:${params.proxyPort}`,
+        ...(params.origin ? { origin: params.origin } : {}),
+      },
+    },
+  );
+  wsClients.push(ws);
+  return ws;
+}
+
+async function expectWsRejects(ws: WebSocket, statusCode: number): Promise<void> {
+  await expect(
+    new Promise<string>((resolve, reject) => {
+      ws.once("open", () => reject(new Error("WebSocket unexpectedly opened")));
+      ws.once("error", (error) => resolve(error.message));
+    }),
+  ).resolves.toContain(`Unexpected server response: ${statusCode}`);
+}
+
+it("rejects script proxy WebSocket upgrades without bearer auth", async () => {
+  const upstream = await startWsEchoUpstream();
+  const proxy = await startGuardedWsProxy({ routeStore: createWsRouteStore(upstream.port) });
+
+  await expectWsRejects(
+    connectGuardedWs({ proxyPort: proxy.port, origin: "https://app.chisacode.sh" }),
+    401,
+  );
+});
+
+it("rejects script proxy WebSocket upgrades with a disallowed origin", async () => {
+  const upstream = await startWsEchoUpstream();
+  const proxy = await startGuardedWsProxy({ routeStore: createWsRouteStore(upstream.port) });
+
+  await expectWsRejects(
+    connectGuardedWs({
+      proxyPort: proxy.port,
+      origin: "https://evil.example",
+      protocol: "chisacode.bearer.correct-password",
+    }),
+    403,
+  );
+});
+
+it("rejects script proxy WebSocket upgrades when the shared upgrade limiter blocks", async () => {
+  const upstream = await startWsEchoUpstream();
+  const proxy = await startGuardedWsProxy({
+    routeStore: createWsRouteStore(upstream.port),
+    allowUpgradeRequest: () => ({ allowed: false, statusCode: 429, reason: "Too Many Requests" }),
+  });
+
+  await expectWsRejects(
+    connectGuardedWs({
+      proxyPort: proxy.port,
+      origin: "https://app.chisacode.sh",
+      protocol: "chisacode.bearer.correct-password",
+    }),
+    429,
+  );
+});
+
+it("allows script proxy WebSocket upgrades with origin, bearer auth, and rate limit guard passing", async () => {
+  const upstream = await startWsEchoUpstream();
+  const proxy = await startGuardedWsProxy({
+    routeStore: createWsRouteStore(upstream.port),
+    allowUpgradeRequest: () => ({ allowed: true, statusCode: 200, reason: "OK" }),
+  });
+  const ws = connectGuardedWs({
+    proxyPort: proxy.port,
+    origin: "https://app.chisacode.sh",
+    protocol: "chisacode.bearer.correct-password",
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+  const reply = await new Promise<string>((resolve, reject) => {
+    ws.once("message", (data) => resolve(data.toString()));
+    ws.once("error", reject);
+    ws.send("hello guarded proxy");
+  });
+
+  expect(reply).toBe("echo: hello guarded proxy");
 });
 
 // ---------------------------------------------------------------------------

@@ -51,7 +51,7 @@ import { CHISACODE_SOURCE_OFFER } from "./legal-source.js";
 import {
   extractWsBearerProtocol,
   extractWsBearerToken,
-  isBearerTokenValid,
+  isBearerTokenValidAsync,
   type DaemonAuthConfig,
 } from "./auth.js";
 import {
@@ -74,6 +74,11 @@ interface PendingConnection {
 interface WebSocketServerConfig {
   allowedOrigins: Set<string>;
   hostnames?: HostnamesConfig;
+  allowUpgradeRequest?: (req: IncomingMessage) => {
+    readonly allowed: boolean;
+    readonly statusCode: number;
+    readonly reason: string;
+  };
 }
 
 type WebSocketRuntimeMetrics = SessionRuntimeMetrics & CheckoutDiffMetrics;
@@ -532,14 +537,14 @@ export class VoiceAssistantWebSocketServer {
     wsConfig: WebSocketServerConfig,
     auth: DaemonAuthConfig | undefined,
   ): WebSocketServer {
-    const { allowedOrigins, hostnames } = wsConfig;
+    const { allowedOrigins, hostnames, allowUpgradeRequest } = wsConfig;
     const password = auth?.password;
     const wss = new WebSocketServer({
       server,
       path: "/ws",
       handleProtocols: (protocols) => selectWebSocketProtocol(protocols, password),
       verifyClient: ({ req }, callback) => {
-        this.verifyWsUpgrade(req, allowedOrigins, hostnames, callback);
+        this.verifyWsUpgrade(req, { allowedOrigins, hostnames, allowUpgradeRequest }, callback);
       },
     });
     wss.on("connection", (ws, request) => {
@@ -558,10 +563,10 @@ export class VoiceAssistantWebSocketServer {
 
   private verifyWsUpgrade(
     req: IncomingMessage,
-    allowedOrigins: Set<string>,
-    hostnames: HostnamesConfig | undefined,
+    config: WebSocketServerConfig,
     callback: (res: boolean, code?: number, message?: string) => void,
   ): void {
+    const { allowedOrigins, hostnames, allowUpgradeRequest } = config;
     const requestMetadata = extractSocketRequestMetadata(req);
     const origin = requestMetadata.origin;
     const requestHost = requestMetadata.host ?? null;
@@ -572,6 +577,15 @@ export class VoiceAssistantWebSocketServer {
         "Rejected connection from disallowed host",
       );
       callback(false, 403, "Host not allowed");
+      return;
+    }
+    const limitDecision = allowUpgradeRequest?.(req);
+    if (limitDecision && !limitDecision.allowed) {
+      this.logger.warn(
+        { ...requestMetadata, statusCode: limitDecision.statusCode },
+        "Rejected WebSocket connection by rate limit",
+      );
+      callback(false, limitDecision.statusCode, limitDecision.reason);
       return;
     }
     const sameOrigin =
@@ -597,7 +611,7 @@ export class VoiceAssistantWebSocketServer {
       const requestMetadata = extractSocketRequestMetadata(request);
       const protocol = extractWsBearerProtocol(request.headers["sec-websocket-protocol"]);
       const token = extractWsBearerToken(protocol);
-      const isAuthorized = isBearerTokenValid({ password, token });
+      const isAuthorized = await isBearerTokenValidAsync({ password, token });
       if (!isAuthorized) {
         const reason = token === null ? "Password required" : "Incorrect password";
         this.logger.warn(

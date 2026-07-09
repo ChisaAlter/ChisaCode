@@ -64,6 +64,12 @@ const RATE_LIMIT_WINDOW_MS = 10_000;
 const RATE_LIMIT_MAX_REQUESTS = 600;
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
+export interface RateLimitDecision {
+  readonly allowed: boolean;
+  readonly statusCode: number;
+  readonly reason: string;
+}
+
 // Whether to honor client-supplied forwarding headers (X-Forwarded-For, etc.).
 // Default false: a direct daemon has no trusted upstream proxy, so the socket
 // remote address is the only honest client identifier. Setting this to `1`
@@ -76,40 +82,72 @@ export function isTrustForwardHeadersEnabled(): boolean {
 }
 
 export function rateLimitKey(req: express.Request): string {
+  return rateLimitKeyFromRequestParts({
+    headers: req.headers,
+    ip: req.ip,
+    remoteAddress: req.socket?.remoteAddress,
+  });
+}
+
+export function rateLimitKeyFromRequestParts(params: {
+  headers: IncomingMessage["headers"];
+  ip?: string;
+  remoteAddress?: string;
+}): string {
   if (isTrustForwardHeadersEnabled()) {
-    const xff = req.headers["x-forwarded-for"];
+    const xff = params.headers["x-forwarded-for"];
     if (typeof xff === "string" && xff.length > 0) {
       return xff.split(",")[0].trim();
     }
   }
-  return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+  return params.ip ?? params.remoteAddress ?? "unknown";
+}
+
+function resolveRateLimitMaxRequests(): number {
+  return Number.parseInt(process.env.CHISACODE_RATE_LIMIT_MAX ?? "", 10) || RATE_LIMIT_MAX_REQUESTS;
+}
+
+export function checkRateLimitForKey(key: string): RateLimitDecision {
+  if (process.env.CHISACODE_DISABLE_RATE_LIMIT === "1") {
+    return { allowed: true, statusCode: 200, reason: "OK" };
+  }
+  const max = resolveRateLimitMaxRequests();
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(key);
+  if (!bucket || now >= bucket.resetAt) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, statusCode: 200, reason: "OK" };
+  }
+  bucket.count += 1;
+  if (bucket.count > max) {
+    return { allowed: false, statusCode: 429, reason: "Too Many Requests" };
+  }
+  return { allowed: true, statusCode: 200, reason: "OK" };
+}
+
+function checkRateLimitForIncomingMessage(req: IncomingMessage): RateLimitDecision {
+  const key = rateLimitKeyFromRequestParts({
+    headers: req.headers,
+    remoteAddress: req.socket?.remoteAddress,
+  });
+  return checkRateLimitForKey(key);
 }
 
 function createRateLimitMiddleware(): express.RequestHandler {
   if (process.env.CHISACODE_DISABLE_RATE_LIMIT === "1") {
     return (_req, _res, next) => next();
   }
-  const max =
-    Number.parseInt(process.env.CHISACODE_RATE_LIMIT_MAX ?? "", 10) || RATE_LIMIT_MAX_REQUESTS;
   return (req, res, next) => {
     if (req.method === "OPTIONS" || req.path === "/api/health") {
       next();
       return;
     }
-    const key = rateLimitKey(req);
-    const now = Date.now();
-    const bucket = rateLimitBuckets.get(key);
-    if (!bucket || now >= bucket.resetAt) {
-      rateLimitBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    const decision = checkRateLimitForKey(rateLimitKey(req));
+    if (decision.allowed) {
       next();
       return;
     }
-    bucket.count += 1;
-    if (bucket.count > max) {
-      res.status(429).json({ error: "Too Many Requests" });
-      return;
-    }
-    next();
+    res.status(decision.statusCode).json({ error: decision.reason });
   };
 }
 
@@ -842,6 +880,12 @@ export async function createChisaCodeDaemon(
   const scriptProxyUpgradeHandler = createScriptProxyUpgradeHandler({
     routeStore: scriptRouteStore,
     logger,
+    guard: {
+      auth: config.auth,
+      allowedOrigins,
+      hostnames: configuredHostnames,
+      allowUpgradeRequest: checkRateLimitForIncomingMessage,
+    },
   });
   httpServer.on("upgrade", scriptProxyUpgradeHandler);
 
@@ -1310,7 +1354,11 @@ export async function createChisaCodeDaemon(
             config.chisacodeHome,
             daemonConfigStore,
             mcpBaseUrl,
-            { allowedOrigins, hostnames: configuredHostnames },
+            {
+              allowedOrigins,
+              hostnames: configuredHostnames,
+              allowUpgradeRequest: checkRateLimitForIncomingMessage,
+            },
             config.auth,
             speechService,
             terminalManager,
@@ -1355,6 +1403,7 @@ export async function createChisaCodeDaemon(
             const offer = await createConnectionOfferV2({
               serverId,
               daemonPublicKeyB64: daemonKeyPair.publicKeyB64,
+              relayAuthPublicKeyB64: daemonKeyPair.relayAuthPublicKeyB64,
               relay: {
                 endpoint: relayPublicEndpoint,
                 useTls: relayPublicUseTls,
@@ -1376,6 +1425,7 @@ export async function createChisaCodeDaemon(
               relayUseTls,
               serverId,
               daemonKeyPair: daemonKeyPair.keyPair,
+              daemonRelayAuthKeyPair: daemonKeyPair.relayAuthKeyPair,
             });
           }
         };

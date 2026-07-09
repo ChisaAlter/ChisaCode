@@ -68,12 +68,17 @@ export function navigateToWorkspace(
   serverId: string,
   workspaceId: string,
   deps: NavigateToWorkspaceDeps,
-): void {
+): boolean {
   const workspaces = deps.getSessionWorkspaces(serverId);
   const resolvedWorkspaceId = resolveWorkspaceMapKeyByIdentity({
     workspaces,
     workspaceId,
   });
+  if (workspaces && !resolvedWorkspaceId) {
+    return false;
+  }
+
+  const targetWorkspaceId = resolvedWorkspaceId ?? workspaceId;
   const workspaceAgents = resolvedWorkspaceId
     ? Array.from(deps.getSessionAgents(serverId)).filter(
         (agent) =>
@@ -88,8 +93,9 @@ export function navigateToWorkspace(
     deps.openWorkspaceAgentTab(`${serverId}:${resolvedWorkspaceId}`, attentionAgentId);
   }
 
-  deps.rememberLastWorkspace({ serverId, workspaceId });
-  deps.navigateToRoute(buildHostWorkspaceRoute(serverId, workspaceId));
+  deps.rememberLastWorkspace({ serverId, workspaceId: targetWorkspaceId });
+  deps.navigateToRoute(buildHostWorkspaceRoute(serverId, targetWorkspaceId));
+  return true;
 }
 
 export function navigateToLastWorkspace(deps: NavigateToLastWorkspaceDeps): boolean {
@@ -97,6 +103,5 @@ export function navigateToLastWorkspace(deps: NavigateToLastWorkspaceDeps): bool
   if (!selection) {
     return false;
   }
-  navigateToWorkspace(selection.serverId, selection.workspaceId, deps);
-  return true;
+  return navigateToWorkspace(selection.serverId, selection.workspaceId, deps);
 }

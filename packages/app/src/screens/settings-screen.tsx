@@ -103,8 +103,7 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useToast } from "@/contexts/toast-context";
 import { getDesktopDaemonLogs } from "@/desktop/daemon/desktop-daemon";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
+import { downloadTextFile } from "@/utils/download-text-file";
 import {
   buildHostOpenProjectRoute,
   buildProjectsSettingsRoute,
@@ -603,15 +602,8 @@ function FeedbackSection({ isDesktopApp }: { isDesktopApp: boolean }) {
       const logs = await getDesktopDaemonLogs();
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const fileName = `chisacode-daemon-${timestamp}.log`;
-      const fileUri = `${FileSystem.cacheDirectory ?? ""}${fileName}`;
-      await FileSystem.writeAsStringAsync(fileUri, logs.contents ?? "", {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: "text/plain",
-          dialogTitle: fileName,
-        });
+      const exported = await downloadTextFile(fileName, logs.contents ?? "");
+      if (exported) {
         toast.show(t("settings.feedback.exportSuccess"), { variant: "success" });
       } else {
         toast.error(t("settings.feedback.shareUnavailable"));
@@ -1170,6 +1162,7 @@ function SettingsSidebar({
   const items = SIDEBAR_SECTION_ITEMS.filter((item) => !item.desktopOnly || isDesktopApp);
   const insets = useSafeAreaInsets();
   const padding = useWindowControlsPadding("sidebar");
+  const webScrollbarStyle = useWebScrollbarStyle();
   const isDesktop = layout === "desktop";
   const isGlassDesktop = isDesktop && theme.glass.enabled;
   const containerStyle = useMemo(
@@ -1179,69 +1172,94 @@ function SettingsSidebar({
     ],
     [insets.top, isDesktop],
   );
+  const sidebarScrollStyle = useMemo(
+    () => [sidebarStyles.scrollView, webScrollbarStyle],
+    [webScrollbarStyle],
+  );
   const selectedSectionId = view.kind === "section" ? view.section : null;
   const selectedServerId = view.kind === "host" ? view.serverId : null;
   const isProjectsSelected = view.kind === "projects" || view.kind === "project";
   const paddingTopStyle = useMemo(() => ({ height: padding.top }), [padding.top]);
 
-  const innerContent = (
-    <>
-      {isDesktop ? (
-        <>
-          <TitlebarDragRegion />
-          {padding.top > 0 ? <View style={paddingTopStyle} /> : null}
-        </>
-      ) : null}
-      {isDesktop ? (
-        <SidebarHeaderRow
-          icon={ArrowLeft}
-          label={t("settings.back")}
-          onPress={onBackToWorkspace}
-          testID="settings-back-to-workspace"
-        />
-      ) : null}
-      <View style={sidebarStyles.list}>
-        {items.map((item) => (
-          <Fragment key={item.id}>
-            <SidebarSectionButton
-              itemId={item.id}
-              label={t(item.labelKey)}
-              icon={item.icon}
-              isSelected={selectedSectionId === item.id}
-              onSelect={onSelectSection}
-            />
-            {item.id === "general" ? (
-              <SidebarProjectsButton isSelected={isProjectsSelected} onSelect={onSelectProjects} />
-            ) : null}
-          </Fragment>
-        ))}
-      </View>
-      <SidebarSeparator />
-      <View style={sidebarStyles.list}>
-        {sortedHosts.map((host) => (
-          <SidebarHostItem
-            key={host.serverId}
-            serverId={host.serverId}
-            label={host.label}
-            isSelected={selectedServerId === host.serverId}
-            isLocal={localServerId !== null && host.serverId === localServerId}
-            onSelect={onSelectHost}
+  const backButton = isDesktop ? (
+    <SidebarHeaderRow
+      icon={ArrowLeft}
+      label={t("settings.back")}
+      onPress={onBackToWorkspace}
+      testID="settings-back-to-workspace"
+    />
+  ) : null;
+
+  const sectionList = (
+    <View style={sidebarStyles.list}>
+      {items.map((item) => (
+        <Fragment key={item.id}>
+          <SidebarSectionButton
+            itemId={item.id}
+            label={t(item.labelKey)}
+            icon={item.icon}
+            isSelected={selectedSectionId === item.id}
+            onSelect={onSelectSection}
           />
-        ))}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("settings.addHost")}
-          onPress={onAddHost}
-          testID="settings-add-host"
-          style={sidebarItemStyle}
-        >
-          <Plus size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-          <Text style={sidebarStyles.label} numberOfLines={1}>
-            {t("settings.addHost")}
-          </Text>
-        </Pressable>
+          {item.id === "general" ? (
+            <SidebarProjectsButton isSelected={isProjectsSelected} onSelect={onSelectProjects} />
+          ) : null}
+        </Fragment>
+      ))}
+    </View>
+  );
+
+  const hostList = (
+    <View style={sidebarStyles.list}>
+      {sortedHosts.map((host) => (
+        <SidebarHostItem
+          key={host.serverId}
+          serverId={host.serverId}
+          label={host.label}
+          isSelected={selectedServerId === host.serverId}
+          isLocal={localServerId !== null && host.serverId === localServerId}
+          onSelect={onSelectHost}
+        />
+      ))}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("settings.addHost")}
+        onPress={onAddHost}
+        testID="settings-add-host"
+        style={sidebarItemStyle}
+      >
+        <Plus size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+        <Text style={sidebarStyles.label} numberOfLines={1}>
+          {t("settings.addHost")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  const scrollableContent = (
+    <>
+      {backButton}
+      {sectionList}
+      <SidebarSeparator />
+      {hostList}
+    </>
+  );
+
+  const innerContent = isDesktop ? (
+    <>
+      <TitlebarDragRegion />
+      {padding.top > 0 ? <View style={paddingTopStyle} /> : null}
+      {backButton}
+      <View style={sidebarStyles.desktopBody}>
+        <ScrollView style={sidebarScrollStyle} contentContainerStyle={sidebarStyles.scrollContent}>
+          {sectionList}
+        </ScrollView>
+        <SidebarSeparator />
+        <View style={sidebarStyles.hostFooter}>{hostList}</View>
       </View>
     </>
+  ) : (
+    scrollableContent
   );
 
   if (isGlassDesktop) {
@@ -1804,9 +1822,11 @@ const desktopStyles = StyleSheet.create((theme) => ({
 const sidebarStyles = StyleSheet.create((theme) => ({
   desktopContainer: {
     width: 320,
+    flexShrink: 0,
     borderRightWidth: theme.glass.enabled ? 0 : 1,
     borderRightColor: theme.colors.border,
     backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surfaceWorkspace,
+    overflow: "hidden",
   },
   mobileContainer: {
     paddingVertical: theme.spacing[2],
@@ -1816,6 +1836,20 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     gap: theme.spacing[1],
+  },
+  desktopBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  hostFooter: {
+    flexShrink: 0,
+  },
+  scrollView: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    paddingBottom: theme.spacing[3],
   },
   item: {
     flexDirection: "row",

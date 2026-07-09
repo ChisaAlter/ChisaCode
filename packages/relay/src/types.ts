@@ -24,5 +24,9 @@ export interface RelaySessionAttachment {
    * independent socket + E2EE channel per connected connection.
    */
   connectionId?: string | null;
+  /**
+   * Ed25519 public key that authenticated a v2 daemon server socket.
+   */
+  relayAuthPublicKeyB64?: string | null;
   createdAt: number;
 }

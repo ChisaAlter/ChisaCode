@@ -62,6 +62,16 @@ export function createLastWorkspaceSelectionStore(storage: LastWorkspaceSelectio
     void storage.write(JSON.stringify(normalized)).catch(() => {});
   }
 
+  function forget() {
+    if (!selection) {
+      return;
+    }
+    selection = null;
+    revision += 1;
+    notifyListeners();
+    void storage.write("").catch(() => {});
+  }
+
   function hydrate(): Promise<void> {
     if (hydrationPromise) {
       return hydrationPromise;
@@ -89,6 +99,7 @@ export function createLastWorkspaceSelectionStore(storage: LastWorkspaceSelectio
 
   return {
     getSelection: () => selection,
+    forget,
     hydrate,
     isHydrated: () => hydrated,
     remember,

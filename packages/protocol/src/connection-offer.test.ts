@@ -58,6 +58,20 @@ describe("connection offer", () => {
     });
   });
 
+  it("parses optional relay auth public key without requiring it for old offers", () => {
+    expect(
+      ConnectionOfferSchema.parse({
+        v: 2,
+        serverId: "server-123",
+        daemonPublicKeyB64: "pubkey",
+        relayAuthPublicKeyB64: "relay-auth-pubkey",
+        relay: { endpoint: "relay.example.com:443" },
+      }),
+    ).toMatchObject({
+      relayAuthPublicKeyB64: "relay-auth-pubkey",
+    });
+  });
+
   it("round-trips relay TLS in offers without rejecting extra relay fields", () => {
     const offer = ConnectionOfferSchema.parse({
       v: 2,

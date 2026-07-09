@@ -37,6 +37,7 @@ import {
   setupDefaultContextMenu,
   setupDragDropPrevention,
   buildStandardContextMenuItems,
+  getMainWindowSizingOptions,
 } from "./window/window-manager.js";
 import { setupDarwinCompositorWatchdog } from "./window/compositor-watchdog/index.js";
 import { registerDialogHandlers } from "./features/dialogs.js";
@@ -446,6 +447,7 @@ async function createMainWindow(): Promise<void> {
     show: false,
     backgroundColor: getWindowBackgroundColor(systemTheme),
     ...(iconPath ? { icon: iconPath } : {}),
+    ...getMainWindowSizingOptions(),
     ...getMainWindowChromeOptions({
       platform: process.platform,
       theme: systemTheme,

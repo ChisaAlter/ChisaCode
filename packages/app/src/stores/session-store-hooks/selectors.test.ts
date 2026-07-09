@@ -100,6 +100,19 @@ describe("selectWorkspace", () => {
     expect(selectWorkspace(useSessionStore.getState(), SERVER_ID, workspace.id)).toBe(workspace);
   });
 
+  it("resolves Windows path workspace identities across slash variants", () => {
+    const workspace = createWorkspace({
+      id: "C:/repo/feature",
+      workspaceDirectory: "C:\\repo\\feature",
+    });
+    useSessionStore.getState().initializeSession(SERVER_ID, null as unknown as DaemonClient);
+    useSessionStore.getState().setWorkspaces(SERVER_ID, new Map([[workspace.id, workspace]]));
+
+    expect(selectWorkspace(useSessionStore.getState(), SERVER_ID, "C:\\repo\\feature")).toBe(
+      workspace,
+    );
+  });
+
   it("keeps the descriptor reference for unrelated workspace updates", () => {
     const workspaceA = createWorkspace({ id: "workspace-a", name: "A" });
     const workspaceB = createWorkspace({ id: "workspace-b", name: "B" });

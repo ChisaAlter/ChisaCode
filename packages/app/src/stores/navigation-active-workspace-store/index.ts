@@ -14,6 +14,7 @@ import {
 } from "./navigation";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-execution";
 
 export type { ActiveWorkspaceSelection } from "@/stores/last-workspace-selection";
 
@@ -57,6 +58,10 @@ export function getIsLastWorkspaceSelectionHydrated(): boolean {
   return lastWorkspaceSelectionStore.isHydrated();
 }
 
+export function forgetLastWorkspaceSelection(): void {
+  lastWorkspaceSelectionStore.forget();
+}
+
 export function navigateToWorkspace(
   serverId: string,
   workspaceId: string,
@@ -80,12 +85,23 @@ export function useActiveWorkspaceSelection(): ActiveWorkspaceSelection | null {
   const selection = parseActiveWorkspaceSelection({ pathname: usePathname(), params });
   const serverId = selection?.serverId ?? null;
   const workspaceId = selection?.workspaceId ?? null;
-  useEffect(() => {
+  const canRememberSelection = useSessionStore((state) => {
     if (!serverId || !workspaceId) {
+      return false;
+    }
+    return Boolean(
+      resolveWorkspaceMapKeyByIdentity({
+        workspaces: state.sessions[serverId]?.workspaces,
+        workspaceId,
+      }),
+    );
+  });
+  useEffect(() => {
+    if (!serverId || !workspaceId || !canRememberSelection) {
       return;
     }
     lastWorkspaceSelectionStore.remember({ serverId, workspaceId });
-  }, [serverId, workspaceId]);
+  }, [canRememberSelection, serverId, workspaceId]);
   return selection;
 }
 

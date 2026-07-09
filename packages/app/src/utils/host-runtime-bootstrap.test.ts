@@ -167,9 +167,46 @@ describe("resolveStartupRedirectRoute", () => {
         ...baseInput,
         anyOnlineHostServerId: "server-1",
         workspaceSelection: { serverId: "server-1", workspaceId: "workspace-a" },
+        workspaceSelectionExists: true,
       });
 
       expect(selection).toEqual({ serverId: "server-1", workspaceId: "workspace-a" });
+    });
+
+    it("waits for workspace validation before restoring a persisted workspace route", () => {
+      const route = resolveStartupRedirectRoute({
+        ...baseInput,
+        anyOnlineHostServerId: "server-1",
+        workspaceSelection: { serverId: "server-1", workspaceId: "workspace-a" },
+        isWorkspaceSelectionValidationPending: true,
+      });
+      const selection = resolveStartupWorkspaceSelection({
+        ...baseInput,
+        anyOnlineHostServerId: "server-1",
+        workspaceSelection: { serverId: "server-1", workspaceId: "workspace-a" },
+        isWorkspaceSelectionValidationPending: true,
+      });
+
+      expect(route).toBeNull();
+      expect(selection).toBeNull();
+    });
+
+    it("ignores a persisted workspace route once hydration proves it is missing", () => {
+      const route = resolveStartupRedirectRoute({
+        ...baseInput,
+        anyOnlineHostServerId: "server-1",
+        workspaceSelection: { serverId: "server-1", workspaceId: "DESKTOP-TFK2NTA" },
+        workspaceSelectionExists: false,
+      });
+      const selection = resolveStartupWorkspaceSelection({
+        ...baseInput,
+        anyOnlineHostServerId: "server-1",
+        workspaceSelection: { serverId: "server-1", workspaceId: "DESKTOP-TFK2NTA" },
+        workspaceSelectionExists: false,
+      });
+
+      expect(route).toBe("/h/server-1");
+      expect(selection).toBeNull();
     });
 
     it("leaves persisted workspace navigation to the workspace navigator when another host is first online", () => {

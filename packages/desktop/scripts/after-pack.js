@@ -1,9 +1,12 @@
 const fs = require("fs");
 const path = require("path");
+const { rebuild } = require("@electron/rebuild");
 
 const { smokePackagedDesktopApp } = require("./smoke-packaged-desktop-app.js");
 
 const EXECUTABLE_NAME = "ChisaCode";
+const ELECTRON_VERSION = require("electron/package.json").version;
+const ELECTRON_REBUILT_MODULES = ["better-sqlite3"];
 
 // electron-builder arch enum → Node.js arch string
 const ARCH_MAP = { 0: "ia32", 1: "x64", 2: "armv7l", 3: "arm64", 4: "universal" };
@@ -74,10 +77,7 @@ function pruneSharpLibvips(nodeModules, platform, arch) {
 }
 
 function pruneNativeModules(appOutDir, platform, arch) {
-  const resourcesDir =
-    platform === "darwin"
-      ? path.join(appOutDir, `${EXECUTABLE_NAME}.app`, "Contents", "Resources")
-      : path.join(appOutDir, "resources");
+  const resourcesDir = resolveResourcesDir(appOutDir, platform);
 
   const nodeModules = path.join(resourcesDir, "app.asar.unpacked", "node_modules");
   if (!fs.existsSync(nodeModules)) return;
@@ -91,6 +91,54 @@ function pruneNativeModules(appOutDir, platform, arch) {
   const after = dirSizeSync(nodeModules);
   const savedMB = ((before - after) / 1024 / 1024).toFixed(1);
   console.log(`Pruned native modules: ${savedMB} MB removed (${fmtMB(before)} → ${fmtMB(after)})`);
+}
+
+function resolveResourcesDir(appOutDir, platform) {
+  return platform === "darwin"
+    ? path.join(appOutDir, `${EXECUTABLE_NAME}.app`, "Contents", "Resources")
+    : path.join(appOutDir, "resources");
+}
+
+async function rebuildElectronNativeModules(appOutDir, platform, arch) {
+  const unpackedAppDir = path.join(resolveResourcesDir(appOutDir, platform), "app.asar.unpacked");
+  const nodeModules = path.join(unpackedAppDir, "node_modules");
+  const modulesToRebuild = ELECTRON_REBUILT_MODULES.filter((moduleName) =>
+    fs.existsSync(path.join(nodeModules, moduleName)),
+  );
+
+  if (modulesToRebuild.length === 0) {
+    return;
+  }
+
+  console.log(
+    `Rebuilding Electron native modules for ${platform}-${arch}: ${modulesToRebuild.join(", ")}`,
+  );
+  const syntheticPackageJson = path.join(unpackedAppDir, "package.json");
+  const shouldRemoveSyntheticPackageJson = !fs.existsSync(syntheticPackageJson);
+  if (shouldRemoveSyntheticPackageJson) {
+    fs.writeFileSync(
+      syntheticPackageJson,
+      `${JSON.stringify({ dependencies: Object.fromEntries(modulesToRebuild.map((name) => [name, "*"])) }, null, 2)}\n`,
+    );
+  }
+
+  try {
+    await rebuild({
+      buildPath: unpackedAppDir,
+      electronVersion: ELECTRON_VERSION,
+      arch,
+      platform,
+      extraModules: modulesToRebuild,
+      onlyModules: modulesToRebuild,
+      force: true,
+      mode: "sequential",
+      types: ["prod", "optional"],
+    });
+  } finally {
+    if (shouldRemoveSyntheticPackageJson) {
+      rmSafe(syntheticPackageJson);
+    }
+  }
 }
 
 function dirSizeSync(dir) {
@@ -113,6 +161,7 @@ exports.default = async function afterPack(context) {
   const platform = context.electronPlatformName;
   const arch = ARCH_MAP[context.arch] || process.arch;
 
+  await rebuildElectronNativeModules(context.appOutDir, platform, arch);
   pruneNativeModules(context.appOutDir, platform, arch);
 
   if (platform === "linux" || platform === "win32") {

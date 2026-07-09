@@ -184,6 +184,11 @@ export function buildRelayWebSocketUrl(params: {
    */
   connectionId?: string;
   version?: RelayProtocolVersion | 1 | 2;
+  relayAuth?: {
+    readonly publicKeyB64: string;
+    readonly nonce: string;
+    readonly signatureB64: string;
+  };
 }): string {
   const { host, port, isIpv6 } = parseHostPort(params.endpoint);
   const protocol = params.useTls ? "wss" : "ws";
@@ -194,6 +199,11 @@ export function buildRelayWebSocketUrl(params: {
   url.searchParams.set("v", normalizeRelayProtocolVersion(params.version));
   if (params.connectionId) {
     url.searchParams.set("connectionId", params.connectionId);
+  }
+  if (params.relayAuth) {
+    url.searchParams.set("relayAuthPublicKeyB64", params.relayAuth.publicKeyB64);
+    url.searchParams.set("relayAuthNonce", params.relayAuth.nonce);
+    url.searchParams.set("relayAuthSignatureB64", params.relayAuth.signatureB64);
   }
   return url.toString();
 }

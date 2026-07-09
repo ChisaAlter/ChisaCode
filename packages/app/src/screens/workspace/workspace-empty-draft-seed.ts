@@ -22,5 +22,5 @@ export function shouldSeedEmptyWorkspaceDraft(input: {
     return false;
   }
 
-  return input.activeAgentCount === 0 && input.terminalCount === 0 && input.workspaceTabCount === 0;
+  return input.terminalCount === 0 && input.workspaceTabCount === 0;
 }

@@ -1,13 +1,29 @@
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import {
+  AGENT_PROVIDER_DEFINITIONS,
+  DEV_AGENT_PROVIDER_DEFINITIONS,
   type AgentModeColorTier,
   type AgentModeIcon,
   type AgentProviderDefinition,
   type AgentProviderModeDefinition,
 } from "@chisacode/protocol/provider-manifest";
 
+const BUILT_IN_PROVIDER_DEFINITION_MAP = new Map(
+  [...AGENT_PROVIDER_DEFINITIONS, ...DEV_AGENT_PROVIDER_DEFINITIONS].map((definition) => [
+    definition.id,
+    definition,
+  ]),
+);
+
+function resolveBuiltInProviderDefinition(
+  entry: ProviderSnapshotEntry,
+): AgentProviderDefinition | undefined {
+  return BUILT_IN_PROVIDER_DEFINITION_MAP.get(entry.provider);
+}
+
 function buildProviderModes(entry: ProviderSnapshotEntry): AgentProviderModeDefinition[] {
-  const entryModes = entry.modes ?? [];
+  const builtInDefinition = resolveBuiltInProviderDefinition(entry);
+  const entryModes = entry.modes?.length ? entry.modes : (builtInDefinition?.modes ?? []);
 
   return entryModes.map((mode) =>
     Object.assign({}, mode, {
@@ -24,13 +40,16 @@ export function buildProviderDefinitions(
     return [];
   }
 
-  return snapshotEntries.map((entry) => ({
-    id: entry.provider,
-    label: entry.label ?? entry.provider,
-    description: entry.description ?? "",
-    defaultModeId: entry.defaultModeId ?? null,
-    modes: buildProviderModes(entry),
-  }));
+  return snapshotEntries.map((entry) => {
+    const builtInDefinition = resolveBuiltInProviderDefinition(entry);
+    return {
+      id: entry.provider,
+      label: entry.label ?? builtInDefinition?.label ?? entry.provider,
+      description: entry.description ?? builtInDefinition?.description ?? "",
+      defaultModeId: entry.defaultModeId ?? builtInDefinition?.defaultModeId ?? null,
+      modes: buildProviderModes(entry),
+    };
+  });
 }
 
 export function resolveProviderLabel(

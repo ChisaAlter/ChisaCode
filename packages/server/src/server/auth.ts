@@ -22,17 +22,6 @@ export function isBearerTokenValid(input: BearerValidationInput): boolean {
   return isBearerTokenValidSync(input);
 }
 
-/**
- * Validates a bearer token against the daemon bcrypt hash synchronously.
- *
- * Use ONLY at startup or in CLI contexts — `compareSync` blocks the event loop
- * and will stall concurrent requests in a daemon handler. For request-path
- * validation use {@link isBearerTokenValidAsync} instead.
- *
- * @param input The configured password hash and the candidate token
- * @returns `true` if no password is configured (auth disabled) or the token matches
- */
-
 export async function isBearerTokenValidAsync(input: BearerValidationInput): Promise<boolean> {
   if (!input.password) {
     return true;
@@ -44,6 +33,16 @@ export async function isBearerTokenValidAsync(input: BearerValidationInput): Pro
   return compare(input.token, input.password);
 }
 
+/**
+ * Validates a bearer token against the daemon bcrypt hash synchronously.
+ *
+ * Use ONLY at startup or in CLI contexts — `compareSync` blocks the event loop
+ * and will stall concurrent requests in a daemon handler. For request-path
+ * validation use {@link isBearerTokenValidAsync} instead.
+ *
+ * @param input The configured password hash and the candidate token
+ * @returns `true` if no password is configured (auth disabled) or the token matches
+ */
 export function isBearerTokenValidSync(input: BearerValidationInput): boolean {
   if (!input.password) {
     return true;

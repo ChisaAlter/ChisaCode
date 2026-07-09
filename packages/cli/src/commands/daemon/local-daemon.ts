@@ -1,5 +1,5 @@
 import { spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { loadConfig, resolveChisaCodeHome, spawnProcess } from "@chisacode/server";
@@ -277,6 +277,22 @@ function isProcessRunning(pid: number): boolean {
   }
 }
 
+function removeStaleDesktopManagedPidFile(pidPath: string, pidInfo: LocalDaemonPidInfo): boolean {
+  if (pidInfo.desktopManaged !== true) {
+    return false;
+  }
+  if (isProcessRunning(pidInfo.pid)) {
+    return false;
+  }
+
+  try {
+    unlinkSync(pidPath);
+    return true;
+  } catch (err) {
+    return readNodeErrnoCode(err) === "ENOENT";
+  }
+}
+
 function signalProcess(pid: number, signal: NodeJS.Signals): boolean {
   try {
     process.kill(pid, signal);
@@ -409,8 +425,12 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
   const config = loadConfig(home, { env });
   const pidPath = pidFilePath(home);
   const logPath = path.join(home, DAEMON_LOG_FILENAME);
-  const pidInfo = existsSync(pidPath) ? readPidFile(pidPath) : null;
-  const running = pidInfo ? isProcessRunning(pidInfo.pid) : false;
+  let pidInfo = existsSync(pidPath) ? readPidFile(pidPath) : null;
+  let running = pidInfo ? isProcessRunning(pidInfo.pid) : false;
+  if (pidInfo && !running && removeStaleDesktopManagedPidFile(pidPath, pidInfo)) {
+    pidInfo = null;
+    running = false;
+  }
   const listen = pidInfo?.listen ?? config.listen;
 
   return {

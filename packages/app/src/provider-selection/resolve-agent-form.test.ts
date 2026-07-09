@@ -13,7 +13,10 @@ import {
   type UserModifiedFields,
 } from "./resolve-agent-form";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
-import type { AgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
+import {
+  AGENT_PROVIDER_DEFINITIONS,
+  type AgentProviderDefinition,
+} from "@chisacode/protocol/provider-manifest";
 import type {
   AgentModelDefinition,
   AgentProvider,
@@ -319,6 +322,43 @@ describe("buildProviderDefinitions", () => {
         ],
       },
     ]);
+  });
+
+  it("falls back to built-in provider modes when snapshot mode metadata is missing", () => {
+    const entries: ProviderSnapshotEntry[] = [
+      {
+        provider: "codex",
+        status: "ready",
+        enabled: true,
+        label: "Codex",
+        description: "Runtime Codex",
+      },
+      {
+        provider: "opencode",
+        status: "ready",
+        enabled: true,
+        label: "OpenCode",
+        description: "Runtime OpenCode",
+        modes: [],
+      },
+    ];
+
+    const definitions = buildProviderDefinitions(entries);
+    const codexDefinition = definitions.find((definition) => definition.id === "codex");
+    const opencodeDefinition = definitions.find((definition) => definition.id === "opencode");
+    const builtInCodex = AGENT_PROVIDER_DEFINITIONS.find((definition) => definition.id === "codex");
+    const builtInOpenCode = AGENT_PROVIDER_DEFINITIONS.find(
+      (definition) => definition.id === "opencode",
+    );
+
+    expect(codexDefinition?.defaultModeId).toBe(builtInCodex?.defaultModeId);
+    expect(codexDefinition?.modes.map((mode) => mode.id)).toEqual(
+      builtInCodex?.modes.map((mode) => mode.id),
+    );
+    expect(opencodeDefinition?.defaultModeId).toBe(builtInOpenCode?.defaultModeId);
+    expect(opencodeDefinition?.modes.map((mode) => mode.id)).toEqual(
+      builtInOpenCode?.modes.map((mode) => mode.id),
+    );
   });
 });
 

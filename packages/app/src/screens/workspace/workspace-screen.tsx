@@ -158,6 +158,7 @@ import {
   resolveWorkspaceRouteState,
   type WorkspaceRouteState,
 } from "@/screens/workspace/workspace-route-state";
+import { useWorkspaceRouteLoadingTimedOut } from "@/screens/workspace/use-workspace-route-loading-timeout";
 import { renderWorkspaceRouteGate } from "@/screens/workspace/workspace-route-state-views";
 import {
   buildWorkspaceTabSnapshot,
@@ -2146,6 +2147,7 @@ function useWorkspaceRouteActions(normalizedServerId: string): {
 
 function useResolvedWorkspaceRouteState(input: {
   serverId: string;
+  workspaceId: string;
   workspace: WorkspaceDescriptor | null;
   hasHydratedWorkspaces: boolean;
 }): WorkspaceRouteState {
@@ -2155,23 +2157,43 @@ function useResolvedWorkspaceRouteState(input: {
     [hosts, input.serverId],
   );
   const hostSnapshot = useHostRuntimeSnapshot(input.serverId);
+  const connectionStatus = hostSnapshot?.connectionStatus ?? "connecting";
+  const workspaceLookupTimedOut = useWorkspaceRouteLoadingTimedOut({
+    routeKey: `${input.serverId}:${input.workspaceId}`,
+    connectionStatus,
+    workspace: input.workspace,
+    hasHydratedWorkspaces: input.hasHydratedWorkspaces,
+  });
   const hostName = useMemo(() => getHostDisplayName(host, input.serverId), [host, input.serverId]);
+  const routeMatchesHostName = useMemo(() => {
+    const routeWorkspaceId = input.workspaceId.trim();
+    const normalizedHostName = hostName.trim();
+    return (
+      routeWorkspaceId.length > 0 &&
+      normalizedHostName.length > 0 &&
+      routeWorkspaceId.toLowerCase() === normalizedHostName.toLowerCase()
+    );
+  }, [hostName, input.workspaceId]);
 
   return useMemo(
     () =>
       resolveWorkspaceRouteState({
         hostName,
-        connectionStatus: hostSnapshot?.connectionStatus ?? "connecting",
+        connectionStatus,
         lastError: hostSnapshot?.lastError ?? null,
         workspace: input.workspace,
         hasHydratedWorkspaces: input.hasHydratedWorkspaces,
+        workspaceLookupTimedOut,
+        routeMatchesHostName,
       }),
     [
       hostName,
-      hostSnapshot?.connectionStatus,
+      connectionStatus,
       hostSnapshot?.lastError,
       input.workspace,
       input.hasHydratedWorkspaces,
+      workspaceLookupTimedOut,
+      routeMatchesHostName,
     ],
   );
 }
@@ -2531,6 +2553,7 @@ function WorkspaceScreenContent({
   );
   const workspaceRouteState = useResolvedWorkspaceRouteState({
     serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
     workspace: workspaceDescriptor,
     hasHydratedWorkspaces,
   });
@@ -5320,6 +5343,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   centerContent: {
     flex: 1,
+    minWidth: 0,
     minHeight: 0,
     position: "relative",
     borderWidth: theme.borderWidth[1],
@@ -5389,6 +5413,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   content: {
     flex: 1,
+    minWidth: 0,
     minHeight: 0,
     backgroundColor: theme.colors.surface0,
     position: "relative",

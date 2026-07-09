@@ -76,7 +76,7 @@ export function applyProvidersSnapshotUpdate(input: {
   });
 }
 
-export type SelectorOpenRefetchDecision = "refetch-stale" | "refetch-always";
+export type SelectorOpenRefetchDecision = "refetch-stale" | "refresh-now";
 
 export function selectorOpenRefetchDecision(input: {
   entries: ProviderSnapshotEntry[] | undefined;
@@ -87,7 +87,7 @@ export function selectorOpenRefetchDecision(input: {
   }
   const selectedEntry = input.entries?.find((entry) => entry.provider === input.selectedProvider);
   if (!selectedEntry || selectedEntry.status === "loading") {
-    return "refetch-always";
+    return "refresh-now";
   }
   return "refetch-stale";
 }
@@ -177,13 +177,13 @@ export function useProvidersSnapshot(
         entries: snapshotQuery.data?.entries,
         selectedProvider,
       });
-      if (decision === "refetch-always") {
-        void queryClient.refetchQueries({ queryKey, type: "active" });
+      if (decision === "refresh-now") {
+        void refreshSnapshot(undefined);
         return;
       }
       void queryClient.refetchQueries({ queryKey, type: "active", stale: true });
     },
-    [queryClient, queryKey, snapshotQuery.data?.entries],
+    [queryClient, queryKey, refreshSnapshot, snapshotQuery.data?.entries],
   );
 
   return {

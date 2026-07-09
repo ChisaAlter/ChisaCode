@@ -13,6 +13,7 @@ export interface WorkspaceTabLayoutInput {
     tabHorizontalPadding: number;
     estimatedCharWidth: number;
     closeButtonWidth: number;
+    minScrollableTabWidth?: number;
   };
 }
 
@@ -28,6 +29,18 @@ export interface WorkspaceTabLayoutResult {
   requiresHorizontalScrollFallback: boolean;
 }
 
+export interface WorkspaceVisibleTabWindowInput {
+  tabCount: number;
+  activeIndex: number;
+  maxVisibleTabs: number;
+}
+
+export interface WorkspaceVisibleTabWindow {
+  startIndex: number;
+  endIndex: number;
+  hiddenCount: number;
+}
+
 function clamp(value: number, min: number, max: number): number {
   if (value < min) {
     return min;
@@ -36,6 +49,25 @@ function clamp(value: number, min: number, max: number): number {
     return max;
   }
   return value;
+}
+
+export function computeWorkspaceVisibleTabWindow(
+  input: WorkspaceVisibleTabWindowInput,
+): WorkspaceVisibleTabWindow {
+  if (input.tabCount <= 0) {
+    return { startIndex: 0, endIndex: 0, hiddenCount: 0 };
+  }
+
+  const visibleCount = clamp(Math.floor(input.maxVisibleTabs), 1, input.tabCount);
+  const activeIndex = clamp(Math.floor(input.activeIndex), 0, input.tabCount - 1);
+  const preferredStartIndex = activeIndex - Math.floor((visibleCount - 1) / 2);
+  const startIndex = clamp(preferredStartIndex, 0, input.tabCount - visibleCount);
+
+  return {
+    startIndex,
+    endIndex: startIndex + visibleCount,
+    hiddenCount: input.tabCount - visibleCount,
+  };
 }
 
 export function computeWorkspaceTabLayout(
@@ -61,10 +93,14 @@ export function computeWorkspaceTabLayout(
     input.metrics.tabIconWidth +
     input.metrics.tabHorizontalPadding * 2 +
     input.metrics.closeButtonWidth;
+  const minScrollableTabWidth = Math.max(
+    iconOnlyTabWidth,
+    input.metrics.minScrollableTabWidth ?? 132,
+  );
   const iconOnlyTotalTabsWidth = iconOnlyTabWidth * tabCount;
   const requiresHorizontalScrollFallback = availableTabsWidth < iconOnlyTotalTabsWidth;
   const resolvedWidth = requiresHorizontalScrollFallback
-    ? iconOnlyTabWidth
+    ? minScrollableTabWidth
     : clamp(availableTabsWidth / tabCount, iconOnlyTabWidth, input.metrics.maxTabWidth);
   const resolvedWidths = Array.from({ length: tabCount }, () => resolvedWidth);
 

@@ -95,6 +95,32 @@ describe("resolveWorkspaceRouteState", () => {
     ).toEqual({ kind: "loading", hostName: "Laptop" });
   });
 
+  it("returns missing when the unresolved workspace route is the host name", () => {
+    expect(
+      resolveWorkspaceRouteState({
+        hostName: "DESKTOP-TFK2NTA",
+        connectionStatus: "online",
+        lastError: null,
+        workspace: null,
+        hasHydratedWorkspaces: false,
+        routeMatchesHostName: true,
+      }),
+    ).toEqual({ kind: "missing", hostName: "DESKTOP-TFK2NTA" });
+  });
+
+  it("returns missing when workspace route loading times out while the host is online", () => {
+    expect(
+      resolveWorkspaceRouteState({
+        hostName: "Laptop",
+        connectionStatus: "online",
+        lastError: null,
+        workspace: null,
+        hasHydratedWorkspaces: false,
+        workspaceLookupTimedOut: true,
+      }),
+    ).toEqual({ kind: "missing", hostName: "Laptop" });
+  });
+
   it("returns ready when the host is online and the descriptor exists", () => {
     expect(
       resolveWorkspaceRouteState({

@@ -776,6 +776,7 @@ const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const DEFAULT_OPEN_PROJECT_TIMEOUT_MS = 60000;
+const DEFAULT_FETCH_AGENT_TIMELINE_TIMEOUT_MS = 60000;
 const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
 
 /** Default timeout for waiting for connection before sending queued messages */
@@ -2265,7 +2266,7 @@ export class DaemonClient {
     const payload = await this.sendRequest({
       requestId: resolvedRequestId,
       message,
-      timeout: 15000,
+      timeout: DEFAULT_FETCH_AGENT_TIMELINE_TIMEOUT_MS,
       options: { skipQueue: true },
       select: (msg) => {
         if (msg.type !== "fetch_agent_timeline_response") {

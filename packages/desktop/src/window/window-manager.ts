@@ -13,6 +13,9 @@ import { translateDesktop } from "../i18n.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 
 const IPC_PREFIXES = ["chisacode"] as const;
+const OPAQUE_HEX_COLOR = /^#[\da-f]{6}$/i;
+const MAIN_WINDOW_MIN_WIDTH = 980;
+const MAIN_WINDOW_MIN_HEIGHT = 720;
 
 export function readBadgeCount(input: unknown): number {
   if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0) {
@@ -91,6 +94,16 @@ export function getMainWindowChromeOptions(input: {
   };
 }
 
+export function getMainWindowSizingOptions(): Pick<
+  Electron.BrowserWindowConstructorOptions,
+  "minWidth" | "minHeight"
+> {
+  return {
+    minWidth: MAIN_WINDOW_MIN_WIDTH,
+    minHeight: MAIN_WINDOW_MIN_HEIGHT,
+  };
+}
+
 function readFiniteOverlayHeight(input: unknown): number | null {
   if (typeof input !== "number" || !Number.isFinite(input)) {
     return null;
@@ -105,7 +118,8 @@ function readOverlayColor(input: unknown): string | null {
     return null;
   }
 
-  return input;
+  const color = input.trim();
+  return OPAQUE_HEX_COLOR.test(color) ? color : null;
 }
 
 export function readWindowControlsOverlayUpdate(

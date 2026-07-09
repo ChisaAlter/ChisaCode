@@ -36,13 +36,16 @@ describe("shouldSeedEmptyWorkspaceDraft", () => {
     ).toBe(false);
   });
 
-  it("does not seed when existing workspace content is known", () => {
+  it("seeds when historical agents exist but no workspace tab can render", () => {
     expect(
       shouldSeedEmptyWorkspaceDraft({
         ...readyEmptyWorkspace,
         activeAgentCount: 1,
       }),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("does not seed when existing workspace tabs are known", () => {
     expect(
       shouldSeedEmptyWorkspaceDraft({
         ...readyEmptyWorkspace,

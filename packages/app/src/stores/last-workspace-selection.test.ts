@@ -63,4 +63,18 @@ describe("last workspace selection", () => {
       workspaceId: "workspace-new",
     });
   });
+
+  it("forgets an invalid saved workspace selection", async () => {
+    const storage = new DelayedWorkspaceSelectionStorage();
+    const store = createLastWorkspaceSelectionStore(storage);
+    const hydration = store.hydrate();
+
+    storage.finishHydrationWith({ serverId: "server-old", workspaceId: "missing-workspace" });
+    await hydration;
+
+    store.forget();
+
+    expect(store.getSelection()).toBeNull();
+    expect(storage.getSavedSelection()).toBeNull();
+  });
 });

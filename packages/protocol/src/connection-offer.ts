@@ -10,6 +10,7 @@ export const ConnectionOfferV2Schema = z.object({
   v: z.literal(2),
   serverId: z.string().min(1),
   daemonPublicKeyB64: z.string().min(1),
+  relayAuthPublicKeyB64: z.string().min(1).optional(),
   relay: z.object({
     endpoint: z.string().min(1),
     useTls: z.boolean().optional(),

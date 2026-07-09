@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeWorkspaceTabLayout } from "@/screens/workspace/workspace-tab-layout";
+import {
+  computeWorkspaceTabLayout,
+  computeWorkspaceVisibleTabWindow,
+} from "@/screens/workspace/workspace-tab-layout";
 
 const metrics = {
   rowHorizontalInset: 0,
@@ -58,7 +61,7 @@ describe("computeWorkspaceTabLayout", () => {
     expect(result.items.map((item) => item.width)).toEqual([175, 175, 175, 175]);
   });
 
-  it("collapses to icon-only before allowing horizontal scroll fallback", () => {
+  it("collapses labels only while icon-only tabs still fit without scrolling", () => {
     const result = computeWorkspaceTabLayout({
       viewportWidth: 388,
       tabLabelLengths: [14, 14, 14, 14],
@@ -71,7 +74,7 @@ describe("computeWorkspaceTabLayout", () => {
     expect(result.items.every((item) => !item.showLabel)).toBe(true);
   });
 
-  it("allows horizontal scroll only when icon-only tabs still cannot fit", () => {
+  it("uses readable tab widths instead of icon-only chips in scroll fallback", () => {
     const result = computeWorkspaceTabLayout({
       viewportWidth: 300,
       tabLabelLengths: [14, 14, 14, 14],
@@ -80,8 +83,8 @@ describe("computeWorkspaceTabLayout", () => {
 
     expect(result.closeButtonPolicy).toBe("all");
     expect(result.requiresHorizontalScrollFallback).toBe(true);
-    expect(result.items.map((item) => item.width)).toEqual([60, 60, 60, 60]);
-    expect(result.items.every((item) => !item.showLabel)).toBe(true);
+    expect(result.items.map((item) => item.width)).toEqual([132, 132, 132, 132]);
+    expect(result.items.every((item) => item.showLabel)).toBe(true);
   });
 
   it("returns empty layout details when there are no tabs", () => {
@@ -94,5 +97,45 @@ describe("computeWorkspaceTabLayout", () => {
     expect(result.closeButtonPolicy).toBe("all");
     expect(result.requiresHorizontalScrollFallback).toBe(false);
     expect(result.items).toEqual([]);
+  });
+
+  it("keeps the active tab centered in the visible overflow window when many tabs are open", () => {
+    const result = computeWorkspaceVisibleTabWindow({
+      tabCount: 24,
+      activeIndex: 12,
+      maxVisibleTabs: 5,
+    });
+
+    expect(result).toEqual({
+      startIndex: 10,
+      endIndex: 15,
+      hiddenCount: 19,
+    });
+  });
+
+  it("clamps the visible overflow window to the start and end of the tab list", () => {
+    expect(
+      computeWorkspaceVisibleTabWindow({
+        tabCount: 24,
+        activeIndex: 0,
+        maxVisibleTabs: 5,
+      }),
+    ).toEqual({
+      startIndex: 0,
+      endIndex: 5,
+      hiddenCount: 19,
+    });
+
+    expect(
+      computeWorkspaceVisibleTabWindow({
+        tabCount: 24,
+        activeIndex: 23,
+        maxVisibleTabs: 5,
+      }),
+    ).toEqual({
+      startIndex: 19,
+      endIndex: 24,
+      hiddenCount: 19,
+    });
   });
 });

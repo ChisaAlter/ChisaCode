@@ -135,7 +135,7 @@ function RootStack() {
         already-mounted workspace screen. Keep workspace identity/retention
         outside this route-level native-stack API.
       */}
-      <Stack.Screen name="h/[serverId]/workspace/[workspaceId]" />
+      <Stack.Screen name="h/[serverId]/workspace/[workspaceId]/index" />
       <Stack.Screen name="h/[serverId]/agent/[agentId]" options={AGENT_SCREEN_OPTIONS} />
       <Stack.Screen name="h/[serverId]/index" />
       <Stack.Screen name="h/[serverId]/sessions" />

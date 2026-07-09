@@ -41,7 +41,6 @@ import {
   type Agent,
   type MessageEntry,
   type SessionState,
-  type WorkspaceDescriptor,
   normalizeWorkspaceDescriptor,
 } from "@/stores/session-store";
 import { useDraftStore } from "@/stores/draft-store";
@@ -66,7 +65,12 @@ import {
   clearWorkspaceArchivePending,
   shouldSuppressWorkspaceForLocalArchive,
 } from "@/contexts/session-workspace-upserts";
+import { hydrateWorkspaceDescriptors } from "@/contexts/session-workspace-hydration";
 import { isNative } from "@/constants/platform";
+import {
+  removeCachedAgentStreamTail,
+  saveCachedAgentStreamTail,
+} from "@/timeline/agent-stream-tail-cache";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
@@ -548,42 +552,15 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (!client || !isConnected) {
         return;
       }
-
-      const workspaces = new Map<string, WorkspaceDescriptor>();
-      let cursor: string | null = null;
-      let includeSubscribe = options?.subscribe ?? false;
-
-      while (true) {
-        const payload = await client.fetchWorkspaces({
-          sort: [{ key: "activity_at", direction: "desc" }],
-          ...(includeSubscribe ? { subscribe: {} } : {}),
-          page: cursor ? { limit: 200, cursor } : { limit: 200 },
-        });
-        if (options?.isCancelled?.()) {
-          return;
-        }
-
-        for (const entry of payload.entries) {
-          const workspace = normalizeWorkspaceDescriptor(entry);
-          if (shouldSuppressWorkspaceForLocalArchive({ serverId, workspace })) {
-            continue;
-          }
-          workspaces.set(workspace.id, workspace);
-        }
-
-        if (!payload.pageInfo.hasMore || !payload.pageInfo.nextCursor) {
-          break;
-        }
-        cursor = payload.pageInfo.nextCursor;
-        includeSubscribe = false;
-      }
-
-      if (options?.isCancelled?.()) {
-        return;
-      }
-
-      setWorkspaces(serverId, workspaces);
-      setHasHydratedWorkspaces(serverId, true);
+      await hydrateWorkspaceDescriptors(
+        {
+          client,
+          serverId,
+          setWorkspaces,
+          setHasHydratedWorkspaces,
+        },
+        options,
+      );
     },
     [client, isConnected, serverId, setHasHydratedWorkspaces, setWorkspaces],
   );
@@ -1152,6 +1129,14 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         setAgentTimelineCursor,
       });
 
+      void saveCachedAgentStreamTail({ serverId, agentId, items: result.tail }).catch((error) => {
+        console.warn("[Session] failed to persist agent stream tail cache", {
+          serverId,
+          agentId,
+          error,
+        });
+      });
+
       executeTimelineSideEffects({
         sideEffects: result.sideEffects,
         agentId,
@@ -1578,6 +1563,13 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       deletePendingAgentUpdate(serverId, agentId);
       clearArchiveAgentPending({ queryClient, serverId, agentId });
       useWorkspaceLayoutStore.getState().unpinAgentEverywhere(agentId);
+      void removeCachedAgentStreamTail({ serverId, agentId }).catch((error) => {
+        console.warn("[Session] failed to remove agent stream tail cache", {
+          serverId,
+          agentId,
+          error,
+        });
+      });
 
       setAgents(serverId, (prev) => {
         if (!prev.has(agentId)) {
