@@ -114,7 +114,8 @@ export type ThemeName =
   | "claude"
   | "ghostty"
   | "liquid-neon"
-  | "chisaki";
+  | "chisaki"
+  | "aemeath";
 
 // Diff stat colors — light uses muted tones, dark uses the brighter palette values
 const lightDiffColors = {
@@ -164,67 +165,67 @@ const darkStatusColors = {
 
 // Semantic color tokens - Layer-based system
 const lightSemanticColors = {
-  // Surfaces (layers) - shifted one step lighter
-  surface0: "#ffffff", // App background
-  surface1: "#fafafa", // Subtle hover (was zinc-100, now zinc-50)
-  surface2: "#f4f4f5", // Elevated: badges, inputs, sheets (was zinc-200, now zinc-100)
-  surface3: "#e4e4e7", // Highest elevation (was zinc-300, now zinc-200)
-  surface4: "#d4d4d8", // Extra emphasis (was zinc-400, now zinc-300)
-  surfaceDiffEmpty: "#f6f6f6", // Empty side of split diff rows, between surface1 and surface2 and biased toward surface2
-  surfaceSidebar: "#f4f4f5", // Sidebar background (darker than main)
-  surfaceSidebarHover: "#e9e9ec", // Sidebar hover (darker in light mode)
-  surfaceWorkspace: "#ffffff", // Workspace main background
+  // Surfaces (layers) — Blockchain Light (蓝紫浅色)
+  surface0: "#f8fafc",
+  surface1: "#f1f5f9",
+  surface2: "#e2e8f0",
+  surface3: "#cbd5e1",
+  surface4: "#94a3b8",
+  surfaceDiffEmpty: "#f8fafc",
+  surfaceSidebar: "#ffffff",
+  surfaceSidebarHover: "#f1f5f9",
+  surfaceWorkspace: "#ffffff",
 
   // Text
-  foreground: "#1a1a1e",
-  foregroundMuted: "#71717a",
+  foreground: "#0f172a",
+  foregroundMuted: "#64748b",
 
   // Controls
   scrollbarHandle: "#3f3f46", // zinc-700
 
-  // Borders - shifted one step lighter
-  border: "#e4e4e7", // (was zinc-200, now zinc-200 - keep for contrast)
-  borderAccent: "#ececf1", // Softer accent border for low-emphasis outlines
+  // Borders
+  border: "#e2e8f0",
+  borderAccent: "#cbd5e1",
 
   // Brand
-  accent: "#20744A",
-  accentBright: "#239956",
+  accent: "#3B82F6", // blue-500
+  accentBright: "#6366F1", // indigo-500
   accentForeground: "#ffffff",
 
   // Semantic
-  destructive: "#b04138", // dark warm red on white — calm but unambiguously red
+  destructive: "#ef4444",
   destructiveForeground: "#ffffff",
   success: "#20744A",
   successForeground: "#ffffff",
   overlay: lightOverlay,
-  blockquoteBorder: "#20744A", // accent green — distinct from text foreground
+  blockquoteBorder: "#3B82F6",
 
   // Legacy aliases (for gradual migration)
-  background: "#ffffff",
+  background: "#f8fafc",
   popover: "#ffffff",
-  popoverForeground: "#1a1a1e",
-  primary: "#18181b",
-  primaryForeground: "#fafafa",
-  secondary: "#f4f4f5",
-  secondaryForeground: "#1a1a1e",
-  muted: "#f4f4f5",
-  mutedForeground: "#71717a",
-  accentBorder: "#ececf1",
-  input: "#f4f4f5",
-  ring: "#18181b",
+  popoverForeground: "#0f172a",
+  primary: "#0f172a",
+  primaryForeground: "#f8fafc",
+  secondary: "#f1f5f9",
+  secondaryForeground: "#0f172a",
+  muted: "#f1f5f9",
+  mutedForeground: "#64748b",
+  accentBorder: "#cbd5e1",
+  input: "#f1f5f9",
+  ring: "#3B82F6",
 
   ...lightDiffColors,
   ...lightStatusColors,
 
   terminal: {
-    background: "#ffffff",
-    foreground: "#1a1a1e",
-    cursor: "#1a1a1e",
+    background: "#f8fafc",
+    foreground: "#0f172a",
+    cursor: "#3B82F6",
     cursorAccent: "#ffffff",
     selectionBackground: "rgba(0, 0, 0, 0.15)",
-    selectionForeground: "#1a1a1e",
+    selectionForeground: "#0f172a",
 
-    black: "#1a1a1e",
+    black: "#0f172a",
     red: "#dc2626",
     green: "#16a34a",
     yellow: "#ca8a04",
@@ -241,66 +242,6 @@ const lightSemanticColors = {
     brightMagenta: "#a855f7",
     brightCyan: "#06b6d4",
     brightWhite: "#fafafa",
-  },
-} as const;
-
-const chisakiSemanticColors = {
-  ...lightSemanticColors,
-
-  surface0: "#fff8f8",
-  surface1: "#fffafa",
-  surface2: "#f8f0f1",
-  surface3: "#eadadd",
-  surface4: "#d7a6ad",
-  surfaceDiffEmpty: "#fbf3f4",
-  surfaceSidebar: "#f3eaec",
-  surfaceSidebarHover: "#eadadd",
-  surfaceWorkspace: "#fffafa",
-
-  foreground: "#22191b",
-  foregroundMuted: "#77686b",
-
-  scrollbarHandle: "#b65f69",
-
-  border: "#eadadd",
-  borderAccent: "#d7a6ad",
-
-  accent: "#b51d2a",
-  accentBright: "#e04755",
-  accentForeground: "#ffffff",
-  destructive: "#991b1b",
-  destructiveForeground: "#ffffff",
-  success: "#15803d",
-  successForeground: "#ffffff",
-
-  overlay: lightOverlay,
-  blockquoteBorder: "#b51d2a", // chisaki accent — warm red
-
-  background: "#fff8f8",
-  popover: "#fffafa",
-  popoverForeground: "#22191b",
-  primary: "#22191b",
-  primaryForeground: "#fffafa",
-  secondary: "#f8f0f1",
-  secondaryForeground: "#22191b",
-  muted: "#f8f0f1",
-  mutedForeground: "#77686b",
-  accentBorder: "#d7a6ad",
-  input: "#f8f0f1",
-  ring: "#b51d2a",
-
-  terminal: {
-    ...lightSemanticColors.terminal,
-    background: "#fffafa",
-    foreground: "#22191b",
-    cursor: "#b51d2a",
-    cursorAccent: "#ffffff",
-    selectionBackground: "rgba(181, 29, 42, 0.18)",
-    selectionForeground: "#22191b",
-    black: "#22191b",
-    red: "#b51d2a",
-    brightBlack: "#77686b",
-    brightRed: "#e04755",
   },
 } as const;
 
@@ -411,24 +352,24 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// ChisaCode — subtle teal-green tint (default)
+// Cyber Dark — 蓝紫暗色 (default)
 const chisacodeDarkColors = buildDarkSemanticColors({
-  surface0: "#181B1A",
-  surface1: "#1E2120",
-  surface2: "#272A29",
-  surface3: "#434645",
-  surface4: "#595B5B",
-  surfaceDiffEmpty: "#252827",
-  surfaceSidebar: "#141716",
-  surfaceSidebarHover: "#1c1f1e",
-  foregroundMuted: "#A1A5A4",
-  scrollbarHandle: "#717574",
-  border: "#252B2A",
-  borderAccent: "#2F3534",
-  accent: "#20744A",
-  accentBright: "#7ccba0",
-  destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
-  ringColor: "#2F3534", // match borderAccent
+  surface0: "#0a0c10",
+  surface1: "#12141c",
+  surface2: "#1a1d28",
+  surface3: "#252836",
+  surface4: "#3a3d4e",
+  surfaceDiffEmpty: "#12141c",
+  surfaceSidebar: "#0e1018",
+  surfaceSidebarHover: "#1a1d28",
+  foregroundMuted: "#8b8fa3",
+  scrollbarHandle: "#3a3d4e",
+  border: "#252836",
+  borderAccent: "#3a3d4e",
+  accent: "#6366F1", // indigo-500
+  accentBright: "#818CF8", // indigo-400
+  destructive: "#ef4444",
+  ringColor: "#6366F1",
 });
 
 // Zinc — neutral gray, no tint
@@ -513,71 +454,77 @@ const ghosttyDarkColors = buildDarkSemanticColors({
 });
 
 const liquidNeonLightColors = {
-  ...lightSemanticColors,
-  surface0: "transparent",
-  surface1: "rgba(255, 255, 255, 0.72)",
-  surface2: "rgba(255, 255, 255, 0.82)",
-  surface3: "rgba(245, 248, 252, 0.90)",
-  surface4: "rgba(233, 238, 245, 0.94)",
-  surfaceDiffEmpty: "rgba(255, 255, 255, 0.72)",
-  surfaceSidebar: "rgba(255, 255, 255, 0.28)",
-  surfaceSidebarHover: "rgba(255, 255, 255, 0.76)",
-  surfaceWorkspace: "transparent",
-  foreground: "#1d1d1f",
-  foregroundMuted: "#6e6e73",
-  scrollbarHandle: "rgba(60, 60, 67, 0.34)",
-  border: "rgba(60, 60, 67, 0.16)",
-  borderAccent: "rgba(255, 255, 255, 0.62)",
-  accent: "#007aff",
-  accentBright: "#5ac8fa",
+  surface0: "#06111f",
+  surface1: "#0a1628",
+  surface2: "#0f1e34",
+  surface3: "#1a2840",
+  surface4: "#243450",
+  surfaceDiffEmpty: "#0a1628",
+  surfaceSidebar: "#081424",
+  surfaceSidebarHover: "#0f1e34",
+  surfaceWorkspace: "#091828",
+  foreground: "#F7FBFF",
+  foregroundMuted: "#BFD0EA",
+  scrollbarHandle: "#243450",
+  border: "rgba(255,255,255,0.20)",
+  borderAccent: "rgba(99,230,255,0.34)",
+  accent: "#00A3FF",
+  accentBright: "#63E6FF",
   accentForeground: "#ffffff",
-  destructive: "#b91c1c",
+  destructive: "#FF4466",
   destructiveForeground: "#ffffff",
-  success: "#047857",
+  success: "#00A3FF",
   successForeground: "#ffffff",
-  overlay: lightOverlay,
-  blockquoteBorder: "#007aff", // liquid neon accent blue
-  background: "transparent",
-  popover: "rgba(255, 255, 255, 0.82)",
-  popoverForeground: "#1d1d1f",
-  primary: "#1d1d1f",
-  primaryForeground: "#ffffff",
-  secondary: "rgba(255, 255, 255, 0.82)",
-  secondaryForeground: "#1d1d1f",
-  muted: "rgba(242, 244, 248, 0.88)",
-  mutedForeground: "#6e6e73",
-  accentBorder: "rgba(255, 255, 255, 0.62)",
-  input: "rgba(255, 255, 255, 0.86)",
-  ring: "#007aff",
-  diffAddition: "#047857",
-  diffDeletion: "#b91c1c",
-  statusSuccess: "#047857",
-  statusDanger: "#b91c1c",
-  statusWarning: "#b45309",
-  statusMerged: "#6d5dfc",
+  overlay: darkOverlay,
+  blockquoteBorder: "#00A3FF",
+  background: "#06111f",
+  popover: "#0f1e34",
+  popoverForeground: "#F7FBFF",
+  primary: "#F7FBFF",
+  primaryForeground: "#06111f",
+  secondary: "#0f1e34",
+  secondaryForeground: "#F7FBFF",
+  muted: "#0f1e34",
+  mutedForeground: "#BFD0EA",
+  accentBorder: "rgba(99,230,255,0.34)",
+  input: "#0f1e34",
+  ring: "#00A3FF",
+  diffAddition: "#4ade80",
+  diffDeletion: "#ef4444",
+  diffAdditionBg: "rgba(74, 222, 128, 0.15)",
+  diffDeletionBg: "rgba(239, 68, 68, 0.10)",
+  diffAdditionHighlightBg: "rgba(74, 222, 128, 0.40)",
+  diffDeletionHighlightBg: "rgba(239, 68, 68, 0.35)",
+  statusSuccess: "#16a34a",
+  statusDanger: "#dc2626",
+  statusWarning: "#f59e0b",
+  statusMerged: "#9333ea",
+  statusSuccessBg: "rgba(22, 163, 74, 0.12)",
+  statusWarningBg: "rgba(245, 158, 11, 0.12)",
+  statusDangerBg: "rgba(220, 38, 38, 0.14)",
   terminal: {
-    background: "#ffffff",
-    foreground: "#1d1d1f",
-    cursor: "#007aff",
-    cursorAccent: "#ffffff",
-    selectionBackground: "rgba(0, 122, 255, 0.18)",
-    selectionForeground: "#1d1d1f",
-    black: "#1d1d1f",
-    red: "#dc2626",
-    green: "#059669",
-    yellow: "#ca8a04",
-    blue: "#2563eb",
-    magenta: "#7c3aed",
-    cyan: "#0e7490",
-    white: "#ffffff",
-    brightBlack: "#6e6e73",
-    brightRed: "#ef4444",
-    brightGreen: "#10b981",
-    brightYellow: "#f59e0b",
-    brightBlue: "#3b82f6",
-    brightMagenta: "#8b5cf6",
-    brightCyan: "#0891b2",
-    brightWhite: "#ffffff",
+    background: "#06111f",
+    foreground: "#F7FBFF",
+    cursor: "#63E6FF",
+    cursorAccent: "#06111f",
+    selectionBackground: "rgba(0,163,255,0.2)",
+    selectionForeground: "#F7FBFF",
+    black: "#081424",
+    red: "#e07070",
+    green: "#5dba80",
+    yellow: "#d4a44a",
+    blue: "#6a9de0",
+    magenta: "#b07ad0",
+    cyan: "#4aabb8",
+    white: "#d4d4d8",
+    brightRed: "#e89090",
+    brightGreen: "#7ecf9a",
+    brightYellow: "#e0be6e",
+    brightBlue: "#8ab4e8",
+    brightMagenta: "#c49ae0",
+    brightCyan: "#6ec2cc",
+    brightBlack: "#1a2840",
+    brightWhite: "#F7FBFF",
   },
 } as const;
 
@@ -714,43 +661,50 @@ const defaultGlass = {
 } as const;
 
 const liquidNeonGlass = {
-  enabled: true,
-  blurIntensity: 72,
-  panel: "rgba(255, 255, 255, 0.46)",
-  popover: "rgba(255, 255, 255, 0.72)",
-  sheet: "rgba(255, 255, 255, 0.76)",
-  chrome: "rgba(255, 255, 255, 0.52)",
-  border: "rgba(255, 255, 255, 0.86)",
-  highlight: "rgba(255, 255, 255, 0.96)",
-  glow: "rgba(86, 128, 178, 0.12)",
-  tint: "rgba(255, 255, 255, 0.08)",
-  edge: "rgba(255, 255, 255, 0.92)",
-  innerShadow: "rgba(60, 60, 67, 0.18)",
-  specular: "rgba(255, 255, 255, 0.88)",
-  refraction: "rgba(130, 170, 220, 0.18)",
-  caustic: "rgba(255, 255, 255, 0.42)",
-  cssBackdropFilter: "blur(16px) saturate(1.08)",
-  cardBorder: "rgba(255, 255, 255, 0.72)",
+  sm: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderRadius: 12,
+    blur: 22,
+    elevation: 2,
+  },
+  md: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderRadius: 16,
+    blur: 26,
+    elevation: 4,
+  },
+  lg: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderRadius: 20,
+    blur: 30,
+    elevation: 8,
+  },
 } as const;
 
 const liquidNeonShadow = {
   sm: {
-    shadowColor: "rgba(60, 60, 67, 0.10)",
+    shadowColor: "rgba(0,163,255,0.08)",
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 12,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 2,
   },
   md: {
-    shadowColor: "rgba(60, 60, 67, 0.12)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 22,
-    elevation: 8,
+    shadowColor: "rgba(0,163,255,0.12)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 16,
+    elevation: 4,
   },
   lg: {
-    shadowColor: "rgba(60, 60, 67, 0.16)",
-    shadowOffset: { width: 0, height: 16 },
-    shadowRadius: 40,
-    elevation: 10,
+    shadowColor: "rgba(99,230,255,0.16), rgba(168,85,247,0.08)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
   },
 } as const;
 
@@ -775,11 +729,11 @@ export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
 export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
 
 export const liquidNeonTheme = {
-  colorScheme: "light" as const,
+  colorScheme: "dark" as const,
   colors: {
     ...liquidNeonLightColors,
     palette: baseColors,
-    syntax: lightHighlightColors,
+    syntax: darkHighlightColors,
   },
   glass: liquidNeonGlass,
   shadow: liquidNeonShadow,
@@ -825,7 +779,80 @@ function buildLightTheme(semanticColors: Widened<typeof lightSemanticColors>) {
 }
 
 export const lightTheme = buildLightTheme(lightSemanticColors);
-export const chisakiTheme = buildLightTheme(chisakiSemanticColors);
+
+// Deep rose-black dark theme
+const chisakiDarkColors = buildDarkSemanticColors({
+  surface0: "#09070A",
+  surface1: "#171116",
+  surface2: "#211820",
+  surface3: "#2A1F28",
+  surface4: "#382630",
+  surfaceDiffEmpty: "#171116",
+  surfaceSidebar: "#130F14",
+  surfaceSidebarHover: "#211820",
+  foregroundMuted: "#B49DA7",
+  scrollbarHandle: "#382630",
+  border: "#34242D",
+  borderAccent: "#56303C",
+  accent: "#B7132F",
+  accentBright: "#FF4B67",
+  destructive: "#991b1b",
+  ringColor: "#B7132F",
+});
+export const chisakiTheme = buildDarkTheme(chisakiDarkColors);
+
+// Aemeath — 粉蓝浅色
+const aemeathSemanticColors = {
+  ...lightSemanticColors,
+
+  surface0: "#FBFDFF",
+  surface1: "#FFFEFE",
+  surface2: "#FFF7FB",
+  surface3: "#F0E3EB",
+  surface4: "#E0D0DC",
+  surfaceDiffEmpty: "#FBFDFF",
+  surfaceSidebar: "#FFF9FC",
+  surfaceSidebarHover: "#FFF0F6",
+  surfaceWorkspace: "#FBFDFF",
+
+  foreground: "#2B2028",
+  foregroundMuted: "#806F7C",
+
+  border: "#F0E3EB",
+  borderAccent: "#DBEEF8",
+
+  accent: "#E87BA8",
+  accentBright: "#F2A7C8",
+  accentForeground: "#ffffff",
+  destructive: "#dc2626",
+  success: "#15803d",
+  successForeground: "#ffffff",
+
+  blockquoteBorder: "#E87BA8",
+  background: "#FBFDFF",
+  popover: "#FFFEFE",
+  popoverForeground: "#2B2028",
+  primary: "#2B2028",
+  primaryForeground: "#FFFEFE",
+  secondary: "#FFF7FB",
+  secondaryForeground: "#2B2028",
+  muted: "#FFF7FB",
+  mutedForeground: "#806F7C",
+  accentBorder: "#F0D8E8",
+  input: "#FFF7FB",
+  ring: "#E87BA8",
+
+  terminal: {
+    ...lightSemanticColors.terminal,
+    background: "#FBFDFF",
+    foreground: "#2B2028",
+    cursor: "#E87BA8",
+    cursorAccent: "#ffffff",
+    selectionBackground: "rgba(232, 123, 168, 0.18)",
+    selectionForeground: "#2B2028",
+  },
+} as const;
+export const aemeathTheme = buildLightTheme(aemeathSemanticColors);
 
 // Keep compatibility with existing code
 export const theme = darkTheme;
@@ -835,7 +862,8 @@ export type Theme =
   | typeof darkTheme
   | typeof lightTheme
   | typeof chisakiTheme
-  | typeof liquidNeonTheme;
+  | typeof liquidNeonTheme
+  | typeof aemeathTheme;
 
 export function isLiquidNeonThemeName(themeName: ThemeName | "auto"): boolean {
   return themeName === "liquid-neon";
@@ -852,7 +880,8 @@ type UnistylesThemeKey =
   | "darkClaude"
   | "darkGhostty"
   | "liquidNeon"
-  | "chisaki";
+  | "chisaki"
+  | "aemeath";
 
 export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
   light: "light",
@@ -863,6 +892,7 @@ export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
   ghostty: "darkGhostty",
   "liquid-neon": "liquidNeon",
   chisaki: "chisaki",
+  aemeath: "aemeath",
 };
 
 export const THEME_SWATCHES: Record<ThemeName, string> = {
@@ -873,7 +903,8 @@ export const THEME_SWATCHES: Record<ThemeName, string> = {
   claude: "#D97757",
   ghostty: "#8caaee",
   "liquid-neon": "#ffffff",
-  chisaki: "#b51d2a",
+  chisaki: "#B7132F",
+  aemeath: "#E87BA8",
 };
 
 export const THEME_PREVIEWS: Record<
@@ -928,9 +959,15 @@ export const THEME_PREVIEWS: Record<
     accent: liquidNeonLightColors.accent,
   },
   chisaki: {
-    surface: chisakiSemanticColors.surface0,
-    border: chisakiSemanticColors.borderAccent,
-    line: chisakiSemanticColors.surface3,
-    accent: chisakiSemanticColors.accent,
+    surface: chisakiDarkColors.surface0,
+    border: chisakiDarkColors.borderAccent,
+    line: chisakiDarkColors.surface3,
+    accent: chisakiDarkColors.accent,
+  },
+  aemeath: {
+    surface: aemeathSemanticColors.surface0,
+    border: aemeathSemanticColors.border,
+    line: aemeathSemanticColors.surface3,
+    accent: aemeathSemanticColors.accent,
   },
 };
