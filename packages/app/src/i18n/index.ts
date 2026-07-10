@@ -1351,6 +1351,7 @@ export const resources = {
               ghostty: "Ghostty",
               "liquid-neon": "玻璃",
               chisaki: "千咲",
+              aemeath: "Aemeath",
               auto: "跟随系统",
             },
           },

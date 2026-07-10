@@ -251,6 +251,7 @@ const CUSTOM_THEME_OPTIONS = [
   "ghostty",
   "liquid-neon",
   "chisaki",
+  "aemeath",
 ] as const;
 
 // ---------------------------------------------------------------------------
