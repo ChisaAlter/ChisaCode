@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { StoredScheduleSchema, type StoredSchedule } from "@chisacode/protocol/schedule/types";
 
 function generateScheduleId(): string {
@@ -11,7 +11,12 @@ export class ScheduleStore {
   constructor(private readonly dir: string) {}
 
   private filePath(id: string): string {
-    return join(this.dir, `${id}.json`);
+    const scheduleDir = resolve(this.dir);
+    const candidate = resolve(scheduleDir, `${id}.json`);
+    if (dirname(candidate) !== scheduleDir) {
+      throw new Error("Invalid schedule id");
+    }
+    return candidate;
   }
 
   private async ensureDir(): Promise<void> {

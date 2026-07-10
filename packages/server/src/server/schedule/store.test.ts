@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
@@ -112,5 +112,16 @@ describe("ScheduleStore", () => {
 
     expect(await store.get(created.id)).toBeNull();
     expect(await store.list()).toEqual([]);
+  });
+
+  test("rejects schedule ids that escape the schedule directory", async () => {
+    const schedulesDir = join(tempDir, "schedules");
+    const configPath = join(tempDir, "config.json");
+    await mkdir(schedulesDir, { recursive: true });
+    await writeFile(configPath, "keep me", "utf-8");
+    const nestedStore = new ScheduleStore(schedulesDir);
+
+    await expect(nestedStore.delete("../config")).rejects.toThrow("Invalid schedule id");
+    await expect(readFile(configPath, "utf-8")).resolves.toBe("keep me");
   });
 });
