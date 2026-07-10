@@ -177,6 +177,26 @@ function stripHopByHopHeaders(
   return out;
 }
 
+function sanitizeForwardedHeaders(
+  rawHeaders: http.IncomingHttpHeaders,
+): Record<string, string | string[]> {
+  const forwardedHeaders = stripHopByHopHeaders(rawHeaders);
+  delete forwardedHeaders.authorization;
+  return forwardedHeaders;
+}
+
+function sanitizeWebSocketProtocols(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const protocols = value
+    .split(",")
+    .map((protocol) => protocol.trim())
+    .filter((protocol) => protocol.length > 0 && extractWsBearerProtocol(protocol) !== protocol);
+  return protocols.length > 0 ? protocols.join(", ") : undefined;
+}
+
 function sameOrigin(origin: string | undefined, hostHeader: string | undefined): boolean {
   if (!origin || !hostHeader) return false;
   return origin === `http://${hostHeader}` || origin === `https://${hostHeader}`;
@@ -269,7 +289,7 @@ export function createScriptProxyMiddleware({
       return;
     }
 
-    const forwardedHeaders = stripHopByHopHeaders(req.headers);
+    const forwardedHeaders = sanitizeForwardedHeaders(req.headers);
     forwardedHeaders["x-forwarded-for"] = req.socket.remoteAddress ?? "127.0.0.1";
     forwardedHeaders["x-forwarded-host"] = hostHeader.replace(/:\d+$/, "");
     forwardedHeaders["x-forwarded-proto"] = req.protocol;
@@ -363,7 +383,13 @@ function forwardScriptProxyUpgrade(params: {
   const { req, socket, head, hostHeader, route, logger } = params;
   const targetSocket = net.connect({ host: "127.0.0.1", port: route.port }, () => {
     // Reconstruct the raw HTTP upgrade request to send to the target
-    const forwardedHeaders = stripHopByHopHeaders(req.headers);
+    const forwardedHeaders = sanitizeForwardedHeaders(req.headers);
+    const protocols = sanitizeWebSocketProtocols(req.headers["sec-websocket-protocol"]);
+    if (protocols === undefined) {
+      delete forwardedHeaders["sec-websocket-protocol"];
+    } else {
+      forwardedHeaders["sec-websocket-protocol"] = protocols;
+    }
     forwardedHeaders["x-forwarded-for"] = req.socket.remoteAddress ?? "127.0.0.1";
     forwardedHeaders["x-forwarded-host"] = hostHeader.replace(/:\d+$/, "");
     forwardedHeaders["x-forwarded-proto"] = "http";

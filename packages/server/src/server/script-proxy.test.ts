@@ -307,13 +307,17 @@ function httpGet(
   port: number,
   host: string,
   path = "/",
+  headers: http.OutgoingHttpHeaders = {},
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const req = http.get({ hostname: "127.0.0.1", port, path, headers: { host } }, (res) => {
-      let body = "";
-      res.on("data", (chunk: Buffer) => (body += chunk.toString()));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
-    });
+    const req = http.get(
+      { hostname: "127.0.0.1", port, path, headers: { ...headers, host } },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk: Buffer) => (body += chunk.toString()));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
+      },
+    );
     req.on("error", reject);
   });
 }
@@ -338,6 +342,26 @@ it("proxies requests to the correct upstream based on Host header", async () => 
   const headers = upstream.receivedHeaders();
   expect(headers["x-forwarded-for"]).toBeDefined();
   expect(headers["x-forwarded-host"]).toBe("test-service.localhost");
+});
+
+it("does not forward daemon Authorization credentials to the HTTP upstream", async () => {
+  const upstream = await startUpstream();
+  const routeStore = new ScriptRouteStore();
+  routeStore.registerRoute({
+    hostname: "credential-test.localhost",
+    port: upstream.port,
+    workspaceId: "workspace-credential-test",
+    projectSlug: "credential-test",
+    scriptName: "service",
+  });
+
+  const proxy = await startProxy(routeStore);
+  const res = await httpGet(proxy.port, `credential-test.localhost:${proxy.port}`, "/", {
+    authorization: "Bearer daemon-secret",
+  });
+
+  expect(res.status).toBe(200);
+  expect(upstream.receivedHeaders().authorization).toBeUndefined();
 });
 
 it("falls through when no route matches", async () => {
@@ -456,13 +480,18 @@ it("proxies WebSocket connections to the correct upstream", async () => {
   expect(reply).toBe("echo: hello proxy");
 });
 
-async function startWsEchoUpstream(): Promise<{ port: number }> {
+async function startWsEchoUpstream(): Promise<{
+  port: number;
+  receivedProtocols: () => string | undefined;
+}> {
   const upstreamPort = await findFreePort();
   const upstreamServer = http.createServer();
   const wss = new WebSocketServer({ server: upstreamServer });
+  let lastProtocols: string | undefined;
   wsServers.push(wss);
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, request) => {
+    lastProtocols = request.headers["sec-websocket-protocol"];
     ws.on("message", (data) => {
       ws.send(`echo: ${data.toString()}`);
     });
@@ -470,7 +499,7 @@ async function startWsEchoUpstream(): Promise<{ port: number }> {
 
   await new Promise<void>((resolve) => upstreamServer.listen(upstreamPort, "127.0.0.1", resolve));
   httpServers.push(upstreamServer);
-  return { port: upstreamPort };
+  return { port: upstreamPort, receivedProtocols: () => lastProtocols };
 }
 
 async function startGuardedWsProxy(params: {
@@ -516,19 +545,15 @@ function createWsRouteStore(port: number): ScriptRouteStore {
 
 function connectGuardedWs(params: {
   proxyPort: number;
-  protocol?: string;
+  protocol?: string | string[];
   origin?: string;
 }): WebSocket {
-  const ws = new WebSocket(
-    `ws://127.0.0.1:${params.proxyPort}`,
-    params.protocol ? [params.protocol] : undefined,
-    {
-      headers: {
-        host: `guarded-ws.localhost:${params.proxyPort}`,
-        ...(params.origin ? { origin: params.origin } : {}),
-      },
+  const ws = new WebSocket(`ws://127.0.0.1:${params.proxyPort}`, params.protocol, {
+    headers: {
+      host: `guarded-ws.localhost:${params.proxyPort}`,
+      ...(params.origin ? { origin: params.origin } : {}),
     },
-  );
+  });
   wsClients.push(ws);
   return ws;
 }
@@ -592,7 +617,7 @@ it("allows script proxy WebSocket upgrades with origin, bearer auth, and rate li
   const ws = connectGuardedWs({
     proxyPort: proxy.port,
     origin: "https://app.chisacode.sh",
-    protocol: "chisacode.bearer.correct-password",
+    protocol: ["chat.v1", "chisacode.bearer.correct-password"],
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -605,7 +630,42 @@ it("allows script proxy WebSocket upgrades with origin, bearer auth, and rate li
     ws.send("hello guarded proxy");
   });
 
+  expect(ws.protocol).toBe("chat.v1");
   expect(reply).toBe("echo: hello guarded proxy");
+});
+
+it("strips daemon bearer protocols before forwarding a WebSocket upgrade", async () => {
+  const upstream = await startWsEchoUpstream();
+  const proxy = await startGuardedWsProxy({ routeStore: createWsRouteStore(upstream.port) });
+
+  await new Promise<void>((resolve, reject) => {
+    const request = http.request({
+      hostname: "127.0.0.1",
+      port: proxy.port,
+      method: "GET",
+      headers: {
+        host: `guarded-ws.localhost:${proxy.port}`,
+        origin: "https://app.chisacode.sh",
+        connection: "Upgrade",
+        upgrade: "websocket",
+        "sec-websocket-version": "13",
+        "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+        "sec-websocket-protocol": "chat.v1, chisacode.bearer.correct-password",
+      },
+    });
+
+    request.once("upgrade", (_response, socket) => {
+      socket.destroy();
+      resolve();
+    });
+    request.once("response", (response) => {
+      reject(new Error(`WebSocket upgrade returned HTTP ${response.statusCode ?? 0}`));
+    });
+    request.once("error", reject);
+    request.end();
+  });
+
+  expect(upstream.receivedProtocols()).toBe("chat.v1");
 });
 
 // ---------------------------------------------------------------------------
