@@ -24,6 +24,8 @@ const HOP_BY_HOP_HEADERS = new Set([
   "trailer",
 ]);
 
+const SCRIPT_PROXY_UPSTREAM_MAX_HEADER_BYTES = 16 * 1024;
+
 // ---------------------------------------------------------------------------
 // ScriptRouteStore
 // ---------------------------------------------------------------------------
@@ -195,6 +197,61 @@ function sanitizeWebSocketProtocols(value: string | undefined): string | undefin
     .map((protocol) => protocol.trim())
     .filter((protocol) => protocol.length > 0 && extractWsBearerProtocol(protocol) !== protocol);
   return protocols.length > 0 ? protocols.join(", ") : undefined;
+}
+
+function getResponseStatusLine(response: IncomingMessage): string {
+  const statusCode = response.statusCode ?? 502;
+  const statusMessage = response.statusMessage ?? http.STATUS_CODES[statusCode] ?? "";
+  const reason = statusMessage.length > 0 ? ` ${statusMessage}` : "";
+  return `HTTP/${response.httpVersion} ${statusCode}${reason}`;
+}
+
+function appendHeaderLines(lines: string[], headers: Record<string, string | string[]>): void {
+  for (const [key, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        lines.push(`${key}: ${item}`);
+      }
+    } else {
+      lines.push(`${key}: ${value}`);
+    }
+  }
+}
+
+function serializeUpgradeResponseHead(
+  response: IncomingMessage,
+  fallbackProtocol: string | null,
+): string {
+  const lines = [getResponseStatusLine(response)];
+  let hasSelectedProtocol = false;
+
+  for (let index = 0; index < response.rawHeaders.length; index += 2) {
+    const name = response.rawHeaders[index];
+    const value = response.rawHeaders[index + 1];
+    if (name === undefined || value === undefined) {
+      continue;
+    }
+    if (name.toLowerCase() === "sec-websocket-protocol") {
+      hasSelectedProtocol = true;
+    }
+    lines.push(`${name}: ${value}`);
+  }
+
+  if (!hasSelectedProtocol && fallbackProtocol !== null) {
+    lines.push(`Sec-WebSocket-Protocol: ${fallbackProtocol}`);
+  }
+  lines.push("", "");
+  return lines.join("\r\n");
+}
+
+function forwardNonUpgradeResponse(response: IncomingMessage, socket: net.Socket): void {
+  const headers = stripHopByHopHeaders(response.headers);
+  headers.connection = "close";
+  const lines = [getResponseStatusLine(response)];
+  appendHeaderLines(lines, headers);
+  lines.push("", "");
+  socket.write(lines.join("\r\n"));
+  response.pipe(socket, { end: true });
 }
 
 function sameOrigin(origin: string | undefined, hostHeader: string | undefined): boolean {
@@ -381,59 +438,106 @@ function forwardScriptProxyUpgrade(params: {
   logger: Logger;
 }): void {
   const { req, socket, head, hostHeader, route, logger } = params;
-  const targetSocket = net.connect({ host: "127.0.0.1", port: route.port }, () => {
-    // Reconstruct the raw HTTP upgrade request to send to the target
-    const forwardedHeaders = sanitizeForwardedHeaders(req.headers);
-    const protocols = sanitizeWebSocketProtocols(req.headers["sec-websocket-protocol"]);
-    if (protocols === undefined) {
-      delete forwardedHeaders["sec-websocket-protocol"];
-    } else {
-      forwardedHeaders["sec-websocket-protocol"] = protocols;
-    }
-    forwardedHeaders["x-forwarded-for"] = req.socket.remoteAddress ?? "127.0.0.1";
-    forwardedHeaders["x-forwarded-host"] = hostHeader.replace(/:\d+$/, "");
-    forwardedHeaders["x-forwarded-proto"] = "http";
+  const forwardedHeaders = sanitizeForwardedHeaders(req.headers);
+  const protocols = sanitizeWebSocketProtocols(req.headers["sec-websocket-protocol"]);
+  if (protocols === undefined) {
+    delete forwardedHeaders["sec-websocket-protocol"];
+  } else {
+    forwardedHeaders["sec-websocket-protocol"] = protocols;
+  }
+  forwardedHeaders["x-forwarded-for"] = req.socket.remoteAddress ?? "127.0.0.1";
+  forwardedHeaders["x-forwarded-host"] = hostHeader.replace(/:\d+$/, "");
+  forwardedHeaders["x-forwarded-proto"] = "http";
+  forwardedHeaders.connection = "Upgrade";
+  forwardedHeaders.upgrade = req.headers.upgrade ?? "websocket";
 
-    // Re-include upgrade and connection headers — they are required for
-    // WebSocket handshake even though they are hop-by-hop.
-    forwardedHeaders["connection"] = "Upgrade";
-    forwardedHeaders["upgrade"] = req.headers.upgrade ?? "websocket";
+  const fallbackProtocol =
+    protocols === undefined ? extractWsBearerProtocol(req.headers["sec-websocket-protocol"]) : null;
+  let targetSocket: net.Socket | undefined;
+  let targetResponse: IncomingMessage | undefined;
+  let responseStarted = false;
 
-    const headerLines: string[] = [];
-    headerLines.push(`${req.method ?? "GET"} ${req.url ?? "/"} HTTP/${req.httpVersion}`);
-    for (const [key, value] of Object.entries(forwardedHeaders)) {
-      if (Array.isArray(value)) {
-        for (const v of value) {
-          headerLines.push(`${key}: ${v}`);
-        }
-      } else {
-        headerLines.push(`${key}: ${value}`);
-      }
-    }
-    headerLines.push("\r\n");
-
-    targetSocket.write(headerLines.join("\r\n"));
-
-    if (head.length > 0) {
-      targetSocket.write(head);
-    }
-
-    // Pipe in both directions
-    targetSocket.pipe(socket);
-    socket.pipe(targetSocket);
+  socket.pause();
+  const targetRequest = http.request({
+    hostname: "127.0.0.1",
+    port: route.port,
+    path: req.url ?? "/",
+    method: req.method ?? "GET",
+    headers: forwardedHeaders,
+    maxHeaderSize: SCRIPT_PROXY_UPSTREAM_MAX_HEADER_BYTES,
+    agent: false,
   });
 
-  targetSocket.on("error", (err) => {
+  targetRequest.once("socket", (connectedSocket) => {
+    targetSocket = connectedSocket;
+  });
+
+  targetRequest.once("upgrade", (response, upgradedSocket, upstreamHead) => {
+    responseStarted = true;
+    targetResponse = response;
+    targetSocket = upgradedSocket;
+
+    socket.write(serializeUpgradeResponseHead(response, fallbackProtocol));
+    if (upstreamHead.length > 0) {
+      socket.write(upstreamHead);
+    }
+    if (head.length > 0) {
+      upgradedSocket.write(head);
+    }
+
+    upgradedSocket.once("error", (err) => {
+      logger.warn(
+        { err, hostname: route.hostname, port: route.port },
+        "Script proxy: WebSocket upstream socket failed",
+      );
+      socket.destroy();
+    });
+    upgradedSocket.pipe(socket);
+    socket.pipe(upgradedSocket);
+    socket.resume();
+  });
+
+  targetRequest.once("response", (response) => {
+    responseStarted = true;
+    targetResponse = response;
+    response.once("error", (err) => {
+      logger.warn(
+        { err, hostname: route.hostname, port: route.port },
+        "Script proxy: WebSocket upstream response failed",
+      );
+      socket.destroy();
+    });
+    forwardNonUpgradeResponse(response, socket);
+  });
+
+  targetRequest.once("error", (err) => {
+    targetSocket?.destroy();
+    if (socket.destroyed) {
+      return;
+    }
     logger.warn(
       { err, hostname: route.hostname, port: route.port },
-      "Script proxy: WebSocket upstream unreachable",
+      "Script proxy: WebSocket upstream request failed",
     );
-    socket.end();
+    if (responseStarted) {
+      socket.destroy();
+    } else {
+      rejectUpgrade(socket, 502, "Bad Gateway");
+    }
   });
 
-  socket.on("error", () => {
-    targetSocket.destroy();
+  socket.once("error", () => {
+    targetResponse?.destroy();
+    targetRequest.destroy();
+    targetSocket?.destroy();
   });
+  socket.once("close", () => {
+    targetResponse?.destroy();
+    targetRequest.destroy();
+    targetSocket?.destroy();
+  });
+
+  targetRequest.end();
 }
 
 // ---------------------------------------------------------------------------

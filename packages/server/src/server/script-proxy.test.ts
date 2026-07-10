@@ -608,12 +608,36 @@ it("rejects script proxy WebSocket upgrades when the shared upgrade limiter bloc
   );
 });
 
-it("allows script proxy WebSocket upgrades with origin, bearer auth, and rate limit guard passing", async () => {
+it("allows bearer-only authenticated WebSocket upgrades without forwarding the credential", async () => {
   const upstream = await startWsEchoUpstream();
   const proxy = await startGuardedWsProxy({
     routeStore: createWsRouteStore(upstream.port),
     allowUpgradeRequest: () => ({ allowed: true, statusCode: 200, reason: "OK" }),
   });
+  const ws = connectGuardedWs({
+    proxyPort: proxy.port,
+    origin: "https://app.chisacode.sh",
+    protocol: "chisacode.bearer.correct-password",
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+  const reply = await new Promise<string>((resolve, reject) => {
+    ws.once("message", (data) => resolve(data.toString()));
+    ws.once("error", reject);
+    ws.send("hello guarded proxy");
+  });
+
+  expect(ws.protocol).toBe("chisacode.bearer.correct-password");
+  expect(reply).toBe("echo: hello guarded proxy");
+  expect(upstream.receivedProtocols()).toBeUndefined();
+});
+
+it("preserves an application protocol while stripping the daemon bearer", async () => {
+  const upstream = await startWsEchoUpstream();
+  const proxy = await startGuardedWsProxy({ routeStore: createWsRouteStore(upstream.port) });
   const ws = connectGuardedWs({
     proxyPort: proxy.port,
     origin: "https://app.chisacode.sh",
@@ -627,44 +651,11 @@ it("allows script proxy WebSocket upgrades with origin, bearer auth, and rate li
   const reply = await new Promise<string>((resolve, reject) => {
     ws.once("message", (data) => resolve(data.toString()));
     ws.once("error", reject);
-    ws.send("hello guarded proxy");
+    ws.send("hello application protocol");
   });
 
   expect(ws.protocol).toBe("chat.v1");
-  expect(reply).toBe("echo: hello guarded proxy");
-});
-
-it("strips daemon bearer protocols before forwarding a WebSocket upgrade", async () => {
-  const upstream = await startWsEchoUpstream();
-  const proxy = await startGuardedWsProxy({ routeStore: createWsRouteStore(upstream.port) });
-
-  await new Promise<void>((resolve, reject) => {
-    const request = http.request({
-      hostname: "127.0.0.1",
-      port: proxy.port,
-      method: "GET",
-      headers: {
-        host: `guarded-ws.localhost:${proxy.port}`,
-        origin: "https://app.chisacode.sh",
-        connection: "Upgrade",
-        upgrade: "websocket",
-        "sec-websocket-version": "13",
-        "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
-        "sec-websocket-protocol": "chat.v1, chisacode.bearer.correct-password",
-      },
-    });
-
-    request.once("upgrade", (_response, socket) => {
-      socket.destroy();
-      resolve();
-    });
-    request.once("response", (response) => {
-      reject(new Error(`WebSocket upgrade returned HTTP ${response.statusCode ?? 0}`));
-    });
-    request.once("error", reject);
-    request.end();
-  });
-
+  expect(reply).toBe("echo: hello application protocol");
   expect(upstream.receivedProtocols()).toBe("chat.v1");
 });
 
