@@ -164,6 +164,12 @@ The smoke must report the desktop-managed daemon, bundled CLI shim daemon status
 command capture before the build can be considered runtime-tested. Still record the `rcedit`
 failure separately; release artifacts are not shippable until the metadata step succeeds.
 
+The packaged smoke creates separate temporary directories for `CHISACODE_HOME` and Electron
+`userData`. The desktop launch, bundled CLI status and terminal commands, cleanup stop command,
+and daemon-log diagnostics all use that isolated home, and both temporary directories are removed
+when the smoke exits. It does not stop, delete, or otherwise operate on the default
+`~/.chisacode` daemon state.
+
 `better-sqlite3` is optional in the server package. In packaged Electron builds,
 the native binding can fail to load if it was compiled for a different Node ABI.
 That must be a warning-only path: the daemon should continue with JSON-backed

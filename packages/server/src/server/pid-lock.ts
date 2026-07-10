@@ -45,8 +45,8 @@ function isPidRunning(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return isErrnoException(error) && error.code === "EPERM";
   }
 }
 
@@ -144,16 +144,29 @@ async function getProcessStartedAtMs(pid: number): Promise<number | null> {
   return await getPosixProcessStartedAtMs(pid);
 }
 
-async function isPidLockOwnerRunning(lock: PidLockInfo): Promise<boolean> {
-  if (!isPidRunning(lock.pid)) return false;
+/**
+ * Verifies whether a running process still owns a recorded PID lock identity.
+ * @param lock The recorded process PID and optional process start timestamp
+ * @returns The owner identity relationship between the lock and current process table
+ */
+export async function getPidLockOwnerStatus(lock: {
+  pid: number;
+  startedAt?: string;
+}): Promise<"match" | "mismatch" | "unknown" | "not_running"> {
+  if (!isPidRunning(lock.pid)) return "not_running";
+  if (typeof lock.startedAt !== "string") return "unknown";
 
   const lockStartedAtMs = Date.parse(lock.startedAt);
+  if (!Number.isFinite(lockStartedAtMs)) return "unknown";
+
   const processStartedAtMs = await getProcessStartedAtMs(lock.pid);
-  if (!Number.isFinite(lockStartedAtMs) || processStartedAtMs === null) {
-    return true;
+  if (processStartedAtMs === null) {
+    return isPidRunning(lock.pid) ? "unknown" : "not_running";
   }
 
-  return Math.abs(processStartedAtMs - lockStartedAtMs) <= PID_START_TIME_TOLERANCE_MS;
+  return Math.abs(processStartedAtMs - lockStartedAtMs) <= PID_START_TIME_TOLERANCE_MS
+    ? "match"
+    : "mismatch";
 }
 
 function getPidFilePath(chisacodeHome: string): string {
@@ -191,7 +204,8 @@ export async function acquirePidLock(
   // Check if existing lock is stale
   const lockOwnerPid = resolveOwnerPid(options?.ownerPid);
   if (existingLock) {
-    if (await isPidLockOwnerRunning(existingLock)) {
+    const ownerStatus = await getPidLockOwnerStatus(existingLock);
+    if (ownerStatus === "match" || ownerStatus === "unknown") {
       if (existingLock.pid === lockOwnerPid) {
         return;
       }
@@ -307,7 +321,8 @@ export async function isLocked(
   if (!info) {
     return { locked: false };
   }
-  if (!(await isPidLockOwnerRunning(info))) {
+  const ownerStatus = await getPidLockOwnerStatus(info);
+  if (ownerStatus === "mismatch" || ownerStatus === "not_running") {
     return { locked: false, info };
   }
   return { locked: true, info };

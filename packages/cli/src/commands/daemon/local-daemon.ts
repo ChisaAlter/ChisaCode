@@ -2,7 +2,12 @@ import { spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { loadConfig, resolveChisaCodeHome, spawnProcess } from "@chisacode/server";
+import {
+  getPidLockOwnerStatus,
+  loadConfig,
+  resolveChisaCodeHome,
+  spawnProcess,
+} from "@chisacode/server";
 import treeKill from "tree-kill";
 import { tryConnectToDaemon } from "../../utils/client.js";
 
@@ -218,6 +223,37 @@ function resolveStopMessage(
   if (forced) return "Daemon owner process was force-stopped";
   if (lifecycleRequested) return "Daemon stopped gracefully";
   return fallbackMessage ?? "Daemon stopped via owner PID signal";
+}
+
+function getOwnerSignalRefusalMessage(
+  pid: number,
+  status: "mismatch" | "unknown" | "not_running",
+): string {
+  switch (status) {
+    case "mismatch":
+      return `Refusing to signal daemon PID ${pid}: owner identity mismatch`;
+    case "unknown":
+      return `Refusing to signal daemon PID ${pid}: owner identity could not be verified`;
+    case "not_running":
+      return `Refusing to signal daemon PID ${pid}: process is not running`;
+  }
+}
+
+async function getUnsafeOwnerSignalResult(
+  state: LocalDaemonState & { pidInfo: LocalDaemonPidInfo },
+): Promise<StopLocalDaemonResult | null> {
+  const ownerStatus = await getPidLockOwnerStatus(state.pidInfo);
+  if (ownerStatus === "match") {
+    return null;
+  }
+
+  return {
+    action: "not_running",
+    home: state.home,
+    pid: state.pidInfo.pid,
+    forced: false,
+    message: getOwnerSignalRefusalMessage(state.pidInfo.pid, ownerStatus),
+  };
 }
 
 function readPidFile(pidPath: string): LocalDaemonPidInfo | null {
@@ -608,6 +644,14 @@ export async function stopLocalDaemon(
   const fallbackMessage = shutdownAttempt.requested ? null : shutdownAttempt.reason;
   let forced = false;
   if (!lifecycleRequested) {
+    const unsafeOwnerResult = await getUnsafeOwnerSignalResult({
+      ...state,
+      pidInfo: state.pidInfo,
+    });
+    if (unsafeOwnerResult) {
+      return unsafeOwnerResult;
+    }
+
     const signaled = await signalProcessTreeOrOwnerSafely(pid, "SIGTERM");
     if (!signaled) {
       return {
@@ -622,8 +666,25 @@ export async function stopLocalDaemon(
 
   let stopped = await waitForPidExit(pid, timeoutMs);
   if (!stopped && options.force) {
+    const unsafeOwnerResult = await getUnsafeOwnerSignalResult({
+      ...state,
+      pidInfo: state.pidInfo,
+    });
+    if (unsafeOwnerResult) {
+      return unsafeOwnerResult;
+    }
+
+    const signaled = await signalProcessTreeOrOwnerSafely(pid, "SIGKILL");
+    if (!signaled) {
+      return {
+        action: "not_running",
+        home: state.home,
+        pid,
+        forced: false,
+        message: "Daemon process was already stopped before the force signal",
+      };
+    }
     forced = true;
-    await signalProcessTreeOrOwnerSafely(pid, "SIGKILL");
     stopped = await waitForPidExit(pid, killTimeoutMs);
   }
 

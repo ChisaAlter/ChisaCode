@@ -87,15 +87,38 @@ function getShellCommand(script) {
   };
 }
 
-function createDefaultDaemonEnv(extraEnv) {
+function createDaemonEnv(extraEnv) {
   const env = {
     ...process.env,
     ...extraEnv,
   };
 
-  delete env.CHISACODE_HOME;
   delete env.CHISACODE_LISTEN;
   return env;
+}
+
+/**
+ * Creates isolated state directories and child-process environments for one packaged smoke run.
+ * @returns The runtime paths, environments, and cleanup operation
+ */
+function createSmokeRuntime() {
+  const smokeHome = createTempDir("chisacode-smoke-home-");
+  const userData = createTempDir("chisacode-smoke-user-data-");
+
+  return {
+    smokeHome,
+    userData,
+    desktopEnv: createDaemonEnv({
+      CHISACODE_HOME: smokeHome,
+      CHISACODE_DESKTOP_SMOKE: "1",
+      CHISACODE_ELECTRON_USER_DATA_DIR: userData,
+    }),
+    cliEnv: createDaemonEnv({ CHISACODE_HOME: smokeHome }),
+    cleanupStopEnv: createDaemonEnv({ CHISACODE_HOME: smokeHome }),
+    async cleanup() {
+      await Promise.all([removeTempDir(smokeHome), removeTempDir(userData)]);
+    },
+  };
 }
 
 function parseSmokeLine(line) {
@@ -121,9 +144,9 @@ function readIfExists(filePath) {
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : null;
 }
 
-function formatLogs({ stdout, stderr, userData }) {
+function formatLogs({ stdout, stderr, userData, smokeHome }) {
   const desktopLog = readIfExists(path.join(userData, "logs", "main.log"));
-  const daemonLog = readIfExists(path.join(os.homedir(), ".chisacode", "daemon.log"));
+  const daemonLog = readIfExists(path.join(smokeHome, "daemon.log"));
   return [
     `App stdout:\n${stdout.join("").trim() || "<empty>"}`,
     `App stderr:\n${stderr.join("").trim() || "<empty>"}`,
@@ -194,7 +217,7 @@ async function removeTempDir(tempDir) {
   }
 }
 
-function waitForSmokeMessage({ child, stdout, stderr, userData, type, validate }) {
+function waitForSmokeMessage({ child, stdout, stderr, userData, smokeHome, type, validate }) {
   return new Promise((resolve, reject) => {
     let settled = false;
 
@@ -216,6 +239,7 @@ function waitForSmokeMessage({ child, stdout, stderr, userData, type, validate }
             stdout,
             stderr,
             userData,
+            smokeHome,
           })}`,
         ),
       );
@@ -244,7 +268,7 @@ function waitForSmokeMessage({ child, stdout, stderr, userData, type, validate }
         new Error(
           `Packaged app exited before reporting smoke success (code ${code}, signal ${
             signal ?? "none"
-          }).\n${formatLogs({ stdout, stderr, userData })}`,
+          }).\n${formatLogs({ stdout, stderr, userData, smokeHome })}`,
         ),
       );
     });
@@ -453,11 +477,8 @@ async function smokePackagedDesktopApp({ appPath }) {
   const executablePath = getExecutablePath(appPath);
   assertExecutable(executablePath, "Packaged app executable");
 
-  const userData = createTempDir("chisacode-smoke-user-data-");
-  const env = createDefaultDaemonEnv({
-    CHISACODE_DESKTOP_SMOKE: "1",
-    CHISACODE_ELECTRON_USER_DATA_DIR: userData,
-  });
+  const runtime = createSmokeRuntime();
+  const { cleanupStopEnv, cliEnv, desktopEnv, smokeHome, userData } = runtime;
 
   const stdout = [];
   const stderr = [];
@@ -465,7 +486,7 @@ async function smokePackagedDesktopApp({ appPath }) {
   console.log(`Packaged desktop smoke: launching ${launch.command} ${launch.args.join(" ")}`);
   const child = spawn(launch.command, launch.args, {
     detached: process.platform !== "win32",
-    env,
+    env: desktopEnv,
     stdio: ["pipe", "pipe", "pipe"],
   });
   let smokeStarted = false;
@@ -476,7 +497,7 @@ async function smokePackagedDesktopApp({ appPath }) {
       return;
     }
 
-    await stopCliDaemon({ appPath, env: createDefaultDaemonEnv() });
+    await stopCliDaemon({ appPath, env: cleanupStopEnv });
     daemonStopped = true;
   };
 
@@ -486,12 +507,12 @@ async function smokePackagedDesktopApp({ appPath }) {
       stdout,
       stderr,
       userData,
+      smokeHome,
       type: "desktop-daemon-smoke-started",
       validate: assertRunningDesktopManagedDaemon,
     });
     smokeStarted = true;
     console.log("Packaged desktop smoke: desktop-managed daemon reported running");
-    const cliEnv = createDefaultDaemonEnv();
     await smokeCliShim({ appPath, env: cliEnv });
     await smokeCliTerminal({ appPath, env: cliEnv });
     await stopDaemonForCleanup();
@@ -514,11 +535,12 @@ async function smokePackagedDesktopApp({ appPath }) {
       }
     }
     releaseChildHandles(child);
-    await removeTempDir(userData);
+    await runtime.cleanup();
   }
 }
 
 module.exports = {
+  createSmokeRuntime,
   smokePackagedDesktopApp,
 };
 

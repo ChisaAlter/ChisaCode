@@ -1,4 +1,5 @@
-import { EventEmitter } from "node:events";
+import { spawn, type ChildProcess } from "node:child_process";
+import { EventEmitter, once } from "node:events";
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +11,7 @@ import {
   resolveLocalDaemonState,
   startLocalDaemonDetached,
   startLocalDaemonForeground,
+  stopLocalDaemon,
 } from "./local-daemon.js";
 
 type RecordedDaemonLaunch =
@@ -69,6 +71,7 @@ class FakeDaemonRuntime implements DaemonLaunchRuntime {
 }
 
 const tempRoots: string[] = [];
+const fixtureProcesses: ChildProcess[] = [];
 
 function isPidRunningForTest(pid: number): boolean {
   try {
@@ -99,21 +102,70 @@ async function createChisaCodeHome(config: unknown): Promise<string> {
 
 async function writePidFile(
   home: string,
-  pidInfo: { pid: number; desktopManaged?: boolean },
+  pidInfo: {
+    pid: number;
+    desktopManaged?: boolean;
+    startedAt?: string;
+    listen?: string | null;
+  },
 ): Promise<string> {
   const pidPath = path.join(home, "chisacode.pid");
   await writeFile(
     pidPath,
     JSON.stringify({
       pid: pidInfo.pid,
-      startedAt: "2000-01-01T00:00:00.000Z",
+      startedAt: pidInfo.startedAt ?? "2000-01-01T00:00:00.000Z",
       hostname: "old-host",
       uid: 0,
-      listen: "127.0.0.1:6767",
+      listen: Object.hasOwn(pidInfo, "listen") ? pidInfo.listen : "127.0.0.1:6767",
       ...(pidInfo.desktopManaged === true ? { desktopManaged: true } : {}),
     }),
   );
   return pidPath;
+}
+
+async function createLongLivedNodeFixture(): Promise<ChildProcess & { pid: number }> {
+  const fixture = spawn(
+    process.execPath,
+    [
+      "-e",
+      [
+        'process.on("message", (message) => {',
+        '  if (message === "stop") process.exit(0);',
+        "});",
+        'process.send?.("ready");',
+      ].join("\n"),
+    ],
+    {
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+      windowsHide: true,
+    },
+  );
+  fixtureProcesses.push(fixture);
+
+  const [message] = await once(fixture, "message");
+  if (message !== "ready") {
+    throw new Error(`Unexpected fixture readiness message: ${String(message)}`);
+  }
+  if (fixture.pid === undefined) {
+    throw new Error("Long-lived Node fixture did not receive a PID");
+  }
+
+  return fixture as ChildProcess & { pid: number };
+}
+
+async function stopNodeFixture(fixture: ChildProcess): Promise<void> {
+  if (fixture.exitCode !== null || fixture.signalCode !== null) {
+    return;
+  }
+
+  const exitPromise = once(fixture, "exit");
+  if (fixture.connected) {
+    fixture.send("stop");
+  } else {
+    fixture.kill("SIGKILL");
+  }
+  await exitPromise;
 }
 
 function expectSupervisorLaunch(argv: string[]): void {
@@ -131,6 +183,7 @@ describe("local daemon launch supervision", () => {
   });
 
   afterEach(async () => {
+    await Promise.all(fixtureProcesses.splice(0).map(stopNodeFixture));
     await Promise.all(
       tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
     );
@@ -239,5 +292,36 @@ describe("local daemon launch supervision", () => {
     expect(state.running).toBe(false);
     expect(state.stalePidFile).toBe(true);
     await expect(access(pidPath)).resolves.toBeUndefined();
+  });
+
+  test("stop refuses to signal a reused PID owned by another process", async () => {
+    const home = await createChisaCodeHome({ version: 1 });
+    const fixture = await createLongLivedNodeFixture();
+    await writePidFile(home, {
+      pid: fixture.pid,
+      startedAt: "2000-01-01T00:00:00.000Z",
+      listen: "pipe://chisacode-reused-pid-fixture",
+    });
+
+    const result = await stopLocalDaemon({
+      home,
+      force: true,
+      timeoutMs: 250,
+      killTimeoutMs: 250,
+    });
+
+    expect({
+      fixtureRunning: isPidRunningForTest(fixture.pid),
+      result,
+    }).toEqual({
+      fixtureRunning: true,
+      result: {
+        action: "not_running",
+        home,
+        pid: fixture.pid,
+        forced: false,
+        message: `Refusing to signal daemon PID ${fixture.pid}: owner identity mismatch`,
+      },
+    });
   });
 });

@@ -7,6 +7,7 @@ export {
 export { loadConfig, type CliConfigOverrides } from "./config.js";
 export { resolveChisaCodeHome } from "./chisacode-home.js";
 export { getOrCreateServerId } from "./server-id.js";
+export { getPidLockOwnerStatus } from "./pid-lock.js";
 export { createRootLogger, type LogLevel, type LogFormat } from "./logger.js";
 export {
   loadPersistedConfig,
