@@ -55,7 +55,7 @@
 - packaged smoke 创建独立临时 `CHISACODE_HOME` 和 Electron `userData`。
 - desktop、bundled CLI、terminal smoke 与 cleanup 全程使用同一个隔离 home。
 - cleanup 只停止隔离 home 中由本次 smoke 启动的 daemon。
-- CLI stop 在 RPC 不可达、准备发信号前验证 PID 身份；PID 文件至少绑定当前用户、主机和进程启动标识。无法证明身份时 fail closed，不发送信号。
+- CLI stop 在 RPC 不可达、准备发信号前验证 PID 身份；共享 verifier 返回 match/mismatch/unknown，CLI 仅在 match 时发送信号。daemon 启动锁对 unknown 保持既有保守语义，避免因平台探针失败启动第二个 daemon。
 
 ### 4.3 Loop 与 relay 资源边界
 
@@ -75,7 +75,7 @@
 ### 4.5 Generative UI action 状态机
 
 - running agent 的 UI action 不调用 `replaceAgentRun`。
-- action 按 agent 合并排队；当前 turn settle 后，以一个系统通知 prompt 注入下一轮。
+- action 由 AgentManager 按 agent 全局合并排队，避免多个客户端 Session 各自形成并发队列；当前 turn settle 后，以一个系统通知 prompt 注入下一轮。
 - 同一 instance 的连续 `change` 只保留每个 field 的最新值；`submit` 保留顺序并触发一次 flush。
 - App 在发送前调用 registry 的 `validateActionPayload`。
 - server 校验 action/instance/component 字符长度及序列化 payload 上限。
