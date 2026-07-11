@@ -81,4 +81,4 @@ Implementation commit: `69a94a292`.
 - Text and select paths share the same component-facing guard. Immediately after `begin()`, both are blocked before reducer dispatch or sender invocation, even before React rerenders.
 - Failed completion unlocks same-tick changes for retry; successful completion remains locked. Strict Effects mount/unmount behavior is unchanged.
 - RED: the new three-argument change guard test failed because the controller-aware API did not exist (`change is not a function`). GREEN: form/controller tests 9 passed; app typecheck and targeted lint passed.
-- Re-review implementation commit is recorded in progress and the completion message.
+- Re-review implementation commit: `a32ea67dc`.
