@@ -38,6 +38,19 @@
 
 **防回滚机制**：每项修复提交时在 commit message 引用根因诊断；安全测试不得改 `not.toThrow`，硬语义降级必须经 opt-in flag 而非默认。
 
+### CLI fallback stop 的 PID verify-to-signal 残余竞态（pending）
+
+- **问题**：`packages/cli/src/commands/daemon/local-daemon.ts` 的 fallback stop 只能按数值 PID
+  发送进程信号。PID owner 校验完成后、SIGTERM 或 SIGKILL 发出前，目标进程仍可能退出且 PID
+  被复用，因此 identity verification 与 tree signaling 之间存在无法原子绑定的 TOCTOU 窗口。
+- **当前缓解**：CLI 在 SIGTERM 前校验一次 `getPidLockOwnerStatus`，进入 force fallback
+  SIGKILL 前再校验一次；`mismatch`、`unknown`、`not_running` 均 fail closed，不发送对应信号。
+  这两次 verifier 会缩小误杀窗口，但不能消除 verify-to-signal 竞态。
+- **候选方案**：评估跨平台 stable process-handle 抽象（Linux pidfd、Windows process handle、其他
+  POSIX 等价机制），或把 fallback termination 收口到持有稳定 owner identity 的 supervisor control
+  通道。不得以新增 native 依赖或删除既有 fallback stop 行为作为未经专项设计的临时修复。
+- **状态**：pending，等待最终审查分流为独立架构任务。
+
 ### 对抗性自审与接线验证（2026-07-05 完成）
 
 - **背景**：对两批改动强制"调用点验证 + 端到端冒烟 + 对抗审查"作为完成标准，主动报告未接线项并修复。

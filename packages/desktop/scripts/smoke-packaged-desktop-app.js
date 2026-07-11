@@ -14,6 +14,14 @@ function createTempDir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
+function removeTempDirSync(tempDir) {
+  try {
+    fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 4, retryDelay: 250 });
+  } catch (error) {
+    console.warn(`Packaged desktop smoke: failed to remove temp dir ${tempDir}: ${error}`);
+  }
+}
+
 function assertExecutable(filePath, label) {
   if (!fs.existsSync(filePath)) {
     throw new Error(`${label} does not exist: ${filePath}`);
@@ -99,11 +107,18 @@ function createDaemonEnv(extraEnv) {
 
 /**
  * Creates isolated state directories and child-process environments for one packaged smoke run.
+ * @param {{ createTempDir?: typeof createTempDir }} [ports] Temporary-directory operation
  * @returns The runtime paths, environments, and cleanup operation
  */
-function createSmokeRuntime() {
-  const smokeHome = createTempDir("chisacode-smoke-home-");
-  const userData = createTempDir("chisacode-smoke-user-data-");
+function createSmokeRuntime({ createTempDir: createTempDirPort = createTempDir } = {}) {
+  const smokeHome = createTempDirPort("chisacode-smoke-home-");
+  let userData;
+  try {
+    userData = createTempDirPort("chisacode-smoke-user-data-");
+  } catch (error) {
+    removeTempDirSync(smokeHome);
+    throw error;
+  }
 
   return {
     smokeHome,
@@ -200,6 +215,24 @@ function releaseChildHandles(child) {
   child.stdout?.destroy();
   child.stderr?.destroy();
   child.unref();
+}
+
+async function terminateAndReleaseChild(child) {
+  try {
+    if (!isRunning(child)) {
+      return;
+    }
+
+    terminateChild(child);
+    if (await waitForChildExit(child)) {
+      return;
+    }
+
+    terminateChild(child, "SIGKILL");
+    await waitForChildExit(child);
+  } finally {
+    releaseChildHandles(child);
+  }
 }
 
 async function removeTempDir(tempDir) {
@@ -473,35 +506,56 @@ async function stopCliDaemon({ appPath, env }) {
   });
 }
 
-async function smokePackagedDesktopApp({ appPath }) {
+/**
+ * @typedef {object} SmokePackagedDesktopAppPorts
+ * @property {typeof assertExecutable} [assertExecutable]
+ * @property {typeof createSmokeRuntime} [createSmokeRuntime]
+ * @property {typeof spawn} [spawnApp]
+ * @property {typeof stopCliDaemon} [stopCliDaemon]
+ */
+
+/**
+ * Runs the packaged desktop smoke against injected process and cleanup ports.
+ * @param {{ appPath: string }} options Packaged application location
+ * @param {SmokePackagedDesktopAppPorts} [ports] Process and cleanup operations
+ * @returns {Promise<void>} A promise that resolves after the smoke and cleanup complete
+ */
+async function smokePackagedDesktopApp(
+  { appPath },
+  {
+    assertExecutable: assertExecutablePort = assertExecutable,
+    createSmokeRuntime: createSmokeRuntimePort = createSmokeRuntime,
+    spawnApp = spawn,
+    stopCliDaemon: stopCliDaemonPort = stopCliDaemon,
+  } = {},
+) {
   const executablePath = getExecutablePath(appPath);
-  assertExecutable(executablePath, "Packaged app executable");
+  assertExecutablePort(executablePath, "Packaged app executable");
 
-  const runtime = createSmokeRuntime();
-  const { cleanupStopEnv, cliEnv, desktopEnv, smokeHome, userData } = runtime;
-
-  const stdout = [];
-  const stderr = [];
-  const launch = getLaunchCommand(executablePath);
-  console.log(`Packaged desktop smoke: launching ${launch.command} ${launch.args.join(" ")}`);
-  const child = spawn(launch.command, launch.args, {
-    detached: process.platform !== "win32",
-    env: desktopEnv,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  let smokeStarted = false;
+  const runtime = createSmokeRuntimePort();
+  let child;
   let daemonStopped = false;
-
   const stopDaemonForCleanup = async () => {
     if (daemonStopped) {
       return;
     }
 
-    await stopCliDaemon({ appPath, env: cleanupStopEnv });
+    await stopCliDaemonPort({ appPath, env: runtime.cleanupStopEnv });
     daemonStopped = true;
   };
 
   try {
+    const { cliEnv, desktopEnv, smokeHome, userData } = runtime;
+    const stdout = [];
+    const stderr = [];
+    const launch = getLaunchCommand(executablePath);
+    console.log(`Packaged desktop smoke: launching ${launch.command} ${launch.args.join(" ")}`);
+    child = spawnApp(launch.command, launch.args, {
+      detached: process.platform !== "win32",
+      env: desktopEnv,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
     const message = await waitForSmokeMessage({
       child,
       stdout,
@@ -511,7 +565,6 @@ async function smokePackagedDesktopApp({ appPath }) {
       type: "desktop-daemon-smoke-started",
       validate: assertRunningDesktopManagedDaemon,
     });
-    smokeStarted = true;
     console.log("Packaged desktop smoke: desktop-managed daemon reported running");
     await smokeCliShim({ appPath, env: cliEnv });
     await smokeCliTerminal({ appPath, env: cliEnv });
@@ -519,22 +572,17 @@ async function smokePackagedDesktopApp({ appPath }) {
     console.log(
       `Packaged desktop smoke passed: desktop-managed daemon pid ${message.status.pid}, listen ${message.status.listen}; CLI shim daemon status and terminal smoke succeeded`,
     );
-  } catch (error) {
-    if (smokeStarted && !daemonStopped) {
+  } finally {
+    try {
+      await stopDaemonForCleanup();
+    } catch {}
+
+    if (child) {
       try {
-        await stopDaemonForCleanup();
+        await terminateAndReleaseChild(child);
       } catch {}
     }
-    throw error;
-  } finally {
-    if (isRunning(child)) {
-      terminateChild(child);
-      if (!(await waitForChildExit(child))) {
-        terminateChild(child, "SIGKILL");
-        await waitForChildExit(child);
-      }
-    }
-    releaseChildHandles(child);
+
     await runtime.cleanup();
   }
 }
