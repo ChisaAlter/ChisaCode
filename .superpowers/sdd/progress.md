@@ -14,6 +14,6 @@ Task 4 residuals: final Windows CreationDate revalidation-to-signal atomic race,
 Task 5: complete (commits 62bb46ae5..3eae591b8, spec review clean, code-quality review approved)
 Task 5 verification: protocol RPC 13 passed; client daemon-client 74 passed; agent-manager GenUI integration 6 passed; wire compatibility 22 passed; websocket server producer 15 passed; build:client, protocol/client/server typechecks, targeted lint, formatting, and diff checks passed.
 Task 5 compatibility: new clients send `generative_ui.action.request`; legacy flat request remains accepted under documented COMPAT windows; unsupported clients retain assistant fences but receive no explicit GenUI history/live wire; canonical tail and before/after pagination are capability-safe.
-Task 6: complete (commit pending at report generation)
+Task 6: complete (implementation commit 69a94a292)
 Task 6 verification: server queue 6 passed; handler 8 passed; focused AgentManager 2 passed; app dispatch 5 passed; form state 3 passed; registry 11 passed; server/app typechecks and targeted lint/format/diff checks passed.
 Task 6 semantics: AgentManager-owned per-agent queue, non-interrupting terminal follow-up, submit batch boundaries, bounded server payload validation, exact app action validation, and retry-safe form state.

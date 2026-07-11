@@ -53,4 +53,4 @@ Implemented on branch `codex/comprehensive-audit-fixes` from base `3eae591b8eacb
 
 ## Commit
 
-Pending at report creation; final commit SHA is reported in the completion message.
+Implementation commit: `69a94a292`.
