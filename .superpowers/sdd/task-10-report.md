@@ -5,9 +5,11 @@
 - Workspace hydration now stages all requested pages and commits only after every page succeeds for
   the newest server generation. Failures, timeouts, cancellation, and stale generations leave the
   hydrated flag unchanged and cannot overwrite a newer result.
-- Direct WebSocket servers use an explicit 64 MiB `maxPayload`, matching the existing binary file
-  transfer limit. Each logical session permits at most 64 concurrent async session messages; the
-  next correlated request receives a bounded `rpc_error` with code `server_busy`.
+- Direct WebSocket servers use an explicit 64 MiB plaintext `maxPayload`, matching the existing
+  binary file transfer limit. Relay data sockets explicitly allow the base64 ciphertext size for
+  that plaintext limit, while the decoded logical-message boundary remains 64 MiB. Each logical
+  session permits at most 64 concurrent async session messages; the next correlated request receives
+  a bounded `rpc_error` with code `server_busy`.
 - WebSocket validation/processing and Session/chat handler error logs retain bounded metadata only.
   They no longer attach raw payloads, parsed prompts, or raw `Error` objects.
 - Chat waits default to 30 seconds, reject deadlines above 5 minutes, settle immediately for an
@@ -55,9 +57,9 @@
   controller for later work. Chat waits resolve the current signal at call time; Session cleanup
   marks the Session disposed and aborts the active generation without renewal.
 - Untrusted `clientId` and `requestId` log fields now use a shared `{ length, fingerprint }` summary.
-  The SHA-256 fingerprint hashes at most 256 code units plus the full length, bounding CPU and log
-  size without retaining raw prefixes or control characters. Malformed hello logs contain only a
-  fixed category/code, issue count, and raw byte length.
+  The SHA-256 fingerprint streams the complete JavaScript string as UTF-8, preventing same-prefix
+  suffix collisions while retaining fixed-size output without raw content or control characters.
+  Malformed hello logs contain only a fixed category/code, issue count, and raw byte length.
 - Hydration now uses a process-global monotonic generation counter and a map containing active
   generations only. A matching `finally` removes the current entry; stale generations cannot delete
   a newer entry, and generation numbers are never reused after cleanup.
@@ -75,3 +77,8 @@
   Active-session validation and processing-error paths now summarize extracted, unvalidated request
   types; only schema-validated finite discriminators are logged raw. The regression uses a secret,
   control characters, and a 20 KiB type and sink-searches every structured logger call.
+- Quality review found relay data sockets still using the `ws` default payload limit and log
+  fingerprints colliding for equal-length identifiers sharing their first 256 code units. Relay
+  tests now verify explicit control/data options plus the exact nonce, authenticator, and base64
+  expansion calculation without allocating a maximum-sized frame. Fingerprint tests prove different
+  UTF-8 suffixes produce different hashes. GREEN: relay 14/14, sanitizer 2/2, WebSocket 20/20.

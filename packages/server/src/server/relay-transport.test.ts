@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type pino from "pino";
 import { generateRelayAuthKeyPair } from "@chisacode/relay/e2ee";
-import { startRelayTransport } from "./relay-transport";
+import {
+  getRelayEncryptedPayloadBytes,
+  RELAY_DATA_MAX_PAYLOAD_BYTES,
+  startRelayTransport,
+} from "./relay-transport";
+import { isWebSocketPayloadWithinLimit, WEBSOCKET_MAX_PAYLOAD_BYTES } from "./websocket-limits.js";
 
 function createMockLogger() {
   const messages: { level: "debug" | "info" | "warn" | "error"; args: unknown[] }[] = [];
@@ -266,7 +271,7 @@ describe("relay-transport control lifecycle", () => {
     ]);
   });
 
-  test("bounds payload size only on the relay control socket", () => {
+  test("bounds payload size on relay control and data sockets", () => {
     const logger = createMockLogger();
     const controller = startRelayTransport({
       logger: logger as unknown as pino.Logger,
@@ -290,7 +295,18 @@ describe("relay-transport control lifecycle", () => {
     expect(relay.sockets[1]?.options).toEqual({
       handshakeTimeout: 10_000,
       perMessageDeflate: false,
+      maxPayload: RELAY_DATA_MAX_PAYLOAD_BYTES,
     });
+  });
+
+  test("accounts exactly for encrypted base64 relay data overhead", () => {
+    const expectedWireBytes = 4 * Math.ceil((WEBSOCKET_MAX_PAYLOAD_BYTES + 24 + 16) / 3);
+    expect(RELAY_DATA_MAX_PAYLOAD_BYTES).toBe(expectedWireBytes);
+    expect(getRelayEncryptedPayloadBytes(WEBSOCKET_MAX_PAYLOAD_BYTES)).toBe(
+      RELAY_DATA_MAX_PAYLOAD_BYTES,
+    );
+    expect(isWebSocketPayloadWithinLimit(WEBSOCKET_MAX_PAYLOAD_BYTES)).toBe(true);
+    expect(isWebSocketPayloadWithinLimit(WEBSOCKET_MAX_PAYLOAD_BYTES + 1)).toBe(false);
   });
 
   test("normalizes, deduplicates, validates, and caps synced connection IDs", () => {

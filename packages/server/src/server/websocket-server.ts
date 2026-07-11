@@ -27,7 +27,6 @@ import {
   wrapSessionMessage,
 } from "./messages.js";
 import { asUint8Array, decodeTerminalStreamFrame } from "@chisacode/protocol/binary-frames/index";
-import { MAX_FILE_TRANSFER_BYTES } from "@chisacode/protocol/binary-frames/file-transfer";
 import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
@@ -60,6 +59,7 @@ import {
   type WebSocketRuntimeCounters,
 } from "./websocket/runtime-metrics.js";
 import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
+import { isWebSocketPayloadWithinLimit, WEBSOCKET_MAX_PAYLOAD_BYTES } from "./websocket-limits.js";
 
 const WS_CLOSE_DAEMON_AUTH_FAILED = 4401;
 
@@ -289,8 +289,7 @@ const WS_CLOSE_INVALID_HELLO = 4002;
 const WS_CLOSE_INCOMPATIBLE_PROTOCOL = 4003;
 const WS_PROTOCOL_VERSION = 1;
 const WS_RUNTIME_METRICS_FLUSH_MS = 30_000;
-/** Maximum direct WebSocket frame size, aligned with the binary file-transfer limit. */
-export const WEBSOCKET_MAX_PAYLOAD_BYTES = MAX_FILE_TRANSFER_BYTES;
+export { WEBSOCKET_MAX_PAYLOAD_BYTES } from "./websocket-limits.js";
 /** Maximum concurrent async messages handled by one logical client session. */
 export const MAX_SESSION_INFLIGHT_MESSAGES = 64;
 
@@ -1383,6 +1382,18 @@ export class VoiceAssistantWebSocketServer {
 
     try {
       const buffer = bufferFromWsData(data);
+      if (!isWebSocketPayloadWithinLimit(buffer.byteLength)) {
+        log.warn(
+          {
+            category: "payload_limit",
+            code: "message_too_large",
+            payloadBytes: buffer.byteLength,
+          },
+          "Rejected WebSocket message above plaintext payload limit",
+        );
+        ws.close(1009, "Message too large");
+        return;
+      }
       const binaryHandled = this.maybeHandleBinaryFrame({
         ws,
         buffer,

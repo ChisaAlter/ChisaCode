@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
 
-const LOG_IDENTIFIER_HASH_SAMPLE_CODE_UNITS = 256;
-
 export interface UntrustedLogIdentifierSummary {
   length: number;
   fingerprint: string;
@@ -13,12 +11,6 @@ export interface UntrustedLogIdentifierSummary {
  * @returns Fixed-size length and fingerprint metadata
  */
 export function summarizeUntrustedLogIdentifier(value: string): UntrustedLogIdentifierSummary {
-  const sample = value.slice(0, LOG_IDENTIFIER_HASH_SAMPLE_CODE_UNITS);
-  const fingerprint = createHash("sha256")
-    .update(String(value.length))
-    .update(":")
-    .update(sample)
-    .digest("hex")
-    .slice(0, 16);
+  const fingerprint = createHash("sha256").update(value, "utf8").digest("hex").slice(0, 16);
   return { length: value.length, fingerprint };
 }

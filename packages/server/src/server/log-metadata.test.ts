@@ -16,4 +16,15 @@ describe("summarizeUntrustedLogIdentifier", () => {
     expect(JSON.stringify(first)).not.toContain("TASK10-LOG-SECRET");
     expect(JSON.stringify(first).length).toBeLessThan(100);
   });
+
+  test("hashes the complete UTF-8 identifier instead of only a shared prefix", () => {
+    const prefix = "同".repeat(256);
+    const first = `${prefix}suffix-a`;
+    const second = `${prefix}suffix-b`;
+
+    expect(first.length).toBe(second.length);
+    expect(summarizeUntrustedLogIdentifier(first).fingerprint).not.toBe(
+      summarizeUntrustedLogIdentifier(second).fingerprint,
+    );
+  });
 });

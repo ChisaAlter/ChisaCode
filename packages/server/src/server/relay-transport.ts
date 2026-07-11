@@ -14,6 +14,7 @@ import {
 } from "@chisacode/relay/e2ee";
 import { buildRelayWebSocketUrl } from "@chisacode/protocol/daemon-endpoints";
 import type { ExternalSocketMetadata } from "./websocket-server.js";
+import { WEBSOCKET_MAX_PAYLOAD_BYTES } from "./websocket-limits.js";
 
 interface RelayTransportOptions {
   logger: pino.Logger;
@@ -73,12 +74,35 @@ const MAX_RELAY_CONNECTION_ID_LENGTH = 128;
 const MAX_RELAY_SYNC_CONNECTION_IDS_INSPECTED = 512;
 const RELAY_CONNECTION_ID_PATTERN = /^[A-Za-z0-9_-]+$/u;
 const RELAY_CONTROL_MAX_PAYLOAD_BYTES = 64 * 1024;
-const RELAY_WEBSOCKET_OPTIONS: RelayWebSocketFactoryOptions = {
+const RELAY_ENCRYPTION_BINARY_OVERHEAD_BYTES = 24 + 16;
+
+/**
+ * Returns the UTF-8 byte length of the relay's base64 ciphertext frame for a plaintext payload.
+ * The E2EE codec prepends a 24-byte nonce, adds a 16-byte Poly1305 authenticator, then base64
+ * encodes the binary bundle for WebSocket text compatibility.
+ * @param plaintextBytes Plaintext payload byte length
+ * @returns Encrypted base64 WebSocket frame byte length
+ */
+export function getRelayEncryptedPayloadBytes(plaintextBytes: number): number {
+  const encryptedBytes = plaintextBytes + RELAY_ENCRYPTION_BINARY_OVERHEAD_BYTES;
+  return 4 * Math.ceil(encryptedBytes / 3);
+}
+
+/** Maximum relay wire frame for one allowed encrypted plaintext WebSocket payload. */
+export const RELAY_DATA_MAX_PAYLOAD_BYTES = getRelayEncryptedPayloadBytes(
+  WEBSOCKET_MAX_PAYLOAD_BYTES,
+);
+
+const RELAY_WEBSOCKET_BASE_OPTIONS = {
   handshakeTimeout: 10_000,
   perMessageDeflate: false,
+} as const;
+const RELAY_DATA_WEBSOCKET_OPTIONS: RelayWebSocketFactoryOptions = {
+  ...RELAY_WEBSOCKET_BASE_OPTIONS,
+  maxPayload: RELAY_DATA_MAX_PAYLOAD_BYTES,
 };
 const RELAY_CONTROL_WEBSOCKET_OPTIONS: RelayWebSocketFactoryOptions = {
-  ...RELAY_WEBSOCKET_OPTIONS,
+  ...RELAY_WEBSOCKET_BASE_OPTIONS,
   maxPayload: RELAY_CONTROL_MAX_PAYLOAD_BYTES,
 };
 
@@ -451,7 +475,7 @@ export function startRelayTransport({
           })
         : undefined,
     });
-    const socket = createWebSocket(url, RELAY_WEBSOCKET_OPTIONS);
+    const socket = createWebSocket(url, RELAY_DATA_WEBSOCKET_OPTIONS);
     dataSockets.set(connectionId, socket);
 
     let attached = false;
