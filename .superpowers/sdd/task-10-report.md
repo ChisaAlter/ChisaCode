@@ -71,3 +71,7 @@
 - Hydration ABA behavior remained green before the structural cleanup because the old registry never
   removed entries; the expanded A/B/C regression remains green (hydration 7/7) while the monotonic
   counter plus matching-finally cleanup removes the registry leak without introducing ABA reuse.
+- Focused re-review found that schema-invalid nested `message.type` values were still logged raw.
+  Active-session validation and processing-error paths now summarize extracted, unvalidated request
+  types; only schema-validated finite discriminators are logged raw. The regression uses a secret,
+  control characters, and a 20 KiB type and sink-searches every structured logger call.

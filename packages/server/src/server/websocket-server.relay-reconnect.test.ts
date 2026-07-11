@@ -108,6 +108,7 @@ import {
 } from "./websocket-server";
 import { parseServerInfoStatusPayload } from "./messages.js";
 import type { SpeechReadinessSnapshot } from "./speech/speech-runtime.js";
+import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
 
 interface WebSocketServerInternals {
   attachSocket(ws: unknown, req: unknown): Promise<void>;
@@ -563,6 +564,39 @@ describe("relay external socket reconnect behavior", () => {
     expect(serializedLogs).not.toContain(secret);
     expect(serializedLogs).toContain('"category":"validation"');
     expect(serializedLogs).toContain('"code":"invalid_hello"');
+    await server.close();
+  });
+
+  test("summarizes an unvalidated nested request type in active-session logs", async () => {
+    const secret = "TASK10-INVALID-REQUEST-TYPE-SECRET";
+    const requestType = `${secret}\n\u0000${"z".repeat(20_000)}`;
+    const logger = createLogger();
+    const server = createServer({ logger });
+    const socket = new MockSocket();
+    await attachDirectAndHello({ server, socket, clientId: "invalid-request-type-client" });
+
+    socket.emit(
+      "message",
+      JSON.stringify({
+        type: "session",
+        message: { type: requestType, requestId: "invalid-request-type-id" },
+      }),
+    );
+    await Promise.resolve();
+
+    const serializedLogs = JSON.stringify([
+      logger.child.mock.calls,
+      logger.trace.mock.calls,
+      logger.debug.mock.calls,
+      logger.info.mock.calls,
+      logger.warn.mock.calls,
+      logger.error.mock.calls,
+    ]);
+    expect(serializedLogs).not.toContain(secret);
+    expect(serializedLogs).toContain(
+      JSON.stringify(summarizeUntrustedLogIdentifier(requestType)).slice(1, -1),
+    );
+    expect(serializedLogs.length).toBeLessThan(5_000);
     await server.close();
   });
 

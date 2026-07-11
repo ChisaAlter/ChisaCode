@@ -1273,7 +1273,9 @@ export class VoiceAssistantWebSocketServer {
         requestId: requestInfo?.requestId
           ? summarizeUntrustedLogIdentifier(requestInfo.requestId)
           : undefined,
-        requestType: requestInfo?.requestType,
+        requestType: requestInfo?.requestType
+          ? summarizeUntrustedLogIdentifier(requestInfo.requestType)
+          : undefined,
         category: "validation",
         code: isUnknownSchema ? "unknown_schema" : "invalid_message",
       },
@@ -1531,7 +1533,9 @@ export class VoiceAssistantWebSocketServer {
         requestId: requestInfo?.requestId
           ? summarizeUntrustedLogIdentifier(requestInfo.requestId)
           : undefined,
-        requestType: requestInfo?.requestType,
+        requestType: requestInfo?.requestType
+          ? summarizeUntrustedLogIdentifier(requestInfo.requestType)
+          : undefined,
         category: "message_processing",
         payloadBytes: buffer.byteLength,
         code: "invalid_message",
