@@ -28,6 +28,7 @@ interface TerminateWithTreeKillOptions {
   operations?: TreeKillOperations;
   ownership?: TreeKillOwnership;
   signal?: AbortSignal;
+  windowsOperations?: WindowsTreeKillOperations;
 }
 
 interface TrackedProcess {
@@ -49,6 +50,12 @@ interface TreeKillOperations {
   ): Promise<void>;
   now?: () => number;
   waitForPoll?: (delayMs: number, cleanupSignal: AbortSignal) => Promise<void>;
+}
+
+interface WindowsTreeKillOperations {
+  query(cleanupSignal: AbortSignal): Promise<WindowsProcessRecord[]>;
+  signal(pid: number, signal: NodeJS.Signals): void;
+  isRunning(pid: number): boolean;
 }
 
 export type TerminateWithTreeKillResult =
@@ -198,7 +205,8 @@ async function terminateTrackedProcessTree(
   deadline: TreeKillCleanupDeadline,
 ): Promise<TrackedTerminationResult> {
   const operations =
-    options.operations ?? createDefaultTreeKillOperations(child, options.ownership, deadline);
+    options.operations ??
+    createDefaultTreeKillOperations(child, options.ownership, deadline, options.windowsOperations);
   if (!operations) {
     return "tracking-unavailable";
   }
@@ -337,34 +345,45 @@ function createDefaultTreeKillOperations(
   child: TreeKillTarget,
   ownership: TreeKillOwnership | undefined,
   deadline: TreeKillCleanupDeadline,
+  windowsOperations?: WindowsTreeKillOperations,
 ): TreeKillOperations | null {
   const pid = ownership?.rootPid ?? child.pid;
   if (typeof pid !== "number" || pid <= 0) {
     return null;
   }
-  if (process.platform === "win32") {
+  if (process.platform === "win32" || windowsOperations) {
     const queryDeadlineMs = deadline.expiresAtMs;
+    const resolvedWindowsOperations =
+      windowsOperations ??
+      ({
+        async query(cleanupSignal) {
+          const processTable = await readWindowsProcessTable(queryDeadlineMs, cleanupSignal);
+          return [...processTable.values()];
+        },
+        isRunning: isPidRunning,
+        signal: signalPid,
+      } satisfies WindowsTreeKillOperations);
     return {
       async snapshot(cleanupSignal) {
-        return snapshotWindowsProcessTree(
-          pid,
-          ownership?.launchedAtMs,
-          isProcessExited(child),
-          queryDeadlineMs,
-          cleanupSignal,
-        );
+        const processes = await resolvedWindowsOperations.query(cleanupSignal);
+        return selectOwnedWindowsProcesses({
+          launchedAtMs: ownership?.launchedAtMs,
+          processes,
+          rootExited: isProcessExited(child),
+          rootPid: pid,
+        });
       },
       async listRunning(processes) {
-        return listRunningWindowsProcesses(processes);
+        return processes.filter((process) => resolvedWindowsOperations.isRunning(process.pid));
       },
       async signal(processes, signal, cleanupSignal) {
         const running = await listIdentityMatchingWindowsProcesses(
           processes,
-          queryDeadlineMs,
+          resolvedWindowsOperations.query,
           cleanupSignal,
         );
         for (const process of running) {
-          signalPid(process.pid, signal);
+          resolvedWindowsOperations.signal(process.pid, signal);
         }
       },
     };
@@ -737,6 +756,15 @@ interface RawWindowsProcessRecord {
   ProcessId?: unknown;
 }
 
+class WindowsProcessOwnershipUnverifiedError extends Error {
+  readonly code = "EXEC_COMMAND_PROCESS_OWNERSHIP_UNVERIFIED";
+
+  constructor() {
+    super("Windows root PID was reused without a provable prior process lineage");
+    this.name = "WindowsProcessOwnershipUnverifiedError";
+  }
+}
+
 interface WindowsProcessSelectionOptions {
   launchedAtMs?: number;
   processes: readonly WindowsProcessRecord[];
@@ -744,26 +772,11 @@ interface WindowsProcessSelectionOptions {
   rootPid: number;
 }
 
-async function snapshotWindowsProcessTree(
-  rootPid: number,
-  launchedAtMs?: number,
-  rootExited = false,
-  queryDeadlineMs?: number,
-  cleanupSignal?: AbortSignal,
-): Promise<TrackedProcess[]> {
-  const processTable = await readWindowsProcessTable(queryDeadlineMs, cleanupSignal);
-  return selectOwnedWindowsProcesses({
-    launchedAtMs,
-    processes: [...processTable.values()],
-    rootExited,
-    rootPid,
-  });
-}
-
 /**
  * Selects launch-bounded Windows process records in child-first termination order.
  * @param options Root identity state and the current Win32 process snapshot
  * @returns Process records that belong to the selected root lineage
+ * @throws {Error} If root reuse is proven but no prior lineage can be verified
  */
 export function selectOwnedWindowsProcesses(
   options: WindowsProcessSelectionOptions,
@@ -776,8 +789,17 @@ export function selectOwnedWindowsProcesses(
     (process) => process.creationTimeMs >= earliestCreationTime,
   );
   const currentRoot = eligibleProcesses.find((process) => process.pid === options.rootPid);
+  const hasOlderDirectChild =
+    currentRoot !== undefined &&
+    eligibleProcesses.some(
+      (process) =>
+        process.parentPid === options.rootPid &&
+        process.pid !== options.rootPid &&
+        process.creationTimeMs < currentRoot.creationTimeMs,
+    );
+  const rootReuseProven = currentRoot !== undefined && (options.rootExited || hasOlderDirectChild);
   const reusedRootCreationTime =
-    options.rootExited && currentRoot ? currentRoot.creationTimeMs : Number.POSITIVE_INFINITY;
+    rootReuseProven && currentRoot ? currentRoot.creationTimeMs : Number.POSITIVE_INFINITY;
   const eligibleTable = new Map(
     eligibleProcesses
       .filter((process) => {
@@ -811,24 +833,24 @@ export function selectOwnedWindowsProcesses(
     }
   };
   visit(options.rootPid, eligibleTable.get(options.rootPid)?.creationTimeMs);
-  return [...owned].flatMap((pid) => {
+  const selected = [...owned].flatMap((pid) => {
     const process = eligibleTable.get(pid);
     return process ? [process] : [];
   });
-}
-
-async function listRunningWindowsProcesses(
-  processes: readonly TrackedProcess[],
-): Promise<TrackedProcess[]> {
-  return processes.filter((process) => isPidRunning(process.pid));
+  if (rootReuseProven && selected.length === 0) {
+    throw new WindowsProcessOwnershipUnverifiedError();
+  }
+  return selected;
 }
 
 async function listIdentityMatchingWindowsProcesses(
   processes: readonly TrackedProcess[],
-  queryDeadlineMs: number,
-  cleanupSignal?: AbortSignal,
+  query: WindowsTreeKillOperations["query"],
+  cleanupSignal: AbortSignal,
 ): Promise<TrackedProcess[]> {
-  const processTable = await readWindowsProcessTable(queryDeadlineMs, cleanupSignal);
+  const processTable = new Map(
+    (await query(cleanupSignal)).map((process) => [process.pid, process] as const),
+  );
   return processes.filter(
     (process) => processTable.get(process.pid)?.identity === process.identity,
   );

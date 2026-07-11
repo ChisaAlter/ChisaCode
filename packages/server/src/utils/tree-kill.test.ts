@@ -184,44 +184,7 @@ describe("terminateWithTreeKill", () => {
   });
 
   test("excludes a reused Windows root and its newer descendants", () => {
-    const processes: WindowsProcessSelectionRecord[] = [
-      {
-        creationTimeMs: 1_100,
-        identity: "windows-creation:1100",
-        parentPid: 42,
-        pid: 100,
-      },
-      {
-        creationTimeMs: 1_200,
-        identity: "windows-creation:1200",
-        parentPid: 100,
-        pid: 101,
-      },
-      {
-        creationTimeMs: 5_000,
-        identity: "windows-creation:5000",
-        parentPid: 1,
-        pid: 42,
-      },
-      {
-        creationTimeMs: 5_000,
-        identity: "windows-creation:5000-equal-child",
-        parentPid: 42,
-        pid: 200,
-      },
-      {
-        creationTimeMs: 5_100,
-        identity: "windows-creation:5100",
-        parentPid: 42,
-        pid: 201,
-      },
-      {
-        creationTimeMs: 5_200,
-        identity: "windows-creation:5200",
-        parentPid: 201,
-        pid: 202,
-      },
-    ];
+    const processes = createReusedWindowsProcessRecords();
 
     const selected = selectOwnedWindowsProcesses({
       launchedAtMs: 1_000,
@@ -231,6 +194,106 @@ describe("terminateWithTreeKill", () => {
     });
 
     expect(selected.map((process) => process.pid)).toEqual([101, 100]);
+  });
+
+  test("infers Windows root reuse from an older launch-bounded direct child", () => {
+    const selected = selectOwnedWindowsProcesses({
+      launchedAtMs: 1_000,
+      processes: createReusedWindowsProcessRecords(),
+      rootExited: false,
+      rootPid: 42,
+    });
+
+    expect(selected.map((process) => process.pid)).toEqual([101, 100]);
+  });
+
+  test("fails closed when a reused Windows root has no provable old lineage", () => {
+    expect(() =>
+      selectOwnedWindowsProcesses({
+        launchedAtMs: 1_000,
+        processes: [
+          {
+            creationTimeMs: 5_000,
+            identity: "windows-creation:5000",
+            parentPid: 1,
+            pid: 42,
+          },
+          {
+            creationTimeMs: 5_100,
+            identity: "windows-creation:5100",
+            parentPid: 42,
+            pid: 201,
+          },
+        ],
+        rootExited: true,
+        rootPid: 42,
+      }),
+    ).toThrow(expect.objectContaining({ code: "EXEC_COMMAND_PROCESS_OWNERSHIP_UNVERIFIED" }));
+  });
+
+  test("refreshes root exit state after a pending Windows process query", async () => {
+    interface TestWindowsOperations {
+      query(cleanupSignal: AbortSignal): Promise<WindowsProcessSelectionRecord[]>;
+      signal(pid: number, signal: NodeJS.Signals): void;
+      isRunning(pid: number): boolean;
+    }
+
+    const records = createReusedWindowsProcessRecords();
+    const running = new Set(records.map((process) => process.pid));
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let queryCount = 0;
+    let markQueryStarted: (() => void) | null = null;
+    let resolveInitialQuery: ((processes: WindowsProcessSelectionRecord[]) => void) | null = null;
+    const queryStarted = new Promise<void>((resolve) => {
+      markQueryStarted = resolve;
+    });
+    const initialQuery = new Promise<WindowsProcessSelectionRecord[]>((resolve) => {
+      resolveInitialQuery = resolve;
+    });
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        return true;
+      },
+    };
+    const windowsOperations: TestWindowsOperations = {
+      async query() {
+        queryCount += 1;
+        if (queryCount === 1) {
+          markQueryStarted?.();
+          return initialQuery;
+        }
+        return records;
+      },
+      signal(pid, signal) {
+        signals.push({ pid, signal });
+        running.delete(pid);
+      },
+      isRunning(pid) {
+        return running.has(pid);
+      },
+    };
+
+    const terminationPromise = terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      ownership: {
+        launchedAtMs: 1_000,
+        rootPid: 42,
+      },
+      windowsOperations,
+    });
+    await queryStarted;
+    child.exitCode = 0;
+    resolveInitialQuery?.(records);
+
+    await expect(terminationPromise).resolves.toBe("terminated");
+    expect(signals).toEqual([
+      { pid: 101, signal: "SIGTERM" },
+      { pid: 100, signal: "SIGTERM" },
+    ]);
+    expect(queryCount).toBe(2);
   });
 
   test("retains launch-bounded Windows descendants when the root record is missing", () => {
@@ -741,4 +804,45 @@ function createLinuxProcStat(startTime: number, processGroupId = 42): string {
     ...Array.from({ length: 16 }, () => "0"),
   ];
   return `42 (worker with ) in name) ${[...fieldsBeforeStartTime, String(startTime)].join(" ")}`;
+}
+
+function createReusedWindowsProcessRecords(): WindowsProcessSelectionRecord[] {
+  return [
+    {
+      creationTimeMs: 1_100,
+      identity: "windows-creation:1100",
+      parentPid: 42,
+      pid: 100,
+    },
+    {
+      creationTimeMs: 1_200,
+      identity: "windows-creation:1200",
+      parentPid: 100,
+      pid: 101,
+    },
+    {
+      creationTimeMs: 5_000,
+      identity: "windows-creation:5000",
+      parentPid: 1,
+      pid: 42,
+    },
+    {
+      creationTimeMs: 5_000,
+      identity: "windows-creation:5000-equal-child",
+      parentPid: 42,
+      pid: 200,
+    },
+    {
+      creationTimeMs: 5_100,
+      identity: "windows-creation:5100",
+      parentPid: 42,
+      pid: 201,
+    },
+    {
+      creationTimeMs: 5_200,
+      identity: "windows-creation:5200",
+      parentPid: 201,
+      pid: 202,
+    },
+  ];
 }
