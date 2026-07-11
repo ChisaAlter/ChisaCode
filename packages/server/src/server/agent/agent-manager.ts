@@ -274,6 +274,11 @@ interface HandleStreamEventOptions {
   fromHistory?: boolean;
 }
 
+interface StreamAgentLifecycleHooks {
+  onStarted(): void;
+  onStartFailed(error: unknown): void;
+}
+
 interface ManagedAgentBase {
   id: string;
   provider: AgentProvider;
@@ -505,10 +510,7 @@ export class AgentManager {
         if (!agent) return undefined;
         return this.hasInFlightRun(agentId) ? "running" : agent.lifecycle;
       },
-      dispatchPrompt: async (agentId, prompt) => {
-        const task = this.consumeGenerativeUiPrompt(agentId, prompt).catch(() => undefined);
-        this.trackBackgroundTask(task);
-      },
+      dispatchPrompt: (agentId, prompt) => this.initiateGenerativeUiPrompt(agentId, prompt),
       log: (metadata) => {
         this.logger.warn(metadata, "Generative UI action batch was dropped");
       },
@@ -539,20 +541,43 @@ export class AgentManager {
     return { queued: true };
   }
 
-  private async consumeGenerativeUiPrompt(agentId: string, prompt: string): Promise<void> {
-    try {
-      for await (const _event of this.streamAgent(
-        agentId,
-        formatSystemNotificationPrompt(prompt),
-      )) {
-        // The normal session event pipeline persists and broadcasts every event.
+  private async initiateGenerativeUiPrompt(agentId: string, prompt: string): Promise<void> {
+    let started = false;
+    let resolveInitiated!: () => void;
+    let rejectInitiated!: (error: unknown) => void;
+    const initiated = new Promise<void>((resolvePromise, rejectPromise) => {
+      resolveInitiated = resolvePromise;
+      rejectInitiated = rejectPromise;
+    });
+    const task = (async () => {
+      try {
+        for await (const _event of this.streamAgentWithLifecycle(
+          agentId,
+          formatSystemNotificationPrompt(prompt),
+          undefined,
+          {
+            onStarted: () => {
+              started = true;
+              resolveInitiated();
+            },
+            onStartFailed: rejectInitiated,
+          },
+        )) {
+          // The normal session event pipeline persists and broadcasts every event.
+        }
+      } catch (error) {
+        if (!started) {
+          rejectInitiated(error);
+          return;
+        }
+        this.logger.warn(
+          { agentId, reason: "dispatch_failed" },
+          "Generative UI follow-up prompt failed after initiation",
+        );
       }
-    } catch {
-      this.logger.warn(
-        { agentId, reason: "dispatch_failed" },
-        "Generative UI follow-up prompt failed",
-      );
-    }
+    })();
+    this.trackBackgroundTask(task);
+    await initiated;
   }
   registerClient(provider: AgentProvider, client: AgentClient): void {
     this.clients.set(provider, client);
@@ -1768,6 +1793,15 @@ export class AgentManager {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): AsyncGenerator<AgentStreamEvent> {
+    return this.streamAgentWithLifecycle(agentId, prompt, options);
+  }
+
+  private streamAgentWithLifecycle(
+    agentId: string,
+    prompt: AgentPromptInput,
+    options: AgentRunOptions | undefined,
+    lifecycleHooks?: StreamAgentLifecycleHooks,
+  ): AsyncGenerator<AgentStreamEvent> {
     const existingAgent = this.requireSessionAgent(agentId);
     this.logger.trace(
       {
@@ -1819,6 +1853,7 @@ export class AgentManager {
         });
         this.finalizeForegroundTurn(agent);
         this.foregroundRuns.settlePendingRun(agentId, pendingRun.token);
+        lifecycleHooks?.onStartFailed(error);
         throw error;
       }
 
@@ -1827,6 +1862,7 @@ export class AgentManager {
       agent.lifecycle = "running";
       this.touchUpdatedAt(agent);
       this.emitState(agent);
+      lifecycleHooks?.onStarted();
       this.logger.trace(
         {
           agentId,

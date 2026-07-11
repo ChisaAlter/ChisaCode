@@ -3,10 +3,15 @@
 import { GenerativeUiActionResponseSchema } from "@chisacode/protocol/generative-ui/rpc-schemas";
 import { type SessionInboundMessage } from "@chisacode/protocol/messages";
 import type { DisposableHandler, GenerativeUiHandlerContext } from "./session-context.js";
+import {
+  GenerativeUiActionQueueFullError,
+  getGenerativeUiActionPayloadBytes,
+  MAX_GENERATIVE_UI_ACTION_PAYLOAD_BYTES,
+} from "../agent/generative-ui-action-queue.js";
 
 export const MAX_GENERATIVE_UI_INSTANCE_ID_LENGTH = 256;
 export const MAX_GENERATIVE_UI_ACTION_LENGTH = 128;
-export const MAX_GENERATIVE_UI_PAYLOAD_BYTES = 65_536;
+export const MAX_GENERATIVE_UI_PAYLOAD_BYTES = MAX_GENERATIVE_UI_ACTION_PAYLOAD_BYTES;
 
 function isJsonValue(value: unknown, ancestors: Set<object>): boolean {
   if (value === null || typeof value === "string" || typeof value === "boolean") return true;
@@ -29,8 +34,7 @@ function hasValidResources(instanceId: string, action: string, payload: unknown)
   if (action.length === 0 || action.length > MAX_GENERATIVE_UI_ACTION_LENGTH) return false;
   try {
     if (!isJsonValue(payload, new Set())) return false;
-    const serialized = JSON.stringify(payload);
-    return new TextEncoder().encode(serialized).byteLength <= MAX_GENERATIVE_UI_PAYLOAD_BYTES;
+    return getGenerativeUiActionPayloadBytes(payload) <= MAX_GENERATIVE_UI_PAYLOAD_BYTES;
   } catch {
     return false;
   }
@@ -69,13 +73,21 @@ export class GenerativeUiHandler implements DisposableHandler {
       this.respond(requestId, false, "invalid generative UI action");
       return;
     }
-    this.context.agentManager.enqueueGenerativeUiAction(agentId, {
-      instanceId,
-      action,
-      payload,
-      timestamp,
-    });
-    this.respond(requestId, true, null);
+    try {
+      this.context.agentManager.enqueueGenerativeUiAction(agentId, {
+        instanceId,
+        action,
+        payload,
+        timestamp,
+      });
+      this.respond(requestId, true, null);
+    } catch (error) {
+      if (error instanceof GenerativeUiActionQueueFullError) {
+        this.respond(requestId, false, "generative UI action queue is full");
+        return;
+      }
+      throw error;
+    }
   }
 
   private respond(requestId: string, received: boolean, error: string | null): void {

@@ -4,7 +4,9 @@ import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/ty
 import {
   createGenerativeFormState,
   createGenerativeFormSubmissionController,
+  dispatchGenerativeFormChange,
   generativeFormReducer,
+  isGenerativeFormEditable,
 } from "@/generative-ui/components/generative-form-state";
 
 interface FormField {
@@ -24,6 +26,8 @@ interface FormProps extends GenerativeUiComponentBaseProps {
   };
 }
 
+const accessibilityDisabledState = { disabled: true } as const;
+const accessibilityEnabledState = { disabled: false } as const;
 const selectRowStyle = {
   flexDirection: "row" as const,
   flexWrap: "wrap" as const,
@@ -143,6 +147,8 @@ function FormFieldRenderer({
           <TouchableOpacity
             key={opt.value}
             onPress={optionHandlers[i]}
+            disabled={disabled}
+            accessibilityState={disabled ? accessibilityDisabledState : accessibilityEnabledState}
             style={value === opt.value ? optionButtonSelectedStyle : optionButtonUnselectedStyle}
           >
             <Text style={value === opt.value ? optionTextSelectedStyle : optionTextUnselectedStyle}>
@@ -199,10 +205,12 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
 
   const handleChange = useCallback(
     (name: string, value: string) => {
-      dispatch({ type: "field_changed", field: name, value });
-      void sendAction(instanceId, "change", { field: name, value });
+      dispatchGenerativeFormChange(state, () => {
+        dispatch({ type: "field_changed", field: name, value });
+        void sendAction(instanceId, "change", { field: name, value });
+      });
     },
-    [instanceId, sendAction],
+    [instanceId, sendAction, state],
   );
 
   const handleSubmit = useCallback(async () => {
@@ -219,7 +227,7 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
     }
   }, [instanceId, sendAction, state.values]);
 
-  const disabled = state.status === "submitting" || state.status === "submitted";
+  const disabled = !isGenerativeFormEditable(state);
   const submitButtonStyle = useMemo(
     () => (disabled ? submitButtonDisabledStyle : submitButtonActiveStyle),
     [disabled],

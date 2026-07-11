@@ -63,3 +63,14 @@ Implementation commit: `69a94a292`.
 - RED evidence: error-status queue test retained state (`expected true to be false`); controller test failed because the factory did not exist.
 - GREEN evidence: queue 7 passed; focused AgentManager 3 passed; form state/controller 6 passed; handler 8 passed; action dispatch 5 passed; server/app typechecks passed.
 - Follow-up implementation commit: `8a7e18148`.
+
+## Quality-review follow-up
+
+- Added a turn-initiation handshake: queue dispatch resolves immediately after successful `startTurn` lifecycle setup and rejects only after pre-start failure lifecycle/pending-run settlement. Turn consumption remains a caught manager background task.
+- Added a shared 64 KiB individual serialized payload limit plus deterministic per-agent aggregate budgets, including pending and in-flight data: 32 batches, 128 actions, and 512 KiB retained serialized action bytes. The newest enqueue is rejected with a typed bounded error; prior intent is unchanged.
+- Coalesced changes replace byte accounting in place, and in-flight batches retain all counters until dispatch settles.
+- Handler overload returns bounded `received:false` without enqueue mutation or payload exposure.
+- Form edits now share `isGenerativeFormEditable`/`dispatchGenerativeFormChange`; text and select changes do not dispatch or send while submitting/submitted. Select controls expose disabled and accessibility-disabled state.
+- RED evidence: initiation integration produced no queue failure logs; budget tests lacked constants/error; overload bubbled the typed error; locked-change helper was absent.
+- GREEN evidence: queue 13 passed; focused AgentManager 5 passed; handler 9 passed; form/controller 8 passed; action dispatch 5 passed; server/app typechecks and targeted lint passed.
+- Quality follow-up implementation commit is recorded in progress and the completion message.

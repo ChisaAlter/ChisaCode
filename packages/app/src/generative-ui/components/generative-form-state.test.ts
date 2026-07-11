@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   createGenerativeFormState,
   createGenerativeFormSubmissionController,
+  dispatchGenerativeFormChange,
   generativeFormReducer,
+  isGenerativeFormEditable,
 } from "./generative-form-state";
 
 describe("generativeFormReducer", () => {
@@ -67,5 +69,33 @@ describe("GenerativeFormSubmissionController", () => {
     expect(controller.complete(false)).toBe(false);
     controller.mount();
     expect(controller.begin()).toBe(true);
+  });
+});
+
+describe("isGenerativeFormEditable", () => {
+  it("allows editable and error states but locks submitting and submitted states", () => {
+    const editable = createGenerativeFormState({ name: "Ada" });
+    const submitting = generativeFormReducer(editable, { type: "submit_started" });
+    const submitted = generativeFormReducer(submitting, { type: "submit_resolved", sent: true });
+    const error = generativeFormReducer(submitting, { type: "submit_resolved", sent: false });
+    expect(isGenerativeFormEditable(editable)).toBe(true);
+    expect(isGenerativeFormEditable(error)).toBe(true);
+    expect(isGenerativeFormEditable(submitting)).toBe(false);
+    expect(isGenerativeFormEditable(submitted)).toBe(false);
+  });
+});
+
+describe("dispatchGenerativeFormChange", () => {
+  it("does not dispatch or send while locked and allows editable errors", () => {
+    const calls: string[] = [];
+    const editable = createGenerativeFormState({ name: "Ada" });
+    const submitting = generativeFormReducer(editable, { type: "submit_started" });
+    const submitted = generativeFormReducer(submitting, { type: "submit_resolved", sent: true });
+    const error = generativeFormReducer(submitting, { type: "submit_resolved", sent: false });
+    expect(dispatchGenerativeFormChange(submitting, () => calls.push("submitting"))).toBe(false);
+    expect(dispatchGenerativeFormChange(submitted, () => calls.push("submitted"))).toBe(false);
+    expect(dispatchGenerativeFormChange(error, () => calls.push("error"))).toBe(true);
+    expect(dispatchGenerativeFormChange(editable, () => calls.push("editable"))).toBe(true);
+    expect(calls).toEqual(["error", "editable"]);
   });
 });

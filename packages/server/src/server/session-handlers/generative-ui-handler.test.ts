@@ -4,6 +4,7 @@ import { GenerativeUiHandler } from "./generative-ui-handler.js";
 import type { GenerativeUiHandlerContext } from "./session-context.js";
 import {
   GenerativeUiActionQueue,
+  GenerativeUiActionQueueFullError,
   type GenerativeUiQueuedAction,
 } from "../agent/generative-ui-action-queue.js";
 
@@ -51,6 +52,31 @@ function request(overrides: Record<string, unknown> = {}) {
 }
 
 describe("GenerativeUiHandler", () => {
+  it("returns a bounded overload response without mutating the full queue", async () => {
+    const emitted: Record<string, unknown>[] = [];
+    const context = createContext([], emitted);
+    context.agentManager = {
+      getAgent: () => ({ lifecycle: "running" }),
+      enqueueGenerativeUiAction: () => {
+        throw new GenerativeUiActionQueueFullError();
+      },
+    } as GenerativeUiHandlerContext["agentManager"];
+    const handler = new GenerativeUiHandler(context);
+
+    await handler.dispatch(request({ payload: { secret: "do-not-log" } }));
+
+    expect(emitted).toEqual([
+      {
+        type: "generative_ui.action.response",
+        payload: {
+          requestId: "req-1",
+          received: false,
+          error: "generative UI action queue is full",
+        },
+      },
+    ]);
+    expect(JSON.stringify(emitted)).not.toContain("do-not-log");
+  });
   it.each(["generative_ui.action.request", "generative_ui.action"] as const)(
     "enqueues %s through the shared AgentManager and responds immediately",
     async (type) => {

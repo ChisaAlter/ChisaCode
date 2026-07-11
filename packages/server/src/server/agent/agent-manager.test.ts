@@ -4,9 +4,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { Writable } from "node:stream";
+import pino from "pino";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager, type ManagedAgent } from "./agent-manager.js";
+import { MAX_GENERATIVE_UI_QUEUE_BATCHES } from "./generative-ui-action-queue.js";
 import { AgentStorage } from "./agent-storage.js";
 import { PARENT_AGENT_ID_LABEL, RELATION_KIND_LABEL } from "@chisacode/protocol/agent-labels";
 import { formatSystemNotificationPrompt } from "./agent-prompt.js";
@@ -200,6 +203,10 @@ class TestAgentSession implements AgentSession {
   private subscribers = new Set<(event: AgentStreamEvent) => void>();
   private turnIdCounter = 0;
   private interrupted = false;
+  private failNextTurn = false;
+  private rejectNextStart = false;
+  private holdNextTurn = false;
+  private heldTurnId: string | null = null;
   readonly startedPrompts: AgentPromptInput[] = [];
 
   constructor(private readonly config: AgentSessionConfig) {
@@ -214,18 +221,40 @@ class TestAgentSession implements AgentSession {
     };
   }
 
+  holdNextTurnUntilReleased(): void {
+    this.holdNextTurn = true;
+  }
+
+  releaseHeldTurn(): void {
+    if (!this.heldTurnId) return;
+    const turnId = this.heldTurnId;
+    this.heldTurnId = null;
+    this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+  }
+
+  rejectNextTurnStart(): void {
+    this.rejectNextStart = true;
+  }
+
   failNextTurnWithDuplicateTerminal(): void {
     this.failNextTurn = true;
   }
 
   async startTurn(prompt: AgentPromptInput): Promise<{ turnId: string }> {
     this.startedPrompts.push(prompt);
+    if (this.rejectNextStart) {
+      this.rejectNextStart = false;
+      throw new Error("pre-start provider failure with private details");
+    }
     this.interrupted = false;
     const turnId = `turn-${++this.turnIdCounter}`;
     // Use setTimeout so events arrive after the caller sets up the foreground waiter
     setTimeout(() => {
       this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
-      if (this.failNextTurn) {
+      if (this.holdNextTurn) {
+        this.holdNextTurn = false;
+        this.heldTurnId = turnId;
+      } else if (this.failNextTurn) {
         this.failNextTurn = false;
         const failed = {
           type: "turn_failed" as const,
@@ -6346,4 +6375,87 @@ test("enqueueGenerativeUiAction clears a failed-turn batch without starting a fo
   await manager.flush();
   expect(client.sessions[0]?.startedPrompts).toHaveLength(1);
   expect(manager.getAgent(agent.id)?.lifecycle).toBe("error");
+});
+
+test("enqueueGenerativeUiAction clears later batches after a pre-start failure", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-gen-ui-prestart-test-"));
+  const logLines: string[] = [];
+  const logStream = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
+      logLines.push(chunk.toString());
+      callback();
+    },
+  });
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    logger: pino({ level: "warn" }, logStream),
+    idFactory: () => "00000000-0000-4000-8000-000000000109",
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir });
+  client.sessions[0]?.rejectNextTurnStart();
+
+  manager.enqueueGenerativeUiAction(agent.id, {
+    instanceId: "form-1",
+    action: "submit",
+    payload: { values: { secret: "do-not-log" } },
+    timestamp: 1,
+  });
+  manager.enqueueGenerativeUiAction(agent.id, {
+    instanceId: "form-1",
+    action: "change",
+    payload: { field: "name", value: "later-secret" },
+    timestamp: 2,
+  });
+
+  await vi.waitFor(() => expect(client.sessions[0]?.startedPrompts).toHaveLength(1));
+  await manager.flush();
+  await vi.waitFor(() => {
+    const reasons = logLines
+      .map((line) => JSON.parse(line) as { reason?: string })
+      .map((entry) => entry.reason)
+      .filter(Boolean);
+    expect(reasons).toEqual(["dispatch_failed", "agent_unavailable"]);
+  });
+  expect(client.sessions[0]?.startedPrompts).toHaveLength(1);
+  expect(manager.getAgent(agent.id)?.lifecycle).toBe("error");
+  const queueLogs = logLines
+    .map((line) => JSON.parse(line) as { reason?: string })
+    .filter((entry) => entry.reason === "dispatch_failed" || entry.reason === "agent_unavailable");
+  expect(JSON.stringify(queueLogs)).not.toContain("do-not-log");
+  expect(JSON.stringify(queueLogs)).not.toContain("later-secret");
+  expect(JSON.stringify(queueLogs)).not.toContain("private details");
+});
+
+test("enqueueGenerativeUiAction releases initiation accounting before turn completion", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-gen-ui-initiation-test-"));
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000110",
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir });
+  client.sessions[0]?.holdNextTurnUntilReleased();
+  manager.enqueueGenerativeUiAction(agent.id, {
+    instanceId: "form-1",
+    action: "submit",
+    payload: { values: {} },
+    timestamp: 1,
+  });
+  await vi.waitFor(() => expect(client.sessions[0]?.startedPrompts).toHaveLength(1));
+
+  for (let index = 0; index < MAX_GENERATIVE_UI_QUEUE_BATCHES; index += 1) {
+    expect(() =>
+      manager.enqueueGenerativeUiAction(agent.id, {
+        instanceId: "form-1",
+        action: "submit",
+        payload: { values: { index } },
+        timestamp: index + 2,
+      }),
+    ).not.toThrow();
+  }
+  client.sessions[0]?.releaseHeldTurn();
+  await manager.flush();
+  expect(client.sessions[0]?.startedPrompts).toHaveLength(MAX_GENERATIVE_UI_QUEUE_BATCHES + 1);
 });

@@ -6,6 +6,19 @@ export interface GenerativeFormState {
   error: string | null;
 }
 
+/** Runs a form change effect only while fields are editable. */
+export function dispatchGenerativeFormChange(
+  state: GenerativeFormState,
+  change: () => void,
+): boolean {
+  if (!isGenerativeFormEditable(state)) return false;
+  change();
+  return true;
+}
+/** Returns whether form fields may emit changes in the current state. */
+export function isGenerativeFormEditable(state: GenerativeFormState): boolean {
+  return state.status === "editable" || state.status === "error";
+}
 export type GenerativeFormAction =
   | { type: "field_changed"; field: string; value: string }
   | { type: "submit_started" }
