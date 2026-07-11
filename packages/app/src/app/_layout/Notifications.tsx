@@ -10,7 +10,11 @@ import {
   WEB_NOTIFICATION_CLICK_EVENT,
   type WebNotificationClickDetail,
 } from "@/utils/os-notifications";
-import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
+import {
+  buildNotificationRoute,
+  normalizeAndroidNotificationData,
+  resolveNotificationTarget,
+} from "@/utils/notification-routing";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 
 function PushNotificationRouter() {
@@ -27,6 +31,12 @@ function PushNotificationRouter() {
     }
 
     router.navigate(buildNotificationRoute(data));
+  });
+  const openAndroidNotification = useStableEvent((data: unknown) => {
+    const normalized = normalizeAndroidNotificationData(data);
+    if (normalized) {
+      openNotification(normalized);
+    }
   });
 
   useEffect(() => {
@@ -107,12 +117,19 @@ function PushNotificationRouter() {
     const subscription = Notifications.addNotificationResponseReceivedListener(openFromResponse);
 
     let cancelled = false;
+    let removeAndroidNotificationListener: (() => void) | null = null;
     if (isAndroid) {
       void import("@/native/android-runtime.android")
-        .then((runtime) => runtime.consumeInitialNotificationData())
-        .then((data) => {
-          if (!cancelled && data) {
-            openNotification(data);
+        .then(async (runtime) => {
+          const removeListener = runtime.subscribeNotificationResponses(openAndroidNotification);
+          if (cancelled) {
+            removeListener();
+            return;
+          }
+          removeAndroidNotificationListener = removeListener;
+          const data = await runtime.consumeInitialNotificationData();
+          if (!cancelled) {
+            openAndroidNotification(data);
           }
           return;
         })
@@ -130,9 +147,10 @@ function PushNotificationRouter() {
 
     return () => {
       cancelled = true;
+      removeAndroidNotificationListener?.();
       subscription.remove();
     };
-  }, [openNotification]);
+  }, [openAndroidNotification, openNotification]);
 
   return null;
 }

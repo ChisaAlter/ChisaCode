@@ -1,11 +1,27 @@
-import { requireNativeModule } from "expo";
+import { requireNativeModule, type EventSubscription } from "expo-modules-core";
 import {
   buildAndroidNotificationData,
-  parseAndroidNotificationData,
+  normalizeAndroidNotificationData,
   type AndroidNotificationData,
 } from "@/utils/notification-routing";
 
-const nativeModule = requireNativeModule("ChisaCodeAndroidRuntime");
+interface NotificationResponseEvent {
+  data?: unknown;
+}
+
+interface ChisaCodeAndroidRuntimeModule {
+  startForegroundService(text: string): Promise<void>;
+  updateForegroundServiceText(text: string): Promise<void>;
+  stopForegroundService(): Promise<void>;
+  sendLocalNotification(title: string, body: string, data: string | null): Promise<void>;
+  consumeInitialNotificationData(): Promise<unknown>;
+  addListener(
+    eventName: "onNotificationResponse",
+    listener: (event: NotificationResponseEvent) => void,
+  ): EventSubscription;
+}
+
+const nativeModule = requireNativeModule<ChisaCodeAndroidRuntimeModule>("ChisaCodeAndroidRuntime");
 
 /**
  * Android foreground service + local notification wrapper.
@@ -41,5 +57,22 @@ export async function sendLocalNotification(
  */
 export async function consumeInitialNotificationData(): Promise<AndroidNotificationData | null> {
   const encoded: unknown = await nativeModule.consumeInitialNotificationData();
-  return parseAndroidNotificationData(typeof encoded === "string" ? encoded : null);
+  return normalizeAndroidNotificationData(encoded);
+}
+
+/**
+ * Subscribes to validated notification data from warm Android launch intents.
+ * @param handler Called once for each valid consumed notification intent
+ * @returns A function that removes the native event listener
+ */
+export function subscribeNotificationResponses(
+  handler: (data: AndroidNotificationData) => void,
+): () => void {
+  const subscription = nativeModule.addListener("onNotificationResponse", (event) => {
+    const data = normalizeAndroidNotificationData(event.data);
+    if (data) {
+      handler(data);
+    }
+  });
+  return () => subscription.remove();
 }

@@ -8,6 +8,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import org.json.JSONException
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -15,6 +16,7 @@ class ChisaCodeAndroidRuntimeModule : Module() {
     companion object {
         private const val TAG = "ChisaCodeRuntime"
         private const val NOTIFICATION_DATA_EXTRA = "chisacode.notification.data"
+        private const val NOTIFICATION_RESPONSE_EVENT = "onNotificationResponse"
         private const val MAX_NOTIFICATION_ID_LENGTH = 512
     }
 
@@ -24,8 +26,8 @@ class ChisaCodeAndroidRuntimeModule : Module() {
         if (data == null) return null
         return try {
             val parsed = JSONObject(data)
-            val serverId = parsed.optString("serverId").trim()
-            val agentId = parsed.optString("agentId").trim()
+            val serverId = (parsed.get("serverId") as? String)?.trim() ?: return null
+            val agentId = (parsed.get("agentId") as? String)?.trim() ?: return null
             if (
                 serverId.isEmpty() || agentId.isEmpty() ||
                 serverId.length > MAX_NOTIFICATION_ID_LENGTH || agentId.length > MAX_NOTIFICATION_ID_LENGTH
@@ -34,14 +36,30 @@ class ChisaCodeAndroidRuntimeModule : Module() {
             } else {
                 JSONObject().put("serverId", serverId).put("agentId", agentId).toString()
             }
-        } catch (error: RuntimeException) {
-            Log.w(TAG, "Ignoring malformed notification navigation data", error)
+        } catch (_: JSONException) {
             null
+        }
+    }
+
+    private fun consumeNotificationData(intent: android.content.Intent): String? {
+        return try {
+            canonicalNotificationData(intent.extras?.get(NOTIFICATION_DATA_EXTRA) as? String)
+        } catch (_: RuntimeException) {
+            null
+        } finally {
+            intent.removeExtra(NOTIFICATION_DATA_EXTRA)
         }
     }
 
     override fun definition() = ModuleDefinition {
         Name("ChisaCodeAndroidRuntime")
+        Events(NOTIFICATION_RESPONSE_EVENT)
+
+        OnNewIntent { intent ->
+            consumeNotificationData(intent)?.let { data ->
+                sendEvent(NOTIFICATION_RESPONSE_EVENT, mapOf("data" to data))
+            }
+        }
 
         AsyncFunction("startForegroundService") { text: String ->
             val context = appContext.reactContext
@@ -103,9 +121,7 @@ class ChisaCodeAndroidRuntimeModule : Module() {
 
         AsyncFunction("consumeInitialNotificationData") {
             val intent = appContext.currentActivity?.intent ?: return@AsyncFunction null
-            val data = intent.getStringExtra(NOTIFICATION_DATA_EXTRA)
-            intent.removeExtra(NOTIFICATION_DATA_EXTRA)
-            canonicalNotificationData(data)
+            consumeNotificationData(intent)
         }
     }
 }

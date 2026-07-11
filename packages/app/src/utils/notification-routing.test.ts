@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAndroidNotificationData,
   buildNotificationRoute,
+  normalizeAndroidNotificationData,
   parseAndroidNotificationData,
   resolveNotificationTarget,
 } from "./notification-routing";
@@ -27,9 +28,22 @@ describe("Android notification data", () => {
     expect(parseAndroidNotificationData(undefined)).toBeNull();
     expect(parseAndroidNotificationData("not-json")).toBeNull();
     expect(parseAndroidNotificationData('{"serverId":"server"}')).toBeNull();
+    expect(parseAndroidNotificationData('{"serverId":123,"agentId":"agent"}')).toBeNull();
+    expect(parseAndroidNotificationData('{"serverId":"server","agentId":true}')).toBeNull();
     expect(
       parseAndroidNotificationData(JSON.stringify({ serverId: "s".repeat(513), agentId: "agent" })),
     ).toBeNull();
+  });
+
+  it("normalizes cold JSON and warm event objects through one dispatch shape", () => {
+    const expected = { serverId: "server", agentId: "agent" };
+    expect(normalizeAndroidNotificationData('{"serverId":"server","agentId":"agent"}')).toEqual(
+      expected,
+    );
+    expect(normalizeAndroidNotificationData({ serverId: "server", agentId: "agent" })).toEqual(
+      expected,
+    );
+    expect(normalizeAndroidNotificationData({ serverId: 1, agentId: "agent" })).toBeNull();
   });
 });
 

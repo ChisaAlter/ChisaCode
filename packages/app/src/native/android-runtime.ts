@@ -27,3 +27,14 @@ export async function sendLocalNotification(
 export async function consumeInitialNotificationData(): Promise<null> {
   return null;
 }
+
+/**
+ * Returns a no-op notification listener cleanup function on unsupported platforms.
+ * @param _handler Ignored notification response handler
+ * @returns A no-op cleanup function
+ */
+export function subscribeNotificationResponses(
+  _handler: (data: Record<string, unknown>) => void,
+): () => void {
+  return () => {};
+}

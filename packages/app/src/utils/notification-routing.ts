@@ -71,6 +71,22 @@ export function parseAndroidNotificationData(
   }
 }
 
+/**
+ * Normalizes either cold-launch JSON or a warm native event payload for routing.
+ * @param data Encoded JSON or structured notification navigation data
+ * @returns Validated navigation data, or null when malformed
+ */
+export function normalizeAndroidNotificationData(data: unknown): AndroidNotificationData | null {
+  if (typeof data === "string") {
+    return parseAndroidNotificationData(data);
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return null;
+  }
+  const encoded = buildAndroidNotificationData(data as Record<string, unknown>);
+  return parseAndroidNotificationData(encoded);
+}
+
 export function resolveNotificationTarget(data: NotificationData): {
   serverId: string | null;
   agentId: string | null;
