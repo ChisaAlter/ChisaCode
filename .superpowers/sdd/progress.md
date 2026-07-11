@@ -28,3 +28,6 @@ Task 7 semantics: ClaudeThinkingOption includes ultracode; dynamic changes alway
 Task 8: complete (commits 52a3fa78b..925838979, spec review clean, code-quality review approved; Critical/Important/Minor all zero).
 Task 8 verification: foreground policy 1 passed; reconciler 5 passed; notification drain 3 passed; notification routing 14 passed; theme 4 passed; app typecheck, targeted lint, formatting, and diff checks passed.
 Task 8 limitation: native Kotlin compile and Android device/warm-tap verification remain unavailable because the pre-existing generated Gradle project fails configuration before compilation (`android.defaultConfig.versionName` missing); no native pass is claimed.
+Task 9: complete (commits 551c08082..fac4e3530, spec review clean, code-quality review approved; Critical/Important/Minor all zero).
+Task 9 verification: build:client passed; reconnect 12 passed; binary frames 55 passed; daemon-client 74 passed; protocol/client typechecks, targeted lint, formatting, and diff checks passed.
+Task 9 semantics: close rejects the active connect before clearing settlement; stale transport and deferred Blob callbacks are generation-guarded; file metadata/chunks are capped at 64 MiB, exact-length validated, copied into owned storage after bounds checks, and cleaned on every error.
