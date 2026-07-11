@@ -130,12 +130,12 @@ class ChisaCodeAndroidRuntimeModule : Module() {
 
         AsyncFunction("consumeInitialNotificationData") {
             synchronized(notificationDataLock) {
-                pendingNotificationData?.let { data ->
-                    pendingNotificationData = null
-                    return@synchronized data
+                val pendingData = pendingNotificationData
+                pendingNotificationData = null
+                val coldLaunchData = appContext.currentActivity?.intent?.let { intent ->
+                    consumeNotificationData(intent)
                 }
-                val intent = appContext.currentActivity?.intent ?: return@synchronized null
-                consumeNotificationData(intent)
+                pendingData ?: coldLaunchData
             }
         }
     }

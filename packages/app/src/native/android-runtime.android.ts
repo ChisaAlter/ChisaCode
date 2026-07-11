@@ -54,8 +54,8 @@ export async function consumeInitialNotificationData(): Promise<AndroidNotificat
 }
 
 /**
- * Subscribes to validated notification data from warm Android launch intents.
- * @param handler Called once for each valid consumed notification intent
+ * Subscribes to payload-free wake signals for durable warm Android notification data.
+ * @param handler Called when JavaScript should drain the native pending notification slot
  * @returns A function that removes the native event listener
  */
 export function subscribeNotificationResponses(handler: () => void): () => void {

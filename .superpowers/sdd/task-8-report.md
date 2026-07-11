@@ -20,7 +20,10 @@
   Expo Module `OnNewIntent`, remove the extra in a `finally` block, and atomically store canonical
   data in a bounded one-slot latest-wins pending queue. The event is only a wake signal; pending data
   remains durable until JavaScript drains it. Initial and event-triggered drains are serialized and
-  coalesced, and listener cleanup disposes the drain controller.
+  coalesced, and listener cleanup disposes the drain controller. Every native drain atomically
+  captures and clears both the pending warm slot and the current Activity cold-launch extra under
+  the same lock, returning `pending ?: cold`; this prevents a losing cold extra from replaying after
+  a warm notification wins.
 - Themes expose `isDark`; the status bar hook reacts to brightness changes rather than theme names.
 
 ## TDD evidence
@@ -60,6 +63,8 @@ Warm-notification device verification is also unavailable. Static seam review co
   Modules API; events carry no payload and only wake the drain path.
 - Every received Intent removes `chisacode.notification.data` while holding the same lock used by
   the one-slot pending queue and drain operation.
+- `consumeInitialNotificationData` clears both native sources on every call regardless of which
+  source wins, so a later remount cannot replay a stale cold-launch extra.
 - Malformed native JSON and non-string values return null without logging raw payloads.
 - The Android TypeScript wrapper returns a typed signal-listener unsubscribe function, and
   `Notifications.tsx` invokes it and disposes the drain controller during effect cleanup.
