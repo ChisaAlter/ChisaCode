@@ -13,7 +13,7 @@ import type {
   AgentTimelineItem,
   AgentProvider,
 } from "./agent/agent-sdk-types.js";
-import { execCommand, platformShell } from "../utils/spawn.js";
+import { ExecCommandTimeoutError, execCommand, platformShell } from "../utils/spawn.js";
 import { writeFileAtomic } from "../utils/atomic-write.js";
 import { getUnattendedModeId } from "@chisacode/protocol/provider-manifest";
 
@@ -576,7 +576,7 @@ export class LoopService {
       if (iteration && iteration.status === "running") {
         iteration.status = "stopped";
         iteration.failureReason = "Loop stopped";
-        iteration.workerCompletedAt = nowIso();
+        iteration.workerCompletedAt ??= nowIso();
       }
       await this.persist();
       return;
@@ -588,7 +588,7 @@ export class LoopService {
     if (iteration && iteration.status === "running") {
       iteration.status = "failed";
       iteration.failureReason = message;
-      iteration.workerCompletedAt = nowIso();
+      iteration.workerCompletedAt ??= nowIso();
     }
     await this.persist();
   }
@@ -688,7 +688,15 @@ export class LoopService {
         level: "info",
         text: `$ ${command}`,
       });
-      const result = await this.runVerifyCheck({ cwd: loop.cwd, command, signal, timeoutMs });
+      let result: LoopVerifyCheckResult;
+      try {
+        result = await this.runVerifyCheck({ cwd: loop.cwd, command, signal, timeoutMs });
+      } catch (error) {
+        if (error instanceof ExecCommandTimeoutError && loop.maxTimeMs !== null) {
+          throw new Error(`Reached max time (${loop.maxTimeMs}ms).`, { cause: error });
+        }
+        throw error;
+      }
       iteration.verifyChecks.push(result);
       const output = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
       this.appendLog(loop, {
@@ -804,6 +812,9 @@ export class LoopService {
     } catch (error) {
       if (options.signal.aborted) {
         throw new Error("Loop aborted", { cause: error });
+      }
+      if (error instanceof ExecCommandTimeoutError) {
+        throw error;
       }
       const childError = error as Error & {
         code?: number | string;

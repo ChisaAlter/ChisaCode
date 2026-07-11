@@ -34,6 +34,7 @@ import { AgentManager } from "./agent/agent-manager.js";
 import { LoopService } from "./loop-service.js";
 import { isPlatform } from "../test-utils/platform.js";
 import { createTestLogger } from "../test-utils/test-logger.js";
+import { ExecCommandTimeoutError } from "../utils/spawn.js";
 
 const TEST_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -578,6 +579,9 @@ describe("LoopService", () => {
   });
 
   test("stops an active verify command by aborting its signal", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
     const verifySignals: AbortSignal[] = [];
     const verifyTimeouts: Array<number | undefined> = [];
     let markVerifyStarted: (() => void) | null = null;
@@ -626,9 +630,13 @@ describe("LoopService", () => {
       verifyChecks: ["ignored-by-injected-runner"],
     });
     await verifyStarted;
+    const beforeStop = await service.inspectLoop(loop.id);
+    const workerCompletedAt = beforeStop.iterations[0]?.workerCompletedAt;
+    expect(workerCompletedAt).toBe("2026-01-01T00:00:00.000Z");
     expect(verifySignals).toHaveLength(1);
     expect(verifyTimeouts).toEqual([undefined]);
 
+    vi.setSystemTime(startedAtMs + 1_000);
     const stopPromise = service.stopLoop(loop.id);
     await vi.waitFor(() => {
       expect(verifySignals[0]?.aborted).toBe(true);
@@ -639,6 +647,7 @@ describe("LoopService", () => {
     expect(stopped.iterations).toHaveLength(1);
     expect(stopped.iterations[0]?.status).toBe("stopped");
     expect(stopped.iterations[0]?.failureReason).toBe("Loop stopped");
+    expect(stopped.iterations[0]?.workerCompletedAt).toBe(workerCompletedAt);
     expect(stopped.iterations[0]?.verifyChecks).toEqual([]);
     expect(
       stopped.logs.filter((entry) => entry.source === "verify-check" && entry.level === "error"),
@@ -738,6 +747,79 @@ describe("LoopService", () => {
     expect(finalLoop.iterations[0]?.status).toBe("failed");
     expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
   });
+
+  test("finishes with canonical max-time failure when a running verify command times out", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
+    const verifyTimeouts: number[] = [];
+    let markVerifyAttempted: (() => void) | null = null;
+    const verifyAttempted = new Promise<void>((resolve) => {
+      markVerifyAttempted = resolve;
+    });
+    const runVerifyCommand: NonNullable<
+      ConstructorParameters<typeof LoopService>[0]["runVerifyCommand"]
+    > = async ({ timeoutMs }) => {
+      const timeout = timeoutMs ?? 0;
+      verifyTimeouts.push(timeout);
+      vi.setSystemTime(startedAtMs + 500);
+      markVerifyAttempted?.();
+      throw new ExecCommandTimeoutError(timeout, "", "");
+    };
+    const manager = new AgentManager({
+      clients: {
+        claude: new ScriptedAgentClient("claude", {
+          async onRun() {
+            return "worker finished";
+          },
+        }),
+      },
+      registry: storage,
+      logger,
+    });
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      runVerifyCommand,
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyChecks: ["times-out"],
+      maxIterations: 3,
+      maxTimeMs: 1_000,
+      sleepMs: 60_000,
+    });
+
+    try {
+      await verifyAttempted;
+      await vi.waitFor(async () => {
+        const state = await service.inspectLoop(loop.id);
+        const sleeping = hasSleepLog(state.logs);
+        expect(state.status !== "running" || sleeping).toBe(true);
+      });
+
+      const finalLoop = await service.inspectLoop(loop.id);
+      expect(finalLoop.status).toBe("failed");
+      expect(finalLoop.iterations).toHaveLength(1);
+      expect(finalLoop.iterations[0]?.status).toBe("failed");
+      expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
+      expect(finalLoop.iterations[0]?.workerCompletedAt).toBe("2026-01-01T00:00:00.000Z");
+      expect(finalLoop.iterations[0]?.verifyChecks).toEqual([]);
+      expect(verifyTimeouts).toHaveLength(1);
+      expect(finalLoop.logs.filter((entry) => entry.text.startsWith("Sleeping "))).toEqual([]);
+      expect(
+        finalLoop.logs.filter(
+          (entry) => entry.source === "verify-check" && entry.level === "error",
+        ),
+      ).toEqual([]);
+    } finally {
+      await service.stopLoop(loop.id);
+    }
+  });
 });
 
 async function fsMkdir(target: string): Promise<void> {
@@ -746,6 +828,10 @@ async function fsMkdir(target: string): Promise<void> {
 
 function pathExists(target: string): boolean {
   return existsSync(target);
+}
+
+function hasSleepLog(entries: Array<{ text: string }>): boolean {
+  return entries.some((entry) => entry.text.startsWith("Sleeping "));
 }
 
 async function waitForLoopCompletion(service: LoopService, loopId: string): Promise<void> {

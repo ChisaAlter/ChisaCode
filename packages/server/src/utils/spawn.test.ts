@@ -1,11 +1,11 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { buildSelfNodeCommand } from "../server/chisacode-env.js";
-import { execCommand, spawnProcess } from "./spawn.js";
+import { execCommand, platformShell, spawnProcess } from "./spawn.js";
 
 const printEnvScript = `
 const keys = [
@@ -41,45 +41,125 @@ describe("execCommand", () => {
     expect(result.stderr).toBe("");
   });
 
-  test("rejects when the command times out", async () => {
-    const command =
-      process.platform === "win32"
-        ? {
-            command: process.execPath,
-            args: ["-e", "setTimeout(() => {}, 10_000)"],
-          }
-        : { command: "sleep", args: ["10"] };
+  test("closes readiness watcher when the command exits before the marker", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-readiness-test-")));
+    tempDirs.push(cwd);
+    const commandError = new Error("command exited before readiness");
 
-    await expect(execCommand(command.command, command.args, { timeout: 100 })).rejects.toThrow();
+    await expect(
+      waitForPathCreation(path.join(cwd, "missing.pid"), Promise.reject(commandError)),
+    ).rejects.toBe(commandError);
   });
 
-  test("aborts a running command when its signal is aborted", async () => {
-    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-signal-test-")));
+  test("times out a command tree launched through the platform shell", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-timeout-test-")));
     tempDirs.push(cwd);
-    const readyPath = path.join(cwd, "ready.txt");
-    const ready = waitForPathCreation(readyPath);
-    const controller = new AbortController();
-    const commandPromise = execCommand(
-      process.execPath,
-      [
-        "-e",
-        [
-          `require("node:fs").writeFileSync(${JSON.stringify(readyPath)}, String(process.pid));`,
-          "process.stdin.resume();",
-        ].join("\n"),
-      ],
-      { signal: controller.signal, timeout: 5_000 },
+    const fixture = createShellTreeFixture(cwd);
+    const shell = platformShell();
+    const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
+      cwd,
+      timeout: 2_000,
+    });
+    let ownerPid: number | null = null;
+    let grandchildPid: number | null = null;
+
+    try {
+      await waitForPathCreation(fixture.grandchildPidPath, commandPromise);
+      ownerPid = readPid(fixture.ownerPidPath);
+      grandchildPid = readPid(fixture.grandchildPidPath);
+      expect(isProcessRunning(ownerPid)).toBe(true);
+      expect(isProcessRunning(grandchildPid)).toBe(true);
+
+      const error = await commandPromise.then(
+        () => new Error("Expected command to reject"),
+        (reason: unknown) =>
+          reason as Error & { code?: string; stderr?: string; stdout?: string; timeoutMs?: number },
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(isProcessRunning(ownerPid)).toBe(false);
+          expect(isProcessRunning(grandchildPid)).toBe(false);
+        },
+        { timeout: 5_000 },
+      );
+      expect(error).toMatchObject({
+        name: "ExecCommandTimeoutError",
+        code: "EXEC_COMMAND_TIMEOUT",
+        timeoutMs: 2_000,
+      });
+    } finally {
+      await commandPromise.catch(() => {});
+      killIfRunning(grandchildPid);
+      killIfRunning(ownerPid);
+      await waitForProcessesStopped([ownerPid, grandchildPid]);
+    }
+  }, 15_000);
+
+  test("preserves nonzero exit details", async () => {
+    const error = await execCommand(process.execPath, [
+      "-e",
+      'console.error("failure"); process.exit(7);',
+    ]).then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) => reason as Error & { code?: number; stdout?: string; stderr?: string },
     );
 
-    await ready;
-    controller.abort(new Error("stop requested"));
-
-    await expect(commandPromise).rejects.toMatchObject({
-      name: "AbortError",
-      code: "ABORT_ERR",
-    });
-    expect(controller.signal.aborted).toBe(true);
+    expect(error.code).toBe(7);
+    expect(error.stdout).toBe("");
+    expect(error.stderr?.trim()).toBe("failure");
   });
+
+  test("rejects when stdout exceeds maxBuffer", async () => {
+    await expect(
+      execCommand(process.execPath, ["-e", 'process.stdout.write("x".repeat(2048));'], {
+        maxBuffer: 1024,
+      }),
+    ).rejects.toMatchObject({ code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" });
+  });
+
+  test("aborts a command tree launched through the platform shell", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-signal-test-")));
+    tempDirs.push(cwd);
+    const fixture = createShellTreeFixture(cwd);
+    const shell = platformShell();
+    const controller = new AbortController();
+    const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
+      cwd,
+      signal: controller.signal,
+      timeout: 10_000,
+    });
+    let ownerPid: number | null = null;
+    let grandchildPid: number | null = null;
+
+    try {
+      await waitForPathCreation(fixture.grandchildPidPath, commandPromise);
+      ownerPid = readPid(fixture.ownerPidPath);
+      grandchildPid = readPid(fixture.grandchildPidPath);
+      expect(isProcessRunning(ownerPid)).toBe(true);
+      expect(isProcessRunning(grandchildPid)).toBe(true);
+
+      controller.abort(new Error("stop requested"));
+
+      await expect(commandPromise).rejects.toMatchObject({
+        name: "AbortError",
+        code: "ABORT_ERR",
+      });
+      await vi.waitFor(
+        () => {
+          expect(isProcessRunning(ownerPid)).toBe(false);
+          expect(isProcessRunning(grandchildPid)).toBe(false);
+        },
+        { timeout: 5_000 },
+      );
+    } finally {
+      controller.abort(new Error("test cleanup"));
+      await commandPromise.catch(() => {});
+      killIfRunning(grandchildPid);
+      killIfRunning(ownerPid);
+      await waitForProcessesStopped([ownerPid, grandchildPid]);
+    }
+  }, 15_000);
 
   test("runs the command in the provided cwd", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-test-")));
@@ -245,21 +325,112 @@ describe("execCommand", () => {
   });
 });
 
-function waitForPathCreation(target: string): Promise<void> {
+interface ShellTreeFixture {
+  command: string;
+  ownerPidPath: string;
+  grandchildPidPath: string;
+}
+
+function createShellTreeFixture(cwd: string): ShellTreeFixture {
+  const ownerScriptPath = path.join(cwd, "owner.cjs");
+  const grandchildScriptPath = path.join(cwd, "grandchild.cjs");
+  const ownerPidPath = path.join(cwd, "owner.pid");
+  const grandchildPidPath = path.join(cwd, "grandchild.pid");
+  writeFileSync(
+    grandchildScriptPath,
+    [
+      'const fs = require("node:fs");',
+      'const net = require("node:net");',
+      "const server = net.createServer();",
+      `server.listen(0, "127.0.0.1", () => fs.writeFileSync(${JSON.stringify(grandchildPidPath)}, String(process.pid)));`,
+    ].join("\n"),
+  );
+  writeFileSync(
+    ownerScriptPath,
+    [
+      'const { spawn } = require("node:child_process");',
+      'const fs = require("node:fs");',
+      `fs.writeFileSync(${JSON.stringify(ownerPidPath)}, String(process.pid));`,
+      `const grandchild = spawn(process.execPath, [${JSON.stringify(grandchildScriptPath)}], { stdio: "ignore" });`,
+      'grandchild.once("error", (error) => { console.error(error); process.exit(1); });',
+      "process.stdin.resume();",
+    ].join("\n"),
+  );
+  return {
+    command: `${path.basename(process.execPath)} ${path.basename(ownerScriptPath)}`,
+    ownerPidPath,
+    grandchildPidPath,
+  };
+}
+
+function readPid(target: string): number {
+  return Number.parseInt(readFileSync(target, "utf8").trim(), 10);
+}
+
+function isProcessRunning(pid: number | null): boolean {
+  if (pid === null || !Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function killIfRunning(pid: number | null): void {
+  if (!isProcessRunning(pid)) {
+    return;
+  }
+  try {
+    process.kill(pid!, "SIGKILL");
+  } catch {
+    // Ignore cleanup races.
+  }
+}
+
+async function waitForProcessesStopped(pids: Array<number | null>): Promise<void> {
+  await vi.waitFor(
+    () => {
+      expect(pids.map(isProcessRunning)).toEqual(pids.map(() => false));
+    },
+    { timeout: 5_000 },
+  );
+}
+
+function waitForPathCreation(target: string, commandPromise: Promise<unknown>): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const watcher = fs.watch(path.dirname(target));
+    const finish = (settle: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      watcher.close();
+      settle();
+    };
     const finishIfReady = () => {
       if (!fs.existsSync(target)) {
         return;
       }
-      watcher.close();
-      resolve();
+      finish(resolve);
     };
     watcher.on("change", finishIfReady);
     watcher.on("error", (error) => {
-      watcher.close();
-      reject(error);
+      finish(() => reject(error));
     });
+    void commandPromise.then(
+      () => {
+        return finish(() =>
+          reject(new Error(`Command exited before ${path.basename(target)} was ready`)),
+        );
+      },
+      (error: unknown) => {
+        return finish(() => reject(error instanceof Error ? error : new Error(String(error))));
+      },
+    );
     finishIfReady();
   });
 }

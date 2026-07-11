@@ -47,7 +47,16 @@ interface RelayWebSocketLike extends RelaySocketLike {
   ) => void;
 }
 
-type RelayWebSocketFactory = (url: string) => RelayWebSocketLike;
+interface RelayWebSocketFactoryOptions {
+  readonly handshakeTimeout: number;
+  readonly perMessageDeflate: false;
+  readonly maxPayload?: number;
+}
+
+type RelayWebSocketFactory = (
+  url: string,
+  options: RelayWebSocketFactoryOptions,
+) => RelayWebSocketLike;
 
 type ControlMessage =
   | { type: "sync"; connectionIds: string[] }
@@ -61,11 +70,23 @@ const CONTROL_STALE_TIMEOUT_MS = 30_000;
 const CONTROL_READY_TIMEOUT_MS = 8_000;
 const MAX_RELAY_CONNECTION_IDS = 256;
 const MAX_RELAY_CONNECTION_ID_LENGTH = 128;
+const MAX_RELAY_SYNC_CONNECTION_IDS_INSPECTED = 512;
 const RELAY_CONNECTION_ID_PATTERN = /^[A-Za-z0-9_-]+$/u;
-const RELAY_WEBSOCKET_OPTIONS = { handshakeTimeout: 10_000, perMessageDeflate: false } as const;
+const RELAY_CONTROL_MAX_PAYLOAD_BYTES = 64 * 1024;
+const RELAY_WEBSOCKET_OPTIONS: RelayWebSocketFactoryOptions = {
+  handshakeTimeout: 10_000,
+  perMessageDeflate: false,
+};
+const RELAY_CONTROL_WEBSOCKET_OPTIONS: RelayWebSocketFactoryOptions = {
+  ...RELAY_WEBSOCKET_OPTIONS,
+  maxPayload: RELAY_CONTROL_MAX_PAYLOAD_BYTES,
+};
 
-function createDefaultRelayWebSocket(url: string): RelayWebSocketLike {
-  return new WebSocket(url, RELAY_WEBSOCKET_OPTIONS);
+function createDefaultRelayWebSocket(
+  url: string,
+  options: RelayWebSocketFactoryOptions,
+): RelayWebSocketLike {
+  return new WebSocket(url, options);
 }
 
 function normalizeRelaySendPayload(data: string | Uint8Array | ArrayBuffer): string | ArrayBuffer {
@@ -116,7 +137,12 @@ function tryParseControlMessage(raw: unknown): ControlMessage | null {
     if (parsed.type === "sync" && Array.isArray(parsed.connectionIds)) {
       const connectionIds: string[] = [];
       const seenConnectionIds = new Set<string>();
-      for (const value of parsed.connectionIds) {
+      const inspectionLimit = Math.min(
+        parsed.connectionIds.length,
+        MAX_RELAY_SYNC_CONNECTION_IDS_INSPECTED,
+      );
+      for (let index = 0; index < inspectionLimit; index += 1) {
+        const value = parsed.connectionIds[index];
         const connectionId = normalizeRelayConnectionId(value);
         if (!connectionId || seenConnectionIds.has(connectionId)) {
           continue;
@@ -164,6 +190,13 @@ export function startRelayTransport({
   let controlReadyTimeout: ReturnType<typeof setTimeout> | null = null;
   let controlLastSeenAt = 0;
   let controlConnectionSeq = 0;
+  let dataSocketCapacityWarningEmitted = false;
+
+  const resetDataSocketCapacityWarning = (): void => {
+    if (dataSockets.size < MAX_RELAY_CONNECTION_IDS) {
+      dataSocketCapacityWarningEmitted = false;
+    }
+  };
 
   const stop = async (): Promise<void> => {
     stopped = true;
@@ -214,7 +247,7 @@ export function startRelayTransport({
           })
         : undefined,
     });
-    const socket = createWebSocket(url);
+    const socket = createWebSocket(url, RELAY_CONTROL_WEBSOCKET_OPTIONS);
     controlWs = socket;
     let controlConnected = false;
 
@@ -370,6 +403,7 @@ export function startRelayTransport({
             // ignore
           }
           dataSockets.delete(msg.connectionId);
+          resetDataSocketCapacityWarning();
         }
       }
     });
@@ -392,13 +426,16 @@ export function startRelayTransport({
     if (!connectionId) return;
     if (dataSockets.has(connectionId)) return;
     if (dataSockets.size >= MAX_RELAY_CONNECTION_IDS) {
-      relayLogger.warn(
-        {
-          connectionCount: dataSockets.size,
-          maxConnectionIds: MAX_RELAY_CONNECTION_IDS,
-        },
-        "relay_data_socket_capacity_reached",
-      );
+      if (!dataSocketCapacityWarningEmitted) {
+        dataSocketCapacityWarningEmitted = true;
+        relayLogger.warn(
+          {
+            connectionCount: dataSockets.size,
+            maxConnectionIds: MAX_RELAY_CONNECTION_IDS,
+          },
+          "relay_data_socket_capacity_reached",
+        );
+      }
       return;
     }
 
@@ -416,7 +453,7 @@ export function startRelayTransport({
           })
         : undefined,
     });
-    const socket = createWebSocket(url);
+    const socket = createWebSocket(url, RELAY_WEBSOCKET_OPTIONS);
     dataSockets.set(connectionId, socket);
 
     let attached = false;
@@ -461,6 +498,7 @@ export function startRelayTransport({
       );
       if (dataSockets.get(connectionId) === socket) {
         dataSockets.delete(connectionId);
+        resetDataSocketCapacityWarning();
       }
     });
 

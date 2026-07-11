@@ -1,16 +1,17 @@
 import { execFile, spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname } from "node:path";
-import { promisify } from "node:util";
 
 import { createExternalCommandProcessEnv, type ProcessEnvRecord } from "../server/chisacode-env.js";
+import { terminateWithTreeKill } from "./tree-kill.js";
 import {
   isWindowsCommandScript,
   quoteWindowsArgument,
   quoteWindowsCommand,
 } from "./windows-command.js";
 
-const execFileAsync = promisify(execFile);
+const COMMAND_GRACEFUL_TERMINATION_MS = 250;
+const COMMAND_FORCE_TERMINATION_MS = 2_000;
 
 interface ExternalEnvOptions {
   baseEnv?: ProcessEnvRecord;
@@ -34,6 +35,34 @@ interface ExecCommandOptions extends ExternalEnvOptions {
 interface ExecCommandResult {
   stdout: string;
   stderr: string;
+}
+
+interface ExecCommandError extends Error {
+  code?: number | string | null;
+  stdout?: string;
+  stderr?: string;
+}
+
+/** Identifies a command that exceeded the configured execution timeout. */
+export class ExecCommandTimeoutError extends Error {
+  readonly code = "EXEC_COMMAND_TIMEOUT";
+
+  /**
+   * Creates a timeout error with captured command output.
+   * @param timeoutMs Configured timeout in milliseconds
+   * @param stdout Captured standard output
+   * @param stderr Captured standard error
+   * @param options Optional error cause
+   */
+  constructor(
+    readonly timeoutMs: number,
+    readonly stdout: string,
+    readonly stderr: string,
+    options?: ErrorOptions,
+  ) {
+    super(`Command timed out after ${timeoutMs}ms`, options);
+    this.name = "ExecCommandTimeoutError";
+  }
 }
 
 function hasPathSeparator(value: string): boolean {
@@ -179,17 +208,123 @@ export async function execCommand(
           ...(envOverlay ? [envOverlay] : []),
         );
 
-  return execFileAsync(resolvedCommand, resolvedArgs, {
-    cwd: options?.cwd,
-    env: childEnv,
-    encoding: options?.encoding ?? "utf8",
-    killSignal: options?.killSignal,
-    signal: options?.signal,
-    timeout: options?.timeout,
-    maxBuffer: options?.maxBuffer,
-    shell,
-    windowsHide: true,
-  }) as Promise<ExecCommandResult>;
+  if (options?.signal?.aborted) {
+    throw createExecCommandAbortError(options.signal.reason, "", "");
+  }
+
+  return new Promise<ExecCommandResult>((resolve, reject) => {
+    let terminationReason: "abort" | "timeout" | null = null;
+    let terminationPromise: Promise<void> | null = null;
+    let timeoutHandle: NodeJS.Timeout | null = null;
+    const child = execFile(
+      resolvedCommand,
+      resolvedArgs,
+      {
+        cwd: options?.cwd,
+        env: childEnv,
+        encoding: options?.encoding ?? "utf8",
+        killSignal: options?.killSignal,
+        maxBuffer: options?.maxBuffer,
+        shell,
+        windowsHide: true,
+      },
+      (error, rawStdout, rawStderr) => {
+        const stdout = normalizeExecOutput(rawStdout, options?.encoding);
+        const stderr = normalizeExecOutput(rawStderr, options?.encoding);
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
+        options?.signal?.removeEventListener("abort", onAbort);
+        void settleExecCommand({
+          terminationReason,
+          error,
+          reject,
+          resolve,
+          stderr,
+          stdout,
+          terminationPromise,
+          abortReason: options?.signal?.reason,
+          timeoutMs: options?.timeout,
+        });
+      },
+    );
+    const requestTermination = (reason: "abort" | "timeout") => {
+      if (terminationReason) {
+        return;
+      }
+      terminationReason = reason;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+      terminationPromise = terminateWithTreeKill(child, {
+        gracefulTimeoutMs: COMMAND_GRACEFUL_TERMINATION_MS,
+        forceTimeoutMs: COMMAND_FORCE_TERMINATION_MS,
+      }).then(() => undefined);
+    };
+    const onAbort = () => requestTermination("abort");
+    options?.signal?.addEventListener("abort", onAbort, { once: true });
+    if (options?.signal?.aborted) {
+      onAbort();
+    }
+    if (!terminationReason && options?.timeout !== undefined && options.timeout > 0) {
+      timeoutHandle = setTimeout(() => requestTermination("timeout"), options.timeout);
+    }
+  });
+}
+
+async function settleExecCommand(options: {
+  abortReason: unknown;
+  error: Error | null;
+  reject: (reason?: unknown) => void;
+  resolve: (result: ExecCommandResult) => void;
+  stderr: string;
+  stdout: string;
+  terminationPromise: Promise<void> | null;
+  terminationReason: "abort" | "timeout" | null;
+  timeoutMs: number | undefined;
+}): Promise<void> {
+  if (options.terminationReason) {
+    await options.terminationPromise;
+    if (options.terminationReason === "abort") {
+      options.reject(
+        createExecCommandAbortError(options.abortReason, options.stdout, options.stderr),
+      );
+      return;
+    }
+    options.reject(
+      new ExecCommandTimeoutError(options.timeoutMs ?? 0, options.stdout, options.stderr, {
+        cause: options.error ?? undefined,
+      }),
+    );
+    return;
+  }
+  if (options.error) {
+    const commandError = options.error as ExecCommandError;
+    commandError.stdout = options.stdout;
+    commandError.stderr = options.stderr;
+    options.reject(commandError);
+    return;
+  }
+  options.resolve({ stdout: options.stdout, stderr: options.stderr });
+}
+
+function normalizeExecOutput(value: string | Buffer, encoding?: BufferEncoding): string {
+  return typeof value === "string" ? value : value.toString(encoding ?? "utf8");
+}
+
+function createExecCommandAbortError(
+  reason: unknown,
+  stdout: string,
+  stderr: string,
+): ExecCommandError {
+  const error = new Error("The operation was aborted", { cause: reason }) as ExecCommandError;
+  error.name = "AbortError";
+  error.code = "ABORT_ERR";
+  error.stdout = stdout;
+  error.stderr = stderr;
+  return error;
 }
 
 export function platformShell(): { command: string; flag: string[] } {

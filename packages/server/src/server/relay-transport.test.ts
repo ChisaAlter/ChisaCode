@@ -35,7 +35,10 @@ class FakeRelayWebSocket {
   pingCalls = 0;
   private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
 
-  constructor(readonly url: string) {}
+  constructor(
+    readonly url: string,
+    readonly options?: unknown,
+  ) {}
 
   on(event: string, listener: (...args: unknown[]) => void) {
     const handlers = this.listeners.get(event) ?? [];
@@ -109,8 +112,8 @@ function createFakeWebSockets() {
   const sockets: FakeRelayWebSocket[] = [];
   return {
     sockets,
-    createWebSocket(url: string) {
-      const socket = new FakeRelayWebSocket(url);
+    createWebSocket(url: string, options?: unknown) {
+      const socket = new FakeRelayWebSocket(url, options);
       sockets.push(socket);
       return socket;
     },
@@ -247,6 +250,33 @@ describe("relay-transport control lifecycle", () => {
     ]);
   });
 
+  test("bounds payload size only on the relay control socket", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+
+    const control = relay.sockets[0];
+    expect(control.options).toEqual({
+      handshakeTimeout: 10_000,
+      perMessageDeflate: false,
+      maxPayload: 64 * 1024,
+    });
+    control.open();
+    control.message(JSON.stringify({ type: "connected", connectionId: "client_1" }));
+
+    expect(relay.sockets[1]?.options).toEqual({
+      handshakeTimeout: 10_000,
+      perMessageDeflate: false,
+    });
+  });
+
   test("normalizes, deduplicates, validates, and caps synced connection IDs", () => {
     const logger = createMockLogger();
     const controller = startRelayTransport({
@@ -272,6 +302,30 @@ describe("relay-transport control lifecycle", () => {
     expect(getDataConnectionIds(relay)).toEqual(uniqueIds.slice(0, 256));
   });
 
+  test("inspects at most 512 raw synced connection IDs", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+    const connectionIds = Array.from({ length: 2_000 }, (_, index) => {
+      if (index === 0) return "seen_id";
+      if (index === 1_999) return "beyond_limit";
+      return index % 2 === 0 ? "invalid id" : "seen_id";
+    });
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds }));
+
+    expect(getDataConnectionIds(relay)).toEqual(["seen_id"]);
+  });
+
   test("caps data sockets independently across connected control messages", () => {
     const logger = createMockLogger();
     const controller = startRelayTransport({
@@ -290,6 +344,8 @@ describe("relay-transport control lifecycle", () => {
     for (const connectionId of uniqueIds) {
       control.message(JSON.stringify({ type: "connected", connectionId }));
     }
+    control.message(JSON.stringify({ type: "connected", connectionId: "client_257" }));
+    control.message(JSON.stringify({ type: "connected", connectionId: "client_258" }));
     control.message(JSON.stringify({ type: "connected", connectionId: "client_0" }));
 
     expect(getDataConnectionIds(relay)).toEqual(uniqueIds.slice(0, 256));
@@ -306,6 +362,38 @@ describe("relay-transport control lifecycle", () => {
         ],
       },
     ]);
+  });
+
+  test("reuses a closed slot and starts a new saturation warning cycle", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+    const connectionIds = Array.from({ length: 256 }, (_, index) => `client_${index}`);
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds }));
+    control.message(JSON.stringify({ type: "connected", connectionId: "overflow_1" }));
+
+    const firstDataSocket = relay.sockets[1];
+    control.message(JSON.stringify({ type: "disconnected", connectionId: "client_0" }));
+    expect(firstDataSocket.readyState).toBe(FakeRelayWebSocket.CLOSED);
+    control.message(JSON.stringify({ type: "connected", connectionId: "replacement" }));
+    expect(getDataConnectionIds(relay).at(-1)).toBe("replacement");
+
+    control.message(JSON.stringify({ type: "connected", connectionId: "overflow_2" }));
+    expect(
+      logger.messages.filter((entry) => {
+        return entry.args.includes("relay_data_socket_capacity_reached");
+      }),
+    ).toHaveLength(2);
   });
 
   test("applies connection ID validation to connected and disconnected messages", () => {
