@@ -239,6 +239,33 @@ test("does not retry after close() is called", async () => {
   }
 });
 
+test("close rejects an in-flight connect and ignores late events from that transport", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_reconnect_close_pending",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  await client.close();
+
+  await expect(connectPromise).rejects.toThrow("Daemon client closed");
+  expect(client.getConnectionState().status).toBe("disposed");
+
+  mock.triggerOpen();
+  mock.triggerError(new Error("late error"));
+  mock.triggerClose({ code: 1006, reason: "late close" });
+  expect(client.getConnectionState().status).toBe("disposed");
+
+  await client.close();
+  await expect(client.connect()).rejects.toThrow("Daemon client is disposed");
+});
+
 test("ensureConnected triggers reconnect when disconnected", async () => {
   vi.useFakeTimers();
   try {

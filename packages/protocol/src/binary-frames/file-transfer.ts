@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { asUint8Array } from "./terminal.js";
 
+/** Maximum declared byte length accepted for a single file transfer. */
+export const MAX_FILE_TRANSFER_BYTES = 64 * 1024 * 1024;
+
 export const FileTransferOpcode = {
   FileBegin: 0x10,
   FileChunk: 0x11,
@@ -12,7 +15,7 @@ export type FileTransferOpcode = (typeof FileTransferOpcode)[keyof typeof FileTr
 export const FileBeginMetadataSchema = z
   .object({
     mime: z.string().min(1),
-    size: z.number().int().nonnegative(),
+    size: z.number().int().safe().nonnegative(),
     encoding: z.enum(["utf-8", "binary"]),
     modifiedAt: z.string(),
   })

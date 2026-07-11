@@ -114,6 +114,7 @@ import {
   decodeFileTransferFrame,
   decodeTerminalStreamFrame,
   FileTransferOpcode,
+  MAX_FILE_TRANSFER_BYTES,
   TerminalStreamOpcode,
   type FileTransferFrame,
 } from "@chisacode/protocol/binary-frames/index";
@@ -732,6 +733,7 @@ interface BinaryFileTransferState extends PendingBinaryFileRead {
     { opcode: typeof FileTransferOpcode.FileBegin }
   >["metadata"]["encoding"];
   modifiedAt: string;
+  receivedBytes: number;
   chunks: Uint8Array[];
 }
 
@@ -1087,6 +1089,9 @@ export class DaemonClient {
 
       this.transportCleanup = [
         transport.onOpen(() => {
+          if (this.transport !== transport) {
+            return;
+          }
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
             this.pendingGenericTransportErrorTimeout = null;
@@ -1095,6 +1100,9 @@ export class DaemonClient {
           this.sendHelloMessage();
         }),
         transport.onClose((event) => {
+          if (this.transport !== transport) {
+            return;
+          }
           this.resetConnectTimeout();
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
@@ -1111,6 +1119,9 @@ export class DaemonClient {
           });
         }),
         transport.onError((event) => {
+          if (this.transport !== transport) {
+            return;
+          }
           this.resetConnectTimeout();
           const reason = describeTransportError(event);
           const isGeneric = reason === "Transport error";
@@ -1149,7 +1160,11 @@ export class DaemonClient {
             reasonCode: "transport_error",
           });
         }),
-        transport.onMessage((data) => this.handleTransportMessage(data)),
+        transport.onMessage((data) => {
+          if (this.transport === transport) {
+            this.handleTransportMessage(data);
+          }
+        }),
       ];
     } catch (error) {
       this.resetConnectTimeout();
@@ -1193,9 +1208,11 @@ export class DaemonClient {
       return;
     }
     this.shouldReconnect = false;
+    const rejectPendingConnect = this.connectReject;
     this.connectPromise = null;
     this.connectResolve = null;
     this.connectReject = null;
+    rejectPendingConnect?.(new Error("Daemon client closed"));
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -1206,6 +1223,7 @@ export class DaemonClient {
     this.rejectPendingSendQueue(new Error("Daemon client closed"));
     this.rejectLivenessProbe(new Error("Daemon client closed"));
     this.terminalStreams.clearSlots();
+    this.activeBinaryFileTransfers.clear();
     this.lastServerInfoMessage = null;
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
@@ -4623,13 +4641,14 @@ export class DaemonClient {
 
   private disposeTransport(code = 1001, reason = "Reconnecting"): void {
     this.cleanupTransport();
-    if (this.transport) {
+    const transport = this.transport;
+    this.transport = null;
+    if (transport) {
       try {
-        this.transport.close(code, reason);
+        transport.close(code, reason);
       } catch {
         // no-op
       }
-      this.transport = null;
     }
   }
 
@@ -4764,12 +4783,21 @@ export class DaemonClient {
       if (!pending) {
         return;
       }
+      if (this.activeBinaryFileTransfers.has(frame.requestId)) {
+        this.failBinaryFileTransfer(frame.requestId, "Duplicate file transfer start");
+        return;
+      }
+      if (frame.metadata.size > MAX_FILE_TRANSFER_BYTES) {
+        this.failBinaryFileTransfer(frame.requestId, "File transfer exceeds maximum size");
+        return;
+      }
       this.activeBinaryFileTransfers.set(frame.requestId, {
         ...pending,
         mime: frame.metadata.mime,
         size: frame.metadata.size,
         encoding: frame.metadata.encoding,
         modifiedAt: frame.metadata.modifiedAt,
+        receivedBytes: 0,
         chunks: [],
       });
       return;
@@ -4777,14 +4805,37 @@ export class DaemonClient {
 
     const transfer = this.activeBinaryFileTransfers.get(frame.requestId);
     if (!transfer) {
+      if (
+        this.pendingBinaryFileReads.has(frame.requestId) &&
+        !this.completedBinaryFileReads.has(frame.requestId)
+      ) {
+        this.failBinaryFileTransfer(frame.requestId, "File transfer frame received before start");
+      }
       return;
     }
 
     if (frame.opcode === FileTransferOpcode.FileChunk) {
+      const nextReceivedBytes = transfer.receivedBytes + frame.payload.byteLength;
+      if (!Number.isSafeInteger(nextReceivedBytes) || nextReceivedBytes > MAX_FILE_TRANSFER_BYTES) {
+        this.failBinaryFileTransfer(frame.requestId, "File transfer exceeds maximum size");
+        return;
+      }
+      if (nextReceivedBytes > transfer.size) {
+        this.failBinaryFileTransfer(frame.requestId, "File transfer exceeds declared size");
+        return;
+      }
+      transfer.receivedBytes = nextReceivedBytes;
       transfer.chunks.push(frame.payload);
       return;
     }
 
+    if (transfer.receivedBytes !== transfer.size) {
+      this.failBinaryFileTransfer(
+        frame.requestId,
+        `File transfer expected ${transfer.size} bytes but received ${transfer.receivedBytes}`,
+      );
+      return;
+    }
     const bytes = concatByteChunks(transfer.chunks, transfer.size);
     this.activeBinaryFileTransfers.delete(frame.requestId);
     this.completedBinaryFileReads.set(frame.requestId, {
@@ -4805,6 +4856,26 @@ export class DaemonClient {
         file: null,
         error: null,
         requestId: frame.requestId,
+      },
+    });
+  }
+
+  private failBinaryFileTransfer(requestId: string, error: string): void {
+    const pending = this.pendingBinaryFileReads.get(requestId);
+    this.activeBinaryFileTransfers.delete(requestId);
+    if (!pending) {
+      return;
+    }
+    this.handleSessionMessage({
+      type: "file_explorer_response",
+      payload: {
+        cwd: pending.cwd,
+        path: pending.path,
+        mode: "file",
+        directory: null,
+        file: null,
+        error,
+        requestId,
       },
     });
   }
@@ -4868,6 +4939,7 @@ export class DaemonClient {
     this.rejectPendingSendQueue(new Error(reason ?? "Connection lost"));
     this.rejectLivenessProbe(new Error(reason ?? "Connection lost"));
     this.terminalStreams.clearSlots();
+    this.activeBinaryFileTransfers.clear();
     this.lastServerInfoMessage = null;
 
     if (wasDisposed) {

@@ -10,11 +10,12 @@
  * Also tests daemon-client transport utilities: decodeMessageData,
  * extractRelayMessageData, encodeUtf8String boundary conditions.
  */
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
   FileTransferOpcode,
+  MAX_FILE_TRANSFER_BYTES,
 } from "@chisacode/protocol/binary-frames/index";
 import {
   decodeTerminalResizePayload,
@@ -30,12 +31,181 @@ import {
   encodeUtf8String,
   extractRelayMessageData,
 } from "./daemon-client-transport.js";
+import { DaemonClient } from "./daemon-client.js";
+import type { DaemonTransport } from "./daemon-client-transport-types.js";
+
+function createBinaryTransferHarness() {
+  const sent: Array<string | Uint8Array | ArrayBuffer> = [];
+  let onMessage: (data: unknown) => void = () => {};
+  let onOpen: () => void = () => {};
+  const transport: DaemonTransport = {
+    send: (data) => sent.push(data),
+    close: () => {},
+    onMessage: (handler) => {
+      onMessage = handler;
+      return () => {};
+    },
+    onOpen: (handler) => {
+      onOpen = handler;
+      return () => {};
+    },
+    onClose: () => () => {},
+    onError: () => () => {},
+  };
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_binary_boundaries",
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    reconnect: { enabled: false },
+    transportFactory: () => transport,
+  });
+  return {
+    client,
+    open: () => {
+      onOpen();
+      sent.length = 0;
+      onMessage(
+        JSON.stringify({
+          type: "session",
+          message: {
+            type: "status",
+            payload: {
+              status: "server_info",
+              serverId: "srv_binary",
+              hostname: null,
+              version: null,
+            },
+          },
+        }),
+      );
+    },
+    frame: (input: Parameters<typeof encodeFileTransferFrame>[0]) =>
+      onMessage(encodeFileTransferFrame(input)),
+  };
+}
+
+const binaryClients: DaemonClient[] = [];
+
+afterEach(async () => {
+  await Promise.all(binaryClients.map((client) => client.close()));
+  binaryClients.length = 0;
+});
+
+async function startBinaryRead(requestId: string) {
+  const harness = createBinaryTransferHarness();
+  binaryClients.push(harness.client);
+  const connecting = harness.client.connect();
+  harness.open();
+  await connecting;
+  return { ...harness, read: harness.client.readFile("/tmp/project", "file.bin", requestId) };
+}
 
 // =============================================================================
 // encodeFileTransferFrame / decodeFileTransferFrame
 // =============================================================================
 
 describe("file transfer binary frames", () => {
+  test("exports an inclusive safe file transfer limit", () => {
+    expect(MAX_FILE_TRANSFER_BYTES).toBe(64 * 1024 * 1024);
+  });
+
+  test("rejects FileBegin metadata one byte over the transfer limit", async () => {
+    const transfer = await startBinaryRead("over-limit");
+    transfer.frame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "over-limit",
+      metadata: {
+        mime: "application/octet-stream",
+        size: MAX_FILE_TRANSFER_BYTES + 1,
+        encoding: "binary",
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    await expect(transfer.read).rejects.toThrow(/maximum size/i);
+  });
+
+  test("rejects a transfer as soon as chunks exceed the declared size", async () => {
+    const transfer = await startBinaryRead("declared-overflow");
+    transfer.frame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "declared-overflow",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 2,
+        encoding: "binary",
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    transfer.frame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "declared-overflow",
+      payload: new Uint8Array([1, 2, 3]),
+    });
+    await expect(transfer.read).rejects.toThrow(/declared size/i);
+  });
+
+  test("rejects FileEnd when fewer bytes arrived than declared", async () => {
+    const transfer = await startBinaryRead("declared-undersize");
+    transfer.frame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "declared-undersize",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 3,
+        encoding: "binary",
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    transfer.frame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "declared-undersize",
+      payload: new Uint8Array([1, 2]),
+    });
+    transfer.frame({ opcode: FileTransferOpcode.FileEnd, requestId: "declared-undersize" });
+    await expect(transfer.read).rejects.toThrow(/expected 3 bytes.*received 2/i);
+  });
+
+  test("accepts an exact zero-byte transfer", async () => {
+    const transfer = await startBinaryRead("exact-zero");
+    transfer.frame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "exact-zero",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 0,
+        encoding: "binary",
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    transfer.frame({ opcode: FileTransferOpcode.FileEnd, requestId: "exact-zero" });
+    await expect(transfer.read).resolves.toMatchObject({ size: 0, bytes: new Uint8Array() });
+  });
+
+  test("accepts a transfer exactly at the maximum byte limit", async () => {
+    const transfer = await startBinaryRead("exact-maximum");
+    transfer.frame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "exact-maximum",
+      metadata: {
+        mime: "application/octet-stream",
+        size: MAX_FILE_TRANSFER_BYTES,
+        encoding: "binary",
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    const chunkSize = 8 * 1024 * 1024;
+    for (let offset = 0; offset < MAX_FILE_TRANSFER_BYTES; offset += chunkSize) {
+      transfer.frame({
+        opcode: FileTransferOpcode.FileChunk,
+        requestId: "exact-maximum",
+        payload: new Uint8Array(chunkSize),
+      });
+    }
+    transfer.frame({ opcode: FileTransferOpcode.FileEnd, requestId: "exact-maximum" });
+    const result = await transfer.read;
+    expect(result.size).toBe(MAX_FILE_TRANSFER_BYTES);
+    expect(result.bytes.byteLength).toBe(MAX_FILE_TRANSFER_BYTES);
+  });
   test("rejects empty requestId", () => {
     expect(() =>
       encodeFileTransferFrame({
