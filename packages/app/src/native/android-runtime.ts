@@ -22,3 +22,8 @@ export async function sendLocalNotification(
 ): Promise<void> {
   // no-op on non-Android platforms
 }
+
+/** Returns no launch notification data on unsupported platforms. */
+export async function consumeInitialNotificationData(): Promise<null> {
+  return null;
+}

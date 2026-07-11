@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 
 class ChisaCodeForegroundService : Service() {
@@ -18,6 +19,7 @@ class ChisaCodeForegroundService : Service() {
         const val CHANNEL_ID_ALERTS = "chisacode.alerts"
         const val NOTIFICATION_ID = 1
         const val ALERT_NOTIFICATION_ID_BASE = 1000
+        private const val TAG = "ChisaCodeRuntime"
 
         private var serviceText: String = "ChisaCode"
 
@@ -86,7 +88,13 @@ class ChisaCodeForegroundService : Service() {
         ensureChannels(this)
         val notification = buildOngoingNotification(this, serviceText)
         startForeground(NOTIFICATION_ID, notification)
-        return START_STICKY
+        return START_NOT_STICKY
+    }
+
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.w(TAG, "Foreground service timed out (startId=$startId, type=$fgsType)")
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf(startId)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

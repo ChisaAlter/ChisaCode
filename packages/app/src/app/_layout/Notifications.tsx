@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "expo-router";
 import * as Notifications from "expo-notifications";
-import { isWeb } from "@/constants/platform";
+import { isAndroid, isWeb } from "@/constants/platform";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { getDesktopHost } from "@/desktop/host";
 import { useStableEvent } from "@/hooks/use-stable-event";
@@ -106,6 +106,21 @@ function PushNotificationRouter() {
 
     const subscription = Notifications.addNotificationResponseReceivedListener(openFromResponse);
 
+    let cancelled = false;
+    if (isAndroid) {
+      void import("@/native/android-runtime.android")
+        .then((runtime) => runtime.consumeInitialNotificationData())
+        .then((data) => {
+          if (!cancelled && data) {
+            openNotification(data);
+          }
+          return;
+        })
+        .catch((error: unknown) => {
+          console.error("Failed to consume Android notification launch data", error);
+        });
+    }
+
     void Notifications.getLastNotificationResponseAsync().then((response) => {
       if (response) {
         openFromResponse(response);
@@ -114,6 +129,7 @@ function PushNotificationRouter() {
     });
 
     return () => {
+      cancelled = true;
       subscription.remove();
     };
   }, [openNotification]);

@@ -1,4 +1,9 @@
 import { requireNativeModule } from "expo";
+import {
+  buildAndroidNotificationData,
+  parseAndroidNotificationData,
+  type AndroidNotificationData,
+} from "@/utils/notification-routing";
 
 const nativeModule = requireNativeModule("ChisaCodeAndroidRuntime");
 
@@ -27,5 +32,14 @@ export async function sendLocalNotification(
   body: string,
   data?: Record<string, unknown>,
 ): Promise<void> {
-  await nativeModule.sendLocalNotification(title, body, data ? JSON.stringify(data) : null);
+  await nativeModule.sendLocalNotification(title, body, buildAndroidNotificationData(data));
+}
+
+/**
+ * Consumes notification navigation data from the current Android launch intent.
+ * @returns Validated notification data, or null when absent or already consumed
+ */
+export async function consumeInitialNotificationData(): Promise<AndroidNotificationData | null> {
+  const encoded: unknown = await nativeModule.consumeInitialNotificationData();
+  return parseAndroidNotificationData(typeof encoded === "string" ? encoded : null);
 }

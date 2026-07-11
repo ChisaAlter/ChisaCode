@@ -703,6 +703,7 @@ const liquidNeonShadow = {
 
 function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemanticColors>) {
   return {
+    isDark: true,
     colorScheme: "dark" as const,
     colors: {
       ...semanticColors,
@@ -722,6 +723,7 @@ export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
 export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
 
 export const liquidNeonTheme = {
+  isDark: true,
   colorScheme: "dark" as const,
   colors: {
     ...liquidNeonLightColors,
@@ -759,6 +761,7 @@ type Widened<T> = T extends string ? string : { [K in keyof T]: Widened<T[K]> };
 
 function buildLightTheme(semanticColors: Widened<typeof lightSemanticColors>) {
   return {
+    isDark: false,
     colorScheme: "light" as const,
     colors: {
       ...semanticColors,

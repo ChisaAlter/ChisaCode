@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { StatusBar } from "react-native";
-import { UnistylesRuntime } from "react-native-unistyles";
+import { useUnistyles } from "react-native-unistyles";
 
 /**
  * Syncs the Android status bar barStyle with the active Unistyles theme colorScheme.
@@ -12,22 +12,10 @@ import { UnistylesRuntime } from "react-native-unistyles";
  * - light / liquid-neon / auto-light themes → dark-content (dark icons)
  */
 export function useStatusBarTheme(): void {
-  const previousThemeKeyRef = useRef<string | undefined>(undefined);
+  const { theme } = useUnistyles();
 
   useEffect(() => {
-    const currentKey: string | undefined = UnistylesRuntime.themeName as string | undefined;
-    if (currentKey === previousThemeKeyRef.current) return;
-    previousThemeKeyRef.current = currentKey;
-
-    const key = currentKey ?? "";
-    const isDark =
-      key === "dark" ||
-      key === "darkZinc" ||
-      key === "darkMidnight" ||
-      key === "darkClaude" ||
-      key === "darkGhostty";
-
-    StatusBar.setBarStyle(isDark ? "light-content" : "dark-content", true);
+    StatusBar.setBarStyle(theme.isDark ? "light-content" : "dark-content", true);
     StatusBar.setBackgroundColor("transparent", true);
-  });
+  }, [theme.isDark]);
 }

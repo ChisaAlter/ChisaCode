@@ -4,6 +4,7 @@ import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { getIsElectron, isAndroid, isWeb, isNative } from "@/constants/platform";
 import { readDesktopSystemIdleTimeMs } from "@/desktop/electron/idle";
 import { invokeDesktopCommand } from "@/desktop/electron/invoke";
+import { shouldRunAndroidForegroundService } from "@/native/android-foreground-service-policy";
 import {
   type ClientActivityTracker,
   createClientActivityTracker,
@@ -150,32 +151,48 @@ export function useClientActivity({
     if (!isAndroid) return;
 
     let disposed = false;
+    let appState = AppState.currentState;
+    let connectionStatus: Parameters<
+      typeof shouldRunAndroidForegroundService
+    >[0]["connectionStatus"] = "idle";
+    let lastShouldRun = false;
 
-    const startService = () => {
-      import("@/native/android-runtime.android")
-        .then((m) => m.startForegroundService("ChisaCode"))
-        .catch(() => {});
-    };
-
-    const stopService = () => {
-      import("@/native/android-runtime.android")
-        .then((m) => m.stopForegroundService())
-        .catch(() => {});
+    const syncService = () => {
+      const shouldRun = shouldRunAndroidForegroundService({ appState, connectionStatus });
+      if (shouldRun === lastShouldRun) return;
+      lastShouldRun = shouldRun;
+      void import("@/native/android-runtime.android")
+        .then((runtime) =>
+          shouldRun ? runtime.startForegroundService("ChisaCode") : runtime.stopForegroundService(),
+        )
+        .catch((error: unknown) => {
+          console.error("Failed to synchronize Android foreground service", error);
+        });
     };
 
     const unsubscribe = client.subscribeConnectionStatus((state) => {
       if (disposed) return;
-      if (state.status === "connected") {
-        startService();
-      } else {
-        stopService();
-      }
+      connectionStatus = state.status;
+      syncService();
+    });
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (disposed) return;
+      appState = nextState;
+      syncService();
     });
 
     return () => {
       disposed = true;
       unsubscribe();
-      stopService();
+      appStateSubscription.remove();
+      if (lastShouldRun) {
+        lastShouldRun = false;
+        void import("@/native/android-runtime.android")
+          .then((runtime) => runtime.stopForegroundService())
+          .catch((error: unknown) => {
+            console.error("Failed to stop Android foreground service during cleanup", error);
+          });
+      }
     };
   }, [client]);
 }

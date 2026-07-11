@@ -1,6 +1,37 @@
 import { describe, expect, it } from "vitest";
 
-import { buildNotificationRoute, resolveNotificationTarget } from "./notification-routing";
+import {
+  buildAndroidNotificationData,
+  buildNotificationRoute,
+  parseAndroidNotificationData,
+  resolveNotificationTarget,
+} from "./notification-routing";
+
+describe("Android notification data", () => {
+  it("round-trips only bounded server and agent ids", () => {
+    const encoded = buildAndroidNotificationData({
+      serverId: " server-123 ",
+      agentId: " agent-456 ",
+      ignored: "not copied",
+    });
+
+    expect(encoded).toBe('{"serverId":"server-123","agentId":"agent-456"}');
+    expect(parseAndroidNotificationData(encoded)).toEqual({
+      serverId: "server-123",
+      agentId: "agent-456",
+    });
+  });
+
+  it("rejects missing, malformed, and oversized payloads", () => {
+    expect(buildAndroidNotificationData({ serverId: "server", agentId: "" })).toBeNull();
+    expect(parseAndroidNotificationData(undefined)).toBeNull();
+    expect(parseAndroidNotificationData("not-json")).toBeNull();
+    expect(parseAndroidNotificationData('{"serverId":"server"}')).toBeNull();
+    expect(
+      parseAndroidNotificationData(JSON.stringify({ serverId: "s".repeat(513), agentId: "agent" })),
+    ).toBeNull();
+  });
+});
 
 describe("resolveNotificationTarget", () => {
   it("extracts non-empty server and agent ids", () => {

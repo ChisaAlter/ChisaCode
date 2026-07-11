@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { THEME_PREVIEWS, THEME_SWATCHES, chisakiTheme, liquidNeonTheme } from "./theme";
+import {
+  THEME_PREVIEWS,
+  THEME_SWATCHES,
+  aemeathTheme,
+  chisakiTheme,
+  darkTheme,
+  lightTheme,
+  liquidNeonTheme,
+} from "./theme";
+
+describe("theme brightness", () => {
+  it("exposes status bar brightness independently of the theme name", () => {
+    expect(darkTheme.isDark).toBe(true);
+    expect(liquidNeonTheme.isDark).toBe(true);
+    expect(chisakiTheme.isDark).toBe(true);
+    expect(lightTheme.isDark).toBe(false);
+    expect(aemeathTheme.isDark).toBe(false);
+  });
+});
 
 describe("liquid neon theme surfaces", () => {
   it("uses dark glass surfaces with cyan accent", () => {
