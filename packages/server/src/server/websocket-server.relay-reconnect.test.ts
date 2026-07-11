@@ -499,10 +499,11 @@ describe("relay external socket reconnect behavior", () => {
 
   test("does not log payload or error secrets when a session handler rejects", async () => {
     const secret = "TASK10-UNIQUE-PROMPT-SECRET";
+    const untrustedId = `${secret}\n\u0000${"x".repeat(20_000)}`;
     const logger = createLogger();
     const server = createServer({ logger });
     const socket = new MockSocket();
-    await attachDirectAndHello({ server, socket, clientId: "sanitized-logs" });
+    await attachDirectAndHello({ server, socket, clientId: untrustedId });
     sessionMock.instances[0].handleMessage.mockRejectedValueOnce(new Error(secret));
 
     socket.emit(
@@ -511,7 +512,7 @@ describe("relay external socket reconnect behavior", () => {
         type: "session",
         message: {
           type: "chat/post",
-          requestId: "secret-request",
+          requestId: untrustedId,
           room: "room",
           body: secret,
         },
@@ -522,6 +523,7 @@ describe("relay external socket reconnect behavior", () => {
 
     expect(
       JSON.stringify([
+        logger.child.mock.calls,
         logger.trace.mock.calls,
         logger.debug.mock.calls,
         logger.info.mock.calls,
@@ -529,6 +531,38 @@ describe("relay external socket reconnect behavior", () => {
         logger.error.mock.calls,
       ]),
     ).not.toContain(secret);
+    await server.close();
+  });
+
+  test("logs fixed metadata for malformed hello without received values", async () => {
+    const secret = "TASK10-MALFORMED-HELLO-SECRET";
+    const logger = createLogger();
+    const server = createServer({ logger });
+    const socket = new MockSocket();
+    await server.attachExternalSocket(socket, { transport: "relay" });
+
+    socket.emit(
+      "message",
+      JSON.stringify({
+        type: "hello",
+        clientId: secret,
+        clientType: secret,
+        protocolVersion: secret,
+      }),
+    );
+    await Promise.resolve();
+
+    const serializedLogs = JSON.stringify([
+      logger.child.mock.calls,
+      logger.trace.mock.calls,
+      logger.debug.mock.calls,
+      logger.info.mock.calls,
+      logger.warn.mock.calls,
+      logger.error.mock.calls,
+    ]);
+    expect(serializedLogs).not.toContain(secret);
+    expect(serializedLogs).toContain('"category":"validation"');
+    expect(serializedLogs).toContain('"code":"invalid_hello"');
     await server.close();
   });
 

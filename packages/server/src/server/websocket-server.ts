@@ -59,6 +59,7 @@ import {
   WebSocketRuntimeMetricsWindow,
   type WebSocketRuntimeCounters,
 } from "./websocket/runtime-metrics.js";
+import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
 
 const WS_CLOSE_DAEMON_AUTH_FAILED = 4401;
 
@@ -995,7 +996,7 @@ export class VoiceAssistantWebSocketServer {
       this.sendToClient(ws, this.createServerInfoMessage());
       existing.connectionLogger.trace(
         {
-          clientId,
+          clientId: summarizeUntrustedLogIdentifier(clientId),
           resumed: true,
           totalSessions: this.sessions.size,
         },
@@ -1004,7 +1005,9 @@ export class VoiceAssistantWebSocketServer {
       return;
     }
 
-    const connectionLogger = pending.connectionLogger.child({ clientId });
+    const connectionLogger = pending.connectionLogger.child({
+      clientId: summarizeUntrustedLogIdentifier(clientId),
+    });
     this.incrementRuntimeCounter("helloNew");
     const connection = this.createSessionConnection({
       ws,
@@ -1018,7 +1021,7 @@ export class VoiceAssistantWebSocketServer {
     this.sendToClient(ws, this.createServerInfoMessage());
     connection.connectionLogger.trace(
       {
-        clientId,
+        clientId: summarizeUntrustedLogIdentifier(clientId),
         resumed: false,
         totalSessions: this.sessions.size,
       },
@@ -1164,7 +1167,7 @@ export class VoiceAssistantWebSocketServer {
 
       connection.connectionLogger.trace(
         {
-          clientId: connection.clientId,
+          clientId: summarizeUntrustedLogIdentifier(connection.clientId),
           code: details.code,
           reason: stringifyCloseReason(details.reason),
           reconnectGraceMs: EXTERNAL_SESSION_DISCONNECT_GRACE_MS,
@@ -1178,7 +1181,7 @@ export class VoiceAssistantWebSocketServer {
       this.incrementRuntimeCounter("sessionSocketDisconnectedAttached");
       connection.connectionLogger.trace(
         {
-          clientId: connection.clientId,
+          clientId: summarizeUntrustedLogIdentifier(connection.clientId),
           remainingSockets: connection.sockets.size,
           code: details.code,
           reason: stringifyCloseReason(details.reason),
@@ -1211,7 +1214,10 @@ export class VoiceAssistantWebSocketServer {
     }
 
     connection.connectionLogger.trace(
-      { clientId: connection.clientId, totalSessions: this.sessions.size },
+      {
+        clientId: summarizeUntrustedLogIdentifier(connection.clientId),
+        totalSessions: this.sessions.size,
+      },
       logMessage,
     );
     await connection.session.cleanup();
@@ -1220,16 +1226,26 @@ export class VoiceAssistantWebSocketServer {
   private handleInvalidInboundMessage(args: {
     ws: WebSocketLike;
     parsed: unknown;
-    parsedMessage: { success: false; error: { message: string } } & Record<string, unknown>;
+    parsedMessage: {
+      success: false;
+      error: { issues?: readonly unknown[] };
+    } & Record<string, unknown>;
+    payloadBytes: number;
     pendingConnection: PendingConnection | undefined;
     activeConnection: SessionConnection | undefined;
     log: pino.Logger;
   }): void {
-    const { ws, parsed, parsedMessage, pendingConnection, activeConnection, log } = args;
+    const { ws, parsed, parsedMessage, payloadBytes, pendingConnection, activeConnection, log } =
+      args;
     this.incrementRuntimeCounter("validationFailed");
     if (pendingConnection) {
       pendingConnection.connectionLogger.warn(
-        { error: parsedMessage.error.message },
+        {
+          category: "validation",
+          code: "invalid_hello",
+          issueCount: parsedMessage.error.issues?.length ?? 0,
+          payloadBytes,
+        },
         "Rejected pending message before hello",
       );
       this.clearPendingConnection(ws);
@@ -1251,8 +1267,12 @@ export class VoiceAssistantWebSocketServer {
 
     log.warn(
       {
-        clientId: activeConnection?.clientId,
-        requestId: requestInfo?.requestId,
+        clientId: activeConnection
+          ? summarizeUntrustedLogIdentifier(activeConnection.clientId)
+          : undefined,
+        requestId: requestInfo?.requestId
+          ? summarizeUntrustedLogIdentifier(requestInfo.requestId)
+          : undefined,
         requestType: requestInfo?.requestType,
         category: "validation",
         code: isUnknownSchema ? "unknown_schema" : "invalid_message",
@@ -1278,14 +1298,13 @@ export class VoiceAssistantWebSocketServer {
       return;
     }
 
-    const errorMessage = `Invalid message: ${parsedMessage.error.message}`;
     this.sendToClient(
       ws,
       wrapSessionMessage({
         type: "status",
         payload: {
           status: "error",
-          message: errorMessage,
+          message: "Invalid message",
         },
       }),
     );
@@ -1379,6 +1398,7 @@ export class VoiceAssistantWebSocketServer {
           ws,
           parsed,
           parsedMessage,
+          payloadBytes: buffer.byteLength,
           pendingConnection,
           activeConnection,
           log,
@@ -1445,7 +1465,7 @@ export class VoiceAssistantWebSocketServer {
       activeConnection.connectionLogger.warn(
         {
           requestType: message.message.type,
-          requestId,
+          requestId: requestId ? summarizeUntrustedLogIdentifier(requestId) : null,
           category: "overload",
           code: "server_busy",
         },
@@ -1496,8 +1516,7 @@ export class VoiceAssistantWebSocketServer {
     error: unknown;
     log: pino.Logger;
   }): void {
-    const { ws, data, error, log } = params;
-    const err = error instanceof Error ? error : new Error("Unknown WebSocket message error");
+    const { ws, data, log } = params;
     const buffer = bufferFromWsData(data);
     let parsedPayload: unknown = null;
     try {
@@ -1509,7 +1528,9 @@ export class VoiceAssistantWebSocketServer {
 
     log.error(
       {
-        requestId: requestInfo?.requestId,
+        requestId: requestInfo?.requestId
+          ? summarizeUntrustedLogIdentifier(requestInfo.requestId)
+          : undefined,
         requestType: requestInfo?.requestType,
         category: "message_processing",
         payloadBytes: buffer.byteLength,
@@ -1550,7 +1571,7 @@ export class VoiceAssistantWebSocketServer {
         type: "status",
         payload: {
           status: "error",
-          message: `Invalid message: ${err.message}`,
+          message: "Invalid message",
         },
       }),
     );

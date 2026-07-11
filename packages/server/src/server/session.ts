@@ -144,6 +144,7 @@ import {
   WorkspaceProjectHandler,
   type SessionContext,
 } from "./session-handlers/index.js";
+import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
 import {
   isProviderVisibleToClient as isProviderVisibleToClientFunc,
   filterEditorsForClient as filterEditorsForClientFunc,
@@ -293,7 +294,8 @@ export class Session {
   private readonly chisacodeHome: string;
 
   // State machine
-  private abortController: AbortController;
+  private operationAbortController: AbortController;
+  private disposed = false;
   private processingPhase: ProcessingPhase = "idle";
   private isVoiceMode = false;
   private voiceModeAgentId: string | null = null;
@@ -512,7 +514,7 @@ export class Session {
     this.serverId = serverId;
     this.daemonVersion = daemonVersion;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
-    this.abortController = new AbortController();
+    this.operationAbortController = new AbortController();
     this.workspaceDirectory = new WorkspaceDirectory({
       logger: this.sessionLogger,
       projectRegistry: this.projectRegistry,
@@ -555,7 +557,7 @@ export class Session {
       workspaceGitService: this.workspaceGitService,
       github: this.github,
       checkoutDiffManager: this.checkoutDiffManager,
-      abortController: this.abortController,
+      getOperationAbortSignal: () => this.operationAbortController.signal,
       chatService: this.chatService,
       scheduleService: this.scheduleService,
       loopService: this.loopService,
@@ -1126,7 +1128,9 @@ export class Session {
           {
             requestType: msg.type,
             requestId:
-              "requestId" in msg && typeof msg.requestId === "string" ? msg.requestId : undefined,
+              "requestId" in msg && typeof msg.requestId === "string"
+                ? summarizeUntrustedLogIdentifier(msg.requestId)
+                : undefined,
             category: "handler",
             code: "handler_error",
           },
@@ -2768,7 +2772,10 @@ export class Session {
       `Abort request, phase: ${this.processingPhase}`,
     );
 
-    this.abortController.abort();
+    this.operationAbortController.abort();
+    if (!this.disposed) {
+      this.operationAbortController = new AbortController();
+    }
     this.setPhase("idle");
   }
 
@@ -2813,6 +2820,7 @@ export class Session {
    * abort ongoing work, and close watchers/observers.
    */
   public async cleanup(): Promise<void> {
+    this.disposed = true;
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
 
     if (this.unsubscribeAgentEvents) {
@@ -2825,7 +2833,7 @@ export class Session {
     }
 
     // Abort any ongoing operations
-    this.abortController.abort();
+    this.operationAbortController.abort();
     this.audioBuffer = null;
     this.sttManager.cleanup();
     this.dictationStreamManager.cleanupAll();

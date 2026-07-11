@@ -68,7 +68,8 @@ export interface SessionIdentityContext {
   /** Check whether the connected client supports a capability. */
   supports(capability: string): boolean;
 
-  readonly abortController: AbortController;
+  /** Returns the current operation signal at operation start. */
+  getOperationAbortSignal(): AbortSignal;
 }
 
 // ---------------------------------------------------------------------------

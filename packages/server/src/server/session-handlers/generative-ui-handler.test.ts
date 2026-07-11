@@ -23,7 +23,7 @@ function createContext(
     sessionLogger: pino({ level: "silent" }),
     chisacodeHome: "/tmp/chisacode",
     appVersion: null,
-    abortController: new AbortController(),
+    getOperationAbortSignal: () => new AbortController().signal,
     emit: (message) => emitted.push(message as Record<string, unknown>),
     emitBinary: () => undefined,
     hasBinaryChannel: () => false,

@@ -11,6 +11,7 @@ import { sendPromptToAgent, formatSystemNotificationPrompt } from "../agent/agen
 import type { SessionInboundMessage, SessionOutboundMessage } from "../messages.js";
 import type { ScheduleService } from "../schedule/service.js";
 import type { ChatScheduleLoopHandlerContext, DisposableHandler } from "./session-context.js";
+import { summarizeUntrustedLogIdentifier } from "../log-metadata.js";
 
 /** Handles chat room, schedule, and loop RPC operations. */
 export class ChatScheduleLoopHandler implements DisposableHandler {
@@ -32,7 +33,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     this.context.sessionLogger.error(
       {
         requestType: request.type,
-        requestId: request.requestId,
+        requestId: summarizeUntrustedLogIdentifier(request.requestId),
         category: "chat",
         code,
       },
@@ -192,7 +193,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
         room: request.room,
         afterMessageId: request.afterMessageId,
         timeoutMs: request.timeoutMs,
-        signal: this.context.abortController.signal,
+        signal: this.context.getOperationAbortSignal(),
       });
       this.context.emit({
         type: "chat/wait/response",
@@ -240,7 +241,12 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
   ): void {
     const message = error instanceof Error ? error.message : String(error);
     this.context.sessionLogger.error(
-      { err: error, requestType: request.type },
+      {
+        requestType: request.type,
+        requestId: summarizeUntrustedLogIdentifier(request.requestId),
+        category: "schedule",
+        code: "schedule_request_failed",
+      },
       "Schedule request failed",
     );
     this.context.emit({
@@ -436,7 +442,12 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
   ): void {
     const message = error instanceof Error ? error.message : String(error);
     this.context.sessionLogger.error(
-      { err: error, requestType: request.type },
+      {
+        requestType: request.type,
+        requestId: summarizeUntrustedLogIdentifier(request.requestId),
+        category: "loop",
+        code: "loop_request_failed",
+      },
       "Loop request failed",
     );
     this.context.emit({

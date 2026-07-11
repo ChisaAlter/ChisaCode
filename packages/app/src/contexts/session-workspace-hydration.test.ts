@@ -204,6 +204,48 @@ describe("hydrateWorkspaceDescriptors", () => {
     expect(recorder.workspaceWrites[0]?.workspaces.has("workspace-old")).toBe(false);
     expect(recorder.hydrationWrites).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
   });
+
+  it("prevents an ABA overwrite after an intermediate generation completes", async () => {
+    let resolveGenerationA!: (value: ReturnType<typeof workspaceResponse>) => void;
+    let resolveGenerationC!: (value: ReturnType<typeof workspaceResponse>) => void;
+    const generationA = new Promise<ReturnType<typeof workspaceResponse>>((resolve) => {
+      resolveGenerationA = resolve;
+    });
+    const generationC = new Promise<ReturnType<typeof workspaceResponse>>((resolve) => {
+      resolveGenerationC = resolve;
+    });
+    const recorder = createRecorder();
+    const client = {
+      fetchWorkspaces: vi
+        .fn()
+        .mockImplementationOnce(() => generationA)
+        .mockResolvedValueOnce(workspaceResponse("workspace-b", "request-b"))
+        .mockImplementationOnce(() => generationC),
+    } as unknown as Pick<DaemonClient, "fetchWorkspaces">;
+    const deps = {
+      client,
+      serverId: SERVER_ID,
+      setWorkspaces: recorder.setWorkspaces,
+      setHasHydratedWorkspaces: recorder.setHasHydratedWorkspaces,
+    };
+
+    const hydrationA = hydrateWorkspaceDescriptors(deps);
+    await hydrateWorkspaceDescriptors(deps);
+    const hydrationC = hydrateWorkspaceDescriptors(deps);
+
+    resolveGenerationA(workspaceResponse("workspace-a", "request-a"));
+    await hydrationA;
+    expect(recorder.workspaceWrites).toHaveLength(1);
+    expect(recorder.workspaceWrites[0]?.workspaces.has("workspace-b")).toBe(true);
+
+    resolveGenerationC(workspaceResponse("workspace-c", "request-c"));
+    await hydrationC;
+    expect(recorder.workspaceWrites).toHaveLength(2);
+    expect(recorder.workspaceWrites[1]?.workspaces.has("workspace-c")).toBe(true);
+    expect(recorder.workspaceWrites.some((write) => write.workspaces.has("workspace-a"))).toBe(
+      false,
+    );
+  });
 });
 
 function workspaceResponse(id: string, requestId: string) {

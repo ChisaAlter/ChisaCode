@@ -12,7 +12,8 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-import { Session } from "./session.js";
+import { Session, type SessionOptions } from "./session.js";
+import { createStub } from "./test-utils/class-mocks.js";
 import {
   asSessionInternals,
   asAgentManager,
@@ -71,7 +72,39 @@ function createMockLogger(): any {
   return { info: fn, warn: fn, error: fn, debug: fn, trace: fn, child };
 }
 
-function createTestSession(messages: unknown[] = []): Session {
+interface AbortableChatWaiter {
+  signal: AbortSignal;
+  resolve: (messages: unknown[]) => void;
+}
+
+function createAbortableChatService(waiters: Set<AbortableChatWaiter>) {
+  return createStub<SessionOptions["chatService"]>({
+    waitForMessages: vi.fn(({ signal }: { signal?: AbortSignal }) => {
+      return new Promise<unknown[]>((resolve) => {
+        if (!signal || signal.aborted) {
+          resolve([]);
+          return;
+        }
+        const waiter = { signal, resolve };
+        waiters.add(waiter);
+        signal.addEventListener("abort", () => settleAbortedWaiter(waiters, waiter), {
+          once: true,
+        });
+      });
+    }),
+  });
+}
+
+function settleAbortedWaiter(waiters: Set<AbortableChatWaiter>, waiter: AbortableChatWaiter): void {
+  waiters.delete(waiter);
+  waiter.resolve([]);
+}
+
+async function waitForWaiterCount(waiters: Set<AbortableChatWaiter>, count: number): Promise<void> {
+  await vi.waitFor(() => expect(waiters).toHaveLength(count));
+}
+
+function createTestSession(messages: unknown[] = [], chatService = asChatService()): Session {
   const { manager: providerSnapshotManager } = createProviderSnapshotManagerStub();
   return new Session({
     clientId: "test-client",
@@ -100,7 +133,7 @@ function createTestSession(messages: unknown[] = []): Session {
       get: vi.fn(),
       list: vi.fn().mockResolvedValue([]),
     },
-    chatService: asChatService(),
+    chatService,
     scheduleService: asScheduleService(),
     loopService: asLoopService(),
     checkoutDiffManager: asCheckoutDiffManager({ scheduleRefreshForCwd: vi.fn() }),
@@ -392,6 +425,65 @@ describe("dispatch ?? chain routing", () => {
       } as any);
 
       expect(abortSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("aborts the active chat wait without poisoning the next wait on the same session", async () => {
+      const messages: any[] = [];
+      const waiters = new Set<AbortableChatWaiter>();
+      const chatService = createAbortableChatService(waiters);
+      const chatSession = createTestSession(messages, chatService);
+
+      const waitA = chatSession.handleMessage({
+        type: "chat/wait",
+        requestId: "wait-a",
+        room: "room",
+      } as any);
+      await waitForWaiterCount(waiters, 1);
+      await chatSession.handleMessage({ type: "abort_request", requestId: "abort-a" } as any);
+      await waitA;
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: "chat/wait/response",
+          payload: expect.objectContaining({ requestId: "wait-a", timedOut: true }),
+        }),
+      );
+
+      const waitB = chatSession.handleMessage({
+        type: "chat/wait",
+        requestId: "wait-b",
+        room: "room",
+      } as any);
+      await waitForWaiterCount(waiters, 1);
+      for (const waiter of Array.from(waiters)) {
+        waiters.delete(waiter);
+        waiter.resolve([{ id: "message-b", body: "after abort" }]);
+      }
+      await waitB;
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: "chat/wait/response",
+          payload: expect.objectContaining({
+            requestId: "wait-b",
+            timedOut: false,
+            messages: [{ id: "message-b", body: "after abort" }],
+          }),
+        }),
+      );
+
+      const waitC = chatSession.handleMessage({
+        type: "chat/wait",
+        requestId: "wait-c",
+        room: "room",
+      } as any);
+      await waitForWaiterCount(waiters, 1);
+      await chatSession.cleanup();
+      await waitC;
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: "chat/wait/response",
+          payload: expect.objectContaining({ requestId: "wait-c", timedOut: true }),
+        }),
+      );
     });
 
     it("routes ping and replies with pong", async () => {
