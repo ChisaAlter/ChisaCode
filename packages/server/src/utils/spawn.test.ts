@@ -27,9 +27,9 @@ function parsePrintedEnv(stdout: string): Record<string, string | null> {
 describe("execCommand", () => {
   const tempDirs: string[] = [];
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const tempDir of tempDirs) {
-      rmSync(tempDir, { recursive: true, force: true });
+      await removeTempDir(tempDir);
     }
     tempDirs.length = 0;
   });
@@ -39,6 +39,19 @@ describe("execCommand", () => {
 
     expect(result.stdout.trim()).toBe("hello");
     expect(result.stderr).toBe("");
+  });
+
+  test("decodes stdout and stderr with the requested encoding", async () => {
+    const result = await execCommand(
+      process.execPath,
+      [
+        "-e",
+        "process.stdout.write(Buffer.from([0xe9])); process.stderr.write(Buffer.from([0xf1]));",
+      ],
+      { encoding: "latin1" },
+    );
+
+    expect(result).toEqual({ stdout: "é", stderr: "ñ" });
   });
 
   test("closes readiness watcher when the command exits before the marker", async () => {
@@ -51,10 +64,33 @@ describe("execCommand", () => {
     ).rejects.toBe(commandError);
   });
 
+  test("preserves ENOENT details when spawning fails before a PID exists", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-enoent-test-")));
+    tempDirs.push(cwd);
+    const missingCommand = path.join(cwd, "missing-command");
+    const error = await execCommand(missingCommand, []).then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) =>
+        reason as Error & {
+          cmd?: string;
+          code?: string;
+          stderr?: string;
+          stdout?: string;
+        },
+    );
+
+    expect(error).toMatchObject({
+      cmd: missingCommand,
+      code: "ENOENT",
+      stderr: "",
+      stdout: "",
+    });
+  });
+
   test("times out a command tree launched through the platform shell", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-timeout-test-")));
     tempDirs.push(cwd);
-    const fixture = createShellTreeFixture(cwd);
+    const fixture = createShellTreeFixture(cwd, { ignoreGrandchildSigterm: true });
     const shell = platformShell();
     const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
       cwd,
@@ -96,32 +132,164 @@ describe("execCommand", () => {
     }
   }, 15_000);
 
+  test("reports configured SIGKILL timeout details after the command tree is gone", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-kill-signal-test-")));
+    tempDirs.push(cwd);
+    const fixture = createShellTreeFixture(cwd, { ignoreGrandchildSigterm: true });
+    const shell = platformShell();
+    const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
+      cwd,
+      killSignal: "SIGKILL",
+      timeout: 1_000,
+    });
+    let ownerPid: number | null = null;
+    let grandchildPid: number | null = null;
+
+    try {
+      await waitForPathCreation(fixture.grandchildPidPath, commandPromise);
+      ownerPid = readPid(fixture.ownerPidPath);
+      grandchildPid = readPid(fixture.grandchildPidPath);
+
+      const error = await commandPromise.then(
+        () => new Error("Expected command to reject"),
+        (reason: unknown) =>
+          reason as Error & {
+            cmd?: string;
+            code?: string;
+            killed?: boolean;
+            signal?: NodeJS.Signals | null;
+            timeoutMs?: number;
+          },
+      );
+
+      expect(isProcessRunning(ownerPid)).toBe(false);
+      expect(isProcessRunning(grandchildPid)).toBe(false);
+      expect(error).toMatchObject({
+        name: "ExecCommandTimeoutError",
+        code: "EXEC_COMMAND_TIMEOUT",
+        killed: true,
+        signal: "SIGKILL",
+        timeoutMs: 1_000,
+      });
+      expect(error.cmd).toContain(fixture.command);
+    } finally {
+      await commandPromise.catch(() => {});
+      killIfRunning(grandchildPid);
+      killIfRunning(ownerPid);
+      await waitForProcessesStopped([ownerPid, grandchildPid]);
+    }
+  }, 15_000);
+
   test("preserves nonzero exit details", async () => {
     const error = await execCommand(process.execPath, [
       "-e",
       'console.error("failure"); process.exit(7);',
     ]).then(
       () => new Error("Expected command to reject"),
-      (reason: unknown) => reason as Error & { code?: number; stdout?: string; stderr?: string },
+      (reason: unknown) =>
+        reason as Error & {
+          cmd?: string;
+          code?: number;
+          killed?: boolean;
+          signal?: NodeJS.Signals | null;
+          stderr?: string;
+          stdout?: string;
+        },
     );
 
     expect(error.code).toBe(7);
+    expect(error.killed).toBe(false);
+    expect(error.signal).toBeNull();
+    expect(error.cmd).toContain("process.exit(7)");
     expect(error.stdout).toBe("");
     expect(error.stderr?.trim()).toBe("failure");
   });
 
-  test("rejects when stdout exceeds maxBuffer", async () => {
-    await expect(
-      execCommand(process.execPath, ["-e", 'process.stdout.write("x".repeat(2048));'], {
-        maxBuffer: 1024,
-      }),
-    ).rejects.toMatchObject({ code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" });
+  test("cleans a command tree when stdout exceeds maxBuffer", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-max-buffer-test-")));
+    tempDirs.push(cwd);
+    const fixture = createShellTreeFixture(cwd, {
+      ignoreGrandchildSigterm: true,
+      outputBytes: 4_096,
+    });
+    const shell = platformShell();
+    const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
+      cwd,
+      maxBuffer: 1_024,
+    });
+    let ownerPid: number | null = null;
+    let grandchildPid: number | null = null;
+
+    try {
+      await waitForPathCreation(fixture.grandchildPidPath, commandPromise);
+      ownerPid = readPid(fixture.ownerPidPath);
+      grandchildPid = readPid(fixture.grandchildPidPath);
+      expect(isProcessRunning(ownerPid)).toBe(true);
+      expect(isProcessRunning(grandchildPid)).toBe(true);
+
+      const error = await commandPromise.then(
+        () => new Error("Expected command to reject"),
+        (reason: unknown) => reason as Error & { code?: string; stderr?: string; stdout?: string },
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(isProcessRunning(ownerPid)).toBe(false);
+          expect(isProcessRunning(grandchildPid)).toBe(false);
+        },
+        { timeout: 5_000 },
+      );
+      expect(error).toMatchObject({
+        name: "RangeError",
+        code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+        message: "stdout maxBuffer length exceeded",
+      });
+      expect(error.stdout?.length).toBeLessThanOrEqual(1_024);
+      expect(error.stderr).toBe("");
+    } finally {
+      await commandPromise.catch(() => {});
+      killIfRunning(grandchildPid);
+      killIfRunning(ownerPid);
+      await waitForProcessesStopped([ownerPid, grandchildPid]);
+    }
+  }, 15_000);
+
+  test("allows output above the default cap when maxBuffer is Infinity", async () => {
+    const outputBytes = 1_100_000;
+
+    const result = await execCommand(
+      process.execPath,
+      ["-e", `process.stdout.write("x".repeat(${outputBytes}));`],
+      { maxBuffer: Number.POSITIVE_INFINITY },
+    );
+
+    expect(result.stdout).toHaveLength(outputBytes);
+    expect(result.stderr).toBe("");
+  });
+
+  test("enforces the stderr maxBuffer independently from stdout", async () => {
+    const error = await execCommand(
+      process.execPath,
+      ["-e", 'process.stdout.write("ok"); process.stderr.write("e".repeat(2048));'],
+      { maxBuffer: 1_024 },
+    ).then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) => reason as Error & { code?: string; stderr?: string; stdout?: string },
+    );
+
+    expect(error).toMatchObject({
+      name: "RangeError",
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      message: "stderr maxBuffer length exceeded",
+      stdout: "ok",
+    });
+    expect(error.stderr).toHaveLength(1_024);
   });
 
   test("aborts a command tree launched through the platform shell", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-signal-test-")));
     tempDirs.push(cwd);
-    const fixture = createShellTreeFixture(cwd);
+    const fixture = createShellTreeFixture(cwd, { ignoreGrandchildSigterm: true });
     const shell = platformShell();
     const controller = new AbortController();
     const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
@@ -160,6 +328,38 @@ describe("execCommand", () => {
       await waitForProcessesStopped([ownerPid, grandchildPid]);
     }
   }, 15_000);
+
+  test("settles once when abort, timeout, and maxBuffer compete", async () => {
+    const controller = new AbortController();
+    let settlementCount = 0;
+    const commandPromise = execCommand(
+      process.execPath,
+      ["-e", 'process.stdout.write("x".repeat(2048)); setInterval(() => {}, 1000);'],
+      {
+        maxBuffer: 1,
+        signal: controller.signal,
+        timeout: 1,
+      },
+    );
+    const observedPromise = commandPromise.then(
+      (result) => {
+        settlementCount += 1;
+        return result;
+      },
+      (error: unknown) => {
+        settlementCount += 1;
+        throw error;
+      },
+    );
+
+    controller.abort(new Error("abort wins"));
+
+    await expect(observedPromise).rejects.toMatchObject({
+      name: "AbortError",
+      code: "ABORT_ERR",
+    });
+    expect(settlementCount).toBe(1);
+  });
 
   test("runs the command in the provided cwd", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-test-")));
@@ -331,7 +531,15 @@ interface ShellTreeFixture {
   grandchildPidPath: string;
 }
 
-function createShellTreeFixture(cwd: string): ShellTreeFixture {
+interface ShellTreeFixtureOptions {
+  ignoreGrandchildSigterm?: boolean;
+  outputBytes?: number;
+}
+
+function createShellTreeFixture(
+  cwd: string,
+  options: ShellTreeFixtureOptions = {},
+): ShellTreeFixture {
   const ownerScriptPath = path.join(cwd, "owner.cjs");
   const grandchildScriptPath = path.join(cwd, "grandchild.cjs");
   const ownerPidPath = path.join(cwd, "owner.pid");
@@ -341,17 +549,24 @@ function createShellTreeFixture(cwd: string): ShellTreeFixture {
     [
       'const fs = require("node:fs");',
       'const net = require("node:net");',
+      ...(options.ignoreGrandchildSigterm ? ['process.on("SIGTERM", () => {});'] : []),
       "const server = net.createServer();",
-      `server.listen(0, "127.0.0.1", () => fs.writeFileSync(${JSON.stringify(grandchildPidPath)}, String(process.pid)));`,
+      'server.listen(0, "127.0.0.1", () => {',
+      `  fs.writeFileSync(${JSON.stringify(grandchildPidPath)}, String(process.pid));`,
+      ...(options.outputBytes
+        ? [`  setImmediate(() => process.stdout.write("x".repeat(${options.outputBytes})));`]
+        : []),
+      "});",
     ].join("\n"),
   );
+  const grandchildStdio = options.outputBytes ? '["ignore", "inherit", "inherit"]' : '"ignore"';
   writeFileSync(
     ownerScriptPath,
     [
       'const { spawn } = require("node:child_process");',
       'const fs = require("node:fs");',
       `fs.writeFileSync(${JSON.stringify(ownerPidPath)}, String(process.pid));`,
-      `const grandchild = spawn(process.execPath, [${JSON.stringify(grandchildScriptPath)}], { stdio: "ignore" });`,
+      `const grandchild = spawn(process.execPath, [${JSON.stringify(grandchildScriptPath)}], { stdio: ${grandchildStdio} });`,
       'grandchild.once("error", (error) => { console.error(error); process.exit(1); });',
       "process.stdin.resume();",
     ].join("\n"),
@@ -394,6 +609,16 @@ async function waitForProcessesStopped(pids: Array<number | null>): Promise<void
   await vi.waitFor(
     () => {
       expect(pids.map(isProcessRunning)).toEqual(pids.map(() => false));
+    },
+    { timeout: 5_000 },
+  );
+}
+
+async function removeTempDir(tempDir: string): Promise<void> {
+  await vi.waitFor(
+    () => {
+      rmSync(tempDir, { recursive: true, force: true });
+      expect(fs.existsSync(tempDir)).toBe(false);
     },
     { timeout: 5_000 },
   );

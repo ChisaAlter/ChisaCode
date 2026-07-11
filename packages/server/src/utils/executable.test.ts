@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   executableExists,
   findExecutable,
+  probeExecutable,
   quoteWindowsArgument,
   quoteWindowsCommand,
 } from "./executable.js";
@@ -42,6 +43,13 @@ function writeBrokenAbsoluteFixture(dir: string): string {
     chmodSync(filePath, 0o644);
   }
   return filePath;
+}
+
+function writeHangingExecutable(dir: string): string {
+  if (isPlatform("win32")) {
+    return writeExecutable(path.join(dir, "hangs.cmd"), "@echo off\r\n:loop\r\ngoto loop\r\n");
+  }
+  return writeExecutable(path.join(dir, "hangs"), "#!/bin/sh\ntrap '' TERM\nwhile :; do :; done\n");
 }
 
 function expectWindowsPathsEqual(actual: string | null, expected: string): void {
@@ -118,6 +126,14 @@ describe("findExecutable", () => {
     prependPath(dir);
 
     await expect(findExecutable("chisacode-definitely-missing-command")).resolves.toBeNull();
+  });
+});
+
+describe("probeExecutable", () => {
+  test("classifies a real executable killed by the probe timeout as existing", async () => {
+    const executablePath = writeHangingExecutable(makeTempDir());
+
+    await expect(probeExecutable(executablePath, 500)).resolves.toBe(true);
   });
 });
 
