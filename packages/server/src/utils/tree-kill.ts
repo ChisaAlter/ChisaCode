@@ -28,6 +28,7 @@ interface TerminateWithTreeKillOptions {
   operations?: TreeKillOperations;
   linuxOperations?: LinuxTreeKillOperations;
   ownership?: TreeKillOwnership;
+  posixOperations?: PosixTreeKillOperations;
   signal?: AbortSignal;
   windowsOperations?: WindowsTreeKillOperations;
 }
@@ -63,6 +64,12 @@ interface WindowsTreeKillOperations {
 interface LinuxTreeKillOperations {
   readProcess(pid: number): Promise<PosixProcessRecord | null>;
   readTopology(cleanupSignal?: AbortSignal): Promise<Map<number, PosixProcessRecord>>;
+  signal(pid: number, signal: NodeJS.Signals): void;
+  signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
+}
+
+interface PosixTreeKillOperations {
+  readProcessTable(cleanupSignal?: AbortSignal): Promise<Map<number, PosixProcessRecord>>;
   signal(pid: number, signal: NodeJS.Signals): void;
   signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
 }
@@ -188,7 +195,10 @@ export async function terminateWithTreeKill(
   );
   try {
     const hasWindowsProcessTracking =
-      process.platform === "win32" || options.windowsOperations !== undefined;
+      options.windowsOperations !== undefined ||
+      (process.platform === "win32" &&
+        options.linuxOperations === undefined &&
+        options.posixOperations === undefined);
     if (
       isProcessExited(child) &&
       !options.operations &&
@@ -206,6 +216,7 @@ export async function terminateWithTreeKill(
         deadline,
         options.windowsOperations,
         options.linuxOperations,
+        options.posixOperations,
       );
     const trackedResult = await terminateTrackedProcessTree(options, deadline, operations);
     if (trackedResult !== "tracking-unavailable" && trackedResult !== "tracking-unverified") {
@@ -375,12 +386,13 @@ function createDefaultTreeKillOperations(
   deadline: TreeKillCleanupDeadline,
   windowsOperations?: WindowsTreeKillOperations,
   linuxOperations?: LinuxTreeKillOperations,
+  posixOperations?: PosixTreeKillOperations,
 ): TreeKillOperations | null {
   const pid = ownership?.rootPid ?? child.pid;
   if (typeof pid !== "number" || pid <= 0) {
     return null;
   }
-  if (windowsOperations || (process.platform === "win32" && !linuxOperations)) {
+  if (windowsOperations || (process.platform === "win32" && !linuxOperations && !posixOperations)) {
     const queryDeadlineMs = deadline.expiresAtMs;
     const resolvedWindowsOperations =
       windowsOperations ??
@@ -418,7 +430,7 @@ function createDefaultTreeKillOperations(
       },
     };
   }
-  if (process.platform === "linux" || linuxOperations) {
+  if (linuxOperations || (process.platform === "linux" && !posixOperations)) {
     const resolvedLinuxOperations =
       linuxOperations ??
       ({
@@ -440,7 +452,7 @@ function createDefaultTreeKillOperations(
         return listRunningLinuxProcesses(processes, resolvedLinuxOperations.readProcess);
       },
       async signal(processes, signal) {
-        const running = await listRunningLinuxProcesses(
+        const running = await listSignalableLinuxProcesses(
           processes,
           resolvedLinuxOperations.readProcess,
         );
@@ -460,27 +472,47 @@ function createDefaultTreeKillOperations(
       },
     };
   }
+  const resolvedPosixOperations =
+    posixOperations ??
+    ({
+      readProcessTable: readPsProcessTableWithIdentity,
+      signal: signalPid,
+      signalProcessGroup,
+    } satisfies PosixTreeKillOperations);
   return {
     async snapshot(cleanupSignal) {
-      return snapshotPosixProcessTree(pid, ownership?.processGroupId, cleanupSignal);
+      return snapshotGenericPosixProcessTree(
+        pid,
+        ownership?.processGroupId,
+        cleanupSignal,
+        resolvedPosixOperations.readProcessTable,
+      );
     },
     async listRunning(processes, cleanupSignal) {
-      return listRunningPosixProcesses(processes, cleanupSignal);
+      return listRunningGenericPosixProcesses(
+        processes,
+        cleanupSignal,
+        resolvedPosixOperations.readProcessTable,
+      );
     },
     async signal(processes, signal, cleanupSignal) {
-      const running = await listRunningPosixProcesses(processes, cleanupSignal);
+      const running = await listSignalableGenericPosixProcesses(
+        processes,
+        cleanupSignal,
+        resolvedPosixOperations.readProcessTable,
+      );
       const processGroupId = ownership?.processGroupId;
       const hasProcessGroupAnchor =
         processGroupId !== undefined &&
         running.some((process) => process.processGroupId === processGroupId);
       if (hasProcessGroupAnchor) {
-        signalProcessGroup(processGroupId, signal);
+        resolvedPosixOperations.signalProcessGroup(processGroupId, signal);
       }
       for (const process of running) {
         if (hasProcessGroupAnchor && process.processGroupId === processGroupId) {
           continue;
         }
-        signalPid(process.pid, signal);
+        resolvedPosixOperations.signal(process.pid, signal);
       }
     },
   };
@@ -535,16 +567,13 @@ function waitForProcessPoll(delayMs: number, cleanupSignal?: AbortSignal): Promi
   });
 }
 
-async function snapshotPosixProcessTree(
+async function snapshotGenericPosixProcessTree(
   rootPid: number,
   processGroupId?: number,
   cleanupSignal?: AbortSignal,
+  readProcessTable: PosixTreeKillOperations["readProcessTable"] = readPsProcessTableWithIdentity,
 ): Promise<TrackedProcess[]> {
-  if (process.platform === "linux") {
-    return snapshotLinuxProcessTree(rootPid, processGroupId, cleanupSignal);
-  }
-
-  const processTable = await readPsProcessTableWithIdentity(cleanupSignal);
+  const processTable = await readProcessTable(cleanupSignal);
   const trackedPids = collectOwnedProcessPids(rootPid, processGroupId, processTable);
   if (trackedPids.length === 0) {
     return [];
@@ -655,22 +684,34 @@ function collectProcessTreePids(
   return tracked;
 }
 
-async function listRunningPosixProcesses(
+async function listRunningGenericPosixProcesses(
   processes: readonly TrackedProcess[],
   cleanupSignal?: AbortSignal,
+  readProcessTable: PosixTreeKillOperations["readProcessTable"] = readPsProcessTableWithIdentity,
 ): Promise<TrackedProcess[]> {
-  if (process.platform === "linux") {
-    return listRunningLinuxProcesses(processes);
-  }
-
   let processTable: Map<number, PosixProcessRecord>;
   try {
-    processTable = await readPsProcessTableWithIdentity(cleanupSignal);
+    processTable = await readProcessTable(cleanupSignal);
   } catch {
     return [...processes];
   }
   return processes.flatMap((process) => {
     const refreshed = refreshTrackedPosixProcess(process, processTable.get(process.pid) ?? null);
+    return refreshed ? [refreshed] : [];
+  });
+}
+
+async function listSignalableGenericPosixProcesses(
+  processes: readonly TrackedProcess[],
+  cleanupSignal: AbortSignal,
+  readProcessTable: PosixTreeKillOperations["readProcessTable"],
+): Promise<TrackedProcess[]> {
+  const processTable = await readProcessTable(cleanupSignal);
+  return processes.flatMap((process) => {
+    const refreshed = refreshTrackedPosixProcessForSignal(
+      process,
+      processTable.get(process.pid) ?? null,
+    );
     return refreshed ? [refreshed] : [];
   });
 }
@@ -692,6 +733,38 @@ async function listRunningLinuxProcesses(
     }
   }
   return running;
+}
+
+async function listSignalableLinuxProcesses(
+  processes: readonly TrackedProcess[],
+  readProcess: LinuxTreeKillOperations["readProcess"],
+): Promise<TrackedProcess[]> {
+  const running: TrackedProcess[] = [];
+  for (const process of processes) {
+    const current = await readProcess(process.pid);
+    const refreshed = refreshTrackedPosixProcessForSignal(process, current);
+    if (refreshed) {
+      running.push(refreshed);
+    }
+  }
+  return running;
+}
+
+function refreshTrackedPosixProcessForSignal(
+  tracked: TrackedProcess,
+  current: PosixProcessRecord | null,
+): TrackedProcess | null {
+  if (current === null) {
+    return null;
+  }
+  if (current.pid !== tracked.pid || current.identity !== tracked.identity) {
+    throw new Error(`Process ${tracked.pid} identity changed before signaling`);
+  }
+  return {
+    identity: tracked.identity,
+    pid: tracked.pid,
+    processGroupId: current.processGroupId,
+  };
 }
 
 /**

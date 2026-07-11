@@ -709,6 +709,12 @@ export class LoopService {
       try {
         result = await this.runVerifyCheck({ cwd: loop.cwd, command, signal, timeoutMs });
       } catch (error) {
+        if (signal.aborted) {
+          throw new Error("Loop aborted", { cause: error });
+        }
+        if (error instanceof ExecCommandKillTimeoutError) {
+          throw error;
+        }
         this.assertVerificationCanContinue(loop, signal, deadline, error);
         if (error instanceof ExecCommandTimeoutError && loop.maxTimeMs !== null) {
           throw new Error(`Reached max time (${loop.maxTimeMs}ms).`, { cause: error });

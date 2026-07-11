@@ -110,6 +110,15 @@ function getCharacterCompletionSlack(encoding: BufferEncoding): number {
   return 0;
 }
 
+function isEncodedOutputTransform(encoding: BufferEncoding): boolean {
+  const normalizedEncoding = encoding.toLowerCase();
+  return (
+    normalizedEncoding === "hex" ||
+    normalizedEncoding === "base64" ||
+    normalizedEncoding === "base64url"
+  );
+}
+
 function isUtf8ContinuationByte(value: number): boolean {
   return value >= 0x80 && value <= 0xbf;
 }
@@ -128,6 +137,21 @@ function getUtf8SequenceLength(leadingByte: number): number {
     return 4;
   }
   return 0;
+}
+
+function getUtf8CompletionTarget(buffer: Buffer, boundary: number): number {
+  if (boundary === 0) {
+    return 0;
+  }
+  let sequenceStart = boundary - 1;
+  while (sequenceStart >= 0 && isUtf8ContinuationByte(buffer[sequenceStart] ?? 0)) {
+    sequenceStart -= 1;
+  }
+  if (sequenceStart < 0) {
+    return boundary;
+  }
+  const sequenceLength = getUtf8SequenceLength(buffer[sequenceStart] ?? 0);
+  return sequenceLength > boundary - sequenceStart ? sequenceStart + sequenceLength : boundary;
 }
 
 function getCompleteUtf8ByteLength(buffer: Buffer, boundary: number): number {
@@ -166,6 +190,22 @@ function isHighSurrogate(value: number): boolean {
 
 function isLowSurrogate(value: number): boolean {
   return value >= 0xdc00 && value <= 0xdfff;
+}
+
+function getUtf16LeCompletionTarget(buffer: Buffer, boundary: number): number {
+  const codeUnitBoundary = boundary - (boundary % 2);
+  if (boundary % 2 === 1) {
+    if (codeUnitBoundary + 2 > buffer.byteLength) {
+      return codeUnitBoundary + 2;
+    }
+    return isHighSurrogate(buffer.readUInt16LE(codeUnitBoundary))
+      ? codeUnitBoundary + 4
+      : codeUnitBoundary + 2;
+  }
+  if (boundary >= 2 && isHighSurrogate(buffer.readUInt16LE(boundary - 2))) {
+    return boundary + 2;
+  }
+  return boundary;
 }
 
 function getCompleteUtf16LeByteLength(buffer: Buffer, boundary: number): number {
@@ -230,6 +270,26 @@ function getCompleteOutputByteLength(
   return boundary;
 }
 
+function getOutputCompletionTarget(
+  buffer: Buffer,
+  boundary: number,
+  encoding: BufferEncoding,
+): number {
+  const normalizedEncoding = encoding.toLowerCase();
+  if (normalizedEncoding === "utf8" || normalizedEncoding === "utf-8") {
+    return getUtf8CompletionTarget(buffer, boundary);
+  }
+  if (
+    normalizedEncoding === "utf16le" ||
+    normalizedEncoding === "utf-16le" ||
+    normalizedEncoding === "ucs2" ||
+    normalizedEncoding === "ucs-2"
+  ) {
+    return getUtf16LeCompletionTarget(buffer, boundary);
+  }
+  return boundary;
+}
+
 class BoundedOutputBuffer {
   private readonly chunks: Buffer[] = [];
   private byteLength = 0;
@@ -251,14 +311,31 @@ class BoundedOutputBuffer {
   append(value: Buffer | string): boolean {
     const chunk = typeof value === "string" ? Buffer.from(value) : value;
     this.observedByteLength += chunk.byteLength;
-    const remaining = Math.max(0, this.captureLimit - this.byteLength);
-    if (remaining > 0) {
-      const boundedChunk = chunk.byteLength > remaining ? chunk.subarray(0, remaining) : chunk;
-      this.chunks.push(boundedChunk);
-      this.byteLength += boundedChunk.byteLength;
+    let offset = 0;
+    if (!this.overflowed) {
+      const remainingBudget = Math.max(0, this.byteLimit - this.byteLength);
+      const budgetBytes = Math.min(chunk.byteLength, remainingBudget);
+      this.appendCopiedSlice(chunk, 0, budgetBytes);
+      offset = budgetBytes;
+      this.overflowed = this.observedByteLength > this.maxBytes;
     }
-    this.overflowed ||= this.observedByteLength > this.maxBytes;
+    if (this.overflowed && offset < chunk.byteLength) {
+      this.appendCompletionBytes(chunk, offset);
+    }
     return this.overflowed;
+  }
+
+  needsCompletion(): boolean {
+    if (!this.overflowed) {
+      return false;
+    }
+    const buffer = Buffer.concat(this.chunks, this.byteLength);
+    const boundary = Math.min(this.byteLimit, buffer.byteLength);
+    const target = Math.min(
+      getOutputCompletionTarget(buffer, boundary, this.encoding),
+      this.captureLimit,
+    );
+    return this.byteLength < target;
   }
 
   toString(): string {
@@ -270,7 +347,37 @@ class BoundedOutputBuffer {
           this.encoding,
         )
       : buffer.byteLength;
-    return buffer.subarray(0, outputByteLength).toString(this.encoding);
+    const output = buffer.subarray(0, outputByteLength).toString(this.encoding);
+    return this.overflowed && isEncodedOutputTransform(this.encoding)
+      ? output.slice(0, this.byteLimit)
+      : output;
+  }
+
+  private appendCompletionBytes(chunk: Buffer, start: number): void {
+    let offset = start;
+    while (offset < chunk.byteLength && this.needsCompletion()) {
+      const buffer = Buffer.concat(this.chunks, this.byteLength);
+      const boundary = Math.min(this.byteLimit, buffer.byteLength);
+      const target = Math.min(
+        getOutputCompletionTarget(buffer, boundary, this.encoding),
+        this.captureLimit,
+      );
+      const bytesToCopy = Math.min(chunk.byteLength - offset, target - this.byteLength);
+      if (bytesToCopy <= 0) {
+        return;
+      }
+      this.appendCopiedSlice(chunk, offset, offset + bytesToCopy);
+      offset += bytesToCopy;
+    }
+  }
+
+  private appendCopiedSlice(chunk: Buffer, start: number, end: number): void {
+    if (end <= start) {
+      return;
+    }
+    const copy = Buffer.from(chunk.subarray(start, end));
+    this.chunks.push(copy);
+    this.byteLength += copy.byteLength;
   }
 }
 
@@ -639,6 +746,13 @@ export async function execCommand(
       chunk: Buffer | string,
     ) => {
       if (terminationReason) {
+        if (
+          terminationReason === "maxBuffer" &&
+          maxBufferStream === stream &&
+          target.needsCompletion()
+        ) {
+          target.append(chunk);
+        }
         return;
       }
       if (target.append(chunk)) {
@@ -814,6 +928,12 @@ function validateExecCommandOptions(options: ExecCommandOptions | undefined): vo
   const maxBuffer = options?.maxBuffer;
   if (maxBuffer !== undefined && (Number.isNaN(maxBuffer) || maxBuffer < 0)) {
     throw createExecCommandRangeError("options.maxBuffer", "a positive number", maxBuffer);
+  }
+  const encoding = options?.encoding;
+  if (encoding !== undefined && !Buffer.isEncoding(encoding)) {
+    const error = new TypeError(`Unknown encoding: ${encoding}`) as TypeError & { code: string };
+    error.code = "ERR_UNKNOWN_ENCODING";
+    throw error;
   }
   const killSignal = options?.killSignal;
   if (killSignal !== undefined && !Object.hasOwn(osConstants.signals, killSignal)) {

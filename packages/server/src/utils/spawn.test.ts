@@ -58,6 +58,42 @@ describe("execCommand", () => {
     expect(result).toEqual({ stdout: "é", stderr: "ñ" });
   });
 
+  test.each([
+    { encoding: "hex" as const, expected: "6" },
+    { encoding: "base64" as const, expected: "Y" },
+    { encoding: "base64url" as const, expected: "Y" },
+  ])("matches the native $encoding overflow prefix", async ({ encoding, expected }) => {
+    const error = await execCommand(
+      process.execPath,
+      ["-e", "process.stdout.write(Buffer.from([0x61, 0x62]));"],
+      { encoding, maxBuffer: 1 },
+    ).then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) => reason as Error & { code?: string; stderr?: string; stdout?: string },
+    );
+
+    expect(error).toMatchObject({
+      name: "RangeError",
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      message: "stdout maxBuffer length exceeded",
+      stderr: "",
+      stdout: expected,
+    });
+  });
+
+  test.each([
+    { encoding: "hex" as const, expected: "61" },
+    { encoding: "base64" as const, expected: "YQ==" },
+    { encoding: "base64url" as const, expected: "YQ" },
+  ])("returns full $encoding output at the raw byte cap", async ({ encoding, expected }) => {
+    await expect(
+      execCommand(process.execPath, ["-e", "process.stdout.write(Buffer.from([0x61]));"], {
+        encoding,
+        maxBuffer: 1,
+      }),
+    ).resolves.toEqual({ stdout: expected, stderr: "" });
+  });
+
   test("retains a complete UTF-8 character at the maxBuffer boundary", async () => {
     const error = await execCommand(
       process.execPath,
@@ -110,6 +146,90 @@ describe("execCommand", () => {
     expect(error.stdout).not.toContain("\uFFFD");
   });
 
+  test("completes a fragmented UTF-8 character after maxBuffer cleanup starts", async () => {
+    const { child, getTerminationCount, runtime } = createManualExecRuntime();
+    const execOptions = {
+      encoding: "utf8" as const,
+      maxBuffer: 2,
+      runtime,
+    } as NonNullable<Parameters<typeof execCommand>[2]> & { runtime: typeof runtime };
+    const commandPromise = execCommand("fragmented-utf8", [], execOptions);
+    const errorPromise = commandPromise.then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) => reason as Error & { code?: string; stdout?: string },
+    );
+
+    child.stdout?.write(Buffer.from([0x61, 0xe2]));
+    child.stdout?.write(Buffer.from([0x82]));
+    expect(getTerminationCount()).toBe(1);
+    child.stdout?.write(Buffer.from([0xac]));
+    child.stdout?.write(Buffer.from([0x78, 0x79]));
+    child.emit("close", 0, null);
+
+    const error = await errorPromise;
+    expect(error).toMatchObject({
+      name: "RangeError",
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      stdout: "a€",
+    });
+    expect(getTerminationCount()).toBe(1);
+  });
+
+  test("completes a fragmented UTF-16LE surrogate pair after maxBuffer cleanup starts", async () => {
+    const { child, getTerminationCount, runtime } = createManualExecRuntime();
+    const execOptions = {
+      encoding: "utf16le" as const,
+      maxBuffer: 2,
+      runtime,
+    } as NonNullable<Parameters<typeof execCommand>[2]> & { runtime: typeof runtime };
+    const commandPromise = execCommand("fragmented-utf16le", [], execOptions);
+    const errorPromise = commandPromise.then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) => reason as Error & { code?: string; stdout?: string },
+    );
+
+    child.stdout?.write(Buffer.from([0x3d, 0xd8]));
+    child.stdout?.write(Buffer.from([0x00]));
+    expect(getTerminationCount()).toBe(1);
+    child.stdout?.write(Buffer.from([0xde]));
+    child.stdout?.write(Buffer.from([0x58, 0x00]));
+    child.emit("close", 0, null);
+
+    const error = await errorPromise;
+    expect(error).toMatchObject({
+      name: "RangeError",
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      stdout: "😀",
+    });
+    expect(Array.from(error.stdout ?? "")).toEqual(["😀"]);
+    expect(getTerminationCount()).toBe(1);
+  });
+
+  test("copies a bounded output prefix away from a large source chunk", async () => {
+    const { child, runtime } = createManualExecRuntime();
+    const execOptions = {
+      encoding: "latin1" as const,
+      maxBuffer: 1,
+      runtime,
+    } as NonNullable<Parameters<typeof execCommand>[2]> & { runtime: typeof runtime };
+    const commandPromise = execCommand("large-output", [], execOptions);
+    const errorPromise = commandPromise.then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) => reason as Error & { code?: string; stdout?: string },
+    );
+    const sourceChunk = Buffer.alloc(1_000_000, 0x62);
+    sourceChunk[0] = 0x61;
+
+    child.stdout?.write(sourceChunk);
+    sourceChunk[0] = 0x7a;
+    child.emit("close", 0, null);
+
+    await expect(errorPromise).resolves.toMatchObject({
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      stdout: "a",
+    });
+  });
+
   test("closes readiness watcher when the command exits before the marker", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-readiness-test-")));
     tempDirs.push(cwd);
@@ -158,6 +278,30 @@ describe("execCommand", () => {
       name: "RangeError",
       code: "ERR_OUT_OF_RANGE",
     });
+  });
+
+  test("rejects an unknown encoding before spawning", async () => {
+    let spawnCount = 0;
+    const runtime = {
+      spawn(): ChildProcess {
+        spawnCount += 1;
+        throw new Error("spawn must not be called for an invalid encoding");
+      },
+      async terminate() {
+        throw new Error("terminate must not be called for an invalid encoding");
+      },
+    };
+    const execOptions = {
+      encoding: "bogus" as BufferEncoding,
+      runtime,
+    } as NonNullable<Parameters<typeof execCommand>[2]> & { runtime: typeof runtime };
+
+    await expect(execCommand("must-not-spawn", [], execOptions)).rejects.toMatchObject({
+      name: "TypeError",
+      code: "ERR_UNKNOWN_ENCODING",
+      message: "Unknown encoding: bogus",
+    });
+    expect(spawnCount).toBe(0);
   });
 
   test("rejects an invalid killSignal before spawning", async () => {
@@ -1232,6 +1376,33 @@ describe("execCommand", () => {
     });
   });
 });
+
+function createManualExecRuntime() {
+  let terminationCount = 0;
+  const child = Object.assign(new EventEmitter(), {
+    exitCode: null,
+    pid: 424_246,
+    signalCode: null,
+    stderr: new PassThrough(),
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    unref() {},
+  }) as unknown as ChildProcess;
+  const runtime = {
+    spawn() {
+      return child;
+    },
+    async terminate() {
+      terminationCount += 1;
+      return "terminated" as const;
+    },
+  };
+  return {
+    child,
+    getTerminationCount: () => terminationCount,
+    runtime,
+  };
+}
 
 interface ShellTreeFixture {
   command: string;

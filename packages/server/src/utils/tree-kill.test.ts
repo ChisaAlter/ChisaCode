@@ -39,6 +39,12 @@ interface TestLinuxOperations {
   signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
 }
 
+interface TestPosixOperations {
+  readProcessTable(cleanupSignal?: AbortSignal): Promise<Map<number, LinuxProcessSelectionRecord>>;
+  signal(pid: number, signal: NodeJS.Signals): void;
+  signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
+}
+
 let tempDir: string | null = null;
 let ownerProcess: ChildProcess | null = null;
 let descendantPid: number | null = null;
@@ -777,6 +783,175 @@ describe("terminateWithTreeKill", () => {
 
       expect(result).toBe("kill-timeout");
       expect(signals).toEqual([]);
+      expect(fallbackSignals).toEqual(["SIGTERM"]);
+    },
+  );
+
+  test.each(["unreadable", "identity-mismatch"] as const)(
+    "fails closed before Linux signaling when identity revalidation is %s",
+    async (failureMode) => {
+      const topology = createLinuxSnapshotTopology();
+      const readCounts = new Map<number, number>();
+      const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+      const groupSignals: Array<{ processGroupId: number; signal: NodeJS.Signals }> = [];
+      const fallbackSignals: Array<NodeJS.Signals | number> = [];
+      const child = {
+        exitCode: null as number | null,
+        signalCode: null as NodeJS.Signals | null,
+        kill(signal: NodeJS.Signals | number = "SIGTERM") {
+          fallbackSignals.push(signal);
+          this.exitCode = 0;
+          return true;
+        },
+      };
+      const linuxOperations: TestLinuxOperations = {
+        async readTopology() {
+          return topology;
+        },
+        async readProcess(pid) {
+          const readCount = (readCounts.get(pid) ?? 0) + 1;
+          readCounts.set(pid, readCount);
+          const current = topology.get(pid) ?? null;
+          if (pid !== 100 || readCount === 1) {
+            return current;
+          }
+          if (failureMode === "unreadable") {
+            throw Object.assign(new Error("permission denied"), { code: "EACCES" });
+          }
+          return current ? { ...current, identity: "linux-starttime:reused" } : null;
+        },
+        signal(pid, signal) {
+          pidSignals.push({ pid, signal });
+        },
+        signalProcessGroup(processGroupId, signal) {
+          groupSignals.push({ processGroupId, signal });
+        },
+      };
+
+      const result = await terminateWithTreeKill(child, {
+        gracefulTimeoutMs: 0,
+        linuxOperations,
+        ownership: {
+          launchedAtMs: 1_000,
+          processGroupId: 42,
+          rootPid: 42,
+        },
+      });
+
+      expect(result).toBe("kill-timeout");
+      expect(pidSignals).toEqual([]);
+      expect(groupSignals).toEqual([]);
+      expect(fallbackSignals).toEqual(["SIGTERM"]);
+    },
+  );
+
+  test("keeps an unreadable Linux survivor during polling and revalidates before force signaling", async () => {
+    const topology = createLinuxSnapshotTopology();
+    const readCounts = new Map<number, number>();
+    const groupSignals: NodeJS.Signals[] = [];
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        throw new Error("raw fallback was not expected");
+      },
+    };
+    const linuxOperations: TestLinuxOperations = {
+      async readTopology() {
+        return topology;
+      },
+      async readProcess(pid) {
+        const readCount = (readCounts.get(pid) ?? 0) + 1;
+        readCounts.set(pid, readCount);
+        if (pid === 100 && readCount === 3) {
+          throw Object.assign(new Error("temporary read failure"), { code: "EACCES" });
+        }
+        if (readCount === 3) {
+          return null;
+        }
+        return topology.get(pid) ?? null;
+      },
+      signal() {
+        throw new Error("group signaling should cover the tracked survivor");
+      },
+      signalProcessGroup(_processGroupId, signal) {
+        groupSignals.push(signal);
+      },
+    };
+
+    const result = await terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      linuxOperations,
+      ownership: {
+        launchedAtMs: 1_000,
+        processGroupId: 42,
+        rootPid: 42,
+      },
+    });
+
+    expect(result).toBe("killed");
+    expect(groupSignals).toEqual(["SIGTERM", "SIGKILL"]);
+    expect(readCounts.get(100)).toBe(4);
+  });
+
+  test.each(["unreadable", "identity-mismatch"] as const)(
+    "fails closed before generic POSIX signaling when process-table revalidation is %s",
+    async (failureMode) => {
+      const processTable = createLinuxSnapshotTopology();
+      const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+      const groupSignals: Array<{ processGroupId: number; signal: NodeJS.Signals }> = [];
+      const fallbackSignals: Array<NodeJS.Signals | number> = [];
+      let posixReadCount = 0;
+      const child = {
+        exitCode: null as number | null,
+        signalCode: null as NodeJS.Signals | null,
+        kill(signal: NodeJS.Signals | number = "SIGTERM") {
+          fallbackSignals.push(signal);
+          this.exitCode = 0;
+          return true;
+        },
+      };
+      const posixOperations: TestPosixOperations = {
+        async readProcessTable() {
+          posixReadCount += 1;
+          if (posixReadCount === 1) {
+            return processTable;
+          }
+          if (failureMode === "unreadable") {
+            throw new Error("ps failed");
+          }
+          return new Map(
+            [...processTable].map(([pid, process]) => [
+              pid,
+              pid === 100 ? { ...process, identity: "ps-start:reused" } : process,
+            ]),
+          );
+        },
+        signal(pid, signal) {
+          pidSignals.push({ pid, signal });
+        },
+        signalProcessGroup(processGroupId, signal) {
+          groupSignals.push({ processGroupId, signal });
+        },
+      };
+      const options = {
+        gracefulTimeoutMs: 0,
+        ownership: {
+          launchedAtMs: 1_000,
+          processGroupId: 42,
+          rootPid: 42,
+        },
+        posixOperations,
+      } as Parameters<typeof terminateWithTreeKill>[1] & {
+        posixOperations: TestPosixOperations;
+      };
+
+      const result = await terminateWithTreeKill(child, options);
+
+      expect(result).toBe("kill-timeout");
+      expect(posixReadCount).toBe(2);
+      expect(pidSignals).toEqual([]);
+      expect(groupSignals).toEqual([]);
       expect(fallbackSignals).toEqual(["SIGTERM"]);
     },
   );

@@ -1093,6 +1093,60 @@ describe("LoopService", () => {
     }
   });
 
+  test("keeps a verify cleanup timeout fatal when it reaches the loop deadline", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
+    const loggedErrors: unknown[] = [];
+    const capturingLogger = createCapturingLoopLogger(
+      loggedErrors,
+    ) as unknown as ConstructorParameters<typeof LoopService>[0]["logger"];
+    const cleanupError = new ExecCommandKillTimeoutError({
+      cause: new RangeError("stdout maxBuffer length exceeded"),
+      cleanupCause: new Error("cleanup could not be confirmed"),
+      cmd: "deadline-overflow",
+      signal: "SIGKILL",
+      stderr: "deadline stderr",
+      stdout: "deadline stdout",
+      terminationReason: "maxBuffer",
+    });
+    const manager = createWorkerOnlyManager(storage, logger);
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger: capturingLogger,
+      persistLoopState: () => Promise.resolve(),
+      runVerifyCommand: async () => {
+        vi.setSystemTime(startedAtMs + 1_000);
+        throw cleanupError;
+      },
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyChecks: ["deadline-overflow"],
+      maxIterations: 3,
+      maxTimeMs: 1_000,
+      sleepMs: 60_000,
+    });
+    await vi.waitFor(async () => {
+      const state = await service.inspectLoop(loop.id);
+      expect(state.status).not.toBe("running");
+    });
+
+    const finalLoop = await service.inspectLoop(loop.id);
+    expect(finalLoop.status).toBe("failed");
+    expect(finalLoop.iterations).toHaveLength(1);
+    expect(finalLoop.iterations[0]?.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.failureReason).toBe(cleanupError.message);
+    expect(finalLoop.iterations[0]?.verifyChecks).toEqual([]);
+    expect(finalLoop.logs.filter((entry) => entry.text.startsWith("Sleeping "))).toEqual([]);
+    expect(finalLoop.logs.some((entry) => entry.text === cleanupError.message)).toBe(true);
+    expect(loggedErrors).toContainEqual(expect.objectContaining({ err: cleanupError }));
+  });
+
   test.each([
     {
       label: "command timeout",
