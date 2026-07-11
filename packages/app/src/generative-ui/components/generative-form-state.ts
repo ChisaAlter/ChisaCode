@@ -9,9 +9,10 @@ export interface GenerativeFormState {
 /** Runs a form change effect only while fields are editable. */
 export function dispatchGenerativeFormChange(
   state: GenerativeFormState,
+  controller: GenerativeFormSubmissionController,
   change: () => void,
 ): boolean {
-  if (!isGenerativeFormEditable(state)) return false;
+  if (!isGenerativeFormEditable(state) || !controller.canChange()) return false;
   change();
   return true;
 }
@@ -58,6 +59,7 @@ export interface GenerativeFormSubmissionController {
   mount(): void;
   unmount(): void;
   begin(): boolean;
+  canChange(): boolean;
   complete(sent: boolean): boolean;
 }
 
@@ -76,6 +78,9 @@ export function createGenerativeFormSubmissionController(): GenerativeFormSubmis
       if (!mounted || locked) return false;
       locked = true;
       return true;
+    },
+    canChange() {
+      return mounted && !locked;
     },
     complete(sent) {
       if (!sent) locked = false;

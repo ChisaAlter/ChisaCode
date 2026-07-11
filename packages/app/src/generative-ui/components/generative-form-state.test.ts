@@ -92,10 +92,46 @@ describe("dispatchGenerativeFormChange", () => {
     const submitting = generativeFormReducer(editable, { type: "submit_started" });
     const submitted = generativeFormReducer(submitting, { type: "submit_resolved", sent: true });
     const error = generativeFormReducer(submitting, { type: "submit_resolved", sent: false });
-    expect(dispatchGenerativeFormChange(submitting, () => calls.push("submitting"))).toBe(false);
-    expect(dispatchGenerativeFormChange(submitted, () => calls.push("submitted"))).toBe(false);
-    expect(dispatchGenerativeFormChange(error, () => calls.push("error"))).toBe(true);
-    expect(dispatchGenerativeFormChange(editable, () => calls.push("editable"))).toBe(true);
+    const controller = createGenerativeFormSubmissionController();
+    controller.mount();
+    expect(
+      dispatchGenerativeFormChange(submitting, controller, () => calls.push("submitting")),
+    ).toBe(false);
+    expect(dispatchGenerativeFormChange(submitted, controller, () => calls.push("submitted"))).toBe(
+      false,
+    );
+    expect(dispatchGenerativeFormChange(error, controller, () => calls.push("error"))).toBe(true);
+    expect(dispatchGenerativeFormChange(editable, controller, () => calls.push("editable"))).toBe(
+      true,
+    );
     expect(calls).toEqual(["error", "editable"]);
+  });
+
+  it("blocks same-tick text and select changes after begin before a reducer transition", () => {
+    const controller = createGenerativeFormSubmissionController();
+    const editable = createGenerativeFormState({ name: "Ada" });
+    const calls: string[] = [];
+    controller.mount();
+    expect(controller.begin()).toBe(true);
+    expect(dispatchGenerativeFormChange(editable, controller, () => calls.push("text"))).toBe(
+      false,
+    );
+    expect(dispatchGenerativeFormChange(editable, controller, () => calls.push("select"))).toBe(
+      false,
+    );
+    expect(calls).toEqual([]);
+
+    expect(controller.complete(false)).toBe(true);
+    expect(dispatchGenerativeFormChange(editable, controller, () => calls.push("retry"))).toBe(
+      true,
+    );
+    expect(calls).toEqual(["retry"]);
+
+    expect(controller.begin()).toBe(true);
+    expect(controller.complete(true)).toBe(true);
+    expect(
+      dispatchGenerativeFormChange(editable, controller, () => calls.push("after-success")),
+    ).toBe(false);
+    expect(calls).toEqual(["retry"]);
   });
 });

@@ -205,7 +205,7 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
 
   const handleChange = useCallback(
     (name: string, value: string) => {
-      dispatchGenerativeFormChange(state, () => {
+      dispatchGenerativeFormChange(state, submissionControllerRef.current, () => {
         dispatch({ type: "field_changed", field: name, value });
         void sendAction(instanceId, "change", { field: name, value });
       });
