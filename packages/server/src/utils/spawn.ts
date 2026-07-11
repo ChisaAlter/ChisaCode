@@ -5,6 +5,7 @@ import { dirname, extname } from "node:path";
 
 import { createExternalCommandProcessEnv, type ProcessEnvRecord } from "../server/chisacode-env.js";
 import {
+  TREE_KILL_CLEANUP_TIMEOUT_MS,
   terminateWithTreeKill,
   type TerminateWithTreeKillResult,
   type TreeKillOwnership,
@@ -29,6 +30,7 @@ interface ExternalEnvOptions {
 export type SpawnProcessOptions = Omit<SpawnOptions, "env"> & ExternalEnvOptions;
 
 interface ExecCommandOptions extends ExternalEnvOptions {
+  cleanupTimeoutMs?: number;
   cwd?: string;
   encoding?: BufferEncoding;
   killSignal?: NodeJS.Signals;
@@ -169,6 +171,15 @@ export class ExecCommandKillTimeoutError extends Error {
     this.stderr = options.stderr;
     this.stdout = options.stdout;
     this.terminationReason = options.terminationReason;
+  }
+}
+
+class ExecCommandCleanupTimeoutError extends Error {
+  readonly code = "EXEC_COMMAND_KILL_TIMEOUT";
+
+  constructor() {
+    super("Command tree cleanup could not be confirmed before the deadline");
+    this.name = "ExecCommandCleanupTimeoutError";
   }
 }
 
@@ -330,10 +341,13 @@ export async function execCommand(
     let terminationReason: ExecCommandTerminationReason | null = null;
     let terminationResult: TerminateWithTreeKillResult | null = null;
     let terminationFailure: unknown;
+    let cleanupTimeoutHandle: NodeJS.Timeout | null = null;
+    let cleanupController: AbortController | null = null;
     let timeoutHandle: NodeJS.Timeout | null = null;
     let spawnError: Error | null = null;
     let maxBufferStream: "stderr" | "stdout" | null = null;
     let childClosed = false;
+    let resolveChildClose: (() => void) | null = null;
     let exitCode: number | null = null;
     let signalCode: NodeJS.Signals | null = null;
     let settled = false;
@@ -347,17 +361,26 @@ export async function execCommand(
       shell,
       windowsHide: true,
     });
+    const childClosePromise = new Promise<void>((resolveClose) => {
+      resolveChildClose = resolveClose;
+    });
     const terminationOwnership = createExecCommandOwnership(child, launchedAtMs, usesProcessGroup);
     const cleanup = () => {
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
         timeoutHandle = null;
       }
+      if (cleanupTimeoutHandle) {
+        clearTimeout(cleanupTimeoutHandle);
+        cleanupTimeoutHandle = null;
+      }
       options?.signal?.removeEventListener("abort", onAbort);
       child.stdout?.off("data", onStdout);
       child.stderr?.off("data", onStderr);
       child.off("error", onError);
       child.off("close", onClose);
+      resolveChildClose?.();
+      resolveChildClose = null;
       child.stdin?.destroy();
       child.stdout?.destroy();
       child.stderr?.destroy();
@@ -406,19 +429,43 @@ export async function execCommand(
         clearTimeout(timeoutHandle);
         timeoutHandle = null;
       }
+      const cleanupTimeoutMs = options?.cleanupTimeoutMs ?? TREE_KILL_CLEANUP_TIMEOUT_MS;
+      cleanupController = new AbortController();
+      cleanupTimeoutHandle = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        const cleanupFailure = new ExecCommandCleanupTimeoutError();
+        cleanupController?.abort(cleanupFailure);
+        terminationFailure = cleanupFailure;
+        terminationResult = "kill-timeout";
+        finishIfReady();
+      }, cleanupTimeoutMs);
       void runtime
         .terminate(child, {
+          cleanupTimeoutMs,
+          closure: childClosePromise,
           gracefulSignal: options?.killSignal,
           gracefulTimeoutMs: COMMAND_GRACEFUL_TERMINATION_MS,
           forceTimeoutMs: COMMAND_FORCE_TERMINATION_MS,
           ownership: terminationOwnership,
+          signal: cleanupController.signal,
         })
         .then(
           (result) => {
+            if (settled) {
+              return;
+            }
+            if (result === "kill-timeout") {
+              terminationFailure = new ExecCommandCleanupTimeoutError();
+            }
             terminationResult = result;
             return finishIfReady();
           },
           (error: unknown) => {
+            if (settled) {
+              return;
+            }
             terminationFailure = error;
             terminationResult = "kill-timeout";
             return finishIfReady();
@@ -450,6 +497,8 @@ export async function execCommand(
     };
     const onClose = (closedExitCode: number | null, closedSignalCode: NodeJS.Signals | null) => {
       childClosed = true;
+      resolveChildClose?.();
+      resolveChildClose = null;
       exitCode = closedExitCode;
       signalCode = closedSignalCode;
       finishIfReady();

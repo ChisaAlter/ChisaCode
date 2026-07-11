@@ -2,6 +2,7 @@ import { type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import * as fs from "node:fs";
+import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -280,6 +281,71 @@ describe("execCommand", () => {
     }
   }, 20_000);
 
+  test("settles timeout when the shell and owner exit before inherited pipes close", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-orphaned-pipe-timeout-")));
+    tempDirs.push(cwd);
+    const fixture = createExitedShellTreeFixture(cwd, { ownerExits: true });
+    const shell = platformShell();
+    let settled = false;
+    const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
+      cleanupTimeoutMs: 1_500,
+      cwd,
+      timeout: 100,
+    });
+    void commandPromise.then(
+      () => {
+        settled = true;
+        return undefined;
+      },
+      () => {
+        settled = true;
+        return undefined;
+      },
+    );
+    let shellPid: number | null = null;
+    let ownerPid: number | null = null;
+    let grandchildPid: number | null = null;
+
+    try {
+      await waitForPathCreation(fixture.grandchildPidPath, commandPromise);
+      shellPid = readPid(fixture.shellPidPath);
+      ownerPid = readPid(fixture.ownerPidPath);
+      grandchildPid = readPid(fixture.grandchildPidPath);
+      await vi.waitFor(
+        () => {
+          expect([isProcessRunning(shellPid), isProcessRunning(ownerPid)]).toEqual([false, false]);
+        },
+        { timeout: 5_000 },
+      );
+      expect(isProcessRunning(grandchildPid)).toBe(true);
+
+      await vi.waitFor(() => expect(settled).toBe(true), { timeout: 3_000 });
+      const error = await commandPromise.then(
+        () => new Error("Expected command to reject"),
+        (reason: unknown) =>
+          reason as Error & {
+            code?: string;
+            killed?: boolean;
+            terminationResult?: string;
+            timeoutMs?: number;
+          },
+      );
+      expect(error).toMatchObject({
+        name: "ExecCommandTimeoutError",
+        code: "EXEC_COMMAND_TIMEOUT",
+        killed: false,
+        terminationResult: "kill-timeout",
+        timeoutMs: 100,
+      });
+    } finally {
+      killIfRunning(grandchildPid);
+      killIfRunning(ownerPid);
+      killIfRunning(shellPid);
+      await waitForProcessesStopped([shellPid, ownerPid, grandchildPid]);
+      await commandPromise.catch(() => {});
+    }
+  }, 15_000);
+
   test("preserves nonzero exit details", async () => {
     const error = await execCommand(process.execPath, [
       "-e",
@@ -389,7 +455,7 @@ describe("execCommand", () => {
       expect(isProcessRunning(grandchildPid)).toBe(true);
       expect(settled).toBe(false);
 
-      writeFileSync(fixture.outputTriggerPath, "emit");
+      await triggerExitedFixtureOutput(fixture.outputTriggerPath, commandPromise);
 
       await vi.waitFor(
         () => {
@@ -415,6 +481,73 @@ describe("execCommand", () => {
       await commandPromise.catch(() => {});
     }
   }, 20_000);
+
+  test("settles maxBuffer when the shell and owner exit before inherited pipes close", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-orphaned-pipe-buffer-")));
+    tempDirs.push(cwd);
+    const fixture = createExitedShellTreeFixture(cwd, {
+      outputBytes: 4_096,
+      ownerExits: true,
+    });
+    const shell = platformShell();
+    let settled = false;
+    const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
+      cleanupTimeoutMs: 1_500,
+      cwd,
+      maxBuffer: 1_024,
+      timeout: 10_000,
+    });
+    void commandPromise.then(
+      () => {
+        settled = true;
+        return undefined;
+      },
+      () => {
+        settled = true;
+        return undefined;
+      },
+    );
+    let shellPid: number | null = null;
+    let ownerPid: number | null = null;
+    let grandchildPid: number | null = null;
+
+    try {
+      await waitForPathCreation(fixture.grandchildPidPath, commandPromise);
+      shellPid = readPid(fixture.shellPidPath);
+      ownerPid = readPid(fixture.ownerPidPath);
+      grandchildPid = readPid(fixture.grandchildPidPath);
+      await vi.waitFor(
+        () => {
+          expect([isProcessRunning(shellPid), isProcessRunning(ownerPid)]).toEqual([false, false]);
+        },
+        { timeout: 5_000 },
+      );
+      expect(isProcessRunning(grandchildPid)).toBe(true);
+
+      await triggerExitedFixtureOutput(fixture.outputTriggerPath, commandPromise);
+
+      await vi.waitFor(() => expect(settled).toBe(true), { timeout: 3_000 });
+      const error = await commandPromise.then(
+        () => new Error("Expected command to reject"),
+        (reason: unknown) =>
+          reason as Error & {
+            code?: string;
+            terminationReason?: string;
+          },
+      );
+      expect(error).toMatchObject({
+        name: "ExecCommandKillTimeoutError",
+        code: "EXEC_COMMAND_KILL_TIMEOUT",
+        terminationReason: "maxBuffer",
+      });
+    } finally {
+      killIfRunning(grandchildPid);
+      killIfRunning(ownerPid);
+      killIfRunning(shellPid);
+      await waitForProcessesStopped([shellPid, ownerPid, grandchildPid]);
+      await commandPromise.catch(() => {});
+    }
+  }, 15_000);
 
   test("allows output above the default cap when maxBuffer is Infinity", async () => {
     const outputBytes = 1_100_000;
@@ -488,6 +621,72 @@ describe("execCommand", () => {
       killIfRunning(grandchildPid);
       killIfRunning(ownerPid);
       await waitForProcessesStopped([ownerPid, grandchildPid]);
+    }
+  }, 15_000);
+
+  test("settles abort when the shell and owner exit before inherited pipes close", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-orphaned-pipe-abort-")));
+    tempDirs.push(cwd);
+    const fixture = createExitedShellTreeFixture(cwd, { ownerExits: true });
+    const shell = platformShell();
+    const controller = new AbortController();
+    let settled = false;
+    const commandPromise = execCommand(shell.command, [...shell.flag, fixture.command], {
+      cleanupTimeoutMs: 1_500,
+      cwd,
+      signal: controller.signal,
+      timeout: 10_000,
+    });
+    void commandPromise.then(
+      () => {
+        settled = true;
+        return undefined;
+      },
+      () => {
+        settled = true;
+        return undefined;
+      },
+    );
+    let shellPid: number | null = null;
+    let ownerPid: number | null = null;
+    let grandchildPid: number | null = null;
+
+    try {
+      await waitForPathCreation(fixture.grandchildPidPath, commandPromise);
+      shellPid = readPid(fixture.shellPidPath);
+      ownerPid = readPid(fixture.ownerPidPath);
+      grandchildPid = readPid(fixture.grandchildPidPath);
+      await vi.waitFor(
+        () => {
+          expect([isProcessRunning(shellPid), isProcessRunning(ownerPid)]).toEqual([false, false]);
+        },
+        { timeout: 5_000 },
+      );
+      expect(isProcessRunning(grandchildPid)).toBe(true);
+
+      controller.abort(new Error("stop requested"));
+
+      await vi.waitFor(() => expect(settled).toBe(true), { timeout: 3_000 });
+      const error = await commandPromise.then(
+        () => new Error("Expected command to reject"),
+        (reason: unknown) =>
+          reason as Error & {
+            code?: string;
+            terminationReason?: string;
+          },
+      );
+      expect(error).toMatchObject({
+        name: "ExecCommandKillTimeoutError",
+        code: "EXEC_COMMAND_KILL_TIMEOUT",
+        terminationReason: "abort",
+      });
+    } finally {
+      controller.abort(new Error("test cleanup"));
+      killIfRunning(grandchildPid);
+      killIfRunning(ownerPid);
+      killIfRunning(shellPid);
+      await waitForProcessesStopped([shellPid, ownerPid, grandchildPid]);
+      await commandPromise.catch(() => {});
     }
   }, 15_000);
 
@@ -590,6 +789,89 @@ describe("execCommand", () => {
     expect(unrefCalled).toBe(true);
   });
 
+  test("bounds a runtime that ignores cleanup cancellation and releases resources once", async () => {
+    vi.useFakeTimers();
+    let unrefCount = 0;
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null,
+      stdin: new PassThrough(),
+      kill() {
+        return true;
+      },
+      pid: 424_246,
+      signalCode: null,
+      stderr: new PassThrough(),
+      stdout: new PassThrough(),
+      unref() {
+        unrefCount += 1;
+      },
+    }) as unknown as ChildProcess;
+    let cleanupSignal: AbortSignal | undefined;
+    const runtime = {
+      spawn() {
+        return child;
+      },
+      terminate(_child: ChildProcess, options: { signal?: AbortSignal }): Promise<"kill-timeout"> {
+        cleanupSignal = options.signal;
+        return new Promise(() => undefined);
+      },
+    };
+    const controller = new AbortController();
+    const execOptions = {
+      cleanupTimeoutMs: 50,
+      runtime,
+      signal: controller.signal,
+    } as NonNullable<Parameters<typeof execCommand>[2]> & {
+      cleanupTimeoutMs: number;
+      runtime: typeof runtime;
+    };
+    let settlementCount = 0;
+
+    try {
+      const commandPromise = execCommand(process.execPath, ["--version"], execOptions);
+      const errorPromise = commandPromise.then(
+        () => new Error("Expected command to reject"),
+        (reason: unknown) => {
+          settlementCount += 1;
+          return reason as Error & {
+            cleanupCause?: Error & { code?: string };
+            code?: string;
+          };
+        },
+      );
+
+      controller.abort(new Error("stop requested"));
+      await vi.advanceTimersByTimeAsync(49);
+      expect(settlementCount).toBe(0);
+      expect(child.stdout?.destroyed).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settlementCount).toBe(1);
+      expect(cleanupSignal?.aborted).toBe(true);
+      const error = await errorPromise;
+      expect(error).toMatchObject({
+        name: "ExecCommandKillTimeoutError",
+        code: "EXEC_COMMAND_KILL_TIMEOUT",
+      });
+      expect(error.cleanupCause).toMatchObject({
+        name: "ExecCommandCleanupTimeoutError",
+        code: "EXEC_COMMAND_KILL_TIMEOUT",
+      });
+      expect(child.listenerCount("close")).toBe(0);
+      expect(child.listenerCount("error")).toBe(0);
+      expect(child.stdin?.destroyed).toBe(true);
+      expect(child.stdout?.destroyed).toBe(true);
+      expect(child.stderr?.destroyed).toBe(true);
+      expect(unrefCount).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(settlementCount).toBe(1);
+      expect(unrefCount).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("preserves timeout identity when cleanup times out without child close", async () => {
     vi.useFakeTimers();
     const child = Object.assign(new EventEmitter(), {
@@ -624,6 +906,7 @@ describe("execCommand", () => {
         (reason: unknown) =>
           reason as Error & {
             cause?: Error & { code?: string };
+            cleanupCause?: Error & { code?: string };
             code?: string;
             killed?: boolean;
             terminationResult?: string;
@@ -644,6 +927,10 @@ describe("execCommand", () => {
       expect(error.cause).toMatchObject({
         name: "ExecCommandTimeoutError",
         code: "EXEC_COMMAND_TIMEOUT",
+      });
+      expect(error.cleanupCause).toMatchObject({
+        name: "ExecCommandCleanupTimeoutError",
+        code: "EXEC_COMMAND_KILL_TIMEOUT",
       });
     } finally {
       vi.useRealTimers();
@@ -915,6 +1202,7 @@ interface ExitedShellTreeFixture {
 
 interface ExitedShellTreeFixtureOptions {
   outputBytes?: number;
+  ownerExits?: boolean;
 }
 
 function createShellTreeFixture(
@@ -979,15 +1267,28 @@ function createExitedShellTreeFixture(
       ...(options.outputBytes
         ? [
             `const outputTriggerPath = ${JSON.stringify(outputTriggerPath)};`,
-            "const watcher = fs.watch(process.cwd(), () => {",
-            "  if (!fs.existsSync(outputTriggerPath)) return;",
-            "  watcher.close();",
-            `  process.stdout.write("x".repeat(${options.outputBytes}));`,
+            "let outputEmitted = false;",
+            "const server = net.createServer((socket) => {",
+            '  socket.once("data", () => {',
+            "    if (!outputEmitted) {",
+            "      outputEmitted = true;",
+            `      process.stdout.write("x".repeat(${options.outputBytes}));`,
+            "    }",
+            "    socket.end();",
+            "  });",
             "});",
           ]
+        : ["const server = net.createServer();"]),
+      'server.listen(0, "127.0.0.1", () => {',
+      `  fs.writeFileSync(${JSON.stringify(grandchildPidPath)}, String(process.pid));`,
+      ...(options.outputBytes
+        ? [
+            "  const address = server.address();",
+            '  if (!address || typeof address === "string") throw new Error("missing control port");',
+            "  fs.writeFileSync(outputTriggerPath, String(address.port));",
+          ]
         : []),
-      "const server = net.createServer();",
-      `server.listen(0, "127.0.0.1", () => fs.writeFileSync(${JSON.stringify(grandchildPidPath)}, String(process.pid)));`,
+      "});",
     ].join("\n"),
   );
   writeFileSync(
@@ -998,9 +1299,21 @@ function createExitedShellTreeFixture(
       'process.on("SIGTERM", () => {});',
       `fs.writeFileSync(${JSON.stringify(shellPidPath)}, String(process.ppid));`,
       `fs.writeFileSync(${JSON.stringify(ownerPidPath)}, String(process.pid));`,
-      `const grandchild = spawn(process.execPath, [${JSON.stringify(grandchildScriptPath)}], { stdio: ["ignore", "inherit", "inherit"] });`,
+      `const grandchild = spawn(process.execPath, [${JSON.stringify(grandchildScriptPath)}], {${options.ownerExits ? " detached: true," : ""} stdio: ["ignore", "inherit", "inherit"] });`,
       'grandchild.once("error", (error) => { console.error(error); process.exit(1); });',
-      "process.stdin.resume();",
+      ...(options.ownerExits
+        ? [
+            `const grandchildPidPath = ${JSON.stringify(grandchildPidPath)};`,
+            "const finishLaunch = () => {",
+            "  if (!fs.existsSync(grandchildPidPath)) return false;",
+            "  watcher.close();",
+            "  grandchild.unref();",
+            "  return true;",
+            "};",
+            "const watcher = fs.watch(process.cwd(), finishLaunch);",
+            "finishLaunch();",
+          ]
+        : ["process.stdin.resume();"]),
     ].join("\n"),
   );
 
@@ -1035,6 +1348,19 @@ function createExitedShellTreeFixture(
 
 function readPid(target: string): number {
   return Number.parseInt(readFileSync(target, "utf8").trim(), 10);
+}
+
+async function triggerExitedFixtureOutput(
+  controlPortPath: string,
+  commandPromise: Promise<unknown>,
+): Promise<void> {
+  await waitForPathCreation(controlPortPath, commandPromise);
+  const port = readPid(controlPortPath);
+  await new Promise<void>((resolve, reject) => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    socket.once("error", reject);
+    socket.once("connect", () => socket.end("emit", resolve));
+  });
 }
 
 function isProcessRunning(pid: number | null): boolean {

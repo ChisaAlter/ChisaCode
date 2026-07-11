@@ -2,14 +2,22 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   parseLinuxProcStat,
   parseWindowsProcessRecord,
   refreshTrackedPosixProcess,
   resolveWindowsProcessQueryTimeout,
+  selectOwnedWindowsProcesses,
   terminateWithTreeKill,
 } from "./tree-kill.js";
+
+interface WindowsProcessSelectionRecord {
+  creationTimeMs: number;
+  identity: string;
+  parentPid: number;
+  pid: number;
+}
 
 let tempDir: string | null = null;
 let ownerProcess: ChildProcess | null = null;
@@ -175,6 +183,80 @@ describe("terminateWithTreeKill", () => {
     });
   });
 
+  test("excludes a reused Windows root and its newer descendants", () => {
+    const processes: WindowsProcessSelectionRecord[] = [
+      {
+        creationTimeMs: 1_100,
+        identity: "windows-creation:1100",
+        parentPid: 42,
+        pid: 100,
+      },
+      {
+        creationTimeMs: 1_200,
+        identity: "windows-creation:1200",
+        parentPid: 100,
+        pid: 101,
+      },
+      {
+        creationTimeMs: 5_000,
+        identity: "windows-creation:5000",
+        parentPid: 1,
+        pid: 42,
+      },
+      {
+        creationTimeMs: 5_000,
+        identity: "windows-creation:5000-equal-child",
+        parentPid: 42,
+        pid: 200,
+      },
+      {
+        creationTimeMs: 5_100,
+        identity: "windows-creation:5100",
+        parentPid: 42,
+        pid: 201,
+      },
+      {
+        creationTimeMs: 5_200,
+        identity: "windows-creation:5200",
+        parentPid: 201,
+        pid: 202,
+      },
+    ];
+
+    const selected = selectOwnedWindowsProcesses({
+      launchedAtMs: 1_000,
+      processes,
+      rootExited: true,
+      rootPid: 42,
+    });
+
+    expect(selected.map((process) => process.pid)).toEqual([101, 100]);
+  });
+
+  test("retains launch-bounded Windows descendants when the root record is missing", () => {
+    const selected = selectOwnedWindowsProcesses({
+      launchedAtMs: 1_000,
+      processes: [
+        {
+          creationTimeMs: 1_100,
+          identity: "windows-creation:1100",
+          parentPid: 42,
+          pid: 100,
+        },
+        {
+          creationTimeMs: 1_200,
+          identity: "windows-creation:1200",
+          parentPid: 100,
+          pid: 101,
+        },
+      ],
+      rootExited: true,
+      rootPid: 42,
+    });
+
+    expect(selected.map((process) => process.pid)).toEqual([101, 100]);
+  });
+
   test("refreshes a tracked POSIX process that moved to another process group", () => {
     const tracked = parseLinuxProcStat(42, createLinuxProcStat(7_001, 42));
     const moved = parseLinuxProcStat(42, createLinuxProcStat(7_001, 99));
@@ -194,6 +276,92 @@ describe("terminateWithTreeKill", () => {
       expect.objectContaining({ code: "EXEC_COMMAND_PROCESS_QUERY_TIMEOUT" }),
     );
   });
+
+  test.each(["snapshot", "signal", "listRunning"] as const)(
+    "bounds a never-settling tracked %s operation by one cleanup deadline",
+    async (hangingOperation) => {
+      interface TrackedProcess {
+        identity: string;
+        pid: number;
+      }
+      interface TestOperations {
+        listRunning(
+          processes: readonly TrackedProcess[],
+          cleanupSignal: AbortSignal,
+        ): Promise<TrackedProcess[]>;
+        signal(
+          processes: readonly TrackedProcess[],
+          signal: NodeJS.Signals,
+          cleanupSignal: AbortSignal,
+        ): Promise<void>;
+        snapshot(cleanupSignal: AbortSignal): Promise<TrackedProcess[]>;
+      }
+
+      vi.useFakeTimers();
+      const root = { identity: "root-start", pid: 100 };
+      let receivedCleanupSignal: AbortSignal | undefined;
+      let settlementCount = 0;
+      const neverSettles = <T>(): Promise<T> => new Promise(() => undefined);
+      const child = {
+        exitCode: null,
+        signalCode: null,
+        kill() {
+          return true;
+        },
+      };
+      const operations: TestOperations = {
+        async snapshot(cleanupSignal) {
+          if (hangingOperation === "snapshot") {
+            receivedCleanupSignal = cleanupSignal;
+            return neverSettles();
+          }
+          return [root];
+        },
+        async signal(_processes, _signal, cleanupSignal) {
+          if (hangingOperation === "signal") {
+            receivedCleanupSignal = cleanupSignal;
+            return neverSettles();
+          }
+        },
+        async listRunning(processes, cleanupSignal) {
+          if (hangingOperation === "listRunning") {
+            receivedCleanupSignal = cleanupSignal;
+            return neverSettles();
+          }
+          return [...processes];
+        },
+      };
+      const options = {
+        cleanupTimeoutMs: 50,
+        gracefulTimeoutMs: 0,
+        forceTimeoutMs: 0,
+        operations,
+      } as Parameters<typeof terminateWithTreeKill>[1] & {
+        cleanupTimeoutMs: number;
+        operations: TestOperations;
+      };
+
+      try {
+        const terminationPromise = terminateWithTreeKill(child, options).then((result) => {
+          settlementCount += 1;
+          return result;
+        });
+
+        await vi.advanceTimersByTimeAsync(49);
+        expect(settlementCount).toBe(0);
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(settlementCount).toBe(1);
+        expect(receivedCleanupSignal?.aborted).toBe(true);
+        await expect(terminationPromise).resolves.toBe("kill-timeout");
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(settlementCount).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   test("sends a matching graceful and force signal only once", async () => {
     interface TrackedProcess {
@@ -356,6 +524,46 @@ describe("terminateWithTreeKill", () => {
 
     expect(result).toBe("kill-timeout");
     expect(signals).toEqual(["SIGTERM"]);
+  });
+
+  test("treats an empty ownership snapshot as unverified cleanup", async () => {
+    interface TrackedProcess {
+      identity: string;
+      pid: number;
+    }
+    interface TestOperations {
+      listRunning(processes: readonly TrackedProcess[]): Promise<TrackedProcess[]>;
+      signal(processes: readonly TrackedProcess[], signal: NodeJS.Signals): Promise<void>;
+      snapshot(): Promise<TrackedProcess[]>;
+    }
+
+    const child = {
+      exitCode: 0,
+      signalCode: null,
+      kill() {
+        return true;
+      },
+    };
+    const operations: TestOperations = {
+      async snapshot() {
+        return [];
+      },
+      async listRunning(processes) {
+        return [...processes];
+      },
+      async signal() {},
+    };
+    const options = {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      operations,
+      ownership: {
+        launchedAtMs: 1_000,
+        rootPid: 100,
+      },
+    } as Parameters<typeof terminateWithTreeKill>[1] & { operations: TestOperations };
+
+    await expect(terminateWithTreeKill(child, options)).resolves.toBe("kill-timeout");
   });
 
   test("returns kill-timeout when tracked signaling cannot revalidate process identity", async () => {

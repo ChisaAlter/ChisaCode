@@ -1,21 +1,25 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import treeKill from "tree-kill";
 
 const PROCESS_POLL_INTERVAL_MS = 25;
 const WINDOWS_PROCESS_QUERY_TIMEOUT_MS = 5_000;
-const WINDOWS_PROCESS_QUERY_BUDGET_MS = 8_000;
 const WINDOWS_CREATION_TIME_TOLERANCE_MS = 1_000;
+
+/** Maximum wall-clock budget for one command-tree cleanup attempt. */
+export const TREE_KILL_CLEANUP_TIMEOUT_MS = 8_000;
 
 export interface TreeKillTarget {
   pid?: number;
   exitCode?: number | null;
   signalCode?: NodeJS.Signals | null;
   kill(signal?: NodeJS.Signals | number): boolean;
+  off?(event: "exit", listener: () => void): unknown;
   once?(event: "exit", listener: () => void): unknown;
 }
 
 interface TerminateWithTreeKillOptions {
+  cleanupTimeoutMs?: number;
+  closure?: Promise<void>;
   gracefulSignal?: NodeJS.Signals;
   forceSignal?: NodeJS.Signals;
   gracefulTimeoutMs: number;
@@ -23,6 +27,7 @@ interface TerminateWithTreeKillOptions {
   onForceSignal?: () => void;
   operations?: TreeKillOperations;
   ownership?: TreeKillOwnership;
+  signal?: AbortSignal;
 }
 
 interface TrackedProcess {
@@ -32,11 +37,18 @@ interface TrackedProcess {
 }
 
 interface TreeKillOperations {
-  snapshot(): Promise<TrackedProcess[]>;
-  listRunning(processes: readonly TrackedProcess[]): Promise<TrackedProcess[]>;
-  signal(processes: readonly TrackedProcess[], signal: NodeJS.Signals): Promise<void>;
+  snapshot(cleanupSignal: AbortSignal): Promise<TrackedProcess[]>;
+  listRunning(
+    processes: readonly TrackedProcess[],
+    cleanupSignal: AbortSignal,
+  ): Promise<TrackedProcess[]>;
+  signal(
+    processes: readonly TrackedProcess[],
+    signal: NodeJS.Signals,
+    cleanupSignal: AbortSignal,
+  ): Promise<void>;
   now?: () => number;
-  waitForPoll?: (delayMs: number) => Promise<void>;
+  waitForPoll?: (delayMs: number, cleanupSignal: AbortSignal) => Promise<void>;
 }
 
 export type TerminateWithTreeKillResult =
@@ -56,41 +68,158 @@ type TrackedTerminationResult =
   | "tracking-unavailable"
   | "tracking-unverified";
 
+class TreeKillCleanupTimeoutError extends Error {
+  readonly code = "EXEC_COMMAND_KILL_TIMEOUT";
+
+  constructor() {
+    super("Command tree cleanup exceeded its absolute deadline");
+    this.name = "TreeKillCleanupTimeoutError";
+  }
+}
+
+class TreeKillCleanupDeadline {
+  private readonly controller = new AbortController();
+  private readonly parentAbortListener: (() => void) | null;
+  private readonly timeoutHandle: NodeJS.Timeout;
+  readonly expiresAtMs: number;
+
+  constructor(
+    timeoutMs: number,
+    private readonly now: () => number,
+    private readonly parentSignal?: AbortSignal,
+  ) {
+    const boundedTimeoutMs = Math.max(0, timeoutMs);
+    this.expiresAtMs = this.now() + boundedTimeoutMs;
+    this.timeoutHandle = setTimeout(() => {
+      this.abort(new TreeKillCleanupTimeoutError());
+    }, boundedTimeoutMs);
+    if (parentSignal) {
+      this.parentAbortListener = () => {
+        this.abort(parentSignal.reason ?? new TreeKillCleanupTimeoutError());
+      };
+      parentSignal.addEventListener("abort", this.parentAbortListener, { once: true });
+      if (parentSignal.aborted) {
+        this.parentAbortListener();
+      }
+    } else {
+      this.parentAbortListener = null;
+    }
+  }
+
+  get signal(): AbortSignal {
+    return this.controller.signal;
+  }
+
+  remainingMs(): number {
+    return Math.max(0, this.expiresAtMs - this.now());
+  }
+
+  run<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    if (this.signal.aborted) {
+      return Promise.reject(this.signal.reason ?? new TreeKillCleanupTimeoutError());
+    }
+    return new Promise<T>((resolve, reject) => {
+      let completed = false;
+      const finish = (settle: () => void) => {
+        if (completed) {
+          return;
+        }
+        completed = true;
+        this.signal.removeEventListener("abort", onAbort);
+        settle();
+      };
+      const onAbort = () => {
+        finish(() => reject(this.signal.reason ?? new TreeKillCleanupTimeoutError()));
+      };
+      this.signal.addEventListener("abort", onAbort, { once: true });
+      let operationPromise: Promise<T>;
+      try {
+        operationPromise = operation(this.signal);
+      } catch (error) {
+        finish(() => reject(error));
+        return;
+      }
+      void operationPromise.then(
+        (value) => finish(() => resolve(value)),
+        (error: unknown) => finish(() => reject(error)),
+      );
+    });
+  }
+
+  dispose(): void {
+    clearTimeout(this.timeoutHandle);
+    if (this.parentSignal && this.parentAbortListener) {
+      this.parentSignal.removeEventListener("abort", this.parentAbortListener);
+    }
+  }
+
+  private abort(reason: unknown): void {
+    if (!this.signal.aborted) {
+      this.controller.abort(reason);
+    }
+  }
+}
+
 export async function terminateWithTreeKill(
   child: TreeKillTarget,
   options: TerminateWithTreeKillOptions,
 ): Promise<TerminateWithTreeKillResult> {
-  if (isProcessExited(child) && !options.operations && !options.ownership) {
-    return "already-exited";
-  }
+  const now = options.operations?.now ?? Date.now;
+  const deadline = new TreeKillCleanupDeadline(
+    options.cleanupTimeoutMs ?? TREE_KILL_CLEANUP_TIMEOUT_MS,
+    now,
+    options.signal,
+  );
+  try {
+    if (isProcessExited(child) && !options.operations && !options.ownership) {
+      return "already-exited";
+    }
 
-  const trackedResult = await terminateTrackedProcessTree(child, options);
-  if (trackedResult !== "tracking-unavailable" && trackedResult !== "tracking-unverified") {
-    return trackedResult;
-  }
+    const trackedResult = await terminateTrackedProcessTree(child, options, deadline);
+    if (trackedResult !== "tracking-unavailable" && trackedResult !== "tracking-unverified") {
+      return trackedResult;
+    }
 
-  const fallbackResult = await terminateRootObservedTree(child, options);
-  return trackedResult === "tracking-unverified" ? "kill-timeout" : fallbackResult;
+    const fallbackResult = await terminateRootObservedTree(child, options, deadline);
+    return trackedResult === "tracking-unverified" ? "kill-timeout" : fallbackResult;
+  } catch (error) {
+    if (deadline.signal.aborted) {
+      return "kill-timeout";
+    }
+    throw error;
+  } finally {
+    deadline.dispose();
+  }
 }
 
 async function terminateTrackedProcessTree(
   child: TreeKillTarget,
   options: TerminateWithTreeKillOptions,
+  deadline: TreeKillCleanupDeadline,
 ): Promise<TrackedTerminationResult> {
   const operations =
-    options.operations ?? createDefaultTreeKillOperations(child, options.ownership);
+    options.operations ?? createDefaultTreeKillOperations(child, options.ownership, deadline);
   if (!operations) {
     return "tracking-unavailable";
   }
 
   let trackedProcesses: TrackedProcess[];
   try {
-    trackedProcesses = await operations.snapshot();
-  } catch {
+    trackedProcesses = await deadline.run((cleanupSignal) => operations.snapshot(cleanupSignal));
+  } catch (error) {
+    rethrowCleanupDeadline(error, deadline);
     return "tracking-unverified";
   }
   if (trackedProcesses.length === 0) {
-    return options.ownership ? "already-exited" : "tracking-unverified";
+    if (options.closure) {
+      try {
+        await deadline.run(async () => options.closure);
+        return "already-exited";
+      } catch (error) {
+        rethrowCleanupDeadline(error, deadline);
+      }
+    }
+    return "tracking-unverified";
   }
 
   const gracefulSignal = options.gracefulSignal ?? "SIGTERM";
@@ -98,7 +227,9 @@ async function terminateTrackedProcessTree(
   if (gracefulSignal === forceSignal) {
     options.onForceSignal?.();
     try {
-      await operations.signal(trackedProcesses, forceSignal);
+      await deadline.run((cleanupSignal) =>
+        operations.signal(trackedProcesses, forceSignal, cleanupSignal),
+      );
       if (options.forceTimeoutMs === undefined) {
         return "killed";
       }
@@ -106,22 +237,28 @@ async function terminateTrackedProcessTree(
         operations,
         trackedProcesses,
         options.forceTimeoutMs,
+        deadline,
       );
       return survivors.length === 0 ? "killed" : "kill-timeout";
-    } catch {
+    } catch (error) {
+      rethrowCleanupDeadline(error, deadline);
       return "tracking-unverified";
     }
   }
 
   let survivors: TrackedProcess[];
   try {
-    await operations.signal(trackedProcesses, gracefulSignal);
+    await deadline.run((cleanupSignal) =>
+      operations.signal(trackedProcesses, gracefulSignal, cleanupSignal),
+    );
     survivors = await waitForTrackedProcesses(
       operations,
       trackedProcesses,
       options.gracefulTimeoutMs,
+      deadline,
     );
-  } catch {
+  } catch (error) {
+    rethrowCleanupDeadline(error, deadline);
     return "tracking-unverified";
   }
   if (survivors.length === 0) {
@@ -130,73 +267,102 @@ async function terminateTrackedProcessTree(
 
   options.onForceSignal?.();
   try {
-    await operations.signal(survivors, forceSignal);
+    await deadline.run((cleanupSignal) => operations.signal(survivors, forceSignal, cleanupSignal));
     if (options.forceTimeoutMs === undefined) {
       return "killed";
     }
-    survivors = await waitForTrackedProcesses(operations, survivors, options.forceTimeoutMs);
+    survivors = await waitForTrackedProcesses(
+      operations,
+      survivors,
+      options.forceTimeoutMs,
+      deadline,
+    );
     return survivors.length === 0 ? "killed" : "kill-timeout";
-  } catch {
+  } catch (error) {
+    rethrowCleanupDeadline(error, deadline);
     return "tracking-unverified";
+  }
+}
+
+function rethrowCleanupDeadline(error: unknown, deadline: TreeKillCleanupDeadline): void {
+  if (deadline.signal.aborted) {
+    throw error;
   }
 }
 
 async function terminateRootObservedTree(
   child: TreeKillTarget,
   options: TerminateWithTreeKillOptions,
+  deadline: TreeKillCleanupDeadline,
 ): Promise<TerminateWithTreeKillResult> {
   if (isProcessExited(child)) {
     return "already-exited";
   }
 
-  const exitPromise = waitForProcessExit(child);
   const gracefulSignal = options.gracefulSignal ?? "SIGTERM";
   const forceSignal = options.forceSignal ?? "SIGKILL";
   if (gracefulSignal === forceSignal) {
     options.onForceSignal?.();
-    await signalTreeOrChild(child, forceSignal);
+    await deadline.run((cleanupSignal) =>
+      signalTreeOrChild(child, forceSignal, cleanupSignal, deadline.remainingMs()),
+    );
     if (options.forceTimeoutMs === undefined) {
       return "killed";
     }
-    return (await waitForExitOrTimeout(exitPromise, options.forceTimeoutMs))
+    return (await waitForExitOrTimeout(child, options.forceTimeoutMs, deadline))
       ? "killed"
       : "kill-timeout";
   }
 
-  await signalTreeOrChild(child, gracefulSignal);
-  if (await waitForExitOrTimeout(exitPromise, options.gracefulTimeoutMs)) {
+  await deadline.run((cleanupSignal) =>
+    signalTreeOrChild(child, gracefulSignal, cleanupSignal, deadline.remainingMs()),
+  );
+  if (await waitForExitOrTimeout(child, options.gracefulTimeoutMs, deadline)) {
     return "terminated";
   }
 
   options.onForceSignal?.();
-  await signalTreeOrChild(child, forceSignal);
+  await deadline.run((cleanupSignal) =>
+    signalTreeOrChild(child, forceSignal, cleanupSignal, deadline.remainingMs()),
+  );
   if (options.forceTimeoutMs === undefined) {
     return "killed";
   }
-  return (await waitForExitOrTimeout(exitPromise, options.forceTimeoutMs))
+  return (await waitForExitOrTimeout(child, options.forceTimeoutMs, deadline))
     ? "killed"
     : "kill-timeout";
 }
 
 function createDefaultTreeKillOperations(
   child: TreeKillTarget,
-  ownership?: TreeKillOwnership,
+  ownership: TreeKillOwnership | undefined,
+  deadline: TreeKillCleanupDeadline,
 ): TreeKillOperations | null {
   const pid = ownership?.rootPid ?? child.pid;
   if (typeof pid !== "number" || pid <= 0) {
     return null;
   }
   if (process.platform === "win32") {
-    const queryDeadlineMs = Date.now() + WINDOWS_PROCESS_QUERY_BUDGET_MS;
+    const queryDeadlineMs = deadline.expiresAtMs;
     return {
-      async snapshot() {
-        return snapshotWindowsProcessTree(pid, ownership?.launchedAtMs, queryDeadlineMs);
+      async snapshot(cleanupSignal) {
+        return snapshotWindowsProcessTree(
+          pid,
+          ownership?.launchedAtMs,
+          isProcessExited(child),
+          queryDeadlineMs,
+          cleanupSignal,
+        );
       },
       async listRunning(processes) {
         return listRunningWindowsProcesses(processes);
       },
-      async signal(processes, signal) {
-        const running = await listIdentityMatchingWindowsProcesses(processes, queryDeadlineMs);
+      async signal(processes, signal, cleanupSignal) {
+        const running = await listIdentityMatchingWindowsProcesses(
+          processes,
+          queryDeadlineMs,
+          cleanupSignal,
+        );
         for (const process of running) {
           signalPid(process.pid, signal);
         }
@@ -204,14 +370,14 @@ function createDefaultTreeKillOperations(
     };
   }
   return {
-    async snapshot() {
-      return snapshotPosixProcessTree(pid, ownership?.processGroupId);
+    async snapshot(cleanupSignal) {
+      return snapshotPosixProcessTree(pid, ownership?.processGroupId, cleanupSignal);
     },
-    async listRunning(processes) {
-      return listRunningPosixProcesses(processes);
+    async listRunning(processes, cleanupSignal) {
+      return listRunningPosixProcesses(processes, cleanupSignal);
     },
-    async signal(processes, signal) {
-      const running = await listRunningPosixProcesses(processes);
+    async signal(processes, signal, cleanupSignal) {
+      const running = await listRunningPosixProcesses(processes, cleanupSignal);
       const processGroupId = ownership?.processGroupId;
       const hasProcessGroupAnchor =
         processGroupId !== undefined &&
@@ -233,37 +399,61 @@ async function waitForTrackedProcesses(
   operations: TreeKillOperations,
   processes: readonly TrackedProcess[],
   timeoutMs: number,
+  cleanupDeadline: TreeKillCleanupDeadline,
 ): Promise<TrackedProcess[]> {
   const now = operations.now ?? Date.now;
   const waitForPoll = operations.waitForPoll ?? waitForProcessPoll;
-  const deadline = now() + Math.max(0, timeoutMs);
-  let survivors = await operations.listRunning(processes);
+  const phaseDeadlineMs = Math.min(cleanupDeadline.expiresAtMs, now() + Math.max(0, timeoutMs));
+  let survivors = await cleanupDeadline.run((cleanupSignal) =>
+    operations.listRunning(processes, cleanupSignal),
+  );
   while (survivors.length > 0) {
-    const remainingMs = deadline - now();
+    const remainingMs = phaseDeadlineMs - now();
     if (remainingMs <= 0) {
       break;
     }
-    await waitForPoll(Math.min(PROCESS_POLL_INTERVAL_MS, remainingMs));
-    survivors = await operations.listRunning(survivors);
+    await cleanupDeadline.run((cleanupSignal) =>
+      waitForPoll(Math.min(PROCESS_POLL_INTERVAL_MS, remainingMs), cleanupSignal),
+    );
+    survivors = await cleanupDeadline.run((cleanupSignal) =>
+      operations.listRunning(survivors, cleanupSignal),
+    );
   }
   return survivors;
 }
 
-function waitForProcessPoll(delayMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, delayMs);
+function waitForProcessPoll(delayMs: number, cleanupSignal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let timer: NodeJS.Timeout | null = null;
+    const finish = (settle: () => void) => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      cleanupSignal?.removeEventListener("abort", onAbort);
+      settle();
+    };
+    const onAbort = () => {
+      finish(() => reject(cleanupSignal?.reason ?? new TreeKillCleanupTimeoutError()));
+    };
+    cleanupSignal?.addEventListener("abort", onAbort, { once: true });
+    timer = setTimeout(() => finish(resolve), delayMs);
+    if (cleanupSignal?.aborted) {
+      onAbort();
+    }
   });
 }
 
 async function snapshotPosixProcessTree(
   rootPid: number,
   processGroupId?: number,
+  cleanupSignal?: AbortSignal,
 ): Promise<TrackedProcess[]> {
   if (process.platform === "linux") {
-    return snapshotLinuxProcessTree(rootPid, processGroupId);
+    return snapshotLinuxProcessTree(rootPid, processGroupId, cleanupSignal);
   }
 
-  const processTable = await readPsProcessTableWithIdentity();
+  const processTable = await readPsProcessTableWithIdentity(cleanupSignal);
   const trackedPids = collectOwnedProcessPids(rootPid, processGroupId, processTable);
   if (trackedPids.length === 0) {
     return [];
@@ -279,8 +469,9 @@ async function snapshotPosixProcessTree(
 async function snapshotLinuxProcessTree(
   rootPid: number,
   processGroupId?: number,
+  cleanupSignal?: AbortSignal,
 ): Promise<TrackedProcess[]> {
-  const processTable = await readPosixProcessTopology();
+  const processTable = await readPosixProcessTopology(cleanupSignal);
   const trackedPids = collectOwnedProcessPids(rootPid, processGroupId, processTable);
   if (trackedPids.length === 0) {
     return [];
@@ -368,6 +559,7 @@ function collectProcessTreePids(
 
 async function listRunningPosixProcesses(
   processes: readonly TrackedProcess[],
+  cleanupSignal?: AbortSignal,
 ): Promise<TrackedProcess[]> {
   if (process.platform === "linux") {
     return listRunningLinuxProcesses(processes);
@@ -375,7 +567,7 @@ async function listRunningPosixProcesses(
 
   let processTable: Map<number, PosixProcessRecord>;
   try {
-    processTable = await readPsProcessTableWithIdentity();
+    processTable = await readPsProcessTableWithIdentity(cleanupSignal);
   } catch {
     return [...processes];
   }
@@ -430,8 +622,12 @@ interface PosixProcessRecord {
   processGroupId: number;
 }
 
-async function readPosixProcessTopology(): Promise<Map<number, PosixProcessRecord>> {
-  const stdout = await execFileText("ps", ["-eo", "pid=,ppid=,pgid="]);
+async function readPosixProcessTopology(
+  cleanupSignal?: AbortSignal,
+): Promise<Map<number, PosixProcessRecord>> {
+  const stdout = await execFileText("ps", ["-eo", "pid=,ppid=,pgid="], {
+    signal: cleanupSignal,
+  });
   const processTable = new Map<number, PosixProcessRecord>();
   for (const line of stdout.split(/\r?\n/u)) {
     const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s*$/u.exec(line);
@@ -448,14 +644,16 @@ async function readPosixProcessTopology(): Promise<Map<number, PosixProcessRecor
   return processTable;
 }
 
-async function readPsProcessTableWithIdentity(): Promise<Map<number, PosixProcessRecord>> {
+async function readPsProcessTableWithIdentity(
+  cleanupSignal?: AbortSignal,
+): Promise<Map<number, PosixProcessRecord>> {
   // macOS has no procfs starttime. `lstart` is only second-resolution, so identity checks there
   // remain best-effort; bounded polling and post-order signaling keep the reuse window small.
   const args =
     process.platform === "darwin"
       ? ["-axo", "pid=,ppid=,pgid=,lstart="]
       : ["-eo", "pid=,ppid=,pgid=,lstart="];
-  const stdout = await execFileText("ps", args);
+  const stdout = await execFileText("ps", args, { signal: cleanupSignal });
   const processTable = new Map<number, PosixProcessRecord>();
   for (const line of stdout.split(/\r?\n/u)) {
     const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$/u.exec(line);
@@ -539,18 +737,56 @@ interface RawWindowsProcessRecord {
   ProcessId?: unknown;
 }
 
+interface WindowsProcessSelectionOptions {
+  launchedAtMs?: number;
+  processes: readonly WindowsProcessRecord[];
+  rootExited: boolean;
+  rootPid: number;
+}
+
 async function snapshotWindowsProcessTree(
   rootPid: number,
   launchedAtMs?: number,
+  rootExited = false,
   queryDeadlineMs?: number,
+  cleanupSignal?: AbortSignal,
 ): Promise<TrackedProcess[]> {
-  const processTable = await readWindowsProcessTable(queryDeadlineMs);
+  const processTable = await readWindowsProcessTable(queryDeadlineMs, cleanupSignal);
+  return selectOwnedWindowsProcesses({
+    launchedAtMs,
+    processes: [...processTable.values()],
+    rootExited,
+    rootPid,
+  });
+}
+
+/**
+ * Selects launch-bounded Windows process records in child-first termination order.
+ * @param options Root identity state and the current Win32 process snapshot
+ * @returns Process records that belong to the selected root lineage
+ */
+export function selectOwnedWindowsProcesses(
+  options: WindowsProcessSelectionOptions,
+): WindowsProcessRecord[] {
   const earliestCreationTime =
-    launchedAtMs === undefined
+    options.launchedAtMs === undefined
       ? Number.NEGATIVE_INFINITY
-      : launchedAtMs - WINDOWS_CREATION_TIME_TOLERANCE_MS;
+      : options.launchedAtMs - WINDOWS_CREATION_TIME_TOLERANCE_MS;
+  const eligibleProcesses = options.processes.filter(
+    (process) => process.creationTimeMs >= earliestCreationTime,
+  );
+  const currentRoot = eligibleProcesses.find((process) => process.pid === options.rootPid);
+  const reusedRootCreationTime =
+    options.rootExited && currentRoot ? currentRoot.creationTimeMs : Number.POSITIVE_INFINITY;
   const eligibleTable = new Map(
-    [...processTable].filter(([, process]) => process.creationTimeMs >= earliestCreationTime),
+    eligibleProcesses
+      .filter((process) => {
+        if (!Number.isFinite(reusedRootCreationTime)) {
+          return true;
+        }
+        return process.pid !== options.rootPid && process.creationTimeMs < reusedRootCreationTime;
+      })
+      .map((process) => [process.pid, process] as const),
   );
   const owned = new Set<number>();
   const childrenByParent = new Map<number, number[]>();
@@ -559,15 +795,22 @@ async function snapshotWindowsProcessTree(
     children.push(process.pid);
     childrenByParent.set(process.parentPid, children);
   }
-  const visit = (pid: number): void => {
+  const visit = (pid: number, parentCreationTime?: number): void => {
     for (const childPid of childrenByParent.get(pid) ?? []) {
-      visit(childPid);
+      const child = eligibleTable.get(childPid);
+      if (!child) {
+        continue;
+      }
+      if (parentCreationTime !== undefined && child.creationTimeMs < parentCreationTime) {
+        continue;
+      }
+      visit(childPid, child.creationTimeMs);
     }
     if (eligibleTable.has(pid)) {
       owned.add(pid);
     }
   };
-  visit(rootPid);
+  visit(options.rootPid, eligibleTable.get(options.rootPid)?.creationTimeMs);
   return [...owned].flatMap((pid) => {
     const process = eligibleTable.get(pid);
     return process ? [process] : [];
@@ -583,8 +826,9 @@ async function listRunningWindowsProcesses(
 async function listIdentityMatchingWindowsProcesses(
   processes: readonly TrackedProcess[],
   queryDeadlineMs: number,
+  cleanupSignal?: AbortSignal,
 ): Promise<TrackedProcess[]> {
-  const processTable = await readWindowsProcessTable(queryDeadlineMs);
+  const processTable = await readWindowsProcessTable(queryDeadlineMs, cleanupSignal);
   return processes.filter(
     (process) => processTable.get(process.pid)?.identity === process.identity,
   );
@@ -592,6 +836,7 @@ async function listIdentityMatchingWindowsProcesses(
 
 async function readWindowsProcessTable(
   queryDeadlineMs?: number,
+  cleanupSignal?: AbortSignal,
 ): Promise<Map<number, WindowsProcessRecord>> {
   const timeout =
     queryDeadlineMs === undefined
@@ -605,7 +850,7 @@ async function readWindowsProcessTable(
       "-Command",
       "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CreationDate | ConvertTo-Json -Compress",
     ],
-    { timeout },
+    { signal: cleanupSignal, timeout },
   );
   const parsed = JSON.parse(stdout) as RawWindowsProcessRecord | RawWindowsProcessRecord[];
   const records = Array.isArray(parsed) ? parsed : [parsed];
@@ -684,7 +929,7 @@ function parseWindowsCreationTime(value: unknown): number | null {
 function execFileText(
   command: string,
   args: string[],
-  options: { timeout?: number } = {},
+  options: { signal?: AbortSignal; timeout?: number } = {},
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -694,6 +939,7 @@ function execFileText(
         encoding: "utf8",
         killSignal: "SIGKILL",
         maxBuffer: 4 * 1024 * 1024,
+        signal: options.signal,
         timeout: options.timeout,
         windowsHide: true,
       },
@@ -733,25 +979,37 @@ function signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): voi
   }
 }
 
-function signalTreeOrChild(child: TreeKillTarget, signal: NodeJS.Signals): Promise<void> {
+async function signalTreeOrChild(
+  child: TreeKillTarget,
+  signal: NodeJS.Signals,
+  cleanupSignal: AbortSignal,
+  remainingMs: number,
+): Promise<void> {
   if (isProcessExited(child)) {
-    return Promise.resolve();
+    return;
   }
 
   const pid = child.pid;
   if (typeof pid !== "number" || pid <= 0) {
     signalDirectChild(child, signal);
-    return Promise.resolve();
+    return;
+  }
+  if (process.platform !== "win32") {
+    signalDirectChild(child, signal);
+    return;
   }
 
-  return new Promise((resolve) => {
-    treeKill(pid, signal, (error) => {
-      if (error) {
-        signalDirectChild(child, signal);
-      }
-      resolve();
+  try {
+    await execFileText("taskkill.exe", ["/pid", String(pid), "/T", "/F"], {
+      signal: cleanupSignal,
+      timeout: Math.max(1, Math.floor(remainingMs)),
     });
-  });
+  } catch (error) {
+    if (cleanupSignal.aborted) {
+      throw error;
+    }
+    signalDirectChild(child, signal);
+  }
 }
 
 function signalDirectChild(child: TreeKillTarget, signal: NodeJS.Signals): void {
@@ -769,34 +1027,35 @@ function isProcessExited(child: TreeKillTarget): boolean {
   );
 }
 
-function waitForProcessExit(child: TreeKillTarget): Promise<void> {
-  if (isProcessExited(child)) {
-    return Promise.resolve();
-  }
-  if (!child.once) {
-    return new Promise(() => undefined);
-  }
-
-  return new Promise((resolve) => {
-    child.once?.("exit", resolve);
-  });
-}
-
-async function waitForExitOrTimeout(
-  exitPromise: Promise<void>,
+function waitForExitOrTimeout(
+  child: TreeKillTarget,
   timeoutMs: number,
+  deadline: TreeKillCleanupDeadline,
 ): Promise<boolean> {
-  let timer: NodeJS.Timeout | null = null;
-  try {
-    return await Promise.race([
-      exitPromise.then(() => true),
-      new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
+  if (isProcessExited(child)) {
+    return Promise.resolve(true);
   }
+  const boundedTimeoutMs = Math.min(Math.max(0, timeoutMs), deadline.remainingMs());
+  return new Promise<boolean>((resolve, reject) => {
+    let timer: NodeJS.Timeout | null = null;
+    const finish = (settle: () => void) => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      child.off?.("exit", onExit);
+      deadline.signal.removeEventListener("abort", onAbort);
+      settle();
+    };
+    const onExit = () => finish(() => resolve(true));
+    const onAbort = () => {
+      finish(() => reject(deadline.signal.reason ?? new TreeKillCleanupTimeoutError()));
+    };
+    child.once?.("exit", onExit);
+    deadline.signal.addEventListener("abort", onAbort, { once: true });
+    timer = setTimeout(() => finish(() => resolve(isProcessExited(child))), boundedTimeoutMs);
+    if (deadline.signal.aborted) {
+      onAbort();
+    }
+  });
 }
