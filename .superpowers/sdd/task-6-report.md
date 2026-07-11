@@ -73,4 +73,4 @@ Implementation commit: `69a94a292`.
 - Form edits now share `isGenerativeFormEditable`/`dispatchGenerativeFormChange`; text and select changes do not dispatch or send while submitting/submitted. Select controls expose disabled and accessibility-disabled state.
 - RED evidence: initiation integration produced no queue failure logs; budget tests lacked constants/error; overload bubbled the typed error; locked-change helper was absent.
 - GREEN evidence: queue 13 passed; focused AgentManager 5 passed; handler 9 passed; form/controller 8 passed; action dispatch 5 passed; server/app typechecks and targeted lint passed.
-- Quality follow-up implementation commit is recorded in progress and the completion message.
+- Quality follow-up implementation commit: `ba5016c68`.
