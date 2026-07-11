@@ -54,3 +54,12 @@ Implemented on branch `codex/comprehensive-audit-fixes` from base `3eae591b8eacb
 ## Commit
 
 Implementation commit: `69a94a292`.
+
+## Spec-review follow-up
+
+- Fixed terminal `error` retention: unavailable status classification now includes missing, closed, and error agents. Duplicate terminal notifications clear/log once and never start a follow-up.
+- Added a synchronous `GenerativeFormSubmissionController`: the first `begin()` locks immediately, false/rejection completion unlocks for retry, and successful completion keeps the submitted lock.
+- Strict Effects lifecycle is explicit: effect setup calls `mount()`, cleanup calls `unmount()`, remount accepts a pending completion, and actual-unmount completion is ignored.
+- RED evidence: error-status queue test retained state (`expected true to be false`); controller test failed because the factory did not exist.
+- GREEN evidence: queue 7 passed; focused AgentManager 3 passed; form state/controller 6 passed; handler 8 passed; action dispatch 5 passed; server/app typechecks passed.
+- Follow-up commit SHA is recorded in the completion message and progress file.

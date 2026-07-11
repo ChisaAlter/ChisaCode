@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView } from "react-nativ
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 import {
   createGenerativeFormState,
+  createGenerativeFormSubmissionController,
   generativeFormReducer,
 } from "@/generative-ui/components/generative-form-state";
 
@@ -189,13 +190,12 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
     for (const field of initialFields) initial[field.name] = "";
     return createGenerativeFormState(initial);
   });
-  const mountedRef = useRef(true);
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
+  const submissionControllerRef = useRef(createGenerativeFormSubmissionController());
+  useEffect(() => {
+    const controller = submissionControllerRef.current;
+    controller.mount();
+    return () => controller.unmount();
+  }, []);
 
   const handleChange = useCallback(
     (name: string, value: string) => {
@@ -206,7 +206,7 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
   );
 
   const handleSubmit = useCallback(async () => {
-    if (state.status === "submitting" || state.status === "submitted") return;
+    if (!submissionControllerRef.current.begin()) return;
     dispatch({ type: "submit_started" });
     let sent = false;
     try {
@@ -214,8 +214,10 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
     } catch {
       sent = false;
     }
-    if (mountedRef.current) dispatch({ type: "submit_resolved", sent });
-  }, [instanceId, sendAction, state.status, state.values]);
+    if (submissionControllerRef.current.complete(sent)) {
+      dispatch({ type: "submit_resolved", sent });
+    }
+  }, [instanceId, sendAction, state.values]);
 
   const disabled = state.status === "submitting" || state.status === "submitted";
   const submitButtonStyle = useMemo(

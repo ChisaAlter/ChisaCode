@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createGenerativeFormState, generativeFormReducer } from "./generative-form-state";
+import {
+  createGenerativeFormState,
+  createGenerativeFormSubmissionController,
+  generativeFormReducer,
+} from "./generative-form-state";
 
 describe("generativeFormReducer", () => {
   it("only enters submitted after a successful send", () => {
@@ -28,5 +32,40 @@ describe("generativeFormReducer", () => {
       value: "Grace",
     });
     expect(edited).toEqual({ status: "editable", values: { name: "Grace" }, error: null });
+  });
+});
+
+describe("GenerativeFormSubmissionController", () => {
+  it("allows only one synchronous begin before completion", () => {
+    const controller = createGenerativeFormSubmissionController();
+    controller.mount();
+    expect(controller.begin()).toBe(true);
+    expect(controller.begin()).toBe(false);
+  });
+
+  it("unlocks after false or rejection-equivalent completion and locks permanently after success", () => {
+    const controller = createGenerativeFormSubmissionController();
+    controller.mount();
+    expect(controller.begin()).toBe(true);
+    expect(controller.complete(false)).toBe(true);
+    expect(controller.begin()).toBe(true);
+    expect(controller.complete(false)).toBe(true);
+    expect(controller.begin()).toBe(true);
+    expect(controller.complete(true)).toBe(true);
+    expect(controller.begin()).toBe(false);
+  });
+
+  it("accepts completion after strict-effects remount and ignores completion while unmounted", () => {
+    const controller = createGenerativeFormSubmissionController();
+    controller.mount();
+    expect(controller.begin()).toBe(true);
+    controller.unmount();
+    controller.mount();
+    expect(controller.complete(false)).toBe(true);
+    expect(controller.begin()).toBe(true);
+    controller.unmount();
+    expect(controller.complete(false)).toBe(false);
+    controller.mount();
+    expect(controller.begin()).toBe(true);
   });
 });

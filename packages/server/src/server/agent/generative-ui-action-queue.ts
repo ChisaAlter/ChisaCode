@@ -33,6 +33,9 @@ interface AgentQueueState {
   dispatching: boolean;
 }
 
+function isUnavailableStatus(status: AgentStatus | undefined): boolean {
+  return status === undefined || status === "closed" || status === "error";
+}
 function createBatch(): ActionBatch {
   return { actions: [], changeIndexes: new Map(), closed: false };
 }
@@ -106,7 +109,7 @@ export class GenerativeUiActionQueue {
   private scheduleIfIdle(agentId: string, state: AgentQueueState): void {
     if (state.scheduled || state.dispatching || state.batches.length === 0) return;
     const status = this.options.getAgentStatus(agentId);
-    if (status !== "idle" && status !== undefined && status !== "closed") return;
+    if (status !== "idle" && !isUnavailableStatus(status)) return;
     state.scheduled = true;
     queueMicrotask(() => {
       state.scheduled = false;
@@ -118,8 +121,7 @@ export class GenerativeUiActionQueue {
     if (this.states.get(agentId) !== state || state.dispatching) return;
     const status = this.options.getAgentStatus(agentId);
     if (status !== "idle") {
-      if (status === undefined || status === "closed")
-        this.dropAll(agentId, state, "agent_unavailable");
+      if (isUnavailableStatus(status)) this.dropAll(agentId, state, "agent_unavailable");
       return;
     }
     const batch = state.batches.shift();
@@ -145,7 +147,7 @@ export class GenerativeUiActionQueue {
       return;
     }
     const nextStatus = this.options.getAgentStatus(agentId);
-    if (nextStatus === undefined || nextStatus === "closed") {
+    if (isUnavailableStatus(nextStatus)) {
       this.dropAll(agentId, state, "agent_unavailable");
       return;
     }

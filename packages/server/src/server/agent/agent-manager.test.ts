@@ -214,6 +214,10 @@ class TestAgentSession implements AgentSession {
     };
   }
 
+  failNextTurnWithDuplicateTerminal(): void {
+    this.failNextTurn = true;
+  }
+
   async startTurn(prompt: AgentPromptInput): Promise<{ turnId: string }> {
     this.startedPrompts.push(prompt);
     this.interrupted = false;
@@ -221,7 +225,19 @@ class TestAgentSession implements AgentSession {
     // Use setTimeout so events arrive after the caller sets up the foreground waiter
     setTimeout(() => {
       this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
-      this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+      if (this.failNextTurn) {
+        this.failNextTurn = false;
+        const failed = {
+          type: "turn_failed" as const,
+          provider: this.provider,
+          turnId,
+          error: "provider failure with private details",
+        };
+        this.pushEvent(failed);
+        this.pushEvent(failed);
+      } else {
+        this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+      }
       this.runtimeModel = "gpt-5.2-codex";
     }, 0);
     return { turnId };
@@ -6304,4 +6320,30 @@ test("enqueueGenerativeUiAction waits for the active turn terminal lifecycle bef
   await vi.waitFor(() => expect(client.sessions[0]?.startedPrompts).toHaveLength(2));
   expect(String(client.sessions[0]?.startedPrompts[1])).toContain('"action":"submit"');
   await manager.flush();
+});
+
+test("enqueueGenerativeUiAction clears a failed-turn batch without starting a follow-up", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-gen-ui-failed-test-"));
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000108",
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir });
+  client.sessions[0]?.failNextTurnWithDuplicateTerminal();
+  const activeRun = manager.runAgent(agent.id, "active turn");
+  await vi.waitFor(() => expect(client.sessions[0]?.startedPrompts).toHaveLength(1));
+
+  manager.enqueueGenerativeUiAction(agent.id, {
+    instanceId: "form-1",
+    action: "submit",
+    payload: { values: { secret: "do-not-log" } },
+    timestamp: 1,
+  });
+
+  await expect(activeRun).rejects.toThrow("provider failure");
+  await manager.flush();
+  expect(client.sessions[0]?.startedPrompts).toHaveLength(1);
+  expect(manager.getAgent(agent.id)?.lifecycle).toBe("error");
 });

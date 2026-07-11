@@ -40,3 +40,33 @@ export function generativeFormReducer(
         : { ...state, status: "error", error: "提交失败，请重试" };
   }
 }
+
+export interface GenerativeFormSubmissionController {
+  mount(): void;
+  unmount(): void;
+  begin(): boolean;
+  complete(sent: boolean): boolean;
+}
+
+/** Creates a synchronous submit lock with explicit mounted lifecycle tracking. */
+export function createGenerativeFormSubmissionController(): GenerativeFormSubmissionController {
+  let mounted = false;
+  let locked = false;
+  return {
+    mount() {
+      mounted = true;
+    },
+    unmount() {
+      mounted = false;
+    },
+    begin() {
+      if (!mounted || locked) return false;
+      locked = true;
+      return true;
+    },
+    complete(sent) {
+      if (!sent) locked = false;
+      return mounted;
+    },
+  };
+}

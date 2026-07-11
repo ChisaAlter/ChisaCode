@@ -121,6 +121,27 @@ describe("GenerativeUiActionQueue", () => {
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain("Grace");
   });
+  it("clears queued state once when a terminal event leaves the agent in error", async () => {
+    const logs: Array<Record<string, unknown>> = [];
+    const queue = new GenerativeUiActionQueue({
+      getAgentStatus: () => "error",
+      dispatchPrompt: async () => {
+        throw new Error("must not dispatch");
+      },
+      log: (metadata) => logs.push(metadata),
+    });
+
+    queue.enqueue("agent-1", action("submit", { secret: "do-not-log" }));
+    queue.onAgentTerminal("agent-1");
+    queue.onAgentTerminal("agent-1");
+    await flushMicrotasks();
+
+    expect(queue.hasPending("agent-1")).toBe(false);
+    expect(logs).toEqual([
+      expect.objectContaining({ agentId: "agent-1", actionCount: 1, reason: "agent_unavailable" }),
+    ]);
+    expect(JSON.stringify(logs)).not.toContain("do-not-log");
+  });
   it("clears queued state when the agent is removed before dispatch", async () => {
     const logs: Array<Record<string, unknown>> = [];
     const queue = new GenerativeUiActionQueue({
