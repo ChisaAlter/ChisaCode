@@ -64,7 +64,7 @@ function createMockTransport() {
   return {
     transport,
     sent,
-    triggerOpen: (options?: { preserveSent?: boolean }) => {
+    triggerOpen: (options?: { preserveSent?: boolean; features?: Record<string, boolean> }) => {
       onOpen();
       if (!options?.preserveSent) {
         // Ignore HELLO handshake payloads in assertions.
@@ -80,6 +80,7 @@ function createMockTransport() {
               serverId: `srv_test_${serverInfoOrdinal++}`,
               hostname: null,
               version: null,
+              ...(options?.features ? { features: options.features } : {}),
             },
           },
         }),
@@ -255,6 +256,7 @@ test("advertises client capabilities in hello", async () => {
     protocolVersion: 1,
     capabilities: {
       custom_mode_icons: true,
+      generative_ui: true,
       reasoning_merge_enum: true,
     },
   });
@@ -4115,4 +4117,78 @@ test("waitForFinish with timeout=0 omits timeoutMs and has no client deadline", 
   } finally {
     vi.useRealTimers();
   }
+});
+
+test("hello advertises generative UI capability", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_gen_ui_hello",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ preserveSent: true, features: { generativeUi: true } });
+  await connectPromise;
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toMatchObject({
+    type: "hello",
+    capabilities: { generative_ui: true },
+  });
+});
+
+test.each([undefined, false])(
+  "sendGenerativeUiAction rejects before transport when server feature is %s",
+  async (generativeUi) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_gen_ui_gate",
+      logger: createMockLogger(),
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+
+    const connectPromise = client.connect();
+    mock.triggerOpen({
+      features: generativeUi === undefined ? {} : { generativeUi },
+    });
+    await connectPromise;
+
+    await expect(
+      client.sendGenerativeUiAction("agent-1", "instance-1", "submit", null),
+    ).rejects.toThrow("generative UI");
+    expect(mock.sent).toHaveLength(0);
+  },
+);
+
+test("sendGenerativeUiAction sends canonical request when server explicitly supports it", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_gen_ui_send",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { generativeUi: true } });
+  await connectPromise;
+
+  const pending = client.sendGenerativeUiAction("agent-1", "instance-1", "submit", { ok: true });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request.type).toBe("generative_ui.action.request");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "generative_ui.action.response",
+      payload: { requestId: request.requestId, received: true, error: null },
+    }),
+  );
+  await expect(pending).resolves.toBeUndefined();
 });

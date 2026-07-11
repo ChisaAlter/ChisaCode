@@ -5,7 +5,7 @@ import pMemoize from "p-memoize";
 import { basename } from "path";
 import { z } from "zod";
 import type { ToolSet } from "ai";
-import type { ClientCapability } from "@chisacode/protocol/client-capabilities";
+import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
@@ -63,7 +63,11 @@ import {
   resolveStructuredGenerationProviders,
   type StructuredGenerationDaemonConfig,
 } from "./agent/structured-generation-providers.js";
-import { getAgentStreamEventTurnId, type AgentSessionConfig } from "./agent/agent-sdk-types.js";
+import {
+  getAgentStreamEventTurnId,
+  type AgentSessionConfig,
+  type AgentStreamEvent,
+} from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import {
@@ -862,6 +866,13 @@ export class Session {
           return;
         }
 
+        if (
+          !this.supports(CLIENT_CAPS.generativeUi) &&
+          this.isGenerativeUiStreamEvent(event.event)
+        ) {
+          return;
+        }
+
         const serializedEvent = serializeAgentStreamEvent(event.event);
         if (!serializedEvent) {
           return;
@@ -905,6 +916,14 @@ export class Session {
         // Title updates may be applied asynchronously after agent creation.
       },
       { replayState: false },
+    );
+  }
+
+  private isGenerativeUiStreamEvent(event: AgentStreamEvent): boolean {
+    return (
+      event.type === "generative_ui_update" ||
+      event.type === "generative_ui_remove" ||
+      (event.type === "timeline" && event.item.type === "generative_ui")
     );
   }
 

@@ -796,4 +796,16 @@ describe("relay external socket reconnect behavior", () => {
 
     await server.close();
   });
+
+  test("advertises generative UI support in server_info", async () => {
+    const server = createServer();
+    const socket = new MockSocket();
+    const serverInfo = await attachRelayAndHello({
+      server,
+      socket,
+      clientId: "cid-gen-ui-feature",
+    });
+    expect(serverInfo.features?.generativeUi).toBe(true);
+    await server.close();
+  });
 });

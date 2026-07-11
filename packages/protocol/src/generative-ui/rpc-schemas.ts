@@ -3,8 +3,7 @@ import { z } from "zod";
 /**
  * App → Server: User interaction callback for generative UI components.
  */
-export const GenerativeUiActionRequestSchema = z.object({
-  type: z.literal("generative_ui.action"),
+const GenerativeUiActionRequestPayloadShape = {
   requestId: z.string(),
   /** Target agent session */
   agentId: z.string(),
@@ -16,6 +15,17 @@ export const GenerativeUiActionRequestSchema = z.object({
   payload: z.unknown(),
   /** Event timestamp (client-side) */
   timestamp: z.number(),
+};
+
+export const GenerativeUiActionRequestSchema = z.object({
+  type: z.literal("generative_ui.action.request"),
+  ...GenerativeUiActionRequestPayloadShape,
+});
+
+// COMPAT(generativeUiActionFlatRpc): added in v0.1.101; remove after 2027-01-11 once the client floor is >= v0.1.101.
+export const LegacyGenerativeUiActionRequestSchema = z.object({
+  type: z.literal("generative_ui.action"),
+  ...GenerativeUiActionRequestPayloadShape,
 });
 
 /**
@@ -29,3 +39,12 @@ export const GenerativeUiActionResponseSchema = z.object({
     error: z.string().nullable(),
   }),
 });
+
+/** Canonical generative UI action request sent by current clients. */
+export type GenerativeUiActionRequest = z.infer<typeof GenerativeUiActionRequestSchema>;
+
+/** Legacy flat generative UI action request accepted during the compatibility window. */
+export type LegacyGenerativeUiActionRequest = z.infer<typeof LegacyGenerativeUiActionRequestSchema>;
+
+/** Generative UI action acknowledgement returned for canonical and legacy requests. */
+export type GenerativeUiActionResponse = z.infer<typeof GenerativeUiActionResponseSchema>;

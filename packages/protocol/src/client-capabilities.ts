@@ -5,6 +5,7 @@ export const CLIENT_CAPS = {
   // outside the legacy set to "ShieldCheck" when this cap is absent. Drop the
   // gate when floor >= v0.1.84.
   customModeIcons: "custom_mode_icons",
+  generativeUi: "generative_ui",
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPS)[keyof typeof CLIENT_CAPS];

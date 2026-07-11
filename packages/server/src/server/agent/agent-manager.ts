@@ -72,7 +72,6 @@ import { IMPORTABLE_PROVIDERS } from "./provider-registry.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { generateComponentPromptSection } from "@chisacode/protocol/generative-ui/component-manifest";
-import { detectGenerativeUiFences } from "./generative-ui-fence-detector.js";
 import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
@@ -501,23 +500,6 @@ export class AgentManager {
       onFlush: ({ agentId, item, provider, turnId }) => {
         const event = this.recordAndDispatchTimelineItem(agentId, item, provider, turnId);
         this.notifyForegroundTurnWaiters(agentId, event);
-
-        // 检测 coalesced 文本中的 chisacode-ui fence block，发出对应的 generative_ui timeline item
-        if (item.type === "assistant_message") {
-          const fences = detectGenerativeUiFences(item.text);
-          for (const fence of fences) {
-            const genUiItem: AgentTimelineItem &
-              Extract<AgentTimelineItem, { type: "generative_ui" }> = {
-              type: "generative_ui",
-              instanceId: `genui_${this.idFactory()}`,
-              componentId: fence.componentId,
-              props: fence.props,
-              source: "fence",
-              status: "rendering",
-            };
-            this.recordAndDispatchTimelineItem(agentId, genUiItem, provider, turnId);
-          }
-        }
       },
     });
     this.updateProviderRegistry({

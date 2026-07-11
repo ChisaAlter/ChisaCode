@@ -11,13 +11,20 @@ import {
   type SessionOutboundMessage,
 } from "@chisacode/protocol/messages";
 import { Session, type SessionOptions } from "./session.js";
+import { GenerativeUiHandler } from "./session-handlers/generative-ui-handler.js";
+import type { GenerativeUiHandlerContext } from "./session-handlers/session-context.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
-import type { AgentTimelineRow } from "./agent/agent-manager.js";
+import type { AgentManagerEvent, AgentTimelineRow } from "./agent/agent-manager.js";
 import { handleCreateChisaCodeWorktreeRequest } from "./worktree-session.js";
+
+const LegacyAgentTimelineItemPayloadSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("reasoning"), text: z.string() }),
+  z.object({ type: z.literal("assistant_message"), text: z.string() }),
+]);
 
 const LegacyTimelineEntryPayloadSchema = z.object({
   provider: z.enum(["claude", "codex", "opencode"]),
-  item: AgentTimelineItemPayloadSchema,
+  item: LegacyAgentTimelineItemPayloadSchema,
   timestamp: z.string(),
   seqStart: z.number().int().nonnegative(),
   seqEnd: z.number().int().nonnegative(),
@@ -74,7 +81,13 @@ const LegacyAgentSnapshotPayloadSchema = AgentSnapshotPayloadSchema.extend({
 });
 
 class InMemoryAgentManager {
+  private subscriber: ((event: AgentManagerEvent) => void) | null = null;
+
   constructor(private readonly rows: AgentTimelineRow[]) {}
+
+  emitEvent(event: AgentManagerEvent) {
+    this.subscriber?.(event);
+  }
 
   getAgent() {
     return {
@@ -137,8 +150,11 @@ class InMemoryAgentManager {
     return [];
   }
 
-  subscribe() {
-    return () => {};
+  subscribe(callback: (event: AgentManagerEvent) => void) {
+    this.subscriber = callback;
+    return () => {
+      this.subscriber = null;
+    };
   }
 }
 
@@ -205,9 +221,11 @@ class InMemoryWorktreeWorkflow {
 function createSessionForWireCompatTest(options?: {
   clientCapabilities?: Record<string, unknown> | null;
   messages?: SessionOutboundMessage[];
+  rows?: AgentTimelineRow[];
+  manager?: InMemoryAgentManager;
 }): Session {
   const messages = options?.messages ?? [];
-  const rows: AgentTimelineRow[] = [
+  const rows: AgentTimelineRow[] = options?.rows ?? [
     {
       seq: 1,
       timestamp: "2026-05-02T00:00:00.000Z",
@@ -233,7 +251,8 @@ function createSessionForWireCompatTest(options?: {
     downloadTokenStore: {} as SessionOptions["downloadTokenStore"],
     pushTokenStore: {} as SessionOptions["pushTokenStore"],
     chisacodeHome: "/tmp/chisacode-home",
-    agentManager: new InMemoryAgentManager(rows) as unknown as SessionOptions["agentManager"],
+    agentManager: (options?.manager ??
+      new InMemoryAgentManager(rows)) as unknown as SessionOptions["agentManager"],
     agentStorage: new EmptyAgentStorage() as unknown as SessionOptions["agentStorage"],
     projectRegistry: new EmptyProjectRegistry() as unknown as SessionOptions["projectRegistry"],
     workspaceRegistry:
@@ -545,4 +564,151 @@ describe("wire compatibility", () => {
       chisacodeHome: "/tmp/chisacode-home",
     });
   });
+});
+
+describe("generative UI wire capability", () => {
+  const fenceText = '```chisacode-ui component=table\n{"rows":[]}\n```';
+  const genUiRow: AgentTimelineRow = {
+    seq: 4,
+    timestamp: "2026-05-02T00:00:00.300Z",
+    item: {
+      type: "generative_ui",
+      instanceId: "gen-ui-1",
+      componentId: "table",
+      props: { rows: [] },
+      source: "tool_call",
+      status: "interactive",
+    },
+  };
+
+  test("legacy timeline schema parses responses without generative UI rows", async () => {
+    const rows: AgentTimelineRow[] = [
+      {
+        seq: 1,
+        timestamp: "2026-05-02T00:00:00.000Z",
+        item: { type: "assistant_message", text: fenceText },
+      },
+      genUiRow,
+    ];
+    const messages: SessionOutboundMessage[] = [];
+    const session = createSessionForWireCompatTest({ rows, messages });
+
+    await session.handleMessage({
+      type: "fetch_agent_timeline_request",
+      requestId: "req-gen-ui-legacy",
+      agentId: "agent-1",
+      projection: "canonical",
+    });
+
+    const response = messages.find((message) => message.type === "fetch_agent_timeline_response");
+    expect(response?.type).toBe("fetch_agent_timeline_response");
+    if (response?.type !== "fetch_agent_timeline_response") throw new Error("missing response");
+    expect(LegacyFetchAgentTimelineResponseMessageSchema.safeParse(response).success).toBe(true);
+    expect(response.payload.entries.map((entry) => entry.item.type)).toEqual(["assistant_message"]);
+    expect(response.payload.entries[0]?.item).toEqual({
+      type: "assistant_message",
+      text: fenceText,
+    });
+  });
+
+  test("capable clients receive explicit generative UI timeline rows", async () => {
+    const rows: AgentTimelineRow[] = [genUiRow];
+    const messages: SessionOutboundMessage[] = [];
+    const session = createSessionForWireCompatTest({
+      rows,
+      messages,
+      clientCapabilities: { [CLIENT_CAPS.generativeUi]: true },
+    });
+
+    await session.handleMessage({
+      type: "fetch_agent_timeline_request",
+      requestId: "req-gen-ui-new",
+      agentId: "agent-1",
+      projection: "canonical",
+    });
+
+    const response = messages.find((message) => message.type === "fetch_agent_timeline_response");
+    expect(response?.type).toBe("fetch_agent_timeline_response");
+    if (response?.type !== "fetch_agent_timeline_response") throw new Error("missing response");
+    expect(response.payload.entries.map((entry) => entry.item.type)).toEqual(["generative_ui"]);
+  });
+
+  test("legacy sessions suppress live explicit generative UI creation rows", () => {
+    const messages: SessionOutboundMessage[] = [];
+    const manager = new InMemoryAgentManager([]);
+    createSessionForWireCompatTest({ manager, messages });
+    manager.emitEvent({
+      type: "agent_stream",
+      agentId: "agent-1",
+      epoch: "epoch-1",
+      seq: 1,
+      event: { type: "timeline", item: genUiRow.item, provider: "codex" },
+    });
+    expect(messages).toHaveLength(0);
+  });
+
+  test.each(["generative_ui_update", "generative_ui_remove"] as const)(
+    "legacy sessions suppress live %s events",
+    (eventType) => {
+      const messages: SessionOutboundMessage[] = [];
+      const manager = new InMemoryAgentManager([]);
+      createSessionForWireCompatTest({ manager, messages });
+      manager.emitEvent({
+        type: "agent_stream",
+        agentId: "agent-1",
+        epoch: "epoch-1",
+        seq: 1,
+        event:
+          eventType === "generative_ui_update"
+            ? { type: eventType, instanceId: "gen-ui-1", props: {}, provider: "codex" }
+            : { type: eventType, instanceId: "gen-ui-1", provider: "codex" },
+      });
+      expect(messages).toHaveLength(0);
+    },
+  );
+});
+
+describe("generative UI RPC routing compatibility", () => {
+  test.each(["generative_ui.action.request", "generative_ui.action"] as const)(
+    "routes %s to the shared response contract",
+    async (type) => {
+      const emitted: Record<string, unknown>[] = [];
+      const prompts: string[] = [];
+      const context = {
+        clientId: "client-1",
+        sessionId: "session-1",
+        sessionLogger: pino({ level: "silent" }),
+        chisacodeHome: "/tmp/chisacode",
+        appVersion: null,
+        abortController: new AbortController(),
+        emit: (message: Record<string, unknown>) => emitted.push(message),
+        emitBinary: () => {},
+        hasBinaryChannel: () => false,
+        supports: () => true,
+        getAgent: () => ({ status: "idle" }),
+        sendPromptToAgent: async (_agentId: string, text: string) => {
+          prompts.push(text);
+        },
+      } as GenerativeUiHandlerContext;
+      const handler = new GenerativeUiHandler(context);
+
+      await handler.dispatch({
+        type,
+        requestId: "req-action",
+        agentId: "agent-1",
+        instanceId: "instance-1",
+        action: "submit",
+        payload: null,
+        timestamp: 1719700000000,
+      });
+
+      expect(prompts).toHaveLength(1);
+      expect(emitted).toEqual([
+        {
+          type: "generative_ui.action.response",
+          payload: { requestId: "req-action", received: true, error: null },
+        },
+      ]);
+    },
+  );
 });

@@ -256,7 +256,7 @@ afterEach(() => {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe("AgentManager generative UI integration", () => {
-  test("T1: emits generative_ui timeline item when fence is in coalesced text", async () => {
+  test("T1: keeps a chisacode-ui fence in exactly one assistant timeline row", async () => {
     vi.useFakeTimers();
     const harness = createHarness();
     activeHarnasses.push(harness);
@@ -270,19 +270,7 @@ describe("AgentManager generative UI integration", () => {
     const rows = await harness.manager.getTimelineRows(agentId);
     const items = getTimelineItems(rows);
 
-    // Should have both assistant_message and generative_ui
-    const genUiItems = items.filter((item) => item.type === "generative_ui");
-    expect(genUiItems).toHaveLength(1);
-    if (genUiItems[0]?.type === "generative_ui") {
-      expect(genUiItems[0].componentId).toBe("line_chart");
-      expect(genUiItems[0].source).toBe("fence");
-      expect(genUiItems[0].status).toBe("rendering");
-      expect(genUiItems[0].props).toEqual({
-        xAxis: "month",
-        yAxis: "sales",
-        data: [{ month: "Jan", sales: 10 }],
-      });
-    }
+    expect(items).toEqual([{ type: "assistant_message", text }]);
   });
 
   test("T2: does not emit gen_ui when no chisacode-ui fence is present", async () => {
@@ -303,7 +291,7 @@ describe("AgentManager generative UI integration", () => {
     expect(items.filter((item) => item.type === "generative_ui")).toHaveLength(0);
   });
 
-  test("T3: emits multiple generative_ui items for multiple fences in one message", async () => {
+  test("T3: multiple fences remain in one assistant timeline row", async () => {
     vi.useFakeTimers();
     const harness = createHarness();
     activeHarnasses.push(harness);
@@ -319,19 +307,8 @@ describe("AgentManager generative UI integration", () => {
     await vi.advanceTimersByTimeAsync(COALESCE_WINDOW_MS + 1);
 
     const rows = await harness.manager.getTimelineRows(agentId);
-    const items = getTimelineItems(rows).filter((item) => item.type === "generative_ui");
-
-    expect(items).toHaveLength(2);
-    const genUi0 = items[0];
-    const genUi1 = items[1];
-    expect(genUi0?.type).toBe("generative_ui");
-    if (genUi0?.type === "generative_ui") {
-      expect(genUi0.componentId).toBe("line_chart");
-    }
-    expect(genUi1?.type).toBe("generative_ui");
-    if (genUi1?.type === "generative_ui") {
-      expect(genUi1.componentId).toBe("bar_chart");
-    }
+    const items = getTimelineItems(rows);
+    expect(items).toEqual([{ type: "assistant_message", text }]);
   });
 
   test("T4: does not emit gen_ui for broken or incomplete fence", async () => {
@@ -353,7 +330,7 @@ describe("AgentManager generative UI integration", () => {
     expect(items.filter((item) => item.type === "generative_ui")).toHaveLength(0);
   });
 
-  test("T5: generative_ui item has all required fields", async () => {
+  test("T5: a valid fence does not create a second timeline item", async () => {
     vi.useFakeTimers();
     const harness = createHarness();
     activeHarnasses.push(harness);
@@ -371,19 +348,10 @@ describe("AgentManager generative UI integration", () => {
 
     const rows = await harness.manager.getTimelineRows(agentId);
     const items = getTimelineItems(rows);
-    const genUi = items.find((item) => item.type === "generative_ui");
-    expect(genUi).toBeDefined();
-    if (genUi?.type === "generative_ui") {
-      expect(typeof genUi.instanceId).toBe("string");
-      expect(genUi.instanceId.length).toBeGreaterThan(0);
-      expect(genUi.componentId).toBe("table");
-      expect(genUi.source).toBe("fence");
-      expect(genUi.status).toBe("rendering");
-      expect(genUi.props).toEqual(props);
-    }
+    expect(items).toEqual([{ type: "assistant_message", text }]);
   });
 
-  test("T6: gen_ui timeline event is broadcast in agent_stream subscription", async () => {
+  test("T6: fence streaming broadcasts only the assistant timeline event", async () => {
     vi.useFakeTimers();
     const harness = createHarness();
     activeHarnasses.push(harness);
@@ -394,14 +362,15 @@ describe("AgentManager generative UI integration", () => {
     await waitForSessionEventQueue();
     await vi.advanceTimersByTimeAsync(COALESCE_WINDOW_MS + 1);
 
-    // Check stream events broadcast to subscribers
     const streamEvents = harness.events.filter(
       (event) =>
         event.type === "agent_stream" &&
         event.agentId === agentId &&
-        event.event.type === "timeline" &&
-        event.event.item.type === "generative_ui",
+        event.event.type === "timeline",
     );
     expect(streamEvents).toHaveLength(1);
+    if (streamEvents[0]?.event.type === "timeline") {
+      expect(streamEvents[0].event.item).toEqual({ type: "assistant_message", text });
+    }
   });
 });

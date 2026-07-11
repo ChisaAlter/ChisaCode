@@ -62,6 +62,7 @@ import { AgentPresetSchema, AgentPresetsPayloadSchema } from "@chisacode/protoco
 import {
   GenerativeUiActionRequestSchema,
   GenerativeUiActionResponseSchema,
+  LegacyGenerativeUiActionRequestSchema,
 } from "@chisacode/protocol/generative-ui/rpc-schemas";
 import {
   ChisaCodeConfigRawSchema,
@@ -2359,6 +2360,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DiagnosticsRequestSchema,
   WorkspaceCreateRequestSchema,
   GenerativeUiActionRequestSchema,
+  // COMPAT(generativeUiActionFlatRpc): added in v0.1.101; remove after 2027-01-11 once the client floor is >= v0.1.101.
+  LegacyGenerativeUiActionRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -2551,6 +2554,7 @@ export const ServerInfoStatusPayloadSchema = z
         providerUsageList: z.boolean().optional(),
         // COMPAT(daemonDiagnostics): added in v0.1.100, remove gate after 2026-12-25 once daemon floor >= v0.1.100.
         daemonDiagnostics: z.boolean().optional(),
+        generativeUi: z.boolean().optional(),
       })
       .optional(),
   })
@@ -5127,6 +5131,7 @@ export const WSHelloMessageSchema = z.object({
       pushNotifications: z.boolean().optional(),
       [CLIENT_CAPS.reasoningMergeEnum]: z.boolean().optional(),
       [CLIENT_CAPS.customModeIcons]: z.boolean().optional(),
+      [CLIENT_CAPS.generativeUi]: z.boolean().optional(),
     })
     .passthrough()
     .optional(),

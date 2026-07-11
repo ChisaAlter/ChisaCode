@@ -247,3 +247,11 @@
 ---
 
 _最后更新 2026-06-28 · 版本 v2.0 — 已归档_
+
+### Task 5 GenUI wire compatibility 与单一渲染源（2026-07-11 完成）
+
+- **问题**：GenUI fence 同时持久化为 `assistant_message` 与第二条 `generative_ui` row，旧客户端还可能收到无法理解的历史/实时 GenUI wire；action RPC 使用 flat request 名且没有双向 capability/feature gate。
+- **影响范围**：`packages/protocol`、`packages/client`、`packages/server` 的 hello/server-info、timeline、agent stream、GenUI action RPC。
+- **解决**：新增 `CLIENT_CAPS.generativeUi` 与可选 `server_info.features.generativeUi`；新客户端只发送 `generative_ui.action.request`，daemon 在兼容窗口继续接受 flat `generative_ui.action` 并统一返回 `.response`；无 capability 的 session 过滤显式 GenUI timeline/live 事件但保留原始 assistant fence；移除 AgentManager fence 自动追加第二 row 的路径。
+- **兼容窗口**：`COMPAT(generativeUiActionFlatRpc)` 自 v0.1.101 起保留，client floor >= v0.1.101 且不早于 2027-01-11 时移除。
+- **状态**：已完成，提交见 `codex/comprehensive-audit-fixes` Task 5 commit。

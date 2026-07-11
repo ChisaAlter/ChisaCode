@@ -2349,9 +2349,16 @@ export class DaemonClient {
     payload: unknown,
     options?: { timeout?: number },
   ): Promise<void> {
+    if (this.lastServerInfoMessage?.features?.generativeUi !== true) {
+      throw new DaemonRpcError({
+        requestId: "",
+        error: "generative UI actions are not supported by this server",
+        requestType: "generative_ui.action.request",
+      });
+    }
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "generative_ui.action",
+      type: "generative_ui.action.request",
       requestId,
       agentId,
       instanceId,
@@ -2374,7 +2381,7 @@ export class DaemonClient {
       throw new DaemonRpcError({
         requestId,
         error: result.error ?? "generative_ui.action rejected",
-        requestType: "generative_ui.action",
+        requestType: "generative_ui.action.request",
       });
     }
   }
@@ -4598,6 +4605,7 @@ export class DaemonClient {
           capabilities: {
             [CLIENT_CAPS.customModeIcons]: true,
             [CLIENT_CAPS.reasoningMergeEnum]: true,
+            [CLIENT_CAPS.generativeUi]: true,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
         }),

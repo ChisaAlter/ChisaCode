@@ -22,6 +22,8 @@ export class GenerativeUiHandler implements DisposableHandler {
 
   async dispatch(msg: SessionInboundMessage): Promise<undefined> {
     switch (msg.type) {
+      case "generative_ui.action.request":
+      // COMPAT(generativeUiActionFlatRpc): added in v0.1.101; remove after 2027-01-11 once the client floor is >= v0.1.101.
       case "generative_ui.action":
         await this.handleUiAction(msg);
         return undefined;
@@ -31,7 +33,10 @@ export class GenerativeUiHandler implements DisposableHandler {
   }
 
   private async handleUiAction(
-    msg: Extract<SessionInboundMessage, { type: "generative_ui.action" }>,
+    msg: Extract<
+      SessionInboundMessage,
+      { type: "generative_ui.action" | "generative_ui.action.request" }
+    >,
   ): Promise<void> {
     const { requestId, agentId, instanceId, action, payload, timestamp } = msg;
 

@@ -1043,6 +1043,7 @@ export class VoiceAssistantWebSocketServer {
         agentSkillManagement: true,
         // COMPAT(agentMcpServerManagement): added in v0.1.X, remove gate when all clients support it.
         agentMcpServerManagement: true,
+        generativeUi: true,
       },
     };
   }

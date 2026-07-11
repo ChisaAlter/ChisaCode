@@ -581,17 +581,23 @@ export class AgentLifecycleHandler implements DisposableHandler {
           endCursor,
           hasOlder,
           hasNewer,
-          entries: entries.map((entry) => ({
-            provider: snapshot.provider,
-            item: entry.item,
-            timestamp: entry.timestamp,
-            seqStart: entry.seqStart,
-            seqEnd: entry.seqEnd,
-            sourceSeqRanges: entry.sourceSeqRanges,
-            collapsed: this.context.supports(CLIENT_CAPS.reasoningMergeEnum)
-              ? entry.collapsed
-              : entry.collapsed.filter((value) => value !== "reasoning_merge"),
-          })),
+          entries: entries
+            .filter(
+              (entry) =>
+                this.context.supports(CLIENT_CAPS.generativeUi) ||
+                entry.item.type !== "generative_ui",
+            )
+            .map((entry) => ({
+              provider: snapshot.provider,
+              item: entry.item,
+              timestamp: entry.timestamp,
+              seqStart: entry.seqStart,
+              seqEnd: entry.seqEnd,
+              sourceSeqRanges: entry.sourceSeqRanges,
+              collapsed: this.context.supports(CLIENT_CAPS.reasoningMergeEnum)
+                ? entry.collapsed
+                : entry.collapsed.filter((value) => value !== "reasoning_merge"),
+            })),
           error: null,
         },
       });
