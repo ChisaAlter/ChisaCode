@@ -39,8 +39,19 @@ interface TestLinuxOperations {
   signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
 }
 
+interface TestPosixProcessTable {
+  complete: boolean;
+  records: Map<number, LinuxProcessSelectionRecord>;
+}
+
 interface TestPosixOperations {
-  readProcessTable(cleanupSignal?: AbortSignal): Promise<Map<number, LinuxProcessSelectionRecord>>;
+  readProcessTable(cleanupSignal?: AbortSignal): Promise<TestPosixProcessTable>;
+  signal(pid: number, signal: NodeJS.Signals): void;
+  signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
+}
+
+interface TestPosixOutputOperations {
+  readProcessTableOutput(cleanupSignal?: AbortSignal): Promise<string>;
   signal(pid: number, signal: NodeJS.Signals): void;
   signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
 }
@@ -897,7 +908,7 @@ describe("terminateWithTreeKill", () => {
   test.each(["unreadable", "identity-mismatch"] as const)(
     "fails closed before generic POSIX signaling when process-table revalidation is %s",
     async (failureMode) => {
-      const processTable = createLinuxSnapshotTopology();
+      const processTable = createTestPosixProcessTable(createLinuxSnapshotTopology());
       const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
       const groupSignals: Array<{ processGroupId: number; signal: NodeJS.Signals }> = [];
       const fallbackSignals: Array<NodeJS.Signals | number> = [];
@@ -920,11 +931,13 @@ describe("terminateWithTreeKill", () => {
           if (failureMode === "unreadable") {
             throw new Error("ps failed");
           }
-          return new Map(
-            [...processTable].map(([pid, process]) => [
-              pid,
-              pid === 100 ? { ...process, identity: "ps-start:reused" } : process,
-            ]),
+          return createTestPosixProcessTable(
+            new Map(
+              [...processTable.records].map(([pid, process]) => [
+                pid,
+                pid === 100 ? { ...process, identity: "ps-start:reused" } : process,
+              ]),
+            ),
           );
         },
         signal(pid, signal) {
@@ -955,6 +968,224 @@ describe("terminateWithTreeKill", () => {
       expect(fallbackSignals).toEqual(["SIGTERM"]);
     },
   );
+
+  test("fails closed when a generic POSIX signal refresh is incomplete", async () => {
+    const rootTable = createTestPosixProcessTable(createSinglePosixRootTable());
+    const incompleteTable = createTestPosixProcessTable(new Map(), false);
+    const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    const groupSignals: Array<{ processGroupId: number; signal: NodeJS.Signals }> = [];
+    const fallbackSignals: Array<NodeJS.Signals | number> = [];
+    let readCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill(signal: NodeJS.Signals | number = "SIGTERM") {
+        fallbackSignals.push(signal);
+        this.exitCode = 0;
+        return true;
+      },
+    };
+    const posixOperations: TestPosixOperations = {
+      async readProcessTable() {
+        readCount += 1;
+        return readCount === 1 ? rootTable : incompleteTable;
+      },
+      signal(pid, signal) {
+        pidSignals.push({ pid, signal });
+      },
+      signalProcessGroup(processGroupId, signal) {
+        groupSignals.push({ processGroupId, signal });
+      },
+    };
+    const options = {
+      gracefulTimeoutMs: 0,
+      ownership: { launchedAtMs: 1_000, rootPid: 42 },
+      posixOperations,
+    } as Parameters<typeof terminateWithTreeKill>[1] & {
+      posixOperations: TestPosixOperations;
+    };
+
+    const result = await terminateWithTreeKill(child, options);
+
+    expect(result).toBe("kill-timeout");
+    expect(readCount).toBe(2);
+    expect(pidSignals).toEqual([]);
+    expect(groupSignals).toEqual([]);
+    expect(fallbackSignals).toEqual(["SIGTERM"]);
+  });
+
+  test.each([
+    {
+      label: "a malformed non-empty row",
+      refreshOutput: "7 1 7 Mon Jul 11 20:00:01 2026\nmalformed process row\n",
+    },
+    { label: "empty output", refreshOutput: "\n" },
+  ])("fails closed when the production POSIX parser sees $label", async ({ refreshOutput }) => {
+    const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    const groupSignals: Array<{ processGroupId: number; signal: NodeJS.Signals }> = [];
+    const fallbackSignals: Array<NodeJS.Signals | number> = [];
+    let readCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill(signal: NodeJS.Signals | number = "SIGTERM") {
+        fallbackSignals.push(signal);
+        this.exitCode = 0;
+        return true;
+      },
+    };
+    const posixOperations: TestPosixOutputOperations = {
+      async readProcessTableOutput() {
+        readCount += 1;
+        return readCount === 1 ? "42 1 42 Mon Jul 11 20:00:00 2026\n" : refreshOutput;
+      },
+      signal(pid, signal) {
+        pidSignals.push({ pid, signal });
+      },
+      signalProcessGroup(processGroupId, signal) {
+        groupSignals.push({ processGroupId, signal });
+      },
+    };
+    const options = {
+      gracefulTimeoutMs: 0,
+      ownership: { launchedAtMs: 1_000, rootPid: 42 },
+      posixOperations,
+    } as Parameters<typeof terminateWithTreeKill>[1] & {
+      posixOperations: TestPosixOutputOperations;
+    };
+
+    const result = await terminateWithTreeKill(child, options);
+
+    expect(result).toBe("kill-timeout");
+    expect(readCount).toBe(2);
+    expect(pidSignals).toEqual([]);
+    expect(groupSignals).toEqual([]);
+    expect(fallbackSignals).toEqual(["SIGTERM"]);
+  });
+
+  test("retains a generic POSIX survivor after an incomplete poll and force-signals after a complete refresh", async () => {
+    const rootTable = createTestPosixProcessTable(createSinglePosixRootTable());
+    const incompleteTable = createTestPosixProcessTable(new Map(), false);
+    const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let readCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        throw new Error("raw fallback was not expected");
+      },
+    };
+    const posixOperations: TestPosixOperations = {
+      async readProcessTable() {
+        readCount += 1;
+        return readCount === 3 ? incompleteTable : rootTable;
+      },
+      signal(pid, signal) {
+        pidSignals.push({ pid, signal });
+      },
+      signalProcessGroup() {
+        throw new Error("process-group signaling was not expected");
+      },
+    };
+    const options = {
+      gracefulTimeoutMs: 0,
+      ownership: { launchedAtMs: 1_000, rootPid: 42 },
+      posixOperations,
+    } as Parameters<typeof terminateWithTreeKill>[1] & {
+      posixOperations: TestPosixOperations;
+    };
+
+    const result = await terminateWithTreeKill(child, options);
+
+    expect(result).toBe("killed");
+    expect(readCount).toBe(4);
+    expect(pidSignals).toEqual([
+      { pid: 42, signal: "SIGTERM" },
+      { pid: 42, signal: "SIGKILL" },
+    ]);
+  });
+
+  test("fails closed before generic POSIX force signaling when the refresh remains incomplete", async () => {
+    const rootTable = createTestPosixProcessTable(createSinglePosixRootTable());
+    const incompleteTable = createTestPosixProcessTable(new Map(), false);
+    const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    const fallbackSignals: Array<NodeJS.Signals | number> = [];
+    let readCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill(signal: NodeJS.Signals | number = "SIGTERM") {
+        fallbackSignals.push(signal);
+        this.exitCode = 0;
+        return true;
+      },
+    };
+    const posixOperations: TestPosixOperations = {
+      async readProcessTable() {
+        readCount += 1;
+        return readCount <= 2 ? rootTable : incompleteTable;
+      },
+      signal(pid, signal) {
+        pidSignals.push({ pid, signal });
+      },
+      signalProcessGroup() {
+        throw new Error("process-group signaling was not expected");
+      },
+    };
+    const options = {
+      gracefulTimeoutMs: 0,
+      ownership: { launchedAtMs: 1_000, rootPid: 42 },
+      posixOperations,
+    } as Parameters<typeof terminateWithTreeKill>[1] & {
+      posixOperations: TestPosixOperations;
+    };
+
+    const result = await terminateWithTreeKill(child, options);
+
+    expect(result).toBe("kill-timeout");
+    expect(readCount).toBe(4);
+    expect(pidSignals).toEqual([{ pid: 42, signal: "SIGTERM" }]);
+    expect(fallbackSignals).toEqual(["SIGTERM"]);
+  });
+
+  test("allows a complete generic POSIX table to confirm the tracked root is gone", async () => {
+    const rootTable = createTestPosixProcessTable(createSinglePosixRootTable());
+    const completeTableWithoutRoot = createTestPosixProcessTable(createSinglePosixProcessTable(7));
+    const pidSignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let readCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        throw new Error("raw fallback was not expected");
+      },
+    };
+    const posixOperations: TestPosixOperations = {
+      async readProcessTable() {
+        readCount += 1;
+        return readCount === 1 ? rootTable : completeTableWithoutRoot;
+      },
+      signal(pid, signal) {
+        pidSignals.push({ pid, signal });
+      },
+      signalProcessGroup() {
+        throw new Error("process-group signaling was not expected");
+      },
+    };
+    const options = {
+      gracefulTimeoutMs: 0,
+      ownership: { launchedAtMs: 1_000, rootPid: 42 },
+      posixOperations,
+    } as Parameters<typeof terminateWithTreeKill>[1] & {
+      posixOperations: TestPosixOperations;
+    };
+
+    const result = await terminateWithTreeKill(child, options);
+
+    expect(result).toBe("terminated");
+    expect(readCount).toBe(3);
+    expect(pidSignals).toEqual([]);
+  });
 
   test("bounds each Windows process query by the shared cleanup deadline", () => {
     expect(resolveWindowsProcessQueryTimeout(10_000, 7_500)).toBe(2_500);
@@ -1559,6 +1790,31 @@ function createLinuxSnapshotTopology(): Map<number, LinuxProcessSelectionRecord>
       },
     ],
   ]);
+}
+
+function createSinglePosixRootTable(): Map<number, LinuxProcessSelectionRecord> {
+  return createSinglePosixProcessTable(42);
+}
+
+function createSinglePosixProcessTable(pid: number): Map<number, LinuxProcessSelectionRecord> {
+  return new Map([
+    [
+      pid,
+      {
+        identity: `ps-start:${pid}`,
+        parentPid: 1,
+        pid,
+        processGroupId: pid,
+      },
+    ],
+  ]);
+}
+
+function createTestPosixProcessTable(
+  records: Map<number, LinuxProcessSelectionRecord>,
+  complete = true,
+): TestPosixProcessTable {
+  return { complete, records: new Map(records) };
 }
 
 function createReusedWindowsProcessRecords(): WindowsProcessSelectionRecord[] {

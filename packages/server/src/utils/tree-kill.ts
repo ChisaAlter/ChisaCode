@@ -68,8 +68,18 @@ interface LinuxTreeKillOperations {
   signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
 }
 
+interface PosixProcessTableSnapshot {
+  complete: boolean;
+  records: Map<number, PosixProcessRecord>;
+}
+
+type ReadPosixProcessTable = (cleanupSignal?: AbortSignal) => Promise<PosixProcessTableSnapshot>;
+
+type ReadPosixProcessTableOutput = (cleanupSignal?: AbortSignal) => Promise<string>;
+
 interface PosixTreeKillOperations {
-  readProcessTable(cleanupSignal?: AbortSignal): Promise<Map<number, PosixProcessRecord>>;
+  readProcessTable?: ReadPosixProcessTable;
+  readProcessTableOutput?: ReadPosixProcessTableOutput;
   signal(pid: number, signal: NodeJS.Signals): void;
   signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
 }
@@ -475,31 +485,33 @@ function createDefaultTreeKillOperations(
   const resolvedPosixOperations =
     posixOperations ??
     ({
-      readProcessTable: readPsProcessTableWithIdentity,
       signal: signalPid,
       signalProcessGroup,
     } satisfies PosixTreeKillOperations);
+  const readProcessTable =
+    resolvedPosixOperations.readProcessTable ??
+    ((cleanupSignal?: AbortSignal) =>
+      readPsProcessTableWithIdentity(
+        cleanupSignal,
+        resolvedPosixOperations.readProcessTableOutput,
+      ));
   return {
     async snapshot(cleanupSignal) {
       return snapshotGenericPosixProcessTree(
         pid,
         ownership?.processGroupId,
         cleanupSignal,
-        resolvedPosixOperations.readProcessTable,
+        readProcessTable,
       );
     },
     async listRunning(processes, cleanupSignal) {
-      return listRunningGenericPosixProcesses(
-        processes,
-        cleanupSignal,
-        resolvedPosixOperations.readProcessTable,
-      );
+      return listRunningGenericPosixProcesses(processes, cleanupSignal, readProcessTable);
     },
     async signal(processes, signal, cleanupSignal) {
       const running = await listSignalableGenericPosixProcesses(
         processes,
         cleanupSignal,
-        resolvedPosixOperations.readProcessTable,
+        readProcessTable,
       );
       const processGroupId = ownership?.processGroupId;
       const hasProcessGroupAnchor =
@@ -571,15 +583,18 @@ async function snapshotGenericPosixProcessTree(
   rootPid: number,
   processGroupId?: number,
   cleanupSignal?: AbortSignal,
-  readProcessTable: PosixTreeKillOperations["readProcessTable"] = readPsProcessTableWithIdentity,
+  readProcessTable: ReadPosixProcessTable = readPsProcessTableWithIdentity,
 ): Promise<TrackedProcess[]> {
   const processTable = await readProcessTable(cleanupSignal);
-  const trackedPids = collectOwnedProcessPids(rootPid, processGroupId, processTable);
+  if (!processTable.complete) {
+    throw new Error("POSIX process table snapshot was incomplete");
+  }
+  const trackedPids = collectOwnedProcessPids(rootPid, processGroupId, processTable.records);
   if (trackedPids.length === 0) {
     return [];
   }
   return trackedPids.flatMap((pid) => {
-    const process = processTable.get(pid);
+    const process = processTable.records.get(pid);
     return process
       ? [{ identity: process.identity, pid, processGroupId: process.processGroupId }]
       : [];
@@ -687,16 +702,22 @@ function collectProcessTreePids(
 async function listRunningGenericPosixProcesses(
   processes: readonly TrackedProcess[],
   cleanupSignal?: AbortSignal,
-  readProcessTable: PosixTreeKillOperations["readProcessTable"] = readPsProcessTableWithIdentity,
+  readProcessTable: ReadPosixProcessTable = readPsProcessTableWithIdentity,
 ): Promise<TrackedProcess[]> {
-  let processTable: Map<number, PosixProcessRecord>;
+  let processTable: PosixProcessTableSnapshot;
   try {
     processTable = await readProcessTable(cleanupSignal);
   } catch {
     return [...processes];
   }
+  if (!processTable.complete) {
+    return [...processes];
+  }
   return processes.flatMap((process) => {
-    const refreshed = refreshTrackedPosixProcess(process, processTable.get(process.pid) ?? null);
+    const refreshed = refreshTrackedPosixProcess(
+      process,
+      processTable.records.get(process.pid) ?? null,
+    );
     return refreshed ? [refreshed] : [];
   });
 }
@@ -704,13 +725,16 @@ async function listRunningGenericPosixProcesses(
 async function listSignalableGenericPosixProcesses(
   processes: readonly TrackedProcess[],
   cleanupSignal: AbortSignal,
-  readProcessTable: PosixTreeKillOperations["readProcessTable"],
+  readProcessTable: ReadPosixProcessTable,
 ): Promise<TrackedProcess[]> {
   const processTable = await readProcessTable(cleanupSignal);
+  if (!processTable.complete) {
+    throw new Error("POSIX process table refresh was incomplete before signaling");
+  }
   return processes.flatMap((process) => {
     const refreshed = refreshTrackedPosixProcessForSignal(
       process,
-      processTable.get(process.pid) ?? null,
+      processTable.records.get(process.pid) ?? null,
     );
     return refreshed ? [refreshed] : [];
   });
@@ -818,29 +842,56 @@ async function readPosixProcessTopology(
 
 async function readPsProcessTableWithIdentity(
   cleanupSignal?: AbortSignal,
-): Promise<Map<number, PosixProcessRecord>> {
+  readOutput: ReadPosixProcessTableOutput = readPsProcessTableOutput,
+): Promise<PosixProcessTableSnapshot> {
+  const stdout = await readOutput(cleanupSignal);
+  return parsePsProcessTableWithIdentity(stdout);
+}
+
+async function readPsProcessTableOutput(cleanupSignal?: AbortSignal): Promise<string> {
   // macOS has no procfs starttime. `lstart` is only second-resolution, so identity checks there
   // remain best-effort; bounded polling and post-order signaling keep the reuse window small.
   const args =
     process.platform === "darwin"
       ? ["-axo", "pid=,ppid=,pgid=,lstart="]
       : ["-eo", "pid=,ppid=,pgid=,lstart="];
-  const stdout = await execFileText("ps", args, { signal: cleanupSignal });
-  const processTable = new Map<number, PosixProcessRecord>();
-  for (const line of stdout.split(/\r?\n/u)) {
+  return execFileText("ps", args, { signal: cleanupSignal });
+}
+
+function parsePsProcessTableWithIdentity(value: string): PosixProcessTableSnapshot {
+  const records = new Map<number, PosixProcessRecord>();
+  let complete = true;
+  let sawRecord = false;
+  for (const line of value.split(/\r?\n/u)) {
+    if (line.trim().length === 0) {
+      continue;
+    }
+    sawRecord = true;
     const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$/u.exec(line);
     if (!match) {
+      complete = false;
       continue;
     }
     const pid = Number.parseInt(match[1] ?? "", 10);
     const parentPid = Number.parseInt(match[2] ?? "", 10);
     const processGroupId = Number.parseInt(match[3] ?? "", 10);
     const identity = match[4] ?? "";
-    if (pid > 0 && parentPid >= 0 && processGroupId > 0 && identity) {
-      processTable.set(pid, { identity, parentPid, pid, processGroupId });
+    const isValid =
+      Number.isSafeInteger(pid) &&
+      pid > 0 &&
+      Number.isSafeInteger(parentPid) &&
+      parentPid >= 0 &&
+      Number.isSafeInteger(processGroupId) &&
+      processGroupId > 0 &&
+      identity.length > 0 &&
+      !records.has(pid);
+    if (!isValid) {
+      complete = false;
+      continue;
     }
+    records.set(pid, { identity, parentPid, pid, processGroupId });
   }
-  return processTable;
+  return { complete: complete && sawRecord, records };
 }
 
 async function readLinuxProcessRecord(pid: number): Promise<PosixProcessRecord | null> {

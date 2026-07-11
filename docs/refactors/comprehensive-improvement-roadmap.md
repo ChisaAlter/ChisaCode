@@ -72,10 +72,15 @@
 - **背景**：第八次修复后的复审发现三个边界问题：Linux/通用 POSIX 在真正发信号前的身份读取
   失败仍可能沿保守 polling 语义继续；`maxBuffer` 清理启动后分片多字节字符无法补全且 retained
   slice 与大源 Buffer 共用 backing allocation；exact deadline 会覆盖更严重的命令树清理超时。
+  最终质量复审又确认通用 POSIX parser 会静默跳过 malformed/empty `ps` 输出，把不完整表中缺失
+  的 tracked PID 误判为已退出。
 - **已修复**：
   - Linux 与通用 POSIX 分离“保守存活轮询”和“严格 signal authorization”。真实消失的 PID
     继续跳过，读取错误或 identity 变化在任何 PID/process-group signal 前 fail closed；轮询阶段
     仍把不可读记录视为存活，避免误报已终止。
+  - 通用 POSIX process-table read 现在携带 private completeness 标记。malformed/invalid/empty
+    `ps` 输出不能确认 PID 消失：严格 snapshot/signal 路径 fail closed，polling 保留 stale survivor；
+    只有 complete table 明确缺失 PID 时才允许判定旧 identity 已退出。
   - 有界输出在首次 raw overflow 时只启动一次清理，并仅继续接收完成边界字符所需的最多三
     个字节；retained slice 复制到独立 Buffer。`hex`/`base64`/`base64url` overflow 前缀与当前
     Node 行为对齐，非 overflow 保留完整编码；未知 encoding 在 spawn 前以
@@ -84,7 +89,7 @@
     根因，不转换为普通 max-time 错误。
 - **边界**：未改 relay、未新增 public API，仍保留现有 process-group signaling、bounded cleanup
   deadline 与跨平台 fallback 策略。
-- **状态**：已完成；精确 RED/GREEN 与最终验证记录见 Task 4 本地报告第九次复审章节。
+- **状态**：已完成；精确 RED/GREEN 与最终验证记录见 Task 4 本地报告第九次及最终质量复审章节。
 
 ### 对抗性自审与接线验证（2026-07-05 完成）
 
