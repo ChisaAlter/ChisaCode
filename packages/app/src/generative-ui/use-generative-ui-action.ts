@@ -69,7 +69,10 @@ export function useGenerativeUiAction({
         const genError =
           error instanceof GenerativeUiError
             ? error
-            : new GenerativeUiError(String(error), "RPC_REJECTED", { instanceId, action });
+            : new GenerativeUiError("Generative UI action failed", "RPC_REJECTED", {
+                instanceId: instanceId.slice(0, 128),
+                action: action.slice(0, 128),
+              });
 
         setState((prev) => {
           const failures = prev.consecutiveFailures + 1;
@@ -84,7 +87,7 @@ export function useGenerativeUiAction({
         });
 
         if (!isRecoverableGenUiError(error)) {
-          console.error("[GenUI] Non-recoverable action error:", error);
+          console.error("[GenUI] Non-recoverable action error", { code: genError.code });
         }
         return false;
       } finally {

@@ -123,8 +123,6 @@ import {
   buildWorkspaceCheckout,
 } from "./session-helpers.js";
 
-import { sendPromptToAgent } from "./agent/agent-prompt.js";
-
 // Re-export so existing imports from "./session.js" keep working.
 export { resolveWaitForFinishError } from "./session-helpers.js";
 export { type SessionRuntimeMetrics } from "./session-internal-types.js";
@@ -688,22 +686,7 @@ export class Session {
       daemonRuntimeConfig: this.daemonRuntimeConfig,
       mcpBaseUrl: this.mcpBaseUrl,
 
-      // GenerativeUiContext
-      getAgent: (agentId) => {
-        const agent = this.agentManager.getAgent(agentId);
-        if (!agent) return undefined;
-        return { status: agent.lifecycle };
-      },
-      sendPromptToAgent: async (agentId, text, options) => {
-        await sendPromptToAgent({
-          agentManager: this.agentManager,
-          agentStorage: this.agentStorage,
-          agentId,
-          prompt: text,
-          unarchive: options?.unarchive ?? true,
-          logger: this.sessionLogger,
-        });
-      },
+      // GenerativeUiContext uses the manager-owned queue shared by every session.
     };
   }
 

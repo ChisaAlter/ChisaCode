@@ -109,9 +109,11 @@ describe("GenerativeUiRegistry", () => {
     expect(() => genUiRegistry.validateActionPayload("actionable", "tap", { x: 42 })).not.toThrow();
   });
 
-  it("validateActionPayload silently passes unknown action names", () => {
+  it("validateActionPayload rejects unknown action names", () => {
     genUiRegistry.register("no_actions", makeEntry());
-    expect(() => genUiRegistry.validateActionPayload("no_actions", "unknown", {})).not.toThrow();
+    expect(() => genUiRegistry.validateActionPayload("no_actions", "unknown", {})).toThrowError(
+      expect.objectContaining({ code: "ACTION_NOT_FOUND" }),
+    );
   });
 
   it("registerAll registers multiple components", () => {

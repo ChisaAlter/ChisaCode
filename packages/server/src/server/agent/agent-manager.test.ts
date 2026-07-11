@@ -104,6 +104,7 @@ class TestAgentClient implements AgentClient {
   readonly capabilities = TEST_CAPABILITIES;
   readonly createdConfigs: AgentSessionConfig[] = [];
   readonly resumeOverrides: Array<Partial<AgentSessionConfig> | undefined> = [];
+  readonly sessions: TestAgentSession[] = [];
 
   async isAvailable(): Promise<boolean> {
     return true;
@@ -111,7 +112,9 @@ class TestAgentClient implements AgentClient {
 
   async createSession(config: AgentSessionConfig): Promise<AgentSession> {
     this.createdConfigs.push(config);
-    return new TestAgentSession(config);
+    const session = new TestAgentSession(config);
+    this.sessions.push(session);
+    return session;
   }
 
   async listModels() {
@@ -197,6 +200,7 @@ class TestAgentSession implements AgentSession {
   private subscribers = new Set<(event: AgentStreamEvent) => void>();
   private turnIdCounter = 0;
   private interrupted = false;
+  readonly startedPrompts: AgentPromptInput[] = [];
 
   constructor(private readonly config: AgentSessionConfig) {
     this.provider = config.provider;
@@ -210,7 +214,8 @@ class TestAgentSession implements AgentSession {
     };
   }
 
-  async startTurn(): Promise<{ turnId: string }> {
+  async startTurn(prompt: AgentPromptInput): Promise<{ turnId: string }> {
+    this.startedPrompts.push(prompt);
     this.interrupted = false;
     const turnId = `turn-${++this.turnIdCounter}`;
     // Use setTimeout so events arrive after the caller sets up the foreground waiter
@@ -6241,4 +6246,62 @@ test("user_message events wrapping a chisacode-system envelope are not restored 
 
   expect(userMessages).toHaveLength(1);
   expect(userMessages[0].text).toBe("real user message");
+});
+
+test("enqueueGenerativeUiAction coalesces idle actions through the manager-owned queue", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-gen-ui-queue-test-"));
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000106",
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir });
+
+  expect(
+    manager.enqueueGenerativeUiAction(agent.id, {
+      instanceId: "form-1",
+      action: "change",
+      payload: { field: "name", value: "first" },
+      timestamp: 1,
+    }),
+  ).toEqual({ queued: true });
+  manager.enqueueGenerativeUiAction(agent.id, {
+    instanceId: "form-1",
+    action: "change",
+    payload: { field: "name", value: "latest" },
+    timestamp: 2,
+  });
+
+  await vi.waitFor(() => expect(client.sessions[0]?.startedPrompts).toHaveLength(1));
+  const prompt = String(client.sessions[0]?.startedPrompts[0]);
+  expect(prompt).toContain("latest");
+  expect(prompt).not.toContain("first");
+  await manager.flush();
+});
+
+test("enqueueGenerativeUiAction waits for the active turn terminal lifecycle before follow-up", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-gen-ui-running-test-"));
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000107",
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir });
+  const activeRun = manager.runAgent(agent.id, "active turn");
+  await vi.waitFor(() => expect(client.sessions[0]?.startedPrompts).toHaveLength(1));
+
+  manager.enqueueGenerativeUiAction(agent.id, {
+    instanceId: "form-1",
+    action: "submit",
+    payload: { values: { name: "Ada" } },
+    timestamp: 1,
+  });
+  expect(client.sessions[0]?.startedPrompts).toHaveLength(1);
+
+  await activeRun;
+  await vi.waitFor(() => expect(client.sessions[0]?.startedPrompts).toHaveLength(2));
+  expect(String(client.sessions[0]?.startedPrompts[1])).toContain('"action":"submit"');
+  await manager.flush();
 });

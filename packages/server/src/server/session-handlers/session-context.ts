@@ -375,13 +375,7 @@ export interface DisposableHandler {
 // ---------------------------------------------------------------------------
 
 export interface GenerativeUiContext {
-  getAgent(agentId: string): { status: string } | undefined;
-  sendPromptToAgent(
-    agentId: string,
-    text: string,
-    options?: { unarchive?: boolean; systemNotification?: boolean },
-  ): Promise<void>;
-  emit(message: Record<string, unknown>): void;
+  agentManager: Pick<AgentManager, "getAgent" | "enqueueGenerativeUiAction">;
 }
 
 export type GenerativeUiHandlerContext = SessionIdentityContext & GenerativeUiContext;

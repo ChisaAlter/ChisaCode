@@ -70,9 +70,13 @@ import { ForegroundRunState, type ForegroundTurnWaiter } from "./foreground-run-
 import { getAgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
 import { IMPORTABLE_PROVIDERS } from "./provider-registry.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
-import { isSystemInjectedEnvelope } from "./agent-prompt.js";
+import { formatSystemNotificationPrompt, isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { generateComponentPromptSection } from "@chisacode/protocol/generative-ui/component-manifest";
 import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
+import {
+  GenerativeUiActionQueue,
+  type GenerativeUiQueuedAction,
+} from "./generative-ui-action-queue.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -462,6 +466,7 @@ export class AgentManager {
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
+  private readonly generativeUiActionQueue: GenerativeUiActionQueue;
   private mcpBaseUrl: string | null;
   private companionMcpTokens = new Map<string, CompanionMcpTokenEntry>();
   private appendSystemPrompt: string;
@@ -494,6 +499,20 @@ export class AgentManager {
       interruptSessionMs:
         options.rescueTimeouts?.interruptSessionMs ?? INTERRUPT_SESSION_TIMEOUT_MS,
     };
+    this.generativeUiActionQueue = new GenerativeUiActionQueue({
+      getAgentStatus: (agentId) => {
+        const agent = this.agents.get(agentId);
+        if (!agent) return undefined;
+        return this.hasInFlightRun(agentId) ? "running" : agent.lifecycle;
+      },
+      dispatchPrompt: async (agentId, prompt) => {
+        const task = this.consumeGenerativeUiPrompt(agentId, prompt).catch(() => undefined);
+        this.trackBackgroundTask(task);
+      },
+      log: (metadata) => {
+        this.logger.warn(metadata, "Generative UI action batch was dropped");
+      },
+    });
     this.agentStreamCoalescer = new AgentStreamCoalescer({
       windowMs: options.agentStreamCoalesceWindowMs ?? AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS,
       timers: { setTimeout, clearTimeout },
@@ -508,6 +527,33 @@ export class AgentManager {
     });
   }
 
+  /**
+   * Enqueues a generative UI action without interrupting an active agent turn.
+   * @param agentId Target agent identifier
+   * @param action Validated action payload
+   * @returns Confirmation that the action entered the manager-owned queue
+   */
+  enqueueGenerativeUiAction(agentId: string, action: GenerativeUiQueuedAction): { queued: true } {
+    this.requireAgent(agentId);
+    this.generativeUiActionQueue.enqueue(agentId, action);
+    return { queued: true };
+  }
+
+  private async consumeGenerativeUiPrompt(agentId: string, prompt: string): Promise<void> {
+    try {
+      for await (const _event of this.streamAgent(
+        agentId,
+        formatSystemNotificationPrompt(prompt),
+      )) {
+        // The normal session event pipeline persists and broadcasts every event.
+      }
+    } catch {
+      this.logger.warn(
+        { agentId, reason: "dispatch_failed" },
+        "Generative UI follow-up prompt failed",
+      );
+    }
+  }
   registerClient(provider: AgentProvider, client: AgentClient): void {
     this.clients.set(provider, client);
   }
@@ -1192,6 +1238,7 @@ export class AgentManager {
 
   async closeAgent(agentId: string): Promise<void> {
     const agent = this.requireAgent(agentId);
+    this.generativeUiActionQueue.clearAgent(agentId);
     this.logger.trace(
       {
         agentId,
@@ -1804,6 +1851,7 @@ export class AgentManager {
           this.foregroundRuns.deleteWaiter(agent, turnStream.waiter);
         }
         this.foregroundRuns.settlePendingRun(agentId, pendingRun.token);
+        this.generativeUiActionQueue.onAgentTerminal(agentId);
         if (!agent.activeForegroundTurnId) {
           await this.refreshRuntimeInfo(agent);
         }
@@ -2765,6 +2813,9 @@ export class AgentManager {
     this.foregroundRuns.notifyWaiters(matchingWaiters, event, {
       terminal: isTurnTerminalEvent(event),
     });
+    if (isTurnTerminalEvent(event) && matchingWaiters.length === 0) {
+      this.generativeUiActionQueue.onAgentTerminal(agent.id);
+    }
     this.logger.trace(
       {
         agentId: agent.id,

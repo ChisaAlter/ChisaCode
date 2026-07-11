@@ -1,10 +1,11 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useCallback } from "react";
 import { View, Text } from "react-native";
 import { genUiRegistry } from "@/generative-ui/registry/registry";
 /* eslint-disable-next-line import/no-unassigned-import */
 import "@/generative-ui/registry/components";
 import { GenerativeUiErrorBoundary } from "@/generative-ui/generative-ui-error-boundary";
 import { useGenerativeUiAction } from "@/generative-ui/use-generative-ui-action";
+import { dispatchValidatedAction } from "@/generative-ui/action-dispatch";
 import type { GenerativeUiItem } from "@/types/stream";
 
 interface Props {
@@ -44,6 +45,7 @@ export function GenerativeUiRenderer({ item, serverId, agentId }: Props) {
       <Suspense fallback={LOADING_FALLBACK}>
         <GenerativeUiRenderInner
           entry={entry}
+          componentId={item.componentId}
           instanceId={item.instanceId}
           safeProps={safeProps}
           serverId={serverId}
@@ -56,21 +58,34 @@ export function GenerativeUiRenderer({ item, serverId, agentId }: Props) {
 
 function GenerativeUiRenderInner({
   entry,
+  componentId,
   instanceId,
   safeProps,
   serverId,
   agentId,
 }: {
   entry: NonNullable<ReturnType<typeof genUiRegistry.get>>;
+  componentId: string;
   instanceId: string;
   safeProps: Record<string, unknown>;
   serverId: string;
   agentId: string;
 }) {
   const { sendAction } = useGenerativeUiAction({ serverId, agentId });
+  const validatedSendAction = useCallback(
+    (_requestedInstanceId: string, action: string, payload: unknown) =>
+      dispatchValidatedAction({
+        componentId,
+        instanceId,
+        action,
+        payload,
+        sender: sendAction,
+      }),
+    [componentId, instanceId, sendAction],
+  );
   const Component = entry.component;
 
-  return <Component instanceId={instanceId} props={safeProps} sendAction={sendAction} />;
+  return <Component instanceId={instanceId} props={safeProps} sendAction={validatedSendAction} />;
 }
 
 function UnknownComponentCard({ componentId }: { componentId: string }) {

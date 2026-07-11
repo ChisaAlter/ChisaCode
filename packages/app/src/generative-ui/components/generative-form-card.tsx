@@ -1,6 +1,10 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useEffect, useReducer, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from "react-native";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
+import {
+  createGenerativeFormState,
+  generativeFormReducer,
+} from "@/generative-ui/components/generative-form-state";
 
 interface FormField {
   name: string;
@@ -110,13 +114,13 @@ const submitTextStyle = {
 function FormFieldRenderer({
   field,
   value,
-  submitted,
+  disabled,
   onChange,
   onSelectOption,
 }: {
   field: FormField;
   value: string;
-  submitted: boolean;
+  disabled: boolean;
   onChange: (value: string) => void;
   onSelectOption: (optValue: string) => void;
 }) {
@@ -158,7 +162,7 @@ function FormFieldRenderer({
         value={value}
         onChangeText={onChange}
         placeholder={field.placeholder}
-        editable={!submitted}
+        editable={!disabled}
       />
     );
   }
@@ -172,7 +176,7 @@ function FormFieldRenderer({
       onChangeText={onChange}
       placeholder={field.placeholder}
       keyboardType={keyboardType}
-      editable={!submitted}
+      editable={!disabled}
     />
   );
 }
@@ -180,29 +184,43 @@ function FormFieldRenderer({
 export default function GenerativeFormCard({ instanceId, props, sendAction }: FormProps) {
   const fields = props.fields ?? [];
 
-  const [values, setValues] = useState<Record<string, string>>(() => {
+  const [state, dispatch] = useReducer(generativeFormReducer, fields, (initialFields) => {
     const initial: Record<string, string> = {};
-    for (const f of fields) initial[f.name] = "";
-    return initial;
+    for (const field of initialFields) initial[field.name] = "";
+    return createGenerativeFormState(initial);
   });
-  const [submitted, setSubmitted] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const handleChange = useCallback(
     (name: string, value: string) => {
-      setValues((prev) => ({ ...prev, [name]: value }));
+      dispatch({ type: "field_changed", field: name, value });
       void sendAction(instanceId, "change", { field: name, value });
     },
     [instanceId, sendAction],
   );
 
-  const handleSubmit = useCallback(() => {
-    setSubmitted(true);
-    void sendAction(instanceId, "submit", { values });
-  }, [instanceId, sendAction, values]);
+  const handleSubmit = useCallback(async () => {
+    if (state.status === "submitting" || state.status === "submitted") return;
+    dispatch({ type: "submit_started" });
+    let sent = false;
+    try {
+      sent = await sendAction(instanceId, "submit", { values: state.values });
+    } catch {
+      sent = false;
+    }
+    if (mountedRef.current) dispatch({ type: "submit_resolved", sent });
+  }, [instanceId, sendAction, state.status, state.values]);
 
+  const disabled = state.status === "submitting" || state.status === "submitted";
   const submitButtonStyle = useMemo(
-    () => (submitted ? submitButtonDisabledStyle : submitButtonActiveStyle),
-    [submitted],
+    () => (disabled ? submitButtonDisabledStyle : submitButtonActiveStyle),
+    [disabled],
   );
 
   const changeHandlers = useMemo(
@@ -242,8 +260,8 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
             </Text>
             <FormFieldRenderer
               field={field}
-              value={values[field.name] ?? ""}
-              submitted={submitted}
+              value={state.values[field.name] ?? ""}
+              disabled={disabled}
               onChange={changeHandlers[fieldIdx]}
               onSelectOption={selectOptionHandlers[fieldIdx]}
             />
@@ -251,9 +269,18 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
         ))}
       </ScrollView>
 
-      <TouchableOpacity onPress={handleSubmit} disabled={submitted} style={submitButtonStyle}>
-        <Text style={submitTextStyle}>{submitted ? "已提交" : (props.submitLabel ?? "提交")}</Text>
+      {state.error ? <Text style={errorTextStyle}>{state.error}</Text> : null}
+      <TouchableOpacity onPress={handleSubmit} disabled={disabled} style={submitButtonStyle}>
+        <Text style={submitTextStyle}>
+          {state.status === "submitted" ? "已提交" : (props.submitLabel ?? "提交")}
+        </Text>
       </TouchableOpacity>
     </View>
   );
 }
+
+const errorTextStyle = {
+  color: "#dc2626",
+  fontSize: 12,
+  marginTop: 4,
+} as const;

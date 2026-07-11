@@ -84,18 +84,27 @@ class GenerativeUiRegistry {
    */
   validateActionPayload(componentId: string, action: string, payload: unknown): void {
     const entry = this.components.get(componentId);
-    if (!entry) return;
+    if (!entry) {
+      throw new GenerativeUiError("Component is not registered", "COMPONENT_NOT_FOUND", {
+        componentId: componentId.slice(0, 128),
+      });
+    }
 
-    const actionDef = entry.actions?.find((a) => a.name === action);
-    if (!actionDef) return;
+    const actionDef = entry.actions?.find((candidate) => candidate.name === action);
+    if (!actionDef) {
+      throw new GenerativeUiError("Action is not registered", "ACTION_NOT_FOUND", {
+        componentId: componentId.slice(0, 128),
+        action: action.slice(0, 128),
+      });
+    }
 
     const result = actionDef.payloadSchema.safeParse(payload);
     if (!result.success) {
-      throw new GenerativeUiError(
-        `Action payload 校验失败 ${componentId}.${action}: ${result.error.message}`,
-        "PROPS_VALIDATION",
-        { componentId, action, issues: result.error.issues },
-      );
+      throw new GenerativeUiError("Action payload validation failed", "PROPS_VALIDATION", {
+        componentId: componentId.slice(0, 128),
+        action: action.slice(0, 128),
+        issueCount: result.error.issues.length,
+      });
     }
   }
 

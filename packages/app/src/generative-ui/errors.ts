@@ -10,6 +10,7 @@ export type GenerativeUiErrorCode =
   | "AGENT_NOT_FOUND"
   | "PROPS_VALIDATION"
   | "COMPONENT_NOT_FOUND"
+  | "ACTION_NOT_FOUND"
   | "COMPONENT_CRASH"
   | "SANDBOX_ERROR";
 
