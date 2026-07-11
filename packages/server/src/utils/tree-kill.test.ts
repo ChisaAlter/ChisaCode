@@ -19,6 +19,12 @@ interface WindowsProcessSelectionRecord {
   pid: number;
 }
 
+interface TestWindowsOperations {
+  query(cleanupSignal: AbortSignal): Promise<WindowsProcessSelectionRecord[]>;
+  signal(pid: number, signal: NodeJS.Signals): void;
+  isRunning(pid: number): boolean;
+}
+
 let tempDir: string | null = null;
 let ownerProcess: ChildProcess | null = null;
 let descendantPid: number | null = null;
@@ -207,6 +213,62 @@ describe("terminateWithTreeKill", () => {
     expect(selected.map((process) => process.pid)).toEqual([101, 100]);
   });
 
+  test("retains late descendants of a proven old Windows lineage after root reuse", () => {
+    const selected = selectOwnedWindowsProcesses({
+      launchedAtMs: 1_000,
+      processes: createLateWindowsDescendantRecords(),
+      rootExited: true,
+      rootPid: 42,
+    });
+
+    expect(selected.map((process) => process.pid)).toEqual([101, 100]);
+  });
+
+  test("signals late descendants only through the proven old Windows lineage", async () => {
+    const records = createLateWindowsDescendantRecords();
+    const running = new Set(records.map((process) => process.pid));
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let queryCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        return true;
+      },
+    };
+    const windowsOperations: TestWindowsOperations = {
+      async query() {
+        queryCount += 1;
+        return records;
+      },
+      signal(pid, signal) {
+        signals.push({ pid, signal });
+        running.delete(pid);
+      },
+      isRunning(pid) {
+        return running.has(pid);
+      },
+    };
+
+    const result = await terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      ownership: {
+        launchedAtMs: 1_000,
+        rootPid: 42,
+      },
+      windowsOperations,
+    });
+
+    expect(result).toBe("terminated");
+    expect(signals).toEqual([
+      { pid: 101, signal: "SIGTERM" },
+      { pid: 100, signal: "SIGTERM" },
+    ]);
+    expect([...running].sort((left, right) => left - right)).toEqual([42, 200, 201, 202]);
+    expect(queryCount).toBe(2);
+  });
+
   test("fails closed when a reused Windows root has no provable old lineage", () => {
     expect(() =>
       selectOwnedWindowsProcesses({
@@ -232,12 +294,6 @@ describe("terminateWithTreeKill", () => {
   });
 
   test("refreshes root exit state after a pending Windows process query", async () => {
-    interface TestWindowsOperations {
-      query(cleanupSignal: AbortSignal): Promise<WindowsProcessSelectionRecord[]>;
-      signal(pid: number, signal: NodeJS.Signals): void;
-      isRunning(pid: number): boolean;
-    }
-
     const records = createReusedWindowsProcessRecords();
     const running = new Set(records.map((process) => process.pid));
     const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
@@ -294,6 +350,79 @@ describe("terminateWithTreeKill", () => {
       { pid: 100, signal: "SIGTERM" },
     ]);
     expect(queryCount).toBe(2);
+  });
+
+  test("fails closed when root exit is observed only after a pending Windows query", async () => {
+    const records: WindowsProcessSelectionRecord[] = [
+      {
+        creationTimeMs: 5_000,
+        identity: "windows-creation:5000",
+        parentPid: 1,
+        pid: 42,
+      },
+      {
+        creationTimeMs: 5_100,
+        identity: "windows-creation:5100",
+        parentPid: 42,
+        pid: 201,
+      },
+      {
+        creationTimeMs: 5_200,
+        identity: "windows-creation:5200",
+        parentPid: 201,
+        pid: 202,
+      },
+    ];
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let queryCount = 0;
+    let markQueryStarted: (() => void) | null = null;
+    let resolveInitialQuery: ((processes: WindowsProcessSelectionRecord[]) => void) | null = null;
+    const queryStarted = new Promise<void>((resolve) => {
+      markQueryStarted = resolve;
+    });
+    const initialQuery = new Promise<WindowsProcessSelectionRecord[]>((resolve) => {
+      resolveInitialQuery = resolve;
+    });
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        return true;
+      },
+    };
+    const windowsOperations: TestWindowsOperations = {
+      async query() {
+        queryCount += 1;
+        if (queryCount === 1) {
+          markQueryStarted?.();
+          return initialQuery;
+        }
+        return records;
+      },
+      signal(pid, signal) {
+        signals.push({ pid, signal });
+      },
+      isRunning() {
+        return true;
+      },
+    };
+
+    const terminationPromise = terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      ownership: {
+        launchedAtMs: 1_000,
+        rootPid: 42,
+      },
+      windowsOperations,
+    });
+    await queryStarted;
+    child.exitCode = 0;
+    resolveInitialQuery?.(records);
+
+    await expect(terminationPromise).resolves.toBe("kill-timeout");
+    expect(signals).toEqual([]);
+    expect(queryCount).toBe(1);
   });
 
   test("retains launch-bounded Windows descendants when the root record is missing", () => {
@@ -841,6 +970,47 @@ function createReusedWindowsProcessRecords(): WindowsProcessSelectionRecord[] {
     {
       creationTimeMs: 5_200,
       identity: "windows-creation:5200",
+      parentPid: 201,
+      pid: 202,
+    },
+  ];
+}
+
+function createLateWindowsDescendantRecords(): WindowsProcessSelectionRecord[] {
+  return [
+    {
+      creationTimeMs: 1_100,
+      identity: "windows-creation:1100",
+      parentPid: 42,
+      pid: 100,
+    },
+    {
+      creationTimeMs: 5_100,
+      identity: "windows-creation:5100-old-lineage",
+      parentPid: 100,
+      pid: 101,
+    },
+    {
+      creationTimeMs: 5_000,
+      identity: "windows-creation:5000-root",
+      parentPid: 1,
+      pid: 42,
+    },
+    {
+      creationTimeMs: 5_000,
+      identity: "windows-creation:5000-new-direct",
+      parentPid: 42,
+      pid: 200,
+    },
+    {
+      creationTimeMs: 5_100,
+      identity: "windows-creation:5100-new-direct",
+      parentPid: 42,
+      pid: 201,
+    },
+    {
+      creationTimeMs: 5_200,
+      identity: "windows-creation:5200-new-lineage",
       parentPid: 201,
       pid: 202,
     },

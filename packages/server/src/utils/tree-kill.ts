@@ -789,25 +789,19 @@ export function selectOwnedWindowsProcesses(
     (process) => process.creationTimeMs >= earliestCreationTime,
   );
   const currentRoot = eligibleProcesses.find((process) => process.pid === options.rootPid);
-  const hasOlderDirectChild =
-    currentRoot !== undefined &&
-    eligibleProcesses.some(
-      (process) =>
-        process.parentPid === options.rootPid &&
-        process.pid !== options.rootPid &&
-        process.creationTimeMs < currentRoot.creationTimeMs,
-    );
-  const rootReuseProven = currentRoot !== undefined && (options.rootExited || hasOlderDirectChild);
-  const reusedRootCreationTime =
-    rootReuseProven && currentRoot ? currentRoot.creationTimeMs : Number.POSITIVE_INFINITY;
+  const oldLineageAnchors = currentRoot
+    ? eligibleProcesses.filter(
+        (process) =>
+          process.parentPid === options.rootPid &&
+          process.pid !== options.rootPid &&
+          process.creationTimeMs < currentRoot.creationTimeMs,
+      )
+    : [];
+  const rootReuseProven =
+    currentRoot !== undefined && (options.rootExited || oldLineageAnchors.length > 0);
   const eligibleTable = new Map(
     eligibleProcesses
-      .filter((process) => {
-        if (!Number.isFinite(reusedRootCreationTime)) {
-          return true;
-        }
-        return process.pid !== options.rootPid && process.creationTimeMs < reusedRootCreationTime;
-      })
+      .filter((process) => !rootReuseProven || process.pid !== options.rootPid)
       .map((process) => [process.pid, process] as const),
   );
   const owned = new Set<number>();
@@ -832,7 +826,13 @@ export function selectOwnedWindowsProcesses(
       owned.add(pid);
     }
   };
-  visit(options.rootPid, eligibleTable.get(options.rootPid)?.creationTimeMs);
+  if (rootReuseProven) {
+    for (const anchor of oldLineageAnchors) {
+      visit(anchor.pid, anchor.creationTimeMs);
+    }
+  } else {
+    visit(options.rootPid, eligibleTable.get(options.rootPid)?.creationTimeMs);
+  }
   const selected = [...owned].flatMap((pid) => {
     const process = eligibleTable.get(pid);
     return process ? [process] : [];
