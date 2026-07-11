@@ -876,6 +876,7 @@ function parsePsProcessTableWithIdentity(value: string): PosixProcessTableSnapsh
     const parentPid = Number.parseInt(match[2] ?? "", 10);
     const processGroupId = Number.parseInt(match[3] ?? "", 10);
     const identity = match[4] ?? "";
+    const normalizedIdentity = identity.trim();
     const isValid =
       Number.isSafeInteger(pid) &&
       pid > 0 &&
@@ -883,13 +884,13 @@ function parsePsProcessTableWithIdentity(value: string): PosixProcessTableSnapsh
       parentPid >= 0 &&
       Number.isSafeInteger(processGroupId) &&
       processGroupId > 0 &&
-      identity.length > 0 &&
+      normalizedIdentity.length > 0 &&
       !records.has(pid);
     if (!isValid) {
       complete = false;
       continue;
     }
-    records.set(pid, { identity, parentPid, pid, processGroupId });
+    records.set(pid, { identity: normalizedIdentity, parentPid, pid, processGroupId });
   }
   return { complete: complete && sawRecord, records };
 }
