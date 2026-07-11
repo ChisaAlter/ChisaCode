@@ -5,6 +5,7 @@ export const CLIENT_CAPS = {
   // outside the legacy set to "ShieldCheck" when this cap is absent. Drop the
   // gate when floor >= v0.1.84.
   customModeIcons: "custom_mode_icons",
+  // COMPAT(generativeUiWireCapability): added in v0.1.101; remove the gate no earlier than 2027-01-11 when client/daemon floor >= v0.1.101.
   generativeUi: "generative_ui",
 } as const;
 

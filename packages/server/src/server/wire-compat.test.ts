@@ -15,6 +15,7 @@ import { GenerativeUiHandler } from "./session-handlers/generative-ui-handler.js
 import type { GenerativeUiHandlerContext } from "./session-handlers/session-context.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
 import type { AgentManagerEvent, AgentTimelineRow } from "./agent/agent-manager.js";
+import { InMemoryAgentTimelineStore } from "./agent/agent-timeline-store.js";
 import { handleCreateChisaCodeWorktreeRequest } from "./worktree-session.js";
 
 const LegacyAgentTimelineItemPayloadSchema = z.discriminatedUnion("type", [
@@ -82,8 +83,11 @@ const LegacyAgentSnapshotPayloadSchema = AgentSnapshotPayloadSchema.extend({
 
 class InMemoryAgentManager {
   private subscriber: ((event: AgentManagerEvent) => void) | null = null;
+  private readonly timelineStore = new InMemoryAgentTimelineStore();
 
-  constructor(private readonly rows: AgentTimelineRow[]) {}
+  constructor(rows: AgentTimelineRow[]) {
+    this.timelineStore.initialize("agent-1", { epoch: "epoch-1", rows });
+  }
 
   emitEvent(event: AgentManagerEvent) {
     this.subscriber?.(event);
@@ -133,17 +137,8 @@ class InMemoryAgentManager {
     };
   }
 
-  fetchTimeline() {
-    return {
-      epoch: "epoch-1",
-      reset: false,
-      staleCursor: false,
-      gap: false,
-      window: { minSeq: 1, maxSeq: 3, nextSeq: 4 },
-      rows: this.rows,
-      hasOlder: false,
-      hasNewer: false,
-    };
+  fetchTimeline(_agentId: string, options?: Parameters<InMemoryAgentTimelineStore["fetch"]>[1]) {
+    return this.timelineStore.fetch("agent-1", options);
   }
 
   listAgents() {
@@ -711,4 +706,144 @@ describe("generative UI RPC routing compatibility", () => {
       ]);
     },
   );
+});
+
+async function fetchTimelineForRows(input: {
+  rows: AgentTimelineRow[];
+  direction?: "tail" | "before" | "after";
+  cursorSeq?: number;
+  limit?: number;
+  clientCapabilities?: Record<string, unknown> | null;
+}) {
+  const messages: SessionOutboundMessage[] = [];
+  const session = createSessionForWireCompatTest({
+    rows: input.rows,
+    messages,
+    clientCapabilities: input.clientCapabilities,
+  });
+  await session.handleMessage({
+    type: "fetch_agent_timeline_request",
+    requestId: "req-pagination",
+    agentId: "agent-1",
+    projection: "canonical",
+    direction: input.direction ?? "tail",
+    ...(input.cursorSeq === undefined
+      ? {}
+      : { cursor: { epoch: "epoch-1", seq: input.cursorSeq } }),
+    ...(input.limit === undefined ? {} : { limit: input.limit }),
+  });
+  const response = messages.find((message) => message.type === "fetch_agent_timeline_response");
+  if (response?.type !== "fetch_agent_timeline_response") throw new Error("missing response");
+  return response.payload;
+}
+
+describe("generative UI visible pagination", () => {
+  const assistantRow = (seq: number): AgentTimelineRow => ({
+    seq,
+    timestamp: `2026-05-02T00:00:0${seq}.000Z`,
+    item: { type: "assistant_message", text: `assistant-${seq}` },
+  });
+  const hiddenRow = (seq: number): AgentTimelineRow => ({
+    seq,
+    timestamp: `2026-05-02T00:00:0${seq}.000Z`,
+    item: {
+      type: "generative_ui",
+      instanceId: `gen-ui-${seq}`,
+      componentId: "table",
+      props: {},
+      source: "tool_call",
+      status: "interactive",
+    },
+  });
+
+  test("tail limit fills from visible rows when the newest canonical row is hidden", async () => {
+    const payload = await fetchTimelineForRows({
+      rows: [assistantRow(1), hiddenRow(2)],
+      limit: 1,
+    });
+    expect(payload.entries.map((entry) => entry.item.type)).toEqual(["assistant_message"]);
+    expect(payload.startCursor).toEqual({ epoch: "epoch-1", seq: 1 });
+    expect(payload.endCursor).toEqual({ epoch: "epoch-1", seq: 1 });
+    expect(payload.window).toEqual({ minSeq: 1, maxSeq: 1, nextSeq: 3 });
+    expect(payload.hasOlder).toBe(false);
+    expect(payload.hasNewer).toBe(false);
+  });
+
+  test("after fills visible limits across hidden sequence gaps", async () => {
+    const rows = [assistantRow(1), hiddenRow(2), assistantRow(3), hiddenRow(4), assistantRow(5)];
+    const after = await fetchTimelineForRows({ rows, direction: "after", cursorSeq: 1, limit: 2 });
+    expect(after.entries.map((entry) => entry.seqStart)).toEqual([3, 5]);
+    expect(after.endCursor).toEqual({ epoch: "epoch-1", seq: 5 });
+    expect(after.hasNewer).toBe(false);
+
+    const exhausted = await fetchTimelineForRows({
+      rows,
+      direction: "after",
+      cursorSeq: 5,
+      limit: 2,
+    });
+    expect(exhausted.entries).toEqual([]);
+    expect(exhausted.endCursor).toBeNull();
+    expect(exhausted.hasNewer).toBe(false);
+  });
+
+  test("before fills visible limits across hidden sequence gaps", async () => {
+    const rows = [assistantRow(1), hiddenRow(2), assistantRow(3), hiddenRow(4), assistantRow(5)];
+    const before = await fetchTimelineForRows({
+      rows,
+      direction: "before",
+      cursorSeq: 5,
+      limit: 2,
+    });
+    expect(before.entries.map((entry) => entry.seqStart)).toEqual([1, 3]);
+    expect(before.startCursor).toEqual({ epoch: "epoch-1", seq: 1 });
+    expect(before.endCursor).toEqual({ epoch: "epoch-1", seq: 3 });
+    expect(before.hasOlder).toBe(false);
+    expect(before.hasNewer).toBe(true);
+
+    const exhausted = await fetchTimelineForRows({
+      rows,
+      direction: "before",
+      cursorSeq: 1,
+      limit: 2,
+    });
+    expect(exhausted.entries).toEqual([]);
+    expect(exhausted.startCursor).toBeNull();
+    expect(exhausted.hasOlder).toBe(false);
+  });
+
+  test("all-hidden history returns stable empty visible metadata", async () => {
+    const payload = await fetchTimelineForRows({ rows: [hiddenRow(1), hiddenRow(2)], limit: 1 });
+    expect(payload.entries).toEqual([]);
+    expect(payload.startCursor).toBeNull();
+    expect(payload.endCursor).toBeNull();
+    expect(payload.window).toEqual({ minSeq: 0, maxSeq: 0, nextSeq: 3 });
+    expect(payload.hasOlder).toBe(false);
+    expect(payload.hasNewer).toBe(false);
+
+    const exhausted = await fetchTimelineForRows({
+      rows: [hiddenRow(1), hiddenRow(2)],
+      direction: "after",
+      cursorSeq: 2,
+      limit: 1,
+    });
+    expect(exhausted.entries).toEqual([]);
+    expect(exhausted.startCursor).toBeNull();
+    expect(exhausted.endCursor).toBeNull();
+    expect(exhausted.hasNewer).toBe(false);
+  });
+
+  test("capable clients retain canonical tail rows and metadata", async () => {
+    const payload = await fetchTimelineForRows({
+      rows: [assistantRow(1), hiddenRow(2)],
+      limit: 1,
+      clientCapabilities: { [CLIENT_CAPS.generativeUi]: true },
+    });
+    expect(payload.entries.map((entry) => entry.item.type)).toEqual(["generative_ui"]);
+    expect(payload.startCursor).toEqual({ epoch: "epoch-1", seq: 2 });
+    expect(payload.endCursor).toEqual({ epoch: "epoch-1", seq: 2 });
+    expect(payload.window).toEqual({ minSeq: 1, maxSeq: 2, nextSeq: 3 });
+    expect(payload.hasOlder).toBe(true);
+    expect(payload.hasNewer).toBe(false);
+  });
 });

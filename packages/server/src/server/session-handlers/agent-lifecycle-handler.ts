@@ -81,6 +81,10 @@ import type {
   AgentSessionConfig,
 } from "../agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "../agent/agent-storage.js";
+import type {
+  AgentTimelineFetchResult,
+  AgentTimelineRow,
+} from "../agent/agent-timeline-store-types.js";
 import type { AgentLifecycleHandlerContext, DisposableHandler } from "./session-context.js";
 import { resolveProjectDisplayName } from "../workspace-registry.js";
 import type { PersistedProjectRecord } from "../workspace-registry.js";
@@ -117,6 +121,63 @@ type AgentUpdatePayload = Extract<
   { type: "agent_update" }
 >["payload"];
 type AgentUpdatesFilter = FetchAgentsRequestFilter;
+
+interface VisibleTimelineSelectionInput {
+  rows: AgentTimelineRow[];
+  direction: AgentTimelineFetchDirection;
+  limit: number;
+  useProjectedLimit: boolean;
+}
+
+function selectVisibleTimelineRows(input: VisibleTimelineSelectionInput): AgentTimelineRow[] {
+  if (input.limit === 0) return input.rows;
+  if (input.useProjectedLimit) {
+    return selectTimelineWindowByProjectedLimit({
+      rows: input.rows,
+      direction: input.direction,
+      limit: input.limit,
+      collapseToolLifecycle: false,
+    }).selectedRows;
+  }
+  if (input.direction === "after") return input.rows.slice(0, input.limit);
+  return input.rows.slice(Math.max(0, input.rows.length - input.limit));
+}
+
+function hasVisibleRowsAfter(input: {
+  rows: AgentTimelineRow[];
+  selectedRows: AgentTimelineRow[];
+  direction: AgentTimelineFetchDirection;
+  beforeSeq: number;
+  reset: boolean;
+}): boolean {
+  if (input.reset || input.direction === "tail") return false;
+  if (input.direction === "before") {
+    return input.rows.some((row) => row.seq >= input.beforeSeq);
+  }
+  const lastSelectedRow = input.selectedRows[input.selectedRows.length - 1];
+  const lastVisibleRow = input.rows[input.rows.length - 1];
+  return (
+    lastSelectedRow !== undefined &&
+    lastVisibleRow !== undefined &&
+    lastSelectedRow.seq < lastVisibleRow.seq
+  );
+}
+
+function shouldLimitByProjectedWindow(input: {
+  supportsGenerativeUi: boolean;
+  projection: TimelineProjectionMode;
+  direction: AgentTimelineFetchDirection;
+  requestedLimit: number | undefined;
+}): boolean {
+  return (
+    input.supportsGenerativeUi &&
+    input.projection === "canonical" &&
+    input.direction === "tail" &&
+    typeof input.requestedLimit === "number" &&
+    input.requestedLimit > 0
+  );
+}
+
 interface AgentUpdatesSubscriptionState {
   subscriptionId: string;
   filter?: AgentUpdatesFilter;
@@ -429,6 +490,83 @@ export class AgentLifecycleHandler implements DisposableHandler {
     });
   }
 
+  private fetchTimelineForClient(params: {
+    agentId: string;
+    direction: AgentTimelineFetchDirection;
+    cursor: AgentTimelineCursor | undefined;
+    limit: number | undefined;
+    useProjectedLimit: boolean;
+  }): AgentTimelineFetchResult {
+    if (this.context.supports(CLIENT_CAPS.generativeUi)) {
+      return this.context.agentManager.fetchTimeline(params.agentId, {
+        direction: params.direction,
+        cursor: params.cursor,
+        limit: params.limit,
+      });
+    }
+
+    // AgentManager timelines are already fully resident in InMemoryAgentTimelineStore.
+    // This creates one finite snapshot, then filters/selects without file I/O or mutation.
+    const completeTimeline = this.context.agentManager.fetchTimeline(params.agentId, {
+      direction: "tail",
+      limit: 0,
+    });
+    const visibleRows = completeTimeline.rows.filter((row) => row.item.type !== "generative_ui");
+    const staleCursor =
+      params.cursor !== undefined && params.cursor.epoch !== completeTimeline.epoch;
+    const gap =
+      !staleCursor &&
+      params.direction === "after" &&
+      params.cursor !== undefined &&
+      completeTimeline.rows.length > 0 &&
+      params.cursor.seq < completeTimeline.window.minSeq - 1;
+    const reset = staleCursor || gap;
+    const beforeSeq = params.cursor?.seq ?? completeTimeline.window.nextSeq;
+    const eligibleRows = reset
+      ? visibleRows
+      : visibleRows.filter((row) => {
+          if (params.direction === "after") return row.seq > (params.cursor?.seq ?? 0);
+          if (params.direction === "before") return row.seq < beforeSeq;
+          return true;
+        });
+    const requestedLimit = params.limit === undefined ? 200 : Math.max(0, Math.floor(params.limit));
+    const selectionDirection = reset ? "tail" : params.direction;
+    const selectedRows = selectVisibleTimelineRows({
+      rows: eligibleRows,
+      direction: selectionDirection,
+      limit: requestedLimit,
+      useProjectedLimit: params.useProjectedLimit,
+    });
+    const firstVisibleRow = visibleRows[0];
+    const lastVisibleRow = visibleRows[visibleRows.length - 1];
+    const firstSelectedRow = selectedRows[0];
+
+    return {
+      epoch: completeTimeline.epoch,
+      direction: params.direction,
+      reset,
+      staleCursor,
+      gap,
+      window: {
+        minSeq: firstVisibleRow?.seq ?? 0,
+        maxSeq: lastVisibleRow?.seq ?? 0,
+        nextSeq: completeTimeline.window.nextSeq,
+      },
+      rows: selectedRows,
+      hasOlder:
+        firstSelectedRow !== undefined &&
+        firstVisibleRow !== undefined &&
+        firstSelectedRow.seq > firstVisibleRow.seq,
+      hasNewer: hasVisibleRowsAfter({
+        rows: visibleRows,
+        selectedRows,
+        direction: selectionDirection,
+        beforeSeq,
+        reset,
+      }),
+    };
+  }
+
   private loadProjectedTimelineWindow(params: {
     agentId: string;
     direction: AgentTimelineFetchDirection;
@@ -506,11 +644,12 @@ export class AgentLifecycleHandler implements DisposableHandler {
     const projection: TimelineProjectionMode = msg.projection ?? "projected";
     const requestedLimit = msg.limit;
     const limit = requestedLimit ?? (direction === "after" ? 0 : undefined);
-    const shouldLimitByProjectedWindow =
-      projection === "canonical" &&
-      direction === "tail" &&
-      typeof requestedLimit === "number" &&
-      requestedLimit > 0;
+    const shouldLimitProjectedWindow = shouldLimitByProjectedWindow({
+      supportsGenerativeUi: this.context.supports(CLIENT_CAPS.generativeUi),
+      projection,
+      direction,
+      requestedLimit,
+    });
     const cursor: AgentTimelineCursor | undefined = msg.cursor
       ? {
           epoch: msg.cursor.epoch,
@@ -526,13 +665,16 @@ export class AgentLifecycleHandler implements DisposableHandler {
       });
       const agentPayload = await this.buildAgentPayload(snapshot);
 
-      let timeline = this.context.agentManager.fetchTimeline(msg.agentId, {
+      let timeline = this.fetchTimelineForClient({
+        agentId: msg.agentId,
         direction,
         cursor,
         limit:
-          shouldLimitByProjectedWindow && typeof requestedLimit === "number"
+          shouldLimitProjectedWindow && typeof requestedLimit === "number"
             ? Math.max(1, Math.floor(requestedLimit))
             : limit,
+        useProjectedLimit:
+          projection === "canonical" && typeof requestedLimit === "number" && requestedLimit > 0,
       });
       let hasOlder = timeline.hasOlder;
       let hasNewer = timeline.hasNewer;
@@ -540,12 +682,12 @@ export class AgentLifecycleHandler implements DisposableHandler {
       let endCursor: { epoch: string; seq: number } | null = null;
       let entries: ReturnType<typeof projectTimelineRows>;
 
-      if (shouldLimitByProjectedWindow) {
+      if (shouldLimitProjectedWindow) {
         const projectedResult = this.loadProjectedTimelineWindow({
           agentId: msg.agentId,
           direction,
           cursor,
-          requestedLimit,
+          requestedLimit: requestedLimit ?? 1,
           timeline,
         });
         timeline = projectedResult.timeline;
@@ -581,23 +723,17 @@ export class AgentLifecycleHandler implements DisposableHandler {
           endCursor,
           hasOlder,
           hasNewer,
-          entries: entries
-            .filter(
-              (entry) =>
-                this.context.supports(CLIENT_CAPS.generativeUi) ||
-                entry.item.type !== "generative_ui",
-            )
-            .map((entry) => ({
-              provider: snapshot.provider,
-              item: entry.item,
-              timestamp: entry.timestamp,
-              seqStart: entry.seqStart,
-              seqEnd: entry.seqEnd,
-              sourceSeqRanges: entry.sourceSeqRanges,
-              collapsed: this.context.supports(CLIENT_CAPS.reasoningMergeEnum)
-                ? entry.collapsed
-                : entry.collapsed.filter((value) => value !== "reasoning_merge"),
-            })),
+          entries: entries.map((entry) => ({
+            provider: snapshot.provider,
+            item: entry.item,
+            timestamp: entry.timestamp,
+            seqStart: entry.seqStart,
+            seqEnd: entry.seqEnd,
+            sourceSeqRanges: entry.sourceSeqRanges,
+            collapsed: this.context.supports(CLIENT_CAPS.reasoningMergeEnum)
+              ? entry.collapsed
+              : entry.collapsed.filter((value) => value !== "reasoning_merge"),
+          })),
           error: null,
         },
       });
