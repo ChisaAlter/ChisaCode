@@ -12,6 +12,11 @@ import {
   type ChatRoomDetail,
 } from "@chisacode/protocol/chat/types";
 import { writeFileAtomic } from "../../utils/atomic-write.js";
+import { CHAT_WAIT_MAX_TIMEOUT_MS } from "@chisacode/protocol/chat/rpc-schemas";
+
+export { CHAT_WAIT_MAX_TIMEOUT_MS };
+/** Default deadline for chat waits that omit timeoutMs. */
+export const CHAT_WAIT_DEFAULT_TIMEOUT_MS = 30_000;
 
 const ChatStorePayloadSchema = z.object({
   rooms: z.array(ChatRoomSchema),
@@ -61,6 +66,9 @@ interface Waiter {
   resolve: (messages: ChatMessage[]) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout> | null;
+  signal: AbortSignal | null;
+  abortListener: (() => void) | null;
+  settled: boolean;
 }
 
 export interface CreateChatRoomInput {
@@ -98,6 +106,7 @@ export interface WaitForChatMessagesInput {
   room: string;
   afterMessageId?: string | null;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface DeleteChatRoomResult {
@@ -267,7 +276,13 @@ export class FileBackedChatService {
   async waitForMessages(input: WaitForChatMessagesInput): Promise<ChatMessage[]> {
     await this.load();
     const room = this.resolveRoom(input.room);
-    const timeoutMs = Math.max(0, Math.floor(input.timeoutMs ?? 0));
+    const timeoutMs = Math.max(0, Math.floor(input.timeoutMs ?? CHAT_WAIT_DEFAULT_TIMEOUT_MS));
+    if (timeoutMs > CHAT_WAIT_MAX_TIMEOUT_MS) {
+      throw new ChatServiceError(
+        "invalid_chat_wait_timeout",
+        `Chat wait timeout cannot exceed ${CHAT_WAIT_MAX_TIMEOUT_MS}ms`,
+      );
+    }
     const afterMessageId = trimToNull(input.afterMessageId);
 
     if (afterMessageId) {
@@ -291,28 +306,54 @@ export class FileBackedChatService {
         roomId: room.id,
         afterMessageId,
         resolve: (messages) => {
+          if (waiter.settled) {
+            return;
+          }
+          waiter.settled = true;
           if (waiter.timeout) {
             clearTimeout(waiter.timeout);
             waiter.timeout = null;
+          }
+          if (waiter.signal && waiter.abortListener) {
+            waiter.signal.removeEventListener("abort", waiter.abortListener);
+            waiter.abortListener = null;
           }
           this.removeWaiter(waiter);
           resolve(messages);
         },
         reject: (error) => {
+          if (waiter.settled) {
+            return;
+          }
+          waiter.settled = true;
           if (waiter.timeout) {
             clearTimeout(waiter.timeout);
             waiter.timeout = null;
+          }
+          if (waiter.signal && waiter.abortListener) {
+            waiter.signal.removeEventListener("abort", waiter.abortListener);
+            waiter.abortListener = null;
           }
           this.removeWaiter(waiter);
           reject(error);
         },
         timeout: null,
+        signal: input.signal ?? null,
+        abortListener: null,
+        settled: false,
       };
 
-      if (timeoutMs > 0) {
-        waiter.timeout = setTimeout(() => {
+      waiter.timeout = setTimeout(() => {
+        waiter.resolve([]);
+      }, timeoutMs);
+
+      if (waiter.signal) {
+        waiter.abortListener = () => waiter.resolve([]);
+        if (waiter.signal.aborted) {
           waiter.resolve([]);
-        }, timeoutMs);
+          return;
+        }
+        waiter.signal.addEventListener("abort", waiter.abortListener, { once: true });
       }
 
       const roomWaiters = this.waitersByRoomId.get(room.id) ?? new Set<Waiter>();

@@ -27,6 +27,17 @@ function isHydrationCancelled(options: WorkspaceHydrationOptions | undefined): b
 }
 
 const DEFAULT_WORKSPACE_HYDRATION_PAGE_TIMEOUT_MS = 12_000;
+const hydrationGenerations = new Map<string, number>();
+
+function beginHydrationGeneration(serverId: string): number {
+  const generation = (hydrationGenerations.get(serverId) ?? 0) + 1;
+  hydrationGenerations.set(serverId, generation);
+  return generation;
+}
+
+function isCurrentHydrationGeneration(serverId: string, generation: number): boolean {
+  return hydrationGenerations.get(serverId) === generation;
+}
 
 async function fetchWorkspacePage(
   client: Pick<DaemonClient, "fetchWorkspaces">,
@@ -57,6 +68,7 @@ export async function hydrateWorkspaceDescriptors(
   deps: WorkspaceHydrationDeps,
   options?: WorkspaceHydrationOptions,
 ): Promise<void> {
+  const generation = beginHydrationGeneration(deps.serverId);
   const workspaces = new Map<string, WorkspaceDescriptor>();
   let cursor: string | null = null;
   let includeSubscribe = options?.subscribe ?? false;
@@ -64,46 +76,39 @@ export async function hydrateWorkspaceDescriptors(
   const shouldSuppressWorkspace =
     deps.shouldSuppressWorkspace ?? shouldSuppressWorkspaceForLocalArchive;
 
-  try {
-    while (true) {
-      const payload = await fetchWorkspacePage(
-        deps.client,
-        {
-          sort: [{ key: "activity_at", direction: "desc" }],
-          ...(includeSubscribe ? { subscribe: {} } : {}),
-          page: cursor ? { limit: 200, cursor } : { limit: 200 },
-        },
-        timeoutMs,
-      );
-      if (isHydrationCancelled(options)) {
-        return;
-      }
-
-      for (const entry of payload.entries) {
-        const workspace = normalizeWorkspaceDescriptor(entry);
-        if (shouldSuppressWorkspace({ serverId: deps.serverId, workspace })) {
-          continue;
-        }
-        workspaces.set(workspace.id, workspace);
-      }
-
-      if (!payload.pageInfo.hasMore || !payload.pageInfo.nextCursor) {
-        break;
-      }
-      cursor = payload.pageInfo.nextCursor;
-      includeSubscribe = false;
-    }
-
-    if (isHydrationCancelled(options)) {
+  while (true) {
+    const payload = await fetchWorkspacePage(
+      deps.client,
+      {
+        sort: [{ key: "activity_at", direction: "desc" }],
+        ...(includeSubscribe ? { subscribe: {} } : {}),
+        page: cursor ? { limit: 200, cursor } : { limit: 200 },
+      },
+      timeoutMs,
+    );
+    if (isHydrationCancelled(options) || !isCurrentHydrationGeneration(deps.serverId, generation)) {
       return;
     }
 
-    deps.setWorkspaces(deps.serverId, workspaces);
-    deps.setHasHydratedWorkspaces(deps.serverId, true);
-  } catch (error) {
-    if (!isHydrationCancelled(options)) {
-      deps.setHasHydratedWorkspaces(deps.serverId, true);
+    for (const entry of payload.entries) {
+      const workspace = normalizeWorkspaceDescriptor(entry);
+      if (shouldSuppressWorkspace({ serverId: deps.serverId, workspace })) {
+        continue;
+      }
+      workspaces.set(workspace.id, workspace);
     }
-    throw error;
+
+    if (!payload.pageInfo.hasMore || !payload.pageInfo.nextCursor) {
+      break;
+    }
+    cursor = payload.pageInfo.nextCursor;
+    includeSubscribe = false;
   }
+
+  if (isHydrationCancelled(options) || !isCurrentHydrationGeneration(deps.serverId, generation)) {
+    return;
+  }
+
+  deps.setWorkspaces(deps.serverId, workspaces);
+  deps.setHasHydratedWorkspaces(deps.serverId, true);
 }

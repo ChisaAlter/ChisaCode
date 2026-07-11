@@ -25,8 +25,10 @@ const wsModuleMock = vi.hoisted(() => {
   class MockWebSocketServer {
     static instances: MockWebSocketServer[] = [];
     readonly handlers = new Map<string, (...args: unknown[]) => void>();
+    readonly options: unknown;
 
-    constructor(_options: unknown) {
+    constructor(options: unknown) {
+      this.options = options;
       MockWebSocketServer.instances.push(this);
     }
 
@@ -99,7 +101,11 @@ vi.mock("./push/push-service.js", () => ({
 }));
 
 import { z } from "zod";
-import { VoiceAssistantWebSocketServer } from "./websocket-server";
+import {
+  MAX_SESSION_INFLIGHT_MESSAGES,
+  WEBSOCKET_MAX_PAYLOAD_BYTES,
+  VoiceAssistantWebSocketServer,
+} from "./websocket-server";
 import { parseServerInfoStatusPayload } from "./messages.js";
 import type { SpeechReadinessSnapshot } from "./speech/speech-runtime.js";
 
@@ -187,14 +193,17 @@ function createLogger() {
   return logger;
 }
 
-function createServer(options?: { speechReadiness?: SpeechReadinessSnapshot | null }) {
+function createServer(options?: {
+  speechReadiness?: SpeechReadinessSnapshot | null;
+  logger?: ReturnType<typeof createLogger>;
+}) {
   const speechReadiness = options?.speechReadiness ?? null;
   const daemonConfigStore = {
     onChange: vi.fn(() => () => {}),
   };
   return new VoiceAssistantWebSocketServer(
     createStub<HTTPServer>({}),
-    createStub<pino.Logger>(createLogger()),
+    createStub<pino.Logger>(options?.logger ?? createLogger()),
     "srv_test",
     createStub<AgentManager>({
       setAgentAttentionCallback: vi.fn(),
@@ -436,6 +445,90 @@ describe("relay external socket reconnect behavior", () => {
     await vi.advanceTimersByTimeAsync(20_000);
     expect(session.cleanup).not.toHaveBeenCalled();
 
+    await server.close();
+  });
+
+  test("configures the direct WebSocket server with the explicit file-compatible payload limit", async () => {
+    expect(WEBSOCKET_MAX_PAYLOAD_BYTES).toBe(64 * 1024 * 1024);
+    const server = createServer();
+
+    expect(wsModuleMock.MockWebSocketServer.instances.at(-1)?.options).toMatchObject({
+      maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
+    });
+
+    await server.close();
+  });
+
+  test("accepts the exact per-session inflight ceiling and rejects one more with rpc_error", async () => {
+    expect(MAX_SESSION_INFLIGHT_MESSAGES).toBe(64);
+    const server = createServer();
+    const socket = new MockSocket();
+    await attachDirectAndHello({ server, socket, clientId: "bounded-session" });
+    socket.sent = [];
+    const session = sessionMock.instances[0];
+    const pending: Array<() => void> = [];
+    session.handleMessage.mockImplementation(
+      () => new Promise<void>((resolve) => pending.push(resolve)),
+    );
+
+    for (let index = 0; index <= MAX_SESSION_INFLIGHT_MESSAGES; index += 1) {
+      socket.emit(
+        "message",
+        JSON.stringify({
+          type: "session",
+          message: { type: "chat/list", requestId: `request-${index}` },
+        }),
+      );
+    }
+    await Promise.resolve();
+
+    expect(session.handleMessage).toHaveBeenCalledTimes(MAX_SESSION_INFLIGHT_MESSAGES);
+    expect(socket.sent.map(parseSentEnvelope)).toContainEqual(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          type: "rpc_error",
+          payload: expect.objectContaining({ requestId: "request-64", code: "server_busy" }),
+        }),
+      }),
+    );
+
+    for (const resolve of pending) resolve();
+    await Promise.resolve();
+    await server.close();
+  });
+
+  test("does not log payload or error secrets when a session handler rejects", async () => {
+    const secret = "TASK10-UNIQUE-PROMPT-SECRET";
+    const logger = createLogger();
+    const server = createServer({ logger });
+    const socket = new MockSocket();
+    await attachDirectAndHello({ server, socket, clientId: "sanitized-logs" });
+    sessionMock.instances[0].handleMessage.mockRejectedValueOnce(new Error(secret));
+
+    socket.emit(
+      "message",
+      JSON.stringify({
+        type: "session",
+        message: {
+          type: "chat/post",
+          requestId: "secret-request",
+          room: "room",
+          body: secret,
+        },
+      }),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      JSON.stringify([
+        logger.trace.mock.calls,
+        logger.debug.mock.calls,
+        logger.info.mock.calls,
+        logger.warn.mock.calls,
+        logger.error.mock.calls,
+      ]),
+    ).not.toContain(secret);
     await server.close();
   });
 

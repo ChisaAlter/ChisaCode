@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { ChatMessageSchema, ChatRoomDetailSchema } from "./types.js";
 
+/** Maximum client-requested chat long-poll deadline. */
+export const CHAT_WAIT_MAX_TIMEOUT_MS = 5 * 60 * 1000;
+
 export const ChatCreateRequestSchema = z.object({
   type: z.literal("chat/create"),
   requestId: z.string(),
@@ -48,7 +51,7 @@ export const ChatWaitRequestSchema = z.object({
   requestId: z.string(),
   room: z.string(),
   afterMessageId: z.string().optional(),
-  timeoutMs: z.number().int().nonnegative().optional(),
+  timeoutMs: z.number().int().nonnegative().max(CHAT_WAIT_MAX_TIMEOUT_MS).optional(),
 });
 
 export const ChatCreateResponseSchema = z.object({

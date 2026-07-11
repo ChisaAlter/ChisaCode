@@ -30,7 +30,12 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
     const message = error instanceof Error ? error.message : "Chat request failed";
     const code = error instanceof ChatServiceError ? error.code : "chat_request_failed";
     this.context.sessionLogger.error(
-      { err: error, requestType: request.type },
+      {
+        requestType: request.type,
+        requestId: request.requestId,
+        category: "chat",
+        code,
+      },
       "Chat request failed",
     );
     this.context.emit({
@@ -187,6 +192,7 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
         room: request.room,
         afterMessageId: request.afterMessageId,
         timeoutMs: request.timeoutMs,
+        signal: this.context.abortController.signal,
       });
       this.context.emit({
         type: "chat/wait/response",

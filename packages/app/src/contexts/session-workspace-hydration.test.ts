@@ -66,7 +66,7 @@ describe("hydrateWorkspaceDescriptors", () => {
     expect(recorder.hydrationWrites).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
   });
 
-  it("marks hydration complete after fetch failure without wiping cached workspaces", async () => {
+  it("leaves hydration incomplete after fetch failure without wiping cached workspaces", async () => {
     const recorder = createRecorder();
     const client = {
       fetchWorkspaces: vi.fn(async () => {
@@ -84,10 +84,35 @@ describe("hydrateWorkspaceDescriptors", () => {
     ).rejects.toThrow("Timeout waiting for message");
 
     expect(recorder.workspaceWrites).toEqual([]);
-    expect(recorder.hydrationWrites).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
+    expect(recorder.hydrationWrites).toEqual([]);
   });
 
-  it("marks hydration complete when fetch never settles", async () => {
+  it("does not commit partial pages when a later page fails", async () => {
+    const recorder = createRecorder();
+    const client = {
+      fetchWorkspaces: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ...workspaceResponse("workspace-page-1", "request-page-1"),
+          pageInfo: { hasMore: true, nextCursor: "next-page" },
+        })
+        .mockRejectedValueOnce(new Error("second page failed")),
+    } as unknown as Pick<DaemonClient, "fetchWorkspaces">;
+
+    await expect(
+      hydrateWorkspaceDescriptors({
+        client,
+        serverId: SERVER_ID,
+        setWorkspaces: recorder.setWorkspaces,
+        setHasHydratedWorkspaces: recorder.setHasHydratedWorkspaces,
+      }),
+    ).rejects.toThrow("second page failed");
+
+    expect(recorder.workspaceWrites).toEqual([]);
+    expect(recorder.hydrationWrites).toEqual([]);
+  });
+
+  it("leaves hydration incomplete when fetch never settles", async () => {
     vi.useFakeTimers();
     try {
       const recorder = createRecorder();
@@ -112,7 +137,7 @@ describe("hydrateWorkspaceDescriptors", () => {
 
       await expectation;
       expect(recorder.workspaceWrites).toEqual([]);
-      expect(recorder.hydrationWrites).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
+      expect(recorder.hydrationWrites).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
@@ -143,4 +168,50 @@ describe("hydrateWorkspaceDescriptors", () => {
     expect(recorder.workspaceWrites).toEqual([]);
     expect(recorder.hydrationWrites).toEqual([]);
   });
+
+  it("commits only the newest hydration generation when an older request settles late", async () => {
+    let resolveOldRequest!: (value: ReturnType<typeof workspaceResponse>) => void;
+    const oldRequest = new Promise<ReturnType<typeof workspaceResponse>>((resolve) => {
+      resolveOldRequest = resolve;
+    });
+    const recorder = createRecorder();
+    const client = {
+      fetchWorkspaces: vi
+        .fn()
+        .mockImplementationOnce(() => oldRequest)
+        .mockResolvedValueOnce(workspaceResponse("workspace-new", "request-new")),
+    } as unknown as Pick<DaemonClient, "fetchWorkspaces">;
+
+    const older = hydrateWorkspaceDescriptors({
+      client,
+      serverId: SERVER_ID,
+      setWorkspaces: recorder.setWorkspaces,
+      setHasHydratedWorkspaces: recorder.setHasHydratedWorkspaces,
+    });
+    const newer = hydrateWorkspaceDescriptors({
+      client,
+      serverId: SERVER_ID,
+      setWorkspaces: recorder.setWorkspaces,
+      setHasHydratedWorkspaces: recorder.setHasHydratedWorkspaces,
+    });
+
+    await newer;
+    resolveOldRequest(workspaceResponse("workspace-old", "request-old"));
+    await older;
+
+    expect(recorder.workspaceWrites).toHaveLength(1);
+    expect(recorder.workspaceWrites[0]?.workspaces.has("workspace-new")).toBe(true);
+    expect(recorder.workspaceWrites[0]?.workspaces.has("workspace-old")).toBe(false);
+    expect(recorder.hydrationWrites).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
+  });
 });
+
+function workspaceResponse(id: string, requestId: string) {
+  return {
+    requestId,
+    entries: [workspacePayload(id)],
+    pageInfo: { hasMore: false, nextCursor: null },
+    subscriptionId: null,
+    error: null,
+  };
+}

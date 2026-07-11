@@ -1122,7 +1122,16 @@ export class Session {
         await this.dispatchInboundMessage(msg);
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        this.sessionLogger.error({ err }, "Error handling message");
+        this.sessionLogger.error(
+          {
+            requestType: msg.type,
+            requestId:
+              "requestId" in msg && typeof msg.requestId === "string" ? msg.requestId : undefined,
+            category: "handler",
+            code: "handler_error",
+          },
+          "Error handling message",
+        );
 
         const requestId =
           "requestId" in msg && typeof msg.requestId === "string" ? msg.requestId : undefined;

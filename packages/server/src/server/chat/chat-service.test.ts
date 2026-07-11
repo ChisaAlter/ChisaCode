@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -6,6 +6,8 @@ import pino from "pino";
 import {
   type ChatServiceError,
   FileBackedChatService,
+  CHAT_WAIT_DEFAULT_TIMEOUT_MS,
+  CHAT_WAIT_MAX_TIMEOUT_MS,
   parseMentionAgentIds,
   type PostChatMessageInput,
 } from "./chat-service.js";
@@ -153,6 +155,39 @@ describe("FileBackedChatService", () => {
       timeoutMs: 10,
     });
     expect(timedOut).toEqual([]);
+  });
+
+  test("uses a finite default wait deadline and caps explicit deadlines", async () => {
+    vi.useFakeTimers();
+    try {
+      const room = await service.createRoom({ name: "bounded-waits" });
+      const defaultWait = service.waitForMessages({ room: room.name });
+      await vi.advanceTimersByTimeAsync(CHAT_WAIT_DEFAULT_TIMEOUT_MS);
+      await expect(defaultWait).resolves.toEqual([]);
+
+      await expect(
+        service.waitForMessages({ room: room.name, timeoutMs: CHAT_WAIT_MAX_TIMEOUT_MS + 1 }),
+      ).rejects.toMatchObject<Partial<ChatServiceError>>({ code: "invalid_chat_wait_timeout" });
+
+      const immediateWait = service.waitForMessages({ room: room.name, timeoutMs: 0 });
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(immediateWait).resolves.toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("aborting a wait settles it once and prevents late messages from reusing the waiter", async () => {
+    const room = await service.createRoom({ name: "aborted-waits" });
+    const controller = new AbortController();
+    const wait = service.waitForMessages({ room: room.name, signal: controller.signal });
+
+    controller.abort();
+    await expect(wait).resolves.toEqual([]);
+
+    const nextWait = service.waitForMessages({ room: room.name, timeoutMs: 1000 });
+    await sendChatMessage({ room: room.name, authorAgentId: "agent-a", body: "late" });
+    await expect(nextWait).resolves.toMatchObject([{ body: "late" }]);
   });
 
   test("deletes rooms, removes messages, and rejects pending waiters", async () => {

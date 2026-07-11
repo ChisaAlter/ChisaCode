@@ -27,6 +27,7 @@ import {
   wrapSessionMessage,
 } from "./messages.js";
 import { asUint8Array, decodeTerminalStreamFrame } from "@chisacode/protocol/binary-frames/index";
+import { MAX_FILE_TRANSFER_BYTES } from "@chisacode/protocol/binary-frames/file-transfer";
 import type { HostnamesConfig } from "./hostnames.js";
 import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
@@ -276,6 +277,7 @@ interface SessionConnection {
   connectionLogger: pino.Logger;
   sockets: Set<WebSocketLike>;
   externalDisconnectCleanupTimeout: ReturnType<typeof setTimeout> | null;
+  inflightMessages: number;
 }
 
 const SLOW_REQUEST_THRESHOLD_MS = 500;
@@ -286,6 +288,10 @@ const WS_CLOSE_INVALID_HELLO = 4002;
 const WS_CLOSE_INCOMPATIBLE_PROTOCOL = 4003;
 const WS_PROTOCOL_VERSION = 1;
 const WS_RUNTIME_METRICS_FLUSH_MS = 30_000;
+/** Maximum direct WebSocket frame size, aligned with the binary file-transfer limit. */
+export const WEBSOCKET_MAX_PAYLOAD_BYTES = MAX_FILE_TRANSFER_BYTES;
+/** Maximum concurrent async messages handled by one logical client session. */
+export const MAX_SESSION_INFLIGHT_MESSAGES = 64;
 
 export class MissingDaemonVersionError extends Error {
   constructor() {
@@ -546,6 +552,7 @@ export class VoiceAssistantWebSocketServer {
       verifyClient: ({ req }, callback) => {
         this.verifyWsUpgrade(req, { allowedOrigins, hostnames, allowUpgradeRequest }, callback);
       },
+      maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
     });
     wss.on("connection", (ws, request) => {
       void this.attachAuthenticatedSocket(ws, request, password);
@@ -908,6 +915,7 @@ export class VoiceAssistantWebSocketServer {
       connectionLogger,
       sockets: new Set([ws]),
       externalDisconnectCleanupTimeout: null,
+      inflightMessages: 0,
     };
     return connection;
   }
@@ -1246,7 +1254,8 @@ export class VoiceAssistantWebSocketServer {
         clientId: activeConnection?.clientId,
         requestId: requestInfo?.requestId,
         requestType: requestInfo?.requestType,
-        error: parsedMessage.error.message,
+        category: "validation",
+        code: isUnknownSchema ? "unknown_schema" : "invalid_message",
       },
       "WS inbound message validation failed",
     );
@@ -1428,20 +1437,56 @@ export class VoiceAssistantWebSocketServer {
     message: Extract<WSInboundMessage, { type: "session" }>,
   ): Promise<void> {
     this.recordInboundSessionRequestType(message.message.type);
-    const startMs = performance.now();
-    await activeConnection.session.handleMessage(message.message);
-    const durationMs = performance.now() - startMs;
-    this.recordRequestLatency(message.message.type, durationMs);
-
-    if (durationMs >= SLOW_REQUEST_THRESHOLD_MS) {
+    const requestId =
+      "requestId" in message.message && typeof message.message.requestId === "string"
+        ? message.message.requestId
+        : null;
+    if (activeConnection.inflightMessages >= MAX_SESSION_INFLIGHT_MESSAGES) {
       activeConnection.connectionLogger.warn(
         {
           requestType: message.message.type,
-          durationMs: Math.round(durationMs),
-          inflightRequests: activeConnection.session.getRuntimeMetrics().inflightRequests,
+          requestId,
+          category: "overload",
+          code: "server_busy",
         },
-        "ws_slow_request",
+        "Rejected session request above inflight limit",
       );
+      if (requestId) {
+        this.sendToConnection(
+          activeConnection,
+          wrapSessionMessage({
+            type: "rpc_error",
+            payload: {
+              requestId,
+              requestType: message.message.type,
+              error: "Server is busy; retry the request",
+              code: "server_busy",
+            },
+          }),
+        );
+      }
+      return;
+    }
+
+    activeConnection.inflightMessages += 1;
+    const startMs = performance.now();
+    try {
+      await activeConnection.session.handleMessage(message.message);
+      const durationMs = performance.now() - startMs;
+      this.recordRequestLatency(message.message.type, durationMs);
+
+      if (durationMs >= SLOW_REQUEST_THRESHOLD_MS) {
+        activeConnection.connectionLogger.warn(
+          {
+            requestType: message.message.type,
+            durationMs: Math.round(durationMs),
+            inflightRequests: activeConnection.session.getRuntimeMetrics().inflightRequests,
+          },
+          "ws_slow_request",
+        );
+      }
+    } finally {
+      activeConnection.inflightMessages -= 1;
     }
   }
 
@@ -1452,19 +1497,23 @@ export class VoiceAssistantWebSocketServer {
     log: pino.Logger;
   }): void {
     const { ws, data, error, log } = params;
-    const err = error instanceof Error ? error : new Error(String(error));
-    const { rawPayload, parsedPayload } = this.decodeRawMessagePayloadForError(data);
-
-    const trimmedRawPayload =
-      typeof rawPayload === "string" && rawPayload.length > 2000
-        ? `${rawPayload.slice(0, 2000)}... (truncated)`
-        : rawPayload;
+    const err = error instanceof Error ? error : new Error("Unknown WebSocket message error");
+    const buffer = bufferFromWsData(data);
+    let parsedPayload: unknown = null;
+    try {
+      parsedPayload = JSON.parse(buffer.toString());
+    } catch {
+      // Parsing failed; bounded metadata below is sufficient for diagnostics.
+    }
+    const requestInfo = extractRequestInfoFromUnknownWsInbound(parsedPayload);
 
     log.error(
       {
-        err,
-        rawPayload: trimmedRawPayload,
-        parsedPayload,
+        requestId: requestInfo?.requestId,
+        requestType: requestInfo?.requestType,
+        category: "message_processing",
+        payloadBytes: buffer.byteLength,
+        code: "invalid_message",
       },
       "Failed to parse/handle message",
     );
@@ -1479,7 +1528,6 @@ export class VoiceAssistantWebSocketServer {
       return;
     }
 
-    const requestInfo = extractRequestInfoFromUnknownWsInbound(parsedPayload);
     if (requestInfo) {
       this.sendToClient(
         ws,
@@ -1506,26 +1554,6 @@ export class VoiceAssistantWebSocketServer {
         },
       }),
     );
-  }
-
-  private decodeRawMessagePayloadForError(data: Buffer | ArrayBuffer | Buffer[] | string): {
-    rawPayload: string | null;
-    parsedPayload: unknown;
-  } {
-    let rawPayload: string | null = null;
-    let parsedPayload: unknown = null;
-    try {
-      const buffer = bufferFromWsData(data);
-      rawPayload = buffer.toString();
-      parsedPayload = JSON.parse(rawPayload);
-    } catch (payloadError) {
-      rawPayload = rawPayload ?? "<unreadable>";
-      parsedPayload = parsedPayload ?? rawPayload;
-      const payloadErr =
-        payloadError instanceof Error ? payloadError : new Error(String(payloadError));
-      this.logger.error({ err: payloadErr }, "Failed to decode raw payload");
-    }
-    return { rawPayload, parsedPayload };
   }
 
   private incrementRuntimeCounter(counter: keyof WebSocketRuntimeCounters): void {
