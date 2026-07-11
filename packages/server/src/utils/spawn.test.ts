@@ -58,6 +58,58 @@ describe("execCommand", () => {
     expect(result).toEqual({ stdout: "é", stderr: "ñ" });
   });
 
+  test("retains a complete UTF-8 character at the maxBuffer boundary", async () => {
+    const error = await execCommand(
+      process.execPath,
+      ["-e", "process.stdout.write(Buffer.from([0xc3, 0xa9, 0xc3, 0xa9, 0x78, 0x78, 0x78]));"],
+      { encoding: "utf8", maxBuffer: 3 },
+    ).then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) =>
+        reason as Error & { cmd?: string; code?: string; stderr?: string; stdout?: string },
+    );
+
+    expect(error).toMatchObject({
+      name: "RangeError",
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      message: "stdout maxBuffer length exceeded",
+      stderr: "",
+      stdout: "éé",
+    });
+    expect(error.cmd).toContain(process.execPath);
+    expect(error.cmd).toContain("process.stdout.write");
+    expect(Buffer.byteLength(error.stdout ?? "", "utf8")).toBe(4);
+    expect(error.stdout).not.toContain("\uFFFD");
+  });
+
+  test("retains a complete UTF-16LE surrogate pair at the maxBuffer boundary", async () => {
+    const error = await execCommand(
+      process.execPath,
+      [
+        "-e",
+        "process.stdout.write(Buffer.from([0x3d, 0xd8, 0x00, 0xde, 0x58, 0x00, 0x59, 0x00]));",
+      ],
+      { encoding: "utf16le", maxBuffer: 3 },
+    ).then(
+      () => new Error("Expected command to reject"),
+      (reason: unknown) =>
+        reason as Error & { cmd?: string; code?: string; stderr?: string; stdout?: string },
+    );
+
+    expect(error).toMatchObject({
+      name: "RangeError",
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      message: "stdout maxBuffer length exceeded",
+      stderr: "",
+      stdout: "😀",
+    });
+    expect(error.cmd).toContain(process.execPath);
+    expect(error.cmd).toContain("process.stdout.write");
+    expect(Buffer.byteLength(error.stdout ?? "", "utf16le")).toBe(4);
+    expect(Array.from(error.stdout ?? "")).toEqual(["😀"]);
+    expect(error.stdout).not.toContain("\uFFFD");
+  });
+
   test("closes readiness watcher when the command exits before the marker", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-readiness-test-")));
     tempDirs.push(cwd);

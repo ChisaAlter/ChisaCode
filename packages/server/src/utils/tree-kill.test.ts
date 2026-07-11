@@ -25,6 +25,20 @@ interface TestWindowsOperations {
   isRunning(pid: number): boolean;
 }
 
+interface LinuxProcessSelectionRecord {
+  identity: string;
+  parentPid: number;
+  pid: number;
+  processGroupId: number;
+}
+
+interface TestLinuxOperations {
+  readProcess(pid: number): Promise<LinuxProcessSelectionRecord | null>;
+  readTopology(): Promise<Map<number, LinuxProcessSelectionRecord>>;
+  signal(pid: number, signal: NodeJS.Signals): void;
+  signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
+}
+
 let tempDir: string | null = null;
 let ownerProcess: ChildProcess | null = null;
 let descendantPid: number | null = null;
@@ -229,6 +243,62 @@ describe("terminateWithTreeKill", () => {
     const result = await terminateWithTreeKill(child, {
       gracefulTimeoutMs: 0,
       forceTimeoutMs: 0,
+      windowsOperations,
+    });
+
+    expect(result).toBe("terminated");
+    expect(signals).toEqual([
+      { pid: 200, signal: "SIGTERM" },
+      { pid: 42, signal: "SIGTERM" },
+    ]);
+    expect([...running]).toEqual([100]);
+    expect(queryCount).toBe(2);
+  });
+
+  test("does not treat a launch-tolerance record as an old Windows lineage anchor", () => {
+    const selected = selectOwnedWindowsProcesses({
+      launchedAtMs: 1_000,
+      processes: createLaunchToleranceWindowsProcessRecords(),
+      rootExited: false,
+      rootPid: 42,
+    });
+
+    expect(selected.map((process) => process.pid)).toEqual([200, 42]);
+  });
+
+  test("does not signal a pre-launch Windows lineage admitted only by root tolerance", async () => {
+    const records = createLaunchToleranceWindowsProcessRecords();
+    const running = new Set(records.map((process) => process.pid));
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let queryCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        return true;
+      },
+    };
+    const windowsOperations: TestWindowsOperations = {
+      async query() {
+        queryCount += 1;
+        return records;
+      },
+      signal(pid, signal) {
+        signals.push({ pid, signal });
+        running.delete(pid);
+      },
+      isRunning(pid) {
+        return running.has(pid);
+      },
+    };
+
+    const result = await terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      ownership: {
+        launchedAtMs: 1_000,
+        rootPid: 42,
+      },
       windowsOperations,
     });
 
@@ -609,6 +679,108 @@ describe("terminateWithTreeKill", () => {
     });
   });
 
+  test("skips a vanished Linux snapshot member and signals the surviving tree", async () => {
+    const topology = createLinuxSnapshotTopology();
+    const running = new Set([42, 101]);
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    const fallbackSignals: Array<NodeJS.Signals | number> = [];
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill(signal: NodeJS.Signals | number = "SIGTERM") {
+        fallbackSignals.push(signal);
+        this.exitCode = 0;
+        return true;
+      },
+    };
+    const linuxOperations: TestLinuxOperations = {
+      async readTopology() {
+        return topology;
+      },
+      async readProcess(pid) {
+        return running.has(pid) ? (topology.get(pid) ?? null) : null;
+      },
+      signal(pid, signal) {
+        signals.push({ pid, signal });
+        running.delete(pid);
+      },
+      signalProcessGroup() {
+        throw new Error("process-group signaling was not expected");
+      },
+    };
+
+    const result = await terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      linuxOperations,
+      ownership: {
+        launchedAtMs: 1_000,
+        rootPid: 42,
+      },
+    });
+
+    expect(result).toBe("terminated");
+    expect(signals).toEqual([
+      { pid: 101, signal: "SIGTERM" },
+      { pid: 42, signal: "SIGTERM" },
+    ]);
+    expect(fallbackSignals).toEqual([]);
+    expect([...running]).toEqual([]);
+  });
+
+  test.each(["unreadable", "inconsistent"] as const)(
+    "fails closed when a present Linux snapshot member is %s",
+    async (failureMode) => {
+      const topology = createLinuxSnapshotTopology();
+      const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+      const fallbackSignals: Array<NodeJS.Signals | number> = [];
+      const child = {
+        exitCode: null as number | null,
+        signalCode: null as NodeJS.Signals | null,
+        kill(signal: NodeJS.Signals | number = "SIGTERM") {
+          fallbackSignals.push(signal);
+          this.exitCode = 0;
+          return true;
+        },
+      };
+      const linuxOperations: TestLinuxOperations = {
+        async readTopology() {
+          return topology;
+        },
+        async readProcess(pid) {
+          const process = topology.get(pid) ?? null;
+          if (pid !== 100) {
+            return process;
+          }
+          if (failureMode === "unreadable") {
+            throw Object.assign(new Error("permission denied"), { code: "EACCES" });
+          }
+          return process ? { ...process, parentPid: 999 } : null;
+        },
+        signal(pid, signal) {
+          signals.push({ pid, signal });
+        },
+        signalProcessGroup() {
+          throw new Error("process-group signaling was not expected");
+        },
+      };
+
+      const result = await terminateWithTreeKill(child, {
+        gracefulTimeoutMs: 0,
+        forceTimeoutMs: 0,
+        linuxOperations,
+        ownership: {
+          launchedAtMs: 1_000,
+          rootPid: 42,
+        },
+      });
+
+      expect(result).toBe("kill-timeout");
+      expect(signals).toEqual([]);
+      expect(fallbackSignals).toEqual(["SIGTERM"]);
+    },
+  );
+
   test("bounds each Windows process query by the shared cleanup deadline", () => {
     expect(resolveWindowsProcessQueryTimeout(10_000, 7_500)).toBe(2_500);
     expect(() => resolveWindowsProcessQueryTimeout(10_000, 10_000)).toThrow(
@@ -701,6 +873,107 @@ describe("terminateWithTreeKill", () => {
       }
     },
   );
+
+  test.each(["snapshot", "revalidation"] as const)(
+    "does not raw-fallback after Windows %s identity tracking fails",
+    async (failurePoint) => {
+      const records = createReusedWindowsProcessRecords();
+      const identitySignals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+      const fallbackSignals: Array<NodeJS.Signals | number> = [];
+      let queryCount = 0;
+      const child = {
+        exitCode: null as number | null,
+        signalCode: null as NodeJS.Signals | null,
+        kill(signal: NodeJS.Signals | number = "SIGTERM") {
+          fallbackSignals.push(signal);
+          this.exitCode = 0;
+          return true;
+        },
+      };
+      const windowsOperations: TestWindowsOperations = {
+        async query() {
+          queryCount += 1;
+          if (failurePoint === "snapshot" || queryCount > 1) {
+            throw new Error(`${failurePoint} query failed`);
+          }
+          return records;
+        },
+        signal(pid, signal) {
+          identitySignals.push({ pid, signal });
+        },
+        isRunning() {
+          return true;
+        },
+      };
+
+      const result = await terminateWithTreeKill(child, {
+        gracefulTimeoutMs: 0,
+        forceTimeoutMs: 0,
+        ownership: {
+          launchedAtMs: 1_000,
+          rootPid: 42,
+        },
+        windowsOperations,
+      });
+
+      expect(result).toBe("kill-timeout");
+      expect(identitySignals).toEqual([]);
+      expect(fallbackSignals).toEqual([]);
+      expect(queryCount).toBe(failurePoint === "snapshot" ? 1 : 2);
+    },
+  );
+
+  test("bounds a never-settling Windows identity query without raw fallback", async () => {
+    vi.useFakeTimers();
+    const fallbackSignals: Array<NodeJS.Signals | number> = [];
+    let cleanupSignal: AbortSignal | undefined;
+    let settlementCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill(signal: NodeJS.Signals | number = "SIGTERM") {
+        fallbackSignals.push(signal);
+        return true;
+      },
+    };
+    const windowsOperations: TestWindowsOperations = {
+      query(signal) {
+        cleanupSignal = signal;
+        return new Promise(() => undefined);
+      },
+      signal() {},
+      isRunning() {
+        return true;
+      },
+    };
+
+    try {
+      const terminationPromise = terminateWithTreeKill(child, {
+        cleanupTimeoutMs: 50,
+        gracefulTimeoutMs: 0,
+        forceTimeoutMs: 0,
+        ownership: {
+          launchedAtMs: 1_000,
+          rootPid: 42,
+        },
+        windowsOperations,
+      }).then((result) => {
+        settlementCount += 1;
+        return result;
+      });
+
+      await vi.advanceTimersByTimeAsync(49);
+      expect(settlementCount).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settlementCount).toBe(1);
+      expect(cleanupSignal?.aborted).toBe(true);
+      await expect(terminationPromise).resolves.toBe("kill-timeout");
+      expect(fallbackSignals).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   test("sends a matching graceful and force signal only once", async () => {
     interface TrackedProcess {
@@ -1021,7 +1294,7 @@ describe("terminateWithTreeKill", () => {
   });
 
   test.runIf(process.platform === "win32")(
-    "kills Windows descendants through taskkill tree cleanup",
+    "kills a live Windows descendant through identity-tracked cleanup",
     async () => {
       tempDir = await mkdtemp(join(tmpdir(), "chisacode-server-tree-kill-"));
       const childPidPath = join(tempDir, "descendant.pid");
@@ -1038,7 +1311,6 @@ describe("terminateWithTreeKill", () => {
         forceTimeoutMs: 2000,
       });
 
-      // tree-kill uses taskkill /T /F on Windows, so the first signal is already forceful.
       expect(result).toBe("terminated");
       await expectOwnerAndDescendantStopped(
         "owner or Windows descendant survived terminateWithTreeKill",
@@ -1080,6 +1352,38 @@ function createLinuxProcStat(startTime: number, processGroupId = 42): string {
     ...Array.from({ length: 16 }, () => "0"),
   ];
   return `42 (worker with ) in name) ${[...fieldsBeforeStartTime, String(startTime)].join(" ")}`;
+}
+
+function createLinuxSnapshotTopology(): Map<number, LinuxProcessSelectionRecord> {
+  return new Map([
+    [
+      42,
+      {
+        identity: "linux-starttime:42",
+        parentPid: 1,
+        pid: 42,
+        processGroupId: 42,
+      },
+    ],
+    [
+      100,
+      {
+        identity: "linux-starttime:100",
+        parentPid: 42,
+        pid: 100,
+        processGroupId: 42,
+      },
+    ],
+    [
+      101,
+      {
+        identity: "linux-starttime:101",
+        parentPid: 42,
+        pid: 101,
+        processGroupId: 42,
+      },
+    ],
+  ]);
 }
 
 function createReusedWindowsProcessRecords(): WindowsProcessSelectionRecord[] {
@@ -1181,6 +1485,29 @@ function createUnboundedWindowsProcessRecords(): WindowsProcessSelectionRecord[]
     {
       creationTimeMs: 5_100,
       identity: "windows-creation:5100-current-child",
+      parentPid: 42,
+      pid: 200,
+    },
+  ];
+}
+
+function createLaunchToleranceWindowsProcessRecords(): WindowsProcessSelectionRecord[] {
+  return [
+    {
+      creationTimeMs: 500,
+      identity: "windows-creation:500-stale-child",
+      parentPid: 42,
+      pid: 100,
+    },
+    {
+      creationTimeMs: 1_500,
+      identity: "windows-creation:1500-current-root",
+      parentPid: 1,
+      pid: 42,
+    },
+    {
+      creationTimeMs: 1_600,
+      identity: "windows-creation:1600-current-child",
       parentPid: 42,
       pid: 200,
     },

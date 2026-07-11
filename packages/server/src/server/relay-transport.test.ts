@@ -27,13 +27,16 @@ function hasLogMessage(logger: TestLogger, level: "info" | "warn", message: stri
 class FakeRelayWebSocket {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
+  static readonly CLOSING = 2;
   static readonly CLOSED = 3;
 
+  deferClose = false;
   readyState = FakeRelayWebSocket.CONNECTING;
   sent: Array<string | Uint8Array | ArrayBuffer> = [];
   terminateCalls = 0;
   pingCalls = 0;
   private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  private pendingClose: { code: number; reason: string } | null = null;
 
   constructor(
     readonly url: string,
@@ -55,8 +58,21 @@ class FakeRelayWebSocket {
   }
 
   close(code?: number, reason?: string) {
+    this.readyState = FakeRelayWebSocket.CLOSING;
+    this.pendingClose = { code: code ?? 1000, reason: reason ?? "" };
+    if (!this.deferClose) {
+      this.acknowledgeClose();
+    }
+  }
+
+  acknowledgeClose() {
+    const close = this.pendingClose;
+    if (!close) {
+      return;
+    }
+    this.pendingClose = null;
     this.readyState = FakeRelayWebSocket.CLOSED;
-    this.emit("close", code ?? 1000, reason ?? "");
+    this.emit("close", close.code, close.reason);
   }
 
   terminate() {
@@ -386,6 +402,52 @@ describe("relay-transport control lifecycle", () => {
     control.message(JSON.stringify({ type: "disconnected", connectionId: "client_0" }));
     expect(firstDataSocket.readyState).toBe(FakeRelayWebSocket.CLOSED);
     control.message(JSON.stringify({ type: "connected", connectionId: "replacement" }));
+    expect(getDataConnectionIds(relay).at(-1)).toBe("replacement");
+
+    control.message(JSON.stringify({ type: "connected", connectionId: "overflow_2" }));
+    expect(
+      logger.messages.filter((entry) => {
+        return entry.args.includes("relay_data_socket_capacity_reached");
+      }),
+    ).toHaveLength(2);
+  });
+
+  test("counts a closing data socket until close acknowledgement", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+    const connectionIds = Array.from({ length: 256 }, (_, index) => `client_${index}`);
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds }));
+    control.message(JSON.stringify({ type: "connected", connectionId: "overflow_1" }));
+    const socketCountAtCapacity = relay.sockets.length;
+    const closingSocket = relay.sockets[1];
+    closingSocket.deferClose = true;
+
+    control.message(JSON.stringify({ type: "disconnected", connectionId: "client_0" }));
+    expect(closingSocket.readyState).toBe(FakeRelayWebSocket.CLOSING);
+    control.message(JSON.stringify({ type: "connected", connectionId: "client_0" }));
+    control.message(JSON.stringify({ type: "connected", connectionId: "replacement" }));
+
+    expect(relay.sockets).toHaveLength(socketCountAtCapacity);
+    expect(
+      logger.messages.filter((entry) => {
+        return entry.args.includes("relay_data_socket_capacity_reached");
+      }),
+    ).toHaveLength(1);
+
+    closingSocket.acknowledgeClose();
+    control.message(JSON.stringify({ type: "connected", connectionId: "replacement" }));
+    expect(relay.sockets).toHaveLength(socketCountAtCapacity + 1);
     expect(getDataConnectionIds(relay).at(-1)).toBe("replacement");
 
     control.message(JSON.stringify({ type: "connected", connectionId: "overflow_2" }));

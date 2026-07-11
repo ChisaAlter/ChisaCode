@@ -51,6 +51,21 @@
   通道。不得以新增 native 依赖或删除既有 fallback stop 行为作为未经专项设计的临时修复。
 - **状态**：pending，等待最终审查分流为独立架构任务。
 
+### Server 进程树 ownership / query / deadline 编排拆分（pending）
+
+- **问题**：`packages/server/src/utils/tree-kill.ts` 当前在同一实现中承担 Windows CIM
+  ownership 查询与 CreationDate 复核、POSIX/Linux 进程身份跟踪、child-first signaling，及
+  cleanup absolute deadline / cancellation 编排。Task 4 已补齐 fail-closed、snapshot churn 和
+  deadline 语义，但继续在单文件内扩展会放大跨平台状态机的审查与回归成本。
+- **影响范围**：`packages/server/src/utils/tree-kill.ts`、`packages/server/src/utils/spawn.ts`，以及
+  server 内所有通过 `terminateWithTreeKill` 清理 provider / shell 命令树的调用点。
+- **建议方案**：在不改变现有 public entry point `terminateWithTreeKill` 的前提下，提取私有
+  Windows ownership/query adapter、POSIX identity tracker、以及共享 cleanup-deadline
+  orchestrator；由现有入口组合这些模块并继续统一返回
+  `already-exited | terminated | killed | kill-timeout`。专项迁移必须保留当前 typed operations
+  tests、CreationDate/starttime identity revalidation、fail-closed fallback 与单一 absolute deadline。
+- **状态**：pending。Task 4 仅加固既有入口与私有 typed seams，不在本轮执行高风险结构拆分。
+
 ### 对抗性自审与接线验证（2026-07-05 完成）
 
 - **背景**：对两批改动强制"调用点验证 + 端到端冒烟 + 对抗审查"作为完成标准，主动报告未接线项并修复。

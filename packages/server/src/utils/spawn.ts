@@ -91,25 +91,186 @@ interface ExecCommandKillTimeoutErrorOptions extends ErrorOptions {
   terminationReason: ExecCommandTerminationReason;
 }
 
+const MAX_UTF8_COMPLETION_BYTES = 3;
+const MAX_UTF16LE_COMPLETION_BYTES = 3;
+
+function getCharacterCompletionSlack(encoding: BufferEncoding): number {
+  const normalizedEncoding = encoding.toLowerCase();
+  if (normalizedEncoding === "utf8" || normalizedEncoding === "utf-8") {
+    return MAX_UTF8_COMPLETION_BYTES;
+  }
+  if (
+    normalizedEncoding === "utf16le" ||
+    normalizedEncoding === "utf-16le" ||
+    normalizedEncoding === "ucs2" ||
+    normalizedEncoding === "ucs-2"
+  ) {
+    return MAX_UTF16LE_COMPLETION_BYTES;
+  }
+  return 0;
+}
+
+function isUtf8ContinuationByte(value: number): boolean {
+  return value >= 0x80 && value <= 0xbf;
+}
+
+function getUtf8SequenceLength(leadingByte: number): number {
+  if (leadingByte <= 0x7f) {
+    return 1;
+  }
+  if (leadingByte >= 0xc2 && leadingByte <= 0xdf) {
+    return 2;
+  }
+  if (leadingByte >= 0xe0 && leadingByte <= 0xef) {
+    return 3;
+  }
+  if (leadingByte >= 0xf0 && leadingByte <= 0xf4) {
+    return 4;
+  }
+  return 0;
+}
+
+function getCompleteUtf8ByteLength(buffer: Buffer, boundary: number): number {
+  if (boundary === 0) {
+    return 0;
+  }
+
+  let sequenceStart = boundary - 1;
+  while (sequenceStart >= 0 && isUtf8ContinuationByte(buffer[sequenceStart] ?? 0)) {
+    sequenceStart -= 1;
+  }
+  if (sequenceStart < 0) {
+    return 0;
+  }
+
+  const sequenceLength = getUtf8SequenceLength(buffer[sequenceStart] ?? 0);
+  if (sequenceLength === 0 || boundary - sequenceStart >= sequenceLength) {
+    return boundary;
+  }
+
+  const completedBoundary = sequenceStart + sequenceLength;
+  if (completedBoundary > buffer.byteLength) {
+    return sequenceStart;
+  }
+  for (let index = sequenceStart + 1; index < completedBoundary; index += 1) {
+    if (!isUtf8ContinuationByte(buffer[index] ?? 0)) {
+      return sequenceStart;
+    }
+  }
+  return completedBoundary;
+}
+
+function isHighSurrogate(value: number): boolean {
+  return value >= 0xd800 && value <= 0xdbff;
+}
+
+function isLowSurrogate(value: number): boolean {
+  return value >= 0xdc00 && value <= 0xdfff;
+}
+
+function getCompleteUtf16LeByteLength(buffer: Buffer, boundary: number): number {
+  const codeUnitBoundary = boundary - (boundary % 2);
+  if (boundary % 2 === 1) {
+    if (codeUnitBoundary + 2 > buffer.byteLength) {
+      return codeUnitBoundary;
+    }
+    const codeUnit = buffer.readUInt16LE(codeUnitBoundary);
+    if (isHighSurrogate(codeUnit)) {
+      if (codeUnitBoundary + 4 > buffer.byteLength) {
+        return codeUnitBoundary;
+      }
+      const nextCodeUnit = buffer.readUInt16LE(codeUnitBoundary + 2);
+      return isLowSurrogate(nextCodeUnit) ? codeUnitBoundary + 4 : codeUnitBoundary;
+    }
+    if (isLowSurrogate(codeUnit)) {
+      if (codeUnitBoundary < 2 || !isHighSurrogate(buffer.readUInt16LE(codeUnitBoundary - 2))) {
+        return codeUnitBoundary;
+      }
+    }
+    return codeUnitBoundary + 2;
+  }
+
+  if (boundary < 2) {
+    return boundary;
+  }
+  const finalCodeUnit = buffer.readUInt16LE(boundary - 2);
+  if (isHighSurrogate(finalCodeUnit)) {
+    if (boundary + 2 > buffer.byteLength) {
+      return boundary - 2;
+    }
+    const nextCodeUnit = buffer.readUInt16LE(boundary);
+    return isLowSurrogate(nextCodeUnit) ? boundary + 2 : boundary - 2;
+  }
+  if (
+    isLowSurrogate(finalCodeUnit) &&
+    (boundary < 4 || !isHighSurrogate(buffer.readUInt16LE(boundary - 4)))
+  ) {
+    return boundary - 2;
+  }
+  return boundary;
+}
+
+function getCompleteOutputByteLength(
+  buffer: Buffer,
+  boundary: number,
+  encoding: BufferEncoding,
+): number {
+  const normalizedEncoding = encoding.toLowerCase();
+  if (normalizedEncoding === "utf8" || normalizedEncoding === "utf-8") {
+    return getCompleteUtf8ByteLength(buffer, boundary);
+  }
+  if (
+    normalizedEncoding === "utf16le" ||
+    normalizedEncoding === "utf-16le" ||
+    normalizedEncoding === "ucs2" ||
+    normalizedEncoding === "ucs-2"
+  ) {
+    return getCompleteUtf16LeByteLength(buffer, boundary);
+  }
+  return boundary;
+}
+
 class BoundedOutputBuffer {
   private readonly chunks: Buffer[] = [];
   private byteLength = 0;
+  private readonly byteLimit: number;
+  private readonly captureLimit: number;
+  private observedByteLength = 0;
+  private overflowed = false;
 
-  constructor(private readonly maxBytes: number) {}
+  constructor(
+    private readonly maxBytes: number,
+    private readonly encoding: BufferEncoding,
+  ) {
+    this.byteLimit = Number.isFinite(maxBytes) ? Math.floor(maxBytes) : maxBytes;
+    this.captureLimit = Number.isFinite(this.byteLimit)
+      ? this.byteLimit + getCharacterCompletionSlack(encoding)
+      : this.byteLimit;
+  }
 
   append(value: Buffer | string): boolean {
     const chunk = typeof value === "string" ? Buffer.from(value) : value;
-    const remaining = Math.max(0, this.maxBytes - this.byteLength);
+    this.observedByteLength += chunk.byteLength;
+    const remaining = Math.max(0, this.captureLimit - this.byteLength);
     if (remaining > 0) {
       const boundedChunk = chunk.byteLength > remaining ? chunk.subarray(0, remaining) : chunk;
       this.chunks.push(boundedChunk);
       this.byteLength += boundedChunk.byteLength;
     }
-    return chunk.byteLength > remaining;
+    this.overflowed ||= this.observedByteLength > this.maxBytes;
+    return this.overflowed;
   }
 
-  toString(encoding: BufferEncoding): string {
-    return Buffer.concat(this.chunks, this.byteLength).toString(encoding);
+  toString(): string {
+    const buffer = Buffer.concat(this.chunks, this.byteLength);
+    const outputByteLength = this.overflowed
+      ? getCompleteOutputByteLength(
+          buffer,
+          Math.min(this.byteLimit, buffer.byteLength),
+          this.encoding,
+        )
+      : buffer.byteLength;
+    return buffer.subarray(0, outputByteLength).toString(this.encoding);
   }
 }
 
@@ -336,8 +497,8 @@ export async function execCommand(
     const runtime = options?.runtime ?? DEFAULT_EXEC_COMMAND_RUNTIME;
     const encoding = options?.encoding ?? "utf8";
     const maxBuffer = options?.maxBuffer ?? DEFAULT_EXEC_MAX_BUFFER;
-    const stdoutBuffer = new BoundedOutputBuffer(maxBuffer);
-    const stderrBuffer = new BoundedOutputBuffer(maxBuffer);
+    const stdoutBuffer = new BoundedOutputBuffer(maxBuffer, encoding);
+    const stderrBuffer = new BoundedOutputBuffer(maxBuffer, encoding);
     let terminationReason: ExecCommandTerminationReason | null = null;
     let terminationResult: TerminateWithTreeKillResult | null = null;
     let terminationFailure: unknown;
@@ -412,8 +573,8 @@ export async function execCommand(
         resolve,
         signalCode,
         spawnError,
-        stderr: stderrBuffer.toString(encoding),
-        stdout: stdoutBuffer.toString(encoding),
+        stderr: stderrBuffer.toString(),
+        stdout: stdoutBuffer.toString(),
         terminationFailure,
         terminationReason,
         terminationResult,

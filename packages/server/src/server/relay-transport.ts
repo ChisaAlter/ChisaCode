@@ -402,8 +402,6 @@ export function startRelayTransport({
           } catch {
             // ignore
           }
-          dataSockets.delete(msg.connectionId);
-          resetDataSocketCapacityWarning();
         }
       }
     });

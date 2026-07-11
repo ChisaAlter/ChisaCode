@@ -34,7 +34,7 @@ import { AgentManager } from "./agent/agent-manager.js";
 import { LoopService } from "./loop-service.js";
 import { isPlatform } from "../test-utils/platform.js";
 import { createTestLogger } from "../test-utils/test-logger.js";
-import { ExecCommandTimeoutError } from "../utils/spawn.js";
+import { ExecCommandKillTimeoutError, ExecCommandTimeoutError } from "../utils/spawn.js";
 
 const TEST_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -46,6 +46,7 @@ const TEST_CAPABILITIES: AgentCapabilityFlags = {
 };
 
 interface ScriptedAgentBehavior {
+  onCreate?(config: AgentSessionConfig): void;
   onRun(input: { config: AgentSessionConfig; prompt: string; turnId: string }): Promise<string>;
 }
 
@@ -68,6 +69,7 @@ class ScriptedAgentClient implements AgentClient {
     config: AgentSessionConfig,
     _launchContext?: AgentLaunchContext,
   ): Promise<AgentSession> {
+    this.behavior.onCreate?.(config);
     return new ScriptedAgentSession(config, this.provider, this.behavior);
   }
 
@@ -654,6 +656,200 @@ describe("LoopService", () => {
     ).toEqual([]);
   });
 
+  test("does not succeed when stop is requested during verify-result persistence", async () => {
+    let markPersistBlocked: (() => void) | null = null;
+    let releasePersist: (() => void) | null = null;
+    let blocked = false;
+    const persistBlocked = new Promise<void>((resolve) => {
+      markPersistBlocked = resolve;
+    });
+    const persistRelease = new Promise<void>((resolve) => {
+      releasePersist = resolve;
+    });
+    const persistLoopState: NonNullable<
+      ConstructorParameters<typeof LoopService>[0]["persistLoopState"]
+    > = async (_storePath, value) => {
+      const records = JSON.parse(value) as Array<{
+        status: string;
+        iterations: Array<{ verifyChecks: unknown[] }>;
+      }>;
+      const record = records[0];
+      if (
+        !blocked &&
+        record?.status === "running" &&
+        record.iterations[0]?.verifyChecks.length === 1
+      ) {
+        blocked = true;
+        markPersistBlocked?.();
+        await persistRelease;
+      }
+    };
+    const runVerifyCommand: NonNullable<
+      ConstructorParameters<typeof LoopService>[0]["runVerifyCommand"]
+    > = async () => ({ stdout: "verified", stderr: "" });
+    const manager = createWorkerOnlyManager(storage, logger);
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      persistLoopState,
+      runVerifyCommand,
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyChecks: ["persisted-check"],
+      maxIterations: 1,
+    });
+    await persistBlocked;
+    const beforeStop = await service.inspectLoop(loop.id);
+    const workerCompletedAt = beforeStop.iterations[0]?.workerCompletedAt;
+
+    const stopPromise = service.stopLoop(loop.id);
+    await vi.waitFor(async () => {
+      const state = await service.inspectLoop(loop.id);
+      expect(hasLogText(state.logs, "Stop requested.")).toBe(true);
+    });
+    releasePersist?.();
+    const stopped = await stopPromise;
+
+    expect(stopped.status).toBe("stopped");
+    expect(stopped.iterations[0]?.status).toBe("stopped");
+    expect(stopped.iterations[0]?.workerCompletedAt).toBe(workerCompletedAt);
+    expect(stopped.logs.some((entry) => entry.text.includes("passed verification"))).toBe(false);
+  });
+
+  test.each(["throws", "returns-pass"] as const)(
+    "canonicalizes verifier cancellation when the provider %s after stop",
+    async (outcome) => {
+      let markVerifierStarted: (() => void) | null = null;
+      let releaseVerifier: (() => void) | null = null;
+      let verifierSignal: AbortSignal | undefined;
+      const verifierStarted = new Promise<void>((resolve) => {
+        markVerifierStarted = resolve;
+      });
+      const verifierRelease = new Promise<void>((resolve) => {
+        releaseVerifier = resolve;
+      });
+      const runVerifierPrompt: NonNullable<
+        ConstructorParameters<typeof LoopService>[0]["runVerifierPrompt"]
+      > = async ({ signal }) => {
+        verifierSignal = signal;
+        markVerifierStarted?.();
+        await verifierRelease;
+        if (outcome === "throws") {
+          throw new Error("provider canceled with noncanonical error");
+        }
+        return { passed: true, reason: "late verifier pass" };
+      };
+      const manager = createWorkerOnlyManager(storage, logger);
+      const service = new LoopService({
+        chisacodeHome,
+        agentManager: manager,
+        logger,
+        runVerifierPrompt,
+      });
+      await service.initialize();
+
+      const loop = await service.runLoop({
+        prompt: "Finish the worker turn.",
+        cwd: workspaceDir,
+        verifyPrompt: "Verify the worker result.",
+      });
+      await verifierStarted;
+      const beforeStop = await service.inspectLoop(loop.id);
+      const workerCompletedAt = beforeStop.iterations[0]?.workerCompletedAt;
+
+      try {
+        const stopPromise = service.stopLoop(loop.id);
+        await vi.waitFor(() => {
+          expect(verifierSignal?.aborted).toBe(true);
+        });
+        releaseVerifier?.();
+        const stopped = await stopPromise;
+
+        expect(stopped.status).toBe("stopped");
+        expect(stopped.iterations).toHaveLength(1);
+        expect(stopped.iterations[0]?.status).toBe("stopped");
+        expect(stopped.iterations[0]?.workerCompletedAt).toBe(workerCompletedAt);
+        expect(stopped.iterations[0]?.verifyPrompt).toBeNull();
+        expect(stopped.logs.some((entry) => entry.text.includes("Verifier result"))).toBe(false);
+        expect(stopped.logs.some((entry) => entry.text.includes("passed verification"))).toBe(
+          false,
+        );
+      } finally {
+        releaseVerifier?.();
+        await service.stopLoop(loop.id);
+      }
+    },
+  );
+
+  test("maps a deadline reached while persisting a passing verify result", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
+    let markPersistBlocked: (() => void) | null = null;
+    let releasePersist: (() => void) | null = null;
+    let blocked = false;
+    const persistBlocked = new Promise<void>((resolve) => {
+      markPersistBlocked = resolve;
+    });
+    const persistRelease = new Promise<void>((resolve) => {
+      releasePersist = resolve;
+    });
+    const persistLoopState: NonNullable<
+      ConstructorParameters<typeof LoopService>[0]["persistLoopState"]
+    > = async (_storePath, value) => {
+      const records = JSON.parse(value) as Array<{
+        status: string;
+        iterations: Array<{ verifyChecks: unknown[] }>;
+      }>;
+      const record = records[0];
+      if (
+        !blocked &&
+        record?.status === "running" &&
+        record.iterations[0]?.verifyChecks.length === 1
+      ) {
+        blocked = true;
+        markPersistBlocked?.();
+        await persistRelease;
+      }
+    };
+    const manager = createWorkerOnlyManager(storage, logger);
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      persistLoopState,
+      runVerifyCommand: async () => ({ stdout: "verified", stderr: "" }),
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyChecks: ["deadline-check"],
+      maxIterations: 1,
+      maxTimeMs: 1_000,
+    });
+    await persistBlocked;
+
+    vi.setSystemTime(startedAtMs + 1_000);
+    releasePersist?.();
+    await vi.waitFor(async () => {
+      const state = await service.inspectLoop(loop.id);
+      expect(state.status).not.toBe("running");
+    });
+
+    const finalLoop = await service.inspectLoop(loop.id);
+    expect(finalLoop.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
+    expect(finalLoop.logs.some((entry) => entry.text.includes("passed verification"))).toBe(false);
+  });
+
   test("limits a verify command timeout to the remaining loop deadline", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
@@ -746,6 +942,155 @@ describe("LoopService", () => {
     expect(finalLoop.iterations).toHaveLength(1);
     expect(finalLoop.iterations[0]?.status).toBe("failed");
     expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
+  });
+
+  test("does not create a verifier after the loop deadline is exhausted", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
+    const createdConfigs: AgentSessionConfig[] = [];
+    const manager = new AgentManager({
+      clients: {
+        claude: new ScriptedAgentClient("claude", {
+          onCreate(config) {
+            createdConfigs.push(config);
+          },
+          async onRun() {
+            vi.setSystemTime(startedAtMs + 1_000);
+            return "worker finished";
+          },
+        }),
+      },
+      registry: storage,
+      logger,
+    });
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      persistLoopState: () => Promise.resolve(),
+      runVerifierPrompt: async () => {
+        throw new Error("Verifier must not run after the deadline");
+      },
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish after the deadline.",
+      cwd: workspaceDir,
+      verifyPrompt: "Must not create a verifier.",
+      maxIterations: 1,
+      maxTimeMs: 1_000,
+    });
+    await vi.waitFor(async () => {
+      const state = await service.inspectLoop(loop.id);
+      expect(state.status).not.toBe("running");
+    });
+
+    const finalLoop = await service.inspectLoop(loop.id);
+    expect(createdConfigs).toHaveLength(1);
+    expect(finalLoop.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
+    expect(finalLoop.iterations[0]?.verifierAgentId).toBeNull();
+    expect(finalLoop.iterations[0]?.verifyPrompt).toBeNull();
+  });
+
+  test("rejects a verifier pass returned after the loop deadline", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
+    const manager = createWorkerOnlyManager(storage, logger);
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      persistLoopState: () => Promise.resolve(),
+      runVerifierPrompt: async () => {
+        vi.setSystemTime(startedAtMs + 1_000);
+        return { passed: true, reason: "late pass" };
+      },
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyPrompt: "Verify before the deadline.",
+      maxIterations: 1,
+      maxTimeMs: 1_000,
+    });
+    await vi.waitFor(async () => {
+      const state = await service.inspectLoop(loop.id);
+      expect(state.status).not.toBe("running");
+    });
+
+    const finalLoop = await service.inspectLoop(loop.id);
+    expect(finalLoop.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
+    expect(finalLoop.iterations[0]?.verifyPrompt).toBeNull();
+    expect(finalLoop.logs.some((entry) => entry.text.includes("Verifier result"))).toBe(false);
+  });
+
+  test("treats verify cleanup timeout as a fatal loop execution failure", async () => {
+    const loggedErrors: unknown[] = [];
+    const capturingLogger = createCapturingLoopLogger(
+      loggedErrors,
+    ) as unknown as ConstructorParameters<typeof LoopService>[0]["logger"];
+    const cleanupError = new ExecCommandKillTimeoutError({
+      cause: new RangeError("stdout maxBuffer length exceeded"),
+      cleanupCause: new Error("cleanup could not be confirmed"),
+      cmd: "verify-overflow",
+      signal: "SIGKILL",
+      stderr: "captured stderr",
+      stdout: "captured stdout",
+      terminationReason: "maxBuffer",
+    });
+    let markVerifyAttempted: (() => void) | null = null;
+    const verifyAttempted = new Promise<void>((resolve) => {
+      markVerifyAttempted = resolve;
+    });
+    const manager = createWorkerOnlyManager(storage, logger);
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger: capturingLogger,
+      persistLoopState: () => Promise.resolve(),
+      runVerifyCommand: async () => {
+        markVerifyAttempted?.();
+        throw cleanupError;
+      },
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyChecks: ["verify-overflow"],
+      maxIterations: 3,
+      sleepMs: 60_000,
+    });
+
+    try {
+      await verifyAttempted;
+      await vi.waitFor(async () => {
+        const state = await service.inspectLoop(loop.id);
+        expect(state.status !== "running" || hasSleepLog(state.logs)).toBe(true);
+      });
+
+      const finalLoop = await service.inspectLoop(loop.id);
+      expect(finalLoop.status).toBe("failed");
+      expect(finalLoop.iterations).toHaveLength(1);
+      expect(finalLoop.iterations[0]?.status).toBe("failed");
+      expect(finalLoop.iterations[0]?.failureReason).toBe(cleanupError.message);
+      expect(finalLoop.iterations[0]?.verifyChecks).toEqual([]);
+      expect(finalLoop.logs.filter((entry) => entry.text.startsWith("Sleeping "))).toEqual([]);
+      expect(finalLoop.logs.some((entry) => entry.text === cleanupError.message)).toBe(true);
+      expect(loggedErrors).toContainEqual(expect.objectContaining({ err: cleanupError }));
+    } finally {
+      await service.stopLoop(loop.id);
+    }
   });
 
   test.each([
@@ -848,6 +1193,42 @@ function pathExists(target: string): boolean {
 
 function hasSleepLog(entries: Array<{ text: string }>): boolean {
   return entries.some((entry) => entry.text.startsWith("Sleeping "));
+}
+
+function hasLogText(entries: Array<{ text: string }>, text: string): boolean {
+  return entries.some((entry) => entry.text === text);
+}
+
+function createWorkerOnlyManager(
+  storage: AgentStorage,
+  logger: ReturnType<typeof createTestLogger>,
+) {
+  return new AgentManager({
+    clients: {
+      claude: new ScriptedAgentClient("claude", {
+        async onRun() {
+          return "worker finished";
+        },
+      }),
+    },
+    registry: storage,
+    logger,
+  });
+}
+
+function createCapturingLoopLogger(loggedErrors: unknown[]) {
+  const logger = {
+    child: () => logger,
+    debug() {},
+    error(context: unknown) {
+      loggedErrors.push(context);
+    },
+    fatal() {},
+    info() {},
+    trace() {},
+    warn() {},
+  };
+  return logger;
 }
 
 async function waitForLoopCompletion(service: LoopService, loopId: string): Promise<void> {

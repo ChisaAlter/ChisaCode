@@ -26,6 +26,7 @@ interface TerminateWithTreeKillOptions {
   forceTimeoutMs?: number;
   onForceSignal?: () => void;
   operations?: TreeKillOperations;
+  linuxOperations?: LinuxTreeKillOperations;
   ownership?: TreeKillOwnership;
   signal?: AbortSignal;
   windowsOperations?: WindowsTreeKillOperations;
@@ -38,6 +39,7 @@ interface TrackedProcess {
 }
 
 interface TreeKillOperations {
+  allowsUnverifiedRootFallback?: boolean;
   snapshot(cleanupSignal: AbortSignal): Promise<TrackedProcess[]>;
   listRunning(
     processes: readonly TrackedProcess[],
@@ -56,6 +58,13 @@ interface WindowsTreeKillOperations {
   query(cleanupSignal: AbortSignal): Promise<WindowsProcessRecord[]>;
   signal(pid: number, signal: NodeJS.Signals): void;
   isRunning(pid: number): boolean;
+}
+
+interface LinuxTreeKillOperations {
+  readProcess(pid: number): Promise<PosixProcessRecord | null>;
+  readTopology(cleanupSignal?: AbortSignal): Promise<Map<number, PosixProcessRecord>>;
+  signal(pid: number, signal: NodeJS.Signals): void;
+  signalProcessGroup(processGroupId: number, signal: NodeJS.Signals): void;
 }
 
 export type TerminateWithTreeKillResult =
@@ -189,9 +198,24 @@ export async function terminateWithTreeKill(
       return "already-exited";
     }
 
-    const trackedResult = await terminateTrackedProcessTree(child, options, deadline);
+    const operations =
+      options.operations ??
+      createDefaultTreeKillOperations(
+        child,
+        options.ownership,
+        deadline,
+        options.windowsOperations,
+        options.linuxOperations,
+      );
+    const trackedResult = await terminateTrackedProcessTree(options, deadline, operations);
     if (trackedResult !== "tracking-unavailable" && trackedResult !== "tracking-unverified") {
       return trackedResult;
+    }
+    if (
+      trackedResult === "tracking-unverified" &&
+      operations?.allowsUnverifiedRootFallback === false
+    ) {
+      return "kill-timeout";
     }
 
     const fallbackResult = await terminateRootObservedTree(child, options, deadline);
@@ -207,13 +231,10 @@ export async function terminateWithTreeKill(
 }
 
 async function terminateTrackedProcessTree(
-  child: TreeKillTarget,
   options: TerminateWithTreeKillOptions,
   deadline: TreeKillCleanupDeadline,
+  operations: TreeKillOperations | null,
 ): Promise<TrackedTerminationResult> {
-  const operations =
-    options.operations ??
-    createDefaultTreeKillOperations(child, options.ownership, deadline, options.windowsOperations);
   if (!operations) {
     return "tracking-unavailable";
   }
@@ -353,12 +374,13 @@ function createDefaultTreeKillOperations(
   ownership: TreeKillOwnership | undefined,
   deadline: TreeKillCleanupDeadline,
   windowsOperations?: WindowsTreeKillOperations,
+  linuxOperations?: LinuxTreeKillOperations,
 ): TreeKillOperations | null {
   const pid = ownership?.rootPid ?? child.pid;
   if (typeof pid !== "number" || pid <= 0) {
     return null;
   }
-  if (process.platform === "win32" || windowsOperations) {
+  if (windowsOperations || (process.platform === "win32" && !linuxOperations)) {
     const queryDeadlineMs = deadline.expiresAtMs;
     const resolvedWindowsOperations =
       windowsOperations ??
@@ -371,6 +393,7 @@ function createDefaultTreeKillOperations(
         signal: signalPid,
       } satisfies WindowsTreeKillOperations);
     return {
+      allowsUnverifiedRootFallback: false,
       async snapshot(cleanupSignal) {
         const processes = await resolvedWindowsOperations.query(cleanupSignal);
         return selectOwnedWindowsProcesses({
@@ -391,6 +414,48 @@ function createDefaultTreeKillOperations(
         );
         for (const process of running) {
           resolvedWindowsOperations.signal(process.pid, signal);
+        }
+      },
+    };
+  }
+  if (process.platform === "linux" || linuxOperations) {
+    const resolvedLinuxOperations =
+      linuxOperations ??
+      ({
+        readProcess: readLinuxProcessRecord,
+        readTopology: readPosixProcessTopology,
+        signal: signalPid,
+        signalProcessGroup,
+      } satisfies LinuxTreeKillOperations);
+    return {
+      async snapshot(cleanupSignal) {
+        return snapshotLinuxProcessTree(
+          pid,
+          ownership?.processGroupId,
+          cleanupSignal,
+          resolvedLinuxOperations,
+        );
+      },
+      async listRunning(processes) {
+        return listRunningLinuxProcesses(processes, resolvedLinuxOperations.readProcess);
+      },
+      async signal(processes, signal) {
+        const running = await listRunningLinuxProcesses(
+          processes,
+          resolvedLinuxOperations.readProcess,
+        );
+        const processGroupId = ownership?.processGroupId;
+        const hasProcessGroupAnchor =
+          processGroupId !== undefined &&
+          running.some((process) => process.processGroupId === processGroupId);
+        if (hasProcessGroupAnchor) {
+          resolvedLinuxOperations.signalProcessGroup(processGroupId, signal);
+        }
+        for (const process of running) {
+          if (hasProcessGroupAnchor && process.processGroupId === processGroupId) {
+            continue;
+          }
+          resolvedLinuxOperations.signal(process.pid, signal);
         }
       },
     };
@@ -496,19 +561,26 @@ async function snapshotLinuxProcessTree(
   rootPid: number,
   processGroupId?: number,
   cleanupSignal?: AbortSignal,
+  operations: Pick<LinuxTreeKillOperations, "readProcess" | "readTopology"> = {
+    readProcess: readLinuxProcessRecord,
+    readTopology: readPosixProcessTopology,
+  },
 ): Promise<TrackedProcess[]> {
-  const processTable = await readPosixProcessTopology(cleanupSignal);
+  const processTable = await operations.readTopology(cleanupSignal);
   const trackedPids = collectOwnedProcessPids(rootPid, processGroupId, processTable);
   if (trackedPids.length === 0) {
     return [];
   }
   const tracked: TrackedProcess[] = [];
   for (const pid of trackedPids) {
-    const process = await readLinuxProcessRecord(pid);
+    const process = await operations.readProcess(pid);
     const expected = processTable.get(pid);
+    if (!process) {
+      continue;
+    }
     if (
-      !process ||
-      process.parentPid !== expected?.parentPid ||
+      !expected ||
+      process.parentPid !== expected.parentPid ||
       process.processGroupId !== expected.processGroupId
     ) {
       throw new Error(`Process ${pid} changed while its tree was being captured`);
@@ -605,11 +677,12 @@ async function listRunningPosixProcesses(
 
 async function listRunningLinuxProcesses(
   processes: readonly TrackedProcess[],
+  readProcess: LinuxTreeKillOperations["readProcess"] = readLinuxProcessRecord,
 ): Promise<TrackedProcess[]> {
   const running: TrackedProcess[] = [];
   for (const process of processes) {
     try {
-      const current = await readLinuxProcessRecord(process.pid);
+      const current = await readProcess(process.pid);
       const refreshed = refreshTrackedPosixProcess(process, current);
       if (refreshed) {
         running.push(refreshed);
@@ -803,9 +876,15 @@ export function selectOwnedWindowsProcesses(
   if (finiteLaunchedAtMs === undefined && (options.rootExited || currentRoot === undefined)) {
     throw new WindowsProcessOwnershipUnverifiedError();
   }
+  const ownershipEligibleProcesses = eligibleProcesses.filter(
+    (process) =>
+      process.pid === options.rootPid ||
+      finiteLaunchedAtMs === undefined ||
+      process.creationTimeMs >= finiteLaunchedAtMs,
+  );
   const oldLineageAnchors =
     finiteLaunchedAtMs !== undefined && currentRoot
-      ? eligibleProcesses.filter(
+      ? ownershipEligibleProcesses.filter(
           (process) =>
             process.parentPid === options.rootPid &&
             process.pid !== options.rootPid &&
@@ -815,7 +894,7 @@ export function selectOwnedWindowsProcesses(
   const rootReuseProven =
     currentRoot !== undefined && (options.rootExited || oldLineageAnchors.length > 0);
   const eligibleTable = new Map(
-    eligibleProcesses
+    ownershipEligibleProcesses
       .filter((process) => !rootReuseProven || process.pid !== options.rootPid)
       .map((process) => [process.pid, process] as const),
   );

@@ -13,7 +13,12 @@ import type {
   AgentTimelineItem,
   AgentProvider,
 } from "./agent/agent-sdk-types.js";
-import { ExecCommandTimeoutError, execCommand, platformShell } from "../utils/spawn.js";
+import {
+  ExecCommandKillTimeoutError,
+  ExecCommandTimeoutError,
+  execCommand,
+  platformShell,
+} from "../utils/spawn.js";
 import { writeFileAtomic } from "../utils/atomic-write.js";
 import { getUnattendedModeId } from "@chisacode/protocol/provider-manifest";
 
@@ -160,6 +165,18 @@ type VerifyCommandRunner = (
   options: VerifyCommandRunnerOptions,
 ) => Promise<{ stdout: string; stderr: string }>;
 
+interface VerifierPromptRunnerOptions {
+  agentId: string;
+  prompt: string;
+  signal: AbortSignal;
+}
+
+type VerifierPromptRunner = (
+  options: VerifierPromptRunnerOptions,
+) => Promise<z.infer<typeof LoopVerifyPromptSchema>>;
+
+type LoopStateWriter = (storePath: string, value: string) => Promise<void>;
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -280,6 +297,7 @@ async function runVerifyCommandWithExec(
 export class LoopService {
   private readonly storePath: string;
   private readonly logger: Logger;
+  private readonly loopStateWriter: LoopStateWriter;
   private readonly verifyCommandRunner: VerifyCommandRunner;
   private loaded = false;
   private readonly loops = new Map<string, LoopRecord>();
@@ -291,11 +309,14 @@ export class LoopService {
       chisacodeHome: string;
       agentManager: AgentManager;
       logger: Logger;
+      persistLoopState?: LoopStateWriter;
       runVerifyCommand?: VerifyCommandRunner;
+      runVerifierPrompt?: VerifierPromptRunner;
     },
   ) {
     this.storePath = path.join(options.chisacodeHome, "loops", "loops.json");
     this.logger = options.logger.child({ module: "loop-service" });
+    this.loopStateWriter = options.persistLoopState ?? writeFileAtomic;
     this.verifyCommandRunner = options.runVerifyCommand ?? runVerifyCommandWithExec;
   }
 
@@ -461,10 +482,10 @@ export class LoopService {
       level: "info",
       text: "Stop requested.",
     });
+    running?.abortController.abort(new Error("Loop aborted"));
     await this.persist();
 
     if (running) {
-      running.abortController.abort(new Error("Loop aborted"));
       if (loop.activeWorkerAgentId) {
         await this.options.agentManager.cancelAgentRun(loop.activeWorkerAgentId).catch(() => {});
       }
@@ -531,6 +552,7 @@ export class LoopService {
           iteration.status = iteration.status === "stopped" ? "stopped" : "failed";
         } else {
           const verificationPassed = await this.runVerification(loop, iteration, signal, deadline);
+          this.assertVerificationCanContinue(loop, signal, deadline);
           if (verificationPassed) {
             iteration.status = "succeeded";
             this.finishLoop(loop, "succeeded", `Iteration ${index} passed verification.`);
@@ -675,13 +697,8 @@ export class LoopService {
     deadline: number | null,
   ): Promise<boolean> {
     for (const command of loop.verifyChecks) {
-      if (signal.aborted) {
-        throw new Error("Loop aborted");
-      }
+      this.assertVerificationCanContinue(loop, signal, deadline);
       const timeoutMs = deadline === null ? undefined : deadline - Date.now();
-      if (timeoutMs !== undefined && timeoutMs <= 0) {
-        throw new Error(`Reached max time (${loop.maxTimeMs}ms).`);
-      }
       this.appendLog(loop, {
         iteration: iteration.index,
         source: "verify-check",
@@ -692,11 +709,13 @@ export class LoopService {
       try {
         result = await this.runVerifyCheck({ cwd: loop.cwd, command, signal, timeoutMs });
       } catch (error) {
+        this.assertVerificationCanContinue(loop, signal, deadline, error);
         if (error instanceof ExecCommandTimeoutError && loop.maxTimeMs !== null) {
           throw new Error(`Reached max time (${loop.maxTimeMs}ms).`, { cause: error });
         }
         throw error;
       }
+      this.assertVerificationCanContinue(loop, signal, deadline);
       iteration.verifyChecks.push(result);
       const output = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
       this.appendLog(loop, {
@@ -707,6 +726,7 @@ export class LoopService {
       });
       loop.updatedAt = nowIso();
       await this.persist();
+      this.assertVerificationCanContinue(loop, signal, deadline);
       if (!result.passed) {
         iteration.failureReason = `Verify check failed: ${command}`;
         return false;
@@ -714,83 +734,130 @@ export class LoopService {
     }
 
     if (!loop.verifyPrompt) {
+      this.assertVerificationCanContinue(loop, signal, deadline);
       return true;
     }
 
+    this.assertVerificationCanContinue(loop, signal, deadline);
     const startedAt = nowIso();
-    const verifierAgent = await this.options.agentManager.createAgent(
-      this.buildVerifierConfig(loop, iteration),
-    );
-    iteration.verifierAgentId = verifierAgent.id;
-    loop.activeVerifierAgentId = verifierAgent.id;
-    loop.updatedAt = nowIso();
-    await this.persist();
+    let verifierAgent: Awaited<ReturnType<AgentManager["createAgent"]>>;
+    try {
+      verifierAgent = await this.options.agentManager.createAgent(
+        this.buildVerifierConfig(loop, iteration),
+      );
+    } catch (error) {
+      this.assertVerificationCanContinue(loop, signal, deadline, error);
+      throw error;
+    }
 
-    const unsubscribe = this.options.agentManager.subscribe(
-      (event) => {
-        if (event.type !== "agent_stream") {
-          return;
-        }
-        const text = formatStreamLog(event.event);
-        if (!text) {
-          return;
-        }
+    let unsubscribe = () => {};
+    let verificationPassed: boolean | null = null;
+    try {
+      try {
+        this.assertVerificationCanContinue(loop, signal, deadline);
+        iteration.verifierAgentId = verifierAgent.id;
+        loop.activeVerifierAgentId = verifierAgent.id;
+        loop.updatedAt = nowIso();
+        await this.persist();
+        this.assertVerificationCanContinue(loop, signal, deadline);
+
+        unsubscribe = this.options.agentManager.subscribe(
+          (event) => {
+            if (event.type !== "agent_stream") {
+              return;
+            }
+            const text = formatStreamLog(event.event);
+            if (!text) {
+              return;
+            }
+            this.appendLog(loop, {
+              iteration: iteration.index,
+              source: "verifier",
+              level: event.event.type === "turn_failed" ? "error" : "info",
+              text,
+            });
+            void this.persist();
+          },
+          { agentId: verifierAgent.id, replayState: false },
+        );
+
+        const result = this.options.runVerifierPrompt
+          ? await this.options.runVerifierPrompt({
+              agentId: verifierAgent.id,
+              prompt: loop.verifyPrompt,
+              signal,
+            })
+          : await getStructuredAgentResponse({
+              caller: async (nextPrompt) => {
+                const run = await this.options.agentManager.runAgent(
+                  verifierAgent.id,
+                  this.toPrompt(nextPrompt),
+                );
+                return this.resolveFinalText(run.timeline, run.finalText);
+              },
+              prompt: loop.verifyPrompt,
+              schema: LoopVerifyPromptSchema,
+              maxRetries: 2,
+              schemaName: "LoopVerifierResult",
+            });
+        this.assertVerificationCanContinue(loop, signal, deadline);
+        iteration.verifyPrompt = {
+          passed: result.passed,
+          reason: result.reason,
+          verifierAgentId: verifierAgent.id,
+          startedAt,
+          completedAt: nowIso(),
+        };
         this.appendLog(loop, {
           iteration: iteration.index,
-          source: "verifier",
-          level: event.event.type === "turn_failed" ? "error" : "info",
-          text,
+          source: "loop",
+          level: result.passed ? "info" : "error",
+          text: `Verifier result: ${result.reason}`,
         });
-        void this.persist();
-      },
-      { agentId: verifierAgent.id, replayState: false },
-    );
-
-    try {
-      const result = await getStructuredAgentResponse({
-        caller: async (nextPrompt) => {
-          const run = await this.options.agentManager.runAgent(
-            verifierAgent.id,
-            this.toPrompt(nextPrompt),
-          );
-          return this.resolveFinalText(run.timeline, run.finalText);
-        },
-        prompt: loop.verifyPrompt,
-        schema: LoopVerifyPromptSchema,
-        maxRetries: 2,
-        schemaName: "LoopVerifierResult",
-      });
-      iteration.verifyPrompt = {
-        passed: result.passed,
-        reason: result.reason,
-        verifierAgentId: verifierAgent.id,
-        startedAt,
-        completedAt: nowIso(),
-      };
-      this.appendLog(loop, {
-        iteration: iteration.index,
-        source: "loop",
-        level: result.passed ? "info" : "error",
-        text: `Verifier result: ${result.reason}`,
-      });
-      if (!result.passed) {
-        iteration.failureReason = result.reason;
-      }
-      return result.passed;
-    } finally {
-      unsubscribe();
-      loop.activeVerifierAgentId = null;
-      loop.updatedAt = nowIso();
-      await this.persist();
-      try {
-        if (loop.archive) {
-          await this.options.agentManager.archiveAgent(verifierAgent.id);
-        } else {
-          await this.options.agentManager.closeAgent(verifierAgent.id);
+        if (!result.passed) {
+          iteration.failureReason = result.reason;
         }
-      } catch {
-        // Ignore cleanup errors for internal loop verifiers.
+        verificationPassed = result.passed;
+      } finally {
+        unsubscribe();
+        loop.activeVerifierAgentId = null;
+        loop.updatedAt = nowIso();
+        await this.persist();
+        try {
+          if (loop.archive) {
+            await this.options.agentManager.archiveAgent(verifierAgent.id);
+          } else {
+            await this.options.agentManager.closeAgent(verifierAgent.id);
+          }
+        } catch {
+          // Ignore cleanup errors for internal loop verifiers.
+        }
       }
+    } catch (error) {
+      this.assertVerificationCanContinue(loop, signal, deadline, error);
+      throw error;
+    }
+    this.assertVerificationCanContinue(loop, signal, deadline);
+    if (verificationPassed === null) {
+      throw new Error("Verifier completed without a result");
+    }
+    return verificationPassed;
+  }
+
+  private assertVerificationCanContinue(
+    loop: LoopRecord,
+    signal: AbortSignal,
+    deadline: number | null,
+    cause?: unknown,
+  ): void {
+    if (signal.aborted) {
+      throw new Error("Loop aborted", cause === undefined ? undefined : { cause });
+    }
+    if (deadline !== null && deadline - Date.now() <= 0) {
+      throw new Error(
+        `Reached max time (${loop.maxTimeMs}ms).`,
+        cause === undefined ? undefined : { cause },
+      );
     }
   }
 
@@ -813,7 +880,10 @@ export class LoopService {
       if (options.signal.aborted) {
         throw new Error("Loop aborted", { cause: error });
       }
-      if (error instanceof ExecCommandTimeoutError) {
+      if (
+        error instanceof ExecCommandTimeoutError ||
+        error instanceof ExecCommandKillTimeoutError
+      ) {
         throw error;
       }
       const childError = error as Error & {
@@ -932,7 +1002,7 @@ export class LoopService {
       const records = Array.from(this.loops.values()).sort((left, right) =>
         left.createdAt.localeCompare(right.createdAt),
       );
-      await writeFileAtomic(this.storePath, JSON.stringify(records, null, 2));
+      await this.loopStateWriter(this.storePath, JSON.stringify(records, null, 2));
       return;
     });
     this.persistQueue = nextPersist.catch(() => {});
