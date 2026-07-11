@@ -189,6 +189,105 @@ describe("terminateWithTreeKill", () => {
     });
   });
 
+  test("ignores older Windows children when live root ownership has no launch bound", () => {
+    const selected = selectOwnedWindowsProcesses({
+      processes: createUnboundedWindowsProcessRecords(),
+      rootExited: false,
+      rootPid: 42,
+    });
+
+    expect(selected.map((process) => process.pid)).toEqual([200, 42]);
+  });
+
+  test("signals only the live Windows root lineage when ownership has no launch bound", async () => {
+    const records = createUnboundedWindowsProcessRecords();
+    const running = new Set(records.map((process) => process.pid));
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let queryCount = 0;
+    const child = {
+      pid: 42,
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        return true;
+      },
+    };
+    const windowsOperations: TestWindowsOperations = {
+      async query() {
+        queryCount += 1;
+        return records;
+      },
+      signal(pid, signal) {
+        signals.push({ pid, signal });
+        running.delete(pid);
+      },
+      isRunning(pid) {
+        return running.has(pid);
+      },
+    };
+
+    const result = await terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      windowsOperations,
+    });
+
+    expect(result).toBe("terminated");
+    expect(signals).toEqual([
+      { pid: 200, signal: "SIGTERM" },
+      { pid: 42, signal: "SIGTERM" },
+    ]);
+    expect([...running]).toEqual([100]);
+    expect(queryCount).toBe(2);
+  });
+
+  test.each([
+    {
+      records: createUnboundedWindowsProcessRecords(),
+      rootState: "reused",
+    },
+    {
+      records: createUnboundedWindowsProcessRecords().filter((process) => process.pid !== 42),
+      rootState: "missing",
+    },
+  ])(
+    "fails closed without a launch bound when the exited Windows root is $rootState",
+    async ({ records }) => {
+      const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+      let queryCount = 0;
+      const child = {
+        pid: 42,
+        exitCode: 0,
+        signalCode: null,
+        kill() {
+          return true;
+        },
+      };
+      const windowsOperations: TestWindowsOperations = {
+        async query() {
+          queryCount += 1;
+          return records;
+        },
+        signal(pid, signal) {
+          signals.push({ pid, signal });
+        },
+        isRunning() {
+          return true;
+        },
+      };
+
+      const result = await terminateWithTreeKill(child, {
+        gracefulTimeoutMs: 0,
+        forceTimeoutMs: 0,
+        windowsOperations,
+      });
+
+      expect(result).toBe("kill-timeout");
+      expect(signals).toEqual([]);
+      expect(queryCount).toBe(1);
+    },
+  );
+
   test("excludes a reused Windows root and its newer descendants", () => {
     const processes = createReusedWindowsProcessRecords();
 
@@ -267,6 +366,54 @@ describe("terminateWithTreeKill", () => {
     ]);
     expect([...running].sort((left, right) => left - right)).toEqual([42, 200, 201, 202]);
     expect(queryCount).toBe(2);
+  });
+
+  test("force-kills a late Windows descendant that survives graceful signaling", async () => {
+    const records = createLateWindowsDescendantRecords();
+    const running = new Set(records.map((process) => process.pid));
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    let queryCount = 0;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill() {
+        return true;
+      },
+    };
+    const windowsOperations: TestWindowsOperations = {
+      async query() {
+        queryCount += 1;
+        return records;
+      },
+      signal(pid, signal) {
+        signals.push({ pid, signal });
+        if (signal === "SIGKILL" || pid === 100) {
+          running.delete(pid);
+        }
+      },
+      isRunning(pid) {
+        return running.has(pid);
+      },
+    };
+
+    const result = await terminateWithTreeKill(child, {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      ownership: {
+        launchedAtMs: 1_000,
+        rootPid: 42,
+      },
+      windowsOperations,
+    });
+
+    expect(result).toBe("killed");
+    expect(signals).toEqual([
+      { pid: 101, signal: "SIGTERM" },
+      { pid: 100, signal: "SIGTERM" },
+      { pid: 101, signal: "SIGKILL" },
+    ]);
+    expect([...running].sort((left, right) => left - right)).toEqual([42, 200, 201, 202]);
+    expect(queryCount).toBe(3);
   });
 
   test("fails closed when a reused Windows root has no provable old lineage", () => {
@@ -1013,6 +1160,29 @@ function createLateWindowsDescendantRecords(): WindowsProcessSelectionRecord[] {
       identity: "windows-creation:5200-new-lineage",
       parentPid: 201,
       pid: 202,
+    },
+  ];
+}
+
+function createUnboundedWindowsProcessRecords(): WindowsProcessSelectionRecord[] {
+  return [
+    {
+      creationTimeMs: 1_000,
+      identity: "windows-creation:1000-stale-child",
+      parentPid: 42,
+      pid: 100,
+    },
+    {
+      creationTimeMs: 5_000,
+      identity: "windows-creation:5000-live-root",
+      parentPid: 1,
+      pid: 42,
+    },
+    {
+      creationTimeMs: 5_100,
+      identity: "windows-creation:5100-current-child",
+      parentPid: 42,
+      pid: 200,
     },
   ];
 }

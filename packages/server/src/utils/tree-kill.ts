@@ -178,7 +178,14 @@ export async function terminateWithTreeKill(
     options.signal,
   );
   try {
-    if (isProcessExited(child) && !options.operations && !options.ownership) {
+    const hasWindowsProcessTracking =
+      process.platform === "win32" || options.windowsOperations !== undefined;
+    if (
+      isProcessExited(child) &&
+      !options.operations &&
+      !options.ownership &&
+      !hasWindowsProcessTracking
+    ) {
       return "already-exited";
     }
 
@@ -773,30 +780,38 @@ interface WindowsProcessSelectionOptions {
 }
 
 /**
- * Selects launch-bounded Windows process records in child-first termination order.
+ * Selects Windows process records in child-first termination order.
  * @param options Root identity state and the current Win32 process snapshot
  * @returns Process records that belong to the selected root lineage
- * @throws {Error} If root reuse is proven but no prior lineage can be verified
+ * @throws {Error} If ownership cannot be verified after root exit, disappearance, or reuse
  */
 export function selectOwnedWindowsProcesses(
   options: WindowsProcessSelectionOptions,
 ): WindowsProcessRecord[] {
+  const finiteLaunchedAtMs =
+    typeof options.launchedAtMs === "number" && Number.isFinite(options.launchedAtMs)
+      ? options.launchedAtMs
+      : undefined;
   const earliestCreationTime =
-    options.launchedAtMs === undefined
+    finiteLaunchedAtMs === undefined
       ? Number.NEGATIVE_INFINITY
-      : options.launchedAtMs - WINDOWS_CREATION_TIME_TOLERANCE_MS;
+      : finiteLaunchedAtMs - WINDOWS_CREATION_TIME_TOLERANCE_MS;
   const eligibleProcesses = options.processes.filter(
     (process) => process.creationTimeMs >= earliestCreationTime,
   );
   const currentRoot = eligibleProcesses.find((process) => process.pid === options.rootPid);
-  const oldLineageAnchors = currentRoot
-    ? eligibleProcesses.filter(
-        (process) =>
-          process.parentPid === options.rootPid &&
-          process.pid !== options.rootPid &&
-          process.creationTimeMs < currentRoot.creationTimeMs,
-      )
-    : [];
+  if (finiteLaunchedAtMs === undefined && (options.rootExited || currentRoot === undefined)) {
+    throw new WindowsProcessOwnershipUnverifiedError();
+  }
+  const oldLineageAnchors =
+    finiteLaunchedAtMs !== undefined && currentRoot
+      ? eligibleProcesses.filter(
+          (process) =>
+            process.parentPid === options.rootPid &&
+            process.pid !== options.rootPid &&
+            process.creationTimeMs < currentRoot.creationTimeMs,
+        )
+      : [];
   const rootReuseProven =
     currentRoot !== undefined && (options.rootExited || oldLineageAnchors.length > 0);
   const eligibleTable = new Map(
