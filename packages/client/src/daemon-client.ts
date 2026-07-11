@@ -1162,7 +1162,7 @@ export class DaemonClient {
         }),
         transport.onMessage((data) => {
           if (this.transport === transport) {
-            this.handleTransportMessage(data);
+            this.handleTransportMessage(data, transport);
           }
         }),
       ];
@@ -4672,7 +4672,10 @@ export class DaemonClient {
     this.connectTimeout = null;
   }
 
-  private handleTransportMessage(data: unknown): void {
+  private handleTransportMessage(data: unknown, expectedTransport?: DaemonTransport): void {
+    if (expectedTransport && this.transport !== expectedTransport) {
+      return;
+    }
     const rawData =
       data && typeof data === "object" && "data" in data ? (data as { data: unknown }).data : data;
 
@@ -4684,7 +4687,10 @@ export class DaemonClient {
       void rawData
         .arrayBuffer()
         .then((buffer) => {
-          this.handleTransportMessage(buffer);
+          if (expectedTransport && this.transport !== expectedTransport) {
+            return;
+          }
+          this.handleTransportMessage(buffer, expectedTransport);
           return;
         })
         .catch(() => {
@@ -4821,7 +4827,7 @@ export class DaemonClient {
         return;
       }
       transfer.receivedBytes = nextReceivedBytes;
-      transfer.chunks.push(frame.payload);
+      transfer.chunks.push(new Uint8Array(frame.payload));
       return;
     }
 

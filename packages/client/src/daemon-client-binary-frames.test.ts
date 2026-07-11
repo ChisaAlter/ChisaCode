@@ -81,6 +81,7 @@ function createBinaryTransferHarness() {
     },
     frame: (input: Parameters<typeof encodeFileTransferFrame>[0]) =>
       onMessage(encodeFileTransferFrame(input)),
+    rawFrame: (frame: Uint8Array) => onMessage(frame),
   };
 }
 
@@ -181,7 +182,7 @@ describe("file transfer binary frames", () => {
     await expect(transfer.read).resolves.toMatchObject({ size: 0, bytes: new Uint8Array() });
   });
 
-  test("accepts a transfer exactly at the maximum byte limit", async () => {
+  test("accepts maximum-size metadata before enforcing exact end length", async () => {
     const transfer = await startBinaryRead("exact-maximum");
     transfer.frame({
       opcode: FileTransferOpcode.FileBegin,
@@ -193,19 +194,82 @@ describe("file transfer binary frames", () => {
         modifiedAt: "2026-01-01T00:00:00.000Z",
       },
     });
-    const chunkSize = 8 * 1024 * 1024;
-    for (let offset = 0; offset < MAX_FILE_TRANSFER_BYTES; offset += chunkSize) {
-      transfer.frame({
-        opcode: FileTransferOpcode.FileChunk,
-        requestId: "exact-maximum",
-        payload: new Uint8Array(chunkSize),
-      });
-    }
     transfer.frame({ opcode: FileTransferOpcode.FileEnd, requestId: "exact-maximum" });
-    const result = await transfer.read;
-    expect(result.size).toBe(MAX_FILE_TRANSFER_BYTES);
-    expect(result.bytes.byteLength).toBe(MAX_FILE_TRANSFER_BYTES);
+    await expect(transfer.read).rejects.toThrow(
+      `expected ${MAX_FILE_TRANSFER_BYTES} bytes but received 0`,
+    );
   });
+
+  test("retains an owned copy of an accepted chunk payload", async () => {
+    const transfer = await startBinaryRead("owned-chunk");
+    transfer.frame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "owned-chunk",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 1,
+        encoding: "binary",
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    const encoded = encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "owned-chunk",
+      payload: new Uint8Array([7]),
+    });
+    const backing = new Uint8Array(8 * 1024 * 1024);
+    const frameOffset = 1024;
+    backing.set(encoded, frameOffset);
+    const frameView = backing.subarray(frameOffset, frameOffset + encoded.byteLength);
+    const payloadOffset = frameOffset + encoded.byteLength - 1;
+    transfer.rawFrame(frameView);
+    backing[payloadOffset] = 99;
+    transfer.frame({ opcode: FileTransferOpcode.FileEnd, requestId: "owned-chunk" });
+    const result = await transfer.read;
+    expect(result.bytes).toEqual(new Uint8Array([7]));
+  });
+
+  test("rejects duplicate FileBegin and clears the transfer", async () => {
+    const transfer = await startBinaryRead("duplicate-start");
+    const begin = {
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "duplicate-start",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 1,
+        encoding: "binary" as const,
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+    transfer.frame(begin);
+    transfer.frame(begin);
+    await expect(transfer.read).rejects.toThrow(/duplicate file transfer start/i);
+
+    const retry = transfer.client.readFile("/tmp/project", "file.bin", "duplicate-start");
+    transfer.frame(begin);
+    transfer.frame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "duplicate-start",
+      payload: new Uint8Array([8]),
+    });
+    transfer.frame({ opcode: FileTransferOpcode.FileEnd, requestId: "duplicate-start" });
+    await expect(retry).resolves.toMatchObject({ bytes: new Uint8Array([8]), size: 1 });
+  });
+
+  test.each([FileTransferOpcode.FileChunk, FileTransferOpcode.FileEnd])(
+    "rejects opcode %s before FileBegin",
+    async (opcode) => {
+      const requestId = `before-start-${opcode}`;
+      const transfer = await startBinaryRead(requestId);
+      if (opcode === FileTransferOpcode.FileChunk) {
+        transfer.frame({ opcode, requestId, payload: new Uint8Array([1]) });
+      } else {
+        transfer.frame({ opcode, requestId });
+      }
+      await expect(transfer.read).rejects.toThrow(/before start/i);
+    },
+  );
+
   test("rejects empty requestId", () => {
     expect(() =>
       encodeFileTransferFrame({

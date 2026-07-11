@@ -70,6 +70,7 @@ function createMockTransport() {
         }),
       );
     },
+    triggerSocketOpen: () => onOpen(),
     triggerClose: (event?: unknown) => onClose(event),
     triggerError: (event?: unknown) => onError(event),
     triggerMessage: (data: unknown) => onMessage(data),
@@ -264,6 +265,73 @@ test("close rejects an in-flight connect and ignores late events from that trans
 
   await client.close();
   await expect(client.connect()).rejects.toThrow("Daemon client is disposed");
+});
+
+test("ignores a deferred Blob message from a stale reconnect transport", async () => {
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const first = createMockTransport();
+    const second = createMockTransport();
+    let callCount = 0;
+    let resolveBlob: ((buffer: ArrayBuffer) => void) | undefined;
+    const blobBuffer = new Promise<ArrayBuffer>((resolve) => {
+      resolveBlob = resolve;
+    });
+    class DeferredBlob extends Blob {
+      override arrayBuffer(): Promise<ArrayBuffer> {
+        return blobBuffer;
+      }
+    }
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_reconnect_deferred_blob",
+      logger,
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5 },
+      transportFactory: () => {
+        callCount += 1;
+        return callCount === 1 ? first.transport : second.transport;
+      },
+    });
+    clients.push(client);
+
+    let connected = false;
+    const connectPromise = client.connect().then(() => {
+      connected = true;
+      return true;
+    });
+    first.triggerMessage(new DeferredBlob());
+    first.triggerClose({ code: 1006, reason: "retry" });
+    await vi.advanceTimersByTimeAsync(5);
+    expect(client.getConnectionState().status).toBe("connecting");
+
+    const staleServerInfo = new TextEncoder().encode(
+      JSON.stringify({
+        type: "session",
+        message: {
+          type: "status",
+          payload: {
+            status: "server_info",
+            serverId: "srv_stale_blob",
+            hostname: null,
+            version: null,
+          },
+        },
+      }),
+    );
+    resolveBlob?.(staleServerInfo.buffer);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(connected).toBe(false);
+    expect(client.getConnectionState().status).toBe("connecting");
+
+    second.triggerSocketOpen();
+    second.triggerMessage(new Blob([staleServerInfo]));
+    await connectPromise;
+    expect(connected).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("ensureConnected triggers reconnect when disconnected", async () => {
