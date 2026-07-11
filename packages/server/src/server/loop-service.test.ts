@@ -748,7 +748,23 @@ describe("LoopService", () => {
     expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
   });
 
-  test("finishes with canonical max-time failure when a running verify command times out", async () => {
+  test.each([
+    {
+      label: "command timeout",
+      createError: (timeout: number) => new ExecCommandTimeoutError(timeout, "", ""),
+    },
+    {
+      label: "cleanup timeout",
+      createError: (timeout: number) =>
+        new ExecCommandTimeoutError(timeout, "", "", {
+          cause: new ExecCommandTimeoutError(timeout, "", "", { killed: false }),
+          cmd: "times-out",
+          killed: false,
+          signal: "SIGTERM",
+          terminationResult: "kill-timeout",
+        }),
+    },
+  ])("finishes with canonical max-time failure after $label", async ({ createError }) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
     vi.setSystemTime(startedAtMs);
@@ -764,7 +780,7 @@ describe("LoopService", () => {
       verifyTimeouts.push(timeout);
       vi.setSystemTime(startedAtMs + 500);
       markVerifyAttempted?.();
-      throw new ExecCommandTimeoutError(timeout, "", "");
+      throw createError(timeout);
     };
     const manager = new AgentManager({
       clients: {

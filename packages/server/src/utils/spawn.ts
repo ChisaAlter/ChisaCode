@@ -1,9 +1,14 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { constants as osConstants } from "node:os";
 import { dirname, extname } from "node:path";
 
 import { createExternalCommandProcessEnv, type ProcessEnvRecord } from "../server/chisacode-env.js";
-import { terminateWithTreeKill } from "./tree-kill.js";
+import {
+  terminateWithTreeKill,
+  type TerminateWithTreeKillResult,
+  type TreeKillOwnership,
+} from "./tree-kill.js";
 import {
   isWindowsCommandScript,
   quoteWindowsArgument,
@@ -30,6 +35,7 @@ interface ExecCommandOptions extends ExternalEnvOptions {
   signal?: AbortSignal;
   timeout?: number;
   maxBuffer?: number;
+  runtime?: ExecCommandRuntime;
   shell?: boolean | string;
 }
 
@@ -49,9 +55,38 @@ interface ExecCommandError extends Error {
 
 type ExecCommandTerminationReason = "abort" | "maxBuffer" | "timeout";
 
+interface ExecCommandRuntime {
+  spawn(command: string, args: string[], options: SpawnOptions): ChildProcess;
+  terminate(
+    child: ChildProcess,
+    options: Parameters<typeof terminateWithTreeKill>[1],
+  ): Promise<TerminateWithTreeKillResult>;
+}
+
+const DEFAULT_EXEC_COMMAND_RUNTIME: ExecCommandRuntime = {
+  spawn(command, args, options) {
+    return spawn(command, args, options);
+  },
+  terminate(child, options) {
+    return terminateWithTreeKill(child, options);
+  },
+};
+
 interface ExecCommandTimeoutErrorOptions extends ErrorOptions {
+  cleanupCause?: unknown;
   cmd?: string;
+  killed?: boolean;
   signal?: NodeJS.Signals;
+  terminationResult?: TerminateWithTreeKillResult;
+}
+
+interface ExecCommandKillTimeoutErrorOptions extends ErrorOptions {
+  cleanupCause?: unknown;
+  cmd: string;
+  signal: NodeJS.Signals;
+  stderr: string;
+  stdout: string;
+  terminationReason: ExecCommandTerminationReason;
 }
 
 class BoundedOutputBuffer {
@@ -80,8 +115,10 @@ class BoundedOutputBuffer {
 export class ExecCommandTimeoutError extends Error {
   readonly code = "EXEC_COMMAND_TIMEOUT";
   readonly cmd: string;
-  readonly killed = true;
+  readonly cleanupCause: unknown;
+  readonly killed: boolean;
   readonly signal: NodeJS.Signals;
+  readonly terminationResult: TerminateWithTreeKillResult | undefined;
 
   /**
    * Creates a timeout error with captured command output.
@@ -98,8 +135,40 @@ export class ExecCommandTimeoutError extends Error {
   ) {
     super(`Command timed out after ${timeoutMs}ms`, options);
     this.name = "ExecCommandTimeoutError";
+    this.cleanupCause = options?.cleanupCause;
     this.cmd = options?.cmd ?? "";
+    this.killed = options?.killed ?? true;
     this.signal = options?.signal ?? "SIGTERM";
+    this.terminationResult = options?.terminationResult;
+  }
+}
+
+/** Identifies a command tree that could not be confirmed stopped within the cleanup deadline. */
+export class ExecCommandKillTimeoutError extends Error {
+  readonly code = "EXEC_COMMAND_KILL_TIMEOUT";
+  readonly cleanupCause: unknown;
+  readonly killed = false;
+  readonly cmd: string;
+  readonly signal: NodeJS.Signals;
+  readonly stderr: string;
+  readonly stdout: string;
+  readonly terminationReason: ExecCommandTerminationReason;
+
+  /**
+   * Creates a bounded cleanup failure with the original termination error as its cause.
+   * @param options Cleanup failure metadata
+   */
+  constructor(options: ExecCommandKillTimeoutErrorOptions) {
+    super(`Command tree did not terminate after ${options.terminationReason}`, {
+      cause: options.cause,
+    });
+    this.name = "ExecCommandKillTimeoutError";
+    this.cleanupCause = options.cleanupCause;
+    this.cmd = options.cmd;
+    this.signal = options.signal;
+    this.stderr = options.stderr;
+    this.stdout = options.stdout;
+    this.terminationReason = options.terminationReason;
   }
 }
 
@@ -230,6 +299,7 @@ export async function execCommand(
   args: string[],
   options?: ExecCommandOptions,
 ): Promise<ExecCommandResult> {
+  validateExecCommandOptions(options);
   const { baseEnv, env, envOverlay } = options ?? {};
   const resolvedBaseEnv = env ?? baseEnv ?? process.env;
   const isWindows = process.platform === "win32";
@@ -237,6 +307,7 @@ export async function execCommand(
   const shouldQuoteForShell = isWindows && shell !== false;
   const resolvedCommand = shouldQuoteForShell ? quoteWindowsCommand(command) : command;
   const resolvedArgs = shouldQuoteForShell ? args.map(quoteWindowsArgument) : args;
+  const commandText = [resolvedCommand, ...resolvedArgs].join(" ");
   const childEnv =
     options?.envMode === "internal"
       ? ({ ...resolvedBaseEnv, ...envOverlay } as NodeJS.ProcessEnv)
@@ -247,28 +318,87 @@ export async function execCommand(
         );
 
   if (options?.signal?.aborted) {
-    throw createExecCommandAbortError(options.signal.reason, "", "");
+    throw createExecCommandAbortError(options.signal.reason, commandText, "", "");
   }
 
   return new Promise<ExecCommandResult>((resolve, reject) => {
+    const runtime = options?.runtime ?? DEFAULT_EXEC_COMMAND_RUNTIME;
     const encoding = options?.encoding ?? "utf8";
     const maxBuffer = options?.maxBuffer ?? DEFAULT_EXEC_MAX_BUFFER;
     const stdoutBuffer = new BoundedOutputBuffer(maxBuffer);
     const stderrBuffer = new BoundedOutputBuffer(maxBuffer);
-    const commandText = [resolvedCommand, ...resolvedArgs].join(" ");
     let terminationReason: ExecCommandTerminationReason | null = null;
-    let terminationPromise: Promise<void> | null = null;
+    let terminationResult: TerminateWithTreeKillResult | null = null;
+    let terminationFailure: unknown;
     let timeoutHandle: NodeJS.Timeout | null = null;
     let spawnError: Error | null = null;
     let maxBufferStream: "stderr" | "stdout" | null = null;
-    const child = spawn(resolvedCommand, resolvedArgs, {
+    let childClosed = false;
+    let exitCode: number | null = null;
+    let signalCode: NodeJS.Signals | null = null;
+    let settled = false;
+    const launchedAtMs = Date.now();
+    const usesProcessGroup = process.platform !== "win32";
+    const child = runtime.spawn(resolvedCommand, resolvedArgs, {
       cwd: options?.cwd,
+      // POSIX detached mode creates a new session/process group. The child stays referenced.
+      detached: usesProcessGroup,
       env: childEnv,
       shell,
       windowsHide: true,
     });
-    const requestTermination = (reason: ExecCommandTerminationReason) => {
+    const terminationOwnership = createExecCommandOwnership(child, launchedAtMs, usesProcessGroup);
+    const cleanup = () => {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+      options?.signal?.removeEventListener("abort", onAbort);
+      child.stdout?.off("data", onStdout);
+      child.stderr?.off("data", onStderr);
+      child.off("error", onError);
+      child.off("close", onClose);
+      child.stdin?.destroy();
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      child.unref();
+    };
+    const finishIfReady = () => {
+      if (settled) {
+        return;
+      }
       if (terminationReason) {
+        if (terminationResult === null) {
+          return;
+        }
+        if (terminationResult !== "kill-timeout" && !childClosed) {
+          return;
+        }
+      } else if (!childClosed) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      settleExecCommand({
+        abortReason: options?.signal?.reason,
+        commandText,
+        exitCode,
+        killSignal: options?.killSignal,
+        maxBufferStream,
+        reject,
+        resolve,
+        signalCode,
+        spawnError,
+        stderr: stderrBuffer.toString(encoding),
+        stdout: stdoutBuffer.toString(encoding),
+        terminationFailure,
+        terminationReason,
+        terminationResult,
+        timeoutMs: options?.timeout,
+      });
+    };
+    const requestTermination = (reason: ExecCommandTerminationReason) => {
+      if (settled || terminationReason) {
         return;
       }
       terminationReason = reason;
@@ -276,11 +406,24 @@ export async function execCommand(
         clearTimeout(timeoutHandle);
         timeoutHandle = null;
       }
-      terminationPromise = terminateWithTreeKill(child, {
-        gracefulSignal: options?.killSignal,
-        gracefulTimeoutMs: COMMAND_GRACEFUL_TERMINATION_MS,
-        forceTimeoutMs: COMMAND_FORCE_TERMINATION_MS,
-      }).then(() => undefined);
+      void runtime
+        .terminate(child, {
+          gracefulSignal: options?.killSignal,
+          gracefulTimeoutMs: COMMAND_GRACEFUL_TERMINATION_MS,
+          forceTimeoutMs: COMMAND_FORCE_TERMINATION_MS,
+          ownership: terminationOwnership,
+        })
+        .then(
+          (result) => {
+            terminationResult = result;
+            return finishIfReady();
+          },
+          (error: unknown) => {
+            terminationFailure = error;
+            terminationResult = "kill-timeout";
+            return finishIfReady();
+          },
+        );
     };
     const appendOutput = (
       target: BoundedOutputBuffer,
@@ -296,38 +439,25 @@ export async function execCommand(
       }
     };
     const onAbort = () => requestTermination("abort");
-    child.stdout?.on("data", (chunk: Buffer | string) => {
+    const onStdout = (chunk: Buffer | string) => {
       appendOutput(stdoutBuffer, "stdout", chunk);
-    });
-    child.stderr?.on("data", (chunk: Buffer | string) => {
+    };
+    const onStderr = (chunk: Buffer | string) => {
       appendOutput(stderrBuffer, "stderr", chunk);
-    });
-    child.on("error", (error) => {
+    };
+    const onError = (error: Error) => {
       spawnError = error;
-    });
-    child.on("close", (exitCode, signalCode) => {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-        timeoutHandle = null;
-      }
-      options?.signal?.removeEventListener("abort", onAbort);
-      void settleExecCommand({
-        abortReason: options?.signal?.reason,
-        commandText,
-        exitCode,
-        killSignal: options?.killSignal,
-        maxBufferStream,
-        reject,
-        resolve,
-        signalCode,
-        spawnError,
-        stderr: stderrBuffer.toString(encoding),
-        stdout: stdoutBuffer.toString(encoding),
-        terminationPromise,
-        terminationReason,
-        timeoutMs: options?.timeout,
-      });
-    });
+    };
+    const onClose = (closedExitCode: number | null, closedSignalCode: NodeJS.Signals | null) => {
+      childClosed = true;
+      exitCode = closedExitCode;
+      signalCode = closedSignalCode;
+      finishIfReady();
+    };
+    child.stdout?.on("data", onStdout);
+    child.stderr?.on("data", onStderr);
+    child.on("error", onError);
+    child.on("close", onClose);
     options?.signal?.addEventListener("abort", onAbort, { once: true });
     if (options?.signal?.aborted) {
       onAbort();
@@ -338,7 +468,22 @@ export async function execCommand(
   });
 }
 
-async function settleExecCommand(options: {
+function createExecCommandOwnership(
+  child: ChildProcess,
+  launchedAtMs: number,
+  usesProcessGroup: boolean,
+): TreeKillOwnership | undefined {
+  if (typeof child.pid !== "number") {
+    return undefined;
+  }
+  return {
+    launchedAtMs,
+    processGroupId: usesProcessGroup ? child.pid : undefined,
+    rootPid: child.pid,
+  };
+}
+
+function settleExecCommand(options: {
   abortReason: unknown;
   commandText: string;
   exitCode: number | null;
@@ -350,31 +495,45 @@ async function settleExecCommand(options: {
   spawnError: Error | null;
   stderr: string;
   stdout: string;
-  terminationPromise: Promise<void> | null;
+  terminationFailure: unknown;
   terminationReason: ExecCommandTerminationReason | null;
+  terminationResult: TerminateWithTreeKillResult | null;
   timeoutMs: number | undefined;
-}): Promise<void> {
-  if (options.terminationReason) {
-    await options.terminationPromise;
-    if (options.terminationReason === "abort") {
+}): void {
+  const terminationReason = options.terminationReason;
+  if (terminationReason) {
+    const terminationError = createExecCommandTerminationError({
+      ...options,
+      terminationReason,
+    });
+    if (options.terminationResult === "kill-timeout") {
+      if (terminationReason === "timeout") {
+        options.reject(
+          new ExecCommandTimeoutError(options.timeoutMs ?? 0, options.stdout, options.stderr, {
+            cause: terminationError,
+            cleanupCause: options.terminationFailure,
+            cmd: options.commandText,
+            killed: false,
+            signal: options.killSignal ?? "SIGTERM",
+            terminationResult: "kill-timeout",
+          }),
+        );
+        return;
+      }
       options.reject(
-        createExecCommandAbortError(options.abortReason, options.stdout, options.stderr),
+        new ExecCommandKillTimeoutError({
+          cause: terminationError,
+          cleanupCause: options.terminationFailure,
+          cmd: options.commandText,
+          signal: options.killSignal ?? "SIGTERM",
+          stderr: options.stderr,
+          stdout: options.stdout,
+          terminationReason,
+        }),
       );
       return;
     }
-    if (options.terminationReason === "maxBuffer") {
-      options.reject(
-        createMaxBufferError(options.maxBufferStream ?? "stdout", options.stdout, options.stderr),
-      );
-      return;
-    }
-    options.reject(
-      new ExecCommandTimeoutError(options.timeoutMs ?? 0, options.stdout, options.stderr, {
-        cause: options.spawnError ?? undefined,
-        cmd: options.commandText,
-        signal: options.killSignal ?? "SIGTERM",
-      }),
-    );
+    options.reject(terminationError);
     return;
   }
   if (options.spawnError) {
@@ -400,13 +559,81 @@ async function settleExecCommand(options: {
   );
 }
 
+function createExecCommandTerminationError(options: {
+  abortReason: unknown;
+  commandText: string;
+  killSignal: NodeJS.Signals | undefined;
+  maxBufferStream: "stderr" | "stdout" | null;
+  spawnError: Error | null;
+  stderr: string;
+  stdout: string;
+  terminationReason: ExecCommandTerminationReason;
+  timeoutMs: number | undefined;
+}): ExecCommandError {
+  if (options.terminationReason === "abort") {
+    return createExecCommandAbortError(
+      options.abortReason,
+      options.commandText,
+      options.stdout,
+      options.stderr,
+    );
+  }
+  if (options.terminationReason === "maxBuffer") {
+    return createMaxBufferError(
+      options.maxBufferStream ?? "stdout",
+      options.commandText,
+      options.stdout,
+      options.stderr,
+    );
+  }
+  return new ExecCommandTimeoutError(options.timeoutMs ?? 0, options.stdout, options.stderr, {
+    cause: options.spawnError ?? undefined,
+    cmd: options.commandText,
+    signal: options.killSignal ?? "SIGTERM",
+  });
+}
+
+function validateExecCommandOptions(options: ExecCommandOptions | undefined): void {
+  const timeout = options?.timeout;
+  if (
+    timeout !== undefined &&
+    (!Number.isFinite(timeout) || !Number.isInteger(timeout) || timeout < 0)
+  ) {
+    throw createExecCommandRangeError("timeout", "an unsigned integer", timeout);
+  }
+  const maxBuffer = options?.maxBuffer;
+  if (maxBuffer !== undefined && (Number.isNaN(maxBuffer) || maxBuffer < 0)) {
+    throw createExecCommandRangeError("options.maxBuffer", "a positive number", maxBuffer);
+  }
+  const killSignal = options?.killSignal;
+  if (killSignal !== undefined && !Object.hasOwn(osConstants.signals, killSignal)) {
+    const error = new TypeError(`Unknown signal: ${killSignal}`) as TypeError & { code: string };
+    error.code = "ERR_UNKNOWN_SIGNAL";
+    throw error;
+  }
+}
+
+function createExecCommandRangeError(
+  name: string,
+  requirement: string,
+  value: number,
+): RangeError & { code: string } {
+  const error = new RangeError(
+    `The value of "${name}" is out of range. It must be ${requirement}. Received ${String(value)}`,
+  ) as RangeError & { code: string };
+  error.code = "ERR_OUT_OF_RANGE";
+  return error;
+}
+
 function createMaxBufferError(
   stream: "stderr" | "stdout",
+  commandText: string,
   stdout: string,
   stderr: string,
 ): ExecCommandError {
   const error = new RangeError(`${stream} maxBuffer length exceeded`) as ExecCommandError;
   error.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+  error.cmd = commandText;
   error.stdout = stdout;
   error.stderr = stderr;
   return error;
@@ -424,7 +651,7 @@ function createExecCommandExitError(options: {
   ) as ExecCommandError;
   error.code = options.exitCode;
   error.cmd = options.commandText;
-  error.killed = options.signalCode !== null;
+  error.killed = false;
   error.signal = options.signalCode;
   error.stdout = options.stdout;
   error.stderr = options.stderr;
@@ -433,12 +660,14 @@ function createExecCommandExitError(options: {
 
 function createExecCommandAbortError(
   reason: unknown,
+  commandText: string,
   stdout: string,
   stderr: string,
 ): ExecCommandError {
   const error = new Error("The operation was aborted", { cause: reason }) as ExecCommandError;
   error.name = "AbortError";
   error.code = "ABORT_ERR";
+  error.cmd = commandText;
   error.stdout = stdout;
   error.stderr = stderr;
   return error;

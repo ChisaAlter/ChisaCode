@@ -3,7 +3,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { parseLinuxProcStat, terminateWithTreeKill } from "./tree-kill.js";
+import {
+  parseLinuxProcStat,
+  parseWindowsProcessRecord,
+  refreshTrackedPosixProcess,
+  resolveWindowsProcessQueryTimeout,
+  terminateWithTreeKill,
+} from "./tree-kill.js";
 
 let tempDir: string | null = null;
 let ownerProcess: ChildProcess | null = null;
@@ -133,12 +139,60 @@ describe("terminateWithTreeKill", () => {
       identity: "linux-starttime:7001",
       parentPid: 1,
       pid: 42,
+      processGroupId: 42,
     });
     expect(reused).toEqual({
       identity: "linux-starttime:7002",
       parentPid: 1,
       pid: 42,
+      processGroupId: 42,
     });
+  });
+
+  test("distinguishes reused Windows PIDs by CreationDate", () => {
+    const original = parseWindowsProcessRecord({
+      CreationDate: "/Date(7001)/",
+      ParentProcessId: 1,
+      ProcessId: 42,
+    });
+    const reused = parseWindowsProcessRecord({
+      CreationDate: "/Date(7002)/",
+      ParentProcessId: 1,
+      ProcessId: 42,
+    });
+
+    expect(original).toEqual({
+      creationTimeMs: 7_001,
+      identity: "windows-creation:7001",
+      parentPid: 1,
+      pid: 42,
+    });
+    expect(reused).toEqual({
+      creationTimeMs: 7_002,
+      identity: "windows-creation:7002",
+      parentPid: 1,
+      pid: 42,
+    });
+  });
+
+  test("refreshes a tracked POSIX process that moved to another process group", () => {
+    const tracked = parseLinuxProcStat(42, createLinuxProcStat(7_001, 42));
+    const moved = parseLinuxProcStat(42, createLinuxProcStat(7_001, 99));
+
+    expect(tracked).not.toBeNull();
+    expect(moved).not.toBeNull();
+    expect(refreshTrackedPosixProcess(tracked!, moved)).toEqual({
+      identity: "linux-starttime:7001",
+      pid: 42,
+      processGroupId: 99,
+    });
+  });
+
+  test("bounds each Windows process query by the shared cleanup deadline", () => {
+    expect(resolveWindowsProcessQueryTimeout(10_000, 7_500)).toBe(2_500);
+    expect(() => resolveWindowsProcessQueryTimeout(10_000, 10_000)).toThrow(
+      expect.objectContaining({ code: "EXEC_COMMAND_PROCESS_QUERY_TIMEOUT" }),
+    );
   });
 
   test("sends a matching graceful and force signal only once", async () => {
@@ -304,6 +358,54 @@ describe("terminateWithTreeKill", () => {
     expect(signals).toEqual(["SIGTERM"]);
   });
 
+  test("returns kill-timeout when tracked signaling cannot revalidate process identity", async () => {
+    interface TrackedProcess {
+      identity: string;
+      pid: number;
+    }
+    interface TestOperations {
+      listRunning(processes: readonly TrackedProcess[]): Promise<TrackedProcess[]>;
+      signal(processes: readonly TrackedProcess[], signal: NodeJS.Signals): Promise<void>;
+      snapshot(): Promise<TrackedProcess[]>;
+    }
+
+    const root = { identity: "root-start", pid: 100 };
+    const fallbackSignals: Array<NodeJS.Signals | number> = [];
+    let exitListener: (() => void) | null = null;
+    const child = {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill(signal: NodeJS.Signals | number = "SIGTERM") {
+        fallbackSignals.push(signal);
+        this.exitCode = 0;
+        exitListener?.();
+        return true;
+      },
+      once(_event: "exit", listener: () => void) {
+        exitListener = listener;
+      },
+    };
+    const operations: TestOperations = {
+      async snapshot() {
+        return [root];
+      },
+      async listRunning(processes) {
+        return [...processes];
+      },
+      async signal() {
+        throw new Error("process identity query failed");
+      },
+    };
+    const options = {
+      gracefulTimeoutMs: 0,
+      forceTimeoutMs: 0,
+      operations,
+    } as Parameters<typeof terminateWithTreeKill>[1] & { operations: TestOperations };
+
+    await expect(terminateWithTreeKill(child, options)).resolves.toBe("kill-timeout");
+    expect(fallbackSignals).toEqual(["SIGTERM"]);
+  });
+
   test("force-kills a tracked descendant after the root exits gracefully", async () => {
     interface TrackedProcess {
       identity: string;
@@ -423,7 +525,12 @@ describe("terminateWithTreeKill", () => {
   );
 });
 
-function createLinuxProcStat(startTime: number): string {
-  const fieldsBeforeStartTime = ["S", "1", ...Array.from({ length: 17 }, () => "0")];
+function createLinuxProcStat(startTime: number, processGroupId = 42): string {
+  const fieldsBeforeStartTime = [
+    "S",
+    "1",
+    String(processGroupId),
+    ...Array.from({ length: 16 }, () => "0"),
+  ];
   return `42 (worker with ) in name) ${[...fieldsBeforeStartTime, String(startTime)].join(" ")}`;
 }

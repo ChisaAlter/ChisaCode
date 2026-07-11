@@ -74,7 +74,12 @@ export async function probeExecutable(
   }
 }
 
-function classifyProbeError(error: unknown): boolean {
+/**
+ * Classifies whether a probe error proves that an executable started.
+ * @param error Error returned by the version probe
+ * @returns Whether process startup was confirmed
+ */
+export function classifyProbeError(error: unknown): boolean {
   const err = error as NodeJS.ErrnoException & {
     killed?: boolean;
   };

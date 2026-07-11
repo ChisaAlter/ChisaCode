@@ -4,12 +4,14 @@ import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
+  classifyProbeError,
   executableExists,
   findExecutable,
   probeExecutable,
   quoteWindowsArgument,
   quoteWindowsCommand,
 } from "./executable.js";
+import { ExecCommandTimeoutError } from "./spawn.js";
 import { isPlatform } from "../test-utils/platform.js";
 
 const originalEnv = {
@@ -134,6 +136,17 @@ describe("probeExecutable", () => {
     const executablePath = writeHangingExecutable(makeTempDir());
 
     await expect(probeExecutable(executablePath, 500)).resolves.toBe(true);
+  });
+
+  test("does not classify an unconfirmed timeout cleanup as existing", () => {
+    const error = new ExecCommandTimeoutError(500, "", "", {
+      cmd: "hangs --version",
+      killed: false,
+      signal: "SIGKILL",
+      terminationResult: "kill-timeout",
+    });
+
+    expect(classifyProbeError(error)).toBe(false);
   });
 });
 
