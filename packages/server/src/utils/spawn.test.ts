@@ -53,6 +53,34 @@ describe("execCommand", () => {
     await expect(execCommand(command.command, command.args, { timeout: 100 })).rejects.toThrow();
   });
 
+  test("aborts a running command when its signal is aborted", async () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-signal-test-")));
+    tempDirs.push(cwd);
+    const readyPath = path.join(cwd, "ready.txt");
+    const ready = waitForPathCreation(readyPath);
+    const controller = new AbortController();
+    const commandPromise = execCommand(
+      process.execPath,
+      [
+        "-e",
+        [
+          `require("node:fs").writeFileSync(${JSON.stringify(readyPath)}, String(process.pid));`,
+          "process.stdin.resume();",
+        ].join("\n"),
+      ],
+      { signal: controller.signal, timeout: 5_000 },
+    );
+
+    await ready;
+    controller.abort(new Error("stop requested"));
+
+    await expect(commandPromise).rejects.toMatchObject({
+      name: "AbortError",
+      code: "ABORT_ERR",
+    });
+    expect(controller.signal.aborted).toBe(true);
+  });
+
   test("runs the command in the provided cwd", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-test-")));
     tempDirs.push(cwd);
@@ -216,3 +244,22 @@ describe("execCommand", () => {
     });
   });
 });
+
+function waitForPathCreation(target: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const watcher = fs.watch(path.dirname(target));
+    const finishIfReady = () => {
+      if (!fs.existsSync(target)) {
+        return;
+      }
+      watcher.close();
+      resolve();
+    };
+    watcher.on("change", finishIfReady);
+    watcher.on("error", (error) => {
+      watcher.close();
+      reject(error);
+    });
+    finishIfReady();
+  });
+}

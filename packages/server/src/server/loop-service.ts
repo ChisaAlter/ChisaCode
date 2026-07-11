@@ -149,6 +149,17 @@ interface RunningLoopState {
   promise: Promise<void>;
 }
 
+interface VerifyCommandRunnerOptions {
+  cwd: string;
+  command: string;
+  signal: AbortSignal;
+  timeoutMs?: number;
+}
+
+type VerifyCommandRunner = (
+  options: VerifyCommandRunnerOptions,
+) => Promise<{ stdout: string; stderr: string }>;
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -254,47 +265,22 @@ function isAbortError(error: unknown): boolean {
   return false;
 }
 
-async function runVerifyCheck(options: {
-  cwd: string;
-  command: string;
-}): Promise<LoopVerifyCheckResult> {
-  const startedAt = nowIso();
-  try {
-    const shell = platformShell();
-    const result = await execCommand(shell.command, [...shell.flag, options.command], {
-      cwd: options.cwd,
-      maxBuffer: MAX_VERIFY_OUTPUT_BYTES,
-    });
-    return {
-      command: options.command,
-      exitCode: 0,
-      passed: true,
-      stdout: result.stdout ?? "",
-      stderr: result.stderr ?? "",
-      startedAt,
-      completedAt: nowIso(),
-    };
-  } catch (error) {
-    const childError = error as Error & {
-      code?: number | string;
-      stdout?: string;
-      stderr?: string;
-    };
-    return {
-      command: options.command,
-      exitCode: typeof childError.code === "number" ? childError.code : 1,
-      passed: false,
-      stdout: childError.stdout ?? "",
-      stderr: childError.stderr ?? "",
-      startedAt,
-      completedAt: nowIso(),
-    };
-  }
+async function runVerifyCommandWithExec(
+  options: VerifyCommandRunnerOptions,
+): Promise<{ stdout: string; stderr: string }> {
+  const shell = platformShell();
+  return execCommand(shell.command, [...shell.flag, options.command], {
+    cwd: options.cwd,
+    maxBuffer: MAX_VERIFY_OUTPUT_BYTES,
+    signal: options.signal,
+    timeout: options.timeoutMs,
+  });
 }
 
 export class LoopService {
   private readonly storePath: string;
   private readonly logger: Logger;
+  private readonly verifyCommandRunner: VerifyCommandRunner;
   private loaded = false;
   private readonly loops = new Map<string, LoopRecord>();
   private persistQueue: Promise<void> = Promise.resolve();
@@ -305,10 +291,12 @@ export class LoopService {
       chisacodeHome: string;
       agentManager: AgentManager;
       logger: Logger;
+      runVerifyCommand?: VerifyCommandRunner;
     },
   ) {
     this.storePath = path.join(options.chisacodeHome, "loops", "loops.json");
     this.logger = options.logger.child({ module: "loop-service" });
+    this.verifyCommandRunner = options.runVerifyCommand ?? runVerifyCommandWithExec;
   }
 
   async initialize(): Promise<void> {
@@ -542,7 +530,7 @@ export class LoopService {
         if (!workerPassed) {
           iteration.status = iteration.status === "stopped" ? "stopped" : "failed";
         } else {
-          const verificationPassed = await this.runVerification(loop, iteration, signal);
+          const verificationPassed = await this.runVerification(loop, iteration, signal, deadline);
           if (verificationPassed) {
             iteration.status = "succeeded";
             this.finishLoop(loop, "succeeded", `Iteration ${index} passed verification.`);
@@ -580,11 +568,11 @@ export class LoopService {
     loopId: string,
     error: unknown,
   ): Promise<void> {
+    const iteration = loop.activeIteration
+      ? loop.iterations.find((candidate) => candidate.index === loop.activeIteration)
+      : null;
     if (isAbortError(error)) {
       this.finishLoop(loop, "stopped", "Loop stopped.");
-      const iteration = loop.activeIteration
-        ? loop.iterations.find((candidate) => candidate.index === loop.activeIteration)
-        : null;
       if (iteration && iteration.status === "running") {
         iteration.status = "stopped";
         iteration.failureReason = "Loop stopped";
@@ -597,9 +585,6 @@ export class LoopService {
     const message = error instanceof Error ? error.message : String(error);
     this.logger.error({ err: error, loopId }, "Loop execution failed");
     this.finishLoop(loop, "failed", message);
-    const iteration = loop.activeIteration
-      ? loop.iterations.find((candidate) => candidate.index === loop.activeIteration)
-      : null;
     if (iteration && iteration.status === "running") {
       iteration.status = "failed";
       iteration.failureReason = message;
@@ -687,10 +672,15 @@ export class LoopService {
     loop: LoopRecord,
     iteration: LoopIterationRecord,
     signal: AbortSignal,
+    deadline: number | null,
   ): Promise<boolean> {
     for (const command of loop.verifyChecks) {
       if (signal.aborted) {
         throw new Error("Loop aborted");
+      }
+      const timeoutMs = deadline === null ? undefined : deadline - Date.now();
+      if (timeoutMs !== undefined && timeoutMs <= 0) {
+        throw new Error(`Reached max time (${loop.maxTimeMs}ms).`);
       }
       this.appendLog(loop, {
         iteration: iteration.index,
@@ -698,7 +688,7 @@ export class LoopService {
         level: "info",
         text: `$ ${command}`,
       });
-      const result = await runVerifyCheck({ cwd: loop.cwd, command });
+      const result = await this.runVerifyCheck({ cwd: loop.cwd, command, signal, timeoutMs });
       iteration.verifyChecks.push(result);
       const output = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
       this.appendLog(loop, {
@@ -793,6 +783,42 @@ export class LoopService {
       } catch {
         // Ignore cleanup errors for internal loop verifiers.
       }
+    }
+  }
+
+  private async runVerifyCheck(
+    options: VerifyCommandRunnerOptions,
+  ): Promise<LoopVerifyCheckResult> {
+    const startedAt = nowIso();
+    try {
+      const result = await this.verifyCommandRunner(options);
+      return {
+        command: options.command,
+        exitCode: 0,
+        passed: true,
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+        startedAt,
+        completedAt: nowIso(),
+      };
+    } catch (error) {
+      if (options.signal.aborted) {
+        throw new Error("Loop aborted", { cause: error });
+      }
+      const childError = error as Error & {
+        code?: number | string;
+        stdout?: string;
+        stderr?: string;
+      };
+      return {
+        command: options.command,
+        exitCode: typeof childError.code === "number" ? childError.code : 1,
+        passed: false,
+        stdout: childError.stdout ?? "",
+        stderr: childError.stderr ?? "",
+        startedAt,
+        completedAt: nowIso(),
+      };
     }
   }
 

@@ -117,6 +117,14 @@ function createFakeWebSockets() {
   };
 }
 
+function getDataConnectionIds(
+  relay: ReturnType<typeof createFakeWebSockets>,
+): Array<string | null> {
+  return relay.sockets.slice(1).map((socket) => {
+    return new URL(socket.url).searchParams.get("connectionId");
+  });
+}
+
 describe("relay-transport control lifecycle", () => {
   const controllers: Array<{ stop: () => Promise<void> }> = [];
   let relay: ReturnType<typeof createFakeWebSockets>;
@@ -237,6 +245,95 @@ describe("relay-transport control lifecycle", () => {
         externalSessionKey: "session:clt_test",
       },
     ]);
+  });
+
+  test("normalizes, deduplicates, validates, and caps synced connection IDs", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+    const uniqueIds = Array.from({ length: 257 }, (_, index) => `client_${index}`);
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(
+      JSON.stringify({
+        type: "sync",
+        connectionIds: [" client_0 ", "invalid id", "x".repeat(129), ...uniqueIds, "client_1"],
+      }),
+    );
+
+    expect(getDataConnectionIds(relay)).toEqual(uniqueIds.slice(0, 256));
+  });
+
+  test("caps data sockets independently across connected control messages", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+    const uniqueIds = Array.from({ length: 257 }, (_, index) => `client_${index}`);
+
+    const control = relay.sockets[0];
+    control.open();
+    for (const connectionId of uniqueIds) {
+      control.message(JSON.stringify({ type: "connected", connectionId }));
+    }
+    control.message(JSON.stringify({ type: "connected", connectionId: "client_0" }));
+
+    expect(getDataConnectionIds(relay)).toEqual(uniqueIds.slice(0, 256));
+    expect(
+      logger.messages.filter((entry) => {
+        return entry.args.includes("relay_data_socket_capacity_reached");
+      }),
+    ).toEqual([
+      {
+        level: "warn",
+        args: [
+          { connectionCount: 256, maxConnectionIds: 256 },
+          "relay_data_socket_capacity_reached",
+        ],
+      },
+    ]);
+  });
+
+  test("applies connection ID validation to connected and disconnected messages", () => {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket: async () => {},
+      relayEndpoint: "relay.chisacode.sh:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "connected", connectionId: " valid_id " }));
+    control.message(JSON.stringify({ type: "connected", connectionId: "invalid id" }));
+    control.message(JSON.stringify({ type: "connected", connectionId: "x".repeat(129) }));
+
+    expect(getDataConnectionIds(relay)).toEqual(["valid_id"]);
+    const validDataSocket = relay.sockets[1];
+    expect(validDataSocket.readyState).toBe(FakeRelayWebSocket.CONNECTING);
+
+    control.message(JSON.stringify({ type: "disconnected", connectionId: "valid id" }));
+    expect(validDataSocket.readyState).toBe(FakeRelayWebSocket.CONNECTING);
+    control.message(JSON.stringify({ type: "disconnected", connectionId: " valid_id " }));
+    expect(validDataSocket.readyState).toBe(FakeRelayWebSocket.CLOSED);
   });
 
   test("uses relayUseTls for control and data socket URLs", () => {

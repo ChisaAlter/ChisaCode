@@ -59,6 +59,9 @@ type ControlMessage =
 const CONTROL_PING_INTERVAL_MS = 10_000;
 const CONTROL_STALE_TIMEOUT_MS = 30_000;
 const CONTROL_READY_TIMEOUT_MS = 8_000;
+const MAX_RELAY_CONNECTION_IDS = 256;
+const MAX_RELAY_CONNECTION_ID_LENGTH = 128;
+const RELAY_CONNECTION_ID_PATTERN = /^[A-Za-z0-9_-]+$/u;
 const RELAY_WEBSOCKET_OPTIONS = { handshakeTimeout: 10_000, perMessageDeflate: false } as const;
 
 function createDefaultRelayWebSocket(url: string): RelayWebSocketLike {
@@ -81,6 +84,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function normalizeRelayConnectionId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const connectionId = value.trim();
+  if (
+    connectionId.length === 0 ||
+    connectionId.length > MAX_RELAY_CONNECTION_ID_LENGTH ||
+    !RELAY_CONNECTION_ID_PATTERN.test(connectionId)
+  ) {
+    return null;
+  }
+  return connectionId;
+}
+
 function tryParseControlMessage(raw: unknown): ControlMessage | null {
   try {
     let text: string;
@@ -96,24 +114,28 @@ function tryParseControlMessage(raw: unknown): ControlMessage | null {
     if (parsed.type === "ping") return { type: "ping" };
     if (parsed.type === "pong") return { type: "pong" };
     if (parsed.type === "sync" && Array.isArray(parsed.connectionIds)) {
-      const connectionIds = parsed.connectionIds.filter(
-        (id: unknown) => typeof id === "string" && id.trim().length > 0,
-      );
+      const connectionIds: string[] = [];
+      const seenConnectionIds = new Set<string>();
+      for (const value of parsed.connectionIds) {
+        const connectionId = normalizeRelayConnectionId(value);
+        if (!connectionId || seenConnectionIds.has(connectionId)) {
+          continue;
+        }
+        seenConnectionIds.add(connectionId);
+        connectionIds.push(connectionId);
+        if (connectionIds.length >= MAX_RELAY_CONNECTION_IDS) {
+          break;
+        }
+      }
       return { type: "sync", connectionIds };
     }
-    if (
-      parsed.type === "connected" &&
-      typeof parsed.connectionId === "string" &&
-      parsed.connectionId.trim()
-    ) {
-      return { type: "connected", connectionId: parsed.connectionId.trim() };
+    if (parsed.type === "connected") {
+      const connectionId = normalizeRelayConnectionId(parsed.connectionId);
+      return connectionId ? { type: "connected", connectionId } : null;
     }
-    if (
-      parsed.type === "disconnected" &&
-      typeof parsed.connectionId === "string" &&
-      parsed.connectionId.trim()
-    ) {
-      return { type: "disconnected", connectionId: parsed.connectionId.trim() };
+    if (parsed.type === "disconnected") {
+      const connectionId = normalizeRelayConnectionId(parsed.connectionId);
+      return connectionId ? { type: "disconnected", connectionId } : null;
     }
     return null;
   } catch {
@@ -369,6 +391,16 @@ export function startRelayTransport({
     if (stopped) return;
     if (!connectionId) return;
     if (dataSockets.has(connectionId)) return;
+    if (dataSockets.size >= MAX_RELAY_CONNECTION_IDS) {
+      relayLogger.warn(
+        {
+          connectionCount: dataSockets.size,
+          maxConnectionIds: MAX_RELAY_CONNECTION_IDS,
+        },
+        "relay_data_socket_capacity_reached",
+      );
+      return;
+    }
 
     const url = buildRelayWebSocketUrl({
       endpoint: relayEndpoint,

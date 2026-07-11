@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { beforeEach, afterEach, describe, expect, test } from "vitest";
+import { beforeEach, afterEach, describe, expect, test, vi } from "vitest";
 import type {
   AgentCapabilityFlags,
   AgentClient,
@@ -239,6 +239,7 @@ describe("LoopService", () => {
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
+    vi.useRealTimers();
   });
 
   // POSIX-only: real worker agent spawns a PTY whose Windows ConPTY path resolution still fails (error 267) after realpathSync; revisit when we have a Windows dev box.
@@ -574,6 +575,168 @@ describe("LoopService", () => {
     expect(finalLoop.status).toBe("stopped");
     expect(finalLoop.iterations[0]?.status).toBe("stopped");
     expect(finalLoop.logs.some((entry) => entry.text.includes("Stop requested"))).toBe(true);
+  });
+
+  test("stops an active verify command by aborting its signal", async () => {
+    const verifySignals: AbortSignal[] = [];
+    const verifyTimeouts: Array<number | undefined> = [];
+    let markVerifyStarted: (() => void) | null = null;
+    const verifyStarted = new Promise<void>((resolve) => {
+      markVerifyStarted = resolve;
+    });
+    const runVerifyCommand: NonNullable<
+      ConstructorParameters<typeof LoopService>[0]["runVerifyCommand"]
+    > = async ({ signal, timeoutMs }) => {
+      verifySignals.push(signal);
+      verifyTimeouts.push(timeoutMs);
+      markVerifyStarted?.();
+      return new Promise((_, reject) => {
+        const rejectOnAbort = () => {
+          reject(new Error("runner rejected after abort"));
+        };
+        if (signal.aborted) {
+          rejectOnAbort();
+          return;
+        }
+        signal.addEventListener("abort", rejectOnAbort, { once: true });
+      });
+    };
+    const manager = new AgentManager({
+      clients: {
+        claude: new ScriptedAgentClient("claude", {
+          async onRun() {
+            return "worker finished";
+          },
+        }),
+      },
+      registry: storage,
+      logger,
+    });
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      runVerifyCommand,
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyChecks: ["ignored-by-injected-runner"],
+    });
+    await verifyStarted;
+    expect(verifySignals).toHaveLength(1);
+    expect(verifyTimeouts).toEqual([undefined]);
+
+    const stopPromise = service.stopLoop(loop.id);
+    await vi.waitFor(() => {
+      expect(verifySignals[0]?.aborted).toBe(true);
+    });
+    const stopped = await stopPromise;
+
+    expect(stopped.status).toBe("stopped");
+    expect(stopped.iterations).toHaveLength(1);
+    expect(stopped.iterations[0]?.status).toBe("stopped");
+    expect(stopped.iterations[0]?.failureReason).toBe("Loop stopped");
+    expect(stopped.iterations[0]?.verifyChecks).toEqual([]);
+    expect(
+      stopped.logs.filter((entry) => entry.source === "verify-check" && entry.level === "error"),
+    ).toEqual([]);
+  });
+
+  test("limits a verify command timeout to the remaining loop deadline", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
+    const verifyTimeouts: Array<number | undefined> = [];
+    const runVerifyCommand: NonNullable<
+      ConstructorParameters<typeof LoopService>[0]["runVerifyCommand"]
+    > = async ({ timeoutMs }) => {
+      verifyTimeouts.push(timeoutMs);
+      return { stdout: "", stderr: "" };
+    };
+    const manager = new AgentManager({
+      clients: {
+        claude: new ScriptedAgentClient("claude", {
+          async onRun() {
+            vi.setSystemTime(startedAtMs + 250);
+            return "worker finished";
+          },
+        }),
+      },
+      registry: storage,
+      logger,
+    });
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      runVerifyCommand,
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish the worker turn.",
+      cwd: workspaceDir,
+      verifyChecks: ["record-timeout"],
+      maxIterations: 1,
+      maxTimeMs: 1_000,
+    });
+    await waitForLoopCompletion(service, loop.id);
+
+    expect(verifyTimeouts).toEqual([750]);
+  });
+
+  test("does not start a verify command after the loop deadline is exhausted", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const startedAtMs = Date.parse("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(startedAtMs);
+    const verifyCommands: string[] = [];
+    const runVerifyCommand: NonNullable<
+      ConstructorParameters<typeof LoopService>[0]["runVerifyCommand"]
+    > = async ({ command }) => {
+      verifyCommands.push(command);
+      return { stdout: "", stderr: "" };
+    };
+    const manager = new AgentManager({
+      clients: {
+        claude: new ScriptedAgentClient("claude", {
+          async onRun() {
+            vi.setSystemTime(startedAtMs + 1_000);
+            return "worker finished";
+          },
+        }),
+      },
+      registry: storage,
+      logger,
+    });
+    const service = new LoopService({
+      chisacodeHome,
+      agentManager: manager,
+      logger,
+      runVerifyCommand,
+    });
+    await service.initialize();
+
+    const loop = await service.runLoop({
+      prompt: "Finish after the deadline.",
+      cwd: workspaceDir,
+      verifyChecks: ["must-not-run"],
+      maxIterations: 1,
+      maxTimeMs: 1_000,
+    });
+    await vi.waitFor(async () => {
+      const state = await service.inspectLoop(loop.id);
+      expect(state.status).not.toBe("running");
+    });
+
+    const finalLoop = await service.inspectLoop(loop.id);
+    expect(verifyCommands).toEqual([]);
+    expect(finalLoop.status).toBe("failed");
+    expect(finalLoop.iterations).toHaveLength(1);
+    expect(finalLoop.iterations[0]?.status).toBe("failed");
+    expect(finalLoop.iterations[0]?.failureReason).toBe("Reached max time (1000ms).");
   });
 });
 

@@ -25,6 +25,7 @@ interface ExecCommandOptions extends ExternalEnvOptions {
   cwd?: string;
   encoding?: BufferEncoding;
   killSignal?: NodeJS.Signals;
+  signal?: AbortSignal;
   timeout?: number;
   maxBuffer?: number;
   shell?: boolean | string;
@@ -183,6 +184,7 @@ export async function execCommand(
     env: childEnv,
     encoding: options?.encoding ?? "utf8",
     killSignal: options?.killSignal,
+    signal: options?.signal,
     timeout: options?.timeout,
     maxBuffer: options?.maxBuffer,
     shell,
