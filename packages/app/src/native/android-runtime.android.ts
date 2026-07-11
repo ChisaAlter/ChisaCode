@@ -5,20 +5,13 @@ import {
   type AndroidNotificationData,
 } from "@/utils/notification-routing";
 
-interface NotificationResponseEvent {
-  data?: unknown;
-}
-
 interface ChisaCodeAndroidRuntimeModule {
   startForegroundService(text: string): Promise<void>;
   updateForegroundServiceText(text: string): Promise<void>;
   stopForegroundService(): Promise<void>;
   sendLocalNotification(title: string, body: string, data: string | null): Promise<void>;
   consumeInitialNotificationData(): Promise<unknown>;
-  addListener(
-    eventName: "onNotificationResponse",
-    listener: (event: NotificationResponseEvent) => void,
-  ): EventSubscription;
+  addListener(eventName: "onNotificationResponse", listener: () => void): EventSubscription;
 }
 
 const nativeModule = requireNativeModule<ChisaCodeAndroidRuntimeModule>("ChisaCodeAndroidRuntime");
@@ -65,14 +58,7 @@ export async function consumeInitialNotificationData(): Promise<AndroidNotificat
  * @param handler Called once for each valid consumed notification intent
  * @returns A function that removes the native event listener
  */
-export function subscribeNotificationResponses(
-  handler: (data: AndroidNotificationData) => void,
-): () => void {
-  const subscription = nativeModule.addListener("onNotificationResponse", (event) => {
-    const data = normalizeAndroidNotificationData(event.data);
-    if (data) {
-      handler(data);
-    }
-  });
+export function subscribeNotificationResponses(handler: () => void): () => void {
+  const subscription = nativeModule.addListener("onNotificationResponse", handler);
   return () => subscription.remove();
 }

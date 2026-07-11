@@ -5,6 +5,7 @@ import { getIsElectron, isAndroid, isWeb, isNative } from "@/constants/platform"
 import { readDesktopSystemIdleTimeMs } from "@/desktop/electron/idle";
 import { invokeDesktopCommand } from "@/desktop/electron/invoke";
 import { shouldRunAndroidForegroundService } from "@/native/android-foreground-service-policy";
+import { createAndroidForegroundServiceReconciler } from "@/native/android-foreground-service-reconciler";
 import {
   type ClientActivityTracker,
   createClientActivityTracker,
@@ -155,19 +156,16 @@ export function useClientActivity({
     let connectionStatus: Parameters<
       typeof shouldRunAndroidForegroundService
     >[0]["connectionStatus"] = "idle";
-    let lastShouldRun = false;
+    const reconciler = createAndroidForegroundServiceReconciler({
+      loadRuntime: () => import("@/native/android-runtime.android"),
+      onError: (error) => {
+        console.error("Failed to synchronize Android foreground service", error);
+      },
+    });
 
     const syncService = () => {
       const shouldRun = shouldRunAndroidForegroundService({ appState, connectionStatus });
-      if (shouldRun === lastShouldRun) return;
-      lastShouldRun = shouldRun;
-      void import("@/native/android-runtime.android")
-        .then((runtime) =>
-          shouldRun ? runtime.startForegroundService("ChisaCode") : runtime.stopForegroundService(),
-        )
-        .catch((error: unknown) => {
-          console.error("Failed to synchronize Android foreground service", error);
-        });
+      reconciler.setDesired(shouldRun);
     };
 
     const unsubscribe = client.subscribeConnectionStatus((state) => {
@@ -185,14 +183,7 @@ export function useClientActivity({
       disposed = true;
       unsubscribe();
       appStateSubscription.remove();
-      if (lastShouldRun) {
-        lastShouldRun = false;
-        void import("@/native/android-runtime.android")
-          .then((runtime) => runtime.stopForegroundService())
-          .catch((error: unknown) => {
-            console.error("Failed to stop Android foreground service during cleanup", error);
-          });
-      }
+      reconciler.dispose();
     };
   }, [client]);
 }

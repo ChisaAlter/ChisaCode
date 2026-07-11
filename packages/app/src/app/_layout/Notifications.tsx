@@ -5,6 +5,7 @@ import { isAndroid, isWeb } from "@/constants/platform";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { getDesktopHost } from "@/desktop/host";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { createAndroidNotificationDrainController } from "@/native/android-notification-drain-controller";
 import {
   ensureOsNotificationPermission,
   WEB_NOTIFICATION_CLICK_EVENT,
@@ -118,19 +119,29 @@ function PushNotificationRouter() {
 
     let cancelled = false;
     let removeAndroidNotificationListener: (() => void) | null = null;
+    let androidDrainController: ReturnType<typeof createAndroidNotificationDrainController> | null =
+      null;
     if (isAndroid) {
       void import("@/native/android-runtime.android")
-        .then(async (runtime) => {
-          const removeListener = runtime.subscribeNotificationResponses(openAndroidNotification);
+        .then((runtime) => {
+          const controller = createAndroidNotificationDrainController({
+            drain: () => runtime.consumeInitialNotificationData(),
+            onData: openAndroidNotification,
+            onError: (error) => {
+              console.error("Failed to drain Android notification launch data", error);
+            },
+          });
+          const removeListener = runtime.subscribeNotificationResponses(() => {
+            controller.requestDrain();
+          });
           if (cancelled) {
             removeListener();
+            controller.dispose();
             return;
           }
           removeAndroidNotificationListener = removeListener;
-          const data = await runtime.consumeInitialNotificationData();
-          if (!cancelled) {
-            openAndroidNotification(data);
-          }
+          androidDrainController = controller;
+          controller.requestDrain();
           return;
         })
         .catch((error: unknown) => {
@@ -148,6 +159,7 @@ function PushNotificationRouter() {
     return () => {
       cancelled = true;
       removeAndroidNotificationListener?.();
+      androidDrainController?.dispose();
       subscription.remove();
     };
   }, [openAndroidNotification, openNotification]);

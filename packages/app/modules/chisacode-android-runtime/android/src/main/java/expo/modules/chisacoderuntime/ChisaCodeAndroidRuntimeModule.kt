@@ -21,6 +21,9 @@ class ChisaCodeAndroidRuntimeModule : Module() {
     }
 
     private val alertIdCounter = AtomicInteger(ChisaCodeForegroundService.ALERT_NOTIFICATION_ID_BASE)
+    private val notificationDataLock = Any()
+    // Bounded latest-wins slot. A wake event is advisory; data remains until JavaScript drains it.
+    private var pendingNotificationData: String? = null
 
     private fun canonicalNotificationData(data: String?): String? {
         if (data == null) return null
@@ -56,8 +59,14 @@ class ChisaCodeAndroidRuntimeModule : Module() {
         Events(NOTIFICATION_RESPONSE_EVENT)
 
         OnNewIntent { intent ->
-            consumeNotificationData(intent)?.let { data ->
-                sendEvent(NOTIFICATION_RESPONSE_EVENT, mapOf("data" to data))
+            val stored = synchronized(notificationDataLock) {
+                consumeNotificationData(intent)?.let { data ->
+                    pendingNotificationData = data
+                    true
+                } ?: false
+            }
+            if (stored) {
+                sendEvent(NOTIFICATION_RESPONSE_EVENT)
             }
         }
 
@@ -120,8 +129,14 @@ class ChisaCodeAndroidRuntimeModule : Module() {
         }
 
         AsyncFunction("consumeInitialNotificationData") {
-            val intent = appContext.currentActivity?.intent ?: return@AsyncFunction null
-            consumeNotificationData(intent)
+            synchronized(notificationDataLock) {
+                pendingNotificationData?.let { data ->
+                    pendingNotificationData = null
+                    return@synchronized data
+                }
+                val intent = appContext.currentActivity?.intent ?: return@synchronized null
+                consumeNotificationData(intent)
+            }
         }
     }
 }

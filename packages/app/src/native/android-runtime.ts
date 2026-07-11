@@ -33,8 +33,6 @@ export async function consumeInitialNotificationData(): Promise<null> {
  * @param _handler Ignored notification response handler
  * @returns A no-op cleanup function
  */
-export function subscribeNotificationResponses(
-  _handler: (data: Record<string, unknown>) => void,
-): () => void {
+export function subscribeNotificationResponses(_handler: () => void): () => void {
   return () => {};
 }

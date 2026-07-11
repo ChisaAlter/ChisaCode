@@ -4,7 +4,9 @@
 
 - Added a pure foreground-service policy that returns true only for `background` + `connected`.
 - Updated client activity tracking to subscribe to both AppState and daemon connection state, avoid
-  duplicate start/stop calls, stop on cleanup when active, and report native Promise failures.
+  duplicate start/stop calls, stop on cleanup when active, and report native Promise failures. A
+  serialized reconciler rechecks the latest desired state after runtime loading and each native
+  operation, preventing stale asynchronous starts or stops from winning.
 - Changed the Android service to `START_NOT_STICKY` and added the API 35 foreground-service timeout
   callback, which logs, removes the notification, and stops the timed-out service instance.
 - Native foreground-service start failures are logged and rethrown through the existing Expo
@@ -15,9 +17,10 @@
   characters. Values must be actual JSON strings; numeric, boolean, null, missing, blank, and
   oversized values are rejected. Unrelated fields are stripped.
 - Cold launches consume and remove the current Activity Intent extra once. Warm/background taps use
-  Expo Module `OnNewIntent`, remove the extra in a `finally` block, and emit only validated canonical
-  data through `onNotificationResponse`. The TypeScript subscription normalizes cold and warm data
-  through the same handler and removes its native listener during cleanup.
+  Expo Module `OnNewIntent`, remove the extra in a `finally` block, and atomically store canonical
+  data in a bounded one-slot latest-wins pending queue. The event is only a wake signal; pending data
+  remains durable until JavaScript drains it. Initial and event-triggered drains are serialized and
+  coalesced, and listener cleanup disposes the drain controller.
 - Themes expose `isDark`; the status bar hook reacts to brightness changes rather than theme names.
 
 ## TDD evidence
@@ -33,6 +36,8 @@ After implementation:
 - `android-foreground-service-policy.test.ts`: 1 test passed
 - `notification-routing.test.ts`: 14 tests passed
 - `theme.test.ts`: 4 tests passed
+- `android-foreground-service-reconciler.test.ts`: 5 tests passed
+- `android-notification-drain-controller.test.ts`: 3 tests passed
 
 ## Android build boundary
 
@@ -52,11 +57,15 @@ or broad Android suite run.
 Warm-notification device verification is also unavailable. Static seam review confirms:
 
 - `Events("onNotificationResponse")` and `OnNewIntent` are registered through the installed Expo
-  Modules API.
-- Every received Intent removes `chisacode.notification.data` before returning or emitting.
+  Modules API; events carry no payload and only wake the drain path.
+- Every received Intent removes `chisacode.notification.data` while holding the same lock used by
+  the one-slot pending queue and drain operation.
 - Malformed native JSON and non-string values return null without logging raw payloads.
-- The Android TypeScript wrapper returns a typed unsubscribe function, and `Notifications.tsx`
-  invokes it during effect cleanup.
+- The Android TypeScript wrapper returns a typed signal-listener unsubscribe function, and
+  `Notifications.tsx` invokes it and disposes the drain controller during effect cleanup.
+- Pure controller tests verify durable late drain, simultaneous initial/event drain coalescing,
+  repeated null consumption, and cleanup suppression. Reconciler tests verify deferred load/start/
+  stop ordering, idempotency, disposal, and bounded retry behavior.
 
 ## Final verification commands
 
@@ -64,8 +73,12 @@ Warm-notification device verification is also unavailable. Static seam review co
   1 test passed.
 - `npx vitest run packages/app/src/utils/notification-routing.test.ts --bail=1` — 14 tests passed.
 - `npx vitest run packages/app/src/styles/theme.test.ts --bail=1` — 4 tests passed.
+- `npx vitest run packages/app/src/native/android-foreground-service-reconciler.test.ts --bail=1`
+  — 5 tests passed.
+- `npx vitest run packages/app/src/native/android-notification-drain-controller.test.ts --bail=1`
+  — 3 tests passed.
 - `npm run typecheck --workspace=@chisacode/app` — exited 0.
-- `npm run lint -- packages/app/src/native/android-foreground-service-policy.ts packages/app/src/native/android-foreground-service-policy.test.ts packages/app/src/hooks/use-client-activity.ts packages/app/src/native/android-runtime.android.ts packages/app/src/native/android-runtime.ts packages/app/src/utils/notification-routing.ts packages/app/src/utils/notification-routing.test.ts packages/app/src/hooks/use-status-bar-theme.ts packages/app/src/styles/theme.ts packages/app/src/styles/theme.test.ts packages/app/src/app/_layout/Notifications.tsx` — 0 warnings and 0 errors.
+- `npm run lint -- packages/app/src/native/android-foreground-service-policy.ts packages/app/src/native/android-foreground-service-policy.test.ts packages/app/src/native/android-foreground-service-reconciler.ts packages/app/src/native/android-foreground-service-reconciler.test.ts packages/app/src/native/android-notification-drain-controller.ts packages/app/src/native/android-notification-drain-controller.test.ts packages/app/src/hooks/use-client-activity.ts packages/app/src/native/android-runtime.android.ts packages/app/src/native/android-runtime.ts packages/app/src/utils/notification-routing.ts packages/app/src/utils/notification-routing.test.ts packages/app/src/hooks/use-status-bar-theme.ts packages/app/src/styles/theme.ts packages/app/src/styles/theme.test.ts packages/app/src/app/_layout/Notifications.tsx` — 0 warnings and 0 errors.
 - `git diff --check` — clean.
 
 ## Scope notes
