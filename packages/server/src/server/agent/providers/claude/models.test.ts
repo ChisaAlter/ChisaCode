@@ -47,6 +47,23 @@ describe("getClaudeModels", () => {
     ]);
   });
 
+  it("offers ultracode only on supported Opus models", () => {
+    const models = getClaudeModels();
+    const opus48Models = models.filter((model) => model.id.startsWith("claude-opus-4-8"));
+    const otherModels = models.filter((model) => !model.id.startsWith("claude-opus-4-8"));
+
+    expect(opus48Models).toHaveLength(2);
+    for (const model of opus48Models) {
+      expect(model.thinkingOptions).toContainEqual({ id: "ultracode", label: "Ultracode" });
+    }
+    for (const model of otherModels) {
+      expect(model.thinkingOptions ?? []).not.toContainEqual({
+        id: "ultracode",
+        label: "Ultracode",
+      });
+    }
+  });
+
   it("marks exactly one model as default", () => {
     const models = getClaudeModels();
     const defaults = models.filter((m) => m.isDefault);

@@ -724,6 +724,42 @@ describe("ClaudeAgentSession features", () => {
     await session.close();
   });
 
+  test("preserves runtime and fast-mode settings for an initial ultracode query", async () => {
+    const { queryFactory } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+      runtimeSettings: {
+        env: { CHISACODE_RUNTIME_SETTING: "preserved" },
+      },
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "claude-opus-4-8",
+      thinkingOptionId: "ultracode",
+      featureValues: { fast_mode: true },
+    });
+
+    await (
+      session as unknown as {
+        ensureQuery(): Promise<unknown>;
+      }
+    ).ensureQuery();
+
+    expect(queryFactory.mock.calls[0]?.[0].options).toMatchObject({
+      effort: "xhigh",
+      settings: {
+        env: { CHISACODE_RUNTIME_SETTING: "preserved" },
+        fastMode: true,
+        ultracode: true,
+      },
+    });
+
+    await session.close();
+  });
+
   test("toggles fast mode on the active query without restarting it", async () => {
     const { queryFactory, queryMock } = createQueryMock();
     const client = new ClaudeAgentClient({
@@ -748,6 +784,84 @@ describe("ClaudeAgentSession features", () => {
     expect(queryMock.applyFlagSettings).toHaveBeenLastCalledWith({ fastMode: true });
     expect(queryMock.close).not.toHaveBeenCalled();
     expect(queryMock.return).not.toHaveBeenCalled();
+
+    await session.close();
+  });
+
+  test("restarts the query when switching to ultracode and preserves gateway settings", async () => {
+    const { queryFactory } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+      runtimeSettings: {
+        env: {
+          ANTHROPIC_API_KEY: "gateway-token",
+          ANTHROPIC_BASE_URL: "http://127.0.0.1:6767/api/model-gateways/opencode",
+          CHISACODE_RUNTIME_SETTING: "preserved",
+        },
+      },
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "GPT6.0",
+      thinkingOptionId: "high",
+    });
+
+    await (
+      session as unknown as {
+        ensureQuery(): Promise<unknown>;
+      }
+    ).ensureQuery();
+    await expect(session.setThinkingOption?.("ultracode")).resolves.toBeUndefined();
+    await (
+      session as unknown as {
+        ensureQuery(): Promise<unknown>;
+      }
+    ).ensureQuery();
+
+    expect(queryFactory).toHaveBeenCalledTimes(2);
+    expect(queryFactory.mock.calls[1]?.[0].options).toMatchObject({
+      effort: "xhigh",
+      settingSources: ["project", "local"],
+      settings: {
+        env: {
+          ANTHROPIC_API_KEY: "gateway-token",
+          ANTHROPIC_BASE_URL:
+            "http://127.0.0.1:6767/api/model-gateways/opencode/model-overrides/GPT6.0",
+          CHISACODE_RUNTIME_SETTING: "preserved",
+        },
+        ultracode: true,
+      },
+    });
+
+    await session.setThinkingOption?.("ultracode");
+    await (
+      session as unknown as {
+        ensureQuery(): Promise<unknown>;
+      }
+    ).ensureQuery();
+    expect(queryFactory).toHaveBeenCalledTimes(3);
+    expect(queryFactory.mock.calls[2]?.[0].options.settings).toMatchObject({ ultracode: true });
+
+    await session.setThinkingOption?.("high");
+    await (
+      session as unknown as {
+        ensureQuery(): Promise<unknown>;
+      }
+    ).ensureQuery();
+    expect(queryFactory).toHaveBeenCalledTimes(4);
+    expect(queryFactory.mock.calls[3]?.[0].options).toMatchObject({
+      effort: "high",
+      settingSources: ["project", "local"],
+      settings: {
+        env: {
+          CHISACODE_RUNTIME_SETTING: "preserved",
+        },
+      },
+    });
+    expect(queryFactory.mock.calls[3]?.[0].options.settings).not.toHaveProperty("ultracode");
 
     await session.close();
   });

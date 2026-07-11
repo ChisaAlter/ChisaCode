@@ -304,6 +304,7 @@ interface ClaudeAgentSessionOptions {
 }
 
 type ClaudeThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
+type ClaudeThinkingOption = ClaudeThinkingEffort | "ultracode";
 
 function resolvePathEnvKey(): "Path" | "PATH" | null {
   if (process.env["Path"] !== undefined) return "Path";
@@ -348,6 +349,9 @@ function isClaudeThinkingEffort(value: string | null | undefined): value is Clau
     value === "xhigh" ||
     value === "max"
   );
+}
+function isClaudeThinkingOption(value: string | null | undefined): value is ClaudeThinkingOption {
+  return value === "ultracode" || isClaudeThinkingEffort(value);
 }
 
 function sanitizeClaudeProjectPath(cwd: string): string {
@@ -1972,7 +1976,7 @@ class ClaudeAgentSession implements AgentSession {
 
     if (!normalizedThinkingOptionId || normalizedThinkingOptionId === "default") {
       this.config.thinkingOptionId = undefined;
-    } else if (isClaudeThinkingEffort(normalizedThinkingOptionId)) {
+    } else if (isClaudeThinkingOption(normalizedThinkingOptionId)) {
       this.config.thinkingOptionId = normalizedThinkingOptionId;
     } else {
       throw new Error(`Unknown thinking option: ${normalizedThinkingOptionId}`);
@@ -2606,14 +2610,13 @@ class ClaudeAgentSession implements AgentSession {
     effort: ClaudeOptions["effort"];
     ultracode: boolean;
   } {
-    const thinkingOptionId =
-      this.config.thinkingOptionId && this.config.thinkingOptionId !== "default"
-        ? this.config.thinkingOptionId
-        : undefined;
+    const thinkingOptionId = isClaudeThinkingOption(this.config.thinkingOptionId)
+      ? this.config.thinkingOptionId
+      : undefined;
     if (thinkingOptionId === "ultracode") {
       return { thinking: { type: "adaptive" }, effort: "xhigh", ultracode: true };
     }
-    if (thinkingOptionId && isClaudeThinkingEffort(thinkingOptionId)) {
+    if (thinkingOptionId) {
       return { thinking: { type: "adaptive" }, effort: thinkingOptionId, ultracode: false };
     }
     return { thinking: undefined, effort: undefined, ultracode: false };
@@ -2646,10 +2649,7 @@ class ClaudeAgentSession implements AgentSession {
     const appendedSystemPrompt = this.buildAppendedSystemPrompt();
     const extraClaudeOptions = this.config.extra?.claude;
     const { sdkEnv, flagSettingsOptions, launchModel, modelGatewayOverrideActive } =
-      this.buildSdkLaunchOptions(extraClaudeOptions);
-    const settingsOptions = ultracode
-      ? { settings: mergeClaudeSettings(extraClaudeOptions?.settings, { ultracode: true }) }
-      : flagSettingsOptions;
+      this.buildSdkLaunchOptions(extraClaudeOptions, { ultracode });
     this.modelGatewayOverrideActive = modelGatewayOverrideActive;
     assertClaudeAutoModeEligible(this.currentMode, sdkEnv);
 
@@ -2702,7 +2702,7 @@ class ClaudeAgentSession implements AgentSession {
       ...(thinking ? { thinking } : {}),
       ...(effort ? { effort } : {}),
       ...extraClaudeOptions,
-      ...settingsOptions,
+      ...flagSettingsOptions,
       ...(this.persistSession === undefined ? {} : { persistSession: this.persistSession }),
       env: sdkEnv,
     };
@@ -2737,7 +2737,10 @@ class ClaudeAgentSession implements AgentSession {
     return base;
   }
 
-  private buildSdkLaunchOptions(extraClaudeOptions: Partial<ClaudeOptions> | undefined): {
+  private buildSdkLaunchOptions(
+    extraClaudeOptions: Partial<ClaudeOptions> | undefined,
+    extra?: { ultracode?: boolean },
+  ): {
     sdkEnv: NodeJS.ProcessEnv;
     flagSettingsOptions: Partial<Pick<ClaudeOptions, "settings" | "settingSources">>;
     launchModel: string | undefined;
@@ -2752,7 +2755,7 @@ class ClaudeAgentSession implements AgentSession {
       ? removeClaudeModelSelectionEnv({ ...baseEnv, ...modelGatewayOverride.env })
       : baseEnv;
     const flagSettingsOptions: Partial<Pick<ClaudeOptions, "settings" | "settingSources">> =
-      this.buildFlagSettingsOptions(extraClaudeOptions, modelGatewayOverride?.env);
+      this.buildFlagSettingsOptions(extraClaudeOptions, modelGatewayOverride?.env, extra);
     if (modelGatewayOverride) {
       flagSettingsOptions.settingSources = CLAUDE_GATEWAY_SETTING_SOURCES;
     }
