@@ -20,3 +20,5 @@ Task 6 semantics: AgentManager-owned per-agent queue, non-interrupting terminal 
 Task 6 spec-review follow-up: error-terminal queue cleanup, synchronous duplicate-submit lock, and Strict Effects remount lifecycle verified; follow-up commit 8a7e18148.
 Task 6 quality-review follow-up: initiation handshake, shared 64 KiB action payload limit, bounded pending/in-flight queue memory, overload response, and locked select/change behavior verified; commit ba5016c68.
 Task 6 quality re-review: synchronous controller authority now blocks same-tick text/select changes after submit begin; commit a32ea67dc.
+Task 6 final: complete through head 03641ba14 (spec review clean, code-quality review approved; Critical/Important/Minor all zero).
+Task 6 final verification: queue 13 passed; focused AgentManager 5 passed; handler 9 passed; action dispatch 5 passed; form/controller 9 passed; server/app typechecks, targeted lint, formatting, and diff checks passed.
