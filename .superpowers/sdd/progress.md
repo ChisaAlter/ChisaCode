@@ -17,4 +17,4 @@ Task 5 compatibility: new clients send `generative_ui.action.request`; legacy fl
 Task 6: complete (implementation commit 69a94a292)
 Task 6 verification: server queue 6 passed; handler 8 passed; focused AgentManager 2 passed; app dispatch 5 passed; form state 3 passed; registry 11 passed; server/app typechecks and targeted lint/format/diff checks passed.
 Task 6 semantics: AgentManager-owned per-agent queue, non-interrupting terminal follow-up, submit batch boundaries, bounded server payload validation, exact app action validation, and retry-safe form state.
-Task 6 spec-review follow-up: error-terminal queue cleanup, synchronous duplicate-submit lock, and Strict Effects remount lifecycle verified; follow-up commit pending.
+Task 6 spec-review follow-up: error-terminal queue cleanup, synchronous duplicate-submit lock, and Strict Effects remount lifecycle verified; follow-up commit 8a7e18148.
