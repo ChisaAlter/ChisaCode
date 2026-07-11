@@ -674,7 +674,10 @@ export class AgentLifecycleHandler implements DisposableHandler {
             ? Math.max(1, Math.floor(requestedLimit))
             : limit,
         useProjectedLimit:
-          projection === "canonical" && typeof requestedLimit === "number" && requestedLimit > 0,
+          projection === "canonical" &&
+          direction === "tail" &&
+          typeof requestedLimit === "number" &&
+          requestedLimit > 0,
       });
       let hasOlder = timeline.hasOlder;
       let hasNewer = timeline.hasNewer;

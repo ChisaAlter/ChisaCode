@@ -812,6 +812,61 @@ describe("generative UI visible pagination", () => {
     expect(exhausted.hasOlder).toBe(false);
   });
 
+  test("unsupported canonical after limit counts adjacent assistant rows canonically", async () => {
+    const rows = [assistantRow(1), assistantRow(2), assistantRow(3)];
+    const payload = await fetchTimelineForRows({
+      rows,
+      direction: "after",
+      cursorSeq: 0,
+      limit: 1,
+    });
+    expect(payload.entries.map((entry) => entry.seqStart)).toEqual([1]);
+    expect(payload.endCursor).toEqual({ epoch: "epoch-1", seq: 1 });
+    expect(payload.hasOlder).toBe(false);
+    expect(payload.hasNewer).toBe(true);
+  });
+
+  test("unsupported canonical before limit counts adjacent assistant rows canonically", async () => {
+    const rows = [assistantRow(1), assistantRow(2), assistantRow(3)];
+    const payload = await fetchTimelineForRows({
+      rows,
+      direction: "before",
+      cursorSeq: 3,
+      limit: 1,
+    });
+    expect(payload.entries.map((entry) => entry.seqStart)).toEqual([2]);
+    expect(payload.startCursor).toEqual({ epoch: "epoch-1", seq: 2 });
+    expect(payload.endCursor).toEqual({ epoch: "epoch-1", seq: 2 });
+    expect(payload.hasOlder).toBe(true);
+    expect(payload.hasNewer).toBe(true);
+  });
+
+  test("capable canonical after and before limits retain original row counting", async () => {
+    const rows = [assistantRow(1), assistantRow(2), assistantRow(3)];
+    const clientCapabilities = { [CLIENT_CAPS.generativeUi]: true };
+    const after = await fetchTimelineForRows({
+      rows,
+      direction: "after",
+      cursorSeq: 0,
+      limit: 1,
+      clientCapabilities,
+    });
+    expect(after.entries.map((entry) => entry.seqStart)).toEqual([1]);
+    expect(after.endCursor).toEqual({ epoch: "epoch-1", seq: 1 });
+    expect(after.hasNewer).toBe(true);
+
+    const before = await fetchTimelineForRows({
+      rows,
+      direction: "before",
+      cursorSeq: 3,
+      limit: 1,
+      clientCapabilities,
+    });
+    expect(before.entries.map((entry) => entry.seqStart)).toEqual([2]);
+    expect(before.startCursor).toEqual({ epoch: "epoch-1", seq: 2 });
+    expect(before.endCursor).toEqual({ epoch: "epoch-1", seq: 2 });
+  });
+
   test("all-hidden history returns stable empty visible metadata", async () => {
     const payload = await fetchTimelineForRows({ rows: [hiddenRow(1), hiddenRow(2)], limit: 1 });
     expect(payload.entries).toEqual([]);
