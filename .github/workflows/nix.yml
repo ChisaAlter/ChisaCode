@@ -2,7 +2,7 @@ name: Nix
 
 on:
   pull_request:
-    branches: [main]
+    branches: [cn-main]
     paths:
       - "nix/**"
       - "flake.nix"

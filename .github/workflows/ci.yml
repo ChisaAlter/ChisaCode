@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [cn-main]
   pull_request:
-    branches: [main]
+    branches: [cn-main]
   merge_group:
   workflow_dispatch:
 
@@ -61,6 +61,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Audit dependencies for known vulnerabilities
         run: npm audit --audit-level=high
@@ -123,8 +126,8 @@ jobs:
           node-version: "22"
           cache: "npm"
 
-      - name: Fetch origin/main (worktree tests)
-        run: git fetch --no-tags origin main:refs/remotes/origin/main
+      - name: Fetch origin/cn-main (worktree tests)
+        run: git fetch --no-tags origin cn-main:refs/remotes/origin/cn-main
 
       - name: Install dependencies
         run: npm ci

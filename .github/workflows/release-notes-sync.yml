@@ -7,7 +7,7 @@ on:
       - "desktop-windows-v*"
       - "android-v*"
     branches:
-      - main
+      - cn-main
     paths:
       - "CHANGELOG.md"
   workflow_dispatch:

@@ -2,7 +2,7 @@ name: Nix Update Hash
 
 on:
   push:
-    branches: [main]
+    branches: [cn-main]
     paths:
       - "nix/**"
       - "flake.nix"
