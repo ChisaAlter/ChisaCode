@@ -22,3 +22,6 @@ Task 6 quality-review follow-up: initiation handshake, shared 64 KiB action payl
 Task 6 quality re-review: synchronous controller authority now blocks same-tick text/select changes after submit begin; commit a32ea67dc.
 Task 6 final: complete through head 03641ba14 (spec review clean, code-quality review approved; Critical/Important/Minor all zero).
 Task 6 final verification: queue 13 passed; focused AgentManager 5 passed; handler 9 passed; action dispatch 5 passed; form/controller 9 passed; server/app typechecks, targeted lint, formatting, and diff checks passed.
+Task 7: complete (commit be98a3e6d, spec review clean, code-quality review approved; Critical/Important/Minor all zero).
+Task 7 verification: Claude agent 42 passed; Claude models 14 passed; targeted lint, server typecheck, targeted formatting, and diff checks passed.
+Task 7 semantics: ClaudeThinkingOption includes ultracode; dynamic changes always request query restart; ultracode options merge additively with runtime env, fastMode, gateway settingSources, and existing settings; switching away removes stale ultracode.
