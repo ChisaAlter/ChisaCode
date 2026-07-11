@@ -5,7 +5,7 @@
 - Exported the documented `MAX_FILE_TRANSFER_BYTES` protocol constant at 64 MiB through the
   existing `@chisacode/protocol/binary-frames/index` subpath.
 - Made `close()` reject the current pending `connect()` with `Daemon client closed` before
-  clearing its resolver state.
+  clearing its resolver state through the shared exactly-once settlement helper.
 - Scoped transport callbacks to their owning transport so late open, error, close, or message
   events cannot mutate a disposed client or a newer connection attempt.
 - Validated file metadata before creating an accumulator and tracked `receivedBytes` before
@@ -43,6 +43,8 @@
 ## Review Notes
 
 - Diff reviewed against base `eea1e854d`.
+- Follow-up spec review confirmed `close()` invokes the pending rejection before clearing all
+  connect settlement fields.
 - The accumulator is receive-side only (`readFile` downloads); uploads do not share this state.
 - Errors contain byte counts and protocol context only, never raw file contents.
 - No package export-map change was required because the existing explicit binary-frame index

@@ -1208,11 +1208,7 @@ export class DaemonClient {
       return;
     }
     this.shouldReconnect = false;
-    const rejectPendingConnect = this.connectReject;
-    this.connectPromise = null;
-    this.connectResolve = null;
-    this.connectReject = null;
-    rejectPendingConnect?.(new Error("Daemon client closed"));
+    this.rejectConnect(new Error("Daemon client closed"));
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
