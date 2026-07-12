@@ -1,5 +1,4 @@
 import {
-  getAgentStreamEventTurnId,
   type AgentCapabilityFlags,
   type AgentClient,
   type AgentCreateSessionOptions,
@@ -62,6 +61,7 @@ import {
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
 import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
+import { CodexSessionEventBus } from "./codex/session-event-bus.js";
 import { CodexContextCompactionState } from "./codex/context-compaction-state.js";
 import {
   cleanupStaleCodexImageAttachments,
@@ -646,7 +646,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private currentThreadId: string | null = null;
   private currentTurnId: string | null = null;
   private client: CodexAppServerClient | null = null;
-  private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
+  private readonly eventBus: CodexSessionEventBus;
   private nextTurnOrdinal = 0;
   private activeForegroundTurnId: string | null = null;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
@@ -698,9 +698,14 @@ export class CodexAppServerAgentSession implements AgentSession {
       provider: CODEX_PROVIDER,
       agentId: this.agentId,
     });
+    this.eventBus = new CodexSessionEventBus(this.logger, {
+      agentId: this.agentId,
+      getSessionId: () => this.currentThreadId,
+      getTurnId: () => this.activeForegroundTurnId,
+    });
     this.permissionController = new CodexPermissionController({
       getCwd: () => this.config.cwd ?? null,
-      emit: (event) => this.emitEvent(event),
+      emit: (event) => this.eventBus.emit(event),
       onPlanApproved: () => this.applyFeatureValue("plan_mode", false),
     });
     this.notificationRouter = new CodexNotificationRouter({
@@ -1255,10 +1260,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
-    this.subscribers.add(callback);
-    return () => {
-      this.subscribers.delete(callback);
-    };
+    return this.eventBus.subscribe(callback);
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
@@ -1434,7 +1436,7 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   async close(): Promise<void> {
     this.permissionController.cancelAll();
-    this.subscribers.clear();
+    this.eventBus.clear();
     this.activeForegroundTurnId = null;
     if (this.client) {
       await this.client.dispose();
@@ -1745,32 +1747,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     return await codexAppServerTurnInputFromPrompt(prompt, this.logger);
   }
 
-  private emitEvent(event: AgentStreamEvent): void {
-    this.notifySubscribers(event);
-  }
-
-  private notifySubscribers(event: AgentStreamEvent): void {
-    const turnId = this.activeForegroundTurnId;
-    const tagged = turnId ? { ...event, turnId } : event;
-    this.logger.trace(
-      {
-        agentId: this.agentId,
-        provider: CODEX_PROVIDER,
-        sessionId: this.currentThreadId,
-        turnId: getAgentStreamEventTurnId(tagged),
-        event: tagged,
-      },
-      "provider.codex.event_emit",
-    );
-    for (const callback of this.subscribers) {
-      try {
-        callback(tagged);
-      } catch (error) {
-        this.logger.warn({ err: error }, "Subscriber callback threw");
-      }
-    }
-  }
-
   private createTurnId(): string {
     return `codex-turn-${this.nextTurnOrdinal++}`;
   }
@@ -1811,7 +1787,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     const item = this.subAgentTracker.buildActivityUpdate(callId, status);
     if (item) {
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item });
+      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item });
     }
   }
 
@@ -1858,7 +1834,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         return;
       }
       const isFirstDeltaForItem = previous.length === 0;
-      this.emitEvent({
+      this.eventBus.emit({
         type: "timeline",
         provider: CODEX_PROVIDER,
         item: {
@@ -1889,7 +1865,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         this.emitSubAgentActivityUpdate(subAgentCallId, "running");
         return;
       }
-      this.emitEvent({
+      this.eventBus.emit({
         type: "timeline",
         provider: CODEX_PROVIDER,
         item: { type: "reasoning", text: parsed.delta },
@@ -1908,7 +1884,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     parsed: Extract<ParsedCodexNotification, { kind: "thread_started" }>,
   ): void {
     this.currentThreadId = parsed.threadId;
-    this.emitEvent({
+    this.eventBus.emit({
       type: "thread_started",
       provider: CODEX_PROVIDER,
       sessionId: parsed.threadId,
@@ -1925,7 +1901,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     this.currentTurnId = parsed.turnId;
     this.resetTurnTrackingState();
-    this.emitEvent({ type: "turn_started", provider: CODEX_PROVIDER });
+    this.eventBus.emit({ type: "turn_started", provider: CODEX_PROVIDER });
   }
 
   private handleTurnCompletedNotification(
@@ -1943,24 +1919,28 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (this.textualToolCallError) {
-      this.emitEvent({
+      this.eventBus.emit({
         type: "turn_failed",
         provider: CODEX_PROVIDER,
         error: this.textualToolCallError,
       });
     } else if (parsed.status === "failed") {
-      this.emitEvent({
+      this.eventBus.emit({
         type: "turn_failed",
         provider: CODEX_PROVIDER,
         error: parsed.errorMessage ?? "Codex turn failed",
       });
     } else if (parsed.status === "interrupted") {
-      this.emitEvent({ type: "turn_canceled", provider: CODEX_PROVIDER, reason: "interrupted" });
+      this.eventBus.emit({
+        type: "turn_canceled",
+        provider: CODEX_PROVIDER,
+        reason: "interrupted",
+      });
     } else {
       if (this.planModeEnabled && this.latestPlanResult?.text) {
         this.permissionController.requestPlanApproval(this.latestPlanResult.text);
       }
-      this.emitEvent({
+      this.eventBus.emit({
         type: "turn_completed",
         provider: CODEX_PROVIDER,
         usage: this.latestUsage,
@@ -2014,7 +1994,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (this.planModeEnabled) {
         return;
       }
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     }
   }
 
@@ -2023,7 +2003,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     this.latestUsage = toAgentUsage(parsed.tokenUsage);
     if (this.latestUsage) {
-      this.notifySubscribers({
+      this.eventBus.emit({
         type: "usage_updated",
         provider: CODEX_PROVIDER,
         usage: this.latestUsage,
@@ -2053,7 +2033,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.compactionState.shouldEmitNotificationCompletion()) {
       return;
     }
-    this.emitEvent({
+    this.eventBus.emit({
       type: "timeline",
       provider: CODEX_PROVIDER,
       item: this.compactionState.createTimelineItem("completed"),
@@ -2075,7 +2055,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       running: true,
     });
     if (timelineItem) {
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     }
   }
 
@@ -2097,7 +2077,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     });
     if (timelineItem) {
       this.notificationStream.markExecCommandCompleted(timelineItem.callId);
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     }
   }
 
@@ -2119,7 +2099,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       fallbackCallId: parsed.callId,
       command,
     });
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
   }
 
   private handlePatchApplyStartedNotification(
@@ -2139,7 +2119,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         callId: parsed.callId,
         changes: parsed.changes,
       });
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     }
   }
 
@@ -2162,7 +2142,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         changes: parsed.changes,
         stdout: parsed.stdout,
       });
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     }
   }
 
@@ -2183,7 +2163,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (!this.compactionState.shouldEmitItemCompletion()) {
         return;
       }
-      this.emitEvent({
+      this.eventBus.emit({
         type: "timeline",
         provider: CODEX_PROVIDER,
         item: this.compactionState.createTimelineItem("completed", parsed.item.id),
@@ -2232,7 +2212,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       this.warnOnIncompleteEditToolCall(timelineItem, "item_completed", parsed.item);
     }
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (timelineItem.type === "assistant_message") {
       this.pendingAssistantMessageBoundary = true;
     }
@@ -2274,14 +2254,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     streamedText: string,
   ): void {
     if (!timelineItem.text.startsWith(streamedText)) {
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
       return;
     }
     const suffix = timelineItem.text.slice(streamedText.length);
     if (!suffix) {
       return;
     }
-    this.emitEvent({
+    this.eventBus.emit({
       type: "timeline",
       provider: CODEX_PROVIDER,
       item:
@@ -2329,7 +2309,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (this.compactionState.isCompactionItem(parsed.item)) {
-      this.emitEvent({
+      this.eventBus.emit({
         type: "timeline",
         provider: CODEX_PROVIDER,
         item: this.compactionState.createTimelineItem("loading", parsed.item.id),
@@ -2366,7 +2346,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     this.warnOnIncompleteEditToolCall(timelineItem, "item_started", parsed.item);
     this.subAgentTracker.registerToolCall(timelineItem, parsed.item);
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (itemId) {
       this.notificationStream.markItemStarted(itemId);
       this.notificationStream.clearCommandOutput(itemId);
@@ -2396,7 +2376,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.rememberCodexUserMessageTurn(timelineItem.messageId)) {
       return;
     }
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
   }
 
   private warnUnknownNotificationMethod(method: string, params: unknown): void {
@@ -2445,7 +2425,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.notificationStream.rememberTerminalCommand(processId, displayCommand)) {
       return;
     }
-    this.emitEvent({
+    this.eventBus.emit({
       type: "timeline",
       provider: CODEX_PROVIDER,
       item: mapCodexTerminalInteractionToToolCall({
