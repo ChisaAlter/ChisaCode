@@ -35,9 +35,7 @@ import { homedir } from "node:os";
 import type { ChildProcess, ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { Dirent } from "node:fs";
-import * as fsSync from "node:fs";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
@@ -57,7 +55,6 @@ import {
 import { findExecutable, probeExecutable } from "../../../utils/executable.js";
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { spawnProcess } from "../../../utils/spawn.js";
-import { ensurePrivateDirectory, writePrivateFileSync } from "../../private-files.js";
 import { extractCodexTerminalSessionId, nonEmptyString } from "./tool-call-mapper-utils.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "./codex-feature-definitions.js";
 import {
@@ -71,6 +68,11 @@ import {
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
 import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
+import {
+  cleanupStaleCodexImageAttachments,
+  mapCodexThreadImageItem,
+  writeCodexImageAttachment,
+} from "./codex/image-attachments.js";
 import {
   applyAgentSkillPolicy,
   expandCodexCustomPrompt,
@@ -119,10 +121,6 @@ import {
   shouldPromoteThreadResponseToAutoReview,
   validateCodexMode,
 } from "./codex/turn-config.js";
-import {
-  renderProviderImageOutputAsAssistantMarkdown,
-  type ProviderImageOutput,
-} from "./provider-image-output.js";
 import { normalizeProviderReplayTimestamp } from "../provider-history-timestamps.js";
 import {
   formatDiagnosticStatus,
@@ -134,6 +132,8 @@ import {
 } from "./diagnostic-utils.js";
 import { runProviderTurn } from "./provider-runner.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
+
+export { cleanupStaleCodexImageAttachments };
 
 export {
   formatCodexQuestionPrompts,
@@ -158,7 +158,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
 const CODEX_PROVIDER = "codex" as const;
-const CODEX_IMAGE_ATTACHMENT_DIR = "chisacode-attachments";
 const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
 const CODEX_TOOL_THREAD_ITEM_TYPES = new Set([
   "commandExecution",
@@ -861,19 +860,6 @@ function mapCodexThreadUserMessageItem(
   };
 }
 
-function firstStringField(
-  record: Record<string, unknown>,
-  fields: readonly string[],
-): string | null {
-  for (const field of fields) {
-    const value = record[field];
-    if (typeof value === "string") {
-      return value;
-    }
-  }
-  return null;
-}
-
 function readCodexHistoryTimestamp(item: unknown): string | null {
   const record = toObjectRecord(item);
   if (!record) {
@@ -906,71 +892,6 @@ function readCodexTurnHistoryTimestamp(
     return startedAt ?? completedAt;
   }
   return completedAt ?? startedAt;
-}
-
-function codexImageOutputFromResult(result: unknown): ProviderImageOutput | null {
-  if (typeof result === "string") {
-    const trimmed = result.trim();
-    if (
-      trimmed.toLowerCase().startsWith("data:image/") ||
-      (/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed) && trimmed.length > 64)
-    ) {
-      return { data: trimmed };
-    }
-    return { url: trimmed };
-  }
-  const resultRecord = toObjectRecord(result);
-  if (!resultRecord) {
-    return null;
-  }
-  return {
-    path: firstStringField(resultRecord, ["path", "savedPath", "saved_path"]),
-    url: firstStringField(resultRecord, ["url"]),
-    data: firstStringField(resultRecord, ["data"]),
-    mimeType: firstStringField(resultRecord, ["mimeType", "mime_type"]),
-  };
-}
-
-function writeImageAttachmentSync(mimeType: string, data: string): string {
-  const attachmentsDir = path.join(os.tmpdir(), CODEX_IMAGE_ATTACHMENT_DIR);
-  ensurePrivateDirectory(attachmentsDir);
-  const normalized = normalizeImageData(mimeType, data);
-  const extension = getImageExtension(normalized.mimeType);
-  const filename = `${randomUUID()}.${extension}`;
-  const filePath = path.join(attachmentsDir, filename);
-  writePrivateFileSync(filePath, Buffer.from(normalized.data, "base64"));
-  return filePath;
-}
-
-function materializeCodexImageOutput(image: { data: string; mimeType: string | null }): {
-  path: string;
-} {
-  return {
-    path: writeImageAttachmentSync(image.mimeType ?? "image/png", image.data),
-  };
-}
-
-function mapCodexThreadImageItem(
-  normalizedType: string,
-  normalizedItem: Record<string, unknown>,
-): AgentTimelineItem | null {
-  if (normalizedType === "imageView") {
-    return renderProviderImageOutputAsAssistantMarkdown({
-      path: firstStringField(normalizedItem, ["path"]),
-    });
-  }
-
-  const savedPath = firstStringField(normalizedItem, ["savedPath", "saved_path"]);
-  const result = codexImageOutputFromResult(normalizedItem.result);
-  return renderProviderImageOutputAsAssistantMarkdown(
-    {
-      path: savedPath ?? result?.path ?? null,
-      url: result?.url ?? null,
-      data: result?.data ?? null,
-      mimeType: result?.mimeType ?? null,
-    },
-    { materialize: materializeCodexImageOutput },
-  );
 }
 
 export function threadItemToTimeline(
@@ -1101,84 +1022,6 @@ export async function rollbackCodexThread(
   return parseCodexThreadRollbackResponse(await client.request("thread/rollback", params));
 }
 
-function getImageExtension(mimeType: string): string {
-  switch (mimeType) {
-    case "image/jpeg":
-      return "jpg";
-    case "image/png":
-      return "png";
-    case "image/webp":
-      return "webp";
-    case "image/gif":
-      return "gif";
-    case "image/bmp":
-      return "bmp";
-    case "image/tiff":
-      return "tiff";
-    default:
-      return "bin";
-  }
-}
-
-interface ImageDataPayload {
-  mimeType: string;
-  data: string;
-}
-
-function normalizeImageData(mimeType: string, data: string): ImageDataPayload {
-  if (data.startsWith("data:")) {
-    const match = data.match(/^data:([^;]+);base64,(.*)$/);
-    if (match) {
-      return { mimeType: match[1], data: match[2] };
-    }
-  }
-  return { mimeType, data };
-}
-
-async function writeImageAttachment(mimeType: string, data: string): Promise<string> {
-  // private-files.ts only exposes sync helpers; the payload is a single image
-  // (small, bounded), so a sync write inside an async wrapper is acceptable
-  // and lets both call sites share the same 0o600/0o700 permission tightening.
-  return writeImageAttachmentSync(mimeType, data);
-}
-
-/**
- * Best-effort cleanup of stale Codex image attachments written to os.tmpdir().
- * Files older than {@link STALE_ATTACHMENT_TTL_MS} are removed. Called on
- * session close so a long-lived daemon does not leak temp files indefinitely.
- * Errors are swallowed — temp dir cleanup is opportunistic.
- */
-const STALE_ATTACHMENT_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-/**
- * Best-effort cleanup of stale Codex image attachments in os.tmpdir().
- * @internal Exported for targeted unit testing only; not part of the provider's public API.
- */
-export async function cleanupStaleCodexImageAttachments(): Promise<void> {
-  const attachmentsDir = path.join(os.tmpdir(), CODEX_IMAGE_ATTACHMENT_DIR);
-  let entries: fsSync.Dirent[];
-  try {
-    entries = await fs.readdir(attachmentsDir, { withFileTypes: true });
-  } catch {
-    return; // directory does not exist yet — nothing to clean
-  }
-  const now = Date.now();
-  await Promise.all(
-    entries.map(async (entry) => {
-      if (!entry.isFile()) return;
-      const filePath = path.join(attachmentsDir, entry.name);
-      try {
-        const stat = await fs.stat(filePath);
-        if (now - stat.mtimeMs > STALE_ATTACHMENT_TTL_MS) {
-          await fs.unlink(filePath);
-        }
-      } catch {
-        // ignore individual file failures
-      }
-    }),
-  );
-}
-
 interface CodexSkillPromptBlock {
   type: "skill";
   name: string;
@@ -1230,7 +1073,7 @@ export async function codexAppServerTurnInputFromPrompt(
     }
     if (block.type === "image") {
       try {
-        const filePath = await writeImageAttachment(block.mimeType, block.data);
+        const filePath = await writeCodexImageAttachment(block.mimeType, block.data);
         output.push({ type: "localImage", path: filePath });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
