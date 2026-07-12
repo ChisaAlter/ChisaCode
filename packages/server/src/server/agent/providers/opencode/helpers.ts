@@ -15,21 +15,16 @@ import {
   resolveDefaultAgentCreateConfig,
 } from "../../create-agent-mode.js";
 import { toDiagnosticErrorMessage } from "../diagnostic-utils.js";
+import {
+  MCP_ALREADY_PRESENT_ERROR_TOKENS,
+  OPENCODE_AUTO_ACCEPT_FEATURE_ID,
+  OPENCODE_BUILD_MODE_ID,
+  OPENCODE_HEADERS_TIMEOUT_TOKENS,
+  OPENCODE_LEGACY_FULL_ACCESS_MODE_ID,
+  OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS,
+  OPENCODE_PERMISSION_ACTION_ALLOW_ONCE,
+} from "./constants.js";
 import { mapOpencodeToolCall } from "./tool-call-mapper.js";
-
-export const OPENCODE_BUILD_MODE_ID = "build";
-export const OPENCODE_LEGACY_FULL_ACCESS_MODE_ID = "full-access";
-export const OPENCODE_AUTO_ACCEPT_FEATURE_ID = "auto_accept";
-export const OPENCODE_PERMISSION_ACTION_ALLOW_ONCE = "allow_once";
-export const OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS = "allow_always";
-
-export const MCP_ALREADY_PRESENT_ERROR_TOKENS = ["already", "exists", "connected"] as const;
-export const OPENCODE_HEADERS_TIMEOUT_TOKENS = [
-  "headers timeout",
-  "headers timeout error",
-  "headers_timeout",
-  "und_err_headers_timeout",
-] as const;
 
 export function isOpenCodeAutoAcceptEnabled(config: AgentSessionConfig): boolean {
   return config.featureValues?.[OPENCODE_AUTO_ACCEPT_FEATURE_ID] === true;

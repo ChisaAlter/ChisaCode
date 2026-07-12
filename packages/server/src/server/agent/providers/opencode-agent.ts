@@ -12,7 +12,6 @@ import {
 } from "@opencode-ai/sdk/v2/client";
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import type { Logger } from "pino";
-import { z } from "zod";
 
 import {
   getAgentStreamEventTurnId,
@@ -23,7 +22,6 @@ import {
   type AgentLaunchContext,
   type AgentMode,
   type AgentModelDefinition,
-  type AgentPermissionAction,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPersistenceHandle,
@@ -37,8 +35,6 @@ import {
   type AgentStreamEvent,
   type AgentTimelineItem,
   type AgentUsage,
-  type ResolveAgentCreateConfigInput,
-  type ResolveAgentCreateConfigResult,
   type ListModelsOptions,
   type ListModesOptions,
   type ListPersistedAgentsOptions,
@@ -48,10 +44,6 @@ import {
   type ToolCallTimelineItem,
 } from "../agent-sdk-types.js";
 import {
-  isDefaultAgentCreateConfigUnattended,
-  resolveDefaultAgentCreateConfig,
-} from "../create-agent-mode.js";
-import {
   checkProviderLaunchAvailable,
   createProviderEnvSpec,
   resolveProviderLaunch,
@@ -60,18 +52,13 @@ import {
 import { withTimeout } from "../../../utils/promise-timeout.js";
 import { execCommand } from "../../../utils/spawn.js";
 import { buildToolCallDisplayModel } from "@chisacode/protocol/tool-call-display";
-import { mapOpencodeToolCall } from "./opencode/tool-call-mapper.js";
 import { OpenCodeServerManager } from "./opencode/server-manager.js";
 import type { OpenCodeLikeProviderConfig } from "./opencode/server-manager.js";
 import {
-  MCP_ALREADY_PRESENT_ERROR_TOKENS,
   OPENCODE_AGENT_HEX_COLOR_PATTERN,
   OPENCODE_AUTO_ACCEPT_FEATURE_ID,
   OPENCODE_BUILD_MODE_ID,
-  OPENCODE_HEADERS_TIMEOUT_TOKENS,
   OPENCODE_LEGACY_FULL_ACCESS_MODE_ID,
-  OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS,
-  OPENCODE_PERMISSION_ACTION_ALLOW_ONCE,
   OPENCODE_PERSISTED_SESSION_LIMIT,
   OPENCODE_PROVIDER_LIST_TIMEOUT_MS,
 } from "./opencode/constants.js";
@@ -87,6 +74,20 @@ import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
 import { OpenCodeAbortCoordinator } from "./opencode/abort-coordinator.js";
 import { OpenCodeEventStreamController } from "./opencode/event-stream.js";
+import {
+  buildOpenCodeAutoAcceptFeature,
+  buildOpenCodePermissionActions,
+  isAlreadyPresentMcpError,
+  isOpenCodeAutoAcceptEnabled,
+  isOpenCodeCreateConfigUnattended,
+  isOpenCodeHeadersTimeoutFailure,
+  isOpenCodeNotFoundError,
+  OpencodeToolPartToTimelineItemSchema,
+  resolveOpenCodeCreateConfig,
+  resolveOpenCodePermissionReply,
+  toOpenCodeMcpConfig,
+  type OpenCodeMcpConfig,
+} from "./opencode/helpers.js";
 import { ProductionOpenCodeRuntime, type OpenCodeRuntime } from "./opencode/runtime.js";
 import { normalizeProviderReplayTimestamp } from "../provider-history-timestamps.js";
 import { revertOpenCodeConversationAndFiles } from "./opencode/rewind.js";
@@ -136,109 +137,6 @@ const DEFAULT_MODES: AgentMode[] = [
   },
 ];
 
-function isOpenCodeAutoAcceptEnabled(config: AgentSessionConfig): boolean {
-  return config.featureValues?.[OPENCODE_AUTO_ACCEPT_FEATURE_ID] === true;
-}
-
-function withOpenCodeAutoAcceptFeature(
-  featureValues: Record<string, unknown> | undefined,
-  enabled: boolean,
-): Record<string, unknown> {
-  return {
-    ...featureValues,
-    [OPENCODE_AUTO_ACCEPT_FEATURE_ID]: enabled,
-  };
-}
-
-function resolveOpenCodeCreateConfig(
-  input: ResolveAgentCreateConfigInput,
-): ResolveAgentCreateConfigResult {
-  const legacyFullAccess = input.requestedMode === OPENCODE_LEGACY_FULL_ACCESS_MODE_ID;
-  const inheritsUnattended =
-    input.requestedMode === undefined && input.parent?.isUnattended === true;
-  const requestedMode = legacyFullAccess ? OPENCODE_BUILD_MODE_ID : input.requestedMode;
-  const featureValues =
-    legacyFullAccess ||
-    (inheritsUnattended && input.featureValues?.[OPENCODE_AUTO_ACCEPT_FEATURE_ID] === undefined)
-      ? withOpenCodeAutoAcceptFeature(input.featureValues, true)
-      : input.featureValues;
-
-  if (inheritsUnattended && requestedMode === undefined) {
-    return { modeId: OPENCODE_BUILD_MODE_ID, featureValues };
-  }
-
-  const resolved = resolveDefaultAgentCreateConfig({
-    ...input,
-    requestedMode,
-    featureValues,
-  });
-  return { ...resolved, featureValues };
-}
-
-function isOpenCodeCreateConfigUnattended(
-  input: Parameters<typeof isDefaultAgentCreateConfigUnattended>[0],
-): boolean {
-  return (
-    isDefaultAgentCreateConfigUnattended(input) ||
-    input.config.featureValues?.[OPENCODE_AUTO_ACCEPT_FEATURE_ID] === true ||
-    input.features?.some(
-      (feature) =>
-        feature.id === OPENCODE_AUTO_ACCEPT_FEATURE_ID &&
-        (feature.value === true || feature.value === "true"),
-    ) === true
-  );
-}
-
-function buildOpenCodeAutoAcceptFeature(config: AgentSessionConfig): AgentFeature {
-  return {
-    type: "toggle",
-    id: OPENCODE_AUTO_ACCEPT_FEATURE_ID,
-    label: "Auto Accept",
-    description: "Automatically approves OpenCode tool permission prompts.",
-    tooltip: "Auto accept permission prompts",
-    icon: "shield-check",
-    value: isOpenCodeAutoAcceptEnabled(config),
-  };
-}
-
-function buildOpenCodePermissionActions(): AgentPermissionAction[] {
-  return [
-    {
-      id: "deny",
-      label: "Deny",
-      behavior: "deny",
-      variant: "danger",
-      intent: "dismiss",
-    },
-    {
-      id: OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS,
-      label: "Allow always",
-      behavior: "allow",
-      variant: "secondary",
-    },
-    {
-      id: OPENCODE_PERMISSION_ACTION_ALLOW_ONCE,
-      label: "Allow once",
-      behavior: "allow",
-      variant: "primary",
-    },
-  ];
-}
-
-function resolveOpenCodePermissionReply(
-  response: AgentPermissionResponse,
-): "once" | "always" | "reject" {
-  if (response.behavior === "deny") {
-    return "reject";
-  }
-
-  if (response.selectedActionId === OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS) {
-    return "always";
-  }
-
-  return "once";
-}
-
 type OpenCodeAgentConfig = AgentSessionConfig & { provider: "opencode" };
 type OpenCodeMessageRole = "user" | "assistant";
 type OpenCodePersistedSession = OpenCodeSession | OpenCodeGlobalSession;
@@ -248,131 +146,10 @@ interface OpenCodeSessionMessage {
   parts: OpenCodePart[];
 }
 
-type OpenCodeMcpConfig =
-  | {
-      type: "local";
-      command: string[];
-      environment?: Record<string, string>;
-      enabled?: boolean;
-    }
-  | {
-      type: "remote";
-      url: string;
-      headers?: Record<string, string>;
-      enabled?: boolean;
-    };
-
 const OPENCODE_HANDLED_BUILTIN_SLASH_COMMANDS: AgentSlashCommand[] = [
   { name: "compact", description: "Compact the current session", argumentHint: "" },
   { name: "summarize", description: "Compact the current session", argumentHint: "" },
 ];
-
-const OpencodeToolStateSchema = z
-  .object({
-    status: z.string().optional(),
-    input: z.unknown().optional(),
-    output: z.unknown().optional(),
-    error: z.unknown().optional(),
-  })
-  .passthrough();
-
-const OpencodeToolPartBaseSchema = z
-  .object({
-    tool: z.string().trim().min(1),
-    state: OpencodeToolStateSchema.optional(),
-  })
-  .passthrough();
-
-const OpencodeToolPartWithCallIdSchema = OpencodeToolPartBaseSchema.extend({
-  callID: z.string().trim().min(1),
-  id: z.string().optional(),
-}).transform((part) => ({
-  toolName: part.tool,
-  callId: part.callID,
-  status: part.state?.status,
-  input: part.state?.input,
-  output: part.state?.output,
-  error: part.state?.error,
-}));
-
-const OpencodeToolPartWithIdSchema = OpencodeToolPartBaseSchema.extend({
-  id: z.string().trim().min(1),
-  callID: z.string().optional(),
-}).transform((part) => ({
-  toolName: part.tool,
-  callId: part.id,
-  status: part.state?.status,
-  input: part.state?.input,
-  output: part.state?.output,
-  error: part.state?.error,
-}));
-
-const OpencodeToolPartWithoutIdSchema = OpencodeToolPartBaseSchema.extend({
-  id: z.string().optional(),
-  callID: z.string().optional(),
-}).transform((part) => ({
-  toolName: part.tool,
-  callId: undefined,
-  status: part.state?.status,
-  input: part.state?.input,
-  output: part.state?.output,
-  error: part.state?.error,
-}));
-
-const OpencodeToolPartSchema = z.union([
-  OpencodeToolPartWithCallIdSchema,
-  OpencodeToolPartWithIdSchema,
-  OpencodeToolPartWithoutIdSchema,
-]);
-
-const OpencodeToolPartTimelineEnvelopeSchema = OpencodeToolPartSchema.transform((part) => ({
-  toolName: part.toolName,
-  callId: part.callId,
-  status: part.status,
-  input: part.input,
-  output: part.output,
-  error: part.error,
-}));
-
-const OpencodeToolPartToTimelineItemSchema = OpencodeToolPartTimelineEnvelopeSchema.transform(
-  (part) =>
-    mapOpencodeToolCall({
-      toolName: part.toolName,
-      callId: part.callId,
-      status: part.status,
-      input: part.input,
-      output: part.output,
-      error: part.error,
-    }),
-);
-
-function toOpenCodeMcpConfig(config: McpServerConfig): OpenCodeMcpConfig {
-  if (config.type === "stdio") {
-    return {
-      type: "local",
-      command: [config.command, ...(config.args ?? [])],
-      ...(config.env ? { environment: config.env } : {}),
-      enabled: true,
-    };
-  }
-
-  return {
-    type: "remote",
-    url: config.url,
-    ...(config.headers ? { headers: config.headers } : {}),
-    enabled: true,
-  };
-}
-
-function isOpenCodeNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    (error as { name?: unknown }).name === "NotFoundError"
-  );
-}
-
 async function reconcileOpenCodeSessionClose(params: {
   client: Pick<OpencodeClient, "session">;
   sessionId: string;
@@ -429,55 +206,6 @@ async function reconcileOpenCodeSessionClose(params: {
       "Failed to archive OpenCode session during close",
     );
   }
-}
-
-function isOpenCodeHeadersTimeoutFailure(error: unknown): boolean {
-  const diagnostics = new Set<string>();
-  const queue: unknown[] = [error];
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) {
-      continue;
-    }
-
-    const normalized = toDiagnosticErrorMessage(current).trim().toLowerCase();
-    if (normalized) {
-      diagnostics.add(normalized);
-    }
-
-    if (typeof current === "object") {
-      const record = current as {
-        message?: unknown;
-        code?: unknown;
-        name?: unknown;
-        cause?: unknown;
-      };
-
-      for (const value of [record.message, record.code, record.name]) {
-        if (typeof value !== "string") {
-          continue;
-        }
-        const diagnostic = value.trim().toLowerCase();
-        if (diagnostic) {
-          diagnostics.add(diagnostic);
-        }
-      }
-
-      if (record.cause) {
-        queue.push(record.cause);
-      }
-    }
-  }
-
-  return [...diagnostics].some((diagnostic) =>
-    OPENCODE_HEADERS_TIMEOUT_TOKENS.some((token) => diagnostic.includes(token)),
-  );
-}
-
-function isAlreadyPresentMcpError(error: unknown): boolean {
-  const normalized = toDiagnosticErrorMessage(error).toLowerCase();
-  return MCP_ALREADY_PRESENT_ERROR_TOKENS.some((token) => normalized.includes(token));
 }
 
 function readOpenCodeMcpOperationError(data: unknown, name: string): unknown {

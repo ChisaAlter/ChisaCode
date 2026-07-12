@@ -2,12 +2,8 @@ import type { Event as OpenCodeEvent, OpencodeClient } from "@opencode-ai/sdk/v2
 import type { Logger } from "pino";
 
 import { toDiagnosticErrorMessage } from "../diagnostic-utils.js";
+import { toTerminalTurnEvent, type TerminalTurnEvent } from "./helpers.js";
 import type { AgentStreamEvent, ToolCallTimelineItem } from "../../agent-sdk-types.js";
-
-type TerminalTurnEvent = Extract<
-  AgentStreamEvent,
-  { type: "turn_completed" | "turn_failed" | "turn_canceled" }
->;
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -85,20 +81,6 @@ function isOpenCodeTerminalEvent(event: OpenCodeEvent, sessionId: string): boole
     event.properties.sessionID === sessionId &&
     event.properties.status.type === "idle"
   );
-}
-
-function toTerminalTurnEvent(event: AgentStreamEvent): TerminalTurnEvent | null {
-  if (event.type === "turn_failed") {
-    return {
-      type: "turn_failed",
-      provider: "opencode",
-      error: toDiagnosticErrorMessage(event.error),
-    };
-  }
-  if (event.type === "turn_completed" || event.type === "turn_canceled") {
-    return event;
-  }
-  return null;
 }
 
 /** Owns OpenCode SSE readiness, consumption, stale-terminal suppression, and shutdown. */
