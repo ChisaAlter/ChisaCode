@@ -118,7 +118,7 @@ console.log("=== Run Output Schema Helper Tests ===\n");
 // Test 7: Conflicting --model is rejected.
 {
   assert.throws(() => resolveProviderAndModel({ provider: "codex/gpt-5.4", model: "gpt-5.5" }), {
-    message: "Conflicting model values provided",
+    code: "CONFLICTING_MODEL_OPTIONS",
   });
   console.log("✓ rejects conflicting explicit model with slash syntax");
 }

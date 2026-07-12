@@ -124,6 +124,51 @@ interface AgentStreamStressRequest {
   coalesced: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function buildMockStructuredValue(schema: unknown, fieldName = "value"): unknown {
+  if (!isRecord(schema)) {
+    return `mock-${fieldName}`;
+  }
+  if ("const" in schema) {
+    return schema.const;
+  }
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    return schema.enum[0];
+  }
+  if ("default" in schema) {
+    return schema.default;
+  }
+
+  const schemaType = Array.isArray(schema.type)
+    ? schema.type.find((value) => value !== "null")
+    : schema.type;
+  if (schemaType === "object" || isRecord(schema.properties)) {
+    const properties = isRecord(schema.properties) ? schema.properties : {};
+    const required = Array.isArray(schema.required)
+      ? schema.required.filter((value): value is string => typeof value === "string")
+      : Object.keys(properties);
+    return Object.fromEntries(
+      required.map((name) => [name, buildMockStructuredValue(properties[name], name)]),
+    );
+  }
+  if (schemaType === "array") {
+    return [];
+  }
+  if (schemaType === "integer" || schemaType === "number") {
+    return 1;
+  }
+  if (schemaType === "boolean") {
+    return true;
+  }
+  if (schemaType === "null") {
+    return null;
+  }
+  return `mock-${fieldName}`;
+}
+
 function shouldEmitPlanApprovalPrompt(prompt: AgentPromptInput): boolean {
   return /emit\s+(?:a\s+)?synthetic\s+plan\s+approval/i.test(promptToText(prompt));
 }
@@ -476,7 +521,7 @@ export class MockLoadTestAgentSession implements AgentSession {
 
   async startTurn(
     prompt: AgentPromptInput,
-    _options?: AgentRunOptions,
+    options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
     if (this.activeTurn) {
       throw new Error("Mock load-test provider already has an active turn");
@@ -522,7 +567,9 @@ export class MockLoadTestAgentSession implements AgentSession {
 
     const largePayload = parseLargeAgentStreamPayloadPrompt(prompt);
     const stress = parseAgentStreamStressPrompt(prompt);
-    if (shouldEmitPlanApprovalPrompt(prompt)) {
+    if (options?.outputSchema) {
+      this.scheduleStructuredOutputTurn(turn, options.outputSchema);
+    } else if (shouldEmitPlanApprovalPrompt(prompt)) {
       this.schedulePlanApprovalTurn(turn);
     } else if (largePayload) {
       this.scheduleLargePayloadTurn(turn, largePayload);
@@ -685,6 +732,27 @@ export class MockLoadTestAgentSession implements AgentSession {
   private schedulePlanApprovalTurn(turn: ActiveTurn): void {
     turn.timer = setTimeout(() => {
       this.emitPlanApprovalTurn(turn);
+    }, 0);
+    turn.timer.unref?.();
+  }
+
+  private scheduleStructuredOutputTurn(turn: ActiveTurn, outputSchema: unknown): void {
+    turn.timer = setTimeout(() => {
+      if (this.activeTurn !== turn) {
+        return;
+      }
+      this.clearTurnTimer(turn);
+      this.emit({
+        type: "turn_started",
+        provider: this.provider,
+        turnId: turn.turnId,
+      });
+      const text = JSON.stringify(buildMockStructuredValue(outputSchema));
+      this.emitTimeline(turn.turnId, {
+        type: "assistant_message",
+        text,
+      });
+      this.finishTurnWithText(turn, text);
     }, 0);
     turn.timer.unref?.();
   }

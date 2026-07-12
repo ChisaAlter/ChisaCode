@@ -27,7 +27,10 @@ const port = 10000 + Math.floor(Math.random() * 50000);
 const chisacodeHome = await mkdtemp(join(tmpdir(), "chisacode-test-home-"));
 
 function daemonCommand(args: string[]) {
-  return runLocalChisaCode(["daemon", ...args], { CHISACODE_HOME: chisacodeHome });
+  return runLocalChisaCode(["daemon", ...args], {
+    CHISACODE_HOME: chisacodeHome,
+    CHISACODE_LANG: "en",
+  });
 }
 
 try {

@@ -21,12 +21,10 @@
  */
 
 import assert from "node:assert";
-import { $ } from "zx";
 import { mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-
-$.verbose = false;
+import { runLocalChisaCode } from "./helpers/local-cli.ts";
 
 console.log("=== Run Command Tests ===\n");
 
@@ -46,11 +44,18 @@ await writeFile(
   }),
 );
 
+function runCommand(args: string[]) {
+  return runLocalChisaCode(args, {
+    CHISACODE_HOST: `localhost:${port}`,
+    CHISACODE_HOME: chisacodeHome,
+  });
+}
+
 try {
   // Test 1: run --help shows options
   {
     console.log("Test 1: run --help shows options");
-    const result = await $`npx chisacode run --help`.nothrow();
+    const result = await runLocalChisaCode(["run", "--help"]);
     assert.strictEqual(result.exitCode, 0, "run --help should exit 0");
     assert(result.stdout.includes("-d"), "help should mention -d flag");
     assert(result.stdout.includes("--detach"), "help should mention --detach flag");
@@ -68,8 +73,7 @@ try {
   // Test 2: run requires prompt argument
   {
     console.log("Test 2: run requires prompt argument");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run`.nothrow();
+    const result = await runCommand(["run"]);
     assert.notStrictEqual(result.exitCode, 0, "should fail without prompt");
     const output = result.stdout + result.stderr;
     // Commander should complain about missing argument
@@ -84,8 +88,7 @@ try {
   // Test 3: run handles daemon not running
   {
     console.log("Test 3: run handles daemon not running");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --provider claude "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--provider", "claude", "test prompt"]);
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -100,8 +103,7 @@ try {
   // Test 4: run -d flag is accepted
   {
     console.log("Test 4: run -d flag is accepted");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run -d "test prompt"`.nothrow();
+    const result = await runCommand(["run", "-d", "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -d flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -111,8 +113,7 @@ try {
   // Test 5: run --name flag is accepted
   {
     console.log("Test 5: run --name flag is accepted");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --name "test-agent" "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--name", "test-agent", "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --name flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -122,8 +123,7 @@ try {
   // Test 6: run --provider flag is accepted
   {
     console.log("Test 6: run --provider flag is accepted");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --provider codex "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--provider", "codex", "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --provider flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -133,8 +133,7 @@ try {
   // Test 6b: run --provider provider/model syntax is accepted
   {
     console.log("Test 6b: run --provider provider/model syntax is accepted");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --provider codex/gpt-5.4 "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--provider", "codex/gpt-5.4", "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept provider/model syntax");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -144,8 +143,7 @@ try {
   // Test 7: run --mode flag is accepted
   {
     console.log("Test 7: run --mode flag is accepted");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --mode bypass "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--mode", "bypass", "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --mode flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -155,8 +153,7 @@ try {
   // Test 8: run --cwd flag is accepted
   {
     console.log("Test 8: run --cwd flag is accepted");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --cwd /tmp "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--cwd", "/tmp", "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --cwd flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -166,8 +163,7 @@ try {
   // Test 9: run --output-schema flag is accepted
   {
     console.log("Test 9: run --output-schema flag is accepted");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --output-schema ${schemaPath} "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--output-schema", schemaPath, "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --output-schema flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -177,8 +173,7 @@ try {
   // Test 10: run --output-schema cannot be used with --detach
   {
     console.log("Test 10: run --output-schema cannot be used with --detach");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run -d --output-schema ${schemaPath} "test prompt"`.nothrow();
+    const result = await runCommand(["run", "-d", "--output-schema", schemaPath, "test prompt"]);
     assert.notStrictEqual(result.exitCode, 0, "should fail with --detach and --output-schema");
     const output = result.stdout + result.stderr;
     assert(
@@ -191,8 +186,7 @@ try {
   // Test 11: -q (quiet) flag is accepted with run
   {
     console.log("Test 11: -q (quiet) flag is accepted with run");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode -q run -d "test prompt"`.nothrow();
+    const result = await runCommand(["-q", "run", "-d", "test prompt"]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -202,8 +196,20 @@ try {
   // Test 12: Combined flags work together
   {
     console.log("Test 12: Combined flags work together");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode -q run -d --name "test-fixer" --provider claude --mode bypass --cwd /tmp "Fix the tests"`.nothrow();
+    const result = await runCommand([
+      "-q",
+      "run",
+      "-d",
+      "--name",
+      "test-fixer",
+      "--provider",
+      "claude",
+      "--mode",
+      "bypass",
+      "--cwd",
+      "/tmp",
+      "Fix the tests",
+    ]);
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept all combined flags");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -213,13 +219,21 @@ try {
   // Test 12b: conflicting provider/model syntax is rejected before connect
   {
     console.log("Test 12b: conflicting provider/model syntax is rejected");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --provider codex/gpt-5.4 --model gpt-5.5 "test prompt"`.nothrow();
+    const result = await runCommand([
+      "run",
+      "--json",
+      "--provider",
+      "codex/gpt-5.4",
+      "--model",
+      "gpt-5.5",
+      "test prompt",
+    ]);
     assert.notStrictEqual(result.exitCode, 0, "should fail for conflicting model inputs");
-    const output = result.stdout + result.stderr;
-    assert(
-      output.includes("Conflicting model values provided"),
-      "should explain conflicting model inputs",
+    const output = JSON.parse(result.stderr) as { error?: { code?: unknown } };
+    assert.strictEqual(
+      output.error?.code,
+      "CONFLICTING_MODEL_OPTIONS",
+      "should expose the stable conflicting-model error code",
     );
     console.log("✓ conflicting provider/model syntax is rejected\n");
   }
@@ -227,7 +241,7 @@ try {
   // Test 13: chisacode --help shows run command
   {
     console.log("Test 13: chisacode --help shows run command");
-    const result = await $`npx chisacode --help`.nothrow();
+    const result = await runLocalChisaCode(["--help"]);
     assert.strictEqual(result.exitCode, 0, "chisacode --help should exit 0");
     assert(result.stdout.includes("run"), "help should mention run command");
     console.log("✓ chisacode --help shows run command\n");
@@ -236,8 +250,7 @@ try {
   // Test 14: run --ui is rejected (flag removed)
   {
     console.log("Test 14: run --ui is rejected");
-    const result =
-      await $`CHISACODE_HOST=localhost:${port} CHISACODE_HOME=${chisacodeHome} npx chisacode run --ui "test prompt"`.nothrow();
+    const result = await runCommand(["run", "--ui", "test prompt"]);
     assert.notStrictEqual(result.exitCode, 0, "should fail for removed --ui flag");
     const output = result.stdout + result.stderr;
     assert(output.includes("unknown option"), "should report unknown option for --ui");

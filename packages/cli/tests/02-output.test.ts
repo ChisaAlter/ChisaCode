@@ -20,6 +20,7 @@ import {
   type OutputSchema,
   type CommandError,
 } from "../src/output/index.js";
+import { tCli } from "../src/i18n.js";
 
 // Test data types
 interface Agent {
@@ -279,7 +280,7 @@ console.log("\n=== Error Rendering ===\n");
 test("renderError formats error for table format", () => {
   const error: CommandError = { code: "NOT_FOUND", message: "Agent not found" };
   const output = renderError(error, { noColor: true });
-  assert.ok(output.includes("Error:"), "Should include Error prefix");
+  assert.ok(output.startsWith(tCli("error.prefix")), "Should include localized error prefix");
   assert.ok(output.includes("Agent not found"), "Should include message");
 });
 

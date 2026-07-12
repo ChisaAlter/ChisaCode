@@ -43,14 +43,22 @@ const TEST_DAEMON_ENV_DEFAULTS: Record<string, string> = {
   CHISACODE_VOICE_MODE_ENABLED: process.env.CHISACODE_VOICE_MODE_ENABLED ?? "0",
 };
 const TEST_DAEMON_HOST = "127.0.0.1";
+const TSX_CLI_PATH = join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "node_modules",
+  "tsx",
+  "dist",
+  "cli.mjs",
+);
 
-function buildNpxSpawnArgs(args: string[]): { command: string; args: string[] } {
-  if (process.platform !== "win32") {
-    return { command: "npx", args };
-  }
+function buildTsxSpawnArgs(args: string[]): { command: string; args: string[] } {
   return {
-    command: process.env.ComSpec ?? "cmd.exe",
-    args: ["/d", "/s", "/c", "npx.cmd", ...args],
+    command: process.execPath,
+    args: [TSX_CLI_PATH, ...args],
   };
 }
 
@@ -190,6 +198,7 @@ async function probeDaemonReady(port: number): Promise<boolean> {
         stop: async () => {},
       },
       ["agent", "ls"],
+      { timeout: 15_000 },
     );
     return exitCode === 0;
   } catch {
@@ -197,10 +206,18 @@ async function probeDaemonReady(port: number): Promise<boolean> {
   }
 }
 
-async function waitForDaemonReady(port: number, timeout = 30000): Promise<void> {
+async function waitForDaemonReady(
+  port: number,
+  timeout = 30000,
+  getExitError?: () => Error | null,
+): Promise<void> {
   const deadline = Date.now() + timeout;
 
   async function poll(): Promise<void> {
+    const exitError = getExitError?.();
+    if (exitError) {
+      throw exitError;
+    }
     if (await probeDaemonReady(port)) return;
     if (Date.now() >= deadline) {
       throw new Error(`Daemon failed to become ready on port ${port} within ${timeout}ms`);
@@ -243,13 +260,7 @@ export async function startTestDaemon(options?: {
   const cliSrcPath = join(cliDir, "src", "index.ts");
 
   // Start daemon process using tsx to run TypeScript directly
-  const daemonInvocation = buildNpxSpawnArgs([
-    "tsx",
-    cliSrcPath,
-    "daemon",
-    "start",
-    "--foreground",
-  ]);
+  const daemonInvocation = buildTsxSpawnArgs([cliSrcPath, "daemon", "start", "--foreground"]);
   const daemonProcess = spawn(daemonInvocation.command, daemonInvocation.args, {
     env: {
       ...process.env,
@@ -266,6 +277,7 @@ export async function startTestDaemon(options?: {
 
   const stdout = createOutputCapture();
   const stderr = createOutputCapture();
+  let cleanupRequested = false;
 
   daemonProcess.stdout?.on("data", (data) => {
     appendOutputCapture(stdout, data);
@@ -276,6 +288,7 @@ export async function startTestDaemon(options?: {
   });
 
   const cleanup = async () => {
+    cleanupRequested = true;
     if (daemonProcess) {
       await terminateProcessTree(daemonProcess, 5000);
     }
@@ -304,7 +317,7 @@ export async function startTestDaemon(options?: {
   });
 
   daemonProcess.on("exit", (code) => {
-    if (code !== 0 && code !== null) {
+    if (!cleanupRequested && code !== 0 && code !== null) {
       console.error(`Daemon process exited with code ${code}`);
       const stderrText = formatOutputCapture(stderr);
       if (stderrText) {
@@ -325,7 +338,14 @@ export async function startTestDaemon(options?: {
 
   // Wait for daemon to be ready
   try {
-    await waitForDaemonReady(port, timeout);
+    await waitForDaemonReady(port, timeout, () => {
+      if (daemonProcess.exitCode === null && daemonProcess.signalCode === null) {
+        return null;
+      }
+      return new Error(
+        `Daemon process exited before readiness (code=${daemonProcess.exitCode ?? "null"}, signal=${daemonProcess.signalCode ?? "null"})\nStdout: ${formatOutputCapture(stdout)}\nStderr: ${formatOutputCapture(stderr)}`,
+      );
+    });
     ctx.isReady = true;
   } catch (err) {
     // Daemon failed to start - clean up and rethrow
@@ -362,7 +382,7 @@ export async function runChisaCodeCli(
   const cliSrcPath = join(cliDir, "src", "index.ts");
 
   return new Promise((resolve, reject) => {
-    const invocation = buildNpxSpawnArgs(["tsx", cliSrcPath, ...args]);
+    const invocation = buildTsxSpawnArgs([cliSrcPath, ...args]);
     const proc = spawn(invocation.command, invocation.args, {
       env: {
         ...process.env,

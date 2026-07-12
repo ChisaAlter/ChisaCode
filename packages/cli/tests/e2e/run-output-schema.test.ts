@@ -35,12 +35,13 @@ const impossibleSchema = JSON.stringify({
   ],
 });
 
-const OPEN_CODE_STRUCTURED_MODEL = "opencode/gpt-5-nano";
-
 let ctx: E2EContext;
 
 async function setup(): Promise<void> {
-  ctx = await createE2ETestContext({ timeout: 180000 });
+  ctx = await createE2ETestContext({
+    timeout: 180000,
+    env: { CHISACODE_NODE_ENV: "development" },
+  });
 }
 
 async function cleanup(): Promise<void> {
@@ -85,21 +86,11 @@ async function runProviderCase(input: {
   assert(parsed.summary && parsed.summary.length > 0, "summary must not be empty");
 }
 
-async function test_all_providers_return_structured_output(): Promise<void> {
+async function test_run_returns_structured_output_without_external_credentials(): Promise<void> {
   await runProviderCase({
-    provider: "claude",
-    mode: "bypassPermissions",
-    model: "haiku",
-  });
-  await runProviderCase({
-    provider: "codex",
-    mode: "full-access",
-    model: "gpt-5.3-codex",
-  });
-  await runProviderCase({
-    provider: "opencode",
-    mode: "default",
-    model: OPEN_CODE_STRUCTURED_MODEL,
+    provider: "mock",
+    mode: "load-test",
+    model: "ten-second-stream",
   });
 }
 
@@ -108,11 +99,11 @@ async function test_schema_validation_is_enforced(): Promise<void> {
     [
       "run",
       "--provider",
-      "claude",
+      "mock",
       "--mode",
-      "bypassPermissions",
+      "load-test",
       "--model",
-      "haiku",
+      "ten-second-stream",
       "--output-schema",
       impossibleSchema,
       'Return exactly {"summary":"ok"} and nothing else.',
@@ -131,7 +122,7 @@ async function test_schema_validation_is_enforced(): Promise<void> {
 async function main(): Promise<void> {
   try {
     await setup();
-    await test_all_providers_return_structured_output();
+    await test_run_returns_structured_output_without_external_credentials();
     await test_schema_validation_is_enforced();
   } catch (error) {
     console.error(error);

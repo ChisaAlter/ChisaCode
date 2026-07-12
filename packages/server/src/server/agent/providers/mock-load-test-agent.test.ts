@@ -131,6 +131,51 @@ describe("MockLoadTestAgentClient", () => {
     expect(events).toHaveLength(eventCountAfterInterrupt);
   });
 
+  test("returns deterministic JSON immediately when an output schema is requested", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    const resultPromise = session.run("Return structured output.", {
+      outputSchema: {
+        type: "object",
+        properties: {
+          summary: { type: "string" },
+          count: { type: "integer" },
+        },
+        required: ["summary", "count"],
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    const result = await resultPromise;
+    unsubscribe();
+
+    expect(JSON.parse(result.finalText ?? "")).toEqual({
+      summary: "mock-summary",
+      count: 1,
+    });
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "turn_started" }),
+        expect.objectContaining({
+          type: "timeline",
+          item: expect.objectContaining({
+            type: "assistant_message",
+            text: '{"summary":"mock-summary","count":1}',
+          }),
+        }),
+        expect.objectContaining({ type: "turn_completed" }),
+      ]),
+    );
+  });
+
   test("agent manager coalesces adjacent assistant tokens into fewer messages", async () => {
     vi.useFakeTimers();
     const workdir = mkdtempSync(join(tmpdir(), "chisacode-mock-load-test-"));
