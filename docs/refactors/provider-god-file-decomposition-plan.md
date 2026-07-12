@@ -23,7 +23,7 @@
 | `codex/session.ts`          | 715  | `CodexAppServerAgentSession` | —                                             | 15             | 29        |
 | `claude/agent.ts`           | 16   | compatibility façade         | wrapper → `claude/client.ts`                  | 0              | 2         |
 | `claude/session.ts`         | 3001 | `ClaudeAgentSession`         | —                                             | 77             | 27        |
-| `opencode-agent.ts`         | 3750 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | ~18            | 21        |
+| `opencode-agent.ts`         | 3698 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | 24             | 23        |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
 
@@ -67,11 +67,11 @@
 
 ### 最大单方法（拆分时优先抽取成独立 handler 模块）
 
-| 方法                                  | 文件                         | 行数          |
-| ------------------------------------- | ---------------------------- | ------------- |
-| `awaitPendingAbortBeforeStartingTurn` | opencode-agent.ts:2902       | ~220          |
-| `ensureEventStreamReady`              | opencode-agent.ts:3135       | ~188          |
-| `routeMessage`                        | claude/message-router.ts:290 | ~80（已提取） |
+| 方法                      | 文件                             | 行数          |
+| ------------------------- | -------------------------------- | ------------- |
+| `awaitPendingBeforeStart` | opencode/abort-coordinator.ts:44 | ~20（已提取） |
+| `ensureEventStreamReady`  | opencode-agent.ts:3051           | ~188          |
+| `routeMessage`            | claude/message-router.ts:290     | ~80（已提取） |
 
 ## 拆分策略
 
@@ -145,10 +145,10 @@
 
 - `opencode/session.ts` —— 移动 `OpenCodeAgentSession`，保持 `implements AgentSession`
 - `opencode/client.ts` —— 移动 `OpenCodeAgentClient`，保持 `implements AgentClient`
-- `opencode/runtime.ts` —— `ProductionOpenCodeRuntime`
+- `opencode/runtime.ts` —— `ProductionOpenCodeRuntime`（已完成）
+- `opencode/abort-coordinator.ts` —— local turn signal、provider `session.abort` pending 与 next-turn serialization（已完成，87 行）
 - `opencode/mimocode-client.ts` —— `MimoCodeAgentClient`
-- `opencode/event-stream.ts` —— `ensureEventStreamReady` / `translateEvent` /
-  `awaitPendingAbortBeforeStartingTurn`
+- `opencode/event-stream.ts` —— `ensureEventStreamReady` / `consumeEventStream` / `translateEvent`
 - `opencode/sub-agent-tracking.ts` —— 模块级 sub-agent 跟踪 helper 函数集合
 
 **验收**：同 Slice 1。

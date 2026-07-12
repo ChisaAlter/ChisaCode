@@ -70,7 +70,6 @@ import {
   OPENCODE_BUILD_MODE_ID,
   OPENCODE_HEADERS_TIMEOUT_TOKENS,
   OPENCODE_LEGACY_FULL_ACCESS_MODE_ID,
-  OPENCODE_PENDING_ABORT_START_TIMEOUT_MS,
   OPENCODE_PERMISSION_ACTION_ALLOW_ALWAYS,
   OPENCODE_PERMISSION_ACTION_ALLOW_ONCE,
   OPENCODE_PERSISTED_SESSION_LIMIT,
@@ -86,6 +85,7 @@ import {
 import { runProviderTurn } from "./provider-runner.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
+import { OpenCodeAbortCoordinator } from "./opencode/abort-coordinator.js";
 import { ProductionOpenCodeRuntime, type OpenCodeRuntime } from "./opencode/runtime.js";
 import { normalizeProviderReplayTimestamp } from "../provider-history-timestamps.js";
 import { revertOpenCodeConversationAndFiles } from "./opencode/rewind.js";
@@ -2705,8 +2705,7 @@ class OpenCodeAgentSession implements AgentSession {
   private currentMode: string = "default";
   private autoAcceptEnabled = false;
   private pendingPermissions = new Map<string, AgentPermissionRequest>();
-  private abortController: AbortController | null = null;
-  private pendingAbortPromise: Promise<void> | null = null;
+  private readonly abortCoordinator: OpenCodeAbortCoordinator;
   private accumulatedUsage: AgentUsage = {};
   private sessionTotalCostUsd: number | undefined;
   private mcpConfigured = false;
@@ -2752,6 +2751,12 @@ class OpenCodeAgentSession implements AgentSession {
     this.client = client;
     this.sessionId = sessionId;
     this.logger = logger.child({ agentId: this.agentId });
+    this.abortCoordinator = new OpenCodeAbortCoordinator({
+      client: this.client,
+      sessionId: this.sessionId,
+      getDirectory: () => this.config.cwd,
+      logger: this.logger,
+    });
     this.modelContextWindowsByModelKey = modelContextWindowsByModelKey;
     this.currentMode = normalizeOpenCodeModeId(config.modeId);
     this.autoAcceptEnabled = isOpenCodeAutoAcceptEnabled(config);
@@ -2812,21 +2817,7 @@ class OpenCodeAgentSession implements AgentSession {
 
   async interrupt(): Promise<void> {
     const turnId = this.activeForegroundTurnId;
-    const turnAbortController = this.abortController;
-    turnAbortController?.abort();
-    // COMPAT(opencodeSlowAbort): OpenCode 1.14.42+ blocks session.abort until
-    // the running tool actually stops, which can be tens of seconds for
-    // long-running tools. Cap the wait so the user-visible cancel lands
-    // quickly while still giving OpenCode a chance to confirm the abort
-    // cleanly. Drop the timeout once upstream returns abort acknowledgement
-    // before tool teardown.
-    const abortPromise = this.beginSessionAbort(turnId, "interrupt");
-    await withTimeout(abortPromise, 2_000, "OpenCode session.abort").catch((error) => {
-      this.logger.warn(
-        { err: error, sessionId: this.sessionId, turnId },
-        "OpenCode session.abort exceeded the cancel cap; proceeding with local cancel",
-      );
-    });
+    await this.abortCoordinator.interruptCurrentTurn(turnId);
     if (turnId) {
       this.suppressTerminalUntilNextUserMessage = true;
       this.finishForegroundTurn(
@@ -2845,46 +2836,6 @@ class OpenCodeAgentSession implements AgentSession {
     });
   }
 
-  private beginSessionAbort(turnId: string | null, reason: string): Promise<void> {
-    const abortPromise = this.client.session
-      .abort({
-        sessionID: this.sessionId,
-        directory: this.config.cwd,
-      })
-      .then(() => undefined)
-      .catch((error) => {
-        this.logger.warn(
-          { err: error, sessionId: this.sessionId, turnId, reason },
-          "OpenCode session.abort rejected",
-        );
-      });
-    const trackedAbortPromise = abortPromise.finally(() => {
-      if (this.pendingAbortPromise === trackedAbortPromise) {
-        this.pendingAbortPromise = null;
-      }
-    });
-    this.pendingAbortPromise = trackedAbortPromise;
-    return trackedAbortPromise;
-  }
-
-  private async awaitPendingAbortBeforeStartingTurn(): Promise<void> {
-    const pendingAbortPromise = this.pendingAbortPromise;
-    if (!pendingAbortPromise) {
-      return;
-    }
-
-    await withTimeout(
-      pendingAbortPromise,
-      OPENCODE_PENDING_ABORT_START_TIMEOUT_MS,
-      "OpenCode pending session.abort",
-    ).catch((error) => {
-      this.logger.warn(
-        { err: error, sessionId: this.sessionId },
-        "OpenCode session.abort was still pending before starting the next turn",
-      );
-    });
-  }
-
   async startTurn(
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
@@ -2892,14 +2843,13 @@ class OpenCodeAgentSession implements AgentSession {
     if (this.activeForegroundTurnId) {
       throw new Error("A foreground turn is already active");
     }
-    await this.awaitPendingAbortBeforeStartingTurn();
+    await this.abortCoordinator.awaitPendingBeforeStart();
 
     this.runningToolCalls.clear();
     this.subAgentsByCallId.clear();
     this.subAgentCallIdByChildSessionId.clear();
     this.pendingChildToolPartsBySessionId.clear();
-    const turnAbortController = new AbortController();
-    this.abortController = turnAbortController;
+    const turnAbortController = this.abortCoordinator.beginTurn();
     await this.ensureMcpServersConfigured();
     const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
     this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
@@ -2914,9 +2864,7 @@ class OpenCodeAgentSession implements AgentSession {
     try {
       await this.ensureEventStreamReady();
     } catch (error) {
-      if (this.abortController === turnAbortController) {
-        this.abortController = null;
-      }
+      this.abortCoordinator.clearTurn(turnAbortController);
       throw error;
     }
 
@@ -3284,7 +3232,7 @@ class OpenCodeAgentSession implements AgentSession {
     }
     this.pendingUserMessageText = null;
     this.activeForegroundTurnId = null;
-    this.abortController = null;
+    this.abortCoordinator.clearTurn();
     this.notifySubscribers(event, turnId);
   }
 
@@ -3507,7 +3455,7 @@ class OpenCodeAgentSession implements AgentSession {
       // notifySubscribers instead of bubbling through provider-runner as an
       // unhandled rejection in whichever test the daemon hops to next.
       this.closed = true;
-      this.abortController?.abort();
+      this.abortCoordinator.close();
       this.eventStreamAbortController?.abort();
       this.eventStreamAbortController = null;
       this.eventStreamReady = null;

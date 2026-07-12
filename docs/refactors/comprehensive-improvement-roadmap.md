@@ -211,9 +211,10 @@
 - **已完成的子步骤**：
   - opencode 常量提取到 `opencode/constants.ts`（`OPENCODE_BUILD_MODE_ID` 等）
   - `ProductionOpenCodeRuntime` 类从 `opencode-agent.ts` 迁移到 `opencode/runtime.ts`
+  - `OpenCodeAbortCoordinator` 独立拥有 local turn signal、provider `session.abort` pending 与 next-turn serialization；主文件降至 3698 行
   - `opencode/helpers.ts` 提取（含 `OpencodeToolPartToTimelineItemSchema`）
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
-- **状态**：进行中；Codex 与 Claude provider 的入口/Client/Session 边界已建立。下一步转入 OpenCode event stream、abort orchestration 与 Session/Client 分离。
+- **状态**：进行中；Codex 与 Claude provider 边界已建立，OpenCode abort orchestration 已完成。下一步提取 OpenCode SSE event stream，再分离 Session/Client。
 
 ---
 
