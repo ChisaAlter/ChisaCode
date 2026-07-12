@@ -1,20 +1,26 @@
 # Provider God-File 拆分计划
 
-> 状态：**草案**（2026-07-03 起草）。本批次未执行，留作下一阶段工作。
+> 状态：**进行中**（2026-07-12 开始按 composition-first 策略执行）。
 >
 > 背景：综合改进路线图归档后，三个 provider agent 实现仍是 god-file，单点修改风险高、
-> provider 间重复模式无法共享。本计划提出分阶段拆分与基类下沉策略。
+> provider 间重复模式难以验证。本计划采用分阶段、composition-first 的领域拆分策略。
+
+## 2026-07-12 执行修正
+
+- 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
+- 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
+- Codex 首个切片已提取 skills/custom prompts 发现、front matter 解析、策略过滤与参数展开到 `codex/skills.ts`；原入口继续重导出既有公开 helper。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
 **无共享基类、无 mixin、无 abstract class**。各 provider 独立实现 5000+ 行，重复模式风险高。
 
-| 文件                        | 行数 | Session 类                             | Client 类                                                        | private 方法数 | import 数 |
-| --------------------------- | ---- | -------------------------------------- | ---------------------------------------------------------------- | -------------- | --------- |
-| `codex-app-server-agent.ts` | 5944 | `CodexAppServerAgentSession` (2485 行) | `CodexAppServerAgentClient` (422 行)                             | ~60            | 28        |
-| `claude/agent.ts`           | 5182 | `ClaudeAgentSession` (3532 行)         | `ClaudeAgentClient` (290 行)                                     | ~71            | 24        |
-| `opencode-agent.ts`         | 3782 | `OpenCodeAgentSession` (1055 行)       | `OpenCodeAgentClient` (387 行) + `MimoCodeAgentClient` (1111 行) | ~18            | 21        |
+| 文件                        | 行数 | Session 类                   | Client 类                                     | private 方法数 | import 数 |
+| --------------------------- | ---- | ---------------------------- | --------------------------------------------- | -------------- | --------- |
+| `codex-app-server-agent.ts` | 5656 | `CodexAppServerAgentSession` | `CodexAppServerAgentClient`                   | ~60            | 28        |
+| `claude/agent.ts`           | 5185 | `ClaudeAgentSession`         | `ClaudeAgentClient`                           | ~71            | 24        |
+| `opencode-agent.ts`         | 3750 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | ~18            | 21        |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
 
@@ -28,9 +34,9 @@
 三个 Session 类都实现 `AgentSession` 接口的 13 个必填方法；三个 Client 类都实现
 `AgentClient` 接口的 4 个必填方法。
 
-### 可下沉到 BaseAgentSession 的强重复
+### Session 层的表面重复（暂不做基类）
 
-这些方法在三处结构高度相似，差异主要在内部状态字段名，适合做模板方法（hooks 化）：
+这些方法名称相似，但 turn ownership、事件标记、interrupt、close 与 persistence 语义并不相同。先通过 provider-specific helper/handler 拆分降低复杂度；只有两个以上 provider 在真实测试下形成稳定同构契约时，才提取共享组件：
 
 - `subscribe` / `notifySubscribers` / `emitEvent` —— 事件订阅列表管理
 - `createTurnId` —— turn ID 生成
@@ -40,15 +46,15 @@
 - `getPendingPermissions` —— 权限队列读取
 - `interrupt` / `close` —— 生命周期终止
 
-### 可下沉到 BaseAgentClient 的强重复
+### Client 层的候选共享点（composition 优先）
 
-- `createSession` / `resumeSession` —— session 工厂
-- `isAvailable` / `getDiagnostic` —— 可用性探测
-- `listPersistedAgents` —— 持久化扫描
+- `createSession` / `resumeSession` —— 保留 provider-specific session 工厂，先抽 spawn/config helper
+- `isAvailable` / `getDiagnostic` —— 复用模块级诊断 helper，不强制继承
+- `listPersistedAgents` —— 按 native storage/transport 分别提取 scanner
 
 ### 不可简单共享的差异点（保留为 provider-specific strategy）
 
-事件路由层差异最大，基类只暴露 `protected abstract dispatchNativeEvent(...)`：
+事件路由层差异最大，应保留 provider-specific handler/context port，不定义跨 provider 的 native event 抽象：
 
 | Provider | 事件机制              | 路由方法                                                                                |
 | -------- | --------------------- | --------------------------------------------------------------------------------------- |
@@ -71,35 +77,25 @@
 
 ## 拆分策略
 
-### Slice 0：提取共享基类（基础设施）
+### Slice 0：移除错误抽象并建立 composition-first 基线（完成）
 
-新增 `packages/server/src/server/agent/providers/base/`：
+- 删除从未接线的 `providers/base/`，避免其默认 turn ID、interrupt、close 与 persistence 语义被误当成稳定契约。
+- 保留现有 `AgentSession` / `AgentClient` 接口和 provider-specific 生命周期实现。
+- 优先提取无状态 helper、transport、runtime、event translator 与领域 handler。
+- Codex 首个领域模块 `codex/skills.ts` 已完成，覆盖技能/自定义 prompt 发现、策略过滤与参数展开。
 
-- `base-agent-session.ts` —— `BaseAgentSession` abstract class
-  - 实现 `subscribe` / `notifySubscribers` / `emitEvent` / `createTurnId`
-  - 实现 `getRuntimeInfo` / `describePersistence` / `setMode` / `setModel` /
-    `setThinkingOption` / `setFeature` / `getPendingPermissions` / `interrupt` / `close`
-  - 模板方法：`run()` 默认调 `runProviderTurn(this, ...)`（已有 helper）
-  - `protected abstract dispatchNativeEvent(event): Promise<void>` —— provider 实现事件路由
-  - `protected abstract buildTurnStartParams(...): Promise<unknown>` —— provider 实现参数构造
-
-- `base-agent-client.ts` —— `BaseAgentClient` abstract class
-  - 实现 `isAvailable` / `getDiagnostic` / `listPersistedAgents` 通用骨架
-  - `protected abstract assertConfig(config): Promise<void>`
-  - `protected abstract instantiateSession(handle, launchContext): AgentSession`
-
-**验收**：基类单独 typecheck 通过；三个 provider 仍各自 implements，行为不变。
+**验收**：server typecheck/build、目标 lint、Codex skills 精确测试通过。
 
 ### Slice 1：Codex 拆分（最大文件先做，收益最高）
 
 把 `codex-app-server-agent.ts` 5944 行拆为：
 
-- `codex/session.ts` —— `CodexAppServerAgentSession extends BaseAgentSession`
-- `codex/client.ts` —— `CodexAppServerAgentClient extends BaseAgentClient`
-- `codex/json-rpc-client.ts` —— 模块级 `CodexAppServerClient`（已在文件头）
+- `codex/session.ts` —— 移动 `CodexAppServerAgentSession`，保持 `implements AgentSession`
+- `codex/client.ts` —— 移动 `CodexAppServerAgentClient`，保持 `implements AgentClient`
+- `codex/app-server-transport.ts` —— `CodexAppServerClient`（已完成）
 - `codex/notification-handlers.ts` —— `handleCodexDeltaNotification` /
   `handleThreadStateNotification` / `respondToPermission` 等大方法
-- `codex/front-matter-parser.ts` —— 文件头 front-matter 解析
+- `codex/skills.ts` —— skills/custom prompts/front matter/策略过滤（已完成）
 - `codex/build-turn-params.ts` —— `buildTurnStartParams`
 
 **验收**：原文件删除；typecheck + 全部 codex 相关测试通过；行为不变（靠现有测试守护）。
@@ -108,8 +104,8 @@
 
 把 `claude/agent.ts` 5182 行拆为：
 
-- `claude/session.ts` —— `ClaudeAgentSession extends BaseAgentSession`
-- `claude/client.ts` —— `ClaudeAgentClient extends BaseAgentClient`
+- `claude/session.ts` —— 移动 `ClaudeAgentSession`，保持 `implements AgentSession`
+- `claude/client.ts` —— 移动 `ClaudeAgentClient`，保持 `implements AgentClient`
 - `claude/timeline-assembler.ts` —— `TimelineAssembler` helper 类（已在文件头）
 - `claude/sdk-pump.ts` —— `runQueryPump` / `routeSdkMessageFromPump`
 - `claude/tool-call-handlers.ts` —— `handleToolUseStart` / `handleToolResult`
@@ -122,8 +118,8 @@
 
 把 `opencode-agent.ts` 3782 行拆为：
 
-- `opencode/session.ts` —— `OpenCodeAgentSession extends BaseAgentSession`
-- `opencode/client.ts` —— `OpenCodeAgentClient extends BaseAgentClient`
+- `opencode/session.ts` —— 移动 `OpenCodeAgentSession`，保持 `implements AgentSession`
+- `opencode/client.ts` —— 移动 `OpenCodeAgentClient`，保持 `implements AgentClient`
 - `opencode/runtime.ts` —— `ProductionOpenCodeRuntime`
 - `opencode/mimocode-client.ts` —— `MimoCodeAgentClient`
 - `opencode/event-stream.ts` —— `ensureEventStreamReady` / `translateEvent` /
@@ -141,33 +137,33 @@
 
 ## 风险与缓解
 
-| 风险                            | 缓解                                                                                |
-| ------------------------------- | ----------------------------------------------------------------------------------- |
-| Session/Client 接口契约破坏     | 每个 Slice 单独验证，靠现有 provider 测试套件守护（codex/claude/opencode 各有测试） |
-| 事件路由差异大，基类抽象泄漏    | `dispatchNativeEvent` 抽象方法不规定事件类型，provider 自定义 event payload         |
-| private 方���状态耦合深，难外移 | Slice 0 先做基类，Slice 1-3 逐个 provider 拆，每 Slice 独立提交可回滚               |
-| 测试覆盖薄弱点放大风险          | 拆分前先补 client 测试（本批次 workflow 已在做）                                    |
+| 风险                              | 缓解                                                                                |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| Session/Client 接口契约破坏       | 每个 Slice 单独验证，靠现有 provider 测试套件守护（codex/claude/opencode 各有测试） |
+| 事件路由差异大，共享 context 膨胀 | 每个 provider 先用窄 context port 提取 handler，不统一 native event payload         |
+| private 状态耦合深，难外移        | 先抽无状态 helper，再引入窄 context port；每个 Slice 独立提交                       |
+| 测试覆盖薄弱点放大风险            | 拆分前先补 client 测试（本批次 workflow 已在做）                                    |
 
 ## 执行顺序与依赖
 
 ```
-Slice 0（基类）─┬─→ Slice 1（Codex）
-               ├─→ Slice 2（Claude）
-               └─→ Slice 3（Opencode）
-                              ↓
-                        Slice 4（共享 rewind/mapper）
+Slice 0（composition-first 基线）─┬─→ Slice 1（Codex）
+                                 ├─→ Slice 2（Claude）
+                                 └─→ Slice 3（Opencode）
+                                                ↓
+                                          Slice 4（验证后共享）
 ```
 
-Slice 1/2/3 互相独立，可并行；Slice 4 依赖前面三 Slice 完成。
+Slice 1/2/3 互相独立；Slice 4 只有在前面切片证明真实同构后才执行，不以制造共享抽象为验收目标。
 
 ## 不做项
 
 - 不改 `AgentSession` / `AgentClient` 接口本身（协议只增不减原则）
-- 不引入 mixin（TypeScript mixin 与 strict 模式 + 复杂泛型组合易踩坑，用 abstract class）
+- 不预设 abstract class/mixin；共享抽象必须由至少两个已拆分 provider 的稳定契约反向证明
 - 不一次性重命名 provider 内部事件方法（保持现有命名，仅改文件位置）
 
 ## 参考
 
-- `comprehensive-improvement-roadmap.md` —— 已归档路线图，未追踪此项
+- `comprehensive-improvement-roadmap.md` —— 主改进路线图，持续记录每个已完成切片
 - `session-decomposition-plan.md` —— session.ts 拆分的成功模式（handler-per-domain）
 - `agent-sdk-types.ts:629/681` —— AgentSession / AgentClient 契约定义

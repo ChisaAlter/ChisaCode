@@ -21,7 +21,6 @@ import {
   type AgentSession,
   type AgentSessionConfig,
   type AgentSkill,
-  type AgentSkillEffectivePolicy,
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
@@ -74,6 +73,17 @@ import {
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
 import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
+import {
+  applyAgentSkillPolicy,
+  expandCodexCustomPrompt,
+  listCodexCustomPrompts,
+  listCodexSkillEntries,
+  listCodexSkills,
+  parseCodexFrontMatter,
+  resolveCodexHomeDir,
+  resolveSkillPolicy,
+  toAgentSkill,
+} from "./codex/skills.js";
 import {
   renderProviderImageOutputAsAssistantMarkdown,
   type ProviderImageOutput,
@@ -375,6 +385,8 @@ function normalizeCodexOutputSchemaNode(schema: unknown, schemaPath: string): un
   return normalized;
 }
 
+export { listCodexSkillEntries, listCodexSkills } from "./codex/skills.js";
+
 export function normalizeCodexOutputSchema(schema: unknown): Record<string, unknown> {
   if (!isSchemaRecord(schema)) {
     throw new Error("Codex structured outputs require a JSON object schema.");
@@ -498,16 +510,6 @@ async function checkCodexLaunchAvailable(launch: ResolvedProviderLaunch) {
   });
 }
 
-function resolveCodexHomeDir(): string {
-  return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
-}
-
-function decodeEscapedChar(next: string): string {
-  if (next === "n") return "\n";
-  if (next === "t") return "\t";
-  return next;
-}
-
 function resolvePermissionDecision(
   response: AgentPermissionResponse,
 ): "accept" | "cancel" | "decline" {
@@ -524,333 +526,6 @@ function firstPositiveFiniteNumber(primary: unknown, secondary: unknown): number
     return secondary;
   }
   return undefined;
-}
-
-function tokenizeCommandArgs(args: string): string[] {
-  const tokens: string[] = [];
-  let current = "";
-  let quote: "'" | '"' | null = null;
-  for (let i = 0; i < args.length; i += 1) {
-    const ch = args[i];
-    if (quote) {
-      if (ch === quote) {
-        quote = null;
-        continue;
-      }
-      if (ch === "\\" && i + 1 < args.length) {
-        const next = args[i + 1];
-        if (next === quote || next === "\\" || next === "n" || next === "t") {
-          i += 1;
-          current += decodeEscapedChar(next);
-          continue;
-        }
-      }
-      current += ch;
-      continue;
-    }
-
-    if (ch === "'" || ch === '"') {
-      quote = ch;
-      continue;
-    }
-
-    if (/\s/.test(ch)) {
-      if (current) {
-        tokens.push(current);
-        current = "";
-      }
-      continue;
-    }
-    current += ch;
-  }
-  if (current) {
-    tokens.push(current);
-  }
-  return tokens;
-}
-
-function parseFrontMatter(markdown: string): {
-  frontMatter: Record<string, string>;
-  body: string;
-} {
-  const lines = markdown.split("\n");
-  if (lines[0]?.trim() !== "---") {
-    return { frontMatter: {}, body: markdown };
-  }
-  let end = -1;
-  for (let i = 1; i < lines.length; i += 1) {
-    if (lines[i]?.trim() === "---") {
-      end = i;
-      break;
-    }
-  }
-  if (end === -1) {
-    return { frontMatter: {}, body: markdown };
-  }
-  const metaLines = lines.slice(1, end);
-  const body = lines.slice(end + 1).join("\n");
-  const frontMatter: Record<string, string> = {};
-  for (const line of metaLines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-    const idx = trimmed.indexOf(":");
-    if (idx <= 0) {
-      continue;
-    }
-    const key = trimmed.slice(0, idx).trim();
-    let value = trimmed.slice(idx + 1).trim();
-    value = value.replace(/^['"]/, "").replace(/['"]$/, "");
-    if (key && value) {
-      frontMatter[key] = value;
-    }
-  }
-  return { frontMatter, body };
-}
-
-async function listCodexCustomPrompts(): Promise<AgentSlashCommand[]> {
-  const codexHome = resolveCodexHomeDir();
-  const promptsDir = path.join(codexHome, "prompts");
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(promptsDir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const mdEntries = entries.filter(
-    (entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name.slice(0, -".md".length),
-  );
-  const parsedCommands = await Promise.all(
-    mdEntries.map(async (entry): Promise<AgentSlashCommand | null> => {
-      const name = entry.name.slice(0, -".md".length);
-      const fullPath = path.join(promptsDir, entry.name);
-      let content: string;
-      try {
-        content = await fs.readFile(fullPath, "utf8");
-      } catch {
-        return null;
-      }
-      const parsed = parseFrontMatter(content);
-      const description = parsed.frontMatter["description"] ?? "Custom prompt";
-      const argumentHint =
-        parsed.frontMatter["argument-hint"] ?? parsed.frontMatter["argument_hint"] ?? "";
-      return {
-        name: `prompts:${name}`,
-        description,
-        argumentHint,
-      };
-    }),
-  );
-  const commands: AgentSlashCommand[] = parsedCommands.filter(
-    (cmd): cmd is AgentSlashCommand => cmd !== null,
-  );
-  return commands.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-interface CodexDiscoveredSkill {
-  name: string;
-  description: string;
-  path: string;
-}
-
-export async function listCodexSkillEntries(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-): Promise<CodexDiscoveredSkill[]> {
-  const candidates: string[] = [];
-  candidates.push(path.join(cwd, ".codex", "skills"));
-
-  const repoRoot = workspaceGitService
-    ? await workspaceGitService.resolveRepoRoot(cwd).catch(() => null)
-    : null;
-  if (repoRoot) {
-    candidates.push(path.join(path.dirname(cwd), ".codex", "skills"));
-    candidates.push(path.join(repoRoot, ".codex", "skills"));
-  }
-
-  candidates.push(path.join(resolveCodexHomeDir(), "skills"));
-
-  const candidateReads = await Promise.all(
-    candidates.map(async (dir) => {
-      let entries: Dirent[];
-      try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-      } catch {
-        return [] as Array<{ path: string; content: string }>;
-      }
-      const dirEntries = entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink());
-      const skillContents = await Promise.all(
-        dirEntries.map(async (entry) => {
-          const skillDir = path.join(dir, entry.name);
-          const skillPath = path.join(skillDir, "SKILL.md");
-          try {
-            return {
-              path: skillPath,
-              content: await fs.readFile(skillPath, "utf8"),
-            };
-          } catch {
-            return null;
-          }
-        }),
-      );
-      return skillContents.filter((content): content is { path: string; content: string } => {
-        return content !== null;
-      });
-    }),
-  );
-
-  const skillsByName = new Map<string, CodexDiscoveredSkill>();
-  for (const skillEntries of candidateReads) {
-    for (const { path: skillPath, content } of skillEntries) {
-      const { frontMatter } = parseFrontMatter(content);
-      const name = frontMatter["name"];
-      const description = frontMatter["description"];
-      if (!name || !description) {
-        continue;
-      }
-      if (!skillsByName.has(name)) {
-        skillsByName.set(name, {
-          name,
-          description,
-          path: skillPath,
-        });
-      }
-    }
-  }
-
-  return Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-export async function listCodexSkills(
-  cwd: string,
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">,
-  policy?: AgentSkillEffectivePolicy,
-): Promise<AgentSlashCommand[]> {
-  const skills = applyAgentSkillPolicy(
-    await listCodexSkillEntries(cwd, workspaceGitService),
-    policy,
-  );
-  return skills.map((skill) => ({
-    name: skill.name,
-    description: skill.description,
-    argumentHint: "",
-  }));
-}
-
-function resolveCodexSkillSourceType(skillPath: string): AgentSkill["sources"][number]["type"] {
-  const normalized = path.normalize(skillPath);
-  if (normalized.includes(path.normalize(`${path.sep}.codex${path.sep}skills${path.sep}`))) {
-    const codexHome = path.normalize(resolveCodexHomeDir());
-    return normalized.startsWith(codexHome) ? "codex-home" : "project";
-  }
-  if (normalized.includes(path.normalize(`${path.sep}.agents${path.sep}skills${path.sep}`))) {
-    return "agents-home";
-  }
-  if (normalized.includes(path.normalize(`${path.sep}.claude${path.sep}skills${path.sep}`))) {
-    return "claude-home";
-  }
-  return "unknown";
-}
-
-function toAgentSkill(skill: CodexDiscoveredSkill): AgentSkill {
-  return {
-    name: skill.name,
-    description: skill.description,
-    sources: [
-      {
-        id: skill.path,
-        type: resolveCodexSkillSourceType(skill.path),
-        path: skill.path,
-      },
-    ],
-    errors: [],
-  };
-}
-
-function resolveSkillPolicy(config: AgentSessionConfig): AgentSkillEffectivePolicy | undefined {
-  const codexExtra = config.extra?.codex;
-  if (!isRecord(codexExtra)) return undefined;
-  const policy = codexExtra.skillsPolicy;
-  if (!isRecord(policy)) return undefined;
-  return {
-    globalDisabledSkillNames: stringArray(policy.globalDisabledSkillNames),
-    providerEnabledSkillNames: stringArray(policy.providerEnabledSkillNames),
-    providerDisabledSkillNames: stringArray(policy.providerDisabledSkillNames),
-    agentEnabledSkillNames: stringArray(policy.agentEnabledSkillNames),
-    agentDisabledSkillNames: stringArray(policy.agentDisabledSkillNames),
-  };
-}
-
-function stringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
-}
-
-function isSkillEnabled(name: string, policy: AgentSkillEffectivePolicy | undefined): boolean {
-  if (!policy) return true;
-  const agentDisabled = new Set(policy.agentDisabledSkillNames ?? []);
-  if (agentDisabled.has(name)) return false;
-  const agentEnabled = new Set(policy.agentEnabledSkillNames ?? []);
-  if (agentEnabled.has(name)) return true;
-  const providerDisabled = new Set(policy.providerDisabledSkillNames ?? []);
-  if (providerDisabled.has(name)) return false;
-  const providerEnabled = new Set(policy.providerEnabledSkillNames ?? []);
-  if (providerEnabled.has(name)) return true;
-  const globalDisabled = new Set(policy.globalDisabledSkillNames ?? []);
-  return !globalDisabled.has(name);
-}
-
-function applyAgentSkillPolicy<T extends { name: string }>(
-  skills: readonly T[],
-  policy: AgentSkillEffectivePolicy | undefined,
-): T[] {
-  return skills.filter((skill) => isSkillEnabled(skill.name, policy));
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function expandCodexCustomPrompt(template: string, args: string | undefined): string {
-  const trimmedArgs = args ? args.trim() : "";
-  const tokens = trimmedArgs ? tokenizeCommandArgs(trimmedArgs) : [];
-  const named: Record<string, string> = {};
-  const positional: string[] = [];
-
-  for (const token of tokens) {
-    const idx = token.indexOf("=");
-    if (idx > 0) {
-      const key = token.slice(0, idx);
-      const value = token.slice(idx + 1);
-      if (key) {
-        named[key] = value;
-        continue;
-      }
-    }
-    positional.push(token);
-  }
-
-  const dollarPlaceholder = "__CODEX_DOLLAR_PLACEHOLDER__";
-  let out = template.split("$$").join(dollarPlaceholder);
-
-  out = out.split("$ARGUMENTS").join(trimmedArgs);
-
-  for (let i = 1; i <= 9; i += 1) {
-    const value = positional[i - 1] ?? "";
-    out = out.split(`$${i}`).join(value);
-  }
-
-  const namedKeys = Object.keys(named).sort((a, b) => b.length - a.length);
-  for (const key of namedKeys) {
-    const value = named[key] ?? "";
-    const re = new RegExp(`\\$${escapeRegExp(key)}\\b`, "g");
-    out = out.replace(re, value);
-  }
-
-  out = out.split(dollarPlaceholder).join("$");
-  return out;
 }
 
 interface CodexMcpServerConfig {
@@ -3545,7 +3220,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       const codexHome = resolveCodexHomeDir();
       const promptPath = path.join(codexHome, "prompts", `${promptName}.md`);
       const raw = await fs.readFile(promptPath, "utf8");
-      const parsed = parseFrontMatter(raw);
+      const parsed = parseCodexFrontMatter(raw);
       return expandCodexCustomPrompt(parsed.body, args);
     }
 
