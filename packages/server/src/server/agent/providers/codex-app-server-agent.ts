@@ -90,6 +90,7 @@ import {
   type CodexDeltaNotification,
   type ParsedCodexNotification,
 } from "./codex/notifications.js";
+import { CodexNotificationStreamState } from "./codex/notification-stream-state.js";
 import {
   loadCodexModelDefinitions,
   readCodexConfiguredDefaults,
@@ -1650,23 +1651,12 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   >();
   private resolvedPermissionRequests = new Set<string>();
-  private pendingAgentMessages = new Map<string, string>();
-  private pendingReasoning = new Map<string, string[]>();
-  private pendingCommandOutputDeltas = new Map<string, string[]>();
-  private pendingFileChangeOutputDeltas = new Map<string, string[]>();
+  private readonly notificationStream = new CodexNotificationStreamState();
   private pendingAssistantMessageBoundary = false;
-  private terminalCommandByProcessId = new Map<string, string>();
-  private pendingUnlabeledTerminalInteractions = new Set<string>();
-  private emittedTerminalInteractionKeys = new Set<string>();
-  private emittedExecCommandStartedCallIds = new Set<string>();
-  private emittedExecCommandCompletedCallIds = new Set<string>();
-  private emittedItemStartedIds = new Set<string>();
-  private emittedItemCompletedIds = new Set<string>();
   private subAgentCallsByCallId = new Map<string, CodexSubAgentCallState>();
   private subAgentCallIdByChildThreadId = new Map<string, string>();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
-  private warnedIncompleteEditToolCallIds = new Set<string>();
   private textualToolCallError: string | null = null;
   private latestUsage: AgentUsage | undefined;
   private latestPlanResult: { callId: string; text: string; turnId: string | null } | null = null;
@@ -3156,10 +3146,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.applyBufferedDeltaTextToTimelineItem(timelineItem, itemId);
     if (itemId) {
       this.upsertSubAgentChildItem(callId, itemId, timelineItem);
-      this.pendingAgentMessages.delete(itemId);
-      this.pendingReasoning.delete(itemId);
-      this.pendingCommandOutputDeltas.delete(itemId);
-      this.pendingFileChangeOutputDeltas.delete(itemId);
+      this.notificationStream.clearItem(itemId);
     }
     this.emitSubAgentActivityUpdate(callId, "running");
   }
@@ -3172,16 +3159,17 @@ export class CodexAppServerAgentSession implements AgentSession {
     // For commandExecution items, codex/event/exec_command_* is authoritative.
     if (timelineItem.type === "tool_call" && normalizedItemType === "commandExecution") {
       const callId = timelineItem.callId || itemId;
-      return Boolean(callId && this.emittedExecCommandCompletedCallIds.has(callId));
+      return Boolean(callId && this.notificationStream.hasExecCommandCompleted(callId));
     }
-    return Boolean(itemId && this.emittedItemCompletedIds.has(itemId));
+    return Boolean(itemId && this.notificationStream.hasItemCompleted(itemId));
   }
 
   private handleCodexDeltaNotification(parsed: CodexDeltaNotification): void {
     if (parsed.kind === "agent_message_delta") {
-      const prev = this.pendingAgentMessages.get(parsed.itemId) ?? "";
-      const text = prev + parsed.delta;
-      this.pendingAgentMessages.set(parsed.itemId, text);
+      const { previous, text } = this.notificationStream.appendAssistantDelta(
+        parsed.itemId,
+        parsed.delta,
+      );
       const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
       if (subAgentCallId) {
         this.upsertSubAgentChildItem(subAgentCallId, parsed.itemId, {
@@ -3192,7 +3180,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         this.emitSubAgentActivityUpdate(subAgentCallId, "running");
         return;
       }
-      const isFirstDeltaForItem = prev.length === 0;
+      const isFirstDeltaForItem = previous.length === 0;
       this.emitEvent({
         type: "timeline",
         provider: CODEX_PROVIDER,
@@ -3211,14 +3199,15 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (parsed.kind === "reasoning_delta") {
-      const prev = this.pendingReasoning.get(parsed.itemId) ?? [];
-      prev.push(parsed.delta);
-      this.pendingReasoning.set(parsed.itemId, prev);
+      const reasoningText = this.notificationStream.appendReasoningDelta(
+        parsed.itemId,
+        parsed.delta,
+      );
       const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
       if (subAgentCallId) {
         this.upsertSubAgentChildItem(subAgentCallId, parsed.itemId, {
           type: "reasoning",
-          text: prev.join(""),
+          text: reasoningText,
         });
         this.emitSubAgentActivityUpdate(subAgentCallId, "running");
         return;
@@ -3231,12 +3220,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (parsed.kind === "exec_command_output_delta") {
-      this.appendOutputDeltaChunk(this.pendingCommandOutputDeltas, parsed.callId, parsed.chunk, {
-        decodeBase64: true,
-      });
+      const chunk = parsed.chunk ? decodeCodexOutputDeltaChunk(parsed.chunk) : parsed.chunk;
+      this.notificationStream.appendCommandOutput(parsed.callId, chunk);
       return;
     }
-    this.appendOutputDeltaChunk(this.pendingFileChangeOutputDeltas, parsed.itemId, parsed.delta);
+    this.notificationStream.appendFileChangeOutput(parsed.itemId, parsed.delta);
   }
 
   private handleThreadStartedNotification(
@@ -3308,16 +3296,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   private resetTurnTrackingState(): void {
     this.latestPlanResult = null;
     this.textualToolCallError = null;
-    this.emittedItemStartedIds.clear();
-    this.emittedItemCompletedIds.clear();
-    this.emittedExecCommandStartedCallIds.clear();
-    this.emittedExecCommandCompletedCallIds.clear();
-    this.pendingAgentMessages.clear();
-    this.pendingReasoning.clear();
-    this.pendingCommandOutputDeltas.clear();
-    this.pendingFileChangeOutputDeltas.clear();
+    this.notificationStream.resetTurn();
     this.pendingAssistantMessageBoundary = false;
-    this.warnedIncompleteEditToolCallIds.clear();
     this.unpairedCompactionNotificationCompletions = 0;
     this.unpairedCompactionItemCompletions = 0;
   }
@@ -3451,8 +3431,8 @@ export class CodexAppServerAgentSession implements AgentSession {
     parsed: Extract<ParsedCodexNotification, { kind: "exec_command_started" }>,
   ): void {
     if (parsed.callId) {
-      this.emittedExecCommandStartedCallIds.add(parsed.callId);
-      this.pendingCommandOutputDeltas.delete(parsed.callId);
+      this.notificationStream.markExecCommandStarted(parsed.callId);
+      this.notificationStream.clearCommandOutput(parsed.callId);
     }
     const timelineItem = mapCodexExecNotificationToToolCall({
       callId: parsed.callId,
@@ -3468,7 +3448,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handleExecCommandCompletedNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "exec_command_completed" }>,
   ): void {
-    const bufferedOutput = this.consumeOutputDelta(this.pendingCommandOutputDeltas, parsed.callId);
+    const bufferedOutput = this.notificationStream.consumeCommandOutput(parsed.callId);
     const resolvedOutput = parsed.output ?? bufferedOutput;
     this.rememberTerminalProcessForCommand(parsed.command, resolvedOutput);
     const timelineItem = mapCodexExecNotificationToToolCall({
@@ -3482,7 +3462,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       running: false,
     });
     if (timelineItem) {
-      this.emittedExecCommandCompletedCallIds.add(timelineItem.callId);
+      this.notificationStream.markExecCommandCompleted(timelineItem.callId);
       this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     }
   }
@@ -3491,14 +3471,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     parsed: Extract<ParsedCodexNotification, { kind: "terminal_interaction" }>,
   ): void {
     const interactionKey = [parsed.processId ?? "", parsed.stdin ?? ""].join("\u0000");
-    if (!this.shouldEmitTerminalInteractionKey(interactionKey)) {
+    if (!this.notificationStream.shouldEmitTerminalInteraction(interactionKey)) {
       return;
     }
-    const command =
-      (parsed.processId ? this.terminalCommandByProcessId.get(parsed.processId) : undefined) ??
-      null;
+    const command = parsed.processId
+      ? this.notificationStream.resolveTerminalCommand(parsed.processId)
+      : null;
     if (!command && parsed.processId) {
-      this.pendingUnlabeledTerminalInteractions.add(parsed.processId);
+      this.notificationStream.markPendingTerminalInteraction(parsed.processId);
     }
     const timelineItem = mapCodexTerminalInteractionToToolCall({
       processId: parsed.processId,
@@ -3512,7 +3492,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     parsed: Extract<ParsedCodexNotification, { kind: "patch_apply_started" }>,
   ): void {
     if (parsed.callId) {
-      this.pendingFileChangeOutputDeltas.delete(parsed.callId);
+      this.notificationStream.clearFileChangeOutput(parsed.callId);
     }
     const timelineItem = mapCodexPatchNotificationToToolCall({
       callId: parsed.callId,
@@ -3532,10 +3512,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handlePatchApplyCompletedNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "patch_apply_completed" }>,
   ): void {
-    const bufferedOutput = this.consumeOutputDelta(
-      this.pendingFileChangeOutputDeltas,
-      parsed.callId,
-    );
+    const bufferedOutput = this.notificationStream.consumeFileChangeOutput(parsed.callId);
     const timelineItem = mapCodexPatchNotificationToToolCall({
       callId: parsed.callId,
       changes: parsed.changes,
@@ -3605,8 +3582,8 @@ export class CodexAppServerAgentSession implements AgentSession {
         this.pendingAssistantMessageBoundary = true;
       }
       if (itemId) {
-        this.emittedItemCompletedIds.add(itemId);
-        this.emittedItemStartedIds.delete(itemId);
+        this.notificationStream.markItemCompleted(itemId);
+        this.notificationStream.clearItemStarted(itemId);
       }
       return;
     }
@@ -3628,10 +3605,10 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.pendingAssistantMessageBoundary = true;
     }
     if (itemId) {
-      this.emittedItemCompletedIds.add(itemId);
-      this.emittedItemStartedIds.delete(itemId);
-      this.pendingCommandOutputDeltas.delete(itemId);
-      this.pendingFileChangeOutputDeltas.delete(itemId);
+      this.notificationStream.markItemCompleted(itemId);
+      this.notificationStream.clearItemStarted(itemId);
+      this.notificationStream.clearCommandOutput(itemId);
+      this.notificationStream.clearFileChangeOutput(itemId);
     }
   }
 
@@ -3642,18 +3619,20 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!itemId) {
       return false;
     }
-    if (timelineItem.type === "assistant_message" && this.pendingAgentMessages.has(itemId)) {
-      const streamedText = this.pendingAgentMessages.get(itemId) ?? "";
-      this.pendingAgentMessages.delete(itemId);
-      this.rememberTextualToolCallFailure(timelineItem.text);
-      this.emitMissingFinalTextSuffix(timelineItem, streamedText);
-      return true;
+    if (timelineItem.type === "assistant_message") {
+      const streamedText = this.notificationStream.consumeAssistantText(itemId);
+      if (streamedText !== null) {
+        this.rememberTextualToolCallFailure(timelineItem.text);
+        this.emitMissingFinalTextSuffix(timelineItem, streamedText);
+        return true;
+      }
     }
-    if (timelineItem.type === "reasoning" && this.pendingReasoning.has(itemId)) {
-      const streamedText = this.pendingReasoning.get(itemId)?.join("") ?? "";
-      this.pendingReasoning.delete(itemId);
-      this.emitMissingFinalTextSuffix(timelineItem, streamedText);
-      return true;
+    if (timelineItem.type === "reasoning") {
+      const streamedText = this.notificationStream.consumeReasoningText(itemId);
+      if (streamedText !== null) {
+        this.emitMissingFinalTextSuffix(timelineItem, streamedText);
+        return true;
+      }
     }
     return false;
   }
@@ -3692,7 +3671,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (timelineItem.type === "assistant_message") {
-      const buffered = this.pendingAgentMessages.get(itemId);
+      const buffered = this.notificationStream.peekAssistantText(itemId);
       if (buffered && buffered.length > 0) {
         timelineItem.text = buffered;
       }
@@ -3700,9 +3679,9 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     if (timelineItem.type === "reasoning") {
-      const buffered = this.pendingReasoning.get(itemId);
+      const buffered = this.notificationStream.peekReasoningText(itemId);
       if (buffered && buffered.length > 0) {
-        timelineItem.text = buffered.join("");
+        timelineItem.text = buffered;
       }
     }
   }
@@ -3746,20 +3725,20 @@ export class CodexAppServerAgentSession implements AgentSession {
     const itemId = parsed.item.id;
     if (normalizedItemType === "commandExecution") {
       const callId = timelineItem.callId || itemId;
-      if (callId && this.emittedExecCommandStartedCallIds.has(callId)) {
+      if (callId && this.notificationStream.hasExecCommandStarted(callId)) {
         return;
       }
     }
-    if (itemId && this.emittedItemStartedIds.has(itemId)) {
+    if (itemId && this.notificationStream.hasItemStarted(itemId)) {
       return;
     }
     this.warnOnIncompleteEditToolCall(timelineItem, "item_started", parsed.item);
     this.registerSubAgentToolCall(timelineItem, parsed.item);
     this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (itemId) {
-      this.emittedItemStartedIds.add(itemId);
-      this.pendingCommandOutputDeltas.delete(itemId);
-      this.pendingFileChangeOutputDeltas.delete(itemId);
+      this.notificationStream.markItemStarted(itemId);
+      this.notificationStream.clearCommandOutput(itemId);
+      this.notificationStream.clearFileChangeOutput(itemId);
     }
   }
 
@@ -3815,39 +3794,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.logger.warn({ method, params }, "Invalid Codex app-server notification payload");
   }
 
-  private appendOutputDeltaChunk(
-    store: Map<string, string[]>,
-    id: string | null | undefined,
-    chunk: string | null | undefined,
-    options?: { decodeBase64?: boolean },
-  ): void {
-    if (!id || !chunk) {
-      return;
-    }
-    const normalized = options?.decodeBase64 ? decodeCodexOutputDeltaChunk(chunk) : chunk;
-    if (!normalized.length) {
-      return;
-    }
-    const prev = store.get(id) ?? [];
-    prev.push(normalized);
-    store.set(id, prev);
-  }
-
-  private consumeOutputDelta(
-    store: Map<string, string[]>,
-    id: string | null | undefined,
-  ): string | null {
-    if (!id) {
-      return null;
-    }
-    const buffered = store.get(id);
-    if (!buffered || buffered.length === 0) {
-      return null;
-    }
-    store.delete(id);
-    return buffered.join("");
-  }
-
   private rememberTerminalProcessForCommand(command: unknown, output: string | null): void {
     const normalizedCommand = normalizeCodexCommandValue(command);
     if (!normalizedCommand) {
@@ -3864,11 +3810,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!processId) {
       return;
     }
-    this.terminalCommandByProcessId.set(processId, displayCommand);
-    if (!this.pendingUnlabeledTerminalInteractions.has(processId)) {
+    if (!this.notificationStream.rememberTerminalCommand(processId, displayCommand)) {
       return;
     }
-    this.pendingUnlabeledTerminalInteractions.delete(processId);
     this.emitEvent({
       type: "timeline",
       provider: CODEX_PROVIDER,
@@ -3877,14 +3821,6 @@ export class CodexAppServerAgentSession implements AgentSession {
         command: displayCommand,
       }),
     });
-  }
-
-  private shouldEmitTerminalInteractionKey(key: string): boolean {
-    if (this.emittedTerminalInteractionKeys.has(key)) {
-      return false;
-    }
-    this.emittedTerminalInteractionKeys.add(key);
-    return true;
   }
 
   private warnOnIncompleteEditToolCall(
@@ -3896,10 +3832,9 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     const warnKey = `${source}:${item.callId}`;
-    if (this.warnedIncompleteEditToolCallIds.has(warnKey)) {
+    if (!this.notificationStream.shouldWarnIncompleteEdit(warnKey)) {
       return;
     }
-    this.warnedIncompleteEditToolCallIds.add(warnKey);
     this.logger.warn(
       {
         source,

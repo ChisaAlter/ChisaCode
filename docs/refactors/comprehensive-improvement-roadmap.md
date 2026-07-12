@@ -24,7 +24,7 @@
 - **Client checkout/worktree 命令拆分**：完成。将 commit/merge/pull/push/PR/stash/worktree/branch/GitHub/directory 等 23 个无状态 RPC 命令提取到 `daemon-client-checkout-commands.ts`，`DaemonClient` 保持原公开方法并改为薄委托；checkout status 与 diff subscription 的重连状态继续留在核心类，等待独立生命周期切片。核心文件进一步降至 4893 行。
 - **Client checkout 订阅生命周期拆分**：完成。将 checkout status 请求去重、diff compare 归一化、一次性 diff 获取、订阅失败回滚、取消订阅与重连恢复状态提取到 `daemon-client-checkout-subscriptions.ts`；`DaemonClient` 的四个公开方法保持兼容并改为薄委托，重连测试改走真实公开订阅流程，不再修改私有状态。核心文件进一步降至 4752 行。
 - **Client 管理类 RPC 分域拆分**：完成。将 provider discovery/diagnostics/presets/model gateway、daemon/project config，以及 agent commands/skills/MCP server 管理共 25 个无状态 RPC 分别提取到三个领域客户端，并用 `daemon-client-command-transport.ts` 统一 correlated request 端口契约；公开方法与 wire shape 保持不变。核心文件进一步降至 4555 行。
-- **Provider composition-first 拆分启动**：完成 Codex skills/custom prompts、notification parser、turn configuration、model catalog 四个领域切片；`codex/skills.ts` 承接扩展发现与策略，`codex/notifications.ts` 承接 24 类 native notification 归一化，`codex/turn-config.ts` 承接 mode/sandbox/schema/`turn/start` 参数，`codex/models.ts` 承接模型 schema、配置默认值与 thinking option 映射。原 5981 行核心文件降至 4377 行。另删除 437 行未接线 speculative 基类。
+- **Provider composition-first 拆分启动**：完成 Codex skills、notification parser、turn configuration、model catalog、notification stream state 五个领域切片；新增 `codex/notification-stream-state.ts` 统一管理 assistant/reasoning/output 缓冲、item/exec 去重、terminal process 关联与 turn reset，事件发送和日志副作用仍留在 session。原 5981 行核心文件降至 4312 行；另删除 437 行未接线 speculative 基类。
 - **状态**：进行中，直接在 `cn-main` 执行，不创建额外分支或 worktree。
 
 ### 2026-07-12 深度架构/安全/产品/代码质量审查批次（完成）
@@ -213,7 +213,7 @@
   - `ProductionOpenCodeRuntime` 类从 `opencode-agent.ts` 迁移到 `opencode/runtime.ts`
   - `opencode/helpers.ts` 提取（含 `OpencodeToolPartToTimelineItemSchema`）
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
-- **状态**：进行中；采用 composition-first，Codex skills、notifications、turn configuration 与 models 切片已完成，后续继续拆 event handlers、session/client 与 runtime。
+- **状态**：进行中；采用 composition-first，Codex skills、notifications、turn configuration、models 与 stream state 切片已完成，后续继续拆 event handlers、session/client 与 runtime。
 
 ---
 
