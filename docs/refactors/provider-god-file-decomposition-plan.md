@@ -10,20 +10,21 @@
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
-- Claude 已完成八个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`history-converter.ts`、`tool-call-handlers.ts` 与 `sdk-types-mapping.ts` 分别拥有 timeline、SDK reader、turn routing、history、tool lifecycle 与纯映射职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
+- Claude 已完成九个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`history-converter.ts`、`tool-call-handlers.ts`、`sdk-types-mapping.ts` 与 `permission-controller.ts` 分别拥有 timeline、SDK reader、turn routing、history、tool lifecycle、纯映射与 permission 生命周期职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
 - OpenCode 已完成 façade、session、client runtime、session runtime、session lifecycle、turn execution、event translator、event values、message translator、permission translator、sub-agent tracking、history、session event bus、permission controller、MCP controller、helpers、catalog、runtime、abort coordinator 与 event-stream controller 二十个边界切片；原入口为 64 行兼容 façade，foreground turn、message、permission、sub-agent、runtime 与 shutdown 资源状态已统一。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 3001 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行。OpenCode 主路由已收敛，后续转向 Claude Session 的剩余大职责。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 2799 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行。OpenCode 主路由已收敛，后续转向 Claude Session 的剩余大职责。
 
 | 文件                                | 行数 | Session 类                    | Client 类                          | private 方法数 | import 数 |
 | ----------------------------------- | ---- | ----------------------------- | ---------------------------------- | -------------- | --------- |
 | `codex-app-server-agent.ts`         | 55   | compatibility façade          | public wrapper → `codex/client.ts` | 0              | 4         |
 | `codex/session.ts`                  | 715  | `CodexAppServerAgentSession`  | —                                  | 15             | 29        |
 | `claude/agent.ts`                   | 16   | compatibility façade          | wrapper → `claude/client.ts`       | 0              | 2         |
-| `claude/session.ts`                 | 3001 | `ClaudeAgentSession`          | —                                  | 77             | 27        |
+| `claude/session.ts`                 | 2799 | `ClaudeAgentSession`          | —                                  | 76             | 27        |
+| `claude/permission-controller.ts`   | 278  | permission lifecycle          | —                                  | 3              | 5         |
 | `opencode-agent.ts`                 | 64   | compatibility façade          | compatibility wrappers             | 0              | 4         |
 | `opencode/session.ts`               | 395  | `OpenCodeAgentSession`        | —                                  | 1              | 18        |
 | `opencode/turn-execution.ts`        | 433  | foreground turn orchestration | —                                  | 5              | 15        |
@@ -139,11 +140,11 @@
 
 **验收**：原入口收敛为显式兼容 façade；session/client/transport 分离；typecheck 与对应 Codex 聚焦测试通过；Session 已降至 715 行 orchestrator。`rewind.ts` 已拥有 fork/rollback 核心语义，保留 Session 中的窄接线，不再创建重复 controller。
 
-### Slice 2：Claude 拆分（完成）
+### Slice 2：Claude 拆分（继续进行）
 
-原 `claude/agent.ts` 从 5185 行收敛为 16 行兼容 façade；Session 主实现迁至 `claude/session.ts`（3001 行）：
+原 `claude/agent.ts` 从 5185 行收敛为 16 行兼容 façade；Session 主实现迁至 `claude/session.ts`（2799 行）：
 
-- `claude/session.ts` —— 移动 `ClaudeAgentSession`，保持 `implements AgentSession`（已完成，3001 行）
+- `claude/session.ts` —— `ClaudeAgentSession` orchestration，保持 `implements AgentSession`（已完成，2799 行；继续拆分 query/options、message translation 与 persistence）
 - `claude/client.ts` —— Client API、显式 Session factory、binary/auth 诊断与 persisted-session scanner（已完成，523 行；`agent.ts` 保留兼容包装）
 - `claude/timeline-assembler.ts` —— assistant/reasoning delta、message identity、去重与 finalize 状态（已完成，325 行）
 - `claude/sdk-pump.ts` —— SDK iterator reader、raw logging、interrupt-abort recovery 与 finally cleanup（已完成，124 行）
@@ -151,6 +152,7 @@
 - `claude/tool-call-handlers.ts` —— tool cache、partial JSON 聚合、运行/完成/失败/取消映射与结构化结果（已完成，651 行）
 - `claude/history-converter.ts` —— transcript 噪声过滤、synthetic/tool-result 判定、compaction 元数据与 `convertHistoryEntry`（已完成，327 行）
 - `claude/sdk-types-mapping.ts` —— content/type guards、question/permission/MCP/session ID 与 usage/token 映射（已完成，233 行）
+- `claude/permission-controller.ts` —— SDK canUseTool、pending map、abort cleanup、question/plan/tool resolution 与 close rejection（已完成，278 行）
 
 **验收**：同 Slice 1。
 

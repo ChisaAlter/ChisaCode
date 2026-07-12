@@ -957,20 +957,24 @@ describe("normalizeClaudeAskUserQuestionUpdatedInput", () => {
     const resultPromise = new Promise<unknown>((resolve, reject) => {
       (
         session as unknown as {
-          pendingPermissions: Map<
-            string,
-            {
-              request: typeof request;
-              resolve: (value: unknown) => void;
-              reject: (error: Error) => void;
-            }
-          >;
+          permissionController: {
+            getPendingMap: () => Map<
+              string,
+              {
+                request: typeof request;
+                resolve: (value: unknown) => void;
+                reject: (error: Error) => void;
+              }
+            >;
+          };
         }
-      ).pendingPermissions.set(request.id, {
-        request,
-        resolve,
-        reject,
-      });
+      ).permissionController
+        .getPendingMap()
+        .set(request.id, {
+          request,
+          resolve,
+          reject,
+        });
     });
 
     try {

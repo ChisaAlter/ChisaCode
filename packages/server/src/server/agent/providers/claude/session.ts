@@ -7,8 +7,6 @@ import {
   type CanUseTool,
   type McpServerConfig as ClaudeSdkMcpServerConfig,
   type PermissionMode,
-  type PermissionResult,
-  type PermissionUpdate,
   type Query,
   type SDKMessage,
   type SDKPartialAssistantMessage,
@@ -17,11 +15,6 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Logger } from "pino";
-import {
-  mapClaudeCompletedToolCall,
-  mapClaudeFailedToolCall,
-  mapClaudeRunningToolCall,
-} from "./tool-call-mapper.js";
 import {
   mapTaskNotificationSystemRecordToToolCall,
   mapTaskNotificationUserContentToToolCall,
@@ -39,13 +32,10 @@ import {
   extractSessionIdRaw,
   isClaudeContentChunk,
   isImageMimeType,
-  isPermissionUpdate,
-  normalizeClaudeAskUserQuestionUpdatedInput,
   readContextWindowUsedTokensFromTaskProgress,
   readStreamRequestInputTokens,
   readStreamRequestOutputTokens,
   readUsageFromTaskNotification,
-  resolvePermissionKind,
   toClaudeSdkMcpConfig,
   type ClaudeContentChunk,
 } from "./sdk-types-mapping.js";
@@ -56,6 +46,7 @@ import {
   type ClaudeTurnState,
 } from "./message-router.js";
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
+import { ClaudePermissionController } from "./permission-controller.js";
 import { ClaudeToolCallHandler, type ClaudeToolUseCacheEntry } from "./tool-call-handlers.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
@@ -75,13 +66,11 @@ import { normalizeProviderReplayTimestamp } from "../../provider-history-timesta
 
 import {
   getAgentStreamEventTurnId,
-  type AgentPermissionAction,
   type AgentFeature,
   type AgentMetadata,
   type AgentMode,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
-  type AgentPermissionUpdate,
   type AgentPersistenceHandle,
   type AgentPromptInput,
   type AgentRunOptions,
@@ -382,13 +371,6 @@ function removeClaudeModelSelectionEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEn
   return cleaned;
 }
 
-interface PendingPermission {
-  request: AgentPermissionRequest;
-  resolve: (result: PermissionResult) => void;
-  reject: (error: Error) => void;
-  cleanup?: () => void;
-}
-
 function readTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -436,43 +418,6 @@ function assertClaudeAutoModeEligible(mode: PermissionMode, env: NodeJS.ProcessE
   );
 }
 
-function getClaudeModeLabel(modeId: PermissionMode): string {
-  return DEFAULT_MODES.find((mode) => mode.id === modeId)?.label ?? modeId;
-}
-
-function buildClaudePlanPermissionActions(
-  resumeMode: PermissionMode | null,
-): AgentPermissionAction[] {
-  const actions: AgentPermissionAction[] = [
-    {
-      id: "reject",
-      label: "Reject",
-      behavior: "deny",
-      variant: "danger",
-      intent: "dismiss",
-    },
-    {
-      id: "implement",
-      label: "Implement",
-      behavior: "allow",
-      variant: "primary",
-      intent: "implement",
-    },
-  ];
-
-  if (resumeMode === "bypassPermissions") {
-    actions.push({
-      id: "implement_resume",
-      label: `Implement with ${getClaudeModeLabel(resumeMode)}`,
-      behavior: "allow",
-      variant: "secondary",
-      intent: "implement_resume",
-    });
-  }
-
-  return actions;
-}
-
 export class ClaudeAgentSession implements AgentSession {
   readonly provider = "claude" as const;
   readonly capabilities = CLAUDE_CAPABILITIES;
@@ -493,7 +438,7 @@ export class ClaudeAgentSession implements AgentSession {
   private currentMode: PermissionMode;
   private planResumeMode: PermissionMode | null = null;
   private availableModes: AgentMode[] = DEFAULT_MODES;
-  private pendingPermissions = new Map<string, PendingPermission>();
+  private readonly permissionController: ClaudePermissionController;
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private readonly timelineAssembler = new ClaudeTimelineAssembler({
     shouldSuppressAssistantText: (text) =>
@@ -530,6 +475,13 @@ export class ClaudeAgentSession implements AgentSession {
     this.runtimeSettings = options.runtimeSettings;
     this.persistSession = options.persistSession;
     this.logger = options.logger.child({ agentId: this.agentId });
+    this.permissionController = new ClaudePermissionController({
+      getPlanResumeMode: () => this.planResumeMode,
+      getModeLabel: (modeId) => DEFAULT_MODES.find((mode) => mode.id === modeId)?.label ?? modeId,
+      setMode: (modeId) => this.setMode(modeId),
+      emitEvent: (event) => this.pushEvent(event),
+      emitToolCall: (item) => this.pushToolCall(item),
+    });
     this.toolCallHandler = new ClaudeToolCallHandler({
       getCwd: () => this.config.cwd,
       emitTimeline: (item) => this.enqueueTimeline(item),
@@ -935,80 +887,11 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {
-    return Array.from(this.pendingPermissions.values()).map((entry) => entry.request);
+    return this.permissionController.getPending();
   }
 
   async respondToPermission(requestId: string, response: AgentPermissionResponse): Promise<void> {
-    const pending = this.pendingPermissions.get(requestId);
-    if (!pending) {
-      throw new Error(`No pending permission request with id '${requestId}'`);
-    }
-    this.pendingPermissions.delete(requestId);
-    pending.cleanup?.();
-
-    if (response.behavior === "allow") {
-      if (pending.request.kind === "plan") {
-        const selectedActionId = response.selectedActionId;
-        const shouldResumePriorMode =
-          selectedActionId === "implement_resume" && this.planResumeMode === "bypassPermissions";
-        const targetMode: PermissionMode = shouldResumePriorMode
-          ? "bypassPermissions"
-          : "acceptEdits";
-        await this.setMode(targetMode);
-        this.pushToolCall(
-          mapClaudeCompletedToolCall({
-            name: "plan_approval",
-            callId: pending.request.id,
-            input: pending.request.input ?? null,
-            output: {
-              approved: true,
-              actionId: selectedActionId ?? "implement",
-            },
-          }),
-        );
-      }
-      const updatedInput =
-        pending.request.kind === "question"
-          ? normalizeClaudeAskUserQuestionUpdatedInput(
-              response.updatedInput,
-              pending.request.input ?? undefined,
-            )
-          : (response.updatedInput ?? pending.request.input ?? {});
-      const result: PermissionResult = {
-        behavior: "allow",
-        updatedInput,
-        updatedPermissions: this.normalizePermissionUpdates(response.updatedPermissions),
-      };
-      pending.resolve(result);
-    } else {
-      if (pending.request.kind === "tool") {
-        this.pushToolCall(
-          mapClaudeFailedToolCall({
-            name: pending.request.name,
-            callId:
-              (typeof pending.request.metadata?.toolUseId === "string"
-                ? pending.request.metadata.toolUseId
-                : null) ?? pending.request.id,
-            input: pending.request.input ?? null,
-            output: null,
-            error: { message: response.message ?? "Permission denied" },
-          }),
-        );
-      }
-      const result: PermissionResult = {
-        behavior: "deny",
-        message: response.message ?? "Permission request denied",
-        interrupt: response.interrupt,
-      };
-      pending.resolve(result);
-    }
-
-    this.pushEvent({
-      type: "permission_resolved",
-      provider: "claude",
-      requestId,
-      resolution: response,
-    });
+    await this.permissionController.respond(requestId, response);
   }
 
   describePersistence(): AgentPersistenceHandle | null {
@@ -2540,86 +2423,8 @@ export class ClaudeAgentSession implements AgentSession {
     );
   }
 
-  private handlePermissionRequest: CanUseTool = async (
-    toolName,
-    input,
-    options,
-  ): Promise<PermissionResult> => {
-    const requestId = `permission-${randomUUID()}`;
-    const kind = resolvePermissionKind(toolName, input);
-    const metadata: AgentMetadata = {};
-    if (options.toolUseID) {
-      metadata.toolUseId = options.toolUseID;
-    }
-    if (toolName === "ExitPlanMode" && typeof input.plan === "string") {
-      metadata.planText = input.plan;
-    }
-    const toolDetail =
-      kind === "tool"
-        ? mapClaudeRunningToolCall({
-            name: toolName,
-            callId: options.toolUseID ?? requestId,
-            input,
-            output: null,
-          })?.detail
-        : undefined;
-
-    const request: AgentPermissionRequest = {
-      id: requestId,
-      provider: "claude",
-      name: toolName,
-      kind,
-      input,
-      detail: toolDetail,
-      suggestions: options.suggestions?.map((suggestion) => ({
-        ...suggestion,
-      })),
-      actions: kind === "plan" ? buildClaudePlanPermissionActions(this.planResumeMode) : undefined,
-      metadata: Object.keys(metadata).length ? metadata : undefined,
-    };
-
-    this.pushEvent({
-      type: "permission_requested",
-      provider: "claude",
-      request,
-    });
-
-    return await new Promise<PermissionResult>((resolve, reject) => {
-      const cleanupFns: Array<() => void> = [];
-      const cleanup = () => {
-        while (cleanupFns.length) {
-          const fn = cleanupFns.pop();
-          try {
-            fn?.();
-          } catch {
-            // ignore cleanup errors
-          }
-        }
-      };
-
-      const abortHandler = () => {
-        this.pendingPermissions.delete(requestId);
-        cleanup();
-        reject(new Error("Permission request aborted"));
-      };
-
-      if (options?.signal) {
-        if (options.signal.aborted) {
-          abortHandler();
-          return;
-        }
-        options.signal.addEventListener("abort", abortHandler, { once: true });
-        cleanupFns.push(() => options.signal?.removeEventListener("abort", abortHandler));
-      }
-
-      this.pendingPermissions.set(requestId, {
-        request,
-        resolve,
-        reject,
-        cleanup,
-      });
-    });
-  };
+  private handlePermissionRequest: CanUseTool = async (toolName, input, options) =>
+    this.permissionController.handleRequest(toolName, input, options);
 
   private enqueueTimeline(item: AgentTimelineItem) {
     this.pushEvent({ type: "timeline", item, provider: "claude" });
@@ -2669,22 +2474,8 @@ export class ClaudeAgentSession implements AgentSession {
     }
   }
 
-  private normalizePermissionUpdates(
-    updates?: AgentPermissionUpdate[],
-  ): PermissionUpdate[] | undefined {
-    if (!updates || updates.length === 0) {
-      return undefined;
-    }
-    const normalized = updates.filter(isPermissionUpdate);
-    return normalized.length > 0 ? normalized : undefined;
-  }
-
-  private rejectAllPendingPermissions(error: Error) {
-    for (const [id, pending] of this.pendingPermissions) {
-      pending.cleanup?.();
-      pending.reject(error);
-      this.pendingPermissions.delete(id);
-    }
+  private rejectAllPendingPermissions(error: Error): void {
+    this.permissionController.rejectAll(error);
   }
 
   private loadPersistedHistory(sessionId: string): void {
