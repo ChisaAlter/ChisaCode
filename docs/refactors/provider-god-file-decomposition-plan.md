@@ -11,20 +11,21 @@
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
 - Claude 已完成八个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`history-converter.ts`、`tool-call-handlers.ts` 与 `sdk-types-mapping.ts` 分别拥有 timeline、SDK reader、turn routing、history、tool lifecycle 与纯映射职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
-- OpenCode 已完成 helpers、catalog、runtime、abort coordinator 与 event-stream controller 五个边界切片；create config、权限、MCP、tool schema、model/mode catalog、SSE lifecycle 与 terminal routing 已从 Session 移出，事件翻译状态暂留 Session。
+- OpenCode 已完成 helpers、catalog、client runtime、runtime、abort coordinator 与 event-stream controller 六个边界切片；Client API、create/resume、诊断、model/mode catalog、SSE lifecycle 与 terminal routing 已从主文件移出，事件翻译状态暂留 Session。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 3001 行，OpenCode 主文件已降至 2922 行，后续继续按领域拆分。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 3001 行，OpenCode 主文件已降至 2514 行，Client runtime 为 507 行，后续继续拆分 Session/history。
 
-| 文件                        | 行数 | Session 类                   | Client 类                                     | private 方法数 | import 数 |
-| --------------------------- | ---- | ---------------------------- | --------------------------------------------- | -------------- | --------- |
-| `codex-app-server-agent.ts` | 55   | compatibility façade         | public wrapper → `codex/client.ts`            | 0              | 4         |
-| `codex/session.ts`          | 715  | `CodexAppServerAgentSession` | —                                             | 15             | 29        |
-| `claude/agent.ts`           | 16   | compatibility façade         | wrapper → `claude/client.ts`                  | 0              | 2         |
-| `claude/session.ts`         | 3001 | `ClaudeAgentSession`         | —                                             | 77             | 27        |
-| `opencode-agent.ts`         | 2922 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | 20             | 23        |
+| 文件                        | 行数 | Session 类                   | Client 类                          | private 方法数 | import 数 |
+| --------------------------- | ---- | ---------------------------- | ---------------------------------- | -------------- | --------- |
+| `codex-app-server-agent.ts` | 55   | compatibility façade         | public wrapper → `codex/client.ts` | 0              | 4         |
+| `codex/session.ts`          | 715  | `CodexAppServerAgentSession` | —                                  | 15             | 29        |
+| `claude/agent.ts`           | 16   | compatibility façade         | wrapper → `claude/client.ts`       | 0              | 2         |
+| `claude/session.ts`         | 3001 | `ClaudeAgentSession`         | —                                  | 77             | 27        |
+| `opencode-agent.ts`         | 2514 | `OpenCodeAgentSession`       | compatibility wrappers             | 18             | 18        |
+| `opencode/client.ts`        | 507  | —                            | `OpenCodeAgentClientRuntime`       | 2              | 13        |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
 
@@ -145,7 +146,7 @@
 把 `opencode-agent.ts` 3782 行拆为：
 
 - `opencode/session.ts` —— 移动 `OpenCodeAgentSession`，保持 `implements AgentSession`
-- `opencode/client.ts` —— 移动 `OpenCodeAgentClient`，保持 `implements AgentClient`
+- `opencode/client.ts` —— Client API、server acquisition、model/mode discovery、诊断与显式 Session factory/persistence collector ports（已完成，507 行；主入口保留兼容 wrappers）
 - `opencode/helpers.ts` —— create config、权限、MCP、tool schema 与诊断 helper（已完成，318 行；统一复用 `constants.ts`）
 - `opencode/catalog.ts` —— model/mode catalog、context-window lookup、runtime model prefix 与 slash-command discovery（已完成，311 行）
 - `opencode/runtime.ts` —— `ProductionOpenCodeRuntime`（已完成）

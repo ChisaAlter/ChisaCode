@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import {
   type AssistantMessage as OpenCodeAssistantMessage,
   type Event as OpenCodeEvent,
@@ -15,13 +14,8 @@ import type { Logger } from "pino";
 
 import {
   getAgentStreamEventTurnId,
-  type AgentCapabilityFlags,
-  type AgentClient,
-  type AgentCreateSessionOptions,
   type AgentFeature,
-  type AgentLaunchContext,
   type AgentMode,
-  type AgentModelDefinition,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPersistenceHandle,
@@ -30,64 +24,50 @@ import {
   type AgentRunResult,
   type AgentRuntimeInfo,
   type AgentSession,
-  type AgentSessionConfig,
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
   type AgentUsage,
-  type ListModelsOptions,
-  type ListModesOptions,
   type ListPersistedAgentsOptions,
   type McpServerConfig,
   type PersistedAgentDescriptor,
   type ToolCallDetail,
   type ToolCallTimelineItem,
 } from "../agent-sdk-types.js";
-import {
-  checkProviderLaunchAvailable,
-  createProviderEnvSpec,
-  resolveProviderLaunch,
-  type ProviderRuntimeSettings,
-} from "../provider-launch-config.js";
-import { withTimeout } from "../../../utils/promise-timeout.js";
-import { execCommand } from "../../../utils/spawn.js";
+import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
 import { buildToolCallDisplayModel } from "@chisacode/protocol/tool-call-display";
-import { OpenCodeServerManager } from "./opencode/server-manager.js";
-import type { OpenCodeLikeProviderConfig } from "./opencode/server-manager.js";
 import {
   OPENCODE_AUTO_ACCEPT_FEATURE_ID,
   OPENCODE_BUILD_MODE_ID,
   OPENCODE_LEGACY_FULL_ACCESS_MODE_ID,
   OPENCODE_PERSISTED_SESSION_LIMIT,
-  OPENCODE_PROVIDER_LIST_TIMEOUT_MS,
 } from "./opencode/constants.js";
-import {
-  formatDiagnosticStatus,
-  formatProviderDiagnostic,
-  formatProviderDiagnosticError,
-  buildBinaryDiagnosticRows,
-  toDiagnosticErrorMessage,
-} from "./diagnostic-utils.js";
+import { toDiagnosticErrorMessage } from "./diagnostic-utils.js";
 import { runProviderTurn } from "./provider-runner.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
 import { OpenCodeAbortCoordinator } from "./opencode/abort-coordinator.js";
 import {
+  MIMOCODE_PROVIDER_CONFIG,
+  OPENCODE_CAPABILITIES,
+  OPENCODE_PROVIDER_CONFIG,
+  OpenCodeAgentClientRuntime,
+  type OpenCodeAgentClientDeps,
+  type OpenCodeSessionFactoryInput,
+} from "./opencode/client.js";
+import {
   applyRuntimeModelPrefix,
   buildOpenCodeModelContextWindowLookup,
   buildOpenCodeModelDefinition,
   buildOpenCodeModelLookupKey,
-  DEFAULT_MODES,
   extractOpenCodeModelContextWindow,
   isSelectableOpenCodeAgent,
   listOpenCodeCommandsFromSdk,
   mapOpenCodeAgentToMode,
   mergeOpenCodeModes,
-  normalizeOpenCodeConfig,
   normalizeOpenCodeModeId,
   parseOpenCodeModelLookupKey,
   readPositiveFiniteNumber,
-  readRuntimeModelPrefix,
   resolveOpenCodeRuntimeAgentId,
   resolveOpenCodeSelectedModelContextWindow,
   type OpenCodeAgentConfig,
@@ -98,50 +78,15 @@ import {
   buildOpenCodePermissionActions,
   isAlreadyPresentMcpError,
   isOpenCodeAutoAcceptEnabled,
-  isOpenCodeCreateConfigUnattended,
   isOpenCodeHeadersTimeoutFailure,
   isOpenCodeNotFoundError,
   OpencodeToolPartToTimelineItemSchema,
-  resolveOpenCodeCreateConfig,
   resolveOpenCodePermissionReply,
   toOpenCodeMcpConfig,
   type OpenCodeMcpConfig,
 } from "./opencode/helpers.js";
-import { ProductionOpenCodeRuntime, type OpenCodeRuntime } from "./opencode/runtime.js";
 import { normalizeProviderReplayTimestamp } from "../provider-history-timestamps.js";
 import { revertOpenCodeConversationAndFiles } from "./opencode/rewind.js";
-
-const OPENCODE_CAPABILITIES: AgentCapabilityFlags = {
-  supportsStreaming: true,
-  supportsSessionPersistence: true,
-  supportsDynamicModes: true,
-  supportsMcpServers: true,
-  supportsReasoningStream: true,
-  supportsToolInvocations: true,
-  supportsRewindConversation: false,
-  supportsRewindFiles: false,
-  supportsRewindBoth: true,
-};
-
-const OPENCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
-  providerId: "opencode",
-  label: "OpenCode",
-  binary: "opencode",
-  serveArgs: (port) => ["serve", "--port", port],
-  rotateServerOnForceRefresh: true,
-  ignoreSystemEnvForDedicatedServer: false,
-  installUrl: "https://github.com/opencode-ai/opencode",
-};
-
-const MIMOCODE_PROVIDER_CONFIG: OpenCodeLikeProviderConfig = {
-  providerId: "mimocode",
-  label: "MiMoCode",
-  binary: "mimo",
-  serveArgs: (port) => ["serve", "--port", port],
-  rotateServerOnForceRefresh: false,
-  ignoreSystemEnvForDedicatedServer: true,
-  installUrl: "https://github.com/XiaomiMiMo/MiMo-Code",
-};
 
 type OpenCodeMessageRole = "user" | "assistant";
 type OpenCodePersistedSession = OpenCodeSession | OpenCodeGlobalSession;
@@ -670,407 +615,55 @@ export const __openCodeInternals = {
   },
 };
 
-export interface OpenCodeAgentClientDeps {
-  runtime?: OpenCodeRuntime;
+function createOpenCodeSession(input: OpenCodeSessionFactoryInput): OpenCodeAgentSession {
+  return new OpenCodeAgentSession(
+    input.config,
+    input.client,
+    input.sessionId,
+    input.logger,
+    input.modelContextWindowsByModelKey,
+    input.releaseServer,
+    input.persistSession,
+    input.agentId,
+    input.modelPrefix,
+  );
 }
 
-export class OpenCodeAgentClient implements AgentClient {
-  readonly provider = "opencode" as const;
-  readonly capabilities = OPENCODE_CAPABILITIES;
-  readonly resolveCreateConfig = resolveOpenCodeCreateConfig;
-  readonly isCreateConfigUnattended = isOpenCodeCreateConfigUnattended;
+export { type OpenCodeAgentClientDeps };
 
-  private readonly runtime: OpenCodeRuntime;
-  private readonly logger: Logger;
-  private readonly runtimeSettings?: ProviderRuntimeSettings;
-  private readonly providerConfig: OpenCodeLikeProviderConfig;
-  private readonly modelContextWindows = new Map<string, number>();
-
-  constructor(
-    logger: Logger,
-    runtimeSettings?: ProviderRuntimeSettings,
-    deps: OpenCodeAgentClientDeps = {},
-    providerConfig: OpenCodeLikeProviderConfig = OPENCODE_PROVIDER_CONFIG,
-  ) {
-    this.providerConfig = providerConfig;
-    this.logger = logger.child({ module: "agent", provider: providerConfig.providerId });
-    this.runtimeSettings = runtimeSettings;
-    this.runtime =
-      deps.runtime ??
-      new ProductionOpenCodeRuntime(
-        OpenCodeServerManager.getInstance(this.logger, runtimeSettings, providerConfig),
-      );
-  }
-
-  async createSession(
-    config: AgentSessionConfig,
-    launchContext?: AgentLaunchContext,
-    options?: AgentCreateSessionOptions,
-  ): Promise<AgentSession> {
-    const openCodeConfig = this.assertConfig(config);
-    const acquisition = await this.runtime.acquireServer({
-      force: false,
-      env: launchContext?.env,
-    });
-    const { url } = acquisition.server;
-    const client = this.runtime.createClient({
-      baseUrl: url,
-      directory: openCodeConfig.cwd,
-    });
-
-    try {
-      const response = await withTimeout(
-        client.session.create({ directory: openCodeConfig.cwd }),
-        10_000,
-        `${this.providerConfig.label} session.create timed out after 10s`,
-      );
-
-      if (response.error) {
-        throw new Error(
-          `Failed to create ${this.providerConfig.label} session: ${JSON.stringify(
-            response.error,
-          )}`,
-        );
-      }
-
-      const session = response.data;
-      if (!session) {
-        throw new Error(`${this.providerConfig.label} session creation returned no data`);
-      }
-
-      await this.populateModelContextWindowCache(client, openCodeConfig.cwd);
-
-      return new OpenCodeAgentSession(
-        openCodeConfig,
-        client,
-        session.id,
-        this.logger,
-        new Map(this.modelContextWindows),
-        acquisition.release,
-        options?.persistSession,
-        launchContext?.agentId,
-        readRuntimeModelPrefix(this.runtimeSettings) ?? undefined,
-      );
-    } catch (error) {
-      acquisition.release();
-      throw error;
-    }
-  }
-
-  async resumeSession(
-    handle: AgentPersistenceHandle,
-    overrides?: Partial<AgentSessionConfig>,
-    launchContext?: AgentLaunchContext,
-  ): Promise<AgentSession> {
-    const metadata = (handle.metadata ?? {}) as Partial<AgentSessionConfig>;
-    const cwd = overrides?.cwd ?? metadata.cwd;
-    if (!cwd) {
-      throw new Error("OpenCode resume requires the original working directory");
-    }
-
-    const config: AgentSessionConfig = {
-      ...metadata,
-      ...overrides,
-      provider: "opencode",
-      cwd,
-    };
-    const openCodeConfig = this.assertConfig(config);
-    const acquisition = await this.runtime.acquireServer({ force: false });
-    const { url } = acquisition.server;
-    const client = this.runtime.createClient({
-      baseUrl: url,
-      directory: openCodeConfig.cwd,
-    });
-
-    try {
-      await this.populateModelContextWindowCache(client, openCodeConfig.cwd);
-
-      return new OpenCodeAgentSession(
-        openCodeConfig,
-        client,
-        handle.sessionId,
-        this.logger,
-        new Map(this.modelContextWindows),
-        acquisition.release,
-        undefined,
-        launchContext?.agentId,
-        readRuntimeModelPrefix(this.runtimeSettings) ?? undefined,
-      );
-    } catch (error) {
-      acquisition.release();
-      throw error;
-    }
-  }
-
-  async listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
-    const acquisition = await this.runtime.acquireServer({ force: options.force });
-    const { url } = acquisition.server;
-    const client = this.runtime.createClient({
-      baseUrl: url,
-      directory: options.cwd,
-    });
-
-    try {
-      // Background model discovery can be legitimately slow while OpenCode refreshes
-      // provider state, so allow longer than turn execution paths.
-      const response = await withTimeout(
-        client.provider.list({ directory: options.cwd }),
-        OPENCODE_PROVIDER_LIST_TIMEOUT_MS,
-        `${this.providerConfig.label} provider.list timed out after ${
-          OPENCODE_PROVIDER_LIST_TIMEOUT_MS / 1000
-        }s - server may not be authenticated or connected to any providers`,
-      );
-
-      if (response.error) {
-        throw new Error(
-          `Failed to fetch ${this.providerConfig.label} providers: ${JSON.stringify(
-            response.error,
-          )}`,
-        );
-      }
-
-      const providers = response.data;
-      if (!providers) {
-        return [];
-      }
-
-      const connectedProviderIds = new Set(providers.connected);
-
-      // Providers with source "api" are managed by the OpenCode console/subscription (e.g. Pi
-      // coding agent). They do not appear in `connected` (which only lists env/config providers)
-      // but are fully usable — OpenCode authenticates them internally via the console session.
-      const isAccessible = (provider: { id: string; source: string }): boolean =>
-        connectedProviderIds.has(provider.id) || provider.source === "api";
-
-      // Fail fast if no providers are accessible at all
-      if (!providers.all.some(isAccessible)) {
-        throw new Error(
-          `${this.providerConfig.label} has no connected providers. Please authenticate with at least one provider ` +
-            "(e.g., openai, anthropic), set appropriate environment variables (e.g., OPENAI_API_KEY), " +
-            `or log in to ${this.providerConfig.label} via the console.`,
-        );
-      }
-
-      const models: AgentModelDefinition[] = [];
-      this.modelContextWindows.clear();
-      for (const provider of providers.all) {
-        if (!isAccessible(provider)) {
-          continue;
-        }
-
-        for (const [modelId, model] of Object.entries(provider.models)) {
-          const definition = buildOpenCodeModelDefinition(provider, modelId, model);
-          const contextWindowMaxTokens = extractOpenCodeModelContextWindow(model);
-          if (contextWindowMaxTokens !== undefined) {
-            this.modelContextWindows.set(
-              buildOpenCodeModelLookupKey(provider.id, modelId),
-              contextWindowMaxTokens,
-            );
-          }
-          models.push(definition);
-        }
-      }
-
-      return models;
-    } finally {
-      acquisition.release();
-    }
-  }
-
-  async listModes(options: ListModesOptions): Promise<AgentMode[]> {
-    const acquisition = await this.runtime.acquireServer({ force: options.force });
-    const { url } = acquisition.server;
-    const directory = options.cwd;
-    const client = this.runtime.createClient({ baseUrl: url, directory });
-
-    try {
-      const response = await withTimeout(
-        client.app.agents({ directory }),
-        10_000,
-        `${this.providerConfig.label} app.agents timed out after 10s`,
-      );
-
-      if (response.error || !response.data) {
-        return DEFAULT_MODES;
-      }
-
-      const discovered = response.data
-        .filter(isSelectableOpenCodeAgent)
-        .map(mapOpenCodeAgentToMode);
-
-      return mergeOpenCodeModes(discovered);
-    } finally {
-      acquisition.release();
-    }
-  }
-
-  async listCommands(config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
-    const openCodeConfig = this.assertConfig(config);
-    const acquisition = await this.runtime.acquireServer({ force: false });
-    const { url } = acquisition.server;
-    const client = this.runtime.createClient({
-      baseUrl: url,
-      directory: openCodeConfig.cwd,
-    });
-
-    try {
-      return await listOpenCodeCommandsFromSdk(client, openCodeConfig.cwd);
-    } finally {
-      acquisition.release();
-    }
-  }
-
-  async listFeatures(config: AgentSessionConfig): Promise<AgentFeature[]> {
-    return [buildOpenCodeAutoAcceptFeature(this.assertConfig(config))];
-  }
-
-  async listPersistedAgents(
-    options?: ListPersistedAgentsOptions,
-  ): Promise<PersistedAgentDescriptor[]> {
-    const acquisition = await this.runtime.acquireServer({ force: false });
-    const { url } = acquisition.server;
-    const client = this.runtime.createClient({
-      baseUrl: url,
-      directory: options?.cwd ?? "",
-    });
-
-    try {
-      return await collectOpenCodePersistedAgentsFromSdk(client, options);
-    } finally {
-      acquisition.release();
-    }
-  }
-
-  async isAvailable(): Promise<boolean> {
-    const launch = await resolveProviderLaunch({
-      commandConfig: this.runtimeSettings?.command,
-      defaultBinary: this.providerConfig.binary,
-    });
-    const availability = await checkProviderLaunchAvailable(launch);
-    return availability.available;
-  }
-
-  async shutdown(): Promise<void> {
-    await this.runtime.shutdown();
-  }
-
-  async getDiagnostic(): Promise<{ diagnostic: string }> {
-    try {
-      const launch = await resolveProviderLaunch({
-        commandConfig: this.runtimeSettings?.command,
-        defaultBinary: this.providerConfig.binary,
-      });
-      const availability = await checkProviderLaunchAvailable(launch);
-      const available = availability.available;
-      let serverStatus = "Not running";
-      let modelsValue = "Not checked";
-      let status = formatDiagnosticStatus(available);
-
-      try {
-        const { url } = await this.runtime.ensureServerRunning();
-        serverStatus = `Running (${url})`;
-      } catch (error) {
-        serverStatus = `Unavailable (${toDiagnosticErrorMessage(error)})`;
-      }
-
-      let authValue = "Not checked";
-      const authCommand = availability.available
-        ? (availability.resolvedPath ?? launch.command)
-        : null;
-      if (authCommand) {
-        try {
-          const { stdout, stderr } = await execCommand(
-            authCommand,
-            [...launch.args, "auth", "list"],
-            {
-              ...createProviderEnvSpec(),
-              timeout: 5_000,
-            },
-          );
-          const text = (stdout.trim() || stderr.trim()).trim();
-          authValue = text ? `\n    ${text.replace(/\n/g, "\n    ")}` : "(empty)";
-        } catch (error) {
-          authValue = `Error - ${toDiagnosticErrorMessage(error)}`;
-        }
-      }
-
-      if (available) {
-        try {
-          const models = await this.listModels({ cwd: homedir(), force: false });
-          modelsValue = String(models.length);
-        } catch (error) {
-          modelsValue = `Error - ${toDiagnosticErrorMessage(error)}`;
-          status = formatDiagnosticStatus(available, {
-            source: "model fetch",
-            cause: error,
-          });
-        }
-
-        if (!modelsValue.startsWith("Error -")) {
-          try {
-            await this.listModes({ cwd: homedir(), force: false });
-          } catch (error) {
-            status = formatDiagnosticStatus(available, {
-              source: "mode fetch",
-              cause: error,
-            });
-          }
-        }
-      }
-
-      return {
-        diagnostic: formatProviderDiagnostic(this.providerConfig.label, [
-          ...(await buildBinaryDiagnosticRows(launch, availability)),
-          { label: "Server", value: serverStatus },
-          { label: "Auth", value: authValue },
-          { label: "Models", value: modelsValue },
-          { label: "Status", value: status },
-        ]),
-      };
-    } catch (error) {
-      return {
-        diagnostic: formatProviderDiagnosticError(this.providerConfig.label, error),
-      };
-    }
-  }
-  private assertConfig(config: AgentSessionConfig): OpenCodeAgentConfig {
-    if (config.provider !== "opencode") {
-      throw new Error(`OpenCodeAgentClient received config for provider '${config.provider}'`);
-    }
-    return normalizeOpenCodeConfig({
-      ...config,
-      provider: "opencode",
-      model: applyRuntimeModelPrefix(config.model, readRuntimeModelPrefix(this.runtimeSettings)),
-    });
-  }
-
-  private async populateModelContextWindowCache(
-    client: OpencodeClient,
-    cwd: string,
-  ): Promise<void> {
-    const response = await client.provider.list({ directory: cwd });
-    if (response.error || !response.data) {
-      return;
-    }
-
-    const lookup = buildOpenCodeModelContextWindowLookup(response.data);
-    this.modelContextWindows.clear();
-    for (const [modelLookupKey, contextWindowMaxTokens] of lookup.entries()) {
-      this.modelContextWindows.set(modelLookupKey, contextWindowMaxTokens);
-    }
-  }
-}
-
-export class MimoCodeAgentClient extends OpenCodeAgentClient {
+export class OpenCodeAgentClient extends OpenCodeAgentClientRuntime {
   constructor(
     logger: Logger,
     runtimeSettings?: ProviderRuntimeSettings,
     deps: OpenCodeAgentClientDeps = {},
   ) {
-    super(logger, runtimeSettings, deps, MIMOCODE_PROVIDER_CONFIG);
+    super(
+      logger,
+      runtimeSettings,
+      deps,
+      createOpenCodeSession,
+      collectOpenCodePersistedAgentsFromSdk,
+      OPENCODE_PROVIDER_CONFIG,
+    );
   }
 }
 
+export class MimoCodeAgentClient extends OpenCodeAgentClientRuntime {
+  constructor(
+    logger: Logger,
+    runtimeSettings?: ProviderRuntimeSettings,
+    deps: OpenCodeAgentClientDeps = {},
+  ) {
+    super(
+      logger,
+      runtimeSettings,
+      deps,
+      createOpenCodeSession,
+      collectOpenCodePersistedAgentsFromSdk,
+      MIMOCODE_PROVIDER_CONFIG,
+    );
+  }
+}
 export interface OpenCodeEventTranslationState {
   sessionId: string;
   cwd?: string;
