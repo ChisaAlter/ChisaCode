@@ -9,7 +9,7 @@
 
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
-- Codex 已完成十个边界切片：`skills.ts`、`notifications.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`image-attachments.ts` 与 `history.ts`；状态对象封装流式通知、child thread 与 permission 生命周期，领域模块承接 plan/question、图片附件和统一历史/实时 item 映射，session 保留事件发送与跨领域协调。
+- Codex 已完成十一个边界切片：`skills.ts`、`notifications.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`image-attachments.ts` 与 `history.ts`；状态对象封装流式通知、child thread 与 permission 生命周期，领域模块承接 notification/plan/question/图片/历史映射，session 保留事件发送与跨领域协调。
 
 ## 现状
 
@@ -82,7 +82,7 @@
 - 删除从未接线的 `providers/base/`，避免其默认 turn ID、interrupt、close 与 persistence 语义被误当成稳定契约。
 - 保留现有 `AgentSession` / `AgentClient` 接口和 provider-specific 生命周期实现。
 - 优先提取无状态 helper、transport、runtime、event translator 与领域 handler。
-- Codex `skills.ts`、`notifications.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立扩展发现、native notification、turn config、model catalog、stream state、sub-agent tracking、permission、image attachment 和 history pipeline 边界。
+- Codex `skills.ts`、`notifications.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立扩展发现、native notification、turn config、model catalog、stream state/timeline、sub-agent、permission、image attachment 和 history pipeline 边界。
 
 **验收**：server typecheck/build、目标 lint、Codex skills 精确测试通过。
 
@@ -95,6 +95,7 @@
 - `codex/app-server-transport.ts` —— `CodexAppServerClient`（已完成）
 - `codex/notifications.ts` —— notification schema/parser/type guard（已完成）
 - `codex/notification-stream-state.ts` —— delta/output 缓冲、生命周期去重、terminal 关联（已完成）
+- `codex/notification-timeline.ts` —— command/patch/terminal timeline 映射与 output delta 解码（已完成）
 - `codex/sub-agent-tracker.ts` —— child thread 映射、子时间线排序、父 sub-agent 状态重建（已完成）
 - `codex/permission-state.ts` —— permission request/handler 原子登记、消费与关闭清理（已完成）
 - `codex/permissions.ts` —— plan/question 规范化、timeline 映射、decision 与 implementation prompt（已完成）
