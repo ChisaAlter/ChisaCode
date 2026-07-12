@@ -11,11 +11,12 @@
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
 - Claude 已完成八个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`history-converter.ts`、`tool-call-handlers.ts` 与 `sdk-types-mapping.ts` 分别拥有 timeline、SDK reader、turn routing、history、tool lifecycle 与纯映射职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
+- OpenCode 已完成 runtime、abort coordinator 与 event-stream controller 三个边界切片；SSE readiness、消费循环、陈旧终态抑制、tool tracking 与 terminal routing 已从 Session 移出，事件翻译状态暂留 Session。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 3001 行，OpenCode 仍有约 3.7k 行责任中心，后续继续按领域拆分。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 3001 行，OpenCode 主文件已降至 3466 行，后续继续按领域拆分。
 
 | 文件                        | 行数 | Session 类                   | Client 类                                     | private 方法数 | import 数 |
 | --------------------------- | ---- | ---------------------------- | --------------------------------------------- | -------------- | --------- |
@@ -23,7 +24,7 @@
 | `codex/session.ts`          | 715  | `CodexAppServerAgentSession` | —                                             | 15             | 29        |
 | `claude/agent.ts`           | 16   | compatibility façade         | wrapper → `claude/client.ts`                  | 0              | 2         |
 | `claude/session.ts`         | 3001 | `ClaudeAgentSession`         | —                                             | 77             | 27        |
-| `opencode-agent.ts`         | 3698 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | 24             | 23        |
+| `opencode-agent.ts`         | 3466 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | 20             | 24        |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
 
@@ -63,14 +64,14 @@
 | -------- | --------------------- | --------------------------------------------------------------------------------------- |
 | Codex    | JSON-RPC notification | `handleNotification` / `handleCodexDeltaNotification` / `handleThreadStateNotification` |
 | Claude   | SDK pump              | `routeSdkMessageFromPump` / `handleToolUseStart` / `handleToolResult` / `runQueryPump`  |
-| Opencode | SSE event stream      | `translateEvent` / `ensureEventStreamReady`                                             |
+| Opencode | SSE event stream      | `OpenCodeEventStreamController` / `translateEvent`                                      |
 
 ### 最大单方法（拆分时优先抽取成独立 handler 模块）
 
 | 方法                      | 文件                             | 行数          |
 | ------------------------- | -------------------------------- | ------------- |
 | `awaitPendingBeforeStart` | opencode/abort-coordinator.ts:44 | ~20（已提取） |
-| `ensureEventStreamReady`  | opencode-agent.ts:3051           | ~188          |
+| `consume`                 | opencode/event-stream.ts:148     | ~70（已提取） |
 | `routeMessage`            | claude/message-router.ts:290     | ~80（已提取） |
 
 ## 拆分策略
@@ -148,7 +149,7 @@
 - `opencode/runtime.ts` —— `ProductionOpenCodeRuntime`（已完成）
 - `opencode/abort-coordinator.ts` —— local turn signal、provider `session.abort` pending 与 next-turn serialization（已完成，87 行）
 - `opencode/mimocode-client.ts` —— `MimoCodeAgentClient`
-- `opencode/event-stream.ts` —— `ensureEventStreamReady` / `consumeEventStream` / `translateEvent`
+- `opencode/event-stream.ts` —— SSE readiness、消费循环、stale terminal 抑制与终态路由（已完成，287 行；`translateEvent` 暂留 Session）
 - `opencode/sub-agent-tracking.ts` —— 模块级 sub-agent 跟踪 helper 函数集合
 
 **验收**：同 Slice 1。
