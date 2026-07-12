@@ -28,15 +28,12 @@ import {
   type PersistedAgentDescriptor,
 } from "../agent-sdk-types.js";
 import type { Logger } from "pino";
-import { homedir } from "node:os";
-
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
 import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
-import { createPathEquivalenceMatcher } from "../../../utils/path.js";
 import { extractCodexTerminalSessionId } from "./tool-call-mapper-utils.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "./codex-feature-definitions.js";
 import {
@@ -59,17 +56,14 @@ import {
   type CodexMcpServerConfig,
   toCodexMcpConfig,
 } from "./codex/runtime-config.js";
+import {
+  CodexClientRuntime,
+  type CodexClientLike,
+  type CodexClientRuntimeDeps,
+} from "./codex/client-runtime.js";
 import { CodexUserMessageTurnState } from "./codex/user-message-turn-state.js";
 import { CodexContextCompactionState } from "./codex/context-compaction-state.js";
-import {
-  CODEX_AUTO_REVIEW_MIN_VERSION,
-  CODEX_GOALS_MIN_VERSION,
-  checkCodexLaunchAvailable,
-  codexVersionAtLeast,
-  resolveCodexLaunch,
-  resolveCodexLaunchPrefix,
-  spawnCodexAppServer,
-} from "./codex/launch.js";
+import { spawnCodexAppServer } from "./codex/launch.js";
 import {
   cleanupStaleCodexImageAttachments,
   writeCodexImageAttachment,
@@ -108,11 +102,7 @@ import { CodexNotificationStreamState } from "./codex/notification-stream-state.
 import { CodexPermissionController } from "./codex/permission-controller.js";
 import { mapCodexPlanToToolCall, planStepsToMarkdown } from "./codex/permissions.js";
 import { CodexSubAgentTracker } from "./codex/sub-agent-tracker.js";
-import {
-  loadCodexModelDefinitions,
-  readCodexConfiguredDefaults,
-  type CodexConfiguredDefaults,
-} from "./codex/models.js";
+import { readCodexConfiguredDefaults, type CodexConfiguredDefaults } from "./codex/models.js";
 import {
   applyApprovalsReviewerParam,
   buildCodexTurnStartParams,
@@ -123,14 +113,6 @@ import {
   shouldPromoteThreadResponseToAutoReview,
   validateCodexMode,
 } from "./codex/turn-config.js";
-import {
-  formatDiagnosticStatus,
-  formatProviderDiagnostic,
-  formatProviderDiagnosticError,
-  buildBinaryDiagnosticRows,
-  resolveBinaryVersion,
-  toDiagnosticErrorMessage,
-} from "./diagnostic-utils.js";
 import { runProviderTurn } from "./provider-runner.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 
@@ -198,23 +180,15 @@ const CODEX_APP_SERVER_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindBoth: false,
 };
 
-interface CodexAppServerClientLike {
-  request(method: string, params?: unknown): Promise<unknown>;
+interface CodexAppServerClientLike extends CodexClientLike {
   forkThread?(params: CodexThreadForkParams): Promise<CodexThreadForkResponse>;
   rollbackThread?(params: CodexThreadRollbackParams): Promise<CodexThreadRollbackResponse>;
-  notify(method: string, params?: unknown): void;
-  dispose(): Promise<void>;
 }
 
-interface CodexAppServerAgentDeps {
+interface CodexAppServerAgentDeps extends CodexClientRuntimeDeps {
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   customProvider?: CodexCustomProvider;
   customCodexConfig?: Record<string, unknown> | null;
-  _createCodexClient?: (
-    child: ChildProcessWithoutNullStreams,
-    logger: Logger,
-    getTraceContext: () => CodexAppServerTraceContext,
-  ) => CodexAppServerClientLike;
 }
 
 function looksLikeTextualCodexToolCallTranscript(text: string): boolean {
@@ -245,21 +219,6 @@ function firstPositiveFiniteNumber(primary: unknown, secondary: unknown): number
 
 function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined;
-}
-
-function filterCodexThreadsByCwd(
-  threads: Array<Record<string, unknown>>,
-  cwd: string | undefined,
-): Array<Record<string, unknown>> {
-  if (!cwd) {
-    return threads;
-  }
-  // thread/list rows carry an optional cwd. The descriptor builder later
-  // falls back to process.cwd() if the field is missing, so we only match
-  // here when the row genuinely carries a cwd string — otherwise threads
-  // with no cwd would falsely match the daemon's own cwd.
-  const matchesCwd = createPathEquivalenceMatcher(cwd);
-  return threads.filter((thread) => typeof thread.cwd === "string" && matchesCwd(thread.cwd));
 }
 
 export function toAgentUsage(tokenUsage: unknown): AgentUsage | undefined {
@@ -2190,14 +2149,33 @@ export class CodexAppServerAgentSession implements AgentSession {
 export class CodexAppServerAgentClient implements AgentClient {
   readonly provider = CODEX_PROVIDER;
   readonly capabilities = CODEX_APP_SERVER_CAPABILITIES;
-  private goalsEnabledPromise: Promise<boolean> | null = null;
-  private autoReviewEnabledPromise: Promise<boolean> | null = null;
+  private readonly clientRuntime: CodexClientRuntime;
 
   constructor(
     private readonly logger: Logger,
     private readonly runtimeSettings?: ProviderRuntimeSettings,
     private readonly deps: CodexAppServerAgentDeps = {},
-  ) {}
+  ) {
+    this.clientRuntime = new CodexClientRuntime(this.logger, this.runtimeSettings, this.deps, () =>
+      this.spawnAppServer(),
+    );
+  }
+
+  private get goalsEnabledPromise(): Promise<boolean> | null {
+    return this.clientRuntime.getGoalsEnabledPromise();
+  }
+
+  private set goalsEnabledPromise(value: Promise<boolean> | null) {
+    this.clientRuntime.setGoalsEnabledPromise(value);
+  }
+
+  private get autoReviewEnabledPromise(): Promise<boolean> | null {
+    return this.clientRuntime.getAutoReviewEnabledPromise();
+  }
+
+  private set autoReviewEnabledPromise(value: Promise<boolean> | null) {
+    this.clientRuntime.setAutoReviewEnabledPromise(value);
+  }
 
   private sessionDeps(): CodexAppServerAgentDeps {
     return {
@@ -2211,50 +2189,14 @@ export class CodexAppServerAgentClient implements AgentClient {
 
   private resolveGoalsEnabled(): Promise<boolean> {
     if (!this.goalsEnabledPromise) {
-      this.goalsEnabledPromise = (async () => {
-        try {
-          const launchPrefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
-          const versionOutput = await resolveBinaryVersion(launchPrefix.command);
-          const enabled = codexVersionAtLeast(versionOutput, CODEX_GOALS_MIN_VERSION);
-          this.logger.trace(
-            {
-              provider: CODEX_PROVIDER,
-              versionOutput,
-              enabled,
-            },
-            "provider.codex.config.goals_resolved",
-          );
-          return enabled;
-        } catch (error) {
-          this.logger.warn({ err: error }, "Failed to probe codex version for goals gate");
-          return false;
-        }
-      })();
+      this.goalsEnabledPromise = this.clientRuntime.resolveGoalsEnabled();
     }
     return this.goalsEnabledPromise;
   }
 
   private resolveAutoReviewEnabled(): Promise<boolean> {
     if (!this.autoReviewEnabledPromise) {
-      this.autoReviewEnabledPromise = (async () => {
-        try {
-          const launchPrefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
-          const versionOutput = await resolveBinaryVersion(launchPrefix.command);
-          const enabled = codexVersionAtLeast(versionOutput, CODEX_AUTO_REVIEW_MIN_VERSION);
-          this.logger.trace(
-            {
-              provider: CODEX_PROVIDER,
-              versionOutput,
-              enabled,
-            },
-            "provider.codex.config.auto_review_resolved",
-          );
-          return enabled;
-        } catch (error) {
-          this.logger.warn({ err: error }, "Failed to probe codex version for auto-review gate");
-          return false;
-        }
-      })();
+      this.autoReviewEnabledPromise = this.clientRuntime.resolveAutoReviewEnabled();
     }
     return this.autoReviewEnabledPromise;
   }
@@ -2333,153 +2275,24 @@ export class CodexAppServerAgentClient implements AgentClient {
     return session;
   }
 
-  async listPersistedAgents(
-    options?: ListPersistedAgentsOptions,
-  ): Promise<PersistedAgentDescriptor[]> {
-    const child = await this.spawnAppServer();
-    const client =
-      this.deps._createCodexClient?.(child, this.logger, () => ({})) ??
-      new CodexAppServerClient(child, this.logger);
-
-    try {
-      await client.request("initialize", buildCodexAppServerInitializeParams());
-      client.notify("initialized", {});
-
-      const limit = options?.limit ?? 20;
-      // thread/list returns the cheap `cwd` field. When the caller supplied
-      // a cwd hint we filter here so the per-thread `thread/read includeTurns`
-      // hydration below only runs for matching threads. Fetch a wider window
-      // when filtering since most threads will be from other cwds.
-      const listLimit = options?.cwd ? Math.max(limit, 50) : limit;
-      const response = toObjectRecord(await client.request("thread/list", { limit: listLimit }));
-      const allThreads = Array.isArray(response?.data) ? response.data.filter(isRecord) : [];
-      const threads = filterCodexThreadsByCwd(allThreads, options?.cwd);
-      const descriptors: PersistedAgentDescriptor[] = await Promise.all(
-        threads.slice(0, limit).map(async (thread) => {
-          const threadId = typeof thread.id === "string" ? thread.id : "";
-          const cwd = typeof thread.cwd === "string" ? thread.cwd : process.cwd();
-          const title = typeof thread.preview === "string" ? thread.preview : null;
-          let timeline: PersistedTimelineEntry[] = [];
-
-          try {
-            timeline = await loadCodexThreadHistoryTimeline({
-              threadId,
-              cwd,
-              requestThread: (threadIdToRead) => {
-                return readCodexThread(client, threadIdToRead);
-              },
-            });
-          } catch {
-            timeline = [];
-          }
-
-          return {
-            provider: CODEX_PROVIDER,
-            sessionId: threadId,
-            cwd,
-            title,
-            lastActivityAt: new Date(
-              ((typeof thread.updatedAt === "number" ? thread.updatedAt : undefined) ??
-                (typeof thread.createdAt === "number" ? thread.createdAt : undefined) ??
-                0) * 1000,
-            ),
-            persistence: {
-              provider: CODEX_PROVIDER,
-              sessionId: threadId,
-              nativeHandle: threadId,
-              metadata: {
-                provider: CODEX_PROVIDER,
-                cwd,
-                title,
-                threadId,
-              },
-            },
-            timeline: timeline.map((entry) => entry.item),
-          };
-        }),
-      );
-
-      return descriptors;
-    } finally {
-      await client.dispose();
-    }
+  listPersistedAgents(options?: ListPersistedAgentsOptions): Promise<PersistedAgentDescriptor[]> {
+    return this.clientRuntime.listPersistedAgents(options);
   }
 
-  async listModels(_options: ListModelsOptions): Promise<AgentModelDefinition[]> {
-    // Codex model/list is global to the app server in this flow; cwd/force are intentionally ignored.
-    const child = await this.spawnAppServer();
-    const client = new CodexAppServerClient(child, this.logger);
-
-    try {
-      await client.request("initialize", buildCodexAppServerInitializeParams());
-      client.notify("initialized", {});
-
-      return await loadCodexModelDefinitions(client, this.logger);
-    } finally {
-      await client.dispose();
-    }
+  listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
+    return this.clientRuntime.listModels(options);
   }
 
-  async archiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
-    const threadId = handle.nativeHandle ?? handle.sessionId;
-    if (!threadId) return;
-
-    const child = await this.spawnAppServer();
-    const client = new CodexAppServerClient(child, this.logger);
-
-    try {
-      await client.request("initialize", buildCodexAppServerInitializeParams());
-      client.notify("initialized", {});
-      await client.request("thread/archive", { threadId });
-    } finally {
-      await client.dispose();
-    }
+  archiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
+    return this.clientRuntime.archiveNativeSession(handle);
   }
 
-  async isAvailable(): Promise<boolean> {
-    const launch = await resolveCodexLaunch(this.runtimeSettings);
-    const availability = await checkCodexLaunchAvailable(launch);
-    return availability.available;
+  isAvailable(): Promise<boolean> {
+    return this.clientRuntime.isAvailable();
   }
 
-  async getDiagnostic(): Promise<{ diagnostic: string }> {
-    try {
-      const launch = await resolveCodexLaunch(this.runtimeSettings);
-      const availability = await checkCodexLaunchAvailable(launch);
-      const available = availability.available;
-      const entries: Array<{ label: string; value: string }> = [
-        ...(await buildBinaryDiagnosticRows(launch, availability)),
-      ];
-      let status = formatDiagnosticStatus(available);
-
-      if (!available) {
-        entries.push({ label: "Models", value: "Not checked" });
-      } else {
-        try {
-          const models = await this.listModels({ cwd: homedir(), force: false });
-          entries.push({ label: "Models", value: String(models.length) });
-        } catch (error) {
-          entries.push({
-            label: "Models",
-            value: `Error - ${toDiagnosticErrorMessage(error)}`,
-          });
-          status = formatDiagnosticStatus(available, {
-            source: "model fetch",
-            cause: error,
-          });
-        }
-      }
-
-      entries.push({ label: "Status", value: status });
-
-      return {
-        diagnostic: formatProviderDiagnostic("Codex", entries),
-      };
-    } catch (error) {
-      return {
-        diagnostic: formatProviderDiagnosticError("Codex", error),
-      };
-    }
+  getDiagnostic(): Promise<{ diagnostic: string }> {
+    return this.clientRuntime.getDiagnostic();
   }
 }
 
