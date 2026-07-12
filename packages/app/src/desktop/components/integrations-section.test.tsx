@@ -20,6 +20,7 @@ const {
     fontWeight: { normal: "400", medium: "500" },
     borderRadius: { lg: 8 },
     opacity: { 50: 0.5 },
+    glass: { enabled: false },
     colors: {
       surface1: "#111",
       surface2: "#222",
@@ -52,6 +53,7 @@ const {
 
 vi.mock("react-native", () => ({
   Alert: { alert: vi.fn() },
+  Platform: { OS: "web" },
   View: ({
     children,
     testID,
@@ -109,8 +111,7 @@ vi.mock("@react-navigation/native", () => ({
 
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
-    create: (factory: unknown) =>
-      typeof factory === "function" ? (factory as (t: typeof theme) => unknown)(theme) : factory,
+    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
 }));

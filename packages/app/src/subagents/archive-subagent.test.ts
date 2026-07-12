@@ -59,11 +59,10 @@ describe("resolveArchiveSubagentDialog", () => {
         status: "running",
       }),
     ).toEqual({
-      title: "Archive running subagent?",
-      message:
-        "Review branch is still running. Archiving it will stop the subagent and remove it from the track.",
-      confirmLabel: "Archive",
-      cancelLabel: "Cancel",
+      title: "归档运行中的子智能体？",
+      message: "Review branch 仍在运行。归档会停止该子智能体，并将它从轨道中移除。",
+      confirmLabel: "归档",
+      cancelLabel: "取消",
       destructive: true,
     });
   });
@@ -75,11 +74,10 @@ describe("resolveArchiveSubagentDialog", () => {
         status: "initializing",
       }),
     ).toEqual({
-      title: "Archive running subagent?",
-      message:
-        "Starting child is still running. Archiving it will stop the subagent and remove it from the track.",
-      confirmLabel: "Archive",
-      cancelLabel: "Cancel",
+      title: "归档运行中的子智能体？",
+      message: "Starting child 仍在运行。归档会停止该子智能体，并将它从轨道中移除。",
+      confirmLabel: "归档",
+      cancelLabel: "取消",
       destructive: true,
     });
   });
@@ -91,10 +89,10 @@ describe("resolveArchiveSubagentDialog", () => {
         status: "idle",
       }),
     ).toEqual({
-      title: "Archive subagent?",
-      message: "Remove Review branch from the track. The subagent will be archived.",
-      confirmLabel: "Archive",
-      cancelLabel: "Cancel",
+      title: "归档子智能体？",
+      message: "从轨道中移除 Review branch。该子智能体会被归档。",
+      confirmLabel: "归档",
+      cancelLabel: "取消",
       destructive: true,
     });
   });
@@ -106,10 +104,10 @@ describe("resolveArchiveSubagentDialog", () => {
         status: null,
       }),
     ).toEqual({
-      title: "Archive subagent?",
-      message: "Remove this subagent from the track. The subagent will be archived.",
-      confirmLabel: "Archive",
-      cancelLabel: "Cancel",
+      title: "归档子智能体？",
+      message: "从轨道中移除 这个子智能体。该子智能体会被归档。",
+      confirmLabel: "归档",
+      cancelLabel: "取消",
       destructive: true,
     });
   });

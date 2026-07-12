@@ -22,6 +22,7 @@ const { clientMock, connectedState, theme } = vi.hoisted(() => ({
     fontWeight: { normal: "400", medium: "500" },
     borderRadius: { md: 6, lg: 8, xl: 12 },
     opacity: { 50: 0.5 },
+    glass: { enabled: false },
     colors: {
       primary: "#111",
       primaryForeground: "#fff",
@@ -37,6 +38,7 @@ const { clientMock, connectedState, theme } = vi.hoisted(() => ({
 
 vi.mock("react-native", () => ({
   Alert: { alert: vi.fn() },
+  Platform: { OS: "web" },
   Dimensions: { get: () => ({ width: 1600, height: 900 }) },
   Modal: ({ visible, children }: { visible: boolean; children?: React.ReactNode }) =>
     visible ? <div>{children}</div> : null,
@@ -118,16 +120,13 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@react-navigation/native", async () => {
-  const ReactModule = await vi.importActual<typeof React>("react");
-  return {
-    useFocusEffect: (callback: () => void | (() => void)) => {
-      const callbackRef = ReactModule.useRef(callback);
-      callbackRef.current = callback;
-      ReactModule.useEffect(() => callbackRef.current(), [callbackRef]);
-    },
-  };
-});
+vi.mock("@react-navigation/native", () => ({
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const callbackRef = React.useRef(callback);
+    callbackRef.current = callback;
+    React.useEffect(() => callbackRef.current(), [callbackRef]);
+  },
+}));
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => clientMock,

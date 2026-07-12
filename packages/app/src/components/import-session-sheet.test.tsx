@@ -4,6 +4,7 @@
 import React, { type ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { I18nextProvider } from "react-i18next";
 import type {
   DaemonClient,
   FetchRecentProviderSessionEntry,
@@ -11,6 +12,9 @@ import type {
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
+import { createAppI18n } from "@/i18n";
+
+const importSessionI18n = createAppI18n("zh-CN");
 
 const { theme, compactState } = vi.hoisted(() => ({
   theme: {
@@ -202,17 +206,19 @@ function renderSheet(
   const cwd = options && "cwd" in options ? (options.cwd ?? undefined) : "/repo/chisacode";
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <ImportSessionSheet
-        visible={options?.visible ?? true}
-        client={client}
-        serverId="server-1"
-        cwd={cwd}
-        onClose={options?.onClose ?? vi.fn()}
-        onImportedAgent={options?.onImportedAgent ?? vi.fn()}
-        onImported={options?.onImported}
-      />
-    </QueryClientProvider>,
+    <I18nextProvider i18n={importSessionI18n}>
+      <QueryClientProvider client={queryClient}>
+        <ImportSessionSheet
+          visible={options?.visible ?? true}
+          client={client}
+          serverId="server-1"
+          cwd={cwd}
+          onClose={options?.onClose ?? vi.fn()}
+          onImportedAgent={options?.onImportedAgent ?? vi.fn()}
+          onImported={options?.onImported}
+        />
+      </QueryClientProvider>
+    </I18nextProvider>,
   );
 }
 
@@ -660,7 +666,7 @@ describe("ImportSessionSheet", () => {
     );
 
     await screen.findByText("Session codex");
-    await screen.findByText("Could not load sessions for Claude Code.");
+    await screen.findByText("无法加载以下提供商的会话：Claude Code。");
   });
 
   it("filters the merged list when a provider badge is selected and restores it on All", async () => {

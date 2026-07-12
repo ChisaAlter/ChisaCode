@@ -13,7 +13,9 @@
 
 - **目标**：继续拆解 client/provider/workspace 超大责任中心；完成 AI SDK、Claude SDK、Expo/EAS major migration；恢复 `cn-main` 全量 CI 的可信绿色基线。
 - **执行顺序**：先清理确定性 CI 失败，再迁移高风险依赖，最后按领域拆分大文件；每批独立验证、提交和推送。
-- **当前批次**：修复 workspace authority 稳定错误契约、draft `runtimeProvider` 快照、Generative UI manager queue 兼容测试、异步进程终止断言、ACP cwd 隔离测试、POSIX terminal `vi.waitFor` 误用、CLI 脚本/Vitest 分类、Wrangler 公开入口解析及 Windows `npx.cmd` 启动。
+- **已完成批次**：修复 workspace authority 稳定错误契约、draft `runtimeProvider` 快照、Generative UI manager queue 兼容测试、异步进程终止断言、ACP cwd 隔离测试、POSIX terminal `vi.waitFor` 误用、CLI 脚本/Vitest 分类、Wrangler 公开入口解析及 Windows `npx.cmd` 启动。
+- **App/链路 CI 收敛**：E2E daemon 改为仅监听 `127.0.0.1`，满足无密码 loopback 安全约束；补齐 Vitest 的 `matchMedia`、Unistyles、safe-area、toast 与平台测试边界，修复 i18n 实例缺失、Aemeath 英文资源、Projects 空状态硬编码、provider icon/turn footer/高度缓存过期契约。20 个目标文件 152 个断言通过，`moduleMock` 审计从基线 303 降至 302。
+- **当前批次**：复核远端 Server Linux/Windows、CLI shard 1/2 与 Android Maestro 失败日志，按共同根因继续拆分提交；App/Playwright/Desktop Chain 等待本批推送后的新矩阵复验。
 - **状态**：进行中，直接在 `cn-main` 执行，不创建额外分支或 worktree。
 
 ### 2026-07-12 深度架构/安全/产品/代码质量审查批次（完成）

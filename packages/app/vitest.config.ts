@@ -83,6 +83,10 @@ export default defineConfig({
         find: /^@chisacode\/relay$/,
         replacement: path.resolve(__dirname, "../relay/src/index.ts"),
       },
+      {
+        find: /^@\/contexts\/toast-context$/,
+        replacement: path.resolve(__dirname, "test-stubs/toast-context.tsx"),
+      },
       { find: "@", replacement: path.resolve(__dirname, "src") },
       // Point to the ESM build so Vite can transform its imports and apply the
       // react alias below (the CJS build uses require('react') which bypasses
@@ -94,6 +98,10 @@ export default defineConfig({
       {
         find: /^react-native-svg$/,
         replacement: path.resolve(__dirname, "test-stubs/react-native-svg-web.ts"),
+      },
+      {
+        find: /^react-native-safe-area-context$/,
+        replacement: path.resolve(__dirname, "test-stubs/react-native-safe-area-context.tsx"),
       },
       { find: "react", replacement: resolvePackageEntry("react") },
       {

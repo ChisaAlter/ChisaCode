@@ -4,6 +4,7 @@ import { vi } from "vitest";
 const globalWithTestShims = globalThis as typeof globalThis & Record<string, unknown>;
 
 globalWithTestShims.__DEV__ = false;
+globalWithTestShims.IS_REACT_ACT_ENVIRONMENT = true;
 
 if (typeof globalThis.self === "undefined") {
   globalWithTestShims.self = globalThis;
@@ -48,15 +49,36 @@ if (typeof globalThis.cancelAnimationFrame !== "function") {
   };
 }
 
+if (
+  typeof globalThis.window !== "undefined" &&
+  typeof globalThis.window.matchMedia !== "function"
+) {
+  globalThis.window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
-    create: <T>(styles: T) => styles,
+    absoluteFillObject: {},
+    create: (styles) => styles,
   },
   useUnistyles: () => ({
-    theme: {},
+    theme: {
+      glass: { enabled: false },
+      shadow: { sm: {}, md: {}, lg: {} },
+    },
     rt: {},
     breakpoint: undefined,
   }),
+  withUnistyles: (Component) => Component,
   UnistylesRuntime: {
     setTheme: vi.fn(),
     themeName: "light",

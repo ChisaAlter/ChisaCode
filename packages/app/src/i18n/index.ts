@@ -3109,6 +3109,7 @@ export const resources = {
               ghostty: "Ghostty",
               "liquid-neon": "Glass",
               chisaki: "Chisaki",
+              aemeath: "Aemeath",
               auto: "System",
             },
           },

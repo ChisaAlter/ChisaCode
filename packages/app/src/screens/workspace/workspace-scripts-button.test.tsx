@@ -67,6 +67,7 @@ vi.mock("react-native-unistyles", () => ({
 }));
 
 vi.mock("@/constants/platform", () => ({
+  isAndroid: false,
   isNative: false,
   isWeb: true,
 }));

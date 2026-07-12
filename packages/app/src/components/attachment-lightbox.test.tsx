@@ -2,9 +2,13 @@ import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
+import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttachmentMetadata } from "@/attachments/types";
+import { createAppI18n } from "@/i18n";
 import { AttachmentLightbox } from "./attachment-lightbox";
+
+const attachmentI18n = createAppI18n("en");
 
 const { theme, imageMetadata, useAttachmentPreviewUrlMock } = vi.hoisted(() => {
   const hoistedTheme = {
@@ -124,7 +128,7 @@ afterEach(() => {
 
 function render(element: React.ReactElement) {
   act(() => {
-    root?.render(element);
+    root?.render(<I18nextProvider i18n={attachmentI18n}>{element}</I18nextProvider>);
   });
 }
 
@@ -187,10 +191,9 @@ describe("AttachmentLightbox", () => {
     const onClose = vi.fn();
     render(<AttachmentLightbox metadata={imageMetadata} onClose={onClose} />);
 
-    const closeButton = document.querySelector(
-      '[aria-label="Close image"][data-testid="attachment-lightbox-close"]',
-    );
+    const closeButton = document.querySelector('[data-testid="attachment-lightbox-close"]');
     expect(closeButton).not.toBeNull();
+    expect(closeButton?.getAttribute("aria-label")).toBe("Dismiss image");
     click(closeButton!);
 
     expect(onClose).toHaveBeenCalledTimes(1);

@@ -31,12 +31,6 @@ vi.mock("react-native-reanimated", () => ({
   FadeOut: {},
 }));
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (styles: unknown) => styles,
-  },
-}));
-
 let root: Root | null = null;
 let container: HTMLElement | null = null;
 

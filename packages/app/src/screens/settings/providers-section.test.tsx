@@ -22,6 +22,8 @@ const {
     fontWeight: { normal: "400" },
     borderRadius: { lg: 8 },
     opacity: { 50: 0.5 },
+    glass: { enabled: false },
+    shadow: { sm: {}, md: {}, lg: {} },
     colors: {
       surface1: "#111",
       surface2: "#222",
@@ -67,6 +69,7 @@ vi.mock("react-native", () => {
     return JSON.stringify(flatten(style));
   }
   return {
+    Platform: { OS: "web" },
     View: ({
       children,
       testID,
@@ -149,8 +152,7 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
-    create: (factory: unknown) =>
-      typeof factory === "function" ? (factory as (t: typeof theme) => unknown)(theme) : factory,
+    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
 }));

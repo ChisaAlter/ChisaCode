@@ -18,6 +18,7 @@ interface ProjectsScreenProps {
 }
 
 export default function ProjectsScreen({ view, returnTo }: ProjectsScreenProps) {
+  const { t } = useTranslation();
   const { projects, hostErrors, isLoading } = useProjects();
   const selectedProjectKey = view.kind === "project" ? view.projectKey : null;
 
@@ -32,7 +33,7 @@ export default function ProjectsScreen({ view, returnTo }: ProjectsScreenProps) 
   if (projects.length === 0) {
     return (
       <View style={styles.centered} testID="projects-list">
-        <Text style={styles.emptyText}>还没有项目</Text>
+        <Text style={styles.emptyText}>{t("sidebar.noProjects")}</Text>
       </View>
     );
   }

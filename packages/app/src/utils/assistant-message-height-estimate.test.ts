@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import {
   clearAssistantMessageHeightEstimateCache,
   estimateAssistantMessageHeightFromCache,
@@ -18,12 +19,12 @@ describe("assistant message height estimate", () => {
   it("estimates assistant message height from measured markdown block heights", () => {
     setAssistantMarkdownBlockHeight({
       block: "First paragraph",
-      width: 804,
+      width: MAX_CONTENT_WIDTH - 16,
       height: 18.2,
     });
     setAssistantMarkdownBlockHeight({
       block: "Second paragraph",
-      width: 804,
+      width: MAX_CONTENT_WIDTH - 16,
       height: 41.1,
     });
 

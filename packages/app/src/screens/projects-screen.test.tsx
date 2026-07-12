@@ -3,9 +3,13 @@
  */
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectHostEntry, ProjectSummary, WorkspaceSummary } from "@/utils/projects";
 import type { ProjectHostError, UseProjectsResult } from "@/hooks/use-projects";
+import { createAppI18n } from "@/i18n";
+
+const projectsI18n = createAppI18n("en");
 
 const { theme, projectsState, navigate } = vi.hoisted(() => ({
   theme: {
@@ -15,6 +19,8 @@ const { theme, projectsState, navigate } = vi.hoisted(() => ({
     fontWeight: { normal: "400" as const, medium: "500" as const },
     borderRadius: { sm: 4, md: 6, lg: 8, full: 999 },
     opacity: { 50: 0.5 },
+    glass: { enabled: false },
+    shadow: { sm: {}, md: {}, lg: {} },
     colors: {
       surface0: "#000",
       surface1: "#111",
@@ -100,8 +106,7 @@ vi.mock("react-native", () => {
 
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
-    create: (factory: unknown) =>
-      typeof factory === "function" ? (factory as (t: typeof theme) => unknown)(theme) : factory,
+    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
   useUnistyles: () => ({ theme }),
 }));
@@ -280,7 +285,11 @@ describe("ProjectsScreen", () => {
 
   function render(view: { kind: "projects" } | { kind: "project"; projectKey: string }) {
     act(() => {
-      root?.render(<ProjectsScreen view={view} />);
+      root?.render(
+        <I18nextProvider i18n={projectsI18n}>
+          <ProjectsScreen view={view} />
+        </I18nextProvider>,
+      );
     });
   }
 

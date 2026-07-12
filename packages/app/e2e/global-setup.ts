@@ -702,7 +702,7 @@ function startDaemon(args: DaemonSpawnArgs): ChildProcess {
       CHISACODE_HOME: args.chisacodeHome,
       CHISACODE_E2E_EDITOR_RECORD_PATH: args.editorRecordPath,
       CHISACODE_SERVER_ID: "srv_e2e_test_daemon",
-      CHISACODE_LISTEN: `0.0.0.0:${args.port}`,
+      CHISACODE_LISTEN: `127.0.0.1:${args.port}`,
       CHISACODE_RELAY_ENDPOINT: `127.0.0.1:${args.relayPort}`,
       CHISACODE_CORS_ORIGINS: `http://localhost:${args.metroPort}`,
       CHISACODE_DICTATION_ENABLED: openAiUsable ? "1" : "0",

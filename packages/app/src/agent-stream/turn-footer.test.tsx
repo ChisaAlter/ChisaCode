@@ -135,7 +135,7 @@ describe("TurnFooter layout", () => {
   it("aligns running and completed footer rows with the message column", () => {
     expect(getTurnFooterStreamItemWrapperStyle(8)).toMatchObject({
       width: "100%",
-      alignSelf: "flex-start",
+      alignSelf: "stretch",
       paddingHorizontal: 8,
     });
   });

@@ -107,9 +107,7 @@ describe("desktop-permissions", () => {
     const snapshot = await permissions.getDesktopPermissionSnapshot();
 
     expect(snapshot.microphone.state).toBe("unknown");
-    expect(snapshot.microphone.detail).toContain(
-      "Microphone status API is unavailable in this runtime.",
-    );
+    expect(snapshot.microphone.detail).toContain("麦克风状态 API");
   });
 
   it("requests notification permission via the browser Notification API", async () => {
