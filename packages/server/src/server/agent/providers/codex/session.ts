@@ -59,7 +59,6 @@ import {
   threadItemToTimeline,
 } from "./history.js";
 import {
-  applyAgentSkillPolicy,
   expandCodexCustomPrompt,
   listCodexCustomPrompts,
   listCodexSkillEntries,
@@ -75,6 +74,7 @@ import { CodexNotificationStreamState } from "./notification-stream-state.js";
 import { CodexToolNotificationHandler } from "./tool-notification-handler.js";
 import { CodexTurnNotificationHandler } from "./turn-notification-handler.js";
 import { CodexThreadBootstrap } from "./thread-bootstrap.js";
+import { CodexSessionMetadata } from "./session-metadata.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
 import {
@@ -103,14 +103,6 @@ export {
   normalizeCodexQuestionPrompts,
   planStepsToMarkdown,
 } from "./permissions.js";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
-function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined;
-}
 
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
@@ -276,26 +268,13 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly toolNotificationHandler: CodexToolNotificationHandler;
   private readonly turnNotificationHandler: CodexTurnNotificationHandler;
   private readonly threadBootstrap: CodexThreadBootstrap;
+  private readonly sessionMetadata: CodexSessionMetadata;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
   private readonly userMessageTurns = new CodexUserMessageTurnState();
   private readonly compactionState = new CodexContextCompactionState();
   private connected = false;
-  private collaborationModes: Array<{
-    name: string;
-    mode?: string | null;
-    model?: string | null;
-    reasoning_effort?: string | null;
-    developer_instructions?: string | null;
-  }> = [];
-  private resolvedCollaborationMode: {
-    mode: string;
-    settings: Record<string, unknown>;
-    name: string;
-  } | null = null;
-  private cachedSkills: Array<{ name: string; description: string; path: string }> = [];
-
   constructor(
     config: AgentSessionConfig,
     private readonly resumeHandle: { sessionId: string; metadata?: Record<string, unknown> } | null,
@@ -335,6 +314,13 @@ export class CodexAppServerAgentSession implements AgentSession {
       customProvider: this.deps.customProvider,
       customCodexConfig: this.deps.customCodexConfig,
       ephemeral: this.ephemeral,
+    });
+    this.sessionMetadata = new CodexSessionMetadata({
+      logger: this.logger,
+      getClient: () => this.client,
+      getConfig: () => this.config,
+      getTraceContext: () => this.traceContext(),
+      customProvider: this.deps.customProvider,
     });
     this.deltaNotificationHandler = new CodexDeltaNotificationHandler({
       notificationStream: this.notificationStream,
@@ -453,7 +439,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       modelId: this.config.model,
       fastModeEnabled: this.serviceTier === "fast",
       planModeEnabled: this.planModeEnabled,
-      planModeAvailable: this.hasPlanCollaborationMode(),
+      planModeAvailable: this.sessionMetadata.hasPlanCollaborationMode(),
     });
   }
 
@@ -467,8 +453,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     await this.client.request("initialize", buildCodexAppServerInitializeParams());
     this.client.notify("initialized", {});
 
-    await this.loadCollaborationModes();
-    await this.loadSkills();
+    await this.sessionMetadata.loadAll(this.planModeEnabled);
 
     if (this.currentThreadId) {
       await this.ensureThreadLoaded();
@@ -486,145 +471,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     };
   }
 
-  private async loadCollaborationModes(): Promise<void> {
-    if (!this.client) return;
-    try {
-      const response = toObjectRecord(await this.client.request("collaborationMode/list", {}));
-      const data = Array.isArray(response?.data) ? response.data : [];
-      this.collaborationModes = data.map((entry) => {
-        const record = toObjectRecord(entry);
-        return {
-          name: typeof record?.name === "string" ? record.name : "",
-          mode: typeof record?.mode === "string" ? record.mode : null,
-          model: typeof record?.model === "string" ? record.model : null,
-          reasoning_effort:
-            typeof record?.reasoning_effort === "string" ? record.reasoning_effort : null,
-          developer_instructions:
-            typeof record?.developer_instructions === "string"
-              ? record.developer_instructions
-              : null,
-        };
-      });
-    } catch (error) {
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: CODEX_PROVIDER,
-          sessionId: this.currentThreadId,
-          turnId: this.activeForegroundTurnId ?? undefined,
-          error,
-        },
-        "provider.codex.metadata.collaboration_modes_failed",
-      );
-      this.collaborationModes = [];
-    }
-    this.refreshResolvedCollaborationMode();
-  }
-
-  private async loadSkills(): Promise<void> {
-    if (!this.client) return;
-    try {
-      const response = toObjectRecord(
-        await this.client.request("skills/list", {
-          cwd: [this.config.cwd],
-        }),
-      );
-      const entries = Array.isArray(response?.data) ? response.data : [];
-      const skillsByName = new Map<string, { name: string; description: string; path: string }>();
-      for (const entry of entries) {
-        const entryRecord = toObjectRecord(entry);
-        const list = Array.isArray(entryRecord?.skills) ? entryRecord.skills : [];
-        for (const skill of list) {
-          const skillRecord = toObjectRecord(skill);
-          if (typeof skillRecord?.name !== "string" || typeof skillRecord?.path !== "string")
-            continue;
-          if (!skillsByName.has(skillRecord.name)) {
-            skillsByName.set(skillRecord.name, {
-              name: skillRecord.name,
-              description: resolveSkillDescription(skillRecord),
-              path: skillRecord.path,
-            });
-          }
-        }
-      }
-      this.cachedSkills = Array.from(skillsByName.values());
-    } catch (error) {
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: CODEX_PROVIDER,
-          sessionId: this.currentThreadId,
-          turnId: this.activeForegroundTurnId ?? undefined,
-          error,
-        },
-        "provider.codex.metadata.skills_failed",
-      );
-      this.cachedSkills = [];
-    }
-  }
-
-  private enabledCachedSkills(): Array<{ name: string; description: string; path: string }> {
-    return applyAgentSkillPolicy(this.cachedSkills, resolveSkillPolicy(this.config));
-  }
-
-  private findCollaborationMode(target: "code" | "plan"): {
-    name: string;
-    mode?: string | null;
-    model?: string | null;
-    reasoning_effort?: string | null;
-    developer_instructions?: string | null;
-  } | null {
-    if (this.collaborationModes.length === 0) return null;
-    const findByName = (predicate: (name: string) => boolean) =>
-      this.collaborationModes.find((entry) => predicate(entry.name.toLowerCase()));
-
-    if (target === "plan") {
-      return findByName((name) => name.includes("plan") || name.includes("read")) ?? null;
-    }
-
-    return (
-      findByName((name) => name.includes("auto") || name.includes("code")) ??
-      this.collaborationModes.find((entry) => {
-        const name = entry.name.toLowerCase();
-        return !name.includes("plan") && !name.includes("read");
-      }) ??
-      this.collaborationModes[0] ??
-      null
-    );
-  }
-
-  private hasPlanCollaborationMode(): boolean {
-    return this.findCollaborationMode("plan") !== null;
-  }
-
-  private resolveCollaborationMode(): {
-    mode: string;
-    settings: Record<string, unknown>;
-    name: string;
-  } | null {
-    const match = this.findCollaborationMode(this.planModeEnabled ? "plan" : "code");
-    if (!match) return null;
-
-    const settings: Record<string, unknown> = {};
-    if (match.model) settings.model = match.model;
-    if (match.reasoning_effort) settings.reasoning_effort = match.reasoning_effort;
-    const developerInstructions = composeSystemPromptParts(
-      match.developer_instructions,
-      this.config.systemPrompt,
-      this.config.daemonAppendSystemPrompt,
-      buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
-    );
-    if (developerInstructions) settings.developer_instructions = developerInstructions;
-    if (this.config.model) settings.model = this.config.model;
-    const thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
-    if (thinkingOptionId) settings.reasoning_effort = thinkingOptionId;
-    return { mode: match.mode ?? "code", settings, name: match.name };
-  }
-
-  private refreshResolvedCollaborationMode(): void {
-    this.resolvedCollaborationMode = this.resolveCollaborationMode();
-  }
-
   private applyFeatureValue(featureId: "fast_mode" | "plan_mode", value: boolean): void {
     this.config.featureValues = {
       ...this.config.featureValues,
@@ -638,7 +484,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
 
     this.planModeEnabled = value;
-    this.refreshResolvedCollaborationMode();
+    this.sessionMetadata.refreshResolvedCollaborationMode(this.planModeEnabled);
     this.cachedRuntimeInfo = null;
   }
 
@@ -747,9 +593,11 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.connected) {
       await this.connect();
     } else {
-      await this.loadSkills();
+      await this.sessionMetadata.loadSkills();
     }
-    const skill = this.enabledCachedSkills().find((entry) => entry.name === commandName);
+    const skill = this.sessionMetadata
+      .getEnabledSkills()
+      .find((entry) => entry.name === commandName);
     if (skill) {
       const trimmedArgs = args?.trim() ?? "";
       const text = trimmedArgs ? `$${skill.name} ${trimmedArgs}` : `$${skill.name}`;
@@ -776,7 +624,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       modeId: this.currentMode,
       config: this.config,
       serviceTier: this.serviceTier,
-      collaborationMode: this.resolvedCollaborationMode,
+      collaborationMode: this.sessionMetadata.getResolvedCollaborationMode(),
       outputSchema: options?.outputSchema,
       developerInstructions,
       codexConfig: this.threadBootstrap.buildInnerConfig(),
@@ -811,7 +659,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         cwd: this.config.cwd ?? null,
         approvalPolicy,
         sandboxPolicyType,
-        hasCollaborationMode: Boolean(this.resolvedCollaborationMode),
+        hasCollaborationMode: Boolean(this.sessionMetadata.getResolvedCollaborationMode()),
         hasOutputSchema,
         hasDeveloperInstructions,
         hasCodexConfig,
@@ -916,15 +764,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.currentThreadId) {
       await this.ensureThread();
     }
+    const collaborationMode = this.sessionMetadata.getResolvedCollaborationMode();
     const info: AgentRuntimeInfo = {
       provider: CODEX_PROVIDER,
       sessionId: this.currentThreadId,
       model: this.config.model ?? null,
       thinkingOptionId: normalizeCodexThinkingOptionId(this.config.thinkingOptionId) ?? null,
       modeId: this.currentMode ?? null,
-      extra: this.resolvedCollaborationMode
-        ? { collaborationMode: this.resolvedCollaborationMode.name }
-        : undefined,
+      extra: collaborationMode ? { collaborationMode: collaborationMode.name } : undefined,
     };
     this.cachedRuntimeInfo = info;
     return { ...info };
@@ -952,13 +799,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!codexModelSupportsFastMode(this.config.model)) {
       this.serviceTier = null;
     }
-    this.refreshResolvedCollaborationMode();
+    this.sessionMetadata.refreshResolvedCollaborationMode(this.planModeEnabled);
     this.cachedRuntimeInfo = null;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
     this.config.thinkingOptionId = normalizeCodexThinkingOptionId(thinkingOptionId);
-    this.refreshResolvedCollaborationMode();
+    this.sessionMetadata.refreshResolvedCollaborationMode(this.planModeEnabled);
     this.cachedRuntimeInfo = null;
   }
 
@@ -1083,9 +930,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.connected) {
       await this.connect();
     } else {
-      await this.loadSkills();
+      await this.sessionMetadata.loadSkills();
     }
-    const appServerSkills = this.enabledCachedSkills().map((skill) => ({
+    const appServerSkills = this.sessionMetadata.getEnabledSkills().map((skill) => ({
       name: skill.name,
       description: skill.description,
       argumentHint: "",
@@ -1121,10 +968,10 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.connected) {
       await this.connect();
     } else {
-      await this.loadSkills();
+      await this.sessionMetadata.loadSkills();
     }
-    if (this.cachedSkills.length > 0) {
-      return this.cachedSkills.map(toAgentSkill);
+    if (this.sessionMetadata.getCachedSkills().length > 0) {
+      return this.sessionMetadata.getCachedSkills().map(toAgentSkill);
     }
     return (await listCodexSkillEntries(this.config.cwd, this.deps.workspaceGitService)).map(
       toAgentSkill,
@@ -1334,14 +1181,4 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handleToolApprovalRequest(params: unknown): Promise<unknown> {
     return this.permissionController.handleToolApprovalRequest(params);
   }
-}
-
-function resolveSkillDescription(skill: Record<string, unknown>): string {
-  if (typeof skill.description === "string") {
-    return skill.description;
-  }
-  if (typeof skill.shortDescription === "string") {
-    return skill.shortDescription;
-  }
-  return "Skill";
 }

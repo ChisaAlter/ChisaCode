@@ -51,10 +51,11 @@ interface CodexSessionTestAccess {
   handleToolApprovalRequest(params: unknown): Promise<unknown>;
   handleNotification(method: string, params: unknown): void;
   loadPersistedHistory(): Promise<void>;
-  refreshResolvedCollaborationMode(): void;
   serviceTier: "fast" | null;
   planModeEnabled: boolean;
-  collaborationModes: CollaborationModeRecord[];
+  sessionMetadata: {
+    setCollaborationModes(modes: CollaborationModeRecord[], planModeEnabled: boolean): void;
+  };
   config: AgentSessionConfig;
 }
 
@@ -2849,19 +2850,21 @@ describe("Codex app-server provider", () => {
     const session = createSession({
       featureValues: { plan_mode: true, fast_mode: true },
     });
-    asInternals(session).collaborationModes = [
-      {
-        name: "Code",
-        mode: "code",
-        developer_instructions: "Built-in code mode",
-      },
-      {
-        name: "Plan",
-        mode: "plan",
-        developer_instructions: "Built-in plan mode",
-      },
-    ];
-    asInternals(session).refreshResolvedCollaborationMode();
+    asInternals(session).sessionMetadata.setCollaborationModes(
+      [
+        {
+          name: "Code",
+          mode: "code",
+          developer_instructions: "Built-in code mode",
+        },
+        {
+          name: "Plan",
+          mode: "plan",
+          developer_instructions: "Built-in plan mode",
+        },
+      ],
+      true,
+    );
     const request = vi.fn(async (method: string) => {
       if (method === "thread/loaded/list") {
         return { data: ["test-thread"] };
