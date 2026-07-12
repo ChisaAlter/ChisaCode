@@ -51,6 +51,7 @@ import {
 } from "./client.js";
 import { CodexUserMessageTurnState } from "./user-message-turn-state.js";
 import { CodexContextCompactionState } from "./context-compaction-state.js";
+import { CodexDeltaNotificationHandler } from "./delta-notification-handler.js";
 import {
   cleanupStaleCodexImageAttachments,
   writeCodexImageAttachment,
@@ -72,8 +73,7 @@ import {
   resolveSkillPolicy,
   toAgentSkill,
 } from "./skills.js";
-import { decodeCodexOutputDeltaChunk } from "./notification-timeline.js";
-import { type CodexDeltaNotification, type ParsedCodexNotification } from "./notifications.js";
+import type { ParsedCodexNotification } from "./notifications.js";
 import { CodexNotificationRouter } from "./notification-router.js";
 import { CodexNotificationStreamState } from "./notification-stream-state.js";
 import { CodexToolNotificationHandler } from "./tool-notification-handler.js";
@@ -116,7 +116,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
-const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
 const CODEX_TEXTUAL_TOOL_CALL_ERROR =
   "Codex returned a tool call transcript as plain text, so no tool was executed.";
 
@@ -321,8 +320,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly permissionController: CodexPermissionController;
   private readonly notificationStream = new CodexNotificationStreamState();
   private readonly notificationRouter: CodexNotificationRouter;
+  private readonly deltaNotificationHandler: CodexDeltaNotificationHandler;
   private readonly toolNotificationHandler: CodexToolNotificationHandler;
-  private pendingAssistantMessageBoundary = false;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
@@ -367,6 +366,14 @@ export class CodexAppServerAgentSession implements AgentSession {
       getSessionId: () => this.currentThreadId,
       getTurnId: () => this.activeForegroundTurnId,
     });
+    this.deltaNotificationHandler = new CodexDeltaNotificationHandler({
+      notificationStream: this.notificationStream,
+      resolveSubAgentCallId: (threadId) => this.getSubAgentCallIdForThread(threadId),
+      upsertSubAgentItem: (callId, itemId, item) =>
+        this.subAgentTracker.upsertChildItem(callId, itemId, item),
+      emitSubAgentActivity: (callId, status) => this.emitSubAgentActivityUpdate(callId, status),
+      emit: (item) => this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item }),
+    });
     this.toolNotificationHandler = new CodexToolNotificationHandler({
       logger: this.logger,
       notificationStream: this.notificationStream,
@@ -380,7 +387,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     });
     this.notificationRouter = new CodexNotificationRouter({
       onParsed: (method, params, parsed) => this.traceParsedNotification(method, params, parsed),
-      onDelta: (parsed) => this.handleCodexDeltaNotification(parsed),
+      onDelta: (parsed) => this.deltaNotificationHandler.handle(parsed),
       onThreadStarted: (parsed) => this.handleThreadStartedNotification(parsed),
       onTurnStarted: (parsed) => this.handleTurnStartedNotification(parsed),
       onTurnCompleted: (parsed) => this.handleTurnCompletedNotification(parsed),
@@ -1456,69 +1463,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     return Boolean(itemId && this.notificationStream.hasItemCompleted(itemId));
   }
 
-  private handleCodexDeltaNotification(parsed: CodexDeltaNotification): void {
-    if (parsed.kind === "agent_message_delta") {
-      const { previous, text } = this.notificationStream.appendAssistantDelta(
-        parsed.itemId,
-        parsed.delta,
-      );
-      const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
-      if (subAgentCallId) {
-        this.subAgentTracker.upsertChildItem(subAgentCallId, parsed.itemId, {
-          type: "assistant_message",
-          messageId: parsed.itemId,
-          text,
-        });
-        this.emitSubAgentActivityUpdate(subAgentCallId, "running");
-        return;
-      }
-      const isFirstDeltaForItem = previous.length === 0;
-      this.eventBus.emit({
-        type: "timeline",
-        provider: CODEX_PROVIDER,
-        item: {
-          type: "assistant_message",
-          messageId: parsed.itemId,
-          text:
-            isFirstDeltaForItem && this.pendingAssistantMessageBoundary
-              ? `${ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN}${parsed.delta}`
-              : parsed.delta,
-        },
-      });
-      if (isFirstDeltaForItem) {
-        this.pendingAssistantMessageBoundary = false;
-      }
-      return;
-    }
-    if (parsed.kind === "reasoning_delta") {
-      const reasoningText = this.notificationStream.appendReasoningDelta(
-        parsed.itemId,
-        parsed.delta,
-      );
-      const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
-      if (subAgentCallId) {
-        this.subAgentTracker.upsertChildItem(subAgentCallId, parsed.itemId, {
-          type: "reasoning",
-          text: reasoningText,
-        });
-        this.emitSubAgentActivityUpdate(subAgentCallId, "running");
-        return;
-      }
-      this.eventBus.emit({
-        type: "timeline",
-        provider: CODEX_PROVIDER,
-        item: { type: "reasoning", text: parsed.delta },
-      });
-      return;
-    }
-    if (parsed.kind === "exec_command_output_delta") {
-      const chunk = parsed.chunk ? decodeCodexOutputDeltaChunk(parsed.chunk) : parsed.chunk;
-      this.notificationStream.appendCommandOutput(parsed.callId, chunk);
-      return;
-    }
-    this.notificationStream.appendFileChangeOutput(parsed.itemId, parsed.delta);
-  }
-
   private handleThreadStartedNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "thread_started" }>,
   ): void {
@@ -1593,7 +1537,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.latestPlanResult = null;
     this.textualToolCallError = null;
     this.notificationStream.resetTurn();
-    this.pendingAssistantMessageBoundary = false;
+    this.deltaNotificationHandler.resetTurn();
     this.compactionState.resetTurnPairing();
   }
 
@@ -1725,7 +1669,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     if (this.consumeStreamedTextCompletion(timelineItem, itemId)) {
       if (timelineItem.type === "assistant_message") {
-        this.pendingAssistantMessageBoundary = true;
+        this.deltaNotificationHandler.markAssistantMessageBoundary();
       }
       if (itemId) {
         this.notificationStream.markItemCompleted(itemId);
@@ -1752,7 +1696,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (timelineItem.type === "assistant_message") {
-      this.pendingAssistantMessageBoundary = true;
+      this.deltaNotificationHandler.markAssistantMessageBoundary();
     }
     if (itemId) {
       this.notificationStream.markItemCompleted(itemId);
