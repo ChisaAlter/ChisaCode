@@ -42,6 +42,7 @@ import { OpenCodeEventStreamController } from "./event-stream.js";
 import { OpenCodePermissionController } from "./permission-controller.js";
 import { OpenCodeSessionEventBus } from "./session-event-bus.js";
 import { OpenCodeSessionRuntime } from "./session-runtime.js";
+import { OpenCodeSessionLifecycle, reconcileOpenCodeSessionClose } from "./session-lifecycle.js";
 import { OpenCodeMcpController } from "./mcp-controller.js";
 import {
   hasNormalizedOpenCodeUsage,
@@ -53,73 +54,11 @@ import {
   type OpenCodeSubAgentActivityState,
   type OpenCodeToolPartEventPart,
 } from "./event-translator.js";
-import {
-  isOpenCodeAutoAcceptEnabled,
-  isOpenCodeHeadersTimeoutFailure,
-  isOpenCodeNotFoundError,
-} from "./helpers.js";
+import { isOpenCodeAutoAcceptEnabled, isOpenCodeHeadersTimeoutFailure } from "./helpers.js";
 import { revertOpenCodeConversationAndFiles } from "./rewind.js";
 import { buildOpenCodeReplayTimelineEvents, filterOpenCodeRevertedMessages } from "./history.js";
 
 export { collectOpenCodePersistedAgentsFromSdk } from "./history.js";
-
-async function reconcileOpenCodeSessionClose(params: {
-  client: Pick<OpencodeClient, "session">;
-  sessionId: string;
-  directory: string;
-  logger: Logger;
-}): Promise<void> {
-  const { client, sessionId, directory, logger } = params;
-
-  try {
-    const response = await client.session.abort({
-      sessionID: sessionId,
-      directory,
-    });
-    if (response.error && !isOpenCodeNotFoundError(response.error)) {
-      logger.warn(
-        {
-          sessionId,
-          error: toDiagnosticErrorMessage(response.error),
-        },
-        "Failed to abort OpenCode session during close",
-      );
-    }
-  } catch (error) {
-    logger.warn(
-      {
-        sessionId,
-        error: toDiagnosticErrorMessage(error),
-      },
-      "Failed to abort OpenCode session during close",
-    );
-  }
-
-  try {
-    const response = await client.session.update({
-      sessionID: sessionId,
-      directory,
-      time: { archived: Date.now() },
-    });
-    if (response.error && !isOpenCodeNotFoundError(response.error)) {
-      logger.warn(
-        {
-          sessionId,
-          error: toDiagnosticErrorMessage(response.error),
-        },
-        "Failed to archive OpenCode session during close",
-      );
-    }
-  } catch (error) {
-    logger.warn(
-      {
-        sessionId,
-        error: toDiagnosticErrorMessage(error),
-      },
-      "Failed to archive OpenCode session during close",
-    );
-  }
-}
 
 function getOpenCodeAttachmentExtension(mimeType: string): string {
   switch (mimeType) {
@@ -270,10 +209,8 @@ export class OpenCodeAgentSession implements AgentSession {
   private subAgentsByCallId = new Map<string, OpenCodeSubAgentActivityState>();
   private subAgentCallIdByChildSessionId = new Map<string, string>();
   private pendingChildToolPartsBySessionId = new Map<string, OpenCodeToolPartEventPart[]>();
-  private releaseServer: (() => void) | null;
   private readonly eventStreamController: OpenCodeEventStreamController;
-  private readonly persistSession: boolean;
-  private deletedFromProvider = false;
+  private readonly lifecycle: OpenCodeSessionLifecycle;
   constructor(
     config: OpenCodeAgentConfig,
     client: OpencodeClient,
@@ -332,8 +269,17 @@ export class OpenCodeAgentSession implements AgentSession {
       trace: (message, data) => this.traceOpenCode(message, data),
       logger: this.logger,
     });
-    this.releaseServer = releaseServer ?? null;
-    this.persistSession = persistSession;
+    this.lifecycle = new OpenCodeSessionLifecycle({
+      client: this.client,
+      sessionId: this.sessionId,
+      getDirectory: () => this.config.cwd,
+      logger: this.logger,
+      persistSession,
+      releaseServer,
+      closeEventBus: () => this.eventBus.close(),
+      closeAbortCoordinator: () => this.abortCoordinator.close(),
+      closeEventStream: () => this.eventStreamController.close(),
+    });
     this.eventStreamController.start();
   }
 
@@ -658,46 +604,7 @@ export class OpenCodeAgentSession implements AgentSession {
   }
 
   async close(): Promise<void> {
-    try {
-      // Flip closed before clearing subscribers so any event the SDK delivers
-      // after the abort (between here and subscribers.clear) is swallowed by
-      // notifySubscribers instead of bubbling through provider-runner as an
-      // unhandled rejection in whichever test the daemon hops to next.
-      this.eventBus.close();
-      this.abortCoordinator.close();
-      this.eventStreamController.close();
-      await reconcileOpenCodeSessionClose({
-        client: this.client,
-        sessionId: this.sessionId,
-        directory: this.config.cwd,
-        logger: this.logger,
-      });
-      await this.deleteProviderSessionIfEphemeral();
-    } finally {
-      this.releaseServer?.();
-      this.releaseServer = null;
-    }
-  }
-
-  private async deleteProviderSessionIfEphemeral(): Promise<void> {
-    if (this.persistSession || this.deletedFromProvider) {
-      return;
-    }
-    this.deletedFromProvider = true;
-    try {
-      const response = await this.client.session.delete({
-        sessionID: this.sessionId,
-        directory: this.config.cwd,
-      });
-      if (response.error) {
-        throw new Error(`OpenCode session.delete failed: ${JSON.stringify(response.error)}`);
-      }
-    } catch (error) {
-      this.logger.debug(
-        { err: error, sessionId: this.sessionId },
-        "Failed to delete non-persistent OpenCode session",
-      );
-    }
+    await this.lifecycle.close();
   }
 
   private parseSlashCommandInput(text: string): { commandName: string; args?: string } | null {

@@ -222,8 +222,9 @@
   - `OpenCodePermissionController` 独立拥有 auto-accept、pending queue、question/tool response；`OpenCodeMcpController` 独立拥有一次性配置、并发去重与失败重试；Session 降至 975 行
   - `OpenCodeSessionEventBus` 独立拥有 active turn、subscriber、turn ID、running tool terminal synthesis 与 close suppression；Session 降至 886 行
   - `OpenCodeSessionRuntime` 独立拥有 mode/model/thinking/feature、catalog cache、context-window selection 与 persistence metadata；Session 降至 792 行
+  - `OpenCodeSessionLifecycle` 独立拥有 close ordering、abort/archive reconciliation、ephemeral delete 与 server release；Session 降至 699 行
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
-- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode translator/history/permission/MCP/event bus/runtime 已独立。下一步继续收敛 Session turn execution 与 close lifecycle。
+- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode translator/history/permission/MCP/event bus/runtime/lifecycle 已独立。下一步提取剩余 turn execution。
 
 ---
 
