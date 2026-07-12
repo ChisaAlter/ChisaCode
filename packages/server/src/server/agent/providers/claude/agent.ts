@@ -41,6 +41,15 @@ import {
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
+  convertClaudeHistoryEntry,
+  isClaudeTranscriptNoiseText,
+  isSyntheticHistoryUserEntry,
+  isSyntheticUserEntry,
+  isToolResultUserEntry,
+  readCompactionMetadata,
+  type ClaudeHistoryEntry,
+} from "./history-converter.js";
+import {
   buildBinaryDiagnosticRows,
   formatDiagnosticStatus,
   formatProviderDiagnostic,
@@ -96,6 +105,7 @@ import { withTimeout } from "../../../../utils/promise-timeout.js";
 import { execCommand } from "../../../../utils/spawn.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
 
+export { convertClaudeHistoryEntry, extractUserMessageText } from "./history-converter.js";
 export { readEventIdentifiers } from "./message-router.js";
 
 const fsPromises = promises;
@@ -263,8 +273,6 @@ const REWIND_COMMAND: AgentSlashCommand = {
   argumentHint: "[user_message_uuid]",
 };
 const INTERRUPT_TOOL_USE_PLACEHOLDER = "[Request interrupted by user for tool use]";
-const INTERRUPT_PLACEHOLDER_PATTERN = /^\[Request interrupted by user(?:[^\]]*)\]$/;
-const NO_RESPONSE_REQUESTED_PLACEHOLDER = "No response requested.";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface SlashCommandInvocation {
@@ -609,117 +617,6 @@ function coerceToolResultContentToString(content: unknown): string {
   return deterministicStringify(content);
 }
 
-function normalizeClaudeTranscriptText(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
-}
-
-function isClaudeInterruptPlaceholderText(value: unknown): boolean {
-  const normalized = normalizeClaudeTranscriptText(value);
-  return normalized !== null && INTERRUPT_PLACEHOLDER_PATTERN.test(normalized);
-}
-
-function isClaudeNoResponsePlaceholderText(value: unknown): boolean {
-  return normalizeClaudeTranscriptText(value) === NO_RESPONSE_REQUESTED_PLACEHOLDER;
-}
-
-const LOCAL_COMMAND_STDOUT_PATTERN =
-  /^\s*<local-command-stdout>[\s\S]*<\/local-command-stdout>\s*$/;
-
-function isClaudeLocalCommandStdout(value: unknown): boolean {
-  const normalized = normalizeClaudeTranscriptText(value);
-  return normalized !== null && LOCAL_COMMAND_STDOUT_PATTERN.test(normalized);
-}
-
-function isClaudeTranscriptNoiseText(value: unknown): boolean {
-  return (
-    isClaudeInterruptPlaceholderText(value) ||
-    isClaudeNoResponsePlaceholderText(value) ||
-    isClaudeLocalCommandStdout(value)
-  );
-}
-
-function collectClaudeTextContentParts(content: unknown): string[] {
-  if (typeof content === "string") {
-    const normalized = normalizeClaudeTranscriptText(content);
-    return normalized ? [normalized] : [];
-  }
-
-  if (!isUnknownArray(content)) {
-    return [];
-  }
-
-  const parts: string[] = [];
-  for (const block of content) {
-    const blockRecord = toObjectRecord(block);
-    if (!blockRecord) {
-      continue;
-    }
-    const text = normalizeClaudeTranscriptText(blockRecord.text);
-    if (text) {
-      parts.push(text);
-      continue;
-    }
-    const input = normalizeClaudeTranscriptText(blockRecord.input);
-    if (input) {
-      parts.push(input);
-    }
-  }
-
-  return parts;
-}
-
-function isClaudeTranscriptNoiseContent(content: unknown): boolean {
-  const parts = collectClaudeTextContentParts(content);
-  return parts.length > 0 && parts.every((part) => isClaudeTranscriptNoiseText(part));
-}
-
-export function extractUserMessageText(content: unknown): string | null {
-  if (typeof content === "string") {
-    const normalized = content.trim();
-    if (!normalized || isClaudeTranscriptNoiseText(normalized)) {
-      return null;
-    }
-    return normalized;
-  }
-
-  if (!Array.isArray(content)) {
-    return null;
-  }
-
-  const parts: string[] = [];
-  for (const block of content) {
-    if (!block || typeof block !== "object") {
-      continue;
-    }
-    const text = typeof block.text === "string" ? block.text : undefined;
-    if (text && text.trim()) {
-      const trimmed = text.trim();
-      if (!isClaudeTranscriptNoiseText(trimmed)) {
-        parts.push(trimmed);
-      }
-      continue;
-    }
-    const input = typeof block.input === "string" ? block.input : undefined;
-    if (input && input.trim()) {
-      const trimmed = input.trim();
-      if (!isClaudeTranscriptNoiseText(trimmed)) {
-        parts.push(trimmed);
-      }
-    }
-  }
-
-  if (parts.length === 0) {
-    return null;
-  }
-
-  const combined = parts.join("\n\n").trim();
-  return combined.length > 0 ? combined : null;
-}
-
 interface PendingPermission {
   request: AgentPermissionRequest;
   resolve: (result: PermissionResult) => void;
@@ -983,32 +880,6 @@ function buildClaudePlanPermissionActions(
   }
 
   return actions;
-}
-
-function isSyntheticUserEntry(entry: unknown): boolean {
-  const candidate = toObjectRecord(entry);
-  if (!candidate) {
-    return false;
-  }
-  return (
-    candidate.isSynthetic === true || candidate.isMeta === true || Boolean(candidate.toolUseResult)
-  );
-}
-
-function isToolResultUserEntry(entry: unknown): boolean {
-  const candidate = toObjectRecord(entry);
-  if (!candidate) {
-    return false;
-  }
-  const message = toObjectRecord(candidate.message);
-  const content = message?.content;
-  return (
-    Array.isArray(content) && content.some((block) => toObjectRecord(block)?.type === "tool_result")
-  );
-}
-
-function isSyntheticHistoryUserEntry(entry: Record<string, unknown>): boolean {
-  return isSyntheticUserEntry(entry) && !isToolResultUserEntry(entry);
 }
 
 export class ClaudeAgentClient implements AgentClient {
@@ -4229,178 +4100,6 @@ class ClaudeAgentSession implements AgentSession {
     }
     return files;
   }
-}
-
-function hasToolLikeBlock(block?: ClaudeContentChunk | null): boolean {
-  if (!block || typeof block !== "object") {
-    return false;
-  }
-  const type = typeof block.type === "string" ? block.type.toLowerCase() : "";
-  return type.includes("tool");
-}
-
-function readCompactionMetadata(source: unknown): { trigger?: string; preTokens?: number } | null {
-  const sourceRecord = toObjectRecord(source);
-  if (!sourceRecord) {
-    return null;
-  }
-  const candidates = [
-    sourceRecord.compact_metadata,
-    sourceRecord.compactMetadata,
-    sourceRecord.compactionMetadata,
-  ];
-  for (const candidate of candidates) {
-    const metadata = toObjectRecord(candidate);
-    if (!metadata) {
-      continue;
-    }
-    const trigger = typeof metadata.trigger === "string" ? metadata.trigger : undefined;
-    const preTokensRaw = metadata.preTokens ?? metadata.pre_tokens;
-    const preTokens = typeof preTokensRaw === "number" ? preTokensRaw : undefined;
-    return { trigger, preTokens };
-  }
-  return null;
-}
-
-function normalizeHistoryBlocks(content: unknown): ClaudeContentChunk[] | null {
-  if (Array.isArray(content)) {
-    const blocks = content.filter((entry) => isClaudeContentChunk(entry));
-    return blocks.length > 0 ? blocks : null;
-  }
-  if (isClaudeContentChunk(content)) {
-    return [content];
-  }
-  return null;
-}
-
-interface ClaudeHistoryEntry {
-  type?: unknown;
-  subtype?: unknown;
-  isCompactSummary?: unknown;
-  isSidechain?: unknown;
-  uuid?: unknown;
-  message?: { content?: unknown; [key: string]: unknown };
-  [key: string]: unknown;
-}
-
-function mapAssistantHistoryBlocksWithMessageId(
-  entry: ClaudeHistoryEntry,
-  content: string | ClaudeContentChunk[],
-  mapBlocks: (content: string | ClaudeContentChunk[]) => AgentTimelineItem[],
-): AgentTimelineItem[] {
-  const items = mapBlocks(content);
-  const assistantMessageId =
-    typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null;
-  if (!assistantMessageId) {
-    return items;
-  }
-  for (const item of items) {
-    if (item.type === "assistant_message" && !item.messageId) {
-      item.messageId = assistantMessageId;
-    }
-  }
-  return items;
-}
-
-function convertClaudeHistoryEntryPreamble(
-  entry: ClaudeHistoryEntry,
-): { shortCircuit: AgentTimelineItem[] } | { proceed: { content: unknown } } {
-  if (entry.type === "system" && entry.subtype === "compact_boundary") {
-    const compactMetadata = readCompactionMetadata(entry);
-    return {
-      shortCircuit: [
-        {
-          type: "compaction",
-          status: "completed",
-          trigger: compactMetadata?.trigger === "manual" ? "manual" : "auto",
-          preTokens: compactMetadata?.preTokens,
-        },
-      ],
-    };
-  }
-
-  const taskNotificationItem = mapTaskNotificationSystemRecordToToolCall(entry);
-  if (taskNotificationItem) {
-    return { shortCircuit: [taskNotificationItem] };
-  }
-
-  if (entry.isCompactSummary) {
-    return { shortCircuit: [] };
-  }
-  if (entry.type === "user" && isSyntheticHistoryUserEntry(entry)) {
-    return { shortCircuit: [] };
-  }
-
-  const message = entry?.message;
-  if (!message || !("content" in message)) {
-    return { shortCircuit: [] };
-  }
-
-  const content = message.content;
-  if (
-    (entry.type === "user" || entry.type === "assistant") &&
-    isClaudeTranscriptNoiseContent(content)
-  ) {
-    return { shortCircuit: [] };
-  }
-
-  return { proceed: { content } };
-}
-
-export function convertClaudeHistoryEntry(
-  entry: ClaudeHistoryEntry,
-  mapBlocks: (content: string | ClaudeContentChunk[]) => AgentTimelineItem[],
-): AgentTimelineItem[] {
-  const preamble = convertClaudeHistoryEntryPreamble(entry);
-  if ("shortCircuit" in preamble) {
-    return preamble.shortCircuit;
-  }
-  const { content } = preamble.proceed;
-  const normalizedBlocks = normalizeHistoryBlocks(content);
-  const contentValue = typeof content === "string" ? content : normalizedBlocks;
-  const hasToolBlock = normalizedBlocks?.some((block) => hasToolLikeBlock(block)) ?? false;
-  const userMessageId =
-    entry.type === "user" && typeof entry.uuid === "string" && entry.uuid.length > 0
-      ? entry.uuid
-      : null;
-
-  if (entry.type === "user") {
-    const userTaskNotificationItem = mapTaskNotificationUserContentToToolCall({
-      content,
-      messageId: userMessageId,
-    });
-    if (userTaskNotificationItem) {
-      return [userTaskNotificationItem];
-    }
-  }
-
-  const timeline: AgentTimelineItem[] = [];
-
-  if (entry.type === "user") {
-    const text = extractUserMessageText(content);
-    if (text) {
-      timeline.push({
-        type: "user_message",
-        text,
-        ...(userMessageId ? { messageId: userMessageId } : {}),
-      });
-    }
-  }
-
-  if (hasToolBlock && normalizedBlocks) {
-    const mapped = mapBlocks(normalizedBlocks);
-    if (entry.type === "user") {
-      const toolItems = mapped.filter((item) => item.type === "tool_call");
-      return timeline.length ? [...timeline, ...toolItems] : toolItems;
-    }
-    return mapped;
-  }
-
-  if (entry.type === "assistant" && contentValue) {
-    return mapAssistantHistoryBlocksWithMessageId(entry, contentValue, mapBlocks);
-  }
-
-  return timeline;
 }
 
 function createAsyncMessageInput<T>(): AsyncMessageInput<T> {
