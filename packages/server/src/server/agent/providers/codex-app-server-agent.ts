@@ -40,10 +40,7 @@ import path from "node:path";
 import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
-import {
-  mapCodexToolCallEnvelope,
-  mapCodexToolCallFromThreadItem,
-} from "./codex/tool-call-mapper.js";
+import { mapCodexToolCallEnvelope } from "./codex/tool-call-mapper.js";
 import {
   checkProviderLaunchAvailable,
   createProviderEnv,
@@ -70,9 +67,15 @@ import {
 import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
 import {
   cleanupStaleCodexImageAttachments,
-  mapCodexThreadImageItem,
   writeCodexImageAttachment,
 } from "./codex/image-attachments.js";
+import {
+  CODEX_CONTEXT_COMPACTION_TYPE,
+  loadCodexThreadHistoryTimeline,
+  normalizeCodexThreadItemType,
+  type PersistedTimelineEntry,
+  threadItemToTimeline,
+} from "./codex/history.js";
 import {
   applyAgentSkillPolicy,
   expandCodexCustomPrompt,
@@ -121,7 +124,6 @@ import {
   shouldPromoteThreadResponseToAutoReview,
   validateCodexMode,
 } from "./codex/turn-config.js";
-import { normalizeProviderReplayTimestamp } from "../provider-history-timestamps.js";
 import {
   formatDiagnosticStatus,
   formatProviderDiagnostic,
@@ -133,7 +135,7 @@ import {
 import { runProviderTurn } from "./provider-runner.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 
-export { cleanupStaleCodexImageAttachments };
+export { cleanupStaleCodexImageAttachments, threadItemToTimeline };
 
 export {
   formatCodexQuestionPrompts,
@@ -159,14 +161,6 @@ const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
 const CODEX_PROVIDER = "codex" as const;
 const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
-const CODEX_TOOL_THREAD_ITEM_TYPES = new Set([
-  "commandExecution",
-  "fileChange",
-  "mcpToolCall",
-  "webSearch",
-  "collabAgentToolCall",
-]);
-const CODEX_CONTEXT_COMPACTION_TYPE = "contextCompaction";
 const CODEX_TEXTUAL_TOOL_CALL_ERROR =
   "Codex returned a tool call transcript as plain text, so no tool was executed.";
 
@@ -266,11 +260,6 @@ function looksLikeTextualCodexToolCallTranscript(text: string): boolean {
 export { listCodexSkillEntries, listCodexSkills } from "./codex/skills.js";
 
 export { normalizeCodexOutputSchema } from "./codex/turn-config.js";
-
-interface PersistedTimelineEntry {
-  item: AgentTimelineItem;
-  timestamp?: string;
-}
 
 function codexMicrosoftStorePackageRoot(): string | null {
   const localAppData = process.env.LOCALAPPDATA;
@@ -444,21 +433,6 @@ export function toAgentUsage(tokenUsage: unknown): AgentUsage | undefined {
   };
 }
 
-function extractUserText(content: unknown): string | null {
-  if (!Array.isArray(content)) return null;
-  const parts: string[] = [];
-  for (const item of content) {
-    const record = toObjectRecord(item);
-    if (!record) {
-      continue;
-    }
-    if (record.type === "text" && typeof record.text === "string") {
-      parts.push(record.text);
-    }
-  }
-  return parts.length > 0 ? parts.join("\n") : null;
-}
-
 interface CodexPatchFileChange {
   path: string;
   kind?: string;
@@ -484,38 +458,6 @@ function extractPatchLikeText(value: unknown): string | undefined {
     }
   }
   return undefined;
-}
-
-function normalizeCodexThreadItemType(rawType: string | undefined): string | undefined {
-  if (!rawType) {
-    return rawType;
-  }
-  switch (rawType) {
-    case "UserMessage":
-      return "userMessage";
-    case "AgentMessage":
-      return "agentMessage";
-    case "Reasoning":
-      return "reasoning";
-    case "Plan":
-      return "plan";
-    case "CommandExecution":
-      return "commandExecution";
-    case "FileChange":
-      return "fileChange";
-    case "McpToolCall":
-      return "mcpToolCall";
-    case "WebSearch":
-      return "webSearch";
-    case "CollabAgentToolCall":
-      return "collabAgentToolCall";
-    case "ImageView":
-      return "imageView";
-    case "ImageGeneration":
-      return "imageGeneration";
-    default:
-      return rawType;
-  }
 }
 
 function normalizeCodexCommandValue(value: unknown): string | string[] | null {
@@ -823,176 +765,6 @@ function mapCodexTerminalInteractionToToolCall(params: {
     },
     ...(processId ? { metadata: { processId } } : {}),
   };
-}
-
-function mapCodexThreadPlanItem(normalizedItem: Record<string, unknown>): AgentTimelineItem | null {
-  const callId =
-    nonEmptyString(normalizedItem.id ?? normalizedItem.itemId ?? undefined) ??
-    `plan:${normalizePlanMarkdown(typeof normalizedItem.text === "string" ? normalizedItem.text : "")}`;
-  return mapCodexPlanToToolCall({
-    callId,
-    text: typeof normalizedItem.text === "string" ? normalizedItem.text : "",
-  });
-}
-
-function mapCodexThreadReasoningItem(
-  normalizedItem: Record<string, unknown>,
-): AgentTimelineItem | null {
-  const summary = Array.isArray(normalizedItem.summary) ? normalizedItem.summary.join("\n") : "";
-  const content = Array.isArray(normalizedItem.content) ? normalizedItem.content.join("\n") : "";
-  const text = summary || content;
-  return text ? { type: "reasoning", text } : null;
-}
-
-function mapCodexThreadUserMessageItem(
-  normalizedItem: Record<string, unknown>,
-  includeUserMessage: boolean,
-): AgentTimelineItem | null {
-  if (!includeUserMessage) {
-    return null;
-  }
-  const text = extractUserText(normalizedItem.content) ?? "";
-  const messageId = nonEmptyString(normalizedItem.id);
-  return {
-    type: "user_message",
-    text,
-    ...(messageId ? { messageId } : {}),
-  };
-}
-
-function readCodexHistoryTimestamp(item: unknown): string | null {
-  const record = toObjectRecord(item);
-  if (!record) {
-    return null;
-  }
-  return (
-    normalizeProviderReplayTimestamp(record.timestamp) ??
-    normalizeProviderReplayTimestamp(record.createdAt) ??
-    normalizeProviderReplayTimestamp(record.created_at)
-  );
-}
-
-function readCodexTurnHistoryTimestamp(
-  turn: unknown,
-  timelineItem: AgentTimelineItem,
-): string | null {
-  const record = toObjectRecord(turn);
-  if (!record) {
-    return null;
-  }
-
-  const startedAt =
-    normalizeProviderReplayTimestamp(record.startedAt) ??
-    normalizeProviderReplayTimestamp(record.started_at);
-  const completedAt =
-    normalizeProviderReplayTimestamp(record.completedAt) ??
-    normalizeProviderReplayTimestamp(record.completed_at);
-
-  if (timelineItem.type === "user_message") {
-    return startedAt ?? completedAt;
-  }
-  return completedAt ?? startedAt;
-}
-
-export function threadItemToTimeline(
-  item: unknown,
-  options?: { includeUserMessage?: boolean; cwd?: string | null },
-): AgentTimelineItem | null {
-  const itemRecord = toObjectRecord(item);
-  if (!itemRecord) return null;
-  const includeUserMessage = options?.includeUserMessage ?? true;
-  const cwd = options?.cwd ?? null;
-  const normalizedType = normalizeCodexThreadItemType(
-    typeof itemRecord.type === "string" ? itemRecord.type : undefined,
-  );
-  const normalizedItem: Record<string, unknown> =
-    normalizedType && normalizedType !== itemRecord.type
-      ? { ...itemRecord, type: normalizedType }
-      : itemRecord;
-
-  if (normalizedType === "imageView" || normalizedType === "imageGeneration") {
-    return mapCodexThreadImageItem(normalizedType, normalizedItem);
-  }
-  if (normalizedType && CODEX_TOOL_THREAD_ITEM_TYPES.has(normalizedType)) {
-    return mapCodexToolCallFromThreadItem(normalizedItem, { cwd });
-  }
-
-  switch (normalizedType) {
-    case "userMessage":
-      return mapCodexThreadUserMessageItem(normalizedItem, includeUserMessage);
-    case "agentMessage": {
-      const messageId = nonEmptyString(normalizedItem.id);
-      return {
-        type: "assistant_message",
-        text: typeof normalizedItem.text === "string" ? normalizedItem.text : "",
-        ...(messageId ? { messageId } : {}),
-      };
-    }
-    case "plan":
-      return mapCodexThreadPlanItem(normalizedItem);
-    case "reasoning":
-      return mapCodexThreadReasoningItem(normalizedItem);
-    case CODEX_CONTEXT_COMPACTION_TYPE:
-      return {
-        type: "compaction",
-        status: "completed",
-      };
-    default:
-      return null;
-  }
-}
-
-const CodexThreadReadResponseSchema = z
-  .object({
-    thread: z
-      .object({
-        turns: z
-          .array(
-            z
-              .object({
-                items: z.array(z.unknown()).default([]),
-              })
-              .passthrough(),
-          )
-          .default([]),
-      })
-      .passthrough()
-      .default({ turns: [] }),
-  })
-  .passthrough();
-
-type CodexThreadReadResponse = z.infer<typeof CodexThreadReadResponseSchema>;
-type CodexThreadReadRequest = (threadId: string) => Promise<unknown>;
-
-async function requestCodexThreadHistory(
-  requestThread: CodexThreadReadRequest,
-  threadId: string,
-): Promise<CodexThreadReadResponse> {
-  const response = await requestThread(threadId);
-  return CodexThreadReadResponseSchema.parse(response);
-}
-
-async function loadCodexThreadHistoryTimeline(params: {
-  threadId: string;
-  cwd: string | null;
-  requestThread: CodexThreadReadRequest;
-}): Promise<PersistedTimelineEntry[]> {
-  const response = await requestCodexThreadHistory(params.requestThread, params.threadId);
-  const timeline: PersistedTimelineEntry[] = [];
-  for (const turn of response.thread.turns) {
-    for (const item of turn.items) {
-      const timelineItem = threadItemToTimeline(item, { cwd: params.cwd });
-      if (timelineItem) {
-        const timestamp =
-          readCodexHistoryTimestamp(item) ?? readCodexTurnHistoryTimestamp(turn, timelineItem);
-        timeline.push({
-          item: timelineItem,
-          timestamp: timestamp ?? undefined,
-        });
-      }
-    }
-  }
-  return timeline;
 }
 
 function readCodexThread(client: CodexAppServerClientLike, threadId: string): Promise<unknown> {
