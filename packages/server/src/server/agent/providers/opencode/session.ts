@@ -21,11 +21,6 @@ import {
   type AgentStreamEvent,
   type AgentUsage,
 } from "../../agent-sdk-types.js";
-import {
-  OPENCODE_AUTO_ACCEPT_FEATURE_ID,
-  OPENCODE_BUILD_MODE_ID,
-  OPENCODE_LEGACY_FULL_ACCESS_MODE_ID,
-} from "./constants.js";
 import { toDiagnosticErrorMessage } from "../diagnostic-utils.js";
 import { runProviderTurn } from "../provider-runner.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
@@ -33,24 +28,20 @@ import { composeSystemPromptParts } from "../../system-prompt.js";
 import { OpenCodeAbortCoordinator } from "./abort-coordinator.js";
 import { OPENCODE_CAPABILITIES } from "./client.js";
 import {
-  applyRuntimeModelPrefix,
   buildOpenCodeModelContextWindowLookup,
   buildOpenCodeModelDefinition,
   buildOpenCodeModelLookupKey,
   extractOpenCodeModelContextWindow,
   isSelectableOpenCodeAgent,
-  listOpenCodeCommandsFromSdk,
   mapOpenCodeAgentToMode,
-  mergeOpenCodeModes,
-  normalizeOpenCodeModeId,
   parseOpenCodeModelLookupKey,
-  resolveOpenCodeRuntimeAgentId,
   resolveOpenCodeSelectedModelContextWindow,
   type OpenCodeAgentConfig,
 } from "./catalog.js";
 import { OpenCodeEventStreamController } from "./event-stream.js";
 import { OpenCodePermissionController } from "./permission-controller.js";
 import { OpenCodeSessionEventBus } from "./session-event-bus.js";
+import { OpenCodeSessionRuntime } from "./session-runtime.js";
 import { OpenCodeMcpController } from "./mcp-controller.js";
 import {
   hasNormalizedOpenCodeUsage,
@@ -63,7 +54,6 @@ import {
   type OpenCodeToolPartEventPart,
 } from "./event-translator.js";
 import {
-  buildOpenCodeAutoAcceptFeature,
   isOpenCodeAutoAcceptEnabled,
   isOpenCodeHeadersTimeoutFailure,
   isOpenCodeNotFoundError,
@@ -260,8 +250,7 @@ export class OpenCodeAgentSession implements AgentSession {
   private readonly client: OpencodeClient;
   private readonly sessionId: string;
   private readonly logger: Logger;
-  private readonly modelContextWindowsByModelKey: ReadonlyMap<string, number>;
-  private currentMode: string = "default";
+  private readonly sessionRuntime: OpenCodeSessionRuntime;
   private readonly permissionController: OpenCodePermissionController;
   private readonly abortCoordinator: OpenCodeAbortCoordinator;
   private accumulatedUsage: AgentUsage = {};
@@ -277,12 +266,10 @@ export class OpenCodeAgentSession implements AgentSession {
   private emittedStructuredMessageIds = new Set<string>();
   /** Tracks the type of each part by ID, learned from message.part.updated events. */
   private partTypes = new Map<string, string>();
-  private availableModesCache: AgentMode[] | null = null;
   private readonly eventBus: OpenCodeSessionEventBus;
   private subAgentsByCallId = new Map<string, OpenCodeSubAgentActivityState>();
   private subAgentCallIdByChildSessionId = new Map<string, string>();
   private pendingChildToolPartsBySessionId = new Map<string, OpenCodeToolPartEventPart[]>();
-  private selectedModelContextWindowMaxTokens: number | undefined;
   private releaseServer: (() => void) | null;
   private readonly eventStreamController: OpenCodeEventStreamController;
   private readonly persistSession: boolean;
@@ -296,7 +283,7 @@ export class OpenCodeAgentSession implements AgentSession {
     releaseServer?: () => void,
     persistSession = true,
     private readonly agentId?: string,
-    private readonly modelPrefix?: string,
+    modelPrefix?: string,
   ) {
     this.config = config;
     this.client = client;
@@ -325,6 +312,14 @@ export class OpenCodeAgentSession implements AgentSession {
       logger: this.logger,
       autoAcceptEnabled: isOpenCodeAutoAcceptEnabled(config),
     });
+    this.sessionRuntime = new OpenCodeSessionRuntime({
+      config: this.config,
+      client: this.client,
+      sessionId: this.sessionId,
+      modelContextWindowsByModelKey,
+      modelPrefix,
+      setAutoAcceptEnabled: (enabled) => this.permissionController.setAutoAcceptEnabled(enabled),
+    });
     this.eventStreamController = new OpenCodeEventStreamController({
       client: this.client,
       sessionId: this.sessionId,
@@ -337,13 +332,8 @@ export class OpenCodeAgentSession implements AgentSession {
       trace: (message, data) => this.traceOpenCode(message, data),
       logger: this.logger,
     });
-    this.modelContextWindowsByModelKey = modelContextWindowsByModelKey;
-    this.currentMode = normalizeOpenCodeModeId(config.modeId);
     this.releaseServer = releaseServer ?? null;
     this.persistSession = persistSession;
-    this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
-      config.model,
-    );
     this.eventStreamController.start();
   }
 
@@ -352,36 +342,19 @@ export class OpenCodeAgentSession implements AgentSession {
   }
 
   get features(): AgentFeature[] {
-    return [buildOpenCodeAutoAcceptFeature(this.config)];
+    return this.sessionRuntime.getFeatures();
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
-    return {
-      provider: "opencode",
-      sessionId: this.sessionId,
-      model: this.config.model ?? null,
-      modeId: this.currentMode,
-    };
+    return this.sessionRuntime.getRuntimeInfo();
   }
 
   async setModel(modelId: string | null): Promise<void> {
-    const normalizedModelId =
-      typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
-    this.config.model = applyRuntimeModelPrefix(
-      normalizedModelId ?? undefined,
-      this.modelPrefix ?? null,
-    );
-    this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
-      this.config.model,
-    );
+    await this.sessionRuntime.setModel(modelId);
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
-    const normalizedThinkingOptionId =
-      typeof thinkingOptionId === "string" && thinkingOptionId.trim().length > 0
-        ? thinkingOptionId
-        : null;
-    this.config.thinkingOptionId = normalizedThinkingOptionId ?? undefined;
+    await this.sessionRuntime.setThinkingOption(thinkingOptionId);
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -430,15 +403,13 @@ export class OpenCodeAgentSession implements AgentSession {
     this.pendingChildToolPartsBySessionId.clear();
     const turnAbortController = this.abortCoordinator.beginTurn();
     await this.mcpController.ensureConfigured(this.config.mcpServers);
-    const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
+    const contextWindowMaxTokens = this.sessionRuntime.getSelectedModelContextWindowMaxTokens();
     this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
 
     const parts = buildOpenCodePromptParts(prompt);
     this.pendingUserMessageText = buildOpenCodeUserTimelineText(prompt);
-    const model = this.parseModel(this.config.model);
-    const thinkingOptionId = this.config.thinkingOptionId;
-    const effectiveVariant = thinkingOptionId ?? undefined;
-    const effectiveMode = resolveOpenCodeRuntimeAgentId(this.currentMode);
+    const { model, configuredModel, effectiveMode, effectiveVariant } =
+      this.sessionRuntime.getTurnConfig();
 
     try {
       await this.eventStreamController.ensureReady();
@@ -497,7 +468,7 @@ export class OpenCodeAgentSession implements AgentSession {
           directory: this.config.cwd,
           command: slashCommand.commandName,
           arguments: slashCommand.args ?? "",
-          ...(this.config.model ? { model: this.config.model } : {}),
+          ...(configuredModel ? { model: configuredModel } : {}),
           ...(effectiveMode ? { agent: effectiveMode } : {}),
           ...(effectiveVariant ? { variant: effectiveVariant } : {}),
         })
@@ -655,52 +626,23 @@ export class OpenCodeAgentSession implements AgentSession {
   }
 
   async getAvailableModes(): Promise<AgentMode[]> {
-    if (this.availableModesCache) {
-      return this.availableModesCache;
-    }
-
-    const response = await this.client.app.agents({
-      directory: this.config.cwd,
-    });
-    const agents = response.error || !response.data ? [] : response.data;
-
-    const discoveredModes = agents.filter(isSelectableOpenCodeAgent).map(mapOpenCodeAgentToMode);
-
-    this.availableModesCache = mergeOpenCodeModes(discoveredModes);
-    return this.availableModesCache;
+    return await this.sessionRuntime.getAvailableModes();
   }
 
   async getCurrentMode(): Promise<string | null> {
-    return this.currentMode;
+    return this.sessionRuntime.getCurrentMode();
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    return await listOpenCodeCommandsFromSdk(this.client, this.config.cwd);
+    return await this.sessionRuntime.listCommands();
   }
 
   async setMode(modeId: string): Promise<void> {
-    const normalizedModeId = normalizeOpenCodeModeId(modeId);
-    if (normalizedModeId === OPENCODE_LEGACY_FULL_ACCESS_MODE_ID) {
-      this.currentMode = OPENCODE_BUILD_MODE_ID;
-      await this.setFeature(OPENCODE_AUTO_ACCEPT_FEATURE_ID, true);
-      return;
-    }
-
-    this.currentMode = normalizedModeId;
-    this.config.modeId = normalizedModeId;
+    await this.sessionRuntime.setMode(modeId);
   }
 
   async setFeature(featureId: string, value: unknown): Promise<void> {
-    if (featureId !== OPENCODE_AUTO_ACCEPT_FEATURE_ID) {
-      throw new Error(`Unsupported OpenCode feature '${featureId}'`);
-    }
-
-    const enabled = value === true;
-    this.permissionController.setAutoAcceptEnabled(enabled);
-    this.config.featureValues = {
-      ...this.config.featureValues,
-      [OPENCODE_AUTO_ACCEPT_FEATURE_ID]: enabled,
-    };
+    await this.sessionRuntime.setFeature(featureId, value);
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {
@@ -712,16 +654,7 @@ export class OpenCodeAgentSession implements AgentSession {
   }
 
   describePersistence(): AgentPersistenceHandle | null {
-    return {
-      provider: "opencode",
-      sessionId: this.sessionId,
-      nativeHandle: this.sessionId,
-      metadata: {
-        cwd: this.config.cwd,
-        ...(this.config.modeId ? { modeId: this.config.modeId } : {}),
-        ...(this.config.model ? { model: this.config.model } : {}),
-      },
-    };
+    return this.sessionRuntime.describePersistence();
   }
 
   async close(): Promise<void> {
@@ -806,17 +739,6 @@ export class OpenCodeAgentSession implements AgentSession {
     }
   }
 
-  private parseModel(model?: string): { providerID: string; modelID: string } | undefined {
-    if (!model) {
-      return undefined;
-    }
-    const parts = model.split("/");
-    if (parts.length >= 2) {
-      return { providerID: parts[0], modelID: parts.slice(1).join("/") };
-    }
-    return { providerID: this.modelPrefix ?? "opencode", modelID: model };
-  }
-
   private async translateEvent(event: OpenCodeEvent): Promise<AgentStreamEvent[]> {
     const translated = translateOpenCodeEvent(event, {
       sessionId: this.sessionId,
@@ -832,12 +754,10 @@ export class OpenCodeAgentSession implements AgentSession {
       subAgentsByCallId: this.subAgentsByCallId,
       subAgentCallIdByChildSessionId: this.subAgentCallIdByChildSessionId,
       pendingChildToolPartsBySessionId: this.pendingChildToolPartsBySessionId,
-      modelContextWindowsByModelKey: this.modelContextWindowsByModelKey,
+      modelContextWindowsByModelKey: this.sessionRuntime.getModelContextWindowsByModelKey(),
       onAssistantModelContextWindowResolved: (contextWindowMaxTokens) => {
         this.accumulatedUsage.contextWindowMaxTokens = contextWindowMaxTokens;
-        if (!this.config.model) {
-          this.selectedModelContextWindowMaxTokens = contextWindowMaxTokens;
-        }
+        this.sessionRuntime.onAssistantModelContextWindowResolved(contextWindowMaxTokens);
       },
     });
 
@@ -860,7 +780,7 @@ export class OpenCodeAgentSession implements AgentSession {
         if (hasNormalizedOpenCodeUsage(this.accumulatedUsage)) {
           translatedEvent.usage = this.accumulatedUsage;
         }
-        const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
+        const contextWindowMaxTokens = this.sessionRuntime.getSelectedModelContextWindowMaxTokens();
         this.accumulatedUsage =
           contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
       }
@@ -868,19 +788,5 @@ export class OpenCodeAgentSession implements AgentSession {
     }
 
     return events;
-  }
-
-  private resolveSelectedModelContextWindowMaxTokens(): number | undefined {
-    return this.selectedModelContextWindowMaxTokens;
-  }
-
-  private resolveConfiguredModelContextWindowMaxTokens(
-    modelId: string | undefined,
-  ): number | undefined {
-    const modelLookupKey = parseOpenCodeModelLookupKey(modelId);
-    if (!modelLookupKey) {
-      return undefined;
-    }
-    return this.modelContextWindowsByModelKey.get(modelLookupKey);
   }
 }
