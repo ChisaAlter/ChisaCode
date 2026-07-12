@@ -32,6 +32,7 @@ import {
 import { getClaudeModelsWithSettings, normalizeClaudeRuntimeModelId } from "./models.js";
 import { parsePartialJsonObject } from "./partial-json.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
+import { runClaudeSdkQueryPump } from "./sdk-pump.js";
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
@@ -2691,24 +2692,6 @@ class ClaudeAgentSession implements AgentSession {
     }
   }
 
-  private shouldRecoverInterruptedQueryAbort(
-    error: unknown,
-    consecutiveRecoveries: number,
-  ): boolean {
-    if (consecutiveRecoveries >= 3) {
-      return false;
-    }
-    let message: string;
-    if (typeof error === "string") {
-      message = error;
-    } else if (error instanceof Error) {
-      message = `${error.message}\n${error.stack ?? ""}`;
-    } else {
-      message = JSON.stringify(error);
-    }
-    return message.toLowerCase().includes("request was aborted");
-  }
-
   private finishForegroundTurn(
     event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
   ): void {
@@ -2782,7 +2765,29 @@ class ClaudeAgentSession implements AgentSession {
       return;
     }
 
-    const pump = this.runQueryPump().catch((error) => {
+    const pump = runClaudeSdkQueryPump({
+      logger: this.logger,
+      getTraceContext: () => ({
+        agentId: this.agentId,
+        provider: "claude",
+        sessionId: this.claudeSessionId,
+        turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
+      }),
+      isClosed: () => this.closed,
+      ensureQuery: () => this.ensureQuery(),
+      isCurrentQuery: (query) => this.query === query,
+      handleMissingResumedConversation: (message, query) =>
+        this.handleMissingResumedConversation(message, query),
+      routeMessage: (message) => this.routeSdkMessageFromPump(message),
+      failActiveTurns: (errorMessage) => this.failActiveTurns(errorMessage),
+      awaitRecentStderrAfterProcessExit: (error) => this.awaitRecentStderrAfterProcessExit(error),
+      clearQueryIfCurrent: (query) => {
+        if (this.query === query) {
+          this.query = null;
+          this.input = null;
+        }
+      },
+    }).catch((error) => {
       this.logger.trace(
         {
           agentId: this.agentId,
@@ -2801,96 +2806,6 @@ class ClaudeAgentSession implements AgentSession {
         this.queryPumpPromise = null;
       }
     });
-  }
-
-  private async runQueryPump(): Promise<void> {
-    let activeQuery: Query;
-    try {
-      activeQuery = await this.ensureQuery();
-    } catch (error) {
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: "claude",
-          sessionId: this.claudeSessionId,
-          turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-          err: error,
-        },
-        "provider.claude.query_pump.init_failed",
-      );
-      this.failActiveTurns(error instanceof Error ? error.message : "Claude stream failed");
-      return;
-    }
-
-    let consecutiveInterruptAbortRecoveries = 0;
-    const logRawMessage = (message: SDKMessage): void => {
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: "claude",
-          sessionId: this.claudeSessionId,
-          turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-          messageType: message.type,
-          messageSubtype: "subtype" in message ? message.subtype : undefined,
-          messageUuid: "uuid" in message ? message.uuid : undefined,
-          rawEvent: message,
-        },
-        "provider.claude.raw_event",
-      );
-    };
-    const handlePumpedMessage = async (message: SDKMessage): Promise<boolean> => {
-      logRawMessage(message);
-      consecutiveInterruptAbortRecoveries = 0;
-      if (await this.handleMissingResumedConversation(message, activeQuery)) {
-        return true;
-      }
-      this.routeSdkMessageFromPump(message);
-      return false;
-    };
-    const drainActiveQuery = async (): Promise<boolean> => {
-      for await (const message of activeQuery) {
-        if (await handlePumpedMessage(message)) {
-          return true;
-        }
-      }
-      return false;
-    };
-    try {
-      while (!this.closed && this.query === activeQuery) {
-        try {
-          if (await drainActiveQuery()) {
-            return;
-          }
-          if (!this.closed && this.query === activeQuery) {
-            this.failActiveTurns("Claude stream ended before terminal result");
-          }
-          return;
-        } catch (error) {
-          if (
-            !this.closed &&
-            this.query === activeQuery &&
-            this.shouldRecoverInterruptedQueryAbort(error, consecutiveInterruptAbortRecoveries)
-          ) {
-            consecutiveInterruptAbortRecoveries += 1;
-            this.logger.debug(
-              { recoveries: consecutiveInterruptAbortRecoveries },
-              "Recovering Claude query pump after interrupt abort",
-            );
-            continue;
-          }
-          if (!this.closed && this.query === activeQuery) {
-            await this.awaitRecentStderrAfterProcessExit(error);
-            this.failActiveTurns(error instanceof Error ? error.message : "Claude stream failed");
-          }
-          return;
-        }
-      }
-    } finally {
-      if (this.query === activeQuery) {
-        this.query = null;
-        this.input = null;
-      }
-    }
   }
 
   private shouldSuppressStaleResult(message: SDKMessage): boolean {
