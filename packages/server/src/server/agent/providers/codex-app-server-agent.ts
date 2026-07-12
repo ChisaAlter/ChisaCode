@@ -60,8 +60,9 @@ import {
   type CodexThreadRollbackResponse,
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
-import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
+import { revertCodexConversation } from "./codex/rewind.js";
 import { CodexSessionEventBus } from "./codex/session-event-bus.js";
+import { CodexUserMessageTurnState } from "./codex/user-message-turn-state.js";
 import { CodexContextCompactionState } from "./codex/context-compaction-state.js";
 import {
   cleanupStaleCodexImageAttachments,
@@ -664,8 +665,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private textualToolCallError: string | null = null;
   private latestUsage: AgentUsage | undefined;
   private latestPlanResult: { callId: string; text: string; turnId: string | null } | null = null;
-  private readonly userMessageTurnIndexes = new Map<string, number>();
-  private readonly userMessageTurnIds: string[] = [];
+  private readonly userMessageTurns = new CodexUserMessageTurnState();
   private readonly compactionState = new CodexContextCompactionState();
   private connected = false;
   private collaborationModes: Array<{
@@ -987,10 +987,10 @@ export class CodexAppServerAgentSession implements AgentSession {
         return readCodexThread(client, threadIdToRead);
       },
     });
-    this.resetCodexUserMessageTurns();
+    this.userMessageTurns.reset();
     for (const entry of timeline) {
       if (entry.item.type === "user_message") {
-        this.rememberCodexUserMessageTurn(entry.item.messageId);
+        this.userMessageTurns.remember(entry.item.messageId);
       }
     }
     if (timeline.length > 0) {
@@ -1224,41 +1224,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     return { turnId };
   }
 
-  private rememberCodexUserMessageTurn(messageId: string | null | undefined): boolean {
-    if (typeof messageId !== "string" || messageId.length === 0) {
-      return false;
-    }
-    if (this.userMessageTurnIndexes.has(messageId)) {
-      return false;
-    }
-    this.userMessageTurnIndexes.set(messageId, this.userMessageTurnIds.length);
-    this.userMessageTurnIds.push(messageId);
-    return true;
-  }
-
-  private resetCodexUserMessageTurns(): void {
-    this.userMessageTurnIndexes.clear();
-    this.userMessageTurnIds.length = 0;
-  }
-
-  private truncateCodexUserMessageTurns(numTurns: number): void {
-    if (numTurns <= 0) {
-      return;
-    }
-    this.userMessageTurnIds.length = Math.max(0, this.userMessageTurnIds.length - numTurns);
-    this.userMessageTurnIndexes.clear();
-    this.userMessageTurnIds.forEach((messageId, index) => {
-      this.userMessageTurnIndexes.set(messageId, index);
-    });
-  }
-
-  private codexUserMessageTurns(): CodexUserMessageTurnIndex {
-    return {
-      resolve: (messageId) => this.userMessageTurnIndexes.get(messageId) ?? null,
-      count: () => this.userMessageTurnIds.length,
-    };
-  }
-
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
     return this.eventBus.subscribe(callback);
   }
@@ -1407,7 +1372,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       cwd: this.config.cwd ?? null,
       model: this.config.model ?? null,
       serviceTier: this.serviceTier,
-      userMessageTurns: this.codexUserMessageTurns(),
+      userMessageTurns: this.userMessageTurns,
       setThreadId: async (threadId) => {
         this.currentThreadId = threadId;
         this.cachedRuntimeInfo = null;
@@ -2021,7 +1986,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handleThreadRolledBackNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "thread_rolled_back" }>,
   ): void {
-    this.truncateCodexUserMessageTurns(parsed.numTurns);
+    this.userMessageTurns.truncate(parsed.numTurns);
   }
 
   private handleContextCompactedNotification(
@@ -2373,7 +2338,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
       return;
     }
-    if (!this.rememberCodexUserMessageTurn(timelineItem.messageId)) {
+    if (!this.userMessageTurns.remember(timelineItem.messageId)) {
       return;
     }
     this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
