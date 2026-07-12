@@ -35,10 +35,7 @@ import {
 } from "./app-server-transport.js";
 import { revertCodexConversation } from "./rewind.js";
 import { CodexSessionEventBus } from "./session-event-bus.js";
-import {
-  buildCodexAppServerInitializeParams,
-  buildRuntimeModelIdentityInstructions,
-} from "./runtime-config.js";
+import { buildRuntimeModelIdentityInstructions } from "./runtime-config.js";
 import type { CodexClientLike } from "./client-runtime.js";
 import {
   CODEX_APP_SERVER_CAPABILITIES,
@@ -72,6 +69,7 @@ import { CodexTurnNotificationHandler } from "./turn-notification-handler.js";
 import { CodexThreadBootstrap } from "./thread-bootstrap.js";
 import { CodexSessionMetadata } from "./session-metadata.js";
 import { CodexSessionHistory } from "./session-history.js";
+import { CodexSessionConnection } from "./session-connection.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
 import {
@@ -241,7 +239,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private currentMode: string;
   private currentThreadId: string | null = null;
   private currentTurnId: string | null = null;
-  private client: CodexAppServerClient | null = null;
+  private readonly connection: CodexSessionConnection;
   private readonly eventBus: CodexSessionEventBus;
   private nextTurnOrdinal = 0;
   private activeForegroundTurnId: string | null = null;
@@ -263,7 +261,6 @@ export class CodexAppServerAgentSession implements AgentSession {
   private warnedInvalidNotificationPayloads = new Set<string>();
   private readonly userMessageTurns = new CodexUserMessageTurnState();
   private readonly compactionState = new CodexContextCompactionState();
-  private connected = false;
   constructor(
     config: AgentSessionConfig,
     private readonly resumeHandle: { sessionId: string; metadata?: Record<string, unknown> } | null,
@@ -284,6 +281,20 @@ export class CodexAppServerAgentSession implements AgentSession {
       agentId: this.agentId,
       getSessionId: () => this.currentThreadId,
       getTurnId: () => this.activeForegroundTurnId,
+    });
+    this.connection = new CodexSessionConnection({
+      logger: this.logger,
+      spawnAppServer: this.spawnAppServer,
+      getTraceContext: () => this.traceContext(),
+      onNotification: (method, params) => this.handleNotification(method, params),
+      registerRequestHandlers: (client) => this.registerRequestHandlers(client),
+      onInitialized: async () => {
+        await this.sessionMetadata.loadAll(this.planModeEnabled);
+        if (this.currentThreadId) {
+          await this.ensureThreadLoaded();
+          await this.loadPersistedHistory();
+        }
+      },
     });
     this.threadBootstrap = new CodexThreadBootstrap({
       logger: this.logger,
@@ -438,24 +449,24 @@ export class CodexAppServerAgentSession implements AgentSession {
     });
   }
 
+  private get client(): CodexAppServerClient | null {
+    return this.connection.getClient();
+  }
+
+  private set client(client: CodexAppServerClient | null) {
+    this.connection.setClient(client);
+  }
+
+  private get connected(): boolean {
+    return this.connection.isConnected();
+  }
+
+  private set connected(connected: boolean) {
+    this.connection.setConnected(connected);
+  }
+
   async connect(): Promise<void> {
-    if (this.connected) return;
-    const child = await this.spawnAppServer();
-    this.client = new CodexAppServerClient(child, this.logger, () => this.traceContext());
-    this.client.setNotificationHandler((method, params) => this.handleNotification(method, params));
-    this.registerRequestHandlers();
-
-    await this.client.request("initialize", buildCodexAppServerInitializeParams());
-    this.client.notify("initialized", {});
-
-    await this.sessionMetadata.loadAll(this.planModeEnabled);
-
-    if (this.currentThreadId) {
-      await this.ensureThreadLoaded();
-      await this.loadPersistedHistory();
-    }
-
-    this.connected = true;
+    await this.connection.connect();
   }
 
   private traceContext(): CodexAppServerTraceContext {
@@ -483,20 +494,18 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.cachedRuntimeInfo = null;
   }
 
-  private registerRequestHandlers(): void {
-    if (!this.client) return;
-
-    this.client.setRequestHandler("item/commandExecution/requestApproval", (params) =>
+  private registerRequestHandlers(client: CodexAppServerClient): void {
+    client.setRequestHandler("item/commandExecution/requestApproval", (params) =>
       this.handleCommandApprovalRequest(params),
     );
-    this.client.setRequestHandler("item/fileChange/requestApproval", (params) =>
+    client.setRequestHandler("item/fileChange/requestApproval", (params) =>
       this.handleFileChangeApprovalRequest(params),
     );
-    this.client.setRequestHandler("item/tool/requestUserInput", (params) =>
+    client.setRequestHandler("item/tool/requestUserInput", (params) =>
       this.handleToolApprovalRequest(params),
     );
     // COMPAT(codex-tool-request-user-input): remove when supported Codex builds only emit item/tool/requestUserInput.
-    this.client.setRequestHandler("tool/requestUserInput", (params) =>
+    client.setRequestHandler("tool/requestUserInput", (params) =>
       this.handleToolApprovalRequest(params),
     );
   }
@@ -881,11 +890,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.permissionController.cancelAll();
     this.eventBus.clear();
     this.activeForegroundTurnId = null;
-    if (this.client) {
-      await this.client.dispose();
-    }
-    this.client = null;
-    this.connected = false;
+    await this.connection.close();
     this.currentThreadId = null;
     this.currentTurnId = null;
     // Best-effort: clean up image attachments older than the TTL so temp files
