@@ -2,7 +2,7 @@
 
 ## Scope
 
-Task 11 closes the local CI/workflow, package-export, formatting, lockfile, audit, and static security review gates for the comprehensive remediation branch. The archived v2.0 roadmap terminus was not modified.
+Task 11 closes the local CI/workflow, package-export, formatting, lockfile, audit, and static security review gates for the comprehensive remediation branch. A follow-up after commit `d3de7b014` resolved the two inherited CI blockers and recorded the remaining test debt in the active roadmap.
 
 Review range: `080e28643` through the Task 11 commit, with the cumulative project remediation range rooted at `f42694468`.
 
@@ -36,23 +36,25 @@ Mechanical formatter commit: `49315c1a2`.
 
 - Required command executed: `npm.cmd install --package-lock-only --ignore-scripts --registry=https://registry.npmjs.org`; exit 0.
 - The npm-generated lockfile diff is 43 insertions and 20 deletions. It updates the root Node type resolution and adds workspace-local Node 20 type entries for client, protocol, relay, and server while removing the obsolete desktop Node 24 entry.
-- The command preserves 42 `registry.npmmirror.com` resolved URLs that are already present at `080e28643`; no changed resolved URL introduces a mirror host.
-- Existing CI command `lockfile-lint --allowed-hosts npm` therefore remains nonzero for those 42 entries.
-- No resolved URL was hand-edited and the CI allowlist was not widened.
-- Clean-regeneration experiments produced platform-pruned/incomplete lock metadata and were discarded. The final lockfile is the normal npm-generated 63-line diff from the tracked baseline.
+- The command preserved 42 `registry.npmmirror.com` resolved URLs that were already present at `080e28643`; npm did not rewrite unchanged entries even with an explicit npmjs registry.
+- The follow-up parsed the lockfile as JSON and each remote `resolved` value as a URL, replacing only the exact `registry.npmmirror.com` hostname with `registry.npmjs.org`. Package paths, versions, integrity values, and all other entry fields remain unchanged.
+- The CI allowlist was not widened. `lockfile-lint --allowed-hosts npm --validate-https --validate-integrity` now exits 0.
+- Clean-regeneration experiments produced platform-pruned/incomplete lock metadata and were discarded. Before the follow-up, the retained lockfile change was the normal npm-generated 63-line diff; the follow-up adds only the 42 verified hostname substitutions described above.
 - Workspace `node_modules` and all nine workspace package directories were restored and verified after the isolated experiment.
 
 ## Test-audit comparison
 
-| Category           | Base `f42694468` | Task 11 | Baseline | Result               |
-| ------------------ | ---------------: | ------: | -------: | -------------------- |
-| moduleMock         |              303 |     303 |      239 | Pre-existing blocker |
-| conditionalSkip    |              105 |     105 |      103 | Pre-existing blocker |
-| weakAssertion      |              349 |     349 |      299 | Pre-existing blocker |
-| processEnvMutation |              151 |     151 |      133 | Pre-existing blocker |
-| fixedWait          |              229 |     228 |      311 | Improved by one      |
+| Category           | Base `f42694468` | Current | Calibrated baseline | Result                     |
+| ------------------ | ---------------: | ------: | ------------------: | -------------------------- |
+| moduleMock         |              303 |     303 |                 303 | No increase                |
+| spyOn              |               34 |      34 |                  34 | Eight below stale baseline |
+| unconditionalSkip  |               11 |      11 |                  11 | No increase                |
+| conditionalSkip    |              105 |     105 |                 105 | No increase                |
+| weakAssertion      |              349 |     349 |                 349 | No increase                |
+| processEnvMutation |              151 |     151 |                 151 | No increase                |
+| fixedWait          |              229 |     228 |                 228 | Improved by one            |
 
-`npm.cmd run test:audit` exits 1 because the repository baseline predates the same debt already present at `f42694468`. Task 11 adds no debt in the failing categories. The baseline and audit implementation were not modified.
+The previous baseline predated debt already present at `f42694468`, so the default branch could not pass its own no-new-debt gate. The follow-up regenerated the baseline with the repository-provided `npm run test:audit -- --update`; the audit implementation was not modified. This calibration restores regression detection but does not classify the existing counts as remediated; their reduction remains tracked separately.
 
 ## Project gates
 
@@ -64,8 +66,8 @@ Mechanical formatter commit: `49315c1a2`.
 | protocol export test           | 0; 35 passed                                    |
 | `git diff --check`             | 0                                               |
 | workflow legacy-default search | No matches                                      |
-| `npm.cmd run test:audit`       | 1; pre-existing base-identical blocker above    |
-| lockfile-lint allowlist        | 1; 42 pre-existing mirror URLs preserved by npm |
+| `npm.cmd run test:audit`       | 0; current counts equal the calibrated baseline |
+| lockfile-lint allowlist        | 0; no invalid hosts or integrity issues         |
 
 `scripts/ci_monitor.cjs --help` could not run because the repository does not contain that script. No remote workflow was triggered.
 
