@@ -448,4 +448,4 @@ jobs:
         # the SHA and the trailing tag comment together.
         uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
         with:
-          extra_args: --only-verified --no-update
+          extra_args: --only-verified
