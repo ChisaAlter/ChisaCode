@@ -10,8 +10,9 @@ import {
 } from "./opencode/client.js";
 import { collectOpenCodePersistedAgentsFromSdk, OpenCodeAgentSession } from "./opencode/session.js";
 
-export { __openCodeInternals, translateOpenCodeEvent } from "./opencode/session.js";
-export type { OpenCodeEventTranslationState } from "./opencode/session.js";
+export { translateOpenCodeEvent } from "./opencode/event-translator.js";
+export type { OpenCodeEventTranslationState } from "./opencode/event-translator.js";
+export { __openCodeInternals } from "./opencode/session.js";
 export { type OpenCodeAgentClientDeps };
 
 function createOpenCodeSession(input: OpenCodeSessionFactoryInput): OpenCodeAgentSession {
