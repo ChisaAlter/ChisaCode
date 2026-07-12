@@ -43,7 +43,6 @@ import path from "node:path";
 import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
-import { curateAgentActivity } from "../activity-curator.js";
 import {
   mapCodexToolCallEnvelope,
   mapCodexToolCallFromThreadItem,
@@ -91,6 +90,7 @@ import {
   type ParsedCodexNotification,
 } from "./codex/notifications.js";
 import { CodexNotificationStreamState } from "./codex/notification-stream-state.js";
+import { CodexSubAgentTracker } from "./codex/sub-agent-tracker.js";
 import {
   loadCodexModelDefinitions,
   readCodexConfiguredDefaults,
@@ -1615,13 +1615,6 @@ function buildRuntimeModelIdentityInstructions(
     .join("\n");
 }
 
-interface CodexSubAgentCallState {
-  callId: string;
-  toolCall: ToolCallTimelineItem;
-  childItemOrder: string[];
-  childItems: Map<string, AgentTimelineItem>;
-}
-
 export class CodexAppServerAgentSession implements AgentSession {
   readonly provider = CODEX_PROVIDER;
   readonly capabilities = CODEX_APP_SERVER_CAPABILITIES;
@@ -1653,8 +1646,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private resolvedPermissionRequests = new Set<string>();
   private readonly notificationStream = new CodexNotificationStreamState();
   private pendingAssistantMessageBoundary = false;
-  private subAgentCallsByCallId = new Map<string, CodexSubAgentCallState>();
-  private subAgentCallIdByChildThreadId = new Map<string, string>();
+  private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
   private textualToolCallError: string | null = null;
@@ -3044,98 +3036,17 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!threadId || threadId === this.currentThreadId) {
       return null;
     }
-    return this.subAgentCallIdByChildThreadId.get(threadId) ?? null;
-  }
-
-  private registerSubAgentToolCall(
-    timelineItem: ToolCallTimelineItem,
-    rawItem: { [key: string]: unknown },
-  ): void {
-    if (timelineItem.detail.type !== "sub_agent") {
-      return;
-    }
-
-    const existing = this.subAgentCallsByCallId.get(timelineItem.callId);
-    const state: CodexSubAgentCallState =
-      existing ??
-      ({
-        callId: timelineItem.callId,
-        toolCall: timelineItem,
-        childItemOrder: [],
-        childItems: new Map<string, AgentTimelineItem>(),
-      } satisfies CodexSubAgentCallState);
-
-    state.toolCall = {
-      ...timelineItem,
-      detail: {
-        ...timelineItem.detail,
-        log:
-          timelineItem.detail.log ||
-          (state.toolCall.detail.type === "sub_agent" ? state.toolCall.detail.log : ""),
-      },
-    };
-    this.subAgentCallsByCallId.set(timelineItem.callId, state);
-
-    const receiverThreadIds = Array.isArray(rawItem.receiverThreadIds)
-      ? rawItem.receiverThreadIds.filter((value): value is string => typeof value === "string")
-      : [];
-    for (const receiverThreadId of receiverThreadIds) {
-      this.subAgentCallIdByChildThreadId.set(receiverThreadId, timelineItem.callId);
-    }
-  }
-
-  private upsertSubAgentChildItem(callId: string, itemId: string, item: AgentTimelineItem): void {
-    const state = this.subAgentCallsByCallId.get(callId);
-    if (!state) {
-      return;
-    }
-    if (!state.childItems.has(itemId)) {
-      state.childItemOrder.push(itemId);
-    }
-    state.childItems.set(itemId, item);
-  }
-
-  private getSubAgentChildTimeline(state: CodexSubAgentCallState): AgentTimelineItem[] {
-    return state.childItemOrder
-      .map((itemId) => state.childItems.get(itemId))
-      .filter((item): item is AgentTimelineItem => Boolean(item));
+    return this.subAgentTracker.getCallIdForThread(threadId);
   }
 
   private emitSubAgentActivityUpdate(
     callId: string,
     status?: ToolCallTimelineItem["status"],
   ): void {
-    const state = this.subAgentCallsByCallId.get(callId);
-    if (!state || state.toolCall.detail.type !== "sub_agent") {
-      return;
+    const item = this.subAgentTracker.buildActivityUpdate(callId, status);
+    if (item) {
+      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item });
     }
-    const childTimeline = this.getSubAgentChildTimeline(state);
-    const log =
-      childTimeline.length > 0
-        ? curateAgentActivity(childTimeline, { labelAssistantMessages: true })
-        : "";
-    const resolvedStatus = status ?? state.toolCall.status;
-    const baseToolCall = {
-      ...state.toolCall,
-      detail: {
-        ...state.toolCall.detail,
-        log,
-      },
-    };
-    const nextToolCall: ToolCallTimelineItem =
-      resolvedStatus === "failed"
-        ? {
-            ...baseToolCall,
-            status: "failed",
-            error: state.toolCall.error ?? { message: "Sub-agent failed" },
-          }
-        : {
-            ...baseToolCall,
-            status: resolvedStatus,
-            error: null,
-          };
-    state.toolCall = nextToolCall;
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: nextToolCall });
   }
 
   private handleSubAgentChildItemCompleted(
@@ -3145,7 +3056,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     this.applyBufferedDeltaTextToTimelineItem(timelineItem, itemId);
     if (itemId) {
-      this.upsertSubAgentChildItem(callId, itemId, timelineItem);
+      this.subAgentTracker.upsertChildItem(callId, itemId, timelineItem);
       this.notificationStream.clearItem(itemId);
     }
     this.emitSubAgentActivityUpdate(callId, "running");
@@ -3172,7 +3083,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       );
       const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
       if (subAgentCallId) {
-        this.upsertSubAgentChildItem(subAgentCallId, parsed.itemId, {
+        this.subAgentTracker.upsertChildItem(subAgentCallId, parsed.itemId, {
           type: "assistant_message",
           messageId: parsed.itemId,
           text,
@@ -3205,7 +3116,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       );
       const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
       if (subAgentCallId) {
-        this.upsertSubAgentChildItem(subAgentCallId, parsed.itemId, {
+        this.subAgentTracker.upsertChildItem(subAgentCallId, parsed.itemId, {
           type: "reasoning",
           text: reasoningText,
         });
@@ -3589,7 +3500,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     this.applyBufferedDeltaTextToTimelineItem(timelineItem, itemId);
     if (timelineItem.type === "tool_call") {
-      this.registerSubAgentToolCall(timelineItem, parsed.item);
+      this.subAgentTracker.registerToolCall(timelineItem, parsed.item);
       if (timelineItem.detail.type === "plan") {
         this.rememberPlanResult(timelineItem);
         // Codex can surface plans both as turn/plan updates and as completed
@@ -3714,7 +3625,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const childSubAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
     if (childSubAgentCallId) {
       if (parsed.item.id) {
-        this.upsertSubAgentChildItem(childSubAgentCallId, parsed.item.id, timelineItem);
+        this.subAgentTracker.upsertChildItem(childSubAgentCallId, parsed.item.id, timelineItem);
       }
       this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
       return;
@@ -3733,7 +3644,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     this.warnOnIncompleteEditToolCall(timelineItem, "item_started", parsed.item);
-    this.registerSubAgentToolCall(timelineItem, parsed.item);
+    this.subAgentTracker.registerToolCall(timelineItem, parsed.item);
     this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (itemId) {
       this.notificationStream.markItemStarted(itemId);
@@ -3756,7 +3667,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const childSubAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
     if (childSubAgentCallId) {
       if (itemId) {
-        this.upsertSubAgentChildItem(childSubAgentCallId, itemId, timelineItem);
+        this.subAgentTracker.upsertChildItem(childSubAgentCallId, itemId, timelineItem);
       }
       this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
       return;
