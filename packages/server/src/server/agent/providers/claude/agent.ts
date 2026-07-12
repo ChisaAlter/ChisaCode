@@ -13,7 +13,6 @@ import {
   type Query,
   type SDKMessage,
   type SDKPartialAssistantMessage,
-  type SDKTaskProgressMessage,
   type SDKResultMessage,
   type SDKSystemMessage,
   type SDKUserMessage,
@@ -30,6 +29,22 @@ import {
 } from "./task-notification-tool-call.js";
 import { getClaudeModelsWithSettings, normalizeClaudeRuntimeModelId } from "./models.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
+import {
+  extractContextWindowSize,
+  extractSessionIdRaw,
+  isClaudeContentChunk,
+  isImageMimeType,
+  isPermissionUpdate,
+  isUnknownArray,
+  normalizeClaudeAskUserQuestionUpdatedInput,
+  readContextWindowUsedTokensFromTaskProgress,
+  readStreamRequestInputTokens,
+  readStreamRequestOutputTokens,
+  readUsageFromTaskNotification,
+  resolvePermissionKind,
+  toClaudeSdkMcpConfig,
+  type ClaudeContentChunk,
+} from "./sdk-types-mapping.js";
 import { runClaudeSdkQueryPump } from "./sdk-pump.js";
 import {
   ClaudeMessageRouter,
@@ -73,7 +88,6 @@ import {
   type AgentMode,
   type AgentModelDefinition,
   type AgentPermissionRequest,
-  type AgentPermissionRequestKind,
   type AgentPermissionResponse,
   type AgentPermissionUpdate,
   type AgentPersistenceHandle,
@@ -106,6 +120,8 @@ import { composeSystemPromptParts } from "../../system-prompt.js";
 
 export { convertClaudeHistoryEntry, extractUserMessageText } from "./history-converter.js";
 export { readEventIdentifiers } from "./message-router.js";
+export { normalizeClaudeAskUserQuestionUpdatedInput } from "./sdk-types-mapping.js";
+export type { ClaudeContentChunk } from "./sdk-types-mapping.js";
 
 const fsPromises = promises;
 const CLAUDE_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
@@ -125,82 +141,12 @@ const CLAUDE_MODEL_SELECTION_ENV_KEYS = [
   "ANTHROPIC_DEFAULT_HAIKU_MODEL",
 ];
 
-function readNonEmptyString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-export function normalizeClaudeAskUserQuestionUpdatedInput(
-  updatedInput: AgentMetadata | undefined,
-  fallbackInput: AgentMetadata | undefined,
-): AgentMetadata {
-  const fallback = isMetadata(fallbackInput) ? fallbackInput : {};
-  const base = isMetadata(updatedInput) ? updatedInput : {};
-  // ChisaCode's shared question UI serializes answers by question header, but Claude's
-  // AskUserQuestion tool expects answer keys to match the full question text. Merge
-  // the original request payload back in so provider callbacks that only return
-  // `{ answers }` still satisfy Claude's full tool input schema.
-  const merged = { ...fallback, ...base };
-  const questions =
-    (Array.isArray(base.questions) ? base.questions : null) ??
-    (Array.isArray(fallback.questions) ? fallback.questions : null);
-  const answers = isMetadata(base.answers) ? base.answers : null;
-
-  if (!questions || !answers) {
-    return merged;
-  }
-
-  const normalizedAnswers: Record<string, string> = {};
-  for (const item of questions) {
-    const question = isMetadata(item) ? item : null;
-    if (!question) {
-      continue;
-    }
-
-    const questionText = readNonEmptyString(question.question);
-    if (!questionText) {
-      continue;
-    }
-
-    const header = readNonEmptyString(question.header);
-    const answer =
-      readNonEmptyString(answers[questionText]) ??
-      (header ? readNonEmptyString(answers[header]) : null);
-    if (answer) {
-      normalizedAnswers[questionText] = answer;
-    }
-  }
-
-  if (Object.keys(normalizedAnswers).length === 0) {
-    return merged;
-  }
-
-  return {
-    ...merged,
-    answers: normalizedAnswers,
-  };
-}
-
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
   return isObjectRecord(value) ? value : undefined;
-}
-
-function isUnknownArray(value: unknown): value is readonly unknown[] {
-  return Array.isArray(value);
-}
-
-function isImageMimeType(
-  value: string,
-): value is "image/jpeg" | "image/png" | "image/gif" | "image/webp" {
-  return (
-    value === "image/jpeg" ||
-    value === "image/png" ||
-    value === "image/gif" ||
-    value === "image/webp"
-  );
 }
 
 interface AsyncMessageInput<T> {
@@ -282,11 +228,6 @@ interface SlashCommandInvocation {
 
 type ClaudeAgentConfig = AgentSessionConfig & { provider: "claude" };
 
-export interface ClaudeContentChunk {
-  type: string;
-  [key: string]: unknown;
-}
-
 interface ClaudeAgentClientOptions {
   defaults?: { agents?: Record<string, AgentDefinition> };
   logger: Logger;
@@ -319,17 +260,6 @@ function resolvePathEnvKey(): "Path" | "PATH" | null {
 function errorToMessageString(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.message;
-  return "";
-}
-
-function extractSessionIdRaw(msg: {
-  session_id?: unknown;
-  sessionId?: unknown;
-  session?: { id?: unknown } | null;
-}): string {
-  if (typeof msg.session_id === "string") return msg.session_id;
-  if (typeof msg.sessionId === "string") return msg.sessionId;
-  if (typeof msg.session?.id === "string") return msg.session.id;
   return "";
 }
 
@@ -655,62 +585,8 @@ function coerceSessionMetadata(metadata: AgentMetadata | undefined): Partial<Age
   return result;
 }
 
-function toClaudeSdkMcpConfig(config: McpServerConfig): ClaudeSdkMcpServerConfig {
-  switch (config.type) {
-    case "stdio":
-      return {
-        type: "stdio",
-        command: config.command,
-        args: config.args,
-        env: config.env,
-      };
-    case "http":
-      return {
-        type: "http",
-        url: config.url,
-        headers: config.headers,
-      };
-    case "sse":
-      return {
-        type: "sse",
-        url: config.url,
-        headers: config.headers,
-      };
-  }
-  throw new Error("Unhandled MCP server config type");
-}
-
-function isClaudeContentChunk(value: unknown): value is ClaudeContentChunk {
-  return isMetadata(value) && typeof value.type === "string";
-}
-
 function isClaudeExtra(value: unknown): value is Partial<ClaudeOptions> {
   return isMetadata(value);
-}
-
-function isPermissionUpdate(value: AgentPermissionUpdate): value is PermissionUpdate {
-  if (!isMetadata(value)) {
-    return false;
-  }
-  const type = value.type;
-  if (type !== "addRules" && type !== "replaceRules" && type !== "removeRules") {
-    return false;
-  }
-  const rules = value.rules;
-  const behavior = value.behavior;
-  const destination = value.destination;
-  return Array.isArray(rules) && typeof behavior === "string" && typeof destination === "string";
-}
-
-function resolvePermissionKind(
-  toolName: string,
-  input: Record<string, unknown>,
-): AgentPermissionRequestKind {
-  if (toolName === "ExitPlanMode") return "plan";
-  if (toolName === "AskUserQuestion" && Array.isArray(input.questions)) {
-    return "question";
-  }
-  return "tool";
 }
 
 function getClaudeModeLabel(modeId: PermissionMode): string {
@@ -957,87 +833,6 @@ async function resolveClaudeAuth(
   } catch {
     return null;
   }
-}
-
-function extractContextWindowSize(modelUsage: unknown): number | undefined {
-  const usageRecord = toObjectRecord(modelUsage);
-  if (!usageRecord) {
-    return undefined;
-  }
-
-  let maxContextWindow: number | undefined;
-  for (const value of Object.values(usageRecord)) {
-    const valueRecord = toObjectRecord(value);
-    if (!valueRecord) {
-      continue;
-    }
-    const contextWindow = valueRecord.contextWindow;
-    if (
-      typeof contextWindow !== "number" ||
-      !Number.isFinite(contextWindow) ||
-      contextWindow <= 0
-    ) {
-      continue;
-    }
-    maxContextWindow = Math.max(maxContextWindow ?? 0, contextWindow);
-  }
-
-  return maxContextWindow;
-}
-
-function readUsageTotalTokens(usage: unknown): number | undefined {
-  if (!usage || typeof usage !== "object") {
-    return undefined;
-  }
-  const totalTokens = (usage as { total_tokens?: unknown }).total_tokens;
-  if (typeof totalTokens !== "number" || !Number.isFinite(totalTokens) || totalTokens < 0) {
-    return undefined;
-  }
-  return totalTokens;
-}
-
-function readContextWindowUsedTokensFromTaskProgress(
-  message: SDKTaskProgressMessage,
-): number | undefined {
-  return readUsageTotalTokens(message.usage);
-}
-
-function readUsageFromTaskNotification(message: { usage?: unknown }): number | undefined {
-  return readUsageTotalTokens(message.usage);
-}
-
-function readStreamRequestInputTokens(event: Record<string, unknown>): number | undefined {
-  const messageUsage = toObjectRecord(toObjectRecord(event.message)?.usage);
-  if (!messageUsage) {
-    return undefined;
-  }
-  const usage = messageUsage;
-  const inputTokens =
-    typeof usage.input_tokens === "number" && Number.isFinite(usage.input_tokens)
-      ? usage.input_tokens
-      : undefined;
-  const cacheCreationInputTokens =
-    typeof usage.cache_creation_input_tokens === "number" &&
-    Number.isFinite(usage.cache_creation_input_tokens)
-      ? usage.cache_creation_input_tokens
-      : 0;
-  const cacheReadInputTokens =
-    typeof usage.cache_read_input_tokens === "number" &&
-    Number.isFinite(usage.cache_read_input_tokens)
-      ? usage.cache_read_input_tokens
-      : 0;
-  if (typeof inputTokens !== "number" || inputTokens < 0) {
-    return undefined;
-  }
-  return inputTokens + cacheCreationInputTokens + cacheReadInputTokens;
-}
-
-function readStreamRequestOutputTokens(event: Record<string, unknown>): number | undefined {
-  const outputTokens = toObjectRecord(event.usage)?.output_tokens;
-  if (typeof outputTokens !== "number" || !Number.isFinite(outputTokens) || outputTokens < 0) {
-    return undefined;
-  }
-  return outputTokens;
 }
 
 class ClaudeAgentSession implements AgentSession {
