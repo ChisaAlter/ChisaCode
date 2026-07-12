@@ -127,6 +127,7 @@ import {
   type DaemonTransportFactory,
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
+import { CheckoutCommandClient } from "./daemon-client-checkout-commands.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   BinaryFileTransferManager,
@@ -854,6 +855,7 @@ export class DaemonClient {
     }
   >();
   private terminalDirectorySubscriptions = new Set<string>();
+  private readonly checkoutCommands: CheckoutCommandClient;
   private readonly terminalStreams = new TerminalStreamRouter();
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
@@ -870,6 +872,9 @@ export class DaemonClient {
 
   constructor(private config: DaemonClientConfig) {
     this.logger = config.logger ?? consoleLogger;
+    this.checkoutCommands = new CheckoutCommandClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+    });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
     try {
@@ -2976,17 +2981,7 @@ export class DaemonClient {
     input: { message?: string; addAll?: boolean },
     requestId?: string,
   ): Promise<CheckoutCommitPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_commit_request",
-        cwd,
-        message: input.message,
-        addAll: input.addAll,
-      },
-      responseType: "checkout_commit_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutCommit(cwd, input, requestId);
   }
 
   async checkoutMerge(
@@ -2994,18 +2989,7 @@ export class DaemonClient {
     input: { baseRef?: string; strategy?: "merge" | "squash"; requireCleanTarget?: boolean },
     requestId?: string,
   ): Promise<CheckoutMergePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_merge_request",
-        cwd,
-        baseRef: input.baseRef,
-        strategy: input.strategy,
-        requireCleanTarget: input.requireCleanTarget,
-      },
-      responseType: "checkout_merge_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutMerge(cwd, input, requestId);
   }
 
   async checkoutMergeFromBase(
@@ -3013,53 +2997,19 @@ export class DaemonClient {
     input: { baseRef?: string; requireCleanTarget?: boolean },
     requestId?: string,
   ): Promise<CheckoutMergeFromBasePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_merge_from_base_request",
-        cwd,
-        baseRef: input.baseRef,
-        requireCleanTarget: input.requireCleanTarget,
-      },
-      responseType: "checkout_merge_from_base_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutMergeFromBase(cwd, input, requestId);
   }
 
   async checkoutPull(cwd: string, requestId?: string): Promise<CheckoutPullPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_pull_request",
-        cwd,
-      },
-      responseType: "checkout_pull_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutPull(cwd, requestId);
   }
 
   async checkoutPush(cwd: string, requestId?: string): Promise<CheckoutPushPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_push_request",
-        cwd,
-      },
-      responseType: "checkout_push_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutPush(cwd, requestId);
   }
 
   async checkoutRefresh(cwd: string, requestId?: string): Promise<CheckoutRefreshPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout.refresh.request",
-        cwd,
-      },
-      responseType: "checkout.refresh.response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutRefresh(cwd, requestId);
   }
 
   async checkoutPrCreate(
@@ -3067,18 +3017,7 @@ export class DaemonClient {
     input: { title?: string; body?: string; baseRef?: string },
     requestId?: string,
   ): Promise<CheckoutPrCreatePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_pr_create_request",
-        cwd,
-        title: input.title,
-        body: input.body,
-        baseRef: input.baseRef,
-      },
-      responseType: "checkout_pr_create_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutPrCreate(cwd, input, requestId);
   }
 
   async checkoutPrMerge(
@@ -3086,16 +3025,7 @@ export class DaemonClient {
     input: { method: CheckoutPrMergeMethod },
     requestId?: string,
   ): Promise<CheckoutPrMergePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_pr_merge_request",
-        cwd,
-        mergeMethod: input.method,
-      },
-      responseType: "checkout_pr_merge_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutPrMerge(cwd, input, requestId);
   }
 
   async checkoutGithubSetAutoMerge(
@@ -3103,46 +3033,18 @@ export class DaemonClient {
     input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
     requestId?: string,
   ): Promise<CheckoutGithubSetAutoMergePayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"checkout.github.set_auto_merge.response">({
-      requestId,
-      message: {
-        type: "checkout.github.set_auto_merge.request",
-        cwd,
-        enabled: input.enabled,
-        ...(input.enabled ? { mergeMethod: input.method } : {}),
-      },
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutGithubSetAutoMerge(cwd, input, requestId);
   }
 
   async checkoutPrStatus(cwd: string, requestId?: string): Promise<CheckoutPrStatusPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_pr_status_request",
-        cwd,
-      },
-      responseType: "checkout_pr_status_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.checkoutPrStatus(cwd, requestId);
   }
 
   async pullRequestTimeline(
     input: { cwd: string; prNumber: number; repoOwner: string; repoName: string },
     requestId?: string,
   ): Promise<PullRequestTimelinePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "pull_request_timeline_request",
-        cwd: input.cwd,
-        prNumber: input.prNumber,
-        repoOwner: input.repoOwner,
-        repoName: input.repoName,
-      },
-      responseType: "pull_request_timeline_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.pullRequestTimeline(input, requestId);
   }
 
   async checkoutSwitchBranch(
@@ -3150,29 +3052,11 @@ export class DaemonClient {
     branch: string,
     requestId?: string,
   ): Promise<CheckoutSwitchBranchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "checkout_switch_branch_request",
-        cwd,
-        branch,
-      },
-      responseType: "checkout_switch_branch_response",
-      timeout: 30000,
-    });
+    return this.checkoutCommands.checkoutSwitchBranch(cwd, branch, requestId);
   }
 
   async renameBranch(input: RenameBranchInput): Promise<RenameBranchResult> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "checkout.rename_branch.request",
-        cwd: input.cwd,
-        branch: input.branch,
-      },
-      responseType: "checkout.rename_branch.response",
-      timeout: 30000,
-    });
+    return this.checkoutCommands.renameBranch(input);
   }
 
   async stashSave(
@@ -3180,29 +3064,11 @@ export class DaemonClient {
     options?: { branch?: string },
     requestId?: string,
   ): Promise<StashSavePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "stash_save_request",
-        cwd,
-        branch: options?.branch,
-      },
-      responseType: "stash_save_response",
-      timeout: 30000,
-    });
+    return this.checkoutCommands.stashSave(cwd, options, requestId);
   }
 
   async stashPop(cwd: string, stashIndex: number, requestId?: string): Promise<StashPopPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "stash_pop_request",
-        cwd,
-        stashIndex,
-      },
-      responseType: "stash_pop_response",
-      timeout: 30000,
-    });
+    return this.checkoutCommands.stashPop(cwd, stashIndex, requestId);
   }
 
   async stashList(
@@ -3210,123 +3076,49 @@ export class DaemonClient {
     options?: { chisacodeOnly?: boolean },
     requestId?: string,
   ): Promise<StashListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "stash_list_request",
-        cwd,
-        chisacodeOnly: options?.chisacodeOnly,
-      },
-      responseType: "stash_list_response",
-      timeout: 10000,
-    });
+    return this.checkoutCommands.stashList(cwd, options, requestId);
   }
 
   async getChisaCodeWorktreeList(
     input: { cwd?: string; repoRoot?: string },
     requestId?: string,
   ): Promise<ChisaCodeWorktreeListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "chisacode_worktree_list_request",
-        cwd: input.cwd,
-        repoRoot: input.repoRoot,
-      },
-      responseType: "chisacode_worktree_list_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.getChisaCodeWorktreeList(input, requestId);
   }
 
   async archiveChisaCodeWorktree(
     input: { worktreePath?: string; repoRoot?: string; branchName?: string },
     requestId?: string,
   ): Promise<ChisaCodeWorktreeArchivePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "chisacode_worktree_archive_request",
-        worktreePath: input.worktreePath,
-        repoRoot: input.repoRoot,
-        branchName: input.branchName,
-      },
-      responseType: "chisacode_worktree_archive_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.archiveChisaCodeWorktree(input, requestId);
   }
 
   async createChisaCodeWorktree(
     input: CreateChisaCodeWorktreeInput,
     requestId?: string,
   ): Promise<CreateChisaCodeWorktreePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "create_chisacode_worktree_request",
-        cwd: input.cwd,
-        ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
-        worktreeSlug: input.worktreeSlug,
-        ...(input.firstAgentContext !== undefined
-          ? { firstAgentContext: input.firstAgentContext }
-          : {}),
-        ...(input.refName !== undefined ? { refName: input.refName } : {}),
-        ...(input.action !== undefined ? { action: input.action } : {}),
-        ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
-      },
-      responseType: "create_chisacode_worktree_response",
-      timeout: 60000,
-    });
+    return this.checkoutCommands.createChisaCodeWorktree(input, requestId);
   }
 
   async validateBranch(
     options: { cwd: string; branchName: string },
     requestId?: string,
   ): Promise<ValidateBranchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "validate_branch_request",
-        cwd: options.cwd,
-        branchName: options.branchName,
-      },
-      responseType: "validate_branch_response",
-      timeout: 10000,
-    });
+    return this.checkoutCommands.validateBranch(options, requestId);
   }
 
   async getBranchSuggestions(
     options: { cwd: string; query?: string; limit?: number },
     requestId?: string,
   ): Promise<BranchSuggestionsPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "branch_suggestions_request",
-        cwd: options.cwd,
-        query: options.query,
-        limit: options.limit,
-      },
-      responseType: "branch_suggestions_response",
-      timeout: 10000,
-    });
+    return this.checkoutCommands.getBranchSuggestions(options, requestId);
   }
 
   async searchGitHub(
     options: { cwd: string; query: string; limit?: number; kinds?: GitHubSearchRequest["kinds"] },
     requestId?: string,
   ): Promise<GitHubSearchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "github_search_request",
-        cwd: options.cwd,
-        query: options.query,
-        limit: options.limit,
-        kinds: options.kinds,
-      },
-      responseType: "github_search_response",
-      timeout: 15000,
-    });
+    return this.checkoutCommands.searchGitHub(options, requestId);
   }
 
   async getDirectorySuggestions(
@@ -3340,22 +3132,8 @@ export class DaemonClient {
     },
     requestId?: string,
   ): Promise<DirectorySuggestionsPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "directory_suggestions_request",
-        query: options.query,
-        cwd: options.cwd,
-        includeFiles: options.includeFiles,
-        includeDirectories: options.includeDirectories,
-        matchMode: options.matchMode,
-        limit: options.limit,
-      },
-      responseType: "directory_suggestions_response",
-      timeout: 10000,
-    });
+    return this.checkoutCommands.getDirectorySuggestions(options, requestId);
   }
-
   // ============================================================================
   // File Explorer
   // ============================================================================
