@@ -9,7 +9,7 @@
 
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
-- Codex 已完成十六个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；router/parser 负责协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射，session 保留少量跨领域协调。
+- Codex 已完成十七个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；launch/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
 
 ## 现状
 
@@ -82,7 +82,7 @@
 - 删除从未接线的 `providers/base/`，避免其默认 turn ID、interrupt、close 与 persistence 语义被误当成稳定契约。
 - 保留现有 `AgentSession` / `AgentClient` 接口和 provider-specific 生命周期实现。
 - 优先提取无状态 helper、transport、runtime、event translator 与领域 handler。
-- Codex `skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立扩展发现、native notification parse/route、turn config、model catalog、stream/compaction state、timeline、sub-agent、permission handler、event bus、rewind index、image attachment 和 history pipeline 边界。
+- Codex `skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立 launch/version/env、native notification parse/route、turn config、model catalog、state/timeline、sub-agent、permission handler、event bus、rewind index、image attachment 和 history pipeline 边界。
 
 **验收**：server typecheck/build、目标 lint、Codex skills 精确测试通过。
 
@@ -93,6 +93,7 @@
 - `codex/session.ts` —— 移动 `CodexAppServerAgentSession`，保持 `implements AgentSession`
 - `codex/client.ts` —— 移动 `CodexAppServerAgentClient`，保持 `implements AgentClient`
 - `codex/app-server-transport.ts` —— `CodexAppServerClient`（已完成）
+- `codex/launch.ts` —— version gate、binary discovery、launch/env resolution 与 app-server spawn（已完成）
 - `codex/notifications.ts` —— notification schema/parser/type guard（已完成）
 - `codex/notification-router.ts` —— schema parse、delta 判别、notification kind 分派（已完成）
 - `codex/notification-stream-state.ts` —— delta/output 缓冲、生命周期去重、terminal 关联（已完成）

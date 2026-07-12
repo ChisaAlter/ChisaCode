@@ -31,23 +31,13 @@ import {
 import type { Logger } from "pino";
 import { homedir } from "node:os";
 
-import type { ChildProcess, ChildProcessWithoutNullStreams } from "node:child_process";
-import { Dirent } from "node:fs";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
-import {
-  checkProviderLaunchAvailable,
-  createProviderEnv,
-  createProviderEnvSpec,
-  resolveProviderLaunch,
-  type ProviderRuntimeSettings,
-  type ResolvedProviderLaunch,
-} from "../provider-launch-config.js";
-import { findExecutable, probeExecutable } from "../../../utils/executable.js";
+import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
 import { createPathEquivalenceMatcher } from "../../../utils/path.js";
-import { spawnProcess } from "../../../utils/spawn.js";
 import { extractCodexTerminalSessionId } from "./tool-call-mapper-utils.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "./codex-feature-definitions.js";
 import {
@@ -64,6 +54,15 @@ import { revertCodexConversation } from "./codex/rewind.js";
 import { CodexSessionEventBus } from "./codex/session-event-bus.js";
 import { CodexUserMessageTurnState } from "./codex/user-message-turn-state.js";
 import { CodexContextCompactionState } from "./codex/context-compaction-state.js";
+import {
+  CODEX_AUTO_REVIEW_MIN_VERSION,
+  CODEX_GOALS_MIN_VERSION,
+  checkCodexLaunchAvailable,
+  codexVersionAtLeast,
+  resolveCodexLaunch,
+  resolveCodexLaunchPrefix,
+  spawnCodexAppServer,
+} from "./codex/launch.js";
 import {
   cleanupStaleCodexImageAttachments,
   writeCodexImageAttachment,
@@ -135,20 +134,18 @@ export {
 };
 
 export {
+  buildCodexAppServerEnv,
+  findCodexMicrosoftStoreBinary,
+  findDefaultCodexBinary,
+} from "./codex/launch.js";
+
+export {
   formatCodexQuestionPrompts,
   mapCodexPlanToToolCall,
   mapCodexQuestionRequestToToolCall,
   normalizeCodexQuestionPrompts,
   planStepsToMarkdown,
 } from "./codex/permissions.js";
-
-function assertChildWithPipes(
-  child: ChildProcess,
-): asserts child is ChildProcessWithoutNullStreams {
-  if (!child.stdin || !child.stdout || !child.stderr) {
-    throw new Error("Child process did not expose stdio pipes");
-  }
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value);
@@ -160,31 +157,6 @@ const CODEX_PROVIDER = "codex" as const;
 const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
 const CODEX_TEXTUAL_TOOL_CALL_ERROR =
   "Codex returned a tool call transcript as plain text, so no tool was executed.";
-
-// Codex's experimental `goals` feature ships in 0.128.0+. Older binaries reject
-// `--enable goals` at launch, so we gate by version and silently skip the flag
-// (and the /goal slash command) when the binary is too old.
-const CODEX_GOALS_MIN_VERSION: readonly [number, number, number] = [0, 128, 0];
-const CODEX_AUTO_REVIEW_MIN_VERSION: readonly [number, number, number] = [0, 115, 0];
-
-function parseCodexVersion(versionOutput: string): [number, number, number] | null {
-  const match = versionOutput.match(/(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
-}
-
-function codexVersionAtLeast(
-  versionOutput: string,
-  min: readonly [number, number, number],
-): boolean {
-  const parsed = parseCodexVersion(versionOutput);
-  if (!parsed) return false;
-  for (let i = 0; i < 3; i += 1) {
-    if (parsed[i] > min[i]) return true;
-    if (parsed[i] < min[i]) return false;
-  }
-  return true;
-}
 
 type GoalSubcommand =
   | { kind: "set"; objective: string }
@@ -257,96 +229,6 @@ function looksLikeTextualCodexToolCallTranscript(text: string): boolean {
 export { listCodexSkillEntries, listCodexSkills } from "./codex/skills.js";
 
 export { normalizeCodexOutputSchema } from "./codex/turn-config.js";
-
-function codexMicrosoftStorePackageRoot(): string | null {
-  const localAppData = process.env.LOCALAPPDATA;
-  if (!localAppData) {
-    return null;
-  }
-  return path.join(localAppData, "Packages");
-}
-
-export async function findCodexMicrosoftStoreBinary(): Promise<string | null> {
-  if (process.platform !== "win32") {
-    return null;
-  }
-
-  const packageRoot = codexMicrosoftStorePackageRoot();
-  if (!packageRoot) {
-    return null;
-  }
-
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(packageRoot, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-
-  const codexPackages = entries
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith("OpenAI.Codex_"))
-    .map((entry) => entry.name)
-    .sort();
-
-  for (const packageName of codexPackages) {
-    const candidate = path.join(
-      packageRoot,
-      packageName,
-      "LocalCache",
-      "Local",
-      "OpenAI",
-      "Codex",
-      "bin",
-      "codex.exe",
-    );
-    if (await probeExecutable(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-export async function findDefaultCodexBinary(): Promise<string | null> {
-  return (await findExecutable("codex")) ?? (await findCodexMicrosoftStoreBinary());
-}
-
-async function resolveCodexLaunchPrefix(runtimeSettings?: ProviderRuntimeSettings): Promise<{
-  command: string;
-  args: string[];
-}> {
-  const launch = await resolveCodexLaunch(runtimeSettings);
-  const availability = await checkCodexLaunchAvailable(launch);
-  if (!availability.available) {
-    throw new Error(
-      "Codex binary not found. Install the Codex CLI (https://github.com/openai/codex) and ensure it is available in your shell PATH.",
-    );
-  }
-  return {
-    command:
-      launch.source === "override" ? launch.command : (availability.resolvedPath ?? launch.command),
-    args: launch.args,
-  };
-}
-
-async function resolveCodexLaunch(
-  runtimeSettings?: ProviderRuntimeSettings,
-): Promise<ResolvedProviderLaunch> {
-  return resolveProviderLaunch({
-    commandConfig: runtimeSettings?.command,
-    defaultBinary: {
-      command: "codex",
-      resolvePath: findDefaultCodexBinary,
-    },
-  });
-}
-
-async function checkCodexLaunchAvailable(launch: ResolvedProviderLaunch) {
-  return checkProviderLaunchAvailable(launch, {
-    command: "codex",
-    resolvePath: findDefaultCodexBinary,
-  });
-}
 
 function firstPositiveFiniteNumber(primary: unknown, secondary: unknown): number | undefined {
   if (typeof primary === "number" && Number.isFinite(primary) && primary > 0) {
@@ -533,16 +415,6 @@ function toCodexTextInput(text: string): Extract<CodexAppServerUserInput, { type
     text,
     text_elements: [],
   };
-}
-
-export function buildCodexAppServerEnv(
-  runtimeSettings?: ProviderRuntimeSettings,
-  launchEnv?: Record<string, string>,
-): NodeJS.ProcessEnv {
-  return createProviderEnv({
-    runtimeSettings,
-    overlays: [launchEnv],
-  });
 }
 
 function buildCodexAppServerInitializeParams(): {
@@ -2514,30 +2386,13 @@ export class CodexAppServerAgentClient implements AgentClient {
     launchEnv?: Record<string, string>,
     options?: { goalsEnabled?: boolean; agentId?: string },
   ): Promise<ChildProcessWithoutNullStreams> {
-    const launchPrefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
-    const args = [...launchPrefix.args, "app-server"];
-    if (options?.goalsEnabled) {
-      args.push("--enable", "goals");
-    }
-    this.logger.trace(
-      {
-        agentId: options?.agentId,
-        provider: CODEX_PROVIDER,
-        launchPrefix,
-        goalsEnabled: options?.goalsEnabled === true,
-      },
-      "provider.codex.spawn",
-    );
-    const child = spawnProcess(launchPrefix.command, args, {
-      detached: process.platform !== "win32",
-      stdio: ["pipe", "pipe", "pipe"],
-      ...createProviderEnvSpec({
-        runtimeSettings: this.runtimeSettings,
-        overlays: [launchEnv],
-      }),
+    return spawnCodexAppServer({
+      logger: this.logger,
+      runtimeSettings: this.runtimeSettings,
+      launchEnv,
+      goalsEnabled: options?.goalsEnabled,
+      agentId: options?.agentId,
     });
-    assertChildWithPipes(child);
-    return child;
   }
 
   async createSession(
