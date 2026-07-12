@@ -53,11 +53,7 @@ import {
   cleanupStaleCodexImageAttachments,
   writeCodexImageAttachment,
 } from "./image-attachments.js";
-import {
-  loadCodexThreadHistoryTimeline,
-  type PersistedTimelineEntry,
-  threadItemToTimeline,
-} from "./history.js";
+import { threadItemToTimeline } from "./history.js";
 import {
   expandCodexCustomPrompt,
   listCodexCustomPrompts,
@@ -75,6 +71,7 @@ import { CodexToolNotificationHandler } from "./tool-notification-handler.js";
 import { CodexTurnNotificationHandler } from "./turn-notification-handler.js";
 import { CodexThreadBootstrap } from "./thread-bootstrap.js";
 import { CodexSessionMetadata } from "./session-metadata.js";
+import { CodexSessionHistory } from "./session-history.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
 import {
@@ -136,13 +133,6 @@ interface CodexAppServerClientLike extends CodexClientLike {
 export { listCodexSkillEntries, listCodexSkills } from "./skills.js";
 
 export { normalizeCodexOutputSchema } from "./turn-config.js";
-
-function readCodexThread(client: CodexAppServerClientLike, threadId: string): Promise<unknown> {
-  return client.request("thread/read", {
-    threadId,
-    includeTurns: true,
-  });
-}
 
 export async function forkCodexThread(
   client: CodexAppServerClientLike,
@@ -258,8 +248,6 @@ export class CodexAppServerAgentSession implements AgentSession {
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private serviceTier: "fast" | null = null;
   private planModeEnabled = false;
-  private historyPending = false;
-  private persistedHistory: PersistedTimelineEntry[] = [];
   private readonly permissionController: CodexPermissionController;
   private readonly notificationStream = new CodexNotificationStreamState();
   private readonly notificationRouter: CodexNotificationRouter;
@@ -269,6 +257,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly turnNotificationHandler: CodexTurnNotificationHandler;
   private readonly threadBootstrap: CodexThreadBootstrap;
   private readonly sessionMetadata: CodexSessionMetadata;
+  private readonly sessionHistory: CodexSessionHistory;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
@@ -314,6 +303,12 @@ export class CodexAppServerAgentSession implements AgentSession {
       customProvider: this.deps.customProvider,
       customCodexConfig: this.deps.customCodexConfig,
       ephemeral: this.ephemeral,
+    });
+    this.sessionHistory = new CodexSessionHistory({
+      getClient: () => this.client,
+      getThreadId: () => this.currentThreadId,
+      getCwd: () => this.config.cwd ?? null,
+      userMessageTurns: this.userMessageTurns,
     });
     this.sessionMetadata = new CodexSessionMetadata({
       logger: this.logger,
@@ -426,7 +421,7 @@ export class CodexAppServerAgentSession implements AgentSession {
 
     if (this.resumeHandle?.sessionId) {
       this.currentThreadId = this.resumeHandle.sessionId;
-      this.historyPending = true;
+      this.sessionHistory.markPending();
     }
   }
 
@@ -506,28 +501,8 @@ export class CodexAppServerAgentSession implements AgentSession {
     );
   }
 
-  private async loadPersistedHistory(): Promise<void> {
-    if (!this.client || !this.currentThreadId) return;
-    const client = this.client;
-    const threadId = this.currentThreadId;
-
-    const timeline = await loadCodexThreadHistoryTimeline({
-      threadId,
-      cwd: this.config.cwd ?? null,
-      requestThread: (threadIdToRead) => {
-        return readCodexThread(client, threadIdToRead);
-      },
-    });
-    this.userMessageTurns.reset();
-    for (const entry of timeline) {
-      if (entry.item.type === "user_message") {
-        this.userMessageTurns.remember(entry.item.messageId);
-      }
-    }
-    if (timeline.length > 0) {
-      this.persistedHistory = timeline;
-      this.historyPending = true;
-    }
+  private loadPersistedHistory(): Promise<void> {
+    return this.sessionHistory.load();
   }
 
   private ensureThreadLoaded(): Promise<void> {
@@ -740,13 +715,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
-    if (!this.historyPending || this.persistedHistory.length === 0) {
-      return;
-    }
-    const history = this.persistedHistory;
-    this.persistedHistory = [];
-    this.historyPending = false;
-    for (const entry of history) {
+    for (const entry of this.sessionHistory.drain()) {
       yield {
         type: "timeline",
         provider: CODEX_PROVIDER,
@@ -886,8 +855,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       setThreadId: async (threadId) => {
         this.currentThreadId = threadId;
         this.cachedRuntimeInfo = null;
-        this.persistedHistory = [];
-        this.historyPending = false;
+        this.sessionHistory.reset();
         await this.loadPersistedHistory();
       },
     });
