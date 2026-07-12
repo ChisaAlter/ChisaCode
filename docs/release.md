@@ -20,8 +20,8 @@ are not part of the default release.
 
 Ordinary branch pushes, pull requests, and merge queues do not trigger GitHub Actions. `CI`,
 `Deploy Relay`, `Nix`, `Nix Update Hash`, and `Release Notes Sync` are manual-only workflows.
-Version-tag workflows remain enabled for release artifacts. Run the manual CI workflow only as part
-of an explicitly authorized release.
+Version-tag workflows remain enabled for release artifacts. Scheduled Dependabot version updates
+are disabled. Run the manual CI workflow only as part of an explicitly authorized release.
 
 ## Two steps
 
