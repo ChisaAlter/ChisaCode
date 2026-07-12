@@ -33,6 +33,11 @@ import { getClaudeModelsWithSettings, normalizeClaudeRuntimeModelId } from "./mo
 import { parsePartialJsonObject } from "./partial-json.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
 import { runClaudeSdkQueryPump } from "./sdk-pump.js";
+import {
+  ClaudeMessageRouter,
+  type ClaudeAutonomousTurnState,
+  type ClaudeTurnState,
+} from "./message-router.js";
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
@@ -90,6 +95,8 @@ import {
 import { withTimeout } from "../../../../utils/promise-timeout.js";
 import { execCommand } from "../../../../utils/spawn.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
+
+export { readEventIdentifiers } from "./message-router.js";
 
 const fsPromises = promises;
 const CLAUDE_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
@@ -185,18 +192,6 @@ function isImageMimeType(
     value === "image/gif" ||
     value === "image/webp"
   );
-}
-
-type TurnState = "idle" | "foreground" | "autonomous";
-
-interface EventIdentifiers {
-  taskId: string | null;
-  parentMessageId: string | null;
-  messageId: string | null;
-}
-
-interface AutonomousTurnState {
-  id: string;
 }
 
 interface AsyncMessageInput<T> {
@@ -1016,62 +1011,6 @@ function isSyntheticHistoryUserEntry(entry: Record<string, unknown>): boolean {
   return isSyntheticUserEntry(entry) && !isToolResultUserEntry(entry);
 }
 
-function firstTrimmedString(sources: readonly unknown[]): string | null {
-  for (const source of sources) {
-    const value = readTrimmedString(source);
-    if (value) {
-      return value;
-    }
-  }
-  return null;
-}
-
-function readTranscriptUuid(message: SDKMessage): string | null {
-  const root = toObjectRecord(message) ?? {};
-  const messageType = readTrimmedString(root.type);
-  if (messageType !== "user" && messageType !== "assistant") {
-    return null;
-  }
-  return firstTrimmedString([root.uuid]);
-}
-
-export function readEventIdentifiers(message: SDKMessage): EventIdentifiers {
-  const root = toObjectRecord(message) ?? {};
-  const messageType = readTrimmedString(root.type);
-  const streamEvent = toObjectRecord(root.event);
-  const streamEventMessage = toObjectRecord(streamEvent?.message);
-  const messageContainer = toObjectRecord(root.message);
-
-  const messageIdFromUuid =
-    messageType === "user" || messageType === "assistant" || messageType === "system"
-      ? root.uuid
-      : undefined;
-
-  return {
-    taskId: firstTrimmedString([
-      root.task_id,
-      streamEvent?.task_id,
-      streamEventMessage?.task_id,
-      messageContainer?.task_id,
-    ]),
-    parentMessageId: firstTrimmedString([
-      root.parent_message_id,
-      streamEvent?.parent_message_id,
-      streamEventMessage?.parent_message_id,
-      messageContainer?.parent_message_id,
-    ]),
-    messageId: firstTrimmedString([
-      root.message_id,
-      streamEvent?.message_id,
-      streamEventMessage?.id,
-      streamEventMessage?.message_id,
-      messageContainer?.id,
-      messageContainer?.message_id,
-      messageIdFromUuid,
-    ]),
-  };
-}
-
 export class ClaudeAgentClient implements AgentClient {
   readonly provider = "claude" as const;
   readonly capabilities = CLAUDE_CAPABILITIES;
@@ -1386,21 +1325,17 @@ class ClaudeAgentSession implements AgentSession {
   private toolUseIndexToId = new Map<number, string>();
   private toolUseInputBuffers = new Map<string, string>();
   private pendingPermissions = new Map<string, PendingPermission>();
-  private activeForegroundTurnId: string | null = null;
-  private autonomousTurn: AutonomousTurnState | null = null;
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private readonly timelineAssembler = new ClaudeTimelineAssembler({
     shouldSuppressAssistantText: (text) =>
       text === INTERRUPT_TOOL_USE_PLACEHOLDER || isClaudeTranscriptNoiseText(text),
   });
+  private readonly messageRouter: ClaudeMessageRouter;
   private readonly sidechainTracker = new ClaudeSidechainTracker({
     getToolInput: (toolUseId) => this.toolUseCache.get(toolUseId)?.input ?? null,
   });
   private persistedHistory: PersistedTimelineEntry[] = [];
   private historyPending = false;
-  private turnState: TurnState = "idle";
-  private nextTurnOrdinal = 1;
-  private cancelCurrentTurn: (() => void) | null = null;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private lastOptionsModel: string | null = null;
   private lastRuntimeModel: string | null = null;
@@ -1408,9 +1343,6 @@ class ClaudeAgentSession implements AgentSession {
   private compacting = false;
   private queryPumpPromise: Promise<void> | null = null;
   private queryRestartNeeded = false;
-  private pendingInterruptAbort = false;
-  private foregroundHasVisibleActivity = false;
-  private activeTurnHasAssistantText = false;
   private lastContextWindowUsedTokens: number | undefined;
   private lastContextWindowMaxTokens: number | undefined;
   private lastStreamRequestInputTokens: number | undefined;
@@ -1430,6 +1362,22 @@ class ClaudeAgentSession implements AgentSession {
     this.runtimeSettings = options.runtimeSettings;
     this.persistSession = options.persistSession;
     this.logger = options.logger.child({ agentId: this.agentId });
+    this.messageRouter = new ClaudeMessageRouter({
+      logger: this.logger,
+      getTraceContext: () => ({
+        agentId: this.agentId,
+        provider: "claude",
+        sessionId: this.claudeSessionId,
+      }),
+      notifySubscribers: (event) => this.notifySubscribers(event),
+      flushPendingToolCalls: () => this.flushPendingToolCalls(),
+      buildTurnFailedEvent: (errorMessage) => this.buildTurnFailedEvent(errorMessage),
+      rememberTranscriptProgress: (message, messageId) =>
+        this.rememberTranscriptProgress(message, messageId),
+      translateMessageToEvents: (message, routeOptions) =>
+        this.translateMessageToEvents(message, routeOptions),
+      assembleTimelineItems: (input) => this.timelineAssembler.consume(input),
+    });
     this.queryFactory = options.queryFactory;
     this.resolveBinary = options.resolveBinary;
     const handle = options.handle;
@@ -1458,6 +1406,71 @@ class ClaudeAgentSession implements AgentSession {
     if (this.currentMode !== "plan") {
       this.planResumeMode = this.currentMode;
     }
+  }
+
+  private get activeForegroundTurnId(): string | null {
+    return this.messageRouter.getActiveForegroundTurnId();
+  }
+
+  private set activeForegroundTurnId(turnId: string | null) {
+    this.messageRouter.setActiveForegroundTurnId(turnId);
+  }
+
+  private get autonomousTurn(): ClaudeAutonomousTurnState | null {
+    return this.messageRouter.getAutonomousTurn();
+  }
+
+  private set autonomousTurn(turn: ClaudeAutonomousTurnState | null) {
+    this.messageRouter.setAutonomousTurn(turn);
+  }
+
+  private get turnState(): ClaudeTurnState {
+    return this.messageRouter.getTurnState();
+  }
+
+  private set turnState(turnState: ClaudeTurnState) {
+    this.messageRouter.setTurnState(turnState);
+  }
+
+  // Compatibility surface for focused routing regression tests.
+  get nextTurnOrdinal(): number {
+    return this.messageRouter.getNextTurnOrdinal();
+  }
+
+  set nextTurnOrdinal(ordinal: number) {
+    this.messageRouter.setNextTurnOrdinal(ordinal);
+  }
+
+  private get cancelCurrentTurn(): (() => void) | null {
+    return this.messageRouter.getCancelCurrentTurn();
+  }
+
+  private set cancelCurrentTurn(cancel: (() => void) | null) {
+    this.messageRouter.setCancelCurrentTurn(cancel);
+  }
+
+  private get pendingInterruptAbort(): boolean {
+    return this.messageRouter.isPendingInterruptAbort();
+  }
+
+  private set pendingInterruptAbort(pending: boolean) {
+    this.messageRouter.setPendingInterruptAbort(pending);
+  }
+
+  private get foregroundHasVisibleActivity(): boolean {
+    return this.messageRouter.hasForegroundVisibleActivity();
+  }
+
+  private set foregroundHasVisibleActivity(visible: boolean) {
+    this.messageRouter.setForegroundVisibleActivity(visible);
+  }
+
+  private get activeTurnHasAssistantText(): boolean {
+    return this.messageRouter.hasActiveTurnAssistantText();
+  }
+
+  private set activeTurnHasAssistantText(hasText: boolean) {
+    this.messageRouter.setActiveTurnAssistantText(hasText);
   }
 
   get id(): string | null {
@@ -2566,29 +2579,12 @@ class ClaudeAgentSession implements AgentSession {
     };
   }
 
-  private transitionTurnState(next: TurnState, reason: string): void {
-    if (this.turnState === next) {
-      return;
-    }
-    this.logger.debug({ from: this.turnState, to: next, reason }, "Claude turn state transition");
-    this.turnState = next;
+  private transitionTurnState(next: ClaudeTurnState, reason: string): void {
+    this.messageRouter.transitionTurnState(next, reason);
   }
 
   private syncTurnState(reason: string): void {
-    if (this.activeForegroundTurnId) {
-      this.transitionTurnState("foreground", reason);
-      return;
-    }
-    if (this.autonomousTurn) {
-      this.transitionTurnState("autonomous", reason);
-      return;
-    }
-    this.transitionTurnState("idle", reason);
-  }
-
-  private isAbortError(message: SDKMessage): boolean {
-    const errors = "errors" in message && Array.isArray(message.errors) ? message.errors : [];
-    return errors.some((e: string) => /\baborted\b/i.test(e));
+    this.messageRouter.syncTurnState(reason);
   }
 
   private buildTurnFailedEvent(
@@ -2646,15 +2642,7 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   private createTurnId(owner: "foreground" | "autonomous"): string {
-    return `${owner}-turn-${this.nextTurnOrdinal++}`;
-  }
-
-  private isTerminalTurnEvent(event: AgentStreamEvent): boolean {
-    return (
-      event.type === "turn_completed" ||
-      event.type === "turn_failed" ||
-      event.type === "turn_canceled"
-    );
+    return this.messageRouter.createTurnId(owner);
   }
 
   private async executeRewindTurn(
@@ -2695,69 +2683,19 @@ class ClaudeAgentSession implements AgentSession {
   private finishForegroundTurn(
     event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
   ): void {
-    if (event.type === "turn_failed" || event.type === "turn_canceled") {
-      this.flushPendingToolCalls();
-    }
-    this.notifySubscribers(event);
-    this.activeForegroundTurnId = null;
-    this.cancelCurrentTurn = null;
-    this.activeTurnHasAssistantText = false;
-    this.syncTurnState("foreground turn terminal");
+    this.messageRouter.finishForegroundTurn(event);
   }
 
   private dispatchEvents(events: AgentStreamEvent[]): void {
-    let terminalSeen = false;
-    for (const event of events) {
-      this.notifySubscribers(event);
-      terminalSeen ||= this.isTerminalTurnEvent(event);
-    }
-
-    if (terminalSeen) {
-      if (this.activeForegroundTurnId) {
-        this.activeForegroundTurnId = null;
-        this.cancelCurrentTurn = null;
-        this.activeTurnHasAssistantText = false;
-        this.syncTurnState("foreground turn terminal");
-      } else if (this.autonomousTurn) {
-        this.autonomousTurn = null;
-        this.activeTurnHasAssistantText = false;
-        this.syncTurnState("autonomous turn terminal");
-      }
-    }
-  }
-
-  private startAutonomousTurn(): void {
-    if (this.autonomousTurn) {
-      return;
-    }
-    this.autonomousTurn = {
-      id: this.createTurnId("autonomous"),
-    };
-    this.activeTurnHasAssistantText = false;
-    this.notifySubscribers({ type: "turn_started", provider: "claude" });
-    this.syncTurnState("autonomous turn started");
+    this.messageRouter.dispatchEvents(events);
   }
 
   private completeAutonomousTurn(): void {
-    if (!this.autonomousTurn) {
-      return;
-    }
-    this.notifySubscribers({ type: "turn_completed", provider: "claude" });
-    this.autonomousTurn = null;
-    this.activeTurnHasAssistantText = false;
-    this.syncTurnState("autonomous turn completed");
+    this.messageRouter.completeAutonomousTurn();
   }
 
   private failActiveTurns(errorMessage: string): void {
-    const failure = this.buildTurnFailedEvent(errorMessage);
-    this.flushPendingToolCalls();
-    if (this.activeForegroundTurnId) {
-      this.finishForegroundTurn(failure);
-      return;
-    }
-    if (this.autonomousTurn) {
-      this.dispatchEvents([failure]);
-    }
+    this.messageRouter.failActiveTurns(errorMessage);
   }
 
   private startQueryPump(): void {
@@ -2808,115 +2746,8 @@ class ClaudeAgentSession implements AgentSession {
     });
   }
 
-  private shouldSuppressStaleResult(message: SDKMessage): boolean {
-    // Suppress stale results from interrupted requests. The cancel path already
-    // emitted the terminal event; this result is leftover from the killed API
-    // request. Consume the flag on ANY result so it doesn't linger.
-    if (message.type === "result" && this.pendingInterruptAbort) {
-      this.pendingInterruptAbort = false;
-      if (message.subtype !== "success") {
-        this.logger.debug("Suppressing stale non-success result from interrupted request");
-        return true;
-      }
-    }
-    if (message.type === "result" && message.subtype !== "success" && this.isAbortError(message)) {
-      this.logger.debug("Suppressing abort result by content");
-      return true;
-    }
-    return false;
-  }
-
-  private isAssistantishMessage(message: SDKMessage): boolean {
-    return (
-      message.type === "assistant" ||
-      message.type === "stream_event" ||
-      message.type === "tool_progress" ||
-      (message.type === "system" && message.subtype === "task_notification")
-    );
-  }
-
   private routeSdkMessageFromPump(message: SDKMessage): void {
-    if (this.shouldSuppressStaleResult(message)) {
-      return;
-    }
-
-    const isForeground = Boolean(this.activeForegroundTurnId);
-    if (!isForeground && this.isAssistantishMessage(message)) {
-      this.startAutonomousTurn();
-    }
-    if (!isForeground && !this.autonomousTurn && message.type === "result") {
-      return;
-    }
-
-    const turnId = this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? null;
-    const identifiers = readEventIdentifiers(message);
-    this.rememberTranscriptProgress(message, readTranscriptUuid(message));
-
-    this.logger.trace(
-      {
-        agentId: this.agentId,
-        provider: "claude",
-        sessionId: this.claudeSessionId,
-        turnId: turnId ?? undefined,
-        messageType: message.type,
-        identifiers,
-        rawEvent: message,
-      },
-      "provider.claude.parsed_event",
-    );
-
-    const messageEvents = this.translateMessageToEvents(message, {
-      suppressAssistantText: true,
-      suppressReasoning: true,
-    });
-    const assistantTimelineEvents = this.timelineAssembler
-      .consume({
-        message,
-        runId: turnId,
-        messageIdHint: identifiers.messageId,
-      })
-      .map(
-        (item) =>
-          ({
-            type: "timeline",
-            item,
-            provider: "claude",
-          }) satisfies AgentStreamEvent,
-      );
-
-    const events = [...messageEvents, ...assistantTimelineEvents];
-
-    if (events.length === 0) {
-      return;
-    }
-    if (
-      this.pendingInterruptAbort &&
-      message.type === "result" &&
-      events.some((event) => event.type === "turn_completed" || event.type === "turn_failed") &&
-      (!this.activeForegroundTurnId || !this.foregroundHasVisibleActivity)
-    ) {
-      this.pendingInterruptAbort = false;
-      this.logger.debug("Suppressing stale Claude interrupt terminal result");
-      return;
-    }
-    if (
-      events.some((event) => event.type === "timeline" && event.item.type === "assistant_message")
-    ) {
-      this.activeTurnHasAssistantText = true;
-    }
-    if (
-      this.activeForegroundTurnId &&
-      events.some(
-        (event) =>
-          event.type === "timeline" ||
-          event.type === "permission_requested" ||
-          event.type === "permission_resolved",
-      )
-    ) {
-      this.foregroundHasVisibleActivity = true;
-    }
-
-    this.dispatchEvents(events);
+    this.messageRouter.routeMessage(message);
   }
 
   private async handleMissingResumedConversation(

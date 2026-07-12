@@ -10,7 +10,7 @@
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
-- Claude 已完成两个边界切片：`timeline-assembler.ts` 独立拥有 assistant/reasoning delta 聚合、message identity、去重与 finalize 状态；`sdk-pump.ts` 独立拥有 SDK iterator reader、raw event logging、interrupt-abort recovery 与 finally cleanup。
+- Claude 已完成三个边界切片：`timeline-assembler.ts` 独立拥有 assistant/reasoning delta 聚合、message identity、去重与 finalize 状态；`sdk-pump.ts` 独立拥有 SDK iterator reader、raw event logging、interrupt-abort recovery 与 finally cleanup；`message-router.ts` 独立拥有 foreground/autonomous turn 状态、事件标识提取、终态分派与 stale-result 抑制。
 
 ## 现状
 
@@ -21,7 +21,7 @@
 | --------------------------- | ---- | ---------------------------- | --------------------------------------------- | -------------- | --------- |
 | `codex-app-server-agent.ts` | 55   | compatibility façade         | public wrapper → `codex/client.ts`            | 0              | 4         |
 | `codex/session.ts`          | 715  | `CodexAppServerAgentSession` | —                                             | 15             | 29        |
-| `claude/agent.ts`           | 4812 | `ClaudeAgentSession`         | `ClaudeAgentClient`                           | 100            | 26        |
+| `claude/agent.ts`           | 4643 | `ClaudeAgentSession`         | `ClaudeAgentClient`                           | 95             | 27        |
 | `opencode-agent.ts`         | 3750 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | ~18            | 21        |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
@@ -125,12 +125,13 @@
 
 ### Slice 2：Claude 拆分（进行中）
 
-把 `claude/agent.ts` 从 5185 行继续拆分（当前 4812 行）：
+把 `claude/agent.ts` 从 5185 行继续拆分（当前 4643 行）：
 
 - `claude/session.ts` —— 移动 `ClaudeAgentSession`，保持 `implements AgentSession`
 - `claude/client.ts` —— 移动 `ClaudeAgentClient`，保持 `implements AgentClient`
 - `claude/timeline-assembler.ts` —— assistant/reasoning delta、message identity、去重与 finalize 状态（已完成，325 行）
-- `claude/sdk-pump.ts` —— SDK iterator reader、raw logging、interrupt-abort recovery 与 finally cleanup（reader loop 已完成，124 行；message route 待拆）
+- `claude/sdk-pump.ts` —— SDK iterator reader、raw logging、interrupt-abort recovery 与 finally cleanup（已完成，124 行）
+- `claude/message-router.ts` —— foreground/autonomous turn 状态、事件标识、终态分派与 stale-result 抑制（已完成，397 行）
 - `claude/tool-call-handlers.ts` —— `handleToolUseStart` / `handleToolResult`
 - `claude/history-converter.ts` —— `convertHistoryEntry`
 - `claude/sdk-types-mapping.ts` —— 文件头 SDK 类型映射
