@@ -226,8 +226,9 @@
   - `OpenCodeTurnExecution` 独立拥有 prompt parts、slash command 分流、run/start/interrupt、MCP/SSE 启动顺序与 provider dispatch；Session 降至 395 行，turn execution 为 433 行
   - `opencode/sub-agent-tracking.ts` 独立拥有 child session 绑定、动作日志、乱序 tool part 缓冲与 parent permission 归属；event translator 从 1093 行降至 810 行
   - `opencode/permission-translator.ts` 独立拥有 permission/question 规范化、命令/cwd 提取与共享 permission contract 映射；`event-values.ts` 提供窄 payload 解析原语，MCP controller 不再依赖 translator；event translator 降至 597 行
+  - `opencode/message-translator.ts` 独立拥有 message/part/delta、structured output、stream dedupe、usage/context 与 tool/compaction 映射；event translator 降至 226 行兼容路由 façade
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
-- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode turn execution/permission/sub-agent tracking/translator/history/MCP/event bus/runtime/lifecycle 已独立。下一步继续拆分 message/usage/session event translation。
+- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode turn/message/permission/sub-agent/history/MCP/event bus/runtime/lifecycle 均已独立，主事件路由完成收敛。下一步转向 Claude Session 的剩余大职责。
 
 ---
 
