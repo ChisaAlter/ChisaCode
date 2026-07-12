@@ -1,23 +1,7 @@
 name: Nix
 
 on:
-  pull_request:
-    branches: [cn-main]
-    paths:
-      - "nix/**"
-      - "flake.nix"
-      - "flake.lock"
-      - "package.json"
-      - "package-lock.json"
-      - "packages/highlight/**"
-      - "packages/protocol/**"
-      - "packages/client/**"
-      - "packages/server/**"
-      - "packages/relay/**"
-      - "packages/cli/**"
-      - "scripts/update-nix.sh"
-      - "scripts/fix-lockfile.mjs"
-      - ".github/workflows/nix.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,8 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-node@v4
         with:

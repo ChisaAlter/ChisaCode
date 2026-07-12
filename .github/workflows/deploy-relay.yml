@@ -1,11 +1,6 @@
 name: Deploy Relay
 
 on:
-  push:
-    branches: [cn-main]
-    paths:
-      - "packages/relay/**"
-      - ".github/workflows/deploy-relay.yml"
   workflow_dispatch:
 
 jobs:

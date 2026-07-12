@@ -1,11 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [cn-main]
-  pull_request:
-    branches: [cn-main]
-  merge_group:
   workflow_dispatch:
 
 # Least-privilege: CI only needs to read code and actions metadata. Jobs that
@@ -16,7 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 env:
   # CI does not use the CUDA execution provider, and the onnxruntime-node

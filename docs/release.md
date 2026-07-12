@@ -16,6 +16,13 @@ Do not run `npm run release:patch` or `npm run release:promote` for the default 
 commands publish npm packages and push the broad `v*` tag path, which triggers extra surfaces that
 are not part of the default release.
 
+## Automation trigger policy
+
+Ordinary branch pushes, pull requests, and merge queues do not trigger GitHub Actions. `CI`,
+`Deploy Relay`, `Nix`, `Nix Update Hash`, and `Release Notes Sync` are manual-only workflows.
+Version-tag workflows remain enabled for release artifacts. Run the manual CI workflow only as part
+of an explicitly authorized release.
+
 ## Two steps
 
 A release has exactly two steps. The agent does the first, the user authorizes the second.
@@ -25,7 +32,7 @@ A release has exactly two steps. The agent does the first, the user authorizes t
 - format, lint, typecheck all green
 - draft the changelog, show it to the user, wait for review
 - run the pre-release sanity check, surface findings to the user
-- confirm CI is green
+- confirm local release checks are green; remote CI is dispatched during the authorized release flow
 
 **Go-ahead** (user says "go ahead"):
 
@@ -64,12 +71,15 @@ npm run version:all:patch
 $version = node -p "require('./package.json').version"
 git tag "desktop-windows-v$version" HEAD
 git tag "android-v$version" HEAD
-git push origin HEAD:cn-main "desktop-windows-v$version" "android-v$version"
+git push origin HEAD:cn-main
+gh workflow run ci.yml --ref cn-main
+# Wait for the release-only CI run to succeed before publishing tags.
+git push origin "desktop-windows-v$version" "android-v$version"
 gh workflow run release-notes-sync.yml -f tag="v$version" -f create_if_missing=true
 ```
 
-This bumps the version across workspaces, creates the version commit, then pushes only the targeted
-tags:
+This bumps the version across workspaces, pushes the version commit without triggering CI, runs the
+single release-only CI gate, then publishes only the targeted tags:
 
 - `desktop-windows-vX.Y.Z` builds and uploads Windows desktop assets to the `vX.Y.Z` GitHub Release
 - `android-vX.Y.Z` builds and uploads the Android APK to the same `vX.Y.Z` GitHub Release
@@ -252,7 +262,7 @@ Tight cadence on purpose. The first run fires immediately, giving a near-real-ti
 
 ## Release notes on GitHub
 
-The GitHub Release body is populated by the `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). The default Windows + Android tag flow triggers it from `desktop-windows-vX.Y.Z` and `android-vX.Y.Z` tags. If a retry is needed, dispatch it with the release tag:
+The GitHub Release body is populated by the manual-only `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). The standard release command dispatches it exactly once after the release tags are pushed. If a retry is needed, dispatch it with the release tag:
 
 ```bash
 gh workflow run release-notes-sync.yml -f tag=vX.Y.Z -f create_if_missing=true
