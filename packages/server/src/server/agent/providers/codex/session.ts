@@ -14,7 +14,6 @@ import {
   type AgentSkill,
   type AgentSlashCommand,
   type AgentStreamEvent,
-  type AgentTimelineItem,
   type ToolCallTimelineItem,
   type AgentUsage,
 } from "../../agent-sdk-types.js";
@@ -52,13 +51,13 @@ import {
 import { CodexUserMessageTurnState } from "./user-message-turn-state.js";
 import { CodexContextCompactionState } from "./context-compaction-state.js";
 import { CodexDeltaNotificationHandler } from "./delta-notification-handler.js";
+import { CodexItemNotificationHandler } from "./item-notification-handler.js";
 import {
   cleanupStaleCodexImageAttachments,
   writeCodexImageAttachment,
 } from "./image-attachments.js";
 import {
   loadCodexThreadHistoryTimeline,
-  normalizeCodexThreadItemType,
   type PersistedTimelineEntry,
   threadItemToTimeline,
 } from "./history.js";
@@ -321,6 +320,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly notificationStream = new CodexNotificationStreamState();
   private readonly notificationRouter: CodexNotificationRouter;
   private readonly deltaNotificationHandler: CodexDeltaNotificationHandler;
+  private readonly itemNotificationHandler: CodexItemNotificationHandler;
   private readonly toolNotificationHandler: CodexToolNotificationHandler;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
@@ -380,6 +380,23 @@ export class CodexAppServerAgentSession implements AgentSession {
       getCwd: () => this.config.cwd ?? null,
       emit: (item) => this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item }),
     });
+    this.itemNotificationHandler = new CodexItemNotificationHandler({
+      notificationStream: this.notificationStream,
+      compactionState: this.compactionState,
+      subAgentTracker: this.subAgentTracker,
+      userMessageTurns: this.userMessageTurns,
+      getCwd: () => this.config.cwd ?? null,
+      resolveSubAgentCallId: (threadId) => this.getSubAgentCallIdForThread(threadId),
+      emitSubAgentActivity: (callId, status) => this.emitSubAgentActivityUpdate(callId, status),
+      rememberTextualToolCallFailure: (text) => this.rememberTextualToolCallFailure(text),
+      rememberPlanResult: (item) => this.rememberPlanResult(item),
+      isPlanModeEnabled: () => this.planModeEnabled,
+      markAssistantMessageBoundary: () =>
+        this.deltaNotificationHandler.markAssistantMessageBoundary(),
+      warnOnIncompleteEdit: (item, source, payload) =>
+        this.toolNotificationHandler.warnOnIncompleteEditToolCall(item, source, payload),
+      emit: (item) => this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item }),
+    });
     this.permissionController = new CodexPermissionController({
       getCwd: () => this.config.cwd ?? null,
       emit: (event) => this.eventBus.emit(event),
@@ -404,8 +421,8 @@ export class CodexAppServerAgentSession implements AgentSession {
       onPatchApplyStarted: (parsed) => this.toolNotificationHandler.handlePatchApplyStarted(parsed),
       onPatchApplyCompleted: (parsed) =>
         this.toolNotificationHandler.handlePatchApplyCompleted(parsed),
-      onItemCompleted: (parsed) => this.handleItemCompletedNotification(parsed),
-      onItemStarted: (parsed) => this.handleItemStartedNotification(parsed),
+      onItemCompleted: (parsed) => this.itemNotificationHandler.handleCompleted(parsed),
+      onItemStarted: (parsed) => this.itemNotificationHandler.handleStarted(parsed),
       onInvalidPayload: (parsed) =>
         this.warnInvalidNotificationPayload(parsed.method, parsed.params),
       onUnknownMethod: (parsed) => this.warnUnknownNotificationMethod(parsed.method, parsed.params),
@@ -1437,32 +1454,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
-  private handleSubAgentChildItemCompleted(
-    callId: string,
-    itemId: string | undefined,
-    timelineItem: AgentTimelineItem,
-  ): void {
-    this.applyBufferedDeltaTextToTimelineItem(timelineItem, itemId);
-    if (itemId) {
-      this.subAgentTracker.upsertChildItem(callId, itemId, timelineItem);
-      this.notificationStream.clearItem(itemId);
-    }
-    this.emitSubAgentActivityUpdate(callId, "running");
-  }
-
-  private shouldSkipCompletedThreadItem(
-    timelineItem: AgentTimelineItem,
-    normalizedItemType: string | undefined,
-    itemId: string | undefined,
-  ): boolean {
-    // For commandExecution items, codex/event/exec_command_* is authoritative.
-    if (timelineItem.type === "tool_call" && normalizedItemType === "commandExecution") {
-      const callId = timelineItem.callId || itemId;
-      return Boolean(callId && this.notificationStream.hasExecCommandCompleted(callId));
-    }
-    return Boolean(itemId && this.notificationStream.hasItemCompleted(itemId));
-  }
-
   private handleThreadStartedNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "thread_started" }>,
   ): void {
@@ -1594,13 +1585,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
-  private isUserMessageItem(item: { type?: string; [key: string]: unknown }): boolean {
-    return (
-      normalizeCodexThreadItemType(typeof item.type === "string" ? item.type : undefined) ===
-      "userMessage"
-    );
-  }
-
   private handleThreadRolledBackNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "thread_rolled_back" }>,
   ): void {
@@ -1622,247 +1606,6 @@ export class CodexAppServerAgentSession implements AgentSession {
       item: this.compactionState.createTimelineItem("completed"),
       ...(parsed.turnId ? { turnId: parsed.turnId } : {}),
     });
-  }
-
-  private handleItemCompletedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "item_completed" }>,
-  ): void {
-    // Codex emits mirrored lifecycle notifications via both `codex/event/item_*`
-    // and canonical `item/*`. We render only the canonical channel to avoid
-    // duplicated assistant/reasoning rows.
-    if (parsed.source === "codex_event") {
-      return;
-    }
-    if (this.isUserMessageItem(parsed.item)) {
-      this.handleUserMessageItem(parsed);
-      return;
-    }
-    if (this.compactionState.isCompactionItem(parsed.item)) {
-      if (!this.compactionState.shouldEmitItemCompletion()) {
-        return;
-      }
-      this.eventBus.emit({
-        type: "timeline",
-        provider: CODEX_PROVIDER,
-        item: this.compactionState.createTimelineItem("completed", parsed.item.id),
-      });
-      return;
-    }
-    const timelineItem = threadItemToTimeline(parsed.item, {
-      includeUserMessage: false,
-      cwd: this.config.cwd ?? null,
-    });
-    if (!timelineItem) {
-      return;
-    }
-    const childSubAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
-    if (childSubAgentCallId) {
-      this.handleSubAgentChildItemCompleted(childSubAgentCallId, parsed.item.id, timelineItem);
-      return;
-    }
-    const normalizedItemType = normalizeCodexThreadItemType(
-      typeof parsed.item.type === "string" ? parsed.item.type : undefined,
-    );
-    const itemId = parsed.item.id;
-    if (this.shouldSkipCompletedThreadItem(timelineItem, normalizedItemType, itemId)) {
-      return;
-    }
-    if (this.consumeStreamedTextCompletion(timelineItem, itemId)) {
-      if (timelineItem.type === "assistant_message") {
-        this.deltaNotificationHandler.markAssistantMessageBoundary();
-      }
-      if (itemId) {
-        this.notificationStream.markItemCompleted(itemId);
-        this.notificationStream.clearItemStarted(itemId);
-      }
-      return;
-    }
-    this.applyBufferedDeltaTextToTimelineItem(timelineItem, itemId);
-    if (timelineItem.type === "tool_call") {
-      this.subAgentTracker.registerToolCall(timelineItem, parsed.item);
-      if (timelineItem.detail.type === "plan") {
-        this.rememberPlanResult(timelineItem);
-        // Codex can surface plans both as turn/plan updates and as completed
-        // thread items. In plan mode, approval owns the visible plan card.
-        if (this.planModeEnabled) {
-          return;
-        }
-      }
-      this.toolNotificationHandler.warnOnIncompleteEditToolCall(
-        timelineItem,
-        "item_completed",
-        parsed.item,
-      );
-    }
-    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    if (timelineItem.type === "assistant_message") {
-      this.deltaNotificationHandler.markAssistantMessageBoundary();
-    }
-    if (itemId) {
-      this.notificationStream.markItemCompleted(itemId);
-      this.notificationStream.clearItemStarted(itemId);
-      this.notificationStream.clearCommandOutput(itemId);
-      this.notificationStream.clearFileChangeOutput(itemId);
-    }
-  }
-
-  private consumeStreamedTextCompletion(
-    timelineItem: AgentTimelineItem,
-    itemId: string | null | undefined,
-  ): boolean {
-    if (!itemId) {
-      return false;
-    }
-    if (timelineItem.type === "assistant_message") {
-      const streamedText = this.notificationStream.consumeAssistantText(itemId);
-      if (streamedText !== null) {
-        this.rememberTextualToolCallFailure(timelineItem.text);
-        this.emitMissingFinalTextSuffix(timelineItem, streamedText);
-        return true;
-      }
-    }
-    if (timelineItem.type === "reasoning") {
-      const streamedText = this.notificationStream.consumeReasoningText(itemId);
-      if (streamedText !== null) {
-        this.emitMissingFinalTextSuffix(timelineItem, streamedText);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private emitMissingFinalTextSuffix(
-    timelineItem: Extract<AgentTimelineItem, { type: "assistant_message" | "reasoning" }>,
-    streamedText: string,
-  ): void {
-    if (!timelineItem.text.startsWith(streamedText)) {
-      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-      return;
-    }
-    const suffix = timelineItem.text.slice(streamedText.length);
-    if (!suffix) {
-      return;
-    }
-    this.eventBus.emit({
-      type: "timeline",
-      provider: CODEX_PROVIDER,
-      item:
-        timelineItem.type === "assistant_message"
-          ? {
-              type: timelineItem.type,
-              text: suffix,
-              ...(timelineItem.messageId ? { messageId: timelineItem.messageId } : {}),
-            }
-          : { type: timelineItem.type, text: suffix },
-    });
-  }
-
-  private applyBufferedDeltaTextToTimelineItem(
-    timelineItem: AgentTimelineItem,
-    itemId: string | null | undefined,
-  ): void {
-    if (!itemId) {
-      return;
-    }
-    if (timelineItem.type === "assistant_message") {
-      const buffered = this.notificationStream.peekAssistantText(itemId);
-      if (buffered && buffered.length > 0) {
-        timelineItem.text = buffered;
-      }
-      this.rememberTextualToolCallFailure(timelineItem.text);
-      return;
-    }
-    if (timelineItem.type === "reasoning") {
-      const buffered = this.notificationStream.peekReasoningText(itemId);
-      if (buffered && buffered.length > 0) {
-        timelineItem.text = buffered;
-      }
-    }
-  }
-
-  private handleItemStartedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "item_started" }>,
-  ): void {
-    if (parsed.source === "codex_event") {
-      return;
-    }
-    if (this.isUserMessageItem(parsed.item)) {
-      this.handleUserMessageItem(parsed);
-      return;
-    }
-    if (this.compactionState.isCompactionItem(parsed.item)) {
-      this.eventBus.emit({
-        type: "timeline",
-        provider: CODEX_PROVIDER,
-        item: this.compactionState.createTimelineItem("loading", parsed.item.id),
-      });
-      return;
-    }
-    const timelineItem = threadItemToTimeline(parsed.item, {
-      includeUserMessage: false,
-      cwd: this.config.cwd ?? null,
-    });
-    if (!timelineItem || timelineItem.type !== "tool_call") {
-      return;
-    }
-    const childSubAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
-    if (childSubAgentCallId) {
-      if (parsed.item.id) {
-        this.subAgentTracker.upsertChildItem(childSubAgentCallId, parsed.item.id, timelineItem);
-      }
-      this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
-      return;
-    }
-    const normalizedItemType = normalizeCodexThreadItemType(
-      typeof parsed.item.type === "string" ? parsed.item.type : undefined,
-    );
-    const itemId = parsed.item.id;
-    if (normalizedItemType === "commandExecution") {
-      const callId = timelineItem.callId || itemId;
-      if (callId && this.notificationStream.hasExecCommandStarted(callId)) {
-        return;
-      }
-    }
-    if (itemId && this.notificationStream.hasItemStarted(itemId)) {
-      return;
-    }
-    this.toolNotificationHandler.warnOnIncompleteEditToolCall(
-      timelineItem,
-      "item_started",
-      parsed.item,
-    );
-    this.subAgentTracker.registerToolCall(timelineItem, parsed.item);
-    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    if (itemId) {
-      this.notificationStream.markItemStarted(itemId);
-      this.notificationStream.clearCommandOutput(itemId);
-      this.notificationStream.clearFileChangeOutput(itemId);
-    }
-  }
-
-  private handleUserMessageItem(
-    parsed: Extract<ParsedCodexNotification, { kind: "item_started" | "item_completed" }>,
-  ): void {
-    const itemId = parsed.item.id;
-    const timelineItem = threadItemToTimeline(parsed.item, {
-      includeUserMessage: true,
-      cwd: this.config.cwd ?? null,
-    });
-    if (!timelineItem || timelineItem.type !== "user_message") {
-      return;
-    }
-    const childSubAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
-    if (childSubAgentCallId) {
-      if (itemId) {
-        this.subAgentTracker.upsertChildItem(childSubAgentCallId, itemId, timelineItem);
-      }
-      this.emitSubAgentActivityUpdate(childSubAgentCallId, "running");
-      return;
-    }
-    if (!this.userMessageTurns.remember(timelineItem.messageId)) {
-      return;
-    }
-    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
   }
 
   private warnUnknownNotificationMethod(method: string, params: unknown): void {
