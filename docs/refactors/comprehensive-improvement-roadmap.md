@@ -20,6 +20,7 @@
 - **认证/MCP 生命周期修复**：WebSocket 密码校验期间暂存并按序重放早到的 hello，修复 bcrypt 异步窗口丢消息导致的永久连接等待；预认证缓冲限制为 4 条/64 KiB，超限按 1008 关闭，避免未认证内存放大。MCP E2E 改用正式 `settings.modeId` 契约并断言运行态模式，后台 agent 的同步 `startTurn` 失败不再被吞成成功；worktree setup/terminal 探针改为跨平台 Node 命令并显式释放终端资源。
 - **GitHub Actions 策略**：普通 branch push、PR 和 merge queue 不再自动触发 Actions；CI、Relay、Nix、Nix hash、release notes 改为手动触发，只有显式授权发布时运行。桌面/Android/App 构建仅保留版本 tag 触发；Dependabot 定时更新已关闭。后续优化默认只做本地提交。
 - **AI SDK/MCP 迁移**：完成。server 已移除 `ai@5`，改用独立 `@ai-sdk/mcp@2.0.10` 的正式 `createMCPClient` / `callTool(arguments)` API；同步收紧 Zod peer 下限与 Node.js 22 运行时基线。server typecheck、目标 lint 与 MCP 精确场景通过；生产依赖审计中的 AI SDK 通告清零。
+- **Client 文件传输状态机拆分**：完成。将 `daemon-client.ts` 内 pending/active/completed 二进制文件读取状态、分片大小校验、结果组装与 legacy base64 解码提取到 `daemon-client-file-transfer.ts`；`DaemonClient` 仅保留 RPC 编排与响应转发，`FileReadResult` 既有导出保持兼容。
 - **状态**：进行中，直接在 `cn-main` 执行，不创建额外分支或 worktree。
 
 ### 2026-07-12 深度架构/安全/产品/代码质量审查批次（完成）

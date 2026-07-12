@@ -113,8 +113,6 @@ import {
   asUint8Array,
   decodeFileTransferFrame,
   decodeTerminalStreamFrame,
-  FileTransferOpcode,
-  MAX_FILE_TRANSFER_BYTES,
   TerminalStreamOpcode,
   type FileTransferFrame,
 } from "@chisacode/protocol/binary-frames/index";
@@ -130,7 +128,14 @@ import {
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
+import {
+  BinaryFileTransferManager,
+  legacyExplorerFileToBytes,
+  type FileReadResult,
+} from "./daemon-client-file-transfer.js";
 import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
+
+export type { FileReadResult } from "./daemon-client-file-transfer.js";
 
 export interface Logger {
   debug(obj: object, msg?: string): void;
@@ -332,15 +337,6 @@ type CreateChisaCodeWorktreePayload = Extract<
 >["payload"];
 type FileExplorerPayload = FileExplorerResponse["payload"];
 export type FileExplorerDirectoryPayload = NonNullable<FileExplorerPayload["directory"]>;
-type LegacyFileExplorerFilePayload = NonNullable<FileExplorerPayload["file"]>;
-export interface FileReadResult {
-  bytes: Uint8Array;
-  mime: string;
-  size: number;
-  path: string;
-  kind: LegacyFileExplorerFilePayload["kind"];
-  modifiedAt: string;
-}
 type FileDownloadTokenPayload = FileDownloadTokenResponse["payload"];
 type ListProviderFeaturesPayload = ListProviderFeaturesResponseMessage["payload"];
 type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
@@ -720,23 +716,6 @@ interface WaitHandle<T> {
   cancel: (error: Error) => void;
 }
 
-interface PendingBinaryFileRead {
-  cwd: string;
-  path: string;
-}
-
-interface BinaryFileTransferState extends PendingBinaryFileRead {
-  mime: string;
-  size: number;
-  encoding: Extract<
-    FileTransferFrame,
-    { opcode: typeof FileTransferOpcode.FileBegin }
-  >["metadata"]["encoding"];
-  modifiedAt: string;
-  receivedBytes: number;
-  chunks: Uint8Array[];
-}
-
 type RpcWaitResult<T> = { kind: "ok"; value: T } | { kind: "error"; error: DaemonRpcError };
 type GetDaemonConfigResponse = Extract<
   SessionOutboundMessage,
@@ -797,55 +776,6 @@ function normalizeClientId(value: unknown): string | null {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function decodeBase64ToBytes(base64: string): Uint8Array {
-  const binary = globalThis.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
-}
-
-function legacyExplorerFileToBytes(file: LegacyFileExplorerFilePayload): FileReadResult {
-  let bytes: Uint8Array;
-  if (file.encoding === "base64" && file.content) {
-    bytes = decodeBase64ToBytes(file.content);
-  } else if (file.encoding === "utf-8" && file.content) {
-    bytes = new TextEncoder().encode(file.content);
-  } else {
-    bytes = new Uint8Array();
-  }
-
-  return {
-    bytes,
-    mime: file.mimeType ?? "application/octet-stream",
-    size: file.size,
-    path: file.path,
-    kind: file.kind,
-    modifiedAt: file.modifiedAt,
-  };
-}
-
-function binaryFileKind(mime: string, encoding: string): FileReadResult["kind"] {
-  if (mime.startsWith("image/")) {
-    return "image";
-  }
-  if (encoding === "utf-8" || mime.startsWith("text/") || mime === "application/json") {
-    return "text";
-  }
-  return "binary";
-}
-
-function concatByteChunks(chunks: Uint8Array[], size: number): Uint8Array {
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
 }
 
 function hashForLog(value: string): string {
@@ -925,9 +855,7 @@ export class DaemonClient {
   >();
   private terminalDirectorySubscriptions = new Set<string>();
   private readonly terminalStreams = new TerminalStreamRouter();
-  private pendingBinaryFileReads = new Map<string, PendingBinaryFileRead>();
-  private activeBinaryFileTransfers = new Map<string, BinaryFileTransferState>();
-  private completedBinaryFileReads = new Map<string, FileReadResult>();
+  private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
   private pendingSendQueue: PendingSend[] = [];
   private readonly logConnectionPath: "direct" | "relay";
@@ -1219,7 +1147,7 @@ export class DaemonClient {
     this.rejectPendingSendQueue(new Error("Daemon client closed"));
     this.rejectLivenessProbe(new Error("Daemon client closed"));
     this.terminalStreams.clearSlots();
-    this.activeBinaryFileTransfers.clear();
+    this.binaryFileTransfers.clearActiveTransfers();
     this.lastServerInfoMessage = null;
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
@@ -3470,15 +3398,14 @@ export class DaemonClient {
 
   async readFile(cwd: string, path: string, requestId?: string): Promise<FileReadResult> {
     const resolvedRequestId = this.createRequestId(requestId);
-    this.pendingBinaryFileReads.set(resolvedRequestId, { cwd, path });
+    this.binaryFileTransfers.startRead(resolvedRequestId, cwd, path);
     try {
       const payload = await this.requestFileExplorer(cwd, path, "file", resolvedRequestId, true);
       if (payload.error) {
         throw new Error(payload.error);
       }
-      const binaryResult = this.completedBinaryFileReads.get(resolvedRequestId);
+      const binaryResult = this.binaryFileTransfers.takeCompletedRead(resolvedRequestId);
       if (binaryResult) {
-        this.completedBinaryFileReads.delete(resolvedRequestId);
         return binaryResult;
       }
       if (!payload.file) {
@@ -3486,8 +3413,7 @@ export class DaemonClient {
       }
       return legacyExplorerFileToBytes(payload.file);
     } finally {
-      this.pendingBinaryFileReads.delete(resolvedRequestId);
-      this.activeBinaryFileTransfers.delete(resolvedRequestId);
+      this.binaryFileTransfers.cleanupRead(resolvedRequestId);
     }
   }
 
@@ -4780,104 +4706,20 @@ export class DaemonClient {
   }
 
   private handleFileTransferFrame(frame: FileTransferFrame): void {
-    if (frame.opcode === FileTransferOpcode.FileBegin) {
-      const pending = this.pendingBinaryFileReads.get(frame.requestId);
-      if (!pending) {
-        return;
-      }
-      if (this.activeBinaryFileTransfers.has(frame.requestId)) {
-        this.failBinaryFileTransfer(frame.requestId, "Duplicate file transfer start");
-        return;
-      }
-      if (frame.metadata.size > MAX_FILE_TRANSFER_BYTES) {
-        this.failBinaryFileTransfer(frame.requestId, "File transfer exceeds maximum size");
-        return;
-      }
-      this.activeBinaryFileTransfers.set(frame.requestId, {
-        ...pending,
-        mime: frame.metadata.mime,
-        size: frame.metadata.size,
-        encoding: frame.metadata.encoding,
-        modifiedAt: frame.metadata.modifiedAt,
-        receivedBytes: 0,
-        chunks: [],
-      });
-      return;
-    }
-
-    const transfer = this.activeBinaryFileTransfers.get(frame.requestId);
-    if (!transfer) {
-      if (
-        this.pendingBinaryFileReads.has(frame.requestId) &&
-        !this.completedBinaryFileReads.has(frame.requestId)
-      ) {
-        this.failBinaryFileTransfer(frame.requestId, "File transfer frame received before start");
-      }
-      return;
-    }
-
-    if (frame.opcode === FileTransferOpcode.FileChunk) {
-      const nextReceivedBytes = transfer.receivedBytes + frame.payload.byteLength;
-      if (!Number.isSafeInteger(nextReceivedBytes) || nextReceivedBytes > MAX_FILE_TRANSFER_BYTES) {
-        this.failBinaryFileTransfer(frame.requestId, "File transfer exceeds maximum size");
-        return;
-      }
-      if (nextReceivedBytes > transfer.size) {
-        this.failBinaryFileTransfer(frame.requestId, "File transfer exceeds declared size");
-        return;
-      }
-      transfer.receivedBytes = nextReceivedBytes;
-      transfer.chunks.push(new Uint8Array(frame.payload));
-      return;
-    }
-
-    if (transfer.receivedBytes !== transfer.size) {
-      this.failBinaryFileTransfer(
-        frame.requestId,
-        `File transfer expected ${transfer.size} bytes but received ${transfer.receivedBytes}`,
-      );
-      return;
-    }
-    const bytes = concatByteChunks(transfer.chunks, transfer.size);
-    this.activeBinaryFileTransfers.delete(frame.requestId);
-    this.completedBinaryFileReads.set(frame.requestId, {
-      bytes,
-      mime: transfer.mime,
-      size: transfer.size,
-      path: transfer.path,
-      kind: binaryFileKind(transfer.mime, transfer.encoding),
-      modifiedAt: transfer.modifiedAt,
-    });
-    this.handleSessionMessage({
-      type: "file_explorer_response",
-      payload: {
-        cwd: transfer.cwd,
-        path: transfer.path,
-        mode: "file",
-        directory: null,
-        file: null,
-        error: null,
-        requestId: frame.requestId,
-      },
-    });
-  }
-
-  private failBinaryFileTransfer(requestId: string, error: string): void {
-    const pending = this.pendingBinaryFileReads.get(requestId);
-    this.activeBinaryFileTransfers.delete(requestId);
-    if (!pending) {
+    const outcome = this.binaryFileTransfers.handleFrame(frame);
+    if (!outcome) {
       return;
     }
     this.handleSessionMessage({
       type: "file_explorer_response",
       payload: {
-        cwd: pending.cwd,
-        path: pending.path,
+        cwd: outcome.cwd,
+        path: outcome.path,
         mode: "file",
         directory: null,
         file: null,
-        error,
-        requestId,
+        error: outcome.error,
+        requestId: outcome.requestId,
       },
     });
   }
@@ -4941,7 +4783,7 @@ export class DaemonClient {
     this.rejectPendingSendQueue(new Error(reason ?? "Connection lost"));
     this.rejectLivenessProbe(new Error(reason ?? "Connection lost"));
     this.terminalStreams.clearSlots();
-    this.activeBinaryFileTransfers.clear();
+    this.binaryFileTransfers.clearActiveTransfers();
     this.lastServerInfoMessage = null;
 
     if (wasDisposed) {
