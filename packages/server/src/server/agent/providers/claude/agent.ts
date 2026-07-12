@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { promises } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   type AgentDefinition,
@@ -27,7 +26,15 @@ import {
   mapTaskNotificationSystemRecordToToolCall,
   mapTaskNotificationUserContentToToolCall,
 } from "./task-notification-tool-call.js";
-import { getClaudeModelsWithSettings, normalizeClaudeRuntimeModelId } from "./models.js";
+import { normalizeClaudeRuntimeModelId } from "./models.js";
+import {
+  CLAUDE_CAPABILITIES,
+  ClaudeAgentClientRuntime,
+  resolveClaudeConfigDir,
+  type ClaudeAgentClientOptions,
+  type ClaudeAgentConfig,
+  type ClaudeAgentSessionOptions,
+} from "./client.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
 import {
   extractContextWindowSize,
@@ -35,7 +42,6 @@ import {
   isClaudeContentChunk,
   isImageMimeType,
   isPermissionUpdate,
-  isUnknownArray,
   normalizeClaudeAskUserQuestionUpdatedInput,
   readContextWindowUsedTokensFromTaskProgress,
   readStreamRequestInputTokens,
@@ -63,13 +69,6 @@ import {
   readCompactionMetadata,
   type ClaudeHistoryEntry,
 } from "./history-converter.js";
-import {
-  buildBinaryDiagnosticRows,
-  formatDiagnosticStatus,
-  formatProviderDiagnostic,
-  formatProviderDiagnosticError,
-  toDiagnosticErrorMessage,
-} from "../diagnostic-utils.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { claudeQuery, type ClaudeOptions, type ClaudeQueryFactory } from "./query.js";
@@ -79,14 +78,9 @@ import { normalizeProviderReplayTimestamp } from "../../provider-history-timesta
 import {
   getAgentStreamEventTurnId,
   type AgentPermissionAction,
-  type AgentCapabilityFlags,
-  type AgentClient,
-  type AgentCreateSessionOptions,
   type AgentFeature,
-  type AgentLaunchContext,
   type AgentMetadata,
   type AgentMode,
-  type AgentModelDefinition,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPermissionUpdate,
@@ -95,27 +89,15 @@ import {
   type AgentRunOptions,
   type AgentRunResult,
   type AgentSession,
-  type AgentSessionConfig,
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
   type AgentUsage,
   type AgentRuntimeInfo,
-  type ListModelsOptions,
-  type ListPersistedAgentsOptions,
   type McpServerConfig,
-  type PersistedAgentDescriptor,
 } from "../../agent-sdk-types.js";
-import {
-  checkProviderLaunchAvailable,
-  createProviderEnv,
-  createProviderEnvSpec,
-  resolveProviderLaunch,
-  type ProviderRuntimeSettings,
-  type ResolvedProviderLaunch,
-} from "../../provider-launch-config.js";
+import { createProviderEnv, type ProviderRuntimeSettings } from "../../provider-launch-config.js";
 import { withTimeout } from "../../../../utils/promise-timeout.js";
-import { execCommand } from "../../../../utils/spawn.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
 
 export { convertClaudeHistoryEntry, extractUserMessageText } from "./history-converter.js";
@@ -123,7 +105,6 @@ export { readEventIdentifiers } from "./message-router.js";
 export { normalizeClaudeAskUserQuestionUpdatedInput } from "./sdk-types-mapping.js";
 export type { ClaudeContentChunk } from "./sdk-types-mapping.js";
 
-const fsPromises = promises;
 const CLAUDE_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
   "user",
   "project",
@@ -168,18 +149,6 @@ interface ClaudeRewindTurnAnchor {
 type ClaudeConversationRewindTarget =
   | { kind: "fresh-session" }
   | { kind: "fork"; messageId: string };
-
-const CLAUDE_CAPABILITIES: AgentCapabilityFlags = {
-  supportsStreaming: true,
-  supportsSessionPersistence: true,
-  supportsDynamicModes: true,
-  supportsMcpServers: true,
-  supportsReasoningStream: true,
-  supportsToolInvocations: true,
-  supportsRewindConversation: true,
-  supportsRewindFiles: true,
-  supportsRewindBoth: true,
-};
 
 const DEFAULT_MODES: AgentMode[] = [
   {
@@ -226,28 +195,6 @@ interface SlashCommandInvocation {
   rawInput: string;
 }
 
-type ClaudeAgentConfig = AgentSessionConfig & { provider: "claude" };
-
-interface ClaudeAgentClientOptions {
-  defaults?: { agents?: Record<string, AgentDefinition> };
-  logger: Logger;
-  runtimeSettings?: ProviderRuntimeSettings;
-  queryFactory?: ClaudeQueryFactory;
-  resolveBinary?: () => Promise<string>;
-}
-
-interface ClaudeAgentSessionOptions {
-  defaults?: { agents?: Record<string, AgentDefinition> };
-  runtimeSettings?: ProviderRuntimeSettings;
-  handle?: AgentPersistenceHandle;
-  agentId?: string;
-  launchEnv?: Record<string, string>;
-  persistSession?: boolean;
-  logger: Logger;
-  queryFactory?: ClaudeQueryFactory;
-  resolveBinary: () => Promise<string>;
-}
-
 type ClaudeThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 type ClaudeThinkingOption = ClaudeThinkingEffort | "ultracode";
 
@@ -278,10 +225,6 @@ function isClaudeThinkingOption(value: string | null | undefined): value is Clau
 
 function sanitizeClaudeProjectPath(cwd: string): string {
   return cwd.replace(/[\\/._:]/g, "-");
-}
-
-function resolveClaudeConfigDir(env: NodeJS.ProcessEnv): string {
-  return env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
 }
 
 interface ClaudeOptionsLogSummary {
@@ -453,42 +396,12 @@ interface PendingPermission {
   cleanup?: () => void;
 }
 
-function isMetadata(value: unknown): value is AgentMetadata {
-  return typeof value === "object" && value !== null;
-}
-
 function readTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function isMcpServerConfig(value: unknown): value is McpServerConfig {
-  if (!isMetadata(value)) {
-    return false;
-  }
-  const type = value.type;
-  if (type === "stdio") {
-    return typeof value.command === "string";
-  }
-  if (type === "http" || type === "sse") {
-    return typeof value.url === "string";
-  }
-  return false;
-}
-
-function isMcpServersRecord(value: unknown): value is Record<string, McpServerConfig> {
-  if (!isMetadata(value)) {
-    return false;
-  }
-  for (const config of Object.values(value)) {
-    if (!isMcpServerConfig(config)) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function isPermissionMode(value: string | undefined): value is PermissionMode {
@@ -530,65 +443,6 @@ function assertClaudeAutoModeEligible(mode: PermissionMode, env: NodeJS.ProcessE
   );
 }
 
-function coerceSessionMetadata(metadata: AgentMetadata | undefined): Partial<AgentSessionConfig> {
-  if (!isMetadata(metadata)) {
-    return {};
-  }
-
-  const result: Partial<AgentSessionConfig> = {};
-  if (metadata.provider === "claude" || metadata.provider === "codex") {
-    result.provider = metadata.provider;
-  }
-  if (typeof metadata.cwd === "string") {
-    result.cwd = metadata.cwd;
-  }
-  if (typeof metadata.modeId === "string") {
-    result.modeId = metadata.modeId;
-  }
-  if (typeof metadata.model === "string") {
-    result.model = metadata.model;
-  }
-  if (typeof metadata.title === "string" || metadata.title === null) {
-    result.title = metadata.title;
-  }
-  if (typeof metadata.approvalPolicy === "string") {
-    result.approvalPolicy = metadata.approvalPolicy;
-  }
-  if (typeof metadata.sandboxMode === "string") {
-    result.sandboxMode = metadata.sandboxMode;
-  }
-  if (typeof metadata.networkAccess === "boolean") {
-    result.networkAccess = metadata.networkAccess;
-  }
-  if (typeof metadata.webSearch === "boolean") {
-    result.webSearch = metadata.webSearch;
-  }
-  if (isMetadata(metadata.extra)) {
-    const extra: AgentSessionConfig["extra"] = {};
-    if (isMetadata(metadata.extra.codex)) {
-      extra.codex = metadata.extra.codex;
-    }
-    if (isClaudeExtra(metadata.extra.claude)) {
-      extra.claude = metadata.extra.claude;
-    }
-    if (extra.codex || extra.claude) {
-      result.extra = extra;
-    }
-  }
-  if (typeof metadata.systemPrompt === "string") {
-    result.systemPrompt = metadata.systemPrompt;
-  }
-  if (isMcpServersRecord(metadata.mcpServers)) {
-    result.mcpServers = metadata.mcpServers;
-  }
-
-  return result;
-}
-
-function isClaudeExtra(value: unknown): value is Partial<ClaudeOptions> {
-  return isMetadata(value);
-}
-
 function getClaudeModeLabel(modeId: PermissionMode): string {
   return DEFAULT_MODES.find((mode) => mode.id === modeId)?.label ?? modeId;
 }
@@ -626,212 +480,12 @@ function buildClaudePlanPermissionActions(
   return actions;
 }
 
-export class ClaudeAgentClient implements AgentClient {
-  readonly provider = "claude" as const;
-  readonly capabilities = CLAUDE_CAPABILITIES;
-
-  private readonly defaults?: { agents?: Record<string, AgentDefinition> };
-  private readonly logger: Logger;
-  private readonly runtimeSettings?: ProviderRuntimeSettings;
-  private readonly queryFactory?: ClaudeQueryFactory;
-  private readonly resolveBinary: () => Promise<string>;
-
+export class ClaudeAgentClient extends ClaudeAgentClientRuntime {
   constructor(options: ClaudeAgentClientOptions) {
-    this.defaults = options.defaults;
-    this.logger = options.logger.child({ module: "agent", provider: "claude" });
-    this.runtimeSettings = options.runtimeSettings;
-    this.queryFactory = options.queryFactory;
-    this.resolveBinary = options.resolveBinary ?? (() => resolveClaudeBinary(this.runtimeSettings));
-  }
-
-  async createSession(
-    config: AgentSessionConfig,
-    launchContext?: AgentLaunchContext,
-    options?: AgentCreateSessionOptions,
-  ): Promise<AgentSession> {
-    const claudeConfig = this.assertConfig(config);
-    return new ClaudeAgentSession(claudeConfig, {
-      defaults: this.defaults,
-      runtimeSettings: this.runtimeSettings,
-      agentId: launchContext?.agentId,
-      launchEnv: launchContext?.env,
-      persistSession: options?.persistSession,
-      logger: this.logger,
-      queryFactory: this.queryFactory,
-      resolveBinary: this.resolveBinary,
+    super({
+      ...options,
+      sessionFactory: (config, sessionOptions) => new ClaudeAgentSession(config, sessionOptions),
     });
-  }
-
-  async resumeSession(
-    handle: AgentPersistenceHandle,
-    overrides?: Partial<AgentSessionConfig>,
-    launchContext?: AgentLaunchContext,
-  ): Promise<AgentSession> {
-    const metadata = coerceSessionMetadata(handle.metadata);
-    const merged: Partial<AgentSessionConfig> = { ...metadata, ...overrides };
-    if (!merged.cwd) {
-      throw new Error("Claude resume requires the original working directory in metadata");
-    }
-    const mergedConfig: AgentSessionConfig = {
-      ...merged,
-      provider: "claude",
-      cwd: merged.cwd,
-    };
-    const claudeConfig = this.assertConfig(mergedConfig);
-    return new ClaudeAgentSession(claudeConfig, {
-      defaults: this.defaults,
-      runtimeSettings: this.runtimeSettings,
-      handle,
-      agentId: launchContext?.agentId,
-      launchEnv: launchContext?.env,
-      logger: this.logger,
-      queryFactory: this.queryFactory,
-      resolveBinary: this.resolveBinary,
-    });
-  }
-
-  async listModels(_options: ListModelsOptions): Promise<AgentModelDefinition[]> {
-    // Claude exposes a global catalog here; cwd/force are intentionally irrelevant.
-    return await getClaudeModelsWithSettings(this.logger);
-  }
-
-  async listFeatures(config: AgentSessionConfig): Promise<AgentFeature[]> {
-    const claudeConfig = this.assertConfig(config);
-    return buildClaudeFeatures({
-      modelId: claudeConfig.model,
-      fastModeEnabled: claudeConfig.featureValues?.fast_mode === true,
-    });
-  }
-
-  async listPersistedAgents(
-    options?: ListPersistedAgentsOptions,
-  ): Promise<PersistedAgentDescriptor[]> {
-    const env = createProviderEnv({ baseEnv: process.env, runtimeSettings: this.runtimeSettings });
-    const configDir = resolveClaudeConfigDir(env);
-    const projectsRoot = path.join(configDir, "projects");
-    if (!(await pathExists(projectsRoot))) {
-      return [];
-    }
-    const limit = options?.limit ?? 20;
-    const candidates = await collectRecentClaudeSessions(projectsRoot, limit * 3);
-    const parsed = await Promise.all(
-      candidates.map((candidate) => parseClaudeSessionDescriptor(candidate.path, candidate.mtime)),
-    );
-    return parsed
-      .filter((descriptor): descriptor is PersistedAgentDescriptor => descriptor !== null)
-      .slice(0, limit);
-  }
-
-  async isAvailable(): Promise<boolean> {
-    const launch = await resolveProviderLaunch({
-      commandConfig: this.runtimeSettings?.command,
-      defaultBinary: "claude",
-    });
-    const availability = await checkProviderLaunchAvailable(launch);
-    return availability.available;
-  }
-
-  async getDiagnostic(): Promise<{ diagnostic: string }> {
-    try {
-      const launch = await resolveProviderLaunch({
-        commandConfig: this.runtimeSettings?.command,
-        defaultBinary: "claude",
-      });
-      const availability = await checkProviderLaunchAvailable(launch);
-      const available = availability.available;
-      const auth = available
-        ? await resolveClaudeAuth(launch, availability, this.runtimeSettings)
-        : null;
-      let modelsValue = "Not checked";
-      let status = formatDiagnosticStatus(available);
-
-      if (available) {
-        try {
-          const models = await this.listModels({
-            cwd: os.homedir(),
-            force: false,
-          });
-          modelsValue = String(models.length);
-        } catch (error) {
-          modelsValue = `Error - ${toDiagnosticErrorMessage(error)}`;
-          status = formatDiagnosticStatus(available, {
-            source: "model fetch",
-            cause: error,
-          });
-        }
-      }
-
-      return {
-        diagnostic: formatProviderDiagnostic("Claude Code", [
-          ...(await buildBinaryDiagnosticRows(launch, availability)),
-          ...(auth ? [{ label: "Auth", value: auth }] : []),
-          { label: "Models", value: modelsValue },
-          { label: "Status", value: status },
-        ]),
-      };
-    } catch (error) {
-      return {
-        diagnostic: formatProviderDiagnosticError("Claude Code", error),
-      };
-    }
-  }
-
-  private assertConfig(config: AgentSessionConfig): ClaudeAgentConfig {
-    if (config.provider !== "claude") {
-      throw new Error(`ClaudeAgentClient received config for provider '${config.provider}'`);
-    }
-    return { ...config, provider: "claude" } as ClaudeAgentConfig;
-  }
-}
-
-async function resolveClaudeBinary(runtimeSettings?: ProviderRuntimeSettings): Promise<string> {
-  const launch = await resolveProviderLaunch({
-    commandConfig: runtimeSettings?.command,
-    defaultBinary: "claude",
-  });
-  const availability = await checkProviderLaunchAvailable(launch);
-  if (availability.available) {
-    return availability.resolvedPath ?? launch.command;
-  }
-  throw new Error(
-    "Claude binary not found. Install Claude Code (https://github.com/anthropics/claude-code) and ensure it is available in your shell PATH.",
-  );
-}
-
-async function resolveClaudeAuth(
-  launch: ResolvedProviderLaunch,
-  availability: { resolvedPath: string | null },
-  runtimeSettings?: ProviderRuntimeSettings,
-): Promise<string | null> {
-  const run = async (
-    executable: string,
-    args: string[],
-  ): Promise<{ stdout: string; stderr: string }> => {
-    try {
-      return await execCommand(executable, args, {
-        ...createProviderEnvSpec({ runtimeSettings }),
-        timeout: 5_000,
-      });
-    } catch (error) {
-      const err = toObjectRecord(error);
-      const stdout = typeof err?.stdout === "string" ? err.stdout : "";
-      const stderr = typeof err?.stderr === "string" ? err.stderr : "";
-      const fallbackMessage = typeof err?.message === "string" ? err.message : "";
-      return { stdout, stderr: stderr || fallbackMessage };
-    }
-  };
-
-  try {
-    const executable = availability.resolvedPath ?? launch.command;
-    const result = await run(executable, [...launch.args, "auth", "status"]);
-
-    const combined = [result.stdout, result.stderr]
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-      .join("\n");
-    return combined || null;
-  } catch {
-    return null;
   }
 }
 
@@ -3360,196 +3014,4 @@ function createAsyncMessageInput<T>(): AsyncMessageInput<T> {
       },
     },
   };
-}
-
-interface ClaudeSessionCandidate {
-  path: string;
-  mtime: Date;
-}
-
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await fsPromises.access(target);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function collectRecentClaudeSessions(
-  root: string,
-  limit: number,
-): Promise<ClaudeSessionCandidate[]> {
-  let projectDirs: string[];
-  try {
-    projectDirs = await fsPromises.readdir(root);
-  } catch {
-    return [];
-  }
-  const projectFileLists = await Promise.all(
-    projectDirs.map(async (dirName) => {
-      const projectPath = path.join(root, dirName);
-      try {
-        const stats = await fsPromises.stat(projectPath);
-        if (!stats.isDirectory()) return { projectPath, files: [] as string[] };
-        const files = await fsPromises.readdir(projectPath);
-        return { projectPath, files };
-      } catch {
-        return { projectPath, files: [] as string[] };
-      }
-    }),
-  );
-  const fileEntries = projectFileLists.flatMap(({ projectPath, files }) =>
-    files.filter((f) => f.endsWith(".jsonl")).map((f) => path.join(projectPath, f)),
-  );
-  const statResults = await Promise.all(
-    fileEntries.map(async (fullPath) => {
-      try {
-        const fileStats = await fsPromises.stat(fullPath);
-        return { path: fullPath, mtime: fileStats.mtime };
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const candidates: ClaudeSessionCandidate[] = statResults.filter(
-    (entry): entry is ClaudeSessionCandidate => entry !== null,
-  );
-  return candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime()).slice(0, limit);
-}
-
-interface ClaudeSessionDescriptorAccumulator {
-  sessionId: string | null;
-  cwd: string | null;
-  title: string | null;
-  timeline: AgentTimelineItem[];
-}
-
-function isFinishedAccumulator(acc: ClaudeSessionDescriptorAccumulator): boolean {
-  return Boolean(acc.sessionId && acc.cwd && acc.title);
-}
-
-function applyClaudeSessionEntryToAccumulator(
-  entryRaw: unknown,
-  acc: ClaudeSessionDescriptorAccumulator,
-): void {
-  const entry = toObjectRecord(entryRaw);
-  if (!entry) {
-    return;
-  }
-  if (entry.isSidechain) {
-    return;
-  }
-  if (entry.type === "user" && isSyntheticUserEntry(entry)) {
-    return;
-  }
-  if (!acc.sessionId && typeof entry.sessionId === "string") {
-    acc.sessionId = entry.sessionId;
-  }
-  if (!acc.cwd && typeof entry.cwd === "string") {
-    acc.cwd = entry.cwd;
-  }
-  if (entry.type === "user" && entry.message) {
-    const text = extractClaudeUserText(entry.message);
-    if (text) {
-      if (!acc.title) {
-        acc.title = text;
-      }
-      acc.timeline.push({ type: "user_message", text });
-    }
-    return;
-  }
-  if (entry.type === "assistant" && entry.message) {
-    const text = extractClaudeUserText(entry.message);
-    if (text) {
-      acc.timeline.push({ type: "assistant_message", text });
-    }
-  }
-}
-
-async function parseClaudeSessionDescriptor(
-  filePath: string,
-  mtime: Date,
-): Promise<PersistedAgentDescriptor | null> {
-  let content: string;
-  try {
-    content = await fsPromises.readFile(filePath, "utf8");
-  } catch {
-    return null;
-  }
-
-  const acc: ClaudeSessionDescriptorAccumulator = {
-    sessionId: null,
-    cwd: null,
-    title: null,
-    timeline: [],
-  };
-
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    let entry: unknown;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    applyClaudeSessionEntryToAccumulator(entry, acc);
-    if (isFinishedAccumulator(acc)) {
-      break;
-    }
-  }
-
-  const { sessionId, cwd, title, timeline } = acc;
-
-  if (!sessionId || !cwd) {
-    return null;
-  }
-
-  const persistence: AgentPersistenceHandle = {
-    provider: "claude",
-    sessionId,
-    nativeHandle: sessionId,
-    metadata: {
-      provider: "claude",
-      cwd,
-    },
-  };
-
-  return {
-    provider: "claude",
-    sessionId,
-    cwd,
-    title: (title ?? "").trim() || `Claude session ${sessionId.slice(0, 8)}`,
-    lastActivityAt: mtime,
-    persistence,
-    timeline,
-  };
-}
-
-function extractClaudeUserText(messageRaw: unknown): string | null {
-  const message = toObjectRecord(messageRaw);
-  if (!message) {
-    return null;
-  }
-  if (typeof message.content === "string") {
-    const normalized = message.content.trim();
-    return normalized && !isClaudeTranscriptNoiseText(normalized) ? normalized : null;
-  }
-  if (typeof message.text === "string") {
-    const normalized = message.text.trim();
-    return normalized && !isClaudeTranscriptNoiseText(normalized) ? normalized : null;
-  }
-  if (isUnknownArray(message.content)) {
-    for (const block of message.content) {
-      const blockRecord = toObjectRecord(block);
-      if (blockRecord && typeof blockRecord.text === "string") {
-        const normalized = blockRecord.text.trim();
-        if (normalized && !isClaudeTranscriptNoiseText(normalized)) {
-          return normalized;
-        }
-      }
-    }
-  }
-  return null;
 }
