@@ -1,9 +1,4 @@
-import {
-  type Event as OpenCodeEvent,
-  type FilePartInput as OpenCodeFilePartInput,
-  type OpencodeClient,
-  type TextPartInput as OpenCodeTextPartInput,
-} from "@opencode-ai/sdk/v2/client";
+import { type Event as OpenCodeEvent, type OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { Logger } from "pino";
 
 import {
@@ -21,10 +16,6 @@ import {
   type AgentStreamEvent,
   type AgentUsage,
 } from "../../agent-sdk-types.js";
-import { toDiagnosticErrorMessage } from "../diagnostic-utils.js";
-import { runProviderTurn } from "../provider-runner.js";
-import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
-import { composeSystemPromptParts } from "../../system-prompt.js";
 import { OpenCodeAbortCoordinator } from "./abort-coordinator.js";
 import { OPENCODE_CAPABILITIES } from "./client.js";
 import {
@@ -42,6 +33,11 @@ import { OpenCodeEventStreamController } from "./event-stream.js";
 import { OpenCodePermissionController } from "./permission-controller.js";
 import { OpenCodeSessionEventBus } from "./session-event-bus.js";
 import { OpenCodeSessionRuntime } from "./session-runtime.js";
+import {
+  buildOpenCodePromptParts,
+  buildOpenCodeUserTimelineText,
+  OpenCodeTurnExecution,
+} from "./turn-execution.js";
 import { OpenCodeSessionLifecycle, reconcileOpenCodeSessionClose } from "./session-lifecycle.js";
 import { OpenCodeMcpController } from "./mcp-controller.js";
 import {
@@ -54,91 +50,11 @@ import {
   type OpenCodeSubAgentActivityState,
   type OpenCodeToolPartEventPart,
 } from "./event-translator.js";
-import { isOpenCodeAutoAcceptEnabled, isOpenCodeHeadersTimeoutFailure } from "./helpers.js";
+import { isOpenCodeAutoAcceptEnabled } from "./helpers.js";
 import { revertOpenCodeConversationAndFiles } from "./rewind.js";
 import { buildOpenCodeReplayTimelineEvents, filterOpenCodeRevertedMessages } from "./history.js";
 
 export { collectOpenCodePersistedAgentsFromSdk } from "./history.js";
-
-function getOpenCodeAttachmentExtension(mimeType: string): string {
-  switch (mimeType) {
-    case "image/png":
-      return "png";
-    case "image/jpeg":
-      return "jpg";
-    case "image/webp":
-      return "webp";
-    case "image/gif":
-      return "gif";
-    case "image/svg+xml":
-      return "svg";
-    default:
-      return "bin";
-  }
-}
-
-function toOpenCodeDataUrl(mimeType: string, data: string): { mimeType: string; url: string } {
-  const match = data.match(/^data:([^;,]+);base64,(.+)$/);
-  if (match) {
-    return {
-      mimeType: match[1] ?? mimeType,
-      url: data,
-    };
-  }
-  return {
-    mimeType,
-    url: `data:${mimeType};base64,${data}`,
-  };
-}
-
-function buildOpenCodePromptParts(
-  prompt: AgentPromptInput,
-): Array<OpenCodeTextPartInput | OpenCodeFilePartInput> {
-  if (typeof prompt === "string") {
-    return [{ type: "text", text: prompt }];
-  }
-  let attachmentOrdinal = 0;
-  const output: Array<OpenCodeTextPartInput | OpenCodeFilePartInput> = [];
-  for (const part of prompt) {
-    if (part.type === "text") {
-      output.push({ type: "text", text: part.text });
-      continue;
-    }
-    if (part.type === "image") {
-      attachmentOrdinal += 1;
-      const normalized = toOpenCodeDataUrl(part.mimeType, part.data);
-      output.push({
-        type: "file",
-        mime: normalized.mimeType,
-        filename: `attachment-${attachmentOrdinal}.${getOpenCodeAttachmentExtension(
-          normalized.mimeType,
-        )}`,
-        url: normalized.url,
-      });
-      continue;
-    }
-    output.push({ type: "text", text: renderPromptAttachmentAsText(part) });
-  }
-  return output;
-}
-
-function buildOpenCodeUserTimelineText(prompt: AgentPromptInput): string {
-  if (typeof prompt === "string") {
-    return prompt;
-  }
-  return prompt
-    .map((part) => {
-      if (part.type === "text") {
-        return part.text;
-      }
-      if (part.type === "image") {
-        return "[Image]";
-      }
-      return renderPromptAttachmentAsText(part);
-    })
-    .filter((text) => text.trim().length > 0)
-    .join("\n");
-}
 
 export const __openCodeInternals = {
   buildOpenCodePromptParts,
@@ -210,6 +126,7 @@ export class OpenCodeAgentSession implements AgentSession {
   private subAgentCallIdByChildSessionId = new Map<string, string>();
   private pendingChildToolPartsBySessionId = new Map<string, OpenCodeToolPartEventPart[]>();
   private readonly eventStreamController: OpenCodeEventStreamController;
+  private readonly turnExecution: OpenCodeTurnExecution;
   private readonly lifecycle: OpenCodeSessionLifecycle;
   constructor(
     config: OpenCodeAgentConfig,
@@ -269,6 +186,26 @@ export class OpenCodeAgentSession implements AgentSession {
       trace: (message, data) => this.traceOpenCode(message, data),
       logger: this.logger,
     });
+    this.turnExecution = new OpenCodeTurnExecution({
+      config: this.config,
+      client: this.client,
+      sessionId: this.sessionId,
+      logger: this.logger,
+      abortCoordinator: this.abortCoordinator,
+      mcpController: this.mcpController,
+      sessionRuntime: this.sessionRuntime,
+      eventStreamController: this.eventStreamController,
+      eventBus: this.eventBus,
+      prepareTranslationState: ({ prompt, contextWindowMaxTokens }) => {
+        this.subAgentsByCallId.clear();
+        this.subAgentCallIdByChildSessionId.clear();
+        this.pendingChildToolPartsBySessionId.clear();
+        this.pendingUserMessageText = buildOpenCodeUserTimelineText(prompt);
+        this.accumulatedUsage =
+          contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
+      },
+      trace: (message, data) => this.traceOpenCode(message, data),
+    });
     this.lifecycle = new OpenCodeSessionLifecycle({
       client: this.client,
       sessionId: this.sessionId,
@@ -304,25 +241,11 @@ export class OpenCodeAgentSession implements AgentSession {
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
-    return runProviderTurn({
-      prompt,
-      runOptions: options,
-      startTurn: (p, o) => this.startTurn(p, o),
-      subscribe: (callback) => this.subscribe(callback),
-      getSessionId: () => this.sessionId,
-    });
+    return this.turnExecution.run(prompt, options);
   }
 
   async interrupt(): Promise<void> {
-    const turnId = this.eventBus.getActiveTurnId();
-    await this.abortCoordinator.interruptCurrentTurn(turnId);
-    if (turnId) {
-      this.eventStreamController.suppressTerminalUntilUserMessage();
-      this.eventBus.finish(
-        { type: "turn_canceled", provider: "opencode", reason: "interrupted" },
-        turnId,
-      );
-    }
+    await this.turnExecution.interrupt();
   }
 
   async revertBoth(input: { messageId: string }): Promise<void> {
@@ -338,197 +261,9 @@ export class OpenCodeAgentSession implements AgentSession {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
-    if (this.eventBus.getActiveTurnId()) {
-      throw new Error("A foreground turn is already active");
-    }
-    await this.abortCoordinator.awaitPendingBeforeStart();
-
-    this.eventBus.prepareTurn();
-    this.subAgentsByCallId.clear();
-    this.subAgentCallIdByChildSessionId.clear();
-    this.pendingChildToolPartsBySessionId.clear();
-    const turnAbortController = this.abortCoordinator.beginTurn();
-    await this.mcpController.ensureConfigured(this.config.mcpServers);
-    const contextWindowMaxTokens = this.sessionRuntime.getSelectedModelContextWindowMaxTokens();
-    this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
-
-    const parts = buildOpenCodePromptParts(prompt);
-    this.pendingUserMessageText = buildOpenCodeUserTimelineText(prompt);
-    const { model, configuredModel, effectiveMode, effectiveVariant } =
-      this.sessionRuntime.getTurnConfig();
-
-    try {
-      await this.eventStreamController.ensureReady();
-    } catch (error) {
-      this.abortCoordinator.clearTurn(turnAbortController);
-      throw error;
-    }
-
-    const turnId = this.eventBus.beginTurn();
-
-    const slashCommand = await this.resolveSlashCommandInvocation(prompt);
-    if (slashCommand) {
-      if (slashCommand.commandName === "compact" || slashCommand.commandName === "summarize") {
-        void this.client.session
-          .summarize({
-            sessionID: this.sessionId,
-            directory: this.config.cwd,
-            ...(model ? { providerID: model.providerID, modelID: model.modelID } : {}),
-          })
-          .then((response) => {
-            if (response.error) {
-              this.eventBus.finish(
-                {
-                  type: "turn_failed",
-                  provider: "opencode",
-                  error: toDiagnosticErrorMessage(response.error),
-                },
-                turnId,
-              );
-            } else {
-              this.eventBus.finish(
-                { type: "turn_completed", provider: "opencode", usage: undefined },
-                turnId,
-              );
-            }
-            return;
-          })
-          .catch((error) => {
-            this.eventBus.finish(
-              {
-                type: "turn_failed",
-                provider: "opencode",
-                error: toDiagnosticErrorMessage(error),
-              },
-              turnId,
-            );
-          });
-        return { turnId };
-      }
-
-      // command() is only dispatch acknowledgement. OpenCode session events are
-      // the source of truth for when the command turn becomes idle or fails.
-      void this.client.session
-        .command({
-          sessionID: this.sessionId,
-          directory: this.config.cwd,
-          command: slashCommand.commandName,
-          arguments: slashCommand.args ?? "",
-          ...(configuredModel ? { model: configuredModel } : {}),
-          ...(effectiveMode ? { agent: effectiveMode } : {}),
-          ...(effectiveVariant ? { variant: effectiveVariant } : {}),
-        })
-        .then((response) => {
-          if (response.error) {
-            if (isOpenCodeHeadersTimeoutFailure(response.error)) {
-              this.logger.warn(
-                {
-                  err: response.error,
-                  commandName: slashCommand.commandName,
-                  turnId,
-                },
-                "OpenCode slash command hit a header timeout; waiting for SSE terminal event",
-              );
-              return;
-            }
-            const errorMsg = toDiagnosticErrorMessage(response.error);
-            this.eventBus.finish(
-              { type: "turn_failed", provider: "opencode", error: errorMsg },
-              turnId,
-            );
-          }
-          return;
-        })
-        .catch((err) => {
-          if (isOpenCodeHeadersTimeoutFailure(err)) {
-            this.logger.warn(
-              {
-                err,
-                commandName: slashCommand.commandName,
-                turnId,
-              },
-              "OpenCode slash command hit a header timeout; waiting for SSE terminal event",
-            );
-            return;
-          }
-          this.eventBus.finish(
-            { type: "turn_failed", provider: "opencode", error: toDiagnosticErrorMessage(err) },
-            turnId,
-          );
-        });
-    } else {
-      // Wrap in an async IIFE so a synchronous throw from promptAsync (e.g.
-      // SDK input validation) is caught alongside async rejections. A plain
-      // `.then().catch()` chain would let a sync throw escape unhandled.
-      void (async () => {
-        this.traceOpenCode("provider.opencode.prompt_async.start", {
-          turnId,
-          sessionId: this.sessionId,
-          model,
-          effectiveMode,
-          effectiveVariant,
-          partTypes: parts.map((p) => p.type),
-        });
-        try {
-          const systemPrompt = composeSystemPromptParts(
-            this.config.systemPrompt,
-            this.config.daemonAppendSystemPrompt,
-          );
-          const promptResponse = await this.client.session.promptAsync({
-            sessionID: this.sessionId,
-            directory: this.config.cwd,
-            parts,
-            ...(options?.outputSchema
-              ? {
-                  format: {
-                    type: "json_schema" as const,
-                    schema: options.outputSchema as Record<string, unknown>,
-                  },
-                }
-              : {}),
-            ...(systemPrompt ? { system: systemPrompt } : {}),
-            ...(model ? { model } : {}),
-            ...(effectiveMode ? { agent: effectiveMode } : {}),
-            ...(effectiveVariant ? { variant: effectiveVariant } : {}),
-          });
-          this.traceOpenCode("provider.opencode.prompt_async.response", {
-            turnId,
-            hasError: promptResponse.error !== undefined,
-            error: promptResponse.error,
-            data: promptResponse.data,
-          });
-          if (promptResponse.error) {
-            this.eventBus.finish(
-              {
-                type: "turn_failed",
-                provider: "opencode",
-                error: toDiagnosticErrorMessage(promptResponse.error),
-              },
-              turnId,
-            );
-          }
-        } catch (error) {
-          this.traceOpenCode("provider.opencode.prompt_async.throw", {
-            turnId,
-            error:
-              error instanceof Error
-                ? { name: error.name, message: error.message, stack: error.stack }
-                : String(error),
-          });
-          this.eventBus.finish(
-            {
-              type: "turn_failed",
-              provider: "opencode",
-              error: toDiagnosticErrorMessage(error),
-            },
-            turnId,
-          );
-        }
-      })();
-    }
-
-    return { turnId };
+    return this.turnExecution.startTurn(prompt, options);
   }
+
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
     return this.eventBus.subscribe(callback);
   }
@@ -605,45 +340,6 @@ export class OpenCodeAgentSession implements AgentSession {
 
   async close(): Promise<void> {
     await this.lifecycle.close();
-  }
-
-  private parseSlashCommandInput(text: string): { commandName: string; args?: string } | null {
-    const trimmed = text.trim();
-    if (!trimmed.startsWith("/") || trimmed.length <= 1) {
-      return null;
-    }
-    const withoutPrefix = trimmed.slice(1);
-    const firstWhitespaceIdx = withoutPrefix.search(/\s/);
-    const commandName =
-      firstWhitespaceIdx === -1 ? withoutPrefix : withoutPrefix.slice(0, firstWhitespaceIdx);
-    if (!commandName || commandName.includes("/")) {
-      return null;
-    }
-    const rawArgs =
-      firstWhitespaceIdx === -1 ? "" : withoutPrefix.slice(firstWhitespaceIdx + 1).trim();
-    return rawArgs.length > 0 ? { commandName, args: rawArgs } : { commandName };
-  }
-
-  private async resolveSlashCommandInvocation(
-    prompt: AgentPromptInput,
-  ): Promise<{ commandName: string; args?: string } | null> {
-    if (typeof prompt !== "string") {
-      return null;
-    }
-    const parsed = this.parseSlashCommandInput(prompt);
-    if (!parsed) {
-      return null;
-    }
-    try {
-      const commands = await this.listCommands();
-      return commands.some((command) => command.name === parsed.commandName) ? parsed : null;
-    } catch (error) {
-      this.logger.warn(
-        { err: error, commandName: parsed.commandName },
-        "Failed to resolve slash command; falling back to plain prompt input",
-      );
-      return null;
-    }
   }
 
   private async translateEvent(event: OpenCodeEvent): Promise<AgentStreamEvent[]> {

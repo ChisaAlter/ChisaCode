@@ -223,8 +223,9 @@
   - `OpenCodeSessionEventBus` 独立拥有 active turn、subscriber、turn ID、running tool terminal synthesis 与 close suppression；Session 降至 886 行
   - `OpenCodeSessionRuntime` 独立拥有 mode/model/thinking/feature、catalog cache、context-window selection 与 persistence metadata；Session 降至 792 行
   - `OpenCodeSessionLifecycle` 独立拥有 close ordering、abort/archive reconciliation、ephemeral delete 与 server release；Session 降至 699 行
+  - `OpenCodeTurnExecution` 独立拥有 prompt parts、slash command 分流、run/start/interrupt、MCP/SSE 启动顺序与 provider dispatch；Session 降至 395 行，turn execution 为 433 行
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
-- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode translator/history/permission/MCP/event bus/runtime/lifecycle 已独立。下一步提取剩余 turn execution。
+- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode turn execution/translator/history/permission/MCP/event bus/runtime/lifecycle 已独立。下一步继续收敛 event translator 与 sub-agent tracking。
 
 ---
 
