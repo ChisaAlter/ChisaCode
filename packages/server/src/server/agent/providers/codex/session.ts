@@ -4,7 +4,6 @@ import {
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPermissionResult,
-  type AgentPromptContentBlock,
   type AgentPromptInput,
   type AgentRunOptions,
   type AgentRunResult,
@@ -18,8 +17,6 @@ import {
 } from "../../agent-sdk-types.js";
 import type { Logger } from "pino";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "../codex-feature-definitions.js";
@@ -51,16 +48,6 @@ import {
   writeCodexImageAttachment,
 } from "./image-attachments.js";
 import { threadItemToTimeline } from "./history.js";
-import {
-  expandCodexCustomPrompt,
-  listCodexCustomPrompts,
-  listCodexSkillEntries,
-  listCodexSkills,
-  parseCodexFrontMatter,
-  resolveCodexHomeDir,
-  resolveSkillPolicy,
-  toAgentSkill,
-} from "./skills.js";
 import type { ParsedCodexNotification } from "./notifications.js";
 import { CodexNotificationRouter } from "./notification-router.js";
 import { CodexNotificationStreamState } from "./notification-stream-state.js";
@@ -70,6 +57,11 @@ import { CodexThreadBootstrap } from "./thread-bootstrap.js";
 import { CodexSessionMetadata } from "./session-metadata.js";
 import { CodexSessionHistory } from "./session-history.js";
 import { CodexSessionConnection } from "./session-connection.js";
+import {
+  CodexSessionCommandController,
+  type CodexPromptInput,
+  type CodexSkillPromptBlock,
+} from "./session-commands.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
 import {
@@ -102,27 +94,6 @@ export {
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
 
-type GoalSubcommand =
-  | { kind: "set"; objective: string }
-  | { kind: "pause" }
-  | { kind: "resume" }
-  | { kind: "clear" }
-  | { kind: "usage" };
-
-function parseGoalSubcommand(args: string | undefined): GoalSubcommand {
-  const trimmed = (args ?? "").trim();
-  if (!trimmed) return { kind: "usage" };
-  const lower = trimmed.toLowerCase();
-  if (lower === "pause") return { kind: "pause" };
-  if (lower === "resume") return { kind: "resume" };
-  if (lower === "clear") return { kind: "clear" };
-  return { kind: "set", objective: trimmed };
-}
-
-function formatOutOfBandStatusMessage(text: string): string {
-  return `${text.replace(/\n+$/u, "")}\n\n`;
-}
-
 interface CodexAppServerClientLike extends CodexClientLike {
   forkThread?(params: CodexThreadForkParams): Promise<CodexThreadForkResponse>;
   rollbackThread?(params: CodexThreadRollbackParams): Promise<CodexThreadRollbackResponse>;
@@ -152,14 +123,6 @@ export async function rollbackCodexThread(
   return parseCodexThreadRollbackResponse(await client.request("thread/rollback", params));
 }
 
-interface CodexSkillPromptBlock {
-  type: "skill";
-  name: string;
-  path: string;
-}
-
-type CodexPromptContentBlock = AgentPromptContentBlock | CodexSkillPromptBlock;
-type CodexPromptInput = string | CodexPromptContentBlock[];
 interface CodexTextElement {
   byteRange: {
     start: number;
@@ -256,6 +219,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly threadBootstrap: CodexThreadBootstrap;
   private readonly sessionMetadata: CodexSessionMetadata;
   private readonly sessionHistory: CodexSessionHistory;
+  private readonly commandController: CodexSessionCommandController;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
@@ -327,6 +291,21 @@ export class CodexAppServerAgentSession implements AgentSession {
       getConfig: () => this.config,
       getTraceContext: () => this.traceContext(),
       customProvider: this.deps.customProvider,
+    });
+    this.commandController = new CodexSessionCommandController({
+      logger: this.logger,
+      getConfig: () => this.config,
+      getClient: () => this.client,
+      isConnected: () => this.connected,
+      connect: () => this.connect(),
+      metadata: this.sessionMetadata,
+      workspaceGitService: this.deps.workspaceGitService,
+      goalsEnabled: this.goalsEnabled,
+      getThreadId: () => this.currentThreadId,
+      ensureThreadLoaded: () => this.ensureThreadLoaded(),
+      ensureThread: () => this.ensureThread(),
+      beginManualCompaction: () => this.compactionState.beginManualCompaction(),
+      cancelManualCompactionStart: () => this.compactionState.cancelManualCompactionStart(),
     });
     this.deltaNotificationHandler = new CodexDeltaNotificationHandler({
       notificationStream: this.notificationStream,
@@ -522,79 +501,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     return this.threadBootstrap.ensureThread();
   }
 
-  private parseSlashCommandInput(text: string): { commandName: string; args?: string } | null {
-    const trimmed = text.trim();
-    if (!trimmed.startsWith("/") || trimmed.length <= 1) {
-      return null;
-    }
-    const withoutPrefix = trimmed.slice(1);
-    const firstWhitespaceIdx = withoutPrefix.search(/\s/);
-    const commandName =
-      firstWhitespaceIdx === -1 ? withoutPrefix : withoutPrefix.slice(0, firstWhitespaceIdx);
-    if (!commandName || commandName.includes("/")) {
-      return null;
-    }
-    const rawArgs =
-      firstWhitespaceIdx === -1 ? "" : withoutPrefix.slice(firstWhitespaceIdx + 1).trim();
-    return rawArgs.length > 0 ? { commandName, args: rawArgs } : { commandName };
-  }
-
-  private async resolveSlashCommandInvocation(
-    prompt: AgentPromptInput,
-  ): Promise<{ commandName: string; args?: string } | null> {
-    if (typeof prompt !== "string") {
-      return null;
-    }
-    const parsed = this.parseSlashCommandInput(prompt);
-    if (!parsed) {
-      return null;
-    }
-    try {
-      const commands = await this.listCommands();
-      return commands.some((command) => command.name === parsed.commandName) ? parsed : null;
-    } catch (error) {
-      this.logger.warn(
-        { err: error, commandName: parsed.commandName },
-        "Failed to resolve slash command; falling back to plain prompt input",
-      );
-      return null;
-    }
-  }
-
-  private async buildCommandPromptInput(
-    commandName: string,
-    args?: string,
-  ): Promise<CodexPromptInput> {
-    if (commandName.startsWith("prompts:")) {
-      const promptName = commandName.slice("prompts:".length);
-      const codexHome = resolveCodexHomeDir();
-      const promptPath = path.join(codexHome, "prompts", `${promptName}.md`);
-      const raw = await fs.readFile(promptPath, "utf8");
-      const parsed = parseCodexFrontMatter(raw);
-      return expandCodexCustomPrompt(parsed.body, args);
-    }
-
-    if (!this.connected) {
-      await this.connect();
-    } else {
-      await this.sessionMetadata.loadSkills();
-    }
-    const skill = this.sessionMetadata
-      .getEnabledSkills()
-      .find((entry) => entry.name === commandName);
-    if (skill) {
-      const trimmedArgs = args?.trim() ?? "";
-      const text = trimmedArgs ? `$${skill.name} ${trimmedArgs}` : `$${skill.name}`;
-      const input: CodexPromptContentBlock[] = [
-        { type: "skill", name: skill.name, path: skill.path },
-        { type: "text", text },
-      ];
-      return input;
-    }
-
-    return args ? `$${commandName} ${args}` : `$${commandName}`;
-  }
-
   private async buildTurnStartParams(prompt: CodexPromptInput, options?: AgentRunOptions) {
     const userInput = await this.buildUserInput(prompt);
     const developerInstructions = composeSystemPromptParts(
@@ -684,10 +590,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       throw new Error("Codex client not initialized");
     }
 
-    const slashCommand = await this.resolveSlashCommandInvocation(prompt);
-    const effectivePrompt = slashCommand
-      ? await this.buildCommandPromptInput(slashCommand.commandName, slashCommand.args)
-      : prompt;
+    const effectivePrompt = await this.commandController.resolvePrompt(prompt);
 
     if (this.currentThreadId) {
       await this.ensureThreadLoaded();
@@ -899,170 +802,17 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
-    const prompts = await listCodexCustomPrompts();
-    if (!this.connected) {
-      await this.connect();
-    } else {
-      await this.sessionMetadata.loadSkills();
-    }
-    const appServerSkills = this.sessionMetadata.getEnabledSkills().map((skill) => ({
-      name: skill.name,
-      description: skill.description,
-      argumentHint: "",
-    }));
-    const fallbackSkills =
-      appServerSkills.length === 0
-        ? await listCodexSkills(
-            this.config.cwd,
-            this.deps.workspaceGitService,
-            resolveSkillPolicy(this.config),
-          )
-        : [];
-    const builtin: AgentSlashCommand[] = [
-      {
-        name: "compact",
-        description: "Summarize conversation to prevent hitting the context limit",
-        argumentHint: "",
-      },
-    ];
-    if (this.goalsEnabled) {
-      builtin.push({
-        name: "goal",
-        description: "Set, pause, resume, or clear the agent's goal",
-        argumentHint: "[<objective>|pause|resume|clear]",
-      });
-    }
-    return [...builtin, ...appServerSkills, ...fallbackSkills, ...prompts].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
+    return this.commandController.listCommands();
   }
 
   async listSkills(): Promise<AgentSkill[]> {
-    if (!this.connected) {
-      await this.connect();
-    } else {
-      await this.sessionMetadata.loadSkills();
-    }
-    if (this.sessionMetadata.getCachedSkills().length > 0) {
-      return this.sessionMetadata.getCachedSkills().map(toAgentSkill);
-    }
-    return (await listCodexSkillEntries(this.config.cwd, this.deps.workspaceGitService)).map(
-      toAgentSkill,
-    );
+    return this.commandController.listSkills();
   }
 
   tryHandleOutOfBand(
     prompt: AgentPromptInput,
   ): { run(ctx: { emit: (event: AgentStreamEvent) => void }): Promise<void> } | null {
-    if (typeof prompt !== "string") return null;
-    const parsed = this.parseSlashCommandInput(prompt);
-    if (!parsed) return null;
-
-    if (parsed.commandName === "compact") {
-      return {
-        run: async ({ emit }) => {
-          const error = await this.executeCompactCommand();
-          if (error) {
-            emit({
-              type: "timeline",
-              provider: CODEX_PROVIDER,
-              item: { type: "assistant_message", text: formatOutOfBandStatusMessage(error) },
-            });
-          }
-        },
-      };
-    }
-
-    if (!this.goalsEnabled || parsed.commandName !== "goal") return null;
-
-    const subcommand = parseGoalSubcommand(parsed.args);
-    return {
-      run: async ({ emit }) => {
-        const text = formatOutOfBandStatusMessage(await this.executeGoalSubcommand(subcommand));
-        emit({
-          type: "timeline",
-          provider: CODEX_PROVIDER,
-          item: { type: "assistant_message", text },
-        });
-      },
-    };
-  }
-
-  private async executeCompactCommand(): Promise<string | null> {
-    try {
-      await this.connect();
-      if (this.currentThreadId) {
-        await this.ensureThreadLoaded();
-      } else {
-        await this.ensureThread();
-      }
-      if (!this.client || !this.currentThreadId) {
-        throw new Error("Codex thread is not available");
-      }
-      this.compactionState.beginManualCompaction();
-      try {
-        await this.client.request("thread/compact/start", {
-          threadId: this.currentThreadId,
-        });
-      } catch (error) {
-        this.compactionState.cancelManualCompactionStart();
-        throw error;
-      }
-      return null;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown error";
-      return `Failed to compact context: ${message}`;
-    }
-  }
-
-  private async executeGoalSubcommand(subcommand: GoalSubcommand): Promise<string> {
-    if (subcommand.kind === "usage") {
-      return "Usage: /goal <objective>|pause|resume|clear";
-    }
-    try {
-      await this.connect();
-      if (this.currentThreadId) {
-        await this.ensureThreadLoaded();
-      } else {
-        await this.ensureThread();
-      }
-      if (!this.client || !this.currentThreadId) {
-        throw new Error("Codex thread is not available");
-      }
-      switch (subcommand.kind) {
-        case "set": {
-          await this.client.request("thread/goal/set", {
-            threadId: this.currentThreadId,
-            objective: subcommand.objective,
-            status: "active",
-          });
-          return `Goal set: ${subcommand.objective}`;
-        }
-        case "pause": {
-          await this.client.request("thread/goal/set", {
-            threadId: this.currentThreadId,
-            status: "paused",
-          });
-          return "Goal paused.";
-        }
-        case "resume": {
-          await this.client.request("thread/goal/set", {
-            threadId: this.currentThreadId,
-            status: "active",
-          });
-          return "Goal resumed.";
-        }
-        case "clear": {
-          await this.client.request("thread/goal/clear", {
-            threadId: this.currentThreadId,
-          });
-          return "Goal cleared.";
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown error";
-      return `Failed to update goal: ${message}`;
-    }
+    return this.commandController.tryHandleOutOfBand(prompt);
   }
 
   private async buildUserInput(prompt: CodexPromptInput): Promise<CodexAppServerUserInput[]> {
