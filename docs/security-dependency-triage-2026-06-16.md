@@ -33,7 +33,6 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 
 ## Deferred
 
-- `ai@5.0.78` / `@ai-sdk/provider-utils`: npm requires `ai@6`, a runtime major. Handle as a dedicated provider compatibility slice with targeted provider tests.
 - `@anthropic-ai/claude-agent-sdk`: patched `0.2.141` resolves the vulnerable SDK path but requires `zod@4`. The repo still uses Zod 3 across protocol/client/server packages, so this needs a Zod migration slice instead of a security patch batch.
 - Expo / React Native toolchain advisories that still require framework-level work
   (`postcss`, `uuid`, `js-yaml`, `tar`, and the `expo-*` package advisories): these sit
@@ -46,3 +45,10 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 - The lockfile update used `--legacy-peer-deps` because the current dependency graph already contains a peer conflict: `@anthropic-ai/claude-agent-sdk@0.2.133` declares `zod@4`, while the repo intentionally remains on Zod 3.
 - A non-force `npm audit fix --omit=dev --registry=https://registry.npmjs.org/` attempt fails at the same `@anthropic-ai/claude-agent-sdk@0.2.141` / Zod 4 peer boundary. Do not bypass this with `--force`; handle it in the Zod migration slice.
 - Do not use `npm audit fix --force` for the remaining advisories.
+
+## Resolved Follow-up - 2026-07-12
+
+- Removed the legacy `ai@5.0.78` dependency entirely; server MCP consumers now use
+  `@ai-sdk/mcp@2.0.10` and the stable `createMCPClient` API.
+- The migration moves `@ai-sdk/provider-utils` from the vulnerable 3.x line to 5.0.7,
+  raises the server Zod peer floor to `^3.25.76`, and establishes Node.js 22 as the minimum runtime.

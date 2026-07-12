@@ -2,7 +2,7 @@
 
 ## Sources Of Truth
 
-- Use the active Node.js installation from `PATH`; the repository does not enforce an exact Node version. This is an npm workspace monorepo with `package-lock.json`, not pnpm/yarn.
+- Use Node.js 22 or newer from the active `PATH`; the repository does not pin an exact Node version. This is an npm workspace monorepo with `package-lock.json`, not pnpm/yarn.
 - `docs/` holds repo-specific architecture, workflow, and gotcha docs. For non-trivial work, list it and skim the relevant file before editing.
 - `CLAUDE.md` has longer standing guidance; prefer this file for the compact checklist and consult the docs it references for details.
 

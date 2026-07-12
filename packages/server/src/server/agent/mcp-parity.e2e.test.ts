@@ -3,8 +3,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { experimental_createMCPClient } from "ai";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { createMCPClient } from "@ai-sdk/mcp";
 import { z } from "zod";
 
 import { AGENT_WAIT_TIMEOUT_MS } from "./mcp-shared.js";
@@ -82,10 +81,17 @@ function getStructuredContent(result: McpToolResult): StructuredContent | null {
 }
 
 async function createMcpClient(url: string): Promise<McpClient> {
-  const transport = new StreamableHTTPClientTransport(new URL(url));
-  const rawClient = await experimental_createMCPClient({ transport });
-  const boundCallTool: McpClient["callTool"] = Reflect.get(rawClient, "callTool").bind(rawClient);
-  return { callTool: boundCallTool, close: () => rawClient.close() };
+  const rawClient = await createMCPClient({
+    transport: {
+      type: "http",
+      url,
+    },
+  });
+  return {
+    callTool: ({ name, args }) =>
+      rawClient.callTool({ name, arguments: args }) as Promise<McpToolResult>,
+    close: () => rawClient.close(),
+  };
 }
 
 async function callToolStructured(

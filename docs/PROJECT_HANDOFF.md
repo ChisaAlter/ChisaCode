@@ -4,7 +4,7 @@ This is the entry point for agents taking over work in this repository. Start he
 
 ## What This Project Is
 
-ChisaCode is a local-first control surface for AI coding agents. A local daemon manages agent processes and state, clients connect over WebSocket, and optional relay support allows encrypted remote access. The workspace is an npm monorepo and does not enforce an exact Node.js version.
+ChisaCode is a local-first control surface for AI coding agents. A local daemon manages agent processes and state, clients connect over WebSocket, and optional relay support allows encrypted remote access. The workspace is an npm monorepo requiring Node.js 22 or newer without pinning an exact version.
 
 ## First Reads
 

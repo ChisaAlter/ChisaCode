@@ -15,17 +15,17 @@ Write-Host "[1/5] 检查 Node.js ..." -ForegroundColor Yellow
 try {
     $nodeVersion = node --version 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "错误: 未找到 Node.js。请从 https://nodejs.org 安装 Node.js 20+ 再运行。" -ForegroundColor Red
+        Write-Host "错误: 未找到 Node.js。请从 https://nodejs.org 安装 Node.js 22+ 再运行。" -ForegroundColor Red
         exit 1
     }
     $majorVersion = [int]($nodeVersion -replace 'v(\d+)\..*', '$1')
-    if ($majorVersion -lt 20) {
-        Write-Host "错误: Node.js $majorVersion 太旧。需要 Node.js >= 20。" -ForegroundColor Red
+    if ($majorVersion -lt 22) {
+        Write-Host "错误: Node.js $majorVersion 太旧。需要 Node.js >= 22。" -ForegroundColor Red
         exit 1
     }
     Write-Host "  Node.js $nodeVersion — 通过" -ForegroundColor Green
 } catch {
-    Write-Host "错误: 未找到 Node.js。请从 https://nodejs.org 安装 Node.js 20+。" -ForegroundColor Red
+    Write-Host "错误: 未找到 Node.js。请从 https://nodejs.org 安装 Node.js 22+。" -ForegroundColor Red
     exit 1
 }
 

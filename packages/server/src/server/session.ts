@@ -4,7 +4,7 @@ import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
 import { basename } from "path";
 import { z } from "zod";
-import type { ToolSet } from "ai";
+import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
   serializeAgentStreamEvent,
@@ -33,8 +33,6 @@ import { type AudioBufferState } from "./session-audio.js";
 import { listAvailableEditorTargets, openInEditorTarget } from "./editor-targets.js";
 import { isStoredAgentProviderAvailable } from "./persistence-hooks.js";
 import { AgentPresetStore } from "./agent/agent-preset-store.js";
-import { experimental_createMCPClient } from "ai";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
@@ -301,9 +299,8 @@ export class Session {
   private voiceModeAgentId: string | null = null;
   private audioBuffer: AudioBufferState | null = null;
 
-  // Per-session MCP client and tools
-  private agentMcpClient: Awaited<ReturnType<typeof experimental_createMCPClient>> | null = null;
-  private agentTools: ToolSet | null = null;
+  // Per-session MCP client
+  private agentMcpClient: MCPClient | null = null;
   private agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
   private readonly usageStore: UsageStore | null;
@@ -812,14 +809,15 @@ export class Session {
         );
         return;
       }
-      const transport = new StreamableHTTPClientTransport(new URL(this.mcpBaseUrl));
-
-      this.agentMcpClient = await experimental_createMCPClient({
-        transport,
+      this.agentMcpClient = await createMCPClient({
+        transport: {
+          type: "http",
+          url: this.mcpBaseUrl,
+        },
       });
 
-      this.agentTools = (await this.agentMcpClient.tools()) as ToolSet;
-      const agentToolCount = Object.keys(this.agentTools ?? {}).length;
+      const agentTools = await this.agentMcpClient.tools();
+      const agentToolCount = Object.keys(agentTools).length;
       this.sessionLogger.trace({ agentToolCount }, "agent.session.mcp_init");
     } catch (error) {
       this.sessionLogger.error({ err: error }, "Failed to initialize Agent MCP");
@@ -2846,7 +2844,6 @@ export class Session {
         this.sessionLogger.error({ err: error }, "Failed to close Agent MCP client");
       }
       this.agentMcpClient = null;
-      this.agentTools = null;
     }
 
     this.terminalController.dispose();

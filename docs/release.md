@@ -58,7 +58,7 @@ There are two supported ways to ship from `main`:
 Before running any stable patch release command:
 
 - Make sure the intended release commit is already committed to `main` and the working tree is clean.
-- Use the active Node.js installation from `PATH`. `npm run check:node` is advisory only and release checks do not enforce an exact Node version.
+- Use Node.js 22 or newer from the active `PATH`. `npm run check:node` enforces the minimum without pinning an exact version.
 - Run `npm run format:check`, `npm run lint`, and `npm run typecheck` and commit any resulting changes before versioning.
 - Do not run `npm run release:check` for the default Windows + Android release unless the user asks for the old npm package release gate. It performs npm package dry-runs and can waste time on surfaces outside this release target.
 - Do not run `npm run release:patch` as a substitute for checking whether the current commit is actually ready.
@@ -437,7 +437,7 @@ The changelog covers **stable-to-stable**. Betas are not represented. When you p
 
 - [ ] Run the pre-release sanity check (see above) and address any findings
 - [ ] Ensure the intended release commit is already committed and the git worktree is clean before versioning
-- [ ] Optionally run `npm run check:node` to print the active Node.js version
+- [ ] Run `npm run check:node` to verify Node.js 22 or newer
 - [ ] Ensure local `npm run format:check`, `npm run lint`, and `npm run typecheck` pass on that exact commit
 - [ ] Update `CHANGELOG.md` with user-facing release notes (features, fixes — not refactors)
 - [ ] Verify the changelog heading follows strict `## X.Y.Z - YYYY-MM-DD` format

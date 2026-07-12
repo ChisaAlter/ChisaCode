@@ -5,8 +5,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
-import { experimental_createMCPClient } from "ai";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { createMCPClient } from "@ai-sdk/mcp";
 import pino from "pino";
 
 import { withTimeout } from "../../utils/promise-timeout.js";
@@ -87,19 +86,18 @@ function getStructuredContent(result: McpToolResult): StructuredContent | null {
 }
 
 async function createMcpClient(url: string, password?: string): Promise<McpClient> {
-  const transport = new StreamableHTTPClientTransport(
-    new URL(url),
-    password
-      ? {
-          requestInit: {
-            headers: { Authorization: `Bearer ${password}` },
-          },
-        }
-      : undefined,
-  );
-  const rawClient = await experimental_createMCPClient({ transport });
-  const boundCallTool: McpClient["callTool"] = Reflect.get(rawClient, "callTool").bind(rawClient);
-  return { callTool: boundCallTool, close: () => rawClient.close() };
+  const rawClient = await createMCPClient({
+    transport: {
+      type: "http",
+      url,
+      ...(password ? { headers: { Authorization: `Bearer ${password}` } } : {}),
+    },
+  });
+  return {
+    callTool: ({ name, args }) =>
+      rawClient.callTool({ name, arguments: args }) as Promise<McpToolResult>,
+    close: () => rawClient.close(),
+  };
 }
 
 async function waitForAgentCompletion(options: {

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js from your active `PATH`; this repository does not enforce an exact Node version.
+- Node.js 22 or newer from your active `PATH`; this repository does not pin an exact version.
 - npm workspaces (comes with Node)
 
 ## Running the dev server

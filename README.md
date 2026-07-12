@@ -18,7 +18,7 @@
 
 ## Quick Start
 
-**Prerequisites:** Node.js >= 20, npm workspaces.
+**Prerequisites:** Node.js >= 22, npm workspaces.
 
 ```bash
 # Clone and install

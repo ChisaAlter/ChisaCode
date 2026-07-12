@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This guide covers the essentials.
 
 ## Development Setup
 
-**Prerequisites**: Node.js >= 20, npm workspaces, Git.
+**Prerequisites**: Node.js >= 22, npm workspaces, Git.
 
 ```bash
 git clone https://github.com/ChisaAlter/ChisaCode.git
