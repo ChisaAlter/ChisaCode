@@ -19,7 +19,6 @@ import type { Logger } from "pino";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
-import { buildCodexFeatures, codexModelSupportsFastMode } from "../codex-feature-definitions.js";
 import {
   CodexAppServerClient,
   parseCodexThreadForkResponse,
@@ -57,6 +56,7 @@ import { CodexThreadBootstrap } from "./thread-bootstrap.js";
 import { CodexSessionMetadata } from "./session-metadata.js";
 import { CodexSessionHistory } from "./session-history.js";
 import { CodexSessionConnection } from "./session-connection.js";
+import { CodexSessionRuntime } from "./session-runtime.js";
 import {
   CodexSessionCommandController,
   type CodexPromptInput,
@@ -64,13 +64,7 @@ import {
 } from "./session-commands.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
-import {
-  buildCodexTurnStartParams,
-  CODEX_MODES,
-  DEFAULT_CODEX_MODE_ID,
-  normalizeCodexThinkingOptionId,
-  validateCodexMode,
-} from "./turn-config.js";
+import { buildCodexTurnStartParams } from "./turn-config.js";
 import { runProviderTurn } from "../provider-runner.js";
 
 export { cleanupStaleCodexImageAttachments, threadItemToTimeline };
@@ -198,17 +192,13 @@ export class CodexAppServerAgentSession implements AgentSession {
   readonly capabilities = CODEX_APP_SERVER_CAPABILITIES;
 
   private readonly logger: Logger;
-  private readonly config: AgentSessionConfig;
-  private currentMode: string;
+  private readonly runtime: CodexSessionRuntime;
   private currentThreadId: string | null = null;
   private currentTurnId: string | null = null;
   private readonly connection: CodexSessionConnection;
   private readonly eventBus: CodexSessionEventBus;
   private nextTurnOrdinal = 0;
   private activeForegroundTurnId: string | null = null;
-  private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
-  private serviceTier: "fast" | null = null;
-  private planModeEnabled = false;
   private readonly permissionController: CodexPermissionController;
   private readonly notificationStream = new CodexNotificationStreamState();
   private readonly notificationRouter: CodexNotificationRouter;
@@ -241,6 +231,18 @@ export class CodexAppServerAgentSession implements AgentSession {
       provider: CODEX_PROVIDER,
       agentId: this.agentId,
     });
+    this.runtime = new CodexSessionRuntime({
+      config,
+      autoReviewEnabled: this.autoReviewEnabled,
+      getThreadId: () => this.currentThreadId,
+      isConnected: () => this.connected,
+      connect: () => this.connect(),
+      ensureThread: () => this.ensureThread(),
+      getResolvedCollaborationMode: () => this.sessionMetadata.getResolvedCollaborationMode(),
+      hasPlanCollaborationMode: () => this.sessionMetadata.hasPlanCollaborationMode(),
+      refreshResolvedCollaborationMode: (planModeEnabled) =>
+        this.sessionMetadata.refreshResolvedCollaborationMode(planModeEnabled),
+    });
     this.eventBus = new CodexSessionEventBus(this.logger, {
       agentId: this.agentId,
       getSessionId: () => this.currentThreadId,
@@ -269,12 +271,8 @@ export class CodexAppServerAgentSession implements AgentSession {
         this.currentThreadId = threadId;
       },
       getMode: () => this.currentMode,
-      setMode: (modeId) => {
-        this.currentMode = modeId;
-      },
-      invalidateRuntimeInfo: () => {
-        this.cachedRuntimeInfo = null;
-      },
+      setMode: (modeId) => this.runtime.setModeFromBootstrap(modeId),
+      invalidateRuntimeInfo: () => this.runtime.invalidateRuntimeInfo(),
       customProvider: this.deps.customProvider,
       customCodexConfig: this.deps.customCodexConfig,
       ephemeral: this.ephemeral,
@@ -370,7 +368,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.permissionController = new CodexPermissionController({
       getCwd: () => this.config.cwd ?? null,
       emit: (event) => this.eventBus.emit(event),
-      onPlanApproved: () => this.applyFeatureValue("plan_mode", false),
+      onPlanApproved: () => this.runtime.applyFeatureValue("plan_mode", false),
     });
     this.notificationRouter = new CodexNotificationRouter({
       onParsed: (method, params, parsed) => this.traceParsedNotification(method, params, parsed),
@@ -397,18 +395,6 @@ export class CodexAppServerAgentSession implements AgentSession {
         this.warnInvalidNotificationPayload(parsed.method, parsed.params),
       onUnknownMethod: (parsed) => this.warnUnknownNotificationMethod(parsed.method, parsed.params),
     });
-    const modeId = config.modeId ?? DEFAULT_CODEX_MODE_ID;
-    validateCodexMode(modeId);
-    this.currentMode = modeId;
-    this.config = { ...config, modeId };
-    this.config.thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
-    if (this.config.featureValues?.fast_mode && codexModelSupportsFastMode(this.config.model)) {
-      this.serviceTier = "fast";
-    }
-    if (this.config.featureValues?.plan_mode) {
-      this.planModeEnabled = true;
-    }
-
     if (this.resumeHandle?.sessionId) {
       this.currentThreadId = this.resumeHandle.sessionId;
       this.sessionHistory.markPending();
@@ -420,12 +406,23 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   get features(): AgentFeature[] {
-    return buildCodexFeatures({
-      modelId: this.config.model,
-      fastModeEnabled: this.serviceTier === "fast",
-      planModeEnabled: this.planModeEnabled,
-      planModeAvailable: this.sessionMetadata.hasPlanCollaborationMode(),
-    });
+    return this.runtime.getFeatures();
+  }
+
+  private get config(): AgentSessionConfig {
+    return this.runtime.getConfig();
+  }
+
+  private get currentMode(): string {
+    return this.runtime.getMode();
+  }
+
+  private get serviceTier(): "fast" | null {
+    return this.runtime.getServiceTier();
+  }
+
+  private get planModeEnabled(): boolean {
+    return this.runtime.isPlanModeEnabled();
   }
 
   private get client(): CodexAppServerClient | null {
@@ -454,23 +451,6 @@ export class CodexAppServerAgentSession implements AgentSession {
       sessionId: this.currentThreadId ?? undefined,
       turnId: this.activeForegroundTurnId ?? undefined,
     };
-  }
-
-  private applyFeatureValue(featureId: "fast_mode" | "plan_mode", value: boolean): void {
-    this.config.featureValues = {
-      ...this.config.featureValues,
-      [featureId]: value,
-    };
-
-    if (featureId === "fast_mode") {
-      this.serviceTier = value ? "fast" : null;
-      this.cachedRuntimeInfo = null;
-      return;
-    }
-
-    this.planModeEnabled = value;
-    this.sessionMetadata.refreshResolvedCollaborationMode(this.planModeEnabled);
-    this.cachedRuntimeInfo = null;
   }
 
   private registerRequestHandlers(client: CodexAppServerClient): void {
@@ -638,73 +618,31 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
-    if (this.cachedRuntimeInfo) return { ...this.cachedRuntimeInfo };
-    if (!this.connected) {
-      await this.connect();
-    }
-    if (!this.currentThreadId) {
-      await this.ensureThread();
-    }
-    const collaborationMode = this.sessionMetadata.getResolvedCollaborationMode();
-    const info: AgentRuntimeInfo = {
-      provider: CODEX_PROVIDER,
-      sessionId: this.currentThreadId,
-      model: this.config.model ?? null,
-      thinkingOptionId: normalizeCodexThinkingOptionId(this.config.thinkingOptionId) ?? null,
-      modeId: this.currentMode ?? null,
-      extra: collaborationMode ? { collaborationMode: collaborationMode.name } : undefined,
-    };
-    this.cachedRuntimeInfo = info;
-    return { ...info };
+    return this.runtime.getRuntimeInfo();
   }
 
   async getAvailableModes(): Promise<AgentMode[]> {
-    if (this.autoReviewEnabled) {
-      return CODEX_MODES;
-    }
-    return CODEX_MODES.filter((mode) => mode.id !== "auto-review");
+    return this.runtime.getAvailableModes();
   }
 
   async getCurrentMode(): Promise<string | null> {
-    return this.currentMode ?? null;
+    return this.runtime.getCurrentMode();
   }
 
   async setMode(modeId: string): Promise<void> {
-    validateCodexMode(modeId);
-    this.currentMode = modeId;
-    this.cachedRuntimeInfo = null;
+    this.runtime.setMode(modeId);
   }
 
   async setModel(modelId: string | null): Promise<void> {
-    this.config.model = modelId ?? undefined;
-    if (!codexModelSupportsFastMode(this.config.model)) {
-      this.serviceTier = null;
-    }
-    this.sessionMetadata.refreshResolvedCollaborationMode(this.planModeEnabled);
-    this.cachedRuntimeInfo = null;
+    this.runtime.setModel(modelId);
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
-    this.config.thinkingOptionId = normalizeCodexThinkingOptionId(thinkingOptionId);
-    this.sessionMetadata.refreshResolvedCollaborationMode(this.planModeEnabled);
-    this.cachedRuntimeInfo = null;
+    this.runtime.setThinkingOption(thinkingOptionId);
   }
 
   async setFeature(featureId: string, value: unknown): Promise<void> {
-    if (featureId === "fast_mode") {
-      if (Boolean(value) && !codexModelSupportsFastMode(this.config.model)) {
-        throw new Error(
-          `Codex fast mode is not available for model '${this.config.model ?? "default"}'`,
-        );
-      }
-      this.applyFeatureValue("fast_mode", Boolean(value));
-      return;
-    }
-    if (featureId === "plan_mode") {
-      this.applyFeatureValue("plan_mode", Boolean(value));
-      return;
-    }
-    throw new Error(`Unknown Codex feature: ${featureId}`);
+    this.runtime.setFeature(featureId, value);
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {
@@ -724,25 +662,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     nativeHandle: string;
     metadata: Record<string, unknown>;
   } | null {
-    if (!this.currentThreadId) return null;
-    const thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId) ?? null;
-    return {
-      provider: CODEX_PROVIDER,
-      sessionId: this.currentThreadId,
-      nativeHandle: this.currentThreadId,
-      metadata: {
-        provider: CODEX_PROVIDER,
-        cwd: this.config.cwd,
-        title: this.config.title ?? null,
-        threadId: this.currentThreadId,
-        modeId: this.currentMode,
-        model: this.config.model ?? null,
-        thinkingOptionId,
-        extra: this.config.extra,
-        systemPrompt: this.config.systemPrompt,
-        mcpServers: this.config.mcpServers,
-      },
-    };
+    return this.runtime.describePersistence();
   }
 
   async revertConversation(input: { messageId: string }): Promise<void> {
@@ -766,7 +686,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       userMessageTurns: this.userMessageTurns,
       setThreadId: async (threadId) => {
         this.currentThreadId = threadId;
-        this.cachedRuntimeInfo = null;
+        this.runtime.invalidateRuntimeInfo();
         this.sessionHistory.reset();
         await this.loadPersistedHistory();
       },
@@ -794,6 +714,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.eventBus.clear();
     this.activeForegroundTurnId = null;
     await this.connection.close();
+    this.runtime.invalidateRuntimeInfo();
     this.currentThreadId = null;
     this.currentTurnId = null;
     // Best-effort: clean up image attachments older than the TTL so temp files
