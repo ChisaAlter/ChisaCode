@@ -24,7 +24,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
-import { extractCodexTerminalSessionId } from "../tool-call-mapper-utils.js";
 import { buildCodexFeatures, codexModelSupportsFastMode } from "../codex-feature-definitions.js";
 import {
   CodexAppServerClient,
@@ -73,17 +72,11 @@ import {
   resolveSkillPolicy,
   toAgentSkill,
 } from "./skills.js";
-import {
-  decodeCodexOutputDeltaChunk,
-  isEditToolCallWithoutContent,
-  mapCodexExecNotificationToToolCall,
-  mapCodexPatchNotificationToToolCall,
-  mapCodexTerminalInteractionToToolCall,
-  normalizeCodexCommandValue,
-} from "./notification-timeline.js";
+import { decodeCodexOutputDeltaChunk } from "./notification-timeline.js";
 import { type CodexDeltaNotification, type ParsedCodexNotification } from "./notifications.js";
 import { CodexNotificationRouter } from "./notification-router.js";
 import { CodexNotificationStreamState } from "./notification-stream-state.js";
+import { CodexToolNotificationHandler } from "./tool-notification-handler.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { mapCodexPlanToToolCall, planStepsToMarkdown } from "./permissions.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
@@ -100,11 +93,8 @@ import {
 } from "./turn-config.js";
 import { runProviderTurn } from "../provider-runner.js";
 
-export {
-  cleanupStaleCodexImageAttachments,
-  mapCodexPatchNotificationToToolCall,
-  threadItemToTimeline,
-};
+export { cleanupStaleCodexImageAttachments, threadItemToTimeline };
+export { mapCodexPatchNotificationToToolCall } from "./notification-timeline.js";
 
 export {
   buildCodexAppServerEnv,
@@ -331,6 +321,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly permissionController: CodexPermissionController;
   private readonly notificationStream = new CodexNotificationStreamState();
   private readonly notificationRouter: CodexNotificationRouter;
+  private readonly toolNotificationHandler: CodexToolNotificationHandler;
   private pendingAssistantMessageBoundary = false;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
@@ -376,6 +367,12 @@ export class CodexAppServerAgentSession implements AgentSession {
       getSessionId: () => this.currentThreadId,
       getTurnId: () => this.activeForegroundTurnId,
     });
+    this.toolNotificationHandler = new CodexToolNotificationHandler({
+      logger: this.logger,
+      notificationStream: this.notificationStream,
+      getCwd: () => this.config.cwd ?? null,
+      emit: (item) => this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item }),
+    });
     this.permissionController = new CodexPermissionController({
       getCwd: () => this.config.cwd ?? null,
       emit: (event) => this.eventBus.emit(event),
@@ -391,11 +388,15 @@ export class CodexAppServerAgentSession implements AgentSession {
       onTokenUsageUpdated: (parsed) => this.handleTokenUsageUpdatedNotification(parsed),
       onContextCompacted: (parsed) => this.handleContextCompactedNotification(parsed),
       onThreadRolledBack: (parsed) => this.handleThreadRolledBackNotification(parsed),
-      onExecCommandStarted: (parsed) => this.handleExecCommandStartedNotification(parsed),
-      onExecCommandCompleted: (parsed) => this.handleExecCommandCompletedNotification(parsed),
-      onTerminalInteraction: (parsed) => this.handleTerminalInteractionNotification(parsed),
-      onPatchApplyStarted: (parsed) => this.handlePatchApplyStartedNotification(parsed),
-      onPatchApplyCompleted: (parsed) => this.handlePatchApplyCompletedNotification(parsed),
+      onExecCommandStarted: (parsed) =>
+        this.toolNotificationHandler.handleExecCommandStarted(parsed),
+      onExecCommandCompleted: (parsed) =>
+        this.toolNotificationHandler.handleExecCommandCompleted(parsed),
+      onTerminalInteraction: (parsed) =>
+        this.toolNotificationHandler.handleTerminalInteraction(parsed),
+      onPatchApplyStarted: (parsed) => this.toolNotificationHandler.handlePatchApplyStarted(parsed),
+      onPatchApplyCompleted: (parsed) =>
+        this.toolNotificationHandler.handlePatchApplyCompleted(parsed),
       onItemCompleted: (parsed) => this.handleItemCompletedNotification(parsed),
       onItemStarted: (parsed) => this.handleItemStartedNotification(parsed),
       onInvalidPayload: (parsed) =>
@@ -1679,111 +1680,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     });
   }
 
-  private handleExecCommandStartedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "exec_command_started" }>,
-  ): void {
-    if (parsed.callId) {
-      this.notificationStream.markExecCommandStarted(parsed.callId);
-      this.notificationStream.clearCommandOutput(parsed.callId);
-    }
-    const timelineItem = mapCodexExecNotificationToToolCall({
-      callId: parsed.callId,
-      command: parsed.command,
-      cwd: parsed.cwd ?? this.config.cwd ?? null,
-      running: true,
-    });
-    if (timelineItem) {
-      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    }
-  }
-
-  private handleExecCommandCompletedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "exec_command_completed" }>,
-  ): void {
-    const bufferedOutput = this.notificationStream.consumeCommandOutput(parsed.callId);
-    const resolvedOutput = parsed.output ?? bufferedOutput;
-    this.rememberTerminalProcessForCommand(parsed.command, resolvedOutput);
-    const timelineItem = mapCodexExecNotificationToToolCall({
-      callId: parsed.callId,
-      command: parsed.command,
-      cwd: parsed.cwd ?? this.config.cwd ?? null,
-      output: resolvedOutput,
-      exitCode: parsed.exitCode,
-      success: parsed.success,
-      stderr: parsed.stderr,
-      running: false,
-    });
-    if (timelineItem) {
-      this.notificationStream.markExecCommandCompleted(timelineItem.callId);
-      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    }
-  }
-
-  private handleTerminalInteractionNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "terminal_interaction" }>,
-  ): void {
-    const interactionKey = [parsed.processId ?? "", parsed.stdin ?? ""].join("\u0000");
-    if (!this.notificationStream.shouldEmitTerminalInteraction(interactionKey)) {
-      return;
-    }
-    const command = parsed.processId
-      ? this.notificationStream.resolveTerminalCommand(parsed.processId)
-      : null;
-    if (!command && parsed.processId) {
-      this.notificationStream.markPendingTerminalInteraction(parsed.processId);
-    }
-    const timelineItem = mapCodexTerminalInteractionToToolCall({
-      processId: parsed.processId,
-      fallbackCallId: parsed.callId,
-      command,
-    });
-    this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-  }
-
-  private handlePatchApplyStartedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "patch_apply_started" }>,
-  ): void {
-    if (parsed.callId) {
-      this.notificationStream.clearFileChangeOutput(parsed.callId);
-    }
-    const timelineItem = mapCodexPatchNotificationToToolCall({
-      callId: parsed.callId,
-      changes: parsed.changes,
-      cwd: this.config.cwd ?? null,
-      running: true,
-    });
-    if (timelineItem) {
-      this.warnOnIncompleteEditToolCall(timelineItem, "patch_apply_started", {
-        callId: parsed.callId,
-        changes: parsed.changes,
-      });
-      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    }
-  }
-
-  private handlePatchApplyCompletedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "patch_apply_completed" }>,
-  ): void {
-    const bufferedOutput = this.notificationStream.consumeFileChangeOutput(parsed.callId);
-    const timelineItem = mapCodexPatchNotificationToToolCall({
-      callId: parsed.callId,
-      changes: parsed.changes,
-      cwd: this.config.cwd ?? null,
-      stdout: parsed.stdout ?? bufferedOutput,
-      stderr: parsed.stderr,
-      success: parsed.success,
-      running: false,
-    });
-    if (timelineItem) {
-      this.warnOnIncompleteEditToolCall(timelineItem, "patch_apply_completed", {
-        callId: parsed.callId,
-        changes: parsed.changes,
-        stdout: parsed.stdout,
-      });
-      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    }
-  }
-
   private handleItemCompletedNotification(
     parsed: Extract<ParsedCodexNotification, { kind: "item_completed" }>,
   ): void {
@@ -1848,7 +1744,11 @@ export class CodexAppServerAgentSession implements AgentSession {
           return;
         }
       }
-      this.warnOnIncompleteEditToolCall(timelineItem, "item_completed", parsed.item);
+      this.toolNotificationHandler.warnOnIncompleteEditToolCall(
+        timelineItem,
+        "item_completed",
+        parsed.item,
+      );
     }
     this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (timelineItem.type === "assistant_message") {
@@ -1982,7 +1882,11 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (itemId && this.notificationStream.hasItemStarted(itemId)) {
       return;
     }
-    this.warnOnIncompleteEditToolCall(timelineItem, "item_started", parsed.item);
+    this.toolNotificationHandler.warnOnIncompleteEditToolCall(
+      timelineItem,
+      "item_started",
+      parsed.item,
+    );
     this.subAgentTracker.registerToolCall(timelineItem, parsed.item);
     this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
     if (itemId) {
@@ -2042,60 +1946,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
     this.warnedInvalidNotificationPayloads.add(key);
     this.logger.warn({ method, params }, "Invalid Codex app-server notification payload");
-  }
-
-  private rememberTerminalProcessForCommand(command: unknown, output: string | null): void {
-    const normalizedCommand = normalizeCodexCommandValue(command);
-    if (!normalizedCommand) {
-      return;
-    }
-    const displayCommand =
-      typeof normalizedCommand === "string"
-        ? normalizedCommand
-        : normalizedCommand.join(" ").trim();
-    if (!displayCommand) {
-      return;
-    }
-    const processId = extractCodexTerminalSessionId(output ?? undefined);
-    if (!processId) {
-      return;
-    }
-    if (!this.notificationStream.rememberTerminalCommand(processId, displayCommand)) {
-      return;
-    }
-    this.eventBus.emit({
-      type: "timeline",
-      provider: CODEX_PROVIDER,
-      item: mapCodexTerminalInteractionToToolCall({
-        processId,
-        command: displayCommand,
-      }),
-    });
-  }
-
-  private warnOnIncompleteEditToolCall(
-    item: ToolCallTimelineItem,
-    source: string,
-    payload: unknown,
-  ): void {
-    if (!isEditToolCallWithoutContent(item)) {
-      return;
-    }
-    const warnKey = `${source}:${item.callId}`;
-    if (!this.notificationStream.shouldWarnIncompleteEdit(warnKey)) {
-      return;
-    }
-    this.logger.warn(
-      {
-        source,
-        callId: item.callId,
-        status: item.status,
-        name: item.name,
-        detail: item.detail,
-        payload,
-      },
-      "Codex edit tool call is missing diff/content fields",
-    );
   }
 
   private handleCommandApprovalRequest(params: unknown): Promise<unknown> {
