@@ -1,12 +1,6 @@
 import {
-  type AgentCapabilityFlags,
-  type AgentClient,
-  type AgentCreateSessionOptions,
   type AgentFeature,
-  type AgentLaunchContext,
   type AgentMode,
-  type AgentModelDefinition,
-  type AgentPersistenceHandle,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPermissionResult,
@@ -23,9 +17,6 @@ import {
   type AgentTimelineItem,
   type ToolCallTimelineItem,
   type AgentUsage,
-  type ListModelsOptions,
-  type ListPersistedAgentsOptions,
-  type PersistedAgentDescriptor,
 } from "../agent-sdk-types.js";
 import type { Logger } from "pino";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
@@ -50,20 +41,20 @@ import { revertCodexConversation } from "./codex/rewind.js";
 import { CodexSessionEventBus } from "./codex/session-event-bus.js";
 import {
   buildCodexAppServerInitializeParams,
-  buildCodexCustomProviderConfig,
   buildRuntimeModelIdentityInstructions,
-  type CodexCustomProvider,
   type CodexMcpServerConfig,
   toCodexMcpConfig,
 } from "./codex/runtime-config.js";
+import type { CodexClientLike } from "./codex/client-runtime.js";
 import {
-  CodexClientRuntime,
-  type CodexClientLike,
-  type CodexClientRuntimeDeps,
-} from "./codex/client-runtime.js";
+  CodexAppServerAgentClient as CodexAppServerAgentClientImpl,
+  CODEX_APP_SERVER_CAPABILITIES,
+  CODEX_PROVIDER,
+  type CodexAppServerAgentDeps,
+  type CodexSessionFactoryInput,
+} from "./codex/client.js";
 import { CodexUserMessageTurnState } from "./codex/user-message-turn-state.js";
 import { CodexContextCompactionState } from "./codex/context-compaction-state.js";
-import { spawnCodexAppServer } from "./codex/launch.js";
 import {
   cleanupStaleCodexImageAttachments,
   writeCodexImageAttachment,
@@ -114,7 +105,6 @@ import {
   validateCodexMode,
 } from "./codex/turn-config.js";
 import { runProviderTurn } from "./provider-runner.js";
-import type { WorkspaceGitService } from "../../workspace-git-service.js";
 
 export {
   cleanupStaleCodexImageAttachments,
@@ -142,7 +132,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
-const CODEX_PROVIDER = "codex" as const;
 const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
 const CODEX_TEXTUAL_TOOL_CALL_ERROR =
   "Codex returned a tool call transcript as plain text, so no tool was executed.";
@@ -168,27 +157,9 @@ function formatOutOfBandStatusMessage(text: string): string {
   return `${text.replace(/\n+$/u, "")}\n\n`;
 }
 
-const CODEX_APP_SERVER_CAPABILITIES: AgentCapabilityFlags = {
-  supportsStreaming: true,
-  supportsSessionPersistence: true,
-  supportsDynamicModes: false,
-  supportsMcpServers: true,
-  supportsReasoningStream: true,
-  supportsToolInvocations: true,
-  supportsRewindConversation: true,
-  supportsRewindFiles: false,
-  supportsRewindBoth: false,
-};
-
 interface CodexAppServerClientLike extends CodexClientLike {
   forkThread?(params: CodexThreadForkParams): Promise<CodexThreadForkResponse>;
   rollbackThread?(params: CodexThreadRollbackParams): Promise<CodexThreadRollbackResponse>;
-}
-
-interface CodexAppServerAgentDeps extends CodexClientRuntimeDeps {
-  workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
-  customProvider?: CodexCustomProvider;
-  customCodexConfig?: Record<string, unknown> | null;
 }
 
 function looksLikeTextualCodexToolCallTranscript(text: string): boolean {
@@ -2146,153 +2117,27 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 }
 
-export class CodexAppServerAgentClient implements AgentClient {
-  readonly provider = CODEX_PROVIDER;
-  readonly capabilities = CODEX_APP_SERVER_CAPABILITIES;
-  private readonly clientRuntime: CodexClientRuntime;
+function createCodexSession(input: CodexSessionFactoryInput): CodexAppServerAgentSession {
+  return new CodexAppServerAgentSession(
+    input.config,
+    input.resumeHandle,
+    input.logger,
+    input.spawnAppServer,
+    input.deps,
+    input.ephemeral,
+    input.goalsEnabled,
+    input.autoReviewEnabled,
+    input.agentId,
+  );
+}
 
+export class CodexAppServerAgentClient extends CodexAppServerAgentClientImpl {
   constructor(
-    private readonly logger: Logger,
-    private readonly runtimeSettings?: ProviderRuntimeSettings,
-    private readonly deps: CodexAppServerAgentDeps = {},
+    logger: Logger,
+    runtimeSettings?: ProviderRuntimeSettings,
+    deps: CodexAppServerAgentDeps = {},
   ) {
-    this.clientRuntime = new CodexClientRuntime(this.logger, this.runtimeSettings, this.deps, () =>
-      this.spawnAppServer(),
-    );
-  }
-
-  private get goalsEnabledPromise(): Promise<boolean> | null {
-    return this.clientRuntime.getGoalsEnabledPromise();
-  }
-
-  private set goalsEnabledPromise(value: Promise<boolean> | null) {
-    this.clientRuntime.setGoalsEnabledPromise(value);
-  }
-
-  private get autoReviewEnabledPromise(): Promise<boolean> | null {
-    return this.clientRuntime.getAutoReviewEnabledPromise();
-  }
-
-  private set autoReviewEnabledPromise(value: Promise<boolean> | null) {
-    this.clientRuntime.setAutoReviewEnabledPromise(value);
-  }
-
-  private sessionDeps(): CodexAppServerAgentDeps {
-    return {
-      ...this.deps,
-      customCodexConfig: buildCodexCustomProviderConfig(
-        this.runtimeSettings,
-        this.deps.customProvider,
-      ),
-    };
-  }
-
-  private resolveGoalsEnabled(): Promise<boolean> {
-    if (!this.goalsEnabledPromise) {
-      this.goalsEnabledPromise = this.clientRuntime.resolveGoalsEnabled();
-    }
-    return this.goalsEnabledPromise;
-  }
-
-  private resolveAutoReviewEnabled(): Promise<boolean> {
-    if (!this.autoReviewEnabledPromise) {
-      this.autoReviewEnabledPromise = this.clientRuntime.resolveAutoReviewEnabled();
-    }
-    return this.autoReviewEnabledPromise;
-  }
-
-  private async spawnAppServer(
-    launchEnv?: Record<string, string>,
-    options?: { goalsEnabled?: boolean; agentId?: string },
-  ): Promise<ChildProcessWithoutNullStreams> {
-    return spawnCodexAppServer({
-      logger: this.logger,
-      runtimeSettings: this.runtimeSettings,
-      launchEnv,
-      goalsEnabled: options?.goalsEnabled,
-      agentId: options?.agentId,
-    });
-  }
-
-  async createSession(
-    config: AgentSessionConfig,
-    launchContext?: AgentLaunchContext,
-    options?: AgentCreateSessionOptions,
-  ): Promise<AgentSession> {
-    if (options?.persistSession === false) {
-      this.logger.debug(
-        "Codex app-server does not expose an ephemeral-session option; persistSession=false is currently a no-op",
-      );
-      // TODO: Honor persistSession=false if app-server adds support, or route
-      // utility generations through `codex exec --ephemeral` in a larger change.
-    }
-    const sessionConfig: AgentSessionConfig = { ...config, provider: CODEX_PROVIDER };
-    const goalsEnabled = await this.resolveGoalsEnabled();
-    const autoReviewEnabled = await this.resolveAutoReviewEnabled();
-    const session = new CodexAppServerAgentSession(
-      sessionConfig,
-      null,
-      this.logger,
-      () =>
-        this.spawnAppServer(launchContext?.env, { goalsEnabled, agentId: launchContext?.agentId }),
-      this.sessionDeps(),
-      options?.persistSession === false,
-      goalsEnabled,
-      autoReviewEnabled,
-      launchContext?.agentId,
-    );
-    await session.connect();
-    return session;
-  }
-
-  async resumeSession(
-    handle: { sessionId: string; metadata?: Record<string, unknown> },
-    overrides?: Partial<AgentSessionConfig>,
-    launchContext?: AgentLaunchContext,
-  ): Promise<AgentSession> {
-    const storedConfig = (handle.metadata ?? {}) as Partial<AgentSessionConfig>;
-    const merged: AgentSessionConfig = {
-      ...storedConfig,
-      ...overrides,
-      provider: CODEX_PROVIDER,
-      cwd: overrides?.cwd ?? storedConfig.cwd ?? process.cwd(),
-    };
-    const goalsEnabled = await this.resolveGoalsEnabled();
-    const autoReviewEnabled = await this.resolveAutoReviewEnabled();
-    const session = new CodexAppServerAgentSession(
-      merged,
-      handle,
-      this.logger,
-      () =>
-        this.spawnAppServer(launchContext?.env, { goalsEnabled, agentId: launchContext?.agentId }),
-      this.sessionDeps(),
-      false,
-      goalsEnabled,
-      autoReviewEnabled,
-      launchContext?.agentId,
-    );
-    await session.connect();
-    return session;
-  }
-
-  listPersistedAgents(options?: ListPersistedAgentsOptions): Promise<PersistedAgentDescriptor[]> {
-    return this.clientRuntime.listPersistedAgents(options);
-  }
-
-  listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
-    return this.clientRuntime.listModels(options);
-  }
-
-  archiveNativeSession(handle: AgentPersistenceHandle): Promise<void> {
-    return this.clientRuntime.archiveNativeSession(handle);
-  }
-
-  isAvailable(): Promise<boolean> {
-    return this.clientRuntime.isAvailable();
-  }
-
-  getDiagnostic(): Promise<{ diagnostic: string }> {
-    return this.clientRuntime.getDiagnostic();
+    super(logger, runtimeSettings, deps, createCodexSession);
   }
 }
 
