@@ -4,17 +4,23 @@ import type {
   Message as OpenCodeMessage,
   Part as OpenCodePart,
 } from "@opencode-ai/sdk/v2/client";
-import { buildToolCallDisplayModel } from "@chisacode/protocol/tool-call-display";
 
 import type {
   AgentStreamEvent,
   AgentTimelineItem,
   AgentUsage,
   ToolCallDetail,
-  ToolCallTimelineItem,
 } from "../../agent-sdk-types.js";
 import { buildOpenCodeModelLookupKey, readPositiveFiniteNumber } from "./catalog.js";
 import { buildOpenCodePermissionActions, OpencodeToolPartToTimelineItemSchema } from "./helpers.js";
+import {
+  appendOpenCodeSubAgentChildSessionLinked,
+  appendOpenCodeSubAgentChildToolPart,
+  appendOpenCodeToolCallTimelineItem,
+  isOpenCodeSessionTrackedByParent,
+  type OpenCodeSubAgentTrackingState,
+  type OpenCodeToolPartEventPart,
+} from "./sub-agent-tracking.js";
 import { toDiagnosticErrorMessage } from "../diagnostic-utils.js";
 
 export type OpenCodeMessageRole = "user" | "assistant";
@@ -106,9 +112,7 @@ export function hasNormalizedOpenCodeUsage(usage: AgentUsage): boolean {
   ].some((value) => typeof value === "number" && Number.isFinite(value));
 }
 
-export interface OpenCodeEventTranslationState {
-  sessionId: string;
-  cwd?: string;
+export interface OpenCodeEventTranslationState extends OpenCodeSubAgentTrackingState {
   messageRoles: Map<string, OpenCodeMessageRole>;
   pendingUserMessageText?: string | null;
   emittedUserMessageIds?: Set<string>;
@@ -118,35 +122,15 @@ export interface OpenCodeEventTranslationState {
   emittedStructuredMessageIds: Set<string>;
   /** Tracks the type of each part by ID, learned from message.part.updated events. */
   partTypes: Map<string, string>;
-  subAgentsByCallId?: Map<string, OpenCodeSubAgentActivityState>;
-  subAgentCallIdByChildSessionId?: Map<string, string>;
-  pendingChildToolPartsBySessionId?: Map<string, OpenCodeToolPartEventPart[]>;
   modelContextWindowsByModelKey?: ReadonlyMap<string, number>;
   onAssistantModelContextWindowResolved?: (contextWindowMaxTokens: number) => void;
 }
 
-export type OpenCodeToolPartEventPart = Extract<
-  Extract<OpenCodeEvent, { type: "message.part.updated" }>["properties"]["part"],
-  { type: "tool" }
->;
+export type {
+  OpenCodeSubAgentActivityState,
+  OpenCodeToolPartEventPart,
+} from "./sub-agent-tracking.js";
 
-interface OpenCodeSubAgentActionEntry {
-  index: number;
-  key: string;
-  toolName: string;
-  summary?: string;
-}
-
-export interface OpenCodeSubAgentActivityState {
-  toolCall: ToolCallTimelineItem;
-  actions: OpenCodeSubAgentActionEntry[];
-  actionIndexByKey: Map<string, number>;
-  nextActionIndex: number;
-  childSessionId?: string;
-}
-
-const MAX_OPENCODE_SUB_AGENT_ACTIONS = 200;
-const MAX_OPENCODE_PENDING_CHILD_TOOL_PARTS = 200;
 export function stringifyStructuredAssistantMessage(value: unknown): string | null {
   if (value === undefined) {
     return null;
@@ -432,273 +416,6 @@ export function translateOpenCodeEvent(
 function resetOpenCodeTurnTrackingState(state: OpenCodeEventTranslationState): void {
   state.streamedPartKeys.clear();
   state.partTypes.clear();
-}
-
-function getOpenCodeSubAgentMaps(state: OpenCodeEventTranslationState): {
-  byCallId: Map<string, OpenCodeSubAgentActivityState>;
-  callIdByChildSessionId: Map<string, string>;
-  pendingChildToolPartsBySessionId: Map<string, OpenCodeToolPartEventPart[]>;
-} {
-  state.subAgentsByCallId ??= new Map();
-  state.subAgentCallIdByChildSessionId ??= new Map();
-  state.pendingChildToolPartsBySessionId ??= new Map();
-  return {
-    byCallId: state.subAgentsByCallId,
-    callIdByChildSessionId: state.subAgentCallIdByChildSessionId,
-    pendingChildToolPartsBySessionId: state.pendingChildToolPartsBySessionId,
-  };
-}
-
-function isOpenCodeSessionTrackedByParent(
-  sessionId: string,
-  state: OpenCodeEventTranslationState,
-): boolean {
-  return (
-    sessionId === state.sessionId || state.subAgentCallIdByChildSessionId?.has(sessionId) === true
-  );
-}
-
-function getOpenCodeSubAgentState(
-  callId: string,
-  state: OpenCodeEventTranslationState,
-  toolCall: ToolCallTimelineItem,
-): OpenCodeSubAgentActivityState {
-  const maps = getOpenCodeSubAgentMaps(state);
-  const existing = maps.byCallId.get(callId);
-  if (existing) {
-    existing.toolCall = toolCall;
-    return existing;
-  }
-
-  const created: OpenCodeSubAgentActivityState = {
-    toolCall,
-    actions: [],
-    actionIndexByKey: new Map(),
-    nextActionIndex: 1,
-  };
-  maps.byCallId.set(callId, created);
-  return created;
-}
-
-function linkOpenCodeSubAgentChildSession(
-  activity: OpenCodeSubAgentActivityState,
-  childSessionId: string,
-  state: OpenCodeEventTranslationState,
-): void {
-  activity.childSessionId = childSessionId;
-  const maps = getOpenCodeSubAgentMaps(state);
-  maps.callIdByChildSessionId.set(childSessionId, activity.toolCall.callId);
-}
-
-function buildOpenCodeSubAgentLog(
-  detail: Extract<ToolCallDetail, { type: "sub_agent" }>,
-  activity: OpenCodeSubAgentActivityState,
-): string {
-  const actionLog = activity.actions
-    .map((action) =>
-      action.summary ? `[${action.toolName}] ${action.summary}` : `[${action.toolName}]`,
-    )
-    .join("\n");
-  const parts = [actionLog, detail.log].filter((part) => part.trim().length > 0);
-  return parts.join("\n\n");
-}
-
-function buildOpenCodeSubAgentTimelineItem(
-  activity: OpenCodeSubAgentActivityState,
-): ToolCallTimelineItem {
-  const toolCall = activity.toolCall;
-  if (toolCall.detail.type !== "sub_agent") {
-    return toolCall;
-  }
-  const childSessionId = activity.childSessionId ?? toolCall.detail.childSessionId;
-  return {
-    ...toolCall,
-    detail: {
-      ...toolCall.detail,
-      ...(childSessionId ? { childSessionId } : {}),
-      log: buildOpenCodeSubAgentLog(toolCall.detail, activity),
-    },
-  };
-}
-
-function registerOpenCodeSubAgentToolCall(
-  item: ToolCallTimelineItem,
-  state: OpenCodeEventTranslationState,
-): ToolCallTimelineItem {
-  if (item.detail.type !== "sub_agent") {
-    return item;
-  }
-  const activity = getOpenCodeSubAgentState(item.callId, state, item);
-  if (item.detail.childSessionId) {
-    linkOpenCodeSubAgentChildSession(activity, item.detail.childSessionId, state);
-  }
-  return buildOpenCodeSubAgentTimelineItem(activity);
-}
-
-function bufferOpenCodeSubAgentChildToolPart(
-  part: OpenCodeToolPartEventPart,
-  state: OpenCodeEventTranslationState,
-): void {
-  const maps = getOpenCodeSubAgentMaps(state);
-  if (maps.byCallId.size === 0) {
-    return;
-  }
-  const totalPending = [...maps.pendingChildToolPartsBySessionId.values()].reduce(
-    (total, parts) => total + parts.length,
-    0,
-  );
-  if (totalPending >= MAX_OPENCODE_PENDING_CHILD_TOOL_PARTS) {
-    return;
-  }
-  const pending = maps.pendingChildToolPartsBySessionId.get(part.sessionID) ?? [];
-  pending.push(part);
-  maps.pendingChildToolPartsBySessionId.set(part.sessionID, pending);
-}
-
-function flushOpenCodeSubAgentChildToolParts(
-  childSessionId: string,
-  state: OpenCodeEventTranslationState,
-  events: AgentStreamEvent[],
-): void {
-  const maps = getOpenCodeSubAgentMaps(state);
-  const pending = maps.pendingChildToolPartsBySessionId.get(childSessionId);
-  if (!pending || pending.length === 0) {
-    return;
-  }
-  maps.pendingChildToolPartsBySessionId.delete(childSessionId);
-  for (const part of pending) {
-    appendOpenCodeSubAgentChildToolPart(part, state, events);
-  }
-}
-
-function findOnlyOpenCodeSubAgentWaitingForChild(
-  state: OpenCodeEventTranslationState,
-): OpenCodeSubAgentActivityState | null {
-  const maps = getOpenCodeSubAgentMaps(state);
-  const candidates = [...maps.byCallId.values()].filter(
-    (activity) =>
-      activity.toolCall.status === "running" &&
-      activity.toolCall.detail.type === "sub_agent" &&
-      !activity.childSessionId,
-  );
-  return candidates.length === 1 ? (candidates[0] ?? null) : null;
-}
-
-function summarizeOpenCodeSubAgentAction(
-  item: ToolCallTimelineItem,
-  cwd: string | undefined,
-): string | undefined {
-  const display = buildToolCallDisplayModel({
-    name: item.name,
-    status: item.status,
-    error: item.error,
-    metadata: item.metadata,
-    detail: item.detail,
-    cwd,
-  });
-  return display.summary ?? display.errorText;
-}
-
-function appendOpenCodeSubAgentAction(
-  activity: OpenCodeSubAgentActivityState,
-  item: ToolCallTimelineItem,
-  cwd: string | undefined,
-): boolean {
-  const key = item.callId || `${item.name}:${activity.actions.length}`;
-  const existingIndex = activity.actionIndexByKey.get(key);
-  const summary = summarizeOpenCodeSubAgentAction(item, cwd);
-
-  if (existingIndex !== undefined) {
-    const action = activity.actions[existingIndex];
-    if (!action) {
-      return false;
-    }
-    const changed = action.toolName !== item.name || action.summary !== summary;
-    action.toolName = item.name;
-    if (summary) {
-      action.summary = summary;
-    } else {
-      delete action.summary;
-    }
-    return changed;
-  }
-
-  if (activity.actions.length >= MAX_OPENCODE_SUB_AGENT_ACTIONS) {
-    return false;
-  }
-
-  activity.actionIndexByKey.set(key, activity.actions.length);
-  activity.actions.push({
-    index: activity.nextActionIndex,
-    key,
-    toolName: item.name,
-    ...(summary ? { summary } : {}),
-  });
-  activity.nextActionIndex += 1;
-  return true;
-}
-
-function appendOpenCodeToolCallTimelineItem(
-  item: ToolCallTimelineItem,
-  state: OpenCodeEventTranslationState,
-  events: AgentStreamEvent[],
-): void {
-  const timelineItem = registerOpenCodeSubAgentToolCall(item, state);
-  events.push({
-    type: "timeline",
-    provider: "opencode",
-    item: timelineItem,
-  });
-  if (timelineItem.detail.type === "sub_agent" && timelineItem.detail.childSessionId) {
-    flushOpenCodeSubAgentChildToolParts(timelineItem.detail.childSessionId, state, events);
-  }
-}
-
-function appendOpenCodeSubAgentChildSessionLinked(
-  childSessionId: string,
-  state: OpenCodeEventTranslationState,
-  events: AgentStreamEvent[],
-): void {
-  const activity = findOnlyOpenCodeSubAgentWaitingForChild(state);
-  if (!activity) {
-    return;
-  }
-  linkOpenCodeSubAgentChildSession(activity, childSessionId, state);
-  events.push({
-    type: "timeline",
-    provider: "opencode",
-    item: buildOpenCodeSubAgentTimelineItem(activity),
-  });
-  flushOpenCodeSubAgentChildToolParts(childSessionId, state, events);
-}
-
-function appendOpenCodeSubAgentChildToolPart(
-  part: OpenCodeToolPartEventPart,
-  state: OpenCodeEventTranslationState,
-  events: AgentStreamEvent[],
-): void {
-  const maps = getOpenCodeSubAgentMaps(state);
-  const parentCallId = maps.callIdByChildSessionId.get(part.sessionID);
-  if (!parentCallId) {
-    bufferOpenCodeSubAgentChildToolPart(part, state);
-    return;
-  }
-  const activity = maps.byCallId.get(parentCallId);
-  if (!activity) {
-    return;
-  }
-  const parsedToolPart = OpencodeToolPartToTimelineItemSchema.safeParse(part);
-  if (!parsedToolPart.success || !parsedToolPart.data) {
-    return;
-  }
-  if (!appendOpenCodeSubAgentAction(activity, parsedToolPart.data, state.cwd)) {
-    return;
-  }
-  events.push({
-    type: "timeline",
-    provider: "opencode",
-    item: buildOpenCodeSubAgentTimelineItem(activity),
-  });
 }
 
 function appendOpenCodeSessionCreatedOrUpdated(

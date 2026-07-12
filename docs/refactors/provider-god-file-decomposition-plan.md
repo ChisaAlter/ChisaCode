@@ -11,12 +11,12 @@
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
 - Claude 已完成八个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`history-converter.ts`、`tool-call-handlers.ts` 与 `sdk-types-mapping.ts` 分别拥有 timeline、SDK reader、turn routing、history、tool lifecycle 与纯映射职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
-- OpenCode 已完成 façade、session、client runtime、session runtime、session lifecycle、turn execution、event translator、history、session event bus、permission controller、MCP controller、helpers、catalog、runtime、abort coordinator 与 event-stream controller 十六个边界切片；原入口为 64 行兼容 façade，foreground turn、runtime 与 shutdown 资源状态已统一。
+- OpenCode 已完成 façade、session、client runtime、session runtime、session lifecycle、turn execution、event translator、sub-agent tracking、history、session event bus、permission controller、MCP controller、helpers、catalog、runtime、abort coordinator 与 event-stream controller 十七个边界切片；原入口为 64 行兼容 façade，foreground turn、sub-agent、runtime 与 shutdown 资源状态已统一。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 3001 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 1093 行、history 为 298 行、Client runtime 为 507 行。后续继续收敛 event translator 与 sub-agent tracking。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 3001 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 810 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行。后续继续按事件领域收敛 translator。
 
 | 文件                                | 行数 | Session 类                    | Client 类                          | private 方法数 | import 数 |
 | ----------------------------------- | ---- | ----------------------------- | ---------------------------------- | -------------- | --------- |
@@ -27,7 +27,8 @@
 | `opencode-agent.ts`                 | 64   | compatibility façade          | compatibility wrappers             | 0              | 4         |
 | `opencode/session.ts`               | 395  | `OpenCodeAgentSession`        | —                                  | 1              | 18        |
 | `opencode/turn-execution.ts`        | 433  | foreground turn orchestration | —                                  | 5              | 15        |
-| `opencode/event-translator.ts`      | 1093 | translation pipeline          | —                                  | 0              | 6         |
+| `opencode/event-translator.ts`      | 810  | translation pipeline          | —                                  | 0              | 6         |
+| `opencode/sub-agent-tracking.ts`    | 307  | sub-agent state/actions       | —                                  | 0              | 4         |
 | `opencode/history.ts`               | 298  | history pipeline              | —                                  | 0              | 8         |
 | `opencode/permission-controller.ts` | 108  | permission state              | —                                  | 2              | 5         |
 | `opencode/mcp-controller.ts`        | 73   | MCP setup state               | —                                  | 2              | 5         |
@@ -162,7 +163,7 @@
 - `opencode/abort-coordinator.ts` —— local turn signal、provider `session.abort` pending 与 next-turn serialization（已完成，87 行）
 - `opencode/mimocode-client.ts` —— `MimoCodeAgentClient`
 - `opencode/event-stream.ts` —— SSE readiness、消费循环、stale terminal 抑制与终态路由（已完成，269 行）
-- `opencode/event-translator.ts` —— native event translation、usage、permission、todo 与 sub-agent timeline 映射（已完成，1093 行）
+- `opencode/event-translator.ts` —— native event translation、usage、permission 与 todo 映射（已完成，810 行；继续按事件领域收敛）
 - `opencode/history.ts` —— persistence scanner、revert 截断、replay timestamp 与 timeline conversion（已完成，298 行）
 - `opencode/permission-controller.ts` —— auto-accept、pending queue 与 question/tool response（已完成，108 行）
 - `opencode/mcp-controller.ts` —— 一次性配置、并发去重、already-present 兼容与失败重试（已完成，73 行）
@@ -170,7 +171,7 @@
 - `opencode/session-runtime.ts` —— mode/model/thinking/feature、catalog cache、context-window selection 与 persistence metadata（已完成，186 行）
 - `opencode/session-lifecycle.ts` —— close ordering、abort/archive reconciliation、ephemeral delete 与 server release（已完成，108 行）
 - `opencode/turn-execution.ts` —— prompt parts、slash command 分流、run/start/interrupt、MCP/SSE 启动顺序与 provider dispatch（已完成，433 行）
-- `opencode/sub-agent-tracking.ts` —— 模块级 sub-agent 跟踪 helper 函数集合
+- `opencode/sub-agent-tracking.ts` —— child session 绑定、动作日志、乱序 tool part 缓冲与 parent permission 归属（已完成，307 行）
 
 **验收**：同 Slice 1。
 
