@@ -95,11 +95,10 @@ import {
   normalizeCodexCommandValue,
 } from "./codex/notification-timeline.js";
 import {
-  CodexNotificationSchema,
-  isCodexDeltaNotification,
   type CodexDeltaNotification,
   type ParsedCodexNotification,
 } from "./codex/notifications.js";
+import { CodexNotificationRouter } from "./codex/notification-router.js";
 import { CodexNotificationStreamState } from "./codex/notification-stream-state.js";
 import { CodexPermissionState, type CodexPendingPermission } from "./codex/permission-state.js";
 import {
@@ -671,6 +670,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private persistedHistory: PersistedTimelineEntry[] = [];
   private readonly permissionState = new CodexPermissionState<CodexQuestionPrompt>();
   private readonly notificationStream = new CodexNotificationStreamState();
+  private readonly notificationRouter: CodexNotificationRouter;
   private pendingAssistantMessageBoundary = false;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
@@ -716,6 +716,27 @@ export class CodexAppServerAgentSession implements AgentSession {
       module: "agent",
       provider: CODEX_PROVIDER,
       agentId: this.agentId,
+    });
+    this.notificationRouter = new CodexNotificationRouter({
+      onParsed: (method, params, parsed) => this.traceParsedNotification(method, params, parsed),
+      onDelta: (parsed) => this.handleCodexDeltaNotification(parsed),
+      onThreadStarted: (parsed) => this.handleThreadStartedNotification(parsed),
+      onTurnStarted: (parsed) => this.handleTurnStartedNotification(parsed),
+      onTurnCompleted: (parsed) => this.handleTurnCompletedNotification(parsed),
+      onPlanUpdated: (parsed) => this.handlePlanUpdatedNotification(parsed),
+      onTokenUsageUpdated: (parsed) => this.handleTokenUsageUpdatedNotification(parsed),
+      onContextCompacted: (parsed) => this.handleContextCompactedNotification(parsed),
+      onThreadRolledBack: (parsed) => this.handleThreadRolledBackNotification(parsed),
+      onExecCommandStarted: (parsed) => this.handleExecCommandStartedNotification(parsed),
+      onExecCommandCompleted: (parsed) => this.handleExecCommandCompletedNotification(parsed),
+      onTerminalInteraction: (parsed) => this.handleTerminalInteractionNotification(parsed),
+      onPatchApplyStarted: (parsed) => this.handlePatchApplyStartedNotification(parsed),
+      onPatchApplyCompleted: (parsed) => this.handlePatchApplyCompletedNotification(parsed),
+      onItemCompleted: (parsed) => this.handleItemCompletedNotification(parsed),
+      onItemStarted: (parsed) => this.handleItemStartedNotification(parsed),
+      onInvalidPayload: (parsed) =>
+        this.warnInvalidNotificationPayload(parsed.method, parsed.params),
+      onUnknownMethod: (parsed) => this.warnUnknownNotificationMethod(parsed.method, parsed.params),
     });
     const modeId = config.modeId ?? DEFAULT_CODEX_MODE_ID;
     validateCodexMode(modeId);
@@ -1946,85 +1967,13 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private handleNotification(method: string, params: unknown): void {
-    const parsed = CodexNotificationSchema.parse({ method, params });
-    this.traceParsedNotification(method, params, parsed);
-    if (isCodexDeltaNotification(parsed)) {
-      this.handleCodexDeltaNotification(parsed);
-      return;
-    }
-    if (this.handleThreadStateNotification(parsed)) {
-      return;
-    }
-    switch (parsed.kind) {
-      case "thread_started":
-        this.handleThreadStartedNotification(parsed);
-        return;
-      case "turn_started":
-        this.handleTurnStartedNotification(parsed);
-        return;
-      case "turn_completed":
-        this.handleTurnCompletedNotification(parsed);
-        return;
-      case "plan_updated":
-        this.handlePlanUpdatedNotification(parsed);
-        return;
-      case "diff_updated":
-        // NOTE: Codex app-server emits frequent `turn/diff/updated` notifications
-        // containing a full accumulated unified diff for the *entire turn*.
-        // This is not a concrete file-change tool call; it is progress telemetry.
-        return;
-      case "token_usage_updated":
-        this.handleTokenUsageUpdatedNotification(parsed);
-        return;
-      case "exec_command_started":
-        this.handleExecCommandStartedNotification(parsed);
-        return;
-      case "exec_command_completed":
-        this.handleExecCommandCompletedNotification(parsed);
-        return;
-      case "terminal_interaction":
-        this.handleTerminalInteractionNotification(parsed);
-        return;
-      case "patch_apply_started":
-        this.handlePatchApplyStartedNotification(parsed);
-        return;
-      case "patch_apply_completed":
-        this.handlePatchApplyCompletedNotification(parsed);
-        return;
-      case "item_completed":
-        this.handleItemCompletedNotification(parsed);
-        return;
-      case "item_started":
-        this.handleItemStartedNotification(parsed);
-        return;
-      case "invalid_payload":
-        this.warnInvalidNotificationPayload(parsed.method, parsed.params);
-        return;
-      case "unknown_method":
-        this.warnUnknownNotificationMethod(parsed.method, parsed.params);
-        return;
-      default:
-        return;
-    }
-  }
-
-  private handleThreadStateNotification(parsed: ParsedCodexNotification): boolean {
-    switch (parsed.kind) {
-      case "context_compacted":
-        this.handleContextCompactedNotification(parsed);
-        return true;
-      case "thread_rolled_back":
-        this.handleThreadRolledBackNotification(parsed);
-        return true;
-      default:
-        return false;
-    }
+    this.notificationRouter.route(method, params);
   }
 
   private traceParsedNotification(
     method: string,
     params: unknown,
-    parsed: z.infer<typeof CodexNotificationSchema>,
+    parsed: ParsedCodexNotification,
   ): void {
     this.logger.trace(
       {
