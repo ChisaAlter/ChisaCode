@@ -15,7 +15,6 @@ import {
   type AgentSlashCommand,
   type AgentStreamEvent,
   type ToolCallTimelineItem,
-  type AgentUsage,
 } from "../../agent-sdk-types.js";
 import type { Logger } from "pino";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
@@ -76,8 +75,8 @@ import type { ParsedCodexNotification } from "./notifications.js";
 import { CodexNotificationRouter } from "./notification-router.js";
 import { CodexNotificationStreamState } from "./notification-stream-state.js";
 import { CodexToolNotificationHandler } from "./tool-notification-handler.js";
+import { CodexTurnNotificationHandler } from "./turn-notification-handler.js";
 import { CodexPermissionController } from "./permission-controller.js";
-import { mapCodexPlanToToolCall, planStepsToMarkdown } from "./permissions.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
 import { readCodexConfiguredDefaults, type CodexConfiguredDefaults } from "./models.js";
 import {
@@ -94,6 +93,7 @@ import { runProviderTurn } from "../provider-runner.js";
 
 export { cleanupStaleCodexImageAttachments, threadItemToTimeline };
 export { mapCodexPatchNotificationToToolCall } from "./notification-timeline.js";
+export { toAgentUsage } from "./turn-notification-handler.js";
 
 export {
   buildCodexAppServerEnv,
@@ -113,10 +113,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
+function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
 const TURN_START_TIMEOUT_MS = 90 * 1000;
 const INTERRUPT_TIMEOUT_MS = 2_000;
-const CODEX_TEXTUAL_TOOL_CALL_ERROR =
-  "Codex returned a tool call transcript as plain text, so no tool was executed.";
 
 type GoalSubcommand =
   | { kind: "set"; objective: string }
@@ -144,54 +146,9 @@ interface CodexAppServerClientLike extends CodexClientLike {
   rollbackThread?(params: CodexThreadRollbackParams): Promise<CodexThreadRollbackResponse>;
 }
 
-function looksLikeTextualCodexToolCallTranscript(text: string): boolean {
-  if (!text.includes("<tool_call>") || !text.includes("</tool_call>")) {
-    return false;
-  }
-  if (!text.includes("<tool_result>") && !text.includes("</tool_result>")) {
-    return false;
-  }
-  return /"name"\s*:\s*"(?:apply_patch|apply_diff|write_file|create_file|shell|exec|command|bash|Bash)"/.test(
-    text,
-  );
-}
-
 export { listCodexSkillEntries, listCodexSkills } from "./skills.js";
 
 export { normalizeCodexOutputSchema } from "./turn-config.js";
-
-function firstPositiveFiniteNumber(primary: unknown, secondary: unknown): number | undefined {
-  if (typeof primary === "number" && Number.isFinite(primary) && primary > 0) {
-    return primary;
-  }
-  if (typeof secondary === "number" && Number.isFinite(secondary) && secondary > 0) {
-    return secondary;
-  }
-  return undefined;
-}
-
-function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined;
-}
-
-export function toAgentUsage(tokenUsage: unknown): AgentUsage | undefined {
-  const usage = toObjectRecord(tokenUsage);
-  if (!usage) return undefined;
-  const last = toObjectRecord(usage.last);
-  const contextWindowMaxTokens = firstPositiveFiniteNumber(
-    usage.model_context_window,
-    usage.modelContextWindow,
-  );
-  const contextWindowUsedTokens = firstPositiveFiniteNumber(last?.total_tokens, last?.totalTokens);
-  return {
-    inputTokens: typeof last?.inputTokens === "number" ? last.inputTokens : undefined,
-    cachedInputTokens:
-      typeof last?.cachedInputTokens === "number" ? last.cachedInputTokens : undefined,
-    outputTokens: typeof last?.outputTokens === "number" ? last.outputTokens : undefined,
-    ...(contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {}),
-    ...(contextWindowUsedTokens !== undefined ? { contextWindowUsedTokens } : {}),
-  };
-}
 
 function readCodexThread(client: CodexAppServerClientLike, threadId: string): Promise<unknown> {
   return client.request("thread/read", {
@@ -322,12 +279,10 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly deltaNotificationHandler: CodexDeltaNotificationHandler;
   private readonly itemNotificationHandler: CodexItemNotificationHandler;
   private readonly toolNotificationHandler: CodexToolNotificationHandler;
+  private readonly turnNotificationHandler: CodexTurnNotificationHandler;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
-  private textualToolCallError: string | null = null;
-  private latestUsage: AgentUsage | undefined;
-  private latestPlanResult: { callId: string; text: string; turnId: string | null } | null = null;
   private readonly userMessageTurns = new CodexUserMessageTurnState();
   private readonly compactionState = new CodexContextCompactionState();
   private connected = false;
@@ -380,6 +335,34 @@ export class CodexAppServerAgentSession implements AgentSession {
       getCwd: () => this.config.cwd ?? null,
       emit: (item) => this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item }),
     });
+    this.turnNotificationHandler = new CodexTurnNotificationHandler({
+      logger: this.logger,
+      getAgentId: () => this.agentId,
+      getThreadId: () => this.currentThreadId,
+      setThreadId: (threadId) => {
+        this.currentThreadId = threadId;
+      },
+      getTurnId: () => this.currentTurnId,
+      getActiveForegroundTurnId: () => this.activeForegroundTurnId,
+      setTurnId: (turnId) => {
+        this.currentTurnId = turnId;
+      },
+      clearActiveForegroundTurn: () => {
+        this.activeForegroundTurnId = null;
+      },
+      isPlanModeEnabled: () => this.planModeEnabled,
+      requestPlanApproval: (plan) => this.permissionController.requestPlanApproval(plan),
+      resolveSubAgentCallId: (threadId) => this.getSubAgentCallIdForThread(threadId),
+      emitSubAgentActivity: (callId, status) => this.emitSubAgentActivityUpdate(callId, status),
+      resetExternalTurnState: () => {
+        this.notificationStream.resetTurn();
+        this.deltaNotificationHandler.resetTurn();
+        this.compactionState.resetTurnPairing();
+      },
+      userMessageTurns: this.userMessageTurns,
+      compactionState: this.compactionState,
+      emit: (event) => this.eventBus.emit(event),
+    });
     this.itemNotificationHandler = new CodexItemNotificationHandler({
       notificationStream: this.notificationStream,
       compactionState: this.compactionState,
@@ -388,8 +371,9 @@ export class CodexAppServerAgentSession implements AgentSession {
       getCwd: () => this.config.cwd ?? null,
       resolveSubAgentCallId: (threadId) => this.getSubAgentCallIdForThread(threadId),
       emitSubAgentActivity: (callId, status) => this.emitSubAgentActivityUpdate(callId, status),
-      rememberTextualToolCallFailure: (text) => this.rememberTextualToolCallFailure(text),
-      rememberPlanResult: (item) => this.rememberPlanResult(item),
+      rememberTextualToolCallFailure: (text) =>
+        this.turnNotificationHandler.rememberTextualToolCallFailure(text),
+      rememberPlanResult: (item) => this.turnNotificationHandler.rememberPlanResult(item),
       isPlanModeEnabled: () => this.planModeEnabled,
       markAssistantMessageBoundary: () =>
         this.deltaNotificationHandler.markAssistantMessageBoundary(),
@@ -405,13 +389,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.notificationRouter = new CodexNotificationRouter({
       onParsed: (method, params, parsed) => this.traceParsedNotification(method, params, parsed),
       onDelta: (parsed) => this.deltaNotificationHandler.handle(parsed),
-      onThreadStarted: (parsed) => this.handleThreadStartedNotification(parsed),
-      onTurnStarted: (parsed) => this.handleTurnStartedNotification(parsed),
-      onTurnCompleted: (parsed) => this.handleTurnCompletedNotification(parsed),
-      onPlanUpdated: (parsed) => this.handlePlanUpdatedNotification(parsed),
-      onTokenUsageUpdated: (parsed) => this.handleTokenUsageUpdatedNotification(parsed),
-      onContextCompacted: (parsed) => this.handleContextCompactedNotification(parsed),
-      onThreadRolledBack: (parsed) => this.handleThreadRolledBackNotification(parsed),
+      onThreadStarted: (parsed) => this.turnNotificationHandler.handleThreadStarted(parsed),
+      onTurnStarted: (parsed) => this.turnNotificationHandler.handleTurnStarted(parsed),
+      onTurnCompleted: (parsed) => this.turnNotificationHandler.handleTurnCompleted(parsed),
+      onPlanUpdated: (parsed) => this.turnNotificationHandler.handlePlanUpdated(parsed),
+      onTokenUsageUpdated: (parsed) => this.turnNotificationHandler.handleTokenUsageUpdated(parsed),
+      onContextCompacted: (parsed) => this.turnNotificationHandler.handleContextCompacted(parsed),
+      onThreadRolledBack: (parsed) => this.turnNotificationHandler.handleThreadRolledBack(parsed),
       onExecCommandStarted: (parsed) =>
         this.toolNotificationHandler.handleExecCommandStarted(parsed),
       onExecCommandCompleted: (parsed) =>
@@ -641,18 +625,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.planModeEnabled = value;
     this.refreshResolvedCollaborationMode();
     this.cachedRuntimeInfo = null;
-  }
-
-  private rememberPlanResult(item: ToolCallTimelineItem): void {
-    if (item.detail.type !== "plan") {
-      return;
-    }
-
-    this.latestPlanResult = {
-      callId: item.callId,
-      text: item.detail.text,
-      turnId: this.currentTurnId,
-    };
   }
 
   private registerRequestHandlers(): void {
@@ -1452,160 +1424,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (item) {
       this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item });
     }
-  }
-
-  private handleThreadStartedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "thread_started" }>,
-  ): void {
-    this.currentThreadId = parsed.threadId;
-    this.eventBus.emit({
-      type: "thread_started",
-      provider: CODEX_PROVIDER,
-      sessionId: parsed.threadId,
-    });
-  }
-
-  private handleTurnStartedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "turn_started" }>,
-  ): void {
-    const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
-    if (subAgentCallId) {
-      this.emitSubAgentActivityUpdate(subAgentCallId, "running");
-      return;
-    }
-    this.currentTurnId = parsed.turnId;
-    this.resetTurnTrackingState();
-    this.eventBus.emit({ type: "turn_started", provider: CODEX_PROVIDER });
-  }
-
-  private handleTurnCompletedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "turn_completed" }>,
-  ): void {
-    const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
-    if (subAgentCallId) {
-      let status: ToolCallTimelineItem["status"] = "completed";
-      if (parsed.status === "failed") {
-        status = "failed";
-      } else if (parsed.status === "interrupted") {
-        status = "canceled";
-      }
-      this.emitSubAgentActivityUpdate(subAgentCallId, status);
-      return;
-    }
-    if (this.textualToolCallError) {
-      this.eventBus.emit({
-        type: "turn_failed",
-        provider: CODEX_PROVIDER,
-        error: this.textualToolCallError,
-      });
-    } else if (parsed.status === "failed") {
-      this.eventBus.emit({
-        type: "turn_failed",
-        provider: CODEX_PROVIDER,
-        error: parsed.errorMessage ?? "Codex turn failed",
-      });
-    } else if (parsed.status === "interrupted") {
-      this.eventBus.emit({
-        type: "turn_canceled",
-        provider: CODEX_PROVIDER,
-        reason: "interrupted",
-      });
-    } else {
-      if (this.planModeEnabled && this.latestPlanResult?.text) {
-        this.permissionController.requestPlanApproval(this.latestPlanResult.text);
-      }
-      this.eventBus.emit({
-        type: "turn_completed",
-        provider: CODEX_PROVIDER,
-        usage: this.latestUsage,
-      });
-    }
-    this.activeForegroundTurnId = null;
-    this.resetTurnTrackingState();
-  }
-
-  private resetTurnTrackingState(): void {
-    this.latestPlanResult = null;
-    this.textualToolCallError = null;
-    this.notificationStream.resetTurn();
-    this.deltaNotificationHandler.resetTurn();
-    this.compactionState.resetTurnPairing();
-  }
-
-  private rememberTextualToolCallFailure(text: string): void {
-    if (this.textualToolCallError || !looksLikeTextualCodexToolCallTranscript(text)) {
-      return;
-    }
-    this.textualToolCallError = CODEX_TEXTUAL_TOOL_CALL_ERROR;
-    this.logger.warn(
-      {
-        agentId: this.agentId,
-        provider: CODEX_PROVIDER,
-        sessionId: this.currentThreadId,
-        turnId: this.activeForegroundTurnId ?? undefined,
-      },
-      "provider.codex.textual_tool_call_detected",
-    );
-  }
-
-  private handlePlanUpdatedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "plan_updated" }>,
-  ): void {
-    const timelineItem = mapCodexPlanToToolCall({
-      callId: `plan:${this.currentTurnId ?? this.currentThreadId ?? "current"}`,
-      text: planStepsToMarkdown(
-        parsed.plan.map((entry) => ({
-          step: entry.step ?? "",
-          status: entry.status ?? "pending",
-        })),
-      ),
-    });
-    if (timelineItem) {
-      this.rememberPlanResult(timelineItem);
-      // In plan mode, the same plan is rendered through the synthetic approval
-      // permission. Keep the remembered text for that card, but do not also
-      // emit a static timeline plan panel.
-      if (this.planModeEnabled) {
-        return;
-      }
-      this.eventBus.emit({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
-    }
-  }
-
-  private handleTokenUsageUpdatedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "token_usage_updated" }>,
-  ): void {
-    this.latestUsage = toAgentUsage(parsed.tokenUsage);
-    if (this.latestUsage) {
-      this.eventBus.emit({
-        type: "usage_updated",
-        provider: CODEX_PROVIDER,
-        usage: this.latestUsage,
-      });
-    }
-  }
-
-  private handleThreadRolledBackNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "thread_rolled_back" }>,
-  ): void {
-    this.userMessageTurns.truncate(parsed.numTurns);
-  }
-
-  private handleContextCompactedNotification(
-    parsed: Extract<ParsedCodexNotification, { kind: "context_compacted" }>,
-  ): void {
-    if (parsed.threadId !== this.currentThreadId) {
-      return;
-    }
-    if (!this.compactionState.shouldEmitNotificationCompletion()) {
-      return;
-    }
-    this.eventBus.emit({
-      type: "timeline",
-      provider: CODEX_PROVIDER,
-      item: this.compactionState.createTimelineItem("completed"),
-      ...(parsed.turnId ? { turnId: parsed.turnId } : {}),
-    });
   }
 
   private warnUnknownNotificationMethod(method: string, params: unknown): void {
