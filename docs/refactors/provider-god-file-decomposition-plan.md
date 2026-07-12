@@ -9,7 +9,7 @@
 
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
-- Codex 首个切片已提取 skills/custom prompts 发现、front matter 解析、策略过滤与参数展开到 `codex/skills.ts`；原入口继续重导出既有公开 helper。
+- Codex 已完成两个边界切片：`codex/skills.ts` 承接 skills/custom prompts，`codex/notifications.ts` 承接 app-server notification Zod 校验、归一化与判别联合；原 session 保留状态处理。
 
 ## 现状
 
@@ -82,7 +82,7 @@
 - 删除从未接线的 `providers/base/`，避免其默认 turn ID、interrupt、close 与 persistence 语义被误当成稳定契约。
 - 保留现有 `AgentSession` / `AgentClient` 接口和 provider-specific 生命周期实现。
 - 优先提取无状态 helper、transport、runtime、event translator 与领域 handler。
-- Codex 首个领域模块 `codex/skills.ts` 已完成，覆盖技能/自定义 prompt 发现、策略过滤与参数展开。
+- Codex `codex/skills.ts` 与 `codex/notifications.ts` 已完成，分别建立扩展发现和 native notification 的稳定输入边界。
 
 **验收**：server typecheck/build、目标 lint、Codex skills 精确测试通过。
 
@@ -93,8 +93,9 @@
 - `codex/session.ts` —— 移动 `CodexAppServerAgentSession`，保持 `implements AgentSession`
 - `codex/client.ts` —— 移动 `CodexAppServerAgentClient`，保持 `implements AgentClient`
 - `codex/app-server-transport.ts` —— `CodexAppServerClient`（已完成）
+- `codex/notifications.ts` —— notification schema/parser/type guard（已完成）
 - `codex/notification-handlers.ts` —— `handleCodexDeltaNotification` /
-  `handleThreadStateNotification` / `respondToPermission` 等大方法
+  `handleThreadStateNotification` / `respondToPermission` 等状态处理方法
 - `codex/skills.ts` —— skills/custom prompts/front matter/策略过滤（已完成）
 - `codex/build-turn-params.ts` —— `buildTurnStartParams`
 
