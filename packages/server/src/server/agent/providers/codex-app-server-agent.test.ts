@@ -9,6 +9,7 @@ import { PassThrough } from "node:stream";
 
 import type {
   AgentLaunchContext,
+  AgentPermissionResult,
   AgentSession,
   AgentSessionConfig,
   AgentSlashCommand,
@@ -46,6 +47,7 @@ interface CollaborationModeRecord {
 
 interface CodexSessionTestAccess {
   ensureThreadLoaded(): Promise<void>;
+  handleCommandApprovalRequest(params: unknown): Promise<unknown>;
   handleToolApprovalRequest(params: unknown): Promise<unknown>;
   handleNotification(method: string, params: unknown): void;
   loadPersistedHistory(): Promise<void>;
@@ -581,6 +583,29 @@ describe("Codex app-server provider", () => {
     });
     appServer.assertNoErrors();
     await session.close();
+  });
+
+  test("registers command approvals before synchronously emitting permission events", async () => {
+    const session = createSession();
+    let responsePromise: Promise<AgentPermissionResult | void> | null = null;
+    session.subscribe((event) => {
+      if (event.type === "permission_requested") {
+        responsePromise = session.respondToPermission(event.request.id, { behavior: "allow" });
+      }
+    });
+
+    const approvalResponse = asInternals(session).handleCommandApprovalRequest({
+      itemId: "exec-sync-approval",
+      threadId: "test-thread",
+      turnId: "test-turn",
+      command: "git status",
+      cwd: "/workspace/project",
+      reason: "confirm synchronous response ordering",
+    });
+
+    expect(responsePromise).not.toBeNull();
+    await expect(responsePromise).resolves.toBeUndefined();
+    await expect(approvalResponse).resolves.toEqual({ decision: "accept" });
   });
 
   test("rewinds the conversation to a freshly emitted Codex user message id", async () => {

@@ -90,6 +90,7 @@ import {
   type ParsedCodexNotification,
 } from "./codex/notifications.js";
 import { CodexNotificationStreamState } from "./codex/notification-stream-state.js";
+import { CodexPermissionState, type CodexPendingPermission } from "./codex/permission-state.js";
 import { CodexSubAgentTracker } from "./codex/sub-agent-tracker.js";
 import {
   loadCodexModelDefinitions,
@@ -1633,17 +1634,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private planModeEnabled = false;
   private historyPending = false;
   private persistedHistory: PersistedTimelineEntry[] = [];
-  private pendingPermissions = new Map<string, AgentPermissionRequest>();
-  private pendingPermissionHandlers = new Map<
-    string,
-    {
-      resolve: (value: unknown) => void;
-      kind: "command" | "file" | "question" | "plan";
-      questions?: CodexQuestionPrompt[];
-      planText?: string;
-    }
-  >();
-  private resolvedPermissionRequests = new Set<string>();
+  private readonly permissionState = new CodexPermissionState<CodexQuestionPrompt>();
   private readonly notificationStream = new CodexNotificationStreamState();
   private pendingAssistantMessageBoundary = false;
   private readonly subAgentTracker = new CodexSubAgentTracker();
@@ -1936,8 +1927,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       },
     };
 
-    this.pendingPermissions.set(requestId, request);
-    this.pendingPermissionHandlers.set(requestId, {
+    this.permissionState.register(request, {
       resolve: () => undefined,
       kind: "plan",
       planText,
@@ -2357,26 +2347,22 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {
-    return Array.from(this.pendingPermissions.values());
+    return this.permissionState.listRequests();
   }
 
   async respondToPermission(
     requestId: string,
     response: AgentPermissionResponse,
   ): Promise<AgentPermissionResult | void> {
-    const pending = this.pendingPermissionHandlers.get(requestId);
-    if (!pending) {
+    const permissionEntry = this.permissionState.take(requestId);
+    if (!permissionEntry) {
       throw new Error(`No pending Codex app-server permission request with id '${requestId}'`);
     }
-    const pendingRequest = this.pendingPermissions.get(requestId) ?? null;
+    const { handler: pending, request: pendingRequest } = permissionEntry;
 
     if (pending.kind === "plan") {
       return this.handlePlanPermissionResponse({ requestId, response, pending, pendingRequest });
     }
-
-    this.pendingPermissionHandlers.delete(requestId);
-    this.pendingPermissions.delete(requestId);
-    this.resolvedPermissionRequests.add(requestId);
 
     if (response.behavior === "deny" && pendingRequest?.kind === "tool") {
       this.emitDeniedToolCallTimelineEvent({ requestId, response, pendingRequest });
@@ -2451,13 +2437,8 @@ export class CodexAppServerAgentSession implements AgentSession {
   private handlePlanPermissionResponse(params: {
     requestId: string;
     response: AgentPermissionResponse;
-    pending: {
-      resolve: (value: unknown) => void;
-      kind: "command" | "file" | "question" | "plan";
-      questions?: CodexQuestionPrompt[];
-      planText?: string;
-    };
-    pendingRequest: AgentPermissionRequest | null;
+    pending: CodexPendingPermission<CodexQuestionPrompt>;
+    pendingRequest: AgentPermissionRequest;
   }): AgentPermissionResult | void {
     const { requestId, response, pending, pendingRequest } = params;
     let followUpPrompt: string | undefined;
@@ -2467,9 +2448,6 @@ export class CodexAppServerAgentSession implements AgentSession {
       });
     }
 
-    this.pendingPermissionHandlers.delete(requestId);
-    this.pendingPermissions.delete(requestId);
-    this.resolvedPermissionRequests.add(requestId);
     this.emitEvent({
       type: "permission_resolved",
       provider: CODEX_PROVIDER,
@@ -2590,12 +2568,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async close(): Promise<void> {
-    for (const pending of this.pendingPermissionHandlers.values()) {
-      pending.resolve({ decision: "cancel" });
-    }
-    this.pendingPermissionHandlers.clear();
-    this.pendingPermissions.clear();
-    this.resolvedPermissionRequests.clear();
+    this.permissionState.cancelAll();
     this.subscribers.clear();
     this.activeForegroundTurnId = null;
     if (this.client) {
@@ -3803,11 +3776,9 @@ export class CodexAppServerAgentSession implements AgentSession {
         turnId: parsed.turnId,
       },
     };
-    this.pendingPermissions.set(requestId, request);
+    const response = this.permissionState.create(request, { kind: "command" });
     this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
-    return new Promise((resolve) => {
-      this.pendingPermissionHandlers.set(requestId, { resolve, kind: "command" });
-    });
+    return response;
   }
 
   private handleFileChangeApprovalRequest(params: unknown): Promise<unknown> {
@@ -3840,11 +3811,9 @@ export class CodexAppServerAgentSession implements AgentSession {
         turnId: parsed.turnId,
       },
     };
-    this.pendingPermissions.set(requestId, request);
+    const response = this.permissionState.create(request, { kind: "file" });
     this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
-    return new Promise((resolve) => {
-      this.pendingPermissionHandlers.set(requestId, { resolve, kind: "file" });
-    });
+    return response;
   }
 
   private handleToolApprovalRequest(params: unknown): Promise<unknown> {
@@ -3878,7 +3847,10 @@ export class CodexAppServerAgentSession implements AgentSession {
         questions,
       },
     };
-    this.pendingPermissions.set(requestId, request);
+    const response = this.permissionState.create(request, {
+      kind: "question",
+      questions,
+    });
     this.emitEvent({
       type: "timeline",
       provider: CODEX_PROVIDER,
@@ -3889,13 +3861,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       }),
     });
     this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
-    return new Promise((resolve) => {
-      this.pendingPermissionHandlers.set(requestId, {
-        resolve,
-        kind: "question",
-        questions,
-      });
-    });
+    return response;
   }
 }
 
