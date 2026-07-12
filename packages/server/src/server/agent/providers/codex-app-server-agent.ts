@@ -64,12 +64,12 @@ import {
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
 import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
+import { CodexContextCompactionState } from "./codex/context-compaction-state.js";
 import {
   cleanupStaleCodexImageAttachments,
   writeCodexImageAttachment,
 } from "./codex/image-attachments.js";
 import {
-  CODEX_CONTEXT_COMPACTION_TYPE,
   loadCodexThreadHistoryTimeline,
   normalizeCodexThreadItemType,
   type PersistedTimelineEntry,
@@ -680,12 +680,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private latestPlanResult: { callId: string; text: string; turnId: string | null } | null = null;
   private readonly userMessageTurnIndexes = new Map<string, number>();
   private readonly userMessageTurnIds: string[] = [];
-  private pendingManualCompactionStarts = 0;
-  private compactionTriggerByItemId = new Map<string, "auto" | "manual">();
-  // Codex can report one completed compaction through both channels:
-  // `thread/compacted` and a completed `contextCompaction` item.
-  private unpairedCompactionNotificationCompletions = 0;
-  private unpairedCompactionItemCompletions = 0;
+  private readonly compactionState = new CodexContextCompactionState();
   private connected = false;
   private collaborationModes: Array<{
     name: string;
@@ -1740,13 +1735,13 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (!this.client || !this.currentThreadId) {
         throw new Error("Codex thread is not available");
       }
-      this.pendingManualCompactionStarts += 1;
+      this.compactionState.beginManualCompaction();
       try {
         await this.client.request("thread/compact/start", {
           threadId: this.currentThreadId,
         });
       } catch (error) {
-        this.pendingManualCompactionStarts = Math.max(0, this.pendingManualCompactionStarts - 1);
+        this.compactionState.cancelManualCompactionStart();
         throw error;
       }
       return null;
@@ -2166,8 +2161,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.textualToolCallError = null;
     this.notificationStream.resetTurn();
     this.pendingAssistantMessageBoundary = false;
-    this.unpairedCompactionNotificationCompletions = 0;
-    this.unpairedCompactionItemCompletions = 0;
+    this.compactionState.resetTurnPairing();
   }
 
   private rememberTextualToolCallFailure(text: string): void {
@@ -2223,46 +2217,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
-  private resolveContextCompactionTrigger(itemId?: string): "auto" | "manual" | undefined {
-    if (itemId) {
-      const known = this.compactionTriggerByItemId.get(itemId);
-      if (known) {
-        return known;
-      }
-    }
-    if (this.pendingManualCompactionStarts > 0) {
-      this.pendingManualCompactionStarts -= 1;
-      return "manual";
-    }
-    return undefined;
-  }
-
-  private createContextCompactionTimelineItem(
-    status: "loading" | "completed",
-    itemId?: string,
-  ): Extract<AgentTimelineItem, { type: "compaction" }> {
-    const trigger = this.resolveContextCompactionTrigger(itemId);
-    if (itemId && trigger) {
-      if (status === "loading") {
-        this.compactionTriggerByItemId.set(itemId, trigger);
-      } else {
-        this.compactionTriggerByItemId.delete(itemId);
-      }
-    }
-    return {
-      type: "compaction",
-      status,
-      ...(trigger ? { trigger } : {}),
-    };
-  }
-
-  private isContextCompactionItem(item: { type?: string; [key: string]: unknown }): boolean {
-    return (
-      normalizeCodexThreadItemType(typeof item.type === "string" ? item.type : undefined) ===
-      CODEX_CONTEXT_COMPACTION_TYPE
-    );
-  }
-
   private isUserMessageItem(item: { type?: string; [key: string]: unknown }): boolean {
     return (
       normalizeCodexThreadItemType(typeof item.type === "string" ? item.type : undefined) ===
@@ -2282,15 +2236,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (parsed.threadId !== this.currentThreadId) {
       return;
     }
-    if (this.unpairedCompactionItemCompletions > 0) {
-      this.unpairedCompactionItemCompletions -= 1;
+    if (!this.compactionState.shouldEmitNotificationCompletion()) {
       return;
     }
-    this.unpairedCompactionNotificationCompletions += 1;
     this.emitEvent({
       type: "timeline",
       provider: CODEX_PROVIDER,
-      item: this.createContextCompactionTimelineItem("completed"),
+      item: this.compactionState.createTimelineItem("completed"),
       ...(parsed.turnId ? { turnId: parsed.turnId } : {}),
     });
   }
@@ -2413,17 +2365,15 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.handleUserMessageItem(parsed);
       return;
     }
-    if (this.isContextCompactionItem(parsed.item)) {
-      if (this.unpairedCompactionNotificationCompletions > 0) {
-        this.unpairedCompactionNotificationCompletions -= 1;
+    if (this.compactionState.isCompactionItem(parsed.item)) {
+      if (!this.compactionState.shouldEmitItemCompletion()) {
         return;
       }
       this.emitEvent({
         type: "timeline",
         provider: CODEX_PROVIDER,
-        item: this.createContextCompactionTimelineItem("completed", parsed.item.id),
+        item: this.compactionState.createTimelineItem("completed", parsed.item.id),
       });
-      this.unpairedCompactionItemCompletions += 1;
       return;
     }
     const timelineItem = threadItemToTimeline(parsed.item, {
@@ -2564,11 +2514,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.handleUserMessageItem(parsed);
       return;
     }
-    if (this.isContextCompactionItem(parsed.item)) {
+    if (this.compactionState.isCompactionItem(parsed.item)) {
       this.emitEvent({
         type: "timeline",
         provider: CODEX_PROVIDER,
-        item: this.createContextCompactionTimelineItem("loading", parsed.item.id),
+        item: this.compactionState.createTimelineItem("loading", parsed.item.id),
       });
       return;
     }
