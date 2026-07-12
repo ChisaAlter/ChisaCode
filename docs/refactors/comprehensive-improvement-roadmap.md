@@ -9,9 +9,9 @@
 
 ## 进行中
 
-### 架构/依赖安全/全量 CI 提升目标（2026-07-12 启动）
+### 架构/依赖安全/本地质量提升目标（2026-07-12 启动）
 
-- **目标**：继续拆解 client/provider/workspace 超大责任中心；完成 AI SDK、Claude SDK、Expo/EAS major migration；恢复 `cn-main` 全量 CI 的可信绿色基线。
+- **目标**：继续拆解 client/provider/workspace 超大责任中心；完成 AI SDK、Claude SDK、Expo/EAS major migration；以聚焦本地验证维持可信质量基线，GitHub Actions 仅作为显式发布门禁。
 - **执行顺序**：先清理确定性 CI 失败，再迁移高风险依赖，最后按领域拆分大文件；每批独立本地验证和提交，普通开发不再推送触发远端 CI。
 - **已完成批次**：修复 workspace authority 稳定错误契约、draft `runtimeProvider` 快照、Generative UI manager queue 兼容测试、异步进程终止断言、ACP cwd 隔离测试、POSIX terminal `vi.waitFor` 误用、CLI 脚本/Vitest 分类、Wrangler 公开入口解析及 Windows `npx.cmd` 启动。
 - **App/链路 CI 收敛**：E2E daemon 改为仅监听 `127.0.0.1`，满足无密码 loopback 安全约束；补齐 Vitest 的 `matchMedia`、Unistyles、safe-area、toast 与平台测试边界，修复 i18n 实例缺失、Aemeath 英文资源、Projects 空状态硬编码、provider icon/turn footer/高度缓存过期契约。20 个目标文件 152 个断言通过，`moduleMock` 审计从基线 303 降至 302。
@@ -24,7 +24,7 @@
 - **Client checkout/worktree 命令拆分**：完成。将 commit/merge/pull/push/PR/stash/worktree/branch/GitHub/directory 等 23 个无状态 RPC 命令提取到 `daemon-client-checkout-commands.ts`，`DaemonClient` 保持原公开方法并改为薄委托；checkout status 与 diff subscription 的重连状态继续留在核心类，等待独立生命周期切片。核心文件进一步降至 4893 行。
 - **Client checkout 订阅生命周期拆分**：完成。将 checkout status 请求去重、diff compare 归一化、一次性 diff 获取、订阅失败回滚、取消订阅与重连恢复状态提取到 `daemon-client-checkout-subscriptions.ts`；`DaemonClient` 的四个公开方法保持兼容并改为薄委托，重连测试改走真实公开订阅流程，不再修改私有状态。核心文件进一步降至 4752 行。
 - **Client 管理类 RPC 分域拆分**：完成。将 provider discovery/diagnostics/presets/model gateway、daemon/project config，以及 agent commands/skills/MCP server 管理共 25 个无状态 RPC 分别提取到三个领域客户端，并用 `daemon-client-command-transport.ts` 统一 correlated request 端口契约；公开方法与 wire shape 保持不变。核心文件进一步降至 4555 行。
-- **Provider composition-first 拆分启动**：完成 Codex skills、notification parser/router、turn configuration、model catalog、launch runtime、notification/compaction state、notification timeline、sub-agent tracker、permission state/domain/controller、session event bus、user-message turn state、image attachments、history pipeline 十七个领域切片；`launch.ts` 集中版本 gate、PATH/Windows Store 探测、override/default launch 解析、环境合成、可用性检查与 app-server spawn。原 5981 行核心文件降至 2617 行；另删除 437 行未接线 speculative 基类。
+- **Provider composition-first 拆分启动**：完成 Codex skills、notification parser/router、turn configuration、model catalog、launch/runtime config、notification/compaction state、notification timeline、sub-agent tracker、permission state/domain/controller、session event bus、user-message turn state、image attachments、history pipeline 十八个领域切片；`launch.ts` 集中版本 gate、PATH/Windows Store 探测、override/default launch 解析、环境合成、可用性检查与 app-server spawn，`runtime-config.ts` 集中 initialize、MCP 转换、自定义 provider 与模型身份指令。原 5981 行核心文件降至 2494 行；另删除 437 行未接线 speculative 基类。
 - **状态**：进行中，直接在 `cn-main` 执行，不创建额外分支或 worktree。
 
 ### 2026-07-12 深度架构/安全/产品/代码质量审查批次（完成）
@@ -213,7 +213,7 @@
   - `ProductionOpenCodeRuntime` 类从 `opencode-agent.ts` 迁移到 `opencode/runtime.ts`
   - `opencode/helpers.ts` 提取（含 `OpencodeToolPartToTimelineItemSchema`）
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
-- **状态**：进行中；采用 composition-first，Codex skills、notification parser/router、turn configuration、models、launch runtime、notification/compaction state、notification timeline、sub-agent tracker、permission state/domain/controller、session event bus、user-message turn state、image attachments 与 history pipeline 切片已完成，后续继续拆 turn/item handlers 与 session/client。
+- **状态**：进行中；采用 composition-first，Codex skills、notification parser/router、turn configuration、models、launch/runtime config、notification/compaction state、notification timeline、sub-agent tracker、permission state/domain/controller、session event bus、user-message turn state、image attachments 与 history pipeline 切片已完成，后续优先拆 `CodexAppServerAgentClient`，再继续 turn/item handlers 与 session。
 
 ---
 

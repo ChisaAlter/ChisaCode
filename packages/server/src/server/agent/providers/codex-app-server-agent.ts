@@ -6,7 +6,6 @@ import {
   type AgentLaunchContext,
   type AgentMode,
   type AgentModelDefinition,
-  type McpServerConfig,
   type AgentPersistenceHandle,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
@@ -52,6 +51,14 @@ import {
 } from "./codex/app-server-transport.js";
 import { revertCodexConversation } from "./codex/rewind.js";
 import { CodexSessionEventBus } from "./codex/session-event-bus.js";
+import {
+  buildCodexAppServerInitializeParams,
+  buildCodexCustomProviderConfig,
+  buildRuntimeModelIdentityInstructions,
+  type CodexCustomProvider,
+  type CodexMcpServerConfig,
+  toCodexMcpConfig,
+} from "./codex/runtime-config.js";
 import { CodexUserMessageTurnState } from "./codex/user-message-turn-state.js";
 import { CodexContextCompactionState } from "./codex/context-compaction-state.js";
 import {
@@ -201,11 +208,7 @@ interface CodexAppServerClientLike {
 
 interface CodexAppServerAgentDeps {
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
-  customProvider?: {
-    id: string;
-    label: string;
-    extends: string;
-  };
+  customProvider?: CodexCustomProvider;
   customCodexConfig?: Record<string, unknown> | null;
   _createCodexClient?: (
     child: ChildProcessWithoutNullStreams,
@@ -238,40 +241,6 @@ function firstPositiveFiniteNumber(primary: unknown, secondary: unknown): number
     return secondary;
   }
   return undefined;
-}
-
-interface CodexMcpServerConfig {
-  url?: string;
-  http_headers?: Record<string, string>;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  tool_timeout_sec?: number;
-}
-
-function toCodexMcpConfig(config: McpServerConfig): CodexMcpServerConfig {
-  switch (config.type) {
-    case "stdio":
-      return {
-        command: config.command,
-        args: config.args,
-        env: config.env,
-      };
-    case "http":
-      return {
-        url: config.url,
-        http_headers: config.headers,
-      };
-    case "sse":
-      return {
-        url: config.url,
-        http_headers: config.headers,
-      };
-    default: {
-      const _exhaustive = config as { type: never };
-      throw new Error(`Unsupported MCP config type: ${String(_exhaustive.type)}`);
-    }
-  }
 }
 
 function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
@@ -415,98 +384,6 @@ function toCodexTextInput(text: string): Extract<CodexAppServerUserInput, { type
     text,
     text_elements: [],
   };
-}
-
-function buildCodexAppServerInitializeParams(): {
-  clientInfo: { name: string; title: string; version: string };
-  capabilities: { experimentalApi: true };
-} {
-  return {
-    clientInfo: {
-      name: "chisacode",
-      title: "ChisaCode",
-      version: "0.0.0",
-    },
-    capabilities: {
-      experimentalApi: true,
-    },
-  };
-}
-
-function normalizeOpenAICompatibleBaseUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const withoutTrailingSlashes = trimmed.replace(/\/+$/u, "");
-  if (withoutTrailingSlashes.endsWith("/v1")) {
-    return withoutTrailingSlashes;
-  }
-  return `${withoutTrailingSlashes}/v1`;
-}
-
-function resolveOpenAIWireApi(
-  runtimeSettings: ProviderRuntimeSettings | undefined,
-): "responses" | "chat" {
-  return runtimeSettings?.env?.OPENAI_WIRE_API === "chat" ? "chat" : "responses";
-}
-
-function buildCodexCustomProviderConfig(
-  runtimeSettings: ProviderRuntimeSettings | undefined,
-  customProvider: CodexAppServerAgentDeps["customProvider"],
-): Record<string, unknown> | null {
-  if (customProvider?.extends !== CODEX_PROVIDER) {
-    return null;
-  }
-  const baseUrl = runtimeSettings?.env?.OPENAI_BASE_URL;
-  if (typeof baseUrl !== "string") {
-    return null;
-  }
-  const normalizedBaseUrl = normalizeOpenAICompatibleBaseUrl(baseUrl);
-  if (!normalizedBaseUrl) {
-    return null;
-  }
-  const providerConfig: Record<string, unknown> = {
-    name: customProvider.label,
-    base_url: normalizedBaseUrl,
-    wire_api: resolveOpenAIWireApi(runtimeSettings),
-  };
-  if (runtimeSettings?.env?.OPENAI_API_KEY?.trim()) {
-    providerConfig.env_key = "OPENAI_API_KEY";
-    providerConfig.requires_openai_auth = false;
-  }
-  return {
-    model_provider: customProvider.id,
-    model_providers: {
-      [customProvider.id]: providerConfig,
-    },
-  };
-}
-
-function buildRuntimeModelIdentityInstructions(
-  config: AgentSessionConfig,
-  customProvider: CodexAppServerAgentDeps["customProvider"],
-): string | null {
-  const runtimeProvider = config.runtimeProvider?.trim();
-  const customProviderId = customProvider?.id?.trim();
-  const provider =
-    customProviderId ||
-    (runtimeProvider && runtimeProvider !== config.provider ? runtimeProvider : null);
-  const model = config.model?.trim();
-  if (!provider) {
-    return null;
-  }
-
-  const providerLine = provider ? `Runtime provider: ${provider}.` : null;
-  const modelLine = model ? `Configured model: ${model}.` : null;
-  return [
-    "When asked what model or provider you are using, answer from this configured runtime metadata.",
-    providerLine,
-    modelLine,
-    "Do not infer a default vendor/model from the client binary, and do not inspect local config files or run shell commands to answer model-identity questions.",
-  ]
-    .filter((line): line is string => typeof line === "string" && line.length > 0)
-    .join("\n");
 }
 
 export class CodexAppServerAgentSession implements AgentSession {
