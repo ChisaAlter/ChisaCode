@@ -91,6 +91,16 @@ import {
   type ParsedCodexNotification,
 } from "./codex/notifications.js";
 import {
+  applyApprovalsReviewerParam,
+  buildCodexTurnStartParams,
+  CODEX_MODES,
+  DEFAULT_CODEX_MODE_ID,
+  MODE_PRESETS,
+  normalizeCodexThinkingOptionId,
+  shouldPromoteThreadResponseToAutoReview,
+  validateCodexMode,
+} from "./codex/turn-config.js";
+import {
   renderProviderImageOutputAsAssistantMarkdown,
   type ProviderImageOutput,
 } from "./provider-image-output.js";
@@ -194,27 +204,6 @@ const CODEX_APP_SERVER_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindBoth: false,
 };
 
-const CODEX_MODES: AgentMode[] = [
-  {
-    id: "auto",
-    label: "Default Permissions",
-    description: "Edit files and run commands with Codex's default approval flow.",
-  },
-  {
-    id: "auto-review",
-    label: "Auto-review",
-    description:
-      "Same workspace-write permissions as Default, but eligible `on-request` approvals are routed through the auto-reviewer subagent.",
-  },
-  {
-    id: "full-access",
-    label: "Full Access",
-    description: "Edit files, run commands, and access the network without additional prompts.",
-  },
-];
-
-const DEFAULT_CODEX_MODE_ID = "auto";
-
 interface CodexAppServerClientLike {
   request(method: string, params?: unknown): Promise<unknown>;
   forkThread?(params: CodexThreadForkParams): Promise<CodexThreadForkResponse>;
@@ -236,79 +225,6 @@ interface CodexAppServerAgentDeps {
     logger: Logger,
     getTraceContext: () => CodexAppServerTraceContext,
   ) => CodexAppServerClientLike;
-}
-
-interface CodexModePreset {
-  approvalPolicy: string;
-  sandbox: string;
-  networkAccess?: boolean;
-  approvalsReviewer?: "auto_review";
-}
-
-const MODE_PRESETS: Record<string, CodexModePreset> = {
-  "read-only": {
-    approvalPolicy: "on-request",
-    sandbox: "read-only",
-  },
-  auto: {
-    approvalPolicy: "on-request",
-    sandbox: "workspace-write",
-  },
-  "auto-review": {
-    approvalPolicy: "on-request",
-    sandbox: "workspace-write",
-    approvalsReviewer: "auto_review",
-  },
-  "full-access": {
-    approvalPolicy: "never",
-    sandbox: "danger-full-access",
-    networkAccess: true,
-  },
-};
-
-function isAutoReviewReviewer(value: string | undefined): boolean {
-  return value === "auto_review" || value === "guardian_subagent";
-}
-
-function applyApprovalsReviewerParam(
-  params: Record<string, unknown>,
-  preset: CodexModePreset,
-): void {
-  if (preset.approvalsReviewer) {
-    params.approvalsReviewer = preset.approvalsReviewer;
-  }
-}
-
-function shouldPromoteThreadResponseToAutoReview(params: {
-  approvalsReviewer: string | undefined;
-  approvalPolicy: string;
-  sandbox: string;
-}): boolean {
-  return (
-    isAutoReviewReviewer(params.approvalsReviewer) &&
-    params.approvalPolicy === "on-request" &&
-    params.sandbox === "workspace-write"
-  );
-}
-
-function validateCodexMode(modeId: string): void {
-  if (!(modeId in MODE_PRESETS)) {
-    const validModes = Object.keys(MODE_PRESETS).join(", ");
-    throw new Error(`Invalid Codex mode "${modeId}". Valid modes are: ${validModes}`);
-  }
-}
-
-function normalizeCodexThinkingOptionId(
-  thinkingOptionId: string | null | undefined,
-): string | undefined {
-  if (typeof thinkingOptionId !== "string") {
-    return undefined;
-  }
-  const normalized = thinkingOptionId.trim();
-  if (!normalized || normalized === "default") {
-    return undefined;
-  }
-  return normalized;
 }
 
 function looksLikeTextualCodexToolCallTranscript(text: string): boolean {
@@ -338,73 +254,9 @@ function normalizeCodexModelLabel(displayName: string): string {
   return displayName.replace(/\bgpt\b/gi, "GPT");
 }
 
-function isSchemaRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isObjectSchemaNode(schema: Record<string, unknown>): boolean {
-  const type = schema.type;
-  return (
-    isSchemaRecord(schema.properties) ||
-    type === "object" ||
-    (Array.isArray(type) && type.includes("object"))
-  );
-}
-
-function normalizeCodexOutputSchemaNode(schema: unknown, schemaPath: string): unknown {
-  if (Array.isArray(schema)) {
-    return schema.map((entry, index) =>
-      normalizeCodexOutputSchemaNode(entry, `${schemaPath}[${index}]`),
-    );
-  }
-  if (!isSchemaRecord(schema)) {
-    return schema;
-  }
-
-  const normalized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(schema)) {
-    normalized[key] = normalizeCodexOutputSchemaNode(value, `${schemaPath}.${key}`);
-  }
-
-  if (!isObjectSchemaNode(normalized)) {
-    return normalized;
-  }
-
-  if (normalized.additionalProperties === undefined) {
-    normalized.additionalProperties = false;
-  } else if (normalized.additionalProperties !== false) {
-    throw new Error(
-      `Codex structured outputs require ${schemaPath} to set additionalProperties to false for object schemas.`,
-    );
-  }
-
-  const properties = isSchemaRecord(normalized.properties) ? normalized.properties : null;
-  if (!properties) {
-    return normalized;
-  }
-
-  const propertyKeys = Object.keys(properties);
-  const existingRequired = Array.isArray(normalized.required)
-    ? normalized.required.filter((entry): entry is string => typeof entry === "string")
-    : [];
-  normalized.required = Array.from(new Set([...existingRequired, ...propertyKeys]));
-  return normalized;
-}
-
 export { listCodexSkillEntries, listCodexSkills } from "./codex/skills.js";
 
-export function normalizeCodexOutputSchema(schema: unknown): Record<string, unknown> {
-  if (!isSchemaRecord(schema)) {
-    throw new Error("Codex structured outputs require a JSON object schema.");
-  }
-
-  const normalized = normalizeCodexOutputSchemaNode(schema, "$");
-  if (!isSchemaRecord(normalized) || !isObjectSchemaNode(normalized)) {
-    throw new Error("Codex structured outputs require a root object schema.");
-  }
-
-  return normalized;
-}
+export { normalizeCodexOutputSchema } from "./codex/turn-config.js";
 
 interface CodexConfiguredDefaults {
   model?: string;
@@ -1568,19 +1420,6 @@ export async function rollbackCodexThread(
   return parseCodexThreadRollbackResponse(await client.request("thread/rollback", params));
 }
 
-function toSandboxPolicy(type: string, networkAccess?: boolean): Record<string, unknown> {
-  switch (type) {
-    case "read-only":
-      return { type: "readOnly" };
-    case "workspace-write":
-      return { type: "workspaceWrite", networkAccess: networkAccess ?? false };
-    case "danger-full-access":
-      return { type: "dangerFullAccess" };
-    default:
-      return { type: "workspaceWrite", networkAccess: networkAccess ?? false };
-  }
-}
-
 function getImageExtension(mimeType: string): string {
   switch (mimeType) {
     case "image/jpeg":
@@ -2386,80 +2225,24 @@ export class CodexAppServerAgentSession implements AgentSession {
     return args ? `$${commandName} ${args}` : `$${commandName}`;
   }
 
-  private async buildTurnStartParams(
-    prompt: CodexPromptInput,
-    options?: AgentRunOptions,
-  ): Promise<{
-    params: Record<string, unknown>;
-    thinkingOptionId?: string;
-    approvalPolicy: string;
-    sandboxPolicyType: string;
-    hasOutputSchema: boolean;
-    hasDeveloperInstructions: boolean;
-    hasCodexConfig: boolean;
-  }> {
-    const input = await this.buildUserInput(prompt);
-    const preset = MODE_PRESETS[this.currentMode] ?? MODE_PRESETS[DEFAULT_CODEX_MODE_ID];
-    const approvalPolicy = this.config.approvalPolicy ?? preset.approvalPolicy;
-    const sandboxPolicyType = this.config.sandboxMode ?? preset.sandbox;
-
-    const params: Record<string, unknown> = {
-      threadId: this.currentThreadId,
-      input,
-      approvalPolicy,
-      sandboxPolicy: toSandboxPolicy(
-        sandboxPolicyType,
-        typeof this.config.networkAccess === "boolean"
-          ? this.config.networkAccess
-          : preset.networkAccess,
-      ),
-    };
-    applyApprovalsReviewerParam(params, preset);
-
-    if (this.config.model) {
-      params.model = this.config.model;
-    }
-    const thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
-    if (thinkingOptionId) {
-      params.effort = thinkingOptionId;
-    }
-    if (this.serviceTier) {
-      params.serviceTier = this.serviceTier;
-    }
-    if (this.resolvedCollaborationMode) {
-      params.collaborationMode = {
-        mode: this.resolvedCollaborationMode.mode,
-        settings: this.resolvedCollaborationMode.settings,
-      };
-    }
-    if (this.config.cwd) {
-      params.cwd = this.config.cwd;
-    }
-    if (options?.outputSchema) {
-      params.outputSchema = normalizeCodexOutputSchema(options.outputSchema);
-    }
+  private async buildTurnStartParams(prompt: CodexPromptInput, options?: AgentRunOptions) {
+    const userInput = await this.buildUserInput(prompt);
     const developerInstructions = composeSystemPromptParts(
       this.config.systemPrompt,
       this.config.daemonAppendSystemPrompt,
       buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
     );
-    if (developerInstructions) {
-      params.developerInstructions = developerInstructions;
-    }
-    const codexConfig = this.buildCodexInnerConfig();
-    if (codexConfig) {
-      params.config = codexConfig;
-    }
-
-    return {
-      params,
-      thinkingOptionId,
-      approvalPolicy,
-      sandboxPolicyType,
-      hasOutputSchema: Boolean(options?.outputSchema),
-      hasDeveloperInstructions: Boolean(developerInstructions),
-      hasCodexConfig: Boolean(codexConfig),
-    };
+    return buildCodexTurnStartParams({
+      threadId: this.currentThreadId,
+      userInput,
+      modeId: this.currentMode,
+      config: this.config,
+      serviceTier: this.serviceTier,
+      collaborationMode: this.resolvedCollaborationMode,
+      outputSchema: options?.outputSchema,
+      developerInstructions,
+      codexConfig: this.buildCodexInnerConfig(),
+    });
   }
 
   private logTurnStartSummary({
