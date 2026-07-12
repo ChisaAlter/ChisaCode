@@ -1,7 +1,7 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 
 import type { McpServerConfig } from "../../agent-sdk-types.js";
-import { readOpenCodeRecord } from "./event-translator.js";
+import { readOpenCodeRecord } from "./event-values.js";
 import {
   isAlreadyPresentMcpError,
   toOpenCodeMcpConfig,
