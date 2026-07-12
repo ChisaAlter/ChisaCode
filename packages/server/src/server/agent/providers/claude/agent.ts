@@ -20,7 +20,6 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Logger } from "pino";
 import {
-  mapClaudeCanceledToolCall,
   mapClaudeCompletedToolCall,
   mapClaudeFailedToolCall,
   mapClaudeRunningToolCall,
@@ -30,7 +29,6 @@ import {
   mapTaskNotificationUserContentToToolCall,
 } from "./task-notification-tool-call.js";
 import { getClaudeModelsWithSettings, normalizeClaudeRuntimeModelId } from "./models.js";
-import { parsePartialJsonObject } from "./partial-json.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
 import { runClaudeSdkQueryPump } from "./sdk-pump.js";
 import {
@@ -39,6 +37,7 @@ import {
   type ClaudeTurnState,
 } from "./message-router.js";
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
+import { ClaudeToolCallHandler, type ClaudeToolUseCacheEntry } from "./tool-call-handlers.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
   convertClaudeHistoryEntry,
@@ -323,18 +322,6 @@ function errorToMessageString(error: unknown): string {
   return "";
 }
 
-function firstStringField(
-  input: Record<string, unknown>,
-  primaryKey: string,
-  secondaryKey: string,
-): string | undefined {
-  const primary = input[primaryKey];
-  if (typeof primary === "string") return primary;
-  const secondary = input[secondaryKey];
-  if (typeof secondary === "string") return secondary;
-  return undefined;
-}
-
 function extractSessionIdRaw(msg: {
   session_id?: unknown;
   sessionId?: unknown;
@@ -529,94 +516,6 @@ function removeClaudeModelSelectionEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEn
   return cleaned;
 }
 
-function isToolResultTextBlock(value: unknown): value is { type: "text"; text: string } {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    (value as { type?: unknown }).type === "text" &&
-    typeof (value as { text?: unknown }).text === "string"
-  );
-}
-
-function normalizeForDeterministicString(value: unknown, seen: WeakSet<object>): unknown {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return value;
-  }
-  if (typeof value === "bigint") {
-    return value.toString();
-  }
-  if (typeof value === "function") {
-    return "[function]";
-  }
-  if (typeof value === "symbol") {
-    return value.toString();
-  }
-  if (typeof value === "undefined") {
-    return "[undefined]";
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => normalizeForDeterministicString(entry, seen));
-  }
-  if (typeof value === "object") {
-    const objectValue = value;
-    if (seen.has(objectValue)) {
-      return "[circular]";
-    }
-    seen.add(objectValue);
-    const record = toObjectRecord(value);
-    if (!record) {
-      seen.delete(objectValue);
-      return "[invalid]";
-    }
-    const normalized: Record<string, unknown> = {};
-    for (const key of Object.keys(record).sort()) {
-      normalized[key] = normalizeForDeterministicString(record[key], seen);
-    }
-    seen.delete(objectValue);
-    return normalized;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return "[unsupported]";
-}
-
-function deterministicStringify(value: unknown): string {
-  if (typeof value === "undefined") {
-    return "";
-  }
-  try {
-    const normalized = normalizeForDeterministicString(value, new WeakSet<object>());
-    if (typeof normalized === "string") {
-      return normalized;
-    }
-    return JSON.stringify(normalized);
-  } catch {
-    if (typeof value === "string") {
-      return value;
-    }
-    if (typeof value === "number" || typeof value === "boolean") {
-      return String(value);
-    }
-    return "[unserializable]";
-  }
-}
-
-function coerceToolResultContentToString(content: unknown): string {
-  if (typeof content === "string") {
-    return content;
-  }
-  if (Array.isArray(content) && content.every((block) => isToolResultTextBlock(block))) {
-    return content.map((block) => block.text).join("");
-  }
-  return deterministicStringify(content);
-}
-
 interface PendingPermission {
   request: AgentPermissionRequest;
   resolve: (result: PermissionResult) => void;
@@ -624,39 +523,8 @@ interface PendingPermission {
   cleanup?: () => void;
 }
 
-type ToolUseClassification = "generic" | "command" | "file_change";
-interface ToolUseCacheEntry {
-  id: string;
-  name: string;
-  server: string;
-  classification: ToolUseClassification;
-  started: boolean;
-  commandText?: string;
-  files?: { path: string; kind: string }[];
-  input?: AgentMetadata | null;
-}
 function isMetadata(value: unknown): value is AgentMetadata {
   return typeof value === "object" && value !== null;
-}
-
-function createDefaultToolUseCacheEntry(id: string, block: ClaudeContentChunk): ToolUseCacheEntry {
-  const nameFromBlock =
-    typeof block.name === "string" && block.name.length > 0 ? block.name : "tool";
-  let server: string;
-  if (typeof block.server === "string" && block.server.length > 0) {
-    server = block.server;
-  } else if (typeof block.name === "string" && block.name.length > 0) {
-    server = block.name;
-  } else {
-    server = "tool";
-  }
-  return {
-    id,
-    name: nameFromBlock,
-    server,
-    classification: "generic",
-    started: false,
-  };
 }
 
 function readTrimmedString(value: unknown): string | undefined {
@@ -1192,9 +1060,6 @@ class ClaudeAgentSession implements AgentSession {
   private currentMode: PermissionMode;
   private planResumeMode: PermissionMode | null = null;
   private availableModes: AgentMode[] = DEFAULT_MODES;
-  private toolUseCache = new Map<string, ToolUseCacheEntry>();
-  private toolUseIndexToId = new Map<number, string>();
-  private toolUseInputBuffers = new Map<string, string>();
   private pendingPermissions = new Map<string, PendingPermission>();
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private readonly timelineAssembler = new ClaudeTimelineAssembler({
@@ -1202,9 +1067,8 @@ class ClaudeAgentSession implements AgentSession {
       text === INTERRUPT_TOOL_USE_PLACEHOLDER || isClaudeTranscriptNoiseText(text),
   });
   private readonly messageRouter: ClaudeMessageRouter;
-  private readonly sidechainTracker = new ClaudeSidechainTracker({
-    getToolInput: (toolUseId) => this.toolUseCache.get(toolUseId)?.input ?? null,
-  });
+  private readonly toolCallHandler: ClaudeToolCallHandler;
+  private readonly sidechainTracker: ClaudeSidechainTracker;
   private persistedHistory: PersistedTimelineEntry[] = [];
   private historyPending = false;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
@@ -1233,6 +1097,15 @@ class ClaudeAgentSession implements AgentSession {
     this.runtimeSettings = options.runtimeSettings;
     this.persistSession = options.persistSession;
     this.logger = options.logger.child({ agentId: this.agentId });
+    this.toolCallHandler = new ClaudeToolCallHandler({
+      getCwd: () => this.config.cwd,
+      emitTimeline: (item) => this.enqueueTimeline(item),
+      deleteSidechain: (toolUseId) => this.sidechainTracker.delete(toolUseId),
+      clearSidechains: () => this.sidechainTracker.clear(),
+    });
+    this.sidechainTracker = new ClaudeSidechainTracker({
+      getToolInput: (toolUseId) => this.toolCallHandler.getToolInput(toolUseId),
+    });
     this.messageRouter = new ClaudeMessageRouter({
       logger: this.logger,
       getTraceContext: () => ({
@@ -1277,6 +1150,26 @@ class ClaudeAgentSession implements AgentSession {
     if (this.currentMode !== "plan") {
       this.planResumeMode = this.currentMode;
     }
+  }
+
+  // Compatibility surface for focused tool-stream regression tests.
+  get toolUseCache(): ReadonlyMap<string, { input?: AgentMetadata | null }> {
+    return this.toolCallHandler.getToolUseCache();
+  }
+
+  get toolUseIndexToId(): ReadonlyMap<number, string> {
+    return this.toolCallHandler.getToolUseIndexToId();
+  }
+
+  get toolUseInputBuffers(): ReadonlyMap<string, string> {
+    return this.toolCallHandler.getToolUseInputBuffers();
+  }
+
+  buildToolOutput(
+    block: ClaudeContentChunk,
+    entry: ClaudeToolUseCacheEntry | undefined,
+  ): AgentMetadata | undefined {
+    return this.toolCallHandler.buildToolOutput(block, entry);
   }
 
   private get activeForegroundTurnId(): string | null {
@@ -2837,8 +2730,8 @@ class ClaudeAgentSession implements AgentSession {
     // the parent timeline. Drop them here; eventually thread them into the
     // parent Task tool call's sub_agent log instead.
     const taskUseId = message.tool_use_id;
-    const cachedTool = taskUseId ? this.toolUseCache.get(taskUseId) : undefined;
-    if (cachedTool?.name === "Task") {
+    const cachedToolName = taskUseId ? this.toolCallHandler.getToolName(taskUseId) : null;
+    if (cachedToolName === "Task") {
       return;
     }
     const taskNotificationItem = mapTaskNotificationSystemRecordToToolCall(message);
@@ -3299,21 +3192,8 @@ class ClaudeAgentSession implements AgentSession {
     this.pushEvent({ type: "timeline", item, provider: "claude" });
   }
 
-  private flushPendingToolCalls() {
-    for (const [id, entry] of this.toolUseCache) {
-      if (entry.started) {
-        this.pushToolCall(
-          mapClaudeCanceledToolCall({
-            name: entry.name,
-            callId: id,
-            input: entry.input ?? null,
-            output: null,
-          }),
-        );
-      }
-    }
-    this.toolUseCache.clear();
-    this.sidechainTracker.clear();
+  private flushPendingToolCalls(): void {
+    this.toolCallHandler.flushPendingToolCalls();
   }
 
   private pushToolCall(
@@ -3592,7 +3472,7 @@ class ClaudeAgentSession implements AgentSession {
       case "tool_use":
       case "server_tool_use":
       case "mcp_tool_use":
-        this.handleToolUseStart(block, context.items);
+        this.toolCallHandler.handleToolUseStart(block, context.items);
         break;
       case "tool_result":
       case "mcp_tool_result":
@@ -3601,261 +3481,11 @@ class ClaudeAgentSession implements AgentSession {
       case "code_execution_tool_result":
       case "bash_code_execution_tool_result":
       case "text_editor_code_execution_tool_result":
-        this.handleToolResult(block, context.items);
+        this.toolCallHandler.handleToolResult(block, context.items);
         break;
       default:
         break;
     }
-  }
-
-  private handleToolUseStart(block: ClaudeContentChunk, items: AgentTimelineItem[]): void {
-    const entry = this.upsertToolUseEntry(block);
-    if (!entry) {
-      return;
-    }
-    if (entry.started) {
-      return;
-    }
-    entry.started = true;
-    this.toolUseCache.set(entry.id, entry);
-    this.pushToolCall(
-      mapClaudeRunningToolCall({
-        name: entry.name,
-        callId: entry.id,
-        input: entry.input ?? this.normalizeToolInput(block.input) ?? null,
-        output: null,
-      }),
-      items,
-    );
-  }
-
-  private handleToolResult(block: ClaudeContentChunk, items: AgentTimelineItem[]): void {
-    const entry =
-      typeof block.tool_use_id === "string" ? this.toolUseCache.get(block.tool_use_id) : undefined;
-    const blockToolName = typeof block.tool_name === "string" ? block.tool_name : undefined;
-    const toolName = entry?.name ?? blockToolName ?? "tool";
-    const callId =
-      typeof block.tool_use_id === "string" && block.tool_use_id.length > 0
-        ? block.tool_use_id
-        : (entry?.id ?? null);
-
-    // Extract output from block.content (SDK always returns content in string form)
-    const output = this.buildToolOutput(block, entry);
-
-    if (block.is_error) {
-      this.pushToolCall(
-        mapClaudeFailedToolCall({
-          name: toolName,
-          callId,
-          input: entry?.input ?? null,
-          output: output ?? null,
-          error: block,
-        }),
-        items,
-      );
-    } else {
-      this.pushToolCall(
-        mapClaudeCompletedToolCall({
-          name: toolName,
-          callId,
-          input: entry?.input ?? null,
-          output: output ?? null,
-        }),
-        items,
-      );
-    }
-
-    if (typeof block.tool_use_id === "string") {
-      this.toolUseCache.delete(block.tool_use_id);
-      this.sidechainTracker.delete(block.tool_use_id);
-    }
-  }
-
-  private buildToolOutput(
-    block: ClaudeContentChunk,
-    entry: ToolUseCacheEntry | undefined,
-  ): AgentMetadata | undefined {
-    if (block.is_error) {
-      return undefined;
-    }
-
-    const blockServer = typeof block.server === "string" ? block.server : undefined;
-    const blockToolName = typeof block.tool_name === "string" ? block.tool_name : undefined;
-    const server = entry?.server ?? blockServer ?? "tool";
-    const tool = entry?.name ?? blockToolName ?? "tool";
-    const content = coerceToolResultContentToString(block.content);
-    const input = entry?.input;
-
-    // Build structured result based on tool type
-    const structured = this.buildStructuredToolResult(server, tool, content, input);
-
-    if (structured) {
-      return structured;
-    }
-
-    // Fallback format - try to parse JSON first
-    const result: AgentMetadata = {};
-
-    if (content.length > 0) {
-      try {
-        // If content is a JSON string, parse it
-        result.output = JSON.parse(content);
-      } catch {
-        // If not JSON, return unchanged (no extra wrapping)
-        result.output = content;
-      }
-    }
-
-    // Preserve file changes tracked during tool execution
-    if (entry?.files?.length) {
-      result.files = entry.files;
-    }
-
-    return Object.keys(result).length > 0 ? result : undefined;
-  }
-
-  private isCommandExecutionTool(
-    normalizedServer: string,
-    normalizedTool: string,
-    input: AgentMetadata | null | undefined,
-  ): boolean {
-    if (
-      normalizedServer.includes("bash") ||
-      normalizedServer.includes("shell") ||
-      normalizedServer.includes("command")
-    ) {
-      return true;
-    }
-    if (
-      normalizedTool.includes("bash") ||
-      normalizedTool.includes("shell") ||
-      normalizedTool.includes("command")
-    ) {
-      return true;
-    }
-    return Boolean(input && (typeof input.command === "string" || Array.isArray(input.command)));
-  }
-
-  private static isFileWriteTool(normalizedTool: string): boolean {
-    return (
-      normalizedTool.includes("write") ||
-      normalizedTool === "write_file" ||
-      normalizedTool === "create_file"
-    );
-  }
-
-  private static isFileEditTool(normalizedTool: string): boolean {
-    return (
-      normalizedTool.includes("edit") ||
-      normalizedTool.includes("patch") ||
-      normalizedTool === "apply_patch" ||
-      normalizedTool === "apply_diff"
-    );
-  }
-
-  private static isFileReadTool(normalizedTool: string): boolean {
-    return (
-      normalizedTool.includes("read") ||
-      normalizedTool === "read_file" ||
-      normalizedTool === "view_file"
-    );
-  }
-
-  private buildStructuredToolResult(
-    server: string,
-    tool: string,
-    output: string,
-    input?: AgentMetadata | null,
-  ): AgentMetadata | undefined {
-    const normalizedServer = server.toLowerCase();
-    const normalizedTool = tool.toLowerCase();
-
-    if (this.isCommandExecutionTool(normalizedServer, normalizedTool, input)) {
-      const command = this.extractCommandText(input ?? {}) ?? "command";
-      return {
-        type: "command",
-        command,
-        output,
-        cwd: typeof input?.cwd === "string" ? input.cwd : undefined,
-      };
-    }
-
-    if (
-      ClaudeAgentSession.isFileWriteTool(normalizedTool) &&
-      input &&
-      typeof input.file_path === "string"
-    ) {
-      return {
-        type: "file_write",
-        filePath: input.file_path,
-        oldContent: "",
-        newContent: typeof input.content === "string" ? input.content : output,
-      };
-    }
-
-    if (
-      ClaudeAgentSession.isFileEditTool(normalizedTool) &&
-      input &&
-      typeof input.file_path === "string"
-    ) {
-      // Support both old_str/new_str and old_string/new_string parameter names
-      const oldContent = firstStringField(input, "old_str", "old_string");
-      const newContent = firstStringField(input, "new_str", "new_string");
-      const diff = firstStringField(input, "patch", "diff");
-      return {
-        type: "file_edit",
-        filePath: input.file_path,
-        diff,
-        oldContent,
-        newContent,
-      };
-    }
-
-    if (
-      ClaudeAgentSession.isFileReadTool(normalizedTool) &&
-      input &&
-      typeof input.file_path === "string"
-    ) {
-      return {
-        type: "file_read",
-        filePath: input.file_path,
-        content: output,
-      };
-    }
-
-    return undefined;
-  }
-
-  private updatePartialEventToolState(event: SDKPartialAssistantMessage["event"]): boolean {
-    if (event.type === "content_block_start") {
-      const block = isClaudeContentChunk(event.content_block) ? event.content_block : null;
-      if (
-        block?.type === "tool_use" &&
-        typeof event.index === "number" &&
-        typeof block.id === "string"
-      ) {
-        this.toolUseIndexToId.set(event.index, block.id);
-        this.toolUseInputBuffers.delete(block.id);
-      }
-      return false;
-    }
-    if (event.type === "content_block_delta") {
-      const delta = isClaudeContentChunk(event.delta) ? event.delta : null;
-      if (delta?.type === "input_json_delta") {
-        const partialJson = typeof delta.partial_json === "string" ? delta.partial_json : undefined;
-        this.handleToolInputDelta(event.index, partialJson);
-        return true;
-      }
-      return false;
-    }
-    if (event.type === "content_block_stop" && typeof event.index === "number") {
-      const toolId = this.toolUseIndexToId.get(event.index);
-      if (toolId) {
-        this.toolUseIndexToId.delete(event.index);
-        this.toolUseInputBuffers.delete(toolId);
-      }
-    }
-    return false;
   }
 
   private mapPartialEvent(
@@ -3865,7 +3495,7 @@ class ClaudeAgentSession implements AgentSession {
       suppressReasoning?: boolean;
     },
   ): AgentTimelineItem[] {
-    if (this.updatePartialEventToolState(event)) {
+    if (this.toolCallHandler.updatePartialEventState(event)) {
       return [];
     }
 
@@ -3887,218 +3517,6 @@ class ClaudeAgentSession implements AgentSession {
       default:
         return [];
     }
-  }
-
-  private upsertToolUseEntry(block: ClaudeContentChunk): ToolUseCacheEntry | null {
-    const id = typeof block.id === "string" ? block.id : undefined;
-    if (!id) {
-      return null;
-    }
-    const existing = this.toolUseCache.get(id) ?? createDefaultToolUseCacheEntry(id, block);
-
-    if (typeof block.name === "string" && block.name.length > 0) {
-      existing.name = block.name;
-    }
-    if (typeof block.server === "string" && block.server.length > 0) {
-      existing.server = block.server;
-    } else if (!existing.server) {
-      existing.server = existing.name;
-    }
-
-    if (
-      block.type === "tool_use" ||
-      block.type === "mcp_tool_use" ||
-      block.type === "server_tool_use"
-    ) {
-      const input = this.normalizeToolInput(block.input);
-      if (input) {
-        this.applyToolInput(existing, input);
-      }
-    }
-
-    this.toolUseCache.set(id, existing);
-    return existing;
-  }
-
-  private handleToolInputDelta(index: number | undefined, partialJson: string | undefined): void {
-    if (typeof index !== "number" || typeof partialJson !== "string") {
-      return;
-    }
-    const toolId = this.toolUseIndexToId.get(index);
-    if (!toolId) {
-      return;
-    }
-    const buffer = (this.toolUseInputBuffers.get(toolId) ?? "") + partialJson;
-    this.toolUseInputBuffers.set(toolId, buffer);
-    const entry = this.toolUseCache.get(toolId);
-    const parsed = parsePartialJsonObject(buffer);
-    if (!entry || !parsed) {
-      return;
-    }
-    const normalized = this.normalizeToolInput(parsed.value);
-    if (!normalized) {
-      return;
-    }
-    if (!parsed.complete && Object.keys(normalized).length === 0) {
-      return;
-    }
-    if (this.areToolInputsEqual(entry.input ?? undefined, normalized)) {
-      return;
-    }
-    this.applyToolInput(entry, normalized);
-    this.toolUseCache.set(toolId, entry);
-    this.pushToolCall(
-      mapClaudeRunningToolCall({
-        name: entry.name,
-        callId: toolId,
-        input: normalized,
-        output: null,
-      }),
-    );
-  }
-
-  private normalizeToolInput(input: unknown): AgentMetadata | null {
-    if (!isMetadata(input)) {
-      return null;
-    }
-    return input;
-  }
-
-  private areToolInputsEqual(left: AgentMetadata | undefined, right: AgentMetadata): boolean {
-    if (!left) {
-      return false;
-    }
-    const leftKeys = Object.keys(left);
-    const rightKeys = Object.keys(right);
-    if (leftKeys.length !== rightKeys.length) {
-      return false;
-    }
-    return rightKeys.every((key) => left[key] === right[key]);
-  }
-
-  private applyToolInput(entry: ToolUseCacheEntry, input: AgentMetadata): void {
-    entry.input = input;
-    if (this.isCommandTool(entry.name, input)) {
-      entry.classification = "command";
-      entry.commandText = this.extractCommandText(input) ?? entry.commandText;
-    } else {
-      const files = this.extractFileChanges(input);
-      if (files?.length) {
-        entry.classification = "file_change";
-        entry.files = files;
-      }
-    }
-  }
-
-  private isCommandTool(name: string, input: AgentMetadata): boolean {
-    const normalized = name.toLowerCase();
-    if (
-      normalized.includes("bash") ||
-      normalized.includes("shell") ||
-      normalized.includes("terminal") ||
-      normalized.includes("command")
-    ) {
-      return true;
-    }
-    if (typeof input.command === "string" || Array.isArray(input.command)) {
-      return true;
-    }
-    return false;
-  }
-
-  private extractCommandText(input: AgentMetadata): string | undefined {
-    const command = input.command;
-    if (typeof command === "string" && command.length > 0) {
-      return command;
-    }
-    if (Array.isArray(command)) {
-      const tokens = command.filter((value): value is string => typeof value === "string");
-      if (tokens.length > 0) {
-        return tokens.join(" ");
-      }
-    }
-    if (typeof input.description === "string" && input.description.length > 0) {
-      return input.description;
-    }
-    return undefined;
-  }
-
-  private extractFileChanges(input: AgentMetadata): { path: string; kind: string }[] | undefined {
-    if (typeof input.file_path === "string" && input.file_path.length > 0) {
-      const relative = this.relativizePath(input.file_path);
-      if (relative) {
-        return [{ path: relative, kind: this.detectFileKind(input.file_path) }];
-      }
-    }
-    if (typeof input.patch === "string" && input.patch.length > 0) {
-      const files = this.parsePatchFileList(input.patch);
-      if (files.length > 0) {
-        return files.map((entry) => ({
-          path: this.relativizePath(entry.path) ?? entry.path,
-          kind: entry.kind,
-        }));
-      }
-    }
-    if (Array.isArray(input.files)) {
-      const files: { path: string; kind: string }[] = [];
-      for (const value of input.files) {
-        if (typeof value === "string" && value.length > 0) {
-          files.push({
-            path: this.relativizePath(value) ?? value,
-            kind: this.detectFileKind(value),
-          });
-        }
-      }
-      if (files.length > 0) {
-        return files;
-      }
-    }
-    return undefined;
-  }
-
-  private detectFileKind(filePath: string): string {
-    try {
-      return fs.existsSync(filePath) ? "update" : "add";
-    } catch {
-      return "update";
-    }
-  }
-
-  private relativizePath(target?: string): string | undefined {
-    if (!target) {
-      return undefined;
-    }
-    const cwd = this.config.cwd;
-    if (cwd && target.startsWith(cwd)) {
-      const relative = path.relative(cwd, target);
-      return relative.length > 0 ? relative : path.basename(target);
-    }
-    return target;
-  }
-
-  private parsePatchFileList(patch: string): { path: string; kind: string }[] {
-    const files: { path: string; kind: string }[] = [];
-    const seen = new Set<string>();
-    for (const line of patch.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      let kind: string | null = null;
-      let parsedPath: string | null = null;
-      if (trimmed.startsWith("*** Add File:")) {
-        kind = "add";
-        parsedPath = trimmed.replace("*** Add File:", "").trim();
-      } else if (trimmed.startsWith("*** Delete File:")) {
-        kind = "delete";
-        parsedPath = trimmed.replace("*** Delete File:", "").trim();
-      } else if (trimmed.startsWith("*** Update File:")) {
-        kind = "update";
-        parsedPath = trimmed.replace("*** Update File:", "").trim();
-      }
-      if (kind && parsedPath && !seen.has(`${kind}:${parsedPath}`)) {
-        seen.add(`${kind}:${parsedPath}`);
-        files.push({ path: parsedPath, kind });
-      }
-    }
-    return files;
   }
 }
 
