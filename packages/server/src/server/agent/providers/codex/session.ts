@@ -38,8 +38,6 @@ import { CodexSessionEventBus } from "./session-event-bus.js";
 import {
   buildCodexAppServerInitializeParams,
   buildRuntimeModelIdentityInstructions,
-  type CodexMcpServerConfig,
-  toCodexMcpConfig,
 } from "./runtime-config.js";
 import type { CodexClientLike } from "./client-runtime.js";
 import {
@@ -76,17 +74,14 @@ import { CodexNotificationRouter } from "./notification-router.js";
 import { CodexNotificationStreamState } from "./notification-stream-state.js";
 import { CodexToolNotificationHandler } from "./tool-notification-handler.js";
 import { CodexTurnNotificationHandler } from "./turn-notification-handler.js";
+import { CodexThreadBootstrap } from "./thread-bootstrap.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
-import { readCodexConfiguredDefaults, type CodexConfiguredDefaults } from "./models.js";
 import {
-  applyApprovalsReviewerParam,
   buildCodexTurnStartParams,
   CODEX_MODES,
   DEFAULT_CODEX_MODE_ID,
-  MODE_PRESETS,
   normalizeCodexThinkingOptionId,
-  shouldPromoteThreadResponseToAutoReview,
   validateCodexMode,
 } from "./turn-config.js";
 import { runProviderTurn } from "../provider-runner.js";
@@ -280,6 +275,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly itemNotificationHandler: CodexItemNotificationHandler;
   private readonly toolNotificationHandler: CodexToolNotificationHandler;
   private readonly turnNotificationHandler: CodexTurnNotificationHandler;
+  private readonly threadBootstrap: CodexThreadBootstrap;
   private readonly subAgentTracker = new CodexSubAgentTracker();
   private warnedUnknownNotificationMethods = new Set<string>();
   private warnedInvalidNotificationPayloads = new Set<string>();
@@ -320,6 +316,25 @@ export class CodexAppServerAgentSession implements AgentSession {
       agentId: this.agentId,
       getSessionId: () => this.currentThreadId,
       getTurnId: () => this.activeForegroundTurnId,
+    });
+    this.threadBootstrap = new CodexThreadBootstrap({
+      logger: this.logger,
+      getClient: () => this.client,
+      getConfig: () => this.config,
+      getThreadId: () => this.currentThreadId,
+      setThreadId: (threadId) => {
+        this.currentThreadId = threadId;
+      },
+      getMode: () => this.currentMode,
+      setMode: (modeId) => {
+        this.currentMode = modeId;
+      },
+      invalidateRuntimeInfo: () => {
+        this.cachedRuntimeInfo = null;
+      },
+      customProvider: this.deps.customProvider,
+      customCodexConfig: this.deps.customCodexConfig,
+      ephemeral: this.ephemeral,
     });
     this.deltaNotificationHandler = new CodexDeltaNotificationHandler({
       notificationStream: this.notificationStream,
@@ -669,34 +684,12 @@ export class CodexAppServerAgentSession implements AgentSession {
     }
   }
 
-  private async ensureThreadLoaded(): Promise<void> {
-    if (!this.client || !this.currentThreadId) return;
-    try {
-      const loaded = toObjectRecord(await this.client.request("thread/loaded/list", {}));
-      const ids = Array.isArray(loaded?.data) ? loaded.data : [];
-      if (ids.includes(this.currentThreadId)) {
-        return;
-      }
-      const params: Record<string, unknown> = { threadId: this.currentThreadId };
-      const developerInstructions = composeSystemPromptParts(
-        this.config.systemPrompt,
-        this.config.daemonAppendSystemPrompt,
-        buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
-      );
-      if (developerInstructions) {
-        params.developerInstructions = developerInstructions;
-      }
-      const codexConfig = this.buildCodexInnerConfig();
-      if (codexConfig) {
-        params.config = codexConfig;
-      }
-      await this.client.request("thread/resume", params);
-    } catch (error) {
-      const threadId = this.currentThreadId;
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn({ error, threadId }, "Failed to resume persisted Codex thread");
-      throw new Error(`Failed to resume Codex thread ${threadId}: ${message}`, { cause: error });
-    }
+  private ensureThreadLoaded(): Promise<void> {
+    return this.threadBootstrap.ensureThreadLoaded();
+  }
+
+  private ensureThread(): Promise<void> {
+    return this.threadBootstrap.ensureThread();
   }
 
   private parseSlashCommandInput(text: string): { commandName: string; args?: string } | null {
@@ -786,7 +779,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       collaborationMode: this.resolvedCollaborationMode,
       outputSchema: options?.outputSchema,
       developerInstructions,
-      codexConfig: this.buildCodexInnerConfig(),
+      codexConfig: this.threadBootstrap.buildInnerConfig(),
     });
   }
 
@@ -1250,129 +1243,6 @@ export class CodexAppServerAgentSession implements AgentSession {
       const message = error instanceof Error ? error.message : "unknown error";
       return `Failed to update goal: ${message}`;
     }
-  }
-
-  private async resolveModelAndThinking(): Promise<{
-    model: string;
-    thinkingOptionId: string | undefined;
-  }> {
-    if (!this.client) {
-      throw new Error("Codex client is not initialized");
-    }
-    let configuredDefaults: CodexConfiguredDefaults = {};
-    let model = this.config.model;
-    let thinkingOptionId = normalizeCodexThinkingOptionId(this.config.thinkingOptionId);
-    if (!model || !thinkingOptionId) {
-      configuredDefaults = await readCodexConfiguredDefaults(this.client, this.logger);
-    }
-    if (!model) {
-      model = configuredDefaults.model;
-    }
-    if (!thinkingOptionId) {
-      thinkingOptionId = configuredDefaults.thinkingOptionId;
-    }
-
-    if (!model || !thinkingOptionId) {
-      const modelResponse = toObjectRecord(await this.client.request("model/list", {}));
-      const modelData = Array.isArray(modelResponse?.data) ? modelResponse.data : [];
-      const models = modelData
-        .map((m) => {
-          const record = toObjectRecord(m);
-          return {
-            id: typeof record?.id === "string" ? record.id : "",
-            isDefault: !!record?.isDefault,
-            defaultReasoningEffort:
-              typeof record?.defaultReasoningEffort === "string"
-                ? record.defaultReasoningEffort
-                : undefined,
-          };
-        })
-        .filter((m) => m.id);
-      const defaultModel = models.find((m) => m.isDefault) ?? models[0];
-      if (!defaultModel) {
-        throw new Error("No models available from Codex app-server");
-      }
-      const selectedModel =
-        (model ? models.find((candidate) => candidate.id === model) : undefined) ?? defaultModel;
-      if (!model) {
-        model = selectedModel.id;
-      }
-      if (!thinkingOptionId) {
-        thinkingOptionId = normalizeCodexThinkingOptionId(selectedModel.defaultReasoningEffort);
-      }
-    }
-
-    if (!model) {
-      throw new Error("Unable to resolve Codex model");
-    }
-    return { model, thinkingOptionId };
-  }
-
-  private async ensureThread(): Promise<void> {
-    if (!this.client) return;
-    if (this.currentThreadId) return;
-
-    const { model, thinkingOptionId } = await this.resolveModelAndThinking();
-    this.config.model = model;
-    this.config.thinkingOptionId = thinkingOptionId;
-
-    const preset = MODE_PRESETS[this.currentMode] ?? MODE_PRESETS[DEFAULT_CODEX_MODE_ID];
-    const approvalPolicy = this.config.approvalPolicy ?? preset.approvalPolicy;
-    const sandbox = this.config.sandboxMode ?? preset.sandbox;
-    const innerConfig = this.buildCodexInnerConfig();
-    const developerInstructions = composeSystemPromptParts(
-      this.config.systemPrompt,
-      this.config.daemonAppendSystemPrompt,
-      buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
-    );
-    const params: Record<string, unknown> = {
-      model,
-      cwd: this.config.cwd ?? null,
-      approvalPolicy,
-      sandbox,
-      ...(developerInstructions ? { developerInstructions } : {}),
-      ...(innerConfig ? { config: innerConfig } : {}),
-      ...(this.ephemeral ? { ephemeral: true } : {}),
-    };
-    applyApprovalsReviewerParam(params, preset);
-    const rawResponse = await this.client.request("thread/start", params);
-    const response = toObjectRecord(rawResponse);
-    const threadRecord = toObjectRecord(response?.thread);
-    const threadId = typeof threadRecord?.id === "string" ? threadRecord.id : undefined;
-    if (!threadId) {
-      throw new Error("Codex app-server did not return thread id");
-    }
-    const responseApprovalsReviewer =
-      typeof response?.approvalsReviewer === "string" ? response.approvalsReviewer : undefined;
-    if (
-      shouldPromoteThreadResponseToAutoReview({
-        approvalsReviewer: responseApprovalsReviewer,
-        approvalPolicy,
-        sandbox,
-      })
-    ) {
-      this.currentMode = "auto-review";
-      this.cachedRuntimeInfo = null;
-    }
-    this.currentThreadId = threadId;
-  }
-
-  private buildCodexInnerConfig(): Record<string, unknown> | null {
-    const innerConfig: Record<string, unknown> = {};
-    if (this.config.mcpServers) {
-      const mcpServers: Record<string, CodexMcpServerConfig> = {};
-      for (const [name, serverConfig] of Object.entries(this.config.mcpServers)) {
-        mcpServers[name] = toCodexMcpConfig(serverConfig);
-      }
-      innerConfig.mcp_servers = mcpServers;
-    }
-    if (this.config.extra?.codex) {
-      Object.assign(innerConfig, this.config.extra.codex);
-    }
-    if (this.deps.customCodexConfig) {
-      Object.assign(innerConfig, this.deps.customCodexConfig);
-    }
-    return Object.keys(innerConfig).length > 0 ? innerConfig : null;
   }
 
   private async buildUserInput(prompt: CodexPromptInput): Promise<CodexAppServerUserInput[]> {
