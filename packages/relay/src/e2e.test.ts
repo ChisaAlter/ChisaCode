@@ -3,6 +3,7 @@ import { WebSocket } from "ws";
 import net from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
+import path from "node:path";
 import { Buffer } from "node:buffer";
 import {
   generateKeyPair,
@@ -11,13 +12,21 @@ import {
   deriveSharedKey,
   encrypt,
   decrypt,
+  exportRelayAuthPublicKey,
+  generateRelayAuthKeyPair,
   SALT_LENGTH,
+  signRelayServerAuth,
 } from "./crypto.js";
 import nacl from "tweetnacl";
 
 const nodeMajor = Number((process.versions.node ?? "0").split(".")[0] ?? "0");
 const shouldRunRelayE2e = process.env.FORCE_RELAY_E2E === "1" || nodeMajor < 25;
-const wranglerCliPath = createRequire(import.meta.url).resolve("wrangler/bin/wrangler.js");
+const require = createRequire(import.meta.url);
+const wranglerCliPath = path.join(
+  path.dirname(require.resolve("wrangler/package.json")),
+  "bin",
+  "wrangler.js",
+);
 const STARTUP_HOOK_TIMEOUT_MS = 90_000;
 const TERMINATION_GRACE_TIMEOUT_MS = 10_000;
 const KILL_EXIT_TIMEOUT_MS = 2_000;
@@ -113,9 +122,46 @@ async function waitForServer(
   return poll();
 }
 
+function buildSignedServerWebSocketUrl(params: {
+  readonly port: number;
+  readonly serverId: string;
+  readonly keyPair: ReturnType<typeof generateRelayAuthKeyPair>;
+  readonly connectionId?: string;
+}): string {
+  const connectionId = params.connectionId ?? "";
+  const nonce = Buffer.from(nacl.randomBytes(16)).toString("base64url");
+  const issuedAt = Date.now();
+  const url = new URL(`ws://127.0.0.1:${params.port}/ws`);
+  url.searchParams.set("serverId", params.serverId);
+  url.searchParams.set("role", "server");
+  url.searchParams.set("v", "2");
+  if (connectionId) {
+    url.searchParams.set("connectionId", connectionId);
+  }
+  url.searchParams.set("relayAuthPublicKeyB64", exportRelayAuthPublicKey(params.keyPair.publicKey));
+  url.searchParams.set("relayAuthNonce", nonce);
+  url.searchParams.set("relayAuthIssuedAt", String(issuedAt));
+  url.searchParams.set(
+    "relayAuthSignatureB64",
+    signRelayServerAuth({
+      secretKey: params.keyPair.secretKey,
+      serverId: params.serverId,
+      role: "server",
+      connectionId,
+      nonce,
+      issuedAt,
+    }),
+  );
+  return url.toString();
+}
+
 function probeRelayWebSocket(port: number): Promise<boolean> {
   const serverId = `probe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  const probeUrl = `ws://127.0.0.1:${port}/ws?serverId=${serverId}&role=server&v=2`;
+  const probeUrl = buildSignedServerWebSocketUrl({
+    port,
+    serverId,
+    keyPair: generateRelayAuthKeyPair(),
+  });
   return new Promise<boolean>((resolve) => {
     const ws = new WebSocket(probeUrl);
     let settled = false;
@@ -243,13 +289,18 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
       // === DAEMON SIDE ===
       // Generate keypair (public key goes in QR)
       const daemonKeyPair = generateKeyPair();
+      const relayAuthKeyPair = generateRelayAuthKeyPair();
       const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
 
       // QR would contain: { serverId, daemonPubKeyB64, relay: { endpoint } }
 
       // Daemon connects to relay as "server" control role
       const daemonControlWs = new WebSocket(
-        `ws://127.0.0.1:${relayPort}/ws?serverId=${serverId}&role=server&v=2`,
+        buildSignedServerWebSocketUrl({
+          port: relayPort,
+          serverId,
+          keyPair: relayAuthKeyPair,
+        }),
       );
 
       await new Promise<void>((resolve, reject) => {
@@ -311,7 +362,12 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
       await waitForClientSeen;
 
       const daemonWs = new WebSocket(
-        `ws://127.0.0.1:${relayPort}/ws?serverId=${serverId}&role=server&connectionId=${connectionId}&v=2`,
+        buildSignedServerWebSocketUrl({
+          port: relayPort,
+          serverId,
+          keyPair: relayAuthKeyPair,
+          connectionId,
+        }),
       );
       await new Promise<void>((resolve, reject) => {
         daemonWs.on("open", resolve);
@@ -407,6 +463,7 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
 
     // Setup keys
     const daemonKeyPair = generateKeyPair();
+    const relayAuthKeyPair = generateRelayAuthKeyPair();
     const clientKeyPair = generateKeyPair();
 
     const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
@@ -419,7 +476,11 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
     const clientSharedKey = deriveSharedKey(clientKeyPair.secretKey, daemonPubKey);
 
     const daemonControlWs = new WebSocket(
-      `ws://127.0.0.1:${relayPort}/ws?serverId=${serverId}&role=server&v=2`,
+      buildSignedServerWebSocketUrl({
+        port: relayPort,
+        serverId,
+        keyPair: relayAuthKeyPair,
+      }),
     );
     await new Promise<void>((r) => daemonControlWs.on("open", r));
 
@@ -458,7 +519,12 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
     await waitForClientSeen;
 
     const daemonWs = new WebSocket(
-      `ws://127.0.0.1:${relayPort}/ws?serverId=${serverId}&role=server&connectionId=${connectionId}&v=2`,
+      buildSignedServerWebSocketUrl({
+        port: relayPort,
+        serverId,
+        keyPair: relayAuthKeyPair,
+        connectionId,
+      }),
     );
     await new Promise<void>((r) => daemonWs.on("open", r));
 

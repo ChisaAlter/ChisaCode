@@ -172,6 +172,7 @@ function relayServerAuthMessage(params: {
   readonly role: "server";
   readonly connectionId: string;
   readonly nonce: string;
+  readonly issuedAt: number;
 }): Uint8Array {
   return new TextEncoder().encode(
     [
@@ -180,6 +181,7 @@ function relayServerAuthMessage(params: {
       params.role,
       params.connectionId,
       params.nonce,
+      String(params.issuedAt),
     ].join("\n"),
   );
 }
@@ -190,6 +192,7 @@ export function signRelayServerAuth(params: {
   readonly role: "server";
   readonly connectionId?: string;
   readonly nonce: string;
+  readonly issuedAt: number;
 }): string {
   if (
     !(params.secretKey instanceof Uint8Array) ||
@@ -202,6 +205,7 @@ export function signRelayServerAuth(params: {
     role: params.role,
     connectionId: params.connectionId ?? "",
     nonce: params.nonce,
+    issuedAt: params.issuedAt,
   });
   return encodeBase64(nacl.sign.detached(message, params.secretKey));
 }
@@ -213,6 +217,7 @@ export function verifyRelayServerAuth(params: {
   readonly role: "server";
   readonly connectionId?: string;
   readonly nonce: string;
+  readonly issuedAt: number;
 }): boolean {
   const publicKey = importRelayAuthPublicKey(params.publicKeyB64);
   const signature = decodeBase64(params.signatureB64);
@@ -224,6 +229,7 @@ export function verifyRelayServerAuth(params: {
     role: params.role,
     connectionId: params.connectionId ?? "",
     nonce: params.nonce,
+    issuedAt: params.issuedAt,
   });
   return nacl.sign.detached.verify(message, signature, publicKey);
 }

@@ -10,6 +10,7 @@ import {
   shell,
 } from "electron";
 import { translateDesktop } from "../i18n.js";
+import { isAllowedExternalUrl } from "../features/opener.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 
 const IPC_PREFIXES = ["chisacode"] as const;
@@ -287,7 +288,7 @@ export async function buildStandardContextMenuItems(
     items.push({ type: "separator" });
   }
 
-  if (params.linkURL && /^https?:/i.test(params.linkURL)) {
+  if (isAllowedExternalUrl(params.linkURL)) {
     items.push({
       label: t("menu.openLinkInBrowser"),
       click: () => {

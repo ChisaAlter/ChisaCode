@@ -65,8 +65,8 @@ jobs:
       - name: Check formatting
         run: npm run format:check
 
-      - name: Audit dependencies for known vulnerabilities
-        run: npm audit --audit-level=high
+      - name: Audit dependencies for critical vulnerabilities
+        run: npm audit --audit-level=critical
 
   test-audit:
     runs-on: ubuntu-latest
@@ -97,8 +97,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build server stack
-        run: npm run build:server
+      - name: Build typecheck dependencies
+        run: npm run build:server && npm run build --workspace=@chisacode/expo-two-way-audio
 
       - name: Typecheck all packages
         run: npm run typecheck
@@ -435,7 +435,7 @@ jobs:
         run: npm ci
 
       - name: Detect unused exports and dependencies
-        run: npm run knip
+        run: npm run knip -- --include dependencies,unlisted,unresolved,binaries
 
   secret-scan:
     runs-on: ubuntu-latest

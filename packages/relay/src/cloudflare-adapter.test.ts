@@ -30,6 +30,7 @@ function createMockSocket(attachment: unknown = null): MockSocket {
 
 function createMockState() {
   const socketsByTag = new Map<string, WebSocket[]>();
+  const storage = new Map<string, unknown>();
   const state = {
     acceptWebSocket: vi.fn(),
     getWebSockets: vi.fn((tag?: string): WebSocket[] => {
@@ -40,6 +41,12 @@ function createMockState() {
       }
       return socketsByTag.get(tag) ?? [];
     }),
+    storage: {
+      get: vi.fn(async (key: string) => storage.get(key)),
+      put: vi.fn(async (key: string, value: unknown) => {
+        storage.set(key, value);
+      }),
+    },
   };
 
   return {
@@ -84,11 +91,13 @@ function signedServerUrl(params?: {
   readonly keyPair?: ReturnType<typeof generateRelayAuthKeyPair>;
   readonly nonce?: string;
   readonly signatureOverride?: string;
+  readonly issuedAt?: number;
 }): string {
   const serverId = params?.serverId ?? "srv_test";
   const role = "server";
   const connectionId = params?.connectionId ?? "";
-  const nonce = params?.nonce ?? "nonce-test";
+  const nonce = params?.nonce ?? "nonce-test-value";
+  const issuedAt = params?.issuedAt ?? Date.now();
   const keyPair = params?.keyPair ?? generateRelayAuthKeyPair();
   const publicKeyB64 = exportRelayAuthPublicKey(keyPair.publicKey);
   const signatureB64 =
@@ -99,6 +108,7 @@ function signedServerUrl(params?: {
       role,
       connectionId,
       nonce,
+      issuedAt,
     });
   const url = new URL("https://relay.test/ws");
   url.searchParams.set("role", role);
@@ -109,6 +119,7 @@ function signedServerUrl(params?: {
   }
   url.searchParams.set("relayAuthPublicKeyB64", publicKeyB64);
   url.searchParams.set("relayAuthNonce", nonce);
+  url.searchParams.set("relayAuthIssuedAt", String(issuedAt));
   url.searchParams.set("relayAuthSignatureB64", signatureB64);
   return url.toString();
 }
@@ -222,6 +233,52 @@ describe("RelayDurableObject versioning", () => {
 
       expect(response.status).toBe(401);
       expect(existingControl.close).not.toHaveBeenCalled();
+      expect(state.acceptWebSocket).not.toHaveBeenCalled();
+    });
+  });
+
+  it("rejects a replayed relay auth credential before replacing the existing server socket", async () => {
+    const keyPair = generateRelayAuthKeyPair();
+    const signedUrl = signedServerUrl({ keyPair, nonce: "nonce-replay-test" });
+    const existingControl = createMockSocket({
+      version: "2",
+      role: "server",
+      connectionId: null,
+      serverId: "srv_test",
+      relayAuthPublicKeyB64: exportRelayAuthPublicKey(keyPair.publicKey),
+      createdAt: Date.now(),
+    });
+    const { state, setTagSockets } = createMockState();
+
+    await withMockWebSocketPair(async () => {
+      const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+      await relay
+        .fetch(new Request(signedUrl, { headers: { Upgrade: "websocket" } }))
+        .catch(swallow);
+      setTagSockets("server-control", [existingControl]);
+
+      const resumedRelay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+      const replayResponse = await resumedRelay.fetch(
+        new Request(signedUrl, { headers: { Upgrade: "websocket" } }),
+      );
+
+      expect(replayResponse.status).toBe(401);
+      expect(existingControl.close).not.toHaveBeenCalled();
+      expect(state.acceptWebSocket).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("rejects expired relay auth credentials", async () => {
+    const { state } = createMockState();
+    await withMockWebSocketPair(async () => {
+      const relay = new RelayDurableObject(state as unknown as DurableObjectStateArg);
+      const req = new Request(signedServerUrl({ issuedAt: Date.now() - 6 * 60 * 1000 }), {
+        headers: { Upgrade: "websocket" },
+      });
+
+      const response = await relay.fetch(req);
+
+      expect(response.status).toBe(401);
       expect(state.acceptWebSocket).not.toHaveBeenCalled();
     });
   });

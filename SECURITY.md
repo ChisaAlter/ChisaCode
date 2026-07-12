@@ -27,7 +27,7 @@ The relay is designed to be untrusted. All traffic between your phone and daemon
 The relay sees only: IP addresses, timing, message sizes, session IDs, and the plaintext `e2ee_hello` / `e2ee_ready` handshake frames (which contain only public keys). It cannot read message contents, forge messages, or derive encryption keys from observing the handshake.
 
 Relay v2 daemon sockets are authenticated before the relay accepts them as `role=server`.
-Each daemon persists an Ed25519 relay-auth signing key alongside its E2EE keypair. Server-control and server-data WebSocket URLs include a nonce and signature over the server id, role, and connection id; the relay rejects missing or invalid signatures by default and will not let a socket signed by a different relay-auth public key replace an existing daemon socket for the same relay session. Legacy unsigned server sockets require the explicit `RELAY_ALLOW_UNSIGNED_SERVER_AUTH=1` Worker opt-in.
+Each daemon persists an Ed25519 relay-auth signing key alongside its E2EE keypair. Server-control and server-data WebSocket URLs include a nonce, issue time, and signature over the server id, role, connection id, nonce, and issue time. The relay rejects missing, invalid, expired, future-dated, or replayed credentials by default, persists the short replay window in Durable Object storage across hibernation, and will not let a socket signed by a different relay-auth public key replace an existing daemon socket for the same relay session. Legacy unsigned server sockets require the explicit `RELAY_ALLOW_UNSIGNED_SERVER_AUTH=1` Worker opt-in.
 
 ### Relay Encryption Security Semantics
 
@@ -37,7 +37,7 @@ Each daemon persists an Ed25519 relay-auth signing key alongside its E2EE keypai
 
 - **Message authentication**: Provided by Poly1305 MAC embedded in XSalsa20-Poly1305 (NaCl box). Tampered ciphertext will fail authenticated decryption with an error.
 
-- **Nonce selection**: Random 24-byte nonces from the OS CSPRNG (`nacl.randomBytes`, fallback to `crypto.getRandomValues`). No nonce counter or monotonic enforcement — relies on 192-bit randomness space for collision avoidance (risk of collision is negligible with a properly seeded CSPRNG).
+- **Nonce selection**: Each channel direction generates a random 16-byte salt from the OS CSPRNG and appends an 8-byte little-endian sequence counter. The receiver locks to the first salt and requires strictly increasing sequence numbers, so nonce reuse, regression, and replay are rejected.
 
 ### Why the relay can't attack you
 

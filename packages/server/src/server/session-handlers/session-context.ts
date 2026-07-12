@@ -324,7 +324,10 @@ export type ConfigControlHandlerContext = SessionIdentityContext &
 /** Context needed by ProviderHandler. */
 export type ProviderHandlerContext = SessionIdentityContext &
   ProviderCatalogContext &
-  Pick<AgentLifecycleContext, "agentManager" | "agentPresetStore" | "providerSnapshotManager"> &
+  Pick<
+    AgentLifecycleContext,
+    "agentManager" | "agentPresetStore" | "providerSnapshotManager" | "isProviderVisibleToClient"
+  > &
   Pick<SessionIdentityContext, "supports">;
 
 /** Context needed by TerminalScriptHandler. */

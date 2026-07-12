@@ -199,6 +199,7 @@ interface SessionForTestOptions {
   getDaemonTcpPort?: () => number | null;
   getDaemonTcpHost?: () => string | null;
   providerSnapshotManager?: ProviderSnapshotManager;
+  appVersion?: string | null;
   messages?: unknown[];
   binaryMessages?: Uint8Array[];
 }
@@ -230,6 +231,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
 
   return new Session({
     clientId: "test-client",
+    appVersion: options.appVersion ?? null,
     onMessage: (message) => messages.push(message),
     onBinaryMessage: createBinaryMessageHandler(options.binaryMessages),
     logger,
@@ -733,6 +735,34 @@ describe("session provider refresh cwd routing", () => {
     expect(getSnapshot).toHaveBeenCalledWith(workspaceCwd);
   });
 
+  test("provider snapshots hide unsupported provider ids from legacy clients", async () => {
+    const messages: unknown[] = [];
+    const { manager: providerSnapshotManager, getSnapshot } = createProviderSnapshotManagerStub();
+    getSnapshot.mockReturnValue([
+      { provider: "codex", status: "available", enabled: true },
+      { provider: "pi", status: "available", enabled: true },
+    ]);
+    const session = createSessionForTest({
+      appVersion: "0.1.44",
+      messages,
+      providerSnapshotManager,
+    });
+
+    await session.handleMessage({
+      type: "get_providers_snapshot_request",
+      requestId: "legacy-provider-snapshot",
+    });
+
+    expect(messages).toHaveLength(1);
+    const response = messages[0] as {
+      type: string;
+      payload: { entries: Array<{ provider: string }>; requestId: string };
+    };
+    expect(response.type).toBe("get_providers_snapshot_response");
+    expect(response.payload.requestId).toBe("legacy-provider-snapshot");
+    expect(response.payload.entries.map((entry) => entry.provider)).toEqual(["codex"]);
+  });
+
   test("normalizes legacy model and mode list requests without cwd to home", async () => {
     const messages: unknown[] = [];
     const {
@@ -761,10 +791,12 @@ describe("session provider refresh cwd routing", () => {
     });
 
     expect(getSnapshot).toHaveBeenCalledWith(homedir());
-    expect(warmUpSnapshotForCwd).toHaveBeenCalledWith({
-      cwd: homedir(),
-      providers: ["codex"],
-    });
+    await vi.waitFor(() =>
+      expect(warmUpSnapshotForCwd).toHaveBeenCalledWith({
+        cwd: homedir(),
+        providers: ["codex"],
+      }),
+    );
   });
 
   test("legacy model list request treats disabled snapshot entries as unavailable without warming", async () => {
@@ -863,10 +895,12 @@ describe("session provider refresh cwd routing", () => {
       requestId: "models-loading-home",
     });
 
-    expect(warmUpSnapshotForCwd).toHaveBeenCalledWith({
-      cwd: homedir(),
-      providers: ["codex"],
-    });
+    await vi.waitFor(() =>
+      expect(warmUpSnapshotForCwd).toHaveBeenCalledWith({
+        cwd: homedir(),
+        providers: ["codex"],
+      }),
+    );
     warmupDeferred.resolve();
     await responsePromise;
 

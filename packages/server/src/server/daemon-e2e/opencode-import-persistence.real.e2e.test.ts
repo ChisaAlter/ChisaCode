@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, test } from "vitest";
+import type { FetchRecentProviderSessionEntry } from "@chisacode/client/internal/daemon-client";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +11,6 @@ import { OpenCodeAgentClient } from "../agent/providers/opencode-agent.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
 import { createTestChisaCodeDaemon } from "../test-utils/chisacode-daemon.js";
 import { isProviderAvailable } from "./agent-configs.js";
-import type { FetchRecentProviderSessionEntry } from "../../client/daemon-client.js";
 
 const OPENCODE_REAL_TEST_MODEL = "opencode/big-pickle";
 const OPENCODE_REAL_TEST_TIMEOUT_MS = 180_000;

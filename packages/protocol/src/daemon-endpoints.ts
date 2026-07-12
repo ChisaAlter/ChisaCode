@@ -187,6 +187,7 @@ export function buildRelayWebSocketUrl(params: {
   relayAuth?: {
     readonly publicKeyB64: string;
     readonly nonce: string;
+    readonly issuedAt: number;
     readonly signatureB64: string;
   };
 }): string {
@@ -203,6 +204,7 @@ export function buildRelayWebSocketUrl(params: {
   if (params.relayAuth) {
     url.searchParams.set("relayAuthPublicKeyB64", params.relayAuth.publicKeyB64);
     url.searchParams.set("relayAuthNonce", params.relayAuth.nonce);
+    url.searchParams.set("relayAuthIssuedAt", String(params.relayAuth.issuedAt));
     url.searchParams.set("relayAuthSignatureB64", params.relayAuth.signatureB64);
   }
   return url.toString();

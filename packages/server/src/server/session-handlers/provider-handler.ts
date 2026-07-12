@@ -19,7 +19,6 @@ import type {
 } from "../agent/agent-sdk-types.js";
 import type { ProviderHandlerContext, DisposableHandler } from "./session-context.js";
 
-const LEGACY_PROVIDER_IDS = new Set(["claude", "codex", "opencode"]);
 const LEGACY_MODE_ICONS = new Set<string>([
   "ShieldCheck",
   "ShieldAlert",
@@ -46,9 +45,7 @@ export class ProviderHandler implements DisposableHandler {
   // --- Provider visibility & client downgrade helpers ---
 
   private isProviderVisibleToClient(provider: string): boolean {
-    // Provider visibility depends on app version capability, which is owned by
-    // Session. Delegate via context if available, otherwise use the legacy set.
-    return LEGACY_PROVIDER_IDS.has(provider) || true; // simplified: context.appVersion check done in Session
+    return this.context.isProviderVisibleToClient(provider);
   }
 
   private downgradeModeIconsForClient<T extends { icon?: string }>(modes: T[]): T[] {

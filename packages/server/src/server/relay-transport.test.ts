@@ -544,9 +544,11 @@ describe("relay-transport control lifecycle", () => {
     const dataUrl = new URL(relay.sockets[1]?.url ?? "");
     expect(controlUrl.searchParams.get("relayAuthPublicKeyB64")).toBeTruthy();
     expect(controlUrl.searchParams.get("relayAuthNonce")).toBeTruthy();
+    expect(Number(controlUrl.searchParams.get("relayAuthIssuedAt"))).toBeGreaterThan(0);
     expect(controlUrl.searchParams.get("relayAuthSignatureB64")).toBeTruthy();
     expect(dataUrl.searchParams.get("relayAuthPublicKeyB64")).toBeTruthy();
     expect(dataUrl.searchParams.get("relayAuthNonce")).toBeTruthy();
+    expect(Number(dataUrl.searchParams.get("relayAuthIssuedAt"))).toBeGreaterThan(0);
     expect(dataUrl.searchParams.get("relayAuthSignatureB64")).toBeTruthy();
   });
 });

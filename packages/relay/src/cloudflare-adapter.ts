@@ -24,6 +24,12 @@ type RelayProtocolVersion = "1" | "2";
 
 const LEGACY_RELAY_VERSION: RelayProtocolVersion = "1";
 const CURRENT_RELAY_VERSION: RelayProtocolVersion = "2";
+const RELAY_AUTH_MAX_AGE_MS = 5 * 60 * 1000;
+const RELAY_AUTH_MAX_FUTURE_SKEW_MS = 30 * 1000;
+const RELAY_AUTH_NONCE_RETENTION_MS = RELAY_AUTH_MAX_AGE_MS + RELAY_AUTH_MAX_FUTURE_SKEW_MS;
+const RELAY_AUTH_NONCE_STORAGE_KEY = "relay-auth-used-nonces";
+const RELAY_AUTH_MAX_TRACKED_NONCES = 512;
+const RELAY_AUTH_NONCE_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 
 // v1 has no E2EE and no authentication on the relay route layer — anyone who
 // knows a serverId can read/write all traffic for v1 sessions. Current client
@@ -74,6 +80,47 @@ interface WebSocketPair {
 interface DurableObjectState {
   acceptWebSocket(ws: WebSocket, tags?: string[]): void;
   getWebSockets(tag?: string): WebSocket[];
+  storage: {
+    get<T>(key: string): Promise<T | undefined>;
+    put<T>(key: string, value: T): Promise<void>;
+  };
+}
+
+interface UsedRelayAuthNonce {
+  readonly key: string;
+  readonly issuedAt: number;
+}
+
+interface RelayAuthCredential {
+  readonly publicKeyB64: string;
+  readonly nonce: string;
+  readonly issuedAt: number;
+  readonly signatureB64: string;
+}
+
+function readRelayAuthCredential(request: Request): RelayAuthCredential | null {
+  const url = new URL(request.url);
+  const publicKeyB64 = url.searchParams.get("relayAuthPublicKeyB64")?.trim() ?? "";
+  const nonce = url.searchParams.get("relayAuthNonce")?.trim() ?? "";
+  const issuedAt = Number(url.searchParams.get("relayAuthIssuedAt")?.trim() ?? "");
+  const signatureB64 = url.searchParams.get("relayAuthSignatureB64")?.trim() ?? "";
+  if (
+    !publicKeyB64 ||
+    !RELAY_AUTH_NONCE_PATTERN.test(nonce) ||
+    !Number.isSafeInteger(issuedAt) ||
+    !signatureB64
+  ) {
+    return null;
+  }
+  return { publicKeyB64, nonce, issuedAt, signatureB64 };
+}
+
+function isRelayAuthCredentialFresh(issuedAt: number, now = Date.now()): boolean {
+  return issuedAt >= now - RELAY_AUTH_MAX_AGE_MS && issuedAt <= now + RELAY_AUTH_MAX_FUTURE_SKEW_MS;
+}
+
+function relayAuthRejected(message: string): { allowed: false; response: Response } {
+  return { allowed: false, response: new Response(message, { status: 401 }) };
 }
 
 interface WebSocketWithAttachment extends WebSocket {
@@ -238,58 +285,74 @@ export class RelayDurableObject {
     return null;
   }
 
-  private verifyServerRelayAuth(params: {
+  private async consumeRelayAuthNonce(params: {
+    publicKeyB64: string;
+    nonce: string;
+    issuedAt: number;
+  }): Promise<boolean> {
+    const now = Date.now();
+    const stored =
+      (await this.state.storage.get<UsedRelayAuthNonce[]>(RELAY_AUTH_NONCE_STORAGE_KEY)) ?? [];
+    const recent = stored.filter((entry) => now - entry.issuedAt <= RELAY_AUTH_NONCE_RETENTION_MS);
+    const key = `${params.publicKeyB64}:${params.nonce}`;
+    if (recent.some((entry) => entry.key === key)) {
+      return false;
+    }
+    recent.push({ key, issuedAt: params.issuedAt });
+    await this.state.storage.put(
+      RELAY_AUTH_NONCE_STORAGE_KEY,
+      recent.slice(-RELAY_AUTH_MAX_TRACKED_NONCES),
+    );
+    return true;
+  }
+
+  private async verifyServerRelayAuth(params: {
     request: Request;
     serverId: string;
     connectionId: string;
-  }): { allowed: true; publicKeyB64: string | null } | { allowed: false; response: Response } {
+  }): Promise<
+    { allowed: true; publicKeyB64: string | null } | { allowed: false; response: Response }
+  > {
     if (allowUnsignedServerAuth()) {
       return { allowed: true, publicKeyB64: null };
     }
 
-    const url = new URL(params.request.url);
-    const publicKeyB64 = url.searchParams.get("relayAuthPublicKeyB64")?.trim() ?? "";
-    const nonce = url.searchParams.get("relayAuthNonce")?.trim() ?? "";
-    const signatureB64 = url.searchParams.get("relayAuthSignatureB64")?.trim() ?? "";
+    const credential = readRelayAuthCredential(params.request);
+    if (!credential) {
+      return relayAuthRejected("Relay server auth required");
+    }
 
-    if (!publicKeyB64 || !nonce || !signatureB64) {
-      return {
-        allowed: false,
-        response: new Response("Relay server auth required", { status: 401 }),
-      };
+    if (!isRelayAuthCredentialFresh(credential.issuedAt)) {
+      return relayAuthRejected("Relay server auth expired");
     }
 
     const boundPublicKeyB64 = this.getBoundRelayAuthPublicKeyB64();
-    if (boundPublicKeyB64 && boundPublicKeyB64 !== publicKeyB64) {
-      return {
-        allowed: false,
-        response: new Response("Relay server auth key mismatch", { status: 401 }),
-      };
+    if (boundPublicKeyB64 && boundPublicKeyB64 !== credential.publicKeyB64) {
+      return relayAuthRejected("Relay server auth key mismatch");
     }
 
     try {
       const verified = verifyRelayServerAuth({
-        publicKeyB64,
-        signatureB64,
+        publicKeyB64: credential.publicKeyB64,
+        signatureB64: credential.signatureB64,
         serverId: params.serverId,
         role: "server",
         connectionId: params.connectionId,
-        nonce,
+        nonce: credential.nonce,
+        issuedAt: credential.issuedAt,
       });
       if (!verified) {
-        return {
-          allowed: false,
-          response: new Response("Relay server auth failed", { status: 401 }),
-        };
+        return relayAuthRejected("Relay server auth failed");
       }
     } catch {
-      return {
-        allowed: false,
-        response: new Response("Relay server auth failed", { status: 401 }),
-      };
+      return relayAuthRejected("Relay server auth failed");
     }
 
-    return { allowed: true, publicKeyB64 };
+    if (!(await this.consumeRelayAuthNonce(credential))) {
+      return relayAuthRejected("Relay server auth replayed");
+    }
+
+    return { allowed: true, publicKeyB64: credential.publicKeyB64 };
   }
 
   // COMPAT(relay-json-ping): Old daemons (< v0.1.76) send JSON {type:"ping"} on the control
@@ -433,12 +496,12 @@ export class RelayDurableObject {
     return this.asSwitchingProtocolsResponse(client);
   }
 
-  private fetchV2(
+  private async fetchV2(
     request: Request,
     role: ConnectionRole,
     serverId: string,
     connectionId: string,
-  ): Response {
+  ): Promise<Response> {
     const upgradeError = this.requireWebSocketUpgrade(request);
     if (upgradeError) return upgradeError;
 
@@ -453,7 +516,7 @@ export class RelayDurableObject {
 
     const serverAuth =
       role === "server"
-        ? this.verifyServerRelayAuth({
+        ? await this.verifyServerRelayAuth({
             request,
             serverId,
             connectionId: resolvedConnectionId,
@@ -556,7 +619,7 @@ export class RelayDurableObject {
       return this.fetchV1(request, role, serverId);
     }
 
-    return this.fetchV2(request, role, serverId, connectionId);
+    return await this.fetchV2(request, role, serverId, connectionId);
   }
 
   /**

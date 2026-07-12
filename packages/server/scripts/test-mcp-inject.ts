@@ -4,7 +4,7 @@ import path from "node:path";
 
 import pino from "pino";
 
-import { ClaudeAgentClient } from "../src/server/agent/providers/claude-agent.js";
+import { ClaudeAgentClient } from "../src/server/agent/providers/claude/agent.js";
 import { CodexAppServerAgentClient } from "../src/server/agent/providers/codex-app-server-agent.js";
 import {
   getFullAccessConfig,

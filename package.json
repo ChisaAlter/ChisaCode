@@ -114,9 +114,12 @@
     "react-refresh": "^0.14.2"
   },
   "devDependencies": {
+    "@chisacode/client": "1.0.2",
+    "@chisacode/protocol": "1.0.2",
     "@types/ws": "^8.5.14",
     "@typescript/native-preview": "7.0.0-dev.20260423.1",
     "@vercel/nft": "^1.5.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "get-port-cli": "^3.0.0",
@@ -129,6 +132,7 @@
     "patch-package": "^8.0.1",
     "playwright": "^1.56.1",
     "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
     "ws": "8.21.0"
   },
   "overrides": {

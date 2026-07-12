@@ -538,17 +538,25 @@ function createRelayAuthQuery(params: {
   readonly keyPair: RelayAuthKeyPair;
   readonly serverId: string;
   readonly connectionId: string;
-}): { readonly publicKeyB64: string; readonly nonce: string; readonly signatureB64: string } {
+}): {
+  readonly publicKeyB64: string;
+  readonly nonce: string;
+  readonly issuedAt: number;
+  readonly signatureB64: string;
+} {
   const nonce = randomUUID();
+  const issuedAt = Date.now();
   return {
     publicKeyB64: exportRelayAuthPublicKey(params.keyPair.publicKey),
     nonce,
+    issuedAt,
     signatureB64: signRelayServerAuth({
       secretKey: params.keyPair.secretKey,
       serverId: params.serverId,
       role: "server",
       connectionId: params.connectionId,
       nonce,
+      issuedAt,
     }),
   };
 }
