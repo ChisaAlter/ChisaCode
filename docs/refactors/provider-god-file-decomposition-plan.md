@@ -9,7 +9,7 @@
 
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
-- Codex 已完成十三个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`image-attachments.ts` 与 `history.ts`；router/parser 负责协议入口，状态对象与领域模块负责生命周期和映射，session 保留事件发送与跨领域协调。
+- Codex 已完成十四个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`image-attachments.ts` 与 `history.ts`；router/parser 负责协议入口，controller/state/领域模块负责 handler 生命周期与映射，session 保留事件发送和少量跨领域回调。
 
 ## 现状
 
@@ -82,7 +82,7 @@
 - 删除从未接线的 `providers/base/`，避免其默认 turn ID、interrupt、close 与 persistence 语义被误当成稳定契约。
 - 保留现有 `AgentSession` / `AgentClient` 接口和 provider-specific 生命周期实现。
 - 优先提取无状态 helper、transport、runtime、event translator 与领域 handler。
-- Codex `skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立扩展发现、native notification parse/route、turn config、model catalog、stream/compaction state、timeline、sub-agent、permission、image attachment 和 history pipeline 边界。
+- Codex `skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立扩展发现、native notification parse/route、turn config、model catalog、stream/compaction state、timeline、sub-agent、permission handler、image attachment 和 history pipeline 边界。
 
 **验收**：server typecheck/build、目标 lint、Codex skills 精确测试通过。
 
@@ -100,6 +100,7 @@
 - `codex/notification-timeline.ts` —— command/patch/terminal timeline 映射与 output delta 解码（已完成）
 - `codex/sub-agent-tracker.ts` —— child thread 映射、子时间线排序、父 sub-agent 状态重建（已完成）
 - `codex/permission-state.ts` —— permission request/handler 原子登记、消费与关闭清理（已完成）
+- `codex/permission-controller.ts` —— command/file/question/plan 请求校验、响应和 timeline 副作用（已完成）
 - `codex/permissions.ts` —— plan/question 规范化、timeline 映射、decision 与 implementation prompt（已完成）
 - `codex/image-attachments.ts` —— data URI/base64 归一化、私有临时文件、history materialize 与 TTL 清理（已完成）
 - `codex/history.ts` —— item type 兼容、实时/回放 timeline 映射、时间戳与 `thread/read` 展开（已完成）

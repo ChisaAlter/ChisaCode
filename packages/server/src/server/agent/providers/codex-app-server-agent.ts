@@ -33,11 +33,9 @@ import type { Logger } from "pino";
 import { homedir } from "node:os";
 
 import type { ChildProcess, ChildProcessWithoutNullStreams } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
 import {
@@ -100,20 +98,8 @@ import {
 } from "./codex/notifications.js";
 import { CodexNotificationRouter } from "./codex/notification-router.js";
 import { CodexNotificationStreamState } from "./codex/notification-stream-state.js";
-import { CodexPermissionState, type CodexPendingPermission } from "./codex/permission-state.js";
-import {
-  buildCodexPlanImplementationPrompt,
-  buildPlanPermissionActions,
-  type CodexQuestionPrompt,
-  formatCodexQuestionPrompts,
-  mapCodexPlanToToolCall,
-  mapCodexQuestionRequestToToolCall,
-  mapCodexQuestionResponseByHeader,
-  normalizeCodexQuestionPrompts,
-  normalizePlanMarkdown,
-  planStepsToMarkdown,
-  resolvePermissionDecision,
-} from "./codex/permissions.js";
+import { CodexPermissionController } from "./codex/permission-controller.js";
+import { mapCodexPlanToToolCall, planStepsToMarkdown } from "./codex/permissions.js";
 import { CodexSubAgentTracker } from "./codex/sub-agent-tracker.js";
 import {
   loadCodexModelDefinitions,
@@ -153,7 +139,7 @@ export {
   mapCodexQuestionRequestToToolCall,
   normalizeCodexQuestionPrompts,
   planStepsToMarkdown,
-};
+} from "./codex/permissions.js";
 
 function assertChildWithPipes(
   child: ChildProcess,
@@ -668,7 +654,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private planModeEnabled = false;
   private historyPending = false;
   private persistedHistory: PersistedTimelineEntry[] = [];
-  private readonly permissionState = new CodexPermissionState<CodexQuestionPrompt>();
+  private readonly permissionController: CodexPermissionController;
   private readonly notificationStream = new CodexNotificationStreamState();
   private readonly notificationRouter: CodexNotificationRouter;
   private pendingAssistantMessageBoundary = false;
@@ -711,6 +697,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       module: "agent",
       provider: CODEX_PROVIDER,
       agentId: this.agentId,
+    });
+    this.permissionController = new CodexPermissionController({
+      getCwd: () => this.config.cwd ?? null,
+      emit: (event) => this.emitEvent(event),
+      onPlanApproved: () => this.applyFeatureValue("plan_mode", false),
     });
     this.notificationRouter = new CodexNotificationRouter({
       onParsed: (method, params, parsed) => this.traceParsedNotification(method, params, parsed),
@@ -961,45 +952,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     };
   }
 
-  private emitSyntheticPlanApprovalRequest(planText: string): void {
-    const requestId = `permission-${randomUUID()}`;
-    const request: AgentPermissionRequest = {
-      id: requestId,
-      provider: CODEX_PROVIDER,
-      name: "CodexPlanApproval",
-      kind: "plan",
-      title: "Plan",
-      description: "Review the proposed plan before implementation starts.",
-      input: { plan: planText },
-      actions: buildPlanPermissionActions(),
-      metadata: {
-        planText,
-        source: "codex_plan_approval",
-      },
-    };
-
-    this.permissionState.register(request, {
-      resolve: () => undefined,
-      kind: "plan",
-      planText,
-    });
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
-  }
-
-  /**
-   * Prepare the session for plan implementation by disabling plan mode
-   * and returning the implementation prompt. The caller is responsible for
-   * starting the turn through the normal streamAgent path.
-   */
-  private preparePlanImplementation(params: { planText?: unknown }): string {
-    const planText =
-      typeof params.planText === "string" ? normalizePlanMarkdown(params.planText) : "";
-
-    this.applyFeatureValue("plan_mode", false);
-
-    return buildCodexPlanImplementationPrompt(planText);
-  }
-
   private registerRequestHandlers(): void {
     if (!this.client) return;
 
@@ -1012,7 +964,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.client.setRequestHandler("item/tool/requestUserInput", (params) =>
       this.handleToolApprovalRequest(params),
     );
-    // Keep the legacy method name for older Codex builds.
+    // COMPAT(codex-tool-request-user-input): remove when supported Codex builds only emit item/tool/requestUserInput.
     this.client.setRequestHandler("tool/requestUserInput", (params) =>
       this.handleToolApprovalRequest(params),
     );
@@ -1398,152 +1350,14 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {
-    return this.permissionState.listRequests();
+    return this.permissionController.getPendingPermissions();
   }
 
   async respondToPermission(
     requestId: string,
     response: AgentPermissionResponse,
   ): Promise<AgentPermissionResult | void> {
-    const permissionEntry = this.permissionState.take(requestId);
-    if (!permissionEntry) {
-      throw new Error(`No pending Codex app-server permission request with id '${requestId}'`);
-    }
-    const { handler: pending, request: pendingRequest } = permissionEntry;
-
-    if (pending.kind === "plan") {
-      return this.handlePlanPermissionResponse({ requestId, response, pending, pendingRequest });
-    }
-
-    if (response.behavior === "deny" && pendingRequest?.kind === "tool") {
-      this.emitDeniedToolCallTimelineEvent({ requestId, response, pendingRequest });
-    }
-
-    this.emitEvent({
-      type: "permission_resolved",
-      provider: CODEX_PROVIDER,
-      requestId,
-      resolution: response,
-    });
-
-    if (pending.kind === "command") {
-      pending.resolve({ decision: resolvePermissionDecision(response) });
-      return;
-    }
-
-    if (pending.kind === "file") {
-      pending.resolve({ decision: resolvePermissionDecision(response) });
-      return;
-    }
-
-    const questions = pending.questions ?? [];
-    const itemId =
-      typeof pendingRequest?.metadata?.itemId === "string"
-        ? pendingRequest.metadata.itemId
-        : requestId;
-    if (response.behavior === "allow") {
-      const mappedAnswers = mapCodexQuestionResponseByHeader({
-        questions,
-        response,
-      });
-      const answers =
-        mappedAnswers ??
-        Object.fromEntries(
-          questions
-            .map((question) => {
-              const fallback = question.options[0]?.label?.trim();
-              return fallback ? [question.id, { answers: [fallback] }] : null;
-            })
-            .filter((entry): entry is [string, { answers: string[] }] => entry !== null),
-        );
-      this.emitEvent({
-        type: "timeline",
-        provider: CODEX_PROVIDER,
-        item: mapCodexQuestionRequestToToolCall({
-          callId: itemId,
-          questions,
-          status: "completed",
-          answers: Object.fromEntries(
-            Object.entries(answers).map(([id, value]) => [id, value.answers]),
-          ),
-        }),
-      });
-      pending.resolve({ answers });
-      return;
-    }
-
-    this.emitEvent({
-      type: "timeline",
-      provider: CODEX_PROVIDER,
-      item: mapCodexQuestionRequestToToolCall({
-        callId: itemId,
-        questions,
-        status: response.interrupt ? "canceled" : "failed",
-        error: { message: response.message ?? "Question dismissed" },
-      }),
-    });
-    pending.resolve({ answers: {} });
-  }
-
-  private handlePlanPermissionResponse(params: {
-    requestId: string;
-    response: AgentPermissionResponse;
-    pending: CodexPendingPermission<CodexQuestionPrompt>;
-    pendingRequest: AgentPermissionRequest;
-  }): AgentPermissionResult | void {
-    const { requestId, response, pending, pendingRequest } = params;
-    let followUpPrompt: string | undefined;
-    if (response.behavior === "allow") {
-      followUpPrompt = this.preparePlanImplementation({
-        planText: pending.planText ?? pendingRequest?.metadata?.planText,
-      });
-    }
-
-    this.emitEvent({
-      type: "permission_resolved",
-      provider: CODEX_PROVIDER,
-      requestId,
-      resolution: response,
-    });
-    if (followUpPrompt) {
-      return { followUpPrompt };
-    }
-  }
-
-  private emitDeniedToolCallTimelineEvent(params: {
-    requestId: string;
-    response: Extract<AgentPermissionResponse, { behavior: "deny" }>;
-    pendingRequest: AgentPermissionRequest;
-  }): void {
-    const { requestId, response, pendingRequest } = params;
-    let fallbackName: string;
-    if (pendingRequest.name === "CodexBash") {
-      fallbackName = "shell";
-    } else if (pendingRequest.name === "CodexFileChange") {
-      fallbackName = "apply_patch";
-    } else {
-      fallbackName = pendingRequest.name;
-    }
-    this.emitEvent({
-      type: "timeline",
-      provider: CODEX_PROVIDER,
-      item: {
-        type: "tool_call",
-        callId: requestId,
-        name: fallbackName,
-        status: "failed",
-        error: { message: response.message ?? "Permission denied" },
-        detail: pendingRequest.detail ?? {
-          type: "unknown",
-          input: pendingRequest.input ?? null,
-          output: null,
-        },
-        metadata: {
-          permissionRequestId: requestId,
-          denied: true,
-        },
-      },
-    });
+    return this.permissionController.respondToPermission(requestId, response);
   }
 
   describePersistence(): {
@@ -1619,7 +1433,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async close(): Promise<void> {
-    this.permissionState.cancelAll();
+    this.permissionController.cancelAll();
     this.subscribers.clear();
     this.activeForegroundTurnId = null;
     if (this.client) {
@@ -2144,7 +1958,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitEvent({ type: "turn_canceled", provider: CODEX_PROVIDER, reason: "interrupted" });
     } else {
       if (this.planModeEnabled && this.latestPlanResult?.text) {
-        this.emitSyntheticPlanApprovalRequest(this.latestPlanResult.text);
+        this.permissionController.requestPlanApproval(this.latestPlanResult.text);
       }
       this.emitEvent({
         type: "turn_completed",
@@ -2667,135 +2481,15 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private handleCommandApprovalRequest(params: unknown): Promise<unknown> {
-    const parsed = z
-      .object({
-        itemId: z.string(),
-        threadId: z.string(),
-        turnId: z.string(),
-        command: z.string().nullable().optional(),
-        cwd: z.string().nullable().optional(),
-        reason: z.string().nullable().optional(),
-      })
-      .parse(params);
-    const commandPreview = mapCodexExecNotificationToToolCall({
-      callId: parsed.itemId,
-      command: parsed.command,
-      cwd: parsed.cwd ?? this.config.cwd ?? null,
-      running: true,
-    });
-    const requestId = `permission-${parsed.itemId}`;
-    const title = parsed.command ? `Run command: ${parsed.command}` : "Run command";
-    const request: AgentPermissionRequest = {
-      id: requestId,
-      provider: CODEX_PROVIDER,
-      name: "CodexBash",
-      kind: "tool",
-      title,
-      description: parsed.reason ?? undefined,
-      input: {
-        command: parsed.command ?? undefined,
-        cwd: parsed.cwd ?? undefined,
-      },
-      detail: commandPreview?.detail ?? {
-        type: "unknown",
-        input: {
-          command: parsed.command ?? null,
-          cwd: parsed.cwd ?? null,
-        },
-        output: null,
-      },
-      metadata: {
-        itemId: parsed.itemId,
-        threadId: parsed.threadId,
-        turnId: parsed.turnId,
-      },
-    };
-    const response = this.permissionState.create(request, { kind: "command" });
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
-    return response;
+    return this.permissionController.handleCommandApprovalRequest(params);
   }
 
   private handleFileChangeApprovalRequest(params: unknown): Promise<unknown> {
-    const parsed = z
-      .object({
-        itemId: z.string(),
-        threadId: z.string(),
-        turnId: z.string(),
-        reason: z.string().nullable().optional(),
-      })
-      .parse(params);
-    const requestId = `permission-${parsed.itemId}`;
-    const request: AgentPermissionRequest = {
-      id: requestId,
-      provider: CODEX_PROVIDER,
-      name: "CodexFileChange",
-      kind: "tool",
-      title: "Apply file changes",
-      description: parsed.reason ?? undefined,
-      detail: {
-        type: "unknown",
-        input: {
-          reason: parsed.reason ?? null,
-        },
-        output: null,
-      },
-      metadata: {
-        itemId: parsed.itemId,
-        threadId: parsed.threadId,
-        turnId: parsed.turnId,
-      },
-    };
-    const response = this.permissionState.create(request, { kind: "file" });
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
-    return response;
+    return this.permissionController.handleFileChangeApprovalRequest(params);
   }
 
   private handleToolApprovalRequest(params: unknown): Promise<unknown> {
-    const parsed = z
-      .object({
-        itemId: z.string(),
-        threadId: z.string(),
-        turnId: z.string(),
-        questions: z.array(z.unknown()),
-      })
-      .parse(params);
-    const requestId = `permission-${parsed.itemId}`;
-    const questions = normalizeCodexQuestionPrompts(parsed.questions);
-    const request: AgentPermissionRequest = {
-      id: requestId,
-      provider: CODEX_PROVIDER,
-      name: "request_user_input",
-      kind: "question",
-      title: "Question",
-      description: undefined,
-      detail: {
-        type: "plain_text",
-        text: formatCodexQuestionPrompts(questions),
-        icon: "brain",
-      },
-      input: { questions },
-      metadata: {
-        itemId: parsed.itemId,
-        threadId: parsed.threadId,
-        turnId: parsed.turnId,
-        questions,
-      },
-    };
-    const response = this.permissionState.create(request, {
-      kind: "question",
-      questions,
-    });
-    this.emitEvent({
-      type: "timeline",
-      provider: CODEX_PROVIDER,
-      item: mapCodexQuestionRequestToToolCall({
-        callId: parsed.itemId,
-        questions,
-        status: "running",
-      }),
-    });
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
-    return response;
+    return this.permissionController.handleToolApprovalRequest(params);
   }
 }
 
