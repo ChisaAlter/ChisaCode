@@ -2,29 +2,12 @@ import type {
   CheckoutPrMergeMethod,
   CreateChisaCodeWorktreeRequest,
   GitHubSearchRequest,
-  SessionInboundMessage,
-  SessionOutboundMessage,
 } from "@chisacode/protocol/messages";
 
-type CorrelatedResponseMessage = Extract<
-  SessionOutboundMessage,
-  { payload: { requestId: string } }
->;
-type CorrelatedResponseType = CorrelatedResponseMessage["type"];
-type CorrelatedResponsePayload<TType extends CorrelatedResponseType> = Extract<
-  CorrelatedResponseMessage,
-  { type: TType }
->["payload"];
-type RequestMessageInput = { type: SessionInboundMessage["type"] } & Record<string, unknown>;
-
-interface CheckoutCommandTransport {
-  request<TResponseType extends CorrelatedResponseType>(params: {
-    requestId?: string;
-    message: RequestMessageInput;
-    responseType: TResponseType;
-    timeout: number;
-  }): Promise<CorrelatedResponsePayload<TResponseType>>;
-}
+import type {
+  DaemonCommandResponsePayload,
+  DaemonCommandTransport,
+} from "./daemon-client-command-transport.js";
 
 type CreateWorktreeInput = Pick<
   CreateChisaCodeWorktreeRequest,
@@ -39,13 +22,13 @@ type CreateWorktreeInput = Pick<
 
 /** Implements stateless checkout, pull-request, stash, and worktree RPC commands. */
 export class CheckoutCommandClient {
-  constructor(private readonly transport: CheckoutCommandTransport) {}
+  constructor(private readonly transport: DaemonCommandTransport) {}
 
   checkoutCommit(
     cwd: string,
     input: { message?: string; addAll?: boolean },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_commit_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_commit_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -63,7 +46,7 @@ export class CheckoutCommandClient {
     cwd: string,
     input: { baseRef?: string; strategy?: "merge" | "squash"; requireCleanTarget?: boolean },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_merge_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_merge_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -82,7 +65,7 @@ export class CheckoutCommandClient {
     cwd: string,
     input: { baseRef?: string; requireCleanTarget?: boolean },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_merge_from_base_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_merge_from_base_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -99,7 +82,7 @@ export class CheckoutCommandClient {
   checkoutPull(
     cwd: string,
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_pull_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_pull_response">> {
     return this.transport.request({
       requestId,
       message: { type: "checkout_pull_request", cwd },
@@ -111,7 +94,7 @@ export class CheckoutCommandClient {
   checkoutPush(
     cwd: string,
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_push_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_push_response">> {
     return this.transport.request({
       requestId,
       message: { type: "checkout_push_request", cwd },
@@ -123,7 +106,7 @@ export class CheckoutCommandClient {
   checkoutRefresh(
     cwd: string,
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout.refresh.response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout.refresh.response">> {
     return this.transport.request({
       requestId,
       message: { type: "checkout.refresh.request", cwd },
@@ -136,7 +119,7 @@ export class CheckoutCommandClient {
     cwd: string,
     input: { title?: string; body?: string; baseRef?: string },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_pr_create_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_pr_create_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -155,7 +138,7 @@ export class CheckoutCommandClient {
     cwd: string,
     input: { method: CheckoutPrMergeMethod },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_pr_merge_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_pr_merge_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -172,7 +155,7 @@ export class CheckoutCommandClient {
     cwd: string,
     input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout.github.set_auto_merge.response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout.github.set_auto_merge.response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -189,7 +172,7 @@ export class CheckoutCommandClient {
   checkoutPrStatus(
     cwd: string,
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_pr_status_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_pr_status_response">> {
     return this.transport.request({
       requestId,
       message: { type: "checkout_pr_status_request", cwd },
@@ -201,7 +184,7 @@ export class CheckoutCommandClient {
   pullRequestTimeline(
     input: { cwd: string; prNumber: number; repoOwner: string; repoName: string },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"pull_request_timeline_response">> {
+  ): Promise<DaemonCommandResponsePayload<"pull_request_timeline_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -220,7 +203,7 @@ export class CheckoutCommandClient {
     cwd: string,
     branch: string,
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"checkout_switch_branch_response">> {
+  ): Promise<DaemonCommandResponsePayload<"checkout_switch_branch_response">> {
     return this.transport.request({
       requestId,
       message: { type: "checkout_switch_branch_request", cwd, branch },
@@ -233,7 +216,7 @@ export class CheckoutCommandClient {
     cwd: string;
     branch: string;
     requestId?: string;
-  }): Promise<CorrelatedResponsePayload<"checkout.rename_branch.response">> {
+  }): Promise<DaemonCommandResponsePayload<"checkout.rename_branch.response">> {
     return this.transport.request({
       requestId: input.requestId,
       message: { type: "checkout.rename_branch.request", cwd: input.cwd, branch: input.branch },
@@ -246,7 +229,7 @@ export class CheckoutCommandClient {
     cwd: string,
     options?: { branch?: string },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"stash_save_response">> {
+  ): Promise<DaemonCommandResponsePayload<"stash_save_response">> {
     return this.transport.request({
       requestId,
       message: { type: "stash_save_request", cwd, branch: options?.branch },
@@ -259,7 +242,7 @@ export class CheckoutCommandClient {
     cwd: string,
     stashIndex: number,
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"stash_pop_response">> {
+  ): Promise<DaemonCommandResponsePayload<"stash_pop_response">> {
     return this.transport.request({
       requestId,
       message: { type: "stash_pop_request", cwd, stashIndex },
@@ -272,7 +255,7 @@ export class CheckoutCommandClient {
     cwd: string,
     options?: { chisacodeOnly?: boolean },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"stash_list_response">> {
+  ): Promise<DaemonCommandResponsePayload<"stash_list_response">> {
     return this.transport.request({
       requestId,
       message: { type: "stash_list_request", cwd, chisacodeOnly: options?.chisacodeOnly },
@@ -284,7 +267,7 @@ export class CheckoutCommandClient {
   getChisaCodeWorktreeList(
     input: { cwd?: string; repoRoot?: string },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"chisacode_worktree_list_response">> {
+  ): Promise<DaemonCommandResponsePayload<"chisacode_worktree_list_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -300,7 +283,7 @@ export class CheckoutCommandClient {
   archiveChisaCodeWorktree(
     input: { worktreePath?: string; repoRoot?: string; branchName?: string },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"chisacode_worktree_archive_response">> {
+  ): Promise<DaemonCommandResponsePayload<"chisacode_worktree_archive_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -317,7 +300,7 @@ export class CheckoutCommandClient {
   createChisaCodeWorktree(
     input: CreateWorktreeInput,
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"create_chisacode_worktree_response">> {
+  ): Promise<DaemonCommandResponsePayload<"create_chisacode_worktree_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -340,7 +323,7 @@ export class CheckoutCommandClient {
   validateBranch(
     options: { cwd: string; branchName: string },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"validate_branch_response">> {
+  ): Promise<DaemonCommandResponsePayload<"validate_branch_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -356,7 +339,7 @@ export class CheckoutCommandClient {
   getBranchSuggestions(
     options: { cwd: string; query?: string; limit?: number },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"branch_suggestions_response">> {
+  ): Promise<DaemonCommandResponsePayload<"branch_suggestions_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -373,7 +356,7 @@ export class CheckoutCommandClient {
   searchGitHub(
     options: { cwd: string; query: string; limit?: number; kinds?: GitHubSearchRequest["kinds"] },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"github_search_response">> {
+  ): Promise<DaemonCommandResponsePayload<"github_search_response">> {
     return this.transport.request({
       requestId,
       message: {
@@ -398,7 +381,7 @@ export class CheckoutCommandClient {
       matchMode?: "fuzzy" | "suffix";
     },
     requestId?: string,
-  ): Promise<CorrelatedResponsePayload<"directory_suggestions_response">> {
+  ): Promise<DaemonCommandResponsePayload<"directory_suggestions_response">> {
     return this.transport.request({
       requestId,
       message: {

@@ -23,6 +23,7 @@
 - **Client 文件传输状态机拆分**：完成。将 `daemon-client.ts` 内 pending/active/completed 二进制文件读取状态、分片大小校验、结果组装与 legacy base64 解码提取到 `daemon-client-file-transfer.ts`；`DaemonClient` 仅保留 RPC 编排与响应转发，`FileReadResult` 既有导出保持兼容。
 - **Client checkout/worktree 命令拆分**：完成。将 commit/merge/pull/push/PR/stash/worktree/branch/GitHub/directory 等 23 个无状态 RPC 命令提取到 `daemon-client-checkout-commands.ts`，`DaemonClient` 保持原公开方法并改为薄委托；checkout status 与 diff subscription 的重连状态继续留在核心类，等待独立生命周期切片。核心文件进一步降至 4893 行。
 - **Client checkout 订阅生命周期拆分**：完成。将 checkout status 请求去重、diff compare 归一化、一次性 diff 获取、订阅失败回滚、取消订阅与重连恢复状态提取到 `daemon-client-checkout-subscriptions.ts`；`DaemonClient` 的四个公开方法保持兼容并改为薄委托，重连测试改走真实公开订阅流程，不再修改私有状态。核心文件进一步降至 4752 行。
+- **Client 管理类 RPC 分域拆分**：完成。将 provider discovery/diagnostics/presets/model gateway、daemon/project config，以及 agent commands/skills/MCP server 管理共 25 个无状态 RPC 分别提取到三个领域客户端，并用 `daemon-client-command-transport.ts` 统一 correlated request 端口契约；公开方法与 wire shape 保持不变。核心文件进一步降至 4555 行。
 - **状态**：进行中，直接在 `cn-main` 执行，不创建额外分支或 worktree。
 
 ### 2026-07-12 深度架构/安全/产品/代码质量审查批次（完成）

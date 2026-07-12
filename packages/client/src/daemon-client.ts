@@ -129,6 +129,9 @@ import {
 } from "./daemon-client-transport.js";
 import { CheckoutCommandClient } from "./daemon-client-checkout-commands.js";
 import { CheckoutSubscriptionClient } from "./daemon-client-checkout-subscriptions.js";
+import { ConfigCommandClient } from "./daemon-client-config-commands.js";
+import { ProviderCommandClient } from "./daemon-client-provider-commands.js";
+import { AgentExtensionCommandClient } from "./daemon-client-agent-extension-commands.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   BinaryFileTransferManager,
@@ -850,6 +853,9 @@ export class DaemonClient {
   private terminalDirectorySubscriptions = new Set<string>();
   private readonly checkoutCommands: CheckoutCommandClient;
   private readonly checkoutSubscriptions: CheckoutSubscriptionClient;
+  private readonly configCommands: ConfigCommandClient;
+  private readonly providerCommands: ProviderCommandClient;
+  private readonly agentExtensionCommands: AgentExtensionCommandClient;
   private readonly terminalStreams = new TerminalStreamRouter();
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
@@ -873,6 +879,15 @@ export class DaemonClient {
       createRequestId: (requestId) => this.createRequestId(requestId),
       sendRequest: (params) => this.sendRequest(params),
       sendMessage: (message) => this.sendSessionMessage(message),
+    });
+    this.configCommands = new ConfigCommandClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+    });
+    this.providerCommands = new ProviderCommandClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+    });
+    this.agentExtensionCommands = new AgentExtensionCommandClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
@@ -3094,152 +3109,63 @@ export class DaemonClient {
     provider: AgentProvider,
     options?: { cwd?: string; requestId?: string },
   ): Promise<ListProviderModelsPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "list_provider_models_request",
-        provider,
-        cwd: options?.cwd,
-      },
-      responseType: "list_provider_models_response",
-      // Provider SDK cold starts (especially model discovery) can exceed 30s.
-      timeout: 45000,
-    });
+    return this.providerCommands.listProviderModels(provider, options);
   }
 
   async listProviderModes(
     provider: AgentProvider,
     options?: { cwd?: string; requestId?: string },
   ): Promise<ListProviderModesPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "list_provider_modes_request",
-        provider,
-        cwd: options?.cwd,
-      },
-      responseType: "list_provider_modes_response",
-      timeout: 45000,
-    });
+    return this.providerCommands.listProviderModes(provider, options);
   }
 
   async listProviderFeatures(
     draftConfig: ListCommandsDraftConfig,
     options?: { requestId?: string },
   ): Promise<ListProviderFeaturesPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "list_provider_features_request",
-        draftConfig,
-      },
-      responseType: "list_provider_features_response",
-      timeout: 45000,
-    });
+    return this.providerCommands.listProviderFeatures(draftConfig, options);
   }
 
   async listAvailableProviders(options?: {
     requestId?: string;
   }): Promise<ListAvailableProvidersPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "list_available_providers_request",
-      },
-      responseType: "list_available_providers_response",
-      timeout: 30000,
-    });
+    return this.providerCommands.listAvailableProviders(options);
   }
 
   async getProvidersSnapshot(options?: {
     cwd?: string;
     requestId?: string;
   }): Promise<GetProvidersSnapshotPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "get_providers_snapshot_request",
-        cwd: options?.cwd,
-      },
-      responseType: "get_providers_snapshot_response",
-      timeout: 10000,
-    });
+    return this.providerCommands.getProvidersSnapshot(options);
   }
 
   async getDaemonConfig(
     requestId?: string,
   ): Promise<{ requestId: string; config: MutableDaemonConfig }> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "get_daemon_config_request",
-      },
-      responseType: "get_daemon_config_response",
-      timeout: 10000,
-    });
+    return this.configCommands.getDaemonConfig(requestId);
   }
 
   async getDaemonStatus(requestId?: string): Promise<DaemonStatusPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "daemon.get_status.request",
-      },
-      responseType: "daemon.get_status.response",
-      timeout: 10000,
-    });
+    return this.configCommands.getDaemonStatus(requestId);
   }
 
   async getDaemonPairingOffer(requestId?: string): Promise<DaemonPairingOfferPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "daemon.get_pairing_offer.request",
-      },
-      responseType: "daemon.get_pairing_offer.response",
-      timeout: 10000,
-    });
+    return this.configCommands.getDaemonPairingOffer(requestId);
   }
 
   async patchDaemonConfig(
     config: MutableDaemonConfigPatch,
     requestId?: string,
   ): Promise<{ requestId: string; config: MutableDaemonConfig }> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "set_daemon_config_request",
-        config,
-      },
-      responseType: "set_daemon_config_response",
-      timeout: 10000,
-    });
+    return this.configCommands.patchDaemonConfig(config, requestId);
   }
 
   async readProjectConfig(repoRoot: string, requestId?: string): Promise<ReadProjectConfigPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "read_project_config_request",
-        repoRoot,
-      },
-      responseType: "read_project_config_response",
-      timeout: 10000,
-    });
+    return this.configCommands.readProjectConfig(repoRoot, requestId);
   }
 
   async writeProjectConfig(input: WriteProjectConfigInput): Promise<WriteProjectConfigPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "write_project_config_request",
-        repoRoot: input.repoRoot,
-        config: input.config,
-        expectedRevision: input.expectedRevision,
-      },
-      responseType: "write_project_config_response",
-      timeout: 10000,
-    });
+    return this.configCommands.writeProjectConfig(input);
   }
 
   async refreshProvidersSnapshot(options?: {
@@ -3247,31 +3173,14 @@ export class DaemonClient {
     providers?: AgentProvider[];
     requestId?: string;
   }): Promise<RefreshProvidersSnapshotPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "refresh_providers_snapshot_request",
-        cwd: options?.cwd,
-        providers: options?.providers,
-      },
-      responseType: "refresh_providers_snapshot_response",
-      timeout: 60000,
-    });
+    return this.providerCommands.refreshProvidersSnapshot(options);
   }
 
   async getProviderDiagnostic(
     provider: AgentProvider,
     options?: { requestId?: string },
   ): Promise<ProviderDiagnosticPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "provider_diagnostic_request",
-        provider,
-      },
-      responseType: "provider_diagnostic_response",
-      timeout: 30000,
-    });
+    return this.providerCommands.getProviderDiagnostic(provider, options);
   }
 
   async runProviderToolingAction(
@@ -3279,43 +3188,17 @@ export class DaemonClient {
     action: "install" | "update" | "reinstall",
     options?: { requestId?: string },
   ): Promise<ProviderToolingActionPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "provider.tooling.run.request",
-        provider,
-        action,
-      },
-      responseType: "provider.tooling.run.response",
-      timeout: 120000,
-    });
+    return this.providerCommands.runProviderToolingAction(provider, action, options);
   }
 
   async listAgentPresets(options?: { requestId?: string }): Promise<AgentPresetsListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "agent.presets.list.request",
-      },
-      responseType: "agent.presets.list.response",
-      timeout: 30000,
-    });
+    return this.providerCommands.listAgentPresets(options);
   }
 
   async runModelGatewayMoaTest(
     input: RunModelGatewayMoaTestInput,
   ): Promise<ModelGatewayMoaTestPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "model_gateway.moa.test.request",
-        gatewayId: input.gatewayId,
-        syntheticModel: input.syntheticModel,
-        prompt: input.prompt,
-      },
-      responseType: "model_gateway.moa.test.response",
-      timeout: 120000,
-    });
+    return this.providerCommands.runModelGatewayMoaTest(input);
   }
 
   async listCommands(agentId: string, requestId?: string): Promise<ListCommandsPayload>;
@@ -3324,32 +3207,11 @@ export class DaemonClient {
     agentId: string,
     requestIdOrOptions?: string | ListCommandsOptions,
   ): Promise<ListCommandsPayload> {
-    const requestId =
-      typeof requestIdOrOptions === "string" ? requestIdOrOptions : requestIdOrOptions?.requestId;
-    const draftConfig =
-      typeof requestIdOrOptions === "string" ? undefined : requestIdOrOptions?.draftConfig;
-
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "list_commands_request",
-        agentId,
-        ...(draftConfig ? { draftConfig } : {}),
-      },
-      responseType: "list_commands_response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.listCommands(agentId, requestIdOrOptions);
   }
 
   async listAgentSkills(options?: { requestId?: string }): Promise<AgentSkillsListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "agent.skills.list.request",
-      },
-      responseType: "agent.skills.list.response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.listAgentSkills(options);
   }
 
   async patchAgentSkillPolicy(input: {
@@ -3360,16 +3222,7 @@ export class DaemonClient {
       disabledSkillNames?: string[];
     };
   }): Promise<AgentSkillsPolicyPatchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "agent.skills.policy.patch.request",
-        scope: input.scope,
-        policy: input.policy,
-      },
-      responseType: "agent.skills.policy.patch.response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.patchAgentSkillPolicy(input);
   }
 
   async installAgentSkills(input: {
@@ -3377,42 +3230,18 @@ export class DaemonClient {
     source: AgentSkillsInstallSource;
     replace?: boolean;
   }): Promise<AgentSkillsInstallPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "agent.skills.install.request",
-        source: input.source,
-        ...(input.replace !== undefined ? { replace: input.replace } : {}),
-      },
-      responseType: "agent.skills.install.response",
-      timeout: 120000,
-    });
+    return this.agentExtensionCommands.installAgentSkills(input);
   }
 
   async uninstallAgentSkill(input: {
     requestId?: string;
     sourceId: string;
   }): Promise<AgentSkillsUninstallPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "agent.skills.uninstall.request",
-        sourceId: input.sourceId,
-      },
-      responseType: "agent.skills.uninstall.response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.uninstallAgentSkill(input);
   }
 
   async listAgentMcpServers(options?: { requestId?: string }): Promise<AgentMcpServersListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "agent.mcp_servers.list.request",
-      },
-      responseType: "agent.mcp_servers.list.response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.listAgentMcpServers(options);
   }
 
   async upsertAgentMcpServer(input: {
@@ -3420,16 +3249,7 @@ export class DaemonClient {
     server: ManagedMcpServerConfig;
     originalName?: string;
   }): Promise<AgentMcpServersUpsertPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "agent.mcp_servers.upsert.request",
-        server: input.server,
-        ...(input.originalName ? { originalName: input.originalName } : {}),
-      },
-      responseType: "agent.mcp_servers.upsert.response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.upsertAgentMcpServer(input);
   }
 
   async patchAgentMcpServerPolicy(input: {
@@ -3440,31 +3260,14 @@ export class DaemonClient {
       disabledServerNames?: string[];
     };
   }): Promise<AgentMcpServersPolicyPatchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "agent.mcp_servers.policy.patch.request",
-        scope: input.scope,
-        policy: input.policy,
-      },
-      responseType: "agent.mcp_servers.policy.patch.response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.patchAgentMcpServerPolicy(input);
   }
 
   async deleteAgentMcpServer(input: {
     requestId?: string;
     name: string;
   }): Promise<AgentMcpServersDeletePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "agent.mcp_servers.delete.request",
-        name: input.name,
-      },
-      responseType: "agent.mcp_servers.delete.response",
-      timeout: 30000,
-    });
+    return this.agentExtensionCommands.deleteAgentMcpServer(input);
   }
 
   // ============================================================================
