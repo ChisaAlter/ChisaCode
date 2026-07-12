@@ -220,6 +220,7 @@
   - `opencode/event-translator.ts` 独立拥有 native event translation、usage、permission、todo 与 sub-agent timeline 映射；Session 降至 1396 行
   - `opencode/history.ts` 独立拥有 persistence scanner、revert 截断、replay timestamp 与 timeline conversion；Session 降至 1111 行
   - `OpenCodePermissionController` 独立拥有 auto-accept、pending queue、question/tool response；`OpenCodeMcpController` 独立拥有一次性配置、并发去重与失败重试；Session 降至 975 行
+  - `OpenCodeSessionEventBus` 独立拥有 active turn、subscriber、turn ID、running tool terminal synthesis 与 close suppression；Session 降至 886 行
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
 - **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode translator/history/permission/MCP 已独立。下一步继续收敛 Session turn、runtime 与 lifecycle orchestration。
 

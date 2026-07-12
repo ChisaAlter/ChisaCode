@@ -7,7 +7,6 @@ import {
 import type { Logger } from "pino";
 
 import {
-  getAgentStreamEventTurnId,
   type AgentFeature,
   type AgentMode,
   type AgentPermissionRequest,
@@ -21,7 +20,6 @@ import {
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentUsage,
-  type ToolCallTimelineItem,
 } from "../../agent-sdk-types.js";
 import {
   OPENCODE_AUTO_ACCEPT_FEATURE_ID,
@@ -52,6 +50,7 @@ import {
 } from "./catalog.js";
 import { OpenCodeEventStreamController } from "./event-stream.js";
 import { OpenCodePermissionController } from "./permission-controller.js";
+import { OpenCodeSessionEventBus } from "./session-event-bus.js";
 import { OpenCodeMcpController } from "./mcp-controller.js";
 import {
   hasNormalizedOpenCodeUsage,
@@ -279,17 +278,13 @@ export class OpenCodeAgentSession implements AgentSession {
   /** Tracks the type of each part by ID, learned from message.part.updated events. */
   private partTypes = new Map<string, string>();
   private availableModesCache: AgentMode[] | null = null;
-  private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
-  private nextTurnOrdinal = 0;
-  private activeForegroundTurnId: string | null = null;
-  private readonly runningToolCalls = new Map<string, ToolCallTimelineItem>();
+  private readonly eventBus: OpenCodeSessionEventBus;
   private subAgentsByCallId = new Map<string, OpenCodeSubAgentActivityState>();
   private subAgentCallIdByChildSessionId = new Map<string, string>();
   private pendingChildToolPartsBySessionId = new Map<string, OpenCodeToolPartEventPart[]>();
   private selectedModelContextWindowMaxTokens: number | undefined;
   private releaseServer: (() => void) | null;
   private readonly eventStreamController: OpenCodeEventStreamController;
-  private closed = false;
   private readonly persistSession: boolean;
   private deletedFromProvider = false;
   constructor(
@@ -313,6 +308,13 @@ export class OpenCodeAgentSession implements AgentSession {
       getDirectory: () => this.config.cwd,
       logger: this.logger,
     });
+    this.eventBus = new OpenCodeSessionEventBus({
+      trace: (message, data) => this.traceOpenCode(message, data),
+      onTurnFinished: () => {
+        this.pendingUserMessageText = null;
+        this.abortCoordinator.clearTurn();
+      },
+    });
     this.mcpController = new OpenCodeMcpController({
       client: this.client,
       getDirectory: () => this.config.cwd,
@@ -327,11 +329,11 @@ export class OpenCodeAgentSession implements AgentSession {
       client: this.client,
       sessionId: this.sessionId,
       getDirectory: () => this.config.cwd,
-      getActiveTurnId: () => this.activeForegroundTurnId,
+      getActiveTurnId: () => this.eventBus.getActiveTurnId(),
       translateEvent: (event) => this.translateEvent(event),
-      trackToolCall: (item) => this.trackToolCall(item),
-      finishTurn: (event, turnId) => this.finishForegroundTurn(event, turnId),
-      notify: (event, turnId) => this.notifySubscribers(event, turnId),
+      trackToolCall: (item) => this.eventBus.trackToolCall(item),
+      finishTurn: (event, turnId) => this.eventBus.finish(event, turnId),
+      notify: (event, turnId) => this.eventBus.notify(event, turnId),
       trace: (message, data) => this.traceOpenCode(message, data),
       logger: this.logger,
     });
@@ -393,11 +395,11 @@ export class OpenCodeAgentSession implements AgentSession {
   }
 
   async interrupt(): Promise<void> {
-    const turnId = this.activeForegroundTurnId;
+    const turnId = this.eventBus.getActiveTurnId();
     await this.abortCoordinator.interruptCurrentTurn(turnId);
     if (turnId) {
       this.eventStreamController.suppressTerminalUntilUserMessage();
-      this.finishForegroundTurn(
+      this.eventBus.finish(
         { type: "turn_canceled", provider: "opencode", reason: "interrupted" },
         turnId,
       );
@@ -417,12 +419,12 @@ export class OpenCodeAgentSession implements AgentSession {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
-    if (this.activeForegroundTurnId) {
+    if (this.eventBus.getActiveTurnId()) {
       throw new Error("A foreground turn is already active");
     }
     await this.abortCoordinator.awaitPendingBeforeStart();
 
-    this.runningToolCalls.clear();
+    this.eventBus.prepareTurn();
     this.subAgentsByCallId.clear();
     this.subAgentCallIdByChildSessionId.clear();
     this.pendingChildToolPartsBySessionId.clear();
@@ -445,9 +447,7 @@ export class OpenCodeAgentSession implements AgentSession {
       throw error;
     }
 
-    const turnId = this.createTurnId();
-    this.activeForegroundTurnId = turnId;
-    this.notifySubscribers({ type: "turn_started", provider: "opencode" }, turnId);
+    const turnId = this.eventBus.beginTurn();
 
     const slashCommand = await this.resolveSlashCommandInvocation(prompt);
     if (slashCommand) {
@@ -460,7 +460,7 @@ export class OpenCodeAgentSession implements AgentSession {
           })
           .then((response) => {
             if (response.error) {
-              this.finishForegroundTurn(
+              this.eventBus.finish(
                 {
                   type: "turn_failed",
                   provider: "opencode",
@@ -469,7 +469,7 @@ export class OpenCodeAgentSession implements AgentSession {
                 turnId,
               );
             } else {
-              this.finishForegroundTurn(
+              this.eventBus.finish(
                 { type: "turn_completed", provider: "opencode", usage: undefined },
                 turnId,
               );
@@ -477,7 +477,7 @@ export class OpenCodeAgentSession implements AgentSession {
             return;
           })
           .catch((error) => {
-            this.finishForegroundTurn(
+            this.eventBus.finish(
               {
                 type: "turn_failed",
                 provider: "opencode",
@@ -515,7 +515,7 @@ export class OpenCodeAgentSession implements AgentSession {
               return;
             }
             const errorMsg = toDiagnosticErrorMessage(response.error);
-            this.finishForegroundTurn(
+            this.eventBus.finish(
               { type: "turn_failed", provider: "opencode", error: errorMsg },
               turnId,
             );
@@ -534,7 +534,7 @@ export class OpenCodeAgentSession implements AgentSession {
             );
             return;
           }
-          this.finishForegroundTurn(
+          this.eventBus.finish(
             { type: "turn_failed", provider: "opencode", error: toDiagnosticErrorMessage(err) },
             turnId,
           );
@@ -581,7 +581,7 @@ export class OpenCodeAgentSession implements AgentSession {
             data: promptResponse.data,
           });
           if (promptResponse.error) {
-            this.finishForegroundTurn(
+            this.eventBus.finish(
               {
                 type: "turn_failed",
                 provider: "opencode",
@@ -598,7 +598,7 @@ export class OpenCodeAgentSession implements AgentSession {
                 ? { name: error.name, message: error.message, stack: error.stack }
                 : String(error),
           });
-          this.finishForegroundTurn(
+          this.eventBus.finish(
             {
               type: "turn_failed",
               provider: "opencode",
@@ -613,94 +613,7 @@ export class OpenCodeAgentSession implements AgentSession {
     return { turnId };
   }
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
-    this.subscribers.add(callback);
-    return () => {
-      this.subscribers.delete(callback);
-    };
-  }
-
-  private finishForegroundTurn(
-    event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
-    turnId: string,
-  ): void {
-    this.traceOpenCode("provider.opencode.finish_foreground_turn", {
-      turnId,
-      activeTurnId: this.activeForegroundTurnId,
-      type: event.type,
-      error: event.type === "turn_failed" ? event.error : undefined,
-      reason: event.type === "turn_canceled" ? event.reason : undefined,
-    });
-    if (this.activeForegroundTurnId !== turnId) {
-      return;
-    }
-    if (event.type === "turn_canceled" || event.type === "turn_failed") {
-      this.synthesizeInterruptedToolCalls(turnId);
-    } else {
-      this.runningToolCalls.clear();
-    }
-    this.pendingUserMessageText = null;
-    this.activeForegroundTurnId = null;
-    this.abortCoordinator.clearTurn();
-    this.notifySubscribers(event, turnId);
-  }
-
-  private trackToolCall(item: ToolCallTimelineItem): void {
-    if (item.status === "running") {
-      this.runningToolCalls.set(item.callId, item);
-      return;
-    }
-    this.runningToolCalls.delete(item.callId);
-  }
-
-  private synthesizeInterruptedToolCalls(turnId: string): void {
-    for (const item of this.runningToolCalls.values()) {
-      const error = { message: "Tool execution aborted" };
-      this.notifySubscribers(
-        {
-          type: "timeline",
-          provider: "opencode",
-          item: {
-            ...item,
-            status: "failed",
-            error,
-            detail:
-              item.detail.type === "sub_agent"
-                ? {
-                    ...item.detail,
-                    log: [item.detail.log, error.message]
-                      .filter((entry) => entry.trim().length > 0)
-                      .join("\n"),
-                  }
-                : item.detail,
-          },
-        },
-        turnId,
-      );
-    }
-    this.runningToolCalls.clear();
-  }
-
-  private notifySubscribers(event: AgentStreamEvent, turnIdOverride?: string): void {
-    if (this.closed) {
-      return;
-    }
-    const turnId = turnIdOverride ?? this.activeForegroundTurnId;
-    const tagged = turnId ? { ...event, turnId } : event;
-    this.traceOpenCode("provider.opencode.event_emit", {
-      turnId: getAgentStreamEventTurnId(tagged),
-      event: tagged,
-    });
-    for (const callback of this.subscribers) {
-      try {
-        callback(tagged);
-      } catch {
-        // Subscriber callback error isolation
-      }
-    }
-  }
-
-  private createTurnId(): string {
-    return `opencode-turn-${this.nextTurnOrdinal++}`;
+    return this.eventBus.subscribe(callback);
   }
 
   private traceOpenCode(msg: OpenCodeTraceMessage, data: OpenCodeTraceData = {}): void {
@@ -709,7 +622,7 @@ export class OpenCodeAgentSession implements AgentSession {
         agentId: this.agentId,
         provider: "opencode",
         sessionId: this.sessionId,
-        turnId: data.turnId ?? this.activeForegroundTurnId ?? undefined,
+        turnId: data.turnId ?? this.eventBus.getActiveTurnId() ?? undefined,
         ...data,
       },
       msg,
@@ -817,10 +730,9 @@ export class OpenCodeAgentSession implements AgentSession {
       // after the abort (between here and subscribers.clear) is swallowed by
       // notifySubscribers instead of bubbling through provider-runner as an
       // unhandled rejection in whichever test the daemon hops to next.
-      this.closed = true;
+      this.eventBus.close();
       this.abortCoordinator.close();
       this.eventStreamController.close();
-      this.subscribers.clear();
       await reconcileOpenCodeSessionClose({
         client: this.client,
         sessionId: this.sessionId,
@@ -828,7 +740,6 @@ export class OpenCodeAgentSession implements AgentSession {
         logger: this.logger,
       });
       await this.deleteProviderSessionIfEphemeral();
-      this.activeForegroundTurnId = null;
     } finally {
       this.releaseServer?.();
       this.releaseServer = null;
