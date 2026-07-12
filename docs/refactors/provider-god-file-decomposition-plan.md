@@ -9,7 +9,7 @@
 
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
-- Codex 已完成三个边界切片：`codex/skills.ts` 承接扩展发现，`codex/notifications.ts` 承接 native notification 归一化，`codex/turn-config.ts` 承接 mode/sandbox/schema 与 `turn/start` 参数构建；session 保留状态处理。
+- Codex 已完成四个边界切片：`codex/skills.ts` 承接扩展发现，`codex/notifications.ts` 承接 native notification 归一化，`codex/turn-config.ts` 承接 turn 配置，`codex/models.ts` 承接模型 schema/defaults/thinking option 映射；session 保留状态处理。
 
 ## 现状
 
@@ -82,7 +82,7 @@
 - 删除从未接线的 `providers/base/`，避免其默认 turn ID、interrupt、close 与 persistence 语义被误当成稳定契约。
 - 保留现有 `AgentSession` / `AgentClient` 接口和 provider-specific 生命周期实现。
 - 优先提取无状态 helper、transport、runtime、event translator 与领域 handler。
-- Codex `codex/skills.ts`、`codex/notifications.ts` 与 `codex/turn-config.ts` 已完成，分别建立扩展发现、native notification 和 turn configuration 的稳定边界。
+- Codex `skills.ts`、`notifications.ts`、`turn-config.ts` 与 `models.ts` 已完成，分别建立扩展发现、native notification、turn configuration 和 model catalog 的稳定边界。
 
 **验收**：server typecheck/build、目标 lint、Codex skills 精确测试通过。
 
@@ -98,6 +98,7 @@
   `handleThreadStateNotification` / `respondToPermission` 等状态处理方法
 - `codex/skills.ts` —— skills/custom prompts/front matter/策略过滤（已完成）
 - `codex/turn-config.ts` —— mode/sandbox/output schema/`turn/start` 参数构建（已完成）
+- `codex/models.ts` —— model schema/config defaults/thinking option 映射（已完成）
 
 **验收**：原文件删除；typecheck + 全部 codex 相关测试通过；行为不变（靠现有测试守护）。
 
