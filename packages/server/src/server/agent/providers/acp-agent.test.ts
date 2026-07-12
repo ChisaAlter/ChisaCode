@@ -1,5 +1,6 @@
 import { type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { resolve as resolvePath } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   AgentSideConnection,
@@ -361,13 +362,13 @@ describe("ACPAgentSession terminal tools", () => {
     await session.createTerminal({
       sessionId: "session-1",
       command: "git -C /repo status --short",
-      cwd: "/repo",
+      cwd: "/tmp/chisacode-acp-test",
     });
 
     expect(spawn).toHaveBeenCalledWith(
       shell.command,
       [...shell.flag, "git -C /repo status --short"],
-      expect.objectContaining({ cwd: "/repo" }),
+      expect.objectContaining({ cwd: resolvePath("/tmp/chisacode-acp-test") }),
     );
   });
 
@@ -380,13 +381,13 @@ describe("ACPAgentSession terminal tools", () => {
       sessionId: "session-1",
       command: "git",
       args: ["status", "--short"],
-      cwd: "/repo",
+      cwd: "/tmp/chisacode-acp-test",
     });
 
     expect(spawn).toHaveBeenCalledWith(
       "git",
       ["status", "--short"],
-      expect.objectContaining({ cwd: "/repo" }),
+      expect.objectContaining({ cwd: resolvePath("/tmp/chisacode-acp-test") }),
     );
   });
 

@@ -44,6 +44,16 @@ const TEST_DAEMON_ENV_DEFAULTS: Record<string, string> = {
 };
 const TEST_DAEMON_HOST = "127.0.0.1";
 
+function buildNpxSpawnArgs(args: string[]): { command: string; args: string[] } {
+  if (process.platform !== "win32") {
+    return { command: "npx", args };
+  }
+  return {
+    command: process.env.ComSpec ?? "cmd.exe",
+    args: ["/d", "/s", "/c", "npx.cmd", ...args],
+  };
+}
+
 const DEFAULT_OUTPUT_CAPTURE_LIMIT = 256 * 1024;
 const TEST_OUTPUT_CAPTURE_LIMIT = Number.parseInt(
   process.env.CHISACODE_TEST_OUTPUT_CAPTURE_BYTES ?? `${DEFAULT_OUTPUT_CAPTURE_LIMIT}`,
@@ -233,7 +243,14 @@ export async function startTestDaemon(options?: {
   const cliSrcPath = join(cliDir, "src", "index.ts");
 
   // Start daemon process using tsx to run TypeScript directly
-  const daemonProcess = spawn("npx", ["tsx", cliSrcPath, "daemon", "start", "--foreground"], {
+  const daemonInvocation = buildNpxSpawnArgs([
+    "tsx",
+    cliSrcPath,
+    "daemon",
+    "start",
+    "--foreground",
+  ]);
+  const daemonProcess = spawn(daemonInvocation.command, daemonInvocation.args, {
     env: {
       ...process.env,
       ...TEST_DAEMON_ENV_DEFAULTS,
@@ -345,7 +362,8 @@ export async function runChisaCodeCli(
   const cliSrcPath = join(cliDir, "src", "index.ts");
 
   return new Promise((resolve, reject) => {
-    const proc = spawn("npx", ["tsx", cliSrcPath, ...args], {
+    const invocation = buildNpxSpawnArgs(["tsx", cliSrcPath, ...args]);
+    const proc = spawn(invocation.command, invocation.args, {
       env: {
         ...process.env,
         ...TEST_DAEMON_ENV_DEFAULTS,

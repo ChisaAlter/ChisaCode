@@ -668,7 +668,7 @@ describe("generative UI RPC routing compatibility", () => {
     "routes %s to the shared response contract",
     async (type) => {
       const emitted: Record<string, unknown>[] = [];
-      const prompts: string[] = [];
+      const enqueued: Array<{ agentId: string; action: string }> = [];
       const context = {
         clientId: "client-1",
         sessionId: "session-1",
@@ -680,9 +680,12 @@ describe("generative UI RPC routing compatibility", () => {
         emitBinary: () => {},
         hasBinaryChannel: () => false,
         supports: () => true,
-        getAgent: () => ({ status: "idle" }),
-        sendPromptToAgent: async (_agentId: string, text: string) => {
-          prompts.push(text);
+        agentManager: {
+          getAgent: () => ({ lifecycle: "idle" }),
+          enqueueGenerativeUiAction: (agentId: string, queuedAction: { action: string }) => {
+            enqueued.push({ agentId, action: queuedAction.action });
+            return { queued: true } as const;
+          },
         },
       } as GenerativeUiHandlerContext;
       const handler = new GenerativeUiHandler(context);
@@ -697,7 +700,7 @@ describe("generative UI RPC routing compatibility", () => {
         timestamp: 1719700000000,
       });
 
-      expect(prompts).toHaveLength(1);
+      expect(enqueued).toEqual([{ agentId: "agent-1", action: "submit" }]);
       expect(emitted).toEqual([
         {
           type: "generative_ui.action.response",

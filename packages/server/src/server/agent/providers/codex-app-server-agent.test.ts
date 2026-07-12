@@ -517,7 +517,7 @@ describe("Codex app-server provider", () => {
 
     try {
       const disposePromise = client.dispose();
-      expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+      await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith("SIGTERM"));
 
       await vi.advanceTimersByTimeAsync(2_000);
       expect(child.kill).toHaveBeenCalledWith("SIGKILL");

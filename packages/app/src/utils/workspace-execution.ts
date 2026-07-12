@@ -126,7 +126,7 @@ export function getWorkspaceExecutionAuthority(
       return {
         ok: false,
         reason: "workspace_id_missing",
-        message: "缺少 workspace ID。",
+        message: "Workspace id is required.",
       };
     }
   }
@@ -137,8 +137,8 @@ export function getWorkspaceExecutionAuthority(
       reason: "workspace_missing",
       message:
         "workspaces" in input
-          ? `找不到 workspace：${input.workspaceId ?? ""}`
-          : "找不到 workspace。",
+          ? `Workspace not found: ${input.workspaceId ?? ""}`
+          : "Workspace not found.",
     };
   }
 
@@ -147,7 +147,7 @@ export function getWorkspaceExecutionAuthority(
     return {
       ok: false,
       reason: "workspace_directory_missing",
-      message: `workspace ${workspace.id} 缺少工作目录`,
+      message: `Workspace directory is missing for workspace ${workspace.id}`,
     };
   }
 

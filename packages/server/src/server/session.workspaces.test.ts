@@ -3551,8 +3551,7 @@ test("list_available_editors_request coalesces concurrent discovery", async () =
     requestId: "req-editors-2",
   });
 
-  await Promise.resolve();
-  expect(discoveryCalls).toBe(1);
+  await vi.waitFor(() => expect(discoveryCalls).toBe(1));
 
   resolveDiscovery([{ id: "cursor", label: "Cursor" }]);
   await Promise.all([first, second]);

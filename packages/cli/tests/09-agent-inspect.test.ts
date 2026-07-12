@@ -137,7 +137,8 @@ try {
     const hasDescription =
       result.stdout.toLowerCase().includes("detail") ||
       result.stdout.toLowerCase().includes("information") ||
-      result.stdout.toLowerCase().includes("show");
+      result.stdout.toLowerCase().includes("show") ||
+      result.stdout.includes("详细信息");
     assert(hasDescription, "help should describe what inspect does");
     console.log("inspect command description is helpful\n");
   }

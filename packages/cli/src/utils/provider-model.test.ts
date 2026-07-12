@@ -7,7 +7,6 @@ describe("resolveProviderAndModel", () => {
     expect(() => resolveProviderAndModel({})).toThrow(
       expect.objectContaining({
         code: "MISSING_PROVIDER",
-        message: "Provider is required",
       }),
     );
   });

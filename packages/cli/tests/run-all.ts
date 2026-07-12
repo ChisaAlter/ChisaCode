@@ -10,7 +10,7 @@
 
 import { spawn } from "child_process";
 import { $ } from "zx";
-import { mkdtemp, readdir, rm, writeFile } from "fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join, dirname, delimiter, relative, sep } from "path";
 import { fileURLToPath } from "url";
@@ -156,11 +156,18 @@ async function collectTestFiles(dir: string, baseDir = dir): Promise<string[]> {
 // tests and package-local src tests use Vitest.
 const discoveredTestFiles = await collectTestFiles(__dirname);
 const discoveredSrcTestFiles = await collectTestFiles(join(repoRoot, "packages/cli/src"));
-const allScriptTestFiles = discoveredTestFiles
-  .filter((f) => f.match(/^\d{2}-.*\.test\.ts$/))
-  .sort();
+const scriptTestFiles = new Set(
+  discoveredTestFiles.filter((file) => file.match(/^\d{2}-.*\.test\.ts$/)),
+);
+for (const file of discoveredTestFiles.filter((candidate) => candidate.startsWith("e2e/"))) {
+  const source = await readFile(join(__dirname, file), "utf8");
+  if (source.startsWith("#!/usr/bin/env npx tsx")) {
+    scriptTestFiles.add(file);
+  }
+}
+const allScriptTestFiles = Array.from(scriptTestFiles).sort();
 const allVitestTestFiles = [
-  ...discoveredTestFiles.filter((f) => f.startsWith("e2e/")),
+  ...discoveredTestFiles.filter((file) => file.startsWith("e2e/") && !scriptTestFiles.has(file)),
   ...discoveredSrcTestFiles.map((file) => `src/${file}`),
 ].sort();
 const allTestFiles: TestEntry[] = [

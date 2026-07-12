@@ -170,8 +170,9 @@ try {
     console.log("Test 12: timeout option documents no default limit");
     const result = await $`npx chisacode wait --help`.nothrow();
     assert.strictEqual(result.exitCode, 0, "wait --help should exit 0");
+    const help = result.stdout.toLowerCase();
     assert(
-      result.stdout.toLowerCase().includes("default: no limit"),
+      help.includes("default: no limit") || result.stdout.includes("默认：无限制"),
       "help should mention timeout default is no limit",
     );
     console.log("timeout option documents no default limit\n");

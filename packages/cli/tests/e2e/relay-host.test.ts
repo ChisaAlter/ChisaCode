@@ -14,11 +14,17 @@ import { createE2ETestContext } from "../helpers/test-daemon.ts";
 
 const nodeMajor = Number((process.versions.node ?? "0").split(".")[0] ?? "0");
 const shouldRunRelayE2e = process.env.FORCE_RELAY_E2E === "1" || nodeMajor < 25;
-const wranglerCliPath = createRequire(import.meta.url).resolve("wrangler/bin/wrangler.js");
+const require = createRequire(import.meta.url);
+const wranglerCliPath = path.join(
+  path.dirname(require.resolve("wrangler/package.json")),
+  "bin",
+  "wrangler.js",
+);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const relayDir = path.resolve(__dirname, "../../../relay");
 const STARTUP_HOOK_TIMEOUT_MS = 120_000;
-const SHUTDOWN_TIMEOUT_MS = 15_000;
+const PROCESS_SHUTDOWN_TIMEOUT_MS = 15_000;
+const SHUTDOWN_HOOK_TIMEOUT_MS = 30_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -111,7 +117,7 @@ async function waitForProcessExit(relayProcess: ChildProcess, deadline: number):
 async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
   if (relayProcess.exitCode !== null) return;
   relayProcess.kill("SIGTERM");
-  await waitForProcessExit(relayProcess, Date.now() + SHUTDOWN_TIMEOUT_MS);
+  await waitForProcessExit(relayProcess, Date.now() + PROCESS_SHUTDOWN_TIMEOUT_MS);
   if (relayProcess.exitCode !== null) return;
   relayProcess.kill("SIGKILL");
   await waitForProcessExit(relayProcess, Date.now() + 2000);
@@ -208,7 +214,7 @@ async function waitForDaemonRelayRegistered(offerUrl: string, timeoutMs = 30_000
       await stopRelayProcess(relayProcess);
       relayProcess = null;
     }
-  }, SHUTDOWN_TIMEOUT_MS);
+  }, SHUTDOWN_HOOK_TIMEOUT_MS);
 
   it("runs `chisacode --host <offer-url> ls` over the relay and matches direct ls output", async () => {
     if (!ctx) throw new Error("test context not initialized");

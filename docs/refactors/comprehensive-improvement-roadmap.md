@@ -9,6 +9,13 @@
 
 ## 进行中
 
+### 架构/依赖安全/全量 CI 提升目标（2026-07-12 启动）
+
+- **目标**：继续拆解 client/provider/workspace 超大责任中心；完成 AI SDK、Claude SDK、Expo/EAS major migration；恢复 `cn-main` 全量 CI 的可信绿色基线。
+- **执行顺序**：先清理确定性 CI 失败，再迁移高风险依赖，最后按领域拆分大文件；每批独立验证、提交和推送。
+- **当前批次**：修复 workspace authority 稳定错误契约、draft `runtimeProvider` 快照、Generative UI manager queue 兼容测试、异步进程终止断言、ACP cwd 隔离测试、POSIX terminal `vi.waitFor` 误用、CLI 脚本/Vitest 分类、Wrangler 公开入口解析及 Windows `npx.cmd` 启动。
+- **状态**：进行中，直接在 `cn-main` 执行，不创建额外分支或 worktree。
+
 ### 2026-07-12 深度架构/安全/产品/代码质量审查批次（完成）
 
 - **审查报告**：[deep-code-audit-2026-07-12.md](deep-code-audit-2026-07-12.md)

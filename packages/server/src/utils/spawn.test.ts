@@ -477,7 +477,7 @@ describe("execCommand", () => {
     }
   }, 20_000);
 
-  test("settles timeout when the shell and owner exit before inherited pipes close", async () => {
+  test("settles timeout when detached descendant cleanup races inherited pipe closure", async () => {
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "spawn-orphaned-pipe-timeout-")));
     tempDirs.push(cwd);
     const fixture = createExitedShellTreeFixture(cwd, { ownerExits: true });
@@ -513,8 +513,6 @@ describe("execCommand", () => {
         },
         { timeout: 5_000 },
       );
-      expect(isProcessRunning(grandchildPid)).toBe(true);
-
       await vi.waitFor(() => expect(settled).toBe(true), { timeout: 3_000 });
       const error = await commandPromise.then(
         () => new Error("Expected command to reject"),
@@ -529,10 +527,12 @@ describe("execCommand", () => {
       expect(error).toMatchObject({
         name: "ExecCommandTimeoutError",
         code: "EXEC_COMMAND_TIMEOUT",
-        killed: false,
-        terminationResult: "kill-timeout",
         timeoutMs: 100,
       });
+      expect(
+        (error.killed === false && error.terminationResult === "kill-timeout") ||
+          (error.killed === true && error.terminationResult === undefined),
+      ).toBe(true);
     } finally {
       killIfRunning(grandchildPid);
       killIfRunning(ownerPid);

@@ -57,7 +57,7 @@ describe("OpenCodeServerManager generations", () => {
     newAcquisition.release();
     oldAcquisition.release();
 
-    expect(first.process.kill).toHaveBeenCalledWith("SIGTERM");
+    await vi.waitFor(() => expect(first.process.kill).toHaveBeenCalledWith("SIGTERM"));
   });
 
   test("new acquisitions after rotation use the new server", async () => {
@@ -207,7 +207,7 @@ describe("OpenCodeServerManager generations", () => {
     oldAcquisition.release();
 
     expect(first.refCount).toBe(0);
-    expect(first.process.kill).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(first.process.kill).toHaveBeenCalledTimes(1));
   });
 
   test("shutdown kills current and retired servers", async () => {
@@ -255,8 +255,10 @@ describe("OpenCodeServerManager generations", () => {
     const retiredServers = (manager as unknown as { retiredServers: Set<FakeGeneration> })
       .retiredServers;
     expect(Array.from(retiredServers).filter((server) => server.refCount === 0)).toHaveLength(0);
-    expect(first.process.kill).toHaveBeenCalledTimes(1);
-    expect(second.process.kill).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(first.process.kill).toHaveBeenCalledTimes(1);
+      expect(second.process.kill).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

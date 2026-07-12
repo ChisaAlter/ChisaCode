@@ -803,7 +803,10 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
         messages.push(msg);
       });
 
-      await vi.waitFor(() => messages.length > 0, { timeout: 500, interval: 20 });
+      await vi.waitFor(() => expect(messages.length).toBeGreaterThan(0), {
+        timeout: 500,
+        interval: 20,
+      });
 
       expect(messages.length).toBeGreaterThan(0);
       expect(messages[0].type).toBe("snapshot");
@@ -856,7 +859,10 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
         messages.push(msg);
       });
 
-      await vi.waitFor(() => messages.length > 0, { timeout: 500, interval: 20 });
+      await vi.waitFor(() => expect(messages.length).toBeGreaterThan(0), {
+        timeout: 500,
+        interval: 20,
+      });
       messages.length = 0;
 
       session.send({ type: "resize", rows: 30, cols: 100 });
@@ -1096,7 +1102,10 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
           .join("\n");
       });
 
-      await vi.waitFor(() => snapshotText.length > 0, { timeout: 500, interval: 20 });
+      await vi.waitFor(() => expect(snapshotText.length).toBeGreaterThan(0), {
+        timeout: 500,
+        interval: 20,
+      });
 
       expect(snapshotText).toContain("before-detach");
       expect(snapshotText).toContain("after-detach");

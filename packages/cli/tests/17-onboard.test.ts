@@ -24,14 +24,17 @@ try {
     0,
     `onboard should succeed:\nstdout:\n${onboard.stdout}\nstderr:\n${onboard.stderr}`,
   );
-  assert(onboard.stdout.includes("Scan to pair"), "onboard output should include scan header");
   assert(
-    onboard.stdout.includes("Pairing link"),
+    onboard.stdout.includes("Scan to pair") || onboard.stdout.includes("扫码配对"),
+    "onboard output should include scan header",
+  );
+  assert(
+    onboard.stdout.includes("Pairing link") || onboard.stdout.includes("配对链接"),
     "onboard output should include pairing link header",
   );
   assert(onboard.stdout.includes("#offer="), "onboard output should include pairing offer URL");
   assert(
-    onboard.stdout.includes("CLI quick reference"),
+    onboard.stdout.includes("CLI quick reference") || onboard.stdout.includes("CLI 快速参考"),
     "onboard output should include CLI quick reference",
   );
   assert(

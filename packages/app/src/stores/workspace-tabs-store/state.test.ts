@@ -209,6 +209,7 @@ describe("workspace-tabs-store reducers", () => {
       draftId: "draft-replacement",
       setup: {
         provider: "mock",
+        runtimeProvider: null,
         cwd: "/repo/worktree",
         modeId: "load-test",
         model: "ten-second-stream",
@@ -253,6 +254,7 @@ describe("workspace-tabs-store reducers", () => {
       draftId: "draft-1",
       setup: {
         provider: "mock",
+        runtimeProvider: null,
         cwd: "/repo/worktree",
         modeId: "load-test",
         model: "ten-second-stream",
