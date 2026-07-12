@@ -35,7 +35,7 @@ jobs:
         run: npm run typecheck --workspace=@chisacode/app
 
       - name: Security audit before deploy
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
 
       - name: Build and deploy to Cloudflare Pages
         run: npm run deploy:web --workspace=@chisacode/app

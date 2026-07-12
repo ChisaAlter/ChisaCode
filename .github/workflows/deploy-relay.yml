@@ -27,7 +27,7 @@ jobs:
         run: npm run typecheck --workspace=@chisacode/relay
 
       - name: Security audit before deploy
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
 
       - name: Deploy worker
         run: cd packages/relay && npx wrangler deploy

@@ -28,6 +28,7 @@
 - 修复 5 个失效 import 和 12 个直接使用但未声明的依赖归属。
 - Relay E2E 显式声明 Wrangler，并通过公开的 `wrangler/package.json` 定位 CLI，不依赖 workspace hoist 或封闭子路径。
 - Vitest Browser 升至 4.1.10，移除 4.1.7 及以下 Browser Mode RCE；Wrangler 升至 4.110.0。
+- CI 与 app/relay 发布工作流统一阻断 critical advisories；已记录的 high/moderate 通告按 major migration 单独治理。
 - 旧客户端 provider 过滤重新接回 Session 的版本兼容策略，避免向不认识新 provider id 的客户端发送 `pi` 等条目。
 - 将一条依赖微任务时序的测试断言改为 `vi.waitFor`，消除调度竞态。
 

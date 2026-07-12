@@ -15,7 +15,7 @@
 - **安全修复**：relay server socket 认证增加签发时间与 Durable Object 持久化 nonce 消费记录；默认拒绝过期、未来和重复凭证，且在关闭既有 socket 前完成校验。补重放/过期单测与真实 Wrangler E2E。
 - **产品兼容修复**：`ProviderHandler` 拆分时遗留的 `LEGACY_PROVIDER_IDS.has(provider) || true` 永真逻辑已删除，重新委托 Session 版本兼容策略；旧客户端不会收到未知 provider id。
 - **代码质量**：Knip CI 收敛为高信号依赖/未声明依赖/unresolved/binary 门禁并清零现有问题；修复失效 import、依赖归属、relay E2E hoist 偶合和异步测试竞态。
-- **依赖安全**：Vitest Browser 升至 4.1.10，Wrangler 升至 4.110.0；CI 阻断 critical advisories。剩余 high/moderate 主要来自 AI SDK 与 Expo/EAS 工具链，major migration 单独追踪，不使用错误的自动降级建议。
+- **依赖安全**：Vitest Browser 升至 4.1.10，Wrangler 升至 4.110.0；CI 与 app/relay 发布工作流统一阻断 critical advisories。剩余 high/moderate 主要来自 AI SDK 与 Expo/EAS 工具链，major migration 单独追踪，不使用错误的自动降级建议。
 - **架构证据**：dependency-cruiser 807 modules / 1888 dependencies / 0 violations。边界健康，但 4k-5k 行责任中心仍是主要扣分项。
 - **状态**：完成。本地精确验证通过；推送后由远端 CI 持续复验。
 
