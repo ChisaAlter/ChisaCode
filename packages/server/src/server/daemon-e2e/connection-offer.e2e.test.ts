@@ -12,6 +12,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { generateLocalPairingOffer } from "../pairing-offer.js";
 import { createTestChisaCodeDaemon } from "../test-utils/chisacode-daemon.js";
 
+const TEST_PASSWORD_HASH = "$2b$12$OLxyuuP9uLK30Uzc4wQX0O6liuU/Q1t5P2b0Ebf36mULvpVK3DRZW";
+
 function createCapturingLogger() {
   const lines: string[] = [];
   const stream = new Writable({
@@ -118,6 +120,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
       listen: "0.0.0.0",
       logger,
       relayEnabled: true,
+      auth: { password: TEST_PASSWORD_HASH },
     });
 
     try {
@@ -164,6 +167,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
       relayEnabled: true,
       chisacodeHomeRoot: tempHomeRoot,
       cleanup: false,
+      auth: { password: TEST_PASSWORD_HASH },
     });
 
     let staticDir1: string | null = daemon1.staticDir;
@@ -192,6 +196,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
         relayEnabled: true,
         chisacodeHomeRoot: tempHomeRoot,
         cleanup: false,
+        auth: { password: TEST_PASSWORD_HASH },
       });
       staticDir2 = daemon2.staticDir;
 
@@ -242,6 +247,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
       ...process.env,
       CHISACODE_HOME: tempHome,
       CHISACODE_LISTEN: `0.0.0.0:${port}`,
+      CHISACODE_PASSWORD: "correct-password",
       OPENAI_API_KEY: "",
       CHISACODE_DICTATION_ENABLED: "0",
       CHISACODE_VOICE_MODE_ENABLED: "0",

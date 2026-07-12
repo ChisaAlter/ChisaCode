@@ -39,13 +39,11 @@ function waitForAgentUpdate(
   });
 }
 
-function pickTwoDistinctModels(models: Array<{ id: string }>): [string, string] {
-  const ids = Array.from(new Set(models.map((m) => m.id))).filter(Boolean);
-  if (ids.length < 2) {
-    throw new Error(`Need at least 2 models to test switching; got ${ids.length}`);
-  }
-  return [ids[0], ids[1]];
-}
+const TEST_MODEL_PAIRS = {
+  claude: ["haiku", "sonnet"],
+  codex: ["gpt-5.4-mini", "gpt-5.4"],
+  opencode: ["test-model", "test-model-2"],
+} as const;
 
 function isBinaryInstalled(binary: string): boolean {
   try {
@@ -89,11 +87,7 @@ describe.each(["claude", "codex", "opencode"] as const)("live model switching (%
     async () => {
       const cwd = tmpCwd();
       try {
-        const modelList = await ctx.client.listProviderModels(provider);
-        if (!modelList.models || modelList.models.length === 0) {
-          throw new Error(`No models returned for provider ${provider}`);
-        }
-        const [modelA, modelB] = pickTwoDistinctModels(modelList.models);
+        const [modelA, modelB] = TEST_MODEL_PAIRS[provider];
 
         const agent = await ctx.client.createAgent({
           provider,

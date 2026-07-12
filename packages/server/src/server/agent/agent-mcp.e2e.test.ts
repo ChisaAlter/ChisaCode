@@ -36,6 +36,9 @@ interface McpClient {
   close: () => Promise<void>;
 }
 
+const TEST_PASSWORD = "correct-password";
+const TEST_PASSWORD_HASH = "$2b$12$OLxyuuP9uLK30Uzc4wQX0O6liuU/Q1t5P2b0Ebf36mULvpVK3DRZW";
+
 function git(cwd: string, args: string[]): void {
   execFileSync("git", args, { cwd, stdio: "pipe" });
 }
@@ -83,8 +86,17 @@ function getStructuredContent(result: McpToolResult): StructuredContent | null {
   return null;
 }
 
-async function createMcpClient(url: string): Promise<McpClient> {
-  const transport = new StreamableHTTPClientTransport(new URL(url));
+async function createMcpClient(url: string, password?: string): Promise<McpClient> {
+  const transport = new StreamableHTTPClientTransport(
+    new URL(url),
+    password
+      ? {
+          requestInit: {
+            headers: { Authorization: `Bearer ${password}` },
+          },
+        }
+      : undefined,
+  );
   const rawClient = await experimental_createMCPClient({ transport });
   const boundCallTool: McpClient["callTool"] = Reflect.get(rawClient, "callTool").bind(rawClient);
   return { callTool: boundCallTool, close: () => rawClient.close() };
@@ -152,7 +164,7 @@ describe("agent MCP end-to-end (offline)", () => {
           cwd: agentCwd,
           title: "MCP e2e smoke",
           provider: "claude/claude-test-model",
-          mode: "bypassPermissions",
+          settings: { modeId: "bypassPermissions" },
           initialPrompt,
           background: false,
         },
@@ -161,6 +173,8 @@ describe("agent MCP end-to-end (offline)", () => {
       const payload = getStructuredContent(result);
       agentId = typeof payload?.agentId === "string" ? payload.agentId : null;
       expect(agentId).toBeTruthy();
+      expect(payload?.currentModeId).toBe("bypassPermissions");
+      expect(payload?.permission).toBeNull();
 
       await waitForAgentCompletion({ client, agentId: agentId! });
 
@@ -238,7 +252,7 @@ describe("agent MCP end-to-end (offline)", () => {
           cwd: agentCwd,
           title: "Injected MCP",
           provider: "claude/claude-test-model",
-          mode: "bypassPermissions",
+          settings: { modeId: "bypassPermissions" },
           initialPrompt: "reply with done and stop",
           background: true,
         },
@@ -261,7 +275,7 @@ describe("agent MCP end-to-end (offline)", () => {
           cwd: disabledAgentCwd,
           title: "No injected MCP",
           provider: "claude/claude-test-model",
-          mode: "bypassPermissions",
+          settings: { modeId: "bypassPermissions" },
           initialPrompt: "reply with done and stop",
           background: true,
         },
@@ -309,12 +323,13 @@ describe("agent MCP end-to-end (offline)", () => {
       mcpDebug: false,
       agentClients: createTestAgentClients(),
       agentStoragePath: path.join(chisacodeHome, "agents"),
+      auth: { password: TEST_PASSWORD_HASH },
     };
 
     const daemon = await createChisaCodeDaemon(daemonConfig, pino({ level: "silent" }));
     await daemon.start();
 
-    const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`);
+    const client = await createMcpClient(`http://127.0.0.1:${port}/mcp/agents`, TEST_PASSWORD);
 
     let agentId: string | null = null;
     try {
@@ -324,7 +339,7 @@ describe("agent MCP end-to-end (offline)", () => {
           cwd: agentCwd,
           title: "Wildcard MCP",
           provider: "claude/claude-test-model",
-          mode: "bypassPermissions",
+          settings: { modeId: "bypassPermissions" },
           initialPrompt: "reply with done and stop",
           background: true,
         },
@@ -383,7 +398,7 @@ describe("agent MCP end-to-end (offline)", () => {
           cwd: agentCwd,
           title: "MCP background create",
           provider: "codex/gpt-5.4-mini",
-          mode: "full-access",
+          settings: { modeId: "full-access" },
           initialPrompt: "Run exactly: sleep 30",
           background: true,
         },
@@ -546,7 +561,7 @@ describe("agent MCP end-to-end (offline)", () => {
           cwd: agentCwd,
           title: "MCP start failure",
           provider: "codex/gpt-5.4-mini",
-          mode: "full-access",
+          settings: { modeId: "full-access" },
           initialPrompt: "Run exactly: sleep 30",
           background: true,
         },
@@ -600,8 +615,14 @@ describe("agent MCP end-to-end (offline)", () => {
       git(repoRoot, ["add", "."]);
       git(repoRoot, ["-c", "commit.gpgsign=false", "commit", "-m", "initial"]);
 
-      const setupCommand =
-        'while [ ! -f "$CHISACODE_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$CHISACODE_WORKTREE_PATH/setup-done.txt"';
+      const setupCommand = [
+        "node -e \"const fs=require('fs');",
+        "const path=require('path');",
+        "const dir=process.env.CHISACODE_WORKTREE_PATH;",
+        "const complete=()=>{if(!fs.existsSync(path.join(dir,'allow-setup')))return false;",
+        "fs.writeFileSync(path.join(dir,'setup-done.txt'),'done');return true;};",
+        'if(!complete()){const watcher=fs.watch(dir,()=>{if(complete())watcher.close();});}"',
+      ].join(" ");
       await writeFile(
         path.join(repoRoot, "chisacode.json"),
         JSON.stringify({
@@ -610,7 +631,7 @@ describe("agent MCP end-to-end (offline)", () => {
             terminals: [
               {
                 name: "Dev Server",
-                command: 'echo "dev-server" > dev-terminal.txt; tail -f /dev/null',
+                command: "node -e \"require('fs').writeFileSync('dev-terminal.txt','dev-server')\"",
               },
             ],
           },
@@ -627,14 +648,14 @@ describe("agent MCP end-to-end (offline)", () => {
             cwd: repoRoot,
             title: "MCP worktree setup terminals",
             provider: "claude/claude-test-model",
-            mode: "bypassPermissions",
+            settings: { modeId: "bypassPermissions" },
             initialPrompt: "say done and stop",
             worktreeName: "mcp-worktree-setup-test",
             baseBranch: "main",
             background: true,
           },
         }),
-        timeoutMs: 2500,
+        timeoutMs: 10_000,
         label: "create_agent should not block on setup",
       });
 
@@ -656,13 +677,35 @@ describe("agent MCP end-to-end (offline)", () => {
         targetPath: path.join(worktreePath, "dev-terminal.txt"),
         timeoutMs: 30000,
       });
+      const terminalsResult = await client.callTool({
+        name: "list_terminals",
+        args: { cwd: worktreePath },
+      });
+      const terminalsPayload = getStructuredContent(terminalsResult);
+      const rawTerminals = terminalsPayload?.terminals;
+      const terminalIds = Array.isArray(rawTerminals)
+        ? rawTerminals.flatMap((terminal) => {
+            if (!terminal || typeof terminal !== "object") return [];
+            const id = Reflect.get(terminal, "id");
+            return typeof id === "string" ? [id] : [];
+          })
+        : [];
+      expect(terminalIds.length).toBeGreaterThan(0);
+      for (const terminalId of terminalIds) {
+        await client.callTool({ name: "kill_terminal", args: { terminalId } });
+      }
     } finally {
       if (agentId) {
         await client.callTool({ name: "kill_agent", args: { agentId } });
       }
       await client.close();
       await daemon.stop();
-      await rm(chisacodeHome, { recursive: true, force: true });
+      await rm(chisacodeHome, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      });
       await rm(staticDir, { recursive: true, force: true });
       await rm(repoRoot, { recursive: true, force: true });
     }

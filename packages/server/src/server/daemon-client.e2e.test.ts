@@ -6,6 +6,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { WebSocket } from "ws";
 
 import {
   createDaemonTestContext,
@@ -15,6 +16,7 @@ import {
 import { createTestChisaCodeDaemon } from "./test-utils/chisacode-daemon.js";
 import { getFullAccessConfig, getAskModeConfig } from "./daemon-e2e/agent-configs.js";
 import { parsePcm16MonoWav, wordSimilarity } from "./test-utils/dictation-e2e.js";
+import { withTimeout } from "../utils/promise-timeout.js";
 import type {
   AgentClient,
   AgentPersistenceHandle,
@@ -25,6 +27,7 @@ import type {
 } from "./agent/agent-sdk-types.js";
 
 const openaiApiKey = process.env.OPENAI_API_KEY ?? null;
+const TEST_PASSWORD_HASH = "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76";
 
 const localModelsDir =
   process.env.CHISACODE_LOCAL_MODELS_DIR ??
@@ -101,26 +104,43 @@ function removeTempDirSync(directory: string): void {
 
 test("DaemonClient connects to a password-protected daemon", async () => {
   const daemon = await createTestChisaCodeDaemon({
-    auth: { password: "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76" },
+    auth: { password: TEST_PASSWORD_HASH },
   });
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
     password: "shared-secret",
+    reconnect: { enabled: false },
   });
 
   try {
-    await client.connect();
-    const agents = await client.fetchAgents();
+    await withTimeout({
+      promise: client.connect(),
+      timeoutMs: 5_000,
+      label: "password-protected daemon connect",
+    });
+    const agents = await withTimeout({
+      promise: client.fetchAgents(),
+      timeoutMs: 5_000,
+      label: "password-protected daemon fetch agents",
+    });
     expect(agents.entries).toEqual([]);
   } finally {
-    await client.close();
-    await daemon.close();
+    await withTimeout({
+      promise: client.close(),
+      timeoutMs: 5_000,
+      label: "password-protected daemon client close",
+    });
+    await withTimeout({
+      promise: daemon.close(),
+      timeoutMs: 5_000,
+      label: "password-protected daemon close",
+    });
   }
-});
+}, 30_000);
 
 test("DaemonClient surfaces password auth failures from WebSocket close reasons", async () => {
   const daemon = await createTestChisaCodeDaemon({
-    auth: { password: "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76" },
+    auth: { password: TEST_PASSWORD_HASH },
   });
   const missingPasswordClient = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
@@ -144,6 +164,42 @@ test("DaemonClient surfaces password auth failures from WebSocket close reasons"
     await daemon.close();
   }
 });
+
+test("WebSocket authentication bounds messages received before password verification", async () => {
+  const daemon = await createTestChisaCodeDaemon({
+    auth: { password: TEST_PASSWORD_HASH },
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${daemon.port}/ws`, [
+    "chisacode.bearer.shared-secret",
+  ]);
+
+  try {
+    const closed = await withTimeout({
+      promise: new Promise<{ code: number; reason: string }>((resolve, reject) => {
+        socket.once("error", reject);
+        socket.once("open", () => {
+          socket.send(Buffer.alloc(64 * 1024 + 1));
+        });
+        socket.once("close", (code, reason) => {
+          resolve({
+            code,
+            reason: reason.toString(),
+          });
+        });
+      }),
+      timeoutMs: 5_000,
+      label: "pre-authentication WebSocket message limit",
+    });
+
+    expect(closed).toEqual({
+      code: 1008,
+      reason: "Pre-authentication message limit exceeded",
+    });
+  } finally {
+    socket.terminate();
+    await daemon.close();
+  }
+}, 30_000);
 
 test("createAgent without an initial prompt returns an idle snapshot", async () => {
   const daemon = await createTestChisaCodeDaemon();

@@ -1217,9 +1217,23 @@ class FakeAgentClient implements AgentClient {
           label: "gpt-5.4-mini",
           isDefault: true,
         },
+        {
+          provider: this.provider,
+          id: "gpt-5.4",
+          label: "gpt-5.4",
+          isDefault: false,
+        },
       ];
     }
-    return [{ provider: this.provider, id: "test-model", label: "Test Model", isDefault: true }];
+    return [
+      { provider: this.provider, id: "test-model", label: "Test Model", isDefault: true },
+      {
+        provider: this.provider,
+        id: "test-model-2",
+        label: "Test Model 2",
+        isDefault: false,
+      },
+    ];
   }
 
   async isAvailable(): Promise<boolean> {

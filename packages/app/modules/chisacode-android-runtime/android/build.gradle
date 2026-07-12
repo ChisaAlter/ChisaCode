@@ -2,6 +2,9 @@ apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 apply plugin: "expo-module-gradle-plugin"
 
+group = "expo.modules.chisacoderuntime"
+version = "1.0.0"
+
 def safeExtGetRoot(prop, fallback) {
   rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }
@@ -13,6 +16,8 @@ android {
   defaultConfig {
     minSdk safeExtGetRoot("minSdkVersion", 29)
     targetSdk safeExtGetRoot("targetSdkVersion", 36)
+    versionCode 1
+    versionName "1.0.0"
   }
 
   compileOptions {

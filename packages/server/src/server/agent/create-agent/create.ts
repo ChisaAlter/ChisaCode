@@ -291,7 +291,7 @@ async function resolveMcpCreateAgent(
     provisionalTitle: input.title.trim(),
     setupContinuation,
     background: input.background,
-    promptFailure: "log",
+    promptFailure: "throw",
   };
 }
 

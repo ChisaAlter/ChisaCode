@@ -62,6 +62,9 @@ import { summarizeUntrustedLogIdentifier } from "./log-metadata.js";
 import { isWebSocketPayloadWithinLimit, WEBSOCKET_MAX_PAYLOAD_BYTES } from "./websocket-limits.js";
 
 const WS_CLOSE_DAEMON_AUTH_FAILED = 4401;
+const WS_CLOSE_POLICY_VIOLATION = 1008;
+const PRE_AUTH_MAX_MESSAGE_COUNT = 4;
+const PRE_AUTH_MAX_TOTAL_BYTES = 64 * 1024;
 
 export interface ExternalSocketMetadata {
   transport: "relay";
@@ -614,23 +617,55 @@ export class VoiceAssistantWebSocketServer {
     request: IncomingMessage,
     password: string | undefined,
   ): Promise<void> {
-    if (password) {
-      const requestMetadata = extractSocketRequestMetadata(request);
-      const protocol = extractWsBearerProtocol(request.headers["sec-websocket-protocol"]);
-      const token = extractWsBearerToken(protocol);
-      const isAuthorized = await isBearerTokenValidAsync({ password, token });
-      if (!isAuthorized) {
-        const reason = token === null ? "Password required" : "Incorrect password";
-        this.logger.warn(
-          { ...requestMetadata, hasToken: token !== null },
-          "Rejected WebSocket connection with invalid daemon password",
-        );
-        ws.close(WS_CLOSE_DAEMON_AUTH_FAILED, reason);
-        return;
-      }
+    if (!password) {
+      await this.attachSocket(ws, request);
+      return;
     }
 
+    const requestMetadata = extractSocketRequestMetadata(request);
+    const earlyMessages: Array<Buffer | ArrayBuffer | Buffer[] | string> = [];
+    let earlyMessageBytes = 0;
+    const queueEarlyMessage = (data: Buffer | ArrayBuffer | Buffer[] | string) => {
+      const messageBytes = getRawMessageByteLength(data);
+      if (
+        earlyMessages.length >= PRE_AUTH_MAX_MESSAGE_COUNT ||
+        earlyMessageBytes + messageBytes > PRE_AUTH_MAX_TOTAL_BYTES
+      ) {
+        ws.off("message", queueEarlyMessage);
+        this.logger.warn(
+          { ...requestMetadata, messageCount: earlyMessages.length, earlyMessageBytes },
+          "Rejected WebSocket connection exceeding pre-authentication message limits",
+        );
+        ws.close(WS_CLOSE_POLICY_VIOLATION, "Pre-authentication message limit exceeded");
+        return;
+      }
+      earlyMessageBytes += messageBytes;
+      earlyMessages.push(data);
+    };
+    ws.on("message", queueEarlyMessage);
+
+    const protocol = extractWsBearerProtocol(request.headers["sec-websocket-protocol"]);
+    const token = extractWsBearerToken(protocol);
+    const isAuthorized = await isBearerTokenValidAsync({ password, token });
+    if (!isAuthorized) {
+      ws.off("message", queueEarlyMessage);
+      const reason = token === null ? "Password required" : "Incorrect password";
+      this.logger.warn(
+        { ...requestMetadata, hasToken: token !== null },
+        "Rejected WebSocket connection with invalid daemon password",
+      );
+      ws.close(WS_CLOSE_DAEMON_AUTH_FAILED, reason);
+      return;
+    }
+
+    ws.off("message", queueEarlyMessage);
+    if (ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
     await this.attachSocket(ws, request);
+    for (const data of earlyMessages) {
+      await this.handleRawMessage(ws, data);
+    }
   }
 
   public broadcast(message: WSOutboundMessage): void {
@@ -1795,6 +1830,16 @@ function extractSocketRequestMetadata(request: unknown): SocketRequestMetadata {
     ...(userAgent ? { userAgent } : {}),
     ...(remoteAddress ? { remoteAddress } : {}),
   };
+}
+
+function getRawMessageByteLength(data: Buffer | ArrayBuffer | Buffer[] | string): number {
+  if (typeof data === "string") {
+    return Buffer.byteLength(data);
+  }
+  if (Array.isArray(data)) {
+    return data.reduce((total, chunk) => total + chunk.byteLength, 0);
+  }
+  return data.byteLength;
 }
 
 function selectWebSocketProtocol(
