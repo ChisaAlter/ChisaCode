@@ -21,7 +21,6 @@ import {
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentUsage,
-  type McpServerConfig,
   type ToolCallTimelineItem,
 } from "../../agent-sdk-types.js";
 import {
@@ -52,12 +51,12 @@ import {
   type OpenCodeAgentConfig,
 } from "./catalog.js";
 import { OpenCodeEventStreamController } from "./event-stream.js";
+import { OpenCodePermissionController } from "./permission-controller.js";
+import { OpenCodeMcpController } from "./mcp-controller.js";
 import {
   hasNormalizedOpenCodeUsage,
   maxFiniteNumber,
   mergeOpenCodeStepFinishUsage,
-  readNonEmptyString,
-  readOpenCodeRecord,
   resolveOpenCodeModelLookupKeyFromAssistantMessage,
   translateOpenCodeEvent,
   type OpenCodeMessageRole,
@@ -66,13 +65,9 @@ import {
 } from "./event-translator.js";
 import {
   buildOpenCodeAutoAcceptFeature,
-  isAlreadyPresentMcpError,
   isOpenCodeAutoAcceptEnabled,
   isOpenCodeHeadersTimeoutFailure,
   isOpenCodeNotFoundError,
-  resolveOpenCodePermissionReply,
-  toOpenCodeMcpConfig,
-  type OpenCodeMcpConfig,
 } from "./helpers.js";
 import { revertOpenCodeConversationAndFiles } from "./rewind.js";
 import { buildOpenCodeReplayTimelineEvents, filterOpenCodeRevertedMessages } from "./history.js";
@@ -135,15 +130,6 @@ async function reconcileOpenCodeSessionClose(params: {
       "Failed to archive OpenCode session during close",
     );
   }
-}
-
-function readOpenCodeMcpOperationError(data: unknown, name: string): unknown {
-  const root = readOpenCodeRecord(data);
-  const entry = readOpenCodeRecord(root?.[name]);
-  if (!entry || entry.status !== "failed") {
-    return undefined;
-  }
-  return entry.error ?? `OpenCode reported MCP server '${name}' failed`;
 }
 
 function getOpenCodeAttachmentExtension(mimeType: string): string {
@@ -277,13 +263,11 @@ export class OpenCodeAgentSession implements AgentSession {
   private readonly logger: Logger;
   private readonly modelContextWindowsByModelKey: ReadonlyMap<string, number>;
   private currentMode: string = "default";
-  private autoAcceptEnabled = false;
-  private pendingPermissions = new Map<string, AgentPermissionRequest>();
+  private readonly permissionController: OpenCodePermissionController;
   private readonly abortCoordinator: OpenCodeAbortCoordinator;
   private accumulatedUsage: AgentUsage = {};
   private sessionTotalCostUsd: number | undefined;
-  private mcpConfigured = false;
-  private mcpSetupPromise: Promise<void> | null = null;
+  private readonly mcpController: OpenCodeMcpController;
   /** Tracks the role of each message by ID to distinguish user from assistant messages */
   private messageRoles = new Map<string, OpenCodeMessageRole>();
   private pendingUserMessageText: string | null = null;
@@ -329,6 +313,16 @@ export class OpenCodeAgentSession implements AgentSession {
       getDirectory: () => this.config.cwd,
       logger: this.logger,
     });
+    this.mcpController = new OpenCodeMcpController({
+      client: this.client,
+      getDirectory: () => this.config.cwd,
+    });
+    this.permissionController = new OpenCodePermissionController({
+      client: this.client,
+      getDirectory: () => this.config.cwd,
+      logger: this.logger,
+      autoAcceptEnabled: isOpenCodeAutoAcceptEnabled(config),
+    });
     this.eventStreamController = new OpenCodeEventStreamController({
       client: this.client,
       sessionId: this.sessionId,
@@ -343,7 +337,6 @@ export class OpenCodeAgentSession implements AgentSession {
     });
     this.modelContextWindowsByModelKey = modelContextWindowsByModelKey;
     this.currentMode = normalizeOpenCodeModeId(config.modeId);
-    this.autoAcceptEnabled = isOpenCodeAutoAcceptEnabled(config);
     this.releaseServer = releaseServer ?? null;
     this.persistSession = persistSession;
     this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
@@ -434,7 +427,7 @@ export class OpenCodeAgentSession implements AgentSession {
     this.subAgentCallIdByChildSessionId.clear();
     this.pendingChildToolPartsBySessionId.clear();
     const turnAbortController = this.abortCoordinator.beginTurn();
-    await this.ensureMcpServersConfigured();
+    await this.mcpController.ensureConfigured(this.config.mcpServers);
     const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
     this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
 
@@ -790,7 +783,7 @@ export class OpenCodeAgentSession implements AgentSession {
     }
 
     const enabled = value === true;
-    this.autoAcceptEnabled = enabled;
+    this.permissionController.setAutoAcceptEnabled(enabled);
     this.config.featureValues = {
       ...this.config.featureValues,
       [OPENCODE_AUTO_ACCEPT_FEATURE_ID]: enabled,
@@ -798,56 +791,11 @@ export class OpenCodeAgentSession implements AgentSession {
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {
-    return Array.from(this.pendingPermissions.values());
+    return this.permissionController.getPending();
   }
 
   async respondToPermission(requestId: string, response: AgentPermissionResponse): Promise<void> {
-    const pending = this.pendingPermissions.get(requestId);
-    if (!pending) {
-      throw new Error(`No pending permission request with id '${requestId}'`);
-    }
-
-    if (pending.kind === "question") {
-      if (response.behavior === "deny") {
-        await this.client.question.reject({
-          requestID: requestId,
-          directory: this.config.cwd,
-        });
-      } else {
-        const answersRecord = readOpenCodeRecord(response.updatedInput?.answers);
-        const questions = Array.isArray(pending.input?.questions) ? pending.input.questions : [];
-        const answers = questions.map((item) => {
-          const header = readNonEmptyString(readOpenCodeRecord(item)?.header);
-          const rawAnswer = header ? readNonEmptyString(answersRecord?.[header]) : null;
-          if (!rawAnswer) {
-            return [];
-          }
-          return rawAnswer
-            .split(",")
-            .map((entry) => entry.trim())
-            .filter((entry) => entry.length > 0);
-        });
-
-        await this.client.question.reply({
-          requestID: requestId,
-          directory: this.config.cwd,
-          answers,
-        });
-      }
-
-      this.pendingPermissions.delete(requestId);
-      return;
-    }
-
-    const reply = resolveOpenCodePermissionReply(response);
-    await this.client.permission.reply({
-      requestID: requestId,
-      directory: this.config.cwd,
-      reply,
-      message: response.behavior === "deny" ? response.message : undefined,
-    });
-
-    this.pendingPermissions.delete(requestId);
+    await this.permissionController.respond(requestId, response);
   }
 
   describePersistence(): AgentPersistenceHandle | null {
@@ -958,68 +906,6 @@ export class OpenCodeAgentSession implements AgentSession {
     return { providerID: this.modelPrefix ?? "opencode", modelID: model };
   }
 
-  private async ensureMcpServersConfigured(): Promise<void> {
-    if (this.mcpConfigured) {
-      return;
-    }
-
-    const mcpServers = this.config.mcpServers;
-    if (!mcpServers || Object.keys(mcpServers).length === 0) {
-      this.mcpConfigured = true;
-      return;
-    }
-
-    if (!this.mcpSetupPromise) {
-      this.mcpSetupPromise = this.configureMcpServers(mcpServers);
-    }
-
-    try {
-      await this.mcpSetupPromise;
-      this.mcpConfigured = true;
-    } catch (error) {
-      this.mcpSetupPromise = null;
-      throw error;
-    }
-  }
-
-  private async configureMcpServers(mcpServers: Record<string, McpServerConfig>): Promise<void> {
-    await Promise.all(
-      Object.entries(mcpServers).map(([name, serverConfig]) =>
-        this.registerMcpServer(name, toOpenCodeMcpConfig(serverConfig)),
-      ),
-    );
-  }
-
-  private async registerMcpServer(name: string, config: OpenCodeMcpConfig): Promise<void> {
-    await this.runMcpOperation("add", name, () =>
-      this.client.mcp.add({
-        directory: this.config.cwd,
-        name,
-        config,
-      }),
-    );
-  }
-
-  private async runMcpOperation(
-    operation: "add",
-    name: string,
-    run: () => Promise<{ data?: unknown; error?: unknown }>,
-  ): Promise<void> {
-    const response = await run();
-    const error = response.error ?? readOpenCodeMcpOperationError(response.data, name);
-    if (!error) {
-      return;
-    }
-
-    if (isAlreadyPresentMcpError(error)) {
-      return;
-    }
-
-    throw new Error(
-      `Failed to ${operation} OpenCode MCP server '${name}': ${toDiagnosticErrorMessage(error)}`,
-    );
-  }
-
   private async translateEvent(event: OpenCodeEvent): Promise<AgentStreamEvent[]> {
     const translated = translateOpenCodeEvent(event, {
       sessionId: this.sessionId,
@@ -1054,11 +940,10 @@ export class OpenCodeAgentSession implements AgentSession {
 
     for (const translatedEvent of translated) {
       if (translatedEvent.type === "permission_requested") {
-        const autoApproved = await this.tryAutoApproveToolPermission(translatedEvent.request);
-        if (autoApproved) {
+        const shouldSurface = await this.permissionController.register(translatedEvent.request);
+        if (!shouldSurface) {
           continue;
         }
-        this.pendingPermissions.set(translatedEvent.request.id, translatedEvent.request);
       }
       if (translatedEvent.type === "turn_completed") {
         if (hasNormalizedOpenCodeUsage(this.accumulatedUsage)) {
@@ -1072,27 +957,6 @@ export class OpenCodeAgentSession implements AgentSession {
     }
 
     return events;
-  }
-
-  private async tryAutoApproveToolPermission(request: AgentPermissionRequest): Promise<boolean> {
-    if (!this.autoAcceptEnabled || request.kind !== "tool") {
-      return false;
-    }
-
-    try {
-      await this.client.permission.reply({
-        requestID: request.id,
-        directory: this.config.cwd,
-        reply: "once",
-      });
-      return true;
-    } catch (error) {
-      this.logger.warn(
-        { err: error, requestId: request.id },
-        "Failed to auto-approve OpenCode tool permission",
-      );
-      return false;
-    }
   }
 
   private resolveSelectedModelContextWindowMaxTokens(): number | undefined {
