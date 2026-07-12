@@ -9,17 +9,17 @@
 
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
-- Codex 已完成三十一个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
+- Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 828 行；Claude/OpenCode 仍有 3.7k-5.1k 行责任中心，重复模式风险仍高。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude/OpenCode 仍有 3.7k-5.1k 行责任中心，重复模式风险仍高。
 
 | 文件                        | 行数 | Session 类                   | Client 类                                     | private 方法数 | import 数 |
 | --------------------------- | ---- | ---------------------------- | --------------------------------------------- | -------------- | --------- |
 | `codex-app-server-agent.ts` | 55   | compatibility façade         | public wrapper → `codex/client.ts`            | 0              | 4         |
-| `codex/session.ts`          | 828  | `CodexAppServerAgentSession` | —                                             | 18             | 32        |
+| `codex/session.ts`          | 715  | `CodexAppServerAgentSession` | —                                             | 15             | 29        |
 | `claude/agent.ts`           | 5185 | `ClaudeAgentSession`         | `ClaudeAgentClient`                           | ~71            | 24        |
 | `opencode-agent.ts`         | 3750 | `OpenCodeAgentSession`       | `OpenCodeAgentClient` + `MimoCodeAgentClient` | ~18            | 21        |
 
@@ -80,7 +80,7 @@
 - 删除从未接线的 `providers/base/`，避免其默认 turn ID、interrupt、close 与 persistence 语义被误当成稳定契约。
 - 保留现有 `AgentSession` / `AgentClient` 接口和 provider-specific 生命周期实现。
 - 优先提取无状态 helper、transport、runtime、event translator 与领域 handler。
-- Codex `skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立 client create/resume/session factory、稳定 façade、launch/version/env、initialize/MCP/custom provider、thread model/start/resume bootstrap、collaboration/skills metadata、persisted history state、connection lifecycle、slash-command/out-of-band command orchestration、session runtime/persistence state、client feature gate/persistence/models/diagnostics、tool/delta/item/turn notification lifecycle、native notification parse/route、turn config、model catalog、state/timeline、sub-agent、permission handler、event bus、rewind index、image attachment 和 history pipeline 边界。
+- Codex `skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts` 已完成，建立 client create/resume/session factory、稳定 façade、launch/version/env、initialize/MCP/custom provider、thread model/start/resume bootstrap、collaboration/skills metadata、persisted history state、connection lifecycle、slash-command/out-of-band command orchestration、session runtime/persistence state、foreground turn execution、client feature gate/persistence/models/diagnostics、tool/delta/item/turn notification lifecycle、native notification parse/route、turn config、model catalog、state/timeline、sub-agent、permission handler、event bus、rewind index、image attachment 和 history pipeline 边界。
 
 **验收**：server typecheck/build、目标 lint、Codex skills 精确测试通过。
 
@@ -100,6 +100,7 @@
 - `codex/session-connection.ts` —— client ownership、并发 connect 去重、initialize handshake、失败清理与 close 竞态（已完成）
 - `codex/session-commands.ts` —— slash-command 解析、custom prompt/skill 展开、命令目录及 `/compact`/`/goal` 编排（已完成）
 - `codex/session-runtime.ts` —— config/mode/feature/service tier、runtime info cache 与 persistence metadata（已完成）
+- `codex/session-turn-execution.ts` —— foreground/native turn state、run/start/interrupt、参数构建与启动日志（已完成）
 - `codex/notifications.ts` —— notification schema/parser/type guard（已完成）
 - `codex/notification-router.ts` —— schema parse、delta 判别、notification kind 分派（已完成）
 - `codex/notification-stream-state.ts` —— delta/output 缓冲、生命周期去重、terminal 关联（已完成）
@@ -121,7 +122,7 @@
 - `codex/turn-config.ts` —— mode/sandbox/output schema/`turn/start` 参数构建（已完成）
 - `codex/models.ts` —— model schema/config defaults/thinking option 映射（已完成）
 
-**验收**：原入口收敛为显式兼容 façade；session/client/transport 分离；typecheck 与对应 Codex 聚焦测试通过；Session 内部 handler 按后续切片继续拆分。
+**验收**：原入口收敛为显式兼容 façade；session/client/transport 分离；typecheck 与对应 Codex 聚焦测试通过；Session 已降至 715 行 orchestrator。`rewind.ts` 已拥有 fork/rollback 核心语义，保留 Session 中的窄接线，不再创建重复 controller。
 
 ### Slice 2：Claude 拆分
 

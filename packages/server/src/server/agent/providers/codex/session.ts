@@ -18,7 +18,6 @@ import {
 import type { Logger } from "pino";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
-import { composeSystemPromptParts } from "../../system-prompt.js";
 import {
   CodexAppServerClient,
   parseCodexThreadForkResponse,
@@ -31,7 +30,6 @@ import {
 } from "./app-server-transport.js";
 import { revertCodexConversation } from "./rewind.js";
 import { CodexSessionEventBus } from "./session-event-bus.js";
-import { buildRuntimeModelIdentityInstructions } from "./runtime-config.js";
 import type { CodexClientLike } from "./client-runtime.js";
 import {
   CODEX_APP_SERVER_CAPABILITIES,
@@ -57,6 +55,7 @@ import { CodexSessionMetadata } from "./session-metadata.js";
 import { CodexSessionHistory } from "./session-history.js";
 import { CodexSessionConnection } from "./session-connection.js";
 import { CodexSessionRuntime } from "./session-runtime.js";
+import { CodexSessionTurnExecution } from "./session-turn-execution.js";
 import {
   CodexSessionCommandController,
   type CodexPromptInput,
@@ -64,8 +63,6 @@ import {
 } from "./session-commands.js";
 import { CodexPermissionController } from "./permission-controller.js";
 import { CodexSubAgentTracker } from "./sub-agent-tracker.js";
-import { buildCodexTurnStartParams } from "./turn-config.js";
-import { runProviderTurn } from "../provider-runner.js";
 
 export { cleanupStaleCodexImageAttachments, threadItemToTimeline };
 export { mapCodexPatchNotificationToToolCall } from "./notification-timeline.js";
@@ -84,9 +81,6 @@ export {
   normalizeCodexQuestionPrompts,
   planStepsToMarkdown,
 } from "./permissions.js";
-
-const TURN_START_TIMEOUT_MS = 90 * 1000;
-const INTERRUPT_TIMEOUT_MS = 2_000;
 
 interface CodexAppServerClientLike extends CodexClientLike {
   forkThread?(params: CodexThreadForkParams): Promise<CodexThreadForkResponse>;
@@ -194,11 +188,9 @@ export class CodexAppServerAgentSession implements AgentSession {
   private readonly logger: Logger;
   private readonly runtime: CodexSessionRuntime;
   private currentThreadId: string | null = null;
-  private currentTurnId: string | null = null;
   private readonly connection: CodexSessionConnection;
   private readonly eventBus: CodexSessionEventBus;
-  private nextTurnOrdinal = 0;
-  private activeForegroundTurnId: string | null = null;
+  private readonly turnExecution: CodexSessionTurnExecution;
   private readonly permissionController: CodexPermissionController;
   private readonly notificationStream = new CodexNotificationStreamState();
   private readonly notificationRouter: CodexNotificationRouter;
@@ -305,6 +297,24 @@ export class CodexAppServerAgentSession implements AgentSession {
       beginManualCompaction: () => this.compactionState.beginManualCompaction(),
       cancelManualCompactionStart: () => this.compactionState.cancelManualCompactionStart(),
     });
+    this.turnExecution = new CodexSessionTurnExecution({
+      logger: this.logger,
+      getClient: () => this.client,
+      connect: () => this.connect(),
+      getThreadId: () => this.currentThreadId,
+      ensureThreadLoaded: () => this.ensureThreadLoaded(),
+      ensureThread: () => this.ensureThread(),
+      resolvePrompt: (prompt) => this.commandController.resolvePrompt(prompt),
+      buildUserInput: (prompt) => this.buildUserInput(prompt),
+      getConfig: () => this.config,
+      getMode: () => this.currentMode,
+      getServiceTier: () => this.serviceTier,
+      getCollaborationMode: () => this.sessionMetadata.getResolvedCollaborationMode(),
+      getCodexConfig: () => this.threadBootstrap.buildInnerConfig(),
+      customProvider: this.deps.customProvider,
+      subscribe: (callback) => this.eventBus.subscribe(callback),
+      getRuntimeInfo: () => this.runtime.getRuntimeInfo(),
+    });
     this.deltaNotificationHandler = new CodexDeltaNotificationHandler({
       notificationStream: this.notificationStream,
       resolveSubAgentCallId: (threadId) => this.getSubAgentCallIdForThread(threadId),
@@ -326,14 +336,10 @@ export class CodexAppServerAgentSession implements AgentSession {
       setThreadId: (threadId) => {
         this.currentThreadId = threadId;
       },
-      getTurnId: () => this.currentTurnId,
+      getTurnId: () => this.turnExecution.getCurrentTurnId(),
       getActiveForegroundTurnId: () => this.activeForegroundTurnId,
-      setTurnId: (turnId) => {
-        this.currentTurnId = turnId;
-      },
-      clearActiveForegroundTurn: () => {
-        this.activeForegroundTurnId = null;
-      },
+      setTurnId: (turnId) => this.turnExecution.setCurrentTurnId(turnId),
+      clearActiveForegroundTurn: () => this.turnExecution.clearActiveForegroundTurn(),
       isPlanModeEnabled: () => this.planModeEnabled,
       requestPlanApproval: (plan) => this.permissionController.requestPlanApproval(plan),
       resolveSubAgentCallId: (threadId) => this.getSubAgentCallIdForThread(threadId),
@@ -425,6 +431,14 @@ export class CodexAppServerAgentSession implements AgentSession {
     return this.runtime.isPlanModeEnabled();
   }
 
+  private get activeForegroundTurnId(): string | null {
+    return this.turnExecution.getActiveForegroundTurnId();
+  }
+
+  private set activeForegroundTurnId(turnId: string | null) {
+    this.turnExecution.setActiveForegroundTurnId(turnId);
+  }
+
   private get client(): CodexAppServerClient | null {
     return this.connection.getClient();
   }
@@ -481,125 +495,15 @@ export class CodexAppServerAgentSession implements AgentSession {
     return this.threadBootstrap.ensureThread();
   }
 
-  private async buildTurnStartParams(prompt: CodexPromptInput, options?: AgentRunOptions) {
-    const userInput = await this.buildUserInput(prompt);
-    const developerInstructions = composeSystemPromptParts(
-      this.config.systemPrompt,
-      this.config.daemonAppendSystemPrompt,
-      buildRuntimeModelIdentityInstructions(this.config, this.deps.customProvider),
-    );
-    return buildCodexTurnStartParams({
-      threadId: this.currentThreadId,
-      userInput,
-      modeId: this.currentMode,
-      config: this.config,
-      serviceTier: this.serviceTier,
-      collaborationMode: this.sessionMetadata.getResolvedCollaborationMode(),
-      outputSchema: options?.outputSchema,
-      developerInstructions,
-      codexConfig: this.threadBootstrap.buildInnerConfig(),
-    });
-  }
-
-  private logTurnStartSummary({
-    turnId,
-    thinkingOptionId,
-    approvalPolicy,
-    sandboxPolicyType,
-    hasOutputSchema,
-    hasDeveloperInstructions,
-    hasCodexConfig,
-  }: {
-    turnId: string;
-    thinkingOptionId?: string;
-    approvalPolicy: string;
-    sandboxPolicyType: string;
-    hasOutputSchema: boolean;
-    hasDeveloperInstructions: boolean;
-    hasCodexConfig: boolean;
-  }): void {
-    this.logger.info(
-      {
-        turnId,
-        threadId: this.currentThreadId,
-        model: this.config.model ?? null,
-        modeId: this.currentMode ?? null,
-        effort: thinkingOptionId ?? null,
-        serviceTier: this.serviceTier,
-        cwd: this.config.cwd ?? null,
-        approvalPolicy,
-        sandboxPolicyType,
-        hasCollaborationMode: Boolean(this.sessionMetadata.getResolvedCollaborationMode()),
-        hasOutputSchema,
-        hasDeveloperInstructions,
-        hasCodexConfig,
-      },
-      "Starting Codex app-server turn",
-    );
-  }
-
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
-    return runProviderTurn({
-      prompt,
-      runOptions: options,
-      startTurn: (p, o) => this.startTurn(p, o),
-      subscribe: (callback) => this.subscribe(callback),
-      getSessionId: async () => (await this.getRuntimeInfo()).sessionId ?? "",
-      reduceFinalText: ({ current, item }) => {
-        if (item.type === "assistant_message") {
-          return item.text;
-        }
-        if (item.type === "tool_call" && item.detail.type === "plan") {
-          return item.detail.text;
-        }
-        return current;
-      },
-    });
+    return this.turnExecution.run(prompt, options);
   }
 
   async startTurn(
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
-    if (this.activeForegroundTurnId) {
-      throw new Error("A foreground turn is already active");
-    }
-
-    await this.connect();
-    if (!this.client) {
-      throw new Error("Codex client not initialized");
-    }
-
-    const effectivePrompt = await this.commandController.resolvePrompt(prompt);
-
-    if (this.currentThreadId) {
-      await this.ensureThreadLoaded();
-    } else {
-      await this.ensureThread();
-    }
-
-    const turnStart = await this.buildTurnStartParams(effectivePrompt, options);
-
-    const turnId = this.createTurnId();
-    this.activeForegroundTurnId = turnId;
-
-    try {
-      this.logTurnStartSummary({
-        turnId,
-        thinkingOptionId: turnStart.thinkingOptionId,
-        approvalPolicy: turnStart.approvalPolicy,
-        sandboxPolicyType: turnStart.sandboxPolicyType,
-        hasOutputSchema: turnStart.hasOutputSchema,
-        hasDeveloperInstructions: turnStart.hasDeveloperInstructions,
-        hasCodexConfig: turnStart.hasCodexConfig,
-      });
-      await this.client.request("turn/start", turnStart.params, TURN_START_TIMEOUT_MS);
-    } catch (error) {
-      this.activeForegroundTurnId = null;
-      throw error;
-    }
-
-    return { turnId };
+    return this.turnExecution.startTurn(prompt, options);
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
@@ -694,29 +598,16 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   async interrupt(): Promise<void> {
-    if (!this.client || !this.currentThreadId || !this.currentTurnId) return;
-    try {
-      await this.client.request(
-        "turn/interrupt",
-        {
-          threadId: this.currentThreadId,
-          turnId: this.currentTurnId,
-        },
-        INTERRUPT_TIMEOUT_MS,
-      );
-    } catch (error) {
-      this.logger.warn({ error }, "Failed to interrupt Codex turn");
-    }
+    await this.turnExecution.interrupt();
   }
 
   async close(): Promise<void> {
     this.permissionController.cancelAll();
     this.eventBus.clear();
-    this.activeForegroundTurnId = null;
+    this.turnExecution.reset();
     await this.connection.close();
     this.runtime.invalidateRuntimeInfo();
     this.currentThreadId = null;
-    this.currentTurnId = null;
     // Best-effort: clean up image attachments older than the TTL so temp files
     // do not accumulate across long-lived daemon sessions.
     void cleanupStaleCodexImageAttachments();
@@ -741,10 +632,6 @@ export class CodexAppServerAgentSession implements AgentSession {
       return [toCodexTextInput(prompt)];
     }
     return await codexAppServerTurnInputFromPrompt(prompt, this.logger);
-  }
-
-  private createTurnId(): string {
-    return `codex-turn-${this.nextTurnOrdinal++}`;
   }
 
   private handleNotification(method: string, params: unknown): void {
