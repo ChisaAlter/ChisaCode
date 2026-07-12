@@ -128,6 +128,7 @@ import {
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
 import { CheckoutCommandClient } from "./daemon-client-checkout-commands.js";
+import { CheckoutSubscriptionClient } from "./daemon-client-checkout-subscriptions.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   BinaryFileTransferManager,
@@ -835,7 +836,6 @@ export class DaemonClient {
   > = new Map();
   private eventListeners: Set<DaemonEventHandler> = new Set();
   private waiters: Set<Waiter<unknown>> = new Set();
-  private checkoutStatusInFlight: Map<string, Promise<CheckoutStatusPayload>> = new Map();
   private connectionListeners: Set<(status: ConnectionState) => void> = new Set();
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -847,15 +847,9 @@ export class DaemonClient {
   private connectReject: ((error: Error) => void) | null = null;
   private lastErrorValue: string | null = null;
   private connectionState: ConnectionState = { status: "idle" };
-  private checkoutDiffSubscriptions = new Map<
-    string,
-    {
-      cwd: string;
-      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
-    }
-  >();
   private terminalDirectorySubscriptions = new Set<string>();
   private readonly checkoutCommands: CheckoutCommandClient;
+  private readonly checkoutSubscriptions: CheckoutSubscriptionClient;
   private readonly terminalStreams = new TerminalStreamRouter();
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
@@ -874,6 +868,11 @@ export class DaemonClient {
     this.logger = config.logger ?? consoleLogger;
     this.checkoutCommands = new CheckoutCommandClient({
       request: (params) => this.sendCorrelatedSessionRequest(params),
+    });
+    this.checkoutSubscriptions = new CheckoutSubscriptionClient({
+      createRequestId: (requestId) => this.createRequestId(requestId),
+      sendRequest: (params) => this.sendRequest(params),
+      sendMessage: (message) => this.sendSessionMessage(message),
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
@@ -1907,22 +1906,6 @@ export class DaemonClient {
     return { agent: payload.agent, project: payload.project ?? null };
   }
 
-  private resubscribeCheckoutDiffSubscriptions(): void {
-    if (this.checkoutDiffSubscriptions.size === 0) {
-      return;
-    }
-    for (const [subscriptionId, subscription] of this.checkoutDiffSubscriptions) {
-      const message = SessionInboundMessageSchema.parse({
-        type: "subscribe_checkout_diff_request",
-        subscriptionId,
-        cwd: subscription.cwd,
-        compare: subscription.compare,
-        requestId: this.createRequestId(),
-      });
-      this.sendSessionMessage(message);
-    }
-  }
-
   private resubscribeTerminalDirectorySubscriptions(): void {
     if (this.terminalDirectorySubscriptions.size === 0) {
       return;
@@ -2829,71 +2812,7 @@ export class DaemonClient {
     cwd: string,
     options?: { requestId?: string },
   ): Promise<CheckoutStatusPayload> {
-    const requestId = options?.requestId;
-
-    if (!requestId) {
-      const existing = this.checkoutStatusInFlight.get(cwd);
-      if (existing) {
-        return existing;
-      }
-    }
-
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "checkout_status_request",
-      cwd,
-      requestId: resolvedRequestId,
-    });
-
-    const responsePromise = this.sendRequest({
-      requestId: resolvedRequestId,
-      message,
-      timeout: 60000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "checkout_status_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-
-    if (!requestId) {
-      this.checkoutStatusInFlight.set(cwd, responsePromise);
-      void responsePromise
-        .finally(() => {
-          if (this.checkoutStatusInFlight.get(cwd) === responsePromise) {
-            this.checkoutStatusInFlight.delete(cwd);
-          }
-        })
-        .catch(() => undefined);
-    }
-
-    return responsePromise;
-  }
-
-  private normalizeCheckoutDiffCompare(compare: {
-    mode: "uncommitted" | "base";
-    baseRef?: string;
-    ignoreWhitespace?: boolean;
-  }): { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean } {
-    if (compare.mode === "uncommitted") {
-      return compare.ignoreWhitespace === true
-        ? { mode: "uncommitted", ignoreWhitespace: true }
-        : { mode: "uncommitted" };
-    }
-    const trimmedBaseRef = compare.baseRef?.trim();
-    if (!trimmedBaseRef) {
-      return compare.ignoreWhitespace === true
-        ? { mode: "base", ignoreWhitespace: true }
-        : { mode: "base" };
-    }
-    return compare.ignoreWhitespace === true
-      ? { mode: "base", baseRef: trimmedBaseRef, ignoreWhitespace: true }
-      : { mode: "base", baseRef: trimmedBaseRef };
+    return this.checkoutSubscriptions.getStatus(cwd, options);
   }
 
   async getCheckoutDiff(
@@ -2901,25 +2820,7 @@ export class DaemonClient {
     compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean },
     requestId?: string,
   ): Promise<CheckoutDiffPayload> {
-    const oneShotSubscriptionId = `oneshot-checkout-diff:${crypto.randomUUID()}`;
-    try {
-      const payload = await this.subscribeCheckoutDiff(cwd, compare, {
-        subscriptionId: oneShotSubscriptionId,
-        requestId,
-      });
-      return {
-        cwd: payload.cwd,
-        files: payload.files,
-        error: payload.error,
-        requestId: payload.requestId,
-      };
-    } finally {
-      try {
-        this.unsubscribeCheckoutDiff(oneShotSubscriptionId);
-      } catch {
-        // Ignore disconnect races during one-shot cleanup.
-      }
-    }
+    return this.checkoutSubscriptions.getDiff(cwd, compare, requestId);
   }
 
   async subscribeCheckoutDiff(
@@ -2927,53 +2828,11 @@ export class DaemonClient {
     compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean },
     options?: { subscriptionId?: string; requestId?: string },
   ): Promise<SubscribeCheckoutDiffPayload> {
-    const subscriptionId = options?.subscriptionId ?? crypto.randomUUID();
-    const normalizedCompare = this.normalizeCheckoutDiffCompare(compare);
-    const previousSubscription = this.checkoutDiffSubscriptions.get(subscriptionId) ?? null;
-    this.checkoutDiffSubscriptions.set(subscriptionId, {
-      cwd,
-      compare: normalizedCompare,
-    });
-
-    const resolvedRequestId = this.createRequestId(options?.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "subscribe_checkout_diff_request",
-      subscriptionId,
-      cwd,
-      compare: normalizedCompare,
-      requestId: resolvedRequestId,
-    });
-
-    try {
-      return await this.sendCorrelatedRequest({
-        requestId: resolvedRequestId,
-        message,
-        responseType: "subscribe_checkout_diff_response",
-        timeout: 60000,
-        options: { skipQueue: true },
-        selectPayload: (payload) => {
-          if (payload.subscriptionId !== subscriptionId) {
-            return null;
-          }
-          return payload;
-        },
-      });
-    } catch (error) {
-      if (previousSubscription) {
-        this.checkoutDiffSubscriptions.set(subscriptionId, previousSubscription);
-      } else {
-        this.checkoutDiffSubscriptions.delete(subscriptionId);
-      }
-      throw error;
-    }
+    return this.checkoutSubscriptions.subscribe(cwd, compare, options);
   }
 
   unsubscribeCheckoutDiff(subscriptionId: string): void {
-    this.checkoutDiffSubscriptions.delete(subscriptionId);
-    this.sendSessionMessage({
-      type: "unsubscribe_checkout_diff_request",
-      subscriptionId,
-    });
+    this.checkoutSubscriptions.unsubscribe(subscriptionId);
   }
 
   async checkoutCommit(
@@ -4662,7 +4521,7 @@ export class DaemonClient {
           this.resetConnectTimeout();
           this.reconnectAttempt = 0;
           this.updateConnectionState({ status: "connected" }, { event: "HELLO_SERVER_INFO" });
-          this.resubscribeCheckoutDiffSubscriptions();
+          this.checkoutSubscriptions.resubscribe();
           this.resubscribeTerminalDirectorySubscriptions();
           this.flushPendingSendQueue();
           this.resolveConnect();

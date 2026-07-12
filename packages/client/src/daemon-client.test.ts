@@ -2225,41 +2225,64 @@ test("returns renameBranch business failures", async () => {
 });
 
 test("resubscribes checkout diff streams after reconnect", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
+  vi.useFakeTimers();
+  try {
+    const logger = createMockLogger();
+    const first = createMockTransport();
+    const second = createMockTransport();
+    let transportCount = 0;
 
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_unit_test",
+      logger,
+      reconnect: { enabled: true, baseDelayMs: 5, maxDelayMs: 5 },
+      transportFactory: () => {
+        transportCount += 1;
+        return transportCount === 1 ? first.transport : second.transport;
+      },
+    });
+    clients.push(client);
 
-  const internal = client as unknown as {
-    checkoutDiffSubscriptions: Map<
-      string,
-      { cwd: string; compare: { mode: "uncommitted" | "base"; baseRef?: string } }
-    >;
-  };
-  internal.checkoutDiffSubscriptions.set("checkout-sub-1", {
-    cwd: "/tmp/project",
-    compare: { mode: "base", baseRef: "main" },
-  });
+    const connectPromise = client.connect();
+    first.triggerOpen();
+    await connectPromise;
 
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
+    const subscribePromise = client.subscribeCheckoutDiff(
+      "/tmp/project",
+      { mode: "base", baseRef: "main" },
+      { subscriptionId: "checkout-sub-1" },
+    );
+    const initialRequest = parseSentFrame(first.sent.at(-1));
+    first.triggerMessage(
+      wrapSessionMessage({
+        type: "subscribe_checkout_diff_response",
+        payload: {
+          subscriptionId: "checkout-sub-1",
+          cwd: "/tmp/project",
+          files: [],
+          error: null,
+          requestId: initialRequest.requestId,
+        },
+      }),
+    );
+    await subscribePromise;
 
-  expect(mock.sent).toHaveLength(1);
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("subscribe_checkout_diff_request");
-  expect(request.subscriptionId).toBe("checkout-sub-1");
-  expect(request.cwd).toBe("/tmp/project");
-  expect(request.compare).toEqual({ mode: "base", baseRef: "main" });
-  expect(typeof request.requestId).toBe("string");
-  expect(z.string().parse(request.requestId).length).toBeGreaterThan(0);
+    first.triggerClose({ code: 1001, reason: "Server restart" });
+    await vi.advanceTimersByTimeAsync(10);
+    second.triggerOpen();
+
+    expect(transportCount).toBe(2);
+    expect(second.sent).toHaveLength(1);
+    const request = parseSentFrame(second.sent[0]);
+    expect(request.type).toBe("subscribe_checkout_diff_request");
+    expect(request.subscriptionId).toBe("checkout-sub-1");
+    expect(request.cwd).toBe("/tmp/project");
+    expect(request.compare).toEqual({ mode: "base", baseRef: "main" });
+    expect(z.string().parse(request.requestId).length).toBeGreaterThan(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("fetches agents via RPC with filters, sort, and pagination", async () => {
