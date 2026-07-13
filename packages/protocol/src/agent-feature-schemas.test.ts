@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  AgentFeatureSchema,
   AgentSnapshotPayloadSchema,
   SetAgentFeatureRequestMessageSchema,
   SetAgentFeatureResponseMessageSchema,
 } from "./messages.js";
+import { AgentFeatureSchema } from "./provider/messages.js";
 
 describe("agent feature schemas", () => {
   it("parses valid toggle features", () => {

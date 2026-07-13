@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { describe, expect, test } from "vitest";
 import {
-  RecentProviderSessionDescriptorPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
   WorkspaceDescriptorPayloadSchema,
 } from "./messages.js";
+import { RecentProviderSessionDescriptorPayloadSchema } from "./provider/messages.js";
 
 describe("workspace message schemas", () => {
   test("parses fetch_workspaces_request", () => {

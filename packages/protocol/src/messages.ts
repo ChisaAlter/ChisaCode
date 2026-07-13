@@ -9,7 +9,7 @@ import {
   ModelGatewayConfigsSchema,
   SyntheticModelConfigSchema,
 } from "@chisacode/protocol/provider-config";
-import { normalizeAgentModelDefinition, TOOL_CALL_ICON_NAMES } from "./agent-types.js";
+import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import {
   ChatCreateRequestSchema,
   ChatListRequestSchema,
@@ -79,7 +79,15 @@ import {
   WorkspaceOutboundMessageSchemas,
   WorktreeSetupDetailPayloadSchema,
 } from "./workspace/messages.js";
+import {
+  AgentFeatureSchema,
+  AgentModeSchema,
+  ListCommandsDraftConfigSchema,
+  ProviderInboundMessageSchemas,
+  ProviderOutboundMessageSchemas,
+} from "./provider/messages.js";
 export * from "./agent/attachments.js";
+export * from "./provider/messages.js";
 export * from "./terminal/messages.js";
 export * from "./checkout/messages.js";
 export * from "./workspace/messages.js";
@@ -289,12 +297,9 @@ export type MutableDaemonConfig = z.infer<typeof MutableDaemonConfigSchema>;
 export type MutableDaemonConfigPatch = z.infer<typeof MutableDaemonConfigPatchSchema>;
 import type {
   AgentCapabilityFlags,
-  AgentModelDefinition,
-  AgentMode,
   AgentPermissionRequest,
   AgentPermissionResponse,
   AgentPersistenceHandle,
-  ProviderStatus,
   AgentRuntimeInfo,
   AgentTimelineItem,
   ToolCallDetail,
@@ -303,130 +308,6 @@ import type {
 } from "./agent-types.js";
 
 export const AgentStatusSchema = z.enum(AGENT_LIFECYCLE_STATUSES);
-
-const AgentModeSchema: z.ZodType<AgentMode> = z.object({
-  id: z.string(),
-  label: z.string(),
-  description: z.string().optional(),
-  icon: z.string().optional(),
-  colorTier: z.string().optional(),
-});
-
-const ProviderStatusSchema: z.ZodType<ProviderStatus> = z.enum([
-  "ready",
-  "loading",
-  "error",
-  "unavailable",
-]);
-
-const AgentSelectOptionSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  description: z.string().optional(),
-  isDefault: z.boolean().optional(),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-export const AgentFeatureToggleSchema = z.object({
-  type: z.literal("toggle"),
-  id: z.string(),
-  label: z.string(),
-  description: z.string().optional(),
-  tooltip: z.string().optional(),
-  icon: z.string().optional(),
-  value: z.boolean(),
-});
-
-export const AgentFeatureSelectSchema = z.object({
-  type: z.literal("select"),
-  id: z.string(),
-  label: z.string(),
-  description: z.string().optional(),
-  tooltip: z.string().optional(),
-  icon: z.string().optional(),
-  value: z.string().nullable(),
-  options: z.array(AgentSelectOptionSchema),
-});
-
-export const AgentFeatureSchema = z.discriminatedUnion("type", [
-  AgentFeatureToggleSchema,
-  AgentFeatureSelectSchema,
-]);
-
-const AgentModelDefinitionSchema: z.ZodType<AgentModelDefinition> = z
-  .object({
-    provider: AgentProviderSchema,
-    id: z.string(),
-    label: z.string(),
-    description: z.string().optional(),
-    isDefault: z.boolean().optional(),
-    metadata: z.record(z.unknown()).optional(),
-    thinkingOptions: z.array(AgentSelectOptionSchema).optional(),
-    defaultThinkingOptionId: z.string().optional(),
-  })
-  .transform(normalizeAgentModelDefinition);
-
-export const ProviderSnapshotEntrySchema = z.object({
-  provider: AgentProviderSchema,
-  status: ProviderStatusSchema,
-  enabled: z.boolean().optional().default(true),
-  error: z.string().optional(),
-  models: z.array(AgentModelDefinitionSchema).optional(),
-  modes: z.array(AgentModeSchema).optional(),
-  fetchedAt: z.string().optional(),
-  label: z.string().optional(),
-  description: z.string().optional(),
-  defaultModeId: z.string().nullable().optional(),
-  derivedFromProviderId: AgentProviderSchema.nullable().optional(),
-  modelGatewayId: z.string().nullable().optional(),
-  installedVersion: z.string().nullable().optional(),
-  latestVersion: z.string().nullable().optional(),
-  versionStatus: z.enum(["unknown", "not-installed", "current", "outdated"]).optional(),
-  packageName: z.string().optional(),
-  checkedAt: z.string().optional(),
-  installAvailable: z.boolean().optional(),
-  updateAvailable: z.boolean().optional(),
-});
-
-const ProviderDiagnosticDetailsSchema = z.object({
-  provider: AgentProviderSchema,
-  effectiveCommand: z
-    .object({
-      argv: z.array(z.string()),
-      source: z.enum(["default", "append", "override", "custom", "unknown"]),
-      resolvedPath: z.string().nullable(),
-      available: z.boolean(),
-    })
-    .optional(),
-  cwd: z.string().optional(),
-  env: z
-    .array(
-      z.object({
-        name: z.string(),
-        present: z.boolean(),
-        source: z.enum(["process", "provider-config"]),
-      }),
-    )
-    .optional(),
-  mcpInjection: z
-    .object({
-      supported: z.boolean(),
-      enabled: z.boolean(),
-      reason: z.string(),
-    })
-    .optional(),
-  tooling: ProviderSnapshotEntrySchema.pick({
-    installedVersion: true,
-    latestVersion: true,
-    versionStatus: true,
-    packageName: true,
-    installAvailable: true,
-    updateAvailable: true,
-    checkedAt: true,
-  })
-    .partial()
-    .optional(),
-});
 
 const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z.object({
   supportsStreaming: z.boolean(),
@@ -889,21 +770,6 @@ export const AgentPresetPayloadSchema = AgentPresetSchema;
 
 export type AgentStreamEventPayload = z.infer<typeof AgentStreamEventPayloadSchema>;
 
-export const RecentProviderSessionDescriptorPayloadSchema = z.object({
-  providerId: z.string(),
-  providerLabel: z.string(),
-  providerHandleId: z.string(),
-  cwd: z.string(),
-  title: z.string().nullable(),
-  firstPromptPreview: z.string().nullable(),
-  lastPromptPreview: z.string().nullable(),
-  lastActivityAt: z.string(),
-});
-
-export type RecentProviderSessionDescriptorPayload = z.infer<
-  typeof RecentProviderSessionDescriptorPayloadSchema
->;
-
 // ============================================================================
 // Session Inbound Messages (Session receives these)
 // ============================================================================
@@ -1037,15 +903,6 @@ export const FetchAgentHistoryRequestMessageSchema = z.object({
       cursor: z.string().min(1).optional(),
     })
     .optional(),
-});
-
-export const FetchRecentProviderSessionsRequestMessageSchema = z.object({
-  type: z.literal("fetch_recent_provider_sessions_request"),
-  requestId: z.string(),
-  cwd: z.string().optional(),
-  providers: z.array(z.string()).optional(),
-  since: z.string().optional(),
-  limit: z.number().int().positive().max(200).optional(),
 });
 
 export const UsageRangeDaysSchema = z.union([z.literal(7), z.literal(30), z.literal(180)]);
@@ -1307,61 +1164,6 @@ export const CreateAgentRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
-export const ListProviderModelsRequestMessageSchema = z.object({
-  type: z.literal("list_provider_models_request"),
-  provider: AgentProviderSchema,
-  cwd: z.string().optional(),
-  requestId: z.string(),
-});
-
-export const ListProviderModesRequestMessageSchema = z.object({
-  type: z.literal("list_provider_modes_request"),
-  provider: AgentProviderSchema,
-  cwd: z.string().optional(),
-  requestId: z.string(),
-});
-
-export const ListAvailableProvidersRequestMessageSchema = z.object({
-  type: z.literal("list_available_providers_request"),
-  requestId: z.string(),
-});
-
-export const GetProvidersSnapshotRequestMessageSchema = z.object({
-  type: z.literal("get_providers_snapshot_request"),
-  cwd: z.string().optional(),
-  requestId: z.string(),
-});
-
-export const RefreshProvidersSnapshotRequestMessageSchema = z.object({
-  type: z.literal("refresh_providers_snapshot_request"),
-  cwd: z.string().optional(),
-  providers: z.array(AgentProviderSchema).optional(),
-  requestId: z.string(),
-});
-
-export const ProviderDiagnosticRequestMessageSchema = z.object({
-  type: z.literal("provider_diagnostic_request"),
-  provider: AgentProviderSchema,
-  requestId: z.string(),
-});
-
-export const ProviderUsageListRequestMessageSchema = z.object({
-  type: z.literal("provider.usage.list.request"),
-  requestId: z.string(),
-});
-
-export const DiagnosticsRequestSchema = z.object({
-  type: z.literal("diagnostics.request"),
-  requestId: z.string(),
-});
-
-export const ProviderToolingActionRequestMessageSchema = z.object({
-  type: z.literal("provider.tooling.run.request"),
-  provider: AgentProviderSchema,
-  action: z.enum(["install", "update", "reinstall"]),
-  requestId: z.string(),
-});
-
 export const AgentPresetsListRequestMessageSchema = z.object({
   type: z.literal("agent.presets.list.request"),
   requestId: z.string(),
@@ -1570,21 +1372,6 @@ export const PingMessageSchema = z.object({
   clientSentAt: z.number().int().optional(),
 });
 
-const ListCommandsDraftConfigSchema = z.object({
-  provider: AgentProviderSchema,
-  cwd: z.string(),
-  modeId: z.string().optional(),
-  model: z.string().optional(),
-  thinkingOptionId: z.string().optional(),
-  featureValues: z.record(z.unknown()).optional(),
-});
-
-export const ListProviderFeaturesRequestMessageSchema = z.object({
-  type: z.literal("list_provider_features_request"),
-  draftConfig: ListCommandsDraftConfigSchema,
-  requestId: z.string(),
-});
-
 export const ListCommandsRequestSchema = z.object({
   type: z.literal("list_commands_request"),
   agentId: z.string(),
@@ -1603,7 +1390,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AudioPlayedMessageSchema,
   FetchAgentsRequestMessageSchema,
   FetchAgentHistoryRequestMessageSchema,
-  FetchRecentProviderSessionsRequestMessageSchema,
   UsageSummaryGetRequestMessageSchema,
   UsageExportRequestMessageSchema,
   UsageClearRequestMessageSchema,
@@ -1635,14 +1421,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DictationStreamFinishMessageSchema,
   DictationStreamCancelMessageSchema,
   CreateAgentRequestMessageSchema,
-  ListProviderModelsRequestMessageSchema,
-  ListProviderModesRequestMessageSchema,
-  ListProviderFeaturesRequestMessageSchema,
-  ListAvailableProvidersRequestMessageSchema,
-  GetProvidersSnapshotRequestMessageSchema,
-  RefreshProvidersSnapshotRequestMessageSchema,
-  ProviderDiagnosticRequestMessageSchema,
-  ProviderToolingActionRequestMessageSchema,
   AgentPresetsListRequestMessageSchema,
   ModelGatewayMoaTestRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
@@ -1660,6 +1438,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentPermissionResponseMessageSchema,
   ...CheckoutInboundMessageSchemas,
   ...WorkspaceInboundMessageSchemas,
+  ...ProviderInboundMessageSchemas,
   ClearAgentAttentionMessageSchema,
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
@@ -1687,8 +1466,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectRequestSchema,
   LoopLogsRequestSchema,
   LoopStopRequestSchema,
-  ProviderUsageListRequestMessageSchema,
-  DiagnosticsRequestSchema,
   GenerativeUiActionRequestSchema,
   // COMPAT(generativeUiActionFlatRpc): added in v0.1.101; remove after 2027-01-11 once the client floor is >= v0.1.101.
   LegacyGenerativeUiActionRequestSchema,
@@ -2077,15 +1854,6 @@ export const FetchAgentHistoryResponseMessageSchema = z.object({
   }),
 });
 
-export const FetchRecentProviderSessionsResponseMessageSchema = z.object({
-  type: z.literal("fetch_recent_provider_sessions_response"),
-  payload: z.object({
-    requestId: z.string(),
-    entries: z.array(RecentProviderSessionDescriptorPayloadSchema),
-    filteredAlreadyImportedCount: z.number().int().nonnegative().optional(),
-  }),
-});
-
 const UsageModelSummaryPayloadSchema = z.object({
   model: z.string(),
   totalTokens: z.number().nonnegative(),
@@ -2293,16 +2061,6 @@ export const DaemonGetPairingOfferResponseSchema = z.object({
     .passthrough(),
 });
 
-export const DiagnosticsResponseSchema = z.object({
-  type: z.literal("diagnostics.response"),
-  payload: z
-    .object({
-      requestId: z.string(),
-      diagnostic: z.string(),
-    })
-    .passthrough(),
-});
-
 export const SetDaemonConfigResponseMessageSchema = z.object({
   type: z.literal("set_daemon_config_response"),
   payload: z
@@ -2404,166 +2162,9 @@ export const CloseItemsResponseSchema = z.object({
   }),
 });
 
-export const ListProviderModelsResponseMessageSchema = z.object({
-  type: z.literal("list_provider_models_response"),
-  payload: z.object({
-    provider: AgentProviderSchema,
-    models: z.array(AgentModelDefinitionSchema).optional(),
-    error: z.string().nullable().optional(),
-    fetchedAt: z.string(),
-    requestId: z.string(),
-  }),
-});
-
-export const ListProviderModesResponseMessageSchema = z.object({
-  type: z.literal("list_provider_modes_response"),
-  payload: z.object({
-    provider: AgentProviderSchema,
-    modes: z.array(AgentModeSchema).optional(),
-    error: z.string().nullable().optional(),
-    fetchedAt: z.string(),
-    requestId: z.string(),
-  }),
-});
-
-export const ListProviderFeaturesResponseMessageSchema = z.object({
-  type: z.literal("list_provider_features_response"),
-  payload: z.object({
-    provider: AgentProviderSchema,
-    features: z.array(AgentFeatureSchema).optional(),
-    error: z.string().nullable().optional(),
-    fetchedAt: z.string(),
-    requestId: z.string(),
-  }),
-});
-
-const ProviderAvailabilitySchema = z.object({
-  provider: AgentProviderSchema,
-  available: z.boolean(),
-  error: z.string().nullable().optional(),
-});
-
-export const ListAvailableProvidersResponseSchema = z.object({
-  type: z.literal("list_available_providers_response"),
-  payload: z.object({
-    providers: z.array(ProviderAvailabilitySchema),
-    error: z.string().nullable().optional(),
-    fetchedAt: z.string(),
-    requestId: z.string(),
-  }),
-});
-
-// COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
-export const GetProvidersSnapshotResponseMessageSchema = z.object({
-  type: z.literal("get_providers_snapshot_response"),
-  payload: z.object({
-    entries: z.array(ProviderSnapshotEntrySchema),
-    generatedAt: z.string(),
-    requestId: z.string(),
-  }),
-});
-
-// COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
-export const ProvidersSnapshotUpdateMessageSchema = z.object({
-  type: z.literal("providers_snapshot_update"),
-  payload: z.object({
-    cwd: z.string().optional(),
-    entries: z.array(ProviderSnapshotEntrySchema),
-    generatedAt: z.string(),
-  }),
-});
-
-// COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
-export const RefreshProvidersSnapshotResponseMessageSchema = z.object({
-  type: z.literal("refresh_providers_snapshot_response"),
-  payload: z.object({
-    requestId: z.string(),
-    acknowledged: z.boolean(),
-  }),
-});
-
-// COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
-export const ProviderDiagnosticResponseMessageSchema = z.object({
-  type: z.literal("provider_diagnostic_response"),
-  payload: z.object({
-    provider: AgentProviderSchema,
-    diagnostic: z.string(),
-    details: ProviderDiagnosticDetailsSchema.optional(),
-    requestId: z.string(),
-  }),
-});
-
-export const ProviderUsageToneSchema = z.enum(["default", "ok", "warning", "danger"]);
-export const ProviderUsageStatusSchema = z.enum(["available", "unavailable", "error"]);
-
-export const ProviderUsageWindowSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  usedPct: z.number().nullable().optional(),
-  remainingPct: z.number().nullable().optional(),
-  resetsAt: z.string().nullable().optional(),
-  runsOutAt: z.string().nullable().optional(),
-  shortfallPct: z.number().nullable().optional(),
-  tone: ProviderUsageToneSchema.optional(),
-});
-
-export const ProviderUsageBalanceSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  used: z.number().nullable().optional(),
-  remaining: z.number().nullable().optional(),
-  limit: z.number().nullable().optional(),
-  unit: z.enum(["usd", "credits", "requests", "tokens"]),
-  resetsAt: z.string().nullable().optional(),
-  tone: ProviderUsageToneSchema.optional(),
-});
-
-export const ProviderUsageDetailSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  value: z.string(),
-  tone: ProviderUsageToneSchema.optional(),
-});
-
-export const ProviderUsageSchema = z.object({
-  providerId: z.string(),
-  displayName: z.string(),
-  status: ProviderUsageStatusSchema,
-  planLabel: z.string().nullable(),
-  sourceLabel: z.string().nullable().optional(),
-  fetchedAt: z.string().nullable().optional(),
-  nextRefreshAt: z.string().nullable().optional(),
-  windows: z.array(ProviderUsageWindowSchema),
-  balances: z.array(ProviderUsageBalanceSchema).optional(),
-  details: z.array(ProviderUsageDetailSchema).optional(),
-  error: z.string().nullable().optional(),
-});
-
-export const ProviderUsageListResponseMessageSchema = z.object({
-  type: z.literal("provider.usage.list.response"),
-  payload: z.object({
-    requestId: z.string(),
-    fetchedAt: z.string(),
-    providers: z.array(ProviderUsageSchema),
-  }),
-});
-
 export const AgentPresetsListResponseMessageSchema = z.object({
   type: z.literal("agent.presets.list.response"),
   payload: AgentPresetsPayloadSchema.extend({
-    requestId: z.string(),
-  }),
-});
-
-export const ProviderToolingActionResponseMessageSchema = z.object({
-  type: z.literal("provider.tooling.run.response"),
-  payload: z.object({
-    provider: AgentProviderSchema,
-    action: z.enum(["install", "update", "reinstall"]),
-    exitCode: z.number().nullable(),
-    stdout: z.string(),
-    stderr: z.string(),
-    success: z.boolean(),
     requestId: z.string(),
   }),
 });
@@ -2825,11 +2426,11 @@ type SessionOutboundMessageSchemaOptions = [
   typeof ArtifactMessageSchema,
   typeof AgentUpdateMessageSchema,
   ...typeof WorkspaceOutboundMessageSchemas,
+  ...typeof ProviderOutboundMessageSchemas,
   typeof AgentStreamMessageSchema,
   typeof AgentStatusMessageSchema,
   typeof FetchAgentsResponseMessageSchema,
   typeof FetchAgentHistoryResponseMessageSchema,
-  typeof FetchRecentProviderSessionsResponseMessageSchema,
   typeof UsageSummaryGetResponseMessageSchema,
   typeof UsageExportResponseMessageSchema,
   typeof UsageClearResponseMessageSchema,
@@ -2859,15 +2460,6 @@ type SessionOutboundMessageSchemaOptions = [
   typeof AgentArchivedMessageSchema,
   typeof CloseItemsResponseSchema,
   ...typeof CheckoutOutboundMessageSchemas,
-  typeof ListProviderModelsResponseMessageSchema,
-  typeof ListProviderModesResponseMessageSchema,
-  typeof ListProviderFeaturesResponseMessageSchema,
-  typeof ListAvailableProvidersResponseSchema,
-  typeof GetProvidersSnapshotResponseMessageSchema,
-  typeof ProvidersSnapshotUpdateMessageSchema,
-  typeof RefreshProvidersSnapshotResponseMessageSchema,
-  typeof ProviderDiagnosticResponseMessageSchema,
-  typeof ProviderToolingActionResponseMessageSchema,
   typeof AgentPresetsListResponseMessageSchema,
   typeof ModelGatewayMoaTestResponseMessageSchema,
   typeof ListCommandsResponseSchema,
@@ -2901,8 +2493,6 @@ type SessionOutboundMessageSchemaOptions = [
   typeof LoopInspectResponseSchema,
   typeof LoopLogsResponseSchema,
   typeof LoopStopResponseSchema,
-  typeof ProviderUsageListResponseMessageSchema,
-  typeof DiagnosticsResponseSchema,
   typeof GenerativeUiActionResponseSchema,
 ];
 
@@ -2926,11 +2516,11 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   ArtifactMessageSchema,
   AgentUpdateMessageSchema,
   ...WorkspaceOutboundMessageSchemas,
+  ...ProviderOutboundMessageSchemas,
   AgentStreamMessageSchema,
   AgentStatusMessageSchema,
   FetchAgentsResponseMessageSchema,
   FetchAgentHistoryResponseMessageSchema,
-  FetchRecentProviderSessionsResponseMessageSchema,
   UsageSummaryGetResponseMessageSchema,
   UsageExportResponseMessageSchema,
   UsageClearResponseMessageSchema,
@@ -2960,15 +2550,6 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   AgentArchivedMessageSchema,
   CloseItemsResponseSchema,
   ...CheckoutOutboundMessageSchemas,
-  ListProviderModelsResponseMessageSchema,
-  ListProviderModesResponseMessageSchema,
-  ListProviderFeaturesResponseMessageSchema,
-  ListAvailableProvidersResponseSchema,
-  GetProvidersSnapshotResponseMessageSchema,
-  ProvidersSnapshotUpdateMessageSchema,
-  RefreshProvidersSnapshotResponseMessageSchema,
-  ProviderDiagnosticResponseMessageSchema,
-  ProviderToolingActionResponseMessageSchema,
   AgentPresetsListResponseMessageSchema,
   ModelGatewayMoaTestResponseMessageSchema,
   ListCommandsResponseSchema,
@@ -3002,8 +2583,6 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   LoopInspectResponseSchema,
   LoopLogsResponseSchema,
   LoopStopResponseSchema,
-  ProviderUsageListResponseMessageSchema,
-  DiagnosticsResponseSchema,
   GenerativeUiActionResponseSchema,
 ]);
 
@@ -3028,9 +2607,6 @@ export type FetchAgentsResponseMessage = z.infer<typeof FetchAgentsResponseMessa
 export type FetchAgentHistoryResponseMessage = z.infer<
   typeof FetchAgentHistoryResponseMessageSchema
 >;
-export type FetchRecentProviderSessionsResponseMessage = z.infer<
-  typeof FetchRecentProviderSessionsResponseMessageSchema
->;
 export type UsageSummaryPayload = z.infer<typeof UsageSummaryPayloadSchema>;
 export type UsageSummaryGetResponseMessage = z.infer<typeof UsageSummaryGetResponseMessageSchema>;
 export type UsageExportResponseMessage = z.infer<typeof UsageExportResponseMessageSchema>;
@@ -3054,39 +2630,8 @@ export type WaitForFinishResponseMessage = z.infer<typeof WaitForFinishResponseM
 export type AgentPermissionRequestMessage = z.infer<typeof AgentPermissionRequestMessageSchema>;
 export type AgentPermissionResolvedMessage = z.infer<typeof AgentPermissionResolvedMessageSchema>;
 export type AgentDeletedMessage = z.infer<typeof AgentDeletedMessageSchema>;
-export type ListProviderModelsResponseMessage = z.infer<
-  typeof ListProviderModelsResponseMessageSchema
->;
-export type ListProviderModesResponseMessage = z.infer<
-  typeof ListProviderModesResponseMessageSchema
->;
-export type ListProviderFeaturesResponseMessage = z.infer<
-  typeof ListProviderFeaturesResponseMessageSchema
->;
-export type ListAvailableProvidersResponse = z.infer<typeof ListAvailableProvidersResponseSchema>;
 export type DaemonGetStatusResponse = z.infer<typeof DaemonGetStatusResponseSchema>;
 export type DaemonGetPairingOfferResponse = z.infer<typeof DaemonGetPairingOfferResponseSchema>;
-export type GetProvidersSnapshotResponseMessage = z.infer<
-  typeof GetProvidersSnapshotResponseMessageSchema
->;
-export type ProvidersSnapshotUpdateMessage = z.infer<typeof ProvidersSnapshotUpdateMessageSchema>;
-export type RefreshProvidersSnapshotResponseMessage = z.infer<
-  typeof RefreshProvidersSnapshotResponseMessageSchema
->;
-export type ProviderDiagnosticResponseMessage = z.infer<
-  typeof ProviderDiagnosticResponseMessageSchema
->;
-export type ProviderToolingActionResponseMessage = z.infer<
-  typeof ProviderToolingActionResponseMessageSchema
->;
-export type ProviderUsageTone = z.infer<typeof ProviderUsageToneSchema>;
-export type ProviderUsageStatus = z.infer<typeof ProviderUsageStatusSchema>;
-export type ProviderUsageWindow = z.infer<typeof ProviderUsageWindowSchema>;
-export type ProviderUsageBalance = z.infer<typeof ProviderUsageBalanceSchema>;
-export type ProviderUsageDetail = z.infer<typeof ProviderUsageDetailSchema>;
-export type ProviderUsage = z.infer<typeof ProviderUsageSchema>;
-export type ProviderUsageListResponse = z.infer<typeof ProviderUsageListResponseMessageSchema>;
-export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
 export type AgentPresetsListResponseMessage = z.infer<typeof AgentPresetsListResponseMessageSchema>;
 export type ModelGatewayMoaTestResponseMessage = z.infer<
   typeof ModelGatewayMoaTestResponseMessageSchema
@@ -3120,9 +2665,6 @@ export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
 export type VoiceAudioChunkMessage = z.infer<typeof VoiceAudioChunkMessageSchema>;
 export type FetchAgentsRequestMessage = z.infer<typeof FetchAgentsRequestMessageSchema>;
 export type FetchAgentHistoryRequestMessage = z.infer<typeof FetchAgentHistoryRequestMessageSchema>;
-export type FetchRecentProviderSessionsRequestMessage = z.infer<
-  typeof FetchRecentProviderSessionsRequestMessageSchema
->;
 export type FetchAgentRequestMessage = z.infer<typeof FetchAgentRequestMessageSchema>;
 export type SendAgentMessageRequest = z.infer<typeof SendAgentMessageRequestSchema>;
 export type WaitForFinishRequest = z.infer<typeof WaitForFinishRequestSchema>;
@@ -3131,30 +2673,6 @@ export type DictationStreamChunkMessage = z.infer<typeof DictationStreamChunkMes
 export type DictationStreamFinishMessage = z.infer<typeof DictationStreamFinishMessageSchema>;
 export type DictationStreamCancelMessage = z.infer<typeof DictationStreamCancelMessageSchema>;
 export type CreateAgentRequestMessage = z.infer<typeof CreateAgentRequestMessageSchema>;
-export type ListProviderModelsRequestMessage = z.infer<
-  typeof ListProviderModelsRequestMessageSchema
->;
-export type ListProviderModesRequestMessage = z.infer<typeof ListProviderModesRequestMessageSchema>;
-export type ListProviderFeaturesRequestMessage = z.infer<
-  typeof ListProviderFeaturesRequestMessageSchema
->;
-export type ListAvailableProvidersRequestMessage = z.infer<
-  typeof ListAvailableProvidersRequestMessageSchema
->;
-export type GetProvidersSnapshotRequestMessage = z.infer<
-  typeof GetProvidersSnapshotRequestMessageSchema
->;
-export type RefreshProvidersSnapshotRequestMessage = z.infer<
-  typeof RefreshProvidersSnapshotRequestMessageSchema
->;
-export type ProviderDiagnosticRequestMessage = z.infer<
-  typeof ProviderDiagnosticRequestMessageSchema
->;
-export type ProviderToolingActionRequestMessage = z.infer<
-  typeof ProviderToolingActionRequestMessageSchema
->;
-export type ProviderUsageListRequest = z.infer<typeof ProviderUsageListRequestMessageSchema>;
-export type DiagnosticsRequest = z.infer<typeof DiagnosticsRequestSchema>;
 export type AgentPresetsListRequestMessage = z.infer<typeof AgentPresetsListRequestMessageSchema>;
 export type ModelGatewayMoaTestRequestMessage = z.infer<
   typeof ModelGatewayMoaTestRequestMessageSchema

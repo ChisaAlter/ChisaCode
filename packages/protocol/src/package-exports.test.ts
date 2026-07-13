@@ -54,6 +54,13 @@ describe("current package exports", () => {
     });
   });
 
+  test("exports provider messages as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./provider/messages"]).toEqual({
+      types: "./dist/provider/messages.d.ts",
+      default: "./dist/provider/messages.js",
+    });
+  });
+
   test("exports terminal messages as a first-class protocol domain", () => {
     expect(protocolPackage.exports["./terminal/messages"]).toEqual({
       types: "./dist/terminal/messages.d.ts",

@@ -1,14 +1,16 @@
 import { describe, expect, test } from "vitest";
 import {
-  GetProvidersSnapshotResponseMessageSchema,
-  ProviderToolingActionRequestMessageSchema,
-  ProviderToolingActionResponseMessageSchema,
-  ProviderDiagnosticResponseMessageSchema,
   AgentPresetsListRequestMessageSchema,
   AgentPresetsListResponseMessageSchema,
+} from "./messages.js";
+import {
+  GetProvidersSnapshotResponseMessageSchema,
+  ProviderDiagnosticResponseMessageSchema,
   ProviderSnapshotEntrySchema,
   ProvidersSnapshotUpdateMessageSchema,
-} from "./messages.js";
+  ProviderToolingActionRequestMessageSchema,
+  ProviderToolingActionResponseMessageSchema,
+} from "./provider/messages.js";
 
 describe("provider snapshot message schemas", () => {
   test("defaults missing provider snapshot entry enabled state to true", () => {

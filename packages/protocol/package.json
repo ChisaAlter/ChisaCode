@@ -133,6 +133,10 @@
       "types": "./dist/provider-manifest.d.ts",
       "default": "./dist/provider-manifest.js"
     },
+    "./provider/messages": {
+      "types": "./dist/provider/messages.d.ts",
+      "default": "./dist/provider/messages.js"
+    },
     "./schedule/rpc-schemas": {
       "types": "./dist/schedule/rpc-schemas.d.ts",
       "default": "./dist/schedule/rpc-schemas.js"
