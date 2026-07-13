@@ -4,7 +4,7 @@
 
 | 维度     | 当前评分 | 主要证据                                                                                                  | 距离 10 分的核心差距                                                                            |
 | -------- | -------: | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 2164 行；workspace 4926 行；Claude 873 行；ACP 926 行；Pi 581 行      | workspace 命令/持久化编排是当前最主要责任中心                                                   |
+| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 2164 行；workspace 4657 行；Claude 873 行；ACP 926 行；Pi 581 行      | workspace persistence/hydration 编排是当前最主要责任中心                                        |
 | 安全设计 |      9.3 | relay E2EE 单调 nonce；Ed25519 socket 认证；AI/Claude SDK 与 Zod 4 迁移后生产依赖 0 high/0 critical       | Expo/EAS 工具链仍有 moderate 通告；relay 认证升级需要持续兼容性发布管理                         |
 | 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop        | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
 | 代码质量 |      9.7 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；daemon 17 个 schema 具备独立契约与聚合测试 | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
@@ -48,6 +48,7 @@
 - 2026-07-13：Skills 与 MCP server 管理的配置、scope、payload 及 8 个 inbound/8 个 outbound schema 提取到 `agent/extensions.ts`；总 union 改由只读 tuple 聚合，旧 `messages` 入口兼容重导出并新增显式 package subpath，主文件降至 2436 行。
 - 2026-07-13：daemon status/pairing/config/project config/lifecycle 的 8 个 inbound、6 个 outbound、3 个 status payload 与 mutable config 提取到 `daemon/messages.ts`；旧入口兼容重导出并新增显式 package subpath，主文件降至 2164 行。
 - 2026-07-13：移动端 workspace tab switcher、presentation fallback、tab menu 与全部局部样式提取到 `workspace-mobile-tab-switcher.tsx`；主屏保持 props/行为兼容并从 5453 降至 4926 行。
+- 2026-07-13：tab、pane、dock、sidebar 与 command-center 五组 workspace action 注册/路由提取到 `use-workspace-keyboard-actions.ts`；handler 改用 `useStableEvent`，避免屏幕重渲染时重复注册，主屏降至 4657 行。
 - 2026-07-13：ACP tool/config/transport/process 分域后，新增 `acp/terminal-controller.ts` 独立拥有 terminal 子进程、输出截断、exit waiter 与关闭清理；`acp/workspace-path.ts` 统一 fs/terminal 意图边界，越界仍 fail-closed，同时只匹配真实 `..` 路径段，不再误拒 `..cache`。主文件从 2860 降至 1866 行，原公开入口继续兼容重导出。
 - 2026-07-13：ACP message assembly、tool snapshot 生命周期、user echo suppression、session update 路由与 running tool 取消态合成提取到 `acp/session-update-controller.ts`；mode/config/session-info/commands 继续通过窄回调由 Session 持有，原私有 `translateSessionUpdate` 保留委托；wrapper smoke 的 tool snapshot 证据改为统计公开 timeline 事件，不再读取 Session 私有 map。主文件进一步降至 1752 行。
 - 2026-07-13：ACP foreground prompt 派发、active turn、usage、user echo suppression、bootstrap thread 事件、canceled tool 合成、终态与 process-exit failure 提取到 `acp/foreground-turn-controller.ts`；每回合 usage 显式重置，进程退出/关闭/替换后的迟到 prompt resolve/reject 被忽略，JSON-RPC code/data 继续进入诊断。测试以重叠回合拒绝及完成/失败后可重试证明公开行为，不再读取私有 active turn。主文件进一步降至 1575 行。
@@ -80,7 +81,7 @@
 1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK 与 Zod 4 已完成；剩余 Expo/EAS framework major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
 2. **P1 provider 文件拆分（核心完成）**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP/Pi/Claude 均已完成 composition-first 核心拆分；后续只在真实复杂度或缺陷证明收益时继续分域，不再按行数做低收益碎片化拆分。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon 域提取并降至 2164 行，下一步评估 usage/voice 分域并保留 agent core 的聚合职责。
-4. **P2 app 工作台拆分（进行中）**：移动端 tab navigation 已提取，`workspace-screen.tsx` 从 5453 降至 4926 行；下一步继续拆 commands 与 persistence，保持 native/web/electron surface 测试分离。
+4. **P2 app 工作台拆分（进行中）**：移动端 tab navigation 与五组 workspace command routing 已提取，`workspace-screen.tsx` 从 5453 降至 4657 行；下一步拆 layout/setup persistence 与 hydration，保持 native/web/electron surface 测试分离。
 5. **P2 产品 parity（2026-07-13 完成）**：MCP 已补齐一等 chat/loop 工具，并复用现有 service、Chat mention fan-out 与 caller cwd/identity 安全边界。
 6. **P2 测试减债**：按包逐步降低 module mock、conditional skip、fixed wait、weak assertion、process.env mutation 基线，不再只维持 no-new-debt。
 
@@ -109,6 +110,7 @@
 - 2026-07-13 Protocol agent extension 批次：protocol typecheck/build、3 个目标文件 lint、18 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 Protocol daemon messages 批次：protocol typecheck/build、3 个目标文件 lint、32 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 App workspace mobile navigation 批次：App typecheck、2 个目标文件 lint 与 15 个 tab menu/layout 聚焦断言通过；未以 web 预览替代 native mobile 验证
+- 2026-07-13 App workspace command routing 批次：App typecheck 与 2 个目标文件 lint 通过；未运行全量 App/Playwright 测试
 - 2026-07-13 ACP tool mapper 批次：server typecheck、3 个目标文件 lint、新 mapper 5 个断言与既有 generic permission 透传场景通过
 - 2026-07-13 ACP session config 批次：server typecheck、2 个目标文件 lint 与既有 mode/model/config 7 个聚焦断言通过
 - 2026-07-13 ACP NDJSON transport 批次：server typecheck、2 个目标文件 lint 与既有 stream/compat 3 个聚焦断言通过
