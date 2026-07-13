@@ -74,6 +74,7 @@ import {
   AgentSessionRescueController,
   type AgentSessionRescueTimeouts,
 } from "./agent-session-rescue-controller.js";
+import { AgentSessionEventPipelineController } from "./agent-session-event-pipeline-controller.js";
 import { AgentSessionLifecycleController } from "./agent-session-lifecycle-controller.js";
 import { AgentSessionRegistrationController } from "./agent-session-registration-controller.js";
 import { AgentSessionStateController } from "./agent-session-state-controller.js";
@@ -173,15 +174,6 @@ function resolveInitialAttention(input: AttentionState | undefined): AttentionSt
     attentionReason: input.attentionReason,
     attentionTimestamp: new Date(input.attentionTimestamp),
   };
-}
-
-interface StreamEventFlags {
-  shouldDispatchEvent: boolean;
-  shouldNotifyWaiters: boolean;
-}
-
-interface HandleStreamEventOptions {
-  fromHistory?: boolean;
 }
 
 interface ManagedAgentBase {
@@ -322,6 +314,7 @@ export class AgentManager {
   private readonly providers: AgentProviderController;
   private readonly runControl: AgentRunControlController;
   private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
+  private readonly sessionEvents: AgentSessionEventPipelineController;
   private readonly sessionLifecycle: AgentSessionLifecycleController;
   private readonly sessionRegistration: AgentSessionRegistrationController;
   private readonly sessionRescue: AgentSessionRescueController;
@@ -332,7 +325,6 @@ export class AgentManager {
   private readonly turnEvents: AgentTurnEventController;
   private readonly waits: AgentWaitController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
-  private readonly sessionEventTails = new Map<string, Promise<void>>();
   private readonly foregroundRuns = new ForegroundRunState();
   private readonly eventBus: AgentManagerEventBus;
   private readonly idFactory: () => string;
@@ -366,7 +358,7 @@ export class AgentManager {
       dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
       emitState: (agent) => this.emitState(agent),
       getAgent: (agentId) => this.requireSessionAgent(agentId),
-      getSessionEventTail: (agentId) => this.sessionEventTails.get(agentId),
+      getSessionEventTail: (agentId) => this.sessionEvents.getTail(agentId),
       logger: this.logger,
       persistSnapshot: (agent) => this.persistSnapshot(agent),
       refreshSessionState: (agent) => this.sessionState.refresh(agent),
@@ -383,7 +375,7 @@ export class AgentManager {
       emitState: (agent) => this.emitState(agent),
       foregroundRuns: this.foregroundRuns,
       getAgent: (agentId) => this.requireSessionAgent(agentId),
-      handleStreamEvent: (agent, event) => this.handleStreamEvent(agent, event),
+      handleStreamEvent: (agent, event) => this.sessionEvents.handle(agent, event),
       isTerminalEvent: isTurnTerminalEvent,
       logger: this.logger,
       onAgentTerminal: (agentId) => this.generativeUiActionQueue.onAgentTerminal(agentId),
@@ -438,7 +430,7 @@ export class AgentManager {
       endInitialSnapshotPersist: (agentId) => {
         this.agentsAwaitingInitialSnapshotPersist.delete(agentId);
       },
-      enqueueSessionEvent: (agentId, event) => this.enqueueSessionEvent(agentId, event),
+      enqueueSessionEvent: (agentId, event) => this.sessionEvents.enqueue(agentId, event),
       hasAgent: (agentId) => this.agents.has(agentId),
       persistSnapshot: (agent, persistOptions) => this.persistSnapshot(agent, persistOptions),
       recordInitialStatus: (agentId, lifecycle) => {
@@ -481,7 +473,7 @@ export class AgentManager {
     this.sessionRescue = new AgentSessionRescueController(this.logger, options.rescueTimeouts);
     this.runControl = new AgentRunControlController({
       clearPendingPermissions: (agent) => this.permissions.clearAfterInterrupt(agent),
-      dispatchSessionEvent: (agent, event) => this.dispatchSessionEvent(agent, event),
+      dispatchSessionEvent: (agent, event) => this.sessionEvents.dispatch(agent, event),
       emitState: (agent) => this.emitState(agent),
       findAgent: (agentId) => this.agents.get(agentId) ?? null,
       foregroundRuns: this.foregroundRuns,
@@ -508,6 +500,22 @@ export class AgentManager {
       windowMs: options.agentStreamCoalesceWindowMs ?? AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS,
       timers: { setTimeout, clearTimeout },
       onFlush: (input) => this.timelineEvents.onCoalescedFlush(input),
+    });
+    this.sessionEvents = new AgentSessionEventPipelineController({
+      coalescer: this.agentStreamCoalescer,
+      dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
+      finalizeForeground: (agent, turnId) => this.foregroundExecution.finalize(agent, turnId),
+      findAgent: (agentId) => this.agents.get(agentId) ?? null,
+      foregroundRuns: this.foregroundRuns,
+      isTerminalEvent: isTurnTerminalEvent,
+      logger: this.logger,
+      onAgentTerminal: (agentId) => this.generativeUiActionQueue.onAgentTerminal(agentId),
+      permissions: this.permissions,
+      sessionState: this.sessionState,
+      timelineEvents: this.timelineEvents,
+      touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
+      trackBackgroundTask: (task) => this.trackBackgroundTask(task),
+      turnEvents: this.turnEvents,
     });
     this.history = new AgentHistoryController({
       cancelAgentRun: (agentId) => this.runControl.cancel(agentId),
@@ -1078,101 +1086,6 @@ export class AgentManager {
     return await this.waits.waitForEvent(agentId, options);
   }
 
-  private enqueueSessionEvent(agentId: string, event: AgentStreamEvent): void {
-    this.logger.trace(
-      {
-        agentId,
-        provider: event.provider,
-        sessionId: this.agents.get(agentId)?.persistence?.sessionId ?? undefined,
-        turnId: getAgentStreamEventTurnId(event),
-        event,
-      },
-      "agent.manager.enqueue",
-    );
-    const previous = this.sessionEventTails.get(agentId) ?? Promise.resolve();
-    const next = previous
-      .catch(() => undefined)
-      .then(async () => {
-        const current = this.agents.get(agentId);
-        if (!current) {
-          return;
-        }
-        if (current.session == null) {
-          return;
-        }
-        this.logger.trace(
-          {
-            agentId,
-            provider: event.provider,
-            sessionId: current.persistence?.sessionId ?? undefined,
-            turnId: getAgentStreamEventTurnId(event),
-            event,
-          },
-          "agent.manager.dequeue",
-        );
-        await this.dispatchSessionEvent(current, event);
-        return;
-      })
-      .catch((err) => {
-        this.logger.error(
-          { err, agentId, eventType: event.type },
-          "Failed to process session event",
-        );
-      });
-
-    this.sessionEventTails.set(agentId, next);
-    this.trackBackgroundTask(next);
-    void next.finally(() => {
-      if (this.sessionEventTails.get(agentId) === next) {
-        this.sessionEventTails.delete(agentId);
-      }
-    });
-  }
-
-  private async dispatchSessionEvent(
-    agent: ActiveManagedAgent,
-    event: AgentStreamEvent,
-  ): Promise<void> {
-    const turnId = getAgentStreamEventTurnId(event);
-    const matchingWaiters = this.foregroundRuns.getMatchingWaiters(agent, turnId);
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: event.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId,
-        matchingWaiterCount: matchingWaiters.length,
-        event,
-      },
-      "agent.manager.dispatch_session_event",
-    );
-
-    const shouldNotifyWaiters = await this.handleStreamEvent(agent, event);
-
-    if (!shouldNotifyWaiters) {
-      return;
-    }
-
-    this.foregroundRuns.notifyWaiters(matchingWaiters, event, {
-      terminal: isTurnTerminalEvent(event),
-    });
-    if (isTurnTerminalEvent(event) && matchingWaiters.length === 0) {
-      this.generativeUiActionQueue.onAgentTerminal(agent.id);
-    }
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: event.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId,
-        notifiedWaiterCount: matchingWaiters.length,
-        terminal: isTurnTerminalEvent(event),
-        event,
-      },
-      "agent.manager.notify_waiters",
-    );
-  }
-
   private async persistSnapshot(
     agent: ManagedAgent,
     options?: {
@@ -1194,191 +1107,6 @@ export class AgentManager {
       return;
     }
     await this.registry.applySnapshot(agent, options);
-  }
-
-  private async handleStreamEvent(
-    agent: ActiveManagedAgent,
-    event: AgentStreamEvent,
-    options?: HandleStreamEventOptions,
-  ): Promise<boolean> {
-    const eventTurnId = getAgentStreamEventTurnId(event);
-    const isForegroundEvent = Boolean(eventTurnId && agent.activeForegroundTurnId === eventTurnId);
-    this.traceHandleStreamEventStart(agent, event, eventTurnId, isForegroundEvent);
-    if (
-      eventTurnId &&
-      isTurnTerminalEvent(event) &&
-      this.foregroundRuns.hasFinalizedTurn(agent, eventTurnId)
-    ) {
-      return false;
-    }
-
-    // Only update timestamp for live events, not history replay
-    if (!options?.fromHistory) {
-      this.touchUpdatedAt(agent);
-      if (this.agentStreamCoalescer.handle(agent.id, event)) {
-        this.traceCoalescerBuffered(agent, event, eventTurnId);
-        return false;
-      }
-      this.agentStreamCoalescer.flushFor(agent.id);
-    }
-
-    const flags: StreamEventFlags = { shouldDispatchEvent: true, shouldNotifyWaiters: true };
-
-    const dispatchPromise = this.dispatchStreamEventByType({
-      agent,
-      event,
-      options,
-      isForegroundEvent,
-      eventTurnId,
-      flags,
-    });
-    if (dispatchPromise) {
-      await dispatchPromise;
-    }
-
-    if (!options?.fromHistory && isForegroundEvent && isTurnTerminalEvent(event)) {
-      this.foregroundExecution.finalize(agent, eventTurnId);
-    }
-
-    if (!options?.fromHistory && flags.shouldDispatchEvent) {
-      this.dispatchStream(agent.id, event, { timestamp: new Date().toISOString() });
-    }
-
-    this.traceHandleStreamEventEnd(agent, event, eventTurnId, flags);
-
-    return flags.shouldNotifyWaiters;
-  }
-
-  private traceHandleStreamEventStart(
-    agent: ActiveManagedAgent,
-    event: AgentStreamEvent,
-    turnId: string | undefined,
-    isForegroundEvent: boolean,
-  ): void {
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: event.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId,
-        lifecycle: agent.lifecycle,
-        activeForegroundTurnId: agent.activeForegroundTurnId,
-        isForegroundEvent,
-        event,
-      },
-      "agent.manager.handle_stream_event.start",
-    );
-  }
-
-  private traceCoalescerBuffered(
-    agent: ActiveManagedAgent,
-    event: AgentStreamEvent,
-    turnId: string | undefined,
-  ): void {
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: event.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId,
-        event,
-      },
-      "agent.manager.coalescer.buffer",
-    );
-  }
-
-  private traceHandleStreamEventEnd(
-    agent: ActiveManagedAgent,
-    event: AgentStreamEvent,
-    turnId: string | undefined,
-    flags: StreamEventFlags,
-  ): void {
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: event.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId,
-        lifecycle: agent.lifecycle,
-        activeForegroundTurnId: agent.activeForegroundTurnId,
-        shouldDispatchEvent: flags.shouldDispatchEvent,
-        shouldNotifyWaiters: flags.shouldNotifyWaiters,
-        event,
-      },
-      "agent.manager.handle_stream_event.end",
-    );
-  }
-
-  private dispatchStreamEventByType(params: {
-    agent: ActiveManagedAgent;
-    event: AgentStreamEvent;
-    options: HandleStreamEventOptions | undefined;
-    isForegroundEvent: boolean;
-    eventTurnId: string | undefined;
-    flags: StreamEventFlags;
-  }): Promise<void> | undefined {
-    const { agent, event, options, isForegroundEvent, eventTurnId, flags } = params;
-    switch (event.type) {
-      case "thread_started":
-        this.sessionState.onThreadStarted(agent);
-        return undefined;
-      case "usage_updated":
-        this.sessionState.onUsageUpdated(agent, event);
-        return undefined;
-      case "mode_changed":
-        this.sessionState.onModeChanged(agent, event);
-        flags.shouldDispatchEvent = false;
-        return undefined;
-      case "model_changed":
-        this.sessionState.onModelChanged(agent, event);
-        flags.shouldDispatchEvent = false;
-        return undefined;
-      case "thinking_option_changed":
-        this.sessionState.onThinkingOptionChanged(agent, event);
-        flags.shouldDispatchEvent = false;
-        return undefined;
-      case "timeline": {
-        const routing = this.timelineEvents.onTimelineEvent(agent, event, options);
-        flags.shouldDispatchEvent = routing.shouldDispatchEvent;
-        flags.shouldNotifyWaiters = routing.shouldNotifyWaiters;
-        return undefined;
-      }
-      case "turn_completed":
-        this.turnEvents.onCompleted({
-          agent,
-          event,
-          eventTurnId,
-          isForegroundEvent,
-          fromHistory: options?.fromHistory === true,
-        });
-        return undefined;
-      case "turn_failed":
-        return this.turnEvents.onFailed({
-          agent,
-          event,
-          eventTurnId,
-          isForegroundEvent,
-          options,
-        });
-      case "turn_canceled":
-        this.turnEvents.onCanceled({ agent, event, eventTurnId, isForegroundEvent, options });
-        return undefined;
-      case "turn_started":
-        this.turnEvents.onStarted({ agent, eventTurnId, isForegroundEvent });
-        return undefined;
-      case "permission_requested":
-        this.permissions.onRequested(agent, event);
-        return undefined;
-      case "permission_resolved": {
-        const shouldDispatchEvent = this.permissions.onResolved(agent, event, options);
-        if (!shouldDispatchEvent) {
-          flags.shouldDispatchEvent = false;
-        }
-        return undefined;
-      }
-      default:
-        return undefined;
-    }
   }
 
   private recordTimeline(
