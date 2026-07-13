@@ -3,9 +3,7 @@ import fs from "node:fs";
 import { promises } from "node:fs";
 import path from "node:path";
 import {
-  type AgentDefinition,
   type CanUseTool,
-  type McpServerConfig as ClaudeSdkMcpServerConfig,
   type PermissionMode,
   type Query,
   type SDKMessage,
@@ -36,7 +34,6 @@ import {
   readStreamRequestInputTokens,
   readStreamRequestOutputTokens,
   readUsageFromTaskNotification,
-  toClaudeSdkMcpConfig,
   type ClaudeContentChunk,
 } from "./sdk-types-mapping.js";
 import { runClaudeSdkQueryPump } from "./sdk-pump.js";
@@ -47,6 +44,7 @@ import {
 } from "./message-router.js";
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { ClaudePermissionController } from "./permission-controller.js";
+import { ClaudeOptionsBuilder, summarizeClaudeOptionsForLog } from "./options-builder.js";
 import { ClaudeToolCallHandler, type ClaudeToolUseCacheEntry } from "./tool-call-handlers.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
@@ -60,7 +58,7 @@ import {
 } from "./history-converter.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
-import { claudeQuery, type ClaudeOptions, type ClaudeQueryFactory } from "./query.js";
+import { claudeQuery, type ClaudeQueryFactory } from "./query.js";
 import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
 
@@ -81,28 +79,9 @@ import {
   type AgentTimelineItem,
   type AgentUsage,
   type AgentRuntimeInfo,
-  type McpServerConfig,
 } from "../../agent-sdk-types.js";
-import { createProviderEnv, type ProviderRuntimeSettings } from "../../provider-launch-config.js";
+import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
 import { withTimeout } from "../../../../utils/promise-timeout.js";
-import { composeSystemPromptParts } from "../../system-prompt.js";
-
-const CLAUDE_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
-  "user",
-  "project",
-  "local",
-];
-const CLAUDE_GATEWAY_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
-  "project",
-  "local",
-];
-const CLAUDE_MODEL_SELECTION_ENV_KEYS = [
-  "ANTHROPIC_MODEL",
-  "ANTHROPIC_SMALL_FAST_MODEL",
-  "ANTHROPIC_DEFAULT_OPUS_MODEL",
-  "ANTHROPIC_DEFAULT_SONNET_MODEL",
-  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-];
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -180,12 +159,6 @@ interface SlashCommandInvocation {
 type ClaudeThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 type ClaudeThinkingOption = ClaudeThinkingEffort | "ultracode";
 
-function resolvePathEnvKey(): "Path" | "PATH" | null {
-  if (process.env["Path"] !== undefined) return "Path";
-  if (process.env["PATH"] !== undefined) return "PATH";
-  return null;
-}
-
 function errorToMessageString(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.message;
@@ -209,167 +182,9 @@ function sanitizeClaudeProjectPath(cwd: string): string {
   return cwd.replace(/[\\/._:]/g, "-");
 }
 
-interface ClaudeOptionsLogSummary {
-  cwd: string | null;
-  permissionMode: string | null;
-  model: string | null;
-  includePartialMessages: boolean;
-  settingSources: string[];
-  enableFileCheckpointing: boolean;
-  hasResume: boolean;
-  maxThinkingTokens: number | null;
-  hasEnv: boolean;
-  envKeyCount: number;
-  hasMcpServers: boolean;
-  mcpServerNames: string[];
-  systemPromptMode: "none" | "string" | "preset" | "custom";
-  systemPromptPreset: string | null;
-  hasCanUseTool: boolean;
-  hasSpawnOverride: boolean;
-  hasStderrHandler: boolean;
-  pathToClaudeCodeExecutable: string | null;
-  persistSession: boolean | null;
-  fastMode: boolean | null;
-}
-
 const MAX_RECENT_STDERR_CHARS = 4000;
 const STDERR_FLUSH_WAIT_MS = 150;
 const STDERR_FLUSH_POLL_INTERVAL_MS = 10;
-
-function summarizeClaudeOptionsForLog(options: ClaudeOptions): ClaudeOptionsLogSummary {
-  const systemPromptRaw = options.systemPrompt;
-  const systemPromptSummary = (() => {
-    if (!systemPromptRaw) {
-      return { mode: "none" as const, preset: null };
-    }
-    if (typeof systemPromptRaw === "string") {
-      return { mode: "string" as const, preset: null };
-    }
-    const prompt = toObjectRecord(systemPromptRaw);
-    const promptType = typeof prompt?.type === "string" ? prompt.type : "custom";
-    return {
-      mode: promptType === "preset" ? ("preset" as const) : ("custom" as const),
-      preset: typeof prompt?.preset === "string" && prompt.preset.length > 0 ? prompt.preset : null,
-    };
-  })();
-  const mcpServerNames = options.mcpServers ? Object.keys(options.mcpServers).sort() : [];
-
-  return {
-    cwd: typeof options.cwd === "string" ? options.cwd : null,
-    permissionMode: typeof options.permissionMode === "string" ? options.permissionMode : null,
-    model: typeof options.model === "string" ? options.model : null,
-    includePartialMessages: options.includePartialMessages === true,
-    settingSources: Array.isArray(options.settingSources) ? options.settingSources : [],
-    enableFileCheckpointing: options.enableFileCheckpointing === true,
-    hasResume: typeof options.resume === "string" && options.resume.length > 0,
-    maxThinkingTokens:
-      typeof options.maxThinkingTokens === "number" ? options.maxThinkingTokens : null,
-    hasEnv: !!options.env,
-    envKeyCount: Object.keys(options.env ?? {}).length,
-    hasMcpServers: mcpServerNames.length > 0,
-    mcpServerNames,
-    systemPromptMode: systemPromptSummary.mode,
-    systemPromptPreset: systemPromptSummary.preset,
-    hasCanUseTool: typeof options.canUseTool === "function",
-    hasSpawnOverride: typeof options.spawnClaudeCodeProcess === "function",
-    hasStderrHandler: typeof options.stderr === "function",
-    pathToClaudeCodeExecutable:
-      typeof options.pathToClaudeCodeExecutable === "string"
-        ? options.pathToClaudeCodeExecutable
-        : null,
-    persistSession: typeof options.persistSession === "boolean" ? options.persistSession : null,
-    fastMode: readClaudeFastModeSetting(options.settings),
-  };
-}
-
-function readClaudeFastModeSetting(settings: ClaudeOptions["settings"]): boolean | null {
-  if (!settings || typeof settings === "string") {
-    return null;
-  }
-  return typeof settings.fastMode === "boolean" ? settings.fastMode : null;
-}
-
-function mergeClaudeSettings(
-  settings: ClaudeOptions["settings"],
-  updates: NonNullable<Exclude<ClaudeOptions["settings"], string>>,
-): ClaudeOptions["settings"] {
-  if (!settings || typeof settings === "string") {
-    return settings ?? updates;
-  }
-  const merged = { ...settings, ...updates };
-  if (settings.env || updates.env) {
-    merged.env = {
-      ...settings.env,
-      ...updates.env,
-    };
-  }
-  return merged;
-}
-
-function readRuntimeSettingsEnv(
-  runtimeSettings: ProviderRuntimeSettings | undefined,
-): Record<string, string> | null {
-  const entries = Object.entries(runtimeSettings?.env ?? {}).filter(
-    (entry): entry is [string, string] => typeof entry[1] === "string",
-  );
-  return entries.length > 0 ? Object.fromEntries(entries) : null;
-}
-
-const CLAUDE_MODEL_GATEWAY_CARRIER_MODEL = "sonnet";
-
-function buildModelGatewayOverrideBaseUrl(baseUrl: string, model: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(baseUrl);
-  } catch {
-    return null;
-  }
-
-  const normalizedPath = parsed.pathname.replace(/\/+$/u, "");
-  const gatewayPathMatch = normalizedPath.match(/^(.*\/api\/model-gateways\/[^/]+)(?:\/v1)?$/u);
-  if (!gatewayPathMatch?.[1]) {
-    return null;
-  }
-
-  parsed.pathname = `${gatewayPathMatch[1]}/model-overrides/${encodeURIComponent(model)}`;
-  parsed.search = "";
-  parsed.hash = "";
-  return parsed.toString().replace(/\/$/u, "");
-}
-
-function resolveClaudeModelGatewayOverride(input: {
-  model: string | undefined;
-  env: NodeJS.ProcessEnv;
-}): { env: Record<string, string>; launchModel: string } | null {
-  const selectedModel = input.model?.trim();
-  const baseUrl = input.env["ANTHROPIC_BASE_URL"]?.trim();
-  if (!selectedModel || !baseUrl) {
-    return null;
-  }
-
-  const overrideBaseUrl = buildModelGatewayOverrideBaseUrl(baseUrl, selectedModel);
-  if (!overrideBaseUrl) {
-    return null;
-  }
-
-  const env: Record<string, string> = {
-    ANTHROPIC_BASE_URL: overrideBaseUrl,
-  };
-  const token = input.env["ANTHROPIC_API_KEY"] ?? input.env["ANTHROPIC_AUTH_TOKEN"];
-  if (token) {
-    env.ANTHROPIC_API_KEY = token;
-    env.ANTHROPIC_AUTH_TOKEN = token;
-  }
-  return { env, launchModel: CLAUDE_MODEL_GATEWAY_CARRIER_MODEL };
-}
-
-function removeClaudeModelSelectionEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const cleaned = { ...env };
-  for (const key of CLAUDE_MODEL_SELECTION_ENV_KEYS) {
-    delete cleaned[key];
-  }
-  return cleaned;
-}
 
 function readTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") {
@@ -383,41 +198,6 @@ function isPermissionMode(value: string | undefined): value is PermissionMode {
   return typeof value === "string" && VALID_CLAUDE_MODES.has(value);
 }
 
-function isTruthyEnvValue(value: string | undefined): boolean {
-  const normalized = value?.trim().toLowerCase();
-  return (
-    normalized !== undefined &&
-    normalized.length > 0 &&
-    normalized !== "0" &&
-    normalized !== "false" &&
-    normalized !== "no" &&
-    normalized !== "off"
-  );
-}
-
-function detectIneligibleAutoModeTransport(env: NodeJS.ProcessEnv): "Bedrock" | "Vertex" | null {
-  if (isTruthyEnvValue(env.CLAUDE_CODE_USE_BEDROCK)) {
-    return "Bedrock";
-  }
-  if (isTruthyEnvValue(env.CLAUDE_CODE_USE_VERTEX)) {
-    return "Vertex";
-  }
-  return null;
-}
-
-function assertClaudeAutoModeEligible(mode: PermissionMode, env: NodeJS.ProcessEnv): void {
-  if (mode !== "auto") {
-    return;
-  }
-  const transport = detectIneligibleAutoModeTransport(env);
-  if (transport === null) {
-    return;
-  }
-  throw new Error(
-    `Claude Auto mode requires the Anthropic API and is not supported when Claude Code uses ${transport}. Select another permission mode or unset the ${transport === "Bedrock" ? "CLAUDE_CODE_USE_BEDROCK" : "CLAUDE_CODE_USE_VERTEX"} environment variable.`,
-  );
-}
-
 export class ClaudeAgentSession implements AgentSession {
   readonly provider = "claude" as const;
   readonly capabilities = CLAUDE_CAPABILITIES;
@@ -425,12 +205,11 @@ export class ClaudeAgentSession implements AgentSession {
   private readonly config: ClaudeAgentConfig;
   private readonly launchEnv?: Record<string, string>;
   private readonly agentId?: string;
-  private readonly defaults?: { agents?: Record<string, AgentDefinition> };
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly persistSession?: boolean;
   private readonly logger: Logger;
   private readonly queryFactory?: ClaudeQueryFactory;
-  private readonly resolveBinary: () => Promise<string>;
+  private readonly optionsBuilder: ClaudeOptionsBuilder;
   private query: Query | null = null;
   private input: AsyncMessageInput<SDKUserMessage> | null = null;
   private claudeSessionId: string | null;
@@ -471,10 +250,24 @@ export class ClaudeAgentSession implements AgentSession {
     this.config = config;
     this.launchEnv = options.launchEnv;
     this.agentId = options.agentId;
-    this.defaults = options.defaults;
     this.runtimeSettings = options.runtimeSettings;
     this.persistSession = options.persistSession;
     this.logger = options.logger.child({ agentId: this.agentId });
+    this.optionsBuilder = new ClaudeOptionsBuilder({
+      config: this.config,
+      launchEnv: this.launchEnv,
+      defaults: options.defaults,
+      runtimeSettings: this.runtimeSettings,
+      persistSession: this.persistSession,
+      logger: this.logger,
+      resolveBinary: options.resolveBinary,
+      getCurrentMode: () => this.currentMode,
+      getClaudeSessionId: () => this.claudeSessionId,
+      getPendingFreshSessionId: () => this.pendingFreshSessionId,
+      canUseTool: async (toolName, input, requestOptions) =>
+        this.handlePermissionRequest(toolName, input, requestOptions),
+      captureStderr: (data) => this.captureStderr(data),
+    });
     this.permissionController = new ClaudePermissionController({
       getPlanResumeMode: () => this.planResumeMode,
       getModeLabel: (modeId) => DEFAULT_MODES.find((mode) => mode.id === modeId)?.label ?? modeId,
@@ -508,7 +301,6 @@ export class ClaudeAgentSession implements AgentSession {
       assembleTimelineItems: (input) => this.timelineAssembler.consume(input),
     });
     this.queryFactory = options.queryFactory;
-    this.resolveBinary = options.resolveBinary;
     const handle = options.handle;
 
     if (handle) {
@@ -813,7 +605,7 @@ export class ClaudeAgentSession implements AgentSession {
     }
 
     const normalized = isPermissionMode(modeId) ? modeId : "default";
-    assertClaudeAutoModeEligible(normalized, this.buildSdkEnv(this.config.extra?.claude));
+    this.optionsBuilder.assertAutoModeEligible(normalized);
     const previousMode = this.currentMode;
     const activeQuery = await this.ensureQuery();
     await activeQuery.setPermissionMode(normalized);
@@ -1338,12 +1130,15 @@ export class ClaudeAgentSession implements AgentSession {
       }
     }
 
-    // Preserve claudeSessionId across query recreation so buildOptions() passes
+    // Preserve claudeSessionId across query recreation so rebuilt options pass
     // resume: sessionId and the new query continues the existing conversation.
     this.persistence = null;
 
     const input = createAsyncMessageInput<SDKUserMessage>();
-    const options = await this.buildOptions();
+    const builtOptions = await this.optionsBuilder.build();
+    const options = builtOptions.options;
+    this.lastOptionsModel = builtOptions.requestedModel;
+    this.modelGatewayOverrideActive = builtOptions.modelGatewayOverrideActive;
     this.logger.debug({ options: summarizeClaudeOptionsForLog(options) }, "claude query");
     this.input = input;
     this.query = claudeQuery(
@@ -1354,7 +1149,7 @@ export class ClaudeAgentSession implements AgentSession {
         queryFactory: this.queryFactory,
       },
     );
-    const fastMode = this.resolveFastModeSetting();
+    const fastMode = this.optionsBuilder.resolveFastModeSetting();
     if (fastMode !== null) {
       await this.query.applyFlagSettings({ fastMode });
     }
@@ -1409,204 +1204,6 @@ export class ClaudeAgentSession implements AgentSession {
     } catch (error) {
       this.logger.warn({ err: error, label }, "Claude query operation did not settle cleanly");
     }
-  }
-
-  private resolveThinkingConfig(): {
-    thinking: ClaudeOptions["thinking"];
-    effort: ClaudeOptions["effort"];
-    ultracode: boolean;
-  } {
-    const thinkingOptionId = isClaudeThinkingOption(this.config.thinkingOptionId)
-      ? this.config.thinkingOptionId
-      : undefined;
-    if (thinkingOptionId === "ultracode") {
-      return { thinking: { type: "adaptive" }, effort: "xhigh", ultracode: true };
-    }
-    if (thinkingOptionId) {
-      return { thinking: { type: "adaptive" }, effort: thinkingOptionId, ultracode: false };
-    }
-    return { thinking: undefined, effort: undefined, ultracode: false };
-  }
-
-  private buildAppendedSystemPrompt(): string {
-    return (
-      composeSystemPromptParts(this.config.systemPrompt, this.config.daemonAppendSystemPrompt) ?? ""
-    );
-  }
-
-  private buildSdkEnv(extraClaudeOptions: Partial<ClaudeOptions> | undefined): NodeJS.ProcessEnv {
-    return createProviderEnv({
-      baseEnv: process.env,
-      runtimeSettings: this.runtimeSettings,
-      overlays: [
-        extraClaudeOptions?.env,
-        {
-          // Increase MCP timeouts for long-running tool calls (10 minutes)
-          MCP_TIMEOUT: "600000",
-          MCP_TOOL_TIMEOUT: "600000",
-        },
-        this.launchEnv,
-      ],
-    });
-  }
-
-  private async buildOptions(): Promise<ClaudeOptions> {
-    const { thinking, effort, ultracode } = this.resolveThinkingConfig();
-    const appendedSystemPrompt = this.buildAppendedSystemPrompt();
-    const extraClaudeOptions = this.config.extra?.claude;
-    const { sdkEnv, flagSettingsOptions, launchModel, modelGatewayOverrideActive } =
-      this.buildSdkLaunchOptions(extraClaudeOptions, { ultracode });
-    this.modelGatewayOverrideActive = modelGatewayOverrideActive;
-    assertClaudeAutoModeEligible(this.currentMode, sdkEnv);
-
-    const claudeBinary = await this.resolveBinary();
-    this.logger.debug(
-      {
-        claudeBinary,
-        pathEnvKey: resolvePathEnvKey(),
-        pathIncludesClaudeLocalBin: (process.env["Path"] ?? process.env["PATH"] ?? "")
-          .toLowerCase()
-          .includes("\\.local\\bin"),
-      },
-      "Resolved Claude executable",
-    );
-    const sessionBinding: Pick<ClaudeOptions, "resume" | "sessionId"> = {};
-    if (this.pendingFreshSessionId) {
-      sessionBinding.sessionId = this.pendingFreshSessionId;
-    } else if (this.claudeSessionId) {
-      sessionBinding.resume = this.claudeSessionId;
-    }
-
-    const base: ClaudeOptions = {
-      cwd: this.config.cwd,
-      includePartialMessages: true,
-      permissionMode: this.currentMode,
-      // Dynamic mode switching can recreate the underlying Claude query. Keep the
-      // bypass launch capability available so later setPermissionMode("bypassPermissions")
-      // calls do not fail after a model/thinking/rewind-driven restart.
-      allowDangerouslySkipPermissions: true,
-      agents: this.defaults?.agents,
-      canUseTool: this.handlePermissionRequest,
-      pathToClaudeCodeExecutable: claudeBinary,
-      // Use Claude Code preset system prompt and load CLAUDE.md files
-      // Append provider-agnostic system prompts for agents.
-      systemPrompt: {
-        type: "preset",
-        preset: "claude_code",
-        append: appendedSystemPrompt,
-      },
-      settingSources: CLAUDE_SETTING_SOURCES,
-      stderr: (data: string) => {
-        this.captureStderr(data);
-        this.logger.error({ stderr: data.trim() }, "Claude Agent SDK stderr");
-      },
-      // Required for provider-level /rewind support.
-      enableFileCheckpointing: true,
-      // If we have a session ID from a previous query (e.g., after interrupt),
-      // resume that session to continue the conversation history.
-      ...sessionBinding,
-      ...(thinking ? { thinking } : {}),
-      ...(effort ? { effort } : {}),
-      ...extraClaudeOptions,
-      ...flagSettingsOptions,
-      ...(this.persistSession === undefined ? {} : { persistSession: this.persistSession }),
-      env: sdkEnv,
-    };
-
-    return this.applyPostOptions(base, launchModel, modelGatewayOverrideActive);
-  }
-
-  private applyPostOptions(
-    base: ClaudeOptions,
-    launchModel: string | undefined,
-    modelGatewayOverrideActive: boolean,
-  ): ClaudeOptions {
-    if (this.config.mcpServers) {
-      base.mcpServers = this.normalizeMcpServers(this.config.mcpServers);
-    }
-
-    if (launchModel) {
-      base.model = launchModel;
-    }
-    this.lastOptionsModel = modelGatewayOverrideActive
-      ? (this.config.model ?? null)
-      : (base.model ?? null);
-    if (this.claudeSessionId && !this.pendingFreshSessionId) {
-      base.resume = this.claudeSessionId;
-    }
-    if (this.runtimeSettings?.disallowedTools?.length) {
-      base.disallowedTools = [
-        ...(base.disallowedTools ?? []),
-        ...this.runtimeSettings.disallowedTools,
-      ];
-    }
-    return base;
-  }
-
-  private buildSdkLaunchOptions(
-    extraClaudeOptions: Partial<ClaudeOptions> | undefined,
-    extra?: { ultracode?: boolean },
-  ): {
-    sdkEnv: NodeJS.ProcessEnv;
-    flagSettingsOptions: Partial<Pick<ClaudeOptions, "settings" | "settingSources">>;
-    launchModel: string | undefined;
-    modelGatewayOverrideActive: boolean;
-  } {
-    const baseEnv = this.buildSdkEnv(extraClaudeOptions);
-    const modelGatewayOverride = resolveClaudeModelGatewayOverride({
-      model: this.config.model,
-      env: baseEnv,
-    });
-    const sdkEnv = modelGatewayOverride
-      ? removeClaudeModelSelectionEnv({ ...baseEnv, ...modelGatewayOverride.env })
-      : baseEnv;
-    const flagSettingsOptions: Partial<Pick<ClaudeOptions, "settings" | "settingSources">> =
-      this.buildFlagSettingsOptions(extraClaudeOptions, modelGatewayOverride?.env, extra);
-    if (modelGatewayOverride) {
-      flagSettingsOptions.settingSources = CLAUDE_GATEWAY_SETTING_SOURCES;
-    }
-    return {
-      sdkEnv,
-      flagSettingsOptions,
-      launchModel: modelGatewayOverride?.launchModel ?? this.config.model,
-      modelGatewayOverrideActive: Boolean(modelGatewayOverride),
-    };
-  }
-
-  private buildFlagSettingsOptions(
-    extraClaudeOptions: Partial<ClaudeOptions> | undefined,
-    envOverride?: Record<string, string>,
-    extra?: { ultracode?: boolean },
-  ): Pick<ClaudeOptions, "settings"> | Record<string, never> {
-    const runtimeEnv = readRuntimeSettingsEnv(this.runtimeSettings);
-    const fastMode = this.resolveFastModeSetting();
-    const env = runtimeEnv || envOverride ? { ...runtimeEnv, ...envOverride } : null;
-    if (!env && fastMode === null && !extra?.ultracode) {
-      return {};
-    }
-    const updates: NonNullable<Exclude<ClaudeOptions["settings"], string>> = {
-      ...(env ? { env } : {}),
-      ...(fastMode === null ? {} : { fastMode }),
-      ...(extra?.ultracode ? { ultracode: true } : {}),
-    };
-    return { settings: mergeClaudeSettings(extraClaudeOptions?.settings, updates) };
-  }
-
-  private resolveFastModeSetting(): boolean | null {
-    if (!claudeModelSupportsFastMode(this.config.model)) {
-      return null;
-    }
-    return this.config.featureValues?.fast_mode === true;
-  }
-
-  private normalizeMcpServers(
-    servers: Record<string, McpServerConfig>,
-  ): Record<string, ClaudeSdkMcpServerConfig> {
-    const result: Record<string, ClaudeSdkMcpServerConfig> = {};
-    for (const [name, config] of Object.entries(servers)) {
-      result[name] = toClaudeSdkMcpConfig(config);
-    }
-    return result;
   }
 
   private toSdkUserMessage(prompt: AgentPromptInput): SDKUserMessage {
@@ -2556,7 +2153,9 @@ export class ClaudeAgentSession implements AgentSession {
   private resolveHistoryPath(sessionId: string): string | null {
     const cwd = this.config.cwd;
     if (!cwd) return null;
-    const configDir = resolveClaudeConfigDir(this.buildSdkEnv(this.config.extra?.claude));
+    const configDir = resolveClaudeConfigDir(
+      this.optionsBuilder.buildSdkEnv(this.config.extra?.claude),
+    );
     const candidates = [cwd];
     try {
       const realCwd = fs.realpathSync(cwd);
