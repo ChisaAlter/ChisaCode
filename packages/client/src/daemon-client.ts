@@ -8,7 +8,6 @@ import {
 } from "@chisacode/protocol/messages";
 import type {
   AgentSnapshotPayload,
-  AgentPermissionResolvedMessage,
   CreateChisaCodeWorktreeRequest,
   FileDownloadTokenResponse,
   FileExplorerResponse,
@@ -142,6 +141,11 @@ import {
   DaemonClientInboundController,
   type DaemonEventHandler,
 } from "./daemon-client-inbound-controller.js";
+import {
+  AgentWaitClient,
+  type AgentPermissionResolvedPayload,
+  type WaitForFinishResult,
+} from "./daemon-client-agent-waits.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 export type {
@@ -180,6 +184,7 @@ export type {
 };
 
 export type { DaemonEvent, DaemonEventHandler } from "./daemon-client-inbound-controller.js";
+export type { WaitForFinishResult } from "./daemon-client-agent-waits.js";
 
 export interface CreateChisaCodeWorktreeInput extends Pick<
   CreateChisaCodeWorktreeRequest,
@@ -280,7 +285,6 @@ export interface RunModelGatewayMoaTestInput {
   prompt: string;
   requestId?: string;
 }
-type AgentPermissionResolvedPayload = AgentPermissionResolvedMessage["payload"];
 type CloseItemsPayload = CloseItemsResponse["payload"];
 type ChatCreatePayload = Extract<
   SessionOutboundMessage,
@@ -550,13 +554,6 @@ type ArchiveWorkspacePayload = ArchiveWorkspaceResponseMessage["payload"];
 type WorkspaceSetupStatusPayload = WorkspaceSetupStatusResponseMessage["payload"];
 export type EditorTargetDescriptor = ListAvailableEditorsPayload["editors"][number];
 
-export interface WaitForFinishResult {
-  status: "idle" | "error" | "permission" | "timeout";
-  final: AgentSnapshotPayload | null;
-  error: string | null;
-  lastMessage: string | null;
-}
-
 export class DaemonClient {
   private readonly connection: DaemonConnectionController;
   private readonly inbound: DaemonClientInboundController;
@@ -573,6 +570,7 @@ export class DaemonClient {
   private readonly voiceClient: VoiceClient;
   private readonly agentLifecycle: AgentLifecycleClient;
   private readonly agentInteraction: AgentInteractionClient;
+  private readonly agentWaits: AgentWaitClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
@@ -651,6 +649,13 @@ export class DaemonClient {
       onTerminalFrame: (frame) => this.terminalClient.handleFrame(frame),
       onTerminalStreamExit: (terminalId) => this.terminalClient.handleStreamExit(terminalId),
       resolvePong: () => this.connection.resolvePong(),
+    });
+    this.agentWaits = new AgentWaitClient({
+      createRequestId: (requestId) => this.createRequestId(requestId),
+      fetchAgent: (agentId) => this.agentLifecycle.fetchAgent(agentId),
+      requests: this.requests,
+      sendMessage: (message) => this.connection.sendSessionMessage(message),
+      subscribeAgentUpdates: (handler) => this.inbound.subscribeMessage("agent_update", handler),
     });
     const runtimeMetricsIntervalMs =
       typeof config.runtimeMetricsIntervalMs === "number" && config.runtimeMetricsIntervalMs > 0
@@ -1689,44 +1694,16 @@ export class DaemonClient {
     requestId: string,
     response: AgentPermissionResponse,
   ): Promise<void> {
-    this.sendSessionMessage({
-      type: "agent_permission_response",
-      agentId,
-      requestId,
-      response,
-    });
+    return this.agentWaits.respondToPermission(agentId, requestId, response);
   }
 
   async respondToPermissionAndWait(
     agentId: string,
     requestId: string,
     response: AgentPermissionResponse,
-    timeout = 15000,
+    timeout = 15_000,
   ): Promise<AgentPermissionResolvedPayload> {
-    const message = SessionInboundMessageSchema.parse({
-      type: "agent_permission_response",
-      agentId,
-      requestId,
-      response,
-    });
-    return this.requests.request({
-      requestId,
-      message,
-      timeout,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "agent_permission_resolved") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        if (msg.payload.agentId !== agentId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
+    return this.agentWaits.respondToPermissionAndWait(agentId, requestId, response, timeout);
   }
 
   // ============================================================================
@@ -1736,122 +1713,13 @@ export class DaemonClient {
   async waitForAgentUpsert(
     agentId: string,
     predicate: (snapshot: AgentSnapshotPayload) => boolean,
-    timeout = 60000,
+    timeout = 60_000,
   ): Promise<AgentSnapshotPayload> {
-    const initialResult = await this.fetchAgent(agentId).catch(() => null);
-    if (initialResult && predicate(initialResult.agent)) {
-      return initialResult.agent;
-    }
-
-    const deadline = Date.now() + timeout;
-    return await new Promise<AgentSnapshotPayload>((resolve, reject) => {
-      let settled = false;
-      let pollInFlight = false;
-      let pollTimer: ReturnType<typeof setInterval> | null = null;
-      let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
-      let unsubscribe: (() => void) | null = null;
-
-      const finish = (
-        result: { kind: "ok"; snapshot: AgentSnapshotPayload } | { kind: "error"; error: Error },
-      ) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        if (timeoutTimer) {
-          clearTimeout(timeoutTimer);
-          timeoutTimer = null;
-        }
-        if (pollTimer) {
-          clearInterval(pollTimer);
-          pollTimer = null;
-        }
-        if (unsubscribe) {
-          unsubscribe();
-          unsubscribe = null;
-        }
-        if (result.kind === "ok") {
-          resolve(result.snapshot);
-          return;
-        }
-        reject(result.error);
-      };
-
-      const maybeResolve = (snapshot: AgentSnapshotPayload | null) => {
-        if (!snapshot) {
-          return false;
-        }
-        if (!predicate(snapshot)) {
-          return false;
-        }
-        finish({ kind: "ok", snapshot });
-        return true;
-      };
-
-      const poll = async () => {
-        if (settled || pollInFlight) {
-          return;
-        }
-        pollInFlight = true;
-        try {
-          const result = await this.fetchAgent(agentId).catch(() => null);
-          maybeResolve(result?.agent ?? null);
-        } finally {
-          pollInFlight = false;
-        }
-      };
-
-      unsubscribe = this.on("agent_update", (message) => {
-        if (settled) {
-          return;
-        }
-        if (message.payload.kind !== "upsert") {
-          return;
-        }
-        const snapshot = message.payload.agent;
-        if (snapshot.id !== agentId) {
-          return;
-        }
-        maybeResolve(snapshot);
-      });
-
-      const remaining = Math.max(1, deadline - Date.now());
-      timeoutTimer = setTimeout(() => {
-        finish({
-          kind: "error",
-          error: new Error(`Timed out waiting for agent ${agentId}`),
-        });
-      }, remaining);
-
-      pollTimer = setInterval(() => {
-        void poll();
-      }, 250);
-      void poll();
-    });
+    return this.agentWaits.waitForAgentUpsert(agentId, predicate, timeout);
   }
 
-  async waitForFinish(agentId: string, timeout = 60000): Promise<WaitForFinishResult> {
-    const requestId = this.createRequestId();
-    const hasTimeout = Number.isFinite(timeout) && timeout > 0;
-    const message = SessionInboundMessageSchema.parse({
-      type: "wait_for_finish_request",
-      requestId,
-      agentId,
-      ...(hasTimeout ? { timeoutMs: timeout } : {}),
-    });
-    const payload = await this.requests.requestCorrelated({
-      requestId,
-      message,
-      responseType: "wait_for_finish_response",
-      timeout: hasTimeout ? timeout + 5000 : 0,
-      options: { skipQueue: true },
-    });
-    return {
-      status: payload.status,
-      final: payload.final,
-      error: payload.error,
-      lastMessage: payload.lastMessage,
-    };
+  async waitForFinish(agentId: string, timeout = 60_000): Promise<WaitForFinishResult> {
+    return this.agentWaits.waitForFinish(agentId, timeout);
   }
 
   // ============================================================================
