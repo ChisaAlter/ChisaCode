@@ -2763,10 +2763,8 @@ test("cancels waiters when send fails (no leaked timeouts)", async () => {
   const promise = client.getCheckoutStatus("/tmp/project");
   await expect(promise).rejects.toThrow("boom");
 
-  // Ensure we didn't leave a waiter behind that will reject later.
-  const internal = client as unknown as { waiters: Set<unknown> };
-  expect(internal.waiters.size).toBe(0);
-
+  // The failed send must cancel its response deadline rather than leaving a timer behind.
+  expect(vi.getTimerCount()).toBe(0);
   vi.runOnlyPendingTimers();
   vi.useRealTimers();
 });

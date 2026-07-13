@@ -153,7 +153,7 @@ import {
   type FetchAgentTimelineProjection,
   type SendMessageOptions,
 } from "./daemon-client-agent-interaction.js";
-import { DaemonRpcError } from "./daemon-client-rpc-error.js";
+import { DaemonRequestCoordinator } from "./daemon-client-request-coordinator.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 
@@ -657,45 +657,12 @@ export interface WaitForFinishResult {
   lastMessage: string | null;
 }
 
-interface Waiter<T> {
-  predicate: (msg: SessionOutboundMessage) => T | null;
-  resolve(value: T): void;
-  reject(error: Error): void;
-  timeoutHandle: ReturnType<typeof setTimeout> | null;
-}
-
-interface WaitHandle<T> {
-  promise: Promise<T>;
-  cancel: (error: Error) => void;
-}
-
-type RpcWaitResult<T> = { kind: "ok"; value: T } | { kind: "error"; error: DaemonRpcError };
-type GetDaemonConfigResponse = Extract<
-  SessionOutboundMessage,
-  { type: "get_daemon_config_response" }
->;
-type SetDaemonConfigResponse = Extract<
-  SessionOutboundMessage,
-  { type: "set_daemon_config_response" }
->;
-type CorrelatedResponseMessage =
-  | Extract<SessionOutboundMessage, { payload: { requestId: string } }>
-  | GetDaemonConfigResponse
-  | SetDaemonConfigResponse;
-type CorrelatedResponseType = CorrelatedResponseMessage["type"];
-type CorrelatedResponsePayload<TType extends CorrelatedResponseType> = Extract<
-  CorrelatedResponseMessage,
-  { type: TType }
->["payload"];
-
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
 
-/** Default timeout for waiting for connection before sending queued messages */
-const DEFAULT_SEND_QUEUE_TIMEOUT_MS = 10000;
 function normalizeClientId(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -735,13 +702,6 @@ function toReasonCode(reason: string | null | undefined): string | null {
   return "unknown";
 }
 
-interface PendingSend {
-  message: SessionInboundMessage;
-  resolve: () => void;
-  reject: (error: Error) => void;
-  timeoutHandle: ReturnType<typeof setTimeout>;
-}
-
 interface LivenessProbe {
   promise: Promise<{ rttMs: number }>;
   resolve: (value: { rttMs: number }) => void;
@@ -759,7 +719,6 @@ export class DaemonClient {
     Set<(message: SessionOutboundMessage) => void>
   > = new Map();
   private eventListeners: Set<DaemonEventHandler> = new Set();
-  private waiters: Set<Waiter<unknown>> = new Set();
   private connectionListeners: Set<(status: ConnectionState) => void> = new Set();
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -771,6 +730,7 @@ export class DaemonClient {
   private connectReject: ((error: Error) => void) | null = null;
   private lastErrorValue: string | null = null;
   private connectionState: ConnectionState = { status: "idle" };
+  private readonly requests: DaemonRequestCoordinator;
   private readonly checkoutCommands: CheckoutCommandClient;
   private readonly checkoutSubscriptions: CheckoutSubscriptionClient;
   private readonly configCommands: ConfigCommandClient;
@@ -784,7 +744,6 @@ export class DaemonClient {
   private readonly agentInteraction: AgentInteractionClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
-  private pendingSendQueue: PendingSend[] = [];
   private readonly logConnectionPath: "direct" | "relay";
   private readonly logServerId: string | null;
   private readonly logClientIdHash: string;
@@ -797,49 +756,54 @@ export class DaemonClient {
 
   constructor(private config: DaemonClientConfig) {
     this.logger = config.logger ?? consoleLogger;
+    this.requests = new DaemonRequestCoordinator({
+      createRequestId: (requestId) => this.createRequestId(requestId),
+      getConnectionStatus: () => this.connectionState.status,
+      sendConnectedMessage: (message) => this.sendSessionMessageStrict(message),
+    });
     this.checkoutCommands = new CheckoutCommandClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
     });
     this.checkoutSubscriptions = new CheckoutSubscriptionClient({
       createRequestId: (requestId) => this.createRequestId(requestId),
-      sendRequest: (params) => this.sendRequest(params),
+      sendRequest: (params) => this.requests.request(params),
       sendMessage: (message) => this.sendSessionMessage(message),
     });
     this.configCommands = new ConfigCommandClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
     });
     this.providerCommands = new ProviderCommandClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
     });
     this.agentExtensionCommands = new AgentExtensionCommandClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
     });
     this.automationCommands = new AutomationCommandClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
     });
     this.workspaceCommands = new WorkspaceCommandClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
     });
     this.terminalClient = new TerminalClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
       isConnected: () => Boolean(this.transport && this.connectionState.status === "connected"),
       sendMessage: (message) => this.sendSessionMessage(message),
       sendBinaryFrame: (frame) => this.sendBinaryFrame(frame),
     });
     this.voiceClient = new VoiceClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
       sendMessage: (message) => this.sendSessionMessage(message),
       sendStrictMessage: (message) => this.sendSessionMessageStrict(message),
       waitFor: (predicate, timeout) =>
-        this.waitForWithCancel(predicate, timeout, { skipQueue: true }),
+        this.requests.waitForWithCancel(predicate, timeout, { skipQueue: true }),
     });
     this.agentLifecycle = new AgentLifecycleClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
       createRequestId: (requestId) => this.createRequestId(requestId),
-      requestStatus: (params) => this.sendRequest({ ...params, options: { skipQueue: true } }),
+      requestStatus: (params) => this.requests.request({ ...params, options: { skipQueue: true } }),
     });
     this.agentInteraction = new AgentInteractionClient({
-      request: (params) => this.sendCorrelatedSessionRequest(params),
+      request: (params) => this.requests.requestSession(params),
       createRequestId: (requestId) => this.createRequestId(requestId),
       supportsGenerativeUi: () => this.lastServerInfoMessage?.features?.generativeUi === true,
     });
@@ -1116,8 +1080,7 @@ export class DaemonClient {
     }
     this.resetConnectTimeout();
     this.disposeTransport(1000, "Client closed");
-    this.clearWaiters(new Error("Daemon client closed"));
-    this.rejectPendingSendQueue(new Error("Daemon client closed"));
+    this.requests.clear(new Error("Daemon client closed"));
     this.rejectLivenessProbe(new Error("Daemon client closed"));
     this.terminalClient.clearStreamSlots();
     this.binaryFileTransfers.clearActiveTransfers();
@@ -1273,201 +1236,6 @@ export class DaemonClient {
     }
   }
 
-  /**
-   * Send a session message for RPC methods that create waiters.
-   * If the connection is still being established ("connecting"), the message
-   * is queued and will be sent once connected (or rejected after timeout).
-   * This prevents waiters from hanging forever when called during connection.
-   */
-  private sendSessionMessageOrThrow(message: SessionInboundMessage): Promise<void> {
-    const status = this.connectionState.status;
-
-    // If connected, send immediately
-    if (this.transport && status === "connected") {
-      const payload = SessionInboundMessageSchema.parse(message);
-      this.transport.send(JSON.stringify({ type: "session", message: payload }));
-      return Promise.resolve();
-    }
-
-    // If connecting, queue the message to be sent once connected
-    if (status === "connecting") {
-      return new Promise((resolve, reject) => {
-        const timeoutHandle = setTimeout(() => {
-          // Remove from queue
-          const idx = this.pendingSendQueue.findIndex((p) => p.resolve === resolve);
-          if (idx !== -1) {
-            this.pendingSendQueue.splice(idx, 1);
-          }
-          reject(new Error(`Timed out waiting for connection to send message`));
-        }, DEFAULT_SEND_QUEUE_TIMEOUT_MS);
-
-        this.pendingSendQueue.push({ message, resolve, reject, timeoutHandle });
-      });
-    }
-
-    // Not connected and not connecting - fail immediately
-    return Promise.reject(new Error(`Transport not connected (status: ${status})`));
-  }
-
-  /**
-   * Flush pending send queue - called when connection is established.
-   */
-  private flushPendingSendQueue(): void {
-    const queue = this.pendingSendQueue;
-    this.pendingSendQueue = [];
-
-    for (const pending of queue) {
-      clearTimeout(pending.timeoutHandle);
-      try {
-        if (this.transport && this.connectionState.status === "connected") {
-          const payload = SessionInboundMessageSchema.parse(pending.message);
-          this.transport.send(JSON.stringify({ type: "session", message: payload }));
-          pending.resolve();
-        } else {
-          pending.reject(new Error("Connection lost before message could be sent"));
-        }
-      } catch (error) {
-        pending.reject(error instanceof Error ? error : new Error(String(error)));
-      }
-    }
-  }
-
-  /**
-   * Reject all pending sends - called when connection fails or is closed.
-   */
-  private rejectPendingSendQueue(error: Error): void {
-    const queue = this.pendingSendQueue;
-    this.pendingSendQueue = [];
-
-    for (const pending of queue) {
-      clearTimeout(pending.timeoutHandle);
-      pending.reject(error);
-    }
-  }
-
-  private async sendRequest<T>(params: {
-    requestId: string;
-    message: SessionInboundMessage;
-    timeout: number;
-    select: (msg: SessionOutboundMessage) => T | null;
-    options?: { skipQueue?: boolean };
-  }): Promise<T> {
-    const { promise, cancel } = this.waitForWithCancel<RpcWaitResult<T>>(
-      (msg) => {
-        if (msg.type === "rpc_error" && msg.payload.requestId === params.requestId) {
-          return {
-            kind: "error",
-            error: new DaemonRpcError({
-              requestId: msg.payload.requestId,
-              error: msg.payload.error,
-              requestType: msg.payload.requestType,
-              code: msg.payload.code,
-            }),
-          };
-        }
-        const value = params.select(msg);
-        if (value === null) {
-          return null;
-        }
-        return { kind: "ok", value };
-      },
-      params.timeout,
-      params.options,
-    );
-
-    try {
-      await this.sendSessionMessageOrThrow(params.message);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      cancel(err);
-      void promise.catch(() => undefined);
-      throw err;
-    }
-
-    const result = await promise;
-    if (result.kind === "error") {
-      throw result.error;
-    }
-    return result.value;
-  }
-
-  private async sendCorrelatedRequest<
-    TResponseType extends CorrelatedResponseType,
-    TResult = CorrelatedResponsePayload<TResponseType>,
-  >(params: {
-    requestId: string;
-    message: SessionInboundMessage;
-    timeout: number;
-    responseType: TResponseType;
-    options?: { skipQueue?: boolean };
-    selectPayload?: (payload: CorrelatedResponsePayload<TResponseType>) => TResult | null;
-  }): Promise<TResult> {
-    return this.sendRequest({
-      requestId: params.requestId,
-      message: params.message,
-      timeout: params.timeout,
-      options: params.options,
-      select: (msg) => {
-        const correlated = msg as CorrelatedResponseMessage;
-        if (correlated.type !== params.responseType) {
-          return null;
-        }
-        const payload = correlated.payload as unknown as CorrelatedResponsePayload<TResponseType>;
-        if (payload.requestId !== params.requestId) {
-          return null;
-        }
-        if (!params.selectPayload) {
-          return payload as TResult;
-        }
-        return params.selectPayload(payload);
-      },
-    });
-  }
-
-  private sendCorrelatedSessionRequest<
-    TResponseType extends CorrelatedResponseType,
-    TResult = CorrelatedResponsePayload<TResponseType>,
-  >(params: {
-    requestId?: string;
-    message: { type: SessionInboundMessage["type"] } & Record<string, unknown>;
-    responseType: TResponseType;
-    timeout: number;
-    selectPayload?: (payload: CorrelatedResponsePayload<TResponseType>) => TResult | null;
-  }): Promise<TResult> {
-    const resolvedRequestId = this.createRequestId(params.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      ...params.message,
-      requestId: resolvedRequestId,
-    });
-    return this.sendCorrelatedRequest({
-      requestId: resolvedRequestId,
-      message,
-      responseType: params.responseType,
-      timeout: params.timeout,
-      options: { skipQueue: true },
-      ...(params.selectPayload ? { selectPayload: params.selectPayload } : {}),
-    });
-  }
-
-  private sendNamespacedCorrelatedSessionRequest<
-    TResponseType extends CorrelatedResponseType,
-    TResult = CorrelatedResponsePayload<TResponseType>,
-  >(params: {
-    requestId?: string;
-    message: { type: Extract<SessionInboundMessage["type"], `${string}.request`> } & Record<
-      string,
-      unknown
-    >;
-    timeout: number;
-    selectPayload?: (payload: CorrelatedResponsePayload<TResponseType>) => TResult | null;
-  }): Promise<TResult> {
-    const responseType = params.message.type.replace(/\.request$/, ".response") as TResponseType;
-    return this.sendCorrelatedSessionRequest({
-      ...params,
-      responseType,
-    });
-  }
-
   private sendSessionMessageStrict(message: SessionInboundMessage): void {
     if (!this.transport || this.connectionState.status !== "connected") {
       throw new Error("Transport not connected");
@@ -1487,7 +1255,7 @@ export class DaemonClient {
       agentId,
       requestId,
     });
-    await this.sendRequest({
+    await this.requests.request({
       requestId,
       message,
       timeout: 15000,
@@ -1539,7 +1307,7 @@ export class DaemonClient {
       params?.requestId ?? `ping-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const clientSentAt = Date.now();
 
-    const payload = await this.sendRequest({
+    const payload = await this.requests.request({
       requestId,
       message: { type: "ping", requestId, clientSentAt },
       timeout: params?.timeoutMs ?? 5000,
@@ -1624,7 +1392,7 @@ export class DaemonClient {
       ...(options?.page ? { page: options.page } : {}),
       ...(options?.subscribe ? { subscribe: options.subscribe } : {}),
     });
-    return this.sendRequest({
+    return this.requests.request({
       requestId: resolvedRequestId,
       message,
       timeout: 10000,
@@ -1650,7 +1418,7 @@ export class DaemonClient {
       ...(options?.sort ? { sort: options.sort } : {}),
       ...(options?.page ? { page: options.page } : {}),
     });
-    return this.sendRequest({
+    return this.requests.request({
       requestId: resolvedRequestId,
       message,
       timeout: 10000,
@@ -1679,7 +1447,7 @@ export class DaemonClient {
       ...(options?.since ? { since: options.since } : {}),
       ...(options?.limit ? { limit: options.limit } : {}),
     });
-    return this.sendRequest({
+    return this.requests.request({
       requestId: resolvedRequestId,
       message,
       timeout: 10000,
@@ -1697,7 +1465,7 @@ export class DaemonClient {
   }
 
   async fetchUsageSummary(options?: FetchUsageSummaryOptions): Promise<UsageSummaryPayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"usage.summary.get.response">({
+    return this.requests.requestNamespaced<"usage.summary.get.response">({
       requestId: options?.requestId,
       message: {
         type: "usage.summary.get.request",
@@ -1708,7 +1476,7 @@ export class DaemonClient {
   }
 
   async exportUsage(options?: ExportUsageOptions): Promise<UsageExportPayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"usage.export.response">({
+    return this.requests.requestNamespaced<"usage.export.response">({
       requestId: options?.requestId,
       message: {
         type: "usage.export.request",
@@ -1719,7 +1487,7 @@ export class DaemonClient {
   }
 
   async clearUsage(requestId?: string): Promise<UsageClearPayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"usage.clear.response">({
+    return this.requests.requestNamespaced<"usage.clear.response">({
       requestId,
       message: {
         type: "usage.clear.request",
@@ -1738,7 +1506,7 @@ export class DaemonClient {
       ...(options?.page ? { page: options.page } : {}),
       ...(options?.subscribe ? { subscribe: options.subscribe } : {}),
     });
-    return this.sendRequest({
+    return this.requests.request({
       requestId: resolvedRequestId,
       message,
       timeout: 10000,
@@ -1935,7 +1703,7 @@ export class DaemonClient {
       ...(reason && reason.trim().length > 0 ? { reason } : {}),
       requestId: resolvedRequestId,
     });
-    return this.sendRequest({
+    return this.requests.request({
       requestId: resolvedRequestId,
       message,
       timeout: 10000,
@@ -1962,7 +1730,7 @@ export class DaemonClient {
       type: "shutdown_server_request",
       requestId: resolvedRequestId,
     });
-    return this.sendRequest({
+    return this.requests.request({
       requestId: resolvedRequestId,
       message,
       timeout: 10000,
@@ -2222,7 +1990,7 @@ export class DaemonClient {
     requestId?: string,
     acceptBinary = false,
   ): Promise<FileExplorerPayload> {
-    return this.sendCorrelatedSessionRequest({
+    return this.requests.requestSession({
       requestId,
       message: {
         type: "file_explorer_request",
@@ -2478,7 +2246,7 @@ export class DaemonClient {
       requestId,
       response,
     });
-    return this.sendRequest({
+    return this.requests.request({
       requestId,
       message,
       timeout,
@@ -2608,7 +2376,7 @@ export class DaemonClient {
       agentId,
       ...(hasTimeout ? { timeoutMs: timeout } : {}),
     });
-    const payload = await this.sendCorrelatedRequest({
+    const payload = await this.requests.requestCorrelated({
       requestId,
       message,
       responseType: "wait_for_finish_response",
@@ -2684,7 +2452,7 @@ export class DaemonClient {
       terminalIds: input.terminalIds ?? [],
       requestId: resolvedRequestId,
     });
-    return this.sendCorrelatedRequest({
+    return this.requests.requestCorrelated({
       requestId: resolvedRequestId,
       message,
       responseType: "close_items_response",
@@ -3066,8 +2834,7 @@ export class DaemonClient {
 
     // Clear all pending waiters and queued sends since the connection was lost
     // and responses from the previous connection will never arrive.
-    this.clearWaiters(new Error(reason ?? "Connection lost"));
-    this.rejectPendingSendQueue(new Error(reason ?? "Connection lost"));
+    this.requests.clear(new Error(reason ?? "Connection lost"));
     this.rejectLivenessProbe(new Error(reason ?? "Connection lost"));
     this.terminalClient.clearStreamSlots();
     this.binaryFileTransfers.clearActiveTransfers();
@@ -3173,7 +2940,7 @@ export class DaemonClient {
           this.updateConnectionState({ status: "connected" }, { event: "HELLO_SERVER_INFO" });
           this.checkoutSubscriptions.resubscribe();
           this.terminalClient.resubscribeDirectories();
-          this.flushPendingSendQueue();
+          this.requests.flushPendingSends();
           this.resolveConnect();
         }
       }
@@ -3211,30 +2978,7 @@ export class DaemonClient {
       }
     }
 
-    this.resolveWaiters(msg);
-  }
-
-  private resolveWaiters(msg: SessionOutboundMessage): void {
-    for (const waiter of Array.from(this.waiters)) {
-      const result = waiter.predicate(msg);
-      if (result !== null) {
-        this.waiters.delete(waiter);
-        if (waiter.timeoutHandle) {
-          clearTimeout(waiter.timeoutHandle);
-        }
-        waiter.resolve(result);
-      }
-    }
-  }
-
-  private clearWaiters(error: Error): void {
-    for (const waiter of Array.from(this.waiters)) {
-      if (waiter.timeoutHandle) {
-        clearTimeout(waiter.timeoutHandle);
-      }
-      waiter.reject(error);
-    }
-    this.waiters.clear();
+    this.requests.handleMessage(msg);
   }
 
   private toEvent(msg: SessionOutboundMessage): DaemonEvent | null {
@@ -3291,77 +3035,5 @@ export class DaemonClient {
       default:
         return null;
     }
-  }
-
-  private waitForWithCancel<T>(
-    predicate: (msg: SessionOutboundMessage) => T | null,
-    timeout = 30000,
-    _options?: { skipQueue?: boolean },
-  ): WaitHandle<T> {
-    // Capture stack trace at call site, not inside setTimeout
-    const timeoutError = new Error(`Timeout waiting for message (${timeout}ms)`);
-
-    let waiter: Waiter<T> | null = null;
-    let settled = false;
-    let rejectFn: ((error: Error) => void) | null = null;
-
-    const promise = new Promise<T>((resolve, reject) => {
-      const wrappedResolve = (value: T) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-      };
-      const wrappedReject = (error: Error) => {
-        if (settled) return;
-        settled = true;
-        reject(error);
-      };
-      rejectFn = wrappedReject;
-
-      const timeoutHandle =
-        timeout > 0
-          ? setTimeout(() => {
-              if (waiter) {
-                this.waiters.delete(waiter);
-              }
-              wrappedReject(timeoutError);
-            }, timeout)
-          : null;
-
-      waiter = {
-        predicate,
-        resolve: wrappedResolve,
-        reject: wrappedReject,
-        timeoutHandle,
-      };
-      this.waiters.add(waiter);
-    });
-
-    const cancel = (error: Error) => {
-      if (settled) {
-        return;
-      }
-
-      if (waiter) {
-        this.waiters.delete(waiter);
-        if (waiter.timeoutHandle) {
-          clearTimeout(waiter.timeoutHandle);
-        }
-      }
-
-      if (rejectFn) {
-        rejectFn(error);
-        return;
-      }
-
-      // Extremely unlikely: cancel called before the Promise executor ran.
-      queueMicrotask(() => {
-        if (!settled && rejectFn) {
-          rejectFn(error);
-        }
-      });
-    };
-
-    return { promise, cancel };
   }
 }
