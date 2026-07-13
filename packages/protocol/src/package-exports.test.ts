@@ -40,6 +40,13 @@ const V1_0_2_PUBLIC_SUBPATHS = [
 ] as const;
 
 describe("current package exports", () => {
+  test("exports agent attachments as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./agent/attachments"]).toEqual({
+      types: "./dist/agent/attachments.d.ts",
+      default: "./dist/agent/attachments.js",
+    });
+  });
+
   test("exports checkout messages as a first-class protocol domain", () => {
     expect(protocolPackage.exports["./checkout/messages"]).toEqual({
       types: "./dist/checkout/messages.d.ts",
@@ -51,6 +58,13 @@ describe("current package exports", () => {
     expect(protocolPackage.exports["./terminal/messages"]).toEqual({
       types: "./dist/terminal/messages.d.ts",
       default: "./dist/terminal/messages.js",
+    });
+  });
+
+  test("exports workspace messages as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./workspace/messages"]).toEqual({
+      types: "./dist/workspace/messages.d.ts",
+      default: "./dist/workspace/messages.js",
     });
   });
 });

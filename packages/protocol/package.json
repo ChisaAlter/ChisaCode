@@ -13,6 +13,10 @@
       "types": "./dist/agent-attention-notification.d.ts",
       "default": "./dist/agent-attention-notification.js"
     },
+    "./agent/attachments": {
+      "types": "./dist/agent/attachments.d.ts",
+      "default": "./dist/agent/attachments.js"
+    },
     "./agent-labels": {
       "types": "./dist/agent-labels.d.ts",
       "default": "./dist/agent-labels.js"
@@ -164,6 +168,10 @@
     "./tool-name-normalization": {
       "types": "./dist/tool-name-normalization.d.ts",
       "default": "./dist/tool-name-normalization.js"
+    },
+    "./workspace/messages": {
+      "types": "./dist/workspace/messages.d.ts",
+      "default": "./dist/workspace/messages.js"
     }
   },
   "publishConfig": {
