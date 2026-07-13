@@ -865,6 +865,57 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
   });
 });
 
+test("isolates throwing daemon event subscribers", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_event_isolation",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const received: string[] = [];
+  client.subscribe(() => {
+    throw new Error("subscriber failed");
+  });
+  client.subscribe((event) => {
+    received.push(event.type);
+  });
+
+  expect(() => {
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "workspace_setup_progress",
+        payload: {
+          workspaceId: "ws-event-isolation",
+          status: "running",
+          detail: {
+            type: "worktree_setup",
+            worktreePath: "/tmp/ws-event-isolation",
+            branchName: "event-isolation",
+            log: "",
+            commands: [],
+          },
+          error: null,
+        },
+      }),
+    );
+  }).not.toThrow();
+
+  expect(received).toEqual(["workspace_setup_progress"]);
+  expect(logger.warn).toHaveBeenCalledWith(
+    expect.objectContaining({ eventType: "workspace_setup_progress" }),
+    "Daemon event listener failed",
+  );
+});
+
 test("sends create_agent_request with string workspace ids", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

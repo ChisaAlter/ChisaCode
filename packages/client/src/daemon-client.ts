@@ -1,15 +1,12 @@
 import type { z } from "zod/v3";
 import {
   CheckoutRenameBranchResponseSchema,
-  parseServerInfoStatusPayload,
   RestartRequestedStatusPayloadSchema,
   ShutdownRequestedStatusPayloadSchema,
   SessionInboundMessageSchema,
   type ServerInfoStatusPayload,
-  WSOutboundMessageSchema,
 } from "@chisacode/protocol/messages";
 import type {
-  AgentStreamEventPayload,
   AgentSnapshotPayload,
   AgentPermissionResolvedMessage,
   CreateChisaCodeWorktreeRequest,
@@ -86,21 +83,13 @@ import type {
 } from "@chisacode/protocol/messages";
 import type { SyntheticModelConfig } from "@chisacode/protocol/provider-config";
 import type {
-  AgentPermissionRequest,
   AgentPersistenceHandle,
   AgentPermissionResponse,
   AgentProvider,
   AgentSessionConfig,
 } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
-import {
-  asUint8Array,
-  decodeFileTransferFrame,
-  decodeTerminalStreamFrame,
-  TerminalStreamOpcode,
-  type FileTransferFrame,
-} from "@chisacode/protocol/binary-frames/index";
-import { decodeMessageData } from "./daemon-client-transport.js";
+
 import { CheckoutCommandClient } from "./daemon-client-checkout-commands.js";
 import { CheckoutSubscriptionClient } from "./daemon-client-checkout-subscriptions.js";
 import { ConfigCommandClient } from "./daemon-client-config-commands.js";
@@ -149,6 +138,10 @@ import {
   type DaemonClientConfig,
   type Logger,
 } from "./daemon-client-connection-controller.js";
+import {
+  DaemonClientInboundController,
+  type DaemonEventHandler,
+} from "./daemon-client-inbound-controller.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 export type {
@@ -163,11 +156,6 @@ const consoleLogger: Logger = {
   warn: (obj, msg) => console.warn(msg, obj),
   error: (obj, msg) => console.error(msg, obj),
 };
-
-const perfNow: () => number =
-  typeof performance !== "undefined" && typeof performance.now === "function"
-    ? () => performance.now()
-    : () => Date.now();
 
 export type {
   DaemonTransport,
@@ -191,50 +179,7 @@ export type {
   TerminalStreamEvent,
 };
 
-export type DaemonEvent =
-  | {
-      type: "agent_update";
-      agentId: string;
-      payload: Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
-    }
-  | {
-      type: "workspace_update";
-      workspaceId: string;
-      payload: Extract<SessionOutboundMessage, { type: "workspace_update" }>["payload"];
-    }
-  | {
-      type: "workspace_setup_progress";
-      workspaceId: string;
-      payload: Extract<SessionOutboundMessage, { type: "workspace_setup_progress" }>["payload"];
-    }
-  | {
-      type: "agent_stream";
-      agentId: string;
-      event: AgentStreamEventPayload;
-      timestamp: string;
-      seq?: number;
-      epoch?: string;
-    }
-  | { type: "status"; payload: { status: string } & Record<string, unknown> }
-  | { type: "agent_deleted"; agentId: string }
-  | {
-      type: "agent_permission_request";
-      agentId: string;
-      request: AgentPermissionRequest;
-    }
-  | {
-      type: "agent_permission_resolved";
-      agentId: string;
-      requestId: string;
-      resolution: AgentPermissionResponse;
-    }
-  | {
-      type: "providers_snapshot_update";
-      payload: Extract<SessionOutboundMessage, { type: "providers_snapshot_update" }>["payload"];
-    }
-  | { type: "error"; message: string };
-
-export type DaemonEventHandler = (event: DaemonEvent) => void;
+export type { DaemonEvent, DaemonEventHandler } from "./daemon-client-inbound-controller.js";
 
 export interface CreateChisaCodeWorktreeInput extends Pick<
   CreateChisaCodeWorktreeRequest,
@@ -614,12 +559,8 @@ export interface WaitForFinishResult {
 
 export class DaemonClient {
   private readonly connection: DaemonConnectionController;
-  private readonly rawMessageListeners = new Set<(message: SessionOutboundMessage) => void>();
-  private readonly messageHandlers = new Map<
-    SessionOutboundMessage["type"],
-    Set<(message: SessionOutboundMessage) => void>
-  >();
-  private readonly eventListeners = new Set<DaemonEventHandler>();
+  private readonly inbound: DaemonClientInboundController;
+
   private readonly requests: DaemonRequestCoordinator;
   private readonly checkoutCommands: CheckoutCommandClient;
   private readonly checkoutSubscriptions: CheckoutSubscriptionClient;
@@ -634,14 +575,13 @@ export class DaemonClient {
   private readonly agentInteraction: AgentInteractionClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
-  private lastServerInfoMessage: ServerInfoStatusPayload | null = null;
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
   private runtimeMetrics: DaemonClientRuntimeMetrics | null = null;
 
   constructor(config: DaemonClientConfig) {
     this.logger = config.logger ?? consoleLogger;
     this.connection = new DaemonConnectionController(config, this.logger, {
-      onMessage: (data) => this.handleTransportMessage(data),
+      onMessage: (data) => this.inbound.handle(data),
       onConnected: () => {
         this.checkoutSubscriptions.resubscribe();
         this.terminalClient.resubscribeDirectories();
@@ -698,7 +638,19 @@ export class DaemonClient {
     this.agentInteraction = new AgentInteractionClient({
       request: (params) => this.requests.requestSession(params),
       createRequestId: (requestId) => this.createRequestId(requestId),
-      supportsGenerativeUi: () => this.lastServerInfoMessage?.features?.generativeUi === true,
+      supportsGenerativeUi: () => this.inbound.supportsGenerativeUi(),
+    });
+    this.inbound = new DaemonClientInboundController({
+      fileTransfers: this.binaryFileTransfers,
+      getRuntimeMetrics: () => this.runtimeMetrics,
+      isConnecting: () => this.connection.isConnecting,
+      logger: this.logger,
+      markConnected: () => this.connection.markConnected(),
+      onInboundActivity: () => this.connection.recordInboundActivity(),
+      onRequestMessage: (message) => this.requests.handleMessage(message),
+      onTerminalFrame: (frame) => this.terminalClient.handleFrame(frame),
+      onTerminalStreamExit: (terminalId) => this.terminalClient.handleStreamExit(terminalId),
+      resolvePong: () => this.connection.resolvePong(),
     });
     const runtimeMetricsIntervalMs =
       typeof config.runtimeMetricsIntervalMs === "number" && config.runtimeMetricsIntervalMs > 0
@@ -765,15 +717,11 @@ export class DaemonClient {
   // ============================================================================
 
   subscribe(handler: DaemonEventHandler): () => void {
-    this.eventListeners.add(handler);
-    return () => this.eventListeners.delete(handler);
+    return this.inbound.subscribe(handler);
   }
 
   subscribeRawMessages(handler: (message: SessionOutboundMessage) => void): () => void {
-    this.rawMessageListeners.add(handler);
-    return () => {
-      this.rawMessageListeners.delete(handler);
-    };
+    return this.inbound.subscribeRaw(handler);
   }
 
   on<TType extends SessionOutboundMessage["type"]>(
@@ -788,27 +736,8 @@ export class DaemonClient {
     if (typeof arg1 === "function") {
       return this.subscribe(arg1);
     }
-
-    const type = arg1;
-    const handler = arg2!;
-
-    if (!this.messageHandlers.has(type)) {
-      this.messageHandlers.set(type, new Set());
-    }
-    this.messageHandlers.get(type)!.add(handler);
-
-    return () => {
-      const handlers = this.messageHandlers.get(type);
-      if (!handlers) {
-        return;
-      }
-      handlers.delete(handler);
-      if (handlers.size === 0) {
-        this.messageHandlers.delete(type);
-      }
-    };
+    return this.inbound.subscribeMessage(arg1, arg2!);
   }
-
   // ============================================================================
   // Core Send Helpers
   // ============================================================================
@@ -2107,107 +2036,7 @@ export class DaemonClient {
   }
 
   getLastServerInfoMessage(): ServerInfoStatusPayload | null {
-    return this.lastServerInfoMessage;
-  }
-
-  private handleTransportMessage(rawData: unknown): void {
-    const rawBytes = asUint8Array(rawData);
-    if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
-      return;
-    }
-    const payload = decodeMessageData(rawData);
-    if (!payload) {
-      return;
-    }
-    this.handleJsonPayload(payload, rawBytes?.byteLength);
-  }
-
-  private handleJsonPayload(payload: string, rawBytesLength: number | undefined): void {
-    const bytes = rawBytesLength ?? payload.length;
-    const startMs = perfNow();
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(payload);
-    } catch {
-      return;
-    }
-
-    const parsed = WSOutboundMessageSchema.safeParse(parsedJson);
-    if (!parsed.success) {
-      const msgType =
-        parsedJson != null &&
-        typeof parsedJson === "object" &&
-        "type" in parsedJson &&
-        typeof parsedJson.type === "string"
-          ? parsedJson.type
-          : "unknown";
-      this.logger.warn({ msgType, error: parsed.error.message }, "Message validation failed");
-      return;
-    }
-
-    this.connection.recordInboundActivity();
-
-    if (parsed.data.type === "pong") {
-      this.connection.resolvePong();
-      this.runtimeMetrics?.recordMessage("pong", bytes, perfNow() - startMs);
-      return;
-    }
-
-    this.handleSessionMessage(parsed.data.message);
-    const msgType = parsed.data.message.type;
-    this.runtimeMetrics?.recordMessage(msgType, bytes, perfNow() - startMs);
-    if (parsed.data.message.type === "agent_stream") {
-      this.runtimeMetrics?.recordAgentStream(parsed.data.message.payload);
-    }
-  }
-
-  private tryHandleBinaryFrame(rawBytes: Uint8Array): boolean {
-    const fileFrame = decodeFileTransferFrame(rawBytes);
-    if (fileFrame) {
-      this.handleFileTransferFrame(fileFrame);
-      this.runtimeMetrics?.recordBinaryFrame("other", rawBytes.byteLength, 0);
-      return true;
-    }
-
-    const frame = decodeTerminalStreamFrame(rawBytes);
-    if (!frame) {
-      return false;
-    }
-    const binaryStartMs = perfNow();
-    this.terminalClient.handleFrame(frame);
-    let frameKind: "output" | "snapshot" | "other" = "other";
-    if (frame.opcode === TerminalStreamOpcode.Output) {
-      frameKind = "output";
-    } else if (frame.opcode === TerminalStreamOpcode.Snapshot) {
-      frameKind = "snapshot";
-    } else if (frame.opcode === TerminalStreamOpcode.Restore) {
-      frameKind = "output";
-    }
-    this.runtimeMetrics?.recordBinaryFrame(
-      frameKind,
-      rawBytes.byteLength,
-      perfNow() - binaryStartMs,
-    );
-    return true;
-  }
-
-  private handleFileTransferFrame(frame: FileTransferFrame): void {
-    const outcome = this.binaryFileTransfers.handleFrame(frame);
-    if (!outcome) {
-      return;
-    }
-    this.handleSessionMessage({
-      type: "file_explorer_response",
-      payload: {
-        cwd: outcome.cwd,
-        path: outcome.path,
-        mode: "file",
-        directory: null,
-        file: null,
-        error: outcome.error,
-        requestId: outcome.requestId,
-      },
-    });
+    return this.inbound.getLastServerInfoMessage();
   }
 
   setReconnectEnabled(enabled: boolean): void {
@@ -2218,113 +2047,11 @@ export class DaemonClient {
     this.requests.clear(error);
     this.terminalClient.clearStreamSlots();
     this.binaryFileTransfers.clearActiveTransfers();
-    this.lastServerInfoMessage = null;
+    this.inbound.reset();
     if (!terminal || !this.runtimeMetricsInterval) return;
     clearInterval(this.runtimeMetricsInterval);
     this.runtimeMetricsInterval = null;
     this.runtimeMetrics?.flush({ final: true });
     this.runtimeMetrics = null;
-  }
-
-  private handleSessionMessage(msg: SessionOutboundMessage): void {
-    if (msg.type === "status") {
-      const serverInfo = parseServerInfoStatusPayload(msg.payload);
-      if (serverInfo) {
-        this.lastServerInfoMessage = serverInfo;
-        if (this.connection.isConnecting) {
-          this.connection.markConnected();
-        }
-      }
-    }
-
-    if (msg.type === "terminal_stream_exit") {
-      this.terminalClient.handleStreamExit(msg.payload.terminalId);
-    }
-
-    if (this.rawMessageListeners.size > 0) {
-      for (const handler of this.rawMessageListeners) {
-        try {
-          handler(msg);
-        } catch {
-          // no-op
-        }
-      }
-    }
-
-    const handlers = this.messageHandlers.get(msg.type);
-    if (handlers) {
-      for (const handler of handlers) {
-        try {
-          handler(msg);
-        } catch {
-          // no-op
-        }
-      }
-    }
-
-    const event = this.toEvent(msg);
-    if (event) {
-      for (const handler of this.eventListeners) {
-        handler(event);
-      }
-    }
-
-    this.requests.handleMessage(msg);
-  }
-
-  private toEvent(msg: SessionOutboundMessage): DaemonEvent | null {
-    switch (msg.type) {
-      case "agent_update":
-        return {
-          type: "agent_update",
-          agentId: msg.payload.kind === "upsert" ? msg.payload.agent.id : msg.payload.agentId,
-          payload: msg.payload,
-        };
-      case "workspace_update":
-        return {
-          type: "workspace_update",
-          workspaceId: msg.payload.kind === "upsert" ? msg.payload.workspace.id : msg.payload.id,
-          payload: msg.payload,
-        };
-      case "workspace_setup_progress":
-        return {
-          type: "workspace_setup_progress",
-          workspaceId: msg.payload.workspaceId,
-          payload: msg.payload,
-        };
-      case "agent_stream":
-        return {
-          type: "agent_stream",
-          agentId: msg.payload.agentId,
-          event: msg.payload.event,
-          timestamp: msg.payload.timestamp,
-          ...(typeof msg.payload.seq === "number" ? { seq: msg.payload.seq } : {}),
-          ...(typeof msg.payload.epoch === "string" ? { epoch: msg.payload.epoch } : {}),
-        };
-      case "status":
-        return { type: "status", payload: msg.payload };
-      case "agent_deleted":
-        return { type: "agent_deleted", agentId: msg.payload.agentId };
-      case "agent_permission_request":
-        return {
-          type: "agent_permission_request",
-          agentId: msg.payload.agentId,
-          request: msg.payload.request,
-        };
-      case "agent_permission_resolved":
-        return {
-          type: "agent_permission_resolved",
-          agentId: msg.payload.agentId,
-          requestId: msg.payload.requestId,
-          resolution: msg.payload.resolution,
-        };
-      case "providers_snapshot_update":
-        return {
-          type: "providers_snapshot_update",
-          payload: msg.payload,
-        };
-      default:
-        return null;
-    }
   }
 }
