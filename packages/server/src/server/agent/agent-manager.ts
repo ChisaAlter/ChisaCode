@@ -60,13 +60,14 @@ import {
   AgentStreamCoalescer,
 } from "./agent-stream-coalescer.js";
 import { ForegroundRunState, type ForegroundTurnWaiter } from "./foreground-run-state.js";
-import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
+import type { RewindMode } from "./rewind/rewind.js";
 import { formatSystemNotificationPrompt, isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
 import {
   GenerativeUiActionQueue,
   type GenerativeUiQueuedAction,
 } from "./generative-ui-action-queue.js";
+import { AgentHistoryController, type HydrateTimelineOptions } from "./agent-history-controller.js";
 import { AgentManagerEventBus } from "./agent-manager-event-bus.js";
 import { AgentArchiveController, type AgentArchivedCallback } from "./agent-archive-controller.js";
 import { AgentMetadataController } from "./agent-metadata-controller.js";
@@ -122,11 +123,6 @@ export type AgentSubscriber = (event: AgentManagerEvent) => void;
 export interface SubscribeOptions {
   agentId?: string;
   replayState?: boolean;
-}
-
-interface HydrateTimelineOptions {
-  force?: boolean;
-  broadcast?: boolean;
 }
 
 export type AgentAttentionCallback = (params: {
@@ -320,6 +316,7 @@ export class AgentManager {
   private readonly agents = new Map<string, ActiveManagedAgent>();
   private readonly archive: AgentArchiveController;
   private readonly foregroundExecution: AgentForegroundExecutionController;
+  private readonly history: AgentHistoryController;
   private readonly launchConfig: AgentLaunchConfigController;
   private readonly metadata: AgentMetadataController;
   private readonly permissions: AgentPermissionController;
@@ -462,6 +459,19 @@ export class AgentManager {
         const event = this.recordAndDispatchTimelineItem(agentId, item, provider, turnId);
         this.notifyForegroundTurnWaiters(agentId, event);
       },
+    });
+    this.history = new AgentHistoryController({
+      cancelAgentRun: (agentId) => this.runControl.cancel(agentId),
+      coalescer: this.agentStreamCoalescer,
+      dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
+      emitState: (agent) => this.emitState(agent),
+      foregroundRuns: this.foregroundRuns,
+      getAgent: (agentId) => this.requireSessionAgent(agentId),
+      logger: this.logger,
+      persistSnapshot: (agent) => this.persistSnapshot(agent),
+      refreshRuntimeInfo: (agent) => this.refreshRuntimeInfo(agent),
+      timeline: this.timeline,
+      touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
     });
   }
 
@@ -1114,43 +1124,11 @@ export class AgentManager {
     agentId: string,
     options?: HydrateTimelineOptions,
   ): Promise<void> {
-    const agent = this.requireSessionAgent(agentId);
-    await this.hydrateTimelineFromLegacyProviderHistory(agent, options);
+    await this.history.hydrate(agentId, options);
   }
 
   async rewind(agentId: string, messageId: string, mode: RewindMode): Promise<void> {
-    const agent = this.requireSessionAgent(agentId);
-    const hadActiveRun =
-      Boolean(agent.activeForegroundTurnId) || this.foregroundRuns.hasPendingRun(agentId);
-    if (hadActiveRun) {
-      await this.cancelAgentRun(agentId);
-    }
-
-    const lock = this.foregroundRuns.createPendingRun(agentId);
-    try {
-      this.logger.info(
-        { agentId, provider: agent.provider, messageId, mode },
-        "agent.rewind.start",
-      );
-      await invokeRewindCapability(agent.session, { messageId, mode });
-      if (mode !== "files") {
-        await this.hydrateTimelineFromProvider(agentId, { force: true, broadcast: true });
-      }
-      await this.refreshRuntimeInfo(agent);
-      await this.persistSnapshot(agent);
-      this.logger.info(
-        { agentId, provider: agent.provider, messageId, mode },
-        "agent.rewind.complete",
-      );
-    } catch (error) {
-      this.logger.warn(
-        { err: error, agentId, provider: agent.provider, messageId, mode },
-        "agent.rewind.failed",
-      );
-      throw error;
-    } finally {
-      this.foregroundRuns.settlePendingRun(agentId, lock.token);
-    }
+    await this.history.rewind(agentId, messageId, mode);
   }
 
   async deleteCommittedTimeline(agentId: string): Promise<void> {
@@ -1537,73 +1515,6 @@ export class AgentManager {
     } catch (error) {
       // Keep existing runtimeInfo if refresh fails.
       this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh runtime info");
-    }
-  }
-
-  private async hydrateTimelineFromLegacyProviderHistory(
-    agent: ActiveManagedAgent,
-    options?: HydrateTimelineOptions,
-  ): Promise<void> {
-    if (agent.historyPrimed && !options?.force) {
-      return;
-    }
-
-    if (options?.force) {
-      const historyEvents: Extract<AgentStreamEvent, { type: "timeline" }>[] = [];
-      for await (const event of agent.session.streamHistory()) {
-        if (event.type === "timeline") {
-          if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
-            continue;
-          }
-          historyEvents.push(event);
-        }
-      }
-
-      this.agentStreamCoalescer.flushAndDiscard(agent.id);
-      await this.deleteCommittedTimeline(agent.id);
-      this.timeline.resetMemory(agent.id);
-      agent.historyPrimed = true;
-
-      for (const event of historyEvents) {
-        const row = this.recordTimeline(
-          agent.id,
-          event.item,
-          event.timestamp ? { timestamp: event.timestamp } : undefined,
-        );
-        if (options?.broadcast) {
-          this.dispatchStream(agent.id, event, {
-            seq: row.seq,
-            epoch: this.timeline.getEpoch(agent.id),
-            timestamp: row.timestamp,
-          });
-        }
-      }
-      this.touchUpdatedAt(agent);
-      this.emitState(agent);
-      return;
-    }
-
-    agent.historyPrimed = true;
-    try {
-      for await (const event of agent.session.streamHistory()) {
-        if (event.type !== "timeline") {
-          continue;
-        }
-        if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
-          continue;
-        }
-        this.recordTimeline(
-          agent.id,
-          event.item,
-          event.timestamp ? { timestamp: event.timestamp } : undefined,
-        );
-      }
-    } catch (error) {
-      // ignore history failures
-      this.logger.debug(
-        { err: error, agentId: agent.id },
-        "Failed to hydrate timeline from legacy provider history",
-      );
     }
   }
 
