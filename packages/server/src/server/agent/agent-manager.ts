@@ -42,6 +42,7 @@ import type {
   AgentTimelineStore,
 } from "./agent-timeline-store-types.js";
 import { AgentTimelineController } from "./agent-timeline-controller.js";
+import { AgentTimelineEventController } from "./agent-timeline-event-controller.js";
 import { AgentLaunchConfigController } from "./agent-launch-config-controller.js";
 import {
   AgentProviderController,
@@ -56,7 +57,7 @@ import {
 } from "./agent-stream-coalescer.js";
 import { ForegroundRunState, type ForegroundTurnWaiter } from "./foreground-run-state.js";
 import type { RewindMode } from "./rewind/rewind.js";
-import { formatSystemNotificationPrompt, isSystemInjectedEnvelope } from "./agent-prompt.js";
+import { formatSystemNotificationPrompt } from "./agent-prompt.js";
 import type { UsageStore } from "../usage/usage-store.js";
 import {
   GenerativeUiActionQueue,
@@ -327,6 +328,7 @@ export class AgentManager {
   private readonly sessionState: AgentSessionStateController;
   private readonly sessionTeardown: AgentSessionTeardownController;
   private readonly timeline: AgentTimelineController;
+  private readonly timelineEvents: AgentTimelineEventController;
   private readonly turnEvents: AgentTurnEventController;
   private readonly waits: AgentWaitController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
@@ -405,6 +407,14 @@ export class AgentManager {
       durableStore: options.durableTimelineStore,
       logger: this.logger,
       trackBackgroundTask: (task) => this.trackBackgroundTask(task),
+    });
+    this.timelineEvents = new AgentTimelineEventController({
+      dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
+      emitState: (agent) => this.emitState(agent),
+      findAgent: (agentId) => this.agents.get(agentId) ?? null,
+      foregroundRuns: this.foregroundRuns,
+      logger: this.logger,
+      timeline: this.timeline,
     });
     this.turnEvents = new AgentTurnEventController({
       dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
@@ -497,10 +507,7 @@ export class AgentManager {
     this.agentStreamCoalescer = new AgentStreamCoalescer({
       windowMs: options.agentStreamCoalesceWindowMs ?? AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS,
       timers: { setTimeout, clearTimeout },
-      onFlush: ({ agentId, item, provider, turnId }) => {
-        const event = this.recordAndDispatchTimelineItem(agentId, item, provider, turnId);
-        this.notifyForegroundTurnWaiters(agentId, event);
-      },
+      onFlush: (input) => this.timelineEvents.onCoalescedFlush(input),
     });
     this.history = new AgentHistoryController({
       cancelAgentRun: (agentId) => this.runControl.cancel(agentId),
@@ -1189,30 +1196,6 @@ export class AgentManager {
     await this.registry.applySnapshot(agent, options);
   }
 
-  private notifyForegroundTurnWaiters(agentId: string, event: AgentStreamEvent): void {
-    const turnId = getAgentStreamEventTurnId(event);
-    if (turnId == null) {
-      return;
-    }
-
-    const agent = this.agents.get(agentId);
-    if (!agent) {
-      return;
-    }
-
-    this.foregroundRuns.notifyAgentWaiters(agent, event);
-    this.logger.trace(
-      {
-        agentId,
-        provider: event.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId,
-        event,
-      },
-      "agent.manager.notify_waiters.coalesced",
-    );
-  }
-
   private async handleStreamEvent(
     agent: ActiveManagedAgent,
     event: AgentStreamEvent,
@@ -1354,8 +1337,12 @@ export class AgentManager {
         this.sessionState.onThinkingOptionChanged(agent, event);
         flags.shouldDispatchEvent = false;
         return undefined;
-      case "timeline":
-        return this.onStreamTimelineEvent({ agent, event, options, isForegroundEvent, flags });
+      case "timeline": {
+        const routing = this.timelineEvents.onTimelineEvent(agent, event, options);
+        flags.shouldDispatchEvent = routing.shouldDispatchEvent;
+        flags.shouldNotifyWaiters = routing.shouldNotifyWaiters;
+        return undefined;
+      }
       case "turn_completed":
         this.turnEvents.onCompleted({
           agent,
@@ -1392,62 +1379,6 @@ export class AgentManager {
       default:
         return undefined;
     }
-  }
-
-  private async onStreamTimelineEvent(params: {
-    agent: ActiveManagedAgent;
-    event: Extract<AgentStreamEvent, { type: "timeline" }>;
-    options: { fromHistory?: boolean } | undefined;
-    isForegroundEvent: boolean;
-    flags: StreamEventFlags;
-  }): Promise<void> {
-    const { agent, event, options, flags } = params;
-
-    if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
-      flags.shouldDispatchEvent = false;
-      flags.shouldNotifyWaiters = false;
-      return;
-    }
-
-    if (options?.fromHistory) {
-      this.recordTimeline(
-        agent.id,
-        event.item,
-        event.timestamp ? { timestamp: event.timestamp } : undefined,
-      );
-      flags.shouldDispatchEvent = false;
-      flags.shouldNotifyWaiters = false;
-      return;
-    }
-
-    this.recordAndDispatchTimelineItem(agent.id, event.item, event.provider, event.turnId);
-    if (event.item.type === "user_message") {
-      agent.lastUserMessageAt = new Date();
-      this.emitState(agent);
-    }
-    flags.shouldDispatchEvent = false;
-    flags.shouldNotifyWaiters = true;
-  }
-
-  private recordAndDispatchTimelineItem(
-    agentId: string,
-    item: AgentTimelineItem,
-    provider: AgentProvider,
-    turnId?: string,
-  ): AgentStreamEvent {
-    const row = this.recordTimeline(agentId, item);
-    const event: AgentStreamEvent = {
-      type: "timeline",
-      item,
-      provider,
-      ...(turnId !== undefined ? { turnId } : {}),
-    };
-    this.dispatchStream(agentId, event, {
-      seq: row.seq,
-      epoch: this.timeline.getEpoch(agentId),
-      timestamp: row.timestamp,
-    });
-    return event;
   }
 
   private recordTimeline(
