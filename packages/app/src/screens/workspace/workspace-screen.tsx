@@ -100,7 +100,7 @@ import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-works
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { checkoutStatusQueryKey } from "@/git/query-keys";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { createWorkspaceBrowser, useBrowserStore } from "@/stores/browser-store";
+import { useBrowserStore } from "@/stores/browser-store";
 import { getDesktopHost } from "@/desktop/host";
 import { buildProviderCommand } from "@/utils/provider-command-templates";
 import {
@@ -120,6 +120,8 @@ import { useWorkspaceKeyboardActions } from "@/screens/workspace/use-workspace-k
 import { useWorkspacePersistenceHydration } from "@/screens/workspace/use-workspace-persistence-hydration";
 import { useWorkspaceTabOpenActions } from "@/screens/workspace/use-workspace-tab-open-actions";
 import { useWorkspaceTabCloseActions } from "@/screens/workspace/use-workspace-tab-close-actions";
+import { useWorkspaceDockActions } from "@/screens/workspace/use-workspace-dock-actions";
+import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace-pane-layout-actions";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   getFallbackTabOptionDescription,
@@ -176,10 +178,7 @@ import { WorkspaceEnvironmentGitPopover } from "@/screens/workspace/workspace-en
 import {
   buildBrowserContextSummary,
   findLatestTurnChanges,
-  resolveDockStateAfterAction,
-  resolveWorkspacePaneCommand,
   type BrowserContextSummary,
-  type WorkspacePaneCommand,
   type WorkspaceEnvironmentDockState,
   type WorkspaceEnvironmentDockTab,
 } from "@/screens/workspace/workspace-environment-dock-model";
@@ -2212,9 +2211,23 @@ function WorkspaceScreenContent({
   const splitWorkspacePane = useWorkspaceLayoutStore((state) => state.splitPane);
   const splitWorkspacePaneEmpty = useWorkspaceLayoutStore((state) => state.splitPaneEmpty);
   const moveWorkspaceTabToPane = useWorkspaceLayoutStore((state) => state.moveTabToPane);
-  const paneFocusSuppressedRef = useRef(false);
   const resizeWorkspaceSplit = useWorkspaceLayoutStore((state) => state.resizeSplit);
   const reorderWorkspaceTabsInPane = useWorkspaceLayoutStore((state) => state.reorderTabsInPane);
+  const {
+    paneFocusSuppressedRef,
+    handleFocusPane,
+    handleSplitPane,
+    handleMoveTabToPane,
+    handleResizePaneSplit,
+    handleReorderTabsInPane,
+  } = useWorkspacePaneLayoutActions({
+    persistenceKey,
+    focusWorkspacePane,
+    splitWorkspacePane,
+    moveWorkspaceTabToPane,
+    resizeWorkspaceSplit,
+    reorderWorkspaceTabsInPane,
+  });
   const _pinnedAgentIds = useWorkspaceLayoutStore((state) =>
     persistenceKey
       ? (state.pinnedAgentIdsByWorkspace[persistenceKey] ?? EMPTY_PINNED_AGENT_IDS)
@@ -2487,150 +2500,27 @@ function WorkspaceScreenContent({
     router,
   ]);
 
-  const handleOpenWorkspaceDockPane = useCallback(
-    (pane: WorkspaceEnvironmentDockTab) => {
-      setEnvironmentDockState((state) =>
-        resolveDockStateAfterAction(state, { type: "openDockPane", pane }),
-      );
-      setEnvironmentPanelMode("forced-open");
-      if (!isMobile) {
-        closeDesktopFileExplorer();
-      }
-    },
-    [closeDesktopFileExplorer, isMobile],
-  );
-
-  const handleApplyWorkspaceDockCommand = useCallback(
-    (
-      command: Extract<
-        WorkspacePaneCommand,
-        { type: "openDockPane" | "toggleDockPane" | "openGitSummary" }
-      >,
-    ) => {
-      let nextOpen = true;
-      setEnvironmentDockState((state) => {
-        const nextState = resolveDockStateAfterAction(state, command);
-        nextOpen = nextState.open;
-        return nextState;
-      });
-      setEnvironmentPanelMode(nextOpen ? "forced-open" : "forced-closed");
-      if (nextOpen && !isMobile) {
-        closeDesktopFileExplorer();
-      }
-    },
-    [closeDesktopFileExplorer, isMobile],
-  );
-
-  const handleOpenTargetInPanePlacement = useCallback(
-    (
-      targetKind: Extract<WorkspacePaneCommand, { type: "openTarget" }>["targetKind"],
-      placement: "current" | "new-tab" | "right" | "down",
-    ) => {
-      if (targetKind === "diff") {
-        handleOpenEnvironmentChanges();
-        return;
-      }
-      if (targetKind === "pull-request") {
-        handleOpenWorkspaceDockPane("pull-request");
-        return;
-      }
-      if (targetKind !== "browser" && targetKind !== "terminal") {
-        return;
-      }
-
-      if (!persistenceKey) {
-        return;
-      }
-
-      let targetPaneId: string | undefined;
-      if (placement === "right" || placement === "down") {
-        const focusedPane = focusedPaneTabState.pane;
-        if (!focusedPane) {
-          return;
-        }
-        const paneId = splitWorkspacePaneEmpty(persistenceKey, {
-          targetPaneId: focusedPane.id,
-          position: placement === "right" ? "right" : "bottom",
-        });
-        if (!paneId) {
-          return;
-        }
-        targetPaneId = paneId;
-      }
-
-      if (targetKind === "terminal") {
-        handleCreateTerminal(targetPaneId ? { paneId: targetPaneId } : undefined);
-        return;
-      }
-
-      if (!getIsElectron()) {
-        return;
-      }
-      const { browserId } = createWorkspaceBrowser();
-      const target = { kind: "browser" as const, browserId };
-      if (targetPaneId) {
-        focusWorkspacePane(persistenceKey, targetPaneId);
-      }
-      if (placement === "new-tab") {
-        openWorkspaceTabInBackground(persistenceKey, target);
-        return;
-      }
-      openWorkspaceTabFocused(persistenceKey, target);
-    },
-    [
-      focusedPaneTabState.pane,
-      focusWorkspacePane,
-      handleCreateTerminal,
-      handleOpenEnvironmentChanges,
-      handleOpenWorkspaceDockPane,
-      openWorkspaceTabFocused,
-      openWorkspaceTabInBackground,
-      persistenceKey,
-      splitWorkspacePaneEmpty,
-    ],
-  );
-
-  const handleExecuteWorkspacePaneCommand = useCallback(
-    (command: WorkspacePaneCommand) => {
-      if (
-        command.type === "openDockPane" ||
-        command.type === "toggleDockPane" ||
-        command.type === "openGitSummary"
-      ) {
-        handleApplyWorkspaceDockCommand(command);
-        return;
-      }
-      if (command.type === "moveTabToDock") {
-        return;
-      }
-      const resolution = resolveWorkspacePaneCommand(command);
-      if (resolution.placement === "dock") {
-        handleOpenWorkspaceDockPane(resolution.dockPane);
-        return;
-      }
-      handleOpenTargetInPanePlacement(resolution.targetKind, resolution.placement);
-    },
-    [handleApplyWorkspaceDockCommand, handleOpenTargetInPanePlacement, handleOpenWorkspaceDockPane],
-  );
-  const handleOpenGitDock = useCallback(() => {
-    handleExecuteWorkspacePaneCommand({ type: "openGitSummary" });
-  }, [handleExecuteWorkspacePaneCommand]);
-  const handleOpenBrowserContextDock = useCallback(() => {
-    if (!hasEnvironmentBrowserContext) {
-      return;
-    }
-    handleExecuteWorkspacePaneCommand({
-      type: "openTarget",
-      targetKind: "browser",
-      placement: "dock",
-    });
-  }, [handleExecuteWorkspacePaneCommand, hasEnvironmentBrowserContext]);
-  const handleOpenPullRequestDock = useCallback(() => {
-    if (!hasEnvironmentPullRequest) {
-      return;
-    }
-    handleOpenWorkspaceDockPane("pull-request");
-  }, [handleOpenWorkspaceDockPane, hasEnvironmentPullRequest]);
+  const {
+    handleOpenWorkspaceDockPane,
+    handleOpenGitDock,
+    handleOpenBrowserContextDock,
+    handleOpenPullRequestDock,
+  } = useWorkspaceDockActions({
+    isMobile,
+    hasEnvironmentBrowserContext,
+    hasEnvironmentPullRequest,
+    persistenceKey,
+    focusedPane: focusedPaneTabState.pane,
+    setEnvironmentDockState,
+    setEnvironmentPanelMode,
+    closeDesktopFileExplorer,
+    handleOpenEnvironmentChanges,
+    handleCreateTerminal,
+    focusWorkspacePane,
+    splitWorkspacePaneEmpty,
+    openWorkspaceTabFocused,
+    openWorkspaceTabInBackground,
+  });
 
   const handleCopyAgentId = useCallback(
     async (agentId: string) => {
@@ -2913,57 +2803,6 @@ function WorkspaceScreenContent({
       });
     },
     [buildPaneContentModel],
-  );
-
-  const handleFocusPane = useStableEvent(function handleFocusPane(paneId: string) {
-    if (!persistenceKey || paneFocusSuppressedRef.current) {
-      return;
-    }
-    focusWorkspacePane(persistenceKey, paneId);
-  });
-
-  const handleSplitPane = useCallback(
-    function handleSplitPane(input: {
-      tabId: string;
-      targetPaneId: string;
-      position: "left" | "right" | "top" | "bottom";
-    }) {
-      if (!persistenceKey) {
-        return;
-      }
-      splitWorkspacePane(persistenceKey, input);
-    },
-    [persistenceKey, splitWorkspacePane],
-  );
-
-  const handleMoveTabToPane = useCallback(
-    function handleMoveTabToPane(tabId: string, toPaneId: string) {
-      if (!persistenceKey) {
-        return;
-      }
-      moveWorkspaceTabToPane(persistenceKey, tabId, toPaneId);
-    },
-    [moveWorkspaceTabToPane, persistenceKey],
-  );
-
-  const handleResizePaneSplit = useCallback(
-    function handleResizePaneSplit(groupId: string, sizes: number[]) {
-      if (!persistenceKey) {
-        return;
-      }
-      resizeWorkspaceSplit(persistenceKey, groupId, sizes);
-    },
-    [persistenceKey, resizeWorkspaceSplit],
-  );
-
-  const handleReorderTabsInPane = useCallback(
-    function handleReorderTabsInPane(paneId: string, tabIds: string[]) {
-      if (!persistenceKey) {
-        return;
-      }
-      reorderWorkspaceTabsInPane(persistenceKey, paneId, tabIds);
-    },
-    [persistenceKey, reorderWorkspaceTabsInPane],
   );
 
   const renderSplitPaneEmptyState = useCallback(
