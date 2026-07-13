@@ -1,32 +1,19 @@
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "@react-navigation/native";
-import { ActivityIndicator, Text, View } from "react-native";
+import { View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 
-import { GestureDetector } from "react-native-gesture-handler";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import type { Theme } from "@/styles/theme";
-import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
-import { ScreenHeader } from "@/components/headers/screen-header";
 import {
   FloatingPanelPortalHost,
   FloatingPanelPortalHostNameProvider,
 } from "@/components/ui/floating-panel-portal";
 import { ExplorerSidebar } from "@/components/explorer-sidebar";
-import { SplitContainer } from "@/components/split-container";
 import { useGitActions } from "@/git/use-actions";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { ExplorerSidebarAnimationProvider } from "@/contexts/explorer-sidebar-animation-context";
@@ -79,23 +66,14 @@ import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace
 import { useWorkspacePaneContentModels } from "@/screens/workspace/use-workspace-pane-content-models";
 import { useWorkspaceEnvironmentPanelState } from "@/screens/workspace/use-workspace-environment-panel-state";
 import { useWorkspaceEnvironmentData } from "@/screens/workspace/use-workspace-environment-data";
+import { WORKSPACE_ENVIRONMENT_PANEL_WIDTH } from "@/screens/workspace/workspace-environment-panel";
 import {
-  WorkspaceHeaderRightControls,
-  WorkspaceHeaderTitleBar,
-} from "@/screens/workspace/workspace-header";
-import {
-  WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
-  WorkspaceEnvironmentPanelRail,
-} from "@/screens/workspace/workspace-environment-panel";
+  WorkspaceCenterColumn,
+  WorkspaceScreenGateShell,
+} from "@/screens/workspace/workspace-center-column";
 import { useWorkspaceExplorerActions } from "@/screens/workspace/use-workspace-explorer-actions";
 import { useWorkspaceOpenIntent } from "@/screens/workspace/use-workspace-open-intent";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
-import {
-  getFallbackTabOptionDescription,
-  getFallbackTabOptionLabel,
-  MobileWorkspaceTabSwitcher,
-  type WorkspaceTabFallbackLabels,
-} from "@/screens/workspace/workspace-mobile-tab-switcher";
 import {
   resolveWorkspaceHeaderRenderState,
   type WorkspaceHeaderCheckoutState,
@@ -111,13 +89,9 @@ import {
   workspaceAgentVisibilityEqual,
 } from "@/workspace-tabs/agent-visibility";
 import { deriveWorkspacePaneState } from "@/screens/workspace/workspace-pane-state";
-import {
-  WorkspacePaneContent,
-  type WorkspacePaneContentModel,
-} from "@/screens/workspace/workspace-pane-content";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
 
-import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { canCreateWorkspaceTerminal } from "@/screens/workspace/terminals/state";
@@ -133,7 +107,6 @@ const EMPTY_UI_TABS: WorkspaceTab[] = [];
 const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
 const EMPTY_PINNED_AGENT_IDS = new Set<string>();
 const EMPTY_SET = new Set<string>();
-const COMPACT_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
 const EMPTY_GIT_ACTION_ICON = <View />;
 const REVIEW_CALLOUT_GIT_ACTION_ICONS = {
   commit: EMPTY_GIT_ACTION_ICON,
@@ -155,11 +128,6 @@ function getWorkspaceScripts(
 ): WorkspaceDescriptor["scripts"] {
   return workspaceDescriptor?.scripts ?? EMPTY_WORKSPACE_SCRIPTS;
 }
-
-const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
-const GATED_WORKSPACE_HEADER_LEFT = <SidebarMenuToggle />;
 
 interface WorkspaceScreenProps {
   serverId: string;
@@ -240,50 +208,6 @@ function WorkspaceDocumentTitleEffect({
   return null;
 }
 
-interface MobileMountedTabSlotProps {
-  tabDescriptor: WorkspaceTabDescriptor;
-  isVisible: boolean;
-  isWorkspaceFocused: boolean;
-  isPaneFocused: boolean;
-  paneId: string | null;
-  buildPaneContentModel: (input: {
-    paneId: string | null;
-    tab: WorkspaceTabDescriptor;
-  }) => WorkspacePaneContentModel;
-}
-
-const MobileMountedTabSlot = memo(function MobileMountedTabSlot({
-  tabDescriptor,
-  isVisible,
-  isWorkspaceFocused,
-  isPaneFocused,
-  paneId,
-  buildPaneContentModel,
-}: MobileMountedTabSlotProps) {
-  const content = useMemo(
-    () =>
-      buildPaneContentModel({
-        paneId,
-        tab: tabDescriptor,
-      }),
-    [buildPaneContentModel, paneId, tabDescriptor],
-  );
-
-  const slotStyle = isVisible
-    ? styles.mobileMountedTabSlotVisible
-    : styles.mobileMountedTabSlotHidden;
-
-  return (
-    <View style={slotStyle} pointerEvents={isVisible ? "auto" : "none"}>
-      <WorkspacePaneContent
-        content={content}
-        isWorkspaceFocused={isWorkspaceFocused}
-        isPaneFocused={isPaneFocused}
-      />
-    </View>
-  );
-});
-
 export function WorkspaceScreen({ serverId, workspaceId, isRouteFocused }: WorkspaceScreenProps) {
   const navigationFocused = useIsFocused();
   const effectiveRouteFocused = isRouteFocused ?? navigationFocused;
@@ -311,83 +235,6 @@ export function WorkspaceScreen({ serverId, workspaceId, isRouteFocused }: Works
       </ErrorBoundary>
     </ExplorerSidebarAnimationProvider>
   );
-}
-
-function shouldShowWorkspaceEnvironmentRail(input: {
-  isMobile: boolean;
-  isEnvironmentPanelVisible: boolean;
-}): boolean {
-  return !input.isMobile && input.isEnvironmentPanelVisible;
-}
-
-interface RenderWorkspaceContentInput {
-  isMissingWorkspaceExecutionAuthority: boolean;
-  activeTabDescriptor: WorkspaceTabDescriptor | null;
-  hasHydratedAgents: boolean;
-  mountedFocusedPaneTabIds: string[];
-  focusedPaneTabDescriptorMap: Map<string, WorkspaceTabDescriptor>;
-  isRouteFocused: boolean;
-  focusedPaneId: string | null;
-  workspaceExecutionMissingText: string;
-  noTabsAvailableText: string;
-  buildMobilePaneContentModel: (input: {
-    paneId: string | null;
-    tab: WorkspaceTabDescriptor;
-  }) => WorkspacePaneContentModel;
-}
-
-function renderWorkspaceContent(input: RenderWorkspaceContentInput): React.ReactNode {
-  const {
-    isMissingWorkspaceExecutionAuthority,
-    activeTabDescriptor,
-    hasHydratedAgents,
-    mountedFocusedPaneTabIds,
-    focusedPaneTabDescriptorMap,
-    isRouteFocused,
-    focusedPaneId,
-    workspaceExecutionMissingText,
-    noTabsAvailableText,
-    buildMobilePaneContentModel,
-  } = input;
-
-  if (isMissingWorkspaceExecutionAuthority) {
-    return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>{workspaceExecutionMissingText}</Text>
-      </View>
-    );
-  }
-  if (!activeTabDescriptor && !hasHydratedAgents) {
-    return (
-      <View style={styles.emptyState}>
-        <ThemedActivityIndicator uniProps={mutedColorMapping} />
-      </View>
-    );
-  }
-  if (!activeTabDescriptor) {
-    return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>{noTabsAvailableText}</Text>
-      </View>
-    );
-  }
-  return mountedFocusedPaneTabIds.map((tabId) => {
-    const tabDescriptor = focusedPaneTabDescriptorMap.get(tabId);
-    if (!tabDescriptor) {
-      return null;
-    }
-    return (
-      <MobileMountedTabSlot
-        key={tabId}
-        tabDescriptor={tabDescriptor}
-        isVisible={isRouteFocused && tabId === activeTabDescriptor.tabId}
-        isWorkspaceFocused={isRouteFocused}
-        isPaneFocused={tabId === activeTabDescriptor.tabId}
-        paneId={focusedPaneId}
-        buildPaneContentModel={buildMobilePaneContentModel}
-      />
-    );
-  });
 }
 
 interface WorkspaceHeaderFields {
@@ -552,36 +399,6 @@ function useResolvedWorkspaceRouteState(input: {
       workspaceLookupTimedOut,
       routeMatchesHostName,
     ],
-  );
-}
-
-function WorkspaceScreenGateFrame({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <ScreenHeader left={GATED_WORKSPACE_HEADER_LEFT} />
-      <View style={styles.centerContent}>{children}</View>
-    </>
-  );
-}
-
-function renderWorkspaceScreenGateShell(input: {
-  gate: ReactNode;
-  workspaceKey: string | null;
-}): ReactElement | null {
-  if (!input.gate) {
-    return null;
-  }
-
-  return (
-    <WorkspaceFocusProvider workspaceKey={input.workspaceKey}>
-      <View style={styles.container}>
-        <View style={styles.threePaneRow}>
-          <View style={styles.centerColumn}>
-            <WorkspaceScreenGateFrame>{input.gate}</WorkspaceScreenGateFrame>
-          </View>
-        </View>
-      </View>
-    </WorkspaceFocusProvider>
   );
 }
 
@@ -932,8 +749,6 @@ function WorkspaceScreenContent({
   });
   const isLocalDaemon = useIsLocalDaemon(normalizedServerId);
 
-  const desktopContentStyle = styles.content;
-
   const {
     environmentDockState,
     setEnvironmentDockState,
@@ -1140,14 +955,6 @@ function WorkspaceScreenContent({
       terminalsQueryKey,
     });
 
-  const tabByKey = useMemo(() => {
-    const map = new Map<string, WorkspaceTabDescriptor>();
-    for (const tab of tabs) {
-      map.set(tab.key, tab);
-    }
-    return map;
-  }, [tabs]);
-
   const allTabDescriptorsById = useMemo(() => {
     const map = new Map<string, WorkspaceTabDescriptor>();
     for (const tab of uiTabs) {
@@ -1186,29 +993,6 @@ function WorkspaceScreenContent({
     setHoveredTabKey,
     setHoveredCloseTabKey,
   });
-
-  const activeTabKey = useMemo(() => activeTabId ?? "", [activeTabId]);
-  const fallbackLabels = useMemo<WorkspaceTabFallbackLabels>(
-    () => ({
-      newAgent: t("workspace.newAgent"),
-      setup: t("workspace.setup"),
-      workspaceSetup: t("workspace.workspaceSetup"),
-      agent: t("session.agent"),
-      terminal: t("terminal.title"),
-      browser: t("browser.title"),
-    }),
-    [t],
-  );
-
-  const tabSwitcherOptions = useMemo(
-    () =>
-      tabs.map((tab) => ({
-        id: tab.key,
-        label: getFallbackTabOptionLabel(tab, fallbackLabels),
-        description: getFallbackTabOptionDescription(tab, fallbackLabels),
-      })),
-    [fallbackLabels, tabs],
-  );
 
   const handleCreateTerminal = useStableEvent(createTerminal);
 
@@ -1409,7 +1193,6 @@ function WorkspaceScreenContent({
   });
 
   const activeTabDescriptor = useMemo(() => activeTab?.descriptor ?? null, [activeTab]);
-  const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   useEffect(() => {
     if (!isRouteFocused || isNative || typeof document === "undefined" || activeTabDescriptor) {
       return;
@@ -1438,30 +1221,6 @@ function WorkspaceScreenContent({
     handleOpenFileFromChatInSidePane,
     openImportSheet,
   });
-  const content = renderWorkspaceContent({
-    isMissingWorkspaceExecutionAuthority,
-    activeTabDescriptor,
-    hasHydratedAgents,
-    mountedFocusedPaneTabIds,
-    focusedPaneTabDescriptorMap,
-    isRouteFocused,
-    focusedPaneId,
-    workspaceExecutionMissingText: t("workspace.screen.workspaceExecutionMissing"),
-    noTabsAvailableText: t("workspace.screen.noTabsAvailable"),
-    buildMobilePaneContentModel,
-  });
-
-  const renderSplitPaneEmptyState = useCallback(
-    function renderSplitPaneEmptyState() {
-      return (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>{t("workspace.screen.emptyPane")}</Text>
-        </View>
-      );
-    },
-    [t],
-  );
-
   const containerStyle = containerWithWorkspaceBackgroundStyle;
 
   const workspaceScreenGate = renderWorkspaceRouteGate({
@@ -1472,253 +1231,215 @@ function WorkspaceScreenContent({
       onDismissMissingWorkspace: handleDismissMissingWorkspace,
     },
   });
-  const gatedWorkspaceScreen = renderWorkspaceScreenGateShell({
-    gate: workspaceScreenGate,
-    workspaceKey: persistenceKey,
-  });
-
-  const headerRight = useMemo(() => {
-    return (
-      <WorkspaceHeaderRightControls
-        isMobile={isMobile}
-        isGitCheckout={isGitCheckout}
-        isExplorerOpen={isExplorerOpen}
-        canToggleExplorer={Boolean(activeExplorerCheckout)}
-        isEnvironmentPanelVisible={isEnvironmentPanelVisible}
-        canShowEnvironmentPanel={Boolean(workspaceDirectory)}
-        explorerToggleAccessibilityState={explorerToggleAccessibilityState}
-        onToggleExplorer={handleToggleExplorer}
-        onToggleEnvironmentPanel={handleToggleEnvironmentPanel}
-      />
-    );
-  }, [
-    activeExplorerCheckout,
-    isMobile,
-    isGitCheckout,
-    handleToggleExplorer,
-    handleToggleEnvironmentPanel,
-    isEnvironmentPanelVisible,
-    isExplorerOpen,
-    explorerToggleAccessibilityState,
-    workspaceDirectory,
-  ]);
-
-  const showScreenHeader = useMemo(
-    () => shouldShowWorkspaceScreenHeader({ isFocusModeEnabled, isMobile }),
-    [isFocusModeEnabled, isMobile],
+  const gatedWorkspaceScreen = (
+    <WorkspaceScreenGateShell gate={workspaceScreenGate} workspaceKey={persistenceKey} />
   );
+
   const showExplorerSidebar = useMemo(
     () => shouldShowWorkspaceExplorerSidebar({ isRouteFocused, isFocusModeEnabled, isMobile }),
     [isRouteFocused, isFocusModeEnabled, isMobile],
-  );
-  const environmentRailVisible = useMemo(
-    () =>
-      shouldShowWorkspaceEnvironmentRail({
-        isMobile,
-        isEnvironmentPanelVisible,
-      }),
-    [isMobile, isEnvironmentPanelVisible],
-  );
-  const createTerminalDisabled = useMemo(
-    () => createTerminalMutation.isPending || pendingTerminalCreateInput !== null,
-    [createTerminalMutation.isPending, pendingTerminalCreateInput],
-  );
-  const showCreateBrowserTab = getIsElectron();
-  const desktopFocusModeEnabled = useMemo(
-    () => isFocusModeEnabled && !isMobile,
-    [isFocusModeEnabled, isMobile],
   );
   const workspaceFloatingPanelPortalHostName = useMemo(
     () =>
       `${WORKSPACE_FLOATING_PANEL_PORTAL_HOST_PREFIX}:${normalizedServerId}:${normalizedWorkspaceId}`,
     [normalizedServerId, normalizedWorkspaceId],
   );
-  const desktopContent = useMemo(() => {
-    if (!canRenderDesktopPaneSplits || !workspaceLayout || !persistenceKey) {
-      return content;
-    }
-    return (
-      <SplitContainer
-        layout={workspaceLayout}
-        focusModeEnabled={desktopFocusModeEnabled}
-        workspaceKey={persistenceKey}
-        normalizedServerId={normalizedServerId}
-        normalizedWorkspaceId={normalizedWorkspaceId}
-        isWorkspaceFocused={isRouteFocused}
-        uiTabs={uiTabs}
-        hoveredCloseTabKey={hoveredCloseTabKey}
-        setHoveredTabKey={setHoveredTabKey}
-        setHoveredCloseTabKey={setHoveredCloseTabKey}
-        closingTabIds={closingTabIds}
-        onNavigateTab={navigateToTabId}
-        onCloseTab={handleCloseTabById}
-        onCopyResumeCommand={handleCopyResumeCommand}
-        onCopyAgentId={handleCopyAgentId}
-        onReloadAgent={handleReloadAgent}
-        onRenameTab={handleRenameTab}
-        onCloseTabsToLeft={handleCloseTabsToLeftInPane}
-        onCloseTabsToRight={handleCloseTabsToRightInPane}
-        onCloseOtherTabs={handleCloseOtherTabsInPane}
-        onCreateDraftTab={handleCreateDraftTab}
-        onCreateTerminalTab={handleCreateTerminal}
-        onCreateBrowserTab={handleCreateBrowserTab}
-        showCreateBrowserTab={showCreateBrowserTab}
-        buildPaneContentModel={buildDesktopPaneContentModel}
-        onFocusPane={handleFocusPane}
-        onSplitPane={handleSplitPane}
-        onSplitPaneEmpty={handleCreateDraftSplit}
-        onMoveTabToPane={handleMoveTabToPane}
-        onResizeSplit={handleResizePaneSplit}
-        onReorderTabsInPane={handleReorderTabsInPane}
-        renderPaneEmptyState={renderSplitPaneEmptyState}
-        topRightControls={headerRight}
-      />
-    );
-  }, [
-    content,
-    canRenderDesktopPaneSplits,
-    workspaceLayout,
-    persistenceKey,
-    desktopFocusModeEnabled,
-    normalizedServerId,
-    normalizedWorkspaceId,
-    isRouteFocused,
-    uiTabs,
-    hoveredCloseTabKey,
-    closingTabIds,
-    navigateToTabId,
-    handleCloseTabById,
-    handleCopyResumeCommand,
-    handleCopyAgentId,
-    handleReloadAgent,
-    handleRenameTab,
-    handleCloseTabsToLeftInPane,
-    handleCloseTabsToRightInPane,
-    handleCloseOtherTabsInPane,
-    handleCreateDraftTab,
-    handleCreateTerminal,
-    handleCreateBrowserTab,
-    showCreateBrowserTab,
-    buildDesktopPaneContentModel,
-    handleFocusPane,
-    handleSplitPane,
-    handleCreateDraftSplit,
-    handleMoveTabToPane,
-    handleResizePaneSplit,
-    handleReorderTabsInPane,
-    renderSplitPaneEmptyState,
-    headerRight,
-  ]);
-  const workspaceCenterColumn = (
-    <View style={styles.centerColumn}>
-      {showScreenHeader && isMobile && (
-        <ScreenHeader
-          left={
-            isMobile ? (
-              <>
-                <SidebarMenuToggle />
-                <WorkspaceHeaderTitleBar
-                  isLoading={isWorkspaceHeaderLoading}
-                  title={workspaceHeaderTitle}
-                  subtitle={workspaceHeaderSubtitle}
-                  showSubtitle={shouldShowWorkspaceHeaderSubtitle}
-                  activeTab={activeTabDescriptor}
-                  currentBranchName={currentBranchName}
-                  isGitCheckout={isGitCheckout}
-                  normalizedServerId={normalizedServerId}
-                  normalizedWorkspaceId={normalizedWorkspaceId}
-                  workspaceScripts={workspaceScripts}
-                  liveTerminalIds={liveTerminalIds}
-                  showWorkspaceSetup={showWorkspaceSetup}
-                  showCreateBrowserTab={showCreateBrowserTab}
-                  isMobile={isMobile}
-                  createTerminalDisabled={createTerminalDisabled}
-                  importAgentDisabled={!canOpenImportSheet}
-                  browserContextDockDisabled={!hasEnvironmentBrowserContext}
-                  onCreateDraftTab={handleCreateDraftTab}
-                  onCreateTerminal={handleCreateTerminal}
-                  onCreateBrowser={handleCreateBrowserTab}
-                  onOpenGitDock={handleOpenGitDock}
-                  onOpenBrowserContextDock={handleOpenBrowserContextDock}
-                  onOpenImportSheet={openImportSheet}
-                  onCopyWorkspacePath={handleCopyWorkspacePath}
-                  onCopyBranchName={handleCopyBranchName}
-                  onOpenSetupTab={handleOpenSetupTab}
-                  onScriptTerminalStarted={handleScriptTerminalStarted}
-                  onViewScriptTerminal={handleViewScriptTerminal}
-                  onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
-                />
-              </>
-            ) : null
-          }
-          right={headerRight}
-        />
-      )}
 
-      {isMobile ? (
-        <MobileWorkspaceTabSwitcher
-          tabs={tabs}
-          activeTabKey={activeTabKey}
-          activeTab={activeTabDescriptor}
-          tabSwitcherOptions={tabSwitcherOptions}
-          tabByKey={tabByKey}
-          normalizedServerId={normalizedServerId}
-          normalizedWorkspaceId={normalizedWorkspaceId}
-          onSelectSwitcherTab={handleSelectSwitcherTab}
-          onCopyResumeCommand={handleCopyResumeCommand}
-          onCopyAgentId={handleCopyAgentId}
-          onReloadAgent={handleReloadAgent}
-          onRenameTab={handleRenameTab}
-          onCloseTab={handleCloseTabById}
-          onCloseTabsAbove={handleCloseTabsToLeft}
-          onCloseTabsBelow={handleCloseTabsToRight}
-          onCloseOtherTabs={handleCloseOtherTabs}
-        />
-      ) : null}
-
-      <View
-        style={styles.centerContent}
-        testID="workspace-main-panel"
-        onLayout={handleCenterContentLayout}
-      >
-        {isMobile ? (
-          <GestureDetector
-            gesture={explorerOpenGesture}
-            touchAction={COMPACT_WEB_GESTURE_TOUCH_ACTION}
-          >
-            <View style={styles.content}>{content}</View>
-          </GestureDetector>
-        ) : (
-          <View style={desktopContentStyle}>{desktopContent}</View>
-        )}
-        {!isMobile ? (
-          <WorkspaceEnvironmentPanelRail
-            visible={environmentRailVisible}
-            serverId={normalizedServerId}
-            workspaceDirectory={workspaceDirectory}
-            currentBranchName={currentBranchName}
-            isGitCheckout={isGitCheckout}
-            isLocalDaemon={isLocalDaemon}
-            diffStat={workspaceDescriptor?.diffStat ?? null}
-            githubRuntime={workspaceDescriptor?.githubRuntime}
-            browserContext={environmentBrowserContext}
-            dockState={environmentDockState}
-            sourceLabel={environmentSourceLabel}
-            taskTitle={workspaceStatusStripModel.taskTitle}
-            activityItems={workspaceActivityItems}
-            activeAgent={environmentPanelAgent}
-            workspaceStatus={environmentWorkspaceStatus}
-            subagents={environmentSubagents}
-            todoItems={environmentTodoItems}
-            latestTurnChanges={environmentTurnChanges}
-            onSelectDockTab={handleOpenWorkspaceDockPane}
-            onOpenChanges={handleOpenEnvironmentChanges}
-            onOpenSubagent={handleOpenEnvironmentSubagent}
-            onCopyResumeCommand={handleCopyResumeCommand}
-          />
-        ) : null}
-      </View>
-    </View>
+  const workspaceCenterHeaderTitleBar = useMemo(
+    () => ({
+      isLoading: isWorkspaceHeaderLoading,
+      title: workspaceHeaderTitle,
+      subtitle: workspaceHeaderSubtitle,
+      showSubtitle: shouldShowWorkspaceHeaderSubtitle,
+      currentBranchName,
+      isGitCheckout,
+      workspaceScripts,
+      liveTerminalIds,
+      showWorkspaceSetup,
+      importAgentDisabled: !canOpenImportSheet,
+      onCreateDraftTab: handleCreateDraftTab,
+      onCreateTerminal: handleCreateTerminal,
+      onCreateBrowser: handleCreateBrowserTab,
+      onOpenGitDock: handleOpenGitDock,
+      onOpenBrowserContextDock: handleOpenBrowserContextDock,
+      onOpenImportSheet: openImportSheet,
+      onCopyWorkspacePath: handleCopyWorkspacePath,
+      onCopyBranchName: handleCopyBranchName,
+      onOpenSetupTab: handleOpenSetupTab,
+      onScriptTerminalStarted: handleScriptTerminalStarted,
+      onViewScriptTerminal: handleViewScriptTerminal,
+      onOpenUrlInBrowserTab: handleOpenUrlInBrowserTab,
+    }),
+    [
+      canOpenImportSheet,
+      currentBranchName,
+      handleCopyBranchName,
+      handleCopyWorkspacePath,
+      handleCreateBrowserTab,
+      handleCreateDraftTab,
+      handleCreateTerminal,
+      handleOpenBrowserContextDock,
+      handleOpenGitDock,
+      handleOpenSetupTab,
+      handleOpenUrlInBrowserTab,
+      handleScriptTerminalStarted,
+      handleViewScriptTerminal,
+      isGitCheckout,
+      isWorkspaceHeaderLoading,
+      liveTerminalIds,
+      openImportSheet,
+      shouldShowWorkspaceHeaderSubtitle,
+      showWorkspaceSetup,
+      workspaceHeaderSubtitle,
+      workspaceHeaderTitle,
+      workspaceScripts,
+    ],
+  );
+  const workspaceCenterHeaderRightControls = useMemo(
+    () => ({
+      isGitCheckout,
+      isExplorerOpen,
+      canToggleExplorer: Boolean(activeExplorerCheckout),
+      canShowEnvironmentPanel: Boolean(workspaceDirectory),
+      explorerToggleAccessibilityState,
+      onToggleExplorer: handleToggleExplorer,
+      onToggleEnvironmentPanel: handleToggleEnvironmentPanel,
+    }),
+    [
+      activeExplorerCheckout,
+      explorerToggleAccessibilityState,
+      handleToggleEnvironmentPanel,
+      handleToggleExplorer,
+      isExplorerOpen,
+      isGitCheckout,
+      workspaceDirectory,
+    ],
+  );
+  const workspaceCenterMobileTabSwitcher = useMemo(
+    () => ({
+      tabs,
+      onSelectSwitcherTab: handleSelectSwitcherTab,
+      onCopyResumeCommand: handleCopyResumeCommand,
+      onCopyAgentId: handleCopyAgentId,
+      onReloadAgent: handleReloadAgent,
+      onRenameTab: handleRenameTab,
+      onCloseTab: handleCloseTabById,
+      onCloseTabsAbove: handleCloseTabsToLeft,
+      onCloseTabsBelow: handleCloseTabsToRight,
+      onCloseOtherTabs: handleCloseOtherTabs,
+    }),
+    [
+      handleCloseOtherTabs,
+      handleCloseTabById,
+      handleCloseTabsToLeft,
+      handleCloseTabsToRight,
+      handleCopyAgentId,
+      handleCopyResumeCommand,
+      handleReloadAgent,
+      handleRenameTab,
+      handleSelectSwitcherTab,
+      tabs,
+    ],
+  );
+  const workspaceCenterSplitContainer = useMemo(
+    () => ({
+      uiTabs,
+      hoveredCloseTabKey,
+      setHoveredTabKey,
+      setHoveredCloseTabKey,
+      closingTabIds,
+      onNavigateTab: navigateToTabId,
+      onCloseTab: handleCloseTabById,
+      onCopyResumeCommand: handleCopyResumeCommand,
+      onCopyAgentId: handleCopyAgentId,
+      onReloadAgent: handleReloadAgent,
+      onRenameTab: handleRenameTab,
+      onCloseTabsToLeft: handleCloseTabsToLeftInPane,
+      onCloseTabsToRight: handleCloseTabsToRightInPane,
+      onCloseOtherTabs: handleCloseOtherTabsInPane,
+      onCreateDraftTab: handleCreateDraftTab,
+      onCreateTerminalTab: handleCreateTerminal,
+      onCreateBrowserTab: handleCreateBrowserTab,
+      buildPaneContentModel: buildDesktopPaneContentModel,
+      onFocusPane: handleFocusPane,
+      onSplitPane: handleSplitPane,
+      onSplitPaneEmpty: handleCreateDraftSplit,
+      onMoveTabToPane: handleMoveTabToPane,
+      onResizeSplit: handleResizePaneSplit,
+      onReorderTabsInPane: handleReorderTabsInPane,
+    }),
+    [
+      buildDesktopPaneContentModel,
+      closingTabIds,
+      handleCloseOtherTabsInPane,
+      handleCloseTabById,
+      handleCloseTabsToLeftInPane,
+      handleCloseTabsToRightInPane,
+      handleCopyAgentId,
+      handleCopyResumeCommand,
+      handleCreateBrowserTab,
+      handleCreateDraftSplit,
+      handleCreateDraftTab,
+      handleCreateTerminal,
+      handleFocusPane,
+      handleMoveTabToPane,
+      handleReloadAgent,
+      handleRenameTab,
+      handleReorderTabsInPane,
+      handleResizePaneSplit,
+      handleSplitPane,
+      hoveredCloseTabKey,
+      navigateToTabId,
+      uiTabs,
+    ],
+  );
+  const workspaceCenterEnvironmentPanel = useMemo(
+    () => ({
+      serverId: normalizedServerId,
+      workspaceDirectory,
+      currentBranchName,
+      isGitCheckout,
+      isLocalDaemon,
+      diffStat: workspaceDescriptor?.diffStat ?? null,
+      githubRuntime: workspaceDescriptor?.githubRuntime,
+      browserContext: environmentBrowserContext,
+      dockState: environmentDockState,
+      sourceLabel: environmentSourceLabel,
+      taskTitle: workspaceStatusStripModel.taskTitle,
+      activityItems: workspaceActivityItems,
+      activeAgent: environmentPanelAgent,
+      workspaceStatus: environmentWorkspaceStatus,
+      subagents: environmentSubagents,
+      todoItems: environmentTodoItems,
+      latestTurnChanges: environmentTurnChanges,
+      onSelectDockTab: handleOpenWorkspaceDockPane,
+      onOpenChanges: handleOpenEnvironmentChanges,
+      onOpenSubagent: handleOpenEnvironmentSubagent,
+      onCopyResumeCommand: handleCopyResumeCommand,
+    }),
+    [
+      currentBranchName,
+      environmentBrowserContext,
+      environmentDockState,
+      environmentPanelAgent,
+      environmentSourceLabel,
+      environmentSubagents,
+      environmentTodoItems,
+      environmentTurnChanges,
+      environmentWorkspaceStatus,
+      handleCopyResumeCommand,
+      handleOpenEnvironmentChanges,
+      handleOpenEnvironmentSubagent,
+      handleOpenWorkspaceDockPane,
+      isGitCheckout,
+      isLocalDaemon,
+      normalizedServerId,
+      workspaceActivityItems,
+      workspaceDescriptor?.diffStat,
+      workspaceDescriptor?.githubRuntime,
+      workspaceDirectory,
+      workspaceStatusStripModel.taskTitle,
+    ],
   );
 
   return (
@@ -1733,7 +1454,34 @@ function WorkspaceScreenContent({
           />
           <View style={styles.threePaneRow}>
             <FloatingPanelPortalHostNameProvider hostName={workspaceFloatingPanelPortalHostName}>
-              {workspaceCenterColumn}
+              <WorkspaceCenterColumn
+                isMobile={isMobile}
+                isFocusModeEnabled={isFocusModeEnabled}
+                isRouteFocused={isRouteFocused}
+                normalizedServerId={normalizedServerId}
+                normalizedWorkspaceId={normalizedWorkspaceId}
+                activeTabDescriptor={activeTabDescriptor}
+                isMissingWorkspaceExecutionAuthority={isMissingWorkspaceExecutionAuthority}
+                hasHydratedAgents={hasHydratedAgents}
+                mountedFocusedPaneTabIds={mountedFocusedPaneTabIds}
+                focusedPaneTabDescriptorMap={focusedPaneTabDescriptorMap}
+                focusedPaneId={focusedPaneId}
+                buildMobilePaneContentModel={buildMobilePaneContentModel}
+                workspaceLayout={workspaceLayout}
+                persistenceKey={persistenceKey}
+                explorerOpenGesture={explorerOpenGesture}
+                onCenterContentLayout={handleCenterContentLayout}
+                isEnvironmentPanelVisible={isEnvironmentPanelVisible}
+                isCreateTerminalPending={
+                  createTerminalMutation.isPending || pendingTerminalCreateInput !== null
+                }
+                hasEnvironmentBrowserContext={hasEnvironmentBrowserContext}
+                headerTitleBar={workspaceCenterHeaderTitleBar}
+                headerRightControls={workspaceCenterHeaderRightControls}
+                mobileTabSwitcher={workspaceCenterMobileTabSwitcher}
+                splitContainer={workspaceCenterSplitContainer}
+                environmentPanel={workspaceCenterEnvironmentPanel}
+              />
             </FloatingPanelPortalHostNameProvider>
 
             <FloatingPanelPortalHost name={workspaceFloatingPanelPortalHostName} />
@@ -1784,172 +1532,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: 12,
     backgroundColor: "transparent",
     overflow: "hidden",
-  },
-  centerColumn: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    position: "relative",
-  },
-  newTabActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  newTabActionButton: {
-    width: 30,
-    height: 30,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  newTabActionButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  newTabTooltipText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.popoverForeground,
-  },
-  newTabTooltipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  newTabTooltipShortcut: {},
-  tabsContainer: {
-    marginHorizontal: theme.spacing[2],
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[1],
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.surface0,
-    flexDirection: "row",
-    alignItems: "center",
-    overflow: "hidden",
-    ...theme.shadow.sm,
-  },
-  tabsScroll: {
-    flex: 1,
-    minWidth: 0,
-  },
-  tabsContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-  },
-  tabsActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingRight: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-  },
-  centerContent: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    position: "relative",
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    backgroundColor: theme.colors.surface0,
-    overflow: "hidden",
-    ...theme.shadow.lg,
-  },
-  tab: {
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    maxWidth: 260,
-  },
-  tabHandle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    flex: 1,
-    minWidth: 0,
-  },
-  tabIcon: {
-    flexShrink: 0,
-  },
-  tabActive: {
-    backgroundColor: theme.colors.surface0,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    ...theme.shadow.sm,
-  },
-  tabHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  tabLabel: {
-    flexShrink: 1,
-    minWidth: 0,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  tabLabelWithCloseButton: {
-    paddingRight: 0,
-  },
-  tabLabelActive: {
-    color: theme.colors.foreground,
-  },
-  tabCloseButton: {
-    width: 18,
-    height: 18,
-    marginLeft: 0,
-    borderRadius: theme.borderRadius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabCloseButtonShown: {
-    opacity: 1,
-  },
-  tabCloseButtonHidden: {
-    opacity: 0,
-  },
-  tabCloseButtonActive: {
-    backgroundColor: theme.colors.surface3,
-  },
-  content: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    backgroundColor: theme.colors.surface0,
-    position: "relative",
-  },
-  mobileMountedTabSlotVisible: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 1,
-  },
-  mobileMountedTabSlotHidden: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0,
-  },
-  contentPlaceholder: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: theme.colors.surface0,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[6],
-  },
-  emptyStateText: {
-    color: theme.colors.foregroundMuted,
-    textAlign: "center",
   },
 }));
 
