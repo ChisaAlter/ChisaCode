@@ -4,7 +4,7 @@
 
 | 维度     | 当前评分 | 主要证据                                                                                                  | 距离 10 分的核心差距                                                                            |
 | -------- | -------: | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 2164 行；workspace 4926 行；ACP 1070 行；Pi 1110 行                   | provider adapters 与 workspace 命令/持久化编排仍是主要责任中心                                  |
+| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 2164 行；workspace 4926 行；ACP 926 行；Pi 1110 行                    | Pi/Claude provider 与 workspace 命令/持久化编排仍是主要责任中心                                 |
 | 安全设计 |      9.3 | relay E2EE 单调 nonce；Ed25519 socket 认证；AI/Claude SDK 与 Zod 4 迁移后生产依赖 0 high/0 critical       | Expo/EAS 工具链仍有 moderate 通告；relay 认证升级需要持续兼容性发布管理                         |
 | 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop        | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
 | 代码质量 |      9.7 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；daemon 17 个 schema 具备独立契约与聚合测试 | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
@@ -53,6 +53,7 @@
 - 2026-07-13：ACP foreground prompt 派发、active turn、usage、user echo suppression、bootstrap thread 事件、canceled tool 合成、终态与 process-exit failure 提取到 `acp/foreground-turn-controller.ts`；每回合 usage 显式重置，进程退出/关闭/替换后的迟到 prompt resolve/reject 被忽略，JSON-RPC code/data 继续进入诊断。测试以重叠回合拒绝及完成/失败后可重试证明公开行为，不再读取私有 active turn。主文件进一步降至 1575 行。
 - 2026-07-13：ACP slash-command snapshot、首次异步 `available_commands_update` 等待、timeout 与 close 唤醒提取到 `acp/command-catalog.ts`；Session 的 listCommands() 与 update callback 收敛为薄委托，原立即返回和等待异步目录行为保持一致。主文件进一步降至 1517 行。
 - 2026-07-13：ACP mode/model/thinking 状态、启动 override、provider writer、config response 规范化、current-mode/config-option update 提取到 `acp/session-config-controller.ts`；Session 配置 API 全部变为薄委托，`SessionStateResponse` 从原入口兼容重导出。控制器新增 mode 目录来源跟踪，config-derived mode 走 `setSessionConfigOption`，不再误用原生 `setSessionMode`；测试配置改通过控制器 state API 建立，不再直接修改 Session 配置字段。主文件进一步降至 1070 行。
+- 2026-07-13：ACP child/connection/capabilities/session identity、new/load/resume、history replay、close/terminate 与 diagnostics 提取到 `acp/session-lifecycle-controller.ts`；初始化失败会终止并清空进程状态，load replay 在失败时也通过 `finally` 复位，close 统一 cancel/close/terminal/terminate 且幂等。Session 仅保留 façade 与领域控制器接线，主文件降至 926 行，ACP 核心 god-file 拆分完成。
 - 2026-07-13：Pi extension UI/ask_user permission 映射提取到 `pi/permission-mapper.ts`，unknown record/string/boolean/string-array 读取提取到 `pi/event-values.ts`；Session 保留 pending request、runtime response 与事件时序，主文件从 1874 降至 1613 行。
 - 2026-07-13：Pi captured entry/index、live user-message 对齐、entry capture/tree navigation 命令、marker/result promise 与 close/process-exit 清理提取到 `pi/extension-history-controller.ts`；脚本生成器与控制器复用同一命令/marker 常量，prompt 失败只撤销 pending result，避免额外未处理拒绝。主文件进一步降至 1423 行。
 - 2026-07-13：Pi active turn、tool lifecycle、extension UI pending、ask_user follow-up、runtime event routing、process-exit failure 与 turn completion 提取到 `pi/session-event-controller.ts`；Session 只保留启动/配置/持久化/状态刷新编排，主文件进一步降至 1110 行。
@@ -74,7 +75,7 @@
 ## 最高优先级剩余项
 
 1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK 与 Zod 4 已完成；剩余 Expo/EAS framework major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
-2. **P1 provider 文件拆分**：`providers/base/` 错误抽象已删除，Codex/Claude/OpenCode 主路径已按 composition-first 拆分，ACP tool/config/transport/process/terminal/path/update/turn/command 均已独立；下一步只收敛 ACP 剩余 process-session lifecycle、Pi 剩余 runtime/session lifecycle 与 Claude Session 的剩余大职责。
+2. **P1 provider 文件拆分**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP 核心拆分完成；下一步集中收敛 Pi 剩余 runtime/session lifecycle 与 Claude Session 的剩余大职责，不再对 926 行 ACP façade 做低收益碎片化拆分。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon 域提取并降至 2164 行，下一步评估 usage/voice 分域并保留 agent core 的聚合职责。
 4. **P2 app 工作台拆分（进行中）**：移动端 tab navigation 已提取，`workspace-screen.tsx` 从 5453 降至 4926 行；下一步继续拆 commands 与 persistence，保持 native/web/electron surface 测试分离。
 5. **P2 产品 parity（2026-07-13 完成）**：MCP 已补齐一等 chat/loop 工具，并复用现有 service、Chat mention fan-out 与 caller cwd/identity 安全边界。
@@ -114,6 +115,7 @@
 - 2026-07-13 ACP foreground turn controller 批次：server typecheck、3 个目标文件 lint 与 3 个 prompt completion/failure/JSON-RPC diagnostic 聚焦场景通过
 - 2026-07-13 ACP command catalog 批次：server typecheck、2 个目标文件 lint 与 2 个立即返回/异步 update 命令发现聚焦场景通过
 - 2026-07-13 ACP session config controller 批次：server typecheck、3 个目标文件 lint 与 11 个配置初始化、stored override、mode provenance、config update、canonical response 聚焦场景通过；真实 provider wrapper smoke 因凭据门禁未在本地运行
+- 2026-07-13 ACP session lifecycle controller 批次：server typecheck、3 个目标文件 lint、4 个 new-session/fail-cleanup/load-replay/close 单测与 6 个配置/turn/command Session 接线场景通过
 - 2026-07-13 Pi permission mapper 批次：server typecheck、3 个目标文件 lint 与既有 extension UI/ask_user 6 个聚焦场景通过
 - 2026-07-13 Pi extension history 批次：server typecheck、2 个目标文件 lint 与既有 live user entry ID/rewind tree navigation 2 个聚焦场景通过
 - 2026-07-13 Pi session event controller 批次：server typecheck、2 个目标文件 lint 与 Pi agent 23 个 permission/tool/message/turn/process-exit 聚焦场景通过

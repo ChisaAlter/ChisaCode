@@ -1,15 +1,12 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
   ClientSideConnection,
-  type AgentCapabilities as ACPAgentCapabilities,
   type Client as ACPClient,
   type CreateTerminalRequest,
   type KillTerminalRequest,
   type ListSessionsResponse,
-  type McpServer,
   type PermissionOption,
   type ReadTextFileRequest,
   type RequestPermissionRequest,
@@ -44,11 +41,9 @@ import {
   type AgentSessionConfig,
   type AgentSlashCommand,
   type AgentStreamEvent,
-  type AgentTimelineItem,
   type ListModesOptions,
   type ListModelsOptions,
   type ListPersistedAgentsOptions,
-  type McpServerConfig,
   type PersistedAgentDescriptor,
 } from "../agent-sdk-types.js";
 import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
@@ -62,6 +57,7 @@ import {
 import { ACPCommandCatalog } from "./acp/command-catalog.js";
 import { ACPForegroundTurnController } from "./acp/foreground-turn-controller.js";
 import { ACPSessionUpdateController } from "./acp/session-update-controller.js";
+import { ACPSessionLifecycleController } from "./acp/session-lifecycle-controller.js";
 import {
   deriveModelDefinitionsFromACP,
   deriveModesFromACP,
@@ -481,46 +477,30 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   readonly capabilities: AgentCapabilityFlags;
 
   private readonly logger: Logger;
-  private readonly runtimeSettings?: ProviderRuntimeSettings;
-  private readonly defaultCommand: [string, ...string[]];
   private readonly toolSnapshotTransformer?: (snapshot: ACPToolSnapshot) => ACPToolSnapshot;
   private readonly agentId?: string;
-  private readonly launchEnv?: Record<string, string>;
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private readonly pendingPermissions = new Map<string, PendingPermission>();
   private readonly terminalController: ACPTerminalController;
   private readonly sessionUpdates: ACPSessionUpdateController;
   private readonly commandCatalog: ACPCommandCatalog;
   private readonly sessionConfig: ACPSessionConfigController;
-  private readonly persistedHistory: AgentTimelineItem[] = [];
-  private readonly initialHandle?: AgentPersistenceHandle;
-
+  private readonly lifecycle: ACPSessionLifecycleController;
+  private readonly foregroundTurn: ACPForegroundTurnController;
   private readonly config: AgentSessionConfig;
-  private child: ChildProcessWithoutNullStreams | null = null;
-  private connection: ClientSideConnection | null = null;
-  private agentCapabilities: ACPAgentCapabilities | null = null;
-  private sessionId: string | null = null;
   private currentTitle: string | null = null;
   private lastActivityAt: string | null = null;
-  private readonly foregroundTurn: ACPForegroundTurnController;
-  private closed = false;
-  private historyPending = false;
-  private replayingHistory = false;
 
   constructor(config: AgentSessionConfig, options: ACPAgentSessionOptions) {
     this.provider = options.provider;
     this.capabilities = options.capabilities;
     this.logger = options.logger.child({ module: "agent", provider: options.provider });
-    this.runtimeSettings = options.runtimeSettings;
-    this.defaultCommand = options.defaultCommand;
     this.toolSnapshotTransformer = options.toolSnapshotTransformer;
     this.agentId = options.agentId;
-    this.launchEnv = options.launchEnv;
-    this.initialHandle = options.handle;
     this.config = { ...config, provider: options.provider };
     this.terminalController = new ACPTerminalController({
       baseCwd: this.config.cwd,
-      runtimeSettings: this.runtimeSettings,
+      runtimeSettings: options.runtimeSettings,
     });
     this.commandCatalog = new ACPCommandCatalog({
       waitForInitialCommands: options.waitForInitialCommands ?? false,
@@ -564,7 +544,38 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         this.commandCatalog.update(update.availableCommands);
       },
     });
+    this.lifecycle = new ACPSessionLifecycleController({
+      provider: this.provider,
+      logger: this.logger,
+      cwd: this.config.cwd,
+      mcpServers: this.config.mcpServers,
+      runtimeSettings: options.runtimeSettings,
+      defaultCommand: options.defaultCommand,
+      launchEnv: options.launchEnv,
+      initialHandle: options.handle,
+      clientFactory: () => this,
+      onProcessExit: (exit) => this.foregroundTurn.handleProcessExit(exit),
+      onThreadBootstrap: () => this.foregroundTurn.markThreadBootstrapPending(),
+      onSessionState: (response) => this.sessionConfig.applySessionState(response),
+      applyConfiguredOverrides: () => this.sessionConfig.applyConfiguredOverrides(),
+    });
     this.currentTitle = config.title ?? null;
+  }
+
+  private get connection(): ClientSideConnection | null {
+    return this.lifecycle.connection;
+  }
+
+  private set connection(connection: ClientSideConnection | null) {
+    this.lifecycle.connection = connection;
+  }
+
+  private get sessionId(): string | null {
+    return this.lifecycle.sessionId;
+  }
+
+  private set sessionId(sessionId: string | null) {
+    this.lifecycle.sessionId = sessionId;
   }
 
   get id(): string | null {
@@ -572,59 +583,12 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async initializeNewSession(): Promise<void> {
-    const spawned = await this.spawnProcess();
-    this.child = spawned.child;
-    this.connection = spawned.connection;
-    this.agentCapabilities = spawned.initialize.agentCapabilities ?? null;
-
-    const response = await this.connection.newSession({
-      cwd: this.config.cwd,
-      mcpServers: normalizeMcpServers(this.config.mcpServers),
-    });
-    this.sessionId = response.sessionId;
-    this.foregroundTurn.markThreadBootstrapPending();
-    this.sessionConfig.applySessionState(response);
-    await this.sessionConfig.applyConfiguredOverrides();
+    await this.lifecycle.initializeNewSession();
   }
 
   async initializeResumedSession(): Promise<void> {
-    const handle = this.initialHandle;
-    if (!handle) {
-      throw new Error("Resume requested without persistence handle");
-    }
-
-    const spawned = await this.spawnProcess();
-    this.child = spawned.child;
-    this.connection = spawned.connection;
-    this.agentCapabilities = spawned.initialize.agentCapabilities ?? null;
-    this.sessionId = handle.sessionId;
-    this.foregroundTurn.markThreadBootstrapPending();
-
-    const sessionCapabilities = this.agentCapabilities?.sessionCapabilities;
-    if (this.agentCapabilities?.loadSession) {
-      this.replayingHistory = true;
-      const response = await this.connection.loadSession({
-        sessionId: handle.sessionId,
-        cwd: this.config.cwd,
-        mcpServers: normalizeMcpServers(this.config.mcpServers),
-      });
-      this.replayingHistory = false;
-      this.historyPending = this.persistedHistory.length > 0;
-      this.sessionConfig.applySessionState(response);
-    } else if (sessionCapabilities?.resume) {
-      const response = await this.connection.unstable_resumeSession({
-        sessionId: handle.sessionId,
-        cwd: this.config.cwd,
-        mcpServers: normalizeMcpServers(this.config.mcpServers),
-      });
-      this.sessionConfig.applySessionState(response);
-    } else {
-      throw new Error(`${this.provider} does not support ACP session resume`);
-    }
-
-    await this.sessionConfig.applyConfiguredOverrides();
+    await this.lifecycle.initializeResumedSession();
   }
-
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
     const result = await runProviderTurn({
       prompt,
@@ -646,7 +610,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     prompt: AgentPromptInput,
     _options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
-    if (this.closed) {
+    if (this.lifecycle.isClosed) {
       throw new Error(`${this.provider} session is closed`);
     }
     if (!this.connection || !this.sessionId) {
@@ -670,13 +634,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
-    if (!this.historyPending || this.persistedHistory.length === 0) {
-      return;
-    }
-    const history = [...this.persistedHistory];
-    this.persistedHistory.length = 0;
-    this.historyPending = false;
-    for (const item of history) {
+    for (const item of this.lifecycle.drainHistory()) {
       yield { type: "timeline", provider: this.provider, item };
     }
   }
@@ -775,51 +733,26 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async close(): Promise<void> {
-    if (this.closed) {
+    if (this.lifecycle.isClosed) {
       return;
     }
-    this.closed = true;
 
     this.commandCatalog.close();
-
     for (const pending of this.pendingPermissions.values()) {
       pending.resolve({ outcome: { outcome: "cancelled" } });
     }
     this.pendingPermissions.clear();
 
-    if (this.connection && this.sessionId) {
-      try {
-        if (this.foregroundTurn.activeTurnId) {
-          await this.connection.cancel({ sessionId: this.sessionId });
-        }
-      } catch (error) {
-        this.logger.debug(
-          { err: error, sessionId: this.sessionId },
-          "Failed to cancel ACP session during close",
-        );
-      }
-
-      try {
-        if (this.agentCapabilities?.sessionCapabilities?.close) {
-          await this.connection.unstable_closeSession({ sessionId: this.sessionId });
-        }
-      } catch (error) {
-        this.logger.debug({ err: error }, "ACP closeSession failed during shutdown");
-      }
+    const closed = await this.lifecycle.close({
+      activeTurn: this.foregroundTurn.activeTurnId !== null,
+      beforeTerminate: () => this.terminalController.close(),
+    });
+    if (!closed) {
+      return;
     }
-
-    this.terminalController.close();
-
-    if (this.child) {
-      await terminateACPChildProcess(this.child, 2_000);
-    }
-
     this.subscribers.clear();
-    this.connection = null;
-    this.child = null;
     this.foregroundTurn.close();
   }
-
   async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
     // Match Zed acp.rs:3189-3220: generic ACP permission requests stay pure pass-through.
     const requestId = randomUUID();
@@ -874,12 +807,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       },
       "provider.acp.parsed_event",
     );
-    if (this.replayingHistory) {
-      for (const event of events) {
-        if (event.type === "timeline") {
-          this.persistedHistory.push(event.item);
-        }
-      }
+    if (this.lifecycle.captureReplayEvents(events)) {
       return;
     }
 
@@ -940,29 +868,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     return this.terminalController.killTerminal(params);
   }
 
-  private async spawnProcess(): Promise<SpawnedACPProcess> {
-    const launch = await resolveACPLaunchCommand({
-      provider: this.provider,
-      runtimeSettings: this.runtimeSettings,
-      defaultCommand: this.defaultCommand,
-    });
-    return spawnInitializedACPProcess({
-      launch,
-      cwd: this.config.cwd,
-      runtimeSettings: this.runtimeSettings,
-      launchEnv: this.launchEnv,
-      logger: this.logger,
-      provider: this.provider,
-      clientFactory: () => this,
-      onExit: ({ exitCode, signal, diagnostic }) => {
-        if (this.closed) {
-          return;
-        }
-        this.foregroundTurn.handleProcessExit({ exitCode, signal, diagnostic });
-      },
-    });
-  }
-
   private translateSessionUpdate(update: SessionUpdate): AgentStreamEvent[] {
     return this.sessionUpdates.translate(update);
   }
@@ -1007,57 +912,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   private collectDiagnostic(message: string): string | undefined {
-    const parts: string[] = [message];
-    if (this.child?.exitCode != null) {
-      parts.push(`exitCode=${this.child.exitCode}`);
-    }
-    if (this.child?.signalCode) {
-      parts.push(`signal=${this.child.signalCode}`);
-    }
-    return parts.length > 0 ? parts.join(" | ") : undefined;
+    return this.lifecycle.collectDiagnostic(message);
   }
-}
-
-function normalizeMcpServers(servers?: Record<string, McpServerConfig>): McpServer[] {
-  if (!servers) {
-    return [];
-  }
-
-  return Object.entries(servers).map(([name, config]) => {
-    if (config.type === "stdio") {
-      return {
-        name,
-        command: config.command,
-        args: config.args ?? [],
-        env: Object.entries(config.env ?? {}).map(([envName, value]) => ({
-          name: envName,
-          value,
-        })),
-      } satisfies McpServer;
-    }
-
-    if (config.type === "http") {
-      return {
-        type: "http",
-        name,
-        url: config.url,
-        headers: Object.entries(config.headers ?? {}).map(([headerName, value]) => ({
-          name: headerName,
-          value,
-        })),
-      } satisfies McpServer;
-    }
-
-    return {
-      type: "sse",
-      name,
-      url: config.url,
-      headers: Object.entries(config.headers ?? {}).map(([headerName, value]) => ({
-        name: headerName,
-        value,
-      })),
-    } satisfies McpServer;
-  });
 }
 
 function coerceSessionConfigMetadata(
