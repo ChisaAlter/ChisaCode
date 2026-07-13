@@ -132,6 +132,7 @@ import { CheckoutSubscriptionClient } from "./daemon-client-checkout-subscriptio
 import { ConfigCommandClient } from "./daemon-client-config-commands.js";
 import { ProviderCommandClient } from "./daemon-client-provider-commands.js";
 import { AgentExtensionCommandClient } from "./daemon-client-agent-extension-commands.js";
+import { AutomationCommandClient } from "./daemon-client-automation-commands.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   BinaryFileTransferManager,
@@ -856,6 +857,7 @@ export class DaemonClient {
   private readonly configCommands: ConfigCommandClient;
   private readonly providerCommands: ProviderCommandClient;
   private readonly agentExtensionCommands: AgentExtensionCommandClient;
+  private readonly automationCommands: AutomationCommandClient;
   private readonly terminalStreams = new TerminalStreamRouter();
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
@@ -887,6 +889,9 @@ export class DaemonClient {
       request: (params) => this.sendCorrelatedSessionRequest(params),
     });
     this.agentExtensionCommands = new AgentExtensionCommandClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+    });
+    this.automationCommands = new AutomationCommandClient({
       request: (params) => this.sendCorrelatedSessionRequest(params),
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
@@ -3634,294 +3639,87 @@ export class DaemonClient {
   }
 
   async createChatRoom(options: CreateChatRoomOptions): Promise<ChatCreatePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "chat/create",
-        name: options.name,
-        ...(options.purpose ? { purpose: options.purpose } : {}),
-      },
-      responseType: "chat/create/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.createChatRoom(options);
   }
 
   async listChatRooms(requestId?: string): Promise<ChatListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "chat/list",
-      },
-      responseType: "chat/list/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.listChatRooms(requestId);
   }
 
   async inspectChatRoom(options: InspectChatRoomOptions): Promise<ChatInspectPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "chat/inspect",
-        room: options.room,
-      },
-      responseType: "chat/inspect/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.inspectChatRoom(options);
   }
 
   async deleteChatRoom(options: DeleteChatRoomOptions): Promise<ChatDeletePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "chat/delete",
-        room: options.room,
-      },
-      responseType: "chat/delete/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.deleteChatRoom(options);
   }
 
   async postChatMessage(options: PostChatMessageOptions): Promise<ChatPostPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "chat/post",
-        room: options.room,
-        body: options.body,
-        ...(options.authorAgentId ? { authorAgentId: options.authorAgentId } : {}),
-        ...(options.replyToMessageId ? { replyToMessageId: options.replyToMessageId } : {}),
-      },
-      responseType: "chat/post/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.postChatMessage(options);
   }
 
   async readChatMessages(options: ReadChatMessagesOptions): Promise<ChatReadPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "chat/read",
-        room: options.room,
-        ...(typeof options.limit === "number" ? { limit: options.limit } : {}),
-        ...(options.since ? { since: options.since } : {}),
-        ...(options.authorAgentId ? { authorAgentId: options.authorAgentId } : {}),
-      },
-      responseType: "chat/read/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.readChatMessages(options);
   }
 
   async waitForChatMessages(options: WaitForChatMessagesOptions): Promise<ChatWaitPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "chat/wait",
-        room: options.room,
-        ...(options.afterMessageId ? { afterMessageId: options.afterMessageId } : {}),
-        ...(typeof options.timeoutMs === "number" ? { timeoutMs: options.timeoutMs } : {}),
-      },
-      responseType: "chat/wait/response",
-      timeout: (options.timeoutMs ?? 0) + 10000,
-    });
+    return this.automationCommands.waitForChatMessages(options);
   }
 
   async scheduleCreate(options: CreateScheduleOptions): Promise<ScheduleCreatePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/create",
-        prompt: options.prompt,
-        cadence: options.cadence,
-        target: options.target,
-        ...(options.name ? { name: options.name } : {}),
-        ...(typeof options.maxRuns === "number" ? { maxRuns: options.maxRuns } : {}),
-        ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}),
-        ...(typeof options.runOnCreate === "boolean" ? { runOnCreate: options.runOnCreate } : {}),
-      },
-      responseType: "schedule/create/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleCreate(options);
   }
 
   async scheduleList(requestId?: string): Promise<ScheduleListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "schedule/list",
-      },
-      responseType: "schedule/list/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleList(requestId);
   }
 
   async scheduleInspect(options: InspectScheduleOptions): Promise<ScheduleInspectPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/inspect",
-        scheduleId: options.id,
-      },
-      responseType: "schedule/inspect/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleInspect(options);
   }
 
   async scheduleLogs(options: InspectScheduleOptions): Promise<ScheduleLogsPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/logs",
-        scheduleId: options.id,
-      },
-      responseType: "schedule/logs/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleLogs(options);
   }
 
   async schedulePause(options: InspectScheduleOptions): Promise<SchedulePausePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/pause",
-        scheduleId: options.id,
-      },
-      responseType: "schedule/pause/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.schedulePause(options);
   }
 
   async scheduleResume(options: InspectScheduleOptions): Promise<ScheduleResumePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/resume",
-        scheduleId: options.id,
-      },
-      responseType: "schedule/resume/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleResume(options);
   }
 
   async scheduleDelete(options: InspectScheduleOptions): Promise<ScheduleDeletePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/delete",
-        scheduleId: options.id,
-      },
-      responseType: "schedule/delete/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleDelete(options);
   }
 
   async scheduleRunOnce(options: InspectScheduleOptions): Promise<ScheduleRunOncePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/run-once",
-        scheduleId: options.id,
-      },
-      responseType: "schedule/run-once/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleRunOnce(options);
   }
 
   async scheduleUpdate(options: UpdateScheduleOptions): Promise<ScheduleUpdatePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "schedule/update",
-        scheduleId: options.id,
-        ...(options.name !== undefined ? { name: options.name } : {}),
-        ...(options.prompt !== undefined ? { prompt: options.prompt } : {}),
-        ...(options.cadence !== undefined ? { cadence: options.cadence } : {}),
-        ...(options.newAgentConfig !== undefined ? { newAgentConfig: options.newAgentConfig } : {}),
-        ...(options.maxRuns !== undefined ? { maxRuns: options.maxRuns } : {}),
-        ...(options.expiresAt !== undefined ? { expiresAt: options.expiresAt } : {}),
-      },
-      responseType: "schedule/update/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.scheduleUpdate(options);
   }
 
   async loopRun(options: RunLoopOptions): Promise<LoopRunPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options.requestId,
-      message: {
-        type: "loop/run",
-        prompt: options.prompt,
-        cwd: options.cwd,
-        ...(options.provider ? { provider: options.provider } : {}),
-        ...(options.model ? { model: options.model } : {}),
-        ...(options.modeId ? { modeId: options.modeId } : {}),
-        ...(options.verifierProvider ? { verifierProvider: options.verifierProvider } : {}),
-        ...(options.verifierModel ? { verifierModel: options.verifierModel } : {}),
-        ...(options.verifierModeId ? { verifierModeId: options.verifierModeId } : {}),
-        ...(options.verifyPrompt ? { verifyPrompt: options.verifyPrompt } : {}),
-        ...(options.verifyChecks && options.verifyChecks.length > 0
-          ? { verifyChecks: options.verifyChecks }
-          : {}),
-        ...(options.name ? { name: options.name } : {}),
-        ...(typeof options.sleepMs === "number" ? { sleepMs: options.sleepMs } : {}),
-        ...(typeof options.maxIterations === "number"
-          ? { maxIterations: options.maxIterations }
-          : {}),
-        ...(typeof options.maxTimeMs === "number" ? { maxTimeMs: options.maxTimeMs } : {}),
-      },
-      responseType: "loop/run/response",
-      timeout: 15000,
-    });
+    return this.automationCommands.loopRun(options);
   }
 
   async loopList(requestId?: string): Promise<LoopListPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "loop/list",
-      },
-      responseType: "loop/list/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.loopList(requestId);
   }
 
   async loopInspect(options: string | InspectLoopOptions): Promise<LoopInspectPayload> {
-    const normalized = typeof options === "string" ? { id: options } : options;
-    return this.sendCorrelatedSessionRequest({
-      requestId: normalized.requestId,
-      message: {
-        type: "loop/inspect",
-        id: normalized.id,
-      },
-      responseType: "loop/inspect/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.loopInspect(options);
   }
 
   async loopLogs(options: string | LoopLogsOptions, afterSeq?: number): Promise<LoopLogsPayload> {
-    const normalized = typeof options === "string" ? { id: options, afterSeq } : options;
-    return this.sendCorrelatedSessionRequest({
-      requestId: normalized.requestId,
-      message: {
-        type: "loop/logs",
-        id: normalized.id,
-        ...(typeof normalized.afterSeq === "number" ? { afterSeq: normalized.afterSeq } : {}),
-      },
-      responseType: "loop/logs/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.loopLogs(options, afterSeq);
   }
 
   async loopStop(options: string | StopLoopOptions): Promise<LoopStopPayload> {
-    const normalized = typeof options === "string" ? { id: options } : options;
-    return this.sendCorrelatedSessionRequest({
-      requestId: normalized.requestId,
-      message: {
-        type: "loop/stop",
-        id: normalized.id,
-      },
-      responseType: "loop/stop/response",
-      timeout: 10000,
-    });
+    return this.automationCommands.loopStop(options);
   }
 
   onTerminalStreamEvent(handler: (event: TerminalStreamEvent) => void): () => void {
