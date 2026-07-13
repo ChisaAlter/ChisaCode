@@ -40,6 +40,13 @@ const V1_0_2_PUBLIC_SUBPATHS = [
 ] as const;
 
 describe("current package exports", () => {
+  test("exports checkout messages as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./checkout/messages"]).toEqual({
+      types: "./dist/checkout/messages.d.ts",
+      default: "./dist/checkout/messages.js",
+    });
+  });
+
   test("exports terminal messages as a first-class protocol domain", () => {
     expect(protocolPackage.exports["./terminal/messages"]).toEqual({
       types: "./dist/terminal/messages.d.ts",

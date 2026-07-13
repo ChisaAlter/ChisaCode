@@ -65,6 +65,10 @@
       "types": "./dist/chisacode-config-schema.d.ts",
       "default": "./dist/chisacode-config-schema.js"
     },
+    "./checkout/messages": {
+      "types": "./dist/checkout/messages.d.ts",
+      "default": "./dist/checkout/messages.js"
+    },
     "./client-capabilities": {
       "types": "./dist/client-capabilities.d.ts",
       "default": "./dist/client-capabilities.js"
