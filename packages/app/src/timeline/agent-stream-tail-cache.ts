@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { StreamItem } from "@/types/stream";
 
 const STORAGE_PREFIX = "@chisacode:agent-stream-tail-cache:v1:";

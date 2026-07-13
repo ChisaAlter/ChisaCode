@@ -5,10 +5,10 @@
 | 维度     | 当前评分 | 主要证据                                                                                                                         | 距离 10 分的核心差距                                                                            |
 | -------- | -------: | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | 架构设计 |      9.6 | dependency-cruiser 0 违规；DaemonClient 2319 行；protocol terminal/checkout/workspace/provider/attachment 已分域，主文件 2860 行 | provider adapters、`workspace-screen.tsx` 与剩余 agent-extension protocol 域仍是主要责任中心    |
-| 安全设计 |      9.1 | relay E2EE 单调 nonce；server socket Ed25519 认证；本轮增加签发时间和 Durable Object 持久化 nonce 防重放                         | AI SDK/Expo/EAS 工具链仍有上游通告；relay 认证升级需要持续兼容性发布管理                        |
+| 安全设计 |      9.3 | relay E2EE 单调 nonce；Ed25519 socket 认证；AI/Claude SDK 与 Zod 4 迁移后生产依赖 0 high/0 critical                              | Expo/EAS 工具链仍有 moderate 通告；relay 认证升级需要持续兼容性发布管理                         |
 | 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop                               | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
-| 代码质量 |      9.4 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；client 状态机及 protocol 五个领域具备独立契约                     | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
-| 综合     |  **9.4** | 核心安全、主要产品域 parity 与持续领域拆分均有代码级实现和精确验证                                                               | 继续提升需要完成 provider adapters、App 工作台、agent-extension protocol 与依赖专项             |
+| 代码质量 |      9.5 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；Zod 单版本与兼容入口消除跨包 peer 漂移                            | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
+| 综合     |  **9.5** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                                                      | 继续提升需要完成 Expo/EAS、provider adapters、App 工作台与 agent-extension protocol             |
 
 ## 本轮已修
 
@@ -44,6 +44,7 @@
 - 2026-07-13：checkout status/diff、Git 操作、PR/timeline、branch/stash 与 GitHub search 提取到 `checkout/messages.ts`；22 个 inbound/23 个 outbound schema 由 tuple 聚合，主文件降至 4142 行。
 - 2026-07-13：workspace/worktree/directory/editor/file explorer 等 14 个 inbound、18 个 outbound schema 与 descriptor/setup 状态提取到 `workspace/messages.ts`；附件归一化独立到 `agent/attachments.ts`，旧入口保持兼容，主文件降至 3339 行。
 - 2026-07-13：provider discovery/snapshot/diagnostic/tooling/usage/recent sessions 的 11 个 inbound、12 个 outbound schema 与 model/mode/feature 基础契约提取到 `provider/messages.ts`；`agent-types.ts` 解除对 god-file 的附件类型反向依赖，主文件降至 2860 行。
+- 2026-07-13：OpenAI SDK 升至 6.46.0；Zod 直接依赖统一到 4.3.6，既有 schema 通过 `zod/v3` 保持语义；Claude Agent SDK 0.2.141、Anthropic SDK 0.93.0 与 MCP SDK 1.29.0 peer 对齐，Claude/Anthropic 生产通告清零。
 
 ## 产品能力矩阵
 
@@ -61,7 +62,7 @@
 
 ## 最高优先级剩余项
 
-1. **P1 依赖安全迁移（部分完成）**：server 已移除 `ai@5` 并迁移到独立 `@ai-sdk/mcp@2`；剩余 Claude SDK/Zod 与 Expo/EAS major 迁移继续按运行时专项契约验证，不与结构拆分混做。
+1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK 与 Zod 4 已完成；剩余 Expo/EAS framework major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
 2. **P1 provider 文件拆分**：先删除或接线当前未使用的 `providers/base/`，再按事件路由、session、client、runtime 拆分 Codex/Claude/OpenCode，避免强行继承错误抽象。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment 域提取并降至 2860 行，下一步继续拆 agent-extension、daemon-config 等 RPC domain。
 4. **P2 app 工作台拆分**：`workspace-screen.tsx` 按 navigation、pane orchestration、commands、persistence 拆分；保持 native/web/electron surface 测试分离。
@@ -89,5 +90,6 @@
 - 2026-07-13 Protocol checkout messages 批次：protocol typecheck/build、4 个目标文件 lint、66 个聚焦断言及 client/server/app/CLI 消费者 typecheck 通过
 - 2026-07-13 Protocol workspace/attachment messages 批次：protocol typecheck/build、6 个目标文件 lint、44 个聚焦断言及 client/server/app/CLI 消费者 typecheck 通过
 - 2026-07-13 Protocol provider messages 批次：protocol typecheck/build、8 个目标文件 lint、87 个聚焦断言及 client/server/app/CLI 消费者 typecheck 通过
+- 2026-07-13 Claude SDK/Zod 4 批次：严格 npm peer 解析及 `npm ls` 通过；protocol/client/server build、protocol/client/server/app/desktop/CLI typecheck、88 个改动文件 lint、148 个聚焦断言通过；生产审计 24 项且 0 high/0 critical，Claude/Anthropic 通告为 0
 
 未在本地运行全仓测试或全量 Playwright/Maestro；按仓库规则只做改动对应的聚焦验证，普通开发不触发远端 CI。

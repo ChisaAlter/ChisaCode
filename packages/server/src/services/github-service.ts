@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { GitHubSearchKind } from "@chisacode/protocol/messages";
 import { findExecutable } from "../utils/executable.js";
 import { resolveGitHubRemote } from "../utils/github-remote.js";

@@ -100,7 +100,7 @@ vi.mock("./push/push-service.js", () => ({
   },
 }));
 
-import { z } from "zod";
+import { z } from "zod/v3";
 import {
   MAX_SESSION_INFLIGHT_MESSAGES,
   WEBSOCKET_MAX_PAYLOAD_BYTES,

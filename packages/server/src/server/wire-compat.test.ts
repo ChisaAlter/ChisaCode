@@ -1,5 +1,5 @@
 import pino from "pino";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { describe, expect, test } from "vitest";
 
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";

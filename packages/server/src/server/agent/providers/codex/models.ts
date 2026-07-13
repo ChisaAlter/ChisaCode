@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { AgentModelDefinition } from "../../agent-sdk-types.js";
 import { normalizeCodexThinkingOptionId } from "./turn-config.js";

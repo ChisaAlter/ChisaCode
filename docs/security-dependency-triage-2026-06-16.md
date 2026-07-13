@@ -33,7 +33,6 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 
 ## Deferred
 
-- `@anthropic-ai/claude-agent-sdk`: patched `0.2.141` resolves the vulnerable SDK path but requires `zod@4`. The repo still uses Zod 3 across protocol/client/server packages, so this needs a Zod migration slice instead of a security patch batch.
 - Expo / React Native toolchain advisories that still require framework-level work
   (`postcss`, `uuid`, `js-yaml`, `tar`, and the `expo-*` package advisories): these sit
   mostly in mobile build/dev tooling and require Expo/RN framework upgrades. Do not
@@ -42,8 +41,6 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 
 ## Notes
 
-- The lockfile update used `--legacy-peer-deps` because the current dependency graph already contains a peer conflict: `@anthropic-ai/claude-agent-sdk@0.2.133` declares `zod@4`, while the repo intentionally remains on Zod 3.
-- A non-force `npm audit fix --omit=dev --registry=https://registry.npmjs.org/` attempt fails at the same `@anthropic-ai/claude-agent-sdk@0.2.141` / Zod 4 peer boundary. Do not bypass this with `--force`; handle it in the Zod migration slice.
 - Do not use `npm audit fix --force` for the remaining advisories.
 
 ## Resolved Follow-up - 2026-07-12
@@ -52,3 +49,10 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
   `@ai-sdk/mcp@2.0.10` and the stable `createMCPClient` API.
 - The migration moves `@ai-sdk/provider-utils` from the vulnerable 3.x line to 5.0.7,
   raises the server Zod peer floor to `^3.25.76`, and establishes Node.js 22 as the minimum runtime.
+
+## Resolved Follow-up - 2026-07-13
+
+- Upgraded OpenAI SDK from 4.x to 6.46.0 as the Zod 4 compatibility prerequisite.
+- Unified direct Zod dependencies in protocol, client, app, desktop, and server on 4.3.6. Existing schemas import the official `zod/v3` compatibility API so wire and persistence parsing semantics remain stable while the dependency graph uses one package version.
+- Upgraded `@anthropic-ai/claude-agent-sdk` to 0.2.141, `@anthropic-ai/sdk` to 0.93.0, and direct `@modelcontextprotocol/sdk` to 1.29.0 without `--legacy-peer-deps` or `--force`.
+- Production audit moved from 26 to 24 findings, remains at 0 high / 0 critical, and no longer reports Claude or Anthropic packages. Remaining moderate findings are primarily Expo/EAS framework-major work.

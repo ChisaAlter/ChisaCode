@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { PersistedConfig } from "../../../persisted-config.js";
 import type { RequestedSpeechProviders } from "../../speech-types.js";

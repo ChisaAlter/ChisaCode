@@ -19,7 +19,7 @@ import {
 } from "./companion-mcp-injection.js";
 import type { EffectiveMcpServersResult } from "./mcp-server-management.js";
 import type { Logger } from "pino";
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 
 import {

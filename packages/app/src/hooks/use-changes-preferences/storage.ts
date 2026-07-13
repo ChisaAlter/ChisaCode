@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const CHANGES_PREFERENCES_STORAGE_KEY = "@chisacode:changes-preferences";
 export const LEGACY_WRAP_LINES_STORAGE_KEY = "diff-wrap-lines";

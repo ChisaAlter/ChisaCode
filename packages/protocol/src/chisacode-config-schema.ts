@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export function normalizeLifecycleCommands(commands: unknown): string[] {
   if (typeof commands === "string") {

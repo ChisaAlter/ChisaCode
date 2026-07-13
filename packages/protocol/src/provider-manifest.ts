@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { AgentMode } from "./agent-types.js";
 
 export type AgentModeColorTier = "safe" | "moderate" | "dangerous" | "planning" | `#${string}`;

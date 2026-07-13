@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { hostname } from "node:os";
 import { promisify } from "node:util";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { writeFileAtomic } from "../utils/atomic-write.js";
 
 const execFileAsync = promisify(execFile);

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { Logger } from "pino";
 import { curateAgentActivity } from "./agent/activity-curator.js";
 import type { AgentManager } from "./agent/agent-manager.js";

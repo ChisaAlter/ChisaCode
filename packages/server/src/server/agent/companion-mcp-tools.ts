@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { ensureValidJson } from "../json-utils.js";
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";

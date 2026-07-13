@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
 import { basename } from "path";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {

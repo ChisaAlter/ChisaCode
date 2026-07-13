@@ -1,5 +1,5 @@
 import React from "react";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { genUiRegistry } from "./registry";
 import type { GenerativeUiComponentEntry } from "./types";
 

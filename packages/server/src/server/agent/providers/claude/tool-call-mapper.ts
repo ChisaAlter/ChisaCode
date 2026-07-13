@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { ToolCallTimelineItem } from "../../agent-sdk-types.js";
 import { isSpeakToolName } from "@chisacode/protocol/tool-name-normalization";

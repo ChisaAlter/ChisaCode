@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const ListTerminalsRequestSchema = z.object({
   type: z.literal("list_terminals_request"),

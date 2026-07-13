@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { HighlightToken } from "@chisacode/highlight";
 
 export interface DiffSegment {

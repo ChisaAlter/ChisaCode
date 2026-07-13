@@ -1,6 +1,6 @@
 import path from "node:path";
 import { resolveChisaCodeNodeEnv } from "./chisacode-env.js";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { ChisaCodeDaemonConfig } from "./bootstrap.js";
 import {

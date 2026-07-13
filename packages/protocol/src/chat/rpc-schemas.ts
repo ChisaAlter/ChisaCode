@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { ChatMessageSchema, ChatRoomDetailSchema } from "./types.js";
 
 /** Maximum client-requested chat long-poll deadline. */

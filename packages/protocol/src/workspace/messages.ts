@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { AgentAttachmentsSchema } from "../agent/attachments.js";
 import { CheckoutErrorSchema } from "../checkout/messages.js";

@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import type { z } from "zod/v3";
 import type { Logger } from "pino";
 import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import type { AgentManager, ManagedAgent } from "./agent-manager.js";

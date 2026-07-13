@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { AgentProvider } from "./agent-types.js";
 import {
   AGENT_PROVIDER_DEFINITIONS,

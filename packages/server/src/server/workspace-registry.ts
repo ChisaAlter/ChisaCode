@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import type { Logger } from "pino";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { PersistedProjectKind, PersistedWorkspaceKind } from "./workspace-registry-model.js";
 

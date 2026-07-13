@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { dispatchValidatedAction } from "./action-dispatch";
 import { genUiRegistry } from "./registry/registry";
 

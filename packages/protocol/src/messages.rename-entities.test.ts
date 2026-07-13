@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { describe, expect, test } from "vitest";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "./messages.js";
 

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, vi } from "vitest";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { Session } from "./session.js";
 import type {
   AgentSnapshotPayload,

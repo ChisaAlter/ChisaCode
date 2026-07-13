@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { CHAT_WAIT_MAX_TIMEOUT_MS, type FileBackedChatService } from "../chat/chat-service.js";
 import { ChatMessageSchema, ChatRoomDetailSchema } from "@chisacode/protocol/chat/types";
 import { ensureValidJson } from "../json-utils.js";

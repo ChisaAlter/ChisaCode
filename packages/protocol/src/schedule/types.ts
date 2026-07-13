@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
 
 export const ScheduleStatusSchema = z.enum(["active", "paused", "completed"]);

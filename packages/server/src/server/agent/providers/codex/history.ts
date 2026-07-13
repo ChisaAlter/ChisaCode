@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { AgentTimelineItem } from "../../agent-sdk-types.js";
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";

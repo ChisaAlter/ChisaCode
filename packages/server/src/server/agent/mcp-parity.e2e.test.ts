@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createMCPClient } from "@ai-sdk/mcp";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { AGENT_WAIT_TIMEOUT_MS } from "./mcp-shared.js";
 import {

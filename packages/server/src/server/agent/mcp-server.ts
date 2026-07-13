@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { ensureValidJson } from "../json-utils.js";
 import type { Logger } from "pino";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";

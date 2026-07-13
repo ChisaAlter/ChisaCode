@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
+import { z } from "zod/v3";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
 
 const FORM_PREFERENCES_STORAGE_KEY = "@chisacode:create-agent-preferences";

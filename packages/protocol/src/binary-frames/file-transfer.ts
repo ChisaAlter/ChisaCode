@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { asUint8Array } from "./terminal.js";
 
 /** Maximum declared byte length accepted for a single file transfer. */

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { ToolCallDetail } from "../../agent-sdk-types.js";
 import { nonEmptyString, truncateDiffText } from "../tool-call-mapper-utils.js";

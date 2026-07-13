@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { AgentProviderSchema } from "../provider-manifest.js";
 import { normalizeAgentModelDefinition } from "../agent-types.js";

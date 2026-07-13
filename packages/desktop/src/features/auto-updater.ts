@@ -4,7 +4,7 @@ import path from "node:path";
 import { app } from "electron";
 import { UUID } from "builder-util-runtime";
 import { autoUpdater, type UpdateInfo } from "electron-updater";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { translateDesktop } from "../i18n.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 

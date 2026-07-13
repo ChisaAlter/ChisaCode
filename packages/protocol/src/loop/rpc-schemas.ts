@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
 
 export const LoopLogEntrySchema = z.object({

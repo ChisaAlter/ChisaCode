@@ -1,5 +1,5 @@
 import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { DaemonClient, type DaemonTransport } from "./daemon-client";
 import {
   encodeFileTransferFrame,

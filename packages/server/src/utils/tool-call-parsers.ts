@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { stripCwdPrefix } from "@chisacode/protocol/path-utils";
 
 const SHELL_WRAPPER_PREFIX_PATTERN = /^\/bin\/(?:zsh|bash|sh)\s+(?:-[a-zA-Z]+\s+)?/;

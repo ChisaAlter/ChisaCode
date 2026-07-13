@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const SpeechProviderIdSchema = z.enum(["openai", "local", "mimo"]);
 export type SpeechProviderId = z.infer<typeof SpeechProviderIdSchema>;

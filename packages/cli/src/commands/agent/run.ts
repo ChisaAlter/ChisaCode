@@ -204,13 +204,14 @@ async function fetchStructuredOutput(
       } satisfies CommandError;
     }
     if (err instanceof StructuredAgentResponseError) {
+      const structuredError = err as StructuredAgentResponseError;
       throw {
         code: "OUTPUT_SCHEMA_FAILED",
         message: "Agent response did not match the required output schema",
         details:
-          err.validationErrors.length > 0
-            ? err.validationErrors.join("\n")
-            : err.lastResponse || "No response",
+          structuredError.validationErrors.length > 0
+            ? structuredError.validationErrors.join("\n")
+            : structuredError.lastResponse || "No response",
       } satisfies CommandError;
     }
     throw err;

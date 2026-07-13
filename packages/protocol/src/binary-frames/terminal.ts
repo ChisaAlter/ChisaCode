@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 import { TerminalStateSchema } from "../messages.js";
 
 export const TerminalStreamResizeSchema = z

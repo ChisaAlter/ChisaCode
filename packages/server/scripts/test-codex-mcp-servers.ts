@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 async function main() {
   const transport = new StdioClientTransport({

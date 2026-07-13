@@ -5,7 +5,7 @@ import {
   LoopRecordSchema,
 } from "@chisacode/protocol/loop/rpc-schemas";
 import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
-import { z } from "zod";
+import { z } from "zod/v3";
 import { ensureValidJson } from "../json-utils.js";
 import type { LoopService } from "../loop-service.js";
 
