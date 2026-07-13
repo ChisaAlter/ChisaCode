@@ -45,11 +45,14 @@ import {
   formatProviderDiagnosticError,
   toDiagnosticErrorMessage,
 } from "../diagnostic-utils.js";
+import { getUserMessageText, streamPiHistory } from "./history-mapper.js";
 import {
-  getUserMessageText,
-  streamPiHistory,
-  type PiCapturedUserMessageEntry,
-} from "./history-mapper.js";
+  CHISACODE_PI_CAPTURE_EXTENSION_COMMAND,
+  CHISACODE_PI_COMMAND_RESULT_MARKER,
+  CHISACODE_PI_ENTRY_CAPTURE_MARKER,
+  CHISACODE_PI_TREE_EXTENSION_COMMAND,
+  PiExtensionHistoryController,
+} from "./extension-history-controller.js";
 import { PiCliRuntime } from "./cli-runtime.js";
 import { revertPiConversation } from "./rewind.js";
 import type { PiRuntime, PiRuntimeSession } from "./runtime.js";
@@ -72,7 +75,7 @@ import {
   type PiToolResult,
   type PiTrackedToolCall,
 } from "./tool-call-mapper.js";
-import { isRecord, optionalString } from "./event-values.js";
+import { optionalString } from "./event-values.js";
 import {
   buildCombinedAskUserSelectionResponse,
   buildExtensionUiResponse,
@@ -87,11 +90,6 @@ import {
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
 const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
-const CHISACODE_PI_TREE_EXTENSION_COMMAND = "chisacode_tree";
-const CHISACODE_PI_CAPTURE_EXTENSION_COMMAND = "chisacode_capture_entries";
-const CHISACODE_PI_ENTRY_CAPTURE_MARKER = "CHISACODE_ENTRY_CAPTURE";
-const CHISACODE_PI_COMMAND_RESULT_MARKER = "CHISACODE_COMMAND_RESULT";
-const CHISACODE_PI_EXTENSION_RESULT_TIMEOUT_MS = 10_000;
 
 const PI_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -181,21 +179,6 @@ interface PiMcpConfigFile {
 interface PiTempFile {
   path: string;
   cleanup: () => void;
-}
-
-interface PiCapturedEntry extends PiCapturedUserMessageEntry {
-  parentId: string | null;
-}
-
-interface PendingPiUserMessage {
-  text: string;
-  turnId: string | undefined;
-}
-
-interface PendingExtensionResult {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  timer: NodeJS.Timeout;
 }
 
 const CHISACODE_MODEL_PREFIX_ENV = "CHISACODE_MODEL_PREFIX";
@@ -606,46 +589,6 @@ function latestPiErrorMessage(messages: PiAgentMessage[]): string | null {
   return formatPiErrorMessage(latestAssistant);
 }
 
-function parseExtensionMarkerPayload(
-  message: string,
-  marker: string,
-): Record<string, unknown> | null {
-  const prefix = `${marker} `;
-  if (!message.startsWith(prefix)) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(message.slice(prefix.length)) as unknown;
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseCapturedEntries(value: unknown): PiCapturedEntry[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.flatMap((entry): PiCapturedEntry[] => {
-    if (!isRecord(entry)) {
-      return [];
-    }
-    const id = optionalString(entry.id)?.trim();
-    const text = optionalString(entry.text);
-    if (!id || text === undefined) {
-      return [];
-    }
-    const parentId = entry.parentId === null ? null : optionalString(entry.parentId)?.trim();
-    return [
-      {
-        id,
-        parentId: parentId || null,
-        text,
-      },
-    ];
-  });
-}
-
 function mapPiModel(model: PiModel): AgentModelDefinition {
   return {
     provider: PI_PROVIDER,
@@ -676,12 +619,7 @@ export class PiRpcAgentSession implements AgentSession {
   private pendingCombinedAskUserResponse: PendingCombinedAskUserResponse | null = null;
   private activeTurnId: string | null = null;
   private lastKnownThinkingOptionId: string | null;
-  currentLeafOverrideId: string | null | undefined;
-  private readonly capturedUserEntries: PiCapturedEntry[] = [];
-  private readonly capturedUserEntriesById = new Map<string, PiCapturedEntry>();
-  private readonly seenUserEntryIds = new Set<string>();
-  private readonly pendingUserMessages: PendingPiUserMessage[] = [];
-  private readonly pendingExtensionResults = new Map<string, PendingExtensionResult>();
+  private readonly extensionHistory: PiExtensionHistoryController;
   private readonly modelPrefix: string | null;
   private state: PiSessionState;
   private closed = false;
@@ -694,6 +632,10 @@ export class PiRpcAgentSession implements AgentSession {
     this.capabilities = options.capabilities;
     this.cleanup = options.cleanup;
     this.logger = options.logger;
+    this.extensionHistory = new PiExtensionHistoryController({
+      runtimeSession: this.runtimeSession,
+      emit: (event) => this.emit(event),
+    });
     this.lastKnownThinkingOptionId =
       normalizePiThinkingOption(options.config.thinkingOptionId) ??
       this.state.thinkingLevel ??
@@ -765,11 +707,11 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
-    await this.requestEntryCapture("history");
+    await this.extensionHistory.capture("history");
     yield* streamPiHistory(
       PI_PROVIDER,
       await this.runtimeSession.getMessages(),
-      this.capturedUserEntries,
+      this.extensionHistory.entries,
     );
   }
 
@@ -854,28 +796,17 @@ export class PiRpcAgentSession implements AgentSession {
     await this.refreshState().catch((err) => {
       this.logger.warn({ err }, "Pi refreshState failed before rewind");
     });
-    await this.requestEntryCapture("rewind");
-    const targetEntry = this.capturedUserEntriesById.get(input.messageId);
-    if (!targetEntry) {
+    await this.extensionHistory.capture("rewind");
+    if (!this.extensionHistory.getEntry(input.messageId)) {
       throw new Error(`Pi rewind target ${input.messageId} was not found in captured tree entries`);
     }
     await revertPiConversation({
       messageId: input.messageId,
       navigator: {
-        navigateTree: (treeEntryId) => this.runPiTreeExtensionCommand(treeEntryId),
+        navigateTree: (treeEntryId) => this.extensionHistory.navigateTree(treeEntryId),
       },
     });
-    // Pi keeps all tree nodes, so selecting the previous leaf later reverses this rewind.
-    this.currentLeafOverrideId = targetEntry.parentId;
     this.activeToolCalls.clear();
-  }
-
-  private async runPiTreeExtensionCommand(targetId: string): Promise<unknown> {
-    const requestId = randomUUID();
-    const resultPromise = this.waitForExtensionResult(requestId);
-    const payload = Buffer.from(JSON.stringify({ targetId, requestId })).toString("base64url");
-    await this.runtimeSession.prompt(`/${CHISACODE_PI_TREE_EXTENSION_COMMAND} ${payload}`);
-    return await resultPromise;
   }
 
   async close(): Promise<void> {
@@ -886,7 +817,7 @@ export class PiRpcAgentSession implements AgentSession {
     try {
       await this.runtimeSession.close();
     } finally {
-      this.rejectAllExtensionResults(new Error("Pi session closed"));
+      this.extensionHistory.close(new Error("Pi session closed"));
       this.cleanup?.();
     }
   }
@@ -939,124 +870,12 @@ export class PiRpcAgentSession implements AgentSession {
     return this.activeTurnId ?? undefined;
   }
 
-  private async requestEntryCapture(reason: string): Promise<void> {
-    const requestId = randomUUID();
-    const resultPromise = this.waitForExtensionResult(requestId);
-    const payload = Buffer.from(JSON.stringify({ requestId, reason })).toString("base64url");
-    await this.runtimeSession.prompt(`/${CHISACODE_PI_CAPTURE_EXTENSION_COMMAND} ${payload}`);
-    await resultPromise;
-  }
-
-  private waitForExtensionResult(requestId: string): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingExtensionResults.delete(requestId);
-        reject(new Error(`Pi extension result timed out for request ${requestId}`));
-      }, CHISACODE_PI_EXTENSION_RESULT_TIMEOUT_MS);
-      this.pendingExtensionResults.set(requestId, { resolve, reject, timer });
-    });
-  }
-
-  private resolveExtensionResult(requestId: string, result: unknown): void {
-    const pending = this.pendingExtensionResults.get(requestId);
-    if (!pending) {
-      return;
-    }
-    clearTimeout(pending.timer);
-    this.pendingExtensionResults.delete(requestId);
-    pending.resolve(result);
-  }
-
-  private rejectExtensionResult(requestId: string, error: Error): void {
-    const pending = this.pendingExtensionResults.get(requestId);
-    if (!pending) {
-      return;
-    }
-    clearTimeout(pending.timer);
-    this.pendingExtensionResults.delete(requestId);
-    pending.reject(error);
-  }
-
-  private rejectAllExtensionResults(error: Error): void {
-    for (const requestId of this.pendingExtensionResults.keys()) {
-      this.rejectExtensionResult(requestId, error);
-    }
-  }
-
-  private recordCapturedUserEntries(entries: PiCapturedEntry[]): void {
-    const previouslySeenEntryIds = new Set(this.seenUserEntryIds);
-    this.capturedUserEntries.splice(0, this.capturedUserEntries.length, ...entries);
-    this.capturedUserEntriesById.clear();
-    for (const entry of entries) {
-      this.capturedUserEntriesById.set(entry.id, entry);
-    }
-    this.flushPendingUserMessages(previouslySeenEntryIds);
-    for (const entry of entries) {
-      this.seenUserEntryIds.add(entry.id);
-    }
-  }
-
-  private flushPendingUserMessages(previouslySeenEntryIds: Set<string>): void {
-    for (let index = 0; index < this.pendingUserMessages.length; index += 1) {
-      const pending = this.pendingUserMessages[index]!;
-      const entry = this.capturedUserEntries.find(
-        (candidate) => !previouslySeenEntryIds.has(candidate.id),
-      );
-      if (!entry) {
-        continue;
-      }
-      previouslySeenEntryIds.add(entry.id);
-      this.pendingUserMessages.splice(index, 1);
-      index -= 1;
-      this.emit({
-        type: "timeline",
-        provider: PI_PROVIDER,
-        turnId: pending.turnId,
-        item: {
-          type: "user_message",
-          text: pending.text,
-          messageId: entry.id,
-        },
-      });
-    }
-  }
-
-  private handleEntryCaptureMarker(message: string): boolean {
-    const payload = parseExtensionMarkerPayload(message, CHISACODE_PI_ENTRY_CAPTURE_MARKER);
-    if (!payload) {
-      return false;
-    }
-    const entries = parseCapturedEntries(payload.entries);
-    this.recordCapturedUserEntries(entries);
-    if (typeof payload.requestId === "string") {
-      this.resolveExtensionResult(payload.requestId, entries);
-    }
-    return true;
-  }
-
-  private handleCommandResultMarker(message: string): boolean {
-    const payload = parseExtensionMarkerPayload(message, CHISACODE_PI_COMMAND_RESULT_MARKER);
-    if (!payload) {
-      return false;
-    }
-    if (typeof payload.requestId !== "string") {
-      return true;
-    }
-    if (payload.ok === true) {
-      this.resolveExtensionResult(payload.requestId, payload.result);
-      return true;
-    }
-    const error = typeof payload.error === "string" ? payload.error : "Pi extension command failed";
-    this.rejectExtensionResult(payload.requestId, new Error(error));
-    return true;
-  }
-
   private handleExtensionUiRequest(
     event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
   ): void {
     const message = optionalString(event.message);
     if (event.method === "notify" && message) {
-      if (this.handleEntryCaptureMarker(message) || this.handleCommandResultMarker(message)) {
+      if (this.extensionHistory.handleMarker(message)) {
         return;
       }
     }
@@ -1126,7 +945,7 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   private handleProcessExit(error: string): void {
-    this.rejectAllExtensionResults(new Error(error));
+    this.extensionHistory.close(new Error(error));
     if (!this.activeTurnId) {
       return;
     }
@@ -1273,16 +1092,7 @@ export class PiRpcAgentSession implements AgentSession {
     if (!text) {
       return;
     }
-    this.pendingUserMessages.push({ text, turnId });
-    void this.requestEntryCapture("message_end").catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      this.emit({
-        type: "turn_failed",
-        provider: PI_PROVIDER,
-        turnId,
-        error: message,
-      });
-    });
+    this.extensionHistory.queueUserMessage(text, turnId);
   }
 
   private emitToolCallEvent(
