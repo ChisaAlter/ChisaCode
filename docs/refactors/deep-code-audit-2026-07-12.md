@@ -2,13 +2,13 @@
 
 ## 结论与评分
 
-| 维度     | 当前评分 | 主要证据                                                                                                      | 距离 10 分的核心差距                                                                            |
-| -------- | -------: | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 2164 行；workspace 1541 行；Claude 873 行；ACP 926 行；Pi 581 行          | workspace 仍承担 route/authority 与跨域 view-model 协调，应只按真实职责继续拆分                 |
-| 安全设计 |      9.6 | relay E2EE 单调 nonce；Ed25519 socket 认证；server 已移除直接 UUID 依赖；生产审计 12 项且 0 high/0 critical   | Expo 56 工具链仍含 `xcode` 嵌套 UUID；Expo 57/EAS 与 relay 认证升级需持续兼容性发布管理         |
-| 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop            | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
-| 代码质量 |      9.8 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；Expo 56 通过 Doctor 与真实 Android Kotlin 编译 | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
-| 综合     |  **9.7** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                                   | 继续提升需要完成 Expo 57/EAS、provider adapters 与测试减债                                      |
+| 维度     | 当前评分 | 主要证据                                                                                                                       | 距离 10 分的核心差距                                                                            |
+| -------- | -------: | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 2164 行；workspace 1541 行；Claude 873 行；ACP 926 行；Pi 581 行                           | workspace 仍承担 route/authority 与跨域 view-model 协调，应只按真实职责继续拆分                 |
+| 安全设计 |      9.7 | relay E2EE 单调 nonce；Ed25519 socket 认证；Expo 57/Bundle Mode 已迁移；生产审计 12 项且 0 high/0 critical                     | 当前 Expo 工具链仍含 `xcode` 嵌套 UUID；EAS 云端验证与 relay 认证升级需持续兼容性发布管理       |
+| 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop                             | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
+| 代码质量 |      9.9 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；Expo 57 通过 Doctor、Android Kotlin 编译与 Hermes bundle export | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
+| 综合     |  **9.8** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                                                    | 继续提升需要完成 EAS 认证发布验证、diagnostics surface parity 与测试减债                        |
 
 ## 本轮已修
 
@@ -49,6 +49,7 @@
 - 2026-07-13：生产路径中的 `ajv`、`brace-expansion`、`js-yaml`、`postcss` 与 `tar` 完成兼容补丁升级；npm 10.9.4 clean-install dry-run 接受新锁，生产审计从 24 降至 19 且保持 0 high/0 critical。
 - 2026-07-13：App 升至 Expo 55.0.27 / React Native 0.83.6 / React 19.2.0，Expo 模块与本地音频模块同步迁移；Gesture Handler 补丁升级至 2.30.1，Android runtime 删除 `implementation project(":expo")` 以解除新版聚合模块循环。Expo Doctor 19/19、App 与模块 typecheck/build、Android prebuild、自定义模块和 App Kotlin 编译通过；生产审计从 19 降至 11 且保持 0 high/0 critical。
 - 2026-07-13：App 继续升至 Expo 56.0.15 / React Native 0.85.3 / React 19.2.3，Expo Router、Reanimated、Worklets、Gesture Handler、本地音频模块与 TypeScript 6 同步对齐；直接 React Navigation 依赖移除，导航 hooks 改走 Expo Router，RN 原生 absolute fill API 与 TS6 type-only import 完成兼容迁移。Expo Doctor 21/21、App 依赖栈 build/typecheck、17 个目标文件 lint、3 个聚焦测试文件 13 个断言、Android clean prebuild、两个自定义模块与 App Kotlin 编译通过；生产审计为 12 moderate、0 high/0 critical。
+- 2026-07-14：App 升至 Expo 57.0.4 / React Native 0.86.0，Reanimated 4.5.0、Worklets 0.10.0、Gesture Handler 2.32.0 与本地音频模块同步对齐；启用官方 Worklets Bundle Mode，并应用 Metro/Metro Runtime 0.84.4 官方补丁，保留 ChisaCode 自定义 Metro overlay/resolver。npm 10 clean-lock/ci dry-run、四个 postinstall 补丁、Expo Doctor 20/20、App 依赖栈 build/typecheck、目标 lint/format、Android clean prebuild、两个自定义模块与 App Kotlin 编译、5,551 模块 Android Hermes bundle export 均通过；生产审计仍为 12 moderate、0 high/0 critical。EAS 20.5.1 live config 因缺少 Expo 登录未执行云端解析，本地 Expo config 已确认 runtimeVersion、updates URL、projectId 与 Android package。
 - 2026-07-13：Skills 与 MCP server 管理的配置、scope、payload 及 8 个 inbound/8 个 outbound schema 提取到 `agent/extensions.ts`；总 union 改由只读 tuple 聚合，旧 `messages` 入口兼容重导出并新增显式 package subpath，主文件降至 2436 行。
 - 2026-07-13：daemon status/pairing/config/project config/lifecycle 的 8 个 inbound、6 个 outbound、3 个 status payload 与 mutable config 提取到 `daemon/messages.ts`；旧入口兼容重导出并新增显式 package subpath，主文件降至 2164 行。
 - 2026-07-13：移动端 workspace tab switcher、presentation fallback、tab menu 与全部局部样式提取到 `workspace-mobile-tab-switcher.tsx`；主屏保持 props/行为兼容并从 5453 降至 4926 行。
@@ -93,7 +94,7 @@
 
 ## 最高优先级剩余项
 
-1. **P1 依赖安全迁移（继续推进）**：AI SDK、Claude SDK、OpenAI SDK、Zod 4、五类兼容型生产补丁、server 直接 UUID 移除及 Expo 55/56 已完成；下一批为 Expo 57/EAS，重点验证 `xcode` 嵌套 `uuid` 与新增 Expo 工具链通告是否消除，并验证发布链兼容性，不与结构拆分混做。
+1. **P1 依赖安全/发布验证（继续推进）**：AI SDK、Claude SDK、OpenAI SDK、Zod 4、五类兼容型生产补丁、server 直接 UUID 移除及 Expo 55/56/57 本地迁移已完成；下一步只在显式发布时完成 EAS 认证 config/build 验证，并跟踪 Expo 上游何时移除 `xcode` 嵌套 `uuid`，不做破坏性 override。
 2. **P1 provider 文件拆分（核心完成）**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP/Pi/Claude 均已完成 composition-first 核心拆分；后续只在真实复杂度或缺陷证明收益时继续分域，不再按行数做低收益碎片化拆分。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon 域提取并降至 2164 行，下一步评估 usage/voice 分域并保留 agent core 的聚合职责。
 4. **P2 app 工作台拆分（核心完成）**：移动端 navigation、workspace command routing、layout/setup persistence/hydration、tab/pane/dock/content、environment panel state/data/view、header/center-column view、explorer 与 open-intent 已提取，`workspace-screen.tsx` 从 5453 降至 1541 行；后续只在 route/authority 或跨域协调出现真实复杂度时继续分域，并保持 native/web/electron surface 验证分离。
@@ -126,6 +127,7 @@
 - 2026-07-13 Server UUID 依赖移除批次：npm 10.9.4 lockfile/clean-install dry-run、server typecheck、11 个目标文件 lint 与 client message ID 4 个精确断言通过；生产审计维持 19 且 0 high/0 critical，残余 UUID 通告仅为 Expo `xcode@3.0.1 -> uuid@7.0.3`
 - 2026-07-13 Expo SDK 55 批次：`expo install --check`、Expo Doctor 19/19、核心 React/Expo 依赖树、npm 10.9.4 clean install、App typecheck、音频模块 typecheck/build、目标 lint、Android prebuild、两个自定义模块与 App `compileDebugKotlin` 通过；生产审计降至 11 且 0 high/0 critical
 - 2026-07-13 Expo SDK 56 批次：`expo install --check`、Expo Doctor 21/21、核心 React/Expo 依赖树、npm 10.9.4 clean-install dry-run、App 依赖栈 build/typecheck、17 个目标文件 lint、3 个导航相关测试文件 13 个断言、Android clean prebuild、两个自定义模块与 App `compileDebugKotlin` 通过；生产审计为 12 moderate 且 0 high/0 critical
+- 2026-07-14 Expo SDK 57 批次：npm 10.9.4 clean-lock/`ci --dry-run`、四个 postinstall 补丁、`expo install --check`、Expo Doctor 20/20、App 依赖栈 build/typecheck、目标 lint/format、Android clean prebuild、两个自定义模块及 App `compileDebugKotlin`、Android Hermes bundle export 通过；本地 Expo config 解析通过，EAS live config 因无 Expo 登录留到发布阶段；生产审计为 12 moderate 且 0 high/0 critical
 - 2026-07-13 Protocol agent extension 批次：protocol typecheck/build、3 个目标文件 lint、18 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 Protocol daemon messages 批次：protocol typecheck/build、3 个目标文件 lint、32 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 App workspace mobile navigation 批次：App typecheck、2 个目标文件 lint 与 15 个 tab menu/layout 聚焦断言通过；未以 web 预览替代 native mobile 验证

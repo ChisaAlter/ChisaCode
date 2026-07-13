@@ -86,3 +86,11 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 - Migrated the Gesture Handler web pointer-capture patch to 2.31.2. The patch applies cleanly to source, CommonJS, and ESM builds after a clean install.
 - `expo install --check`, Expo Doctor 21/21, the core React/Expo dependency tree, App dependency builds and typecheck, focused lint/tests, Android clean prebuild, both custom Android module compiles, and App `compileDebugKotlin` passed.
 - Production audit reports 12 moderate findings and remains at 0 high / 0 critical. The findings remain confined to Expo CLI/config/prebuild tooling, including `xcode -> uuid`; Expo 57/EAS is the next compatibility migration instead of forcing a standalone override.
+
+## Resolved Follow-up - 2026-07-14 (Expo SDK 57 and Worklets Bundle Mode)
+
+- Upgraded the App to Expo 57.0.4 / React Native 0.86.0 / React 19.2.3, including Expo Router 57.0.4, Reanimated 4.5.0, Worklets 0.10.0, Gesture Handler 2.32.0, and the local two-way-audio module on Expo Modules Core 57.0.3.
+- Enabled the official Worklets Bundle Mode mitigation for the Hermes V1 plus Reanimated memory regression. The existing custom Metro resolver is wrapped with Reanimated and Bundle Mode configuration, and the official Metro/Metro Runtime 0.84.4 patches are applied through the selective postinstall patch runner.
+- Migrated the Gesture Handler web pointer-capture patch to 2.32.0. All four postinstall patches apply cleanly after install, and the npm 10.9.4 lockfile retains workspace-local Node type snapshots and npmjs-only resolved URLs.
+- `expo install --check`, Expo Doctor 20/20, App dependency builds/typecheck, focused lint/format, Android clean prebuild, both custom Android module compiles, App `compileDebugKotlin`, and an Android Hermes bundle export passed. Local Expo config also resolved the app-version runtime policy, updates URL, EAS project ID, and Android package.
+- EAS CLI 20.5.1 live production config resolution reached the Expo account gate and was not bypassed; authenticated EAS validation remains a release-time check. Production audit remains at 12 moderate findings with 0 high / 0 critical, still confined to Expo CLI/config/prebuild tooling and `xcode -> uuid`.

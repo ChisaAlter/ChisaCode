@@ -13,6 +13,14 @@ const patchedPackages = [
     nodeModulesPath: "node_modules/react-native-gesture-handler",
     patchPrefix: "react-native-gesture-handler+",
   },
+  {
+    nodeModulesPath: "node_modules/metro",
+    patchPrefix: "metro+",
+  },
+  {
+    nodeModulesPath: "node_modules/metro-runtime",
+    patchPrefix: "metro-runtime+",
+  },
 ];
 
 const installedPatchPrefixes = patchedPackages

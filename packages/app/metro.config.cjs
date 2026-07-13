@@ -1,4 +1,6 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const { wrapWithReanimatedMetroConfig } = require("react-native-reanimated/metro-config");
+const { getBundleModeMetroConfig } = require("react-native-worklets/bundleMode");
 const { resolve } = require("metro-resolver");
 const fs = require("fs");
 const path = require("path");
@@ -78,4 +80,4 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return resolveWithCustomWebOverlay(context, moduleName, platform);
 };
 
-module.exports = config;
+module.exports = getBundleModeMetroConfig(wrapWithReanimatedMetroConfig(config));
