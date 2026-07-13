@@ -74,7 +74,6 @@ export default {
     icon: "./assets/images/icon.png",
     scheme: "chisacode",
     userInterfaceStyle: "automatic",
-    newArchEnabled: true,
     runtimeVersion: {
       policy: "appVersion",
     },
@@ -97,7 +96,6 @@ export default {
         backgroundColor: "#160709",
         foregroundImage: "./assets/images/android-icon-foreground.png",
       },
-      edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: true,
       softwareKeyboardLayoutMode: "resize",
       // Allow HTTP connections for local network hosts (required for release builds)
@@ -125,6 +123,7 @@ export default {
     },
     plugins: [
       "./plugins/with-android-export-embed-cli",
+      "expo-asset",
       "expo-router",
       [
         "expo-camera",

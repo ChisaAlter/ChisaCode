@@ -11,7 +11,7 @@
 
 ### 架构/依赖安全/本地质量提升目标（2026-07-12 启动）
 
-- **目标**：继续拆解 client/provider/workspace 超大责任中心；完成 AI SDK、Claude SDK、Expo/EAS major migration；以聚焦本地验证维持可信质量基线，GitHub Actions 仅作为显式发布门禁。
+- **目标**：继续拆解 client/provider/workspace 超大责任中心；完成 AI SDK、Claude SDK 与 Expo/EAS major migration；以聚焦本地验证维持可信质量基线，GitHub Actions 仅作为显式发布门禁。Expo 55 已落地，下一依赖批次转向 Expo 56/EAS 发布链。
 - **执行顺序**：先清理确定性 CI 失败，再迁移高风险依赖，最后按领域拆分大文件；每批独立本地验证和提交，普通开发不再推送触发远端 CI。
 - **已完成批次**：修复 workspace authority 稳定错误契约、draft `runtimeProvider` 快照、Generative UI manager queue 兼容测试、异步进程终止断言、ACP cwd 隔离测试、POSIX terminal `vi.waitFor` 误用、CLI 脚本/Vitest 分类、Wrangler 公开入口解析及 Windows `npx.cmd` 启动。
 - **App/链路 CI 收敛**：E2E daemon 改为仅监听 `127.0.0.1`，满足无密码 loopback 安全约束；补齐 Vitest 的 `matchMedia`、Unistyles、safe-area、toast 与平台测试边界，修复 i18n 实例缺失、Aemeath 英文资源、Projects 空状态硬编码、provider icon/turn footer/高度缓存过期契约。20 个目标文件 152 个断言通过，`moduleMock` 审计从基线 303 降至 302。
@@ -23,6 +23,7 @@
 - **Claude SDK/Zod 4 安全迁移**：完成。OpenAI SDK 先独立升级到 6.46.0；随后将 protocol/client/app/desktop/server 的直接 Zod 依赖统一到 4.3.6，既有 schema 暂经官方 `zod/v3` 兼容入口保持解析语义，Claude Agent SDK 升至修复版 0.2.141，Anthropic SDK 升至 0.93.0，MCP SDK 下限对齐 1.29.0。严格 npm peer 解析与 `npm ls` 均通过；生产审计从 26 降至 24，Claude/Anthropic 通告清零且维持 0 high/0 critical。protocol/client/server build、六个消费包 typecheck、88 个改动文件 lint 与 148 个聚焦断言通过。
 - **兼容型生产依赖安全补丁**：完成。将生产路径中的 `ajv`、`brace-expansion`、`js-yaml`、`postcss` 与 `tar` 提升到兼容修复版，并使用 npm 10.9.4 生成可 clean-install 的跨平台 lockfile。生产审计从 24 降至 19，五类通告清零，继续保持 0 high/0 critical；剩余项集中在 Expo/EAS framework major（含 `xcode` 嵌套 `uuid`）以及暂无 Babel 7 修复版的低危通告。
 - **Server UUID 运行时依赖移除**：完成。11 个 server 生产文件统一改用 Node.js 22+ 的 `node:crypto.randomUUID()`，删除直接 `uuid` 与 `@types/uuid` 依赖。生产审计仍为 19 且 0 high/0 critical，因为残余 `uuid` 通告只位于 `@expo/config-plugins -> xcode@3.0.1 -> uuid@7.0.3`；该原生生成链留给 Expo framework major，不做破坏性 override。server typecheck、11 个目标文件 lint、4 个 client message ID 精确断言与 npm 10.9.4 clean-install dry-run 通过。
+- **Expo SDK 55 迁移**：完成第一阶段 framework major。App 从 Expo 54 / RN 0.81 / React 19.1 升至 Expo 55.0.27 / RN 0.83.6 / React 19.2.0，全套 Expo 模块、Router、Reanimated、Worklets 与自研 `expo-two-way-audio` 对齐；删除 App 对 `expo-modules-core` 和本地 `eas-cli` 的直接依赖，补齐 `@types/react-dom` 与 renderer 锁步。Gesture Handler 补丁迁移到 2.30.1；Android runtime 移除对 `:expo` 的反向依赖，解除 Expo 55 Gradle 循环。`expo install --check`、Expo Doctor 19/19、依赖树、App/音频模块 typecheck/build、目标 lint、Android prebuild、两个自定义模块及 App `compileDebugKotlin` 均通过。生产审计从 19 降至 11，保持 0 high/0 critical；剩余 11 项仍集中在 Expo CLI/config/prebuild 的 `xcode -> uuid` 工具链。
 - **Protocol agent extension 消息域拆分**：完成。将 Skills 与 MCP server 管理配置、scope、payload、8 个 inbound 和 8 个 outbound schema 提取到 `agent/extensions.ts`，总 union 改为只读 tuple 聚合；旧 `messages` 入口继续兼容重导出，并新增 `@chisacode/protocol/agent/extensions` 显式子路径。主文件从 2860 降至 2436 行；protocol build/typecheck、3 个目标文件 lint、18 个聚焦断言、子路径运行时导入与五个消费者 typecheck 通过。
 - **Protocol daemon 消息域拆分**：完成。将 daemon status/pairing、mutable config、project config、restart/shutdown 的 8 个 inbound、6 个 outbound 与 3 个 status payload 提取到 `daemon/messages.ts`，总 union/status union 均改为只读 tuple 聚合；旧 `messages` 入口继续兼容重导出，并新增 `@chisacode/protocol/daemon/messages` 显式子路径。主文件从 2436 降至 2164 行；protocol build/typecheck、3 个目标文件 lint、32 个聚焦断言、子路径运行时导入与五个消费者 typecheck 通过。
 - **App workspace 移动端导航拆分**：完成首个工作台切片。将 mobile tab switcher、presentation fallback、tab menu 与局部样式提取到 `workspace-mobile-tab-switcher.tsx`，主屏仅保留导航数据与命令回调接线，从 5453 降至 4926 行。App typecheck、2 个目标文件 lint 与 15 个 tab menu/layout 聚焦断言通过；本批未声称 native mobile 运行态验证。
@@ -70,7 +71,7 @@
 - **安全修复**：relay server socket 认证增加签发时间与 Durable Object 持久化 nonce 消费记录；默认拒绝过期、未来和重复凭证，且在关闭既有 socket 前完成校验。补重放/过期单测与真实 Wrangler E2E。
 - **产品兼容修复**：`ProviderHandler` 拆分时遗留的 `LEGACY_PROVIDER_IDS.has(provider) || true` 永真逻辑已删除，重新委托 Session 版本兼容策略；旧客户端不会收到未知 provider id。
 - **代码质量**：Knip CI 收敛为高信号依赖/未声明依赖/unresolved/binary 门禁并清零现有问题；修复失效 import、依赖归属、relay E2E hoist 偶合、异步测试竞态，以及 125 个锁文件镜像来源漂移。
-- **依赖安全**：Vitest Browser 升至 4.1.10，Wrangler 升至 4.110.0；AI SDK、Claude SDK、Zod 4、五类兼容型生产补丁及 server 直接 UUID 依赖移除均已完成，生产审计从 24 降至 19 并维持 0 high/0 critical。剩余项主要来自 Expo/EAS（含 `xcode` 嵌套 `uuid`）与 Babel major，单独追踪，不使用错误的自动降级建议。
+- **依赖安全**：Vitest Browser 升至 4.1.10，Wrangler 升至 4.110.0；AI SDK、Claude SDK、Zod 4、五类兼容型生产补丁、server 直接 UUID 移除及 Expo SDK 55 迁移均已完成，生产审计从 24 经 19 降至 11，并维持 0 high/0 critical。剩余项来自 Expo CLI/config/prebuild 的 `xcode` 嵌套 `uuid` 工具链，继续随 Expo 56/EAS 批次治理，不使用破坏性 override。
 - **架构证据**：dependency-cruiser 807 modules / 1888 dependencies / 0 violations。边界健康，但 4k-5k 行责任中心仍是主要扣分项。
 - **状态**：完成。本地精确验证通过；普通开发不触发远端 CI，完整门禁仅在显式版本发布时运行。
 

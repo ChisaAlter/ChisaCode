@@ -70,3 +70,11 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 - Removed the server's direct `uuid` runtime dependency and obsolete `@types/uuid` development dependency.
 - Production audit remains at 19 findings with 0 high / 0 critical because the remaining `uuid` advisory is exclusively `@expo/config-plugins -> xcode@3.0.1 -> uuid@7.0.3`; no server production source imports `uuid`.
 - The nested `xcode` path remains deferred to the Expo framework-major migration. It is not overridden independently because native project generation compatibility owns that dependency.
+
+## Resolved Follow-up - 2026-07-13 (Expo SDK 55)
+
+- Upgraded the App from Expo 54 / React Native 0.81 / React 19.1 to Expo 55.0.27 / React Native 0.83.6 / React 19.2.0, including the Expo module set, Router, Reanimated, Worklets, and the local two-way-audio module.
+- Removed the App's direct `expo-modules-core` and local `eas-cli` dependencies. Native module callers now consume the public `expo` runtime API and use a local removable-subscription contract; React DOM types and `react-test-renderer` are explicit and locked to the React 19.2 line.
+- Migrated the Gesture Handler patch from 2.28.0 to 2.30.1 and removed the Android runtime's explicit `implementation project(":expo")`, which caused a circular dependency under the Expo 55 aggregate module.
+- `expo install --check`, Expo Doctor 19/19, the core React/Expo dependency tree, npm 10.9.4 clean install, App/module typechecks, Android prebuild, both custom Android module compiles, and App `compileDebugKotlin` passed.
+- Production audit moved from 19 to 11 moderate findings and remains at 0 high / 0 critical. The remaining findings are confined to the Expo CLI/config/prebuild toolchain, including `xcode -> uuid`; continue with Expo 56/EAS rather than forcing a standalone native-tool override.

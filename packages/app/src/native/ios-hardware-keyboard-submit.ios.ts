@@ -1,13 +1,17 @@
-import { requireNativeModule, type EventSubscription } from "expo-modules-core";
+import { requireNativeModule } from "expo";
 
 type HardwareKeyboardSubmitHandler = () => void;
+
+interface RemovableEventSubscription {
+  remove(): void;
+}
 
 interface ChisaCodeHardwareKeyboardModule {
   setHardwareKeyboardSubmitEnabled(enabled: boolean): void;
   addListener(
     eventName: "onHardwareKeyboardSubmit",
     handler: HardwareKeyboardSubmitHandler,
-  ): EventSubscription;
+  ): RemovableEventSubscription;
 }
 
 const module = requireNativeModule<ChisaCodeHardwareKeyboardModule>("ChisaCodeHardwareKeyboard");

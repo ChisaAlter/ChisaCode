@@ -37,14 +37,14 @@
     "open:android": "open -a \"Android Studio\" examples/basic-usage/android"
   },
   "devDependencies": {
-    "@types/react": "^18.0.25",
-    "expo-module-scripts": "^3.5.2",
-    "expo-modules-core": "^2.0.4",
+    "@types/react": "^19.2.2",
+    "expo-module-scripts": "^55.0.2",
+    "expo-modules-core": "^55.0.25",
     "vitest": "4.1.10"
   },
   "peerDependencies": {
-    "expo": "*",
-    "react": "*",
-    "react-native": "*"
+    "expo": "^55.0.0",
+    "react": "^19.2.0",
+    "react-native": "^0.83.0"
   }
 }

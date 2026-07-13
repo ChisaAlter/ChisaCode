@@ -458,13 +458,14 @@ function ProjectConfigForm({
     },
     onSuccess: (result) => {
       if (result.ok) {
-        queryClient.setQueryData<ReadProjectConfigData>(queryKey, {
+        const cachedResult: ReadProjectConfigData = {
           ok: true,
           config: result.config,
           revision: result.revision,
           requestId: "local-cache",
           repoRoot,
-        });
+        };
+        queryClient.setQueryData<ReadProjectConfigData>(queryKey, cachedResult);
         setWriteError(null);
         queryClient.invalidateQueries({ queryKey: ["projects"] });
         toast.show(t("projectSettings.saved"), { variant: "success" });

@@ -31,7 +31,6 @@ android {
 }
 
 dependencies {
-  implementation project(":expo")
   implementation "org.jetbrains.kotlin:kotlin-stdlib:${safeExtGetRoot("kotlinVersion", "2.1.20")}"
   implementation "androidx.core:core-ktx:1.15.0"
 }

@@ -17,8 +17,10 @@ export interface ArchiveAgentInput {
 
 export type ArchiveAgentClient = Pick<DaemonClient, "archiveAgent">;
 
-export type ArchiveAgentPendingState = Record<string, true>;
-export type ArchiveAgentSuppressedState = Record<string, true>;
+type ArchiveAgentState = Record<string, true>;
+
+export type ArchiveAgentPendingState = ArchiveAgentState;
+export type ArchiveAgentSuppressedState = ArchiveAgentState;
 
 interface SetAgentArchivingInput extends ArchiveAgentInput {
   queryClient: QueryClient;
@@ -153,26 +155,23 @@ function setArchiveAgentState(input: {
     return;
   }
 
-  input.queryClient.setQueryData<ArchiveAgentPendingState | ArchiveAgentSuppressedState>(
-    input.queryKey,
-    (current) => {
-      const state = current ?? {};
-      if (input.active) {
-        if (state[key]) {
-          return state;
-        }
-        return { ...state, [key]: true };
-      }
-
-      if (!state[key]) {
+  input.queryClient.setQueryData<ArchiveAgentState>(input.queryKey, (current) => {
+    const state: ArchiveAgentState = current ?? {};
+    if (input.active) {
+      if (state[key]) {
         return state;
       }
+      return { ...state, [key]: true };
+    }
 
-      const next = { ...state };
-      delete next[key];
-      return next;
-    },
-  );
+    if (!state[key]) {
+      return state;
+    }
+
+    const next = { ...state };
+    delete next[key];
+    return next;
+  });
 }
 
 export function isAgentArchiving(input: IsAgentArchivingInput): boolean {

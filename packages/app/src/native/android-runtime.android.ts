@@ -1,9 +1,13 @@
-import { requireNativeModule, type EventSubscription } from "expo-modules-core";
+import { requireNativeModule } from "expo";
 import {
   buildAndroidNotificationData,
   normalizeAndroidNotificationData,
   type AndroidNotificationData,
 } from "@/utils/notification-routing";
+
+interface RemovableEventSubscription {
+  remove(): void;
+}
 
 interface ChisaCodeAndroidRuntimeModule {
   startForegroundService(text: string): Promise<void>;
@@ -11,7 +15,10 @@ interface ChisaCodeAndroidRuntimeModule {
   stopForegroundService(): Promise<void>;
   sendLocalNotification(title: string, body: string, data: string | null): Promise<void>;
   consumeInitialNotificationData(): Promise<unknown>;
-  addListener(eventName: "onNotificationResponse", listener: () => void): EventSubscription;
+  addListener(
+    eventName: "onNotificationResponse",
+    listener: () => void,
+  ): RemovableEventSubscription;
 }
 
 const nativeModule = requireNativeModule<ChisaCodeAndroidRuntimeModule>("ChisaCodeAndroidRuntime");

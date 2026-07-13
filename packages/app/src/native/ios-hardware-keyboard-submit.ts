@@ -1,12 +1,14 @@
-import type { EventSubscription } from "expo-modules-core";
-
 type HardwareKeyboardSubmitHandler = () => void;
+
+interface RemovableEventSubscription {
+  remove(): void;
+}
 
 export function setHardwareKeyboardSubmitEnabled(_enabled: boolean) {}
 
 export function addHardwareKeyboardSubmitListener(
   _handler: HardwareKeyboardSubmitHandler,
-): EventSubscription {
+): RemovableEventSubscription {
   return {
     remove: () => {},
   };
