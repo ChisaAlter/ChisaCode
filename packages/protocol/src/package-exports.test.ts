@@ -75,6 +75,13 @@ describe("current package exports", () => {
     });
   });
 
+  test("exports voice messages as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./voice/messages"]).toEqual({
+      types: "./dist/voice/messages.d.ts",
+      default: "./dist/voice/messages.js",
+    });
+  });
+
   test("exports workspace messages as a first-class protocol domain", () => {
     expect(protocolPackage.exports["./workspace/messages"]).toEqual({
       types: "./dist/workspace/messages.d.ts",

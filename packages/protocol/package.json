@@ -185,6 +185,10 @@
       "types": "./dist/usage/messages.d.ts",
       "default": "./dist/usage/messages.js"
     },
+    "./voice/messages": {
+      "types": "./dist/voice/messages.d.ts",
+      "default": "./dist/voice/messages.js"
+    },
     "./workspace/messages": {
       "types": "./dist/workspace/messages.d.ts",
       "default": "./dist/workspace/messages.js"
