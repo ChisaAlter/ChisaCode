@@ -89,6 +89,10 @@
       "types": "./dist/daemon-endpoints.d.ts",
       "default": "./dist/daemon-endpoints.js"
     },
+    "./daemon/messages": {
+      "types": "./dist/daemon/messages.d.ts",
+      "default": "./dist/daemon/messages.js"
+    },
     "./error-utils": {
       "types": "./dist/error-utils.d.ts",
       "default": "./dist/error-utils.js"
