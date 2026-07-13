@@ -5,7 +5,7 @@
 | 维度     | 当前评分 | 主要证据                                                                                                  | 距离 10 分的核心差距                                                                            |
 | -------- | -------: | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 2164 行；workspace 1959 行；Claude 873 行；ACP 926 行；Pi 581 行      | workspace center-column render shell 仍集中在主屏                                               |
-| 安全设计 |      9.3 | relay E2EE 单调 nonce；Ed25519 socket 认证；AI/Claude SDK 与 Zod 4 迁移后生产依赖 0 high/0 critical       | Expo/EAS 工具链仍有 moderate 通告；relay 认证升级需要持续兼容性发布管理                         |
+| 安全设计 |      9.4 | relay E2EE 单调 nonce；Ed25519 socket 认证；兼容补丁后生产审计 19 项且 0 high/0 critical                  | Expo/EAS、UUID 与 Babel major 风险仍需专项迁移；relay 认证升级需要持续兼容性发布管理            |
 | 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop        | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
 | 代码质量 |      9.7 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；daemon 17 个 schema 具备独立契约与聚合测试 | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
 | 综合     |  **9.6** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                               | 继续提升需要完成 Expo/EAS、provider adapters 与 App 工作台拆分                                  |
@@ -45,6 +45,7 @@
 - 2026-07-13：workspace/worktree/directory/editor/file explorer 等 14 个 inbound、18 个 outbound schema 与 descriptor/setup 状态提取到 `workspace/messages.ts`；附件归一化独立到 `agent/attachments.ts`，旧入口保持兼容，主文件降至 3339 行。
 - 2026-07-13：provider discovery/snapshot/diagnostic/tooling/usage/recent sessions 的 11 个 inbound、12 个 outbound schema 与 model/mode/feature 基础契约提取到 `provider/messages.ts`；`agent-types.ts` 解除对 god-file 的附件类型反向依赖，主文件降至 2860 行。
 - 2026-07-13：OpenAI SDK 升至 6.46.0；Zod 直接依赖统一到 4.3.6，既有 schema 通过 `zod/v3` 保持语义；Claude Agent SDK 0.2.141、Anthropic SDK 0.93.0 与 MCP SDK 1.29.0 peer 对齐，Claude/Anthropic 生产通告清零。
+- 2026-07-13：生产路径中的 `ajv`、`brace-expansion`、`js-yaml`、`postcss` 与 `tar` 完成兼容补丁升级；npm 10.9.4 clean-install dry-run 接受新锁，生产审计从 24 降至 19 且保持 0 high/0 critical。
 - 2026-07-13：Skills 与 MCP server 管理的配置、scope、payload 及 8 个 inbound/8 个 outbound schema 提取到 `agent/extensions.ts`；总 union 改由只读 tuple 聚合，旧 `messages` 入口兼容重导出并新增显式 package subpath，主文件降至 2436 行。
 - 2026-07-13：daemon status/pairing/config/project config/lifecycle 的 8 个 inbound、6 个 outbound、3 个 status payload 与 mutable config 提取到 `daemon/messages.ts`；旧入口兼容重导出并新增显式 package subpath，主文件降至 2164 行。
 - 2026-07-13：移动端 workspace tab switcher、presentation fallback、tab menu 与全部局部样式提取到 `workspace-mobile-tab-switcher.tsx`；主屏保持 props/行为兼容并从 5453 降至 4926 行。
@@ -88,7 +89,7 @@
 
 ## 最高优先级剩余项
 
-1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK 与 Zod 4 已完成；剩余 Expo/EAS framework major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
+1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK、Zod 4 及五类兼容型生产补丁已完成；剩余 Expo/EAS、`uuid` 与 Babel major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
 2. **P1 provider 文件拆分（核心完成）**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP/Pi/Claude 均已完成 composition-first 核心拆分；后续只在真实复杂度或缺陷证明收益时继续分域，不再按行数做低收益碎片化拆分。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon 域提取并降至 2164 行，下一步评估 usage/voice 分域并保留 agent core 的聚合职责。
 4. **P2 app 工作台拆分（进行中）**：移动端 navigation、workspace command routing、layout/setup persistence/hydration、tab/pane/dock/content、environment panel state/data/view、header view、explorer 与 open-intent 已提取，`workspace-screen.tsx` 从 5453 降至 1959 行；下一步评估 center-column render shell，保持 native/web/electron surface 测试分离。
@@ -117,6 +118,7 @@
 - 2026-07-13 Protocol workspace/attachment messages 批次：protocol typecheck/build、6 个目标文件 lint、44 个聚焦断言及 client/server/app/CLI 消费者 typecheck 通过
 - 2026-07-13 Protocol provider messages 批次：protocol typecheck/build、8 个目标文件 lint、87 个聚焦断言及 client/server/app/CLI 消费者 typecheck 通过
 - 2026-07-13 Claude SDK/Zod 4 批次：严格 npm peer 解析及 `npm ls` 通过；protocol/client/server build、protocol/client/server/app/desktop/CLI typecheck、88 个改动文件 lint、148 个聚焦断言通过；生产审计 24 项且 0 high/0 critical，Claude/Anthropic 通告为 0
+- 2026-07-13 兼容型依赖安全补丁批次：npm 10.9.4 clean-install dry-run、lockfile-lint、目标格式检查与生产审计通过；生产通告从 24 降至 19，五类已修通告清零，0 high/0 critical
 - 2026-07-13 Protocol agent extension 批次：protocol typecheck/build、3 个目标文件 lint、18 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 Protocol daemon messages 批次：protocol typecheck/build、3 个目标文件 lint、32 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 App workspace mobile navigation 批次：App typecheck、2 个目标文件 lint 与 15 个 tab menu/layout 聚焦断言通过；未以 web 预览替代 native mobile 验证

@@ -56,3 +56,10 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 - Unified direct Zod dependencies in protocol, client, app, desktop, and server on 4.3.6. Existing schemas import the official `zod/v3` compatibility API so wire and persistence parsing semantics remain stable while the dependency graph uses one package version.
 - Upgraded `@anthropic-ai/claude-agent-sdk` to 0.2.141, `@anthropic-ai/sdk` to 0.93.0, and direct `@modelcontextprotocol/sdk` to 1.29.0 without `--legacy-peer-deps` or `--force`.
 - Production audit moved from 26 to 24 findings, remains at 0 high / 0 critical, and no longer reports Claude or Anthropic packages. Remaining moderate findings are primarily Expo/EAS framework-major work.
+
+## Resolved Follow-up - 2026-07-13 (Compatible Transitive Patches)
+
+- Upgraded the production dependency paths for `ajv`, `brace-expansion`, `js-yaml`, `postcss`, and `tar` to compatible patched releases.
+- Regenerated the lockfile with npm 10.9.4 so workspace-local `@types/node` and cross-platform optional package entries remain complete for clean installs.
+- Production audit moved from 24 to 19 findings and remains at 0 high / 0 critical. The five resolved advisory families no longer appear.
+- Remaining findings are the Expo/EAS framework-major cluster, the `uuid` major migration coupled to Expo `xcode`, and a low-severity Babel issue without a Babel 7 patch release.
