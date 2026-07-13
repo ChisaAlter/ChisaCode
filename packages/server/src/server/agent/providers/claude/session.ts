@@ -1,13 +1,10 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
 import { promises } from "node:fs";
-import path from "node:path";
 import {
   type CanUseTool,
   type PermissionMode,
   type Query,
   type SDKMessage,
-  type SDKPartialAssistantMessage,
   type SDKResultMessage,
   type SDKSystemMessage,
   type SDKUserMessage,
@@ -20,7 +17,6 @@ import {
 import { normalizeClaudeRuntimeModelId } from "./models.js";
 import {
   CLAUDE_CAPABILITIES,
-  resolveClaudeConfigDir,
   type ClaudeAgentConfig,
   type ClaudeAgentSessionOptions,
 } from "./client.js";
@@ -28,7 +24,6 @@ import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
 import {
   extractContextWindowSize,
   extractSessionIdRaw,
-  isClaudeContentChunk,
   isImageMimeType,
   readContextWindowUsedTokensFromTaskProgress,
   readStreamRequestInputTokens,
@@ -45,22 +40,22 @@ import {
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { ClaudePermissionController } from "./permission-controller.js";
 import { ClaudeOptionsBuilder, summarizeClaudeOptionsForLog } from "./options-builder.js";
+import {
+  CLAUDE_INTERRUPT_TOOL_USE_PLACEHOLDER as INTERRUPT_TOOL_USE_PLACEHOLDER,
+  ClaudeSessionHistory,
+} from "./session-history.js";
 import { ClaudeToolCallHandler, type ClaudeToolUseCacheEntry } from "./tool-call-handlers.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
-  convertClaudeHistoryEntry,
   isClaudeTranscriptNoiseText,
-  isSyntheticHistoryUserEntry,
   isSyntheticUserEntry,
   isToolResultUserEntry,
   readCompactionMetadata,
-  type ClaudeHistoryEntry,
 } from "./history-converter.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { claudeQuery, type ClaudeQueryFactory } from "./query.js";
 import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
-import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
 
 import {
   getAgentStreamEventTurnId,
@@ -95,11 +90,6 @@ interface AsyncMessageInput<T> {
   push: (item: T) => void;
   end: () => void;
   iterable: AsyncIterable<T>;
-}
-
-interface PersistedTimelineEntry {
-  item: AgentTimelineItem;
-  timestamp?: string;
 }
 
 interface ClaudeRewindTurnAnchor {
@@ -147,7 +137,6 @@ const REWIND_COMMAND: AgentSlashCommand = {
   description: "Rewind tracked files to a previous user message",
   argumentHint: "[user_message_uuid]",
 };
-const INTERRUPT_TOOL_USE_PLACEHOLDER = "[Request interrupted by user for tool use]";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface SlashCommandInvocation {
@@ -176,10 +165,6 @@ function isClaudeThinkingEffort(value: string | null | undefined): value is Clau
 }
 function isClaudeThinkingOption(value: string | null | undefined): value is ClaudeThinkingOption {
   return value === "ultracode" || isClaudeThinkingEffort(value);
-}
-
-function sanitizeClaudeProjectPath(cwd: string): string {
-  return cwd.replace(/[\\/._:]/g, "-");
 }
 
 const MAX_RECENT_STDERR_CHARS = 4000;
@@ -226,8 +211,7 @@ export class ClaudeAgentSession implements AgentSession {
   private readonly messageRouter: ClaudeMessageRouter;
   private readonly toolCallHandler: ClaudeToolCallHandler;
   private readonly sidechainTracker: ClaudeSidechainTracker;
-  private persistedHistory: PersistedTimelineEntry[] = [];
-  private historyPending = false;
+  private readonly historyController: ClaudeSessionHistory;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private lastOptionsModel: string | null = null;
   private lastRuntimeModel: string | null = null;
@@ -284,6 +268,16 @@ export class ClaudeAgentSession implements AgentSession {
     this.sidechainTracker = new ClaudeSidechainTracker({
       getToolInput: (toolUseId) => this.toolCallHandler.getToolInput(toolUseId),
     });
+    this.historyController = new ClaudeSessionHistory({
+      getCwd: () => this.config.cwd,
+      getSdkEnv: () => this.optionsBuilder.buildSdkEnv(this.config.extra?.claude),
+      rememberUserMessageId: (messageId) => this.rememberUserMessageId(messageId),
+      rememberRewindUserAnchor: (messageId) => this.rememberRewindUserAnchor(messageId),
+      rememberRewindAssistantAnchor: (messageId) => this.rememberRewindAssistantAnchor(messageId),
+      handleToolUseStart: (block, target) => this.toolCallHandler.handleToolUseStart(block, target),
+      handleToolResult: (block, target) => this.toolCallHandler.handleToolResult(block, target),
+      updatePartialEventState: (event) => this.toolCallHandler.updatePartialEventState(event),
+    });
     this.messageRouter = new ClaudeMessageRouter({
       logger: this.logger,
       getTraceContext: () => ({
@@ -309,7 +303,7 @@ export class ClaudeAgentSession implements AgentSession {
       }
       this.claudeSessionId = handle.sessionId;
       this.persistence = handle;
-      this.loadPersistedHistory(handle.sessionId);
+      this.historyController.load(handle.sessionId);
     } else {
       this.claudeSessionId = null;
       this.persistence = null;
@@ -571,20 +565,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
-    if (!this.historyPending || this.persistedHistory.length === 0) {
-      return;
-    }
-    const history = this.persistedHistory;
-    this.persistedHistory = [];
-    this.historyPending = false;
-    for (const entry of history) {
-      yield {
-        type: "timeline",
-        item: entry.item,
-        provider: "claude",
-        timestamp: entry.timestamp,
-      };
-    }
+    yield* this.historyController.stream();
   }
 
   async getAvailableModes(): Promise<AgentMode[]> {
@@ -736,7 +717,7 @@ export class ClaudeAgentSession implements AgentSession {
       // (see `claude --help`), so the SDK's persistSession=false is silently dropped
       // in stream-json mode. Sweep the transcript ourselves so ephemeral runs
       // (metadata generator, branch-name generator) don't show up as resumable.
-      const historyPath = this.resolveHistoryPath(this.claudeSessionId);
+      const historyPath = this.historyController.resolvePath(this.claudeSessionId);
       if (historyPath) {
         try {
           await promises.rm(historyPath, { force: true });
@@ -954,11 +935,8 @@ export class ClaudeAgentSession implements AgentSession {
       }
     };
 
-    for (let idx = this.persistedHistory.length - 1; idx >= 0; idx -= 1) {
-      const entry = this.persistedHistory[idx];
-      if (entry?.item.type === "user_message") {
-        pushUnique(entry.item.messageId);
-      }
+    for (const messageId of this.historyController.getRewindCandidateUserMessageIds()) {
+      pushUnique(messageId);
     }
     for (let idx = this.userMessageIds.length - 1; idx >= 0; idx -= 1) {
       pushUnique(this.userMessageIds[idx]);
@@ -974,12 +952,11 @@ export class ClaudeAgentSession implements AgentSession {
     this.persistence = null;
     this.cachedRuntimeInfo = null;
     this.queryRestartNeeded = true;
-    this.persistedHistory = [];
-    this.historyPending = false;
+    this.historyController.clear();
     this.userMessageIds = [];
     this.emittedUserMessageIds.clear();
     this.rewindTurnAnchors.length = 0;
-    this.loadPersistedHistory(sessionId);
+    this.historyController.load(sessionId);
     if (oldSessionId && oldSessionId !== sessionId) {
       this.dispatchEvents([
         {
@@ -1003,8 +980,7 @@ export class ClaudeAgentSession implements AgentSession {
     this.persistence = null;
     this.cachedRuntimeInfo = null;
     this.queryRestartNeeded = true;
-    this.persistedHistory = [];
-    this.historyPending = false;
+    this.historyController.clear();
     this.userMessageIds = [];
     this.emittedUserMessageIds.clear();
     this.rewindTurnAnchors.length = 0;
@@ -1454,8 +1430,7 @@ export class ClaudeAgentSession implements AgentSession {
       this.input = null;
     }
     this.persistence = null;
-    this.persistedHistory = [];
-    this.historyPending = false;
+    this.historyController.clear();
     this.cachedRuntimeInfo = null;
     this.queryRestartNeeded = false;
     this.autonomousTurn = null;
@@ -1531,7 +1506,7 @@ export class ClaudeAgentSession implements AgentSession {
         this.appendUserMessageEvents(message, events);
         break;
       case "assistant": {
-        const timelineItems = this.mapBlocksToTimeline(message.message.content, {
+        const timelineItems = this.historyController.mapBlocksToTimeline(message.message.content, {
           suppressAssistantText: options?.suppressAssistantText ?? false,
           suppressReasoning: options?.suppressReasoning ?? false,
         });
@@ -1717,7 +1692,7 @@ export class ClaudeAgentSession implements AgentSession {
     messageId: string | undefined,
     events: AgentStreamEvent[],
   ): void {
-    const timelineItems = this.mapBlocksToTimeline(content, {
+    const timelineItems = this.historyController.mapBlocksToTimeline(content, {
       textMessageType: "user_message",
     });
     for (const item of timelineItems) {
@@ -1742,7 +1717,7 @@ export class ClaudeAgentSession implements AgentSession {
     if (usageUpdatedEvent) {
       events.push(usageUpdatedEvent);
     }
-    const timelineItems = this.mapPartialEvent(message.event, {
+    const timelineItems = this.historyController.mapPartialEvent(message.event, {
       suppressAssistantText: options?.suppressAssistantText ?? false,
       suppressReasoning: options?.suppressReasoning ?? false,
     });
@@ -2073,273 +2048,6 @@ export class ClaudeAgentSession implements AgentSession {
 
   private rejectAllPendingPermissions(error: Error): void {
     this.permissionController.rejectAll(error);
-  }
-
-  private loadPersistedHistory(sessionId: string): void {
-    try {
-      const historyPath = this.resolveHistoryPath(sessionId);
-      if (!historyPath || !fs.existsSync(historyPath)) {
-        return;
-      }
-      this.ingestPersistedHistory(fs.readFileSync(historyPath, "utf8"));
-    } catch {
-      // ignore history load failures
-    }
-  }
-
-  private ingestPersistedHistory(content: string): void {
-    if (!content) {
-      return;
-    }
-
-    const timeline: PersistedTimelineEntry[] = [];
-    for (const line of content.split(/\r?\n/)) {
-      this.ingestPersistedHistoryLine(line, timeline);
-    }
-
-    if (timeline.length > 0) {
-      this.persistedHistory = [...this.persistedHistory, ...timeline];
-      this.historyPending = true;
-    }
-  }
-
-  private ingestPersistedHistoryLine(line: string, timeline: PersistedTimelineEntry[]): void {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    let entry: Record<string, unknown>;
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-      const record = toObjectRecord(parsed);
-      if (!record) {
-        return;
-      }
-      entry = record;
-    } catch {
-      return;
-    }
-
-    if (entry.isSidechain) {
-      return;
-    }
-
-    const historyTimestamp = normalizeProviderReplayTimestamp(entry.timestamp);
-    const items = this.convertHistoryEntry(entry);
-    const isVisibleUserEntry =
-      entry.type === "user" &&
-      typeof entry.uuid === "string" &&
-      !isSyntheticHistoryUserEntry(entry) &&
-      !isToolResultUserEntry(entry);
-    if (isVisibleUserEntry && typeof entry.uuid === "string") {
-      this.rememberUserMessageId(entry.uuid);
-      this.rememberRewindUserAnchor(entry.uuid);
-    }
-    if (entry.type === "assistant" && typeof entry.uuid === "string") {
-      this.rememberRewindAssistantAnchor(entry.uuid);
-    }
-
-    if (items.length > 0) {
-      timeline.push(
-        ...items.map((item) => ({
-          item,
-          timestamp: historyTimestamp ?? undefined,
-        })),
-      );
-    }
-  }
-
-  private resolveHistoryPath(sessionId: string): string | null {
-    const cwd = this.config.cwd;
-    if (!cwd) return null;
-    const configDir = resolveClaudeConfigDir(
-      this.optionsBuilder.buildSdkEnv(this.config.extra?.claude),
-    );
-    const candidates = [cwd];
-    try {
-      const realCwd = fs.realpathSync(cwd);
-      if (realCwd !== cwd) {
-        candidates.push(realCwd);
-      }
-    } catch {
-      // Fall back to the configured cwd when the path has already disappeared.
-    }
-    for (const candidate of candidates) {
-      const sanitized = sanitizeClaudeProjectPath(candidate);
-      const historyPath = path.join(configDir, "projects", sanitized, `${sessionId}.jsonl`);
-      if (fs.existsSync(historyPath)) {
-        return historyPath;
-      }
-    }
-    const sanitized = sanitizeClaudeProjectPath(cwd);
-    return path.join(configDir, "projects", sanitized, `${sessionId}.jsonl`);
-  }
-
-  private convertHistoryEntry(entry: ClaudeHistoryEntry): AgentTimelineItem[] {
-    return convertClaudeHistoryEntry(entry, (content) => this.mapBlocksToTimeline(content));
-  }
-
-  // Maps Claude content blocks into AgentTimelineItems.
-  //
-  // textMessageType controls what type text blocks emit:
-  //   - "assistant_message" (default): one item per text block (streaming granularity)
-  //   - "user_message": coalesces all text blocks into a single user_message
-  //     (matches extractUserMessageText semantics: trim each block, join with "\n\n")
-  //
-  // suppressAssistantText only applies when textMessageType is "assistant_message" — user text
-  // must never be suppressed since the TimelineAssembler only handles assistant text.
-  //
-  // NOTE: convertClaudeHistoryEntry uses extractUserMessageText directly instead of this function
-  // for user entries. Both paths must produce equivalent user_message items.
-  private mapBlocksToTimeline(
-    content: string | ReadonlyArray<unknown>,
-    options?: {
-      textMessageType?: "assistant_message" | "user_message";
-      suppressAssistantText?: boolean;
-      suppressReasoning?: boolean;
-    },
-  ): AgentTimelineItem[] {
-    const textMessageType = options?.textMessageType ?? "assistant_message";
-    const suppressText =
-      textMessageType === "assistant_message" && (options?.suppressAssistantText ?? false);
-    const suppressReasoning = options?.suppressReasoning ?? false;
-
-    if (typeof content === "string") {
-      if (
-        !content ||
-        content === INTERRUPT_TOOL_USE_PLACEHOLDER ||
-        isClaudeTranscriptNoiseText(content)
-      ) {
-        return [];
-      }
-      if (suppressText) {
-        return [];
-      }
-      return [{ type: textMessageType, text: content }];
-    }
-
-    const items: AgentTimelineItem[] = [];
-    // User SDK entries can arrive as multiple text blocks, but ChisaCode treats them as one message.
-    const userTextParts: string[] = [];
-    for (const block of content) {
-      if (!isClaudeContentChunk(block)) {
-        continue;
-      }
-      this.mapBlockToTimeline(block, {
-        items,
-        userTextParts,
-        textMessageType,
-        suppressText,
-        suppressReasoning,
-      });
-    }
-
-    if (textMessageType === "user_message" && userTextParts.length > 0) {
-      items.unshift({
-        type: "user_message",
-        text: userTextParts.join("\n\n"),
-      });
-    }
-
-    return items;
-  }
-
-  private appendTextBlockToTimeline(
-    block: ClaudeContentChunk,
-    context: {
-      items: AgentTimelineItem[];
-      userTextParts: string[];
-      textMessageType: "assistant_message" | "user_message";
-      suppressText: boolean;
-    },
-  ): void {
-    const { items, userTextParts, textMessageType, suppressText } = context;
-    const text = typeof block.text === "string" ? block.text : "";
-    if (!text || text === INTERRUPT_TOOL_USE_PLACEHOLDER || isClaudeTranscriptNoiseText(text)) {
-      return;
-    }
-    if (textMessageType === "user_message") {
-      const trimmed = text.trim();
-      if (trimmed) {
-        userTextParts.push(trimmed);
-      }
-      return;
-    }
-    if (!suppressText) {
-      items.push({ type: "assistant_message", text });
-    }
-  }
-
-  private mapBlockToTimeline(
-    block: ClaudeContentChunk,
-    context: {
-      items: AgentTimelineItem[];
-      userTextParts: string[];
-      textMessageType: "assistant_message" | "user_message";
-      suppressText: boolean;
-      suppressReasoning: boolean;
-    },
-  ): void {
-    switch (block.type) {
-      case "text":
-      case "text_delta":
-        this.appendTextBlockToTimeline(block, context);
-        break;
-      case "thinking":
-      case "thinking_delta":
-        if (typeof block.thinking === "string" && block.thinking && !context.suppressReasoning) {
-          context.items.push({ type: "reasoning", text: block.thinking });
-        }
-        break;
-      case "tool_use":
-      case "server_tool_use":
-      case "mcp_tool_use":
-        this.toolCallHandler.handleToolUseStart(block, context.items);
-        break;
-      case "tool_result":
-      case "mcp_tool_result":
-      case "web_fetch_tool_result":
-      case "web_search_tool_result":
-      case "code_execution_tool_result":
-      case "bash_code_execution_tool_result":
-      case "text_editor_code_execution_tool_result":
-        this.toolCallHandler.handleToolResult(block, context.items);
-        break;
-      default:
-        break;
-    }
-  }
-
-  private mapPartialEvent(
-    event: SDKPartialAssistantMessage["event"],
-    options?: {
-      suppressAssistantText?: boolean;
-      suppressReasoning?: boolean;
-    },
-  ): AgentTimelineItem[] {
-    if (this.toolCallHandler.updatePartialEventState(event)) {
-      return [];
-    }
-
-    switch (event.type) {
-      case "content_block_start":
-        return isClaudeContentChunk(event.content_block)
-          ? this.mapBlocksToTimeline([event.content_block], {
-              suppressAssistantText: options?.suppressAssistantText,
-              suppressReasoning: options?.suppressReasoning,
-            })
-          : [];
-      case "content_block_delta":
-        return isClaudeContentChunk(event.delta)
-          ? this.mapBlocksToTimeline([event.delta], {
-              suppressAssistantText: options?.suppressAssistantText,
-              suppressReasoning: options?.suppressReasoning,
-            })
-          : [];
-      default:
-        return [];
-    }
   }
 }
 

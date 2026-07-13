@@ -229,8 +229,9 @@
   - `opencode/message-translator.ts` 独立拥有 message/part/delta、structured output、stream dedupe、usage/context 与 tool/compaction 映射；event translator 降至 226 行兼容路由 façade
   - `ClaudePermissionController` 独立拥有 SDK `canUseTool`、pending request map、abort cleanup、question/plan/tool resolution 与 close rejection；Claude Session 从 3001 行降至 2799 行
   - `ClaudeOptionsBuilder` 独立拥有 SDK env overlays、Model Gateway override、thinking/ultracode、fast settings、MCP/system prompt、session binding 与 credential-safe options summary；Claude Session 降至 2391 行
+  - `ClaudeSessionHistory` 独立拥有 transcript path/load/JSONL ingest、单次 replay、rewind candidate 与 live/history block mapping；Claude Session 降至 2099 行
   - 未接线的 `providers/base/` speculative 基类已删除；复核确认其默认生命周期语义不适合直接套用到 Codex/Claude/OpenCode
-- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode 主事件路由完成收敛；Claude permission 与 options 构建已独立。下一步拆分 Claude message translation 与 persistence。
+- **状态**：进行中；三个 provider 均已建立稳定 façade/client/session 边界，OpenCode 主事件路由完成收敛；Claude permission/options/persisted history 已独立。下一步拆分 Claude message translation 与 rewind/session lifecycle。
 
 ---
 
