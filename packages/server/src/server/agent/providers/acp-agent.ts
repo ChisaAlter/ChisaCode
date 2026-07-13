@@ -64,6 +64,7 @@ import {
   selectACPPermissionOption,
   type ACPToolSnapshot,
 } from "./acp/tool-call-mapper.js";
+import { ACPCommandCatalog } from "./acp/command-catalog.js";
 import { ACPForegroundTurnController } from "./acp/foreground-turn-controller.js";
 import { ACPSessionUpdateController } from "./acp/session-update-controller.js";
 import {
@@ -519,6 +520,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private readonly pendingPermissions = new Map<string, PendingPermission>();
   private readonly terminalController: ACPTerminalController;
   private readonly sessionUpdates: ACPSessionUpdateController;
+  private readonly commandCatalog: ACPCommandCatalog;
   private readonly persistedHistory: AgentTimelineItem[] = [];
   private readonly initialHandle?: AgentPersistenceHandle;
 
@@ -535,11 +537,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private currentTitle: string | null = null;
   private lastActivityAt: string | null = null;
   private configOptions: SessionConfigOption[] = [];
-  private cachedCommands: AgentSlashCommand[] = [];
-  private commandsReadyDeferred: { promise: Promise<void>; resolve: () => void } | null = null;
-  private commandsReadySettled = false;
-  private waitForInitialCommands: boolean;
-  private initialCommandsWaitTimeoutMs: number;
   private readonly foregroundTurn: ACPForegroundTurnController;
   private closed = false;
   private historyPending = false;
@@ -569,6 +566,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       baseCwd: this.config.cwd,
       runtimeSettings: this.runtimeSettings,
     });
+    this.commandCatalog = new ACPCommandCatalog({
+      waitForInitialCommands: options.waitForInitialCommands ?? false,
+      initialWaitTimeoutMs: options.initialCommandsWaitTimeoutMs ?? 1500,
+    });
     this.foregroundTurn = new ACPForegroundTurnController({
       provider: this.provider,
       getSessionId: () => this.sessionId,
@@ -586,20 +587,13 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       onConfigOptionUpdate: (update) => this.handleConfigOptionUpdate(update),
       onSessionInfoUpdate: (update) => this.handleSessionInfoUpdate(update),
       onAvailableCommandsUpdate: (update) => {
-        this.cachedCommands = update.availableCommands.map((command) => ({
-          name: command.name,
-          description: command.description,
-          argumentHint: "",
-        }));
-        this.settleCommandsReady();
+        this.commandCatalog.update(update.availableCommands);
       },
     });
     this.currentMode = config.modeId ?? null;
     this.currentModel = config.model ?? null;
     this.thinkingOptionId = config.thinkingOptionId ?? null;
     this.currentTitle = config.title ?? null;
-    this.waitForInitialCommands = options.waitForInitialCommands ?? false;
-    this.initialCommandsWaitTimeoutMs = options.initialCommandsWaitTimeoutMs ?? 1500;
   }
 
   get id(): string | null {
@@ -728,60 +722,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     return this.currentMode;
   }
 
-  private ensureCommandsReadyDeferred(): void {
-    if (this.commandsReadyDeferred || this.commandsReadySettled || this.cachedCommands.length > 0) {
-      return;
-    }
-
-    let resolve!: () => void;
-    const promise = new Promise<void>((r) => {
-      resolve = r;
-    });
-    this.commandsReadyDeferred = { promise, resolve };
-  }
-
-  private settleCommandsReady(): void {
-    if (this.commandsReadySettled) {
-      return;
-    }
-    this.commandsReadySettled = true;
-    this.commandsReadyDeferred?.resolve();
-    this.commandsReadyDeferred = null;
-  }
-
-  private async waitForCommandsReady(): Promise<void> {
-    const deferred = this.commandsReadyDeferred;
-    if (!deferred) {
-      return;
-    }
-
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    try {
-      await Promise.race([
-        deferred.promise,
-        new Promise<void>((resolve) => {
-          timer = setTimeout(resolve, this.initialCommandsWaitTimeoutMs);
-        }),
-      ]);
-    } finally {
-      if (timer) {
-        clearTimeout(timer);
-      }
-    }
-  }
-
   async listCommands(): Promise<AgentSlashCommand[]> {
-    if (this.cachedCommands.length > 0) {
-      return this.cachedCommands;
-    }
-    if (!this.waitForInitialCommands || this.closed) {
-      return this.cachedCommands;
-    }
-
-    this.ensureCommandsReadyDeferred();
-    await this.waitForCommandsReady();
-    this.settleCommandsReady();
-    return this.cachedCommands;
+    return this.commandCatalog.list();
   }
 
   async setMode(modeId: string): Promise<void> {
@@ -1161,7 +1103,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     }
     this.closed = true;
 
-    this.settleCommandsReady();
+    this.commandCatalog.close();
 
     for (const pending of this.pendingPermissions.values()) {
       pending.resolve({ outcome: { outcome: "cancelled" } });
