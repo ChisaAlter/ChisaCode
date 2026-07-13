@@ -86,7 +86,7 @@ import {
   useWorkspaceLayoutStoreHydrated,
 } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
-import { normalizeWorkspaceTabTarget, workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
+import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
 import {
   getHostRuntimeStore,
   useHostRuntimeClient,
@@ -122,6 +122,7 @@ import { useWorkspaceTabOpenActions } from "@/screens/workspace/use-workspace-ta
 import { useWorkspaceTabCloseActions } from "@/screens/workspace/use-workspace-tab-close-actions";
 import { useWorkspaceDockActions } from "@/screens/workspace/use-workspace-dock-actions";
 import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace-pane-layout-actions";
+import { useWorkspacePaneContentModels } from "@/screens/workspace/use-workspace-pane-content-models";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   getFallbackTabOptionDescription,
@@ -145,11 +146,9 @@ import {
 } from "@/workspace-tabs/agent-visibility";
 import { deriveWorkspacePaneState } from "@/screens/workspace/workspace-pane-state";
 import {
-  buildWorkspacePaneContentModel,
   WorkspacePaneContent,
   type WorkspacePaneContentModel,
 } from "@/screens/workspace/workspace-pane-content";
-import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
 
 import { useSubagentsForParent, type SubagentRow } from "@/subagents/select";
@@ -164,7 +163,6 @@ import {
 } from "@/utils/host-routes";
 import { canCreateWorkspaceTerminal } from "@/screens/workspace/terminals/state";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
-import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import type { TodoEntry, TurnChangesItem } from "@/types/stream";
 import {
   buildWorkspaceActivityItems,
@@ -398,32 +396,6 @@ const MobileMountedTabSlot = memo(function MobileMountedTabSlot({
     </View>
   );
 });
-
-function useStableTabDescriptorMap(tabDescriptors: WorkspaceTabDescriptor[]) {
-  const cacheRef = useRef(new Map<string, WorkspaceTabDescriptor>());
-  const tabDescriptorMap = useMemo(() => {
-    const next = new Map<string, WorkspaceTabDescriptor>();
-    for (const tabDescriptor of tabDescriptors) {
-      const cachedDescriptor = cacheRef.current.get(tabDescriptor.tabId);
-      if (
-        cachedDescriptor &&
-        cachedDescriptor.key === tabDescriptor.key &&
-        cachedDescriptor.kind === tabDescriptor.kind &&
-        workspaceTabTargetsEqual(cachedDescriptor.target, tabDescriptor.target)
-      ) {
-        next.set(tabDescriptor.tabId, cachedDescriptor);
-        continue;
-      }
-      next.set(tabDescriptor.tabId, tabDescriptor);
-    }
-    return next;
-  }, [tabDescriptors]);
-  useEffect(() => {
-    cacheRef.current = tabDescriptorMap;
-  }, [tabDescriptorMap]);
-
-  return tabDescriptorMap;
-}
 
 export function WorkspaceScreen({ serverId, workspaceId, isRouteFocused }: WorkspaceScreenProps) {
   const navigationFocused = useIsFocused();
@@ -2692,95 +2664,28 @@ function WorkspaceScreenContent({
     }
     document.title = t("workspace.title");
   }, [activeTabDescriptor, isRouteFocused, t]);
-  const buildPaneContentModel = useCallback(
-    (input: {
-      tab: WorkspaceTabDescriptor;
-      paneId?: string | null;
-      focusPaneBeforeOpen?: boolean;
-    }) =>
-      buildWorkspacePaneContentModel({
-        tab: input.tab,
-        normalizedServerId,
-        normalizedWorkspaceId,
-        onOpenTab: (target) => {
-          if (!persistenceKey) {
-            return;
-          }
-          if (input.focusPaneBeforeOpen && input.paneId) {
-            focusWorkspacePane(persistenceKey, input.paneId);
-          }
-          const tabId = openWorkspaceChildTabFocused(persistenceKey, target, input.tab.tabId);
-          if (tabId) {
-            navigateToTabId(tabId);
-          }
-        },
-        onCloseCurrentTab: () => {
-          void handleCloseTabById(input.tab.tabId);
-        },
-        onRetargetCurrentTab: (target) => {
-          if (!persistenceKey) {
-            return;
-          }
-          retargetWorkspaceTab(persistenceKey, input.tab.tabId, target);
-        },
-        onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => {
-          if (input.focusPaneBeforeOpen && input.paneId && persistenceKey) {
-            focusWorkspacePane(persistenceKey, input.paneId);
-          }
-          if (request.disposition === "side") {
-            handleOpenFileFromChatInSidePane({
-              location: request.location,
-              sourcePaneId: input.paneId ?? undefined,
-              parentTabId: input.tab.tabId,
-            });
-            return;
-          }
-          handleOpenFileFromChat(request.location, { parentTabId: input.tab.tabId });
-        },
-        onOpenImportSheet: openImportSheet,
-      }),
-    [
-      handleCloseTabById,
-      handleOpenFileFromChat,
-      handleOpenFileFromChatInSidePane,
-      focusWorkspacePane,
-      navigateToTabId,
-      normalizedServerId,
-      normalizedWorkspaceId,
-      openImportSheet,
-      openWorkspaceChildTabFocused,
-      persistenceKey,
-      retargetWorkspaceTab,
-    ],
-  );
-  const focusedPaneId = useMemo(
-    () => focusedPaneTabState.pane?.id ?? null,
-    [focusedPaneTabState.pane],
-  );
-  const focusedPaneTabIds = useMemo(() => tabs.map((tab) => tab.tabId), [tabs]);
-  const focusedPaneTabDescriptorMap = useStableTabDescriptorMap(tabs);
-  const { mountedTabIds: mountedFocusedPaneTabIdsSet } = useMountedTabSet({
+  const {
+    focusedPaneId,
+    mountedFocusedPaneTabIds,
+    focusedPaneTabDescriptorMap,
+    buildMobilePaneContentModel,
+    buildDesktopPaneContentModel,
+  } = useWorkspacePaneContentModels({
+    normalizedServerId,
+    normalizedWorkspaceId,
+    persistenceKey,
+    tabs,
     activeTabId,
-    allTabIds: focusedPaneTabIds,
-    cap: 3,
+    focusedPaneId: focusedPaneTabState.pane?.id ?? null,
+    focusWorkspacePane,
+    openWorkspaceChildTabFocused,
+    navigateToTabId,
+    handleCloseTabById,
+    retargetWorkspaceTab,
+    handleOpenFileFromChat,
+    handleOpenFileFromChatInSidePane,
+    openImportSheet,
   });
-  const mountedFocusedPaneTabIds = useMemo(
-    () => focusedPaneTabIds.filter((tabId) => mountedFocusedPaneTabIdsSet.has(tabId)),
-    [focusedPaneTabIds, mountedFocusedPaneTabIdsSet],
-  );
-  const buildMobilePaneContentModel = useCallback(
-    function buildMobilePaneContentModel(input: {
-      paneId: string | null;
-      tab: WorkspaceTabDescriptor;
-    }) {
-      return buildPaneContentModel({
-        tab: input.tab,
-        paneId: input.paneId,
-        focusPaneBeforeOpen: false,
-      });
-    },
-    [buildPaneContentModel],
-  );
   const content = renderWorkspaceContent({
     isMissingWorkspaceExecutionAuthority,
     activeTabDescriptor,
@@ -2793,17 +2698,6 @@ function WorkspaceScreenContent({
     noTabsAvailableText: t("workspace.screen.noTabsAvailable"),
     buildMobilePaneContentModel,
   });
-
-  const buildDesktopPaneContentModel = useCallback(
-    function buildDesktopPaneContentModel(input: { paneId: string; tab: WorkspaceTabDescriptor }) {
-      return buildPaneContentModel({
-        tab: input.tab,
-        paneId: input.paneId,
-        focusPaneBeforeOpen: true,
-      });
-    },
-    [buildPaneContentModel],
-  );
 
   const renderSplitPaneEmptyState = useCallback(
     function renderSplitPaneEmptyState() {

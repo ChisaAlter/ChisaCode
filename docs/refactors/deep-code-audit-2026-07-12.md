@@ -4,7 +4,7 @@
 
 | 维度     | 当前评分 | 主要证据                                                                                                  | 距离 10 分的核心差距                                                                            |
 | -------- | -------: | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 2164 行；workspace 3809 行；Claude 873 行；ACP 926 行；Pi 581 行      | workspace pane content-model 与 environment-panel state 仍集中在主屏                            |
+| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 2164 行；workspace 3703 行；Claude 873 行；ACP 926 行；Pi 581 行      | workspace environment-panel visibility/state 仍集中在主屏                                       |
 | 安全设计 |      9.3 | relay E2EE 单调 nonce；Ed25519 socket 认证；AI/Claude SDK 与 Zod 4 迁移后生产依赖 0 high/0 critical       | Expo/EAS 工具链仍有 moderate 通告；relay 认证升级需要持续兼容性发布管理                         |
 | 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop        | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
 | 代码质量 |      9.7 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；daemon 17 个 schema 具备独立契约与聚合测试 | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
@@ -53,6 +53,7 @@
 - 2026-07-13：draft 创建、tab focus、imported agent、文件/side-pane/browser 打开、mobile switcher 与 split 后创建提取到 `use-workspace-tab-open-actions.ts`；移动端切回 agent、后台 draft、Electron gate 与 pane placement 语义保持不变，主屏降至 4270 行。
 - 2026-07-13：pending close 防重、terminal 确认/kill、agent 本地 tab close、browser cleanup、auto-open suppression 与 bulk-close 选择/确认提取到 `use-workspace-tab-close-actions.ts`；既有纯 helper 保持复用，主屏降至 3970 行。
 - 2026-07-13：dock state/command/placement 路由提取到 `use-workspace-dock-actions.ts`，pane focus suppression 与 split/move/resize/reorder 提取到 `use-workspace-pane-layout-actions.ts`；命令可用性、Electron gate 和 keyboard suppression 语义保持不变，主屏降至 3809 行。
+- 2026-07-13：pane child open/close/retarget、file disposition、descriptor identity cache、3-tab mounted retention 与 mobile/desktop adapter 提取到 `use-workspace-pane-content-models.ts`；desktop focus-before-open 与 side-pane parent/source 语义保持不变，主屏降至 3703 行。
 - 2026-07-13：ACP tool/config/transport/process 分域后，新增 `acp/terminal-controller.ts` 独立拥有 terminal 子进程、输出截断、exit waiter 与关闭清理；`acp/workspace-path.ts` 统一 fs/terminal 意图边界，越界仍 fail-closed，同时只匹配真实 `..` 路径段，不再误拒 `..cache`。主文件从 2860 降至 1866 行，原公开入口继续兼容重导出。
 - 2026-07-13：ACP message assembly、tool snapshot 生命周期、user echo suppression、session update 路由与 running tool 取消态合成提取到 `acp/session-update-controller.ts`；mode/config/session-info/commands 继续通过窄回调由 Session 持有，原私有 `translateSessionUpdate` 保留委托；wrapper smoke 的 tool snapshot 证据改为统计公开 timeline 事件，不再读取 Session 私有 map。主文件进一步降至 1752 行。
 - 2026-07-13：ACP foreground prompt 派发、active turn、usage、user echo suppression、bootstrap thread 事件、canceled tool 合成、终态与 process-exit failure 提取到 `acp/foreground-turn-controller.ts`；每回合 usage 显式重置，进程退出/关闭/替换后的迟到 prompt resolve/reject 被忽略，JSON-RPC code/data 继续进入诊断。测试以重叠回合拒绝及完成/失败后可重试证明公开行为，不再读取私有 active turn。主文件进一步降至 1575 行。
@@ -85,7 +86,7 @@
 1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK 与 Zod 4 已完成；剩余 Expo/EAS framework major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
 2. **P1 provider 文件拆分（核心完成）**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP/Pi/Claude 均已完成 composition-first 核心拆分；后续只在真实复杂度或缺陷证明收益时继续分域，不再按行数做低收益碎片化拆分。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon 域提取并降至 2164 行，下一步评估 usage/voice 分域并保留 agent core 的聚合职责。
-4. **P2 app 工作台拆分（进行中）**：移动端 navigation、workspace command routing、layout/setup persistence/hydration、tab open/close actions，以及 pane/dock actions 已提取，`workspace-screen.tsx` 从 5453 降至 3809 行；下一步评估 pane content-model callbacks 与 environment-panel state orchestration，保持 native/web/electron surface 测试分离。
+4. **P2 app 工作台拆分（进行中）**：移动端 navigation、workspace command routing、layout/setup persistence/hydration、tab open/close、pane/dock actions 与 pane content models 已提取，`workspace-screen.tsx` 从 5453 降至 3703 行；下一步拆分 environment-panel visibility/state orchestration，保持 native/web/electron surface 测试分离。
 5. **P2 产品 parity（2026-07-13 完成）**：MCP 已补齐一等 chat/loop 工具，并复用现有 service、Chat mention fan-out 与 caller cwd/identity 安全边界。
 6. **P2 测试减债**：按包逐步降低 module mock、conditional skip、fixed wait、weak assertion、process.env mutation 基线，不再只维持 no-new-debt。
 
@@ -119,6 +120,7 @@
 - 2026-07-13 App workspace tab open actions 批次：App typecheck 与 2 个目标文件 lint 通过；未运行全量 App/Playwright 测试
 - 2026-07-13 App workspace tab close actions 批次：App typecheck、2 个目标文件 lint 与 2 个关闭测试文件 7 个断言通过；未运行全量 App/Playwright 测试
 - 2026-07-13 App workspace pane/dock actions 批次：App typecheck、3 个目标文件 lint 与 dock model 18 个断言通过；未运行全量 App/Playwright 测试
+- 2026-07-13 App workspace pane content models 批次：App typecheck、2 个目标文件 lint 与 pane-content 2 个断言通过；未运行全量 App/Playwright 测试
 - 2026-07-13 ACP tool mapper 批次：server typecheck、3 个目标文件 lint、新 mapper 5 个断言与既有 generic permission 透传场景通过
 - 2026-07-13 ACP session config 批次：server typecheck、2 个目标文件 lint 与既有 mode/model/config 7 个聚焦断言通过
 - 2026-07-13 ACP NDJSON transport 批次：server typecheck、2 个目标文件 lint 与既有 stream/compat 3 个聚焦断言通过
