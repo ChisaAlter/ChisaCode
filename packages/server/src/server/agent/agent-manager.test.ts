@@ -1279,6 +1279,34 @@ test("createAgent preserves a user-provided chisacode MCP config", async () => {
   expect(client.lastConfig?.mcpServers).toEqual(snapshot.config.mcpServers);
 });
 
+test("changing the MCP base URL revokes previously issued companion tokens", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-companion-token-revocation-"));
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    logger,
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
+    idFactory: () => "00000000-0000-4000-8000-000000000143",
+  });
+
+  try {
+    const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir });
+    const companion = snapshot.config.mcpServers?.["chisacode-companion"];
+    expect(companion?.type).toBe("http");
+    if (!companion || companion.type !== "http") {
+      throw new Error("Expected injected companion MCP server");
+    }
+    const token = new URL(companion.url).searchParams.get("companionToken");
+    expect(token).toEqual(expect.any(String));
+    expect(manager.validateCompanionMcpToken(snapshot.id, token!)).toBe(true);
+
+    manager.setMcpBaseUrl("http://127.0.0.1:6768/mcp/agents");
+
+    expect(manager.validateCompanionMcpToken(snapshot.id, token!)).toBe(false);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("createAgent fails when cwd does not exist", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");

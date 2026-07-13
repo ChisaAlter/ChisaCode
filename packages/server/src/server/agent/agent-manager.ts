@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
-import { stat } from "node:fs/promises";
 import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
@@ -11,12 +9,6 @@ import {
   readAgentRelation,
   type AgentRelation,
 } from "@chisacode/protocol/agent-labels";
-import {
-  buildCompanionMcpUrl,
-  COMPANION_MCP_SERVER_NAME,
-  createCompanionTokenEntry,
-  type CompanionMcpTokenEntry,
-} from "./companion-mcp-injection.js";
 import type { EffectiveMcpServersResult } from "./mcp-server-management.js";
 import type { Logger } from "pino";
 import { z } from "zod/v3";
@@ -28,7 +20,6 @@ import {
   type AgentClient,
   type AgentCreateSessionOptions,
   type AgentFeature,
-  type AgentLaunchContext,
   type AgentModelDefinition,
   type AgentSlashCommand,
   type AgentMode,
@@ -59,6 +50,7 @@ import type {
   AgentTimelineStore,
 } from "./agent-timeline-store-types.js";
 import { AgentTimelineController } from "./agent-timeline-controller.js";
+import { AgentLaunchConfigController } from "./agent-launch-config-controller.js";
 import {
   AgentProviderController,
   type ImportablePersistedAgentQueryOptions,
@@ -71,10 +63,8 @@ import {
   AgentStreamCoalescer,
 } from "./agent-stream-coalescer.js";
 import { ForegroundRunState, type ForegroundTurnWaiter } from "./foreground-run-state.js";
-import { getAgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { formatSystemNotificationPrompt, isSystemInjectedEnvelope } from "./agent-prompt.js";
-import { generateComponentPromptSection } from "@chisacode/protocol/generative-ui/component-manifest";
 import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
 import {
   GenerativeUiActionQueue,
@@ -134,10 +124,6 @@ function isModelAvailableForRuntimeProvider(
   models: readonly AgentModelDefinition[],
 ): boolean {
   return models.some((model) => model.id === modelId);
-}
-
-function resolveDefaultModelId(models: readonly AgentModelDefinition[]): string | undefined {
-  return (models.find((model) => model.isDefault) ?? models[0])?.id;
 }
 
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
@@ -409,6 +395,7 @@ function validateAgentId(agentId: string, source: string): string {
 
 export class AgentManager {
   private readonly agents = new Map<string, ActiveManagedAgent>();
+  private readonly launchConfig: AgentLaunchConfigController;
   private readonly providers: AgentProviderController;
   private readonly timeline: AgentTimelineController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
@@ -421,15 +408,6 @@ export class AgentManager {
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private readonly generativeUiActionQueue: GenerativeUiActionQueue;
-  private mcpBaseUrl: string | null;
-  private companionMcpTokens = new Map<string, CompanionMcpTokenEntry>();
-  private appendSystemPrompt: string;
-  private readonly resolveSkillPolicy:
-    | ((agentId: string, config: AgentSessionConfig) => AgentSkillEffectivePolicy | undefined)
-    | undefined;
-  private readonly resolveMcpServers:
-    | ((agentId: string, config: AgentSessionConfig) => EffectiveMcpServersResult | undefined)
-    | undefined;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private logger: Logger;
@@ -440,10 +418,6 @@ export class AgentManager {
     this.idFactory = options?.idFactory ?? (() => randomUUID());
     this.registry = options?.registry;
     this.onAgentAttention = options?.onAgentAttention;
-    this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
-    this.appendSystemPrompt = options.appendSystemPrompt ?? "";
-    this.resolveSkillPolicy = options.resolveSkillPolicy;
-    this.resolveMcpServers = options.resolveMcpServers;
     this.usageStore = options.usageStore;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.eventBus = new AgentManagerEventBus({
@@ -456,6 +430,14 @@ export class AgentManager {
       clients: options.clients ?? {},
       providerDefinitions: options.providerDefinitions ?? {},
       logger: this.logger,
+    });
+    this.launchConfig = new AgentLaunchConfigController({
+      appendSystemPrompt: options.appendSystemPrompt ?? "",
+      logger: this.logger,
+      mcpBaseUrl: options.mcpBaseUrl ?? null,
+      providers: this.providers,
+      resolveMcpServers: options.resolveMcpServers,
+      resolveSkillPolicy: options.resolveSkillPolicy,
     });
     this.timeline = new AgentTimelineController({
       durableStore: options.durableTimelineStore,
@@ -563,36 +545,15 @@ export class AgentManager {
   }
 
   setMcpBaseUrl(url: string | null): void {
-    this.mcpBaseUrl = url;
+    this.launchConfig.setMcpBaseUrl(url);
   }
 
   validateCompanionMcpToken(parentAgentId: string, token: string): boolean {
-    // Lazy cleanup: evict expired tokens on every validation call to prevent
-    // unbounded growth of the companionMcpTokens map.  This is cheap because
-    // validation is infrequent (once per companion MCP connection) and the
-    // map is typically very small (< 50 entries).
-    if (this.companionMcpTokens.size > 0) {
-      const now = Date.now();
-      for (const [key, entry] of this.companionMcpTokens) {
-        if (entry.expiresAt < now) {
-          this.companionMcpTokens.delete(key);
-        }
-      }
-    }
-
-    const entry = this.companionMcpTokens.get(token);
-    if (!entry) {
-      return false;
-    }
-    if (entry.expiresAt < Date.now()) {
-      this.companionMcpTokens.delete(token);
-      return false;
-    }
-    return entry.parentAgentId === parentAgentId;
+    return this.launchConfig.validateCompanionMcpToken(parentAgentId, token);
   }
 
   setAppendSystemPrompt(prompt: string | null | undefined): void {
-    this.appendSystemPrompt = prompt ?? "";
+    this.launchConfig.setAppendSystemPrompt(prompt);
   }
 
   public getMetricsSnapshot(): AgentMetricsSnapshot {
@@ -688,14 +649,14 @@ export class AgentManager {
   }
 
   async listDraftCommands(config: AgentSessionConfig): Promise<AgentSlashCommand[]> {
-    const normalizedConfig = await this.normalizeConfig(config);
-    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
+    const normalizedConfig = await this.launchConfig.normalizeConfig(config);
+    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
     return await this.providers.listDraftCommands(launchConfig, normalizedConfig.provider);
   }
 
   async listDraftFeatures(config: AgentSessionConfig): Promise<AgentFeature[]> {
-    const normalizedConfig = await this.normalizeConfig(config);
-    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
+    const normalizedConfig = await this.launchConfig.normalizeConfig(config);
+    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
     return await this.providers.listDraftFeatures(launchConfig, normalizedConfig.provider);
   }
 
@@ -733,15 +694,11 @@ export class AgentManager {
     },
   ): Promise<ManagedAgent> {
     const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
-    const mcpConfig = this.applyDaemonMcpServers(config, resolvedAgentId);
-    const skillConfig = this.applyDaemonSkillPolicy(mcpConfig, resolvedAgentId);
-    this.providers.requireEnabledProvider(skillConfig.provider);
-    this.providers.requireEnabledProvider(skillConfig.runtimeProvider ?? skillConfig.provider);
-    const normalizedConfig = this.applyDaemonAppendSystemPrompt(
-      await this.normalizeConfig(skillConfig),
-    );
-    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
-    const launchContext = this.buildLaunchContext(resolvedAgentId, options?.env);
+    this.providers.requireEnabledProvider(config.provider);
+    this.providers.requireEnabledProvider(config.runtimeProvider ?? config.provider);
+    const normalizedConfig = await this.launchConfig.prepareAgentConfig(config, resolvedAgentId);
+    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
+    const launchContext = this.launchConfig.buildLaunchContext(resolvedAgentId, options?.env);
     const client = await this.providers.requireAvailableClient(launchConfig.provider);
     const createOptions = this.buildCreateSessionOptions(options);
     const session = await client.createSession(launchConfig, launchContext, createOptions);
@@ -787,10 +744,9 @@ export class AgentManager {
       ...overrides,
       provider: handle.provider,
     } as AgentSessionConfig;
-    const mcpConfig = this.applyDaemonMcpServers(mergedConfig, resolvedAgentId);
-    const skillConfig = this.applyDaemonSkillPolicy(mcpConfig, resolvedAgentId);
-    const normalizedConfig = this.applyDaemonAppendSystemPrompt(
-      await this.normalizeConfig(skillConfig),
+    const normalizedConfig = await this.launchConfig.prepareAgentConfig(
+      mergedConfig,
+      resolvedAgentId,
     );
     const resumeOverrides: Partial<AgentSessionConfig> = { ...overrides };
     let hasResumeOverrides = overrides !== undefined;
@@ -815,9 +771,9 @@ export class AgentManager {
       hasResumeOverrides = true;
     }
 
-    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
+    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
     const runtimeProvider = launchConfig.provider;
-    const launchContext = this.buildLaunchContext(resolvedAgentId);
+    const launchContext = this.launchConfig.buildLaunchContext(resolvedAgentId);
     const client = this.providers.requireClient(runtimeProvider);
     const available = await client.isAvailable();
     if (!available) {
@@ -839,70 +795,6 @@ export class AgentManager {
       labels: labelsForAgentRelation(options?.labels, relation),
       relation,
     });
-  }
-
-  private applyDaemonMcpServers(
-    config: AgentSessionConfig,
-    resolvedAgentId: string,
-  ): AgentSessionConfig {
-    const resolved = this.resolveMcpServers?.(resolvedAgentId, config);
-    const managedMcpServers = resolved?.servers ?? {};
-    const hasManagedMcpServers = Object.keys(managedMcpServers).length > 0;
-    const daemonMcpEnabled = resolved?.daemonMcpEnabled ?? true;
-    if (this.mcpBaseUrl == null || !daemonMcpEnabled) {
-      if (!hasManagedMcpServers) {
-        return config;
-      }
-      return {
-        ...config,
-        mcpServers: {
-          ...managedMcpServers,
-          ...config.mcpServers,
-        },
-      };
-    }
-    const { token, entry } = createCompanionTokenEntry(resolvedAgentId);
-    this.companionMcpTokens.set(token, entry);
-    return {
-      ...config,
-      mcpServers: {
-        ...managedMcpServers,
-        chisacode: {
-          type: "http" as const,
-          url: `${this.mcpBaseUrl}?callerAgentId=${resolvedAgentId}`,
-        },
-        [COMPANION_MCP_SERVER_NAME]: {
-          type: "http" as const,
-          url: buildCompanionMcpUrl({
-            mcpBaseUrl: this.mcpBaseUrl,
-            parentAgentId: resolvedAgentId,
-            token,
-          }),
-        },
-        ...config.mcpServers,
-      },
-    };
-  }
-
-  private applyDaemonSkillPolicy(config: AgentSessionConfig, agentId: string): AgentSessionConfig {
-    const policy = this.resolveSkillPolicy?.(agentId, config);
-    if (!policy) {
-      return config;
-    }
-    const runtimeProvider = config.runtimeProvider ?? config.provider;
-    if (config.provider !== "codex" && runtimeProvider !== "codex") {
-      return config;
-    }
-    return {
-      ...config,
-      extra: {
-        ...config.extra,
-        codex: {
-          ...config.extra?.codex,
-          skillsPolicy: policy,
-        },
-      },
-    };
   }
 
   // Hot-reload an active agent session with config overrides. By default the
@@ -939,13 +831,9 @@ export class AgentManager {
       provider: existing.provider,
       runtimeProvider,
     } as AgentSessionConfig;
-    const mcpConfig = this.applyDaemonMcpServers(refreshConfig, agentId);
-    const skillConfig = this.applyDaemonSkillPolicy(mcpConfig, agentId);
-    const normalizedConfig = this.applyDaemonAppendSystemPrompt(
-      await this.normalizeConfig(skillConfig),
-    );
-    const launchConfig = this.buildRuntimeLaunchConfig(normalizedConfig);
-    const launchContext = this.buildLaunchContext(agentId);
+    const normalizedConfig = await this.launchConfig.prepareAgentConfig(refreshConfig, agentId);
+    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
+    const launchContext = this.launchConfig.buildLaunchContext(agentId);
 
     const session = reloadHandle
       ? await client.resumeSession(reloadHandle, launchConfig, launchContext)
@@ -3400,100 +3288,6 @@ export class AgentManager {
 
   private dispatch(event: AgentManagerEvent): void {
     this.eventBus.dispatch(event);
-  }
-
-  private async normalizeConfig(config: AgentSessionConfig): Promise<AgentSessionConfig> {
-    const normalized: AgentSessionConfig = { ...config };
-    const runtimeProvider = normalized.runtimeProvider ?? normalized.provider;
-
-    // Always resolve cwd to absolute path for consistent history file lookup
-    if (normalized.cwd) {
-      normalized.cwd = resolve(normalized.cwd);
-      try {
-        const cwdStats = await stat(normalized.cwd);
-        if (!cwdStats.isDirectory()) {
-          throw new Error(`Working directory is not a directory: ${normalized.cwd}`);
-        }
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          (error as NodeJS.ErrnoException).code === "ENOENT"
-        ) {
-          throw new Error(`Working directory does not exist: ${normalized.cwd}`, { cause: error });
-        }
-        if (error instanceof Error) {
-          throw error;
-        }
-        throw new Error(`Failed to access working directory: ${normalized.cwd}`, { cause: error });
-      }
-    }
-
-    if (typeof normalized.model === "string") {
-      const trimmed = normalized.model.trim();
-      normalized.model = trimmed.length > 0 && trimmed !== "default" ? trimmed : undefined;
-    }
-
-    if (!normalized.model) {
-      const client = this.providers.getClient(runtimeProvider);
-      if (client) {
-        try {
-          const models = await client.listModels({ cwd: normalized.cwd, force: false });
-          normalized.model = resolveDefaultModelId(models);
-        } catch (error) {
-          // Provider may not support model listing — leave model undefined
-          this.logger.debug(
-            { err: error, provider: runtimeProvider },
-            "Failed to list models for default resolution",
-          );
-        }
-      }
-    }
-
-    if (!normalized.modeId) {
-      try {
-        normalized.modeId =
-          getAgentProviderDefinition(normalized.provider).defaultModeId ?? undefined;
-      } catch (error) {
-        // Unknown provider
-        this.logger.debug(
-          { err: error, provider: normalized.provider },
-          "Failed to resolve default mode for provider",
-        );
-      }
-    }
-
-    return normalized;
-  }
-
-  private buildRuntimeLaunchConfig(config: AgentSessionConfig): AgentSessionConfig {
-    const runtimeProvider = config.runtimeProvider ?? config.provider;
-    return runtimeProvider === config.provider ? config : { ...config, provider: runtimeProvider };
-  }
-
-  private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const genUiSection = generateComponentPromptSection();
-    const parts = [this.appendSystemPrompt.trim(), genUiSection].filter(Boolean);
-    const daemonAppendSystemPrompt = parts.join("\n\n");
-    const next = { ...config };
-    delete next.daemonAppendSystemPrompt;
-
-    return daemonAppendSystemPrompt
-      ? {
-          ...next,
-          daemonAppendSystemPrompt,
-        }
-      : next;
-  }
-
-  private buildLaunchContext(agentId: string, env?: Record<string, string>): AgentLaunchContext {
-    return {
-      agentId,
-      env: {
-        ...env,
-        CHISACODE_AGENT_ID: agentId,
-      },
-    };
   }
 
   async archiveNativeSessionBestEffort(
