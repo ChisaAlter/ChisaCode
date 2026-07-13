@@ -30,7 +30,7 @@ import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
 import type { DaemonConfigStore } from "./daemon-config-store.js";
 import { type UsageStore } from "./usage/usage-store.js";
-import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
+import type { WorkspaceGitService } from "./workspace-git-service.js";
 
 import { AgentManager } from "./agent/agent-manager.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
@@ -62,13 +62,10 @@ import {
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import {
-  checkoutLiteFromGitSnapshot,
   normalizeWorkspaceId as normalizePersistedWorkspaceId,
   deriveProjectGroupingName,
-  deriveWorkspaceDisplayName,
 } from "./workspace-registry-model.js";
 import {
-  resolveProjectDisplayName,
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
   type ProjectRegistry,
@@ -104,7 +101,6 @@ import {
   resolveKnownProjectRootForConfig,
   type GitMutationRefreshReason,
   diffChangeTypeFor,
-  buildWorkspaceCheckout,
 } from "./session-helpers.js";
 
 // Re-export so existing imports from "./session.js" keep working.
@@ -146,11 +142,10 @@ import {
 } from "./agent-session-helpers.js";
 import {
   isPathWithinRoot as isPathWithinRootCore,
-  buildWorkspaceGitRuntimePayload as buildWorkspaceGitRuntimePayloadCore,
-  buildWorkspaceGitHubRuntimePayload as buildWorkspaceGitHubRuntimePayloadCore,
   buildWorkspaceScriptPayloadSnapshot as buildWorkspaceScriptPayloadSnapshotCore,
   emitWorkspaceScriptStatusUpdate as emitWorkspaceScriptStatusUpdateCore,
 } from "./workspace-core.js";
+import { WorkspaceDescriptorBuilder } from "./workspace-descriptor-builder.js";
 import { WorkspaceGitObserverController } from "./workspace-git-observer-controller.js";
 import { WorkspaceRecordController } from "./workspace-record-controller.js";
 import {
@@ -313,6 +308,7 @@ export class Session {
     },
   );
   private readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
+  private readonly workspaceDescriptorBuilder: WorkspaceDescriptorBuilder;
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly workspaceGitObserverController: WorkspaceGitObserverController;
   private readonly workspaceRecordController: WorkspaceRecordController;
@@ -461,6 +457,12 @@ export class Session {
       emit: (message) => this.emit(message),
       emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
       onBranchChanged,
+    });
+    this.workspaceDescriptorBuilder = new WorkspaceDescriptorBuilder({
+      projectRegistry: this.projectRegistry,
+      workspaceGitService: this.workspaceGitService,
+      buildWorkspaceScriptPayloadSnapshot: (workspaceId, workspaceDirectory) =>
+        this.buildWorkspaceScriptPayloadSnapshot(workspaceId, workspaceDirectory),
     });
     this.workspaceDirectory = new WorkspaceDirectory({
       logger: this.sessionLogger,
@@ -958,16 +960,10 @@ export class Session {
     workspace: PersistedWorkspaceRecord,
     projectRecord?: PersistedProjectRecord | null,
   ): Promise<ProjectPlacementPayload> {
-    const project = projectRecord ?? (await this.projectRegistry.get(workspace.projectId));
-    if (!project) {
-      throw new Error(`Project not found for workspace ${workspace.workspaceId}`);
-    }
-    const checkout = buildWorkspaceCheckout(workspace, project);
-    return {
-      projectKey: project.projectId,
-      projectName: resolveProjectDisplayName(project),
-      checkout,
-    };
+    return this.workspaceDescriptorBuilder.buildProjectPlacementForWorkspace(
+      workspace,
+      projectRecord,
+    );
   }
 
   private async buildProjectPlacementForCwd(
@@ -1732,111 +1728,24 @@ export class Session {
     workspace: PersistedWorkspaceRecord,
     projectRecord?: PersistedProjectRecord | null,
   ): Promise<WorkspaceDescriptorPayload> {
-    const resolvedProjectRecord =
-      projectRecord ?? (await this.projectRegistry.get(workspace.projectId));
-
-    let diffStat: { additions: number; deletions: number } | null = null;
-    const snapshot = this.workspaceGitService.peekSnapshot(workspace.cwd);
-    if (snapshot?.git.diffStat) {
-      diffStat = snapshot.git.diffStat;
-    }
-
-    return {
-      id: workspace.workspaceId,
-      projectId: workspace.projectId,
-      projectDisplayName: resolvedProjectRecord
-        ? resolveProjectDisplayName(resolvedProjectRecord)
-        : workspace.projectId,
-      projectCustomName: resolvedProjectRecord?.customName ?? null,
-      projectRootPath: resolvedProjectRecord?.rootPath ?? workspace.cwd,
-      workspaceDirectory: workspace.cwd,
-      projectKind: (resolvedProjectRecord?.kind ?? "directory") === "git" ? "git" : "non_git",
-      workspaceKind: workspace.kind,
-      name: workspace.displayName,
-      archivingAt: null,
-      status: "done",
-      activityAt: null,
-      diffStat,
-      scripts:
-        this.scriptRouteStore && this.scriptRuntimeStore
-          ? this.buildWorkspaceScriptPayloadSnapshot(workspace.workspaceId, workspace.cwd)
-          : [],
-      ...(resolvedProjectRecord
-        ? {
-            project: await this.buildProjectPlacementForWorkspace(workspace, resolvedProjectRecord),
-          }
-        : {}),
-    };
-  }
-
-  private buildWorkspaceGitRuntimePayload(
-    snapshot: WorkspaceGitRuntimeSnapshot,
-  ): NonNullable<WorkspaceDescriptorPayload["gitRuntime"]> | null {
-    return buildWorkspaceGitRuntimePayloadCore(snapshot);
-  }
-
-  private buildWorkspaceGitHubRuntimePayload(
-    snapshot: WorkspaceGitRuntimeSnapshot,
-  ): NonNullable<WorkspaceDescriptorPayload["githubRuntime"]> {
-    return buildWorkspaceGitHubRuntimePayloadCore(snapshot);
+    return this.workspaceDescriptorBuilder.describeWorkspaceRecord(workspace, projectRecord);
   }
 
   private async describeWorkspaceRecordWithGitData(
     workspace: PersistedWorkspaceRecord,
     projectRecord?: PersistedProjectRecord | null,
   ): Promise<WorkspaceDescriptorPayload> {
-    const base = await this.describeWorkspaceRecord(workspace, projectRecord);
-    const snapshot = this.workspaceGitService.peekSnapshot(workspace.cwd);
-    if (!snapshot) {
-      return base;
-    }
-
-    const checkout = checkoutLiteFromGitSnapshot(workspace.cwd, snapshot.git);
-    const displayName = deriveWorkspaceDisplayName({ cwd: workspace.cwd, checkout });
-
-    return {
-      ...base,
-      name: displayName,
-      diffStat: snapshot.git.diffStat ?? null,
-      gitRuntime: this.buildWorkspaceGitRuntimePayload(snapshot) ?? undefined,
-      githubRuntime: this.buildWorkspaceGitHubRuntimePayload(snapshot),
-    };
+    return this.workspaceDescriptorBuilder.describeWorkspaceRecordWithGitData(
+      workspace,
+      projectRecord,
+    );
   }
 
   private async describeCreatedWorktreeWorkspace(
     result: CreateChisaCodeWorktreeResult,
   ): Promise<WorkspaceDescriptorPayload> {
-    const projectRecord = await this.projectRegistry.get(result.workspace.projectId);
-    return {
-      id: result.workspace.workspaceId,
-      projectId: result.workspace.projectId,
-      projectDisplayName: projectRecord
-        ? resolveProjectDisplayName(projectRecord)
-        : result.workspace.projectId,
-      projectCustomName: projectRecord?.customName ?? null,
-      projectRootPath: projectRecord?.rootPath ?? result.repoRoot,
-      workspaceDirectory: result.workspace.cwd,
-      projectKind: "git",
-      workspaceKind: result.workspace.kind,
-      name: result.worktree.branchName || result.workspace.displayName,
-      archivingAt: null,
-      status: "done",
-      activityAt: null,
-      diffStat: { additions: 0, deletions: 0 },
-      scripts: [],
-      gitRuntime: {
-        currentBranch: result.worktree.branchName || null,
-        remoteUrl: null,
-        isChisaCodeOwnedWorktree: true,
-        isDirty: false,
-        aheadBehind: null,
-        aheadOfOrigin: null,
-        behindOfOrigin: null,
-      },
-      githubRuntime: null,
-    };
+    return this.workspaceDescriptorBuilder.describeCreatedWorktreeWorkspace(result);
   }
-
   private async buildWorkspaceDescriptor(input: {
     workspace: PersistedWorkspaceRecord;
     projectRecord?: PersistedProjectRecord | null;
