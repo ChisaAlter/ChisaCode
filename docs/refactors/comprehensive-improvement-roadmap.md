@@ -157,8 +157,13 @@
   revalidation 与共享 deadline 下的 query timeout；`tree-kill-command.ts` 收口可取消/有界的
   `execFile` 文本查询。原 `tree-kill.ts` 保留兼容重导出并从 1302 行降至 1021 行，21 个 Windows
   ownership/query/signaling 聚焦场景、server typecheck 与目标 lint 通过。
-- **状态**：in-progress。Windows ownership/query adapter 已完成；下一步提取 POSIX identity
-  tracker 与 cleanup-deadline orchestrator，完成后再将本项标记为 done。
+- **POSIX tracker 进展（2026-07-14）**：新增 `tree-kill-posix.ts`，统一拥有 Linux `/proc`
+  starttime identity、generic POSIX `ps lstart` completeness、child-first ownership、process-group
+  signaling、保守 survivor polling 与严格 signal authorization；Linux/POSIX 平台分支仅保留
+  adapter 选择。`tree-kill.ts` 进一步从 1021 行降至 541 行，19 个 Linux/POSIX identity、
+  completeness、polling 与 signaling 聚焦场景、server typecheck 和目标 lint 通过。
+- **状态**：in-progress。Windows adapter 与 POSIX identity tracker 已完成；下一步提取共享
+  cleanup-deadline orchestrator，完成后再将本项标记为 done。
 
 ### Task 4 第九次规范复审加固（2026-07-11 完成）
 
