@@ -38,15 +38,12 @@ import {
 } from "./session-history.js";
 import { ClaudeToolCallHandler, type ClaudeToolUseCacheEntry } from "./tool-call-handlers.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
-import {
-  isClaudeTranscriptNoiseText,
-  isSyntheticUserEntry,
-  isToolResultUserEntry,
-} from "./history-converter.js";
+import { isClaudeTranscriptNoiseText } from "./history-converter.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { claudeQuery, type ClaudeQueryFactory } from "./query.js";
 import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
+import { ClaudeRewindController, type ClaudeRewindInvocation } from "./rewind-controller.js";
 
 import {
   getAgentStreamEventTurnId,
@@ -83,15 +80,6 @@ interface AsyncMessageInput<T> {
   iterable: AsyncIterable<T>;
 }
 
-interface ClaudeRewindTurnAnchor {
-  userMessageId: string;
-  assistantMessageId: string | null;
-}
-
-type ClaudeConversationRewindTarget =
-  | { kind: "fresh-session" }
-  | { kind: "fork"; messageId: string };
-
 const DEFAULT_MODES: AgentMode[] = [
   {
     id: "default",
@@ -122,20 +110,6 @@ const DEFAULT_MODES: AgentMode[] = [
 
 const VALID_CLAUDE_MODES = new Set(DEFAULT_MODES.map((mode) => mode.id));
 
-const REWIND_COMMAND_NAME = "rewind";
-const REWIND_COMMAND: AgentSlashCommand = {
-  name: REWIND_COMMAND_NAME,
-  description: "Rewind tracked files to a previous user message",
-  argumentHint: "[user_message_uuid]",
-};
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-interface SlashCommandInvocation {
-  commandName: string;
-  args?: string;
-  rawInput: string;
-}
-
 type ClaudeThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 type ClaudeThinkingOption = ClaudeThinkingEffort | "ultracode";
 
@@ -161,14 +135,6 @@ function isClaudeThinkingOption(value: string | null | undefined): value is Clau
 const MAX_RECENT_STDERR_CHARS = 4000;
 const STDERR_FLUSH_WAIT_MS = 150;
 const STDERR_FLUSH_POLL_INTERVAL_MS = 10;
-
-function readTrimmedString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
 
 function isPermissionMode(value: string | undefined): value is PermissionMode {
   return typeof value === "string" && VALID_CLAUDE_MODES.has(value);
@@ -203,6 +169,7 @@ export class ClaudeAgentSession implements AgentSession {
   private readonly toolCallHandler: ClaudeToolCallHandler;
   private readonly sidechainTracker: ClaudeSidechainTracker;
   private readonly historyController: ClaudeSessionHistory;
+  private readonly rewindController: ClaudeRewindController;
   private readonly messageTranslator: ClaudeMessageTranslator;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private lastOptionsModel: string | null = null;
@@ -210,8 +177,6 @@ export class ClaudeAgentSession implements AgentSession {
   private modelGatewayOverrideActive = false;
   private queryPumpPromise: Promise<void> | null = null;
   private queryRestartNeeded = false;
-  private userMessageIds: string[] = [];
-  private readonly rewindTurnAnchors: ClaudeRewindTurnAnchor[] = [];
   private pendingFreshSessionId: string | null = null;
   private recentStderr = "";
   private closed = false;
@@ -254,12 +219,18 @@ export class ClaudeAgentSession implements AgentSession {
     this.sidechainTracker = new ClaudeSidechainTracker({
       getToolInput: (toolUseId) => this.toolCallHandler.getToolInput(toolUseId),
     });
+    this.rewindController = new ClaudeRewindController({
+      getHistoryCandidateUserMessageIds: () =>
+        this.historyController.getRewindCandidateUserMessageIds(),
+      rewindFiles: (messageId) => this.rewindFilesOnce(messageId),
+    });
     this.historyController = new ClaudeSessionHistory({
       getCwd: () => this.config.cwd,
       getSdkEnv: () => this.optionsBuilder.buildSdkEnv(this.config.extra?.claude),
-      rememberUserMessageId: (messageId) => this.rememberUserMessageId(messageId),
-      rememberRewindUserAnchor: (messageId) => this.rememberRewindUserAnchor(messageId),
-      rememberRewindAssistantAnchor: (messageId) => this.rememberRewindAssistantAnchor(messageId),
+      rememberUserMessageId: (messageId) => this.rewindController.rememberUserMessageId(messageId),
+      rememberRewindUserAnchor: (messageId) => this.rewindController.rememberUserAnchor(messageId),
+      rememberRewindAssistantAnchor: (messageId) =>
+        this.rewindController.rememberAssistantAnchor(messageId),
       handleToolUseStart: (block, target) => this.toolCallHandler.handleToolUseStart(block, target),
       handleToolResult: (block, target) => this.toolCallHandler.handleToolResult(block, target),
       updatePartialEventState: (event) => this.toolCallHandler.updatePartialEventState(event),
@@ -275,7 +246,7 @@ export class ClaudeAgentSession implements AgentSession {
       mapPartialEvent: (event, mapOptions) =>
         this.historyController.mapPartialEvent(event, mapOptions),
       getToolName: (toolUseId) => this.toolCallHandler.getToolName(toolUseId),
-      rememberUserMessageId: (messageId) => this.rememberUserMessageId(messageId),
+      rememberUserMessageId: (messageId) => this.rewindController.rememberUserMessageId(messageId),
       hasActiveTurnAssistantText: () => this.activeTurnHasAssistantText,
       buildTurnFailedEvent: (errorMessage) => this.buildTurnFailedEvent(errorMessage),
     });
@@ -290,7 +261,7 @@ export class ClaudeAgentSession implements AgentSession {
       flushPendingToolCalls: () => this.flushPendingToolCalls(),
       buildTurnFailedEvent: (errorMessage) => this.buildTurnFailedEvent(errorMessage),
       rememberTranscriptProgress: (message, messageId) =>
-        this.rememberTranscriptProgress(message, messageId),
+        this.rewindController.rememberTranscriptProgress(message, messageId),
       translateMessageToEvents: (message, routeOptions) =>
         this.translateMessageToEvents(message, routeOptions),
       assembleTimelineItems: (input) => this.timelineAssembler.consume(input),
@@ -476,8 +447,8 @@ export class ClaudeAgentSession implements AgentSession {
       throw new Error("A foreground turn is already active");
     }
 
-    const slashCommand = this.resolveSlashCommandInvocation(prompt);
-    if (slashCommand?.commandName === REWIND_COMMAND_NAME) {
+    const slashCommand = this.rewindController.resolveSlashCommandInvocation(prompt);
+    if (slashCommand) {
       const turnId = this.createTurnId("foreground");
       this.activeForegroundTurnId = turnId;
       this.transitionTurnState("foreground", "rewind command");
@@ -492,7 +463,7 @@ export class ClaudeAgentSession implements AgentSession {
     const sdkMessage = this.toSdkUserMessage(prompt);
     const sdkUserMessageId =
       typeof sdkMessage.uuid === "string" && sdkMessage.uuid.length > 0 ? sdkMessage.uuid : null;
-    this.rememberRewindUserAnchor(sdkUserMessageId);
+    this.rewindController.rememberUserAnchor(sdkUserMessageId);
     const turnId = this.createTurnId("foreground");
     this.activeForegroundTurnId = turnId;
     this.foregroundHasVisibleActivity = false;
@@ -754,14 +725,15 @@ export class ClaudeAgentSession implements AgentSession {
         });
       }
     }
-    if (!commandMap.has(REWIND_COMMAND_NAME)) {
-      commandMap.set(REWIND_COMMAND_NAME, REWIND_COMMAND);
+    const rewindCommand = this.rewindController.getCommand();
+    if (!commandMap.has(rewindCommand.name)) {
+      commandMap.set(rewindCommand.name, rewindCommand);
     }
     return Array.from(commandMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async revertConversation(input: { messageId: string }): Promise<void> {
-    const target = this.resolveConversationRewindTarget(input.messageId);
+    const target = this.rewindController.resolveConversationTarget(input.messageId);
     if (target.kind === "fresh-session") {
       this.startFreshConversationSession();
       return;
@@ -770,7 +742,6 @@ export class ClaudeAgentSession implements AgentSession {
       sdk: realClaudeRewindSdk,
       sessionId: this.claudeSessionId,
       messageId: target.messageId,
-      resolveMessageId: (messageId) => this.resolveClaudeMessageId(messageId),
       setSessionId: (sessionId) => {
         this.rebindConversationSession(sessionId);
       },
@@ -778,129 +749,15 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   async revertFiles(input: { messageId: string }): Promise<void> {
-    const messageId = await this.resolveClaudeMessageId(input.messageId);
     await revertClaudeFiles({
       query: await this.ensureQuery(),
-      messageId,
+      messageId: input.messageId,
     });
   }
 
   async revertBoth(input: { messageId: string }): Promise<void> {
     await this.revertFiles(input);
     await this.revertConversation(input);
-  }
-
-  private resolveSlashCommandInvocation(prompt: AgentPromptInput): SlashCommandInvocation | null {
-    if (typeof prompt !== "string") {
-      return null;
-    }
-    const parsed = this.parseSlashCommandInput(prompt);
-    if (!parsed) {
-      return null;
-    }
-    return parsed.commandName === REWIND_COMMAND_NAME ? parsed : null;
-  }
-
-  private parseSlashCommandInput(text: string): SlashCommandInvocation | null {
-    const trimmed = text.trim();
-    if (!trimmed.startsWith("/") || trimmed.length <= 1) {
-      return null;
-    }
-    const withoutPrefix = trimmed.slice(1);
-    const firstWhitespaceIdx = withoutPrefix.search(/\s/);
-    const commandName =
-      firstWhitespaceIdx === -1 ? withoutPrefix : withoutPrefix.slice(0, firstWhitespaceIdx);
-    if (!commandName || commandName.includes("/")) {
-      return null;
-    }
-    const rawArgs =
-      firstWhitespaceIdx === -1 ? "" : withoutPrefix.slice(firstWhitespaceIdx + 1).trim();
-    return rawArgs.length > 0
-      ? { commandName, args: rawArgs, rawInput: trimmed }
-      : { commandName, rawInput: trimmed };
-  }
-
-  private buildRewindSuccessMessage(
-    targetUserMessageId: string,
-    rewindResult: {
-      filesChanged?: string[];
-      insertions?: number;
-      deletions?: number;
-    },
-  ): string {
-    const fileCount = Array.isArray(rewindResult.filesChanged)
-      ? rewindResult.filesChanged.length
-      : undefined;
-    const stats: string[] = [];
-    if (typeof fileCount === "number") {
-      stats.push(`${fileCount} file${fileCount === 1 ? "" : "s"}`);
-    }
-    if (typeof rewindResult.insertions === "number") {
-      stats.push(`${rewindResult.insertions} insertions`);
-    }
-    if (typeof rewindResult.deletions === "number") {
-      stats.push(`${rewindResult.deletions} deletions`);
-    }
-    if (stats.length > 0) {
-      return `Rewound tracked files to message ${targetUserMessageId} (${stats.join(", ")}).`;
-    }
-    return `Rewound tracked files to message ${targetUserMessageId}.`;
-  }
-
-  private async attemptRewind(args: string | undefined): Promise<{
-    messageId: string | null;
-    result?: {
-      filesChanged?: string[];
-      insertions?: number;
-      deletions?: number;
-    };
-    error?: string;
-  }> {
-    if (typeof args === "string" && args.trim().length > 0) {
-      const candidate = args.trim().split(/\s+/)[0] ?? "";
-      if (!UUID_PATTERN.test(candidate)) {
-        return {
-          messageId: null,
-          error: "Invalid message UUID. Usage: /rewind <user_message_uuid> or /rewind",
-        };
-      }
-      const rewindResult = await this.rewindFilesOnce(candidate);
-      if (rewindResult.canRewind) {
-        return { messageId: candidate, result: rewindResult };
-      }
-      return {
-        messageId: null,
-        error: rewindResult.error ?? `No file checkpoint found for message ${candidate}.`,
-      };
-    }
-
-    const candidates = this.getRewindCandidateUserMessageIds();
-    if (candidates.length === 0) {
-      return {
-        messageId: null,
-        error: "No prior user message available to rewind. Use /rewind <user_message_uuid>.",
-      };
-    }
-
-    let lastError: string | undefined;
-    for (const candidate of candidates) {
-      try {
-        const rewindResult = await this.rewindFilesOnce(candidate);
-        if (rewindResult.canRewind) {
-          return { messageId: candidate, result: rewindResult };
-        }
-        if (rewindResult.error) {
-          lastError = rewindResult.error;
-        }
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : "Failed to rewind tracked files.";
-      }
-    }
-
-    return {
-      messageId: null,
-      error: lastError ?? "No rewind checkpoints are currently available for this session.",
-    };
   }
 
   private async rewindFilesOnce(messageId: string): Promise<{
@@ -928,24 +785,6 @@ export class ClaudeAgentSession implements AgentSession {
     return this.ensureQuery();
   }
 
-  private getRewindCandidateUserMessageIds(): string[] {
-    const candidates: string[] = [];
-    const pushUnique = (value: string | null | undefined) => {
-      if (typeof value === "string" && value.length > 0 && !candidates.includes(value)) {
-        candidates.push(value);
-      }
-    };
-
-    for (const messageId of this.historyController.getRewindCandidateUserMessageIds()) {
-      pushUnique(messageId);
-    }
-    for (let idx = this.userMessageIds.length - 1; idx >= 0; idx -= 1) {
-      pushUnique(this.userMessageIds[idx]);
-    }
-
-    return candidates;
-  }
-
   private rebindConversationSession(sessionId: string): void {
     const oldSessionId = this.claudeSessionId;
     this.claudeSessionId = sessionId;
@@ -954,9 +793,8 @@ export class ClaudeAgentSession implements AgentSession {
     this.cachedRuntimeInfo = null;
     this.queryRestartNeeded = true;
     this.historyController.clear();
-    this.userMessageIds = [];
+    this.rewindController.reset();
     this.messageTranslator.resetUserMessageState();
-    this.rewindTurnAnchors.length = 0;
     this.historyController.load(sessionId);
     if (oldSessionId && oldSessionId !== sessionId) {
       this.dispatchEvents([
@@ -982,99 +820,8 @@ export class ClaudeAgentSession implements AgentSession {
     this.cachedRuntimeInfo = null;
     this.queryRestartNeeded = true;
     this.historyController.clear();
-    this.userMessageIds = [];
+    this.rewindController.reset();
     this.messageTranslator.resetUserMessageState();
-    this.rewindTurnAnchors.length = 0;
-  }
-
-  private rememberUserMessageId(messageId: string | null | undefined): void {
-    if (typeof messageId !== "string" || messageId.length === 0) {
-      return;
-    }
-    const last = this.userMessageIds[this.userMessageIds.length - 1];
-    if (last === messageId) {
-      return;
-    }
-    this.userMessageIds.push(messageId);
-  }
-
-  private rememberRewindUserAnchor(userMessageId: string | null | undefined): void {
-    if (typeof userMessageId !== "string" || userMessageId.length === 0) {
-      return;
-    }
-    if (this.rewindTurnAnchors.some((anchor) => anchor.userMessageId === userMessageId)) {
-      return;
-    }
-    this.rewindTurnAnchors.push({
-      userMessageId,
-      assistantMessageId: null,
-    });
-  }
-
-  private rememberRewindAssistantAnchor(assistantMessageId: string | null | undefined): void {
-    if (typeof assistantMessageId !== "string" || assistantMessageId.length === 0) {
-      return;
-    }
-    for (let index = this.rewindTurnAnchors.length - 1; index >= 0; index -= 1) {
-      const anchor = this.rewindTurnAnchors[index];
-      if (!anchor) {
-        continue;
-      }
-      anchor.assistantMessageId = assistantMessageId;
-      return;
-    }
-  }
-
-  private rememberTranscriptProgress(message: SDKMessage, messageId: string | null): void {
-    if (!messageId) {
-      return;
-    }
-    if (
-      message.type === "user" &&
-      !isSyntheticUserEntry(message) &&
-      !isToolResultUserEntry(message)
-    ) {
-      this.rememberRewindUserAnchor(messageId);
-      return;
-    }
-    if (message.type === "assistant") {
-      this.rememberRewindAssistantAnchor(messageId);
-      return;
-    }
-    if (message.type === "stream_event") {
-      const event = toObjectRecord(message.event) ?? {};
-      const eventType = readTrimmedString(event.type);
-      if (eventType === "message_start") {
-        this.rememberRewindAssistantAnchor(messageId);
-      }
-      return;
-    }
-  }
-
-  private resolveClaudeMessageId(messageId: string): string {
-    return messageId;
-  }
-
-  private resolveConversationRewindTarget(messageId: string): ClaudeConversationRewindTarget {
-    const targetUserMessageId = this.resolveClaudeMessageId(messageId);
-    const index = this.rewindTurnAnchors.findIndex(
-      (anchor) => anchor.userMessageId === targetUserMessageId,
-    );
-    if (index < 0) {
-      throw new Error(`Claude rewind target ${messageId} is not in the tracked conversation`);
-    }
-
-    if (index === 0) {
-      return { kind: "fresh-session" };
-    }
-
-    const previousTurn = this.rewindTurnAnchors[index - 1];
-    if (!previousTurn?.assistantMessageId) {
-      throw new Error(
-        `Claude rewind cannot preserve turn ${index} because its assistant response id was not observed`,
-      );
-    }
-    return { kind: "fork", messageId: previousTurn.assistantMessageId };
   }
 
   private async ensureQuery(): Promise<Query> {
@@ -1212,7 +959,7 @@ export class ClaudeAgentSession implements AgentSession {
     }
 
     const messageId = randomUUID();
-    this.rememberUserMessageId(messageId);
+    this.rewindController.rememberUserMessageId(messageId);
 
     return {
       type: "user",
@@ -1294,11 +1041,11 @@ export class ClaudeAgentSession implements AgentSession {
 
   private async executeRewindTurn(
     _turnId: string,
-    invocation: SlashCommandInvocation,
+    invocation: ClaudeRewindInvocation,
   ): Promise<void> {
     this.notifySubscribers({ type: "turn_started", provider: "claude" });
     try {
-      const rewindAttempt = await this.attemptRewind(invocation.args);
+      const rewindAttempt = await this.rewindController.attempt(invocation.args);
       if (!rewindAttempt.messageId || !rewindAttempt.result) {
         this.finishForegroundTurn({
           type: "turn_failed",
@@ -1314,7 +1061,10 @@ export class ClaudeAgentSession implements AgentSession {
         provider: "claude",
         item: {
           type: "assistant_message",
-          text: this.buildRewindSuccessMessage(rewindAttempt.messageId, rewindAttempt.result),
+          text: this.rewindController.buildSuccessMessage(
+            rewindAttempt.messageId,
+            rewindAttempt.result,
+          ),
         },
       });
       this.finishForegroundTurn({ type: "turn_completed", provider: "claude" });
