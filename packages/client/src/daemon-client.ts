@@ -76,9 +76,6 @@ import type {
   EditorTargetId,
   ChisaCodeConfigRaw,
   ChisaCodeConfigRevision,
-  UsageClearResponseMessage,
-  UsageExportResponseMessage,
-  UsageSummaryGetResponseMessage,
 } from "@chisacode/protocol/messages";
 import type { SyntheticModelConfig } from "@chisacode/protocol/provider-config";
 import type {
@@ -96,6 +93,29 @@ import { ProviderCommandClient } from "./daemon-client-provider-commands.js";
 import { AgentExtensionCommandClient } from "./daemon-client-agent-extension-commands.js";
 import { AutomationCommandClient } from "./daemon-client-automation-commands.js";
 import { WorkspaceCommandClient } from "./daemon-client-workspace-commands.js";
+import {
+  QueryCommandClient,
+  type ExportUsageOptions,
+  type FetchAgentHistoryEntry,
+  type FetchAgentHistoryOptions,
+  type FetchAgentHistoryPayload,
+  type FetchAgentHistoryPageInfo,
+  type FetchAgentsEntry,
+  type FetchAgentsOptions,
+  type FetchAgentsPayload,
+  type FetchAgentsPageInfo,
+  type FetchRecentProviderSessionEntry,
+  type FetchRecentProviderSessionsOptions,
+  type FetchRecentProviderSessionsPayload,
+  type FetchUsageSummaryOptions,
+  type FetchWorkspacesEntry,
+  type FetchWorkspacesOptions,
+  type FetchWorkspacesPayload,
+  type FetchWorkspacesPageInfo,
+  type UsageClearPayload,
+  type UsageExportPayload,
+  type UsageSummaryPayload,
+} from "./daemon-client-query-commands.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   BinaryFileTransferManager,
@@ -181,6 +201,22 @@ export type {
   RenameTerminalInput,
   RenameTerminalResult,
   TerminalStreamEvent,
+  ExportUsageOptions,
+  FetchAgentHistoryEntry,
+  FetchAgentHistoryOptions,
+  FetchAgentHistoryPageInfo,
+  FetchAgentsEntry,
+  FetchAgentsOptions,
+  FetchAgentsPageInfo,
+  FetchRecentProviderSessionEntry,
+  FetchRecentProviderSessionsOptions,
+  FetchUsageSummaryOptions,
+  FetchWorkspacesEntry,
+  FetchWorkspacesOptions,
+  FetchWorkspacesPageInfo,
+  UsageClearPayload,
+  UsageExportPayload,
+  UsageSummaryPayload,
 };
 
 export type { DaemonEvent, DaemonEventHandler } from "./daemon-client-inbound-controller.js";
@@ -348,65 +384,6 @@ type ScheduleUpdatePayload = Extract<
 >["payload"];
 type RestartRequestedStatusPayload = z.infer<typeof RestartRequestedStatusPayloadSchema>;
 type ShutdownRequestedStatusPayload = z.infer<typeof ShutdownRequestedStatusPayloadSchema>;
-type FetchAgentsPayload = Extract<
-  SessionOutboundMessage,
-  { type: "fetch_agents_response" }
->["payload"];
-type FetchAgentsRequest = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
-export type FetchAgentsOptions = Omit<FetchAgentsRequest, "type" | "requestId"> & {
-  requestId?: string;
-};
-export type FetchAgentsEntry = FetchAgentsPayload["entries"][number];
-export type FetchAgentsPageInfo = FetchAgentsPayload["pageInfo"];
-type FetchAgentHistoryPayload = Extract<
-  SessionOutboundMessage,
-  { type: "fetch_agent_history_response" }
->["payload"];
-type FetchAgentHistoryRequest = Extract<
-  SessionInboundMessage,
-  { type: "fetch_agent_history_request" }
->;
-export type FetchAgentHistoryOptions = Omit<FetchAgentHistoryRequest, "type" | "requestId"> & {
-  requestId?: string;
-};
-export type FetchAgentHistoryEntry = FetchAgentHistoryPayload["entries"][number];
-export type FetchAgentHistoryPageInfo = FetchAgentHistoryPayload["pageInfo"];
-type FetchRecentProviderSessionsPayload = Extract<
-  SessionOutboundMessage,
-  { type: "fetch_recent_provider_sessions_response" }
->["payload"];
-type FetchRecentProviderSessionsRequest = Extract<
-  SessionInboundMessage,
-  { type: "fetch_recent_provider_sessions_request" }
->;
-export type FetchRecentProviderSessionsOptions = Omit<
-  FetchRecentProviderSessionsRequest,
-  "type" | "requestId"
-> & {
-  requestId?: string;
-};
-export type FetchRecentProviderSessionEntry = FetchRecentProviderSessionsPayload["entries"][number];
-export type UsageSummaryPayload = UsageSummaryGetResponseMessage["payload"];
-type UsageSummaryGetRequest = Extract<SessionInboundMessage, { type: "usage.summary.get.request" }>;
-export type FetchUsageSummaryOptions = Omit<UsageSummaryGetRequest, "type" | "requestId"> & {
-  requestId?: string;
-};
-export type UsageExportPayload = UsageExportResponseMessage["payload"];
-type UsageExportRequest = Extract<SessionInboundMessage, { type: "usage.export.request" }>;
-export type ExportUsageOptions = Omit<UsageExportRequest, "type" | "requestId"> & {
-  requestId?: string;
-};
-export type UsageClearPayload = UsageClearResponseMessage["payload"];
-type FetchWorkspacesPayload = Extract<
-  SessionOutboundMessage,
-  { type: "fetch_workspaces_response" }
->["payload"];
-type FetchWorkspacesRequest = Extract<SessionInboundMessage, { type: "fetch_workspaces_request" }>;
-export type FetchWorkspacesOptions = Omit<FetchWorkspacesRequest, "type" | "requestId"> & {
-  requestId?: string;
-};
-export type FetchWorkspacesEntry = FetchWorkspacesPayload["entries"][number];
-export type FetchWorkspacesPageInfo = FetchWorkspacesPayload["pageInfo"];
 export interface CreateChatRoomOptions {
   name: string;
   purpose?: string | null;
@@ -566,6 +543,7 @@ export class DaemonClient {
   private readonly agentExtensionCommands: AgentExtensionCommandClient;
   private readonly automationCommands: AutomationCommandClient;
   private readonly workspaceCommands: WorkspaceCommandClient;
+  private readonly queryCommands: QueryCommandClient;
   private readonly terminalClient: TerminalClient;
   private readonly voiceClient: VoiceClient;
   private readonly agentLifecycle: AgentLifecycleClient;
@@ -613,6 +591,9 @@ export class DaemonClient {
       request: (params) => this.requests.requestSession(params),
     });
     this.workspaceCommands = new WorkspaceCommandClient({
+      request: (params) => this.requests.requestSession(params),
+    });
+    this.queryCommands = new QueryCommandClient({
       request: (params) => this.requests.requestSession(params),
     });
     this.terminalClient = new TerminalClient({
@@ -841,147 +822,34 @@ export class DaemonClient {
   // ============================================================================
 
   async fetchAgents(options?: FetchAgentsOptions): Promise<FetchAgentsPayload> {
-    const resolvedRequestId = this.createRequestId(options?.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agents_request",
-      requestId: resolvedRequestId,
-      ...(options?.scope ? { scope: options.scope } : {}),
-      ...(options?.filter ? { filter: options.filter } : {}),
-      ...(options?.sort ? { sort: options.sort } : {}),
-      ...(options?.page ? { page: options.page } : {}),
-      ...(options?.subscribe ? { subscribe: options.subscribe } : {}),
-    });
-    return this.requests.request({
-      requestId: resolvedRequestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "fetch_agents_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
+    return this.queryCommands.fetchAgents(options);
   }
 
   async fetchAgentHistory(options?: FetchAgentHistoryOptions): Promise<FetchAgentHistoryPayload> {
-    const resolvedRequestId = this.createRequestId(options?.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agent_history_request",
-      requestId: resolvedRequestId,
-      ...(options?.filter ? { filter: options.filter } : {}),
-      ...(options?.sort ? { sort: options.sort } : {}),
-      ...(options?.page ? { page: options.page } : {}),
-    });
-    return this.requests.request({
-      requestId: resolvedRequestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "fetch_agent_history_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
+    return this.queryCommands.fetchAgentHistory(options);
   }
 
   async fetchRecentProviderSessions(
     options?: FetchRecentProviderSessionsOptions,
   ): Promise<FetchRecentProviderSessionsPayload> {
-    const resolvedRequestId = this.createRequestId(options?.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "fetch_recent_provider_sessions_request",
-      requestId: resolvedRequestId,
-      ...(options?.cwd ? { cwd: options.cwd } : {}),
-      ...(options?.providers ? { providers: options.providers } : {}),
-      ...(options?.since ? { since: options.since } : {}),
-      ...(options?.limit ? { limit: options.limit } : {}),
-    });
-    return this.requests.request({
-      requestId: resolvedRequestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "fetch_recent_provider_sessions_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
+    return this.queryCommands.fetchRecentProviderSessions(options);
   }
 
   async fetchUsageSummary(options?: FetchUsageSummaryOptions): Promise<UsageSummaryPayload> {
-    return this.requests.requestNamespaced<"usage.summary.get.response">({
-      requestId: options?.requestId,
-      message: {
-        type: "usage.summary.get.request",
-        ...(options?.rangeDays ? { rangeDays: options.rangeDays } : {}),
-      },
-      timeout: 10000,
-    });
+    return this.queryCommands.fetchUsageSummary(options);
   }
 
   async exportUsage(options?: ExportUsageOptions): Promise<UsageExportPayload> {
-    return this.requests.requestNamespaced<"usage.export.response">({
-      requestId: options?.requestId,
-      message: {
-        type: "usage.export.request",
-        ...(options?.format ? { format: options.format } : {}),
-      },
-      timeout: 10000,
-    });
+    return this.queryCommands.exportUsage(options);
   }
 
   async clearUsage(requestId?: string): Promise<UsageClearPayload> {
-    return this.requests.requestNamespaced<"usage.clear.response">({
-      requestId,
-      message: {
-        type: "usage.clear.request",
-      },
-      timeout: 10000,
-    });
+    return this.queryCommands.clearUsage(requestId);
   }
 
   async fetchWorkspaces(options?: FetchWorkspacesOptions): Promise<FetchWorkspacesPayload> {
-    const resolvedRequestId = this.createRequestId(options?.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "fetch_workspaces_request",
-      requestId: resolvedRequestId,
-      ...(options?.filter ? { filter: options.filter } : {}),
-      ...(options?.sort ? { sort: options.sort } : {}),
-      ...(options?.page ? { page: options.page } : {}),
-      ...(options?.subscribe ? { subscribe: options.subscribe } : {}),
-    });
-    return this.requests.request({
-      requestId: resolvedRequestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "fetch_workspaces_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
+    return this.queryCommands.fetchWorkspaces(options);
   }
-
   async openProject(cwd: string, requestId?: string): Promise<OpenProjectPayload> {
     return this.workspaceCommands.openProject(cwd, requestId);
   }
