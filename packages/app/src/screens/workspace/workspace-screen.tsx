@@ -114,6 +114,7 @@ import { useWorkspaceDockActions } from "@/screens/workspace/use-workspace-dock-
 import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace-pane-layout-actions";
 import { useWorkspacePaneContentModels } from "@/screens/workspace/use-workspace-pane-content-models";
 import { useWorkspaceEnvironmentPanelState } from "@/screens/workspace/use-workspace-environment-panel-state";
+import { useWorkspaceEnvironmentData } from "@/screens/workspace/use-workspace-environment-data";
 import { useWorkspaceExplorerActions } from "@/screens/workspace/use-workspace-explorer-actions";
 import { useWorkspaceOpenIntent } from "@/screens/workspace/use-workspace-open-intent";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
@@ -144,7 +145,7 @@ import {
 } from "@/screens/workspace/workspace-pane-content";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
 
-import { useSubagentsForParent, type SubagentRow } from "@/subagents/select";
+import type { SubagentRow } from "@/subagents/select";
 import { isAbsolutePath } from "@/utils/path";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
@@ -154,16 +155,12 @@ import { canCreateWorkspaceTerminal } from "@/screens/workspace/terminals/state"
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
 import type { TodoEntry, TurnChangesItem } from "@/types/stream";
 import {
-  buildWorkspaceActivityItems,
-  buildWorkspaceStatusStripModel,
-  findLatestTodoItems,
   shouldEnableWorkspaceReviewArchiveAction,
   type WorkspaceActivityItem,
 } from "@/screens/workspace/workspace-environment-panel-model";
 import { WorkspaceEnvironmentGitPopover } from "@/screens/workspace/workspace-environment-git-popover";
 import {
   buildBrowserContextSummary,
-  findLatestTurnChanges,
   type BrowserContextSummary,
   type WorkspaceEnvironmentDockState,
   type WorkspaceEnvironmentDockTab,
@@ -1285,61 +1282,6 @@ function WorkspaceEnvironmentPanelRail({
   );
 }
 
-function getWorkspaceEnvironmentSourceLabel(
-  workspace: WorkspaceDescriptor | null | undefined,
-): string | null {
-  const label = workspace?.projectDisplayName ?? workspace?.projectRootPath;
-  const normalized = label?.trim();
-  return normalized ? normalized : null;
-}
-
-function getWorkspaceEnvironmentStatus(
-  workspace: WorkspaceDescriptor | null | undefined,
-): WorkspaceDescriptor["status"] | null {
-  return workspace?.status ?? null;
-}
-
-function useEnvironmentPanelAgent(serverId: string, agentId: string | null): Agent | null {
-  return useSessionStore((state) => {
-    if (!agentId) {
-      return null;
-    }
-    return state.sessions[serverId]?.agents?.get(agentId) ?? null;
-  });
-}
-
-function useEnvironmentPanelTodoItems(
-  serverId: string,
-  agentId: string | null,
-): TodoEntry[] | null {
-  return useSessionStore((state) => {
-    if (!agentId) {
-      return null;
-    }
-    const session = state.sessions[serverId];
-    return findLatestTodoItems({
-      head: session?.agentStreamHead.get(agentId),
-      tail: session?.agentStreamTail.get(agentId),
-    });
-  });
-}
-
-function useEnvironmentPanelTurnChanges(
-  serverId: string,
-  agentId: string | null,
-): TurnChangesItem | null {
-  return useSessionStore((state) => {
-    if (!agentId) {
-      return null;
-    }
-    const session = state.sessions[serverId];
-    return findLatestTurnChanges({
-      head: session?.agentStreamHead.get(agentId),
-      tail: session?.agentStreamTail.get(agentId),
-    });
-  });
-}
-
 function shouldShowWorkspaceEnvironmentRail(input: {
   isMobile: boolean;
   isEnvironmentPanelVisible: boolean;
@@ -1979,15 +1921,6 @@ function WorkspaceScreenContent({
     setExplorerTabForCheckout,
   });
 
-  const environmentSourceLabel = useMemo(
-    () => getWorkspaceEnvironmentSourceLabel(workspaceDescriptor),
-    [workspaceDescriptor],
-  );
-  const environmentWorkspaceStatus = useMemo(
-    () => getWorkspaceEnvironmentStatus(workspaceDescriptor),
-    [workspaceDescriptor],
-  );
-
   const workspaceLayout = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,
   );
@@ -2057,32 +1990,22 @@ function WorkspaceScreenContent({
     }
     return target.agentId;
   }, [focusedPaneTabState.activeTab]);
-  const environmentPanelAgent = useEnvironmentPanelAgent(normalizedServerId, focusedPaneAgentId);
-  const environmentSubagents = useSubagentsForParent({
-    serverId: normalizedServerId,
-    parentAgentId: focusedPaneAgentId ?? "",
+  const {
+    environmentPanelAgent,
+    environmentPanelAgentId,
+    environmentSubagents,
+    environmentTodoItems,
+    environmentTurnChanges,
+    environmentSourceLabel,
+    environmentWorkspaceStatus,
+    workspaceStatusStripModel,
+    workspaceActivityItems,
+  } = useWorkspaceEnvironmentData({
+    normalizedServerId,
+    focusedPaneAgentId,
+    workspaceDescriptor,
+    currentBranchName,
   });
-  const environmentTodoItems = useEnvironmentPanelTodoItems(normalizedServerId, focusedPaneAgentId);
-  const workspaceStatusStripModel = useMemo(
-    () =>
-      buildWorkspaceStatusStripModel({
-        activeAgent: environmentPanelAgent,
-        workspace: workspaceDescriptor,
-        currentBranchName,
-        todoItems: environmentTodoItems,
-      }),
-    [currentBranchName, environmentPanelAgent, environmentTodoItems, workspaceDescriptor],
-  );
-  const workspaceActivityItems = useMemo(
-    () =>
-      buildWorkspaceActivityItems({
-        activeAgent: environmentPanelAgent,
-        workspace: workspaceDescriptor,
-        currentBranchName,
-      }),
-    [currentBranchName, environmentPanelAgent, workspaceDescriptor],
-  );
-  const environmentPanelAgentId = environmentPanelAgent?.id ?? null;
   const workspaceReviewArchiveAction = useMemo(() => {
     if (
       !workspaceDirectory ||
@@ -2106,11 +2029,6 @@ function WorkspaceScreenContent({
     workspaceDescriptor?.workspaceKind,
     workspaceDirectory,
   ]);
-  const environmentTurnChanges = useEnvironmentPanelTurnChanges(
-    normalizedServerId,
-    focusedPaneAgentId,
-  );
-
   useEffect(() => {
     if (!isRouteFocused) {
       return;
