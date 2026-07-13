@@ -10,15 +10,7 @@ import {
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "@react-navigation/native";
-import {
-  ActivityIndicator,
-  BackHandler,
-  type LayoutChangeEvent,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, BackHandler, Pressable, ScrollView, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGlobalSearchParams, useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -123,6 +115,7 @@ import { useWorkspaceTabCloseActions } from "@/screens/workspace/use-workspace-t
 import { useWorkspaceDockActions } from "@/screens/workspace/use-workspace-dock-actions";
 import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace-pane-layout-actions";
 import { useWorkspacePaneContentModels } from "@/screens/workspace/use-workspace-pane-content-models";
+import { useWorkspaceEnvironmentPanelState } from "@/screens/workspace/use-workspace-environment-panel-state";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   getFallbackTabOptionDescription,
@@ -230,11 +223,7 @@ const ThemedListTree = withUnistyles(ListTree);
 const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
 
 const WORKSPACE_ENVIRONMENT_PANEL_WIDTH = 300;
-const WORKSPACE_ENVIRONMENT_PANEL_SAFE_GAP = 44;
-const WORKSPACE_ENVIRONMENT_PANEL_MIN_CONTENT_WIDTH = 1008;
 const WORKSPACE_FLOATING_PANEL_TOP_OFFSET = 56;
-
-type WorkspaceEnvironmentPanelMode = "auto" | "forced-open" | "forced-closed";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -1324,10 +1313,6 @@ function WorkspaceEnvironmentPanelRail({
   );
 }
 
-function getEnvironmentExplorerTab(checkout: ExplorerCheckoutContext): "changes" | "files" {
-  return checkout.isGit ? "changes" : "files";
-}
-
 function getWorkspaceEnvironmentSourceLabel(
   workspace: WorkspaceDescriptor | null | undefined,
 ): string | null {
@@ -1386,7 +1371,6 @@ function useEnvironmentPanelTurnChanges(
 function shouldShowWorkspaceEnvironmentRail(input: {
   isMobile: boolean;
   isEnvironmentPanelVisible: boolean;
-  workspaceDirectory: string | null;
 }): boolean {
   return !input.isMobile && input.isEnvironmentPanelVisible;
 }
@@ -1824,17 +1808,6 @@ function WorkspaceScreenContent({
   const isMobile = useIsCompactFormFactor();
   const globalParams = useGlobalSearchParams<{ open?: string | string[] }>();
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
-  const [environmentPanelMode, setEnvironmentPanelMode] =
-    useState<WorkspaceEnvironmentPanelMode>("auto");
-  const [centerContentSize, setCenterContentSize] = useState<{
-    width: number;
-    height: number;
-  } | null>(null);
-  const [environmentDockState, setEnvironmentDockState] = useState<WorkspaceEnvironmentDockState>({
-    open: true,
-    activeTab: "git-summary",
-  });
-
   const normalizedServerId = useMemo(() => trimNonEmpty(decodeSegment(serverId)) ?? "", [serverId]);
   const openIntentValue = useMemo(
     () => getSearchParamValue(globalParams.open),
@@ -2051,75 +2024,23 @@ function WorkspaceScreenContent({
 
   const desktopContentStyle = styles.content;
 
-  const hasEnoughSpaceForEnvironmentPanel = useMemo(() => {
-    if (!centerContentSize) {
-      return true;
-    }
-    return (
-      centerContentSize.width >=
-      WORKSPACE_ENVIRONMENT_PANEL_WIDTH +
-        WORKSPACE_ENVIRONMENT_PANEL_SAFE_GAP +
-        WORKSPACE_ENVIRONMENT_PANEL_MIN_CONTENT_WIDTH
-    );
-  }, [centerContentSize]);
-  const previousHasEnoughSpaceForEnvironmentPanelRef = useRef(hasEnoughSpaceForEnvironmentPanel);
-  const wantsEnvironmentPanelVisible =
-    environmentPanelMode === "forced-open" ||
-    (environmentPanelMode === "auto" && hasEnoughSpaceForEnvironmentPanel);
-  const isEnvironmentPanelVisible = wantsEnvironmentPanelVisible;
-
-  useEffect(() => {
-    const wasEnough = previousHasEnoughSpaceForEnvironmentPanelRef.current;
-    previousHasEnoughSpaceForEnvironmentPanelRef.current = hasEnoughSpaceForEnvironmentPanel;
-    if (
-      !wasEnough &&
-      hasEnoughSpaceForEnvironmentPanel &&
-      environmentPanelMode === "forced-closed"
-    ) {
-      setEnvironmentPanelMode("auto");
-    }
-  }, [environmentPanelMode, hasEnoughSpaceForEnvironmentPanel]);
-
-  const handleCenterContentLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setCenterContentSize((current) =>
-      current?.width === width && current.height === height ? current : { width, height },
-    );
-  }, []);
-
-  const handleToggleEnvironmentPanel = useCallback(() => {
-    if (!isEnvironmentPanelVisible) {
-      setEnvironmentDockState((state) => ({ ...state, open: true }));
-    }
-    setEnvironmentPanelMode(isEnvironmentPanelVisible ? "forced-closed" : "forced-open");
-    if (!isEnvironmentPanelVisible && isExplorerOpen && activeExplorerCheckout) {
-      toggleFileExplorerForCheckout({
-        isCompact: isMobile,
-        checkout: activeExplorerCheckout,
-      });
-    }
-  }, [
-    activeExplorerCheckout,
+  const {
+    environmentDockState,
+    setEnvironmentDockState,
+    setEnvironmentPanelMode,
     isEnvironmentPanelVisible,
-    isExplorerOpen,
+    handleCenterContentLayout,
+    handleToggleEnvironmentPanel,
+    handleOpenEnvironmentChanges,
+  } = useWorkspaceEnvironmentPanelState({
+    panelWidth: WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
     isMobile,
+    isExplorerOpen,
+    activeExplorerCheckout,
+    openFileExplorerForCheckout,
     toggleFileExplorerForCheckout,
-  ]);
-
-  const handleOpenEnvironmentChanges = useCallback(() => {
-    if (!activeExplorerCheckout) {
-      return;
-    }
-    setExplorerTabForCheckout({
-      ...activeExplorerCheckout,
-      tab: getEnvironmentExplorerTab(activeExplorerCheckout),
-    });
-    openFileExplorerForCheckout({
-      isCompact: isMobile,
-      checkout: activeExplorerCheckout,
-    });
-    setEnvironmentPanelMode("forced-closed");
-  }, [activeExplorerCheckout, isMobile, openFileExplorerForCheckout, setExplorerTabForCheckout]);
+    setExplorerTabForCheckout,
+  });
 
   const explorerToggleAccessibilityState = useMemo(
     () => ({ expanded: isExplorerOpen }),
@@ -2768,9 +2689,8 @@ function WorkspaceScreenContent({
       shouldShowWorkspaceEnvironmentRail({
         isMobile,
         isEnvironmentPanelVisible,
-        workspaceDirectory,
       }),
-    [isMobile, isEnvironmentPanelVisible, workspaceDirectory],
+    [isMobile, isEnvironmentPanelVisible],
   );
   const createTerminalDisabled = useMemo(
     () => createTerminalMutation.isPending || pendingTerminalCreateInput !== null,
