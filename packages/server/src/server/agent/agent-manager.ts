@@ -70,6 +70,7 @@ import {
 import { AgentManagerEventBus } from "./agent-manager-event-bus.js";
 import { AgentArchiveController, type AgentArchivedCallback } from "./agent-archive-controller.js";
 import { AgentMetadataController } from "./agent-metadata-controller.js";
+import { AgentPermissionController } from "./agent-permission-controller.js";
 import { AgentRunControlController } from "./agent-run-control-controller.js";
 import { AgentRuntimeConfigurationController } from "./agent-runtime-configuration-controller.js";
 import {
@@ -321,6 +322,7 @@ export class AgentManager {
   private readonly foregroundExecution: AgentForegroundExecutionController;
   private readonly launchConfig: AgentLaunchConfigController;
   private readonly metadata: AgentMetadataController;
+  private readonly permissions: AgentPermissionController;
   private readonly providers: AgentProviderController;
   private readonly runControl: AgentRunControlController;
   private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
@@ -358,6 +360,17 @@ export class AgentManager {
       getLastAssistantMessage: (agentId) => this.getLastAssistantMessage(agentId),
       getPendingRun: (agentId) => this.foregroundRuns.getPendingRun(agentId),
       subscribe: (callback, waitOptions) => this.subscribe(callback, waitOptions),
+    });
+    this.permissions = new AgentPermissionController({
+      broadcastAttention: (agent) => this.broadcastAgentAttention(agent, "permission"),
+      dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
+      emitState: (agent) => this.emitState(agent),
+      getAgent: (agentId) => this.requireSessionAgent(agentId),
+      getSessionEventTail: (agentId) => this.sessionEventTails.get(agentId),
+      logger: this.logger,
+      persistSnapshot: (agent) => this.persistSnapshot(agent),
+      refreshSessionState: (agent) => this.refreshSessionState(agent),
+      touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
     });
     this.foregroundExecution = new AgentForegroundExecutionController({
       attachPersistenceCwd,
@@ -418,8 +431,8 @@ export class AgentManager {
     });
     this.sessionRescue = new AgentSessionRescueController(this.logger, options.rescueTimeouts);
     this.runControl = new AgentRunControlController({
+      clearPendingPermissions: (agent) => this.permissions.clearAfterInterrupt(agent),
       dispatchSessionEvent: (agent, event) => this.dispatchSessionEvent(agent, event),
-      dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
       emitState: (agent) => this.emitState(agent),
       findAgent: (agentId) => this.agents.get(agentId) ?? null,
       foregroundRuns: this.foregroundRuns,
@@ -1081,39 +1094,7 @@ export class AgentManager {
     requestId: string,
     response: AgentPermissionResponse,
   ): Promise<AgentPermissionResult | void> {
-    const agent = this.requireAgent(agentId);
-    agent.inFlightPermissionResponses.add(requestId);
-
-    try {
-      const result = await agent.session.respondToPermission(requestId, response);
-      await this.sessionEventTails.get(agent.id)?.catch(() => undefined);
-      agent.pendingPermissions.delete(requestId);
-
-      try {
-        await this.refreshSessionState(agent);
-      } catch (error) {
-        // Ignore refresh errors - state sync after permission approval is best effort.
-        this.logger.debug(
-          { err: error, agentId: agent.id },
-          "Failed to refresh state after permission response",
-        );
-      }
-
-      this.touchUpdatedAt(agent);
-      await this.persistSnapshot(agent);
-      this.emitState(agent);
-
-      const bufferedResolution = agent.bufferedPermissionResolutions.get(requestId);
-      if (bufferedResolution) {
-        agent.bufferedPermissionResolutions.delete(requestId);
-        this.dispatchStream(agent.id, bufferedResolution, { timestamp: new Date().toISOString() });
-      }
-
-      return result;
-    } finally {
-      agent.inFlightPermissionResponses.delete(requestId);
-      agent.bufferedPermissionResolutions.delete(requestId);
-    }
+    return this.permissions.respond(agentId, requestId, response);
   }
 
   async cancelAgentRun(agentId: string): Promise<boolean> {
@@ -1121,8 +1102,7 @@ export class AgentManager {
   }
 
   getPendingPermissions(agentId: string): AgentPermissionRequest[] {
-    const agent = this.requireSessionAgent(agentId);
-    return Array.from(agent.pendingPermissions.values());
+    return this.permissions.list(agentId);
   }
 
   /**
@@ -1529,13 +1509,7 @@ export class AgentManager {
       agent.currentModeId = null;
     }
 
-    try {
-      const pending = agent.session.getPendingPermissions();
-      agent.pendingPermissions = new Map(pending.map((request) => [request.id, request]));
-    } catch (error) {
-      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh pending permissions");
-      agent.pendingPermissions.clear();
-    }
+    this.permissions.refreshFromSession(agent);
 
     this.syncFeaturesFromSession(agent);
     await this.refreshRuntimeInfo(agent);
@@ -1844,11 +1818,15 @@ export class AgentManager {
         this.onStreamTurnStarted({ agent, eventTurnId, isForegroundEvent });
         return undefined;
       case "permission_requested":
-        this.onStreamPermissionRequested(agent, event);
+        this.permissions.onRequested(agent, event);
         return undefined;
-      case "permission_resolved":
-        this.onStreamPermissionResolved({ agent, event, options, flags });
+      case "permission_resolved": {
+        const shouldDispatchEvent = this.permissions.onResolved(agent, event, options);
+        if (!shouldDispatchEvent) {
+          flags.shouldDispatchEvent = false;
+        }
         return undefined;
+      }
       default:
         return undefined;
     }
@@ -1992,7 +1970,7 @@ export class AgentManager {
       this.formatTurnFailedMessage(event),
       options,
     );
-    this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Turn failed");
+    this.permissions.resolvePending(agent, event.provider, options, "Turn failed");
     if (!isForegroundEvent) {
       this.emitState(agent);
     }
@@ -2026,7 +2004,7 @@ export class AgentManager {
       agent.lifecycle = "idle";
     }
     agent.lastError = undefined;
-    this.resolvePendingPermissionsForAgent(agent, event.provider, options, "Interrupted");
+    this.permissions.resolvePending(agent, event.provider, options, "Interrupted");
     if (!isForegroundEvent) {
       this.emitState(agent);
     }
@@ -2052,53 +2030,6 @@ export class AgentManager {
     if (!isForegroundEvent) {
       agent.lifecycle = "running";
       this.emitState(agent);
-    }
-  }
-
-  private onStreamPermissionRequested(
-    agent: ActiveManagedAgent,
-    event: Extract<AgentStreamEvent, { type: "permission_requested" }>,
-  ): void {
-    const hadPendingPermissions = agent.pendingPermissions.size > 0;
-    agent.pendingPermissions.set(event.request.id, event.request);
-    if (!hadPendingPermissions && !agent.internal) {
-      this.broadcastAgentAttention(agent, "permission");
-    }
-    this.emitState(agent);
-  }
-
-  private onStreamPermissionResolved(params: {
-    agent: ActiveManagedAgent;
-    event: Extract<AgentStreamEvent, { type: "permission_resolved" }>;
-    options: { fromHistory?: boolean } | undefined;
-    flags: StreamEventFlags;
-  }): void {
-    const { agent, event, options, flags } = params;
-    agent.pendingPermissions.delete(event.requestId);
-    if (!options?.fromHistory && agent.inFlightPermissionResponses.has(event.requestId)) {
-      agent.bufferedPermissionResolutions.set(event.requestId, event);
-      flags.shouldDispatchEvent = false;
-      return;
-    }
-    this.emitState(agent);
-  }
-
-  private resolvePendingPermissionsForAgent(
-    agent: ActiveManagedAgent,
-    provider: AgentProvider,
-    options: { fromHistory?: boolean } | undefined,
-    message: string,
-  ): void {
-    for (const [requestId] of agent.pendingPermissions) {
-      agent.pendingPermissions.delete(requestId);
-      if (!options?.fromHistory) {
-        this.dispatchStream(agent.id, {
-          type: "permission_resolved",
-          provider,
-          requestId,
-          resolution: { behavior: "deny", message },
-        });
-      }
     }
   }
 

@@ -14,8 +14,8 @@ const CANCEL_PROPAGATION_TIMEOUT_MS = 2_000;
 type ActiveManagedAgent = Exclude<ManagedAgent, { lifecycle: "closed" }>;
 
 interface AgentRunControlControllerOptions {
+  clearPendingPermissions(agent: ActiveManagedAgent): void;
   dispatchSessionEvent(agent: ActiveManagedAgent, event: AgentStreamEvent): Promise<void>;
-  dispatchStream(agentId: string, event: AgentStreamEvent, metadata?: { timestamp?: string }): void;
   emitState(agent: ManagedAgent): void;
   findAgent(agentId: string): ActiveManagedAgent | null;
   foregroundRuns: ForegroundRunState;
@@ -71,7 +71,7 @@ export class AgentRunControlController {
     await this.options.interruptSession(agent.session, agentId);
     await this.waitForForegroundCancellation(agent, foregroundTurnId, pendingRun);
     await this.forceCancelStaleForegroundTurn(agent, foregroundTurnId);
-    this.clearPendingPermissions(agent);
+    this.options.clearPendingPermissions(agent);
     return true;
   }
 
@@ -166,28 +166,6 @@ export class AgentRunControlController {
     if (staleRun && !staleRun.settled) {
       await staleRun.settledPromise;
     }
-  }
-
-  private clearPendingPermissions(agent: ActiveManagedAgent): void {
-    if (agent.pendingPermissions.size === 0) {
-      return;
-    }
-
-    for (const [requestId] of agent.pendingPermissions) {
-      this.options.dispatchStream(
-        agent.id,
-        {
-          type: "permission_resolved",
-          provider: agent.provider,
-          requestId,
-          resolution: { behavior: "deny", message: "Interrupted" },
-        },
-        { timestamp: new Date().toISOString() },
-      );
-    }
-    agent.pendingPermissions.clear();
-    this.options.touchUpdatedAt(agent);
-    this.options.emitState(agent);
   }
 
   private createPropagationTimeout(): Promise<void> {
