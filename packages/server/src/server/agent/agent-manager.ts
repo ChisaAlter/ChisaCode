@@ -78,6 +78,7 @@ import {
   AgentSessionRescueController,
   type AgentSessionRescueTimeouts,
 } from "./agent-session-rescue-controller.js";
+import { AgentSessionRegistrationController } from "./agent-session-registration-controller.js";
 import { AgentSessionTeardownController } from "./agent-session-teardown-controller.js";
 import {
   AgentWaitController,
@@ -324,6 +325,7 @@ export class AgentManager {
   private readonly providers: AgentProviderController;
   private readonly runControl: AgentRunControlController;
   private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
+  private readonly sessionRegistration: AgentSessionRegistrationController;
   private readonly sessionRescue: AgentSessionRescueController;
   private readonly sessionTeardown: AgentSessionTeardownController;
   private readonly timeline: AgentTimelineController;
@@ -400,6 +402,31 @@ export class AgentManager {
       durableStore: options.durableTimelineStore,
       logger: this.logger,
       trackBackgroundTask: (task) => this.trackBackgroundTask(task),
+    });
+    this.sessionRegistration = new AgentSessionRegistrationController({
+      addAgent: (agent) => {
+        this.agents.set(agent.id, agent);
+      },
+      attachPersistenceCwd,
+      beginInitialSnapshotPersist: (agentId) => {
+        this.agentsAwaitingInitialSnapshotPersist.add(agentId);
+      },
+      emitState: (agent, emitOptions) => this.emitState(agent, emitOptions),
+      endInitialSnapshotPersist: (agentId) => {
+        this.agentsAwaitingInitialSnapshotPersist.delete(agentId);
+      },
+      enqueueSessionEvent: (agentId, event) => this.enqueueSessionEvent(agentId, event),
+      hasAgent: (agentId) => this.agents.has(agentId),
+      persistSnapshot: (agent, persistOptions) => this.persistSnapshot(agent, persistOptions),
+      recordInitialStatus: (agentId, lifecycle) => {
+        this.previousStatuses.set(agentId, lifecycle);
+      },
+      refreshRuntimeInfo: (agent) => this.refreshRuntimeInfo(agent),
+      refreshSessionState: (agent) => this.refreshSessionState(agent),
+      registry: this.registry,
+      resolveInitialAttention,
+      timeline: this.timeline,
+      validateAgentId,
     });
     this.metadata = new AgentMetadataController({
       emitState: (agent, emitOptions) => this.emitState(agent, emitOptions),
@@ -715,7 +742,7 @@ export class AgentManager {
     const createOptions = this.buildCreateSessionOptions(options);
     const session = await client.createSession(launchConfig, launchContext, createOptions);
     const relation = readAgentRelation(options?.labels, options?.relation) ?? undefined;
-    return this.registerSession(session, normalizedConfig, resolvedAgentId, {
+    return this.sessionRegistration.register(session, normalizedConfig, resolvedAgentId, {
       labels: labelsForAgentRelation(options?.labels, relation),
       relation,
       workspaceId: options?.workspaceId,
@@ -802,7 +829,7 @@ export class AgentManager {
           )
         : await client.createSession(launchConfig, launchContext);
     const relation = readAgentRelation(options?.labels, options?.relation) ?? undefined;
-    return this.registerSession(session, normalizedConfig, resolvedAgentId, {
+    return this.sessionRegistration.register(session, normalizedConfig, resolvedAgentId, {
       ...options,
       labels: labelsForAgentRelation(options?.labels, relation),
       relation,
@@ -861,7 +888,7 @@ export class AgentManager {
     }
 
     // Preserve existing labels and timeline during reload.
-    return this.registerSession(session, normalizedConfig, agentId, {
+    return this.sessionRegistration.register(session, normalizedConfig, agentId, {
       labels: existing.labels,
       relation: existing.relation,
       createdAt: existing.createdAt,
@@ -1154,137 +1181,6 @@ export class AgentManager {
     return await this.waits.waitForEvent(agentId, options);
   }
 
-  private async registerSession(
-    session: AgentSession,
-    config: AgentSessionConfig,
-    agentId: string,
-    options?: {
-      workspaceId?: string;
-      createdAt?: Date;
-      updatedAt?: Date;
-      lastUserMessageAt?: Date | null;
-      labels?: Record<string, string>;
-      relation?: AgentRelation;
-      timeline?: AgentTimelineItem[];
-      timelineRows?: AgentTimelineRow[];
-      timelineNextSeq?: number;
-      historyPrimed?: boolean;
-      lastUsage?: AgentUsage;
-      lastError?: string;
-      attention?: AttentionState;
-      initialTitle?: string | null;
-    },
-  ): Promise<ManagedAgent> {
-    const resolvedAgentId = validateAgentId(agentId, "registerSession");
-    if (this.agents.has(resolvedAgentId)) {
-      throw new Error(`Agent with id ${resolvedAgentId} already exists`);
-    }
-    const initialPersistedTitle = await this.resolveInitialPersistedTitle(
-      resolvedAgentId,
-      config,
-      options?.initialTitle ?? null,
-    );
-
-    const now = new Date();
-    const { durableTimelineHasRows } = await this.timeline.initializeForAgent({
-      agentId: resolvedAgentId,
-      now,
-      options,
-    });
-
-    const managed = this.buildManagedAgentForRegister({
-      resolvedAgentId,
-      session,
-      config,
-      now,
-      durableTimelineHasRows,
-      options,
-    });
-
-    this.agents.set(resolvedAgentId, managed);
-    // Initialize previousStatus to track transitions
-    this.previousStatuses.set(resolvedAgentId, managed.lifecycle);
-    await this.refreshRuntimeInfo(managed);
-    await this.persistSnapshot(managed, {
-      workspaceId: options?.workspaceId,
-      title: initialPersistedTitle.title,
-      titleSource: initialPersistedTitle.titleSource,
-    });
-    this.emitState(managed, { persist: false });
-
-    await this.refreshSessionState(managed);
-    managed.lifecycle = "idle";
-    await this.persistSnapshot(managed, { workspaceId: options?.workspaceId });
-    this.emitState(managed, { persist: false });
-    this.subscribeToSession(managed);
-    return { ...managed };
-  }
-
-  private buildManagedAgentForRegister(params: {
-    resolvedAgentId: string;
-    session: AgentSession;
-    config: AgentSessionConfig;
-    now: Date;
-    durableTimelineHasRows: boolean;
-    options:
-      | {
-          createdAt?: Date;
-          updatedAt?: Date;
-          lastUserMessageAt?: Date | null;
-          labels?: Record<string, string>;
-          relation?: AgentRelation;
-          historyPrimed?: boolean;
-          lastUsage?: AgentUsage;
-          lastError?: string;
-          attention?: AttentionState;
-        }
-      | undefined;
-  }): ActiveManagedAgent {
-    const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
-    return {
-      id: resolvedAgentId,
-      provider: config.provider,
-      cwd: config.cwd,
-      session,
-      capabilities: session.capabilities,
-      config,
-      runtimeInfo: undefined,
-      lifecycle: "initializing",
-      createdAt: options?.createdAt ?? now,
-      updatedAt: options?.updatedAt ?? now,
-      availableModes: [],
-      currentModeId: null,
-      pendingPermissions: new Map<string, AgentPermissionRequest>(),
-      bufferedPermissionResolutions: new Map(),
-      inFlightPermissionResponses: new Set(),
-      pendingReplacement: false,
-      activeForegroundTurnId: null,
-      foregroundTurnWaiters: new Set<ForegroundTurnWaiter>(),
-      finalizedForegroundTurnIds: new Set<string>(),
-      unsubscribeSession: null,
-      persistence: attachPersistenceCwd(session.describePersistence(), config.cwd),
-      historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
-      lastUserMessageAt: options?.lastUserMessageAt ?? null,
-      lastUsage: options?.lastUsage,
-      lastError: options?.lastError,
-      attention: resolveInitialAttention(options?.attention),
-      internal: config.internal ?? false,
-      labels: options?.labels ?? {},
-      relation: options?.relation,
-    } as ActiveManagedAgent;
-  }
-
-  private subscribeToSession(agent: ActiveManagedAgent): void {
-    if (agent.unsubscribeSession) {
-      return;
-    }
-    const agentId = agent.id;
-    const unsubscribe = agent.session.subscribe((event: AgentStreamEvent) => {
-      this.enqueueSessionEvent(agentId, event);
-    });
-    agent.unsubscribeSession = unsubscribe;
-  }
-
   private enqueueSessionEvent(agentId: string, event: AgentStreamEvent): void {
     this.logger.trace(
       {
@@ -1378,31 +1274,6 @@ export class AgentManager {
       },
       "agent.manager.notify_waiters",
     );
-  }
-
-  private async resolveInitialPersistedTitle(
-    agentId: string,
-    config: AgentSessionConfig,
-    fallbackTitle: string | null,
-  ): Promise<{ title: string | null; titleSource: StoredAgentTitleSource }> {
-    const existing = await this.registry?.get(agentId);
-    if (existing) {
-      return {
-        title: existing.title ?? null,
-        titleSource: existing.titleSource ?? "legacy",
-      };
-    }
-    const explicitTitle =
-      typeof config.title === "string" && config.title.trim().length > 0
-        ? config.title.trim()
-        : null;
-    if (explicitTitle) {
-      return { title: explicitTitle, titleSource: "explicit" };
-    }
-    return {
-      title: fallbackTitle,
-      titleSource: fallbackTitle ? "initial_prompt" : "legacy",
-    };
   }
 
   private async persistSnapshot(
@@ -1987,7 +1858,9 @@ export class AgentManager {
   private emitState(agent: ManagedAgent, options?: { persist?: boolean }): void {
     // Keep attention as an edge-triggered unread signal, not a level signal.
     this.checkAndSetAttention(agent);
-    if (options?.persist !== false) {
+    const shouldPersist =
+      options?.persist !== false && !this.agentsAwaitingInitialSnapshotPersist.has(agent.id);
+    if (shouldPersist) {
       this.enqueueBackgroundPersist(agent);
     }
 
@@ -2002,7 +1875,7 @@ export class AgentManager {
         lifecycle: agent.lifecycle,
         activeForegroundTurnId: agent.activeForegroundTurnId,
         pendingPermissions: agent.pendingPermissions.size,
-        persist: options?.persist !== false,
+        persist: shouldPersist,
       },
       "agent.manager.emit_state",
     );

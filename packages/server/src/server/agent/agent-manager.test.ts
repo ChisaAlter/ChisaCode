@@ -3366,6 +3366,57 @@ test("createAgent fails when explicit agent ID is not a UUID", async () => {
   ).rejects.toThrow("createAgent: agentId must be a UUID");
 });
 
+test("createAgent protects the initial title while the first snapshot is pending", async () => {
+  const agentId = "00000000-0000-4000-8000-000000000135";
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-initial-title-race-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const initialPersistStarted = deferred<void>();
+  const releaseInitialPersist = deferred<void>();
+  const originalApplySnapshot = storage.applySnapshot.bind(storage);
+  let shouldHoldNextPersist = true;
+  const applySnapshotSpy = vi
+    .spyOn(storage, "applySnapshot")
+    .mockImplementation(async (...args: Parameters<AgentStorage["applySnapshot"]>) => {
+      if (shouldHoldNextPersist) {
+        shouldHoldNextPersist = false;
+        initialPersistStarted.resolve();
+        await releaseInitialPersist.promise;
+      }
+      await originalApplySnapshot(...args);
+    });
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+  });
+  const creating = manager.createAgent({ provider: "codex", cwd: workdir }, agentId, {
+    initialTitle: "Initial prompt title",
+  });
+
+  try {
+    await initialPersistStarted.promise;
+    expect(manager.getAgent(agentId)?.lifecycle).toBe("initializing");
+
+    await manager.setTitle(agentId, "Racing title");
+    expect(manager.getAgent(agentId)?.config.title).toBeUndefined();
+
+    releaseInitialPersist.resolve();
+    await creating;
+    await manager.flush();
+
+    const persisted = await storage.get(agentId);
+    expect(persisted?.title).toBe("Initial prompt title");
+    expect(persisted?.titleSource).toBe("initial_prompt");
+  } finally {
+    releaseInitialPersist.resolve();
+    await creating.catch(() => undefined);
+    applySnapshotSpy.mockRestore();
+    await manager.flush().catch(() => undefined);
+    await storage.flush().catch(() => undefined);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 test("createAgent persists provided title before returning", async () => {
   const agentId = "00000000-0000-4000-8000-000000000102";
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
