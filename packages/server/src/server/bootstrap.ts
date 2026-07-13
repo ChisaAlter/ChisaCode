@@ -274,6 +274,7 @@ import { createSqliteAgentIndex } from "./agent-index/sqlite-agent-index.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
+import { createDaemonDiagnosticReport } from "./diagnostics-report.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import { FileBackedProjectRegistry, FileBackedWorkspaceRegistry } from "./workspace-registry.js";
@@ -1096,6 +1097,30 @@ export async function createChisaCodeDaemon(
         chatService,
         loopService,
         providerSnapshotManager,
+        getDiagnostics: () =>
+          createDaemonDiagnosticReport(
+            {
+              chisacodeHome: config.chisacodeHome,
+              daemonVersion,
+              daemonRuntimeConfig: {
+                listen: formatListenTarget(boundListenTarget ?? listenTarget),
+                relay: {
+                  enabled: config.relayEnabled ?? true,
+                  useTls:
+                    config.relayUseTls ??
+                    (config.relayEndpoint ?? "relay.chisacode.sh:443") === "relay.chisacode.sh:443",
+                  publicUseTls:
+                    config.relayPublicUseTls ??
+                    config.relayUseTls ??
+                    (config.relayEndpoint ?? "relay.chisacode.sh:443") === "relay.chisacode.sh:443",
+                },
+              },
+              daemonConfigStore,
+              agentManager,
+              providerSnapshotManager,
+            },
+            { includeLogs: false },
+          ),
         github,
         workspaceGitService,
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,

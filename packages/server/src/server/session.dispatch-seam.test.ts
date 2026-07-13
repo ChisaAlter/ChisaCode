@@ -326,6 +326,21 @@ describe("dispatch ?? chain routing", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
     });
+
+    it("routes diagnostics.request to provider handler", async () => {
+      const internals = asSessionInternals(session) as any;
+      const dispatchSpy = vi
+        .spyOn(internals.providerHandler, "handleDiagnosticsRequest")
+        .mockResolvedValue(undefined);
+
+      await session.handleMessage({
+        type: "diagnostics.request",
+        requestId: "test-diagnostics",
+        includeLogs: false,
+      } as any);
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("dispatchTerminalMessage", () => {

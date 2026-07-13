@@ -62,6 +62,8 @@ function parseSentSessionMessage(data: string | ArrayBuffer | Uint8Array | undef
   workspaceId?: string;
   provider?: string;
   providers?: string[];
+  includeLogs?: boolean;
+  maxLogLines?: number;
   cwd?: string;
   config?: unknown;
   draftConfig?: unknown;
@@ -630,6 +632,31 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     requestId: "provider-diagnostic-request",
     provider: "codex",
     diagnostic: "Codex is ready.",
+  });
+
+  const daemonDiagnosticPromise = client.diagnostics.get({
+    includeLogs: true,
+    maxLogLines: 40,
+    requestId: "daemon-diagnostics-request",
+  });
+  expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
+    type: "diagnostics.request",
+    requestId: "daemon-diagnostics-request",
+    includeLogs: true,
+    maxLogLines: 40,
+  });
+  ws.message(
+    sessionMessage({
+      type: "diagnostics.response",
+      payload: {
+        requestId: "daemon-diagnostics-request",
+        diagnostic: "Daemon is ready.",
+      },
+    }),
+  );
+  await expect(daemonDiagnosticPromise).resolves.toEqual({
+    requestId: "daemon-diagnostics-request",
+    diagnostic: "Daemon is ready.",
   });
 
   const snapshotUpdates: string[] = [];

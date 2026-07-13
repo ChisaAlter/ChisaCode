@@ -53,6 +53,7 @@ import type {
   GetProvidersSnapshotResponseMessage,
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
+  DiagnosticsResponse,
   ProviderToolingActionResponseMessage,
   AgentPresetsListResponseMessage,
   ModelGatewayMoaTestResponseMessage,
@@ -288,6 +289,8 @@ type ListAvailableProvidersPayload = ListAvailableProvidersResponse["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
+/** Payload returned by the daemon-wide diagnostics report RPC. */
+export type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ProviderToolingActionPayload = ProviderToolingActionResponseMessage["payload"];
 type AgentPresetsListPayload = AgentPresetsListResponseMessage["payload"];
 type ModelGatewayMoaTestPayload = ModelGatewayMoaTestResponseMessage["payload"];
@@ -1650,6 +1653,15 @@ export class DaemonClient {
     options?: { requestId?: string },
   ): Promise<ProviderDiagnosticPayload> {
     return this.providerCommands.getProviderDiagnostic(provider, options);
+  }
+
+  /** Generates a bounded, redacted daemon troubleshooting report. */
+  async getDiagnostics(options?: {
+    includeLogs?: boolean;
+    maxLogLines?: number;
+    requestId?: string;
+  }): Promise<DiagnosticsPayload> {
+    return this.providerCommands.getDiagnostics(options);
   }
 
   async runProviderToolingAction(

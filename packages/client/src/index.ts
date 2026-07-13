@@ -12,6 +12,7 @@ import type {
   MutableDaemonConfig,
   MutableDaemonConfigPatch,
   ProviderDiagnosticResponseMessage,
+  DiagnosticsResponse,
   ProviderToolingActionResponseMessage,
   AgentPresetsListResponseMessage,
   ProjectPlacementPayload,
@@ -274,6 +275,8 @@ export type ChisaCodeProviderSnapshotUpdate = Extract<
 >["payload"];
 export type ChisaCodeProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
 export type ChisaCodeProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
+/** Result returned by the public daemon diagnostics API. */
+export type ChisaCodeDiagnosticsResult = DiagnosticsResponse["payload"];
 export type ChisaCodeProviderToolingActionResult = ProviderToolingActionResponseMessage["payload"];
 export type ChisaCodeAgentPresetsListResult = AgentPresetsListResponseMessage["payload"];
 
@@ -351,12 +354,22 @@ export interface ChisaCodeConfigActions {
   ): Promise<{ requestId: string; config: MutableDaemonConfig }>;
 }
 
+/** Public daemon troubleshooting report operations. */
+export interface ChisaCodeDiagnosticsActions {
+  get(options?: {
+    includeLogs?: boolean;
+    maxLogLines?: number;
+    requestId?: string;
+  }): Promise<ChisaCodeDiagnosticsResult>;
+}
+
 export interface ChisaCodeClient {
   readonly workspaces: ChisaCodeWorkspaceActions;
   readonly agents: ChisaCodeAgentActions;
   readonly providers: ChisaCodeProviderActions;
   readonly presets: ChisaCodePresetActions;
   readonly config: ChisaCodeConfigActions;
+  readonly diagnostics: ChisaCodeDiagnosticsActions;
   connect(): Promise<void>;
   close(): Promise<void>;
   ensureConnected(): void;
@@ -428,6 +441,9 @@ export function createChisaCodeClient(config: ChisaCodeClientConfig): ChisaCodeC
     config: {
       get: (requestId) => daemonClient.getDaemonConfig(requestId),
       patch: (patch, requestId) => daemonClient.patchDaemonConfig(patch, requestId),
+    },
+    diagnostics: {
+      get: (options) => daemonClient.getDiagnostics(options),
     },
     connect: () => daemonClient.connect(),
     close: () => daemonClient.close(),

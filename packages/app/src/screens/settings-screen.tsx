@@ -10,6 +10,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +33,7 @@ import {
   Blocks,
   ChartNoAxesColumnIncreasing,
   Bug,
+  Copy,
 } from "lucide-react-native";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
@@ -52,6 +54,7 @@ import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
   useHostRuntimeIsConnected,
+  useHostRuntimeClient,
   useHosts,
 } from "@/runtime/host-runtime";
 import type { HostProfile } from "@/types/host-connection";
@@ -541,6 +544,7 @@ function GeneralSection({
 }
 
 interface DiagnosticsSectionProps {
+  serverId: string | null;
   voiceAudioEngine: ReturnType<typeof useVoiceAudioEngineOptional>;
   isPlaybackTestRunning: boolean;
   playbackTestResult: string | null;
@@ -548,38 +552,104 @@ interface DiagnosticsSectionProps {
 }
 
 function DiagnosticsSection({
+  serverId,
   voiceAudioEngine,
   isPlaybackTestRunning,
   playbackTestResult,
   handlePlaybackTest,
 }: DiagnosticsSectionProps) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const client = useHostRuntimeClient(serverId ?? "");
+  const [includeLogs, setIncludeLogs] = useState(false);
+  const [isCopyingReport, setIsCopyingReport] = useState(false);
   const handlePlayPress = useCallback(() => {
     void handlePlaybackTest();
   }, [handlePlaybackTest]);
+  const handleCopyReport = useCallback(async () => {
+    if (!client || isCopyingReport) {
+      return;
+    }
+    setIsCopyingReport(true);
+    try {
+      const result = await client.getDiagnostics({ includeLogs });
+      await Clipboard.setStringAsync(result.diagnostic);
+      toast.show(t("settings.diagnostics.reportCopied"), { variant: "success" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(t("settings.diagnostics.reportFailed", { message }));
+    } finally {
+      setIsCopyingReport(false);
+    }
+  }, [client, includeLogs, isCopyingReport, t, toast]);
+  const handleCopyReportPress = useCallback(() => {
+    void handleCopyReport();
+  }, [handleCopyReport]);
   return (
-    <SettingsSection title={t("settings.diagnostics.title")}>
-      <View style={settingsStyles.card}>
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.testAudio")}</Text>
-            {playbackTestResult ? (
-              <Text style={settingsStyles.rowHint}>{playbackTestResult}</Text>
-            ) : null}
+    <>
+      <SettingsSection title={t("settings.diagnostics.reportTitle")}>
+        <View style={settingsStyles.card}>
+          <View style={ROW_WITH_BORDER_STYLE}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.copyReport")}</Text>
+              <Text style={settingsStyles.rowHint}>
+                {client
+                  ? t("settings.diagnostics.reportHint")
+                  : t("settings.diagnostics.reportUnavailable")}
+              </Text>
+            </View>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={Copy}
+              onPress={handleCopyReportPress}
+              loading={isCopyingReport}
+              disabled={!client}
+            >
+              {isCopyingReport
+                ? t("settings.diagnostics.copyingReport")
+                : t("settings.diagnostics.copyReportAction")}
+            </Button>
           </View>
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={handlePlayPress}
-            disabled={!voiceAudioEngine || isPlaybackTestRunning}
-          >
-            {isPlaybackTestRunning
-              ? t("settings.diagnostics.playing")
-              : t("settings.diagnostics.playTest")}
-          </Button>
+          <View style={settingsStyles.row}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.includeLogs")}</Text>
+              <Text style={settingsStyles.rowHint}>
+                {t("settings.diagnostics.includeLogsHint")}
+              </Text>
+            </View>
+            <Switch
+              value={includeLogs}
+              onValueChange={setIncludeLogs}
+              disabled={!client || isCopyingReport}
+              accessibilityLabel={t("settings.diagnostics.includeLogs")}
+            />
+          </View>
         </View>
-      </View>
-    </SettingsSection>
+      </SettingsSection>
+      <SettingsSection title={t("settings.diagnostics.title")}>
+        <View style={settingsStyles.card}>
+          <View style={settingsStyles.row}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.testAudio")}</Text>
+              {playbackTestResult ? (
+                <Text style={settingsStyles.rowHint}>{playbackTestResult}</Text>
+              ) : null}
+            </View>
+            <Button
+              variant="secondary"
+              size="sm"
+              onPress={handlePlayPress}
+              disabled={!voiceAudioEngine || isPlaybackTestRunning}
+            >
+              {isPlaybackTestRunning
+                ? t("settings.diagnostics.playing")
+                : t("settings.diagnostics.playTest")}
+            </Button>
+          </View>
+        </View>
+      </SettingsSection>
+    </>
   );
 }
 
@@ -1583,6 +1653,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
         case "diagnostics":
           return (
             <DiagnosticsSection
+              serverId={anyOnlineServerId}
               voiceAudioEngine={voiceAudioEngine}
               isPlaybackTestRunning={isPlaybackTestRunning}
               playbackTestResult={playbackTestResult}

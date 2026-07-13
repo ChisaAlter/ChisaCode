@@ -344,6 +344,7 @@ describe("ProviderSnapshotManager public surface", () => {
             OPENAI_API_KEY: "secret-key",
             OPENAI_BASE_URL: "https://example.test",
           },
+          command: ["provider-cli", "--api-key", "command-secret", "--mode", "safe"],
         },
       },
       extraClients: {
@@ -365,6 +366,14 @@ describe("ProviderSnapshotManager public surface", () => {
       expect(result.diagnostic).toContain("OPENAI_API_KEY=present");
       expect(result.diagnostic).not.toContain("secret-key");
       expect(result.diagnostic).not.toContain("https://example.test");
+      expect(result.details.effectiveCommand?.argv).toEqual([
+        "provider-cli",
+        "--api-key",
+        "[redacted]",
+        "--mode",
+        "safe",
+      ]);
+      expect(result.diagnostic).not.toContain("command-secret");
       expect(result.details.mcpInjection).toMatchObject({ supported: true, enabled: true });
     } finally {
       manager.destroy();

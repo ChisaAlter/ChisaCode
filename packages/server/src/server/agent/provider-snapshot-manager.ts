@@ -36,6 +36,11 @@ import {
 } from "./provider-tooling.js";
 import { applyMutableProviderConfigToOverrides } from "../daemon-config-store.js";
 import type { MutableDaemonConfig } from "../daemon-config-store.js";
+import {
+  redactDiagnosticArgv,
+  redactDiagnosticText,
+  type DiagnosticPathRedaction,
+} from "../diagnostic-redaction.js";
 
 const DEFAULT_REFRESH_TIMEOUT_MS = 30_000;
 
@@ -371,9 +376,31 @@ export class ProviderSnapshotManager {
   async getProviderDiagnostic(provider: AgentProvider): Promise<ProviderDiagnosticResult> {
     const definition = this.requireProvider(provider);
     const client = this.ensureClient(provider, definition);
-    const details = await this.buildProviderDiagnosticDetails(provider, definition, client);
+    const rawDetails = await this.buildProviderDiagnosticDetails(provider, definition, client);
+    const pathRedactions: DiagnosticPathRedaction[] = [{ value: homedir(), replacement: "<home>" }];
+    const details: ProviderDiagnosticDetails = {
+      ...rawDetails,
+      cwd: redactDiagnosticText(rawDetails.cwd, { paths: pathRedactions }),
+      ...(rawDetails.effectiveCommand
+        ? {
+            effectiveCommand: {
+              ...rawDetails.effectiveCommand,
+              argv: redactDiagnosticArgv(rawDetails.effectiveCommand.argv).map((argument) =>
+                redactDiagnosticText(argument, { paths: pathRedactions }),
+              ),
+              resolvedPath: rawDetails.effectiveCommand.resolvedPath
+                ? redactDiagnosticText(rawDetails.effectiveCommand.resolvedPath, {
+                    paths: pathRedactions,
+                  })
+                : null,
+            },
+          }
+        : {}),
+    };
     const providerDiagnostic = client.getDiagnostic
-      ? (await client.getDiagnostic()).diagnostic
+      ? redactDiagnosticText((await client.getDiagnostic()).diagnostic, {
+          paths: pathRedactions,
+        })
       : "No provider-specific diagnostic available.";
     return {
       provider,

@@ -593,6 +593,32 @@ describe("companion MCP scope", () => {
   });
 });
 
+describe("diagnostics MCP tool", () => {
+  it("returns the injected redacted report without exposing log controls", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const requests: string[] = [];
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      getDiagnostics: async () => {
+        requests.push("requested");
+        return "Redacted daemon report";
+      },
+      logger: createTestLogger(),
+    });
+    const tool = registeredTool(server, "get_diagnostics");
+
+    const parsed = await tool.inputSchema.safeParseAsync({ includeLogs: true });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toEqual({});
+
+    const response = await tool.handler(parsed.data);
+    expect(requests).toEqual(["requested"]);
+    expect(response.structuredContent).toEqual({ diagnostic: "Redacted daemon report" });
+  });
+});
+
 describe("terminal MCP tools", () => {
   const logger = createTestLogger();
 

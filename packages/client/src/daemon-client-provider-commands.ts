@@ -102,6 +102,23 @@ export class ProviderCommandClient {
     });
   }
 
+  getDiagnostics(options?: {
+    includeLogs?: boolean;
+    maxLogLines?: number;
+    requestId?: string;
+  }): Promise<DaemonCommandResponsePayload<"diagnostics.response">> {
+    return this.transport.request({
+      requestId: options?.requestId,
+      message: {
+        type: "diagnostics.request",
+        includeLogs: options?.includeLogs,
+        maxLogLines: options?.maxLogLines,
+      },
+      responseType: "diagnostics.response",
+      timeout: 30000,
+    });
+  }
+
   runProviderToolingAction(
     provider: AgentProvider,
     action: "install" | "update" | "reinstall",

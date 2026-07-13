@@ -324,6 +324,7 @@ export type ConfigControlHandlerContext = SessionIdentityContext &
 /** Context needed by ProviderHandler. */
 export type ProviderHandlerContext = SessionIdentityContext &
   ProviderCatalogContext &
+  Pick<ConfigControlContext, "daemonVersion" | "daemonRuntimeConfig"> &
   Pick<
     AgentLifecycleContext,
     "agentManager" | "agentPresetStore" | "providerSnapshotManager" | "isProviderVisibleToClient"

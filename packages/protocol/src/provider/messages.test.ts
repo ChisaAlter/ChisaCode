@@ -32,6 +32,8 @@ describe("provider message domain", () => {
     const request = DiagnosticsRequestSchema.parse({
       type: "diagnostics.request",
       requestId: "request-1",
+      includeLogs: true,
+      maxLogLines: 120,
     });
     expect(SessionInboundMessageSchema.parse(request)).toEqual(request);
 
@@ -43,6 +45,17 @@ describe("provider message domain", () => {
       },
     });
     expect(SessionOutboundMessageSchema.parse(response)).toEqual(response);
+  });
+
+  test("bounds explicitly requested daemon log context", () => {
+    expect(
+      DiagnosticsRequestSchema.safeParse({
+        type: "diagnostics.request",
+        requestId: "request-1",
+        includeLogs: true,
+        maxLogLines: 201,
+      }).success,
+    ).toBe(false);
   });
 
   test("keeps the legacy messages export wired to provider schemas", () => {

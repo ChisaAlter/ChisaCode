@@ -104,6 +104,8 @@ export interface AgentMcpServerOptions {
   markWorkspaceArchiving?: ArchiveChisaCodeWorktreeDependencies["markWorkspaceArchiving"];
   clearWorkspaceArchiving?: ArchiveChisaCodeWorktreeDependencies["clearWorkspaceArchiving"];
   createChisaCodeWorktree?: CreateChisaCodeWorktreeWorkflowFn;
+  /** Generates a redacted daemon report without log excerpts for the read-only diagnostics tool. */
+  getDiagnostics?: () => Promise<string>;
   chisacodeHome?: string;
   /**
    * ID of the agent that is connecting to this MCP server.
@@ -2351,6 +2353,26 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       };
     },
   );
+
+  const getDiagnostics = options.getDiagnostics;
+  if (getDiagnostics) {
+    registerTool(
+      "get_diagnostics",
+      {
+        title: "Get diagnostics",
+        description:
+          "Return a redacted daemon troubleshooting report. Daemon log excerpts are never included through MCP.",
+        inputSchema: {},
+        outputSchema: {
+          diagnostic: z.string(),
+        },
+      },
+      async () => ({
+        content: [],
+        structuredContent: ensureValidJson({ diagnostic: await getDiagnostics() }),
+      }),
+    );
+  }
 
   return server;
 }

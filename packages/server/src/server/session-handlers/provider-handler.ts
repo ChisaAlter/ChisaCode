@@ -11,6 +11,7 @@ import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 import { expandTilde } from "../../utils/path.js";
 import { getErrorMessage } from "@chisacode/protocol/error-utils";
 import { runSyntheticModelTest } from "../model-gateway/model-gateway.js";
+import { createDaemonDiagnosticReport } from "../diagnostics-report.js";
 import type { SessionInboundMessage } from "../messages.js";
 import type {
   AgentProvider,
@@ -338,6 +339,44 @@ export class ProviderHandler implements DisposableHandler {
           requestType: msg.type,
           error: `Failed to get provider diagnostic: ${err.message}`,
           code: "provider_diagnostic_failed",
+        },
+      });
+    }
+  }
+
+  /** Handle generation of a bounded daemon-wide troubleshooting report. */
+  async handleDiagnosticsRequest(
+    msg: Extract<SessionInboundMessage, { type: "diagnostics.request" }>,
+  ): Promise<void> {
+    try {
+      const diagnostic = await createDaemonDiagnosticReport(
+        {
+          chisacodeHome: this.context.chisacodeHome,
+          daemonVersion: this.context.daemonVersion,
+          daemonRuntimeConfig: this.context.daemonRuntimeConfig,
+          daemonConfigStore: this.context.daemonConfigStore,
+          agentManager: this.context.agentManager,
+          providerSnapshotManager: this.context.providerSnapshotManager,
+        },
+        {
+          includeLogs: msg.includeLogs,
+          maxLogLines: msg.maxLogLines,
+        },
+      );
+      this.context.emit({
+        type: "diagnostics.response",
+        payload: { requestId: msg.requestId, diagnostic },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.context.sessionLogger.error({ err }, "Failed to generate daemon diagnostics");
+      this.context.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Failed to generate diagnostics: ${err.message}`,
+          code: "diagnostics_failed",
         },
       });
     }

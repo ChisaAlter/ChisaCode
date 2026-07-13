@@ -4,9 +4,10 @@ import { runStatusCommand } from "./status.js";
 import { runStopCommand } from "./stop.js";
 import { runRestartCommand } from "./restart.js";
 import { runSetPasswordCommand } from "./set-password.js";
+import { runDiagnosticsCommand } from "./diagnostics.js";
 import { pairCommand } from "./pair.js";
 import { withOutput } from "../../output/index.js";
-import { addJsonOption } from "../../utils/command-options.js";
+import { addJsonAndDaemonHostOptions, addJsonOption } from "../../utils/command-options.js";
 import { tCli } from "../../i18n.js";
 
 function resolveHostnamesOption(hostnames: unknown, allowedHosts: unknown): string | undefined {
@@ -24,6 +25,13 @@ export function createDaemonCommand(): Command {
   addJsonOption(daemon.command("status").description(tCli("daemon.status.description")))
     .option("--home <path>", tCli("option.home"))
     .action(withOutput(runStatusCommand));
+
+  addJsonAndDaemonHostOptions(
+    daemon.command("diagnostics").description(tCli("daemon.diagnostics.description")),
+  )
+    .option("--logs", tCli("daemon.diagnostics.logs"))
+    .option("--log-lines <count>", tCli("daemon.diagnostics.logLines"))
+    .action(withOutput(runDiagnosticsCommand));
 
   addJsonOption(daemon.command("stop").description(tCli("daemon.stop.description")))
     .option("--home <path>", tCli("option.home"))

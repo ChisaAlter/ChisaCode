@@ -79,8 +79,16 @@ Daemon operations:
 
 ```bash
 chisacode daemon status
+chisacode daemon diagnostics
 chisacode daemon start
 chisacode daemon stop
+```
+
+Diagnostic reports are redacted and exclude daemon logs by default. Add logs only when needed:
+
+```bash
+chisacode daemon diagnostics --logs --log-lines 100
+chisacode daemon diagnostics --json
 ```
 
 Use a different daemon:
@@ -204,8 +212,16 @@ daemon 操作：
 
 ```bash
 chisacode daemon status
+chisacode daemon diagnostics
 chisacode daemon start
 chisacode daemon stop
+```
+
+诊断报告会自动脱敏，并且默认不包含 daemon 日志。只有确实需要时才显式附带：
+
+```bash
+chisacode daemon diagnostics --logs --log-lines 100
+chisacode daemon diagnostics --json
 ```
 
 连接另一台 daemon：

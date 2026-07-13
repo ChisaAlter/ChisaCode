@@ -198,6 +198,8 @@ export const ProviderUsageListRequestMessageSchema = z.object({
 export const DiagnosticsRequestSchema = z.object({
   type: z.literal("diagnostics.request"),
   requestId: z.string(),
+  includeLogs: z.boolean().optional(),
+  maxLogLines: z.number().int().positive().max(200).optional(),
 });
 
 export const ProviderToolingActionRequestMessageSchema = z.object({

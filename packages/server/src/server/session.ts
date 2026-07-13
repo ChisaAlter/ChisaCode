@@ -1294,6 +1294,8 @@ export class Session {
         return this.providerHandler.handleRefreshProvidersSnapshotRequest(msg);
       case "provider_diagnostic_request":
         return this.providerHandler.handleProviderDiagnosticRequest(msg);
+      case "diagnostics.request":
+        return this.providerHandler.handleDiagnosticsRequest(msg);
       case "provider.tooling.run.request":
         return this.providerHandler.handleProviderToolingActionRequest(msg);
       case "agent.presets.list.request":
