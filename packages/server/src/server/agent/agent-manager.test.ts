@@ -29,6 +29,8 @@ import type {
   PersistedAgentDescriptor,
 } from "./agent-sdk-types.js";
 import type { ProviderDefinition } from "./provider-registry.js";
+import { InMemoryAgentTimelineStore } from "./agent-timeline-store.js";
+import type { AgentTimelineRow, AgentTimelineStore } from "./agent-timeline-store-types.js";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -100,6 +102,56 @@ function expectArchivedAgentRecord(
   expect(record?.requiresAttention).toBe(false);
   expect(record?.attentionReason).toBeNull();
   expect(record?.attentionTimestamp).toBeNull();
+}
+
+function createTestDurableTimelineStore(): AgentTimelineStore {
+  const rowsByAgent = new Map<string, AgentTimelineRow[]>();
+  const getRows = (agentId: string) => rowsByAgent.get(agentId) ?? [];
+  return {
+    appendCommitted: async (agentId, item, options) => {
+      const rows = getRows(agentId);
+      const row = {
+        seq: (rows.at(-1)?.seq ?? 0) + 1,
+        timestamp: options?.timestamp ?? new Date().toISOString(),
+        item,
+      };
+      rowsByAgent.set(agentId, [...rows, row]);
+      return row;
+    },
+    fetchCommitted: async (agentId, options) => {
+      const fetchStore = new InMemoryAgentTimelineStore();
+      fetchStore.initialize(agentId, {
+        epoch: "durable-test",
+        rows: getRows(agentId),
+      });
+      return fetchStore.fetch(agentId, options);
+    },
+    getLatestCommittedSeq: async (agentId) => getRows(agentId).at(-1)?.seq ?? 0,
+    getCommittedRows: async (agentId) => [...getRows(agentId)],
+    getLastItem: async (agentId) => getRows(agentId).at(-1)?.item ?? null,
+    getLastAssistantMessage: async (agentId) => {
+      const chunks: string[] = [];
+      for (const row of getRows(agentId).toReversed()) {
+        if (row.item.type !== "assistant_message") {
+          if (chunks.length > 0) break;
+          continue;
+        }
+        chunks.push(row.item.text);
+      }
+      return chunks.length > 0 ? chunks.toReversed().join("") : null;
+    },
+    deleteAgent: async (agentId) => {
+      rowsByAgent.delete(agentId);
+    },
+    bulkInsert: async (agentId, rows) => {
+      const merged = new Map(getRows(agentId).map((row) => [row.seq, row]));
+      for (const row of rows) merged.set(row.seq, row);
+      rowsByAgent.set(
+        agentId,
+        Array.from(merged.values()).sort((left, right) => left.seq - right.seq),
+      );
+    },
+  };
 }
 
 class TestAgentClient implements AgentClient {
@@ -2791,6 +2843,57 @@ test("getTimelineRows falls back to the in-memory timeline when no durable store
       },
     },
   ]);
+});
+
+test("getLastAssistantMessage does not duplicate live rows already committed durably", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-timeline-overlap-"));
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    durableTimelineStore: createTestDurableTimelineStore(),
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000141",
+  });
+
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir });
+  await manager.appendTimelineItem(snapshot.id, {
+    type: "assistant_message",
+    text: "hello",
+  });
+  await manager.flush();
+
+  await expect(manager.getLastAssistantMessage(snapshot.id)).resolves.toBe("hello");
+});
+
+test("getLastAssistantMessage does not join across a durable non-assistant boundary", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-timeline-boundary-"));
+  const agentId = "00000000-0000-4000-8000-000000000142";
+  const durableTimelineStore = createTestDurableTimelineStore();
+  await durableTimelineStore.bulkInsert(agentId, [
+    {
+      seq: 1,
+      timestamp: new Date().toISOString(),
+      item: { type: "assistant_message", text: "old answer" },
+    },
+    {
+      seq: 2,
+      timestamp: new Date().toISOString(),
+      item: { type: "user_message", text: "new question" },
+    },
+  ]);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    durableTimelineStore,
+    logger,
+    idFactory: () => agentId,
+  });
+
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir });
+  await manager.appendTimelineItem(snapshot.id, {
+    type: "assistant_message",
+    text: "new answer",
+  });
+
+  await expect(manager.getLastAssistantMessage(snapshot.id)).resolves.toBe("new answer");
 });
 
 test("getAgent does not expose committed history internals once manager owns the seam", async () => {
