@@ -9,7 +9,7 @@
  * state transitions and read/write dispatch paths.
  */
 
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 import {
   type AgentSnapshotPayload,
@@ -1042,7 +1042,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to update agent: ${getErrorMessage(error)}`,
@@ -1113,7 +1113,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to respond to permission: ${getErrorMessage(error)}`,
@@ -1133,7 +1133,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
     this.context.emit({
       type: "activity_log",
       payload: {
-        id: uuidv4(),
+        id: randomUUID(),
         timestamp: new Date(),
         type: "error",
         content: `${context}: ${message}`,
@@ -1732,7 +1732,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to create agent: ${wireError.message}`,
@@ -1932,7 +1932,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: "Unable to resume agent: missing persistence handle",
@@ -1984,7 +1984,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to resume agent: ${message}`,
@@ -2052,7 +2052,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to import agent: ${message}`,
@@ -2131,7 +2131,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to refresh agent: ${message}`,
@@ -2262,7 +2262,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to set agent mode: ${getErrorMessage(error)}`,
@@ -2309,7 +2309,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to set agent model: ${getErrorMessage(error)}`,
@@ -2356,7 +2356,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to set agent feature: ${getErrorMessage(error)}`,
@@ -2402,7 +2402,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
       this.context.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to set agent thinking option: ${getErrorMessage(error)}`,

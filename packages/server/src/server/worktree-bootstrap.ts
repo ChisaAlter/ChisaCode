@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { TerminalSession } from "../terminal/terminal.js";
@@ -506,7 +506,7 @@ async function runWorktreeTerminalBootstrap(
     return;
   }
 
-  const callId = uuidv4();
+  const callId = randomUUID();
   const started = await options.appendTimelineItem(
     buildTerminalTimelineItem({
       callId,
@@ -589,7 +589,7 @@ export async function runAsyncWorktreeBootstrap(
     return;
   }
 
-  const setupCallId = uuidv4();
+  const setupCallId = randomUUID();
   let setupResults: WorktreeSetupCommandResult[] = [];
   let runtimeEnv: WorktreeRuntimeEnv | null = null;
   const emitLiveTimelineItem = options.emitLiveTimelineItem;

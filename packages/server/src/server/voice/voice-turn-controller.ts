@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import type { Logger } from "pino";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 
 import { Pcm16MonoResampler } from "../agent/pcm16-resampler.js";
 import { parsePcmRateFromFormat } from "../speech/audio.js";
@@ -413,7 +413,7 @@ export function createVoiceTurnController(params: {
     currentFinalizingTurn = null;
     state = {
       status: "capturing",
-      utteranceId: uuidv4(),
+      utteranceId: randomUUID(),
       startedAt,
     };
     params.logger.info(

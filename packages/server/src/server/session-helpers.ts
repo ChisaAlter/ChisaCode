@@ -8,7 +8,7 @@
 
 import { realpathSync } from "node:fs";
 import { resolve, sep } from "path";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 
 import type { AgentStorage } from "./agent/agent-storage.js";
 import type { AgentSnapshotPayload, ProjectPlacementPayload } from "./messages.js";
@@ -154,7 +154,7 @@ export function resolveSubscriptionId(
   if (requestedSubscriptionId && requestedSubscriptionId.length > 0) {
     return requestedSubscriptionId;
   }
-  return uuidv4();
+  return randomUUID();
 }
 
 /** Map a diff file to its change type indicator ("A"/"D"/"M"). */

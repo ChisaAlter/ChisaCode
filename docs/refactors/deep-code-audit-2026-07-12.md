@@ -2,13 +2,13 @@
 
 ## 结论与评分
 
-| 维度     | 当前评分 | 主要证据                                                                                                  | 距离 10 分的核心差距                                                                            |
-| -------- | -------: | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 2164 行；workspace 1541 行；Claude 873 行；ACP 926 行；Pi 581 行      | workspace 仍承担 route/authority 与跨域 view-model 协调，应只按真实职责继续拆分                 |
-| 安全设计 |      9.4 | relay E2EE 单调 nonce；Ed25519 socket 认证；兼容补丁后生产审计 19 项且 0 high/0 critical                  | Expo/EAS、UUID 与 Babel major 风险仍需专项迁移；relay 认证升级需要持续兼容性发布管理            |
-| 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop        | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
-| 代码质量 |      9.7 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；daemon 17 个 schema 具备独立契约与聚合测试 | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
-| 综合     |  **9.6** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                               | 继续提升需要完成 Expo/EAS、provider adapters 与 App 工作台拆分                                  |
+| 维度     | 当前评分 | 主要证据                                                                                                    | 距离 10 分的核心差距                                                                            |
+| -------- | -------: | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 2164 行；workspace 1541 行；Claude 873 行；ACP 926 行；Pi 581 行        | workspace 仍承担 route/authority 与跨域 view-model 协调，应只按真实职责继续拆分                 |
+| 安全设计 |      9.5 | relay E2EE 单调 nonce；Ed25519 socket 认证；server 已移除直接 UUID 依赖；生产审计 19 项且 0 high/0 critical | Expo/EAS 的 `xcode` 嵌套 UUID 与 Babel major 仍需专项迁移；relay 认证升级需持续兼容性发布管理   |
+| 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop          | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
+| 代码质量 |      9.7 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；daemon 17 个 schema 具备独立契约与聚合测试   | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
+| 综合     |  **9.6** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                                 | 继续提升需要完成 Expo/EAS、provider adapters 与 App 工作台拆分                                  |
 
 ## 本轮已修
 
@@ -20,6 +20,7 @@
 - 重放检查发生在 `closeExistingServerSockets` 之前；捕获的旧 URL 不能再抢占合法 daemon socket。
 - `SECURITY.md` 的 E2EE nonce 描述与实际 `salt(16)+seq(8)` 单调语义对齐。
 - Electron 右键菜单外链与 IPC opener 复用同一 `URL` protocol validator。
+- Server 的 11 个 UUID 生产调用点统一迁移到 `node:crypto.randomUUID()`，删除直接 `uuid` / `@types/uuid` 依赖；残余通告仅来自 Expo `xcode` 嵌套链。
 
 ### 架构与代码质量
 
@@ -90,7 +91,7 @@
 
 ## 最高优先级剩余项
 
-1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK、Zod 4 及五类兼容型生产补丁已完成；剩余 Expo/EAS、`uuid` 与 Babel major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
+1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK、Zod 4、五类兼容型生产补丁及 server 直接 UUID 依赖移除已完成；剩余 Expo/EAS（含 `xcode` 嵌套 `uuid`）与 Babel major 继续按 native/runtime 专项验证，不与结构拆分混做。
 2. **P1 provider 文件拆分（核心完成）**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP/Pi/Claude 均已完成 composition-first 核心拆分；后续只在真实复杂度或缺陷证明收益时继续分域，不再按行数做低收益碎片化拆分。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon 域提取并降至 2164 行，下一步评估 usage/voice 分域并保留 agent core 的聚合职责。
 4. **P2 app 工作台拆分（核心完成）**：移动端 navigation、workspace command routing、layout/setup persistence/hydration、tab/pane/dock/content、environment panel state/data/view、header/center-column view、explorer 与 open-intent 已提取，`workspace-screen.tsx` 从 5453 降至 1541 行；后续只在 route/authority 或跨域协调出现真实复杂度时继续分域，并保持 native/web/electron surface 验证分离。
@@ -120,6 +121,7 @@
 - 2026-07-13 Protocol provider messages 批次：protocol typecheck/build、8 个目标文件 lint、87 个聚焦断言及 client/server/app/CLI 消费者 typecheck 通过
 - 2026-07-13 Claude SDK/Zod 4 批次：严格 npm peer 解析及 `npm ls` 通过；protocol/client/server build、protocol/client/server/app/desktop/CLI typecheck、88 个改动文件 lint、148 个聚焦断言通过；生产审计 24 项且 0 high/0 critical，Claude/Anthropic 通告为 0
 - 2026-07-13 兼容型依赖安全补丁批次：npm 10.9.4 clean-install dry-run、lockfile-lint、目标格式检查与生产审计通过；生产通告从 24 降至 19，五类已修通告清零，0 high/0 critical
+- 2026-07-13 Server UUID 依赖移除批次：npm 10.9.4 lockfile/clean-install dry-run、server typecheck、11 个目标文件 lint 与 client message ID 4 个精确断言通过；生产审计维持 19 且 0 high/0 critical，残余 UUID 通告仅为 Expo `xcode@3.0.1 -> uuid@7.0.3`
 - 2026-07-13 Protocol agent extension 批次：protocol typecheck/build、3 个目标文件 lint、18 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 Protocol daemon messages 批次：protocol typecheck/build、3 个目标文件 lint、32 个聚焦断言、显式 package subpath 运行时导入及 client/server/app/desktop/CLI 消费者 typecheck 通过
 - 2026-07-13 App workspace mobile navigation 批次：App typecheck、2 个目标文件 lint 与 15 个 tab menu/layout 聚焦断言通过；未以 web 预览替代 native mobile 验证

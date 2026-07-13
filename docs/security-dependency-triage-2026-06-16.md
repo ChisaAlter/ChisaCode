@@ -63,3 +63,10 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 - Regenerated the lockfile with npm 10.9.4 so workspace-local `@types/node` and cross-platform optional package entries remain complete for clean installs.
 - Production audit moved from 24 to 19 findings and remains at 0 high / 0 critical. The five resolved advisory families no longer appear.
 - Remaining findings are the Expo/EAS framework-major cluster, the `uuid` major migration coupled to Expo `xcode`, and a low-severity Babel issue without a Babel 7 patch release.
+
+## Resolved Follow-up - 2026-07-13 (Server UUID Dependency Removal)
+
+- Replaced all UUID generation in 11 server production files with the Node.js 22+ `node:crypto.randomUUID()` API.
+- Removed the server's direct `uuid` runtime dependency and obsolete `@types/uuid` development dependency.
+- Production audit remains at 19 findings with 0 high / 0 critical because the remaining `uuid` advisory is exclusively `@expo/config-plugins -> xcode@3.0.1 -> uuid@7.0.3`; no server production source imports `uuid`.
+- The nested `xcode` path remains deferred to the Expo framework-major migration. It is not overridden independently because native project generation compatibility owns that dependency.

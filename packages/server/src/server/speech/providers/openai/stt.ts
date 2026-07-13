@@ -1,10 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import type pino from "pino";
 import { OpenAI } from "openai";
 import { writeFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { v4 } from "uuid";
 import { inferAudioExtension } from "../../../agent/audio-utils.js";
 import type {
   LogprobToken,
@@ -70,7 +70,7 @@ export class OpenAISTT implements SpeechToTextProvider {
     const requiredSampleRate = 24000;
 
     let connected = false;
-    let segmentId = v4();
+    let segmentId = randomUUID();
     let previousSegmentId: string | null = null;
     let pcm16: Buffer = Buffer.alloc(0);
     const transcribeAudio = this.transcribeAudioInternal.bind(this);
@@ -153,14 +153,14 @@ export class OpenAISTT implements SpeechToTextProvider {
             emitter.emit("error", err);
           } finally {
             previousSegmentId = committedId;
-            segmentId = v4();
+            segmentId = randomUUID();
             pcm16 = Buffer.alloc(0);
           }
         })();
       },
       clear() {
         pcm16 = Buffer.alloc(0);
-        segmentId = v4();
+        segmentId = randomUUID();
       },
       close() {
         connected = false;
@@ -184,7 +184,7 @@ export class OpenAISTT implements SpeechToTextProvider {
 
     try {
       const ext = inferAudioExtension(format);
-      tempFilePath = join(tmpdir(), `audio-${v4()}.${ext}`);
+      tempFilePath = join(tmpdir(), `audio-${randomUUID()}.${ext}`);
       await writeFile(tempFilePath, audioBuffer);
 
       logger.debug({ tempFilePath, bytes: audioBuffer.length }, "Transcribing audio file");

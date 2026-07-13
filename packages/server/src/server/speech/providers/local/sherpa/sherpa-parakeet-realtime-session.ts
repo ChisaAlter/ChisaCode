@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 
 import type { StreamingTranscriptionSession } from "../../../speech-provider.js";
 import { pcm16lePeakAbs, pcm16leToFloat32 } from "../../../audio.js";
@@ -34,7 +34,7 @@ export class SherpaParakeetRealtimeTranscriptionSession
     if (this.connected) {
       return;
     }
-    this.currentSegmentId = uuidv4();
+    this.currentSegmentId = randomUUID();
     this.connected = true;
   }
 
@@ -69,7 +69,7 @@ export class SherpaParakeetRealtimeTranscriptionSession
         this.emit("transcript", { segmentId, transcript: finalText, isFinal: true });
 
         this.previousSegmentId = segmentId;
-        this.currentSegmentId = uuidv4();
+        this.currentSegmentId = randomUUID();
         this.lastPartialText = "";
         this.pcm16 = Buffer.alloc(0);
       } catch (err) {
@@ -83,7 +83,7 @@ export class SherpaParakeetRealtimeTranscriptionSession
       return;
     }
     this.pcm16 = Buffer.alloc(0);
-    this.currentSegmentId = uuidv4();
+    this.currentSegmentId = randomUUID();
     this.lastPartialText = "";
   }
 

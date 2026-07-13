@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import type pino from "pino";
 
 import type {
@@ -42,7 +42,7 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
     const logger = params.logger.child({ provider: "local", component: "parakeet-stt-session" });
     const requiredSampleRate = this.engine.sampleRate;
     let connected = false;
-    let segmentId = uuidv4();
+    let segmentId = randomUUID();
     let previousSegmentId: string | null = null;
     let pcm16: Buffer = Buffer.alloc(0);
 
@@ -68,7 +68,7 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
         const prev = previousSegmentId;
         const committedPcm16 = pcm16;
         previousSegmentId = committedId;
-        segmentId = uuidv4();
+        segmentId = randomUUID();
         pcm16 = Buffer.alloc(0);
         emitter.emit("committed", { segmentId: committedId, previousSegmentId: prev });
 
@@ -96,7 +96,7 @@ export class SherpaOnnxParakeetSTT implements SpeechToTextProvider {
       },
       clear() {
         pcm16 = Buffer.alloc(0);
-        segmentId = uuidv4();
+        segmentId = randomUUID();
       },
       close() {
         connected = false;

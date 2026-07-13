@@ -1,6 +1,6 @@
 import type pino from "pino";
 import type { Readable } from "node:stream";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import type { TextToSpeechProvider } from "../speech/speech-provider.js";
 import { toResolver, type Resolvable } from "../speech/provider-resolver.js";
 import type { SessionOutboundMessage } from "../messages.js";
@@ -351,7 +351,7 @@ export class TTSManager {
     const { prepared, emitMessage, abortSignal, isVoiceMode } = params;
     const { stream, format, text } = prepared;
 
-    const audioId = uuidv4();
+    const audioId = randomUUID();
     let playbackResolve!: () => void;
     let playbackReject!: (error: Error) => void;
 

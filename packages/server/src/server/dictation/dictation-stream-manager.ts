@@ -1,5 +1,5 @@
 import type pino from "pino";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import {
   createDictationDebugChunkWriter,
   maybePersistDictationDebugAudio,
@@ -536,7 +536,7 @@ export class DictationStreamManager {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "system",
           content: `Saved dictation audio: ${debugRecordingPath}`,
@@ -738,7 +738,7 @@ export class DictationStreamManager {
           this.emit({
             type: "activity_log",
             payload: {
-              id: uuidv4(),
+              id: randomUUID(),
               timestamp: new Date(),
               type: "system",
               content: `Saved dictation audio: ${debugRecordingPath}`,
@@ -777,7 +777,7 @@ export class DictationStreamManager {
         this.emit({
           type: "activity_log",
           payload: {
-            id: uuidv4(),
+            id: randomUUID(),
             timestamp: new Date(),
             type: "system",
             content: `Saved dictation audio: ${debugRecordingPath}`,

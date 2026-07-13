@@ -1,5 +1,5 @@
 import equal from "fast-deep-equal";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
 import { basename } from "path";
@@ -422,7 +422,7 @@ export class Session {
     this.clientId = clientId;
     this.appVersion = appVersion ?? null;
     this.clientCapabilities = parseClientCapabilitiesFunc(clientCapabilities);
-    this.sessionId = uuidv4();
+    this.sessionId = randomUUID();
     this.onMessage = onMessage;
     this.onBinaryMessage = onBinaryMessage ?? null;
     this.onLifecycleIntent = onLifecycleIntent ?? null;
@@ -1156,7 +1156,7 @@ export class Session {
         this.emit({
           type: "activity_log",
           payload: {
-            id: uuidv4(),
+            id: randomUUID(),
             timestamp: new Date(),
             type: "error",
             content: `Error: ${err.message}`,
@@ -2629,7 +2629,7 @@ export class Session {
       this.emit({
         type: "set_voice_mode_response",
         payload: {
-          requestId: requestId ?? uuidv4(),
+          requestId: requestId ?? randomUUID(),
           enabled: false,
           agentId: null,
           accepted: false,
@@ -2650,7 +2650,7 @@ export class Session {
     this.emit({
       type: "set_voice_mode_response",
       payload: {
-        requestId: requestId ?? uuidv4(),
+        requestId: requestId ?? randomUUID(),
         enabled,
         agentId: this.voiceModeAgentId,
         accepted: true,
@@ -2708,7 +2708,7 @@ export class Session {
 
   private async processAudio(audio: Buffer, format: string): Promise<void> {
     this.setPhase("transcribing");
-    const requestId = uuidv4();
+    const requestId = randomUUID();
     try {
       const result = await this.sttManager.transcribe(audio, format, {
         requestId,
@@ -2734,7 +2734,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "transcript",
           content: result.text,
@@ -2746,7 +2746,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Error: ${message}`,
