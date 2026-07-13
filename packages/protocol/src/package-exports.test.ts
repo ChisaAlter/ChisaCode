@@ -68,6 +68,13 @@ describe("current package exports", () => {
     });
   });
 
+  test("exports usage messages as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./usage/messages"]).toEqual({
+      types: "./dist/usage/messages.d.ts",
+      default: "./dist/usage/messages.js",
+    });
+  });
+
   test("exports workspace messages as a first-class protocol domain", () => {
     expect(protocolPackage.exports["./workspace/messages"]).toEqual({
       types: "./dist/workspace/messages.d.ts",

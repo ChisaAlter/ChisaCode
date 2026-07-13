@@ -181,6 +181,10 @@
       "types": "./dist/tool-name-normalization.d.ts",
       "default": "./dist/tool-name-normalization.js"
     },
+    "./usage/messages": {
+      "types": "./dist/usage/messages.d.ts",
+      "default": "./dist/usage/messages.js"
+    },
     "./workspace/messages": {
       "types": "./dist/workspace/messages.d.ts",
       "default": "./dist/workspace/messages.js"

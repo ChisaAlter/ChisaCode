@@ -92,11 +92,13 @@ import {
   DaemonOutboundMessageSchemas,
   DaemonStatusPayloadSchemas,
 } from "./daemon/messages.js";
+import { UsageInboundMessageSchemas, UsageOutboundMessageSchemas } from "./usage/messages.js";
 export * from "./agent/attachments.js";
 export * from "./agent/extensions.js";
 export * from "./daemon/messages.js";
 export * from "./provider/messages.js";
 export * from "./terminal/messages.js";
+export * from "./usage/messages.js";
 export * from "./checkout/messages.js";
 export * from "./workspace/messages.js";
 import {
@@ -737,26 +739,6 @@ export const FetchAgentHistoryRequestMessageSchema = z.object({
     .optional(),
 });
 
-export const UsageRangeDaysSchema = z.union([z.literal(7), z.literal(30), z.literal(180)]);
-export const UsageExportFormatSchema = z.enum(["json", "csv"]);
-
-export const UsageSummaryGetRequestMessageSchema = z.object({
-  type: z.literal("usage.summary.get.request"),
-  requestId: z.string(),
-  rangeDays: UsageRangeDaysSchema.default(30),
-});
-
-export const UsageExportRequestMessageSchema = z.object({
-  type: z.literal("usage.export.request"),
-  requestId: z.string(),
-  format: UsageExportFormatSchema.default("json"),
-});
-
-export const UsageClearRequestMessageSchema = z.object({
-  type: z.literal("usage.clear.request"),
-  requestId: z.string(),
-});
-
 export const FetchAgentRequestMessageSchema = z.object({
   type: z.literal("fetch_agent_request"),
   requestId: z.string(),
@@ -1077,9 +1059,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AudioPlayedMessageSchema,
   FetchAgentsRequestMessageSchema,
   FetchAgentHistoryRequestMessageSchema,
-  UsageSummaryGetRequestMessageSchema,
-  UsageExportRequestMessageSchema,
-  UsageClearRequestMessageSchema,
+  ...UsageInboundMessageSchemas,
   FetchAgentRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
   ArchiveAgentRequestMessageSchema,
@@ -1505,69 +1485,6 @@ export const FetchAgentHistoryResponseMessageSchema = z.object({
   }),
 });
 
-const UsageModelSummaryPayloadSchema = z.object({
-  model: z.string(),
-  totalTokens: z.number().nonnegative(),
-  turnCount: z.number().int().nonnegative(),
-  percentage: z.number().int().nonnegative(),
-});
-
-const UsageDailySummaryPayloadSchema = z.object({
-  date: z.string(),
-  inputTokens: z.number().nonnegative(),
-  cachedInputTokens: z.number().nonnegative(),
-  outputTokens: z.number().nonnegative(),
-  totalTokens: z.number().nonnegative(),
-  turnCount: z.number().int().nonnegative(),
-  messageCount: z.number().int().nonnegative(),
-  topModel: z.string().nullable(),
-  models: z.array(UsageModelSummaryPayloadSchema),
-});
-
-export const UsageSummaryPayloadSchema = z.object({
-  rangeDays: UsageRangeDaysSchema,
-  generatedAt: z.string(),
-  totals: z.object({
-    inputTokens: z.number().nonnegative(),
-    cachedInputTokens: z.number().nonnegative(),
-    outputTokens: z.number().nonnegative(),
-    totalTokens: z.number().nonnegative(),
-    turnCount: z.number().int().nonnegative(),
-    messageCount: z.number().int().nonnegative(),
-    activeDays: z.number().int().nonnegative(),
-    currentStreakDays: z.number().int().nonnegative(),
-  }),
-  mostUsedModel: UsageModelSummaryPayloadSchema.nullable(),
-  daily: z.array(UsageDailySummaryPayloadSchema),
-  models: z.array(UsageModelSummaryPayloadSchema),
-});
-
-export const UsageSummaryGetResponseMessageSchema = z.object({
-  type: z.literal("usage.summary.get.response"),
-  payload: z.object({
-    requestId: z.string(),
-    summary: UsageSummaryPayloadSchema,
-  }),
-});
-
-export const UsageExportResponseMessageSchema = z.object({
-  type: z.literal("usage.export.response"),
-  payload: z.object({
-    requestId: z.string(),
-    format: UsageExportFormatSchema,
-    filename: z.string(),
-    content: z.string(),
-  }),
-});
-
-export const UsageClearResponseMessageSchema = z.object({
-  type: z.literal("usage.clear.response"),
-  payload: z.object({
-    requestId: z.string(),
-    cleared: z.boolean(),
-  }),
-});
-
 export const FetchAgentResponseMessageSchema = z.object({
   type: z.literal("fetch_agent_response"),
   payload: z.object({
@@ -1796,9 +1713,7 @@ type SessionOutboundMessageSchemaOptions = [
   typeof AgentStatusMessageSchema,
   typeof FetchAgentsResponseMessageSchema,
   typeof FetchAgentHistoryResponseMessageSchema,
-  typeof UsageSummaryGetResponseMessageSchema,
-  typeof UsageExportResponseMessageSchema,
-  typeof UsageClearResponseMessageSchema,
+  ...typeof UsageOutboundMessageSchemas,
   typeof FetchAgentResponseMessageSchema,
   typeof FetchAgentTimelineResponseMessageSchema,
   typeof CancelAgentResponseMessageSchema,
@@ -1874,9 +1789,7 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   AgentStatusMessageSchema,
   FetchAgentsResponseMessageSchema,
   FetchAgentHistoryResponseMessageSchema,
-  UsageSummaryGetResponseMessageSchema,
-  UsageExportResponseMessageSchema,
-  UsageClearResponseMessageSchema,
+  ...UsageOutboundMessageSchemas,
   FetchAgentResponseMessageSchema,
   FetchAgentTimelineResponseMessageSchema,
   CancelAgentResponseMessageSchema,
@@ -1948,10 +1861,6 @@ export type FetchAgentsResponseMessage = z.infer<typeof FetchAgentsResponseMessa
 export type FetchAgentHistoryResponseMessage = z.infer<
   typeof FetchAgentHistoryResponseMessageSchema
 >;
-export type UsageSummaryPayload = z.infer<typeof UsageSummaryPayloadSchema>;
-export type UsageSummaryGetResponseMessage = z.infer<typeof UsageSummaryGetResponseMessageSchema>;
-export type UsageExportResponseMessage = z.infer<typeof UsageExportResponseMessageSchema>;
-export type UsageClearResponseMessage = z.infer<typeof UsageClearResponseMessageSchema>;
 export type FetchAgentResponseMessage = z.infer<typeof FetchAgentResponseMessageSchema>;
 export type FetchAgentTimelineResponseMessage = z.infer<
   typeof FetchAgentTimelineResponseMessageSchema
