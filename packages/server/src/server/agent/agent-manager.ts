@@ -70,6 +70,7 @@ import {
 } from "./generative-ui-action-queue.js";
 import { AgentManagerEventBus } from "./agent-manager-event-bus.js";
 import { AgentArchiveController, type AgentArchivedCallback } from "./agent-archive-controller.js";
+import { AgentMetadataController } from "./agent-metadata-controller.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -359,6 +360,7 @@ export class AgentManager {
   private readonly agents = new Map<string, ActiveManagedAgent>();
   private readonly archive: AgentArchiveController;
   private readonly launchConfig: AgentLaunchConfigController;
+  private readonly metadata: AgentMetadataController;
   private readonly providers: AgentProviderController;
   private readonly timeline: AgentTimelineController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
@@ -405,6 +407,14 @@ export class AgentManager {
       durableStore: options.durableTimelineStore,
       logger: this.logger,
       trackBackgroundTask: (task) => this.trackBackgroundTask(task),
+    });
+    this.metadata = new AgentMetadataController({
+      emitState: (agent, emitOptions) => this.emitState(agent, emitOptions),
+      getAgent: (agentId) => this.agents.get(agentId) ?? null,
+      isAwaitingInitialSnapshotPersist: (agentId) =>
+        this.agentsAwaitingInitialSnapshotPersist.has(agentId),
+      persistSnapshot: (agent, persistOptions) => this.persistSnapshot(agent, persistOptions),
+      registry: this.registry,
     });
     this.archive = new AgentArchiveController({
       archiveNativeSessionBestEffort: (provider, persistence) =>
@@ -565,19 +575,7 @@ export class AgentManager {
   }
 
   private touchUpdatedAt(agent: ManagedAgent): Date {
-    const nowMs = Date.now();
-    const previousMs = agent.updatedAt.getTime();
-    const nextMs = nowMs > previousMs ? nowMs : previousMs + 1;
-    const next = new Date(nextMs);
-    agent.updatedAt = next;
-    return next;
-  }
-
-  private nextStoredUpdatedAt(record: StoredAgentRecord): string {
-    const previousMs = Date.parse(record.updatedAt);
-    const nowMs = Date.now();
-    const nextMs = nowMs > previousMs ? nowMs : previousMs + 1;
-    return new Date(nextMs).toISOString();
+    return this.metadata.touchUpdatedAt(agent);
   }
 
   hasInFlightRun(agentId: string): boolean {
@@ -1038,61 +1036,26 @@ export class AgentManager {
 
   async setTitle(agentId: string, title: string): Promise<void> {
     const agent = this.requireAgent(agentId);
-    const normalizedTitle = title.trim();
-    if (!normalizedTitle) {
-      return;
-    }
-    if (
-      this.agentsAwaitingInitialSnapshotPersist.has(agent.id) &&
-      this.registry &&
-      (await this.registry.get(agent.id)) === null
-    ) {
-      return;
-    }
-    agent.config = { ...agent.config, title: normalizedTitle };
-    this.touchUpdatedAt(agent);
-    await this.persistSnapshot(agent, { title: normalizedTitle, titleSource: "explicit" });
-    this.emitState(agent, { persist: false });
+    await this.metadata.setTitle(agent, title);
   }
 
   async setGeneratedTitle(agentId: string, title: string): Promise<void> {
     const agent = this.requireAgent(agentId);
-    const normalizedTitle = title.trim();
-    if (!normalizedTitle) {
-      return;
-    }
-
-    const registry = this.requireRegistry();
-    const persisted = await registry.setGeneratedTitle(agent.id, normalizedTitle);
-
-    agent.updatedAt = new Date(persisted.updatedAt);
-    this.emitState(agent, { persist: false });
+    await this.metadata.setGeneratedTitle(agent, title);
   }
 
   async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
     const agent = this.requireAgent(agentId);
-    agent.labels = { ...agent.labels, ...labels };
-    this.touchUpdatedAt(agent);
-    await this.persistSnapshot(agent);
-    this.emitState(agent, { persist: false });
+    await this.metadata.setLabels(agent, labels);
   }
 
   notifyAgentState(agentId: string): void {
-    const agent = this.agents.get(agentId);
-    if (!agent || agent.internal) {
-      return;
-    }
-    this.touchUpdatedAt(agent);
-    this.emitState(agent);
+    this.metadata.notifyAgentState(agentId);
   }
 
   async clearAgentAttention(agentId: string): Promise<void> {
     const agent = this.requireAgent(agentId);
-    if (agent.attention.requiresAttention) {
-      agent.attention = { requiresAttention: false };
-      await this.persistSnapshot(agent);
-      this.emitState(agent, { persist: false });
-    }
+    await this.metadata.clearAgentAttention(agent);
   }
 
   async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
@@ -1114,38 +1077,7 @@ export class AgentManager {
       labels?: Record<string, string>;
     },
   ): Promise<void> {
-    const liveAgent = this.agents.get(agentId);
-    if (liveAgent) {
-      const normalizedTitle = updates.title?.trim();
-      const labels = updates.labels;
-
-      if (normalizedTitle) {
-        liveAgent.config = { ...liveAgent.config, title: normalizedTitle };
-      }
-      if (labels) {
-        liveAgent.labels = { ...liveAgent.labels, ...labels };
-      }
-      const snapshotUpdates = normalizedTitle
-        ? { title: normalizedTitle, titleSource: "explicit" as const }
-        : {};
-      this.touchUpdatedAt(liveAgent);
-      await this.persistSnapshot(liveAgent, snapshotUpdates);
-      this.emitState(liveAgent, { persist: false });
-      return;
-    }
-
-    const registry = this.requireRegistry();
-    const existing = await registry.get(agentId);
-    if (!existing) {
-      throw new Error(`Agent not found: ${agentId}`);
-    }
-
-    await registry.upsert({
-      ...existing,
-      ...(updates.title ? { title: updates.title } : {}),
-      ...(updates.labels ? { labels: { ...existing.labels, ...updates.labels } } : {}),
-      updatedAt: this.nextStoredUpdatedAt(existing),
-    });
+    await this.metadata.updateAgentMetadata(agentId, updates);
   }
 
   async runAgent(
@@ -2281,13 +2213,6 @@ export class AgentManager {
       return;
     }
     await this.registry.applySnapshot(agent, options);
-  }
-
-  private requireRegistry(): AgentStorage {
-    if (!this.registry) {
-      throw new Error("Agent storage unavailable");
-    }
-    return this.registry;
   }
 
   private async refreshSessionState(agent: ActiveManagedAgent): Promise<void> {
