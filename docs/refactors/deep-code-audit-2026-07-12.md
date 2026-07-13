@@ -4,7 +4,7 @@
 
 | 维度     | 当前评分 | 主要证据                                                                                                  | 距离 10 分的核心差距                                                                            |
 | -------- | -------: | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 主文件 2164 行；workspace 主屏 4926 行；ACP provider 主文件 2143 行   | provider adapters 与 workspace 命令/持久化编排仍是主要责任中心                                  |
+| 架构设计 |      9.8 | dependency-cruiser 0 违规；protocol 主文件 2164 行；workspace 主屏 4926 行；ACP provider 主文件 2001 行   | provider adapters 与 workspace 命令/持久化编排仍是主要责任中心                                  |
 | 安全设计 |      9.3 | relay E2EE 单调 nonce；Ed25519 socket 认证；AI/Claude SDK 与 Zod 4 迁移后生产依赖 0 high/0 critical       | Expo/EAS 工具链仍有 moderate 通告；relay 认证升级需要持续兼容性发布管理                         |
 | 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop        | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
 | 代码质量 |      9.7 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；daemon 17 个 schema 具备独立契约与聚合测试 | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
@@ -48,7 +48,7 @@
 - 2026-07-13：Skills 与 MCP server 管理的配置、scope、payload 及 8 个 inbound/8 个 outbound schema 提取到 `agent/extensions.ts`；总 union 改由只读 tuple 聚合，旧 `messages` 入口兼容重导出并新增显式 package subpath，主文件降至 2436 行。
 - 2026-07-13：daemon status/pairing/config/project config/lifecycle 的 8 个 inbound、6 个 outbound、3 个 status payload 与 mutable config 提取到 `daemon/messages.ts`；旧入口兼容重导出并新增显式 package subpath，主文件降至 2164 行。
 - 2026-07-13：移动端 workspace tab switcher、presentation fallback、tab menu 与全部局部样式提取到 `workspace-mobile-tab-switcher.tsx`；主屏保持 props/行为兼容并从 5453 降至 4926 行。
-- 2026-07-13：ACP tool/permission 投影提取到 `acp/tool-call-mapper.ts`，模式/模型/config 映射提取到 `acp/session-config.ts`，NDJSON 编解码、非法 stdout 诊断与 stringified numeric response ID 兼容提取到 `acp/ndjson-stream.ts`。Session 保留写入时序、进程、状态和 terminal 生命周期，原入口兼容重导出，主文件从 2860 降至 2143 行。
+- 2026-07-13：ACP tool/permission、session config 与 NDJSON transport 分域后，进一步新增 `acp/process-runtime.ts` 统一 command resolution、环境、spawn error、initialize timeout 和 SIGTERM/SIGKILL 清理；Client probe 与 live Session 复用同一 runtime，Session initialize 失败不再遗留子进程。主文件从 2860 降至 2001 行，原公开入口继续兼容重导出。
 
 ## 产品能力矩阵
 
@@ -67,7 +67,7 @@
 ## 最高优先级剩余项
 
 1. **P1 依赖安全迁移（部分完成）**：AI SDK、Claude SDK、OpenAI SDK 与 Zod 4 已完成；剩余 Expo/EAS framework major 迁移继续按 native/runtime 专项验证，不与结构拆分混做。
-2. **P1 provider 文件拆分**：`providers/base/` 错误抽象已删除，Codex/Claude/OpenCode 主路径已按 composition-first 拆分，ACP tool mapper、session config 与 NDJSON transport 已独立；下一步收敛 ACP 剩余 runtime/session 编排、`pi/agent.ts` 与 Claude Session 的剩余大职责。
+2. **P1 provider 文件拆分**：`providers/base/` 错误抽象已删除，Codex/Claude/OpenCode 主路径已按 composition-first 拆分，ACP tool mapper、session config、NDJSON transport 与 process runtime 已独立；下一步收敛 ACP 剩余 runtime/session 编排、`pi/agent.ts` 与 Claude Session 的剩余大职责。
 3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon 域提取并降至 2164 行，下一步评估 usage/voice 分域并保留 agent core 的聚合职责。
 4. **P2 app 工作台拆分（进行中）**：移动端 tab navigation 已提取，`workspace-screen.tsx` 从 5453 降至 4926 行；下一步继续拆 commands 与 persistence，保持 native/web/electron surface 测试分离。
 5. **P2 产品 parity（2026-07-13 完成）**：MCP 已补齐一等 chat/loop 工具，并复用现有 service、Chat mention fan-out 与 caller cwd/identity 安全边界。
@@ -101,5 +101,6 @@
 - 2026-07-13 ACP tool mapper 批次：server typecheck、3 个目标文件 lint、新 mapper 5 个断言与既有 generic permission 透传场景通过
 - 2026-07-13 ACP session config 批次：server typecheck、2 个目标文件 lint 与既有 mode/model/config 7 个聚焦断言通过
 - 2026-07-13 ACP NDJSON transport 批次：server typecheck、2 个目标文件 lint 与既有 stream/compat 3 个聚焦断言通过
+- 2026-07-13 ACP process runtime 批次：server typecheck、3 个目标文件 lint 与 initialize timeout fail-cleanup 聚焦测试通过
 
 未在本地运行全仓测试或全量 Playwright/Maestro；按仓库规则只做改动对应的聚焦验证，普通开发不触发远端 CI。

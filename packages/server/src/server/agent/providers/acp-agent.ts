@@ -2,20 +2,16 @@ import { type ChildProcess, type ChildProcessWithoutNullStreams } from "node:chi
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Readable, Writable } from "node:stream";
 import {
   ClientSideConnection,
-  PROTOCOL_VERSION,
   type AgentCapabilities as ACPAgentCapabilities,
   type Error as ACPError,
   type Client as ACPClient,
-  type ClientCapabilities as ACPClientCapabilities,
   type ConfigOptionUpdate,
   type ContentBlock,
   type CreateTerminalRequest,
   type CurrentModeUpdate,
   type EnvVariable,
-  type InitializeResponse,
   type KillTerminalRequest,
   type ListSessionsResponse,
   type LoadSessionResponse,
@@ -70,12 +66,7 @@ import {
   type McpServerConfig,
   type PersistedAgentDescriptor,
 } from "../agent-sdk-types.js";
-import {
-  checkProviderLaunchAvailable,
-  createProviderEnvSpec,
-  resolveProviderLaunch,
-  type ProviderRuntimeSettings,
-} from "../provider-launch-config.js";
+import { createProviderEnvSpec, type ProviderRuntimeSettings } from "../provider-launch-config.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "./provider-runner.js";
 import { platformShell, spawnProcess } from "../../../utils/spawn.js";
@@ -103,10 +94,16 @@ import {
   type ACPProviderModeWriteResult,
   type AvailableACPModel,
 } from "./acp/session-config.js";
-import { createLoggedNdJsonStream } from "./acp/ndjson-stream.js";
-
+import {
+  ACP_PROBE_ENV,
+  resolveACPLaunchCommand,
+  spawnInitializedACPProcess,
+  terminateACPChildProcess,
+  type SpawnedACPProcess,
+} from "./acp/process-runtime.js";
 export type { ACPToolSnapshot } from "./acp/tool-call-mapper.js";
 export { createLoggedNdJsonStream } from "./acp/ndjson-stream.js";
+export type { SpawnedACPProcess } from "./acp/process-runtime.js";
 export {
   deriveModelDefinitionsFromACP,
   deriveModesFromACP,
@@ -116,14 +113,6 @@ export {
   type ACPProviderModeWriterContext,
   type ACPProviderModeWriteResult,
 } from "./acp/session-config.js";
-
-function assertChildWithPipes(
-  child: ChildProcess,
-): asserts child is ChildProcessWithoutNullStreams {
-  if (!child.stdin || !child.stdout || !child.stderr) {
-    throw new Error("Child process did not expose stdio pipes");
-  }
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value);
@@ -204,19 +193,6 @@ const DEFAULT_ACP_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindBoth: false,
 };
 
-const ACP_CLIENT_CAPABILITIES: ACPClientCapabilities = {
-  fs: {
-    readTextFile: true,
-    writeTextFile: true,
-  },
-  terminal: true,
-};
-
-// Suppress interactive auth side-effects (e.g. Gemini CLI opening a Google
-// sign-in URL in the browser) when probing an ACP agent for models/modes.
-// NO_BROWSER is honored by Gemini CLI; other ACP agents ignore it.
-const PROBE_ENV: Record<string, string> = { NO_BROWSER: "true" };
-
 interface ACPAgentClientOptions {
   provider: string;
   logger: Logger;
@@ -268,12 +244,6 @@ interface ACPAgentSessionOptions {
   launchEnv?: Record<string, string>;
   waitForInitialCommands?: boolean;
   initialCommandsWaitTimeoutMs?: number;
-}
-
-export interface SpawnedACPProcess {
-  child: ChildProcessWithoutNullStreams;
-  connection: ClientSideConnection;
-  initialize: InitializeResponse;
 }
 
 interface PendingPermission {
@@ -452,7 +422,7 @@ export class ACPAgentClient implements AgentClient {
 
   async listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
     const { cwd } = options;
-    const probe = await this.spawnProcess(PROBE_ENV);
+    const probe = await this.spawnProcess(ACP_PROBE_ENV);
     try {
       const response = await probe.connection.newSession({
         cwd,
@@ -472,7 +442,7 @@ export class ACPAgentClient implements AgentClient {
 
   async listModes(options: ListModesOptions): Promise<AgentMode[]> {
     const { cwd } = options;
-    const probe = await this.spawnProcess(PROBE_ENV);
+    const probe = await this.spawnProcess(ACP_PROBE_ENV);
     try {
       const response = await probe.connection.newSession({
         cwd,
@@ -493,7 +463,7 @@ export class ACPAgentClient implements AgentClient {
   async listPersistedAgents(
     options?: ListPersistedAgentsOptions,
   ): Promise<PersistedAgentDescriptor[]> {
-    const probe = await this.spawnProcess(PROBE_ENV);
+    const probe = await this.spawnProcess(ACP_PROBE_ENV);
     try {
       if (!probe.initialize.agentCapabilities?.sessionCapabilities?.list) {
         return [];
@@ -549,66 +519,16 @@ export class ACPAgentClient implements AgentClient {
     launchEnv?: Record<string, string>,
     options?: { initializeTimeoutMs?: number },
   ): Promise<SpawnedACPProcess> {
-    const { command, args } = await this.resolveLaunchCommand();
-    const child = spawnProcess(command, args, {
+    return spawnInitializedACPProcess({
+      launch: await this.resolveLaunchCommand(),
       cwd: process.cwd(),
-      ...createProviderEnvSpec({
-        runtimeSettings: this.runtimeSettings,
-        overlays: [launchEnv],
-      }),
-      stdio: ["pipe", "pipe", "pipe"],
+      runtimeSettings: this.runtimeSettings,
+      launchEnv,
+      logger: this.logger,
+      provider: this.provider,
+      clientFactory: () => this.buildProbeClient(),
+      initializeTimeoutMs: options?.initializeTimeoutMs,
     });
-    assertChildWithPipes(child);
-
-    const stderrChunks: string[] = [];
-    child.stderr.on("data", (chunk: Buffer | string) => {
-      stderrChunks.push(chunk.toString());
-    });
-
-    const spawnErrorPromise = new Promise<never>((_, reject) => {
-      child.once("error", (error) => {
-        const stderr = stderrChunks.join("").trim();
-        reject(new Error(stderr ? `${String(error)}\n${stderr}` : String(error)));
-      });
-    });
-
-    const stream = createLoggedNdJsonStream(
-      Writable.toWeb(child.stdin),
-      Readable.toWeb(child.stdout),
-      { logger: this.logger, provider: this.provider },
-    );
-    const connection = new ClientSideConnection(() => this.buildProbeClient(), stream);
-
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    const initializeTimeoutPromise = options?.initializeTimeoutMs
-      ? new Promise<never>((_, reject) => {
-          timeout = setTimeout(() => {
-            reject(new Error(`ACP initialize timed out after ${options.initializeTimeoutMs}ms`));
-          }, options.initializeTimeoutMs);
-        })
-      : null;
-
-    let initialize: InitializeResponse;
-    try {
-      initialize = await Promise.race([
-        connection.initialize({
-          protocolVersion: PROTOCOL_VERSION,
-          clientCapabilities: ACP_CLIENT_CAPABILITIES,
-          clientInfo: { name: "ChisaCode", version: "dev" },
-        }),
-        spawnErrorPromise,
-        ...(initializeTimeoutPromise ? [initializeTimeoutPromise] : []),
-      ]);
-    } catch (error) {
-      await terminateChildProcess(child, 2_000);
-      throw error;
-    } finally {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-    }
-
-    return { child, connection, initialize };
   }
 
   protected buildProbeClient(): ACPClient {
@@ -643,23 +563,16 @@ export class ACPAgentClient implements AgentClient {
         // No active session to close here; ignore capability.
       }
     } finally {
-      await terminateChildProcess(probe.child, 2_000);
+      await terminateACPChildProcess(probe.child, 2_000);
     }
   }
 
   protected async resolveLaunchCommand(): Promise<{ command: string; args: string[] }> {
-    const prefix = await resolveProviderLaunch({
-      commandConfig: this.runtimeSettings?.command,
-      defaultBinary: this.defaultCommand[0],
+    return resolveACPLaunchCommand({
+      provider: this.provider,
+      runtimeSettings: this.runtimeSettings,
+      defaultCommand: this.defaultCommand,
     });
-    const availability = await checkProviderLaunchAvailable(prefix);
-    if (!availability.available) {
-      throw new Error(`${this.provider} command '${this.defaultCommand[0]}' not found`);
-    }
-    return {
-      command: prefix.command,
-      args: [...prefix.args, ...this.defaultCommand.slice(1)],
-    };
   }
 
   private assertProvider(config: AgentSessionConfig): void {
@@ -1402,8 +1315,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.terminalEntries.clear();
 
     if (this.child) {
-      this.child.kill("SIGTERM");
-      await waitForChildExit(this.child, 2_000);
+      await terminateACPChildProcess(this.child, 2_000);
     }
 
     this.subscribers.clear();
@@ -1602,60 +1514,33 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   private async spawnProcess(): Promise<SpawnedACPProcess> {
-    const prefix = await resolveProviderLaunch({
-      commandConfig: this.runtimeSettings?.command,
-      defaultBinary: this.defaultCommand[0],
+    const launch = await resolveACPLaunchCommand({
+      provider: this.provider,
+      runtimeSettings: this.runtimeSettings,
+      defaultCommand: this.defaultCommand,
     });
-    const availability = await checkProviderLaunchAvailable(prefix);
-    if (!availability.available) {
-      throw new Error(`${this.provider} command '${this.defaultCommand[0]}' not found`);
-    }
-
-    const command = prefix.command;
-    const args = [...prefix.args, ...this.defaultCommand.slice(1)];
-    const child = spawnProcess(command, args, {
+    return spawnInitializedACPProcess({
+      launch,
       cwd: this.config.cwd,
-      ...createProviderEnvSpec({
-        runtimeSettings: this.runtimeSettings,
-        overlays: [this.launchEnv],
-      }),
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    assertChildWithPipes(child);
-
-    const stderrChunks: string[] = [];
-    child.stderr.on("data", (chunk: Buffer | string) => {
-      stderrChunks.push(chunk.toString());
-    });
-    child.once("exit", (code, signal) => {
-      if (this.closed) {
-        return;
-      }
-      if (this.activeForegroundTurnId) {
+      runtimeSettings: this.runtimeSettings,
+      launchEnv: this.launchEnv,
+      logger: this.logger,
+      provider: this.provider,
+      clientFactory: () => this,
+      onExit: ({ exitCode, signal, diagnostic }) => {
+        if (this.closed || !this.activeForegroundTurnId) {
+          return;
+        }
         this.synthesizeCanceledToolCalls();
         this.finishTurn({
           type: "turn_failed",
           provider: this.provider,
-          error: `ACP agent exited unexpectedly (${code ?? "null"}${signal ? `, ${signal}` : ""})`,
-          diagnostic: stderrChunks.join("").trim() || undefined,
+          error: `ACP agent exited unexpectedly (${exitCode ?? "null"}${signal ? `, ${signal}` : ""})`,
+          diagnostic,
           turnId: this.activeForegroundTurnId,
         });
-      }
+      },
     });
-
-    const stream = createLoggedNdJsonStream(
-      Writable.toWeb(child.stdin),
-      Readable.toWeb(child.stdout),
-      { logger: this.logger, provider: this.provider },
-    );
-    const connection = new ClientSideConnection(() => this, stream);
-    const initialize = await connection.initialize({
-      protocolVersion: PROTOCOL_VERSION,
-      clientCapabilities: ACP_CLIENT_CAPABILITIES,
-      clientInfo: { name: "ChisaCode", version: "dev" },
-    });
-
-    return { child, connection, initialize };
   }
 
   private applySessionState(response: SessionStateResponse): void {
@@ -2113,31 +1998,4 @@ function coerceSessionConfigMetadata(
     return {};
   }
   return metadata as Partial<AgentSessionConfig>;
-}
-
-async function waitForChildExit(
-  child: ChildProcessWithoutNullStreams,
-  timeoutMs: number,
-): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return;
-  }
-  await Promise.race([
-    new Promise<void>((resolve) => child.once("exit", () => resolve())),
-    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-  ]);
-  if (child.exitCode === null && child.signalCode === null) {
-    child.kill("SIGKILL");
-  }
-}
-
-async function terminateChildProcess(
-  child: ChildProcessWithoutNullStreams,
-  timeoutMs: number,
-): Promise<void> {
-  child.kill("SIGTERM");
-  child.stdin.destroy();
-  child.stdout.destroy();
-  child.stderr.destroy();
-  await waitForChildExit(child, timeoutMs);
 }
