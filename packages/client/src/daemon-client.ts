@@ -145,6 +145,7 @@ import {
   type SubscribeTerminalPayload,
   type TerminalStreamEvent,
 } from "./daemon-client-terminal-client.js";
+import { VoiceClient, type SetVoiceModePayload } from "./daemon-client-voice-client.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 
@@ -400,14 +401,6 @@ export interface RunModelGatewayMoaTestInput {
   prompt: string;
   requestId?: string;
 }
-type SetVoiceModePayload = Extract<
-  SessionOutboundMessage,
-  { type: "set_voice_mode_response" }
->["payload"];
-type DictationFinishAcceptedPayload = Extract<
-  SessionOutboundMessage,
-  { type: "dictation_stream_finish_accepted" }
->["payload"];
 type AgentPermissionResolvedPayload = AgentPermissionResolvedMessage["payload"];
 type CloseItemsPayload = CloseItemsResponse["payload"];
 type ChatCreatePayload = Extract<
@@ -761,14 +754,6 @@ const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
 
 /** Default timeout for waiting for connection before sending queued messages */
 const DEFAULT_SEND_QUEUE_TIMEOUT_MS = 10000;
-const DEFAULT_DICTATION_FINISH_ACCEPT_TIMEOUT_MS = 15000;
-const DEFAULT_DICTATION_FINISH_FALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
-const DEFAULT_DICTATION_FINISH_TIMEOUT_GRACE_MS = 5000;
-
-function isWaiterTimeoutError(error: unknown): boolean {
-  return error instanceof Error && error.message.startsWith("Timeout waiting for message");
-}
-
 function normalizeClientId(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -852,6 +837,7 @@ export class DaemonClient {
   private readonly automationCommands: AutomationCommandClient;
   private readonly workspaceCommands: WorkspaceCommandClient;
   private readonly terminalClient: TerminalClient;
+  private readonly voiceClient: VoiceClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
   private pendingSendQueue: PendingSend[] = [];
@@ -895,6 +881,13 @@ export class DaemonClient {
       isConnected: () => Boolean(this.transport && this.connectionState.status === "connected"),
       sendMessage: (message) => this.sendSessionMessage(message),
       sendBinaryFrame: (frame) => this.sendBinaryFrame(frame),
+    });
+    this.voiceClient = new VoiceClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+      sendMessage: (message) => this.sendSessionMessage(message),
+      sendStrictMessage: (message) => this.sendSessionMessageStrict(message),
+      waitFor: (predicate, timeout) =>
+        this.waitForWithCancel(predicate, timeout, { skipQueue: true }),
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
@@ -2513,256 +2506,38 @@ export class DaemonClient {
   // ============================================================================
 
   async setVoiceMode(enabled: boolean, agentId?: string): Promise<SetVoiceModePayload> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_voice_mode",
-      enabled,
-      ...(agentId ? { agentId } : {}),
-      requestId,
-    });
-    const response = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 10000,
-      select: (msg) => {
-        if (msg.type !== "set_voice_mode_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!response.accepted) {
-      const codeSuffix =
-        typeof response.reasonCode === "string" && response.reasonCode.trim().length > 0
-          ? ` (${response.reasonCode})`
-          : "";
-      throw new Error((response.error ?? "Failed to set voice mode") + codeSuffix);
-    }
-    return response;
+    return this.voiceClient.setVoiceMode(enabled, agentId);
   }
 
   async sendVoiceAudioChunk(audio: string, format: string, isLast = false): Promise<void> {
-    this.sendSessionMessage({ type: "voice_audio_chunk", audio, format, isLast });
+    return this.voiceClient.sendVoiceAudioChunk(audio, format, isLast);
   }
 
   async startDictationStream(dictationId: string, format: string): Promise<void> {
-    const ack = this.waitForWithCancel(
-      (msg) => {
-        if (msg.type !== "dictation_stream_ack") {
-          return null;
-        }
-        if (msg.payload.dictationId !== dictationId) {
-          return null;
-        }
-        if (msg.payload.ackSeq !== -1) {
-          return null;
-        }
-        return msg.payload;
-      },
-      30000,
-      { skipQueue: true },
-    );
-    const ackPromise = ack.promise.then(() => undefined);
-
-    const streamError = this.waitForWithCancel(
-      (msg) => {
-        if (msg.type !== "dictation_stream_error") {
-          return null;
-        }
-        if (msg.payload.dictationId !== dictationId) {
-          return null;
-        }
-        return msg.payload;
-      },
-      30000,
-      { skipQueue: true },
-    );
-    const errorPromise = streamError.promise.then((payload) => {
-      throw new Error(payload.error);
-    });
-
-    const cleanupError = new Error("Cancelled dictation start waiter");
-    try {
-      this.sendSessionMessageStrict({ type: "dictation_stream_start", dictationId, format });
-      await Promise.race([ackPromise, errorPromise]);
-    } finally {
-      ack.cancel(cleanupError);
-      streamError.cancel(cleanupError);
-      void ackPromise.catch(() => undefined);
-      void errorPromise.catch(() => undefined);
-    }
+    return this.voiceClient.startDictationStream(dictationId, format);
   }
 
   sendDictationStreamChunk(dictationId: string, seq: number, audio: string, format: string): void {
-    this.sendSessionMessageStrict({
-      type: "dictation_stream_chunk",
-      dictationId,
-      seq,
-      audio,
-      format,
-    });
+    this.voiceClient.sendDictationStreamChunk(dictationId, seq, audio, format);
   }
 
   async finishDictationStream(
     dictationId: string,
     finalSeq: number,
   ): Promise<{ dictationId: string; text: string }> {
-    const final = this.waitForWithCancel(
-      (msg) => {
-        if (msg.type !== "dictation_stream_final") {
-          return null;
-        }
-        if (msg.payload.dictationId !== dictationId) {
-          return null;
-        }
-        return msg.payload;
-      },
-      0,
-      { skipQueue: true },
-    );
-
-    const streamError = this.waitForWithCancel(
-      (msg) => {
-        if (msg.type !== "dictation_stream_error") {
-          return null;
-        }
-        if (msg.payload.dictationId !== dictationId) {
-          return null;
-        }
-        return msg.payload;
-      },
-      0,
-      { skipQueue: true },
-    );
-
-    const finishAccepted = this.waitForWithCancel<DictationFinishAcceptedPayload>(
-      (msg) => {
-        if (msg.type !== "dictation_stream_finish_accepted") {
-          return null;
-        }
-        if (msg.payload.dictationId !== dictationId) {
-          return null;
-        }
-        return msg.payload;
-      },
-      DEFAULT_DICTATION_FINISH_ACCEPT_TIMEOUT_MS,
-      { skipQueue: true },
-    );
-
-    const finalPromise = final.promise;
-    const errorPromise = streamError.promise.then((payload) => {
-      throw new Error(payload.error);
-    });
-    const finishAcceptedPromise = finishAccepted.promise;
-
-    const finalOutcomePromise = finalPromise.then((payload) => ({
-      kind: "final" as const,
-      payload,
-    }));
-    const errorOutcomePromise = errorPromise.then(
-      () => ({
-        kind: "error" as const,
-        error: new Error("Unexpected dictation stream error state"),
-      }),
-      (error) => ({
-        kind: "error" as const,
-        error: error instanceof Error ? error : new Error(String(error)),
-      }),
-    );
-    const finishAcceptedOutcomePromise = finishAcceptedPromise.then(
-      (payload) => ({ kind: "accepted" as const, payload }),
-      (error) => {
-        if (isWaiterTimeoutError(error)) {
-          return { kind: "accepted_timeout" as const };
-        }
-        return {
-          kind: "accepted_error" as const,
-          error: error instanceof Error ? error : new Error(String(error)),
-        };
-      },
-    );
-
-    const waitForFinalResult = async (
-      timeoutMs: number,
-    ): Promise<{ dictationId: string; text: string }> => {
-      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-        const outcome = await Promise.race([finalOutcomePromise, errorOutcomePromise]);
-        if (outcome.kind === "error") {
-          throw outcome.error;
-        }
-        return outcome.payload;
-      }
-
-      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-      const timeoutPromise = new Promise<{ kind: "timeout" }>((resolve) => {
-        timeoutHandle = setTimeout(() => resolve({ kind: "timeout" }), timeoutMs);
-      });
-
-      const outcome = await Promise.race([
-        finalOutcomePromise,
-        errorOutcomePromise,
-        timeoutPromise,
-      ]);
-
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-
-      if (outcome.kind === "timeout") {
-        throw new Error(`Timeout waiting for dictation finalization (${timeoutMs}ms)`);
-      }
-      if (outcome.kind === "error") {
-        throw outcome.error;
-      }
-      return outcome.payload;
-    };
-
-    const cleanupError = new Error("Cancelled dictation finish waiter");
-    try {
-      this.sendSessionMessageStrict({ type: "dictation_stream_finish", dictationId, finalSeq });
-      const firstOutcome = await Promise.race([
-        finalOutcomePromise,
-        errorOutcomePromise,
-        finishAcceptedOutcomePromise,
-      ]);
-
-      if (firstOutcome.kind === "final") {
-        return firstOutcome.payload;
-      }
-      if (firstOutcome.kind === "error") {
-        throw firstOutcome.error;
-      }
-
-      if (firstOutcome.kind === "accepted") {
-        return await waitForFinalResult(
-          firstOutcome.payload.timeoutMs + DEFAULT_DICTATION_FINISH_TIMEOUT_GRACE_MS,
-        );
-      }
-
-      return await waitForFinalResult(DEFAULT_DICTATION_FINISH_FALLBACK_TIMEOUT_MS);
-    } finally {
-      final.cancel(cleanupError);
-      streamError.cancel(cleanupError);
-      finishAccepted.cancel(cleanupError);
-      void finalPromise.catch(() => undefined);
-      void errorPromise.catch(() => undefined);
-      void finishAcceptedPromise.catch(() => undefined);
-    }
+    return this.voiceClient.finishDictationStream(dictationId, finalSeq);
   }
 
   cancelDictationStream(dictationId: string): void {
-    this.sendSessionMessageStrict({ type: "dictation_stream_cancel", dictationId });
+    this.voiceClient.cancelDictationStream(dictationId);
   }
 
   async abortRequest(): Promise<void> {
-    this.sendSessionMessage({ type: "abort_request" });
+    return this.voiceClient.abortRequest();
   }
 
   async audioPlayed(id: string): Promise<void> {
-    this.sendSessionMessage({ type: "audio_played", id });
+    return this.voiceClient.audioPlayed(id);
   }
 
   // ============================================================================
