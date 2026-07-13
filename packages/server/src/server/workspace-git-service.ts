@@ -2,7 +2,6 @@ import { watch, type FSWatcher } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { LRUCache } from "lru-cache";
-import pLimit from "p-limit";
 import type pino from "pino";
 import type { ProjectCheckoutLitePayload } from "@chisacode/protocol/messages";
 import type { CheckoutContext } from "../utils/checkout-git.js";
@@ -29,11 +28,11 @@ import {
   type GitHubService,
   type PullRequestMergeable,
 } from "../services/github-service.js";
-import { parseGitRevParsePath } from "../utils/git-rev-parse-path.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { resolveGitHubRemote, type GitHubRemoteIdentity } from "../utils/github-remote.js";
 import { listChisaCodeWorktrees, type ChisaCodeWorktreeInfo } from "../utils/worktree.js";
 import { READ_ONLY_GIT_ENV } from "./checkout-git-utils.js";
+import { WorkspaceGitWorkingTreeObserver } from "./workspace-git-working-tree-observer.js";
 import {
   buildWorkspaceGitMetadataFromSnapshot,
   type WorkspaceGitMetadata,
@@ -43,7 +42,7 @@ import { checkoutLiteFromGitSnapshot, normalizeWorkspaceId } from "./workspace-r
 const WORKSPACE_GIT_WATCH_DEBOUNCE_MS = 500;
 const BACKGROUND_GIT_FETCH_INTERVAL_MS = 180_000;
 export const WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS = 60_000;
-const WORKING_TREE_WATCH_FALLBACK_REFRESH_MS = 5_000;
+
 // Auxiliary reads may reuse cached values within this window; snapshots do not expire on read.
 const WORKSPACE_GIT_AUXILIARY_READ_TTL_MS = 15_000;
 // Non-forced refresh triggers share this minimum gap to absorb watcher/self-heal bursts; force bypasses it.
@@ -53,13 +52,6 @@ const WORKSPACE_GIT_CHECKOUT_DIFF_CACHE_MAX = 64;
 // Small values (booleans, short strings, small arrays); generous cap.
 const WORKSPACE_GIT_AUXILIARY_CACHE_MAX = 256;
 const WORKSPACE_GIT_FACTS_REUSE_TTL_MS = 1_000;
-const LINUX_WATCH_MAX_DIRS = 5_000;
-const LINUX_WATCH_REFRESH_COOLDOWN_MS = 2_000;
-const LINUX_WATCH_IGNORE_TTL_MS = 5 * 60 * 1_000;
-
-const linuxWatchReaddirConcurrency =
-  parseInt(process.env.CHISACODE_LINUX_WATCH_READDIR_CONCURRENCY ?? "16", 10) || 16;
-const linuxWatchReaddirLimit = pLimit(linuxWatchReaddirConcurrency);
 
 export interface WorkspaceGitRuntimeSnapshot {
   cwd: string;
@@ -297,18 +289,6 @@ interface RepoGitTarget {
   fetchInFlight: boolean;
 }
 
-interface WorkingTreeWatchTarget {
-  cwd: string;
-  repoRoot: string | null;
-  repoWatchPath: string | null;
-  watchers: FSWatcher[];
-  watchedPaths: Set<string>;
-  fallbackRefreshInterval: NodeJS.Timeout | null;
-  linuxTreeRefreshPromise: Promise<void> | null;
-  linuxTreeRefreshQueued: boolean;
-  listeners: Set<() => void>;
-}
-
 interface WorkspaceGitAuxiliaryReadCacheEntry<T> {
   value: T | null;
   loadedAtMs: number | null;
@@ -351,9 +331,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly snapshotUpdatedListeners = new Set<WorkspaceGitSnapshotUpdatedListener>();
   private readonly workspaceTargets = new Map<string, WorkspaceGitTarget>();
   private readonly repoTargets = new Map<string, RepoGitTarget>();
-  private readonly workingTreeWatchTargets = new Map<string, WorkingTreeWatchTarget>();
-  private readonly workingTreeWatchSetups = new Map<string, Promise<WorkingTreeWatchTarget>>();
-  private readonly linuxIgnoredDirsCache = new Map<string, { ignored: Set<string>; ts: number }>();
+  private readonly workingTreeObserver: WorkspaceGitWorkingTreeObserver;
   private readonly branchValidationCache = new LRUCache<
     string,
     WorkspaceGitAuxiliaryReadCacheEntry<WorkspaceGitBranchValidationResult>
@@ -386,6 +364,19 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.chisacodeHome = options.chisacodeHome;
     this.deps = resolveWorkspaceGitServiceDeps(options.deps);
+    this.workingTreeObserver = new WorkspaceGitWorkingTreeObserver({
+      logger: this.logger,
+      deps: {
+        watch: this.deps.watch,
+        readdir: this.deps.readdir,
+        resolveAbsoluteGitDir: this.deps.resolveAbsoluteGitDir,
+        runGitCommand: this.deps.runGitCommand,
+        now: this.deps.now,
+      },
+      scheduleRefreshForCwd: (cwd, refreshOptions) => {
+        this.scheduleWorkspaceRefresh(cwd, refreshOptions);
+      },
+    });
   }
 
   registerWorkspace(
@@ -651,20 +642,11 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     this.scheduleWorkspaceObservationSetup(target);
   }
 
-  async requestWorkingTreeWatch(
+  requestWorkingTreeWatch(
     cwd: string,
     onChange: () => void,
   ): Promise<{ repoRoot: string | null; unsubscribe: () => void }> {
-    cwd = normalizeWorkspaceId(cwd);
-    const target = await this.ensureWorkingTreeWatchTarget(cwd);
-    target.listeners.add(onChange);
-
-    return {
-      repoRoot: target.repoRoot,
-      unsubscribe: () => {
-        this.removeWorkingTreeWatchListener(cwd, onChange);
-      },
-    };
+    return this.workingTreeObserver.requestWatch(cwd, onChange);
   }
 
   scheduleRefreshForCwd(cwd: string): void {
@@ -686,11 +668,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
     this.repoTargets.clear();
 
-    for (const target of this.workingTreeWatchTargets.values()) {
-      this.closeWorkingTreeWatchTarget(target);
-    }
-    this.workingTreeWatchTargets.clear();
-    this.workingTreeWatchSetups.clear();
+    this.workingTreeObserver.dispose();
     this.snapshotUpdatedListeners.clear();
   }
 
@@ -762,24 +740,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     };
     cache.set(key, entry);
     return entry;
-  }
-
-  private async ensureWorkingTreeWatchTarget(cwd: string): Promise<WorkingTreeWatchTarget> {
-    const existingTarget = this.workingTreeWatchTargets.get(cwd);
-    if (existingTarget) {
-      return existingTarget;
-    }
-
-    const existingSetup = this.workingTreeWatchSetups.get(cwd);
-    if (existingSetup) {
-      return existingSetup;
-    }
-
-    const setup = this.createWorkingTreeWatchTarget(cwd).finally(() => {
-      this.workingTreeWatchSetups.delete(cwd);
-    });
-    this.workingTreeWatchSetups.set(cwd, setup);
-    return setup;
   }
 
   private createWorkspaceTarget(cwd: string): WorkspaceGitTarget {
@@ -924,82 +884,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       target.listeners.size > 0 &&
       this.workspaceTargets.get(target.cwd) === target
     );
-  }
-
-  private async createWorkingTreeWatchTarget(cwd: string): Promise<WorkingTreeWatchTarget> {
-    const repoRoot = await this.resolveCheckoutWatchRoot(cwd);
-    const target: WorkingTreeWatchTarget = {
-      cwd,
-      repoRoot,
-      repoWatchPath: null,
-      watchers: [],
-      watchedPaths: new Set<string>(),
-      fallbackRefreshInterval: null,
-      linuxTreeRefreshPromise: null,
-      linuxTreeRefreshQueued: false,
-      listeners: new Set(),
-    };
-
-    const repoWatchPath = repoRoot ?? cwd;
-    target.repoWatchPath = repoWatchPath;
-    const watchPaths = new Set<string>([repoWatchPath]);
-    const gitDir = await this.deps.resolveAbsoluteGitDir(cwd);
-    if (gitDir) {
-      watchPaths.add(gitDir);
-    }
-
-    let hasRecursiveRepoCoverage = false;
-    const allowRecursiveRepoWatch = process.platform !== "linux";
-    if (process.platform === "linux") {
-      hasRecursiveRepoCoverage = await this.ensureLinuxRepoTreeWatchers(target, repoWatchPath);
-    }
-    for (const watchPath of watchPaths) {
-      if (process.platform === "linux" && watchPath === repoWatchPath) {
-        continue;
-      }
-      const shouldTryRecursive = watchPath === repoWatchPath && allowRecursiveRepoWatch;
-      const watcherIsRecursive = this.addWorkingTreeWatcher(target, watchPath, shouldTryRecursive);
-      if (watchPath === repoWatchPath && watcherIsRecursive) {
-        hasRecursiveRepoCoverage = true;
-      }
-    }
-
-    const missingRepoCoverage = repoRoot === null || !hasRecursiveRepoCoverage;
-    if (target.watchers.length === 0 || missingRepoCoverage) {
-      target.fallbackRefreshInterval = setInterval(() => {
-        this.scheduleWorkspaceRefresh(cwd, {
-          force: true,
-          reason: "working-tree-watch-fallback",
-        });
-        for (const listener of target.listeners) {
-          listener();
-        }
-      }, WORKING_TREE_WATCH_FALLBACK_REFRESH_MS);
-      this.logger.warn(
-        {
-          cwd,
-          intervalMs: WORKING_TREE_WATCH_FALLBACK_REFRESH_MS,
-          reason:
-            target.watchers.length === 0 ? "no_watchers" : "missing_recursive_repo_root_coverage",
-        },
-        "Working tree watchers unavailable; using timed refresh fallback",
-      );
-    }
-
-    this.workingTreeWatchTargets.set(cwd, target);
-    return target;
-  }
-
-  private async resolveCheckoutWatchRoot(cwd: string): Promise<string | null> {
-    try {
-      const { stdout } = await this.deps.runGitCommand(["rev-parse", "--show-toplevel"], {
-        cwd,
-        envOverlay: READ_ONLY_GIT_ENV,
-      });
-      return parseGitRevParsePath(stdout);
-    } catch {
-      return null;
-    }
   }
 
   private async resolveWorkspaceGitRefsRoot(gitDir: string): Promise<string> {
@@ -1188,211 +1072,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     target.githubPollSubscription?.unsubscribe();
     target.githubPollSubscription = null;
     target.githubPollHeadRef = null;
-  }
-
-  private addWorkingTreeWatcher(
-    target: WorkingTreeWatchTarget,
-    watchPath: string,
-    shouldTryRecursive: boolean,
-  ): boolean {
-    if (target.watchedPaths.has(watchPath)) {
-      return false;
-    }
-
-    const { cwd } = target;
-    const onChange = () => {
-      if (process.platform === "linux" && target.repoWatchPath) {
-        void this.refreshLinuxRepoTreeWatchers(target);
-      }
-      this.scheduleWorkspaceRefresh(cwd, {
-        force: true,
-        reason: "working-tree-watch",
-      });
-      for (const listener of target.listeners) {
-        listener();
-      }
-    };
-    const createWatcher = (recursive: boolean): FSWatcher =>
-      this.deps.watch(watchPath, { recursive }, () => {
-        onChange();
-      });
-
-    let watcher: FSWatcher | null = null;
-    let watcherIsRecursive = false;
-    try {
-      if (shouldTryRecursive) {
-        watcher = createWatcher(true);
-        watcherIsRecursive = true;
-      } else {
-        watcher = createWatcher(false);
-      }
-    } catch (error) {
-      if (shouldTryRecursive) {
-        try {
-          watcher = createWatcher(false);
-          this.logger.warn(
-            { err: error, watchPath, cwd },
-            "Working tree recursive watch unavailable; using non-recursive fallback",
-          );
-        } catch (fallbackError) {
-          this.logger.warn(
-            { err: fallbackError, watchPath, cwd },
-            "Failed to start working tree watcher",
-          );
-        }
-      } else {
-        this.logger.warn({ err: error, watchPath, cwd }, "Failed to start working tree watcher");
-      }
-    }
-
-    if (!watcher) {
-      return false;
-    }
-
-    watcher.on("error", (error) => {
-      this.logger.warn({ err: error, watchPath, cwd }, "Working tree watcher error");
-    });
-    target.watchers.push(watcher);
-    target.watchedPaths.add(watchPath);
-    return watcherIsRecursive;
-  }
-
-  private async ensureLinuxRepoTreeWatchers(
-    target: WorkingTreeWatchTarget,
-    rootPath: string,
-  ): Promise<boolean> {
-    const directories = await this.listLinuxWatchDirectories(rootPath);
-    let complete = true;
-    for (const directory of directories) {
-      const watcherWasRecursive = this.addWorkingTreeWatcher(target, directory, false);
-      if (!watcherWasRecursive && !target.watchedPaths.has(directory)) {
-        complete = false;
-      }
-    }
-    return complete && target.watchedPaths.has(rootPath);
-  }
-
-  private async refreshLinuxRepoTreeWatchers(target: WorkingTreeWatchTarget): Promise<void> {
-    if (process.platform !== "linux" || !target.repoWatchPath) {
-      return;
-    }
-    const rootPath = target.repoWatchPath;
-    if (target.linuxTreeRefreshPromise) {
-      target.linuxTreeRefreshQueued = true;
-      return;
-    }
-
-    target.linuxTreeRefreshPromise = (async () => {
-      do {
-        target.linuxTreeRefreshQueued = false;
-        try {
-          await this.ensureLinuxRepoTreeWatchers(target, rootPath);
-        } catch (error) {
-          this.logger.warn(
-            {
-              err: error,
-              cwd: target.cwd,
-              rootPath,
-            },
-            "Failed to refresh Linux working tree watchers",
-          );
-        }
-        if (target.linuxTreeRefreshQueued) {
-          await new Promise((r) => setTimeout(r, LINUX_WATCH_REFRESH_COOLDOWN_MS));
-        }
-      } while (target.linuxTreeRefreshQueued);
-    })();
-
-    try {
-      await target.linuxTreeRefreshPromise;
-    } finally {
-      target.linuxTreeRefreshPromise = null;
-    }
-  }
-
-  private async listLinuxWatchDirectories(rootPath: string): Promise<string[]> {
-    const ignored = await this.loadLinuxIgnoredDirs(rootPath);
-    const directories: string[] = [];
-    let currentLevel: string[] = [rootPath];
-    let capped = false;
-
-    while (currentLevel.length > 0) {
-      directories.push(...currentLevel);
-      if (directories.length >= LINUX_WATCH_MAX_DIRS) {
-        capped = true;
-        break;
-      }
-      const readResults = await Promise.all(
-        currentLevel.map((directory) =>
-          linuxWatchReaddirLimit(async () => {
-            try {
-              return await this.deps.readdir(directory, { withFileTypes: true });
-            } catch {
-              return null;
-            }
-          }),
-        ),
-      );
-      const nextLevel: string[] = [];
-      for (let i = 0; i < currentLevel.length; i += 1) {
-        const directory = currentLevel[i];
-        const entries = readResults[i];
-        if (!directory || !entries) continue;
-        for (const entry of entries) {
-          if (!entry.isDirectory() || entry.name === ".git") {
-            continue;
-          }
-          const childPath = join(directory, entry.name);
-          if (ignored.has(childPath)) {
-            continue;
-          }
-          nextLevel.push(childPath);
-        }
-      }
-      currentLevel = nextLevel;
-    }
-
-    if (capped) {
-      this.logger.warn(
-        { rootPath, limit: LINUX_WATCH_MAX_DIRS, walked: directories.length },
-        "Linux working tree exceeds watcher cap; skipping deeper directories",
-      );
-    }
-
-    return directories;
-  }
-
-  private async loadLinuxIgnoredDirs(rootPath: string): Promise<Set<string>> {
-    const cached = this.linuxIgnoredDirsCache.get(rootPath);
-    if (cached && Date.now() - cached.ts < LINUX_WATCH_IGNORE_TTL_MS) {
-      return cached.ignored;
-    }
-
-    const ignored = new Set<string>();
-    try {
-      const result = await this.deps.runGitCommand(
-        ["ls-files", "-o", "-i", "--directory", "--exclude-standard"],
-        { cwd: rootPath, env: READ_ONLY_GIT_ENV },
-      );
-      for (const raw of result.stdout.split("\n")) {
-        if (!raw.endsWith("/")) {
-          continue;
-        }
-        const rel = raw.replace(/\/+$/, "");
-        if (!rel) {
-          continue;
-        }
-        ignored.add(resolve(rootPath, rel));
-      }
-    } catch (error) {
-      this.logger.debug(
-        { err: error, rootPath },
-        "Failed to load gitignore directories; falling back to name-based skip only",
-      );
-    }
-
-    this.linuxIgnoredDirsCache.set(rootPath, { ignored, ts: Date.now() });
-    return ignored;
   }
 
   private async refreshWorkspaceTarget(
@@ -1698,7 +1377,11 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       return;
     }
     for (const listener of target.listeners) {
-      listener(snapshot);
+      try {
+        listener(snapshot);
+      } catch (error) {
+        this.logger.warn({ err: error, cwd: snapshot.cwd }, "Workspace git listener threw");
+      }
     }
     for (const listener of this.snapshotUpdatedListeners) {
       try {
@@ -1777,21 +1460,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     this.workspaceTargets.delete(target.cwd);
   }
 
-  private removeWorkingTreeWatchListener(cwd: string, listener: () => void): void {
-    const target = this.workingTreeWatchTargets.get(cwd);
-    if (!target) {
-      return;
-    }
-
-    target.listeners.delete(listener);
-    if (target.listeners.size > 0) {
-      return;
-    }
-
-    this.closeWorkingTreeWatchTarget(target);
-    this.workingTreeWatchTargets.delete(cwd);
-  }
-
   private closeWorkspaceTarget(target: WorkspaceGitTarget): void {
     target.closed = true;
     if (target.debounceTimer) {
@@ -1809,23 +1477,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
     target.watchers = [];
     target.listeners.clear();
-  }
-
-  private closeWorkingTreeWatchTarget(target: WorkingTreeWatchTarget): void {
-    if (target.fallbackRefreshInterval) {
-      clearInterval(target.fallbackRefreshInterval);
-      target.fallbackRefreshInterval = null;
-    }
-
-    for (const watcher of target.watchers) {
-      watcher.close();
-    }
-    target.watchers = [];
-    target.watchedPaths.clear();
-    target.listeners.clear();
-    if (target.repoWatchPath) {
-      this.linuxIgnoredDirsCache.delete(target.repoWatchPath);
-    }
   }
 
   private closeRepoTarget(target: RepoGitTarget): void {

@@ -298,6 +298,27 @@ describe("WorkspaceGitServiceImpl", () => {
     service.dispose();
   });
 
+  test("workspace listener failures do not block remaining listeners", async () => {
+    const service = createService();
+    await service.getSnapshot(REPO_CWD);
+    const throwingListener = vi.fn(() => {
+      throw new Error("listener failed");
+    });
+    const healthyListener = vi.fn();
+    const first = service.registerWorkspace({ cwd: REPO_CWD }, throwingListener);
+    const second = service.registerWorkspace({ cwd: REPO_CWD }, healthyListener);
+
+    await expect(
+      service.getSnapshot(REPO_CWD, { force: true, reason: "listener-isolation" }),
+    ).resolves.toEqual(createSnapshot(REPO_CWD));
+    expect(throwingListener).toHaveBeenCalledTimes(1);
+    expect(healthyListener).toHaveBeenCalledTimes(1);
+
+    first.unsubscribe();
+    second.unsubscribe();
+    service.dispose();
+  });
+
   test("getSnapshot populates github pull request state in the runtime snapshot", async () => {
     const getPullRequestStatus = vi.fn(async () =>
       createPullRequestStatusResult({
@@ -777,6 +798,51 @@ describe("WorkspaceGitServiceImpl", () => {
     service.dispose();
   });
 
+  test("working tree watch recreates a target when the last unsubscribe races a new subscriber", async () => {
+    const watchers = [createWatcher(), createWatcher(), createWatcher(), createWatcher()];
+    const watch = vi
+      .fn()
+      .mockReturnValueOnce(watchers[0])
+      .mockReturnValueOnce(watchers[1])
+      .mockReturnValueOnce(watchers[2])
+      .mockReturnValueOnce(watchers[3]);
+    const service = createService({ watch });
+    const first = await service.requestWorkingTreeWatch(REPO_CWD, vi.fn());
+
+    const secondPromise = service.requestWorkingTreeWatch(REPO_CWD, vi.fn());
+    first.unsubscribe();
+    const second = await secondPromise;
+
+    expect(second.repoRoot).toBe(REPO_CWD);
+    expect(watch).toHaveBeenCalledTimes(4);
+    expect(watchers[0].close).toHaveBeenCalledTimes(1);
+    expect(watchers[1].close).toHaveBeenCalledTimes(1);
+
+    second.unsubscribe();
+    service.dispose();
+  });
+
+  test("dispose during working tree setup rejects the late request without creating watchers", async () => {
+    const gitDir = createDeferred<string | null>();
+    const watch = vi.fn(() => createWatcher());
+    const service = createService({
+      watch,
+      resolveAbsoluteGitDir: vi.fn(() => gitDir.promise),
+    });
+
+    const subscriptionPromise = service.requestWorkingTreeWatch(REPO_CWD, vi.fn());
+    await flushPromises();
+
+    service.dispose();
+    gitDir.resolve(join(REPO_CWD, ".git"));
+
+    await expect(subscriptionPromise).rejects.toThrow(
+      "Workspace git working tree observer is disposed",
+    );
+    expect(watch).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   test("sets a 5-second fallback polling interval when recursive watch is unavailable", async () => {
     if (process.platform === "linux") {
       // On Linux, recursive watch is never attempted — the service uses per-directory
@@ -852,6 +918,32 @@ describe("WorkspaceGitServiceImpl", () => {
     expect(listener).toHaveBeenCalledTimes(1);
 
     subscription.unsubscribe();
+    service.dispose();
+  });
+
+  test("working tree listener failures do not block remaining listeners", async () => {
+    const watchCallbacks: Array<() => void> = [];
+    const watch = vi.fn(
+      (_watchPath: string, _options: { recursive: boolean }, callback: () => void) => {
+        watchCallbacks.push(callback);
+        return createWatcher();
+      },
+    );
+    const service = createService({ watch });
+    const throwingListener = vi.fn(() => {
+      throw new Error("listener failed");
+    });
+    const healthyListener = vi.fn();
+
+    const first = await service.requestWorkingTreeWatch(REPO_CWD, throwingListener);
+    const second = await service.requestWorkingTreeWatch(REPO_CWD, healthyListener);
+
+    expect(() => watchCallbacks[0]?.()).not.toThrow();
+    expect(throwingListener).toHaveBeenCalledTimes(1);
+    expect(healthyListener).toHaveBeenCalledTimes(1);
+
+    first.unsubscribe();
+    second.unsubscribe();
     service.dispose();
   });
 
