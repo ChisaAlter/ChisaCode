@@ -133,6 +133,7 @@ import { ConfigCommandClient } from "./daemon-client-config-commands.js";
 import { ProviderCommandClient } from "./daemon-client-provider-commands.js";
 import { AgentExtensionCommandClient } from "./daemon-client-agent-extension-commands.js";
 import { AutomationCommandClient } from "./daemon-client-automation-commands.js";
+import { WorkspaceCommandClient } from "./daemon-client-workspace-commands.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   BinaryFileTransferManager,
@@ -762,7 +763,6 @@ const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
-const DEFAULT_OPEN_PROJECT_TIMEOUT_MS = 60000;
 const DEFAULT_FETCH_AGENT_TIMELINE_TIMEOUT_MS = 60000;
 const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
 
@@ -858,6 +858,7 @@ export class DaemonClient {
   private readonly providerCommands: ProviderCommandClient;
   private readonly agentExtensionCommands: AgentExtensionCommandClient;
   private readonly automationCommands: AutomationCommandClient;
+  private readonly workspaceCommands: WorkspaceCommandClient;
   private readonly terminalStreams = new TerminalStreamRouter();
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
@@ -892,6 +893,9 @@ export class DaemonClient {
       request: (params) => this.sendCorrelatedSessionRequest(params),
     });
     this.automationCommands = new AutomationCommandClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+    });
+    this.workspaceCommands = new WorkspaceCommandClient({
       request: (params) => this.sendCorrelatedSessionRequest(params),
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
@@ -1807,15 +1811,7 @@ export class DaemonClient {
   }
 
   async openProject(cwd: string, requestId?: string): Promise<OpenProjectPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "open_project_request",
-        cwd,
-      },
-      responseType: "open_project_response",
-      timeout: DEFAULT_OPEN_PROJECT_TIMEOUT_MS,
-    });
+    return this.workspaceCommands.openProject(cwd, requestId);
   }
 
   async startWorkspaceScript(
@@ -1825,27 +1821,11 @@ export class DaemonClient {
   ): Promise<
     Extract<SessionOutboundMessage, { type: "start_workspace_script_response" }>["payload"]
   > {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "start_workspace_script_request",
-        workspaceId,
-        scriptName,
-      },
-      responseType: "start_workspace_script_response",
-      timeout: 10000,
-    });
+    return this.workspaceCommands.startWorkspaceScript(workspaceId, scriptName, requestId);
   }
 
   async listAvailableEditors(requestId?: string): Promise<ListAvailableEditorsPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "list_available_editors_request",
-      },
-      responseType: "list_available_editors_response",
-      timeout: 10000,
-    });
+    return this.workspaceCommands.listAvailableEditors(requestId);
   }
 
   async openInEditor(
@@ -1853,46 +1833,21 @@ export class DaemonClient {
     editorId: EditorTargetId,
     requestId?: string,
   ): Promise<OpenInEditorPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "open_in_editor_request",
-        path,
-        editorId,
-      },
-      responseType: "open_in_editor_response",
-      timeout: 10000,
-    });
+    return this.workspaceCommands.openInEditor(path, editorId, requestId);
   }
 
   async archiveWorkspace(
     workspaceId: string,
     requestId?: string,
   ): Promise<ArchiveWorkspacePayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "archive_workspace_request",
-        workspaceId,
-      },
-      responseType: "archive_workspace_response",
-      timeout: 10000,
-    });
+    return this.workspaceCommands.archiveWorkspace(workspaceId, requestId);
   }
 
   async fetchWorkspaceSetupStatus(
     workspaceId: string,
     requestId?: string,
   ): Promise<WorkspaceSetupStatusPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "workspace_setup_status_request",
-        workspaceId,
-      },
-      responseType: "workspace_setup_status_response",
-      timeout: 10000,
-    });
+    return this.workspaceCommands.fetchWorkspaceSetupStatus(workspaceId, requestId);
   }
 
   async fetchAgent(agentId: string, requestId?: string): Promise<FetchAgentResult | null> {
@@ -3043,14 +2998,7 @@ export class DaemonClient {
     path: string,
     requestId?: string,
   ): Promise<FileExplorerDirectoryPayload> {
-    const payload = await this.requestFileExplorer(cwd, path, "list", requestId);
-    if (payload.error) {
-      throw new Error(payload.error);
-    }
-    if (!payload.directory) {
-      throw new Error("Directory listing unavailable.");
-    }
-    return payload.directory;
+    return this.workspaceCommands.listDirectory(cwd, path, requestId);
   }
 
   async readFile(cwd: string, path: string, requestId?: string): Promise<FileReadResult> {
@@ -3079,31 +3027,14 @@ export class DaemonClient {
     path: string,
     requestId?: string,
   ): Promise<FileDownloadTokenPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "file_download_token_request",
-        cwd,
-        path,
-      },
-      responseType: "file_download_token_response",
-      timeout: 10000,
-    });
+    return this.workspaceCommands.requestDownloadToken(cwd, path, requestId);
   }
 
   async requestProjectIcon(
     cwd: string,
     requestId?: string,
   ): Promise<ProjectIconResponse["payload"]> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "project_icon_request",
-        cwd,
-      },
-      responseType: "project_icon_response",
-      timeout: 10000,
-    });
+    return this.workspaceCommands.requestProjectIcon(cwd, requestId);
   }
 
   // ============================================================================
