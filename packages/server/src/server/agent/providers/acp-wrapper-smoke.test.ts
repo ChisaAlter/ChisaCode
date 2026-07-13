@@ -82,7 +82,6 @@ interface SmokeTrace {
 interface SessionInternals {
   availableModels: Array<{ modelId: string; name?: string }> | null;
   configOptions: SessionConfigOption[];
-  toolCalls: Map<string, unknown>;
 }
 
 const wrappers: WrapperSmokeConfig[] = [
@@ -372,7 +371,9 @@ async function captureFinalState(session: ACPAgentSession, trace: SmokeTrace): P
     availableModes: await session.getAvailableModes(),
     availableModels: internals.availableModels,
     configOptions: internals.configOptions,
-    toolSnapshotCount: internals.toolCalls.size,
+    toolSnapshotCount: trace.events.filter(
+      (event) => event.type === "timeline" && event.item.type === "tool_call",
+    ).length,
   };
 }
 
@@ -623,7 +624,6 @@ for (const config of wrappers) {
         expect(
           trace.notifications.some((entry) => JSON.stringify(entry).includes("tool_call_update")),
         ).toBe(true);
-        expect(asInternals<SessionInternals>(session).toolCalls.size).toBeGreaterThan(0);
         trace.criteria.toolSnapshot = {
           outcome: "PASS",
           detail:

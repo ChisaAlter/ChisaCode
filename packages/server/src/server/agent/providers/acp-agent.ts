@@ -28,10 +28,7 @@ import {
   type SessionUpdate,
   type TerminalOutputRequest,
   type TerminalOutputResponse,
-  type ToolCall,
-  type ToolCallUpdate,
   type Usage,
-  type UsageUpdate,
   type WaitForTerminalExitRequest,
   type WriteTextFileRequest,
 } from "@agentclientprotocol/sdk";
@@ -69,14 +66,11 @@ import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "./provider-runner.js";
 import {
-  contentBlockToText,
   mapACPPermissionRequest,
-  mapACPPlanToTimeline,
-  mapACPToolSnapshotToTimeline,
-  mergeACPToolSnapshot,
   selectACPPermissionOption,
   type ACPToolSnapshot,
 } from "./acp/tool-call-mapper.js";
+import { ACPSessionUpdateController } from "./acp/session-update-controller.js";
 import {
   deriveCurrentConfigValue,
   deriveModelDefinitionsFromACP,
@@ -216,10 +210,6 @@ interface PendingPermission {
   resolve: (response: RequestPermissionResponse) => void;
   reject: (error: Error) => void;
   turnId: string | null;
-}
-
-interface MessageAssemblyState {
-  text: string;
 }
 
 export type SessionStateResponse = NewSessionResponse | LoadSessionResponse | ResumeSessionResponse;
@@ -574,9 +564,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private readonly launchEnv?: Record<string, string>;
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private readonly pendingPermissions = new Map<string, PendingPermission>();
-  private readonly messageAssemblies = new Map<string, MessageAssemblyState>();
-  private readonly toolCalls = new Map<string, ACPToolSnapshot>();
   private readonly terminalController: ACPTerminalController;
+  private readonly sessionUpdates: ACPSessionUpdateController;
   private readonly persistedHistory: AgentTimelineItem[] = [];
   private readonly initialHandle?: AgentPersistenceHandle;
 
@@ -630,6 +619,27 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.terminalController = new ACPTerminalController({
       baseCwd: this.config.cwd,
       runtimeSettings: this.runtimeSettings,
+    });
+    this.sessionUpdates = new ACPSessionUpdateController({
+      provider: this.provider,
+      getTurnId: () => this.activeForegroundTurnId,
+      getSuppressedUserEcho: () => ({
+        messageId: this.suppressUserEchoMessageId,
+        text: this.suppressUserEchoText,
+      }),
+      getTerminalStates: () => this.terminalController.timelineStates,
+      transformToolSnapshot: this.toolSnapshotTransformer,
+      onCurrentModeUpdate: (update) => this.handleCurrentModeUpdate(update),
+      onConfigOptionUpdate: (update) => this.handleConfigOptionUpdate(update),
+      onSessionInfoUpdate: (update) => this.handleSessionInfoUpdate(update),
+      onAvailableCommandsUpdate: (update) => {
+        this.cachedCommands = update.availableCommands.map((command) => ({
+          name: command.name,
+          description: command.description,
+          argumentHint: "",
+        }));
+        this.settleCommandsReady();
+      },
     });
     this.currentMode = config.modeId ?? null;
     this.currentModel = config.model ?? null;
@@ -1275,12 +1285,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
     // Match Zed acp.rs:3189-3220: generic ACP permission requests stay pure pass-through.
     const requestId = randomUUID();
-    let toolSnapshot =
-      this.toolCalls.get(params.toolCall.toolCallId) ??
-      mergeACPToolSnapshot(params.toolCall.toolCallId, params.toolCall);
-    if (this.toolSnapshotTransformer) {
-      toolSnapshot = this.toolSnapshotTransformer(toolSnapshot);
-    }
+    const toolSnapshot = this.sessionUpdates.buildPermissionToolSnapshot(
+      params.toolCall.toolCallId,
+      params.toolCall,
+    );
     const request = mapACPPermissionRequest(this.provider, requestId, params, toolSnapshot);
 
     const promise = new Promise<RequestPermissionResponse>((resolve, reject) => {
@@ -1499,119 +1507,19 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   private translateSessionUpdate(update: SessionUpdate): AgentStreamEvent[] {
-    switch (update.sessionUpdate) {
-      case "user_message_chunk": {
-        const item = this.createMessageTimelineItem("user_message", update);
-        if (!item) {
-          return [];
-        }
-        const shouldSuppress =
-          this.suppressUserEchoMessageId &&
-          update.messageId === this.suppressUserEchoMessageId &&
-          this.suppressUserEchoText &&
-          item.text === this.suppressUserEchoText;
-        if (shouldSuppress) {
-          return [];
-        }
-        return [this.wrapTimeline(item)];
-      }
-      case "agent_message_chunk": {
-        const item = this.createMessageTimelineItem("assistant_message", update);
-        return item ? [this.wrapTimeline(item)] : [];
-      }
-      case "agent_thought_chunk": {
-        const item = this.createMessageTimelineItem("reasoning", update);
-        return item ? [this.wrapTimeline(item)] : [];
-      }
-      case "tool_call":
-        return this.handleToolCallUpdate(update.toolCallId, update, undefined);
-      case "tool_call_update":
-        return this.handleToolCallUpdate(
-          update.toolCallId,
-          update,
-          this.toolCalls.get(update.toolCallId),
-        );
-      case "plan":
-        return [this.wrapTimeline(mapACPPlanToTimeline(update))];
-      case "current_mode_update":
-        this.handleCurrentModeUpdate(update);
-        return [
-          {
-            type: "mode_changed",
-            provider: this.provider,
-            currentModeId: this.currentMode,
-            availableModes: [...this.availableModes],
-          },
-        ];
-      case "config_option_update":
-        return this.handleConfigOptionUpdate(update);
-      case "session_info_update":
-        this.handleSessionInfoUpdate(update);
-        return [];
-      case "usage_update":
-        this.handleUsageUpdate(update);
-        return [];
-      case "available_commands_update":
-        this.cachedCommands = update.availableCommands.map((command) => ({
-          name: command.name,
-          description: command.description,
-          argumentHint: "",
-        }));
-        this.settleCommandsReady();
-        return [];
-      default:
-        return [];
-    }
+    return this.sessionUpdates.translate(update);
   }
 
-  private handleToolCallUpdate(
-    toolCallId: string,
-    update: ToolCall | ToolCallUpdate,
-    previous: ACPToolSnapshot | undefined,
-  ): AgentStreamEvent[] {
-    let snapshot = mergeACPToolSnapshot(toolCallId, update, previous);
-    if (this.toolSnapshotTransformer) {
-      snapshot = this.toolSnapshotTransformer(snapshot);
-    }
-    this.toolCalls.set(toolCallId, snapshot);
-    return [
-      this.wrapTimeline(
-        mapACPToolSnapshotToTimeline(snapshot, this.terminalController.timelineStates),
-      ),
-    ];
-  }
-
-  private createMessageTimelineItem(
-    type: "user_message" | "assistant_message" | "reasoning",
-    update: Extract<
-      SessionUpdate,
-      { sessionUpdate: "user_message_chunk" | "agent_message_chunk" | "agent_thought_chunk" }
-    >,
-  ):
-    | { type: "user_message"; text: string; messageId?: string }
-    | { type: "assistant_message"; text: string }
-    | { type: "reasoning"; text: string }
-    | null {
-    const chunkText = contentBlockToText(update.content);
-    if (!chunkText) {
-      return null;
-    }
-    const key = `${type}:${update.messageId ?? "default"}`;
-    const state = this.messageAssemblies.get(key) ?? { text: "" };
-    state.text += chunkText;
-    this.messageAssemblies.set(key, state);
-
-    if (type === "user_message") {
-      return { type: "user_message", text: state.text, messageId: update.messageId ?? undefined };
-    }
-    if (type === "assistant_message") {
-      return { type: "assistant_message", text: chunkText };
-    }
-    return { type: "reasoning", text: chunkText };
-  }
-
-  private handleCurrentModeUpdate(update: CurrentModeUpdate): void {
+  private handleCurrentModeUpdate(update: CurrentModeUpdate): AgentStreamEvent[] {
     this.currentMode = this.transformModeId(update.currentModeId);
+    return [
+      {
+        type: "mode_changed",
+        provider: this.provider,
+        currentModeId: this.currentMode,
+        availableModes: [...this.availableModes],
+      },
+    ];
   }
 
   private handleConfigOptionUpdate(update: ConfigOptionUpdate): AgentStreamEvent[] {
@@ -1661,10 +1569,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     }
   }
 
-  private handleUsageUpdate(update: UsageUpdate): void {
-    void update;
-  }
-
   private handlePromptResponse(response: PromptResponse, turnId: string): void {
     this.currentTurnUsage = mapACPUsage(response.usage) ?? this.currentTurnUsage;
 
@@ -1691,15 +1595,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         });
         break;
     }
-  }
-
-  private wrapTimeline(item: AgentTimelineItem): AgentStreamEvent {
-    return {
-      type: "timeline",
-      provider: this.provider,
-      item,
-      turnId: this.activeForegroundTurnId ?? undefined,
-    };
   }
 
   private pushEvent(event: AgentStreamEvent): void {
@@ -1754,17 +1649,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   private synthesizeCanceledToolCalls(): void {
-    for (const snapshot of this.toolCalls.values()) {
-      const mapped = mapACPToolSnapshotToTimeline(snapshot, this.terminalController.timelineStates);
-      if (mapped.status === "running") {
-        this.pushEvent(
-          this.wrapTimeline({
-            ...mapped,
-            status: "canceled",
-            error: null,
-          }),
-        );
-      }
+    for (const event of this.sessionUpdates.createCanceledToolEvents()) {
+      this.pushEvent(event);
     }
   }
 
