@@ -39,6 +39,15 @@ const V1_0_2_PUBLIC_SUBPATHS = [
   "./tool-name-normalization",
 ] as const;
 
+describe("current package exports", () => {
+  test("exports terminal messages as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./terminal/messages"]).toEqual({
+      types: "./dist/terminal/messages.d.ts",
+      default: "./dist/terminal/messages.js",
+    });
+  });
+});
+
 describe("package exports compatibility", () => {
   test.each(V1_0_2_PUBLIC_SUBPATHS)("keeps the v1.0.2 public subpath %s", (subpath) => {
     const outputPath = subpath.slice(2);

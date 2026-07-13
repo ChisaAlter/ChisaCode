@@ -40,6 +40,7 @@
 - 2026-07-13：agent timeline、消息发送与 Generative UI action 提取到独立 interaction/query 客户端；能力门禁、60 秒冷启动预算、messageId/附件映射与 `DaemonRpcError` 元数据保持兼容，核心降至 3368 行。
 - 2026-07-13：correlated RPC、waiter timeout/cancel、连接中请求队列、flush 和断线拒绝提取到统一 request coordinator；领域客户端共享同一 authority，核心降至 3040 行，私有 waiter 状态测试改为 deadline 行为测试。
 - 2026-07-13：transport factory/E2EE、hello、connect/reconnect、连接状态订阅、发送与 liveness 提取到独立 connection controller；核心只接收 active transport 数据和生命周期回调，降至 2319 行，公开连接配置与状态类型兼容。
+- 2026-07-13：protocol terminal inbound/outbound schema、snapshot 类型与 union tuple 提取到 `terminal/messages.ts`；旧 `messages` 入口兼容重导出，并新增显式 package subpath，主文件从 5213 降至 4941 行。
 
 ## 产品能力矩阵
 
@@ -59,7 +60,7 @@
 
 1. **P1 依赖安全迁移（部分完成）**：server 已移除 `ai@5` 并迁移到独立 `@ai-sdk/mcp@2`；剩余 Claude SDK/Zod 与 Expo/EAS major 迁移继续按运行时专项契约验证，不与结构拆分混做。
 2. **P1 provider 文件拆分**：先删除或接线当前未使用的 `providers/base/`，再按事件路由、session、client、runtime 拆分 Codex/Claude/OpenCode，避免强行继承错误抽象。
-3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成文件传输、checkout、管理命令、automation、workspace、terminal、voice/dictation、agent lifecycle/config、interaction/query、request/waiter 与 transport/reconnect 分域，核心降至 2319 行；client god-file 已退出最高风险区，下一步按 RPC domain 拆 `messages.ts`。
+3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal 域提取并降至 4941 行，下一步继续拆 checkout、workspace、provider 等 RPC domain。
 4. **P2 app 工作台拆分**：`workspace-screen.tsx` 按 navigation、pane orchestration、commands、persistence 拆分；保持 native/web/electron surface 测试分离。
 5. **P2 产品 parity（2026-07-13 完成）**：MCP 已补齐一等 chat/loop 工具，并复用现有 service、Chat mention fan-out 与 caller cwd/identity 安全边界。
 6. **P2 测试减债**：按包逐步降低 module mock、conditional skip、fixed wait、weak assertion、process.env mutation 基线，不再只维持 no-new-debt。
@@ -81,5 +82,6 @@
 - 2026-07-13 Client agent interaction 批次：client typecheck/build、4 个目标文件 lint、3 个专用契约测试与 5 个既有 timeline/Generative UI/SDK façade 场景通过
 - 2026-07-13 Client request coordinator 批次：client typecheck/build、4 个目标文件 lint、3 个专用状态机测试与 10 个既有 timeout/send-failure/status/namespaced/close 场景通过
 - 2026-07-13 Client connection controller 批次：client typecheck/build、3 个目标文件 lint、3 个专用连接测试与 16 个既有 connect/reconnect/liveness/binary/terminal/dictation/SDK 场景通过
+- 2026-07-13 Protocol terminal messages 批次：protocol typecheck/build、5 个目标文件 lint、42 个聚焦断言及 client/server/app/CLI 消费者 typecheck 通过
 
 未在本地运行全仓测试或全量 Playwright/Maestro；按仓库规则只做改动对应的聚焦验证，普通开发不触发远端 CI。

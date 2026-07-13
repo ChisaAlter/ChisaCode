@@ -141,6 +141,10 @@
       "types": "./dist/terminal-key-input.d.ts",
       "default": "./dist/terminal-key-input.js"
     },
+    "./terminal/messages": {
+      "types": "./dist/terminal/messages.d.ts",
+      "default": "./dist/terminal/messages.js"
+    },
     "./terminal-snapshot": {
       "types": "./dist/terminal-snapshot.d.ts",
       "default": "./dist/terminal-snapshot.js"

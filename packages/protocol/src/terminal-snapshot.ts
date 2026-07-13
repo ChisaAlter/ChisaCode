@@ -1,4 +1,4 @@
-import type { TerminalCell, TerminalState } from "./messages.js";
+import type { TerminalCell, TerminalState } from "./terminal/messages.js";
 
 interface TerminalStyle {
   fg: number | undefined;
