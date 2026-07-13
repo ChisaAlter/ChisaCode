@@ -12,11 +12,12 @@
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
 - Claude 已完成十四个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`message-translator.ts`、`query-lifecycle.ts`、`rewind-controller.ts`、`history-converter.ts`、`session-history.ts`、`tool-call-handlers.ts`、`sdk-types-mapping.ts`、`permission-controller.ts` 与 `options-builder.ts` 分别拥有 timeline、SDK reader、turn routing、message/usage translation、query/input/pump lifecycle、rewind state/selection、history conversion、persisted replay、tool lifecycle、纯映射、permission 生命周期与 SDK options/env 职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
 - OpenCode 已完成 façade、session、client runtime、session runtime、session lifecycle、turn execution、event translator、event values、message translator、permission translator、sub-agent tracking、history、session event bus、permission controller、MCP controller、helpers、catalog、runtime、abort coordinator 与 event-stream controller 二十个边界切片；原入口为 64 行兼容 façade，foreground turn、message、permission、sub-agent、runtime 与 shutdown 资源状态已统一。
+- ACP 已完成首个边界切片：`acp/tool-call-mapper.ts` 独立拥有增量 tool snapshot、plan/timeline/detail、permission request/option 与 raw payload 解析；`acp-agent.ts` 继续拥有 Session 状态、事件编排和 terminal 生命周期，并兼容重导出 `ACPToolSnapshot`。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 1225 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行。OpenCode 主路由已收敛，后续转向 Claude Session 的剩余大职责。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 1225 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行；ACP 主文件为 2446 行，tool mapper 为 431 行。OpenCode 主路由已收敛，后续继续拆 ACP、Pi 与 Claude Session 的剩余大职责。
 
 | 文件                                | 行数 | Session 类                    | Client 类                          | private 方法数 | import 数 |
 | ----------------------------------- | ---- | ----------------------------- | ---------------------------------- | -------------- | --------- |
@@ -45,6 +46,8 @@
 | `opencode/session-runtime.ts`       | 186  | runtime/catalog state         | —                                  | 2              | 5         |
 | `opencode/session-lifecycle.ts`     | 108  | shutdown/resource state       | —                                  | 1              | 4         |
 | `opencode/client.ts`                | 507  | —                             | `OpenCodeAgentClientRuntime`       | 2              | 13        |
+| `acp-agent.ts`                      | 2446 | `ACPAgentSession`             | `ACPAgentClient`                   | —              | —         |
+| `acp/tool-call-mapper.ts`           | 431  | tool/permission projection    | —                                  | 0              | 2         |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
 
@@ -193,10 +196,16 @@
 
 **验收**：同 Slice 1。
 
+### Slice 3.5：ACP 拆分（进行中）
+
+- `acp/tool-call-mapper.ts` —— 增量 tool snapshot、plan/timeline/detail、permission request/option 与 raw payload 解析（已完成，431 行）
+- `acp-agent.ts` —— 保留 Client/Session orchestration、terminal ownership、进程与 transport 生命周期（进行中，2446 行；原 `ACPToolSnapshot` 兼容重导出）
+
+**验收**：server typecheck、目标 lint、新 mapper 5 个断言与既有 generic permission 透传场景通过。
+
 ### Slice 4：跨 provider 共享 rewind / tool-call-mapper
 
-各 provider 子目录现有独立的 `tool-call-mapper.ts` / `rewind.ts`，评估能否提取共享版本
-到 `providers/shared/`。差异点保留为 provider-specific strategy。
+各 provider 子目录现有独立的 `tool-call-mapper.ts` / `rewind.ts`；ACP 已先建立 provider-specific mapper。等待至少第二个 provider 出现经测试证明的同构契约后，再评估提取共享版本到 `providers/shared/`，差异点继续保留为 provider-specific strategy。
 
 **验收**：至少一个 provider 改用共享版本；其他保持不变不算阻塞。
 
