@@ -87,7 +87,6 @@ import {
   useWorkspaceLayoutStoreHydrated,
 } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
-import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { normalizeWorkspaceTabTarget, workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import {
   getHostRuntimeStore,
@@ -97,11 +96,6 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import {
-  shouldAutoOpenWorkspaceSetup,
-  shouldShowWorkspaceSetup,
-  useWorkspaceSetupStore,
-} from "@/stores/workspace-setup-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { useWorkspaceTerminalSessionRetention } from "@/terminal/hooks/use-workspace-terminal-session-retention";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
@@ -126,6 +120,7 @@ import {
   WorkspaceTabRenameModal,
 } from "@/screens/workspace/use-workspace-tab-rename";
 import { useWorkspaceKeyboardActions } from "@/screens/workspace/use-workspace-keyboard-actions";
+import { useWorkspacePersistenceHydration } from "@/screens/workspace/use-workspace-persistence-hydration";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   getFallbackTabOptionDescription,
@@ -144,7 +139,6 @@ import {
 import { useWorkspaceRouteLoadingTimedOut } from "@/screens/workspace/use-workspace-route-loading-timeout";
 import { renderWorkspaceRouteGate } from "@/screens/workspace/workspace-route-state-views";
 import {
-  buildWorkspaceTabSnapshot,
   deriveWorkspaceAgentVisibility,
   workspaceAgentVisibilityEqual,
 } from "@/workspace-tabs/agent-visibility";
@@ -159,7 +153,7 @@ import {
 } from "@/screens/workspace/workspace-pane-content";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
-import { shouldSeedEmptyWorkspaceDraft } from "@/screens/workspace/workspace-empty-draft-seed";
+
 import {
   buildBulkCloseConfirmationMessage,
   classifyBulkClosableTabs,
@@ -2236,11 +2230,6 @@ function WorkspaceScreenContent({
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,
   );
   const hasHydratedWorkspaceLayoutStore = useWorkspaceLayoutStoreHydrated();
-  const workspaceSetupSnapshot = useWorkspaceSetupStore((state) =>
-    persistenceKey ? (state.snapshots[persistenceKey] ?? null) : null,
-  );
-  const upsertWorkspaceSetupProgress = useWorkspaceSetupStore((state) => state.upsertProgress);
-  const showWorkspaceSetup = shouldShowWorkspaceSetup(workspaceSetupSnapshot);
   const uiTabs = useMemo(
     () => (workspaceLayout ? collectAllTabs(workspaceLayout.root) : EMPTY_UI_TABS),
     [workspaceLayout],
@@ -2262,7 +2251,6 @@ function WorkspaceScreenContent({
     (state) => state.suppressTerminalAutoOpen,
   );
   const retargetWorkspaceTab = useWorkspaceLayoutStore((state) => state.retargetTab);
-  const reconcileWorkspaceTabs = useWorkspaceLayoutStore((state) => state.reconcileTabs);
   const splitWorkspacePane = useWorkspaceLayoutStore((state) => state.splitPane);
   const splitWorkspacePaneEmpty = useWorkspaceLayoutStore((state) => state.splitPaneEmpty);
   const moveWorkspaceTabToPane = useWorkspaceLayoutStore((state) => state.moveTabToPane);
@@ -2277,7 +2265,6 @@ function WorkspaceScreenContent({
   const _hiddenAgentIds = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.hiddenAgentIdsByWorkspace[persistenceKey] ?? EMPTY_SET) : EMPTY_SET,
   );
-  const pendingByDraftId = useCreateFlowStore((state) => state.pendingByDraftId);
   const { closingTabIds, closeTab } = useCloseTabs();
   const closeWorkspaceTabWithCleanup = useCallback(
     function closeWorkspaceTabWithCleanup(input: {
@@ -2416,57 +2403,24 @@ function WorkspaceScreenContent({
     },
     [openWorkspaceTabFocused, openWorkspaceTabInBackground, persistenceKey],
   );
-
-  useEffect(() => {
-    if (!isRouteFocused) {
-      return;
-    }
-    if (!normalizedServerId || !normalizedWorkspaceId || !persistenceKey) {
-      return;
-    }
-    if (!hasHydratedWorkspaceLayoutStore) {
-      return;
-    }
-
-    const hasActivePendingDraftCreateInWorkspace = uiTabs.some((tab) => {
-      if (tab.target.kind !== "draft") {
-        return false;
-      }
-      const pending = pendingByDraftId[tab.target.draftId];
-      return (
-        pending?.serverId === normalizedServerId &&
-        (pending.lifecycle === "active" || pending.lifecycle === "sent")
-      );
-    });
-
-    reconcileWorkspaceTabs(
-      persistenceKey,
-      buildWorkspaceTabSnapshot({
-        agentVisibility: workspaceAgentVisibility,
-        agentsHydrated: hasHydratedAgents,
-        terminalsHydrated: terminalsQuery.isSuccess,
-        knownTerminalIds,
-        standaloneTerminalIds,
-        hasActivePendingDraftCreate: hasActivePendingDraftCreateInWorkspace,
-        activeSetupWorkspaceId: showWorkspaceSetup ? normalizedWorkspaceId : null,
-      }),
-    );
-  }, [
-    hasHydratedAgents,
-    hasHydratedWorkspaceLayoutStore,
+  const { showWorkspaceSetup } = useWorkspacePersistenceHydration({
+    client,
     isRouteFocused,
-    normalizedServerId,
-    normalizedWorkspaceId,
-    pendingByDraftId,
+    serverId: normalizedServerId,
+    workspaceId: normalizedWorkspaceId,
     persistenceKey,
-    reconcileWorkspaceTabs,
+    workspaceDirectory,
+    hasHydratedWorkspaceLayoutStore,
+    hasHydratedAgents,
+    terminalsHydrated: terminalsQuery.isSuccess,
+    terminalCount: terminals.length,
     knownTerminalIds,
     standaloneTerminalIds,
-    terminalsQuery.isSuccess,
     uiTabs,
-    showWorkspaceSetup,
     workspaceAgentVisibility,
-  ]);
+    openWorkspaceDraftTab,
+    openWorkspaceTabInBackground,
+  });
 
   const activeTabId = focusedPaneTabState.activeTabId;
   const activeTab = focusedPaneTabState.activeTab;
@@ -2475,14 +2429,6 @@ function WorkspaceScreenContent({
     () => focusedPaneTabState.tabs.map((tab) => tab.descriptor),
     [focusedPaneTabState.tabs],
   );
-  const hasSetupTab = useMemo(
-    () =>
-      uiTabs.some(
-        (tab) => tab.target.kind === "setup" && tab.target.workspaceId === normalizedWorkspaceId,
-      ),
-    [normalizedWorkspaceId, uiTabs],
-  );
-
   const navigateToTabId = useCallback(
     function navigateToTabId(tabId: string) {
       if (!tabId || !persistenceKey) {
@@ -2505,158 +2451,6 @@ function WorkspaceScreenContent({
     [navigateToTabId, openWorkspaceTabFocused, persistenceKey],
   );
   const handleOpenEnvironmentSubagent = handleImportedAgent;
-
-  const emptyWorkspaceSeedKeysRef = useRef<Set<string>>(new Set());
-  const autoOpenedSetupTabWorkspaceRef = useRef<string | null>(null);
-  const requestedWorkspaceSetupStatusKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!isRouteFocused) {
-      return;
-    }
-    if (!client || !normalizedServerId || !normalizedWorkspaceId || !persistenceKey) {
-      return;
-    }
-    if (workspaceSetupSnapshot) {
-      return;
-    }
-    if (requestedWorkspaceSetupStatusKeyRef.current === persistenceKey) {
-      return;
-    }
-
-    requestedWorkspaceSetupStatusKeyRef.current = persistenceKey;
-    let isCancelled = false;
-
-    client
-      .fetchWorkspaceSetupStatus(normalizedWorkspaceId)
-      .then((response) => {
-        if (isCancelled || response.workspaceId !== normalizedWorkspaceId || !response.snapshot) {
-          return;
-        }
-        upsertWorkspaceSetupProgress({
-          serverId: normalizedServerId,
-          payload: { workspaceId: response.workspaceId, ...response.snapshot },
-          source: "cached",
-        });
-        return;
-      })
-      .catch(() => {
-        if (requestedWorkspaceSetupStatusKeyRef.current === persistenceKey) {
-          requestedWorkspaceSetupStatusKeyRef.current = null;
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    client,
-    isRouteFocused,
-    normalizedServerId,
-    normalizedWorkspaceId,
-    persistenceKey,
-    upsertWorkspaceSetupProgress,
-    workspaceSetupSnapshot,
-  ]);
-
-  useEffect(() => {
-    const hasSeedPrerequisites = Boolean(
-      isRouteFocused &&
-      persistenceKey &&
-      workspaceDirectory &&
-      hasHydratedWorkspaceLayoutStore &&
-      hasHydratedAgents &&
-      terminalsQuery.isSuccess,
-    );
-    if (!hasSeedPrerequisites || !persistenceKey) {
-      return;
-    }
-
-    const hasConsideredEmptyWorkspaceDraftSeed =
-      emptyWorkspaceSeedKeysRef.current.has(persistenceKey);
-    const shouldSeedDraft = shouldSeedEmptyWorkspaceDraft({
-      isRouteFocused,
-      hasPersistenceKey: true,
-      hasWorkspaceDirectory: true,
-      hasHydratedWorkspaceLayoutStore,
-      hasHydratedAgents,
-      hasLoadedTerminals: terminalsQuery.isSuccess,
-      hasConsideredEmptyWorkspaceDraftSeed,
-      activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
-      terminalCount: terminals.length,
-      workspaceTabCount: uiTabs.length,
-    });
-
-    if (hasConsideredEmptyWorkspaceDraftSeed) {
-      return;
-    }
-
-    emptyWorkspaceSeedKeysRef.current.add(persistenceKey);
-    if (!shouldSeedDraft) {
-      return;
-    }
-    openWorkspaceDraftTab();
-  }, [
-    openWorkspaceDraftTab,
-    persistenceKey,
-    hasHydratedAgents,
-    hasHydratedWorkspaceLayoutStore,
-    isRouteFocused,
-    terminals.length,
-    terminalsQuery.isSuccess,
-    uiTabs.length,
-    workspaceDirectory,
-    workspaceAgentVisibility.activeAgentIds.size,
-  ]);
-
-  useEffect(() => {
-    if (!isRouteFocused) {
-      return;
-    }
-    if (!persistenceKey) {
-      return;
-    }
-    if (!workspaceSetupSnapshot || !showWorkspaceSetup) {
-      if (autoOpenedSetupTabWorkspaceRef.current === persistenceKey) {
-        autoOpenedSetupTabWorkspaceRef.current = null;
-      }
-      return;
-    }
-
-    if (!shouldAutoOpenWorkspaceSetup(workspaceSetupSnapshot)) {
-      return;
-    }
-    if (hasSetupTab) {
-      autoOpenedSetupTabWorkspaceRef.current = persistenceKey;
-      return;
-    }
-    if (autoOpenedSetupTabWorkspaceRef.current === persistenceKey) {
-      return;
-    }
-
-    const target = normalizeWorkspaceTabTarget({
-      kind: "setup",
-      workspaceId: normalizedWorkspaceId,
-    });
-    if (!target) {
-      return;
-    }
-
-    const tabId = openWorkspaceTabInBackground(persistenceKey, target);
-    if (!tabId) {
-      return;
-    }
-
-    autoOpenedSetupTabWorkspaceRef.current = persistenceKey;
-  }, [
-    hasSetupTab,
-    isRouteFocused,
-    normalizedWorkspaceId,
-    openWorkspaceTabInBackground,
-    persistenceKey,
-    showWorkspaceSetup,
-    workspaceSetupSnapshot,
-  ]);
 
   const handleOpenFileFromExplorer = useCallback(
     function handleOpenFileFromExplorer(filePath: string) {
