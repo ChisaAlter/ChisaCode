@@ -22,7 +22,6 @@ import {
   isImageMimeType,
   type ClaudeContentChunk,
 } from "./sdk-types-mapping.js";
-import { runClaudeSdkQueryPump } from "./sdk-pump.js";
 import {
   ClaudeMessageRouter,
   type ClaudeAutonomousTurnState,
@@ -30,8 +29,9 @@ import {
 } from "./message-router.js";
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { ClaudePermissionController } from "./permission-controller.js";
-import { ClaudeOptionsBuilder, summarizeClaudeOptionsForLog } from "./options-builder.js";
+import { ClaudeOptionsBuilder } from "./options-builder.js";
 import { ClaudeMessageTranslator } from "./message-translator.js";
+import { type ClaudeAsyncMessageInput, ClaudeQueryLifecycle } from "./query-lifecycle.js";
 import {
   CLAUDE_INTERRUPT_TOOL_USE_PLACEHOLDER as INTERRUPT_TOOL_USE_PLACEHOLDER,
   ClaudeSessionHistory,
@@ -41,7 +41,6 @@ import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-defi
 import { isClaudeTranscriptNoiseText } from "./history-converter.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
-import { claudeQuery, type ClaudeQueryFactory } from "./query.js";
 import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
 import { ClaudeRewindController, type ClaudeRewindInvocation } from "./rewind-controller.js";
 
@@ -63,8 +62,6 @@ import {
   type AgentUsage,
   type AgentRuntimeInfo,
 } from "../../agent-sdk-types.js";
-import type { ProviderRuntimeSettings } from "../../provider-launch-config.js";
-import { withTimeout } from "../../../../utils/promise-timeout.js";
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -72,12 +69,6 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 
 function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
   return isObjectRecord(value) ? value : undefined;
-}
-
-interface AsyncMessageInput<T> {
-  push: (item: T) => void;
-  end: () => void;
-  iterable: AsyncIterable<T>;
 }
 
 const DEFAULT_MODES: AgentMode[] = [
@@ -113,12 +104,6 @@ const VALID_CLAUDE_MODES = new Set(DEFAULT_MODES.map((mode) => mode.id));
 type ClaudeThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
 type ClaudeThinkingOption = ClaudeThinkingEffort | "ultracode";
 
-function errorToMessageString(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  return "";
-}
-
 function isClaudeThinkingEffort(value: string | null | undefined): value is ClaudeThinkingEffort {
   return (
     value === "low" ||
@@ -132,10 +117,6 @@ function isClaudeThinkingOption(value: string | null | undefined): value is Clau
   return value === "ultracode" || isClaudeThinkingEffort(value);
 }
 
-const MAX_RECENT_STDERR_CHARS = 4000;
-const STDERR_FLUSH_WAIT_MS = 150;
-const STDERR_FLUSH_POLL_INTERVAL_MS = 10;
-
 function isPermissionMode(value: string | undefined): value is PermissionMode {
   return typeof value === "string" && VALID_CLAUDE_MODES.has(value);
 }
@@ -145,15 +126,11 @@ export class ClaudeAgentSession implements AgentSession {
   readonly capabilities = CLAUDE_CAPABILITIES;
 
   private readonly config: ClaudeAgentConfig;
-  private readonly launchEnv?: Record<string, string>;
   private readonly agentId?: string;
-  private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly persistSession?: boolean;
   private readonly logger: Logger;
-  private readonly queryFactory?: ClaudeQueryFactory;
   private readonly optionsBuilder: ClaudeOptionsBuilder;
-  private query: Query | null = null;
-  private input: AsyncMessageInput<SDKUserMessage> | null = null;
+  private readonly queryLifecycle: ClaudeQueryLifecycle;
   private claudeSessionId: string | null;
   private persistence: AgentPersistenceHandle | null;
   private currentMode: PermissionMode;
@@ -175,24 +152,18 @@ export class ClaudeAgentSession implements AgentSession {
   private lastOptionsModel: string | null = null;
   private lastRuntimeModel: string | null = null;
   private modelGatewayOverrideActive = false;
-  private queryPumpPromise: Promise<void> | null = null;
-  private queryRestartNeeded = false;
   private pendingFreshSessionId: string | null = null;
-  private recentStderr = "";
-  private closed = false;
 
   constructor(config: ClaudeAgentConfig, options: ClaudeAgentSessionOptions) {
     this.config = config;
-    this.launchEnv = options.launchEnv;
     this.agentId = options.agentId;
-    this.runtimeSettings = options.runtimeSettings;
     this.persistSession = options.persistSession;
     this.logger = options.logger.child({ agentId: this.agentId });
     this.optionsBuilder = new ClaudeOptionsBuilder({
       config: this.config,
-      launchEnv: this.launchEnv,
+      launchEnv: options.launchEnv,
       defaults: options.defaults,
-      runtimeSettings: this.runtimeSettings,
+      runtimeSettings: options.runtimeSettings,
       persistSession: this.persistSession,
       logger: this.logger,
       resolveBinary: options.resolveBinary,
@@ -202,6 +173,33 @@ export class ClaudeAgentSession implements AgentSession {
       canUseTool: async (toolName, input, requestOptions) =>
         this.handlePermissionRequest(toolName, input, requestOptions),
       captureStderr: (data) => this.captureStderr(data),
+    });
+    this.queryLifecycle = new ClaudeQueryLifecycle({
+      logger: this.logger,
+      optionsBuilder: this.optionsBuilder,
+      runtimeSettings: options.runtimeSettings,
+      launchEnv: options.launchEnv,
+      queryFactory: options.queryFactory,
+      getTraceContext: () => ({
+        agentId: this.agentId,
+        provider: "claude",
+        sessionId: this.claudeSessionId,
+        turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
+      }),
+      onBeforeQueryCreate: () => {
+        this.persistence = null;
+      },
+      onQueryOptionsBuilt: ({ requestedModel, modelGatewayOverrideActive }) => {
+        this.lastOptionsModel = requestedModel;
+        this.modelGatewayOverrideActive = modelGatewayOverrideActive;
+      },
+      handleMissingResumedConversation: (message, query) =>
+        this.handleMissingResumedConversation(message, query),
+      routeMessage: (message) => this.messageRouter.routeMessage(message),
+      failActiveTurns: (errorMessage) => this.failActiveTurns(errorMessage),
+      onInterruptStarted: () => {
+        this.pendingInterruptAbort = true;
+      },
     });
     this.permissionController = new ClaudePermissionController({
       getPlanResumeMode: () => this.planResumeMode,
@@ -266,7 +264,6 @@ export class ClaudeAgentSession implements AgentSession {
         this.translateMessageToEvents(message, routeOptions),
       assembleTimelineItems: (input) => this.timelineAssembler.consume(input),
     });
-    this.queryFactory = options.queryFactory;
     const handle = options.handle;
 
     if (handle) {
@@ -313,6 +310,35 @@ export class ClaudeAgentSession implements AgentSession {
     entry: ClaudeToolUseCacheEntry | undefined,
   ): AgentMetadata | undefined {
     return this.toolCallHandler.buildToolOutput(block, entry);
+  }
+
+  // Compatibility surface for focused query lifecycle regression tests.
+  private get query(): Query | null {
+    return this.queryLifecycle.getCurrentQuery();
+  }
+
+  private set query(query: Query | null) {
+    this.queryLifecycle.setCurrentQueryForCompatibility(query);
+  }
+
+  private get input(): ClaudeAsyncMessageInput<SDKUserMessage> | null {
+    return this.queryLifecycle.getCurrentInput();
+  }
+
+  private set input(input: ClaudeAsyncMessageInput<SDKUserMessage> | null) {
+    this.queryLifecycle.setCurrentInputForCompatibility(input);
+  }
+
+  private get queryRestartNeeded(): boolean {
+    return this.queryLifecycle.isRestartNeeded();
+  }
+
+  private set queryRestartNeeded(restartNeeded: boolean) {
+    this.queryLifecycle.setRestartNeeded(restartNeeded);
+  }
+
+  private get closed(): boolean {
+    return this.queryLifecycle.isClosed();
   }
 
   private get activeForegroundTurnId(): string | null {
@@ -495,12 +521,7 @@ export class ClaudeAgentSession implements AgentSession {
     this.notifySubscribers({ type: "turn_started", provider: "claude" });
 
     try {
-      await this.ensureQuery();
-      if (!this.input) {
-        throw new Error("Claude session input stream not initialized");
-      }
-      this.startQueryPump();
-      this.input.push(sdkMessage);
+      await this.queryLifecycle.send(sdkMessage);
       setTimeout(() => {
         if (this.activeForegroundTurnId === turnId) {
           this.emitSubmittedUserMessage(sdkMessage, turnId);
@@ -624,7 +645,7 @@ export class ClaudeAgentSession implements AgentSession {
       ...this.config.featureValues,
       fast_mode: enabled,
     };
-    const activeQuery = query ?? this.query;
+    const activeQuery = query ?? this.queryLifecycle.getCurrentQuery();
     if (activeQuery) {
       await activeQuery.applyFlagSettings({ fastMode: enabled });
     }
@@ -669,7 +690,7 @@ export class ClaudeAgentSession implements AgentSession {
       },
       "provider.claude.session_close.start",
     );
-    this.closed = true;
+    this.queryLifecycle.beginClose();
     this.rejectAllPendingPermissions(new Error("Claude session closed"));
     this.cancelCurrentTurn?.();
     this.subscribers.clear();
@@ -678,12 +699,7 @@ export class ClaudeAgentSession implements AgentSession {
     this.cancelCurrentTurn = null;
     this.turnState = "idle";
     this.sidechainTracker.clear();
-    this.input?.end();
-    this.query?.close?.();
-    await this.awaitWithTimeout(this.query?.interrupt?.(), "close query interrupt");
-    await this.awaitWithTimeout(this.query?.return?.(), "close query return");
-    this.query = null;
-    this.input = null;
+    await this.queryLifecycle.closeTransport();
     if (this.persistSession === false && this.claudeSessionId) {
       // Claude Code currently ignores --no-session-persistence outside --print mode
       // (see `claude --help`), so the SDK's persistSession=false is silently dropped
@@ -779,10 +795,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   private async ensureFreshQuery(): Promise<Query> {
-    if (this.query) {
-      this.queryRestartNeeded = true;
-    }
-    return this.ensureQuery();
+    return this.queryLifecycle.ensureFreshQuery();
   }
 
   private rebindConversationSession(sessionId: string): void {
@@ -825,102 +838,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   private async ensureQuery(): Promise<Query> {
-    if (this.query && !this.queryRestartNeeded) {
-      return this.query;
-    }
-
-    if (this.queryRestartNeeded && this.query) {
-      const oldQuery = this.query;
-      const oldInput = this.input;
-      // Null out query/input BEFORE awaiting the old iterator's return so the
-      // old pump sees this.query !== activeQuery and skips failActiveTurns.
-      this.query = null;
-      this.input = null;
-      this.queryPumpPromise = null;
-      this.queryRestartNeeded = false;
-      oldInput?.end();
-      oldQuery.close?.();
-      try {
-        await oldQuery.return?.();
-      } catch {
-        /* ignore */
-      }
-    }
-
-    // Preserve claudeSessionId across query recreation so rebuilt options pass
-    // resume: sessionId and the new query continues the existing conversation.
-    this.persistence = null;
-
-    const input = createAsyncMessageInput<SDKUserMessage>();
-    const builtOptions = await this.optionsBuilder.build();
-    const options = builtOptions.options;
-    this.lastOptionsModel = builtOptions.requestedModel;
-    this.modelGatewayOverrideActive = builtOptions.modelGatewayOverrideActive;
-    this.logger.debug({ options: summarizeClaudeOptionsForLog(options) }, "claude query");
-    this.input = input;
-    this.query = claudeQuery(
-      { prompt: input.iterable, options },
-      {
-        runtimeSettings: this.runtimeSettings,
-        launchEnv: this.launchEnv,
-        queryFactory: this.queryFactory,
-      },
-    );
-    const fastMode = this.optionsBuilder.resolveFastModeSetting();
-    if (fastMode !== null) {
-      await this.query.applyFlagSettings({ fastMode });
-    }
-    // Do not kick off background control-plane queries here. Methods like
-    // supportedCommands()/setPermissionMode() may execute immediately after
-    // ensureQuery() (for listCommands()/setMode()), and sharing the same query
-    // control plane can cause those calls to wait behind supportedModels().
-    return this.query;
-  }
-
-  private async awaitWithTimeout(
-    promise: Promise<unknown> | undefined,
-    label: string,
-  ): Promise<void> {
-    if (!promise) {
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: "claude",
-          sessionId: this.claudeSessionId,
-          turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-          label,
-        },
-        "provider.claude.query_operation.skip",
-      );
-      return;
-    }
-    const startedAt = Date.now();
-    this.logger.trace(
-      {
-        agentId: this.agentId,
-        provider: "claude",
-        sessionId: this.claudeSessionId,
-        turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-        label,
-      },
-      "provider.claude.query_operation.start",
-    );
-    try {
-      await withTimeout(promise, 3_000, "timeout");
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: "claude",
-          sessionId: this.claudeSessionId,
-          turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-          label,
-          durationMs: Date.now() - startedAt,
-        },
-        "provider.claude.query_operation.settled",
-      );
-    } catch (error) {
-      this.logger.warn({ err: error, label }, "Claude query operation did not settle cleanly");
-    }
+    return this.queryLifecycle.ensureQuery();
   }
 
   private toSdkUserMessage(prompt: AgentPromptInput): SDKUserMessage {
@@ -998,41 +916,15 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   private captureStderr(data: string): void {
-    const text = data.trim();
-    if (!text) {
-      return;
-    }
-    const combined = this.recentStderr ? `${this.recentStderr}\n${text}` : text;
-    this.recentStderr = combined.slice(-MAX_RECENT_STDERR_CHARS);
+    this.queryLifecycle.captureStderr(data);
   }
 
   private clearRecentStderr(): void {
-    this.recentStderr = "";
+    this.queryLifecycle.clearRecentStderr();
   }
 
   private getRecentStderrDiagnostic(): string | undefined {
-    return this.recentStderr.trim() || undefined;
-  }
-
-  private async awaitRecentStderrAfterProcessExit(error: unknown): Promise<void> {
-    if (this.getRecentStderrDiagnostic()) {
-      return;
-    }
-    const message = errorToMessageString(error);
-    if (
-      !/\bprocess exited with code\b/i.test(message) &&
-      !/\bterminated by signal\b/i.test(message)
-    ) {
-      return;
-    }
-
-    const startedAt = Date.now();
-    while (!this.closed && !this.getRecentStderrDiagnostic()) {
-      if (Date.now() - startedAt >= STDERR_FLUSH_WAIT_MS) {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, STDERR_FLUSH_POLL_INTERVAL_MS));
-    }
+    return this.queryLifecycle.getRecentStderrDiagnostic();
   }
 
   private createTurnId(owner: "foreground" | "autonomous"): string {
@@ -1095,58 +987,6 @@ export class ClaudeAgentSession implements AgentSession {
     this.messageRouter.failActiveTurns(errorMessage);
   }
 
-  private startQueryPump(): void {
-    if (this.closed || this.queryPumpPromise) {
-      return;
-    }
-
-    const pump = runClaudeSdkQueryPump({
-      logger: this.logger,
-      getTraceContext: () => ({
-        agentId: this.agentId,
-        provider: "claude",
-        sessionId: this.claudeSessionId,
-        turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-      }),
-      isClosed: () => this.closed,
-      ensureQuery: () => this.ensureQuery(),
-      isCurrentQuery: (query) => this.query === query,
-      handleMissingResumedConversation: (message, query) =>
-        this.handleMissingResumedConversation(message, query),
-      routeMessage: (message) => this.routeSdkMessageFromPump(message),
-      failActiveTurns: (errorMessage) => this.failActiveTurns(errorMessage),
-      awaitRecentStderrAfterProcessExit: (error) => this.awaitRecentStderrAfterProcessExit(error),
-      clearQueryIfCurrent: (query) => {
-        if (this.query === query) {
-          this.query = null;
-          this.input = null;
-        }
-      },
-    }).catch((error) => {
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: "claude",
-          sessionId: this.claudeSessionId,
-          turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-          err: error,
-        },
-        "provider.claude.query_pump.exit_unexpected",
-      );
-    });
-
-    this.queryPumpPromise = pump;
-    void pump.finally(() => {
-      if (this.queryPumpPromise === pump) {
-        this.queryPumpPromise = null;
-      }
-    });
-  }
-
-  private routeSdkMessageFromPump(message: SDKMessage): void {
-    this.messageRouter.routeMessage(message);
-  }
-
   private async handleMissingResumedConversation(
     message: SDKMessage,
     activeQuery: Query,
@@ -1164,19 +1004,10 @@ export class ClaudeAgentSession implements AgentSession {
     );
 
     this.failActiveTurns(staleResumeError);
-    this.input?.end();
-    await this.awaitWithTimeout(
-      activeQuery.return?.(),
-      "query pump return on missing resumed conversation",
-    );
-    if (this.query === activeQuery) {
-      this.query = null;
-      this.input = null;
-    }
+    await this.queryLifecycle.invalidateMissingResume(activeQuery);
     this.persistence = null;
     this.historyController.clear();
     this.cachedRuntimeInfo = null;
-    this.queryRestartNeeded = false;
     this.autonomousTurn = null;
     this.activeForegroundTurnId = null;
     this.syncTurnState("missing resumed conversation");
@@ -1184,28 +1015,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   private async interruptActiveTurn(): Promise<void> {
-    const queryToInterrupt = this.query;
-    if (!queryToInterrupt || typeof queryToInterrupt.interrupt !== "function") {
-      this.logger.trace(
-        {
-          agentId: this.agentId,
-          provider: "claude",
-          sessionId: this.claudeSessionId,
-          turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
-        },
-        "provider.claude.interrupt.no_query",
-      );
-      return;
-    }
-    this.pendingInterruptAbort = true;
-    try {
-      await this.awaitWithTimeout(
-        queryToInterrupt.interrupt(),
-        "interruptActiveTurn query.interrupt()",
-      );
-    } catch (error) {
-      this.logger.warn({ err: error }, "Failed to interrupt active turn");
-    }
+    await this.queryLifecycle.interruptActiveTurn();
   }
 
   private translateMessageToEvents(
@@ -1412,51 +1222,4 @@ export class ClaudeAgentSession implements AgentSession {
   private rejectAllPendingPermissions(error: Error): void {
     this.permissionController.rejectAll(error);
   }
-}
-
-function createAsyncMessageInput<T>(): AsyncMessageInput<T> {
-  const queue: T[] = [];
-  const resolvers: Array<(value: IteratorResult<T, void>) => void> = [];
-  let closed = false;
-
-  return {
-    push(item: T) {
-      if (closed) {
-        return;
-      }
-      const resolve = resolvers.shift();
-      if (resolve) {
-        resolve({ value: item, done: false });
-        return;
-      }
-      queue.push(item);
-    },
-    end() {
-      closed = true;
-      while (resolvers.length > 0) {
-        const resolve = resolvers.shift();
-        resolve?.({ value: undefined, done: true });
-      }
-    },
-    iterable: {
-      [Symbol.asyncIterator](): AsyncIterator<T, void> {
-        return {
-          next: (): Promise<IteratorResult<T, void>> => {
-            if (queue.length > 0) {
-              const value = queue.shift();
-              if (value !== undefined) {
-                return Promise.resolve({ value, done: false });
-              }
-            }
-            if (closed) {
-              return Promise.resolve({ value: undefined, done: true });
-            }
-            return new Promise<IteratorResult<T, void>>((resolve) => {
-              resolvers.push(resolve);
-            });
-          },
-        };
-      },
-    },
-  };
 }
