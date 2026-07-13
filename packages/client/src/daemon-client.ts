@@ -1,5 +1,4 @@
 import type { z } from "zod";
-import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 import {
   CheckoutRenameBranchResponseSchema,
   parseServerInfoStatusPayload,
@@ -93,7 +92,6 @@ import type {
   AgentSessionConfig,
 } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
-import { isRelayClientWebSocketUrl } from "@chisacode/protocol/daemon-endpoints";
 import {
   asUint8Array,
   decodeFileTransferFrame,
@@ -101,17 +99,7 @@ import {
   TerminalStreamOpcode,
   type FileTransferFrame,
 } from "@chisacode/protocol/binary-frames/index";
-import {
-  createRelayE2eeTransportFactory,
-  createWebSocketTransportFactory,
-  decodeMessageData,
-  defaultWebSocketFactory,
-  describeTransportClose,
-  describeTransportError,
-  type DaemonTransport,
-  type DaemonTransportFactory,
-  type WebSocketFactory,
-} from "./daemon-client-transport.js";
+import { decodeMessageData } from "./daemon-client-transport.js";
 import { CheckoutCommandClient } from "./daemon-client-checkout-commands.js";
 import { CheckoutSubscriptionClient } from "./daemon-client-checkout-subscriptions.js";
 import { ConfigCommandClient } from "./daemon-client-config-commands.js";
@@ -154,15 +142,19 @@ import {
   type SendMessageOptions,
 } from "./daemon-client-agent-interaction.js";
 import { DaemonRequestCoordinator } from "./daemon-client-request-coordinator.js";
+import {
+  DaemonConnectionController,
+  type ConnectionState,
+  type DaemonClientConfig,
+  type Logger,
+} from "./daemon-client-connection-controller.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
-
-export interface Logger {
-  debug(obj: object, msg?: string): void;
-  info(obj: object, msg?: string): void;
-  warn(obj: object, msg?: string): void;
-  error(obj: object, msg?: string): void;
-}
+export type {
+  ConnectionState,
+  DaemonClientConfig,
+  Logger,
+} from "./daemon-client-connection-controller.js";
 
 const consoleLogger: Logger = {
   debug: () => {},
@@ -175,13 +167,6 @@ const perfNow: () => number =
   typeof performance !== "undefined" && typeof performance.now === "function"
     ? () => performance.now()
     : () => Date.now();
-
-function normalizePassword(value: string | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  return value.length > 0 ? value : null;
-}
 
 export type {
   DaemonTransport,
@@ -204,13 +189,6 @@ export type {
   RenameTerminalResult,
   TerminalStreamEvent,
 };
-
-export type ConnectionState =
-  | { status: "idle" }
-  | { status: "connecting"; attempt: number }
-  | { status: "connected" }
-  | { status: "disconnected"; reason?: string }
-  | { status: "disposed" };
 
 export type DaemonEvent =
   | {
@@ -256,32 +234,6 @@ export type DaemonEvent =
   | { type: "error"; message: string };
 
 export type DaemonEventHandler = (event: DaemonEvent) => void;
-
-export interface DaemonClientConfig {
-  url: string;
-  clientId: string;
-  clientType?: "mobile" | "browser" | "cli" | "mcp";
-  appVersion?: string;
-  runtimeGeneration?: number | null;
-  password?: string;
-  authHeader?: string;
-  suppressSendErrors?: boolean;
-  transportFactory?: DaemonTransportFactory;
-  webSocketFactory?: WebSocketFactory;
-  logger?: Logger;
-  connectTimeoutMs?: number;
-  e2ee?: {
-    enabled?: boolean;
-    daemonPublicKeyB64?: string;
-  };
-  reconnect?: {
-    enabled?: boolean;
-    baseDelayMs?: number;
-    maxDelayMs?: number;
-  };
-  runtimeMetricsIntervalMs?: number;
-  runtimeMetricsWindowMs?: number;
-}
 
 export interface CreateChisaCodeWorktreeInput extends Pick<
   CreateChisaCodeWorktreeRequest,
@@ -657,79 +609,14 @@ export interface WaitForFinishResult {
   lastMessage: string | null;
 }
 
-const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
-const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
-const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
-const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
-const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
-
-function normalizeClientId(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function hashForLog(value: string): string {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-  return `h_${Math.abs(hash).toString(16)}`;
-}
-
-function toReasonCode(reason: string | null | undefined): string | null {
-  if (!reason) {
-    return null;
-  }
-  const normalized = reason.toLowerCase();
-  if (normalized.includes("timed out")) {
-    return "connect_timeout";
-  }
-  if (normalized.includes("disposed")) {
-    return "disposed";
-  }
-  if (normalized.includes("client closed")) {
-    return "client_closed";
-  }
-  if (normalized.includes("transport")) {
-    return "transport_error";
-  }
-  if (normalized.includes("failed to connect")) {
-    return "connect_failed";
-  }
-  return "unknown";
-}
-
-interface LivenessProbe {
-  promise: Promise<{ rttMs: number }>;
-  resolve: (value: { rttMs: number }) => void;
-  reject: (error: Error) => void;
-  timeoutHandle: ReturnType<typeof setTimeout>;
-  startedAt: number;
-}
-
 export class DaemonClient {
-  private transport: DaemonTransport | null = null;
-  private transportCleanup: Array<() => void> = [];
-  private rawMessageListeners: Set<(message: SessionOutboundMessage) => void> = new Set();
-  private messageHandlers: Map<
+  private readonly connection: DaemonConnectionController;
+  private readonly rawMessageListeners = new Set<(message: SessionOutboundMessage) => void>();
+  private readonly messageHandlers = new Map<
     SessionOutboundMessage["type"],
     Set<(message: SessionOutboundMessage) => void>
-  > = new Map();
-  private eventListeners: Set<DaemonEventHandler> = new Set();
-  private connectionListeners: Set<(status: ConnectionState) => void> = new Set();
-  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-  private connectTimeout: ReturnType<typeof setTimeout> | null = null;
-  private pendingGenericTransportErrorTimeout: ReturnType<typeof setTimeout> | null = null;
-  private reconnectAttempt = 0;
-  private shouldReconnect = true;
-  private connectPromise: Promise<void> | null = null;
-  private connectResolve: (() => void) | null = null;
-  private connectReject: ((error: Error) => void) | null = null;
-  private lastErrorValue: string | null = null;
-  private connectionState: ConnectionState = { status: "idle" };
+  >();
+  private readonly eventListeners = new Set<DaemonEventHandler>();
   private readonly requests: DaemonRequestCoordinator;
   private readonly checkoutCommands: CheckoutCommandClient;
   private readonly checkoutSubscriptions: CheckoutSubscriptionClient;
@@ -744,22 +631,25 @@ export class DaemonClient {
   private readonly agentInteraction: AgentInteractionClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
-  private readonly logConnectionPath: "direct" | "relay";
-  private readonly logServerId: string | null;
-  private readonly logClientIdHash: string;
-  private readonly logGeneration: number | null;
   private lastServerInfoMessage: ServerInfoStatusPayload | null = null;
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
   private runtimeMetrics: DaemonClientRuntimeMetrics | null = null;
-  private livenessProbe: LivenessProbe | null = null;
-  private consecutiveLivenessFailures = 0;
 
-  constructor(private config: DaemonClientConfig) {
+  constructor(config: DaemonClientConfig) {
     this.logger = config.logger ?? consoleLogger;
+    this.connection = new DaemonConnectionController(config, this.logger, {
+      onMessage: (data) => this.handleTransportMessage(data),
+      onConnected: () => {
+        this.checkoutSubscriptions.resubscribe();
+        this.terminalClient.resubscribeDirectories();
+        this.requests.flushPendingSends();
+      },
+      onReset: (error, terminal) => this.handleConnectionReset(error, terminal),
+    });
     this.requests = new DaemonRequestCoordinator({
       createRequestId: (requestId) => this.createRequestId(requestId),
-      getConnectionStatus: () => this.connectionState.status,
-      sendConnectedMessage: (message) => this.sendSessionMessageStrict(message),
+      getConnectionStatus: () => this.connection.getState().status,
+      sendConnectedMessage: (message) => this.connection.sendSessionMessageStrict(message),
     });
     this.checkoutCommands = new CheckoutCommandClient({
       request: (params) => this.requests.requestSession(params),
@@ -767,7 +657,7 @@ export class DaemonClient {
     this.checkoutSubscriptions = new CheckoutSubscriptionClient({
       createRequestId: (requestId) => this.createRequestId(requestId),
       sendRequest: (params) => this.requests.request(params),
-      sendMessage: (message) => this.sendSessionMessage(message),
+      sendMessage: (message) => this.connection.sendSessionMessage(message),
     });
     this.configCommands = new ConfigCommandClient({
       request: (params) => this.requests.requestSession(params),
@@ -786,14 +676,14 @@ export class DaemonClient {
     });
     this.terminalClient = new TerminalClient({
       request: (params) => this.requests.requestSession(params),
-      isConnected: () => Boolean(this.transport && this.connectionState.status === "connected"),
-      sendMessage: (message) => this.sendSessionMessage(message),
-      sendBinaryFrame: (frame) => this.sendBinaryFrame(frame),
+      isConnected: () => this.connection.isConnected,
+      sendMessage: (message) => this.connection.sendSessionMessage(message),
+      sendBinaryFrame: (frame) => this.connection.sendBinaryFrame(frame),
     });
     this.voiceClient = new VoiceClient({
       request: (params) => this.requests.requestSession(params),
-      sendMessage: (message) => this.sendSessionMessage(message),
-      sendStrictMessage: (message) => this.sendSessionMessageStrict(message),
+      sendMessage: (message) => this.connection.sendSessionMessage(message),
+      sendStrictMessage: (message) => this.connection.sendSessionMessageStrict(message),
       waitFor: (predicate, timeout) =>
         this.requests.waitForWithCancel(predicate, timeout, { skipQueue: true }),
     });
@@ -807,26 +697,6 @@ export class DaemonClient {
       createRequestId: (requestId) => this.createRequestId(requestId),
       supportsGenerativeUi: () => this.lastServerInfoMessage?.features?.generativeUi === true,
     });
-    this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
-    let parsedUrlForLog: URL | null = null;
-    try {
-      parsedUrlForLog = new URL(this.config.url);
-    } catch {
-      parsedUrlForLog = null;
-    }
-    const parsedServerIdForLog = normalizeClientId(parsedUrlForLog?.searchParams.get("serverId"));
-    this.logServerId = parsedServerIdForLog ?? parsedUrlForLog?.host ?? null;
-    const resolvedClientId = normalizeClientId(this.config.clientId);
-    if (!resolvedClientId) {
-      throw new Error("Daemon client requires a non-empty clientId");
-    }
-    this.config.clientId = resolvedClientId;
-    this.logClientIdHash = hashForLog(resolvedClientId);
-    this.logGeneration =
-      typeof this.config.runtimeGeneration === "number" &&
-      Number.isFinite(this.config.runtimeGeneration)
-        ? this.config.runtimeGeneration
-        : null;
     const runtimeMetricsIntervalMs =
       typeof config.runtimeMetricsIntervalMs === "number" && config.runtimeMetricsIntervalMs > 0
         ? config.runtimeMetricsIntervalMs
@@ -839,9 +709,9 @@ export class DaemonClient {
       this.runtimeMetrics = new DaemonClientRuntimeMetrics(
         this.logger,
         {
-          connectionPath: this.logConnectionPath,
-          serverId: this.logServerId,
-          getConnectionStatus: () => this.connectionState.status,
+          connectionPath: this.connection.connectionPath,
+          serverId: this.connection.serverId,
+          getConnectionStatus: () => this.connection.getState().status,
         },
         runtimeMetricsWindowMs ? { windowMs: runtimeMetricsWindowMs } : undefined,
       );
@@ -856,291 +726,35 @@ export class DaemonClient {
   // ============================================================================
 
   async connect(): Promise<void> {
-    if (this.connectionState.status === "disposed") {
-      throw new Error("Daemon client is disposed");
-    }
-    if (this.connectionState.status === "connected") {
-      return;
-    }
-    if (this.connectPromise) {
-      return this.connectPromise;
-    }
-
-    this.shouldReconnect = true;
-    this.connectPromise = new Promise((resolve, reject) => {
-      this.connectResolve = resolve;
-      this.connectReject = reject;
-      this.attemptConnect();
-    });
-
-    return this.connectPromise;
-  }
-
-  private attemptConnect(): void {
-    if (this.connectionState.status === "disposed") {
-      this.rejectConnect(new Error("Daemon client is disposed"));
-      return;
-    }
-    if (!this.shouldReconnect) {
-      this.rejectConnect(new Error("Daemon client is closed"));
-      return;
-    }
-
-    if (this.connectionState.status === "connecting") {
-      return;
-    }
-
-    const headers: Record<string, string> = {};
-    const password = normalizePassword(this.config.password);
-    if (password) {
-      headers.Authorization = `Bearer ${password}`;
-    } else if (this.config.authHeader) {
-      headers.Authorization = this.config.authHeader;
-    }
-    const protocols = password ? [`chisacode.bearer.${password}`] : undefined;
-
-    try {
-      // Reconnect can overlap with browser close/error delivery ordering.
-      // Always dispose previous transport before constructing the next one.
-      this.disposeTransport();
-      const baseTransportFactory =
-        this.config.transportFactory ??
-        createWebSocketTransportFactory(this.config.webSocketFactory ?? defaultWebSocketFactory);
-      const shouldUseRelayE2ee =
-        this.config.e2ee?.enabled === true && isRelayClientWebSocketUrl(this.config.url);
-
-      let transportFactory = baseTransportFactory;
-      if (shouldUseRelayE2ee) {
-        const daemonPublicKeyB64 = this.config.e2ee?.daemonPublicKeyB64;
-        if (!daemonPublicKeyB64) {
-          throw new Error("daemonPublicKeyB64 is required for relay E2EE");
-        }
-        transportFactory = createRelayE2eeTransportFactory({
-          baseFactory: baseTransportFactory,
-          daemonPublicKeyB64,
-          logger: this.logger,
-        });
-      }
-      const transportUrl = this.resolveTransportUrlForAttempt();
-      const transport = transportFactory({
-        url: transportUrl,
-        headers,
-        ...(protocols ? { protocols } : {}),
-      });
-      this.transport = transport;
-      this.lastServerInfoMessage = null;
-
-      this.updateConnectionState(
-        {
-          status: "connecting",
-          attempt: this.reconnectAttempt,
-        },
-        { event: "CONNECT_REQUEST" },
-      );
-      this.resetConnectTimeout();
-      const timeoutMs = Math.max(1, this.config.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS);
-      this.connectTimeout = setTimeout(() => {
-        if (this.connectionState.status !== "connecting") {
-          return;
-        }
-        this.lastErrorValue = "Connection timed out";
-        this.disposeTransport(1001, "Connection timed out");
-        this.scheduleReconnect({
-          reason: "Connection timed out",
-          event: "CONNECT_TIMEOUT",
-          reasonCode: "connect_timeout",
-        });
-      }, timeoutMs);
-
-      this.transportCleanup = [
-        transport.onOpen(() => {
-          if (this.transport !== transport) {
-            return;
-          }
-          if (this.pendingGenericTransportErrorTimeout) {
-            clearTimeout(this.pendingGenericTransportErrorTimeout);
-            this.pendingGenericTransportErrorTimeout = null;
-          }
-          this.lastErrorValue = null;
-          this.sendHelloMessage();
-        }),
-        transport.onClose((event) => {
-          if (this.transport !== transport) {
-            return;
-          }
-          this.resetConnectTimeout();
-          if (this.pendingGenericTransportErrorTimeout) {
-            clearTimeout(this.pendingGenericTransportErrorTimeout);
-            this.pendingGenericTransportErrorTimeout = null;
-          }
-          const reason = describeTransportClose(event);
-          if (reason) {
-            this.lastErrorValue = reason;
-          }
-          this.scheduleReconnect({
-            reason,
-            event: "TRANSPORT_CLOSE",
-            reasonCode: "transport_closed",
-          });
-        }),
-        transport.onError((event) => {
-          if (this.transport !== transport) {
-            return;
-          }
-          this.resetConnectTimeout();
-          const reason = describeTransportError(event);
-          const isGeneric = reason === "Transport error";
-          // Browser WebSocket.onerror often provides no useful details and is followed
-          // by a close event (often with code 1006). Prefer surfacing the close details
-          // instead of immediately disconnecting with a generic "Transport error".
-          if (isGeneric) {
-            this.lastErrorValue ??= reason;
-            if (!this.pendingGenericTransportErrorTimeout) {
-              this.pendingGenericTransportErrorTimeout = setTimeout(() => {
-                this.pendingGenericTransportErrorTimeout = null;
-                if (
-                  this.connectionState.status === "connected" ||
-                  this.connectionState.status === "connecting"
-                ) {
-                  this.lastErrorValue = reason;
-                  this.scheduleReconnect({
-                    reason,
-                    event: "TRANSPORT_ERROR",
-                    reasonCode: "transport_error",
-                  });
-                }
-              }, 250);
-            }
-            return;
-          }
-
-          if (this.pendingGenericTransportErrorTimeout) {
-            clearTimeout(this.pendingGenericTransportErrorTimeout);
-            this.pendingGenericTransportErrorTimeout = null;
-          }
-          this.lastErrorValue = reason;
-          this.scheduleReconnect({
-            reason,
-            event: "TRANSPORT_ERROR",
-            reasonCode: "transport_error",
-          });
-        }),
-        transport.onMessage((data) => {
-          if (this.transport === transport) {
-            this.handleTransportMessage(data, transport);
-          }
-        }),
-      ];
-    } catch (error) {
-      this.resetConnectTimeout();
-      const message = error instanceof Error ? error.message : "Failed to connect";
-      this.lastErrorValue = message;
-      this.scheduleReconnect({
-        reason: message,
-        event: "CONNECT_FAILED",
-        reasonCode: "connect_failed",
-      });
-      // scheduleReconnect may already rejectConnect (e.g. when disposed) before
-      // reaching here; only reject if the connect promise is still pending so we
-      // don't double-reject. rejectConnect itself no-ops on a null connectReject,
-      // but guarding keeps the control flow explicit.
-      if (this.connectReject) {
-        this.rejectConnect(error instanceof Error ? error : new Error(message));
-      }
-    }
-  }
-
-  private resolveConnect(): void {
-    if (this.connectResolve) {
-      this.connectResolve();
-    }
-    this.connectPromise = null;
-    this.connectResolve = null;
-    this.connectReject = null;
-  }
-
-  private rejectConnect(error: Error): void {
-    if (this.connectReject) {
-      this.connectReject(error);
-    }
-    this.connectPromise = null;
-    this.connectResolve = null;
-    this.connectReject = null;
+    return this.connection.connect();
   }
 
   async close(): Promise<void> {
-    if (this.connectionState.status === "disposed") {
-      return;
-    }
-    this.shouldReconnect = false;
-    this.rejectConnect(new Error("Daemon client closed"));
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    this.resetConnectTimeout();
-    this.disposeTransport(1000, "Client closed");
-    this.requests.clear(new Error("Daemon client closed"));
-    this.rejectLivenessProbe(new Error("Daemon client closed"));
-    this.terminalClient.clearStreamSlots();
-    this.binaryFileTransfers.clearActiveTransfers();
-    this.lastServerInfoMessage = null;
-    if (this.runtimeMetricsInterval) {
-      clearInterval(this.runtimeMetricsInterval);
-      this.runtimeMetricsInterval = null;
-      this.runtimeMetrics?.flush({ final: true });
-      this.runtimeMetrics = null;
-    }
-    this.updateConnectionState(
-      { status: "disposed" },
-      { event: "DISPOSE", reason: "Client closed", reasonCode: "disposed" },
-    );
+    return this.connection.close();
   }
 
   ensureConnected(): void {
-    if (this.connectionState.status === "disposed") {
-      return;
-    }
-    if (!this.shouldReconnect) {
-      this.shouldReconnect = true;
-    }
-    if (
-      this.connectionState.status === "connected" ||
-      this.connectionState.status === "connecting"
-    ) {
-      return;
-    }
-    // connect() handles its own failures via scheduleReconnect + rejectConnect,
-    // but a rejection here would otherwise become an unhandled promise rejection.
-    // Surface it to the logger so the failure is at least observable.
-    void this.connect().catch((error: unknown) => {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.logger.warn({ err }, "ensureConnected connect() rejected");
-    });
+    this.connection.ensureConnected();
   }
 
   getConnectionState(): ConnectionState {
-    return this.connectionState;
+    return this.connection.getState();
   }
 
   subscribeConnectionStatus(listener: (status: ConnectionState) => void): () => void {
-    this.connectionListeners.add(listener);
-    listener(this.connectionState);
-    return () => {
-      this.connectionListeners.delete(listener);
-    };
+    return this.connection.subscribe(listener);
   }
 
   get isConnected(): boolean {
-    return this.connectionState.status === "connected";
+    return this.connection.isConnected;
   }
 
   get isConnecting(): boolean {
-    return this.connectionState.status === "connecting";
+    return this.connection.isConnecting;
   }
 
   get lastError(): string | null {
-    return this.lastErrorValue;
+    return this.connection.lastError;
   }
 
   // ============================================================================
@@ -1196,56 +810,8 @@ export class DaemonClient {
   // Core Send Helpers
   // ============================================================================
 
-  /**
-   * Send a session message. For fire-and-forget messages (heartbeats, etc.),
-   * failures are suppressed if `suppressSendErrors` is configured.
-   * For RPC methods that wait for responses, use `sendSessionMessageOrThrow` instead.
-   */
   private sendSessionMessage(message: SessionInboundMessage): void {
-    if (!this.transport || this.connectionState.status !== "connected") {
-      if (this.config.suppressSendErrors) {
-        return;
-      }
-      throw new Error(`Transport not connected (status: ${this.connectionState.status})`);
-    }
-    const payload = SessionInboundMessageSchema.parse(message);
-    try {
-      this.transport.send(JSON.stringify({ type: "session", message: payload }));
-    } catch (error) {
-      if (this.config.suppressSendErrors) {
-        return;
-      }
-      throw error instanceof Error ? error : new Error(String(error));
-    }
-  }
-
-  private sendBinaryFrame(frame: Uint8Array): void {
-    if (!this.transport || this.connectionState.status !== "connected") {
-      if (this.config.suppressSendErrors) {
-        return;
-      }
-      throw new Error(`Transport not connected (status: ${this.connectionState.status})`);
-    }
-    try {
-      this.transport.send(frame);
-    } catch (error) {
-      if (this.config.suppressSendErrors) {
-        return;
-      }
-      throw error instanceof Error ? error : new Error(String(error));
-    }
-  }
-
-  private sendSessionMessageStrict(message: SessionInboundMessage): void {
-    if (!this.transport || this.connectionState.status !== "connected") {
-      throw new Error("Transport not connected");
-    }
-    const payload = SessionInboundMessageSchema.parse(message);
-    try {
-      this.transport.send(JSON.stringify({ type: "session", message: payload }));
-    } catch (error) {
-      throw error instanceof Error ? error : new Error(String(error));
-    }
+    this.connection.sendSessionMessage(message);
   }
 
   async clearAgentAttention(agentId: string | string[]): Promise<void> {
@@ -1330,51 +896,7 @@ export class DaemonClient {
   }
 
   checkLiveness(params?: { timeoutMs?: number }): Promise<{ rttMs: number }> {
-    if (this.connectionState.status !== "connected" || !this.transport) {
-      return Promise.reject(
-        new Error(`Transport not connected (status: ${this.connectionState.status})`),
-      );
-    }
-
-    if (this.livenessProbe) {
-      return this.livenessProbe.promise;
-    }
-
-    const startedAt = perfNow();
-    const timeoutMs = Math.max(1, params?.timeoutMs ?? DEFAULT_LIVENESS_TIMEOUT_MS);
-    let resolveProbe: ((value: { rttMs: number }) => void) | null = null;
-    let rejectProbe: ((error: Error) => void) | null = null;
-    const promise = new Promise<{ rttMs: number }>((resolve, reject) => {
-      resolveProbe = resolve;
-      rejectProbe = reject;
-    });
-    const probe: LivenessProbe = {
-      promise,
-      resolve: (value) => resolveProbe?.(value),
-      reject: (error) => rejectProbe?.(error),
-      timeoutHandle: setTimeout(() => {
-        if (this.livenessProbe !== probe) {
-          return;
-        }
-        this.livenessProbe = null;
-        const error = new Error(`Liveness check timed out (${timeoutMs}ms)`);
-        probe.reject(error);
-        this.recordLivenessFailure(error);
-      }, timeoutMs),
-      startedAt,
-    };
-    this.livenessProbe = probe;
-
-    try {
-      this.transport.send(JSON.stringify({ type: "ping" }));
-    } catch (error) {
-      this.clearLivenessProbe();
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.recordLivenessFailure(err);
-      return Promise.reject(err);
-    }
-
-    return promise;
+    return this.connection.checkLiveness(params);
   }
 
   // ============================================================================
@@ -2576,110 +2098,7 @@ export class DaemonClient {
     return this.lastServerInfoMessage;
   }
 
-  private resolveTransportUrlForAttempt(): string {
-    return this.config.url;
-  }
-
-  private sendHelloMessage(): void {
-    if (!this.transport) {
-      this.scheduleReconnect({
-        reason: "Transport unavailable before hello",
-        event: "HELLO_TRANSPORT_MISSING",
-        reasonCode: "transport_error",
-      });
-      return;
-    }
-
-    try {
-      this.transport.send(
-        JSON.stringify({
-          type: "hello",
-          clientId: this.config.clientId,
-          clientType: this.config.clientType ?? "cli",
-          protocolVersion: 1,
-          capabilities: {
-            [CLIENT_CAPS.customModeIcons]: true,
-            [CLIENT_CAPS.reasoningMergeEnum]: true,
-            [CLIENT_CAPS.generativeUi]: true,
-          },
-          ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
-        }),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to send hello message";
-      this.lastErrorValue = message;
-      this.scheduleReconnect({
-        reason: message,
-        event: "HELLO_SEND_FAILED",
-        reasonCode: "transport_error",
-      });
-    }
-  }
-
-  private disposeTransport(code = 1001, reason = "Reconnecting"): void {
-    this.cleanupTransport();
-    const transport = this.transport;
-    this.transport = null;
-    if (transport) {
-      try {
-        transport.close(code, reason);
-      } catch {
-        // no-op
-      }
-    }
-  }
-
-  private cleanupTransport(): void {
-    this.resetConnectTimeout();
-    if (this.pendingGenericTransportErrorTimeout) {
-      clearTimeout(this.pendingGenericTransportErrorTimeout);
-      this.pendingGenericTransportErrorTimeout = null;
-    }
-    for (const cleanup of this.transportCleanup) {
-      try {
-        cleanup();
-      } catch {
-        // no-op
-      }
-    }
-    this.transportCleanup = [];
-  }
-
-  private resetConnectTimeout(): void {
-    if (!this.connectTimeout) {
-      return;
-    }
-    clearTimeout(this.connectTimeout);
-    this.connectTimeout = null;
-  }
-
-  private handleTransportMessage(data: unknown, expectedTransport?: DaemonTransport): void {
-    if (expectedTransport && this.transport !== expectedTransport) {
-      return;
-    }
-    const rawData =
-      data && typeof data === "object" && "data" in data ? (data as { data: unknown }).data : data;
-
-    if (
-      typeof Blob !== "undefined" &&
-      rawData instanceof Blob &&
-      typeof rawData.arrayBuffer === "function"
-    ) {
-      void rawData
-        .arrayBuffer()
-        .then((buffer) => {
-          if (expectedTransport && this.transport !== expectedTransport) {
-            return;
-          }
-          this.handleTransportMessage(buffer, expectedTransport);
-          return;
-        })
-        .catch(() => {
-          // Ignore failed blob decoding and allow reconnect logic to recover.
-        });
-      return;
-    }
-
+  private handleTransportMessage(rawData: unknown): void {
     const rawBytes = asUint8Array(rawData);
     if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
       return;
@@ -2714,10 +2133,10 @@ export class DaemonClient {
       return;
     }
 
-    this.consecutiveLivenessFailures = 0;
+    this.connection.recordInboundActivity();
 
     if (parsed.data.type === "pong") {
-      this.resolveLivenessProbe();
+      this.connection.resolvePong();
       this.runtimeMetrics?.recordMessage("pong", bytes, perfNow() - startMs);
       return;
     }
@@ -2779,154 +2198,20 @@ export class DaemonClient {
     });
   }
 
-  private updateConnectionState(
-    next: ConnectionState,
-    metadata?: { event: string; reason?: string; reasonCode?: string },
-  ): void {
-    const previous = this.connectionState;
-    this.connectionState = next;
-    const reasonFromNext =
-      next.status === "disconnected" && typeof next.reason === "string" ? next.reason : null;
-    const reason = metadata?.reason ?? reasonFromNext;
-    const reasonCode = metadata?.reasonCode ?? toReasonCode(reason);
-    this.logger.debug(
-      {
-        serverId: this.logServerId,
-        clientIdHash: this.logClientIdHash,
-        from: previous.status,
-        to: next.status,
-        event: metadata?.event ?? "STATE_UPDATE",
-        connectionPath: this.logConnectionPath,
-        generation: this.logGeneration,
-        reasonCode,
-        reason,
-      },
-      "DaemonClientTransition",
-    );
-    for (const listener of this.connectionListeners) {
-      try {
-        listener(next);
-      } catch {
-        // no-op
-      }
-    }
-  }
-
   setReconnectEnabled(enabled: boolean): void {
-    this.config = { ...this.config, reconnect: { ...this.config.reconnect, enabled } };
+    this.connection.setReconnectEnabled(enabled);
   }
 
-  private scheduleReconnect(input?: {
-    reason?: string;
-    event?: string;
-    reasonCode?: string;
-  }): void {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    const wasDisposed = this.connectionState.status === "disposed";
-    const reason = input?.reason;
-
-    if (typeof reason === "string" && reason.trim().length > 0) {
-      this.lastErrorValue = reason.trim();
-    }
-
-    // Clear all pending waiters and queued sends since the connection was lost
-    // and responses from the previous connection will never arrive.
-    this.requests.clear(new Error(reason ?? "Connection lost"));
-    this.rejectLivenessProbe(new Error(reason ?? "Connection lost"));
+  private handleConnectionReset(error: Error, terminal: boolean): void {
+    this.requests.clear(error);
     this.terminalClient.clearStreamSlots();
     this.binaryFileTransfers.clearActiveTransfers();
     this.lastServerInfoMessage = null;
-
-    if (wasDisposed) {
-      this.rejectConnect(new Error(reason ?? "Daemon client is disposed"));
-      return;
-    }
-    this.emitDisconnectedStateForReconnect(reason, input);
-    if (!this.shouldReconnect || this.config.reconnect?.enabled === false) {
-      this.rejectConnect(new Error(reason ?? "Transport disconnected before connect"));
-      return;
-    }
-
-    this.armReconnectTimer();
-  }
-
-  private emitDisconnectedStateForReconnect(
-    reason: string | undefined,
-    input: { reason?: string; event?: string; reasonCode?: string } | undefined,
-  ): void {
-    this.updateConnectionState(
-      {
-        status: "disconnected",
-        ...(reason ? { reason } : {}),
-      },
-      {
-        event: input?.event ?? "TRANSPORT_CLOSE",
-        ...(reason ? { reason } : {}),
-        ...(input?.reasonCode ? { reasonCode: input.reasonCode } : {}),
-      },
-    );
-  }
-
-  private armReconnectTimer(): void {
-    const attempt = this.reconnectAttempt;
-    const baseDelay = this.config.reconnect?.baseDelayMs ?? DEFAULT_RECONNECT_BASE_DELAY_MS;
-    const maxDelay = this.config.reconnect?.maxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS;
-    const delay = Math.min(baseDelay * 2 ** attempt, maxDelay);
-    this.reconnectAttempt = attempt + 1;
-    this.reconnectTimeout = setTimeout(() => {
-      this.reconnectTimeout = null;
-      if (!this.shouldReconnect) {
-        return;
-      }
-      this.attemptConnect();
-    }, delay);
-  }
-
-  private resolveLivenessProbe(): void {
-    const probe = this.livenessProbe;
-    if (!probe) {
-      return;
-    }
-    this.livenessProbe = null;
-    clearTimeout(probe.timeoutHandle);
-    probe.resolve({ rttMs: perfNow() - probe.startedAt });
-  }
-
-  private clearLivenessProbe(): void {
-    const probe = this.livenessProbe;
-    if (!probe) {
-      return;
-    }
-    this.livenessProbe = null;
-    clearTimeout(probe.timeoutHandle);
-  }
-
-  private rejectLivenessProbe(error: Error): void {
-    const probe = this.livenessProbe;
-    if (!probe) {
-      return;
-    }
-    this.livenessProbe = null;
-    clearTimeout(probe.timeoutHandle);
-    probe.reject(error);
-  }
-
-  private recordLivenessFailure(error: Error): void {
-    this.consecutiveLivenessFailures += 1;
-    if (this.consecutiveLivenessFailures < LIVENESS_FAILURE_RECONNECT_THRESHOLD) {
-      return;
-    }
-    this.consecutiveLivenessFailures = 0;
-    this.lastErrorValue = error.message;
-    this.disposeTransport(1001, "Liveness check timed out");
-    this.scheduleReconnect({
-      reason: error.message,
-      event: "LIVENESS_TIMEOUT",
-      reasonCode: "liveness_timeout",
-    });
+    if (!terminal || !this.runtimeMetricsInterval) return;
+    clearInterval(this.runtimeMetricsInterval);
+    this.runtimeMetricsInterval = null;
+    this.runtimeMetrics?.flush({ final: true });
+    this.runtimeMetrics = null;
   }
 
   private handleSessionMessage(msg: SessionOutboundMessage): void {
@@ -2934,14 +2219,8 @@ export class DaemonClient {
       const serverInfo = parseServerInfoStatusPayload(msg.payload);
       if (serverInfo) {
         this.lastServerInfoMessage = serverInfo;
-        if (this.connectionState.status === "connecting") {
-          this.resetConnectTimeout();
-          this.reconnectAttempt = 0;
-          this.updateConnectionState({ status: "connected" }, { event: "HELLO_SERVER_INFO" });
-          this.checkoutSubscriptions.resubscribe();
-          this.terminalClient.resubscribeDirectories();
-          this.requests.flushPendingSends();
-          this.resolveConnect();
+        if (this.connection.isConnecting) {
+          this.connection.markConnected();
         }
       }
     }
