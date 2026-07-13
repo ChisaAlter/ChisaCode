@@ -1,4 +1,4 @@
-import { type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -11,7 +11,6 @@ import {
   type ContentBlock,
   type CreateTerminalRequest,
   type CurrentModeUpdate,
-  type EnvVariable,
   type KillTerminalRequest,
   type ListSessionsResponse,
   type LoadSessionResponse,
@@ -66,10 +65,9 @@ import {
   type McpServerConfig,
   type PersistedAgentDescriptor,
 } from "../agent-sdk-types.js";
-import { createProviderEnvSpec, type ProviderRuntimeSettings } from "../provider-launch-config.js";
+import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "./provider-runner.js";
-import { platformShell, spawnProcess } from "../../../utils/spawn.js";
 import {
   contentBlockToText,
   mapACPPermissionRequest,
@@ -101,6 +99,8 @@ import {
   terminateACPChildProcess,
   type SpawnedACPProcess,
 } from "./acp/process-runtime.js";
+import { ACPTerminalController, type ACPTerminalExit } from "./acp/terminal-controller.js";
+import { resolvePathInsideBase } from "./acp/workspace-path.js";
 export type { ACPToolSnapshot } from "./acp/tool-call-mapper.js";
 export { createLoggedNdJsonStream } from "./acp/ndjson-stream.js";
 export type { SpawnedACPProcess } from "./acp/process-runtime.js";
@@ -143,42 +143,6 @@ function summarizeACPRequestError(error: unknown): {
   }
 
   return { message: String(error) };
-}
-
-function resolveTerminalCommand(
-  command: string,
-  args?: string[],
-): { command: string; args: string[] } {
-  if (args && args.length > 0) {
-    return { command, args };
-  }
-
-  if (!/\s/.test(command.trim())) {
-    return { command, args: [] };
-  }
-
-  const shell = platformShell();
-  return { command: shell.command, args: [...shell.flag, command] };
-}
-
-/**
- * Resolves `target` against `base` and returns the resolved path only if it
- * stays inside `base`. This is an INTENT constraint (keeps ACP fs/terminal
- * requests inside the project directory so agent typos don't write outside
- * the workspace), NOT a security boundary — the ACP agent runs as the same
- * OS user with the same privileges as the daemon and could spawn its own
- * processes to escape this check.
- *
- * @throws Error if the resolved path escapes `base`
- */
-function resolvePathInsideBase(target: string, base: string): string {
-  const resolvedTarget = path.resolve(target);
-  const resolvedBase = path.resolve(base);
-  const relative = path.relative(resolvedBase, resolvedTarget);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Path "${target}" escapes the project directory "${base}"`);
-  }
-  return resolvedTarget;
 }
 
 const DEFAULT_ACP_CAPABILITIES: AgentCapabilityFlags = {
@@ -259,23 +223,6 @@ interface MessageAssemblyState {
 }
 
 export type SessionStateResponse = NewSessionResponse | LoadSessionResponse | ResumeSessionResponse;
-
-interface TerminalExit {
-  exitCode?: number | null;
-  signal?: string | null;
-}
-
-interface TerminalEntry {
-  id: string;
-  child: ChildProcess;
-  output: string;
-  truncated: boolean;
-  outputByteLimit: number | null;
-  exit: TerminalExit | null;
-  waitForExit: Promise<TerminalExit>;
-  resolveExit: (exit: TerminalExit) => void;
-  rejectExit: (error: Error) => void;
-}
 
 export function mapACPUsage(usage: Usage | null | undefined): AgentUsage | undefined {
   if (!usage) {
@@ -629,7 +576,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private readonly pendingPermissions = new Map<string, PendingPermission>();
   private readonly messageAssemblies = new Map<string, MessageAssemblyState>();
   private readonly toolCalls = new Map<string, ACPToolSnapshot>();
-  private readonly terminalEntries = new Map<string, TerminalEntry>();
+  private readonly terminalController: ACPTerminalController;
   private readonly persistedHistory: AgentTimelineItem[] = [];
   private readonly initialHandle?: AgentPersistenceHandle;
 
@@ -680,6 +627,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.launchEnv = options.launchEnv;
     this.initialHandle = options.handle;
     this.config = { ...config, provider: options.provider };
+    this.terminalController = new ACPTerminalController({
+      baseCwd: this.config.cwd,
+      runtimeSettings: this.runtimeSettings,
+    });
     this.currentMode = config.modeId ?? null;
     this.currentModel = config.model ?? null;
     this.thinkingOptionId = config.thinkingOptionId ?? null;
@@ -1309,10 +1260,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       }
     }
 
-    for (const terminal of this.terminalEntries.values()) {
-      terminal.child.kill("SIGTERM");
-    }
-    this.terminalEntries.clear();
+    this.terminalController.close();
 
     if (this.child) {
       await terminateACPChildProcess(this.child, 2_000);
@@ -1427,90 +1375,23 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async createTerminal(params: CreateTerminalRequest): Promise<{ terminalId: string }> {
-    const terminalId = randomUUID();
-    const env = Object.fromEntries(
-      (params.env ?? []).map((entry: EnvVariable) => [entry.name, entry.value]),
-    );
-    const cwd = params.cwd ? resolvePathInsideBase(params.cwd, this.config.cwd) : this.config.cwd;
-    const terminalCommand = resolveTerminalCommand(params.command, params.args);
-    const child = spawnProcess(terminalCommand.command, terminalCommand.args, {
-      cwd,
-      ...createProviderEnvSpec({
-        runtimeSettings: this.runtimeSettings,
-        overlays: [env],
-      }),
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let resolveExit!: (exit: TerminalExit) => void;
-    let rejectExit!: (error: Error) => void;
-    const waitForExit = new Promise<TerminalExit>((resolve, reject) => {
-      resolveExit = resolve;
-      rejectExit = reject;
-    });
-    waitForExit.catch(() => undefined);
-
-    const entry: TerminalEntry = {
-      id: terminalId,
-      child,
-      output: "",
-      truncated: false,
-      outputByteLimit: params.outputByteLimit ?? null,
-      exit: null,
-      waitForExit,
-      resolveExit,
-      rejectExit,
-    };
-
-    child.stdout!.on("data", (chunk: Buffer | string) =>
-      appendTerminalOutput(entry, chunk.toString()),
-    );
-    child.stderr!.on("data", (chunk: Buffer | string) =>
-      appendTerminalOutput(entry, chunk.toString()),
-    );
-    child.once("error", (error) => {
-      const spawnError = error instanceof Error ? error : new Error(String(error));
-      appendTerminalOutput(entry, `${spawnError.message}\n`);
-      rejectExit(spawnError);
-    });
-    child.once("exit", (code, signal) => {
-      const exit = { exitCode: code, signal };
-      entry.exit = exit;
-      resolveExit(exit);
-    });
-
-    this.terminalEntries.set(terminalId, entry);
-    return { terminalId };
+    return this.terminalController.createTerminal(params);
   }
 
   async terminalOutput(params: TerminalOutputRequest): Promise<TerminalOutputResponse> {
-    const entry = this.getTerminalEntry(params.terminalId);
-    return {
-      output: entry.output,
-      truncated: entry.truncated,
-      exitStatus: entry.exit ?? undefined,
-    };
+    return this.terminalController.terminalOutput(params);
   }
 
-  async waitForTerminalExit(params: WaitForTerminalExitRequest): Promise<TerminalExit> {
-    const entry = this.getTerminalEntry(params.terminalId);
-    return entry.waitForExit;
+  async waitForTerminalExit(params: WaitForTerminalExitRequest): Promise<ACPTerminalExit> {
+    return this.terminalController.waitForTerminalExit(params);
   }
 
   async releaseTerminal(params: { sessionId: string; terminalId: string }): Promise<void> {
-    const entry = this.getTerminalEntry(params.terminalId);
-    if (!entry.exit) {
-      entry.child.kill("SIGTERM");
-    }
-    this.terminalEntries.delete(params.terminalId);
+    return this.terminalController.releaseTerminal(params);
   }
 
   async killTerminal(params: KillTerminalRequest): Promise<Record<string, never>> {
-    const entry = this.getTerminalEntry(params.terminalId);
-    if (!entry.exit) {
-      entry.child.kill("SIGTERM");
-    }
-    return {};
+    return this.terminalController.killTerminal(params);
   }
 
   private async spawnProcess(): Promise<SpawnedACPProcess> {
@@ -1693,7 +1574,11 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       snapshot = this.toolSnapshotTransformer(snapshot);
     }
     this.toolCalls.set(toolCallId, snapshot);
-    return [this.wrapTimeline(mapACPToolSnapshotToTimeline(snapshot, this.terminalEntries))];
+    return [
+      this.wrapTimeline(
+        mapACPToolSnapshotToTimeline(snapshot, this.terminalController.timelineStates),
+      ),
+    ];
   }
 
   private createMessageTimelineItem(
@@ -1870,7 +1755,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
 
   private synthesizeCanceledToolCalls(): void {
     for (const snapshot of this.toolCalls.values()) {
-      const mapped = mapACPToolSnapshotToTimeline(snapshot, this.terminalEntries);
+      const mapped = mapACPToolSnapshotToTimeline(snapshot, this.terminalController.timelineStates);
       if (mapped.status === "running") {
         this.pushEvent(
           this.wrapTimeline({
@@ -1892,14 +1777,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       parts.push(`signal=${this.child.signalCode}`);
     }
     return parts.length > 0 ? parts.join(" | ") : undefined;
-  }
-
-  private getTerminalEntry(terminalId: string): TerminalEntry {
-    const entry = this.terminalEntries.get(terminalId);
-    if (!entry) {
-      throw new Error(`Unknown terminal '${terminalId}'`);
-    }
-    return entry;
   }
 }
 
@@ -1977,18 +1854,6 @@ function extractPromptText(prompt: AgentPromptInput): string {
     )
     .map((block) => block.text)
     .join("");
-}
-
-function appendTerminalOutput(entry: TerminalEntry, chunk: string): void {
-  entry.output += chunk;
-  const limit = entry.outputByteLimit;
-  if (!limit) {
-    return;
-  }
-  while (Buffer.byteLength(entry.output, "utf8") > limit && entry.output.length > 0) {
-    entry.output = entry.output.slice(1);
-    entry.truncated = true;
-  }
 }
 
 function coerceSessionConfigMetadata(

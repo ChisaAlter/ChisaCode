@@ -12,12 +12,12 @@
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
 - Claude 已完成十四个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`message-translator.ts`、`query-lifecycle.ts`、`rewind-controller.ts`、`history-converter.ts`、`session-history.ts`、`tool-call-handlers.ts`、`sdk-types-mapping.ts`、`permission-controller.ts` 与 `options-builder.ts` 分别拥有 timeline、SDK reader、turn routing、message/usage translation、query/input/pump lifecycle、rewind state/selection、history conversion、persisted replay、tool lifecycle、纯映射、permission 生命周期与 SDK options/env 职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
 - OpenCode 已完成 façade、session、client runtime、session runtime、session lifecycle、turn execution、event translator、event values、message translator、permission translator、sub-agent tracking、history、session event bus、permission controller、MCP controller、helpers、catalog、runtime、abort coordinator 与 event-stream controller 二十个边界切片；原入口为 64 行兼容 façade，foreground turn、message、permission、sub-agent、runtime 与 shutdown 资源状态已统一。
-- ACP 已完成四个边界切片：tool/permission mapper、session config、NDJSON transport 与 process runtime 分别拥有投影、配置、编解码兼容和 command/spawn/initialize/cleanup；Client probe 与 live Session 共用 process runtime，`acp-agent.ts` 继续拥有 Session 业务状态、写入时序、事件编排和 terminal 生命周期，并兼容重导出原公开 API。
+- ACP 已完成六个边界切片：tool/permission mapper、session config、NDJSON transport、process runtime、terminal controller 与 workspace path 分别拥有投影、配置、编解码兼容、process lifecycle、terminal ownership 和 fs/terminal 意图边界；`acp-agent.ts` 继续拥有 Session 业务状态、写入时序与事件编排，并兼容重导出原公开 API。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 1225 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行；ACP 主文件为 2001 行，tool mapper 为 431 行，session config 为 283 行，NDJSON transport 为 107 行，process runtime 为 208 行。OpenCode 主路由已收敛，后续继续拆 ACP、Pi 与 Claude Session 的剩余大职责。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 1225 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行；ACP 主文件为 1866 行，tool mapper 为 431 行，session config 为 283 行，NDJSON transport 为 107 行，process runtime 为 208 行，terminal controller 为 186 行，workspace path 为 20 行。OpenCode 主路由已收敛，后续继续拆 ACP、Pi 与 Claude Session 的剩余大职责。
 
 | 文件                                | 行数 | Session 类                    | Client 类                          | private 方法数 | import 数 |
 | ----------------------------------- | ---- | ----------------------------- | ---------------------------------- | -------------- | --------- |
@@ -46,10 +46,12 @@
 | `opencode/session-runtime.ts`       | 186  | runtime/catalog state         | —                                  | 2              | 5         |
 | `opencode/session-lifecycle.ts`     | 108  | shutdown/resource state       | —                                  | 1              | 4         |
 | `opencode/client.ts`                | 507  | —                             | `OpenCodeAgentClientRuntime`       | 2              | 13        |
-| `acp-agent.ts`                      | 2001 | `ACPAgentSession`             | `ACPAgentClient`                   | —              | —         |
+| `acp-agent.ts`                      | 1866 | `ACPAgentSession`             | `ACPAgentClient`                   | —              | —         |
 | `acp/session-config.ts`             | 283  | mode/model/config mapping     | —                                  | 0              | 4         |
 | `acp/ndjson-stream.ts`              | 107  | transport/compat parsing      | —                                  | 0              | 3         |
 | `acp/process-runtime.ts`            | 208  | spawn/initialize/cleanup      | shared runtime                     | 0              | 7         |
+| `acp/terminal-controller.ts`        | 186  | terminal process/state        | ACP client terminal methods        | 1              | 5         |
+| `acp/workspace-path.ts`             | 20   | fs/terminal path intent       | shared helper                      | 0              | 1         |
 | `acp/tool-call-mapper.ts`           | 431  | tool/permission projection    | —                                  | 0              | 2         |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
@@ -205,9 +207,11 @@
 - `acp/session-config.ts` —— 模式/模型目录派生、selection 校验、select option 展平与 provider mode writer 契约（已完成，283 行）
 - `acp/ndjson-stream.ts` —— NDJSON 编解码、非法 stdout 诊断与 stringified numeric response ID 兼容（已完成，107 行）
 - `acp/process-runtime.ts` —— command resolution、env、spawn/initialize、stderr/exit 与失败终止（已完成，208 行；Client/Session 共享）
-- `acp-agent.ts` —— 保留 Client/Session orchestration、写入时序、terminal ownership、进程与 transport 生命周期（进行中，2001 行；原公开 mapper/config/transport/process 类型兼容重导出）
+- `acp/terminal-controller.ts` —— terminal process、output/truncation、exit waiter、release/kill/close ownership（已完成，186 行）
+- `acp/workspace-path.ts` —— fs/terminal 共用路径意图约束，精确识别 `..` 越界并允许 `..cache` 等合法名称（已完成，20 行）
+- `acp-agent.ts` —— 保留 Client/Session orchestration、写入时序、terminal ownership、进程与 transport 生命周期（进行中，1866 行；原公开 mapper/config/transport/process 类型兼容重导出）
 
-**验收**：server typecheck、目标 lint、新 mapper 5 个断言、既有 generic permission、mode/model/config 7 个、stream/compat 3 个与 initialize timeout fail-cleanup 聚焦测试通过。
+**验收**：server typecheck、目标 lint、新 mapper 5 个断言、既有 generic permission、mode/model/config 7 个、stream/compat 3 个、initialize fail-cleanup、terminal 3 个与 workspace path 1 个聚焦场景通过。
 
 ### Slice 4：跨 provider 共享 rewind / tool-call-mapper
 
