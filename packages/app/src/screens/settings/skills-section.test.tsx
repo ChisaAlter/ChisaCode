@@ -112,7 +112,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@react-navigation/native", () => ({
+vi.mock("expo-router", () => ({
   useFocusEffect: (callback: () => void | (() => void)) => {
     const callbackRef = React.useRef(callback);
     callbackRef.current = callback;

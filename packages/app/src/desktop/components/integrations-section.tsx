@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ArrowUpRight, Terminal, Blocks, Check, Download } from "lucide-react-native";
 import { settingsStyles } from "@/styles/settings";

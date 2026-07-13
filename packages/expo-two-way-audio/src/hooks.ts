@@ -5,7 +5,7 @@ import {
   isRecording,
   requestMicrophonePermissionsAsync,
 } from "./core";
-import { ExpoTwoWayAudioEventMap, addExpoTwoWayAudioEventListener } from "./events";
+import { addExpoTwoWayAudioEventListener, type ExpoTwoWayAudioEventMap } from "./events";
 
 export const useMicrophonePermissions = createPermissionHook({
   getMethod: getMicrophonePermissionsAsync,

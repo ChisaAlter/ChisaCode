@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigation } from "@react-navigation/native";
 import { StyleSheet, View } from "react-native";
-import { useGlobalSearchParams, useLocalSearchParams, useRootNavigationState } from "expo-router";
+import {
+  useGlobalSearchParams,
+  useLocalSearchParams,
+  useNavigation,
+  useRootNavigationState,
+} from "expo-router";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
 import {
   type ActiveWorkspaceSelection,

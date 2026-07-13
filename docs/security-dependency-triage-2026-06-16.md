@@ -78,3 +78,11 @@ npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org/
 - Migrated the Gesture Handler patch from 2.28.0 to 2.30.1 and removed the Android runtime's explicit `implementation project(":expo")`, which caused a circular dependency under the Expo 55 aggregate module.
 - `expo install --check`, Expo Doctor 19/19, the core React/Expo dependency tree, npm 10.9.4 clean install, App/module typechecks, Android prebuild, both custom Android module compiles, and App `compileDebugKotlin` passed.
 - Production audit moved from 19 to 11 moderate findings and remains at 0 high / 0 critical. The remaining findings are confined to the Expo CLI/config/prebuild toolchain, including `xcode -> uuid`; continue with Expo 56/EAS rather than forcing a standalone native-tool override.
+
+## Resolved Follow-up - 2026-07-13 (Expo SDK 56)
+
+- Upgraded the App to Expo 56.0.15 / React Native 0.85.3 / React 19.2.3, including Expo Router 56.2.14, Reanimated 4.3.1, Worklets 0.8.3, Gesture Handler 2.31.2, and TypeScript 6.0.3.
+- Removed the App's direct `@react-navigation/native` dependency and migrated navigation hooks to Expo Router. Updated React Native absolute-fill usage for the 0.85 API and made the local audio event-map import type-only for TypeScript 6.
+- Migrated the Gesture Handler web pointer-capture patch to 2.31.2. The patch applies cleanly to source, CommonJS, and ESM builds after a clean install.
+- `expo install --check`, Expo Doctor 21/21, the core React/Expo dependency tree, App dependency builds and typecheck, focused lint/tests, Android clean prebuild, both custom Android module compiles, and App `compileDebugKotlin` passed.
+- Production audit reports 12 moderate findings and remains at 0 high / 0 critical. The findings remain confined to Expo CLI/config/prebuild tooling, including `xcode -> uuid`; Expo 57/EAS is the next compatibility migration instead of forcing a standalone override.

@@ -59,7 +59,7 @@ export function createGlassSurfaceStyle(
   return styles[variant];
 }
 
-const absoluteFill = RNStyleSheet.absoluteFillObject;
+const absoluteFill = RNStyleSheet.absoluteFill;
 
 function WebRefractionLayer() {
   const idBase = useSvgId("liquid-glass-refraction");

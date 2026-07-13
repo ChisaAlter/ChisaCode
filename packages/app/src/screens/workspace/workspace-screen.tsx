@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { useIsFocused } from "@react-navigation/native";
 import { View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter, type Href } from "expo-router";
+import { useIsFocused, useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 
 import { StyleSheet } from "react-native-unistyles";

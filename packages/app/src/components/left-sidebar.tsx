@@ -1465,7 +1465,7 @@ function DesktopSidebar({
 // tries to patch the native node that Reanimated also manages.
 const staticStyles = RNStyleSheet.create({
   backdrop: {
-    ...RNStyleSheet.absoluteFillObject,
+    ...RNStyleSheet.absoluteFill,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   mobileSidebar: {

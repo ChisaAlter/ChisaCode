@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Edit3, Globe2, Plus, RefreshCw, Search, Terminal, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";

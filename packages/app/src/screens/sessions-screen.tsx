@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { View, Text } from "react-native";
-import { useIsFocused } from "@react-navigation/native";
-import { router } from "expo-router";
+import { router, useIsFocused } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ChevronLeft } from "lucide-react-native";

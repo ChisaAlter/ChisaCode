@@ -103,7 +103,7 @@ vi.mock("react-native", () => ({
   ActivityIndicator: () => React.createElement("span", { "data-testid": "activity-indicator" }),
 }));
 
-vi.mock("@react-navigation/native", () => ({
+vi.mock("expo-router", () => ({
   useFocusEffect: (callback: () => undefined | (() => void)) => {
     React.useEffect(() => callback(), [callback]);
   },

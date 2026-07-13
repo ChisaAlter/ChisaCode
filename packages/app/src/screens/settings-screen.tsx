@@ -9,10 +9,9 @@ import {
   View,
   type PressableStateCallbackType,
 } from "react-native";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Buffer } from "buffer";

@@ -177,13 +177,13 @@ const staticStyles = RNStyleSheet.create({
 
 const styles = StyleSheet.create((theme) => ({
   root: {
-    ...RNStyleSheet.absoluteFillObject,
+    ...RNStyleSheet.absoluteFill,
     display: theme.glass.enabled ? "flex" : "none",
     backgroundColor: "#f3f7fb",
     overflow: "hidden",
   },
   noiseVeil: {
-    ...RNStyleSheet.absoluteFillObject,
+    ...RNStyleSheet.absoluteFill,
     backgroundColor: "rgba(255, 255, 255, 0.58)",
   },
 }));

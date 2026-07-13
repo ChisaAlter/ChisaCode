@@ -7,7 +7,7 @@ import {
   StyleSheet as RNStyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "expo-router";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -622,7 +622,7 @@ function SidebarContent({
 // tries to patch the native node that Reanimated also manages.
 const explorerStaticStyles = RNStyleSheet.create({
   backdrop: {
-    ...RNStyleSheet.absoluteFillObject,
+    ...RNStyleSheet.absoluteFill,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   mobileSidebar: {
