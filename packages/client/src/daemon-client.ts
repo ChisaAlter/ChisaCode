@@ -1,10 +1,6 @@
 import type { z } from "zod";
 import { CLIENT_CAPS } from "@chisacode/protocol/client-capabilities";
 import {
-  AgentCreateFailedStatusPayloadSchema,
-  AgentCreatedStatusPayloadSchema,
-  AgentRefreshedStatusPayloadSchema,
-  AgentResumedStatusPayloadSchema,
   CheckoutRenameBranchResponseSchema,
   parseServerInfoStatusPayload,
   RestartRequestedStatusPayloadSchema,
@@ -16,14 +12,11 @@ import {
 import type {
   AgentStreamEventPayload,
   AgentSnapshotPayload,
-  ProjectPlacementPayload,
   AgentPermissionResolvedMessage,
-  CreateAgentRequestMessage,
   CreateChisaCodeWorktreeRequest,
   FileDownloadTokenResponse,
   FileExplorerResponse,
   FetchAgentTimelineResponseMessage,
-  GitSetupOptions,
   CheckoutStatusResponse,
   CheckoutCommitResponse,
   CheckoutMergeResponse,
@@ -73,13 +66,13 @@ import type {
   AgentSkillsInstallResponse,
   AgentSkillsInstallSourceSchema,
   AgentSkillsUninstallResponse,
+  AgentRewindResponseMessage,
   AgentMcpServerManagementScope,
   AgentMcpServersListResponse,
   AgentMcpServersUpsertResponse,
   AgentMcpServersPolicyPatchResponse,
   AgentMcpServersDeleteResponse,
   ManagedMcpServerConfig,
-  AgentRewindResponseMessage,
   SubscribeTerminalRequest,
   CloseItemsResponse,
   TerminalInput,
@@ -96,8 +89,8 @@ import type {
 import type { SyntheticModelConfig } from "@chisacode/protocol/provider-config";
 import type {
   AgentPermissionRequest,
-  AgentPermissionResponse,
   AgentPersistenceHandle,
+  AgentPermissionResponse,
   AgentProvider,
   AgentSessionConfig,
 } from "@chisacode/protocol/agent-types";
@@ -146,6 +139,13 @@ import {
   type TerminalStreamEvent,
 } from "./daemon-client-terminal-client.js";
 import { VoiceClient, type SetVoiceModePayload } from "./daemon-client-voice-client.js";
+import {
+  AgentLifecycleClient,
+  type AgentRefreshedStatusPayload,
+  type CreateAgentRequestOptions,
+  type FetchAgentResult,
+  type ImportAgentInput,
+} from "./daemon-client-agent-lifecycle.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 
@@ -168,21 +168,6 @@ const perfNow: () => number =
     ? () => performance.now()
     : () => Date.now();
 
-interface ImportAgentInputBase {
-  cwd?: string;
-  labels?: Record<string, string>;
-}
-
-export type ImportAgentInput =
-  | (ImportAgentInputBase & {
-      providerId: string;
-      providerHandleId: string;
-    })
-  | (ImportAgentInputBase & {
-      provider: AgentProvider;
-      sessionId: string;
-    });
-
 function normalizePassword(value: string | undefined): string | null {
   if (typeof value !== "string") {
     return null;
@@ -197,7 +182,14 @@ export type {
   WebSocketLike,
 } from "./daemon-client-transport.js";
 
-export type { RenameTerminalInput, RenameTerminalResult, TerminalStreamEvent };
+export type {
+  CreateAgentRequestOptions,
+  FetchAgentResult,
+  ImportAgentInput,
+  RenameTerminalInput,
+  RenameTerminalResult,
+  TerminalStreamEvent,
+};
 
 export type ConnectionState =
   | { status: "idle" }
@@ -281,27 +273,6 @@ export interface SendMessageOptions {
   messageId?: string;
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: SendAgentMessageRequest["attachments"];
-}
-
-type AgentConfigOverrides = Partial<Omit<AgentSessionConfig, "provider" | "cwd">>;
-
-export interface CreateAgentRequestOptions extends AgentConfigOverrides {
-  config?: AgentSessionConfig;
-  provider?: AgentProvider;
-  cwd?: string;
-  env?: CreateAgentRequestMessage["env"];
-  workspaceId?: string;
-  initialPrompt?: string;
-  clientMessageId?: string;
-  outputSchema?: Record<string, unknown>;
-  images?: CreateAgentRequestMessage["images"];
-  attachments?: CreateAgentRequestMessage["attachments"];
-  git?: GitSetupOptions;
-  worktree?: CreateAgentRequestMessage["worktree"];
-  autoArchive?: CreateAgentRequestMessage["autoArchive"];
-  worktreeName?: string;
-  requestId?: string;
-  labels?: Record<string, string>;
 }
 
 export interface CreateChisaCodeWorktreeInput extends Pick<
@@ -476,7 +447,6 @@ export interface FetchAgentTimelineOptions {
   requestId?: string;
 }
 
-type AgentRefreshedStatusPayload = z.infer<typeof AgentRefreshedStatusPayloadSchema>;
 type RestartRequestedStatusPayload = z.infer<typeof RestartRequestedStatusPayloadSchema>;
 type ShutdownRequestedStatusPayload = z.infer<typeof ShutdownRequestedStatusPayloadSchema>;
 type FetchAgentsPayload = Extract<
@@ -685,11 +655,6 @@ type ArchiveWorkspacePayload = ArchiveWorkspaceResponseMessage["payload"];
 type WorkspaceSetupStatusPayload = WorkspaceSetupStatusResponseMessage["payload"];
 export type EditorTargetDescriptor = ListAvailableEditorsPayload["editors"][number];
 
-export interface FetchAgentResult {
-  agent: AgentSnapshotPayload;
-  project: ProjectPlacementPayload | null;
-}
-
 export interface WaitForFinishResult {
   status: "idle" | "error" | "permission" | "timeout";
   final: AgentSnapshotPayload | null;
@@ -838,6 +803,7 @@ export class DaemonClient {
   private readonly workspaceCommands: WorkspaceCommandClient;
   private readonly terminalClient: TerminalClient;
   private readonly voiceClient: VoiceClient;
+  private readonly agentLifecycle: AgentLifecycleClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
   private pendingSendQueue: PendingSend[] = [];
@@ -888,6 +854,11 @@ export class DaemonClient {
       sendStrictMessage: (message) => this.sendSessionMessageStrict(message),
       waitFor: (predicate, timeout) =>
         this.waitForWithCancel(predicate, timeout, { skipQueue: true }),
+    });
+    this.agentLifecycle = new AgentLifecycleClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+      createRequestId: (requestId) => this.createRequestId(requestId),
+      requestStatus: (params) => this.sendRequest({ ...params, options: { skipQueue: true } }),
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
@@ -1842,34 +1813,7 @@ export class DaemonClient {
   }
 
   async fetchAgent(agentId: string, requestId?: string): Promise<FetchAgentResult | null> {
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agent_request",
-      requestId: resolvedRequestId,
-      agentId,
-    });
-    const payload = await this.sendRequest({
-      requestId: resolvedRequestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "fetch_agent_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (payload.error) {
-      throw new Error(payload.error);
-    }
-    if (!payload.agent) {
-      return null;
-    }
-    return { agent: payload.agent, project: payload.project ?? null };
+    return this.agentLifecycle.fetchAgent(agentId, requestId);
   }
 
   // ============================================================================
@@ -1877,139 +1821,22 @@ export class DaemonClient {
   // ============================================================================
 
   async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
-    const requestId = this.createRequestId(options.requestId);
-    const config = resolveAgentConfig(options);
-
-    const message = SessionInboundMessageSchema.parse({
-      type: "create_agent_request",
-      requestId,
-      config,
-      ...(options.env ? { env: options.env } : {}),
-      ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
-      ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
-      ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}),
-      ...(options.outputSchema ? { outputSchema: options.outputSchema } : {}),
-      ...(options.images && options.images.length > 0 ? { images: options.images } : {}),
-      ...(options.attachments && options.attachments.length > 0
-        ? { attachments: options.attachments }
-        : {}),
-      ...(options.git ? { git: options.git } : {}),
-      ...(options.worktree ? { worktree: options.worktree } : {}),
-      ...(options.autoArchive !== undefined ? { autoArchive: options.autoArchive } : {}),
-      ...(options.worktreeName ? { worktreeName: options.worktreeName } : {}),
-      ...(options.labels && Object.keys(options.labels).length > 0
-        ? { labels: options.labels }
-        : {}),
-    });
-
-    const status = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 60000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "status") {
-          return null;
-        }
-        const created = AgentCreatedStatusPayloadSchema.safeParse(msg.payload);
-        if (created.success && created.data.requestId === requestId) {
-          return created.data;
-        }
-        const failed = AgentCreateFailedStatusPayloadSchema.safeParse(msg.payload);
-        if (failed.success && failed.data.requestId === requestId) {
-          return failed.data;
-        }
-        return null;
-      },
-    });
-    if (status.status === "agent_create_failed") {
-      throw new Error(status.error);
-    }
-
-    return status.agent;
+    return this.agentLifecycle.createAgent(options);
   }
 
   async deleteAgent(agentId: string): Promise<void> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "delete_agent_request",
-      agentId,
-      requestId,
-    });
-    await this.sendRequest({
-      requestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "agent_deleted") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
+    return this.agentLifecycle.deleteAgent(agentId);
   }
 
   async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "archive_agent_request",
-      agentId,
-      requestId,
-    });
-    const result = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "agent_archived") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    return { archivedAt: result.archivedAt };
+    return this.agentLifecycle.archiveAgent(agentId);
   }
 
   async updateAgent(
     agentId: string,
     updates: { name?: string; labels?: Record<string, string> },
   ): Promise<void> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "update_agent_request",
-      agentId,
-      ...(updates.name !== undefined ? { name: updates.name } : {}),
-      ...(updates.labels && Object.keys(updates.labels).length > 0
-        ? { labels: updates.labels }
-        : {}),
-      requestId,
-    });
-    const payload = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "update_agent_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "updateAgent rejected");
-    }
+    return this.agentLifecycle.updateAgent(agentId, updates);
   }
 
   async renameProject(
@@ -2017,119 +1844,22 @@ export class DaemonClient {
     customName: string | null,
     requestId?: string,
   ): Promise<{ customName: string | null }> {
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "project.rename.request",
-        projectId,
-        customName,
-      },
-      responseType: "project.rename.response",
-      timeout: 10000,
-    });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "renameProject rejected");
-    }
-    return { customName: payload.customName };
+    return this.agentLifecycle.renameProject(projectId, customName, requestId);
   }
 
   async resumeAgent(
     handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
   ): Promise<AgentSnapshotPayload> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "resume_agent_request",
-      requestId,
-      handle,
-      ...(overrides ? { overrides } : {}),
-    });
-
-    const status = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "status") {
-          return null;
-        }
-        const resumed = AgentResumedStatusPayloadSchema.safeParse(msg.payload);
-        if (resumed.success && resumed.data.requestId === requestId) {
-          return resumed.data;
-        }
-        return null;
-      },
-    });
-
-    return status.agent;
+    return this.agentLifecycle.resumeAgent(handle, overrides);
   }
 
   async importAgent(input: ImportAgentInput): Promise<AgentSnapshotPayload> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "import_agent_request",
-      requestId,
-      ...("providerId" in input
-        ? { providerId: input.providerId, providerHandleId: input.providerHandleId }
-        : { provider: input.provider, sessionId: input.sessionId }),
-      ...(input.cwd ? { cwd: input.cwd } : {}),
-      ...(input.labels && Object.keys(input.labels).length > 0 ? { labels: input.labels } : {}),
-    });
-
-    const status = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "status") {
-          return null;
-        }
-        const resumed = AgentResumedStatusPayloadSchema.safeParse(msg.payload);
-        if (resumed.success && resumed.data.requestId === requestId) {
-          return resumed.data;
-        }
-
-        const failed = AgentCreateFailedStatusPayloadSchema.safeParse(msg.payload);
-        if (failed.success && failed.data.requestId === requestId) {
-          return failed.data;
-        }
-
-        return null;
-      },
-    });
-
-    if (status.status === "agent_create_failed") {
-      throw new Error(status.error);
-    }
-
-    return status.agent;
+    return this.agentLifecycle.importAgent(input);
   }
 
   async refreshAgent(agentId: string, requestId?: string): Promise<AgentRefreshedStatusPayload> {
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "refresh_agent_request",
-      agentId,
-      requestId: resolvedRequestId,
-    });
-    return this.sendRequest({
-      requestId: resolvedRequestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "status") {
-          return null;
-        }
-        const refreshed = AgentRefreshedStatusPayloadSchema.safeParse(msg.payload);
-        if (refreshed.success && refreshed.data.requestId === resolvedRequestId) {
-          return refreshed.data;
-        }
-        return null;
-      },
-    });
+    return this.agentLifecycle.refreshAgent(agentId, requestId);
   }
 
   async fetchAgentTimeline(
@@ -2275,85 +2005,15 @@ export class DaemonClient {
     messageId: string,
     mode: "conversation" | "files" | "both",
   ): Promise<AgentRewindResponseMessage["payload"]> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "agent.rewind.request",
-      requestId,
-      agentId,
-      messageId,
-      mode,
-    });
-    const payload = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "agent.rewind.response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!payload.ok) {
-      throw new Error(payload.error ?? "Agent rewind failed");
-    }
-    return payload;
+    return this.agentLifecycle.rewindAgent(agentId, messageId, mode);
   }
 
   async cancelAgent(agentId: string): Promise<void> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "cancel_agent_request",
-      agentId,
-      requestId,
-    });
-    await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "cancel_agent_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
+    return this.agentLifecycle.cancelAgent(agentId);
   }
 
   async setAgentMode(agentId: string, modeId: string): Promise<void> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_mode_request",
-      agentId,
-      modeId,
-      requestId,
-    });
-    const payload = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "set_agent_mode_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentMode rejected");
-    }
+    return this.agentLifecycle.setAgentMode(agentId, modeId);
   }
 
   async setAgentModel(
@@ -2361,89 +2021,15 @@ export class DaemonClient {
     modelId: string | null,
     runtimeProvider?: string | null,
   ): Promise<void> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_model_request",
-      agentId,
-      modelId,
-      ...(runtimeProvider ? { runtimeProvider } : {}),
-      requestId,
-    });
-    const payload = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "set_agent_model_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentModel rejected");
-    }
+    return this.agentLifecycle.setAgentModel(agentId, modelId, runtimeProvider);
   }
 
   async setAgentFeature(agentId: string, featureId: string, value: unknown): Promise<void> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_feature_request",
-      agentId,
-      featureId,
-      value,
-      requestId,
-    });
-    const payload = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "set_agent_feature_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentFeature rejected");
-    }
+    return this.agentLifecycle.setAgentFeature(agentId, featureId, value);
   }
 
   async setAgentThinkingOption(agentId: string, thinkingOptionId: string | null): Promise<void> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_thinking_request",
-      agentId,
-      thinkingOptionId,
-      requestId,
-    });
-    const payload = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "set_agent_thinking_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "setAgentThinkingOption rejected");
-    }
+    return this.agentLifecycle.setAgentThinkingOption(agentId, thinkingOptionId);
   }
 
   async restartServer(reason?: string, requestId?: string): Promise<RestartRequestedStatusPayload> {
@@ -3882,39 +3468,4 @@ export class DaemonClient {
 
     return { promise, cancel };
   }
-}
-
-function resolveAgentConfig(options: CreateAgentRequestOptions): AgentSessionConfig {
-  const {
-    config,
-    provider,
-    cwd,
-    env: _env,
-    workspaceId: _workspaceId,
-    initialPrompt: _initialPrompt,
-    images: _images,
-    git: _git,
-    worktreeName: _worktreeName,
-    requestId: _requestId,
-    labels: _labels,
-    ...overrides
-  } = options;
-
-  const baseConfig: Partial<AgentSessionConfig> = {
-    ...(provider ? { provider } : {}),
-    ...(cwd ? { cwd } : {}),
-    ...overrides,
-  };
-
-  const merged = config ? { ...baseConfig, ...config } : baseConfig;
-
-  if (!merged.provider || !merged.cwd) {
-    throw new Error("createAgent requires provider and cwd");
-  }
-
-  return {
-    ...merged,
-    provider: merged.provider,
-    cwd: merged.cwd,
-  };
 }
