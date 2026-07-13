@@ -71,17 +71,12 @@ import { AgentManagerEventBus } from "./agent-manager-event-bus.js";
 import { AgentArchiveController, type AgentArchivedCallback } from "./agent-archive-controller.js";
 import { AgentMetadataController } from "./agent-metadata-controller.js";
 import { AgentRuntimeConfigurationController } from "./agent-runtime-configuration-controller.js";
+import {
+  AgentSessionRescueController,
+  type AgentSessionRescueTimeouts,
+} from "./agent-session-rescue-controller.js";
 
-const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
-const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
-
-type TimeoutResult = "completed" | "timed_out";
-
-interface TimeoutOptions {
-  operation: Promise<void>;
-  timeoutMs: number;
-  onLateError?: (error: unknown) => void;
-}
+const CANCEL_PROPAGATION_TIMEOUT_MS = 2_000;
 
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
 export type {
@@ -97,6 +92,7 @@ export type {
   ProviderAvailability,
 } from "./agent-provider-controller.js";
 export type { AgentArchivedCallback } from "./agent-archive-controller.js";
+export type { AgentSessionRescueTimeouts } from "./agent-session-rescue-controller.js";
 
 export type AgentManagerEvent =
   | { type: "agent_state"; agent: ManagedAgent }
@@ -127,11 +123,6 @@ export type AgentAttentionCallback = (params: {
   reason: "finished" | "error" | "permission";
 }) => void;
 
-interface AgentManagerRescueTimeouts {
-  reloadSessionCloseMs?: number;
-  interruptSessionMs?: number;
-}
-
 export interface AgentManagerOptions {
   clients?: ProviderClientMap;
   providerDefinitions?: ProviderEnabledMap;
@@ -152,7 +143,7 @@ export interface AgentManagerOptions {
   ) => EffectiveMcpServersResult | undefined;
   usageStore?: UsageStore;
   agentStreamCoalesceWindowMs?: number;
-  rescueTimeouts?: AgentManagerRescueTimeouts;
+  rescueTimeouts?: AgentSessionRescueTimeouts;
   logger: Logger;
 }
 
@@ -356,6 +347,7 @@ export class AgentManager {
   private readonly metadata: AgentMetadataController;
   private readonly providers: AgentProviderController;
   private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
+  private readonly sessionRescue: AgentSessionRescueController;
   private readonly timeline: AgentTimelineController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
@@ -369,7 +361,6 @@ export class AgentManager {
   private readonly generativeUiActionQueue: GenerativeUiActionQueue;
   private onAgentAttention?: AgentAttentionCallback;
   private logger: Logger;
-  private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private readonly usageStore?: UsageStore;
 
   constructor(options: AgentManagerOptions) {
@@ -429,12 +420,7 @@ export class AgentManager {
       persistSnapshot: (agent, persistOptions) => this.persistSnapshot(agent, persistOptions),
       registry: this.registry,
     });
-    this.rescueTimeouts = {
-      reloadSessionCloseMs:
-        options.rescueTimeouts?.reloadSessionCloseMs ?? RELOAD_SESSION_CLOSE_TIMEOUT_MS,
-      interruptSessionMs:
-        options.rescueTimeouts?.interruptSessionMs ?? INTERRUPT_SESSION_TIMEOUT_MS,
-    };
+    this.sessionRescue = new AgentSessionRescueController(this.logger, options.rescueTimeouts);
     this.generativeUiActionQueue = new GenerativeUiActionQueue({
       getAgentStatus: (agentId) => {
         const agent = this.agents.get(agentId);
@@ -820,7 +806,7 @@ export class AgentManager {
       existing.unsubscribeSession = null;
     }
     this.foregroundRuns.clearAgent(agentId, existing);
-    await this.closeReloadedSession(existing.session, agentId);
+    await this.sessionRescue.closeReloadedSession(existing.session, agentId);
 
     if (rehydrateFromDisk) {
       // Wipe both durable and in-memory timeline so registerSession mints a
@@ -841,60 +827,6 @@ export class AgentManager {
       lastError: preservedLastError,
       attention: preservedAttention,
     });
-  }
-
-  private async closeReloadedSession(session: AgentSession, agentId: string): Promise<void> {
-    try {
-      const result = await this.waitWithTimeout({
-        operation: session.close(),
-        timeoutMs: this.rescueTimeouts.reloadSessionCloseMs,
-        onLateError: (error) => {
-          this.logger.warn(
-            { err: error, agentId },
-            "Previous session close failed after refresh timeout",
-          );
-        },
-      });
-
-      if (result === "timed_out") {
-        this.logger.warn(
-          { agentId, timeoutMs: this.rescueTimeouts.reloadSessionCloseMs },
-          "Timed out closing previous session during refresh",
-        );
-      }
-    } catch (error) {
-      this.logger.warn({ err: error, agentId }, "Failed to close previous session during refresh");
-    }
-  }
-
-  private async waitWithTimeout(options: TimeoutOptions): Promise<TimeoutResult> {
-    let didTimeOut = false;
-    let timer: NodeJS.Timeout | null = null;
-    const operation = options.operation
-      .then((): TimeoutResult => "completed")
-      .catch((error) => {
-        if (didTimeOut) {
-          options.onLateError?.(error);
-          return "timed_out" as const;
-        }
-        throw error;
-      });
-
-    try {
-      return await Promise.race([
-        operation,
-        new Promise<TimeoutResult>((resolvePromise) => {
-          timer = setTimeout(() => {
-            didTimeOut = true;
-            resolvePromise("timed_out");
-          }, options.timeoutMs);
-        }),
-      ]);
-    } finally {
-      if (timer) {
-        clearTimeout(timer);
-      }
-    }
   }
 
   async closeAgent(agentId: string): Promise<void> {
@@ -1469,7 +1401,7 @@ export class AgentManager {
       return false;
     }
 
-    await this.interruptSession(agent.session, agentId);
+    await this.sessionRescue.interruptSession(agent.session, agentId);
 
     // The interrupt will produce a turn_canceled/turn_failed event via subscribe(),
     // which flows through the session event dispatcher and settles the foreground turn waiter.
@@ -1479,7 +1411,7 @@ export class AgentManager {
         (candidate) => candidate.turnId === foregroundTurnId,
       );
       const timeout = new Promise<void>((resolvePromise) =>
-        setTimeout(resolvePromise, INTERRUPT_SESSION_TIMEOUT_MS),
+        setTimeout(resolvePromise, CANCEL_PROPAGATION_TIMEOUT_MS),
       );
       if (waiter) {
         await Promise.race([waiter.settledPromise, timeout]);
@@ -1512,7 +1444,7 @@ export class AgentManager {
       }
     } else if (pendingRun) {
       const timeout = new Promise<void>((resolvePromise) =>
-        setTimeout(resolvePromise, INTERRUPT_SESSION_TIMEOUT_MS),
+        setTimeout(resolvePromise, CANCEL_PROPAGATION_TIMEOUT_MS),
       );
       await Promise.race([pendingRun.settledPromise, timeout]);
     }
@@ -1559,30 +1491,6 @@ export class AgentManager {
     }
 
     return true;
-  }
-
-  private async interruptSession(session: AgentSession, agentId: string): Promise<void> {
-    try {
-      const result = await this.waitWithTimeout({
-        operation: session.interrupt(),
-        timeoutMs: this.rescueTimeouts.interruptSessionMs,
-        onLateError: (error) => {
-          this.logger.warn(
-            { err: error, agentId },
-            "Session interrupt failed after timeout during cancel",
-          );
-        },
-      });
-
-      if (result === "timed_out") {
-        this.logger.warn(
-          { agentId, timeoutMs: this.rescueTimeouts.interruptSessionMs },
-          "Timed out interrupting session during cancel",
-        );
-      }
-    } catch (error) {
-      this.logger.error({ err: error, agentId }, "Failed to interrupt session");
-    }
   }
 
   getPendingPermissions(agentId: string): AgentPermissionRequest[] {
