@@ -28,6 +28,7 @@ import {
   resolveACPModeSelection,
   resolveACPModelSelection,
 } from "./acp-agent.js";
+import type { ACPSessionConfigController } from "./acp/session-config-controller.js";
 import { transformPiModels } from "./pi/agent.js";
 import type { AgentStreamEvent } from "../agent-sdk-types.js";
 import { createTestLogger } from "../../../test-utils/test-logger.js";
@@ -37,7 +38,7 @@ import * as spawnUtils from "../../../utils/spawn.js";
 interface ACPSessionInternals {
   sessionId: string | null;
   connection: { prompt: (...args: unknown[]) => Promise<PromptResponse> };
-  configOptions: SessionConfigOption[];
+  sessionConfig: ACPSessionConfigController;
   translateSessionUpdate(update: SessionUpdate): AgentStreamEvent[];
 }
 
@@ -50,7 +51,7 @@ interface ACPModelSelectionInternals {
       value: string;
     }) => Promise<unknown>;
   };
-  configOptions: SessionConfigOption[];
+  sessionConfig: ACPSessionConfigController;
 }
 
 interface ACPConfiguredOverrideInternals {
@@ -64,12 +65,7 @@ interface ACPConfiguredOverrideInternals {
     }) => Promise<unknown>;
     unstable_setSessionModel?: (input: { sessionId: string; modelId: string }) => Promise<void>;
   };
-  configOptions: SessionConfigOption[];
-  availableModes: Array<{ id: string; label: string; description?: string }>;
-  availableModels: Array<{ modelId: string; name: string; description?: string | null }> | null;
-  currentMode: string | null;
-  currentModel: string | null;
-  applyConfiguredOverrides(): Promise<void>;
+  sessionConfig: ACPSessionConfigController;
 }
 
 function createSession(): ACPAgentSession {
@@ -156,6 +152,13 @@ function selectConfigOptionName(category: "mode" | "model" | "thought_level"): s
   return "Thinking";
 }
 
+function applyConfigOptions(
+  controller: ACPSessionConfigController,
+  configOptions: SessionConfigOption[],
+): void {
+  controller.applySessionState({ sessionId: "session-1", configOptions } as SessionStateResponse);
+}
+
 function prepareConfiguredOverrideSession(
   session: ACPAgentSession,
   options: {
@@ -185,15 +188,34 @@ function prepareConfiguredOverrideSession(
     unstable_setSessionModel: unstableSetSessionModel,
     ...options.connection,
   };
-  internals.availableModes = options.availableModes ?? [];
-  internals.availableModels = options.availableModels ?? null;
-  internals.configOptions = options.configOptions ?? [];
-  internals.currentMode = options.currentMode ?? null;
-  internals.currentModel = options.currentModel ?? null;
+  internals.sessionConfig.applySessionState({
+    sessionId: "session-1",
+    modes: {
+      availableModes: (options.availableModes ?? []).map((mode) => ({
+        id: mode.id,
+        name: mode.label,
+        description: mode.description,
+      })),
+      currentModeId: options.currentMode ?? null,
+    },
+    models: options.availableModels
+      ? {
+          availableModels: options.availableModels,
+          currentModelId: options.currentModel ?? null,
+        }
+      : null,
+    configOptions: options.configOptions ?? [],
+  } as SessionStateResponse);
 
   return { internals, setSessionMode, unstableSetSessionModel, setSessionConfigOption };
 }
 
+test("ACP config writes require an initialized session even when clearing values", async () => {
+  const session = createSession();
+
+  await expect(session.setModel(null)).rejects.toThrow("ACP session not initialized");
+  await expect(session.setThinkingOption(null)).rejects.toThrow("ACP session not initialized");
+});
 test("ACP setModel only uses config-option fallback when the matching select choice contains the model", async () => {
   const logger = createTestLogger();
   const childLogger = { trace: vi.fn(), warn: vi.fn() };
@@ -214,7 +236,7 @@ test("ACP setModel only uses config-option fallback when the matching select cho
   const internals = asInternals<ACPModelSelectionInternals>(session);
   internals.sessionId = "session-1";
   internals.connection = { setSessionConfigOption };
-  internals.configOptions = [
+  applyConfigOptions(internals.sessionConfig, [
     {
       id: "model-option",
       name: "Model",
@@ -223,7 +245,7 @@ test("ACP setModel only uses config-option fallback when the matching select cho
       currentValue: "sonnet",
       options: [{ value: "sonnet", name: "Sonnet" }],
     },
-  ];
+  ]);
 
   await session.setModel("sonnet");
 
@@ -585,7 +607,7 @@ describe("ACPAgentSession Zed parity", () => {
       ],
     });
 
-    await valid.internals.applyConfiguredOverrides();
+    await valid.internals.sessionConfig.applyConfiguredOverrides();
     expect(valid.setSessionMode).toHaveBeenCalledWith({ sessionId: "session-1", modeId: "plan" });
     expect(valid.unstableSetSessionModel).toHaveBeenCalledWith({
       sessionId: "session-1",
@@ -626,7 +648,9 @@ describe("ACPAgentSession Zed parity", () => {
       availableModels: [{ modelId: "sonnet", name: "Sonnet", description: null }],
     });
 
-    await expect(invalid.internals.applyConfiguredOverrides()).resolves.toBeUndefined();
+    await expect(
+      invalid.internals.sessionConfig.applyConfiguredOverrides(),
+    ).resolves.toBeUndefined();
     expect(invalid.setSessionMode).not.toHaveBeenCalled();
     expect(invalid.unstableSetSessionModel).not.toHaveBeenCalled();
     expect(childLogger.warn).toHaveBeenCalledWith(
@@ -651,7 +675,7 @@ describe("ACPAgentSession Zed parity", () => {
       connection: { unstable_setSessionModel: undefined },
     });
 
-    await expect(internals.applyConfiguredOverrides()).resolves.toBeUndefined();
+    await expect(internals.sessionConfig.applyConfiguredOverrides()).resolves.toBeUndefined();
     expect(setSessionConfigOption).not.toHaveBeenCalled();
   });
 
@@ -671,7 +695,7 @@ describe("ACPAgentSession Zed parity", () => {
         connection: { unstable_setSessionModel: undefined },
       });
 
-    await expect(internals.applyConfiguredOverrides()).resolves.toBeUndefined();
+    await expect(internals.sessionConfig.applyConfiguredOverrides()).resolves.toBeUndefined();
     expect(unstableSetSessionModel).not.toHaveBeenCalled();
     expect(setSessionConfigOption).not.toHaveBeenCalled();
     expect(childLogger.warn).toHaveBeenCalledWith(
@@ -718,7 +742,7 @@ describe("ACPAgentSession Zed parity", () => {
         thinkingOptionId: "high",
       },
     ]);
-    expect(internals.configOptions).toEqual([
+    expect(internals.sessionConfig.configOptions).toEqual([
       selectConfigOption("mode", ["default", "plan"], "plan"),
       selectConfigOption("model", ["sonnet", "opus"], "opus"),
       selectConfigOption("thought_level", ["low", "high"], "high"),
@@ -780,7 +804,9 @@ describe("ACPAgentSession Zed parity", () => {
     const events: AgentStreamEvent[] = [];
     const unsubscribe = session.subscribe((event) => events.push(event));
     internals.sessionId = "session-1";
-    internals.configOptions = [selectConfigOption("mode", ["ask", "default"], "ask")];
+    applyConfigOptions(internals.sessionConfig, [
+      selectConfigOption("mode", ["ask", "default"], "ask"),
+    ]);
     internals.connection = {
       setSessionConfigOption: vi.fn(async () => ({
         configOptions: [selectConfigOption("mode", ["ask", "default"], "default")],
@@ -810,7 +836,9 @@ describe("ACPAgentSession Zed parity", () => {
     const events: AgentStreamEvent[] = [];
     const unsubscribe = session.subscribe((event) => events.push(event));
     internals.sessionId = "session-1";
-    internals.configOptions = [selectConfigOption("model", ["claude-sonnet", "sonnet"], "sonnet")];
+    applyConfigOptions(internals.sessionConfig, [
+      selectConfigOption("model", ["claude-sonnet", "sonnet"], "sonnet"),
+    ]);
     internals.connection = {
       setSessionConfigOption: vi.fn(async () => ({
         configOptions: [selectConfigOption("model", ["claude-sonnet", "sonnet"], "sonnet")],
@@ -834,9 +862,9 @@ describe("ACPAgentSession Zed parity", () => {
     const events: AgentStreamEvent[] = [];
     const unsubscribe = session.subscribe((event) => events.push(event));
     internals.sessionId = "session-1";
-    internals.configOptions = [
+    applyConfigOptions(internals.sessionConfig, [
       selectConfigOption("thought_level", ["think-hard", "high"], "think-hard"),
-    ];
+    ]);
     internals.connection = {
       setSessionConfigOption: vi.fn(async () => ({
         configOptions: [selectConfigOption("thought_level", ["think-hard", "high"], "high")],

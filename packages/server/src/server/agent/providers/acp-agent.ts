@@ -6,19 +6,14 @@ import {
   ClientSideConnection,
   type AgentCapabilities as ACPAgentCapabilities,
   type Client as ACPClient,
-  type ConfigOptionUpdate,
   type CreateTerminalRequest,
-  type CurrentModeUpdate,
   type KillTerminalRequest,
   type ListSessionsResponse,
-  type LoadSessionResponse,
   type McpServer,
-  type NewSessionResponse,
   type PermissionOption,
   type ReadTextFileRequest,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
-  type ResumeSessionResponse,
   type SessionConfigOption,
   type SessionInfoUpdate,
   type SessionNotification,
@@ -68,20 +63,16 @@ import { ACPCommandCatalog } from "./acp/command-catalog.js";
 import { ACPForegroundTurnController } from "./acp/foreground-turn-controller.js";
 import { ACPSessionUpdateController } from "./acp/session-update-controller.js";
 import {
-  deriveCurrentConfigValue,
   deriveModelDefinitionsFromACP,
   deriveModesFromACP,
-  findSelectConfigOption,
-  flattenSelectOptions,
-  resolveACPModeSelection,
-  resolveACPModelSelection,
   type ACPBeforeModeWriteResult,
-  type ACPModeSelection,
-  type ACPModelSelection,
   type ACPProviderModeWriterContext,
   type ACPProviderModeWriteResult,
-  type AvailableACPModel,
 } from "./acp/session-config.js";
+import {
+  ACPSessionConfigController,
+  type SessionStateResponse,
+} from "./acp/session-config-controller.js";
 import {
   ACP_PROBE_ENV,
   resolveACPLaunchCommand,
@@ -94,6 +85,7 @@ import { resolvePathInsideBase } from "./acp/workspace-path.js";
 export type { ACPToolSnapshot } from "./acp/tool-call-mapper.js";
 export { createLoggedNdJsonStream } from "./acp/ndjson-stream.js";
 export { mapACPUsage } from "./acp/foreground-turn-controller.js";
+export type { SessionStateResponse } from "./acp/session-config-controller.js";
 export type { SpawnedACPProcess } from "./acp/process-runtime.js";
 export {
   deriveModelDefinitionsFromACP,
@@ -177,8 +169,6 @@ interface PendingPermission {
   reject: (error: Error) => void;
   turnId: string | null;
 }
-
-export type SessionStateResponse = NewSessionResponse | LoadSessionResponse | ResumeSessionResponse;
 
 export class ACPAgentClient implements AgentClient {
   readonly provider: string;
@@ -493,27 +483,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private readonly logger: Logger;
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly defaultCommand: [string, ...string[]];
-  private readonly defaultModes: AgentMode[];
-  protected readonly modelTransformer?: (models: AgentModelDefinition[]) => AgentModelDefinition[];
-  private readonly sessionResponseTransformer?: (
-    response: SessionStateResponse,
-  ) => SessionStateResponse;
-  private readonly configOptionsTransformer?: (
-    configOptions: SessionConfigOption[],
-  ) => SessionConfigOption[];
-  private readonly modeIdTransformer?: (modeId: string) => string | null;
   private readonly toolSnapshotTransformer?: (snapshot: ACPToolSnapshot) => ACPToolSnapshot;
-  private readonly providerModeWriter?: (
-    context: ACPProviderModeWriterContext,
-  ) => Promise<ACPProviderModeWriteResult>;
-  private readonly beforeModeWriter?: (
-    context: ACPProviderModeWriterContext,
-  ) => Promise<ACPBeforeModeWriteResult>;
-  private readonly thinkingOptionWriter?: (
-    connection: ClientSideConnection,
-    sessionId: string,
-    thinkingOptionId: string,
-  ) => Promise<void>;
   private readonly agentId?: string;
   private readonly launchEnv?: Record<string, string>;
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
@@ -521,6 +491,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private readonly terminalController: ACPTerminalController;
   private readonly sessionUpdates: ACPSessionUpdateController;
   private readonly commandCatalog: ACPCommandCatalog;
+  private readonly sessionConfig: ACPSessionConfigController;
   private readonly persistedHistory: AgentTimelineItem[] = [];
   private readonly initialHandle?: AgentPersistenceHandle;
 
@@ -529,14 +500,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private connection: ClientSideConnection | null = null;
   private agentCapabilities: ACPAgentCapabilities | null = null;
   private sessionId: string | null = null;
-  private currentMode: string | null = null;
-  private availableModes: AgentMode[];
-  private currentModel: string | null = null;
-  private availableModels: AvailableACPModel[] | null = null;
-  private thinkingOptionId: string | null = null;
   private currentTitle: string | null = null;
   private lastActivityAt: string | null = null;
-  private configOptions: SessionConfigOption[] = [];
   private readonly foregroundTurn: ACPForegroundTurnController;
   private closed = false;
   private historyPending = false;
@@ -548,16 +513,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.logger = options.logger.child({ module: "agent", provider: options.provider });
     this.runtimeSettings = options.runtimeSettings;
     this.defaultCommand = options.defaultCommand;
-    this.defaultModes = options.defaultModes;
-    this.modelTransformer = options.modelTransformer;
-    this.sessionResponseTransformer = options.sessionResponseTransformer;
-    this.configOptionsTransformer = options.configOptionsTransformer;
-    this.modeIdTransformer = options.modeIdTransformer;
     this.toolSnapshotTransformer = options.toolSnapshotTransformer;
-    this.providerModeWriter = options.providerModeWriter;
-    this.beforeModeWriter = options.beforeModeWriter;
-    this.thinkingOptionWriter = options.thinkingOptionWriter;
-    this.availableModes = options.defaultModes;
     this.agentId = options.agentId;
     this.launchEnv = options.launchEnv;
     this.initialHandle = options.handle;
@@ -577,22 +533,37 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       collectDiagnostic: (message) => this.collectDiagnostic(message),
       createCanceledToolEvents: () => this.sessionUpdates.createCanceledToolEvents(),
     });
+    this.sessionConfig = new ACPSessionConfigController({
+      provider: this.provider,
+      logger: this.logger,
+      defaultModes: options.defaultModes,
+      initialModeId: config.modeId ?? null,
+      initialModelId: config.model ?? null,
+      initialThinkingOptionId: config.thinkingOptionId ?? null,
+      getConnection: () => this.connection,
+      getSessionId: () => this.sessionId,
+      getRuntimeInfo: () => this.runtimeInfo(),
+      emit: (event) => this.pushEvent(event),
+      sessionResponseTransformer: options.sessionResponseTransformer,
+      configOptionsTransformer: options.configOptionsTransformer,
+      modeIdTransformer: options.modeIdTransformer,
+      providerModeWriter: options.providerModeWriter,
+      beforeModeWriter: options.beforeModeWriter,
+      thinkingOptionWriter: options.thinkingOptionWriter,
+    });
     this.sessionUpdates = new ACPSessionUpdateController({
       provider: this.provider,
       getTurnId: () => this.foregroundTurn.activeTurnId,
       getSuppressedUserEcho: () => this.foregroundTurn.suppressedUserEcho,
       getTerminalStates: () => this.terminalController.timelineStates,
       transformToolSnapshot: this.toolSnapshotTransformer,
-      onCurrentModeUpdate: (update) => this.handleCurrentModeUpdate(update),
-      onConfigOptionUpdate: (update) => this.handleConfigOptionUpdate(update),
+      onCurrentModeUpdate: (update) => this.sessionConfig.handleCurrentModeUpdate(update),
+      onConfigOptionUpdate: (update) => this.sessionConfig.handleConfigOptionUpdate(update),
       onSessionInfoUpdate: (update) => this.handleSessionInfoUpdate(update),
       onAvailableCommandsUpdate: (update) => {
         this.commandCatalog.update(update.availableCommands);
       },
     });
-    this.currentMode = config.modeId ?? null;
-    this.currentModel = config.model ?? null;
-    this.thinkingOptionId = config.thinkingOptionId ?? null;
     this.currentTitle = config.title ?? null;
   }
 
@@ -612,8 +583,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     });
     this.sessionId = response.sessionId;
     this.foregroundTurn.markThreadBootstrapPending();
-    this.applySessionState(response);
-    await this.applyConfiguredOverrides();
+    this.sessionConfig.applySessionState(response);
+    await this.sessionConfig.applyConfiguredOverrides();
   }
 
   async initializeResumedSession(): Promise<void> {
@@ -639,19 +610,19 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       });
       this.replayingHistory = false;
       this.historyPending = this.persistedHistory.length > 0;
-      this.applySessionState(response);
+      this.sessionConfig.applySessionState(response);
     } else if (sessionCapabilities?.resume) {
       const response = await this.connection.unstable_resumeSession({
         sessionId: handle.sessionId,
         cwd: this.config.cwd,
         mcpServers: normalizeMcpServers(this.config.mcpServers),
       });
-      this.applySessionState(response);
+      this.sessionConfig.applySessionState(response);
     } else {
       throw new Error(`${this.provider} does not support ACP session resume`);
     }
 
-    await this.applyConfiguredOverrides();
+    await this.sessionConfig.applyConfiguredOverrides();
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -715,11 +686,11 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async getAvailableModes(): Promise<AgentMode[]> {
-    return [...this.availableModes];
+    return this.sessionConfig.modes;
   }
 
   async getCurrentMode(): Promise<string | null> {
-    return this.currentMode;
+    return this.sessionConfig.modeId;
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
@@ -727,310 +698,16 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async setMode(modeId: string): Promise<void> {
-    if (!this.connection || !this.sessionId) {
-      throw new Error("ACP session not initialized");
-    }
-
-    const selection = resolveACPModeSelection({
-      modeId,
-      availableModes: this.availableModes,
-      configOptions: this.configOptions,
-    });
-    await this.setModeWithSelection({ modeId, selection });
-  }
-
-  // Mode/model selection updates stay after ACP RPC success; this intentionally diverges from Zed's optimistic rollback path (acp.rs:3080-3104).
-  private async setModeWithSelection({
-    modeId,
-    selection,
-  }: {
-    modeId: string;
-    selection: ACPModeSelection;
-  }): Promise<void> {
-    if (!this.connection || !this.sessionId) {
-      throw new Error("ACP session not initialized");
-    }
-
-    const context = this.createProviderModeWriterContext(modeId, selection);
-    const providerResult = this.providerModeWriter
-      ? await this.providerModeWriter(context)
-      : { handled: false };
-    if (providerResult.handled) {
-      this.currentMode = providerResult.currentModeId ?? modeId;
-      if (providerResult.configOptions) {
-        this.configOptions = this.transformConfigOptions(providerResult.configOptions);
-      }
-      this.availableModes = deriveModesFromACP(this.defaultModes, null, this.configOptions).modes;
-      this.pushEvent({
-        type: "mode_changed",
-        provider: this.provider,
-        currentModeId: this.currentMode,
-        availableModes: [...this.availableModes],
-      });
-      return;
-    }
-
-    if (selection.hasAvailableModes) {
-      if (!selection.availableMode) {
-        this.warnInvalidSelection(
-          modeId,
-          `is not valid ${this.provider} mode. Available options: ${this.availableModes
-            .map((mode) => mode.id)
-            .join(", ")}`,
-        );
-        return;
-      }
-    } else {
-      const modeOption = selection.configOption;
-      if (!modeOption) {
-        throw new Error(`${this.provider} does not expose ACP mode switching`);
-      }
-      if (!selection.configChoice) {
-        this.warnInvalidSelection(
-          modeId,
-          `is not valid ${this.provider} mode config option. Available options: ${flattenSelectOptions(
-            modeOption.options,
-          )
-            .map((option) => option.value)
-            .join(", ")}`,
-        );
-        return;
-      }
-    }
-
-    if (this.beforeModeWriter) {
-      const beforeResult = await this.beforeModeWriter(context);
-      if (beforeResult?.configOptions) {
-        this.configOptions = this.transformConfigOptions(beforeResult.configOptions);
-      }
-    }
-
-    if (selection.hasAvailableModes) {
-      await this.connection.setSessionMode({ sessionId: this.sessionId, modeId });
-      this.currentMode = modeId;
-      this.pushEvent({
-        type: "mode_changed",
-        provider: this.provider,
-        currentModeId: this.currentMode,
-        availableModes: [...this.availableModes],
-      });
-      return;
-    }
-
-    const modeOption = selection.configOption;
-    if (!modeOption) {
-      throw new Error(`${this.provider} does not expose ACP mode switching`);
-    }
-
-    const response = await this.connection.setSessionConfigOption({
-      sessionId: this.sessionId,
-      configId: modeOption.id,
-      value: modeId,
-    });
-    this.currentMode = this.applyConfigOptionResponse({
-      response,
-      configId: modeOption.id,
-      category: "mode",
-      requestedValue: modeId,
-      label: "mode",
-    });
-    this.availableModes = deriveModesFromACP(this.defaultModes, null, this.configOptions).modes;
-    this.pushEvent({
-      type: "mode_changed",
-      provider: this.provider,
-      currentModeId: this.currentMode,
-      availableModes: [...this.availableModes],
-    });
-  }
-
-  private createProviderModeWriterContext(
-    requestedModeId: string,
-    selection: ACPModeSelection,
-  ): ACPProviderModeWriterContext {
-    if (!this.connection || !this.sessionId) {
-      throw new Error("ACP session not initialized");
-    }
-    return {
-      connection: this.connection,
-      sessionId: this.sessionId,
-      requestedModeId,
-      currentModeId: this.currentMode,
-      selection,
-      configOptions: this.configOptions,
-      logger: this.logger,
-    };
+    await this.sessionConfig.setMode(modeId);
   }
 
   async setModel(modelId: string | null): Promise<void> {
-    if (!this.connection || !this.sessionId) {
-      throw new Error("ACP session not initialized");
-    }
-    if (!modelId) {
-      this.currentModel = null;
-      return;
-    }
-
-    const selection = resolveACPModelSelection({
-      modelId,
-      availableModels: this.availableModels,
-      configOptions: this.configOptions,
-    });
-    await this.setModelWithSelection({ modelId, selection });
-  }
-
-  private async setModelWithSelection({
-    modelId,
-    selection,
-  }: {
-    modelId: string;
-    selection: ACPModelSelection;
-  }): Promise<void> {
-    if (!this.connection || !this.sessionId) {
-      throw new Error("ACP session not initialized");
-    }
-
-    if (selection.hasAvailableModels) {
-      if (!selection.availableModel) {
-        this.warnInvalidSelection(
-          modelId,
-          `is not a valid ${this.provider} model. Available options: ${this.availableModels
-            ?.map((model) => model.modelId)
-            .join(", ")}`,
-        );
-        return;
-      }
-
-      if (typeof this.connection.unstable_setSessionModel !== "function") {
-        throw new Error(this.modelSelectionUnavailableMessage());
-      }
-
-      try {
-        await this.connection.unstable_setSessionModel({
-          sessionId: this.sessionId,
-          modelId,
-        });
-        this.currentModel = modelId;
-        this.pushEvent({
-          type: "model_changed",
-          provider: this.provider,
-          runtimeInfo: this.runtimeInfo(),
-        });
-        return;
-      } catch {
-        // Fall through to config option path.
-      }
-    }
-
-    const modelOption = selection.configOption;
-    if (!modelOption) {
-      throw new Error(this.modelSelectionUnavailableMessage());
-    }
-    if (!selection.configChoice) {
-      this.warnInvalidSelection(
-        modelId,
-        `is not a valid ${this.provider} model config option. Available options: ${flattenSelectOptions(
-          modelOption.options,
-        )
-          .map((option) => option.value)
-          .join(", ")}`,
-      );
-      return;
-    }
-
-    const response = await this.connection.setSessionConfigOption({
-      sessionId: this.sessionId,
-      configId: modelOption.id,
-      value: modelId,
-    });
-    this.currentModel = this.applyConfigOptionResponse({
-      response,
-      configId: modelOption.id,
-      category: "model",
-      requestedValue: modelId,
-      label: "model",
-    });
-    this.pushEvent({
-      type: "model_changed",
-      provider: this.provider,
-      runtimeInfo: this.runtimeInfo(),
-    });
+    await this.sessionConfig.setModel(modelId);
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
-    if (!this.connection || !this.sessionId) {
-      throw new Error("ACP session not initialized");
-    }
-    if (!thinkingOptionId) {
-      this.thinkingOptionId = null;
-      return;
-    }
-
-    if (this.thinkingOptionWriter) {
-      await this.thinkingOptionWriter(this.connection, this.sessionId, thinkingOptionId);
-      this.thinkingOptionId = thinkingOptionId;
-      this.pushEvent({
-        type: "thinking_option_changed",
-        provider: this.provider,
-        thinkingOptionId: this.thinkingOptionId,
-      });
-      return;
-    }
-
-    const option = findSelectConfigOption({
-      configOptions: this.configOptions,
-      category: "thought_level",
-    });
-    if (!option) {
-      throw new Error(`${this.provider} does not expose ACP thought-level selection`);
-    }
-    const response = await this.connection.setSessionConfigOption({
-      sessionId: this.sessionId,
-      configId: option.id,
-      value: thinkingOptionId,
-    });
-    this.thinkingOptionId = this.applyConfigOptionResponse({
-      response,
-      configId: option.id,
-      category: "thought_level",
-      requestedValue: thinkingOptionId,
-      label: "thought-level",
-    });
-    this.pushEvent({
-      type: "thinking_option_changed",
-      provider: this.provider,
-      thinkingOptionId: this.thinkingOptionId,
-    });
+    await this.sessionConfig.setThinkingOption(thinkingOptionId);
   }
-
-  private applyConfigOptionResponse({
-    response,
-    configId,
-    category,
-    requestedValue,
-    label,
-  }: {
-    response: { configOptions: SessionConfigOption[] };
-    configId: string;
-    category: string;
-    requestedValue: string;
-    label: string;
-  }): string {
-    this.configOptions = this.transformConfigOptions(response.configOptions);
-    const responseOption = findSelectConfigOption({
-      configOptions: this.configOptions,
-      category,
-      id: configId,
-    });
-    if (responseOption?.currentValue != null) {
-      return responseOption.currentValue;
-    }
-    this.logger.warn(
-      { configId, value: requestedValue },
-      `ACP setSessionConfigOption response did not include the requested ${label} option currentValue; using requested value`,
-    );
-    return requestedValue;
-  }
-
   getPendingPermissions(): AgentPermissionRequest[] {
     return Array.from(this.pendingPermissions.values(), (entry) => entry.request);
   }
@@ -1286,132 +963,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     });
   }
 
-  private applySessionState(response: SessionStateResponse): void {
-    const transformed = this.sessionResponseTransformer
-      ? this.sessionResponseTransformer(response)
-      : response;
-
-    this.configOptions = this.transformConfigOptions(transformed.configOptions ?? []);
-
-    const modeInfo = deriveModesFromACP(this.defaultModes, transformed.modes, this.configOptions);
-    this.availableModes = modeInfo.modes;
-    this.currentMode = modeInfo.currentModeId ?? this.currentMode;
-
-    this.availableModels = transformed.models?.availableModels ?? null;
-    this.currentModel =
-      transformed.models?.currentModelId ?? deriveCurrentConfigValue(this.configOptions, "model");
-    this.thinkingOptionId =
-      deriveCurrentConfigValue(this.configOptions, "thought_level") ?? this.thinkingOptionId;
-  }
-
-  private transformConfigOptions(configOptions: SessionConfigOption[]): SessionConfigOption[] {
-    return this.configOptionsTransformer
-      ? this.configOptionsTransformer(configOptions)
-      : configOptions;
-  }
-
-  private transformModeId(modeId: string): string | null {
-    return this.modeIdTransformer ? this.modeIdTransformer(modeId) : modeId;
-  }
-
-  private async applyConfiguredOverrides(): Promise<void> {
-    const configuredModeId = this.config.modeId;
-    if (configuredModeId && configuredModeId !== this.currentMode) {
-      const selection = resolveACPModeSelection({
-        modeId: configuredModeId,
-        availableModes: this.availableModes,
-        configOptions: this.configOptions,
-      });
-      await this.setModeWithSelection({ modeId: configuredModeId, selection });
-    }
-    const configuredModelId = this.config.model;
-    if (configuredModelId && configuredModelId !== this.currentModel) {
-      const selection = resolveACPModelSelection({
-        modelId: configuredModelId,
-        availableModels: this.availableModels,
-        configOptions: this.configOptions,
-      });
-      try {
-        await this.setModelWithSelection({ modelId: configuredModelId, selection });
-      } catch (error) {
-        if (!this.isModelSelectionUnavailableError(error)) {
-          throw error;
-        }
-        this.logger.warn(
-          { value: configuredModelId },
-          `${this.provider} does not expose ACP model selection; using provider default model`,
-        );
-      }
-    }
-    if (this.config.thinkingOptionId && this.config.thinkingOptionId !== this.thinkingOptionId) {
-      await this.setThinkingOption(this.config.thinkingOptionId);
-    }
-  }
-
-  private warnInvalidSelection(value: string, message: string): void {
-    this.logger.warn({ value }, message);
-  }
-
-  private modelSelectionUnavailableMessage(): string {
-    return `${this.provider} does not expose ACP model selection`;
-  }
-
-  private isModelSelectionUnavailableError(error: unknown): boolean {
-    return error instanceof Error && error.message === this.modelSelectionUnavailableMessage();
-  }
-
   private translateSessionUpdate(update: SessionUpdate): AgentStreamEvent[] {
     return this.sessionUpdates.translate(update);
-  }
-
-  private handleCurrentModeUpdate(update: CurrentModeUpdate): AgentStreamEvent[] {
-    this.currentMode = this.transformModeId(update.currentModeId);
-    return [
-      {
-        type: "mode_changed",
-        provider: this.provider,
-        currentModeId: this.currentMode,
-        availableModes: [...this.availableModes],
-      },
-    ];
-  }
-
-  private handleConfigOptionUpdate(update: ConfigOptionUpdate): AgentStreamEvent[] {
-    this.configOptions = this.transformConfigOptions(update.configOptions);
-    const modeInfo = deriveModesFromACP(this.defaultModes, null, this.configOptions);
-    const nextMode = modeInfo.currentModeId;
-    const nextModel = deriveCurrentConfigValue(this.configOptions, "model");
-    const nextThinkingOptionId = deriveCurrentConfigValue(this.configOptions, "thought_level");
-
-    this.availableModes = modeInfo.modes;
-    this.currentMode = nextMode ?? this.currentMode;
-    this.currentModel = nextModel ?? this.currentModel;
-    this.thinkingOptionId = nextThinkingOptionId ?? this.thinkingOptionId;
-
-    const events: AgentStreamEvent[] = [];
-    if (nextMode !== null) {
-      events.push({
-        type: "mode_changed",
-        provider: this.provider,
-        currentModeId: this.currentMode,
-        availableModes: [...this.availableModes],
-      });
-    }
-    if (nextModel !== null) {
-      events.push({
-        type: "model_changed",
-        provider: this.provider,
-        runtimeInfo: this.runtimeInfo(),
-      });
-    }
-    if (nextThinkingOptionId !== null) {
-      events.push({
-        type: "thinking_option_changed",
-        provider: this.provider,
-        thinkingOptionId: this.thinkingOptionId,
-      });
-    }
-    return events;
   }
 
   private handleSessionInfoUpdate(update: SessionInfoUpdate): void {
@@ -1443,9 +996,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     return {
       provider: this.provider,
       sessionId: this.sessionId,
-      model: this.currentModel,
-      thinkingOptionId: this.thinkingOptionId,
-      modeId: this.currentMode,
+      model: this.sessionConfig.modelId,
+      thinkingOptionId: this.sessionConfig.thinkingOptionId,
+      modeId: this.sessionConfig.modeId,
       extra: {
         title: this.currentTitle,
         updatedAt: this.lastActivityAt,
