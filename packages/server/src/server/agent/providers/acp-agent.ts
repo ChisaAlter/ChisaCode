@@ -34,8 +34,6 @@ import {
   type ResumeSessionResponse,
   type SessionConfigOption,
   type SessionInfoUpdate,
-  type SessionMode,
-  type SessionModelState,
   type SessionNotification,
   type SessionUpdate,
   type TerminalOutputRequest,
@@ -96,8 +94,32 @@ import {
   selectACPPermissionOption,
   type ACPToolSnapshot,
 } from "./acp/tool-call-mapper.js";
+import {
+  deriveCurrentConfigValue,
+  deriveModelDefinitionsFromACP,
+  deriveModesFromACP,
+  findSelectConfigOption,
+  flattenSelectOptions,
+  resolveACPModeSelection,
+  resolveACPModelSelection,
+  type ACPBeforeModeWriteResult,
+  type ACPModeSelection,
+  type ACPModelSelection,
+  type ACPProviderModeWriterContext,
+  type ACPProviderModeWriteResult,
+  type AvailableACPModel,
+} from "./acp/session-config.js";
 
 export type { ACPToolSnapshot } from "./acp/tool-call-mapper.js";
+export {
+  deriveModelDefinitionsFromACP,
+  deriveModesFromACP,
+  resolveACPModeSelection,
+  resolveACPModelSelection,
+  type ACPBeforeModeWriteResult,
+  type ACPProviderModeWriterContext,
+  type ACPProviderModeWriteResult,
+} from "./acp/session-config.js";
 
 function assertChildWithPipes(
   child: ChildProcess,
@@ -383,57 +405,6 @@ interface TerminalEntry {
   rejectExit: (error: Error) => void;
 }
 
-interface ConfigOptionSelector {
-  id: string;
-  label: string;
-  description?: string;
-  isDefault?: boolean;
-  metadata?: AgentMetadata;
-}
-
-type SelectConfigOption = Extract<SessionConfigOption, { type: "select" }>;
-interface SelectConfigChoice {
-  value: string;
-  name: string;
-  description?: string | null;
-  group?: string;
-}
-type AvailableACPModel = NonNullable<SessionModelState["availableModels"]>[number];
-
-interface ACPModeSelection {
-  availableMode: AgentMode | null;
-  configOption: SelectConfigOption | null;
-  configChoice: SelectConfigChoice | null;
-  hasAvailableModes: boolean;
-}
-
-interface ACPModelSelection {
-  availableModel: AvailableACPModel | null;
-  configOption: SelectConfigOption | null;
-  configChoice: SelectConfigChoice | null;
-  hasAvailableModels: boolean;
-}
-
-export interface ACPProviderModeWriterContext {
-  connection: ClientSideConnection;
-  sessionId: string;
-  requestedModeId: string;
-  currentModeId: string | null;
-  selection: ACPModeSelection;
-  configOptions: SessionConfigOption[];
-  logger: Logger;
-}
-
-export interface ACPProviderModeWriteResult {
-  handled: boolean;
-  currentModeId?: string;
-  configOptions?: SessionConfigOption[];
-}
-
-export interface ACPBeforeModeWriteResult {
-  configOptions?: SessionConfigOption[];
-}
-
 export function mapACPUsage(usage: Usage | null | undefined): AgentUsage | undefined {
   if (!usage) {
     return undefined;
@@ -444,110 +415,6 @@ export function mapACPUsage(usage: Usage | null | undefined): AgentUsage | undef
     outputTokens: usage.outputTokens ?? undefined,
     cachedInputTokens: usage.cachedReadTokens ?? undefined,
   };
-}
-
-export function resolveACPModeSelection({
-  modeId,
-  availableModes,
-  configOptions,
-}: {
-  modeId: string;
-  availableModes: AgentMode[];
-  configOptions: SessionConfigOption[] | null | undefined;
-}): ACPModeSelection {
-  const configOption = findSelectConfigOption({ configOptions, category: "mode" });
-  return {
-    availableMode: availableModes.find((mode) => mode.id === modeId) ?? null,
-    configOption,
-    configChoice: findSelectConfigChoice({ option: configOption, value: modeId }),
-    hasAvailableModes: availableModes.length > 0,
-  };
-}
-
-export function resolveACPModelSelection({
-  modelId,
-  availableModels,
-  configOptions,
-}: {
-  modelId: string;
-  availableModels: AvailableACPModel[] | null | undefined;
-  configOptions: SessionConfigOption[] | null | undefined;
-}): ACPModelSelection {
-  const configOption = findSelectConfigOption({ configOptions, category: "model" });
-  return {
-    availableModel: availableModels?.find((model) => model.modelId === modelId) ?? null,
-    configOption,
-    configChoice: findSelectConfigChoice({ option: configOption, value: modelId }),
-    hasAvailableModels: Boolean(availableModels?.length),
-  };
-}
-
-export function deriveModesFromACP(
-  fallbackModes: AgentMode[],
-  modeState?: { availableModes?: SessionMode[] | null; currentModeId?: string | null } | null,
-  configOptions?: SessionConfigOption[] | null,
-): { modes: AgentMode[]; currentModeId: string | null } {
-  if (modeState?.availableModes?.length) {
-    return {
-      modes: modeState.availableModes.map((mode) => ({
-        id: mode.id,
-        label: mode.name,
-        description: mode.description ?? undefined,
-      })),
-      currentModeId: modeState.currentModeId ?? null,
-    };
-  }
-
-  const modeOption = findSelectConfigOption({ configOptions, category: "mode" });
-  if (modeOption) {
-    const flatOptions = flattenSelectOptions(modeOption.options);
-    return {
-      modes: flatOptions.map((option) => ({
-        id: option.value,
-        label: option.name,
-        description: option.description ?? undefined,
-      })),
-      currentModeId: modeOption.currentValue,
-    };
-  }
-
-  return {
-    modes: fallbackModes,
-    currentModeId: null,
-  };
-}
-
-export function deriveModelDefinitionsFromACP(
-  provider: string,
-  models: SessionModelState | null | undefined,
-  configOptions?: SessionConfigOption[] | null,
-): AgentModelDefinition[] {
-  const thinkingOptions = deriveSelectorOptions(configOptions, "thought_level");
-  const defaultThinkingOptionId = thinkingOptions.find((option) => option.isDefault)?.id ?? null;
-
-  if (models?.availableModels?.length) {
-    return models.availableModels.map((model) => ({
-      provider,
-      id: model.modelId,
-      label: model.name,
-      description: model.description ?? undefined,
-      isDefault: model.modelId === models.currentModelId,
-      thinkingOptions: thinkingOptions.length > 0 ? thinkingOptions : undefined,
-      defaultThinkingOptionId: defaultThinkingOptionId ?? undefined,
-    }));
-  }
-
-  const modelOptions = deriveSelectorOptions(configOptions, "model");
-  return modelOptions.map((option) => ({
-    provider,
-    id: option.id,
-    label: option.label,
-    description: option.description,
-    isDefault: option.isDefault,
-    thinkingOptions: thinkingOptions.length > 0 ? thinkingOptions : undefined,
-    defaultThinkingOptionId: defaultThinkingOptionId ?? undefined,
-    metadata: option.metadata,
-  }));
 }
 
 export class ACPAgentClient implements AgentClient {
@@ -2247,78 +2114,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     }
     return entry;
   }
-}
-
-function findSelectConfigOption({
-  configOptions,
-  category,
-  id,
-}: {
-  configOptions: SessionConfigOption[] | null | undefined;
-  category: string;
-  id?: string;
-}): SelectConfigOption | null {
-  const option = configOptions?.find(
-    (entry): entry is SelectConfigOption =>
-      entry.type === "select" && entry.category === category && (!id || entry.id === id),
-  );
-  return option ?? null;
-}
-
-function findSelectConfigChoice({
-  option,
-  value,
-}: {
-  option: SelectConfigOption | null;
-  value: string;
-}): SelectConfigChoice | null {
-  if (!option) {
-    return null;
-  }
-  return flattenSelectOptions(option.options).find((choice) => choice.value === value) ?? null;
-}
-
-function flattenSelectOptions(options: SelectConfigOption["options"]): SelectConfigChoice[] {
-  const flattened: SelectConfigChoice[] = [];
-  for (const option of options) {
-    if ("value" in option) {
-      flattened.push(option);
-      continue;
-    }
-    for (const groupOption of option.options) {
-      flattened.push({ ...groupOption, group: option.group });
-    }
-  }
-  return flattened;
-}
-
-function deriveSelectorOptions(
-  configOptions: SessionConfigOption[] | null | undefined,
-  category: string,
-): ConfigOptionSelector[] {
-  const option = findSelectConfigOption({ configOptions, category });
-  if (!option) {
-    return [];
-  }
-
-  return flattenSelectOptions(option.options).map((value) => ({
-    id: value.value,
-    label: value.name,
-    description: value.description ?? undefined,
-    isDefault: value.value === option.currentValue,
-    metadata: value.group ? { group: value.group } : undefined,
-  }));
-}
-
-function deriveCurrentConfigValue(
-  configOptions: SessionConfigOption[] | null | undefined,
-  category: string,
-): string | null {
-  const option = configOptions?.find(
-    (entry): entry is Extract<SessionConfigOption, { type: "select" }> =>
-      entry.type === "select" && entry.category === category,
-  );
-  return option?.currentValue ?? null;
 }
 
 function normalizeMcpServers(servers?: Record<string, McpServerConfig>): McpServer[] {
