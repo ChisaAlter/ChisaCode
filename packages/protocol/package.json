@@ -17,6 +17,10 @@
       "types": "./dist/agent/attachments.d.ts",
       "default": "./dist/agent/attachments.js"
     },
+    "./agent/extensions": {
+      "types": "./dist/agent/extensions.d.ts",
+      "default": "./dist/agent/extensions.js"
+    },
     "./agent-labels": {
       "types": "./dist/agent-labels.d.ts",
       "default": "./dist/agent-labels.js"
