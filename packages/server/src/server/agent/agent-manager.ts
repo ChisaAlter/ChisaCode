@@ -19,7 +19,6 @@ import {
   type AgentClient,
   type AgentCreateSessionOptions,
   type AgentFeature,
-  type AgentModelDefinition,
   type AgentSlashCommand,
   type AgentMode,
   type AgentPermissionRequest,
@@ -71,6 +70,7 @@ import {
 import { AgentManagerEventBus } from "./agent-manager-event-bus.js";
 import { AgentArchiveController, type AgentArchivedCallback } from "./agent-archive-controller.js";
 import { AgentMetadataController } from "./agent-metadata-controller.js";
+import { AgentRuntimeConfigurationController } from "./agent-runtime-configuration-controller.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -81,13 +81,6 @@ interface TimeoutOptions {
   operation: Promise<void>;
   timeoutMs: number;
   onLateError?: (error: unknown) => void;
-}
-
-function isModelAvailableForRuntimeProvider(
-  modelId: string,
-  models: readonly AgentModelDefinition[],
-): boolean {
-  return models.some((model) => model.id === modelId);
 }
 
 export { AGENT_LIFECYCLE_STATUSES, type AgentLifecycleStatus };
@@ -362,6 +355,7 @@ export class AgentManager {
   private readonly launchConfig: AgentLaunchConfigController;
   private readonly metadata: AgentMetadataController;
   private readonly providers: AgentProviderController;
+  private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
   private readonly timeline: AgentTimelineController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
@@ -415,6 +409,14 @@ export class AgentManager {
         this.agentsAwaitingInitialSnapshotPersist.has(agentId),
       persistSnapshot: (agent, persistOptions) => this.persistSnapshot(agent, persistOptions),
       registry: this.registry,
+    });
+    this.runtimeConfiguration = new AgentRuntimeConfigurationController({
+      emitState: (agent) => this.emitState(agent),
+      providers: this.providers,
+      reloadAgentSession: async (agentId, overrides) => {
+        await this.reloadAgentSession(agentId, overrides);
+      },
+      touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
     });
     this.archive = new AgentArchiveController({
       archiveNativeSessionBestEffort: (provider, persistence) =>
@@ -932,16 +934,7 @@ export class AgentManager {
 
   async setAgentMode(agentId: string, modeId: string): Promise<void> {
     const agent = this.requireSessionAgent(agentId);
-    await agent.session.setMode(modeId);
-    const currentMode = (await agent.session.getCurrentMode()) ?? modeId;
-    agent.config.modeId = currentMode ?? undefined;
-    agent.currentModeId = currentMode;
-    // Update runtimeInfo to reflect the new mode
-    if (agent.runtimeInfo) {
-      agent.runtimeInfo = { ...agent.runtimeInfo, modeId: currentMode };
-    }
-    this.touchUpdatedAt(agent);
-    this.emitState(agent);
+    await this.runtimeConfiguration.setMode(agent, modeId);
   }
 
   async setAgentModel(
@@ -950,88 +943,17 @@ export class AgentManager {
     options?: { runtimeProvider?: AgentProvider | string | null },
   ): Promise<void> {
     const agent = this.requireSessionAgent(agentId);
-    const normalizedModelId =
-      typeof modelId === "string" && modelId.trim().length > 0 ? modelId : null;
-    const currentRuntimeProvider =
-      agent.runtimeInfo?.provider ?? agent.config.runtimeProvider ?? agent.provider;
-    const requestedRuntimeProvider =
-      typeof options?.runtimeProvider === "string" && options.runtimeProvider.trim().length > 0
-        ? options.runtimeProvider.trim()
-        : currentRuntimeProvider;
-
-    if (requestedRuntimeProvider !== currentRuntimeProvider) {
-      this.providers.requireEnabledProvider(requestedRuntimeProvider);
-      if (normalizedModelId) {
-        const client = this.providers.requireClient(requestedRuntimeProvider);
-        const availableModels = await client.listModels({ cwd: agent.config.cwd, force: false });
-        if (!isModelAvailableForRuntimeProvider(normalizedModelId, availableModels)) {
-          throw new Error(
-            `Model '${normalizedModelId}' is not available for runtime provider '${requestedRuntimeProvider}'`,
-          );
-        }
-      }
-      await this.reloadAgentSession(agentId, {
-        model: normalizedModelId ?? undefined,
-        runtimeProvider: requestedRuntimeProvider,
-      });
-      return;
-    }
-
-    if (normalizedModelId) {
-      const client = this.providers.requireClient(currentRuntimeProvider);
-      const availableModels = await client.listModels({ cwd: agent.config.cwd, force: false });
-      if (!isModelAvailableForRuntimeProvider(normalizedModelId, availableModels)) {
-        throw new Error(
-          `Model '${normalizedModelId}' is not available for runtime provider '${currentRuntimeProvider}'`,
-        );
-      }
-    }
-
-    if (agent.session.setModel) {
-      await agent.session.setModel(normalizedModelId);
-    }
-
-    agent.config.model = normalizedModelId ?? undefined;
-    if (agent.runtimeInfo) {
-      agent.runtimeInfo = { ...agent.runtimeInfo, model: normalizedModelId };
-    }
-    this.touchUpdatedAt(agent);
-    this.emitState(agent);
+    await this.runtimeConfiguration.setModel(agent, modelId, options);
   }
 
   async setAgentThinkingOption(agentId: string, thinkingOptionId: string | null): Promise<void> {
     const agent = this.requireSessionAgent(agentId);
-    const normalizedThinkingOptionId =
-      typeof thinkingOptionId === "string" && thinkingOptionId.trim().length > 0
-        ? thinkingOptionId
-        : null;
-
-    if (agent.session.setThinkingOption) {
-      await agent.session.setThinkingOption(normalizedThinkingOptionId);
-    }
-
-    agent.config.thinkingOptionId = normalizedThinkingOptionId ?? undefined;
-    if (agent.runtimeInfo) {
-      agent.runtimeInfo = {
-        ...agent.runtimeInfo,
-        thinkingOptionId: normalizedThinkingOptionId,
-      };
-    }
-    this.touchUpdatedAt(agent);
-    this.emitState(agent);
+    await this.runtimeConfiguration.setThinkingOption(agent, thinkingOptionId);
   }
 
   async setAgentFeature(agentId: string, featureId: string, value: unknown): Promise<void> {
     const agent = this.requireAgent(agentId);
-
-    if (!agent.session.setFeature) {
-      throw new Error("Agent session does not support setting features");
-    }
-
-    await agent.session.setFeature(featureId, value);
-    agent.config.featureValues = { ...agent.config.featureValues, [featureId]: value };
-    this.touchUpdatedAt(agent);
-    this.emitState(agent);
+    await this.runtimeConfiguration.setFeature(agent, featureId, value);
   }
 
   async setTitle(agentId: string, title: string): Promise<void> {
