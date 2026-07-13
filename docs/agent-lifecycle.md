@@ -31,7 +31,8 @@ Archive is a **soft delete**: the agent record stays on disk with `archivedAt` s
 
 `create_agent_request` can opt an agent into `autoArchive`. In that mode the daemon archives the agent after the first terminal turn event (`turn_completed`, `turn_failed`, or `turn_canceled`). If the same request created a ChisaCode worktree through its `worktree` field, auto-archive archives that worktree too, which removes the agent records inside the worktree.
 
-Archiving runs through `AgentManager.archiveAgent` (`packages/server/src/server/agent/agent-manager.ts`):
+Archiving enters through `AgentManager.archiveAgent` and is orchestrated by `AgentArchiveController`
+(`packages/server/src/server/agent/agent-archive-controller.ts`):
 
 1. Snapshot the current session into the registry
 2. Set `archivedAt` and normalize `lastStatus` away from `running`/`initializing`

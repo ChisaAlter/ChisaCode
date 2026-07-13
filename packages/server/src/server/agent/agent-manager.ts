@@ -4,7 +4,6 @@ import {
   type AgentLifecycleStatus,
 } from "@chisacode/protocol/agent-lifecycle";
 import {
-  isCascadingAgentRelation,
   labelsForAgentRelation,
   readAgentRelation,
   type AgentRelation,
@@ -41,7 +40,6 @@ import {
   type ListPersistedAgentsOptions,
   type PersistedAgentDescriptor,
 } from "./agent-sdk-types.js";
-import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import type { AgentStorage, StoredAgentRecord, StoredAgentTitleSource } from "./agent-storage.js";
 import type {
   AgentTimelineFetchOptions,
@@ -71,20 +69,10 @@ import {
   type GenerativeUiQueuedAction,
 } from "./generative-ui-action-queue.js";
 import { AgentManagerEventBus } from "./agent-manager-event-bus.js";
+import { AgentArchiveController, type AgentArchivedCallback } from "./agent-archive-controller.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
-const STORED_AGENT_CAPABILITIES: AgentCapabilityFlags = {
-  supportsStreaming: false,
-  supportsSessionPersistence: true,
-  supportsDynamicModes: false,
-  supportsMcpServers: false,
-  supportsReasoningStream: false,
-  supportsToolInvocations: true,
-  supportsRewindConversation: false,
-  supportsRewindFiles: false,
-  supportsRewindBoth: false,
-};
 
 type TimeoutResult = "completed" | "timed_out";
 
@@ -92,31 +80,6 @@ interface TimeoutOptions {
   operation: Promise<void>;
   timeoutMs: number;
   onLateError?: (error: unknown) => void;
-}
-
-function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
-  const config: AgentSessionConfig = {
-    provider: record.provider,
-    cwd: record.cwd,
-  };
-  if (!record.config) {
-    return config;
-  }
-  if (record.config.runtimeProvider != null) config.runtimeProvider = record.config.runtimeProvider;
-  if (record.config.modeId != null) config.modeId = record.config.modeId;
-  if (record.config.model != null) config.model = record.config.model;
-  if (record.config.thinkingOptionId != null) {
-    config.thinkingOptionId = record.config.thinkingOptionId;
-  }
-  if (record.config.featureValues != null) {
-    config.featureValues = record.config.featureValues;
-  }
-  if (record.config.extra != null) config.extra = record.config.extra;
-  if (record.config.systemPrompt != null) {
-    config.systemPrompt = record.config.systemPrompt;
-  }
-  if (record.config.mcpServers != null) config.mcpServers = record.config.mcpServers;
-  return config;
 }
 
 function isModelAvailableForRuntimeProvider(
@@ -139,6 +102,7 @@ export type {
   ImportablePersistedAgentQueryOptions,
   ProviderAvailability,
 } from "./agent-provider-controller.js";
+export type { AgentArchivedCallback } from "./agent-archive-controller.js";
 
 export type AgentManagerEvent =
   | { type: "agent_state"; agent: ManagedAgent }
@@ -168,8 +132,6 @@ export type AgentAttentionCallback = (params: {
   provider: AgentProvider;
   reason: "finished" | "error" | "permission";
 }) => void;
-
-export type AgentArchivedCallback = (agentId: string) => Promise<void> | void;
 
 interface AgentManagerRescueTimeouts {
   reloadSessionCloseMs?: number;
@@ -395,6 +357,7 @@ function validateAgentId(agentId: string, source: string): string {
 
 export class AgentManager {
   private readonly agents = new Map<string, ActiveManagedAgent>();
+  private readonly archive: AgentArchiveController;
   private readonly launchConfig: AgentLaunchConfigController;
   private readonly providers: AgentProviderController;
   private readonly timeline: AgentTimelineController;
@@ -409,7 +372,6 @@ export class AgentManager {
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private readonly generativeUiActionQueue: GenerativeUiActionQueue;
   private onAgentAttention?: AgentAttentionCallback;
-  private onAgentArchived?: AgentArchivedCallback;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private readonly usageStore?: UsageStore;
@@ -443,6 +405,17 @@ export class AgentManager {
       durableStore: options.durableTimelineStore,
       logger: this.logger,
       trackBackgroundTask: (task) => this.trackBackgroundTask(task),
+    });
+    this.archive = new AgentArchiveController({
+      archiveNativeSessionBestEffort: (provider, persistence) =>
+        this.providers.archiveNativeSessionBestEffort(provider, persistence),
+      closeAgent: (agentId) => this.closeAgent(agentId),
+      dispatchAgentState: (agent) => this.dispatch({ type: "agent_state", agent }),
+      getAgent: (agentId) => this.agents.get(agentId) ?? null,
+      logger: this.logger,
+      notifyAgentState: (agentId) => this.notifyAgentState(agentId),
+      persistSnapshot: (agent, persistOptions) => this.persistSnapshot(agent, persistOptions),
+      registry: this.registry,
     });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -541,7 +514,7 @@ export class AgentManager {
   }
 
   setAgentArchivedCallback(callback: AgentArchivedCallback): void {
-    this.onAgentArchived = callback;
+    this.archive.setArchivedCallback(callback);
   }
 
   setMcpBaseUrl(url: string | null): void {
@@ -956,120 +929,7 @@ export class AgentManager {
 
   async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
     const agent = this.requireAgent(agentId);
-    if (!this.registry) {
-      throw new Error("Agent storage is not configured");
-    }
-
-    await this.registry.applySnapshot(agent, {
-      internal: agent.internal,
-    });
-    const stored = await this.registry.get(agentId);
-    if (!stored) {
-      throw new Error(`Agent ${agentId} not found in storage after snapshot`);
-    }
-
-    const { archivedAt } = await this.markRecordArchived(stored);
-    agent.updatedAt = new Date(archivedAt);
-    await this.closeAgent(agentId);
-
-    await this.cascadeArchiveChildren(agentId);
-
-    return { archivedAt };
-  }
-
-  // Only true subagent/team-slot relations are owned by the parent lifecycle.
-  // Legacy records with only a parent label still derive a subagent relation.
-  private async cascadeArchiveChildren(parentAgentId: string): Promise<void> {
-    const registry = this.registry;
-    if (!registry) {
-      return;
-    }
-    const records = await registry.list();
-    for (const record of records) {
-      if (record.archivedAt) {
-        continue;
-      }
-      const relation = readAgentRelation(record.labels, record.relation);
-      if (relation?.parentAgentId !== parentAgentId || !isCascadingAgentRelation(relation)) {
-        continue;
-      }
-      if (this.agents.has(record.id)) {
-        await this.archiveAgent(record.id);
-      } else {
-        await this.markRecordArchived(record);
-        await this.cascadeArchiveChildren(record.id);
-      }
-    }
-  }
-
-  private async markRecordArchived(record: StoredAgentRecord): Promise<ArchivedStoredAgentRecord> {
-    const registry = this.requireRegistry();
-    const archivedAt = new Date().toISOString();
-    const archivedRecord = buildArchivedAgentRecord(record, { archivedAt, updatedAt: archivedAt });
-
-    await registry.upsert(archivedRecord);
-
-    await this.archiveNativeSessionBestEffort(record.provider, record.persistence);
-
-    if (this.agents.has(record.id)) {
-      this.notifyAgentState(record.id);
-    } else if (!archivedRecord.internal) {
-      this.dispatchArchivedStoredAgent(archivedRecord);
-    }
-
-    await this.fireAgentArchived(record.id);
-
-    return archivedRecord;
-  }
-
-  private async fireAgentArchived(agentId: string): Promise<void> {
-    const callback = this.onAgentArchived;
-    if (!callback) {
-      return;
-    }
-    try {
-      await callback(agentId);
-    } catch (error) {
-      this.logger.warn({ err: error, agentId }, "onAgentArchived callback failed");
-    }
-  }
-
-  private dispatchArchivedStoredAgent(record: StoredAgentRecord): void {
-    const updatedAt = new Date(record.updatedAt);
-    this.dispatch({
-      type: "agent_state",
-      agent: {
-        id: record.id,
-        provider: record.provider,
-        cwd: record.cwd,
-        session: null,
-        capabilities: STORED_AGENT_CAPABILITIES,
-        config: buildStoredAgentConfig(record),
-        runtimeInfo: undefined,
-        lifecycle: "closed",
-        createdAt: new Date(record.createdAt),
-        updatedAt,
-        availableModes: [],
-        features: record.features,
-        currentModeId: record.lastModeId ?? null,
-        pendingPermissions: new Map(),
-        bufferedPermissionResolutions: new Map(),
-        inFlightPermissionResponses: new Set(),
-        pendingReplacement: false,
-        activeForegroundTurnId: null,
-        foregroundTurnWaiters: new Set(),
-        finalizedForegroundTurnIds: new Set(),
-        unsubscribeSession: null,
-        persistence: record.persistence ?? null,
-        historyPrimed: true,
-        lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
-        lastUsage: undefined,
-        lastError: record.lastError ?? undefined,
-        attention: { requiresAttention: false },
-        internal: record.internal,
-        labels: record.labels,
-      },
-    });
+    return await this.archive.archiveAgent(agent);
   }
 
   async setAgentMode(agentId: string, modeId: string): Promise<void> {
@@ -1236,66 +1096,15 @@ export class AgentManager {
   }
 
   async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
-    const registry = this.requireRegistry();
-    const liveAgent = this.getAgent(agentId);
-    if (liveAgent) {
-      await this.persistSnapshot(liveAgent, {
-        internal: liveAgent.internal,
-      });
-    }
-
-    const record = await registry.get(agentId);
-    if (!record) {
-      throw new Error(`Agent not found: ${agentId}`);
-    }
-
-    const nextRecord = buildArchivedAgentRecord(record, { archivedAt });
-    await registry.upsert(nextRecord);
-
-    await this.archiveNativeSessionBestEffort(record.provider, record.persistence);
-
-    if (this.agents.has(agentId)) {
-      this.notifyAgentState(agentId);
-    } else if (!nextRecord.internal) {
-      this.dispatchArchivedStoredAgent(nextRecord);
-    }
-
-    await this.fireAgentArchived(agentId);
-
-    return nextRecord;
+    return await this.archive.archiveSnapshot(agentId, archivedAt);
   }
 
   async unarchiveSnapshot(agentId: string): Promise<boolean> {
-    const registry = this.requireRegistry();
-    const record = await registry.get(agentId);
-    if (!record || !record.archivedAt) {
-      return false;
-    }
-
-    await registry.upsert({
-      ...record,
-      archivedAt: null,
-    });
-
-    if (this.getAgent(agentId)) {
-      this.notifyAgentState(agentId);
-    }
-    return true;
+    return await this.archive.unarchiveSnapshot(agentId);
   }
 
   async unarchiveSnapshotByHandle(handle: AgentPersistenceHandle): Promise<void> {
-    const registry = this.requireRegistry();
-    const records = await registry.list();
-    const matched = records.find(
-      (record) =>
-        record.persistence?.provider === handle.provider &&
-        record.persistence?.sessionId === handle.sessionId,
-    );
-    if (!matched) {
-      return;
-    }
-
-    await this.unarchiveSnapshot(matched.id);
+    await this.archive.unarchiveSnapshotByHandle(handle);
   }
 
   async updateAgentMetadata(
@@ -3288,13 +3097,6 @@ export class AgentManager {
 
   private dispatch(event: AgentManagerEvent): void {
     this.eventBus.dispatch(event);
-  }
-
-  async archiveNativeSessionBestEffort(
-    provider: AgentProvider,
-    persistence: AgentPersistenceHandle | null | undefined,
-  ): Promise<void> {
-    await this.providers.archiveNativeSessionBestEffort(provider, persistence);
   }
 
   private requireAgent(id: string): ActiveManagedAgent {
