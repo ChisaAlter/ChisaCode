@@ -77,6 +77,7 @@ import {
   GenerativeUiActionQueue,
   type GenerativeUiQueuedAction,
 } from "./generative-ui-action-queue.js";
+import { AgentManagerEventBus } from "./agent-manager-event-bus.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
@@ -390,11 +391,6 @@ function attachPersistenceCwd(
   };
 }
 
-interface SubscriptionRecord {
-  callback: AgentSubscriber;
-  agentId: string | null;
-}
-
 const BUSY_STATUSES: Set<AgentLifecycleStatus> = new Set(["initializing", "running"]);
 const AgentIdSchema = z.string().uuid();
 
@@ -464,7 +460,7 @@ export class AgentManager {
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
   private readonly foregroundRuns = new ForegroundRunState();
-  private readonly subscribers = new Set<SubscriptionRecord>();
+  private readonly eventBus: AgentManagerEventBus;
   private readonly idFactory: () => string;
   private readonly registry?: AgentStorage;
   private readonly durableTimelineStore?: AgentTimelineStore;
@@ -498,6 +494,12 @@ export class AgentManager {
     this.resolveMcpServers = options.resolveMcpServers;
     this.usageStore = options.usageStore;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
+    this.eventBus = new AgentManagerEventBus({
+      logger: this.logger,
+      validateAgentId,
+      getAgent: (agentId) => this.agents.get(agentId) ?? null,
+      listAgents: () => this.agents.values(),
+    });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
         options.rescueTimeouts?.reloadSessionCloseMs ?? RELOAD_SESSION_CLOSE_TIMEOUT_MS,
@@ -710,40 +712,7 @@ export class AgentManager {
   }
 
   subscribe(callback: AgentSubscriber, options?: SubscribeOptions): () => void {
-    const targetAgentId =
-      options?.agentId == null ? null : validateAgentId(options.agentId, "subscribe");
-    const record: SubscriptionRecord = {
-      callback,
-      agentId: targetAgentId,
-    };
-    this.subscribers.add(record);
-
-    if (options?.replayState !== false) {
-      if (record.agentId) {
-        const agent = this.agents.get(record.agentId);
-        if (agent) {
-          callback({
-            type: "agent_state",
-            agent: { ...agent },
-          });
-        }
-      } else {
-        // For global subscribers, skip internal agents during replay
-        for (const agent of this.agents.values()) {
-          if (agent.internal) {
-            continue;
-          }
-          callback({
-            type: "agent_state",
-            agent: { ...agent },
-          });
-        }
-      }
-    }
-
-    return () => {
-      this.subscribers.delete(record);
-    };
+    return this.eventBus.subscribe(callback, options);
   }
 
   listAgents(): ManagedAgent[] {
@@ -3762,35 +3731,7 @@ export class AgentManager {
   }
 
   private dispatch(event: AgentManagerEvent): void {
-    for (const subscriber of this.subscribers) {
-      if (
-        subscriber.agentId &&
-        event.type === "agent_stream" &&
-        subscriber.agentId !== event.agentId
-      ) {
-        continue;
-      }
-      if (
-        subscriber.agentId &&
-        event.type === "agent_state" &&
-        subscriber.agentId !== event.agent.id
-      ) {
-        continue;
-      }
-      // Skip internal agents for global subscribers (those without a specific agentId)
-      if (!subscriber.agentId) {
-        if (event.type === "agent_state" && event.agent.internal) {
-          continue;
-        }
-        if (event.type === "agent_stream") {
-          const agent = this.agents.get(event.agentId);
-          if (agent?.internal) {
-            continue;
-          }
-        }
-      }
-      subscriber.callback(event);
-    }
+    this.eventBus.dispatch(event);
   }
 
   private async normalizeConfig(config: AgentSessionConfig): Promise<AgentSessionConfig> {

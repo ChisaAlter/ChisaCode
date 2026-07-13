@@ -3994,6 +3994,13 @@ test("subscribe error isolation: throwing subscriber does not break event flow",
     cwd: workdir,
   });
 
+  manager.subscribe(
+    () => {
+      throw new Error("subscriber failed");
+    },
+    { agentId: snapshot.id, replayState: false },
+  );
+
   const receivedEvents: string[] = [];
   const settled = new Promise<void>((resolve) => {
     manager.subscribe(
