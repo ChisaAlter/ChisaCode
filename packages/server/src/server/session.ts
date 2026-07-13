@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
-import { basename } from "path";
 import { z } from "zod/v3";
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
@@ -66,12 +65,9 @@ import {
   checkoutLiteFromGitSnapshot,
   normalizeWorkspaceId as normalizePersistedWorkspaceId,
   deriveProjectGroupingName,
-  classifyDirectoryForProjectMembership,
   deriveWorkspaceDisplayName,
 } from "./workspace-registry-model.js";
 import {
-  createPersistedProjectRecord,
-  createPersistedWorkspaceRecord,
   resolveProjectDisplayName,
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
@@ -81,7 +77,6 @@ import {
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import { PushTokenStore } from "./push/token-store.js";
 import { buildMetadataPrompt } from "../utils/build-metadata-prompt.js";
-import { archivePersistedWorkspaceRecord } from "./workspace-archive-service.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import type { ScriptRouteStore } from "./script-proxy.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
@@ -157,6 +152,7 @@ import {
   emitWorkspaceScriptStatusUpdate as emitWorkspaceScriptStatusUpdateCore,
 } from "./workspace-core.js";
 import { WorkspaceGitObserverController } from "./workspace-git-observer-controller.js";
+import { WorkspaceRecordController } from "./workspace-record-controller.js";
 import {
   WorkspaceUpdateController,
   type WorkspaceUpdatesSubscriptionState,
@@ -319,6 +315,7 @@ export class Session {
   private readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly workspaceGitObserverController: WorkspaceGitObserverController;
+  private readonly workspaceRecordController: WorkspaceRecordController;
   private readonly workspaceUpdateController: WorkspaceUpdateController;
   private readonly sttLanguage: string;
   private readonly serverId: string | undefined;
@@ -472,6 +469,15 @@ export class Session {
       listAgentPayloads: () => this.listAgentPayloads(),
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
       buildWorkspaceDescriptor: (input) => this.buildWorkspaceDescriptor(input),
+    });
+    this.workspaceRecordController = new WorkspaceRecordController({
+      projectRegistry: this.projectRegistry,
+      workspaceRegistry: this.workspaceRegistry,
+      workspaceGitService: this.workspaceGitService,
+      resolveRegisteredWorkspaceIdForCwd: (cwd, workspaces) =>
+        this.resolveRegisteredWorkspaceIdForCwd(cwd, workspaces),
+      removeWorkspaceGitSubscription: (cwd) => this.removeWorkspaceGitSubscription(cwd),
+      removeWorkspaceScriptRuntime: (cwd) => this.scriptRuntimeStore?.removeForWorkspace(cwd),
     });
     this.workspaceUpdateController = new WorkspaceUpdateController({
       sessionLogger: this.sessionLogger,
@@ -946,35 +952,8 @@ export class Session {
     cwd: string,
     options?: { refreshGit?: boolean },
   ): Promise<PersistedWorkspaceRecord | null> {
-    const normalizedCwd = await this.resolveWorkspaceDirectory(cwd, options);
-    const workspaces = await this.workspaceRegistry.list();
-    const workspaceId = this.resolveRegisteredWorkspaceIdForCwd(normalizedCwd, workspaces);
-    return workspaces.find((workspace) => workspace.workspaceId === workspaceId) ?? null;
+    return this.workspaceRecordController.findWorkspaceByDirectory(cwd, options);
   }
-
-  private async findExactWorkspaceByDirectory(
-    cwd: string,
-    options?: { refreshGit?: boolean },
-  ): Promise<PersistedWorkspaceRecord | null> {
-    const normalizedCwd = await this.resolveWorkspaceDirectory(cwd, options);
-    const workspaces = await this.workspaceRegistry.list();
-    return workspaces.find((workspace) => workspace.cwd === normalizedCwd) ?? null;
-  }
-
-  private async resolveWorkspaceDirectory(
-    cwd: string,
-    options?: { refreshGit?: boolean },
-  ): Promise<string> {
-    const normalizedCwd = normalizePersistedWorkspaceId(cwd);
-    if (options?.refreshGit === false) {
-      const snapshot = this.workspaceGitService.peekSnapshot(normalizedCwd);
-      return normalizePersistedWorkspaceId(snapshot?.git.repoRoot ?? normalizedCwd);
-    }
-
-    const checkout = await this.workspaceGitService.getCheckout(normalizedCwd);
-    return normalizePersistedWorkspaceId(checkout.worktreeRoot ?? normalizedCwd);
-  }
-
   private async buildProjectPlacementForWorkspace(
     workspace: PersistedWorkspaceRecord,
     projectRecord?: PersistedProjectRecord | null,
@@ -1901,167 +1880,8 @@ export class Session {
   }
 
   private async findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord> {
-    const inputCwd = normalizePersistedWorkspaceId(cwd);
-    const normalizedCwd = await this.resolveWorkspaceDirectory(cwd);
-    const existingWorkspace = await this.findExactWorkspaceByDirectory(normalizedCwd, {
-      refreshGit: false,
-    });
-    if (existingWorkspace) {
-      if (existingWorkspace.archivedAt && inputCwd !== normalizedCwd) {
-        const timestamp = new Date().toISOString();
-        const displayName = basename(inputCwd) || inputCwd;
-        const projectRecord = createPersistedProjectRecord({
-          projectId: inputCwd,
-          rootPath: inputCwd,
-          kind: "non_git",
-          displayName,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        });
-        await this.projectRegistry.upsert(projectRecord);
-        const workspaceRecord = createPersistedWorkspaceRecord({
-          workspaceId: inputCwd,
-          projectId: projectRecord.projectId,
-          cwd: inputCwd,
-          kind: "directory",
-          displayName,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        });
-        await this.workspaceRegistry.upsert(workspaceRecord);
-        return workspaceRecord;
-      }
-      return this.reclassifyOrUnarchiveWorkspaceForDirectory({
-        workspace: existingWorkspace,
-        project: await this.projectRegistry.get(existingWorkspace.projectId),
-        cwd: normalizedCwd,
-      });
-    }
-
-    return this.createWorkspaceForDirectory(normalizedCwd);
+    return this.workspaceRecordController.findOrCreateWorkspaceForDirectory(cwd);
   }
-
-  private async createWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord> {
-    const checkout = await this.workspaceGitService.getCheckout(cwd);
-    const membership = classifyDirectoryForProjectMembership({ cwd, checkout });
-    const timestamp = new Date().toISOString();
-
-    const projectRecord = await this.resolveProjectRecordForPlacement({
-      membership,
-      timestamp,
-    });
-    await this.projectRegistry.upsert(projectRecord);
-
-    const workspaceRecord = createPersistedWorkspaceRecord({
-      workspaceId: membership.workspaceId,
-      projectId: projectRecord.projectId,
-      cwd,
-      kind: membership.workspaceKind,
-      displayName: membership.workspaceDisplayName,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-    await this.workspaceRegistry.upsert(workspaceRecord);
-    return workspaceRecord;
-  }
-
-  private async reclassifyOrUnarchiveWorkspaceForDirectory(input: {
-    workspace: PersistedWorkspaceRecord;
-    project: PersistedProjectRecord | null;
-    cwd: string;
-  }): Promise<PersistedWorkspaceRecord> {
-    const checkout = await this.workspaceGitService.getCheckout(input.cwd);
-    const membership = classifyDirectoryForProjectMembership({ cwd: input.cwd, checkout });
-    const timestamp = new Date().toISOString();
-    const projectRecord = await this.resolveProjectRecordForPlacement({
-      membership,
-      timestamp,
-    });
-    const projectId = projectRecord.projectId;
-    const kind = membership.workspaceKind;
-    const displayName = membership.workspaceDisplayName;
-
-    if (
-      input.workspace.workspaceId === membership.workspaceId &&
-      input.workspace.projectId === projectId &&
-      input.workspace.kind === kind &&
-      input.workspace.displayName === displayName
-    ) {
-      return this.ensureWorkspaceRecordUnarchived(input.workspace);
-    }
-
-    await this.projectRegistry.upsert(projectRecord);
-
-    const nextWorkspace = {
-      ...input.workspace,
-      workspaceId: membership.workspaceId,
-      projectId,
-      cwd: input.cwd,
-      kind,
-      displayName,
-      archivedAt: null,
-      updatedAt: timestamp,
-    };
-    await this.workspaceRegistry.upsert(nextWorkspace);
-    return nextWorkspace;
-  }
-
-  private async resolveProjectRecordForPlacement(input: {
-    membership: ReturnType<typeof classifyDirectoryForProjectMembership>;
-    timestamp: string;
-  }): Promise<PersistedProjectRecord> {
-    const rootPath = input.membership.projectRootPath;
-    const kind = input.membership.projectKind;
-    const projects = await this.projectRegistry.list();
-    const existingProject =
-      projects.find((project) => !project.archivedAt && project.rootPath === rootPath) ??
-      projects.find((project) => project.rootPath === rootPath) ??
-      null;
-
-    if (!existingProject) {
-      return createPersistedProjectRecord({
-        projectId: input.membership.projectKey,
-        rootPath,
-        kind,
-        displayName: input.membership.projectName,
-        createdAt: input.timestamp,
-        updatedAt: input.timestamp,
-      });
-    }
-
-    return {
-      ...existingProject,
-      rootPath,
-      kind,
-      archivedAt: null,
-      updatedAt: input.timestamp,
-    };
-  }
-
-  private async ensureWorkspaceRecordUnarchived(
-    workspace: PersistedWorkspaceRecord,
-  ): Promise<PersistedWorkspaceRecord> {
-    const project = await this.projectRegistry.get(workspace.projectId);
-    if (!workspace.archivedAt && (!project || !project.archivedAt)) {
-      return workspace;
-    }
-
-    const timestamp = new Date().toISOString();
-    let unarchivedWorkspace = workspace;
-    if (workspace.archivedAt) {
-      unarchivedWorkspace = { ...workspace, archivedAt: null, updatedAt: timestamp };
-      await this.workspaceRegistry.upsert(unarchivedWorkspace);
-    }
-    if (project?.archivedAt) {
-      await this.projectRegistry.upsert({
-        ...project,
-        archivedAt: null,
-        updatedAt: timestamp,
-      });
-    }
-    return unarchivedWorkspace;
-  }
-
   private async createChisaCodeWorktree(
     input: CreateChisaCodeWorktreeInput,
     options?: {
@@ -2090,19 +1910,7 @@ export class Session {
   }
 
   private async archiveWorkspaceRecord(workspaceId: string, archivedAt?: string): Promise<void> {
-    const existingWorkspace = await archivePersistedWorkspaceRecord({
-      workspaceId,
-      archivedAt,
-      workspaceRegistry: this.workspaceRegistry,
-      projectRegistry: this.projectRegistry,
-    });
-    if (!existingWorkspace) {
-      this.removeWorkspaceGitSubscription(workspaceId);
-      return;
-    }
-
-    this.scriptRuntimeStore?.removeForWorkspace(existingWorkspace.cwd);
-    this.removeWorkspaceGitSubscription(existingWorkspace.cwd);
+    await this.workspaceRecordController.archiveWorkspaceRecord(workspaceId, archivedAt);
   }
 
   async reconcileAndEmitWorkspaceUpdates(): Promise<void> {
