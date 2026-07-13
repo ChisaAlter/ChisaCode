@@ -2,13 +2,13 @@
 
 ## 结论与评分
 
-| 维度     | 当前评分 | 主要证据                                                                                                 | 距离 10 分的核心差距                                                                               |
-| -------- | -------: | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 架构设计 |      8.7 | dependency-cruiser 检查 807 个模块、1888 条依赖，0 违规；Session 已按领域拆分                            | `daemon-client.ts`、provider adapters、`workspace-screen.tsx`、`messages.ts` 仍是 4k-5k 行责任中心 |
-| 安全设计 |      9.1 | relay E2EE 单调 nonce；server socket Ed25519 认证；本轮增加签发时间和 Durable Object 持久化 nonce 防重放 | AI SDK/Expo/EAS 工具链仍有上游通告；relay 认证升级需要持续兼容性发布管理                           |
-| 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop       | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                            |
-| 代码质量 |      8.5 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；本轮清除未声明依赖和失效 import           | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合    |
-| 综合     |  **8.9** | 核心安全、主要产品域 parity 与依赖边界均有代码级实现和精确验证                                           | 继续提升需要多批次结构迁移，不适合一次性重写                                                       |
+| 维度     | 当前评分 | 主要证据                                                                                                 | 距离 10 分的核心差距                                                                             |
+| -------- | -------: | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 架构设计 |      8.8 | dependency-cruiser 0 违规；Session 已按领域拆分；DaemonClient terminal 生命周期已独立，核心降至 4145 行  | `daemon-client.ts`、provider adapters、`workspace-screen.tsx`、`messages.ts` 仍是 4k+ 行责任中心 |
+| 安全设计 |      9.1 | relay E2EE 单调 nonce；server socket Ed25519 认证；本轮增加签发时间和 Durable Object 持久化 nonce 防重放 | AI SDK/Expo/EAS 工具链仍有上游通告；relay 认证升级需要持续兼容性发布管理                         |
+| 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop       | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                          |
+| 代码质量 |      8.6 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；新增领域客户端专用契约测试                | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合  |
+| 综合     |  **8.9** | 核心安全、主要产品域 parity 与依赖边界均有代码级实现和精确验证                                           | 继续提升需要多批次结构迁移，不适合一次性重写                                                     |
 
 ## 本轮已修
 
@@ -34,6 +34,7 @@
 - 将一条依赖微任务时序的测试断言改为 `vi.waitFor`，消除调度竞态。
 - 2026-07-13：MCP 新增完整 Chat/Loop 一等工具；工具注册拆到独立领域模块，Chat WebSocket 与 MCP 复用同一投递/fan-out 命令，避免 surface 语义漂移。
 - 2026-07-13：agent-scoped Chat 工具锁定 caller author identity，Loop 启动复用既有 scoped cwd resolver；top-level MCP 仍需显式 author/cwd。
+- 2026-07-13：DaemonClient 的 terminal 目录订阅、RPC、stream slot 与 binary 路由提取到独立领域客户端；核心只保留 façade、连接生命周期通知和 metrics 分类，公开类型兼容不变。
 
 ## 产品能力矩阵
 
@@ -51,9 +52,9 @@
 
 ## 最高优先级剩余项
 
-1. **P1 依赖安全迁移**：`ai@5` 的 provider-utils 通告需要升级到 `ai@7`；Claude Agent SDK 安全修复要求 Zod 4。两者都属于运行时 major migration，必须各自做专项契约测试。
+1. **P1 依赖安全迁移（部分完成）**：server 已移除 `ai@5` 并迁移到独立 `@ai-sdk/mcp@2`；剩余 Claude SDK/Zod 与 Expo/EAS major 迁移继续按运行时专项契约验证，不与结构拆分混做。
 2. **P1 provider 文件拆分**：先删除或接线当前未使用的 `providers/base/`，再按事件路由、session、client、runtime 拆分 Codex/Claude/OpenCode，避免强行继承错误抽象。
-3. **P1 client/protocol 拆分**：按 RPC domain 拆 `daemon-client.ts` 和 `messages.ts`，保持 exports map 与 wire compatibility；先增加边界测试，再迁移。
+3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成文件传输、checkout、管理命令、automation、workspace 与 terminal 生命周期分域，核心降至 4145 行；继续拆 agent/voice/connection 领域，并按 RPC domain 拆 `messages.ts`。
 4. **P2 app 工作台拆分**：`workspace-screen.tsx` 按 navigation、pane orchestration、commands、persistence 拆分；保持 native/web/electron surface 测试分离。
 5. **P2 产品 parity（2026-07-13 完成）**：MCP 已补齐一等 chat/loop 工具，并复用现有 service、Chat mention fan-out 与 caller cwd/identity 安全边界。
 6. **P2 测试减债**：按包逐步降低 module mock、conditional skip、fixed wait、weak assertion、process.env mutation 基线，不再只维持 no-new-debt。
@@ -69,5 +70,6 @@
 - Relay Wrangler E2E：3 项通过
 - Relay、Protocol、Server 受影响包 typecheck 通过
 - 2026-07-13 MCP Chat/Loop 批次：server typecheck、7 个目标文件 lint、2 个精确 MCP 契约测试通过
+- 2026-07-13 Client terminal 批次：client typecheck/build、3 个目标文件 lint、3 个专用测试与 6 个既有 terminal 集成场景通过
 
 未在本地运行全仓测试或全量 Playwright/Maestro；按仓库规则只做改动对应的聚焦验证，普通开发不触发远端 CI。

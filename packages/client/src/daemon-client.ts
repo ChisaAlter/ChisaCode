@@ -7,7 +7,6 @@ import {
   AgentResumedStatusPayloadSchema,
   CheckoutRenameBranchResponseSchema,
   parseServerInfoStatusPayload,
-  RenameTerminalResponseSchema,
   RestartRequestedStatusPayloadSchema,
   ShutdownRequestedStatusPayloadSchema,
   SessionInboundMessageSchema,
@@ -81,13 +80,8 @@ import type {
   AgentMcpServersDeleteResponse,
   ManagedMcpServerConfig,
   AgentRewindResponseMessage,
-  ListTerminalsResponse,
-  CreateTerminalResponse,
-  SubscribeTerminalResponse,
   SubscribeTerminalRequest,
   CloseItemsResponse,
-  KillTerminalResponse,
-  CaptureTerminalResponse,
   TerminalInput,
   SessionInboundMessage,
   SessionOutboundMessage,
@@ -140,7 +134,17 @@ import {
   legacyExplorerFileToBytes,
   type FileReadResult,
 } from "./daemon-client-file-transfer.js";
-import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
+import {
+  TerminalClient,
+  type CaptureTerminalPayload,
+  type CreateTerminalPayload,
+  type KillTerminalPayload,
+  type ListTerminalsPayload,
+  type RenameTerminalInput,
+  type RenameTerminalResult,
+  type SubscribeTerminalPayload,
+  type TerminalStreamEvent,
+} from "./daemon-client-terminal-client.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 
@@ -192,7 +196,7 @@ export type {
   WebSocketLike,
 } from "./daemon-client-transport.js";
 
-export type { TerminalStreamEvent };
+export type { RenameTerminalInput, RenameTerminalResult, TerminalStreamEvent };
 
 export type ConnectionState =
   | { status: "idle" }
@@ -405,13 +409,7 @@ type DictationFinishAcceptedPayload = Extract<
   { type: "dictation_stream_finish_accepted" }
 >["payload"];
 type AgentPermissionResolvedPayload = AgentPermissionResolvedMessage["payload"];
-type ListTerminalsPayload = ListTerminalsResponse["payload"];
-type CreateTerminalPayload = CreateTerminalResponse["payload"];
-export type RenameTerminalResult = z.infer<typeof RenameTerminalResponseSchema>["payload"];
-type SubscribeTerminalPayload = SubscribeTerminalResponse["payload"];
 type CloseItemsPayload = CloseItemsResponse["payload"];
-type KillTerminalPayload = KillTerminalResponse["payload"];
-type CaptureTerminalPayload = CaptureTerminalResponse["payload"];
 type ChatCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "chat/create/response" }
@@ -687,11 +685,6 @@ export interface RenameBranchInput {
   branch: string;
   requestId?: string;
 }
-export interface RenameTerminalInput {
-  terminalId: string;
-  title: string;
-  requestId?: string;
-}
 type ListAvailableEditorsPayload = ListAvailableEditorsResponseMessage["payload"];
 type OpenInEditorPayload = OpenInEditorResponseMessage["payload"];
 type OpenProjectPayload = OpenProjectResponseMessage["payload"];
@@ -851,7 +844,6 @@ export class DaemonClient {
   private connectReject: ((error: Error) => void) | null = null;
   private lastErrorValue: string | null = null;
   private connectionState: ConnectionState = { status: "idle" };
-  private terminalDirectorySubscriptions = new Set<string>();
   private readonly checkoutCommands: CheckoutCommandClient;
   private readonly checkoutSubscriptions: CheckoutSubscriptionClient;
   private readonly configCommands: ConfigCommandClient;
@@ -859,7 +851,7 @@ export class DaemonClient {
   private readonly agentExtensionCommands: AgentExtensionCommandClient;
   private readonly automationCommands: AutomationCommandClient;
   private readonly workspaceCommands: WorkspaceCommandClient;
-  private readonly terminalStreams = new TerminalStreamRouter();
+  private readonly terminalClient: TerminalClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
   private pendingSendQueue: PendingSend[] = [];
@@ -897,6 +889,12 @@ export class DaemonClient {
     });
     this.workspaceCommands = new WorkspaceCommandClient({
       request: (params) => this.sendCorrelatedSessionRequest(params),
+    });
+    this.terminalClient = new TerminalClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+      isConnected: () => Boolean(this.transport && this.connectionState.status === "connected"),
+      sendMessage: (message) => this.sendSessionMessage(message),
+      sendBinaryFrame: (frame) => this.sendBinaryFrame(frame),
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
@@ -1174,7 +1172,7 @@ export class DaemonClient {
     this.clearWaiters(new Error("Daemon client closed"));
     this.rejectPendingSendQueue(new Error("Daemon client closed"));
     this.rejectLivenessProbe(new Error("Daemon client closed"));
-    this.terminalStreams.clearSlots();
+    this.terminalClient.clearStreamSlots();
     this.binaryFileTransfers.clearActiveTransfers();
     this.lastServerInfoMessage = null;
     if (this.runtimeMetricsInterval) {
@@ -1879,18 +1877,6 @@ export class DaemonClient {
       return null;
     }
     return { agent: payload.agent, project: payload.project ?? null };
-  }
-
-  private resubscribeTerminalDirectorySubscriptions(): void {
-    if (this.terminalDirectorySubscriptions.size === 0) {
-      return;
-    }
-    for (const cwd of this.terminalDirectorySubscriptions) {
-      this.sendSessionMessage({
-        type: "subscribe_terminals_request",
-        cwd,
-      });
-    }
   }
 
   // ============================================================================
@@ -3385,41 +3371,15 @@ export class DaemonClient {
   // ============================================================================
 
   subscribeTerminals(input: { cwd: string }): void {
-    this.terminalDirectorySubscriptions.add(input.cwd);
-    if (!this.transport || this.connectionState.status !== "connected") {
-      return;
-    }
-    this.sendSessionMessage({
-      type: "subscribe_terminals_request",
-      cwd: input.cwd,
-    });
+    this.terminalClient.subscribeDirectories(input);
   }
 
   unsubscribeTerminals(input: { cwd: string }): void {
-    this.terminalDirectorySubscriptions.delete(input.cwd);
-    if (!this.transport || this.connectionState.status !== "connected") {
-      return;
-    }
-    this.sendSessionMessage({
-      type: "unsubscribe_terminals_request",
-      cwd: input.cwd,
-    });
+    this.terminalClient.unsubscribeDirectories(input);
   }
 
   async listTerminals(cwd?: string, requestId?: string): Promise<ListTerminalsPayload> {
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "list_terminals_request",
-      ...(cwd === undefined ? {} : { cwd }),
-      requestId: resolvedRequestId,
-    });
-    return this.sendCorrelatedRequest({
-      requestId: resolvedRequestId,
-      message,
-      responseType: "list_terminals_response",
-      timeout: 10000,
-      options: { skipQueue: true },
-    });
+    return this.terminalClient.listTerminals(cwd, requestId);
   }
 
   async createTerminal(
@@ -3428,36 +3388,11 @@ export class DaemonClient {
     requestId?: string,
     options?: { agentId?: string; command?: string; args?: string[] },
   ): Promise<CreateTerminalPayload> {
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "create_terminal_request",
-      cwd,
-      name,
-      agentId: options?.agentId,
-      command: options?.command,
-      args: options?.args,
-      requestId: resolvedRequestId,
-    });
-    return this.sendCorrelatedRequest({
-      requestId: resolvedRequestId,
-      message,
-      responseType: "create_terminal_response",
-      timeout: 10000,
-      options: { skipQueue: true },
-    });
+    return this.terminalClient.createTerminal(cwd, name, requestId, options);
   }
 
   async renameTerminal(input: RenameTerminalInput): Promise<RenameTerminalResult> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: input.requestId,
-      message: {
-        type: "terminal.rename.request",
-        terminalId: input.terminalId,
-        title: input.title,
-      },
-      responseType: "terminal.rename.response",
-      timeout: 10000,
-    });
+    return this.terminalClient.renameTerminal(input);
   }
 
   async subscribeTerminal(
@@ -3466,64 +3401,19 @@ export class DaemonClient {
       | { restore?: SubscribeTerminalRequest["restore"]; requestId?: string }
       | string,
   ): Promise<SubscribeTerminalPayload> {
-    const restore = typeof optionsOrRequestId === "object" ? optionsOrRequestId.restore : undefined;
-    const requestId =
-      typeof optionsOrRequestId === "object" ? optionsOrRequestId.requestId : optionsOrRequestId;
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "subscribe_terminal_request",
-      terminalId,
-      requestId: resolvedRequestId,
-      ...(restore ? { restore } : {}),
-    });
-    const payload = await this.sendCorrelatedRequest({
-      requestId: resolvedRequestId,
-      message,
-      responseType: "subscribe_terminal_response",
-      timeout: 10000,
-      options: { skipQueue: true },
-    });
-    if (payload.error === null) {
-      this.terminalStreams.setSlot(terminalId, payload.slot);
-    }
-    return payload;
+    return this.terminalClient.subscribeTerminal(terminalId, optionsOrRequestId);
   }
 
   unsubscribeTerminal(terminalId: string): void {
-    this.terminalStreams.removeTerminal(terminalId);
-    this.sendSessionMessage({
-      type: "unsubscribe_terminal_request",
-      terminalId,
-    });
+    this.terminalClient.unsubscribeTerminal(terminalId);
   }
 
   sendTerminalInput(terminalId: string, message: TerminalInput["message"]): void {
-    const frame = this.terminalStreams.encodeInput(terminalId, message);
-    if (frame) {
-      this.sendBinaryFrame(frame);
-      return;
-    }
-    this.sendSessionMessage({
-      type: "terminal_input",
-      terminalId,
-      message,
-    });
+    this.terminalClient.sendInput(terminalId, message);
   }
 
   async killTerminal(terminalId: string, requestId?: string): Promise<KillTerminalPayload> {
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "kill_terminal_request",
-      terminalId,
-      requestId: resolvedRequestId,
-    });
-    return this.sendCorrelatedRequest({
-      requestId: resolvedRequestId,
-      message,
-      responseType: "kill_terminal_response",
-      timeout: 10000,
-      options: { skipQueue: true },
-    });
+    return this.terminalClient.killTerminal(terminalId, requestId);
   }
 
   async closeItems(
@@ -3551,22 +3441,7 @@ export class DaemonClient {
     options?: { start?: number; end?: number; stripAnsi?: boolean },
     requestId?: string,
   ): Promise<CaptureTerminalPayload> {
-    const resolvedRequestId = this.createRequestId(requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "capture_terminal_request",
-      terminalId,
-      ...(options?.start === undefined ? {} : { start: options.start }),
-      ...(options?.end === undefined ? {} : { end: options.end }),
-      ...(options?.stripAnsi === undefined ? {} : { stripAnsi: options.stripAnsi }),
-      requestId: resolvedRequestId,
-    });
-    return this.sendCorrelatedRequest({
-      requestId: resolvedRequestId,
-      message,
-      responseType: "capture_terminal_response",
-      timeout: 10000,
-      options: { skipQueue: true },
-    });
+    return this.terminalClient.captureTerminal(terminalId, options, requestId);
   }
 
   async createChatRoom(options: CreateChatRoomOptions): Promise<ChatCreatePayload> {
@@ -3654,28 +3529,14 @@ export class DaemonClient {
   }
 
   onTerminalStreamEvent(handler: (event: TerminalStreamEvent) => void): () => void {
-    return this.terminalStreams.onEvent(handler);
+    return this.terminalClient.onStreamEvent(handler);
   }
 
   async waitForTerminalStreamEvent(
     predicate: (event: TerminalStreamEvent) => boolean,
     timeout = 5000,
   ): Promise<TerminalStreamEvent> {
-    return new Promise<TerminalStreamEvent>((resolve, reject) => {
-      const timeoutHandle = setTimeout(() => {
-        unsubscribe();
-        reject(new Error(`Timeout waiting for terminal stream event (${timeout}ms)`));
-      }, timeout);
-
-      const unsubscribe = this.onTerminalStreamEvent((event) => {
-        if (!predicate(event)) {
-          return;
-        }
-        clearTimeout(timeoutHandle);
-        unsubscribe();
-        resolve(event);
-      });
-    });
+    return this.terminalClient.waitForStreamEvent(predicate, timeout);
   }
 
   // ============================================================================
@@ -3857,7 +3718,7 @@ export class DaemonClient {
       return false;
     }
     const binaryStartMs = perfNow();
-    this.terminalStreams.handleFrame(frame);
+    this.terminalClient.handleFrame(frame);
     let frameKind: "output" | "snapshot" | "other" = "other";
     if (frame.opcode === TerminalStreamOpcode.Output) {
       frameKind = "output";
@@ -3951,7 +3812,7 @@ export class DaemonClient {
     this.clearWaiters(new Error(reason ?? "Connection lost"));
     this.rejectPendingSendQueue(new Error(reason ?? "Connection lost"));
     this.rejectLivenessProbe(new Error(reason ?? "Connection lost"));
-    this.terminalStreams.clearSlots();
+    this.terminalClient.clearStreamSlots();
     this.binaryFileTransfers.clearActiveTransfers();
     this.lastServerInfoMessage = null;
 
@@ -4054,7 +3915,7 @@ export class DaemonClient {
           this.reconnectAttempt = 0;
           this.updateConnectionState({ status: "connected" }, { event: "HELLO_SERVER_INFO" });
           this.checkoutSubscriptions.resubscribe();
-          this.resubscribeTerminalDirectorySubscriptions();
+          this.terminalClient.resubscribeDirectories();
           this.flushPendingSendQueue();
           this.resolveConnect();
         }
@@ -4062,7 +3923,7 @@ export class DaemonClient {
     }
 
     if (msg.type === "terminal_stream_exit") {
-      this.terminalStreams.removeTerminal(msg.payload.terminalId);
+      this.terminalClient.handleStreamExit(msg.payload.terminalId);
     }
 
     if (this.rawMessageListeners.size > 0) {
