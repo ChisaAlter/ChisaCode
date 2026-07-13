@@ -10,9 +10,6 @@ import type { FSWatcher } from "node:fs";
 import type { LocalSpeechModelId } from "./speech/providers/local/models.js";
 import type { SpeechReadinessSnapshot } from "./speech/speech-runtime.js";
 
-/** Current phase of the speech processing pipeline. */
-export type ProcessingPhase = "idle" | "transcribing";
-
 /** Describes a workspace directory being watched by the Session for git changes. */
 export interface WorkspaceGitWatchTarget {
   cwd: string;

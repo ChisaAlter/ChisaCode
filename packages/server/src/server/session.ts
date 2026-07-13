@@ -24,12 +24,7 @@ import { TerminalSessionController } from "../terminal/terminal-session-controll
 import { type TerminalStreamFrame } from "@chisacode/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech/speech-provider.js";
-import { STTManager } from "./agent/stt-manager.js";
-import {
-  DictationStreamManager,
-  type DictationStreamOutboundMessage,
-} from "./dictation/dictation-stream-manager.js";
-import { type AudioBufferState } from "./session-audio.js";
+
 import { listAvailableEditorTargets, openInEditorTarget } from "./editor-targets.js";
 import { isStoredAgentProviderAvailable } from "./persistence-hooks.js";
 import { AgentPresetStore } from "./agent/agent-preset-store.js";
@@ -126,7 +121,6 @@ export { resolveWaitForFinishError } from "./session-helpers.js";
 export { type SessionRuntimeMetrics } from "./session-internal-types.js";
 
 import {
-  type ProcessingPhase,
   type WorkspaceGitWatchTarget,
   type SessionRuntimeMetrics,
   type AgentMcpTransportFactory,
@@ -139,6 +133,7 @@ import {
   GenerativeUiHandler,
   ProviderHandler,
   TerminalScriptHandler,
+  VoiceDictationHandler,
   WorkspaceProjectHandler,
   type SessionContext,
 } from "./session-handlers/index.js";
@@ -294,10 +289,6 @@ export class Session {
   // State machine
   private operationAbortController: AbortController;
   private disposed = false;
-  private processingPhase: ProcessingPhase = "idle";
-  private isVoiceMode = false;
-  private voiceModeAgentId: string | null = null;
-  private audioBuffer: AudioBufferState | null = null;
 
   // Per-session MCP client
   private agentMcpClient: MCPClient | null = null;
@@ -363,8 +354,6 @@ export class Session {
   private readonly workspaceGitFetchSubscriptions = new Map<string, () => void>();
   private readonly workspaceGitSubscriptions = new Map<string, () => void>();
   private readonly workspaceDirectory: WorkspaceDirectory;
-  private readonly sttManager: STTManager;
-  private readonly dictationStreamManager: DictationStreamManager;
   private readonly sttLanguage: string;
   private readonly serverId: string | undefined;
   private readonly daemonVersion: string | undefined;
@@ -378,6 +367,7 @@ export class Session {
   private readonly workspaceProjectHandler: WorkspaceProjectHandler;
   private readonly agentLifecycleHandler: AgentLifecycleHandler;
   private readonly generativeUiHandler: GenerativeUiHandler;
+  private readonly voiceDictationHandler: VoiceDictationHandler;
 
   constructor(options: SessionOptions) {
     const {
@@ -498,15 +488,12 @@ export class Session {
     this.getDaemonTcpHost = getDaemonTcpHost ?? null;
     this.resolveScriptHealth = resolveScriptHealth ?? null;
     this.sttLanguage = sttLanguage ?? "en";
-    this.sttManager = new STTManager(this.sessionId, this.sessionLogger, stt, {
-      language: this.sttLanguage,
-    });
-    this.dictationStreamManager = new DictationStreamManager({
-      logger: this.sessionLogger,
-      emit: (message) => this.handleDictationManagerMessage(message),
+    this.voiceDictationHandler = new VoiceDictationHandler({
       sessionId: this.sessionId,
+      sessionLogger: this.sessionLogger,
       stt,
-      language: this.sttLanguage,
+      sttLanguage: this.sttLanguage,
+      emit: (message) => this.emit(message),
     });
     this.serverId = serverId;
     this.daemonVersion = daemonVersion;
@@ -1183,30 +1170,7 @@ export class Session {
   }
 
   private dispatchVoiceAndDictationMessage(msg: SessionInboundMessage): Promise<void> | undefined {
-    switch (msg.type) {
-      case "set_voice_mode":
-        return this.handleSetVoiceMode(msg.enabled, msg.agentId, msg.requestId);
-      case "voice_audio_chunk":
-        return this.handleVoiceAudioChunk(msg);
-      case "dictation_stream_start":
-        return this.dictationStreamManager.handleStart(msg.dictationId, msg.format);
-      case "dictation_stream_chunk":
-        return this.dictationStreamManager.handleChunk({
-          dictationId: msg.dictationId,
-          seq: msg.seq,
-          audioBase64: msg.audio,
-          format: msg.format,
-        });
-      case "dictation_stream_finish":
-        return this.dictationStreamManager.handleFinish(msg.dictationId, msg.finalSeq);
-      case "dictation_stream_cancel":
-        this.dictationStreamManager.handleCancel(msg.dictationId);
-        return undefined;
-      case "audio_played":
-        return undefined;
-      default:
-        return undefined;
-    }
+    return this.voiceDictationHandler.dispatch(msg);
   }
 
   private dispatchAgentLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -2622,169 +2586,16 @@ export class Session {
     );
   }
 
-  private async handleSetVoiceMode(
-    enabled: boolean,
-    agentId?: string,
-    requestId?: string,
-  ): Promise<void> {
-    if (enabled && !agentId) {
-      this.emit({
-        type: "set_voice_mode_response",
-        payload: {
-          requestId: requestId ?? randomUUID(),
-          enabled: false,
-          agentId: null,
-          accepted: false,
-          error: "Voice mode requires an agent id",
-          reasonCode: "missing_agent",
-          retryable: false,
-        },
-      });
-      return;
-    }
-
-    this.isVoiceMode = enabled;
-    this.voiceModeAgentId = enabled ? (agentId ?? null) : null;
-    if (!enabled) {
-      this.audioBuffer = null;
-    }
-
-    this.emit({
-      type: "set_voice_mode_response",
-      payload: {
-        requestId: requestId ?? randomUUID(),
-        enabled,
-        agentId: this.voiceModeAgentId,
-        accepted: true,
-        error: null,
-      },
-    });
-  }
-
-  private ensureAudioBufferForFormat(format: string): AudioBufferState {
-    const isPCM = format.toLowerCase().includes("audio/pcm");
-    if (!this.audioBuffer || this.audioBuffer.format !== format) {
-      this.audioBuffer = {
-        chunks: [],
-        format,
-        isPCM,
-        totalPCMBytes: 0,
-      };
-    }
-    return this.audioBuffer;
-  }
-
-  private finalizeBufferedAudio(): { audio: Buffer; format: string } | null {
-    const buffer = this.audioBuffer;
-    this.audioBuffer = null;
-    if (!buffer || buffer.chunks.length === 0) {
-      return null;
-    }
-    return {
-      audio: Buffer.concat(buffer.chunks),
-      format: buffer.format,
-    };
-  }
-
-  private async handleVoiceAudioChunk(
-    msg: Extract<SessionInboundMessage, { type: "voice_audio_chunk" }>,
-  ): Promise<void> {
-    const chunkFormat = msg.format || "audio/wav";
-    const chunkBuffer = Buffer.from(msg.audio, "base64");
-    const buffer = this.ensureAudioBufferForFormat(chunkFormat);
-    buffer.chunks.push(chunkBuffer);
-    if (buffer.isPCM) {
-      buffer.totalPCMBytes += chunkBuffer.length;
-    }
-
-    if (!msg.isLast) {
-      return;
-    }
-
-    const finalized = this.finalizeBufferedAudio();
-    if (!finalized) {
-      return;
-    }
-    await this.processAudio(finalized.audio, finalized.format);
-  }
-
-  private async processAudio(audio: Buffer, format: string): Promise<void> {
-    this.setPhase("transcribing");
-    const requestId = randomUUID();
-    try {
-      const result = await this.sttManager.transcribe(audio, format, {
-        requestId,
-        label: this.isVoiceMode ? "voice" : "buffered",
-      });
-
-      this.emit({
-        type: "transcription_result",
-        payload: {
-          text: result.text,
-          requestId,
-          ...(result.language ? { language: result.language } : {}),
-          ...(result.duration !== undefined ? { duration: result.duration } : {}),
-          ...(result.avgLogprob !== undefined ? { avgLogprob: result.avgLogprob } : {}),
-          ...(result.isLowConfidence !== undefined
-            ? { isLowConfidence: result.isLowConfidence }
-            : {}),
-          byteLength: result.byteLength,
-          format: result.format,
-          ...(result.debugRecordingPath ? { debugRecordingPath: result.debugRecordingPath } : {}),
-        },
-      });
-      this.emit({
-        type: "activity_log",
-        payload: {
-          id: randomUUID(),
-          timestamp: new Date(),
-          type: "transcript",
-          content: result.text,
-        },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.sessionLogger.error({ err: error }, "Failed to process voice audio chunk");
-      this.emit({
-        type: "activity_log",
-        payload: {
-          id: randomUUID(),
-          timestamp: new Date(),
-          type: "error",
-          content: `Error: ${message}`,
-        },
-      });
-    } finally {
-      this.setPhase("idle");
-    }
-  }
-
-  private handleDictationManagerMessage(message: DictationStreamOutboundMessage): void {
-    this.emit(message as unknown as SessionOutboundMessage);
-  }
-
   /**
    * Handle abort request from client
    */
   private async handleAbort(): Promise<void> {
-    this.sessionLogger.info(
-      { phase: this.processingPhase },
-      `Abort request, phase: ${this.processingPhase}`,
-    );
+    this.sessionLogger.info("Abort request");
 
     this.operationAbortController.abort();
     if (!this.disposed) {
       this.operationAbortController = new AbortController();
     }
-    this.setPhase("idle");
-  }
-
-  /**
-   * Set the processing phase
-   */
-  private setPhase(phase: ProcessingPhase): void {
-    this.processingPhase = phase;
-    this.sessionLogger.debug({ phase }, `Phase: ${phase}`);
   }
 
   /**
@@ -2834,9 +2645,7 @@ export class Session {
 
     // Abort any ongoing operations
     this.operationAbortController.abort();
-    this.audioBuffer = null;
-    this.sttManager.cleanup();
-    this.dictationStreamManager.cleanupAll();
+    this.voiceDictationHandler.dispose();
 
     // Close MCP clients
     if (this.agentMcpClient) {
