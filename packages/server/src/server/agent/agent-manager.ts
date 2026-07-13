@@ -75,6 +75,7 @@ import {
 } from "./agent-session-rescue-controller.js";
 import { AgentSessionLifecycleController } from "./agent-session-lifecycle-controller.js";
 import { AgentSessionRegistrationController } from "./agent-session-registration-controller.js";
+import { AgentSessionStateController } from "./agent-session-state-controller.js";
 import { AgentSessionTeardownController } from "./agent-session-teardown-controller.js";
 import {
   AgentWaitController,
@@ -324,6 +325,7 @@ export class AgentManager {
   private readonly sessionLifecycle: AgentSessionLifecycleController;
   private readonly sessionRegistration: AgentSessionRegistrationController;
   private readonly sessionRescue: AgentSessionRescueController;
+  private readonly sessionState: AgentSessionStateController;
   private readonly sessionTeardown: AgentSessionTeardownController;
   private readonly timeline: AgentTimelineController;
   private readonly waits: AgentWaitController;
@@ -367,8 +369,14 @@ export class AgentManager {
       getSessionEventTail: (agentId) => this.sessionEventTails.get(agentId),
       logger: this.logger,
       persistSnapshot: (agent) => this.persistSnapshot(agent),
-      refreshSessionState: (agent) => this.refreshSessionState(agent),
+      refreshSessionState: (agent) => this.sessionState.refresh(agent),
       touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
+    });
+    this.sessionState = new AgentSessionStateController({
+      attachPersistenceCwd,
+      emitState: (agent) => this.emitState(agent),
+      logger: this.logger,
+      permissions: this.permissions,
     });
     this.foregroundExecution = new AgentForegroundExecutionController({
       attachPersistenceCwd,
@@ -379,7 +387,7 @@ export class AgentManager {
       isTerminalEvent: isTurnTerminalEvent,
       logger: this.logger,
       onAgentTerminal: (agentId) => this.generativeUiActionQueue.onAgentTerminal(agentId),
-      refreshRuntimeInfo: (agent) => this.refreshRuntimeInfo(agent),
+      refreshRuntimeInfo: (agent) => this.sessionState.refreshRuntimeInfo(agent),
       touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
     });
     this.providers = new AgentProviderController({
@@ -418,8 +426,8 @@ export class AgentManager {
       recordInitialStatus: (agentId, lifecycle) => {
         this.previousStatuses.set(agentId, lifecycle);
       },
-      refreshRuntimeInfo: (agent) => this.refreshRuntimeInfo(agent),
-      refreshSessionState: (agent) => this.refreshSessionState(agent),
+      refreshRuntimeInfo: (agent) => this.sessionState.refreshRuntimeInfo(agent),
+      refreshSessionState: (agent) => this.sessionState.refresh(agent),
       registry: this.registry,
       resolveInitialAttention,
       timeline: this.timeline,
@@ -495,7 +503,7 @@ export class AgentManager {
       getAgent: (agentId) => this.requireSessionAgent(agentId),
       logger: this.logger,
       persistSnapshot: (agent) => this.persistSnapshot(agent),
-      refreshRuntimeInfo: (agent) => this.refreshRuntimeInfo(agent),
+      refreshRuntimeInfo: (agent) => this.sessionState.refreshRuntimeInfo(agent),
       timeline: this.timeline,
       touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
     });
@@ -1173,53 +1181,6 @@ export class AgentManager {
     await this.registry.applySnapshot(agent, options);
   }
 
-  private async refreshSessionState(agent: ActiveManagedAgent): Promise<void> {
-    try {
-      const modes = await agent.session.getAvailableModes();
-      agent.availableModes = modes;
-    } catch (error) {
-      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh available modes");
-      agent.availableModes = [];
-    }
-
-    try {
-      agent.currentModeId = await agent.session.getCurrentMode();
-    } catch (error) {
-      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh current mode");
-      agent.currentModeId = null;
-    }
-
-    this.permissions.refreshFromSession(agent);
-
-    this.syncFeaturesFromSession(agent);
-    await this.refreshRuntimeInfo(agent);
-  }
-
-  private async refreshRuntimeInfo(agent: ActiveManagedAgent): Promise<void> {
-    try {
-      const newInfo = await agent.session.getRuntimeInfo();
-      const changed =
-        newInfo.model !== agent.runtimeInfo?.model ||
-        newInfo.thinkingOptionId !== agent.runtimeInfo?.thinkingOptionId ||
-        newInfo.sessionId !== agent.runtimeInfo?.sessionId ||
-        newInfo.modeId !== agent.runtimeInfo?.modeId;
-      agent.runtimeInfo = newInfo;
-      if (!agent.persistence && newInfo.sessionId) {
-        agent.persistence = attachPersistenceCwd(
-          { provider: newInfo.provider, sessionId: newInfo.sessionId },
-          agent.cwd,
-        );
-      }
-      // Emit state if runtimeInfo changed so clients get the updated model
-      if (changed) {
-        this.emitState(agent);
-      }
-    } catch (error) {
-      // Keep existing runtimeInfo if refresh fails.
-      this.logger.debug({ err: error, agentId: agent.id }, "Failed to refresh runtime info");
-    }
-  }
-
   private notifyForegroundTurnWaiters(agentId: string, event: AgentStreamEvent): void {
     const turnId = getAgentStreamEventTurnId(event);
     if (turnId == null) {
@@ -1368,42 +1329,22 @@ export class AgentManager {
     const { agent, event, options, isForegroundEvent, eventTurnId, flags } = params;
     switch (event.type) {
       case "thread_started":
-        this.onStreamThreadStarted(agent);
+        this.sessionState.onThreadStarted(agent);
         return undefined;
       case "usage_updated":
-        agent.lastUsage = event.usage;
-        this.emitState(agent);
+        this.sessionState.onUsageUpdated(agent, event);
         return undefined;
       case "mode_changed":
-        agent.currentModeId = event.currentModeId;
-        agent.availableModes = event.availableModes;
-        if (agent.runtimeInfo) {
-          agent.runtimeInfo = { ...agent.runtimeInfo, modeId: event.currentModeId };
-        }
+        this.sessionState.onModeChanged(agent, event);
         flags.shouldDispatchEvent = false;
-        this.emitState(agent);
         return undefined;
       case "model_changed":
-        agent.runtimeInfo = event.runtimeInfo;
-        if (!agent.persistence && event.runtimeInfo.sessionId) {
-          agent.persistence = attachPersistenceCwd(
-            { provider: event.runtimeInfo.provider, sessionId: event.runtimeInfo.sessionId },
-            agent.cwd,
-          );
-        }
-        agent.currentModeId = event.runtimeInfo.modeId ?? agent.currentModeId;
+        this.sessionState.onModelChanged(agent, event);
         flags.shouldDispatchEvent = false;
-        this.emitState(agent);
         return undefined;
       case "thinking_option_changed":
-        if (agent.runtimeInfo) {
-          agent.runtimeInfo = {
-            ...agent.runtimeInfo,
-            thinkingOptionId: event.thinkingOptionId,
-          };
-        }
+        this.sessionState.onThinkingOptionChanged(agent, event);
         flags.shouldDispatchEvent = false;
-        this.emitState(agent);
         return undefined;
       case "timeline":
         return this.onStreamTimelineEvent({ agent, event, options, isForegroundEvent, flags });
@@ -1443,18 +1384,6 @@ export class AgentManager {
       default:
         return undefined;
     }
-  }
-
-  private onStreamThreadStarted(agent: ActiveManagedAgent): void {
-    const previousSessionId = agent.persistence?.sessionId ?? null;
-    const handle = agent.session.describePersistence();
-    if (handle) {
-      agent.persistence = attachPersistenceCwd(handle, agent.cwd);
-      if (agent.persistence?.sessionId !== previousSessionId) {
-        this.emitState(agent);
-      }
-    }
-    void this.refreshRuntimeInfo(agent);
   }
 
   private async onStreamTimelineEvent(params: {
@@ -1520,7 +1449,7 @@ export class AgentManager {
       (agent as ActiveManagedAgent).lifecycle = "idle";
       this.emitState(agent);
     }
-    void this.refreshRuntimeInfo(agent);
+    void this.sessionState.refreshRuntimeInfo(agent);
   }
 
   private recordUsageEvent(
@@ -1738,7 +1667,7 @@ export class AgentManager {
       this.enqueueBackgroundPersist(agent);
     }
 
-    this.syncFeaturesFromSession(agent);
+    this.sessionState.syncFeatures(agent);
 
     this.logger.trace(
       {
@@ -1758,12 +1687,6 @@ export class AgentManager {
       type: "agent_state",
       agent: { ...agent },
     });
-  }
-
-  private syncFeaturesFromSession(agent: ManagedAgent): void {
-    if ("session" in agent && agent.session?.features) {
-      agent.features = agent.session.features;
-    }
   }
 
   private checkAndSetAttention(agent: ManagedAgent): void {
