@@ -74,6 +74,9 @@ import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import { WorktreeRequestError } from "../worktree-errors.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
+import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
+import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
+import { resolveAgentIdentifier } from "../agent-session-helpers.js";
 import {
   archiveChisaCodeWorktreeCommand,
   type ArchiveChisaCodeWorktreeCommandDependencies,
@@ -88,6 +91,8 @@ export interface AgentMcpServerOptions {
   terminalManager?: TerminalManager | null;
   getDaemonTcpPort?: () => number | null;
   scheduleService?: ScheduleService | null;
+  chatService?: ChatMcpService | null;
+  loopService?: LoopMcpService | null;
   providerSnapshotManager: ProviderSnapshotManager;
   github?: GitHubService;
   workspaceGitService?: Pick<
@@ -485,6 +490,8 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     agentStorage,
     terminalManager,
     scheduleService,
+    chatService,
+    loopService,
     providerSnapshotManager,
     callerAgentId,
     companionParentAgentId,
@@ -869,6 +876,33 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       registerTool,
     });
   }
+
+  registerChatMcpTools({
+    registerTool,
+    chatService,
+    agentManager,
+    agentStorage,
+    callerAgentId,
+    logger: childLogger,
+    resolveAgentIdentifier: (identifier) =>
+      resolveAgentIdentifier(
+        {
+          listLiveAgentIds: () => agentManager.listAgents().map((agent) => agent.id),
+          listStoredRecords: async () =>
+            (await agentStorage.list()).map((record) => ({
+              id: record.id,
+              title: record.title,
+              internal: record.internal,
+            })),
+        },
+        identifier,
+      ),
+  });
+  registerLoopMcpTools({
+    registerTool,
+    loopService,
+    resolveScopedCwd,
+  });
 
   registerTool(
     "create_agent",

@@ -10,6 +10,9 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { createAgentMcpServer } from "./mcp-server.js";
+import type { ChatMcpService } from "./chat-mcp-tools.js";
+import type { LoopMcpService } from "./loop-mcp-tools.js";
+import type { LoopRecord } from "@chisacode/protocol/loop/rpc-schemas";
 import type { AgentManager, ManagedAgent } from "./agent-manager.js";
 import type { AgentStorage, StoredAgentRecord } from "./agent-storage.js";
 import type { AgentMode, AgentProvider, ProviderSnapshotEntry } from "./agent-sdk-types.js";
@@ -2171,6 +2174,146 @@ describe("update_agent MCP tool", () => {
 
     expect(spies.agentStorage.get).not.toHaveBeenCalled();
     expect(spies.agentManager.updateAgentMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe("chat MCP tools", () => {
+  const logger = createTestLogger();
+
+  it("registers the complete chat surface and binds posts to the caller agent", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const message = {
+      id: "message-1",
+      roomId: "room-1",
+      authorAgentId: "caller-agent",
+      body: "hello",
+      replyToMessageId: null,
+      mentionAgentIds: [],
+      createdAt: "2026-07-13T00:00:00.000Z",
+    };
+    const dispatchMessage = vi.fn().mockResolvedValue(message);
+    const chatService = {
+      createRoom: vi.fn(),
+      listRooms: vi.fn(),
+      inspectRoom: vi.fn(),
+      deleteRoom: vi.fn(),
+      dispatchMessage,
+      readMessages: vi.fn(),
+      listRoomPosterAgentIds: vi.fn().mockResolvedValue([]),
+      waitForMessages: vi.fn(),
+    } as unknown as ChatMcpService;
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      chatService,
+      callerAgentId: "caller-agent",
+      logger,
+    });
+
+    for (const name of [
+      "create_chat_room",
+      "list_chat_rooms",
+      "inspect_chat_room",
+      "delete_chat_room",
+      "post_chat_message",
+      "read_chat_messages",
+      "wait_for_chat_messages",
+    ]) {
+      expect(lookupTool(server, name)).toBeDefined();
+    }
+
+    const tool = registeredTool(server, "post_chat_message");
+    await expect(
+      tool.handler({ room: "room-1", body: "hello", authorAgentId: "spoofed-agent" }),
+    ).rejects.toThrow("authorAgentId cannot differ from the caller agent");
+
+    const response = await tool.handler({ room: "room-1", body: "hello" });
+    expect(dispatchMessage).toHaveBeenCalledWith({
+      room: "room-1",
+      body: "hello",
+      authorAgentId: "caller-agent",
+      replyToMessageId: undefined,
+    });
+    expect(response.structuredContent).toEqual(message);
+  });
+});
+
+describe("loop MCP tools", () => {
+  const logger = createTestLogger();
+
+  it("registers the complete loop surface and inherits the caller cwd", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    spies.agentManager.getAgent.mockReturnValue(
+      createManagedAgent({ id: "caller-agent", cwd: REPO_CWD }),
+    );
+    const loop: LoopRecord = {
+      id: "loop-1",
+      name: "MCP loop",
+      prompt: "ship it",
+      cwd: REPO_CWD,
+      provider: "claude",
+      model: null,
+      modeId: null,
+      workerProvider: null,
+      workerModel: null,
+      verifierProvider: null,
+      verifierModel: null,
+      verifierModeId: null,
+      verifyPrompt: null,
+      verifyChecks: ["npm test"],
+      archive: false,
+      sleepMs: 0,
+      maxIterations: 1,
+      maxTimeMs: null,
+      status: "running",
+      createdAt: "2026-07-13T00:00:00.000Z",
+      updatedAt: "2026-07-13T00:00:00.000Z",
+      startedAt: "2026-07-13T00:00:00.000Z",
+      completedAt: null,
+      stopRequestedAt: null,
+      iterations: [],
+      logs: [],
+      nextLogSeq: 1,
+      activeIteration: null,
+      activeWorkerAgentId: null,
+      activeVerifierAgentId: null,
+    };
+    const runLoop = vi.fn().mockResolvedValue(loop);
+    const loopService = {
+      runLoop,
+      listLoops: vi.fn(),
+      inspectLoop: vi.fn(),
+      getLoopLogs: vi.fn(),
+      stopLoop: vi.fn(),
+    } as unknown as LoopMcpService;
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      loopService,
+      callerAgentId: "caller-agent",
+      logger,
+    });
+
+    for (const name of ["run_loop", "list_loops", "inspect_loop", "loop_logs", "stop_loop"]) {
+      expect(lookupTool(server, name)).toBeDefined();
+    }
+
+    const response = await registeredTool(server, "run_loop").handler({
+      prompt: "ship it",
+      name: "MCP loop",
+      verifyChecks: ["npm test"],
+      maxIterations: 1,
+    });
+    expect(runLoop).toHaveBeenCalledWith({
+      prompt: "ship it",
+      name: "MCP loop",
+      verifyChecks: ["npm test"],
+      maxIterations: 1,
+      cwd: REPO_CWD,
+    });
+    expect(response.structuredContent).toEqual(loop);
   });
 });
 

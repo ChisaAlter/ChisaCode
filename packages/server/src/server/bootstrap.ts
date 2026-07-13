@@ -1093,6 +1093,8 @@ export async function createChisaCodeDaemon(
         terminalManager,
         getDaemonTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
         scheduleService,
+        chatService,
+        loopService,
         providerSnapshotManager,
         github,
         workspaceGitService,

@@ -5,9 +5,8 @@
  * with similar request/response/error patterns.
  */
 
-import { ChatServiceError, parseMentionAgentIds } from "../chat/chat-service.js";
-import { notifyChatMentions, prepareChatMentionFanout } from "../chat/chat-mentions.js";
-import { sendPromptToAgent, formatSystemNotificationPrompt } from "../agent/agent-prompt.js";
+import { ChatServiceError } from "../chat/chat-service.js";
+import { postChatMessageCommand } from "../chat/post-message-command.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../messages.js";
 import type { ScheduleService } from "../schedule/service.js";
 import type { ChatScheduleLoopHandlerContext, DisposableHandler } from "./session-context.js";
@@ -114,50 +113,24 @@ export class ChatScheduleLoopHandler implements DisposableHandler {
   ): Promise<void> {
     try {
       const authorAgentId = request.authorAgentId?.trim() || this.context.clientId;
-      const mentionAgentIds = parseMentionAgentIds(request.body);
-      const storedAgents = await this.context.agentStorage.list();
-      const liveAgents = this.context.agentManager.listAgents();
-      const fanout = await prepareChatMentionFanout({
-        authorAgentId,
-        mentionAgentIds,
-        storedAgents,
-        liveAgents,
-        listRoomPosterAgentIds: () =>
-          this.context.chatService.listRoomPosterAgentIds({ room: request.room }),
-      });
-      if (!fanout.ok) {
-        throw new ChatServiceError("chat_mention_fanout_limit_exceeded", fanout.error);
-      }
-      const message = await this.context.chatService.dispatchMessage({
-        room: request.room,
-        authorAgentId,
-        body: request.body,
-        replyToMessageId: request.replyToMessageId,
-      });
+      const message = await postChatMessageCommand(
+        {
+          chatService: this.context.chatService,
+          agentManager: this.context.agentManager,
+          agentStorage: this.context.agentStorage,
+          logger: this.context.sessionLogger,
+          resolveAgentIdentifier: (identifier) => this.context.resolveAgentIdentifier(identifier),
+        },
+        {
+          room: request.room,
+          authorAgentId,
+          body: request.body,
+          replyToMessageId: request.replyToMessageId,
+        },
+      );
       this.context.emit({
         type: "chat/post/response",
         payload: { requestId: request.requestId, message, error: null },
-      });
-      void notifyChatMentions({
-        room: request.room,
-        authorAgentId,
-        body: request.body,
-        mentionAgentIds: message.mentionAgentIds,
-        logger: this.context.sessionLogger,
-        storedAgents,
-        liveAgents,
-        prepared: fanout.prepared,
-        resolveAgentIdentifier: (identifier) => this.context.resolveAgentIdentifier(identifier),
-        sendAgentMessage: async (agentId, text) => {
-          await sendPromptToAgent({
-            agentManager: this.context.agentManager,
-            agentStorage: this.context.agentStorage,
-            agentId,
-            prompt: formatSystemNotificationPrompt(text),
-            unarchive: false,
-            logger: this.context.sessionLogger,
-          });
-        },
       });
     } catch (error) {
       this.emitChatRpcError(request, error);
