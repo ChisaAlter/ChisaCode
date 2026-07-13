@@ -75,6 +75,12 @@ import {
   AgentSessionRescueController,
   type AgentSessionRescueTimeouts,
 } from "./agent-session-rescue-controller.js";
+import {
+  AgentWaitController,
+  type WaitForAgentOptions,
+  type WaitForAgentResult,
+  type WaitForAgentStartOptions,
+} from "./agent-wait-controller.js";
 
 const CANCEL_PROPAGATION_TIMEOUT_MS = 2_000;
 
@@ -93,6 +99,11 @@ export type {
 } from "./agent-provider-controller.js";
 export type { AgentArchivedCallback } from "./agent-archive-controller.js";
 export type { AgentSessionRescueTimeouts } from "./agent-session-rescue-controller.js";
+export type {
+  WaitForAgentOptions,
+  WaitForAgentResult,
+  WaitForAgentStartOptions,
+} from "./agent-wait-controller.js";
 
 export type AgentManagerEvent =
   | { type: "agent_state"; agent: ManagedAgent }
@@ -145,21 +156,6 @@ export interface AgentManagerOptions {
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentSessionRescueTimeouts;
   logger: Logger;
-}
-
-export interface WaitForAgentOptions {
-  signal?: AbortSignal;
-  waitForActive?: boolean;
-}
-
-export interface WaitForAgentResult {
-  status: AgentLifecycleStatus;
-  permission: AgentPermissionRequest | null;
-  lastMessage: string | null;
-}
-
-export interface WaitForAgentStartOptions {
-  signal?: AbortSignal;
 }
 
 type AttentionState =
@@ -306,12 +302,7 @@ function attachPersistenceCwd(
   };
 }
 
-const BUSY_STATUSES: Set<AgentLifecycleStatus> = new Set(["initializing", "running"]);
 const AgentIdSchema = z.string().uuid();
-
-function isAgentBusy(status: AgentLifecycleStatus): boolean {
-  return BUSY_STATUSES.has(status);
-}
 
 function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
   return (
@@ -319,17 +310,6 @@ function isTurnTerminalEvent(event: AgentStreamEvent): boolean {
     event.type === "turn_failed" ||
     event.type === "turn_canceled"
   );
-}
-
-function abortMessage(reason: unknown, fallbackMessage: string): string {
-  if (typeof reason === "string") return reason;
-  if (reason instanceof Error) return reason.message;
-  return fallbackMessage;
-}
-
-function createAbortError(signal: AbortSignal | undefined, fallbackMessage: string): Error {
-  const message = abortMessage(signal?.reason, fallbackMessage);
-  return Object.assign(new Error(message), { name: "AbortError" });
 }
 
 function validateAgentId(agentId: string, source: string): string {
@@ -349,6 +329,7 @@ export class AgentManager {
   private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
   private readonly sessionRescue: AgentSessionRescueController;
   private readonly timeline: AgentTimelineController;
+  private readonly waits: AgentWaitController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
   private readonly foregroundRuns = new ForegroundRunState();
@@ -374,6 +355,12 @@ export class AgentManager {
       validateAgentId,
       getAgent: (agentId) => this.agents.get(agentId) ?? null,
       listAgents: () => this.agents.values(),
+    });
+    this.waits = new AgentWaitController({
+      getAgent: (agentId) => this.getAgent(agentId),
+      getLastAssistantMessage: (agentId) => this.getLastAssistantMessage(agentId),
+      getPendingRun: (agentId) => this.foregroundRuns.getPendingRun(agentId),
+      subscribe: (callback, waitOptions) => this.subscribe(callback, waitOptions),
     });
     this.providers = new AgentProviderController({
       clients: options.clients ?? {},
@@ -1245,109 +1232,7 @@ export class AgentManager {
   }
 
   async waitForAgentRunStart(agentId: string, options?: WaitForAgentStartOptions): Promise<void> {
-    const snapshot = this.getAgent(agentId);
-    if (!snapshot) {
-      throw new Error(`Agent ${agentId} not found`);
-    }
-
-    const pendingRun = this.foregroundRuns.getPendingRun(agentId);
-    if ((snapshot.lifecycle === "running" || pendingRun?.started) && !snapshot.pendingReplacement) {
-      return;
-    }
-
-    if (!snapshot.activeForegroundTurnId && !pendingRun && !snapshot.pendingReplacement) {
-      throw new Error(`Agent ${agentId} has no pending run`);
-    }
-
-    if (options?.signal?.aborted) {
-      throw createAbortError(options.signal, "wait_for_agent_start aborted");
-    }
-
-    await new Promise<void>((resolvePromise, reject) => {
-      if (options?.signal?.aborted) {
-        reject(createAbortError(options.signal, "wait_for_agent_start aborted"));
-        return;
-      }
-
-      let unsubscribe: (() => void) | null = null;
-      let abortHandler: (() => void) | null = null;
-
-      const cleanup = () => {
-        if (unsubscribe) {
-          try {
-            unsubscribe();
-          } catch {
-            // ignore cleanup errors
-          }
-          unsubscribe = null;
-        }
-        if (abortHandler && options?.signal) {
-          try {
-            options.signal.removeEventListener("abort", abortHandler);
-          } catch {
-            // ignore cleanup errors
-          }
-          abortHandler = null;
-        }
-      };
-
-      const finishOk = () => {
-        cleanup();
-        resolvePromise();
-      };
-
-      const finishErr = (error: unknown) => {
-        cleanup();
-        reject(error);
-      };
-
-      if (options?.signal) {
-        abortHandler = () =>
-          finishErr(createAbortError(options.signal, "wait_for_agent_start aborted"));
-        options.signal.addEventListener("abort", abortHandler, { once: true });
-      }
-
-      const checkCurrentState = () => {
-        const current = this.getAgent(agentId);
-        if (!current) {
-          finishErr(new Error(`Agent ${agentId} not found`));
-          return true;
-        }
-
-        const currentPendingRun = this.foregroundRuns.getPendingRun(agentId);
-        if (
-          (current.lifecycle === "running" || currentPendingRun?.started) &&
-          !current.pendingReplacement
-        ) {
-          finishOk();
-          return true;
-        }
-
-        if (current.lifecycle === "error" && !currentPendingRun?.started) {
-          finishErr(new Error(current.lastError ?? `Agent ${agentId} failed to start`));
-          return true;
-        }
-
-        if (!currentPendingRun && !current.activeForegroundTurnId && !current.pendingReplacement) {
-          finishErr(new Error(`Agent ${agentId} run finished before starting`));
-          return true;
-        }
-
-        return false;
-      };
-
-      unsubscribe = this.subscribe(
-        (event) => {
-          if (event.type !== "agent_state" || event.agent.id !== agentId) {
-            return;
-          }
-          checkCurrentState();
-        },
-        { agentId, replayState: false },
-      );
-
-      checkCurrentState();
-    });
+    await this.waits.waitForRunStart(agentId, options);
   }
 
   async respondToPermission(
@@ -1498,11 +1383,6 @@ export class AgentManager {
     return Array.from(agent.pendingPermissions.values());
   }
 
-  private peekPendingPermission(agent: ManagedAgent): AgentPermissionRequest | null {
-    const iterator = agent.pendingPermissions.values().next();
-    return iterator.done ? null : iterator.value;
-  }
-
   /**
    * Hydrates the timeline from provider history if the agent's durable
    * timeline is empty (e.g., imported agents that have provider history
@@ -1585,161 +1465,7 @@ export class AgentManager {
     agentId: string,
     options?: WaitForAgentOptions,
   ): Promise<WaitForAgentResult> {
-    const snapshot = this.getAgent(agentId);
-    if (!snapshot) {
-      throw new Error(`Agent ${agentId} not found`);
-    }
-
-    const pendingForegroundRun = this.foregroundRuns.getPendingRun(agentId);
-    const hasForegroundTurn =
-      Boolean(snapshot.activeForegroundTurnId) || Boolean(pendingForegroundRun);
-
-    const immediatePermission = this.peekPendingPermission(snapshot);
-    if (immediatePermission) {
-      return {
-        status: snapshot.lifecycle,
-        permission: immediatePermission,
-        lastMessage: await this.getLastAssistantMessage(agentId),
-      };
-    }
-
-    const initialStatus = snapshot.lifecycle;
-    const initialBusy = isAgentBusy(initialStatus) || hasForegroundTurn;
-    const waitForActive = options?.waitForActive ?? false;
-    if (!waitForActive && !initialBusy) {
-      return {
-        status: initialStatus,
-        permission: null,
-        lastMessage: await this.getLastAssistantMessage(agentId),
-      };
-    }
-    if (waitForActive && !initialBusy && !hasForegroundTurn) {
-      return {
-        status: initialStatus,
-        permission: null,
-        lastMessage: await this.getLastAssistantMessage(agentId),
-      };
-    }
-
-    if (options?.signal?.aborted) {
-      throw createAbortError(options.signal, "wait_for_agent aborted");
-    }
-
-    return await new Promise<WaitForAgentResult>((resolvePromise, reject) => {
-      // Bug #1 Fix: Check abort signal AGAIN inside Promise constructor
-      // to avoid race condition between pre-Promise check and abort listener registration
-      if (options?.signal?.aborted) {
-        reject(createAbortError(options.signal, "wait_for_agent aborted"));
-        return;
-      }
-
-      let currentStatus: AgentLifecycleStatus = initialStatus;
-      let hasStarted =
-        isAgentBusy(initialStatus) ||
-        Boolean(snapshot.activeForegroundTurnId) ||
-        Boolean(pendingForegroundRun?.started);
-      let terminalStatusOverride: AgentLifecycleStatus | null = null;
-      let finished = false;
-
-      // Bug #3 Fix: Declare unsubscribe and abortHandler upfront so cleanup can reference them
-      let unsubscribe: (() => void) | null = null;
-      let abortHandler: (() => void) | null = null;
-
-      const cleanup = () => {
-        // Clean up subscription
-        if (unsubscribe) {
-          try {
-            unsubscribe();
-          } catch {
-            // ignore cleanup errors
-          }
-          unsubscribe = null;
-        }
-
-        // Clean up abort listener
-        if (abortHandler && options?.signal) {
-          try {
-            options.signal.removeEventListener("abort", abortHandler);
-          } catch {
-            // ignore cleanup errors
-          }
-          abortHandler = null;
-        }
-      };
-
-      const finish = (permission: AgentPermissionRequest | null) => {
-        if (finished) {
-          return;
-        }
-        finished = true;
-        cleanup();
-        void this.getLastAssistantMessage(agentId)
-          .then((lastMessage) => {
-            resolvePromise({
-              status: currentStatus,
-              permission,
-              lastMessage,
-            });
-            return;
-          })
-          .catch(reject);
-      };
-
-      // Bug #3 Fix: Set up abort handler BEFORE subscription
-      // to ensure cleanup handlers exist before callback can fire
-      if (options?.signal) {
-        abortHandler = () => {
-          cleanup();
-          reject(createAbortError(options.signal, "wait_for_agent aborted"));
-        };
-        options.signal.addEventListener("abort", abortHandler, { once: true });
-      }
-
-      // Bug #3 Fix: Now subscribe with cleanup handlers already in place
-      // This prevents race condition if callback fires synchronously with replayState: true
-      unsubscribe = this.subscribe(
-        (event) => {
-          if (event.type === "agent_state") {
-            currentStatus = event.agent.lifecycle;
-            const pending = this.peekPendingPermission(event.agent);
-            if (pending) {
-              finish(pending);
-              return;
-            }
-            if (isAgentBusy(event.agent.lifecycle)) {
-              hasStarted = true;
-              return;
-            }
-            if (!waitForActive || hasStarted) {
-              if (terminalStatusOverride) {
-                currentStatus = terminalStatusOverride;
-              }
-              finish(null);
-            }
-            return;
-          }
-
-          if (event.type === "agent_stream") {
-            if (event.event.type === "permission_requested") {
-              finish(event.event.request);
-              return;
-            }
-            if (event.event.type === "turn_failed") {
-              hasStarted = true;
-              terminalStatusOverride = "error";
-              return;
-            }
-            if (event.event.type === "turn_completed") {
-              hasStarted = true;
-            }
-            if (event.event.type === "turn_canceled") {
-              hasStarted = true;
-            }
-          }
-        },
-        { agentId, replayState: true },
-      );
-    });
+    return await this.waits.waitForEvent(agentId, options);
   }
 
   private async registerSession(
