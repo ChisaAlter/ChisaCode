@@ -1,5 +1,12 @@
 import { execFileText } from "./tree-kill-command.js";
 import {
+  rethrowCleanupDeadline,
+  TREE_KILL_CLEANUP_TIMEOUT_MS,
+  TreeKillCleanupDeadline,
+  waitForExitOrTimeout,
+  waitForProcessPoll,
+} from "./tree-kill-deadline.js";
+import {
   createGenericPosixTreeKillAdapter,
   createLinuxTreeKillAdapter,
   type LinuxTreeKillOperations,
@@ -16,11 +23,9 @@ export {
   selectOwnedWindowsProcesses,
 } from "./tree-kill-windows.js";
 export { parseLinuxProcStat, refreshTrackedPosixProcess } from "./tree-kill-posix.js";
+export { TREE_KILL_CLEANUP_TIMEOUT_MS } from "./tree-kill-deadline.js";
 
 const PROCESS_POLL_INTERVAL_MS = 25;
-
-/** Maximum wall-clock budget for one command-tree cleanup attempt. */
-export const TREE_KILL_CLEANUP_TIMEOUT_MS = 8_000;
 
 export interface TreeKillTarget {
   pid?: number;
@@ -85,98 +90,6 @@ type TrackedTerminationResult =
   | TerminateWithTreeKillResult
   | "tracking-unavailable"
   | "tracking-unverified";
-
-class TreeKillCleanupTimeoutError extends Error {
-  readonly code = "EXEC_COMMAND_KILL_TIMEOUT";
-
-  constructor() {
-    super("Command tree cleanup exceeded its absolute deadline");
-    this.name = "TreeKillCleanupTimeoutError";
-  }
-}
-
-class TreeKillCleanupDeadline {
-  private readonly controller = new AbortController();
-  private readonly parentAbortListener: (() => void) | null;
-  private readonly timeoutHandle: NodeJS.Timeout;
-  readonly expiresAtMs: number;
-
-  constructor(
-    timeoutMs: number,
-    private readonly now: () => number,
-    private readonly parentSignal?: AbortSignal,
-  ) {
-    const boundedTimeoutMs = Math.max(0, timeoutMs);
-    this.expiresAtMs = this.now() + boundedTimeoutMs;
-    this.timeoutHandle = setTimeout(() => {
-      this.abort(new TreeKillCleanupTimeoutError());
-    }, boundedTimeoutMs);
-    if (parentSignal) {
-      this.parentAbortListener = () => {
-        this.abort(parentSignal.reason ?? new TreeKillCleanupTimeoutError());
-      };
-      parentSignal.addEventListener("abort", this.parentAbortListener, { once: true });
-      if (parentSignal.aborted) {
-        this.parentAbortListener();
-      }
-    } else {
-      this.parentAbortListener = null;
-    }
-  }
-
-  get signal(): AbortSignal {
-    return this.controller.signal;
-  }
-
-  remainingMs(): number {
-    return Math.max(0, this.expiresAtMs - this.now());
-  }
-
-  run<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    if (this.signal.aborted) {
-      return Promise.reject(this.signal.reason ?? new TreeKillCleanupTimeoutError());
-    }
-    return new Promise<T>((resolve, reject) => {
-      let completed = false;
-      const finish = (settle: () => void) => {
-        if (completed) {
-          return;
-        }
-        completed = true;
-        this.signal.removeEventListener("abort", onAbort);
-        settle();
-      };
-      const onAbort = () => {
-        finish(() => reject(this.signal.reason ?? new TreeKillCleanupTimeoutError()));
-      };
-      this.signal.addEventListener("abort", onAbort, { once: true });
-      let operationPromise: Promise<T>;
-      try {
-        operationPromise = operation(this.signal);
-      } catch (error) {
-        finish(() => reject(error));
-        return;
-      }
-      void operationPromise.then(
-        (value) => finish(() => resolve(value)),
-        (error: unknown) => finish(() => reject(error)),
-      );
-    });
-  }
-
-  dispose(): void {
-    clearTimeout(this.timeoutHandle);
-    if (this.parentSignal && this.parentAbortListener) {
-      this.parentSignal.removeEventListener("abort", this.parentAbortListener);
-    }
-  }
-
-  private abort(reason: unknown): void {
-    if (!this.signal.aborted) {
-      this.controller.abort(reason);
-    }
-  }
-}
 
 export async function terminateWithTreeKill(
   child: TreeKillTarget,
@@ -326,12 +239,6 @@ async function terminateTrackedProcessTree(
   }
 }
 
-function rethrowCleanupDeadline(error: unknown, deadline: TreeKillCleanupDeadline): void {
-  if (deadline.signal.aborted) {
-    throw error;
-  }
-}
-
 async function terminateRootObservedTree(
   child: TreeKillTarget,
   options: TerminateWithTreeKillOptions,
@@ -341,6 +248,7 @@ async function terminateRootObservedTree(
     return "already-exited";
   }
 
+  const isChildExited = () => isProcessExited(child);
   const gracefulSignal = options.gracefulSignal ?? "SIGTERM";
   const forceSignal = options.forceSignal ?? "SIGKILL";
   if (gracefulSignal === forceSignal) {
@@ -351,7 +259,7 @@ async function terminateRootObservedTree(
     if (options.forceTimeoutMs === undefined) {
       return "killed";
     }
-    return (await waitForExitOrTimeout(child, options.forceTimeoutMs, deadline))
+    return (await waitForExitOrTimeout(child, isChildExited, options.forceTimeoutMs, deadline))
       ? "killed"
       : "kill-timeout";
   }
@@ -359,7 +267,7 @@ async function terminateRootObservedTree(
   await deadline.run((cleanupSignal) =>
     signalTreeOrChild(child, gracefulSignal, cleanupSignal, deadline.remainingMs()),
   );
-  if (await waitForExitOrTimeout(child, options.gracefulTimeoutMs, deadline)) {
+  if (await waitForExitOrTimeout(child, isChildExited, options.gracefulTimeoutMs, deadline)) {
     return "terminated";
   }
 
@@ -370,7 +278,7 @@ async function terminateRootObservedTree(
   if (options.forceTimeoutMs === undefined) {
     return "killed";
   }
-  return (await waitForExitOrTimeout(child, options.forceTimeoutMs, deadline))
+  return (await waitForExitOrTimeout(child, isChildExited, options.forceTimeoutMs, deadline))
     ? "killed"
     : "kill-timeout";
 }
@@ -437,28 +345,6 @@ async function waitForTrackedProcesses(
   return survivors;
 }
 
-function waitForProcessPoll(delayMs: number, cleanupSignal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let timer: NodeJS.Timeout | null = null;
-    const finish = (settle: () => void) => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      cleanupSignal?.removeEventListener("abort", onAbort);
-      settle();
-    };
-    const onAbort = () => {
-      finish(() => reject(cleanupSignal?.reason ?? new TreeKillCleanupTimeoutError()));
-    };
-    cleanupSignal?.addEventListener("abort", onAbort, { once: true });
-    timer = setTimeout(() => finish(resolve), delayMs);
-    if (cleanupSignal?.aborted) {
-      onAbort();
-    }
-  });
-}
-
 async function signalTreeOrChild(
   child: TreeKillTarget,
   signal: NodeJS.Signals,
@@ -505,37 +391,4 @@ function isProcessExited(child: TreeKillTarget): boolean {
     (child.exitCode !== null && child.exitCode !== undefined) ||
     (child.signalCode !== null && child.signalCode !== undefined)
   );
-}
-
-function waitForExitOrTimeout(
-  child: TreeKillTarget,
-  timeoutMs: number,
-  deadline: TreeKillCleanupDeadline,
-): Promise<boolean> {
-  if (isProcessExited(child)) {
-    return Promise.resolve(true);
-  }
-  const boundedTimeoutMs = Math.min(Math.max(0, timeoutMs), deadline.remainingMs());
-  return new Promise<boolean>((resolve, reject) => {
-    let timer: NodeJS.Timeout | null = null;
-    const finish = (settle: () => void) => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      child.off?.("exit", onExit);
-      deadline.signal.removeEventListener("abort", onAbort);
-      settle();
-    };
-    const onExit = () => finish(() => resolve(true));
-    const onAbort = () => {
-      finish(() => reject(deadline.signal.reason ?? new TreeKillCleanupTimeoutError()));
-    };
-    child.once?.("exit", onExit);
-    deadline.signal.addEventListener("abort", onAbort, { once: true });
-    timer = setTimeout(() => finish(() => resolve(isProcessExited(child))), boundedTimeoutMs);
-    if (deadline.signal.aborted) {
-      onAbort();
-    }
-  });
 }

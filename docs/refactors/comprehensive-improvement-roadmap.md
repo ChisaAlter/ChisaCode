@@ -138,15 +138,15 @@
   通道。不得以新增 native 依赖或删除既有 fallback stop 行为作为未经专项设计的临时修复。
 - **状态**：pending，等待最终审查分流为独立架构任务。
 
-### Server 进程树 ownership / query / deadline 编排拆分（in-progress）
+### Server 进程树 ownership / query / deadline 编排拆分（done）
 
-- **问题**：`packages/server/src/utils/tree-kill.ts` 当前在同一实现中承担 Windows CIM
+- **问题**：`packages/server/src/utils/tree-kill.ts` 原实现在同一文件中承担 Windows CIM
   ownership 查询与 CreationDate 复核、POSIX/Linux 进程身份跟踪、child-first signaling，及
   cleanup absolute deadline / cancellation 编排。Task 4 已补齐 fail-closed、snapshot churn 和
   deadline 语义，但继续在单文件内扩展会放大跨平台状态机的审查与回归成本。
 - **影响范围**：`packages/server/src/utils/tree-kill.ts`、`packages/server/src/utils/spawn.ts`，以及
   server 内所有通过 `terminateWithTreeKill` 清理 provider / shell 命令树的调用点。
-- **建议方案**：在不改变现有 public entry point `terminateWithTreeKill` 的前提下，提取私有
+- **实施方案**：在不改变现有 public entry point `terminateWithTreeKill` 的前提下，提取私有
   Windows ownership/query adapter、POSIX identity tracker、以及共享 cleanup-deadline
   orchestrator；由现有入口组合这些模块并继续统一返回
   `already-exited | terminated | killed | kill-timeout`。专项迁移必须保留当前 typed operations
@@ -162,8 +162,13 @@
   signaling、保守 survivor polling 与严格 signal authorization；Linux/POSIX 平台分支仅保留
   adapter 选择。`tree-kill.ts` 进一步从 1021 行降至 541 行，19 个 Linux/POSIX identity、
   completeness、polling 与 signaling 聚焦场景、server typecheck 和目标 lint 通过。
-- **状态**：in-progress。Windows adapter 与 POSIX identity tracker 已完成；下一步提取共享
-  cleanup-deadline orchestrator，完成后再将本项标记为 done。
+- **Deadline orchestrator 进展（2026-07-14）**：新增 `tree-kill-deadline.ts`，独立拥有单一 absolute
+  deadline、父级 abort 传播、异步 operation race、polling wait 与 root exit wait；`tree-kill.ts`
+  保留 `TREE_KILL_CLEANUP_TIMEOUT_MS` 兼容重导出和终止编排，平台 adapter 继续共享同一截止时间。
+  原入口从 541 行降至 410 行，新模块为 165 行；9 个 deadline/operation race/poll/root-exit 聚焦
+  场景、server typecheck 与 2 个目标文件 lint 通过。
+- **状态**：done。Windows ownership/query、POSIX identity tracking 与 cleanup deadline 三个责任边界
+  均已完成拆分，公开入口和 `already-exited | terminated | killed | kill-timeout` 结果契约保持不变。
 
 ### Task 4 第九次规范复审加固（2026-07-11 完成）
 
