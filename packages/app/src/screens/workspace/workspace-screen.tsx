@@ -10,9 +10,9 @@ import {
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "@react-navigation/native";
-import { ActivityIndicator, BackHandler, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useGlobalSearchParams, useRouter, type Href } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import {
   ChevronDown,
@@ -64,9 +64,7 @@ import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { ExplorerSidebarAnimationProvider } from "@/contexts/explorer-sidebar-animation-context";
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
-import { useExplorerOpenGesture } from "@/hooks/use-explorer-open-gesture";
-import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
-import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
+import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore, type Agent, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import {
@@ -116,6 +114,8 @@ import { useWorkspaceDockActions } from "@/screens/workspace/use-workspace-dock-
 import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace-pane-layout-actions";
 import { useWorkspacePaneContentModels } from "@/screens/workspace/use-workspace-pane-content-models";
 import { useWorkspaceEnvironmentPanelState } from "@/screens/workspace/use-workspace-environment-panel-state";
+import { useWorkspaceExplorerActions } from "@/screens/workspace/use-workspace-explorer-actions";
+import { useWorkspaceOpenIntent } from "@/screens/workspace/use-workspace-open-intent";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   getFallbackTabOptionDescription,
@@ -149,11 +149,7 @@ import { isAbsolutePath } from "@/utils/path";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
-import {
-  buildHostRootRoute,
-  buildHostWorkspaceRoute,
-  buildSettingsHostRoute,
-} from "@/utils/host-routes";
+import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { canCreateWorkspaceTerminal } from "@/screens/workspace/terminals/state";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
 import type { TodoEntry, TurnChangesItem } from "@/types/stream";
@@ -164,7 +160,6 @@ import {
   shouldEnableWorkspaceReviewArchiveAction,
   type WorkspaceActivityItem,
 } from "@/screens/workspace/workspace-environment-panel-model";
-import { resolveWorkspaceScreenOpenIntentAction } from "@/screens/workspace/workspace-open-intent";
 import { WorkspaceEnvironmentGitPopover } from "@/screens/workspace/workspace-environment-git-popover";
 import {
   buildBrowserContextSummary,
@@ -256,29 +251,6 @@ function trimNonEmpty(value: string | null | undefined): string | null {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function getSearchParamValue(value: string | string[] | undefined): string {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (Array.isArray(value)) {
-    const firstValue = value[0];
-    return typeof firstValue === "string" ? firstValue.trim() : "";
-  }
-  return "";
-}
-
-function stripOpenSearchParamFromBrowserUrl() {
-  if (!isWeb || typeof window === "undefined") {
-    return;
-  }
-  const url = new URL(window.location.href);
-  if (!url.searchParams.has("open")) {
-    return;
-  }
-  url.searchParams.delete("open");
-  window.history.replaceState(null, "", url.toString());
 }
 
 function decodeSegment(value: string): string {
@@ -1804,17 +1776,9 @@ function WorkspaceScreenContent({
 }: WorkspaceScreenContentProps) {
   const { t } = useTranslation();
   const toast = useToast();
-  const router = useRouter();
   const isMobile = useIsCompactFormFactor();
-  const globalParams = useGlobalSearchParams<{ open?: string | string[] }>();
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const normalizedServerId = useMemo(() => trimNonEmpty(decodeSegment(serverId)) ?? "", [serverId]);
-  const openIntentValue = useMemo(
-    () => getSearchParamValue(globalParams.open),
-    [globalParams.open],
-  );
-  const consumedWorkspaceIntentRef = useRef<string | null>(null);
-
   const normalizedWorkspaceId = useMemo(
     () => resolveWorkspaceRouteId({ routeWorkspaceId: workspaceId }) ?? "",
     [workspaceId],
@@ -1975,52 +1939,25 @@ function WorkspaceScreenContent({
     checkoutState: workspaceHeaderCheckoutState,
   });
 
-  const isExplorerOpen = usePanelStore((state) =>
-    selectIsFileExplorerOpen(state, { isCompact: isMobile }),
-  );
-  const canOpenExplorerFromAgentView = usePanelStore(
-    (state) =>
-      state.mobileView === "agent" && !selectIsFileExplorerOpen(state, { isCompact: true }),
-  );
-  const openFileExplorerForCheckout = usePanelStore((state) => state.openFileExplorerForCheckout);
-  const toggleFileExplorerForCheckout = usePanelStore(
-    (state) => state.toggleFileExplorerForCheckout,
-  );
-  const closeDesktopFileExplorer = usePanelStore((state) => state.closeDesktopFileExplorer);
-  const setExplorerTabForCheckout = usePanelStore((state) => state.setExplorerTabForCheckout);
-  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const {
+    isExplorerOpen,
+    activeExplorerCheckout,
+    openFileExplorerForCheckout,
+    toggleFileExplorerForCheckout,
+    closeDesktopFileExplorer,
+    setExplorerTabForCheckout,
+    showMobileAgent,
+    handleToggleExplorer,
+    explorerToggleAccessibilityState,
+    explorerOpenGesture,
+  } = useWorkspaceExplorerActions({
+    normalizedServerId,
+    workspaceDirectory,
+    isGitCheckout,
+    isMobile,
+    isRouteFocused,
+  });
   const isLocalDaemon = useIsLocalDaemon(normalizedServerId);
-
-  const activeExplorerCheckout = useMemo<ExplorerCheckoutContext | null>(() => {
-    if (!normalizedServerId || !workspaceDirectory) {
-      return null;
-    }
-    return {
-      serverId: normalizedServerId,
-      cwd: workspaceDirectory,
-      isGit: isGitCheckout,
-    };
-  }, [isGitCheckout, normalizedServerId, workspaceDirectory]);
-
-  const openExplorerForWorkspace = useCallback(() => {
-    if (!activeExplorerCheckout) {
-      return;
-    }
-    openFileExplorerForCheckout({
-      isCompact: isMobile,
-      checkout: activeExplorerCheckout,
-    });
-  }, [activeExplorerCheckout, isMobile, openFileExplorerForCheckout]);
-
-  const handleToggleExplorer = useCallback(() => {
-    if (!activeExplorerCheckout) {
-      return;
-    }
-    toggleFileExplorerForCheckout({
-      isCompact: isMobile,
-      checkout: activeExplorerCheckout,
-    });
-  }, [activeExplorerCheckout, isMobile, toggleFileExplorerForCheckout]);
 
   const desktopContentStyle = styles.content;
 
@@ -2042,10 +1979,6 @@ function WorkspaceScreenContent({
     setExplorerTabForCheckout,
   });
 
-  const explorerToggleAccessibilityState = useMemo(
-    () => ({ expanded: isExplorerOpen }),
-    [isExplorerOpen],
-  );
   const environmentSourceLabel = useMemo(
     () => getWorkspaceEnvironmentSourceLabel(workspaceDescriptor),
     [workspaceDescriptor],
@@ -2054,27 +1987,6 @@ function WorkspaceScreenContent({
     () => getWorkspaceEnvironmentStatus(workspaceDescriptor),
     [workspaceDescriptor],
   );
-
-  const explorerOpenGesture = useExplorerOpenGesture({
-    enabled: isMobile && canOpenExplorerFromAgentView,
-    onOpen: openExplorerForWorkspace,
-  });
-
-  useEffect(() => {
-    if (!isRouteFocused || isWeb || !isExplorerOpen) {
-      return;
-    }
-
-    const handler = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (isExplorerOpen) {
-        showMobileAgent();
-        return true;
-      }
-      return false;
-    });
-
-    return () => handler.remove();
-  }, [isExplorerOpen, isRouteFocused, showMobileAgent]);
 
   const workspaceLayout = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,
@@ -2351,47 +2263,17 @@ function WorkspaceScreenContent({
 
   const handleCreateTerminal = useStableEvent(createTerminal);
 
-  useEffect(() => {
-    if (!isRouteFocused || !openIntentValue || !persistenceKey) {
-      return;
-    }
-    const consumptionKey = `${normalizedServerId}:${normalizedWorkspaceId}:${openIntentValue}`;
-    if (consumedWorkspaceIntentRef.current === consumptionKey) {
-      return;
-    }
-    const action = resolveWorkspaceScreenOpenIntentAction({
-      openIntentValue,
-      hasExplorerCheckout: activeExplorerCheckout !== null,
-      isTerminalCreatePending:
-        createTerminalMutation.isPending || pendingTerminalCreateInput !== null,
-    });
-    if (action.kind === "ignore" || action.kind === "wait") {
-      return;
-    }
-    consumedWorkspaceIntentRef.current = consumptionKey;
-    if (isWeb) {
-      stripOpenSearchParamFromBrowserUrl();
-    } else {
-      router.replace(buildHostWorkspaceRoute(normalizedServerId, normalizedWorkspaceId) as Href);
-    }
-    if (action.kind === "open-changes") {
-      handleOpenEnvironmentChanges();
-      return;
-    }
-    handleCreateTerminal();
-  }, [
-    activeExplorerCheckout,
-    createTerminalMutation.isPending,
-    handleCreateTerminal,
-    handleOpenEnvironmentChanges,
+  useWorkspaceOpenIntent({
     isRouteFocused,
+    persistenceKey,
     normalizedServerId,
     normalizedWorkspaceId,
-    openIntentValue,
-    pendingTerminalCreateInput,
-    persistenceKey,
-    router,
-  ]);
+    hasExplorerCheckout: activeExplorerCheckout !== null,
+    isTerminalCreatePending:
+      createTerminalMutation.isPending || pendingTerminalCreateInput !== null,
+    onOpenChanges: handleOpenEnvironmentChanges,
+    onCreateTerminal: handleCreateTerminal,
+  });
 
   const {
     handleOpenWorkspaceDockPane,
