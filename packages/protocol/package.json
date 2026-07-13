@@ -21,6 +21,10 @@
       "types": "./dist/agent/extensions.d.ts",
       "default": "./dist/agent/extensions.js"
     },
+    "./agent/state": {
+      "types": "./dist/agent/state.d.ts",
+      "default": "./dist/agent/state.js"
+    },
     "./agent-labels": {
       "types": "./dist/agent-labels.d.ts",
       "default": "./dist/agent-labels.js"

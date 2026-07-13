@@ -47,6 +47,13 @@ describe("current package exports", () => {
     });
   });
 
+  test("exports agent state as a first-class protocol domain", () => {
+    expect(protocolPackage.exports["./agent/state"]).toEqual({
+      types: "./dist/agent/state.d.ts",
+      default: "./dist/agent/state.js",
+    });
+  });
+
   test("exports checkout messages as a first-class protocol domain", () => {
     expect(protocolPackage.exports["./checkout/messages"]).toEqual({
       types: "./dist/checkout/messages.d.ts",

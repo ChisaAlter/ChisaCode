@@ -4,7 +4,7 @@
 
 | 维度     | 当前评分 | 主要证据                                                                                                                       | 距离 10 分的核心差距                                                                            |
 | -------- | -------: | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 1895 行；workspace 1541 行；Claude 873 行；ACP 926 行；Pi 581 行                           | workspace 仍承担 route/authority 与跨域 view-model 协调，应只按真实职责继续拆分                 |
+| 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 1449 行；workspace 1541 行；Claude 873 行；ACP 926 行；Pi 581 行                           | workspace 仍承担 route/authority 与跨域 view-model 协调，应只按真实职责继续拆分                 |
 | 安全设计 |      9.7 | relay E2EE 单调 nonce；Ed25519 socket 认证；Expo 57/Bundle Mode 已迁移；生产审计 12 项且 0 high/0 critical                     | 当前 Expo 工具链仍含 `xcode` 嵌套 UUID；EAS 云端验证与 relay 认证升级需持续兼容性发布管理       |
 | 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop                             | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
 | 代码质量 |      9.9 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；Expo 57 通过 Doctor、Android Kotlin 编译与 Hermes bundle export | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
@@ -54,6 +54,7 @@
 - 2026-07-13：daemon status/pairing/config/project config/lifecycle 的 8 个 inbound、6 个 outbound、3 个 status payload 与 mutable config 提取到 `daemon/messages.ts`；旧入口兼容重导出并新增显式 package subpath，主文件降至 2164 行。
 - 2026-07-14：usage summary/export/clear 的 3 个 inbound、3 个 outbound schema、兼容默认值与 payload/type 提取到 `usage/messages.ts`；总 union 改由只读 tuple 聚合，旧入口兼容重导出并新增显式 package subpath，主文件降至 2073 行。
 - 2026-07-14：voice mode/audio、dictation stream 的 7 个 inbound、9 个 outbound schema、server voice capability 与消息类型提取到 `voice/messages.ts`；旧入口兼容重导出并新增显式 package subpath，主文件降至 1895 行。通用 `abort_request` 保留在主会话控制域，不错误归入 voice。
+- 2026-07-14：agent status/capability、permission、tool/timeline、stream event、snapshot/list payload 与 relation schema 提取到 `agent/state.ts`；旧入口兼容重导出并新增显式 package subpath，七个既有 schema 保持运行时同一性，主文件降至 1449 行。
 - 2026-07-13：移动端 workspace tab switcher、presentation fallback、tab menu 与全部局部样式提取到 `workspace-mobile-tab-switcher.tsx`；主屏保持 props/行为兼容并从 5453 降至 4926 行。
 - 2026-07-13：tab、pane、dock、sidebar 与 command-center 五组 workspace action 注册/路由提取到 `use-workspace-keyboard-actions.ts`；handler 改用 `useStableEvent`，避免屏幕重渲染时重复注册，主屏降至 4657 行。
 - 2026-07-13：layout tab reconcile、setup cache 恢复、空 workspace draft seed 与 setup tab auto-open 提取到 `use-workspace-persistence-hydration.ts`；storage schema 与 effect 顺序保持不变，主屏降至 4451 行。
@@ -98,7 +99,7 @@
 
 1. **P1 依赖安全/发布验证（继续推进）**：AI SDK、Claude SDK、OpenAI SDK、Zod 4、五类兼容型生产补丁、server 直接 UUID 移除及 Expo 55/56/57 本地迁移已完成；下一步只在显式发布时完成 EAS 认证 config/build 验证，并跟踪 Expo 上游何时移除 `xcode` 嵌套 `uuid`，不做破坏性 override。
 2. **P1 provider 文件拆分（核心完成）**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP/Pi/Claude 均已完成 composition-first 核心拆分；后续只在真实复杂度或缺陷证明收益时继续分域，不再按行数做低收益碎片化拆分。
-3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon/usage/voice-dictation 域提取并降至 1895 行，下一步只按真实职责评估 agent lifecycle/core 分域并保留总 union 聚合职责。
+3. **P1 client/protocol 拆分（进行中）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon/usage/voice-dictation/agent-state 域提取并降至 1449 行，下一步提取 agent lifecycle/config/interaction RPC 到 `agent/messages.ts`，主文件只保留跨域 session/WS 聚合职责。
 4. **P2 app 工作台拆分（核心完成）**：移动端 navigation、workspace command routing、layout/setup persistence/hydration、tab/pane/dock/content、environment panel state/data/view、header/center-column view、explorer 与 open-intent 已提取，`workspace-screen.tsx` 从 5453 降至 1541 行；后续只在 route/authority 或跨域协调出现真实复杂度时继续分域，并保持 native/web/electron surface 验证分离。
 5. **P2 产品 parity（2026-07-13 完成）**：MCP 已补齐一等 chat/loop 工具，并复用现有 service、Chat mention fan-out 与 caller cwd/identity 安全边界。
 6. **P2 测试减债**：按包逐步降低 module mock、conditional skip、fixed wait、weak assertion、process.env mutation 基线，不再只维持 no-new-debt。
