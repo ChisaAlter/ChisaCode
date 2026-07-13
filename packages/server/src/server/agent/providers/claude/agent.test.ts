@@ -788,6 +788,32 @@ describe("ClaudeAgentSession features", () => {
     await session.close();
   });
 
+  test("clears cached runtime model when switching back to the default model", async () => {
+    const { queryFactory, queryMock } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "claude-opus-4-8",
+    });
+
+    await (
+      session as unknown as {
+        ensureQuery(): Promise<unknown>;
+      }
+    ).ensureQuery();
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ model: "claude-opus-4-8" });
+
+    await session.setModel(null);
+
+    expect(queryMock.setModel).toHaveBeenLastCalledWith(undefined);
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ model: null });
+    await session.close();
+  });
   test("restarts the query when switching to ultracode and preserves gateway settings", async () => {
     const { queryFactory } = createQueryMock();
     const client = new ClaudeAgentClient({

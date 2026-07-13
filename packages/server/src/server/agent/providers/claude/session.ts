@@ -10,18 +10,13 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { Logger } from "pino";
-import { normalizeClaudeRuntimeModelId } from "./models.js";
 import {
   CLAUDE_CAPABILITIES,
   type ClaudeAgentConfig,
   type ClaudeAgentSessionOptions,
 } from "./client.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
-import {
-  extractSessionIdRaw,
-  isImageMimeType,
-  type ClaudeContentChunk,
-} from "./sdk-types-mapping.js";
+import { isImageMimeType, type ClaudeContentChunk } from "./sdk-types-mapping.js";
 import {
   ClaudeMessageRouter,
   type ClaudeAutonomousTurnState,
@@ -31,6 +26,7 @@ import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { ClaudePermissionController } from "./permission-controller.js";
 import { ClaudeOptionsBuilder } from "./options-builder.js";
 import { ClaudeMessageTranslator } from "./message-translator.js";
+import { ClaudeSessionIdentityController } from "./session-identity.js";
 import { type ClaudeAsyncMessageInput, ClaudeQueryLifecycle } from "./query-lifecycle.js";
 import {
   CLAUDE_INTERRUPT_TOOL_USE_PLACEHOLDER as INTERRUPT_TOOL_USE_PLACEHOLDER,
@@ -62,14 +58,6 @@ import {
   type AgentUsage,
   type AgentRuntimeInfo,
 } from "../../agent-sdk-types.js";
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
-  return isObjectRecord(value) ? value : undefined;
-}
 
 const DEFAULT_MODES: AgentMode[] = [
   {
@@ -131,8 +119,7 @@ export class ClaudeAgentSession implements AgentSession {
   private readonly logger: Logger;
   private readonly optionsBuilder: ClaudeOptionsBuilder;
   private readonly queryLifecycle: ClaudeQueryLifecycle;
-  private claudeSessionId: string | null;
-  private persistence: AgentPersistenceHandle | null;
+  private readonly sessionIdentity: ClaudeSessionIdentityController;
   private currentMode: PermissionMode;
   private planResumeMode: PermissionMode | null = null;
   private availableModes: AgentMode[] = DEFAULT_MODES;
@@ -148,17 +135,17 @@ export class ClaudeAgentSession implements AgentSession {
   private readonly historyController: ClaudeSessionHistory;
   private readonly rewindController: ClaudeRewindController;
   private readonly messageTranslator: ClaudeMessageTranslator;
-  private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
-  private lastOptionsModel: string | null = null;
-  private lastRuntimeModel: string | null = null;
-  private modelGatewayOverrideActive = false;
-  private pendingFreshSessionId: string | null = null;
 
   constructor(config: ClaudeAgentConfig, options: ClaudeAgentSessionOptions) {
     this.config = config;
     this.agentId = options.agentId;
     this.persistSession = options.persistSession;
     this.logger = options.logger.child({ agentId: this.agentId });
+    this.sessionIdentity = new ClaudeSessionIdentityController({
+      config: this.config,
+      handle: options.handle,
+      logger: this.logger,
+    });
     this.optionsBuilder = new ClaudeOptionsBuilder({
       config: this.config,
       launchEnv: options.launchEnv,
@@ -168,8 +155,8 @@ export class ClaudeAgentSession implements AgentSession {
       logger: this.logger,
       resolveBinary: options.resolveBinary,
       getCurrentMode: () => this.currentMode,
-      getClaudeSessionId: () => this.claudeSessionId,
-      getPendingFreshSessionId: () => this.pendingFreshSessionId,
+      getClaudeSessionId: () => this.sessionIdentity.id,
+      getPendingFreshSessionId: () => this.sessionIdentity.pendingFreshId,
       canUseTool: async (toolName, input, requestOptions) =>
         this.handlePermissionRequest(toolName, input, requestOptions),
       captureStderr: (data) => this.captureStderr(data),
@@ -183,16 +170,11 @@ export class ClaudeAgentSession implements AgentSession {
       getTraceContext: () => ({
         agentId: this.agentId,
         provider: "claude",
-        sessionId: this.claudeSessionId,
+        sessionId: this.sessionIdentity.id,
         turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
       }),
-      onBeforeQueryCreate: () => {
-        this.persistence = null;
-      },
-      onQueryOptionsBuilt: ({ requestedModel, modelGatewayOverrideActive }) => {
-        this.lastOptionsModel = requestedModel;
-        this.modelGatewayOverrideActive = modelGatewayOverrideActive;
-      },
+      onBeforeQueryCreate: () => this.sessionIdentity.beforeQueryCreate(),
+      onQueryOptionsBuilt: (input) => this.sessionIdentity.captureQueryOptions(input),
       handleMissingResumedConversation: (message, query) =>
         this.handleMissingResumedConversation(message, query),
       routeMessage: (message) => this.messageRouter.routeMessage(message),
@@ -234,7 +216,7 @@ export class ClaudeAgentSession implements AgentSession {
       updatePartialEventState: (event) => this.toolCallHandler.updatePartialEventState(event),
     });
     this.messageTranslator = new ClaudeMessageTranslator({
-      getSessionId: () => this.claudeSessionId,
+      getSessionId: () => this.sessionIdentity.id,
       captureSessionIdFromMessage: (message) => this.captureSessionIdFromMessage(message),
       handleSystemInit: (message) => this.handleSystemMessage(message),
       handleSidechainMessage: (message, parentToolUseId) =>
@@ -253,7 +235,7 @@ export class ClaudeAgentSession implements AgentSession {
       getTraceContext: () => ({
         agentId: this.agentId,
         provider: "claude",
-        sessionId: this.claudeSessionId,
+        sessionId: this.sessionIdentity.id,
       }),
       notifySubscribers: (event) => this.notifySubscribers(event),
       flushPendingToolCalls: () => this.flushPendingToolCalls(),
@@ -264,18 +246,8 @@ export class ClaudeAgentSession implements AgentSession {
         this.translateMessageToEvents(message, routeOptions),
       assembleTimelineItems: (input) => this.timelineAssembler.consume(input),
     });
-    const handle = options.handle;
-
-    if (handle) {
-      if (!handle.sessionId) {
-        throw new Error("Cannot resume: persistence handle has no sessionId");
-      }
-      this.claudeSessionId = handle.sessionId;
-      this.persistence = handle;
-      this.historyController.load(handle.sessionId);
-    } else {
-      this.claudeSessionId = null;
-      this.persistence = null;
+    if (this.sessionIdentity.id) {
+      this.historyController.load(this.sessionIdentity.id);
     }
 
     // Validate mode if provided
@@ -407,7 +379,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   get id(): string | null {
-    return this.claudeSessionId;
+    return this.sessionIdentity.id;
   }
 
   get features(): AgentFeature[] {
@@ -418,24 +390,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
-    if (this.cachedRuntimeInfo) {
-      return { ...this.cachedRuntimeInfo };
-    }
-    const info: AgentRuntimeInfo = {
-      provider: "claude",
-      sessionId: this.claudeSessionId,
-      model: this.lastOptionsModel,
-      modeId: this.currentMode ?? null,
-      ...(this.lastRuntimeModel
-        ? {
-            extra: {
-              runtimeModel: this.lastRuntimeModel,
-            },
-          }
-        : {}),
-    };
-    this.cachedRuntimeInfo = info;
-    return { ...info };
+    return this.sessionIdentity.getRuntimeInfo(this.currentMode ?? null);
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -444,18 +399,13 @@ export class ClaudeAgentSession implements AgentSession {
       runOptions: options,
       startTurn: (p, o) => this.startTurn(p, o),
       subscribe: (callback) => this.subscribe(callback),
-      getSessionId: () => this.claudeSessionId ?? "",
+      getSessionId: () => this.sessionIdentity.id ?? "",
       reduceFinalText: appendOrReplaceGrowingAssistantMessage,
     });
 
-    this.cachedRuntimeInfo = {
-      provider: "claude",
-      sessionId: this.claudeSessionId,
-      model: this.lastOptionsModel,
-      modeId: this.currentMode ?? null,
-    };
+    this.sessionIdentity.rememberRunCompleted(this.currentMode ?? null);
 
-    if (!this.claudeSessionId) {
+    if (!this.sessionIdentity.id) {
       throw new Error("Session ID not set after run completed");
     }
 
@@ -591,6 +541,7 @@ export class ClaudeAgentSession implements AgentSession {
       this.planResumeMode = normalized;
     }
     this.currentMode = normalized;
+    this.sessionIdentity.invalidateRuntimeInfo();
   }
 
   async setModel(modelId: string | null): Promise<void> {
@@ -602,11 +553,7 @@ export class ClaudeAgentSession implements AgentSession {
     if (!claudeModelSupportsFastMode(this.config.model) && this.config.featureValues?.fast_mode) {
       await this.applyFastModeFeature(false, activeQuery);
     }
-    this.lastOptionsModel = normalizedModelId ?? this.lastOptionsModel;
-    this.lastRuntimeModel = null;
-    this.cachedRuntimeInfo = null;
-    // Model change affects persistence metadata, so invalidate cached handle.
-    this.persistence = null;
+    this.sessionIdentity.recordModelSelection(normalizedModelId);
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
@@ -649,7 +596,7 @@ export class ClaudeAgentSession implements AgentSession {
     if (activeQuery) {
       await activeQuery.applyFlagSettings({ fastMode: enabled });
     }
-    this.cachedRuntimeInfo = null;
+    this.sessionIdentity.invalidateRuntimeInfo();
   }
 
   getPendingPermissions(): AgentPermissionRequest[] {
@@ -661,19 +608,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   describePersistence(): AgentPersistenceHandle | null {
-    if (this.persistence) {
-      return this.persistence;
-    }
-    if (!this.claudeSessionId) {
-      return null;
-    }
-    this.persistence = {
-      provider: "claude",
-      sessionId: this.claudeSessionId,
-      nativeHandle: this.claudeSessionId,
-      metadata: { ...this.config },
-    };
-    return this.persistence;
+    return this.sessionIdentity.describePersistence();
   }
 
   async close(): Promise<void> {
@@ -681,7 +616,7 @@ export class ClaudeAgentSession implements AgentSession {
       {
         agentId: this.agentId,
         provider: "claude",
-        sessionId: this.claudeSessionId,
+        sessionId: this.sessionIdentity.id,
         turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
         turnState: this.turnState,
         hasQuery: Boolean(this.query),
@@ -700,18 +635,18 @@ export class ClaudeAgentSession implements AgentSession {
     this.turnState = "idle";
     this.sidechainTracker.clear();
     await this.queryLifecycle.closeTransport();
-    if (this.persistSession === false && this.claudeSessionId) {
+    if (this.persistSession === false && this.sessionIdentity.id) {
       // Claude Code currently ignores --no-session-persistence outside --print mode
       // (see `claude --help`), so the SDK's persistSession=false is silently dropped
       // in stream-json mode. Sweep the transcript ourselves so ephemeral runs
       // (metadata generator, branch-name generator) don't show up as resumable.
-      const historyPath = this.historyController.resolvePath(this.claudeSessionId);
+      const historyPath = this.historyController.resolvePath(this.sessionIdentity.id);
       if (historyPath) {
         try {
           await promises.rm(historyPath, { force: true });
         } catch (error) {
           this.logger.warn(
-            { err: error, historyPath, claudeSessionId: this.claudeSessionId },
+            { err: error, historyPath, claudeSessionId: this.sessionIdentity.id },
             "Failed to delete ephemeral Claude session transcript",
           );
         }
@@ -721,7 +656,7 @@ export class ClaudeAgentSession implements AgentSession {
       {
         agentId: this.agentId,
         provider: "claude",
-        sessionId: this.claudeSessionId,
+        sessionId: this.sessionIdentity.id,
         turnState: this.turnState,
       },
       "provider.claude.session_close.complete",
@@ -756,7 +691,7 @@ export class ClaudeAgentSession implements AgentSession {
     }
     await revertClaudeConversation({
       sdk: realClaudeRewindSdk,
-      sessionId: this.claudeSessionId,
+      sessionId: this.sessionIdentity.id,
       messageId: target.messageId,
       setSessionId: (sessionId) => {
         this.rebindConversationSession(sessionId);
@@ -799,38 +734,30 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   private rebindConversationSession(sessionId: string): void {
-    const oldSessionId = this.claudeSessionId;
-    this.claudeSessionId = sessionId;
-    this.pendingFreshSessionId = null;
-    this.persistence = null;
-    this.cachedRuntimeInfo = null;
+    const capture = this.sessionIdentity.rebindSession(sessionId);
     this.queryRestartNeeded = true;
     this.historyController.clear();
     this.rewindController.reset();
     this.messageTranslator.resetUserMessageState();
     this.historyController.load(sessionId);
-    if (oldSessionId && oldSessionId !== sessionId) {
+    if (capture.threadStartedSessionId && capture.notice) {
       this.dispatchEvents([
         {
           type: "timeline",
           provider: "claude",
-          item: this.createClaudeSessionChangedNotice(oldSessionId, sessionId),
+          item: capture.notice,
         },
         {
           type: "thread_started",
           provider: "claude",
-          sessionId,
+          sessionId: capture.threadStartedSessionId,
         },
       ]);
     }
   }
 
   private startFreshConversationSession(): void {
-    const sessionId = randomUUID();
-    this.claudeSessionId = sessionId;
-    this.pendingFreshSessionId = sessionId;
-    this.persistence = null;
-    this.cachedRuntimeInfo = null;
+    this.sessionIdentity.startFreshSession();
     this.queryRestartNeeded = true;
     this.historyController.clear();
     this.rewindController.reset();
@@ -887,7 +814,7 @@ export class ClaudeAgentSession implements AgentSession {
       },
       parent_tool_use_id: null,
       uuid: messageId,
-      session_id: this.claudeSessionId ?? "",
+      session_id: this.sessionIdentity.id ?? "",
     };
   }
 
@@ -1005,9 +932,8 @@ export class ClaudeAgentSession implements AgentSession {
 
     this.failActiveTurns(staleResumeError);
     await this.queryLifecycle.invalidateMissingResume(activeQuery);
-    this.persistence = null;
+    this.sessionIdentity.invalidateMissingResume();
     this.historyController.clear();
-    this.cachedRuntimeInfo = null;
     this.autonomousTurn = null;
     this.activeForegroundTurnId = null;
     this.syncTurnState("missing resumed conversation");
@@ -1046,121 +972,27 @@ export class ClaudeAgentSession implements AgentSession {
     }
   }
 
-  private createClaudeSessionChangedNotice(
-    oldSessionId: string,
-    newSessionId: string,
-  ): AgentTimelineItem {
-    return {
-      type: "assistant_message",
-      text: `Claude switched to a new session: ${oldSessionId} -> ${newSessionId}`,
-    };
-  }
-
   private captureSessionIdFromMessage(message: SDKMessage): {
     threadStartedSessionId: string | null;
     notice: AgentTimelineItem | null;
   } {
-    const msgRecord = toObjectRecord(message) ?? {};
-    const sessionId = extractSessionIdRaw({
-      session_id: msgRecord.session_id,
-      sessionId: msgRecord.sessionId,
-      session: isObjectRecord(msgRecord.session) ? { id: msgRecord.session.id } : null,
-    }).trim();
-    if (!sessionId) {
-      return { threadStartedSessionId: null, notice: null };
-    }
-    if (this.claudeSessionId === null) {
-      this.claudeSessionId = sessionId;
-      this.pendingFreshSessionId = null;
-      this.persistence = null;
-      return { threadStartedSessionId: sessionId, notice: null };
-    }
-    if (this.claudeSessionId === sessionId) {
-      this.pendingFreshSessionId = null;
-      return { threadStartedSessionId: null, notice: null };
-    }
-    const oldSessionId = this.claudeSessionId;
-    // Session ID changed mid-stream (e.g. a hook caused Claude to restart
-    // with a new session). Accept the new ID and continue — the turn should
-    // not be failed just because the underlying subprocess cycled.
-    this.logger.warn(
-      { existingSessionId: this.claudeSessionId, newSessionId: sessionId },
-      "Claude session ID changed in message; accepting new session",
-    );
-    this.claudeSessionId = sessionId;
-    this.pendingFreshSessionId = null;
-    this.persistence = null;
-    return {
-      threadStartedSessionId: sessionId,
-      notice: this.createClaudeSessionChangedNotice(oldSessionId, sessionId),
-    };
+    return this.sessionIdentity.captureSessionIdFromMessage(message);
   }
 
   private handleSystemMessage(message: SDKSystemMessage): {
     threadStartedSessionId: string | null;
     notice: AgentTimelineItem | null;
   } {
-    if (message.subtype !== "init") {
-      return { threadStartedSessionId: null, notice: null };
-    }
-
-    const msgRecord = toObjectRecord(message) ?? {};
-    const newSessionId = extractSessionIdRaw({
-      session_id: msgRecord.session_id,
-      sessionId: msgRecord.sessionId,
-      session: isObjectRecord(msgRecord.session) ? { id: msgRecord.session.id } : null,
-    }).trim();
-    if (!newSessionId) {
-      return { threadStartedSessionId: null, notice: null };
-    }
-    const existingSessionId = this.claudeSessionId;
-    let threadStartedSessionId: string | null = null;
-    let notice: AgentTimelineItem | null = null;
-
-    if (existingSessionId === null) {
-      this.claudeSessionId = newSessionId;
-      this.pendingFreshSessionId = null;
-      threadStartedSessionId = newSessionId;
-      this.logger.debug({ sessionId: newSessionId }, "Claude session ID set for the first time");
-    } else if (existingSessionId === newSessionId) {
-      this.pendingFreshSessionId = null;
-      this.logger.debug({ sessionId: newSessionId }, "Claude session ID unchanged (same value)");
-    } else {
-      // Session ID changed in an init message (e.g. a hook restarted Claude
-      // with a new session mid-turn). Accept the new ID and continue.
-      this.logger.warn(
-        { existingSessionId, newSessionId },
-        "Claude session ID changed in init message; accepting new session",
-      );
-      this.claudeSessionId = newSessionId;
-      this.pendingFreshSessionId = null;
-      threadStartedSessionId = newSessionId;
-      notice = this.createClaudeSessionChangedNotice(existingSessionId, newSessionId);
-    }
-    this.availableModes = DEFAULT_MODES;
-    this.currentMode = message.permissionMode;
-    if (this.currentMode !== "plan") {
-      this.planResumeMode = this.currentMode;
-    }
-    this.persistence = null;
-    if (message.model) {
-      const normalizedRuntimeModel = normalizeClaudeRuntimeModelId(message.model);
-      this.logger.debug(
-        { runtimeModel: message.model, normalizedRuntimeModel },
-        "Captured runtime model from SDK init",
-      );
-      if (this.modelGatewayOverrideActive) {
-        this.lastOptionsModel =
-          this.config.model ?? normalizedRuntimeModel ?? this.lastOptionsModel;
-      } else if (normalizedRuntimeModel) {
-        this.lastOptionsModel = normalizedRuntimeModel;
-      } else if (!this.lastOptionsModel) {
-        this.lastOptionsModel = this.config.model ?? null;
+    const { capture, permissionMode } = this.sessionIdentity.captureSystemMessage(message);
+    if (permissionMode) {
+      this.availableModes = DEFAULT_MODES;
+      this.currentMode = permissionMode;
+      if (this.currentMode !== "plan") {
+        this.planResumeMode = this.currentMode;
       }
-      this.lastRuntimeModel = message.model;
-      this.cachedRuntimeInfo = null;
+      this.sessionIdentity.invalidateRuntimeInfo();
     }
-    return { threadStartedSessionId, notice };
+    return capture;
   }
 
   // Compatibility surface for focused usage translation regression tests.
@@ -1204,7 +1036,7 @@ export class ClaudeAgentSession implements AgentSession {
       {
         agentId: this.agentId,
         provider: "claude",
-        sessionId: this.claudeSessionId,
+        sessionId: this.sessionIdentity.id,
         turnId: getAgentStreamEventTurnId(tagged),
         event: tagged,
       },

@@ -180,6 +180,7 @@ test("exposes and applies auto permission mode", async () => {
   const session = await createSession();
 
   try {
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ modeId: "default" });
     await expect(session.getAvailableModes()).resolves.toEqual(
       expect.arrayContaining([
         {
@@ -194,6 +195,7 @@ test("exposes and applies auto permission mode", async () => {
 
     expect(queryMock.setPermissionMode).toHaveBeenCalledWith("auto");
     expect(await session.getCurrentMode()).toBe("auto");
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({ modeId: "auto" });
   } finally {
     await session.close();
   }
@@ -536,6 +538,7 @@ test("captures session IDs from fixture-driven init message variants", async () 
         };
       } = asInternals(session);
       try {
+        await session.getRuntimeInfo();
         const started = internal.handleSystemMessage({
           type: "system",
           subtype: "init",
@@ -548,6 +551,9 @@ test("captures session IDs from fixture-driven init message variants", async () 
           notice: null,
         });
         expect(session.describePersistence()?.sessionId).toBe(fixture.expected);
+        await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+          sessionId: fixture.expected,
+        });
       } finally {
         await session.close();
       }
