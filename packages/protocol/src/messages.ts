@@ -1,8 +1,5 @@
 import { z } from "zod/v3";
 import { CLIENT_CAPS } from "./client-capabilities.js";
-import { MAX_EXPLICIT_AGENT_TITLE_CHARS } from "@chisacode/protocol/agent-title-limits";
-import { AgentProviderSchema } from "@chisacode/protocol/provider-manifest";
-import { AGENT_RELATION_KINDS } from "./agent-labels.js";
 import { SyntheticModelConfigSchema } from "@chisacode/protocol/provider-config";
 import {
   ChatCreateRequestSchema,
@@ -52,7 +49,6 @@ import {
   LoopLogsResponseSchema,
   LoopStopResponseSchema,
 } from "@chisacode/protocol/loop/rpc-schemas";
-import { AgentPresetsPayloadSchema } from "@chisacode/protocol/agent-presets";
 import {
   GenerativeUiActionRequestSchema,
   GenerativeUiActionResponseSchema,
@@ -66,21 +62,17 @@ import {
   CheckoutInboundMessageSchemas,
   CheckoutOutboundMessageSchemas,
 } from "./checkout/messages.js";
-import { AgentAttachmentsSchema } from "./agent/attachments.js";
 import {
-  ProjectPlacementPayloadSchema,
   WorkspaceInboundMessageSchemas,
   WorkspaceOutboundMessageSchemas,
 } from "./workspace/messages.js";
 import {
-  ListCommandsDraftConfigSchema,
   ProviderInboundMessageSchemas,
   ProviderOutboundMessageSchemas,
 } from "./provider/messages.js";
 import {
   AgentExtensionInboundMessageSchemas,
   AgentExtensionOutboundMessageSchemas,
-  McpServerConfigSchema,
 } from "./agent/extensions.js";
 import {
   DaemonInboundMessageSchemas,
@@ -94,16 +86,13 @@ import {
   VoiceOutboundMessageSchemas,
 } from "./voice/messages.js";
 import {
-  AgentPermissionRequestPayloadSchema,
-  AgentPermissionResponseSchema,
-  AgentPersistenceHandleSchema,
-  AgentSnapshotPayloadSchema,
-  AgentStatusSchema,
-  AgentStreamEventPayloadSchema,
-  AgentTimelineItemPayloadSchema,
-} from "./agent/state.js";
+  AgentInboundMessageSchemas,
+  AgentOutboundMessageSchemas,
+  AgentStatusPayloadSchemas,
+} from "./agent/messages.js";
 export * from "./agent/attachments.js";
 export * from "./agent/extensions.js";
+export * from "./agent/messages.js";
 export * from "./agent/state.js";
 export * from "./daemon/messages.js";
 export * from "./provider/messages.js";
@@ -140,30 +129,6 @@ export {
   type ChisaCodeScriptEntryRaw,
   type ProjectConfigRpcError,
 };
-const AgentSessionConfigSchema = z.object({
-  provider: AgentProviderSchema,
-  runtimeProvider: AgentProviderSchema.optional(),
-  cwd: z.string(),
-  modeId: z.string().optional(),
-  model: z.string().optional(),
-  thinkingOptionId: z.string().optional(),
-  featureValues: z.record(z.unknown()).optional(),
-  title: z.string().trim().min(1).max(MAX_EXPLICIT_AGENT_TITLE_CHARS).optional().nullable(),
-  approvalPolicy: z.string().optional(),
-  sandboxMode: z.string().optional(),
-  networkAccess: z.boolean().optional(),
-  webSearch: z.boolean().optional(),
-  extra: z
-    .object({
-      codex: z.record(z.unknown()).optional(),
-      claude: z.record(z.unknown()).optional(),
-    })
-    .partial()
-    .optional(),
-  systemPrompt: z.string().optional(),
-  mcpServers: z.record(McpServerConfigSchema).optional(),
-});
-
 // ============================================================================
 // Session Inbound Messages (Session receives these)
 // ============================================================================
@@ -172,39 +137,10 @@ export const AbortRequestMessageSchema = z.object({
   type: z.literal("abort_request"),
 });
 
-const AgentDirectoryFilterSchema = z.object({
-  labels: z.record(z.string()).optional(),
-  projectKeys: z.array(z.string()).optional(),
-  statuses: z.array(AgentStatusSchema).optional(),
-  includeArchived: z.boolean().optional(),
-  requiresAttention: z.boolean().optional(),
-  thinkingOptionId: z.string().nullable().optional(),
-});
-
-export const DeleteAgentRequestMessageSchema = z.object({
-  type: z.literal("delete_agent_request"),
-  agentId: z.string(),
-  requestId: z.string(),
-});
-
-export const ArchiveAgentRequestMessageSchema = z.object({
-  type: z.literal("archive_agent_request"),
-  agentId: z.string(),
-  requestId: z.string(),
-});
-
 export const CloseItemsRequestMessageSchema = z.object({
   type: z.literal("close_items_request"),
   agentIds: z.array(z.string()).default([]),
   terminalIds: z.array(z.string()).default([]),
-  requestId: z.string(),
-});
-
-export const UpdateAgentRequestMessageSchema = z.object({
-  type: z.literal("update_agent_request"),
-  agentId: z.string(),
-  name: z.string().optional(),
-  labels: z.record(z.string()).optional(),
   requestId: z.string(),
 });
 
@@ -216,286 +152,12 @@ export const ProjectRenameRequestSchema = z.object({
   requestId: z.string(),
 });
 
-const ImageAttachmentSchema = z.object({
-  data: z.string(), // base64 encoded image
-  mimeType: z.string(), // e.g., "image/jpeg", "image/png"
-});
-
-export const SendAgentMessageSchema = z.object({
-  type: z.literal("send_agent_message"),
-  agentId: z.string(),
-  text: z.string(),
-  messageId: z.string().optional(), // Client-provided ID for deduplication
-  images: z.array(ImageAttachmentSchema).optional(),
-  attachments: AgentAttachmentsSchema,
-});
-
-// ============================================================================
-// Agent RPCs (requestId-correlated)
-// ============================================================================
-
-export const FetchAgentsRequestMessageSchema = z.object({
-  type: z.literal("fetch_agents_request"),
-  requestId: z.string(),
-  scope: z.enum(["active"]).optional(),
-  filter: AgentDirectoryFilterSchema.optional(),
-  sort: z
-    .array(
-      z.object({
-        key: z.enum(["status_priority", "created_at", "updated_at", "title"]),
-        direction: z.enum(["asc", "desc"]),
-      }),
-    )
-    .optional(),
-  page: z
-    .object({
-      limit: z.number().int().positive().max(200),
-      cursor: z.string().min(1).optional(),
-    })
-    .optional(),
-  subscribe: z
-    .object({
-      subscriptionId: z.string().optional(),
-    })
-    .optional(),
-});
-
-export const FetchAgentHistoryRequestMessageSchema = z.object({
-  type: z.literal("fetch_agent_history_request"),
-  requestId: z.string(),
-  filter: AgentDirectoryFilterSchema.optional(),
-  sort: z
-    .array(
-      z.object({
-        key: z.enum(["status_priority", "created_at", "updated_at", "title"]),
-        direction: z.enum(["asc", "desc"]),
-      }),
-    )
-    .optional(),
-  page: z
-    .object({
-      limit: z.number().int().positive().max(200),
-      cursor: z.string().min(1).optional(),
-    })
-    .optional(),
-});
-
-export const FetchAgentRequestMessageSchema = z.object({
-  type: z.literal("fetch_agent_request"),
-  requestId: z.string(),
-  /** Accepts full ID, unique prefix, or exact full title (server resolves). */
-  agentId: z.string(),
-});
-
-export const SendAgentMessageRequestSchema = z.object({
-  type: z.literal("send_agent_message_request"),
-  requestId: z.string(),
-  /** Accepts full ID, unique prefix, or exact full title (server resolves). */
-  agentId: z.string(),
-  text: z.string(),
-  messageId: z.string().optional(), // Client-provided ID for deduplication
-  images: z.array(ImageAttachmentSchema).optional(),
-  attachments: AgentAttachmentsSchema,
-});
-
-export const WaitForFinishRequestSchema = z.object({
-  type: z.literal("wait_for_finish_request"),
-  requestId: z.string(),
-  /** Accepts full ID, unique prefix, or exact full title (server resolves). */
-  agentId: z.string(),
-  timeoutMs: z.number().int().positive().optional(),
-});
-
-const GitSetupOptionsSchema = z.object({
-  baseBranch: z.string().optional(),
-  createNewBranch: z.boolean().optional(),
-  newBranchName: z.string().optional(),
-  createWorktree: z.boolean().optional(),
-  worktreeSlug: z.string().optional(),
-  refName: z.string().min(1).optional(),
-  action: z.enum(["branch-off", "checkout"]).optional(),
-  githubPrNumber: z.number().int().positive().optional(),
-});
-
-export type GitSetupOptions = z.infer<typeof GitSetupOptionsSchema>;
-
-export const CreateAgentWorktreeTargetSchema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("branch-off"),
-    newBranch: z.string().min(1),
-    base: z.string().min(1).optional(),
-  }),
-  z.object({
-    mode: z.literal("checkout-branch"),
-    branch: z.string().min(1),
-  }),
-  z.object({
-    mode: z.literal("checkout-pr"),
-    prNumber: z.number().int().positive(),
-  }),
-]);
-
-export type CreateAgentWorktreeTarget = z.infer<typeof CreateAgentWorktreeTargetSchema>;
-
-export const CreateAgentRequestMessageSchema = z.object({
-  type: z.literal("create_agent_request"),
-  config: AgentSessionConfigSchema,
-  env: z.record(z.string()).optional(),
-  workspaceId: z.string().optional(),
-  worktreeName: z.string().optional(),
-  initialPrompt: z.string().optional(),
-  clientMessageId: z.string().optional(),
-  outputSchema: z.record(z.unknown()).optional(),
-  images: z.array(ImageAttachmentSchema).optional(),
-  attachments: AgentAttachmentsSchema,
-  git: GitSetupOptionsSchema.optional(),
-  worktree: CreateAgentWorktreeTargetSchema.optional(),
-  autoArchive: z.boolean().optional(),
-  labels: z.record(z.string()).default({}),
-  relationKind: z.enum(AGENT_RELATION_KINDS).optional(),
-  requestId: z.string(),
-});
-
-export const AgentPresetsListRequestMessageSchema = z.object({
-  type: z.literal("agent.presets.list.request"),
-  requestId: z.string(),
-});
-
 export const ModelGatewayMoaTestRequestMessageSchema = z.object({
   type: z.literal("model_gateway.moa.test.request"),
   requestId: z.string(),
   gatewayId: z.string().min(1),
   syntheticModel: SyntheticModelConfigSchema,
   prompt: z.string().min(1),
-});
-
-export const ResumeAgentRequestMessageSchema = z.object({
-  type: z.literal("resume_agent_request"),
-  handle: AgentPersistenceHandleSchema,
-  overrides: AgentSessionConfigSchema.partial().optional(),
-  requestId: z.string(),
-});
-
-export const ImportAgentRequestMessageSchema = z.object({
-  type: z.literal("import_agent_request"),
-  provider: AgentProviderSchema.optional(),
-  providerId: z.string().optional(),
-  sessionId: z.string().optional(),
-  providerHandleId: z.string().optional(),
-  cwd: z.string().optional(),
-  labels: z.record(z.string()).optional(),
-  requestId: z.string(),
-});
-
-export const RefreshAgentRequestMessageSchema = z.object({
-  type: z.literal("refresh_agent_request"),
-  agentId: z.string(),
-  requestId: z.string(),
-});
-
-export const CancelAgentRequestMessageSchema = z.object({
-  type: z.literal("cancel_agent_request"),
-  agentId: z.string(),
-  requestId: z.string().optional(),
-});
-
-export const AgentTimelineCursorSchema = z.object({
-  epoch: z.string(),
-  seq: z.number().int().nonnegative(),
-});
-
-export const FetchAgentTimelineRequestMessageSchema = z.object({
-  type: z.literal("fetch_agent_timeline_request"),
-  agentId: z.string(),
-  requestId: z.string(),
-  direction: z.enum(["tail", "before", "after"]).optional(),
-  cursor: AgentTimelineCursorSchema.optional(),
-  // 0 means "all matching rows for this query window".
-  limit: z.number().int().nonnegative().optional(),
-  // Default should be projected for app timeline loading.
-  projection: z.enum(["projected", "canonical"]).optional(),
-});
-
-export const SetAgentModeRequestMessageSchema = z.object({
-  type: z.literal("set_agent_mode_request"),
-  agentId: z.string(),
-  modeId: z.string(),
-  requestId: z.string(),
-});
-
-const AgentActionResponsePayloadSchema = z.object({
-  requestId: z.string(),
-  agentId: z.string(),
-  accepted: z.boolean(),
-  error: z.string().nullable(),
-});
-
-export const SetAgentModeResponseMessageSchema = z.object({
-  type: z.literal("set_agent_mode_response"),
-  payload: AgentActionResponsePayloadSchema,
-});
-
-export const SetAgentModelRequestMessageSchema = z.object({
-  type: z.literal("set_agent_model_request"),
-  agentId: z.string(),
-  modelId: z.string().nullable(),
-  runtimeProvider: AgentProviderSchema.nullable().optional(),
-  requestId: z.string(),
-});
-
-export const SetAgentModelResponseMessageSchema = z.object({
-  type: z.literal("set_agent_model_response"),
-  payload: AgentActionResponsePayloadSchema,
-});
-
-export const SetAgentThinkingRequestMessageSchema = z.object({
-  type: z.literal("set_agent_thinking_request"),
-  agentId: z.string(),
-  thinkingOptionId: z.string().nullable(),
-  requestId: z.string(),
-});
-
-export const SetAgentThinkingResponseMessageSchema = z.object({
-  type: z.literal("set_agent_thinking_response"),
-  payload: AgentActionResponsePayloadSchema,
-});
-
-export const SetAgentFeatureRequestMessageSchema = z.object({
-  type: z.literal("set_agent_feature_request"),
-  agentId: z.string(),
-  featureId: z.string(),
-  value: z.unknown(),
-  requestId: z.string(),
-});
-
-export const SetAgentFeatureResponseMessageSchema = z.object({
-  type: z.literal("set_agent_feature_response"),
-  payload: AgentActionResponsePayloadSchema,
-});
-
-export const AgentRewindModeSchema = z.enum(["conversation", "files", "both"]);
-
-export const AgentRewindRequestMessageSchema = z.object({
-  type: z.literal("agent.rewind.request"),
-  agentId: z.string(),
-  messageId: z.string(),
-  mode: AgentRewindModeSchema,
-  requestId: z.string(),
-});
-
-export const AgentRewindResponseMessageSchema = z.object({
-  type: z.literal("agent.rewind.response"),
-  payload: z.object({
-    requestId: z.string(),
-    agentId: z.string(),
-    ok: z.boolean(),
-    error: z.string().nullable(),
-  }),
-});
-
-export const UpdateAgentResponseMessageSchema = z.object({
-  type: z.literal("update_agent_response"),
-  payload: AgentActionResponsePayloadSchema,
 });
 
 export const ProjectRenameResponsePayloadSchema = z.object({
@@ -509,19 +171,6 @@ export const ProjectRenameResponsePayloadSchema = z.object({
 export const ProjectRenameResponseSchema = z.object({
   type: z.literal("project.rename.response"),
   payload: ProjectRenameResponsePayloadSchema,
-});
-
-export const AgentPermissionResponseMessageSchema = z.object({
-  type: z.literal("agent_permission_response"),
-  agentId: z.string(),
-  requestId: z.string(),
-  response: AgentPermissionResponseSchema,
-});
-
-export const ClearAgentAttentionMessageSchema = z.object({
-  type: z.literal("clear_agent_attention"),
-  agentId: z.union([z.string(), z.array(z.string())]),
-  requestId: z.string().optional(),
 });
 
 export const ClientHeartbeatMessageSchema = z.object({
@@ -539,13 +188,6 @@ export const PingMessageSchema = z.object({
   clientSentAt: z.number().int().optional(),
 });
 
-export const ListCommandsRequestSchema = z.object({
-  type: z.literal("list_commands_request"),
-  agentId: z.string(),
-  draftConfig: ListCommandsDraftConfigSchema.optional(),
-  requestId: z.string(),
-});
-
 export const RegisterPushTokenMessageSchema = z.object({
   type: z.literal("register_push_token"),
   token: z.string(),
@@ -554,40 +196,18 @@ export const RegisterPushTokenMessageSchema = z.object({
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ...VoiceInboundMessageSchemas,
   AbortRequestMessageSchema,
-  FetchAgentsRequestMessageSchema,
-  FetchAgentHistoryRequestMessageSchema,
+  ...AgentInboundMessageSchemas,
   ...UsageInboundMessageSchemas,
-  FetchAgentRequestMessageSchema,
-  DeleteAgentRequestMessageSchema,
-  ArchiveAgentRequestMessageSchema,
   CloseItemsRequestMessageSchema,
-  UpdateAgentRequestMessageSchema,
   ProjectRenameRequestSchema,
-  SendAgentMessageRequestSchema,
-  WaitForFinishRequestSchema,
   ...DaemonInboundMessageSchemas,
   ...AgentExtensionInboundMessageSchemas,
-  CreateAgentRequestMessageSchema,
-  AgentPresetsListRequestMessageSchema,
   ModelGatewayMoaTestRequestMessageSchema,
-  ResumeAgentRequestMessageSchema,
-  ImportAgentRequestMessageSchema,
-  RefreshAgentRequestMessageSchema,
-  CancelAgentRequestMessageSchema,
-  FetchAgentTimelineRequestMessageSchema,
-  SetAgentModeRequestMessageSchema,
-  SetAgentModelRequestMessageSchema,
-  SetAgentThinkingRequestMessageSchema,
-  SetAgentFeatureRequestMessageSchema,
-  AgentRewindRequestMessageSchema,
-  AgentPermissionResponseMessageSchema,
   ...CheckoutInboundMessageSchemas,
   ...WorkspaceInboundMessageSchemas,
   ...ProviderInboundMessageSchemas,
-  ClearAgentAttentionMessageSchema,
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
-  ListCommandsRequestSchema,
   RegisterPushTokenMessageSchema,
   ...TerminalInboundMessageSchemas,
   ChatCreateRequestSchema,
@@ -757,47 +377,8 @@ export const RpcErrorMessageSchema = z.object({
   }),
 });
 
-const AgentStatusWithRequestSchema = z.object({
-  agentId: z.string(),
-  requestId: z.string(),
-});
-
-const AgentStatusWithTimelineSchema = AgentStatusWithRequestSchema.extend({
-  timelineSize: z.number().optional(),
-});
-
-export const AgentCreatedStatusPayloadSchema = z
-  .object({
-    status: z.literal("agent_created"),
-    agent: AgentSnapshotPayloadSchema,
-  })
-  .extend(AgentStatusWithRequestSchema.shape);
-
-export const AgentCreateFailedStatusPayloadSchema = z.object({
-  status: z.literal("agent_create_failed"),
-  requestId: z.string(),
-  error: z.string(),
-  errorCode: z.string().optional(),
-});
-
-export const AgentResumedStatusPayloadSchema = z
-  .object({
-    status: z.literal("agent_resumed"),
-    agent: AgentSnapshotPayloadSchema,
-  })
-  .extend(AgentStatusWithTimelineSchema.shape);
-
-export const AgentRefreshedStatusPayloadSchema = z
-  .object({
-    status: z.literal("agent_refreshed"),
-  })
-  .extend(AgentStatusWithTimelineSchema.shape);
-
 export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
-  AgentCreatedStatusPayloadSchema,
-  AgentCreateFailedStatusPayloadSchema,
-  AgentResumedStatusPayloadSchema,
-  AgentRefreshedStatusPayloadSchema,
+  ...AgentStatusPayloadSchemas,
   ...DaemonStatusPayloadSchemas,
 ]);
 
@@ -811,203 +392,6 @@ export const ArtifactMessageSchema = z.object({
     title: z.string(),
     content: z.string(),
     isBase64: z.boolean(),
-  }),
-});
-
-export const AgentUpdateMessageSchema = z.object({
-  type: z.literal("agent_update"),
-  payload: z.discriminatedUnion("kind", [
-    z.object({
-      kind: z.literal("upsert"),
-      agent: AgentSnapshotPayloadSchema,
-      project: ProjectPlacementPayloadSchema.nullable().optional(),
-    }),
-    z.object({
-      kind: z.literal("remove"),
-      agentId: z.string(),
-    }),
-  ]),
-});
-
-export const AgentStreamMessageSchema = z.object({
-  type: z.literal("agent_stream"),
-  payload: z.object({
-    agentId: z.string(),
-    event: AgentStreamEventPayloadSchema,
-    timestamp: z.string(),
-    // Present for timeline events. Maps 1:1 to canonical in-memory timeline rows.
-    seq: z.number().int().nonnegative().optional(),
-    epoch: z.string().optional(),
-  }),
-});
-
-export const AgentStatusMessageSchema = z.object({
-  type: z.literal("agent_status"),
-  payload: z.object({
-    agentId: z.string(),
-    status: z.string(),
-    info: AgentSnapshotPayloadSchema,
-  }),
-});
-
-export const AgentListMessageSchema = z.object({
-  type: z.literal("agent_list"),
-  payload: z.object({
-    agents: z.array(AgentSnapshotPayloadSchema),
-  }),
-});
-
-const AgentDirectoryResponseEntrySchema = z.object({
-  agent: AgentSnapshotPayloadSchema,
-  project: ProjectPlacementPayloadSchema,
-});
-
-const AgentDirectoryPageInfoSchema = z.object({
-  nextCursor: z.string().nullable(),
-  prevCursor: z.string().nullable(),
-  hasMore: z.boolean(),
-});
-
-export const FetchAgentsResponseMessageSchema = z.object({
-  type: z.literal("fetch_agents_response"),
-  payload: z.object({
-    requestId: z.string(),
-    subscriptionId: z.string().nullable().optional(),
-    entries: z.array(AgentDirectoryResponseEntrySchema),
-    pageInfo: AgentDirectoryPageInfoSchema,
-  }),
-});
-
-export const FetchAgentHistoryResponseMessageSchema = z.object({
-  type: z.literal("fetch_agent_history_response"),
-  payload: z.object({
-    requestId: z.string(),
-    entries: z.array(AgentDirectoryResponseEntrySchema),
-    pageInfo: AgentDirectoryPageInfoSchema,
-  }),
-});
-
-export const FetchAgentResponseMessageSchema = z.object({
-  type: z.literal("fetch_agent_response"),
-  payload: z.object({
-    requestId: z.string(),
-    agent: AgentSnapshotPayloadSchema.nullable(),
-    project: ProjectPlacementPayloadSchema.nullable().optional(),
-    error: z.string().nullable(),
-  }),
-});
-
-const AgentTimelineSeqRangeSchema = z.object({
-  startSeq: z.number().int().nonnegative(),
-  endSeq: z.number().int().nonnegative(),
-});
-
-export const AgentTimelineEntryPayloadSchema = z.object({
-  provider: AgentProviderSchema,
-  item: AgentTimelineItemPayloadSchema,
-  timestamp: z.string(),
-  seqStart: z.number().int().nonnegative(),
-  seqEnd: z.number().int().nonnegative(),
-  sourceSeqRanges: z.array(AgentTimelineSeqRangeSchema),
-  collapsed: z.array(z.enum(["assistant_merge", "reasoning_merge", "tool_lifecycle"])),
-});
-
-export const FetchAgentTimelineResponseMessageSchema = z.object({
-  type: z.literal("fetch_agent_timeline_response"),
-  payload: z.object({
-    requestId: z.string(),
-    agentId: z.string(),
-    agent: AgentSnapshotPayloadSchema.nullable(),
-    direction: z.enum(["tail", "before", "after"]),
-    projection: z.enum(["projected", "canonical"]),
-    epoch: z.string(),
-    reset: z.boolean(),
-    staleCursor: z.boolean(),
-    gap: z.boolean(),
-    window: z.object({
-      minSeq: z.number().int().nonnegative(),
-      maxSeq: z.number().int().nonnegative(),
-      nextSeq: z.number().int().nonnegative(),
-    }),
-    startCursor: AgentTimelineCursorSchema.nullable(),
-    endCursor: AgentTimelineCursorSchema.nullable(),
-    hasOlder: z.boolean(),
-    hasNewer: z.boolean(),
-    entries: z.array(AgentTimelineEntryPayloadSchema),
-    error: z.string().nullable(),
-  }),
-});
-
-export const CancelAgentResponseMessageSchema = z.object({
-  type: z.literal("cancel_agent_response"),
-  payload: z.object({
-    requestId: z.string(),
-    agentId: z.string(),
-    agent: AgentSnapshotPayloadSchema.nullable(),
-  }),
-});
-
-export const ClearAgentAttentionResponseMessageSchema = z.object({
-  type: z.literal("clear_agent_attention_response"),
-  payload: z.object({
-    requestId: z.string(),
-    agentId: z.string().or(z.array(z.string())),
-    agents: z.array(AgentSnapshotPayloadSchema),
-  }),
-});
-
-export const SendAgentMessageResponseMessageSchema = z.object({
-  type: z.literal("send_agent_message_response"),
-  payload: z.object({
-    requestId: z.string(),
-    agentId: z.string(),
-    accepted: z.boolean(),
-    error: z.string().nullable(),
-  }),
-});
-
-export const WaitForFinishResponseMessageSchema = z.object({
-  type: z.literal("wait_for_finish_response"),
-  payload: z.object({
-    requestId: z.string(),
-    status: z.enum(["idle", "error", "permission", "timeout"]),
-    final: AgentSnapshotPayloadSchema.nullable(),
-    error: z.string().nullable(),
-    lastMessage: z.string().nullable(),
-  }),
-});
-
-export const AgentPermissionRequestMessageSchema = z.object({
-  type: z.literal("agent_permission_request"),
-  payload: z.object({
-    agentId: z.string(),
-    request: AgentPermissionRequestPayloadSchema,
-  }),
-});
-
-export const AgentPermissionResolvedMessageSchema = z.object({
-  type: z.literal("agent_permission_resolved"),
-  payload: z.object({
-    agentId: z.string(),
-    requestId: z.string(),
-    resolution: AgentPermissionResponseSchema,
-  }),
-});
-
-export const AgentDeletedMessageSchema = z.object({
-  type: z.literal("agent_deleted"),
-  payload: z.object({
-    agentId: z.string(),
-    requestId: z.string(),
-  }),
-});
-
-export const AgentArchivedMessageSchema = z.object({
-  type: z.literal("agent_archived"),
-  payload: z.object({
-    agentId: z.string(),
-    archivedAt: z.string(),
-    requestId: z.string(),
   }),
 });
 
@@ -1026,13 +410,6 @@ export const CloseItemsResponseSchema = z.object({
   payload: z.object({
     agents: z.array(CloseItemsAgentResultSchema),
     terminals: z.array(CloseItemsTerminalResultSchema),
-    requestId: z.string(),
-  }),
-});
-
-export const AgentPresetsListResponseMessageSchema = z.object({
-  type: z.literal("agent.presets.list.response"),
-  payload: AgentPresetsPayloadSchema.extend({
     requestId: z.string(),
   }),
 });
@@ -1077,22 +454,6 @@ export const ModelGatewayMoaTestResponseMessageSchema = z.object({
   }),
 });
 
-const AgentSlashCommandSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  argumentHint: z.string(),
-});
-
-export const ListCommandsResponseSchema = z.object({
-  type: z.literal("list_commands_response"),
-  payload: z.object({
-    agentId: z.string(),
-    commands: z.array(AgentSlashCommandSchema),
-    error: z.string().nullable(),
-    requestId: z.string(),
-  }),
-});
-
 type SessionOutboundMessageSchemaOptions = [
   typeof ActivityLogMessageSchema,
   typeof AssistantChunkMessageSchema,
@@ -1101,37 +462,15 @@ type SessionOutboundMessageSchemaOptions = [
   typeof PongMessageSchema,
   typeof RpcErrorMessageSchema,
   typeof ArtifactMessageSchema,
-  typeof AgentUpdateMessageSchema,
+  ...typeof AgentOutboundMessageSchemas,
   ...typeof WorkspaceOutboundMessageSchemas,
   ...typeof ProviderOutboundMessageSchemas,
-  typeof AgentStreamMessageSchema,
-  typeof AgentStatusMessageSchema,
-  typeof FetchAgentsResponseMessageSchema,
-  typeof FetchAgentHistoryResponseMessageSchema,
   ...typeof UsageOutboundMessageSchemas,
-  typeof FetchAgentResponseMessageSchema,
-  typeof FetchAgentTimelineResponseMessageSchema,
-  typeof CancelAgentResponseMessageSchema,
-  typeof ClearAgentAttentionResponseMessageSchema,
-  typeof SendAgentMessageResponseMessageSchema,
   ...typeof DaemonOutboundMessageSchemas,
-  typeof SetAgentModeResponseMessageSchema,
-  typeof SetAgentModelResponseMessageSchema,
-  typeof SetAgentThinkingResponseMessageSchema,
-  typeof SetAgentFeatureResponseMessageSchema,
-  typeof AgentRewindResponseMessageSchema,
-  typeof UpdateAgentResponseMessageSchema,
   typeof ProjectRenameResponseSchema,
-  typeof WaitForFinishResponseMessageSchema,
-  typeof AgentPermissionRequestMessageSchema,
-  typeof AgentPermissionResolvedMessageSchema,
-  typeof AgentDeletedMessageSchema,
-  typeof AgentArchivedMessageSchema,
   typeof CloseItemsResponseSchema,
   ...typeof CheckoutOutboundMessageSchemas,
-  typeof AgentPresetsListResponseMessageSchema,
   typeof ModelGatewayMoaTestResponseMessageSchema,
-  typeof ListCommandsResponseSchema,
   ...typeof AgentExtensionOutboundMessageSchemas,
   ...typeof TerminalOutboundMessageSchemas,
   typeof ChatCreateResponseSchema,
@@ -1169,37 +508,15 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   PongMessageSchema,
   RpcErrorMessageSchema,
   ArtifactMessageSchema,
-  AgentUpdateMessageSchema,
+  ...AgentOutboundMessageSchemas,
   ...WorkspaceOutboundMessageSchemas,
   ...ProviderOutboundMessageSchemas,
-  AgentStreamMessageSchema,
-  AgentStatusMessageSchema,
-  FetchAgentsResponseMessageSchema,
-  FetchAgentHistoryResponseMessageSchema,
   ...UsageOutboundMessageSchemas,
-  FetchAgentResponseMessageSchema,
-  FetchAgentTimelineResponseMessageSchema,
-  CancelAgentResponseMessageSchema,
-  ClearAgentAttentionResponseMessageSchema,
-  SendAgentMessageResponseMessageSchema,
   ...DaemonOutboundMessageSchemas,
-  SetAgentModeResponseMessageSchema,
-  SetAgentModelResponseMessageSchema,
-  SetAgentThinkingResponseMessageSchema,
-  SetAgentFeatureResponseMessageSchema,
-  AgentRewindResponseMessageSchema,
-  UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
-  WaitForFinishResponseMessageSchema,
-  AgentPermissionRequestMessageSchema,
-  AgentPermissionResolvedMessageSchema,
-  AgentDeletedMessageSchema,
-  AgentArchivedMessageSchema,
   CloseItemsResponseSchema,
   ...CheckoutOutboundMessageSchemas,
-  AgentPresetsListResponseMessageSchema,
   ModelGatewayMoaTestResponseMessageSchema,
-  ListCommandsResponseSchema,
   ...AgentExtensionOutboundMessageSchemas,
   ...TerminalOutboundMessageSchemas,
   ChatCreateResponseSchema,
@@ -1236,32 +553,8 @@ export type ServerCapabilities = z.infer<typeof ServerCapabilitiesSchema>;
 export type ServerInfoStatusPayload = z.infer<typeof ServerInfoStatusPayloadSchema>;
 export type RpcErrorMessage = z.infer<typeof RpcErrorMessageSchema>;
 export type ArtifactMessage = z.infer<typeof ArtifactMessageSchema>;
-export type AgentUpdateMessage = z.infer<typeof AgentUpdateMessageSchema>;
-export type AgentStreamMessage = z.infer<typeof AgentStreamMessageSchema>;
-export type AgentStatusMessage = z.infer<typeof AgentStatusMessageSchema>;
-export type FetchAgentsResponseMessage = z.infer<typeof FetchAgentsResponseMessageSchema>;
-export type FetchAgentHistoryResponseMessage = z.infer<
-  typeof FetchAgentHistoryResponseMessageSchema
->;
-export type FetchAgentResponseMessage = z.infer<typeof FetchAgentResponseMessageSchema>;
-export type FetchAgentTimelineResponseMessage = z.infer<
-  typeof FetchAgentTimelineResponseMessageSchema
->;
-export type CancelAgentResponseMessage = z.infer<typeof CancelAgentResponseMessageSchema>;
-export type SendAgentMessageResponseMessage = z.infer<typeof SendAgentMessageResponseMessageSchema>;
-export type SetAgentModeResponseMessage = z.infer<typeof SetAgentModeResponseMessageSchema>;
-export type SetAgentModelResponseMessage = z.infer<typeof SetAgentModelResponseMessageSchema>;
-export type SetAgentThinkingResponseMessage = z.infer<typeof SetAgentThinkingResponseMessageSchema>;
-export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureResponseMessageSchema>;
-export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
-export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
 export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
-export type WaitForFinishResponseMessage = z.infer<typeof WaitForFinishResponseMessageSchema>;
-export type AgentPermissionRequestMessage = z.infer<typeof AgentPermissionRequestMessageSchema>;
-export type AgentPermissionResolvedMessage = z.infer<typeof AgentPermissionResolvedMessageSchema>;
-export type AgentDeletedMessage = z.infer<typeof AgentDeletedMessageSchema>;
-export type AgentPresetsListResponseMessage = z.infer<typeof AgentPresetsListResponseMessageSchema>;
 export type ModelGatewayMoaTestResponseMessage = z.infer<
   typeof ModelGatewayMoaTestResponseMessageSchema
 >;
@@ -1291,13 +584,6 @@ export type LoopStopResponse = z.infer<typeof LoopStopResponseSchema>;
 export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
 
 // Type exports for inbound message types
-export type FetchAgentsRequestMessage = z.infer<typeof FetchAgentsRequestMessageSchema>;
-export type FetchAgentHistoryRequestMessage = z.infer<typeof FetchAgentHistoryRequestMessageSchema>;
-export type FetchAgentRequestMessage = z.infer<typeof FetchAgentRequestMessageSchema>;
-export type SendAgentMessageRequest = z.infer<typeof SendAgentMessageRequestSchema>;
-export type WaitForFinishRequest = z.infer<typeof WaitForFinishRequestSchema>;
-export type CreateAgentRequestMessage = z.infer<typeof CreateAgentRequestMessageSchema>;
-export type AgentPresetsListRequestMessage = z.infer<typeof AgentPresetsListRequestMessageSchema>;
 export type ModelGatewayMoaTestRequestMessage = z.infer<
   typeof ModelGatewayMoaTestRequestMessageSchema
 >;
@@ -1322,22 +608,8 @@ export type LoopListRequest = z.infer<typeof LoopListRequestSchema>;
 export type LoopInspectRequest = z.infer<typeof LoopInspectRequestSchema>;
 export type LoopLogsRequest = z.infer<typeof LoopLogsRequestSchema>;
 export type LoopStopRequest = z.infer<typeof LoopStopRequestSchema>;
-export type ResumeAgentRequestMessage = z.infer<typeof ResumeAgentRequestMessageSchema>;
-export type DeleteAgentRequestMessage = z.infer<typeof DeleteAgentRequestMessageSchema>;
-export type UpdateAgentRequestMessage = z.infer<typeof UpdateAgentRequestMessageSchema>;
 export type ProjectRenameRequest = z.infer<typeof ProjectRenameRequestSchema>;
-export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;
-export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMessageSchema>;
-export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;
-export type SetAgentFeatureRequestMessage = z.infer<typeof SetAgentFeatureRequestMessageSchema>;
-export type AgentPermissionResponseMessage = z.infer<typeof AgentPermissionResponseMessageSchema>;
-export type ClearAgentAttentionMessage = z.infer<typeof ClearAgentAttentionMessageSchema>;
-export type ClearAgentAttentionResponseMessage = z.infer<
-  typeof ClearAgentAttentionResponseMessageSchema
->;
 export type ClientHeartbeatMessage = z.infer<typeof ClientHeartbeatMessageSchema>;
-export type ListCommandsRequest = z.infer<typeof ListCommandsRequestSchema>;
-export type ListCommandsResponse = z.infer<typeof ListCommandsResponseSchema>;
 export type RegisterPushTokenMessage = z.infer<typeof RegisterPushTokenMessageSchema>;
 
 // Cross-domain terminal-related message types retained in this module.
