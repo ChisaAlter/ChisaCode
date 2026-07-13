@@ -81,6 +81,7 @@ import {
   type WaitForAgentResult,
   type WaitForAgentStartOptions,
 } from "./agent-wait-controller.js";
+import { AgentForegroundExecutionController } from "./agent-foreground-execution-controller.js";
 
 const CANCEL_PROPAGATION_TIMEOUT_MS = 2_000;
 
@@ -184,11 +185,6 @@ interface StreamEventFlags {
 
 interface HandleStreamEventOptions {
   fromHistory?: boolean;
-}
-
-interface StreamAgentLifecycleHooks {
-  onStarted(): void;
-  onStartFailed(error: unknown): void;
 }
 
 interface ManagedAgentBase {
@@ -323,6 +319,7 @@ function validateAgentId(agentId: string, source: string): string {
 export class AgentManager {
   private readonly agents = new Map<string, ActiveManagedAgent>();
   private readonly archive: AgentArchiveController;
+  private readonly foregroundExecution: AgentForegroundExecutionController;
   private readonly launchConfig: AgentLaunchConfigController;
   private readonly metadata: AgentMetadataController;
   private readonly providers: AgentProviderController;
@@ -361,6 +358,18 @@ export class AgentManager {
       getLastAssistantMessage: (agentId) => this.getLastAssistantMessage(agentId),
       getPendingRun: (agentId) => this.foregroundRuns.getPendingRun(agentId),
       subscribe: (callback, waitOptions) => this.subscribe(callback, waitOptions),
+    });
+    this.foregroundExecution = new AgentForegroundExecutionController({
+      attachPersistenceCwd,
+      emitState: (agent) => this.emitState(agent),
+      foregroundRuns: this.foregroundRuns,
+      getAgent: (agentId) => this.requireSessionAgent(agentId),
+      handleStreamEvent: (agent, event) => this.handleStreamEvent(agent, event),
+      isTerminalEvent: isTurnTerminalEvent,
+      logger: this.logger,
+      onAgentTerminal: (agentId) => this.generativeUiActionQueue.onAgentTerminal(agentId),
+      refreshRuntimeInfo: (agent) => this.refreshRuntimeInfo(agent),
+      touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
     });
     this.providers = new AgentProviderController({
       clients: options.clients ?? {},
@@ -451,7 +460,7 @@ export class AgentManager {
     });
     const task = (async () => {
       try {
-        for await (const _event of this.streamAgentWithLifecycle(
+        for await (const _event of this.foregroundExecution.stream(
           agentId,
           formatSystemNotificationPrompt(prompt),
           undefined,
@@ -1038,154 +1047,7 @@ export class AgentManager {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): AsyncGenerator<AgentStreamEvent> {
-    return this.streamAgentWithLifecycle(agentId, prompt, options);
-  }
-
-  private streamAgentWithLifecycle(
-    agentId: string,
-    prompt: AgentPromptInput,
-    options: AgentRunOptions | undefined,
-    lifecycleHooks?: StreamAgentLifecycleHooks,
-  ): AsyncGenerator<AgentStreamEvent> {
-    const existingAgent = this.requireSessionAgent(agentId);
-    this.logger.trace(
-      {
-        agentId,
-        provider: existingAgent.provider,
-        sessionId: existingAgent.persistence?.sessionId ?? undefined,
-        turnId: existingAgent.activeForegroundTurnId ?? undefined,
-        lifecycle: existingAgent.lifecycle,
-        activeForegroundTurnId: existingAgent.activeForegroundTurnId,
-        hasPendingForegroundRun: this.foregroundRuns.hasPendingRun(agentId),
-        promptType: typeof prompt === "string" ? "string" : "structured",
-        hasRunOptions: Boolean(options),
-      },
-      "agent.manager.stream.request",
-    );
-    if (existingAgent.activeForegroundTurnId || this.foregroundRuns.hasPendingRun(agentId)) {
-      this.logger.trace(
-        {
-          agentId,
-          provider: existingAgent.provider,
-          sessionId: existingAgent.persistence?.sessionId ?? undefined,
-          turnId: existingAgent.activeForegroundTurnId ?? undefined,
-          lifecycle: existingAgent.lifecycle,
-          hasPendingForegroundRun: this.foregroundRuns.hasPendingRun(agentId),
-        },
-        "agent.manager.stream.reject",
-      );
-      throw new Error(`Agent ${agentId} already has an active run`);
-    }
-
-    const agent = existingAgent;
-    agent.pendingReplacement = false;
-    agent.lastError = undefined;
-
-    const pendingRun = this.foregroundRuns.createPendingRun(agentId);
-
-    const streamForwarder = async function* streamForwarder(this: AgentManager) {
-      let turnId: string;
-      let turnStream: ReturnType<ForegroundRunState["createTurnStream"]> | null = null;
-      try {
-        const result = await agent.session.startTurn(prompt, options);
-        turnId = result.turnId;
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : "Failed to start turn";
-        await this.handleStreamEvent(agent, {
-          type: "turn_failed",
-          provider: agent.provider,
-          error: errorMsg,
-        });
-        this.finalizeForegroundTurn(agent);
-        this.foregroundRuns.settlePendingRun(agentId, pendingRun.token);
-        lifecycleHooks?.onStartFailed(error);
-        throw error;
-      }
-
-      pendingRun.started = true;
-      agent.activeForegroundTurnId = turnId;
-      agent.lifecycle = "running";
-      this.touchUpdatedAt(agent);
-      this.emitState(agent);
-      lifecycleHooks?.onStarted();
-      this.logger.trace(
-        {
-          agentId,
-          provider: agent.provider,
-          sessionId: agent.persistence?.sessionId ?? undefined,
-          turnId,
-          lifecycle: agent.lifecycle,
-          activeForegroundTurnId: agent.activeForegroundTurnId,
-        },
-        "agent.manager.stream.start",
-      );
-
-      turnStream = this.foregroundRuns.createTurnStream(turnId);
-      this.foregroundRuns.addWaiter(agent, turnStream.waiter);
-
-      try {
-        for await (const event of turnStream.events(isTurnTerminalEvent)) {
-          yield event;
-        }
-      } finally {
-        if (turnStream) {
-          this.foregroundRuns.deleteWaiter(agent, turnStream.waiter);
-        }
-        this.foregroundRuns.settlePendingRun(agentId, pendingRun.token);
-        this.generativeUiActionQueue.onAgentTerminal(agentId);
-        if (!agent.activeForegroundTurnId) {
-          await this.refreshRuntimeInfo(agent);
-        }
-      }
-    }.call(this);
-
-    return streamForwarder;
-  }
-
-  private finalizeForegroundTurn(agent: ActiveManagedAgent, turnId?: string): void {
-    const mutableAgent = agent;
-    if (turnId) {
-      this.foregroundRuns.rememberFinalizedTurn(mutableAgent, turnId);
-    }
-    mutableAgent.activeForegroundTurnId = null;
-    const terminalError = mutableAgent.lastError;
-    const shouldHoldBusyForReplacement = mutableAgent.pendingReplacement && !terminalError;
-    let nextLifecycle: "running" | "error" | "idle";
-    if (shouldHoldBusyForReplacement) {
-      nextLifecycle = "running";
-    } else if (terminalError) {
-      nextLifecycle = "error";
-    } else {
-      nextLifecycle = "idle";
-    }
-    mutableAgent.lifecycle = nextLifecycle;
-    const persistenceHandle =
-      mutableAgent.session.describePersistence() ??
-      (mutableAgent.runtimeInfo?.sessionId
-        ? {
-            provider: mutableAgent.runtimeInfo.provider,
-            sessionId: mutableAgent.runtimeInfo.sessionId,
-          }
-        : null);
-    if (persistenceHandle) {
-      mutableAgent.persistence = attachPersistenceCwd(persistenceHandle, mutableAgent.cwd);
-    }
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: agent.provider,
-        sessionId: mutableAgent.persistence?.sessionId ?? undefined,
-        turnId,
-        lifecycle: mutableAgent.lifecycle,
-        terminalError,
-        pendingReplacement: mutableAgent.pendingReplacement,
-      },
-      "agent.manager.finalize",
-    );
-    if (!shouldHoldBusyForReplacement) {
-      this.touchUpdatedAt(mutableAgent);
-      this.emitState(mutableAgent);
-    }
+    return this.foregroundExecution.stream(agentId, prompt, options);
   }
 
   replaceAgentRun(
@@ -1956,7 +1818,7 @@ export class AgentManager {
     }
 
     if (!options?.fromHistory && isForegroundEvent && isTurnTerminalEvent(event)) {
-      this.finalizeForegroundTurn(agent, eventTurnId);
+      this.foregroundExecution.finalize(agent, eventTurnId);
     }
 
     if (!options?.fromHistory && flags.shouldDispatchEvent) {
