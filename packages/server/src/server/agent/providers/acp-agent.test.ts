@@ -37,7 +37,6 @@ import * as spawnUtils from "../../../utils/spawn.js";
 interface ACPSessionInternals {
   sessionId: string | null;
   connection: { prompt: (...args: unknown[]) => Promise<PromptResponse> };
-  activeForegroundTurnId: string | null;
   configOptions: SessionConfigOption[];
   translateSessionUpdate(update: SessionUpdate): AgentStreamEvent[];
 }
@@ -1433,7 +1432,7 @@ describe("ACPAgentSession", () => {
       type: "turn_started",
       turnId,
     });
-    expect(asInternals<ACPSessionInternals>(session).activeForegroundTurnId).toBe(turnId);
+    await expect(session.startTurn("overlap")).rejects.toThrow("already active");
 
     resolvePrompt({ stopReason: "end_turn", usage: { outputTokens: 3 } });
     await Promise.resolve();
@@ -1443,7 +1442,7 @@ describe("ACPAgentSession", () => {
       type: "turn_completed",
       turnId,
     });
-    expect(asInternals<ACPSessionInternals>(session).activeForegroundTurnId).toBeNull();
+    await expect(session.startTurn("next turn")).resolves.toEqual({ turnId: expect.any(String) });
   });
 
   test("startTurn converts background prompt rejections into turn_failed events", async () => {
@@ -1476,7 +1475,7 @@ describe("ACPAgentSession", () => {
       turnId,
       error: "prompt failed",
     });
-    expect(asInternals<ACPSessionInternals>(session).activeForegroundTurnId).toBeNull();
+    await expect(session.startTurn("next turn")).resolves.toEqual({ turnId: expect.any(String) });
   });
 
   test("startTurn preserves JSON-RPC error details from a real ACP prompt response", async () => {

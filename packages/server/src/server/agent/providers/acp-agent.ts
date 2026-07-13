@@ -5,10 +5,8 @@ import path from "node:path";
 import {
   ClientSideConnection,
   type AgentCapabilities as ACPAgentCapabilities,
-  type Error as ACPError,
   type Client as ACPClient,
   type ConfigOptionUpdate,
-  type ContentBlock,
   type CreateTerminalRequest,
   type CurrentModeUpdate,
   type KillTerminalRequest,
@@ -17,7 +15,6 @@ import {
   type McpServer,
   type NewSessionResponse,
   type PermissionOption,
-  type PromptResponse,
   type ReadTextFileRequest,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
@@ -28,7 +25,6 @@ import {
   type SessionUpdate,
   type TerminalOutputRequest,
   type TerminalOutputResponse,
-  type Usage,
   type WaitForTerminalExitRequest,
   type WriteTextFileRequest,
 } from "@agentclientprotocol/sdk";
@@ -45,7 +41,6 @@ import {
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPersistenceHandle,
-  type AgentPromptContentBlock,
   type AgentPromptInput,
   type AgentRunOptions,
   type AgentRunResult,
@@ -55,7 +50,6 @@ import {
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
-  type AgentUsage,
   type ListModesOptions,
   type ListModelsOptions,
   type ListPersistedAgentsOptions,
@@ -63,13 +57,14 @@ import {
   type PersistedAgentDescriptor,
 } from "../agent-sdk-types.js";
 import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
-import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
+
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "./provider-runner.js";
 import {
   mapACPPermissionRequest,
   selectACPPermissionOption,
   type ACPToolSnapshot,
 } from "./acp/tool-call-mapper.js";
+import { ACPForegroundTurnController } from "./acp/foreground-turn-controller.js";
 import { ACPSessionUpdateController } from "./acp/session-update-controller.js";
 import {
   deriveCurrentConfigValue,
@@ -97,6 +92,7 @@ import { ACPTerminalController, type ACPTerminalExit } from "./acp/terminal-cont
 import { resolvePathInsideBase } from "./acp/workspace-path.js";
 export type { ACPToolSnapshot } from "./acp/tool-call-mapper.js";
 export { createLoggedNdJsonStream } from "./acp/ndjson-stream.js";
+export { mapACPUsage } from "./acp/foreground-turn-controller.js";
 export type { SpawnedACPProcess } from "./acp/process-runtime.js";
 export {
   deriveModelDefinitionsFromACP,
@@ -107,37 +103,6 @@ export {
   type ACPProviderModeWriterContext,
   type ACPProviderModeWriteResult,
 } from "./acp/session-config.js";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isACPError(value: unknown): value is ACPError {
-  return isRecord(value) && typeof value.message === "string" && typeof value.code === "number";
-}
-
-function summarizeACPRequestError(error: unknown): {
-  message: string;
-  code?: string;
-  diagnostic?: string;
-} {
-  // Promise rejections are untyped, but the ACP SDK rejects JSON-RPC failures as response.error.
-  if (isACPError(error)) {
-    const code = String(error.code);
-    const data = error.data === undefined ? "" : ` | data=${JSON.stringify(error.data)}`;
-    return {
-      message: error.message,
-      code,
-      diagnostic: `${error.message} | code=${code}${data}`,
-    };
-  }
-
-  if (error instanceof Error) {
-    return { message: error.message };
-  }
-
-  return { message: String(error) };
-}
 
 const DEFAULT_ACP_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -213,18 +178,6 @@ interface PendingPermission {
 }
 
 export type SessionStateResponse = NewSessionResponse | LoadSessionResponse | ResumeSessionResponse;
-
-export function mapACPUsage(usage: Usage | null | undefined): AgentUsage | undefined {
-  if (!usage) {
-    return undefined;
-  }
-
-  return {
-    inputTokens: usage.inputTokens ?? undefined,
-    outputTokens: usage.outputTokens ?? undefined,
-    cachedInputTokens: usage.cachedReadTokens ?? undefined,
-  };
-}
 
 export class ACPAgentClient implements AgentClient {
   readonly provider: string;
@@ -587,14 +540,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private commandsReadySettled = false;
   private waitForInitialCommands: boolean;
   private initialCommandsWaitTimeoutMs: number;
-  private currentTurnUsage: AgentUsage | undefined;
-  private activeForegroundTurnId: string | null = null;
+  private readonly foregroundTurn: ACPForegroundTurnController;
   private closed = false;
   private historyPending = false;
   private replayingHistory = false;
-  private suppressUserEchoMessageId: string | null = null;
-  private suppressUserEchoText: string | null = null;
-  private bootstrapThreadEventPending = false;
 
   constructor(config: AgentSessionConfig, options: ACPAgentSessionOptions) {
     this.provider = options.provider;
@@ -620,13 +569,17 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       baseCwd: this.config.cwd,
       runtimeSettings: this.runtimeSettings,
     });
+    this.foregroundTurn = new ACPForegroundTurnController({
+      provider: this.provider,
+      getSessionId: () => this.sessionId,
+      emit: (event) => this.pushEvent(event),
+      collectDiagnostic: (message) => this.collectDiagnostic(message),
+      createCanceledToolEvents: () => this.sessionUpdates.createCanceledToolEvents(),
+    });
     this.sessionUpdates = new ACPSessionUpdateController({
       provider: this.provider,
-      getTurnId: () => this.activeForegroundTurnId,
-      getSuppressedUserEcho: () => ({
-        messageId: this.suppressUserEchoMessageId,
-        text: this.suppressUserEchoText,
-      }),
+      getTurnId: () => this.foregroundTurn.activeTurnId,
+      getSuppressedUserEcho: () => this.foregroundTurn.suppressedUserEcho,
       getTerminalStates: () => this.terminalController.timelineStates,
       transformToolSnapshot: this.toolSnapshotTransformer,
       onCurrentModeUpdate: (update) => this.handleCurrentModeUpdate(update),
@@ -664,7 +617,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       mcpServers: normalizeMcpServers(this.config.mcpServers),
     });
     this.sessionId = response.sessionId;
-    this.bootstrapThreadEventPending = true;
+    this.foregroundTurn.markThreadBootstrapPending();
     this.applySessionState(response);
     await this.applyConfiguredOverrides();
   }
@@ -680,7 +633,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.connection = spawned.connection;
     this.agentCapabilities = spawned.initialize.agentCapabilities ?? null;
     this.sessionId = handle.sessionId;
-    this.bootstrapThreadEventPending = true;
+    this.foregroundTurn.markThreadBootstrapPending();
 
     const sessionCapabilities = this.agentCapabilities?.sessionCapabilities;
     if (this.agentCapabilities?.loadSession) {
@@ -734,41 +687,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     if (!this.connection || !this.sessionId) {
       throw new Error(`${this.provider} session is not initialized`);
     }
-    if (this.activeForegroundTurnId) {
-      throw new Error("A foreground turn is already active");
-    }
-
-    const turnId = randomUUID();
-    const messageId = randomUUID();
-    this.activeForegroundTurnId = turnId;
-    this.suppressUserEchoMessageId = messageId;
-    this.suppressUserEchoText = extractPromptText(prompt);
-    this.emitBootstrapThreadEvent();
-    this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
-
-    void this.connection
-      .prompt({
-        sessionId: this.sessionId,
-        messageId,
-        prompt: toACPContentBlocks(prompt),
-      })
-      .then((response) => {
-        this.handlePromptResponse(response, turnId);
-        return;
-      })
-      .catch((error) => {
-        const summary = summarizeACPRequestError(error);
-        this.finishTurn({
-          type: "turn_failed",
-          provider: this.provider,
-          error: summary.message,
-          code: summary.code,
-          diagnostic: this.collectDiagnostic(summary.diagnostic ?? summary.message),
-          turnId,
-        });
-      });
-
-    return { turnId };
+    return this.foregroundTurn.startTurn(prompt, this.connection, this.sessionId);
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
@@ -1231,7 +1150,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     }
     this.pendingPermissions.clear();
 
-    if (this.activeForegroundTurnId) {
+    if (this.foregroundTurn.activeTurnId) {
       await this.connection.cancel({ sessionId: this.sessionId });
     }
   }
@@ -1251,7 +1170,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
 
     if (this.connection && this.sessionId) {
       try {
-        if (this.activeForegroundTurnId) {
+        if (this.foregroundTurn.activeTurnId) {
           await this.connection.cancel({ sessionId: this.sessionId });
         }
       } catch (error) {
@@ -1279,7 +1198,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.subscribers.clear();
     this.connection = null;
     this.child = null;
-    this.activeForegroundTurnId = null;
+    this.foregroundTurn.close();
   }
 
   async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
@@ -1297,7 +1216,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         options: params.options,
         resolve,
         reject,
-        turnId: this.activeForegroundTurnId,
+        turnId: this.foregroundTurn.activeTurnId,
       });
     });
 
@@ -1305,7 +1224,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       type: "permission_requested",
       provider: this.provider,
       request,
-      turnId: this.activeForegroundTurnId ?? undefined,
+      turnId: this.foregroundTurn.activeTurnId ?? undefined,
     });
     return promise;
   }
@@ -1330,7 +1249,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         agentId: this.agentId,
         provider: this.provider,
         sessionId: this.sessionId,
-        turnId: this.activeForegroundTurnId ?? undefined,
+        turnId: this.foregroundTurn.activeTurnId ?? undefined,
         rawEvent: params,
         events,
       },
@@ -1417,17 +1336,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       provider: this.provider,
       clientFactory: () => this,
       onExit: ({ exitCode, signal, diagnostic }) => {
-        if (this.closed || !this.activeForegroundTurnId) {
+        if (this.closed) {
           return;
         }
-        this.synthesizeCanceledToolCalls();
-        this.finishTurn({
-          type: "turn_failed",
-          provider: this.provider,
-          error: `ACP agent exited unexpectedly (${exitCode ?? "null"}${signal ? `, ${signal}` : ""})`,
-          diagnostic,
-          turnId: this.activeForegroundTurnId,
-        });
+        this.foregroundTurn.handleProcessExit({ exitCode, signal, diagnostic });
       },
     });
   }
@@ -1569,41 +1481,13 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     }
   }
 
-  private handlePromptResponse(response: PromptResponse, turnId: string): void {
-    this.currentTurnUsage = mapACPUsage(response.usage) ?? this.currentTurnUsage;
-
-    switch (response.stopReason) {
-      case "cancelled":
-        this.synthesizeCanceledToolCalls();
-        this.finishTurn({
-          type: "turn_canceled",
-          provider: this.provider,
-          reason: "Interrupted",
-          turnId,
-        });
-        break;
-      case "end_turn":
-      case "max_tokens":
-      case "max_turn_requests":
-      case "refusal":
-      default:
-        this.finishTurn({
-          type: "turn_completed",
-          provider: this.provider,
-          usage: this.currentTurnUsage,
-          turnId,
-        });
-        break;
-    }
-  }
-
   private pushEvent(event: AgentStreamEvent): void {
     this.logger.trace(
       {
         agentId: this.agentId,
         provider: this.provider,
         sessionId: this.sessionId,
-        turnId: getAgentStreamEventTurnId(event) ?? this.activeForegroundTurnId ?? undefined,
+        turnId: getAgentStreamEventTurnId(event) ?? this.foregroundTurn.activeTurnId ?? undefined,
         event,
       },
       "provider.acp.event_emit",
@@ -1625,33 +1509,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         updatedAt: this.lastActivityAt,
       },
     };
-  }
-
-  private finishTurn(
-    event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
-  ): void {
-    this.activeForegroundTurnId = null;
-    this.suppressUserEchoMessageId = null;
-    this.suppressUserEchoText = null;
-    this.pushEvent(event);
-  }
-
-  private emitBootstrapThreadEvent(): void {
-    if (!this.bootstrapThreadEventPending || !this.sessionId) {
-      return;
-    }
-    this.bootstrapThreadEventPending = false;
-    this.pushEvent({
-      type: "thread_started",
-      provider: this.provider,
-      sessionId: this.sessionId,
-    });
-  }
-
-  private synthesizeCanceledToolCalls(): void {
-    for (const event of this.sessionUpdates.createCanceledToolEvents()) {
-      this.pushEvent(event);
-    }
   }
 
   private collectDiagnostic(message: string): string | undefined {
@@ -1706,40 +1563,6 @@ function normalizeMcpServers(servers?: Record<string, McpServerConfig>): McpServ
       })),
     } satisfies McpServer;
   });
-}
-
-function toACPContentBlocks(prompt: AgentPromptInput): ContentBlock[] {
-  if (typeof prompt === "string") {
-    return [{ type: "text", text: prompt }];
-  }
-
-  const contentBlocks: ContentBlock[] = [];
-  for (const block of prompt) {
-    switch (block.type) {
-      case "text":
-        contentBlocks.push({ type: "text", text: block.text });
-        break;
-      case "image":
-        contentBlocks.push({ type: "image", data: block.data, mimeType: block.mimeType });
-        break;
-      default:
-        contentBlocks.push({ type: "text", text: renderPromptAttachmentAsText(block) });
-        break;
-    }
-  }
-  return contentBlocks;
-}
-
-function extractPromptText(prompt: AgentPromptInput): string {
-  if (typeof prompt === "string") {
-    return prompt;
-  }
-  return prompt
-    .filter(
-      (block): block is Extract<AgentPromptContentBlock, { type: "text" }> => block.type === "text",
-    )
-    .map((block) => block.text)
-    .join("");
 }
 
 function coerceSessionConfigMetadata(
