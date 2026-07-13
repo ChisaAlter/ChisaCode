@@ -28,7 +28,9 @@ interface SessionInternals {
     lastEmittedByWorkspaceId: Map<string, unknown>;
   };
   buildWorkspaceDescriptorMap: () => Promise<Map<string, unknown>>;
-  syncWorkspaceGitObserver(cwd: string, details: { isGit: boolean; workspaceId: string }): void;
+  workspaceGitObserverController: {
+    syncObserver(cwd: string, details: { isGit: boolean; workspaceId: string }): void;
+  };
   listAgentPayloads: () => Promise<unknown[]>;
 }
 
@@ -322,7 +324,10 @@ describe("workspace git watch targets", () => {
 
     sessionAny.buildWorkspaceDescriptorMap = async () => new Map([[descriptor.id, descriptor]]);
 
-    sessionAny.syncWorkspaceGitObserver(REPO_CWD, { isGit: true, workspaceId: "ws-10" });
+    sessionAny.workspaceGitObserverController.syncObserver(REPO_CWD, {
+      isGit: true,
+      workspaceId: "ws-10",
+    });
 
     expect(workspaceGitService.registerWorkspace).toHaveBeenCalledWith(
       { cwd: REPO_CWD },
@@ -381,7 +386,10 @@ describe("workspace git watch targets", () => {
       lastEmittedByWorkspaceId: new Map(),
     };
 
-    sessionAny.syncWorkspaceGitObserver(REPO_CWD, { isGit: true, workspaceId: "ws-10" });
+    sessionAny.workspaceGitObserverController.syncObserver(REPO_CWD, {
+      isGit: true,
+      workspaceId: "ws-10",
+    });
     emitted.length = 0;
 
     subscriptions[0]?.listener(
@@ -464,7 +472,10 @@ describe("workspace git watch targets", () => {
       name: "old-branch",
     });
 
-    sessionAny.syncWorkspaceGitObserver("/tmp/repo", { isGit: true, workspaceId: "ws-10" });
+    sessionAny.workspaceGitObserverController.syncObserver("/tmp/repo", {
+      isGit: true,
+      workspaceId: "ws-10",
+    });
 
     subscriptions[0]?.listener(
       createWorkspaceRuntimeSnapshot("/tmp/repo", {
@@ -512,7 +523,10 @@ describe("workspace git watch targets", () => {
       lastEmittedByWorkspaceId: new Map(),
     };
 
-    sessionAny.syncWorkspaceGitObserver(REPO_CWD, { isGit: true, workspaceId: "ws-10" });
+    sessionAny.workspaceGitObserverController.syncObserver(REPO_CWD, {
+      isGit: true,
+      workspaceId: "ws-10",
+    });
     emitted.length = 0;
 
     subscriptions[0]?.listener(

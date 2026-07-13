@@ -86,10 +86,7 @@ import { archivePersistedWorkspaceRecord } from "./workspace-archive-service.js"
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import type { ScriptRouteStore } from "./script-proxy.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
-import {
-  buildCheckoutPrStatusPayloadFromSnapshot,
-  buildCheckoutStatusPayloadFromSnapshot,
-} from "./checkout/status-projection.js";
+
 import { type Resolvable } from "./speech/provider-resolver.js";
 import type pino from "pino";
 import type { FileBackedChatService } from "./chat/chat-service.js";
@@ -121,7 +118,6 @@ export { resolveWaitForFinishError } from "./session-helpers.js";
 export { type SessionRuntimeMetrics } from "./session-internal-types.js";
 
 import {
-  type WorkspaceGitWatchTarget,
   type SessionRuntimeMetrics,
   type AgentMcpTransportFactory,
 } from "./session-internal-types.js";
@@ -156,14 +152,12 @@ import {
 } from "./agent-session-helpers.js";
 import {
   isPathWithinRoot as isPathWithinRootCore,
-  workspaceGitDescriptorStateKey as workspaceGitDescriptorStateKeyCore,
   buildWorkspaceGitRuntimePayload as buildWorkspaceGitRuntimePayloadCore,
   buildWorkspaceGitHubRuntimePayload as buildWorkspaceGitHubRuntimePayloadCore,
   buildWorkspaceScriptPayloadSnapshot as buildWorkspaceScriptPayloadSnapshotCore,
   emitWorkspaceScriptStatusUpdate as emitWorkspaceScriptStatusUpdateCore,
-  removeWorkspaceGitWatchTarget as removeWorkspaceGitWatchTargetCore,
-  removeWorkspaceGitSubscription as removeWorkspaceGitSubscriptionCore,
 } from "./workspace-core.js";
+import { WorkspaceGitObserverController } from "./workspace-git-observer-controller.js";
 
 type FetchWorkspacesRequestMessage = Extract<
   SessionInboundMessage,
@@ -324,11 +318,6 @@ export class Session {
   private unsubscribeProviderSnapshotEvents: (() => void) | null = null;
   private readonly scriptRouteStore: ScriptRouteStore | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
-  private readonly onBranchChanged?: (
-    workspaceId: string,
-    oldBranch: string | null,
-    newBranch: string | null,
-  ) => void;
   private readonly getDaemonTcpPort: (() => number | null) | null;
   private readonly getDaemonTcpHost: (() => string | null) | null;
   private readonly resolveScriptHealth: ((hostname: string) => ScriptHealthState | null) | null;
@@ -350,11 +339,9 @@ export class Session {
       cacheKey: () => AVAILABLE_EDITOR_TARGETS_CACHE_KEY,
     },
   );
-  private readonly workspaceGitWatchTargets = new Map<string, WorkspaceGitWatchTarget>();
   private readonly workspaceSetupSnapshots: Map<string, WorkspaceSetupSnapshot>;
-  private readonly workspaceGitFetchSubscriptions = new Map<string, () => void>();
-  private readonly workspaceGitSubscriptions = new Map<string, () => void>();
   private readonly workspaceDirectory: WorkspaceDirectory;
+  private readonly workspaceGitObserverController: WorkspaceGitObserverController;
   private readonly sttLanguage: string;
   private readonly serverId: string | undefined;
   private readonly daemonVersion: string | undefined;
@@ -478,7 +465,6 @@ export class Session {
     this.scriptRouteStore = scriptRouteStore ?? null;
     this.scriptRuntimeStore = scriptRuntimeStore ?? null;
     this.workspaceSetupSnapshots = workspaceSetupSnapshots ?? new Map();
-    this.onBranchChanged = onBranchChanged;
     this.getDaemonTcpPort = getDaemonTcpPort ?? null;
     this.getDaemonTcpHost = getDaemonTcpHost ?? null;
     this.resolveScriptHealth = resolveScriptHealth ?? null;
@@ -494,6 +480,13 @@ export class Session {
     this.daemonVersion = daemonVersion;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.operationAbortController = new AbortController();
+    this.workspaceGitObserverController = new WorkspaceGitObserverController({
+      workspaceGitService: this.workspaceGitService,
+      sessionLogger: this.sessionLogger,
+      emit: (message) => this.emit(message),
+      emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
+      onBranchChanged,
+    });
     this.workspaceDirectory = new WorkspaceDirectory({
       logger: this.sessionLogger,
       projectRegistry: this.projectRegistry,
@@ -1642,137 +1635,31 @@ export class Session {
   /**
    * Handle agent permission response from user
    */
-  private async removeWorkspaceGitWatchTarget(cwd: string): Promise<void> {
-    removeWorkspaceGitWatchTargetCore(cwd, this.workspaceGitWatchTargets);
-  }
 
   private removeWorkspaceGitSubscription(cwd: string): void {
-    removeWorkspaceGitSubscriptionCore(
-      cwd,
-      this.workspaceGitWatchTargets,
-      this.workspaceGitFetchSubscriptions,
-      this.workspaceGitSubscriptions,
-    );
-  }
-
-  private workspaceGitDescriptorStateKey(workspace: WorkspaceDescriptorPayload | null): string {
-    return workspaceGitDescriptorStateKeyCore(workspace);
+    this.workspaceGitObserverController.removeSubscription(cwd);
   }
 
   private shouldSkipWorkspaceGitWatchUpdate(
     workspaceId: string,
     workspace: WorkspaceDescriptorPayload | null,
   ): boolean {
-    const target = this.workspaceGitWatchTargets.get(workspaceId);
-    if (!target) {
-      return false;
-    }
-    const nextStateKey = this.workspaceGitDescriptorStateKey(workspace);
-    if (target.latestDescriptorStateKey === nextStateKey) {
-      return true;
-    }
-    target.latestDescriptorStateKey = nextStateKey;
-    return false;
+    return this.workspaceGitObserverController.shouldSkipDescriptorUpdate(workspaceId, workspace);
   }
 
   private rememberWorkspaceGitDescriptorState(
     workspaceId: string,
     workspace: WorkspaceDescriptorPayload | null,
   ): void {
-    const target = this.workspaceGitWatchTargets.get(workspaceId);
-    if (!target) {
-      return;
-    }
-    target.latestDescriptorStateKey = this.workspaceGitDescriptorStateKey(workspace);
-    target.lastBranchName = workspace?.name ?? null;
+    this.workspaceGitObserverController.recordDescriptorUpdate(workspaceId, workspace);
   }
 
   private handleWorkspaceGitBranchSnapshot(cwd: string, branchName: string | null): void {
-    const target = this.workspaceGitWatchTargets.get(normalizePersistedWorkspaceId(cwd));
-    if (!target) {
-      return;
-    }
-
-    const previousBranchName = target.lastBranchName;
-    if (branchName === previousBranchName) {
-      return;
-    }
-
-    target.lastBranchName = branchName;
-    this.onBranchChanged?.(target.workspaceId, previousBranchName, branchName);
+    this.workspaceGitObserverController.handleBranchSnapshot(cwd, branchName);
   }
 
   private syncWorkspaceGitObservers(workspaces: Iterable<WorkspaceDescriptorPayload>): void {
-    for (const workspace of workspaces) {
-      this.syncWorkspaceGitObserver(workspace.workspaceDirectory, {
-        isGit: workspace.projectKind === "git",
-        workspaceId: workspace.id,
-      });
-      this.rememberWorkspaceGitDescriptorState(workspace.workspaceDirectory, workspace);
-    }
-  }
-
-  private syncWorkspaceGitObserver(
-    cwd: string,
-    options: { isGit: boolean; workspaceId: string },
-  ): void {
-    const normalizedCwd = normalizePersistedWorkspaceId(cwd);
-    if (!options.isGit) {
-      this.removeWorkspaceGitSubscription(normalizedCwd);
-      return;
-    }
-
-    if (this.workspaceGitSubscriptions.has(normalizedCwd)) {
-      return;
-    }
-
-    const target: WorkspaceGitWatchTarget = {
-      cwd: normalizedCwd,
-      workspaceId: options.workspaceId,
-      watchers: [],
-      debounceTimer: null,
-      refreshPromise: null,
-      refreshQueued: false,
-      latestDescriptorStateKey: null,
-      lastBranchName: null,
-    };
-    this.workspaceGitWatchTargets.set(normalizedCwd, target);
-
-    const subscription = this.workspaceGitService.registerWorkspace(
-      { cwd: normalizedCwd },
-      (snapshot) => {
-        this.handleWorkspaceGitBranchSnapshot(normalizedCwd, snapshot.git.currentBranch ?? null);
-        void this.emitWorkspaceUpdateForCwd(normalizedCwd);
-        this.emitCheckoutStatusUpdate(normalizedCwd, snapshot);
-      },
-    );
-    this.workspaceGitSubscriptions.set(normalizedCwd, subscription.unsubscribe);
-  }
-
-  private emitCheckoutStatusUpdate(cwd: string, snapshot: WorkspaceGitRuntimeSnapshot): void {
-    try {
-      const requestId = `subscription:${cwd}`;
-      this.emit({
-        type: "checkout_status_update",
-        payload: {
-          ...buildCheckoutStatusPayloadFromSnapshot({
-            cwd,
-            requestId,
-            snapshot,
-          }),
-          prStatus: buildCheckoutPrStatusPayloadFromSnapshot({
-            cwd,
-            requestId,
-            snapshot,
-          }),
-        },
-      });
-    } catch (error) {
-      this.sessionLogger.warn(
-        { err: error, cwd },
-        "Failed to emit workspace checkout status update",
-      );
-    }
+    this.workspaceGitObserverController.syncObservers(workspaces);
   }
 
   /**
@@ -2299,9 +2186,8 @@ export class Session {
       return;
     }
 
-    await this.removeWorkspaceGitWatchTarget(existingWorkspace.cwd);
     this.scriptRuntimeStore?.removeForWorkspace(existingWorkspace.cwd);
-    this.removeWorkspaceGitSubscription(workspaceId);
+    this.removeWorkspaceGitSubscription(existingWorkspace.cwd);
   }
 
   private async reconcileAndEmitWorkspaceUpdates(): Promise<void> {
@@ -2336,9 +2222,8 @@ export class Session {
       result.changesApplied.map(async (change) => {
         switch (change.kind) {
           case "workspace_archived":
-            await this.removeWorkspaceGitWatchTarget(change.directory);
             this.scriptRuntimeStore?.removeForWorkspace(change.directory);
-            this.removeWorkspaceGitSubscription(change.workspaceId);
+            this.removeWorkspaceGitSubscription(change.directory);
             changedWorkspaceIds.add(change.workspaceId);
             break;
           case "workspace_updated":
@@ -2393,13 +2278,6 @@ export class Session {
         this.shouldSkipWorkspaceGitWatchUpdate(workspaceId, nextWorkspace)
       ) {
         continue;
-      }
-      const watchTarget = this.workspaceGitWatchTargets.get(workspaceId);
-      if (watchTarget && this.onBranchChanged) {
-        const newBranchName = nextWorkspace?.name ?? null;
-        if (newBranchName !== watchTarget.lastBranchName) {
-          this.onBranchChanged(workspaceId, watchTarget.lastBranchName, newBranchName);
-        }
       }
       this.rememberWorkspaceGitDescriptorState(workspaceId, nextWorkspace);
 
@@ -2604,9 +2482,6 @@ export class Session {
     this.agentLifecycleHandler.dispose();
     this.generativeUiHandler.dispose();
 
-    for (const unsubscribe of this.workspaceGitSubscriptions.values()) {
-      unsubscribe();
-    }
-    this.workspaceGitSubscriptions.clear();
+    this.workspaceGitObserverController.dispose();
   }
 }
