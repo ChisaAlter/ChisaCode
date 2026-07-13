@@ -3,11 +3,7 @@ import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@chisacode/protocol/agent-lifecycle";
-import {
-  labelsForAgentRelation,
-  readAgentRelation,
-  type AgentRelation,
-} from "@chisacode/protocol/agent-labels";
+import type { AgentRelation } from "@chisacode/protocol/agent-labels";
 import type { EffectiveMcpServersResult } from "./mcp-server-management.js";
 import type { Logger } from "pino";
 import { z } from "zod/v3";
@@ -17,7 +13,6 @@ import {
   getAgentStreamEventTurnId,
   type AgentCapabilityFlags,
   type AgentClient,
-  type AgentCreateSessionOptions,
   type AgentFeature,
   type AgentSlashCommand,
   type AgentMode,
@@ -78,6 +73,7 @@ import {
   AgentSessionRescueController,
   type AgentSessionRescueTimeouts,
 } from "./agent-session-rescue-controller.js";
+import { AgentSessionLifecycleController } from "./agent-session-lifecycle-controller.js";
 import { AgentSessionRegistrationController } from "./agent-session-registration-controller.js";
 import { AgentSessionTeardownController } from "./agent-session-teardown-controller.js";
 import {
@@ -325,6 +321,7 @@ export class AgentManager {
   private readonly providers: AgentProviderController;
   private readonly runControl: AgentRunControlController;
   private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
+  private readonly sessionLifecycle: AgentSessionLifecycleController;
   private readonly sessionRegistration: AgentSessionRegistrationController;
   private readonly sessionRescue: AgentSessionRescueController;
   private readonly sessionTeardown: AgentSessionTeardownController;
@@ -519,6 +516,18 @@ export class AgentManager {
       logger: this.logger,
       persistSnapshot: (agent) => this.persistSnapshot(agent),
       timeline: this.timeline,
+    });
+    this.sessionLifecycle = new AgentSessionLifecycleController({
+      cancelAgentRun: (agentId) => this.runControl.cancel(agentId),
+      getAgent: (agentId) => this.requireSessionAgent(agentId),
+      hasInFlightRun: (agentId) => this.hasInFlightRun(agentId),
+      idFactory: () => this.idFactory(),
+      launchConfig: this.launchConfig,
+      providers: this.providers,
+      registration: this.sessionRegistration,
+      teardown: this.sessionTeardown,
+      timeline: this.timeline,
+      validateAgentId,
     });
   }
 
@@ -732,30 +741,7 @@ export class AgentManager {
       initialTitle?: string | null;
     },
   ): Promise<ManagedAgent> {
-    const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
-    this.providers.requireEnabledProvider(config.provider);
-    this.providers.requireEnabledProvider(config.runtimeProvider ?? config.provider);
-    const normalizedConfig = await this.launchConfig.prepareAgentConfig(config, resolvedAgentId);
-    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
-    const launchContext = this.launchConfig.buildLaunchContext(resolvedAgentId, options?.env);
-    const client = await this.providers.requireAvailableClient(launchConfig.provider);
-    const createOptions = this.buildCreateSessionOptions(options);
-    const session = await client.createSession(launchConfig, launchContext, createOptions);
-    const relation = readAgentRelation(options?.labels, options?.relation) ?? undefined;
-    return this.sessionRegistration.register(session, normalizedConfig, resolvedAgentId, {
-      labels: labelsForAgentRelation(options?.labels, relation),
-      relation,
-      workspaceId: options?.workspaceId,
-      initialTitle: options?.initialTitle,
-    });
-  }
-
-  private buildCreateSessionOptions(options?: {
-    persistSession?: boolean;
-  }): AgentCreateSessionOptions | undefined {
-    return options?.persistSession === undefined
-      ? undefined
-      : { persistSession: options.persistSession };
+    return await this.sessionLifecycle.create(config, agentId, options);
   }
 
   // Reconstruct an agent from provider persistence. Callers should explicitly
@@ -772,68 +758,7 @@ export class AgentManager {
       relation?: AgentRelation;
     },
   ): Promise<ManagedAgent> {
-    const resolvedAgentId = validateAgentId(
-      agentId ?? this.idFactory(),
-      "resumeAgentFromPersistence",
-    );
-    const metadata = { ...((handle.metadata ?? {}) as Partial<AgentSessionConfig>) };
-    delete metadata.title;
-    const mergedConfig = {
-      ...metadata,
-      ...overrides,
-      provider: handle.provider,
-    } as AgentSessionConfig;
-    const normalizedConfig = await this.launchConfig.prepareAgentConfig(
-      mergedConfig,
-      resolvedAgentId,
-    );
-    const resumeOverrides: Partial<AgentSessionConfig> = { ...overrides };
-    let hasResumeOverrides = overrides !== undefined;
-
-    if (normalizedConfig.model !== mergedConfig.model) {
-      resumeOverrides.model = normalizedConfig.model;
-      hasResumeOverrides = true;
-    }
-
-    if (normalizedConfig.modeId !== mergedConfig.modeId) {
-      resumeOverrides.modeId = normalizedConfig.modeId;
-      hasResumeOverrides = true;
-    }
-
-    if (metadata.daemonAppendSystemPrompt !== normalizedConfig.daemonAppendSystemPrompt) {
-      resumeOverrides.daemonAppendSystemPrompt = normalizedConfig.daemonAppendSystemPrompt;
-      hasResumeOverrides = true;
-    }
-
-    if (JSON.stringify(metadata.extra) !== JSON.stringify(normalizedConfig.extra)) {
-      resumeOverrides.extra = normalizedConfig.extra;
-      hasResumeOverrides = true;
-    }
-
-    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
-    const runtimeProvider = launchConfig.provider;
-    const launchContext = this.launchConfig.buildLaunchContext(resolvedAgentId);
-    const client = this.providers.requireClient(runtimeProvider);
-    const available = await client.isAvailable();
-    if (!available) {
-      throw new Error(
-        `Provider '${runtimeProvider}' is not available. Please ensure the CLI is installed.`,
-      );
-    }
-    const session =
-      handle.provider === runtimeProvider
-        ? await client.resumeSession(
-            handle,
-            hasResumeOverrides ? resumeOverrides : undefined,
-            launchContext,
-          )
-        : await client.createSession(launchConfig, launchContext);
-    const relation = readAgentRelation(options?.labels, options?.relation) ?? undefined;
-    return this.sessionRegistration.register(session, normalizedConfig, resolvedAgentId, {
-      ...options,
-      labels: labelsForAgentRelation(options?.labels, relation),
-      relation,
-    });
+    return await this.sessionLifecycle.resume(handle, overrides, agentId, options);
   }
 
   // Hot-reload an active agent session with config overrides. By default the
@@ -847,58 +772,7 @@ export class AgentManager {
     overrides?: Partial<AgentSessionConfig>,
     options?: { rehydrateFromDisk?: boolean },
   ): Promise<ManagedAgent> {
-    let existing = this.requireSessionAgent(agentId);
-    if (this.hasInFlightRun(agentId)) {
-      await this.cancelAgentRun(agentId);
-      existing = this.requireSessionAgent(agentId);
-    }
-    const rehydrateFromDisk = options?.rehydrateFromDisk ?? false;
-    const preservedHistoryPrimed = existing.historyPrimed;
-    const preservedLastUsage = existing.lastUsage;
-    const preservedLastError = existing.lastError;
-    const preservedAttention = existing.attention;
-    const handle = existing.persistence;
-    const currentRuntimeProvider =
-      handle?.provider ?? existing.config.runtimeProvider ?? existing.provider;
-    const runtimeProvider =
-      overrides?.runtimeProvider ?? existing.config.runtimeProvider ?? currentRuntimeProvider;
-    const client = this.providers.requireClient(runtimeProvider);
-    const reloadHandle = handle?.provider === runtimeProvider ? handle : null;
-    const refreshConfig = {
-      ...existing.config,
-      ...overrides,
-      provider: existing.provider,
-      runtimeProvider,
-    } as AgentSessionConfig;
-    const normalizedConfig = await this.launchConfig.prepareAgentConfig(refreshConfig, agentId);
-    const launchConfig = this.launchConfig.buildRuntimeLaunchConfig(normalizedConfig);
-    const launchContext = this.launchConfig.buildLaunchContext(agentId);
-
-    const session = reloadHandle
-      ? await client.resumeSession(reloadHandle, launchConfig, launchContext)
-      : await client.createSession(launchConfig, launchContext);
-
-    await this.sessionTeardown.detachForReload(existing);
-
-    if (rehydrateFromDisk) {
-      // Wipe both durable and in-memory timeline so registerSession mints a
-      // new epoch and hydrateTimelineFromProvider re-streams the freshly read
-      // provider history into an empty timeline.
-      await this.timeline.deleteAll(agentId);
-    }
-
-    // Preserve existing labels and timeline during reload.
-    return this.sessionRegistration.register(session, normalizedConfig, agentId, {
-      labels: existing.labels,
-      relation: existing.relation,
-      createdAt: existing.createdAt,
-      updatedAt: existing.updatedAt,
-      lastUserMessageAt: existing.lastUserMessageAt,
-      historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
-      lastUsage: preservedLastUsage,
-      lastError: preservedLastError,
-      attention: preservedAttention,
-    });
+    return await this.sessionLifecycle.reload(agentId, overrides, options);
   }
 
   async closeAgent(agentId: string): Promise<void> {
