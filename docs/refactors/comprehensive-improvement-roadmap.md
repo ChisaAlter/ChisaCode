@@ -138,7 +138,7 @@
   通道。不得以新增 native 依赖或删除既有 fallback stop 行为作为未经专项设计的临时修复。
 - **状态**：pending，等待最终审查分流为独立架构任务。
 
-### Server 进程树 ownership / query / deadline 编排拆分（pending）
+### Server 进程树 ownership / query / deadline 编排拆分（in-progress）
 
 - **问题**：`packages/server/src/utils/tree-kill.ts` 当前在同一实现中承担 Windows CIM
   ownership 查询与 CreationDate 复核、POSIX/Linux 进程身份跟踪、child-first signaling，及
@@ -152,7 +152,13 @@
   `already-exited | terminated | killed | kill-timeout`。专项迁移必须保留当前 typed operations
   tests、CreationDate/starttime signal-time identity revalidation、保守 polling 与严格 signaling
   的错误语义区分、fail-closed fallback 与单一 absolute deadline。
-- **状态**：pending。Task 4 仅加固既有入口与私有 typed seams，不在本轮执行高风险结构拆分。
+- **Windows adapter 进展（2026-07-14）**：新增 `tree-kill-windows.ts`，完整拥有 CIM 查询、
+  CreationDate identity、launch-bound lineage 选择、PID 复用 fail-closed、signal-time identity
+  revalidation 与共享 deadline 下的 query timeout；`tree-kill-command.ts` 收口可取消/有界的
+  `execFile` 文本查询。原 `tree-kill.ts` 保留兼容重导出并从 1302 行降至 1021 行，21 个 Windows
+  ownership/query/signaling 聚焦场景、server typecheck 与目标 lint 通过。
+- **状态**：in-progress。Windows ownership/query adapter 已完成；下一步提取 POSIX identity
+  tracker 与 cleanup-deadline orchestrator，完成后再将本项标记为 done。
 
 ### Task 4 第九次规范复审加固（2026-07-11 完成）
 
