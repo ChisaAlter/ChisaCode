@@ -545,6 +545,46 @@ describe("PiRpcAgentSession", () => {
     ]);
   });
 
+  test("applies model prefix and launch env when resuming Pi sessions", async () => {
+    const pi = new FakePi();
+    const client = createClient(pi, {
+      env: {
+        CHISACODE_MODEL_PREFIX: "xiaomi",
+      },
+    });
+
+    const session = (await client.resumeSession(
+      {
+        provider: "pi",
+        sessionId: "pi-session-1",
+        nativeHandle: "/tmp/native-pi-session",
+        metadata: {
+          cwd: "/workspace/project",
+          model: "mimo-v2.5",
+        },
+      },
+      {},
+      {
+        env: {
+          PI_RESUME_TOKEN: "expected",
+        },
+      },
+    )) as PiRpcAgentSession;
+
+    expect(pi.recordedLaunches[0]).toMatchObject({
+      cwd: "/workspace/project",
+      env: { PI_RESUME_TOKEN: "expected" },
+    });
+    expect(pi.recordedLaunches[0]?.argv).toContain("xiaomi/mimo-v2.5");
+
+    const fakeSession = pi.latestSession();
+    fakeSession.setModelResult = { provider: "xiaomi", id: "mimo-v2.5", name: "MiMo v2.5" };
+    await session.setModel("mimo-v2.5");
+    expect(fakeSession.setModelRequests).toEqual([{ provider: "xiaomi", modelId: "mimo-v2.5" }]);
+
+    await session.close();
+  });
+
   test("creates Pi sessions with agent and daemon system prompts appended", async () => {
     const pi = new FakePi();
     const client = createClient(pi);

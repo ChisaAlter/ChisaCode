@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Logger } from "pino";
 
@@ -8,10 +8,8 @@ import {
   type AgentCapabilityFlags,
   type AgentClient,
   type AgentLaunchContext,
-  type AgentMetadata,
   type AgentMode,
   type AgentModelDefinition,
-  type McpServerConfig,
   type AgentPermissionRequest,
   type AgentPermissionResponse,
   type AgentPersistenceHandle,
@@ -23,7 +21,6 @@ import {
   type AgentSessionConfig,
   type AgentSlashCommand,
   type AgentStreamEvent,
-  type AgentUsage,
   type ListPersistedAgentsOptions,
   type ListModesOptions,
   type ListModelsOptions,
@@ -37,7 +34,6 @@ import {
   type ResolvedProviderLaunch,
 } from "../../provider-launch-config.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
-import { composeSystemPromptParts } from "../../system-prompt.js";
 import {
   buildBinaryDiagnosticRows,
   formatDiagnosticStatus,
@@ -46,29 +42,24 @@ import {
   toDiagnosticErrorMessage,
 } from "../diagnostic-utils.js";
 import { streamPiHistory } from "./history-mapper.js";
+import { PiExtensionHistoryController } from "./extension-history-controller.js";
 import {
-  CHISACODE_PI_CAPTURE_EXTENSION_COMMAND,
-  CHISACODE_PI_COMMAND_RESULT_MARKER,
-  CHISACODE_PI_ENTRY_CAPTURE_MARKER,
-  CHISACODE_PI_TREE_EXTENSION_COMMAND,
-  PiExtensionHistoryController,
-} from "./extension-history-controller.js";
+  isPiMcpAdapterCommand,
+  PiSessionLifecycle,
+  type PiSessionInitialization,
+} from "./session-lifecycle.js";
+import {
+  DEFAULT_PI_THINKING_LEVEL,
+  PiSessionRuntimeController,
+  readRuntimeModelPrefix,
+} from "./session-runtime.js";
 import { PiSessionEventController } from "./session-event-controller.js";
 import { PiCliRuntime } from "./cli-runtime.js";
 import { revertPiConversation } from "./rewind.js";
 import type { PiRuntime, PiRuntimeSession } from "./runtime.js";
-import type {
-  PiAgentMessage,
-  PiImageContent,
-  PiModel,
-  PiRpcSlashCommand,
-  PiSessionStats,
-  PiSessionState,
-  PiThinkingLevel,
-} from "./rpc-types.js";
+import type { PiAgentMessage, PiImageContent, PiModel, PiThinkingLevel } from "./rpc-types.js";
 
 const PI_PROVIDER = "pi";
-const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
 const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
 
 const PI_CAPABILITIES: AgentCapabilityFlags = {
@@ -108,77 +99,11 @@ interface PiPromptPayload {
   images?: PiImageContent[];
 }
 
-interface PiModelReference {
-  provider?: string;
-  id: string;
-}
-
-interface PiPersistenceMetadata {
-  cwd?: string;
-  model?: string;
-  thinkingOptionId?: string;
-  systemPrompt?: string;
-}
-
 interface StartTurnResult {
   turnId: string;
 }
 
-interface PiRpcAgentSessionOptions {
-  runtimeSession: PiRuntimeSession;
-  config: AgentSessionConfig;
-  initialState: PiSessionState;
-  capabilities: AgentCapabilityFlags;
-  cleanup?: () => void;
-  modelPrefix?: string;
-  logger: Logger;
-}
-
-interface PiResumeConfig {
-  cwd: string;
-  model?: string;
-  thinkingOptionId?: string;
-  config: AgentSessionConfig;
-}
-
-interface PiMcpServerConfig {
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
-  headers?: Record<string, string>;
-  auth?: false;
-  oauth?: false;
-}
-
-interface PiMcpConfigFile {
-  path: string;
-  cleanup: () => void;
-}
-
-interface PiTempFile {
-  path: string;
-  cleanup: () => void;
-}
-
-const CHISACODE_MODEL_PREFIX_ENV = "CHISACODE_MODEL_PREFIX";
-
-function readRuntimeModelPrefix(
-  runtimeSettings: ProviderRuntimeSettings | undefined,
-): string | null {
-  const prefix = runtimeSettings?.env?.[CHISACODE_MODEL_PREFIX_ENV]?.trim();
-  return prefix ? prefix : null;
-}
-
-function applyRuntimeModelPrefix(
-  model: string | undefined,
-  prefix: string | null,
-): string | undefined {
-  if (!model || !prefix || model.includes("/") || model.includes(":")) {
-    return model;
-  }
-  return `${prefix}/${model}`;
-}
+type PiRpcAgentSessionOptions = PiSessionInitialization;
 
 function normalizePiModelLabel(label: string): string {
   return label.trim().replace(/[_\s]+/g, " ");
@@ -204,24 +129,6 @@ export function transformPiModels(models: AgentModelDefinition[]): AgentModelDef
   });
 }
 
-function isPiThinkingLevel(value: string | null | undefined): value is PiThinkingLevel {
-  return (
-    value === "off" ||
-    value === "minimal" ||
-    value === "low" ||
-    value === "medium" ||
-    value === "high" ||
-    value === "xhigh"
-  );
-}
-
-function normalizePiThinkingOption(value: string | null | undefined): PiThinkingLevel | null {
-  if (!value) {
-    return null;
-  }
-  return isPiThinkingLevel(value) ? value : null;
-}
-
 function mapThinkingOption(option: (typeof PI_THINKING_OPTIONS)[number]) {
   const mappedOption = {
     id: option.id,
@@ -235,35 +142,6 @@ function mapThinkingOption(option: (typeof PI_THINKING_OPTIONS)[number]) {
     };
   }
   return mappedOption;
-}
-
-function toAgentUsage(stats: PiSessionStats): AgentUsage | undefined {
-  const inputTokens = stats.tokens?.input ?? 0;
-  const cachedInputTokens = stats.tokens?.cacheRead ?? 0;
-  const outputTokens = stats.tokens?.output ?? 0;
-  const totalCostUsd = stats.cost ?? 0;
-  const contextWindowMaxTokens = stats.contextUsage?.contextWindow ?? undefined;
-  const contextWindowUsedTokens = stats.contextUsage?.tokens ?? undefined;
-
-  if (
-    inputTokens === 0 &&
-    cachedInputTokens === 0 &&
-    outputTokens === 0 &&
-    totalCostUsd === 0 &&
-    contextWindowMaxTokens === undefined &&
-    contextWindowUsedTokens === undefined
-  ) {
-    return undefined;
-  }
-
-  return {
-    inputTokens,
-    cachedInputTokens,
-    outputTokens,
-    totalCostUsd,
-    ...(typeof contextWindowMaxTokens === "number" ? { contextWindowMaxTokens } : {}),
-    ...(typeof contextWindowUsedTokens === "number" ? { contextWindowUsedTokens } : {}),
-  };
 }
 
 function convertPromptInput(prompt: AgentPromptInput): PiPromptPayload {
@@ -301,233 +179,12 @@ function convertPromptInput(prompt: AgentPromptInput): PiPromptPayload {
   return payload;
 }
 
-function parseModelReference(modelId: string | null): PiModelReference | null {
-  if (!modelId) {
-    return null;
-  }
-  if (modelId.includes("/")) {
-    const [provider, ...rest] = modelId.split("/");
-    const id = rest.join("/");
-    if (provider && id) {
-      return { provider, id };
-    }
-  }
-  if (modelId.includes(":")) {
-    const [provider, ...rest] = modelId.split(":");
-    const id = rest.join(":");
-    if (provider && id) {
-      return { provider, id };
-    }
-  }
-  return { id: modelId };
-}
-
-function parsePersistenceMetadata(metadata: AgentMetadata | undefined): PiPersistenceMetadata {
-  if (!metadata) {
-    return {};
-  }
-  return {
-    ...(typeof metadata.cwd === "string" ? { cwd: metadata.cwd } : {}),
-    ...(typeof metadata.model === "string" ? { model: metadata.model } : {}),
-    ...(typeof metadata.thinkingOptionId === "string"
-      ? { thinkingOptionId: metadata.thinkingOptionId }
-      : {}),
-    ...(typeof metadata.systemPrompt === "string" ? { systemPrompt: metadata.systemPrompt } : {}),
-  };
-}
-
-function buildResumeConfig(
-  metadata: PiPersistenceMetadata,
-  overrides: Partial<AgentSessionConfig> | undefined,
-): PiResumeConfig {
-  const overrideConfig = overrides ?? {};
-  const cwd = overrideConfig.cwd ?? metadata.cwd ?? process.cwd();
-  const model = overrideConfig.model ?? metadata.model;
-  const thinkingOptionId = overrideConfig.thinkingOptionId ?? metadata.thinkingOptionId;
-  return {
-    cwd,
-    model,
-    thinkingOptionId,
-    config: {
-      ...overrideConfig,
-      provider: PI_PROVIDER,
-      cwd,
-      model,
-      thinkingOptionId,
-      systemPrompt: overrideConfig.systemPrompt ?? metadata.systemPrompt,
-    },
-  };
-}
-
-function toPiMcpConfig(config: McpServerConfig): PiMcpServerConfig {
-  if (config.type === "stdio") {
-    return {
-      command: config.command,
-      ...(config.args ? { args: config.args } : {}),
-      ...(config.env ? { env: config.env } : {}),
-    };
-  }
-
-  return {
-    url: config.url,
-    ...(config.headers ? { headers: config.headers } : {}),
-    auth: false,
-    oauth: false,
-  };
-}
-
-function createPiMcpConfigFile(servers: Record<string, McpServerConfig>): PiMcpConfigFile {
-  const dir = mkdtempSync(join(tmpdir(), "chisacode-pi-mcp-"));
-  const filePath = join(dir, "mcp.json");
-  const mcpServers: Record<string, PiMcpServerConfig> = {};
-  for (const [name, serverConfig] of Object.entries(servers)) {
-    mcpServers[name] = toPiMcpConfig(serverConfig);
-  }
-  writeFileSync(filePath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, "utf8");
-  return {
-    path: filePath,
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
-  };
-}
-
-function createPiChisaCodeExtensionFile(): PiTempFile {
-  const dir = mkdtempSync(join(tmpdir(), "chisacode-pi-extension-"));
-  const filePath = join(dir, "chisacode-integration.mjs");
-  writeFileSync(
-    filePath,
-    `
-	function decodePayload(encoded) {
-	  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
-	}
-
-	function readTextContent(content) {
-	  if (typeof content === "string") {
-	    return content;
-	  }
-	  if (!Array.isArray(content)) {
-	    return "";
-	  }
-	  return content
-	    .filter((part) => part && part.type === "text" && typeof part.text === "string")
-	    .map((part) => part.text)
-	    .join("\\n\\n");
-	}
-
-	function getCapturedUserEntries(ctx) {
-	  return ctx.sessionManager
-	    .getEntries()
-	    .filter((entry) => entry.type === "message" && entry.message?.role === "user")
-	    .map((entry) => ({
-	      id: entry.id,
-	      parentId: entry.parentId ?? null,
-	      text: readTextContent(entry.message.content),
-	    }));
-	}
-
-	function emitEntryCapture(ctx, reason, requestId) {
-	  ctx.ui.notify(
-	    "${CHISACODE_PI_ENTRY_CAPTURE_MARKER} " +
-	      JSON.stringify({ reason, requestId, entries: getCapturedUserEntries(ctx) }),
-	    "info",
-	  );
-	}
-
-	function emitCommandResult(ctx, requestId, result) {
-	  ctx.ui.notify(
-	    "${CHISACODE_PI_COMMAND_RESULT_MARKER} " + JSON.stringify({ requestId, ...result }),
-	    result.ok ? "info" : "error",
-	  );
-	}
-	
-	export default function chisacodeIntegration(pi) {
-	  pi.on("session_start", async (_event, ctx) => {
-	    emitEntryCapture(ctx, "session_start");
-	  });
-
-	  pi.on("turn_end", async (_event, ctx) => {
-	    emitEntryCapture(ctx, "turn_end");
-	  });
-
-	  pi.registerCommand("${CHISACODE_PI_CAPTURE_EXTENSION_COMMAND}", {
-	    description: "Internal ChisaCode entry capture bridge",
-	    handler: async (args, ctx) => {
-	      const payload = decodePayload(args.trim());
-	      emitEntryCapture(ctx, "command", payload.requestId);
-	    },
-	  });
-
-	  pi.registerCommand("${CHISACODE_PI_TREE_EXTENSION_COMMAND}", {
-	    description: "Internal ChisaCode tree navigation bridge",
-	    handler: async (args, ctx) => {
-	      const payload = decodePayload(args.trim());
-	      try {
-	        const result = await ctx.navigateTree(payload.targetId, { summarize: false });
-	        emitEntryCapture(ctx, "tree_navigation");
-	        emitCommandResult(ctx, payload.requestId, { ok: true, result });
-	      } catch (error) {
-	        const message = error instanceof Error ? error.message : String(error);
-	        emitCommandResult(ctx, payload.requestId, { ok: false, error: message });
-	        throw error;
-	      }
-	    },
-	  });
-	}
-`.trimStart(),
-    "utf8",
-  );
-  return {
-    path: filePath,
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
-  };
-}
-
-function combineCleanup(cleanups: Array<(() => void) | undefined>): (() => void) | undefined {
-  const activeCleanups = cleanups.filter((cleanup): cleanup is () => void => Boolean(cleanup));
-  if (activeCleanups.length === 0) {
-    return undefined;
-  }
-  return () => {
-    for (const cleanup of activeCleanups) {
-      cleanup();
-    }
-  };
-}
-
-function isPiMcpAdapterCommand(command: PiRpcSlashCommand): boolean {
-  if (command.source !== "extension" || !/^mcp(?::\d+)?$/.test(command.name)) {
-    return false;
-  }
-  if (!command.sourceInfo) {
-    return true;
-  }
-  return JSON.stringify(command.sourceInfo).includes("pi-mcp-adapter");
-}
-
-function withPiMcpCapability(supportsMcpServers: boolean): AgentCapabilityFlags {
-  return {
-    ...PI_CAPABILITIES,
-    supportsMcpServers,
-  };
-}
-
 function isPiRequestAbortError(error: unknown): boolean {
   if (error instanceof Error && error.name === "AbortError") {
     return true;
   }
 
   return /\brequest was aborted\b|\babort(ed)?\b/i.test(toDiagnosticErrorMessage(error));
-}
-
-function resolveThinkingOptionId(
-  cachedThinkingOptionId: string | null,
-  sessionThinkingLevel: PiThinkingLevel,
-): PiThinkingLevel | null {
-  const currentThinking = cachedThinkingOptionId ?? sessionThinkingLevel;
-  return normalizePiThinkingOption(currentThinking);
-}
-
-function modelToId(model: PiModel | null | undefined): string | null {
-  return model?.provider && model.id ? `${model.provider}/${model.id}` : null;
 }
 
 function piAssistantText(message: Extract<PiAgentMessage, { role: "assistant" }>): string | null {
@@ -593,21 +250,17 @@ export class PiRpcAgentSession implements AgentSession {
   readonly capabilities: AgentCapabilityFlags;
 
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
-  private lastKnownThinkingOptionId: string | null;
   private readonly extensionHistory: PiExtensionHistoryController;
   private readonly sessionEvents: PiSessionEventController;
-  private readonly modelPrefix: string | null;
-  private state: PiSessionState;
-  private closed = false;
-
+  private readonly sessionRuntime: PiSessionRuntimeController;
   constructor(options: PiRpcAgentSessionOptions) {
     this.runtimeSession = options.runtimeSession;
-    this.config = options.config;
-    this.modelPrefix = options.modelPrefix ?? null;
-    this.state = options.initialState;
     this.capabilities = options.capabilities;
-    this.cleanup = options.cleanup;
     this.logger = options.logger;
+    this.sessionRuntime = new PiSessionRuntimeController({
+      ...options,
+      emit: (event) => this.emit(event),
+    });
     this.extensionHistory = new PiExtensionHistoryController({
       runtimeSession: this.runtimeSession,
       emit: (event) => this.emit(event),
@@ -616,14 +269,10 @@ export class PiRpcAgentSession implements AgentSession {
       runtimeSession: this.runtimeSession,
       extensionHistory: this.extensionHistory,
       emit: (event) => this.emit(event),
-      getSessionId: () => this.state.sessionId,
+      getSessionId: () => this.sessionRuntime.sessionId,
       resolveTurnError: latestPiErrorMessage,
-      onTurnCompleted: (turnId) => void this.refreshAfterTurn(turnId),
+      onTurnCompleted: (turnId) => void this.sessionRuntime.refreshAfterTurn(turnId),
     });
-    this.lastKnownThinkingOptionId =
-      normalizePiThinkingOption(options.config.thinkingOptionId) ??
-      this.state.thinkingLevel ??
-      null;
 
     this.runtimeSession.onEvent((event) => {
       this.sessionEvents.handleRuntimeEvent(event);
@@ -631,12 +280,10 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   private readonly runtimeSession: PiRuntimeSession;
-  private readonly config: AgentSessionConfig;
-  private readonly cleanup?: () => void;
   private readonly logger: Logger;
 
   get id(): string | null {
-    return this.state.sessionId;
+    return this.sessionRuntime.sessionId;
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -645,7 +292,7 @@ export class PiRpcAgentSession implements AgentSession {
       runOptions: options,
       startTurn: (p, o) => this.startTurn(p, o),
       subscribe: (callback) => this.subscribe(callback),
-      getSessionId: () => this.state.sessionId,
+      getSessionId: () => this.sessionRuntime.sessionId,
       reduceFinalText: ({ current, item }) =>
         item.type === "assistant_message" ? `${current}${item.text}` : current,
     });
@@ -699,17 +346,7 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
-    await this.refreshState();
-    return {
-      provider: PI_PROVIDER,
-      sessionId: this.state.sessionId,
-      model: modelToId(this.state.model),
-      thinkingOptionId: resolveThinkingOptionId(
-        this.lastKnownThinkingOptionId,
-        this.state.thinkingLevel,
-      ),
-      modeId: null,
-    };
+    return this.sessionRuntime.getRuntimeInfo();
   }
 
   async getAvailableModes(): Promise<AgentMode[]> {
@@ -734,16 +371,7 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   describePersistence(): AgentPersistenceHandle | null {
-    return {
-      provider: PI_PROVIDER,
-      sessionId: this.state.sessionId,
-      nativeHandle: this.state.sessionFile,
-      metadata: {
-        cwd: this.config.cwd,
-        ...(this.config.model ? { model: this.config.model } : {}),
-        ...(this.config.thinkingOptionId ? { thinkingOptionId: this.config.thinkingOptionId } : {}),
-      },
-    };
+    return this.sessionRuntime.describePersistence();
   }
 
   async interrupt(): Promise<void> {
@@ -754,7 +382,7 @@ export class PiRpcAgentSession implements AgentSession {
     if (this.sessionEvents.activeTurnId) {
       throw new Error("Cannot rewind the Pi conversation while a Pi turn is active");
     }
-    await this.refreshState().catch((err) => {
+    await this.sessionRuntime.refreshState().catch((err) => {
       this.logger.warn({ err }, "Pi refreshState failed before rewind");
     });
     await this.extensionHistory.capture("rewind");
@@ -771,16 +399,9 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async close(): Promise<void> {
-    if (this.closed) {
-      return;
-    }
-    this.closed = true;
-    try {
-      await this.runtimeSession.close();
-    } finally {
+    await this.sessionRuntime.close(() => {
       this.sessionEvents.close(new Error("Pi session closed"));
-      this.cleanup?.();
-    }
+    });
   }
 
   async listCommands(): Promise<AgentSlashCommand[]> {
@@ -793,59 +414,16 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async setModel(modelId: string | null): Promise<void> {
-    const prefixedModelId = applyRuntimeModelPrefix(modelId ?? undefined, this.modelPrefix);
-    const parsedReference = parseModelReference(prefixedModelId ?? null);
-    if (!parsedReference) {
-      return;
-    }
-    if (!parsedReference.provider) {
-      throw new Error(`Pi model id must include a provider: ${modelId}`);
-    }
-
-    const model = await this.runtimeSession.setModel(parsedReference.provider, parsedReference.id);
-    this.state = {
-      ...this.state,
-      model,
-    };
-    this.config.model = `${model.provider}/${model.id}`;
+    await this.sessionRuntime.setModel(modelId);
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
-    const thinkingLevel = normalizePiThinkingOption(thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL;
-    await this.runtimeSession.setThinkingLevel(thinkingLevel);
-    this.lastKnownThinkingOptionId = thinkingLevel;
-    this.config.thinkingOptionId = thinkingLevel;
-    this.state = {
-      ...this.state,
-      thinkingLevel,
-    };
+    await this.sessionRuntime.setThinkingOption(thinkingOptionId);
   }
 
   private emit(event: AgentStreamEvent): void {
     for (const subscriber of this.subscribers) {
       subscriber(event);
-    }
-  }
-
-  private async refreshState(): Promise<void> {
-    this.state = await this.runtimeSession.getState();
-  }
-
-  private async refreshAfterTurn(turnId: string | undefined): Promise<void> {
-    await this.refreshState().catch((err) => {
-      this.logger.warn({ err }, "Pi refreshState failed after turn");
-    });
-    const usage = await this.runtimeSession
-      .getSessionStats()
-      .then(toAgentUsage)
-      .catch(() => undefined);
-    if (usage) {
-      this.emit({
-        type: "usage_updated",
-        provider: PI_PROVIDER,
-        turnId,
-        usage,
-      });
     }
   }
 }
@@ -857,111 +435,35 @@ export class PiRpcAgentClient implements AgentClient {
   private readonly logger: Logger;
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly runtime: PiRuntime;
+  private readonly sessionLifecycle: PiSessionLifecycle;
 
   constructor(options: PiRpcAgentClientOptions) {
     this.logger = options.logger;
     this.runtimeSettings = options.runtimeSettings;
     this.runtime = options.runtime ?? createRuntime(options.logger, options.runtimeSettings);
+    this.sessionLifecycle = new PiSessionLifecycle({
+      runtime: this.runtime,
+      logger: this.logger,
+      modelPrefix: readRuntimeModelPrefix(this.runtimeSettings),
+      baseCapabilities: PI_CAPABILITIES,
+    });
   }
 
   async createSession(
     config: AgentSessionConfig,
     launchContext?: AgentLaunchContext,
   ): Promise<AgentSession> {
-    const modelPrefix = readRuntimeModelPrefix(this.runtimeSettings);
-    const normalizedConfig: AgentSessionConfig = {
-      ...config,
-      model: applyRuntimeModelPrefix(config.model, modelPrefix),
-    };
-    const mcpConfig = await this.prepareMcpConfig(config.cwd, config.mcpServers);
-    const chisacodeExtension = createPiChisaCodeExtensionFile();
-    let runtimeSession: PiRuntimeSession;
-    try {
-      runtimeSession = await this.runtime.startSession({
-        cwd: normalizedConfig.cwd,
-        model: normalizedConfig.model,
-        thinkingOptionId:
-          normalizePiThinkingOption(normalizedConfig.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
-        systemPrompt: composeSystemPromptParts(
-          normalizedConfig.systemPrompt,
-          normalizedConfig.daemonAppendSystemPrompt,
-        ),
-        env: launchContext?.env,
-        mcpConfigPath: mcpConfig?.path,
-        extensionPaths: [chisacodeExtension.path],
-      });
-    } catch (error) {
-      mcpConfig?.cleanup();
-      chisacodeExtension.cleanup();
-      throw error;
-    }
-    try {
-      return new PiRpcAgentSession({
-        runtimeSession,
-        config: normalizedConfig,
-        initialState: await runtimeSession.getState(),
-        capabilities: withPiMcpCapability(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, chisacodeExtension.cleanup]),
-        modelPrefix: modelPrefix ?? undefined,
-        logger: this.logger,
-      });
-    } catch (error) {
-      await runtimeSession.close().catch(() => undefined);
-      mcpConfig?.cleanup();
-      chisacodeExtension.cleanup();
-      throw error;
-    }
+    return new PiRpcAgentSession(await this.sessionLifecycle.createSession(config, launchContext));
   }
 
   async resumeSession(
     handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
-    _launchContext?: AgentLaunchContext,
+    launchContext?: AgentLaunchContext,
   ): Promise<AgentSession> {
-    const sessionFile = handle.nativeHandle;
-    if (!sessionFile) {
-      throw new Error("Pi resume requires a native session file handle");
-    }
-
-    const persistenceMetadata = parsePersistenceMetadata(handle.metadata);
-    const resumeConfig = buildResumeConfig(persistenceMetadata, overrides);
-
-    const mcpConfig = await this.prepareMcpConfig(resumeConfig.cwd, resumeConfig.config.mcpServers);
-    const chisacodeExtension = createPiChisaCodeExtensionFile();
-    let runtimeSession: PiRuntimeSession;
-    try {
-      runtimeSession = await this.runtime.startSession({
-        cwd: resumeConfig.cwd,
-        session: sessionFile,
-        model: resumeConfig.model,
-        thinkingOptionId: normalizePiThinkingOption(resumeConfig.thinkingOptionId) ?? undefined,
-        systemPrompt: composeSystemPromptParts(
-          resumeConfig.config.systemPrompt,
-          resumeConfig.config.daemonAppendSystemPrompt,
-        ),
-        mcpConfigPath: mcpConfig?.path,
-        extensionPaths: [chisacodeExtension.path],
-      });
-    } catch (error) {
-      mcpConfig?.cleanup();
-      chisacodeExtension.cleanup();
-      throw error;
-    }
-    try {
-      return new PiRpcAgentSession({
-        runtimeSession,
-        config: resumeConfig.config,
-        initialState: await runtimeSession.getState(),
-        capabilities: withPiMcpCapability(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, chisacodeExtension.cleanup]),
-        logger: this.logger,
-      });
-    } catch (error) {
-      await runtimeSession.close().catch(() => undefined);
-      mcpConfig?.cleanup();
-      chisacodeExtension.cleanup();
-      throw error;
-    }
+    return new PiRpcAgentSession(
+      await this.sessionLifecycle.resumeSession(handle, overrides, launchContext),
+    );
   }
 
   async listModels(options: ListModelsOptions): Promise<AgentModelDefinition[]> {
@@ -1067,37 +569,6 @@ export class PiRpcAgentClient implements AgentClient {
       return {
         diagnostic: formatProviderDiagnosticError("Pi", error),
       };
-    }
-  }
-
-  private async prepareMcpConfig(
-    cwd: string,
-    servers: Record<string, McpServerConfig> | undefined,
-  ): Promise<PiMcpConfigFile | null> {
-    if (!servers || Object.keys(servers).length === 0) {
-      return null;
-    }
-    if (!(await this.detectMcpAdapter(cwd))) {
-      return null;
-    }
-    return createPiMcpConfigFile(servers);
-  }
-
-  private async detectMcpAdapter(cwd: string): Promise<boolean> {
-    const runtimeSession = await this.runtime.startSession({ cwd }).catch((error) => {
-      this.logger.debug({ err: error, cwd }, "Pi MCP adapter probe failed to start");
-      return null;
-    });
-    if (!runtimeSession) {
-      return false;
-    }
-    try {
-      return (await runtimeSession.getCommands()).some(isPiMcpAdapterCommand);
-    } catch (error) {
-      this.logger.debug({ err: error, cwd }, "Pi MCP adapter probe failed");
-      return false;
-    } finally {
-      await runtimeSession.close().catch(() => undefined);
     }
   }
 
