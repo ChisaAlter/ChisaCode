@@ -2,9 +2,8 @@ import { randomUUID } from "node:crypto";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
-import { CLIENT_CAPS, type ClientCapability } from "@chisacode/protocol/client-capabilities";
+import type { ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
-  serializeAgentStreamEvent,
   type AgentSnapshotPayload,
   type FirstAgentContext,
   type SessionInboundMessage,
@@ -33,7 +32,7 @@ import type { WorkspaceGitService } from "./workspace-git-service.js";
 
 import { AgentManager } from "./agent/agent-manager.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
-import type { AgentManagerEvent, ManagedAgent } from "./agent/agent-manager.js";
+import type { ManagedAgent } from "./agent/agent-manager.js";
 import { archiveAgentCommand } from "./agent/lifecycle-command.js";
 import {
   buildStoredAgentPayload,
@@ -45,11 +44,7 @@ import {
   emitLiveTimelineItemIfAgentKnown,
 } from "./agent/timeline-append.js";
 import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
-import {
-  getAgentStreamEventTurnId,
-  type AgentSessionConfig,
-  type AgentStreamEvent,
-} from "./agent/agent-sdk-types.js";
+import type { AgentSessionConfig } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import {
@@ -120,7 +115,6 @@ import {
   matchesAgentFilter as matchesAgentFilterFunc,
   resolveAgentIdentifier as resolveAgentIdentifierFunc,
   parseClientCapabilities as parseClientCapabilitiesFunc,
-  buildAgentStreamPayload as buildAgentStreamPayloadFunc,
   getFocusedAgentSelectionForCwd as getFocusedAgentSelectionForCwdFunc,
   readStructuredGenerationDaemonConfig as readStructuredGenerationDaemonConfigFunc,
   bufferOrEmitAgentUpdate as bufferOrEmitAgentUpdateFunc,
@@ -134,6 +128,7 @@ import {
   buildWorkspaceScriptPayloadSnapshot as buildWorkspaceScriptPayloadSnapshotCore,
   emitWorkspaceScriptStatusUpdate as emitWorkspaceScriptStatusUpdateCore,
 } from "./workspace-core.js";
+import { AgentEventForwarder } from "./agent-event-forwarder.js";
 import { GitMetadataGenerator } from "./git-metadata-generator.js";
 import { WorkspaceDescriptorBuilder } from "./workspace-descriptor-builder.js";
 import { WorkspaceGitObserverController } from "./workspace-git-observer-controller.js";
@@ -260,7 +255,7 @@ export class Session {
   private readonly mcpBaseUrl: string | null;
   private readonly downloadTokenStore: DownloadTokenStore;
   private readonly pushTokenStore: PushTokenStore;
-  private unsubscribeAgentEvents: (() => void) | null = null;
+
   private agentUpdatesSubscription: AgentUpdatesSubscriptionState | null = null;
 
   private clientActivity: {
@@ -309,6 +304,7 @@ export class Session {
   private readonly daemonVersion: string | undefined;
   private readonly daemonRuntimeConfig: SessionOptions["daemonRuntimeConfig"];
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
+  private readonly agentEventForwarder: AgentEventForwarder;
   private readonly checkoutGitHandler: CheckoutGitHandler;
   private readonly chatScheduleLoopHandler: ChatScheduleLoopHandler;
   private readonly configControlHandler: ConfigControlHandler;
@@ -509,10 +505,17 @@ export class Session {
       this.agentDirectoryHandler,
     );
     this.generativeUiHandler = new GenerativeUiHandler(sessionContext);
+    this.agentEventForwarder = new AgentEventForwarder({
+      agentManager: this.agentManager,
+      sessionLogger: this.sessionLogger,
+      supports: (capability) => this.supports(capability as ClientCapability),
+      forwardAgentUpdate: (agent) => this.forwardAgentUpdate(agent),
+      emit: (message) => this.emit(message),
+    });
 
     // Initialize asynchronous collaborators only after their handlers exist.
     void this.initializeAgentMcp();
-    this.subscribeToAgentEvents();
+    this.agentEventForwarder.start();
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -789,99 +792,6 @@ export class Session {
     } catch (error) {
       this.sessionLogger.error({ err: error }, "Failed to initialize Agent MCP");
     }
-  }
-
-  /**
-   * Subscribe to AgentManager events and forward them to the client
-   */
-  private subscribeToAgentEvents(): void {
-    if (this.unsubscribeAgentEvents) {
-      this.unsubscribeAgentEvents();
-    }
-
-    this.unsubscribeAgentEvents = this.agentManager.subscribe(
-      (event) => {
-        if (event.type === "agent_state") {
-          this.sessionLogger.trace(
-            {
-              agentId: event.agent.id,
-              provider: event.agent.provider,
-              providerSessionId: event.agent.persistence?.sessionId ?? undefined,
-              turnId: event.agent.activeForegroundTurnId ?? undefined,
-              lifecycle: event.agent.lifecycle,
-            },
-            "agent.session.forward_update",
-          );
-          void this.forwardAgentUpdate(event.agent);
-          return;
-        }
-
-        if (
-          !this.supports(CLIENT_CAPS.generativeUi) &&
-          this.isGenerativeUiStreamEvent(event.event)
-        ) {
-          return;
-        }
-
-        const serializedEvent = serializeAgentStreamEvent(event.event);
-        if (!serializedEvent) {
-          return;
-        }
-        this.sessionLogger.trace(
-          {
-            agentId: event.agentId,
-            provider: event.event.provider,
-            turnId: getAgentStreamEventTurnId(event.event),
-            seq: event.seq,
-            epoch: event.epoch,
-            event: event.event,
-          },
-          "agent.session.forward_stream",
-        );
-
-        this.emit({
-          type: "agent_stream",
-          payload: this.buildAgentStreamPayload(event, serializedEvent),
-        });
-
-        if (event.event.type === "permission_requested") {
-          this.emit({
-            type: "agent_permission_request",
-            payload: {
-              agentId: event.agentId,
-              request: event.event.request,
-            },
-          });
-        } else if (event.event.type === "permission_resolved") {
-          this.emit({
-            type: "agent_permission_resolved",
-            payload: {
-              agentId: event.agentId,
-              requestId: event.event.requestId,
-              resolution: event.event.resolution,
-            },
-          });
-        }
-
-        // Title updates may be applied asynchronously after agent creation.
-      },
-      { replayState: false },
-    );
-  }
-
-  private isGenerativeUiStreamEvent(event: AgentStreamEvent): boolean {
-    return (
-      event.type === "generative_ui_update" ||
-      event.type === "generative_ui_remove" ||
-      (event.type === "timeline" && event.item.type === "generative_ui")
-    );
-  }
-
-  private buildAgentStreamPayload(
-    event: Extract<AgentManagerEvent, { type: "agent_stream" }>,
-    serializedEvent: Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"]["event"],
-  ): Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"] {
-    return buildAgentStreamPayloadFunc(event, serializedEvent);
   }
 
   private async buildAgentPayload(agent: ManagedAgent): Promise<AgentSnapshotPayload> {
@@ -1865,10 +1775,7 @@ export class Session {
     this.disposed = true;
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
 
-    if (this.unsubscribeAgentEvents) {
-      this.unsubscribeAgentEvents();
-      this.unsubscribeAgentEvents = null;
-    }
+    this.agentEventForwarder.dispose();
     if (this.unsubscribeProviderSnapshotEvents) {
       this.unsubscribeProviderSnapshotEvents();
       this.unsubscribeProviderSnapshotEvents = null;
