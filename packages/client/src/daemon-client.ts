@@ -16,7 +16,6 @@ import type {
   CreateChisaCodeWorktreeRequest,
   FileDownloadTokenResponse,
   FileExplorerResponse,
-  FetchAgentTimelineResponseMessage,
   CheckoutStatusResponse,
   CheckoutCommitResponse,
   CheckoutMergeResponse,
@@ -78,7 +77,6 @@ import type {
   TerminalInput,
   SessionInboundMessage,
   SessionOutboundMessage,
-  SendAgentMessageRequest,
   EditorTargetId,
   ChisaCodeConfigRaw,
   ChisaCodeConfigRevision,
@@ -146,6 +144,16 @@ import {
   type FetchAgentResult,
   type ImportAgentInput,
 } from "./daemon-client-agent-lifecycle.js";
+import {
+  AgentInteractionClient,
+  type FetchAgentTimelineCursor,
+  type FetchAgentTimelineDirection,
+  type FetchAgentTimelineOptions,
+  type FetchAgentTimelinePayload,
+  type FetchAgentTimelineProjection,
+  type SendMessageOptions,
+} from "./daemon-client-agent-interaction.js";
+import { DaemonRpcError } from "./daemon-client-rpc-error.js";
 
 export type { FileReadResult } from "./daemon-client-file-transfer.js";
 
@@ -186,6 +194,12 @@ export type {
   CreateAgentRequestOptions,
   FetchAgentResult,
   ImportAgentInput,
+  FetchAgentTimelineCursor,
+  FetchAgentTimelineDirection,
+  FetchAgentTimelineOptions,
+  FetchAgentTimelinePayload,
+  FetchAgentTimelineProjection,
+  SendMessageOptions,
   RenameTerminalInput,
   RenameTerminalResult,
   TerminalStreamEvent,
@@ -267,12 +281,6 @@ export interface DaemonClientConfig {
   };
   runtimeMetricsIntervalMs?: number;
   runtimeMetricsWindowMs?: number;
-}
-
-export interface SendMessageOptions {
-  messageId?: string;
-  images?: Array<{ data: string; mimeType: string }>;
-  attachments?: SendAgentMessageRequest["attachments"];
 }
 
 export interface CreateChisaCodeWorktreeInput extends Pick<
@@ -434,19 +442,6 @@ type ScheduleUpdatePayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/update/response" }
 >["payload"];
-export type FetchAgentTimelinePayload = FetchAgentTimelineResponseMessage["payload"];
-
-export type FetchAgentTimelineDirection = FetchAgentTimelinePayload["direction"];
-export type FetchAgentTimelineProjection = FetchAgentTimelinePayload["projection"];
-export type FetchAgentTimelineCursor = NonNullable<FetchAgentTimelinePayload["startCursor"]>;
-export interface FetchAgentTimelineOptions {
-  direction?: FetchAgentTimelineDirection;
-  cursor?: FetchAgentTimelineCursor;
-  limit?: number;
-  projection?: FetchAgentTimelineProjection;
-  requestId?: string;
-}
-
 type RestartRequestedStatusPayload = z.infer<typeof RestartRequestedStatusPayloadSchema>;
 type ShutdownRequestedStatusPayload = z.infer<typeof ShutdownRequestedStatusPayloadSchema>;
 type FetchAgentsPayload = Extract<
@@ -693,28 +688,10 @@ type CorrelatedResponsePayload<TType extends CorrelatedResponseType> = Extract<
   { type: TType }
 >["payload"];
 
-class DaemonRpcError extends Error {
-  readonly requestId: string;
-  readonly requestType?: string;
-  readonly code?: string;
-
-  constructor(params: { requestId: string; error: string; requestType?: string; code?: string }) {
-    const parts = [params.error];
-    if (params.requestType) parts.push(`requestType=${params.requestType}`);
-    if (params.code) parts.push(`code=${params.code}`);
-    super(parts.join(" "));
-    this.name = "DaemonRpcError";
-    this.requestId = params.requestId;
-    this.requestType = params.requestType;
-    this.code = params.code;
-  }
-}
-
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
-const DEFAULT_FETCH_AGENT_TIMELINE_TIMEOUT_MS = 60000;
 const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
 
 /** Default timeout for waiting for connection before sending queued messages */
@@ -804,6 +781,7 @@ export class DaemonClient {
   private readonly terminalClient: TerminalClient;
   private readonly voiceClient: VoiceClient;
   private readonly agentLifecycle: AgentLifecycleClient;
+  private readonly agentInteraction: AgentInteractionClient;
   private readonly binaryFileTransfers = new BinaryFileTransferManager();
   private logger: Logger;
   private pendingSendQueue: PendingSend[] = [];
@@ -859,6 +837,11 @@ export class DaemonClient {
       request: (params) => this.sendCorrelatedSessionRequest(params),
       createRequestId: (requestId) => this.createRequestId(requestId),
       requestStatus: (params) => this.sendRequest({ ...params, options: { skipQueue: true } }),
+    });
+    this.agentInteraction = new AgentInteractionClient({
+      request: (params) => this.sendCorrelatedSessionRequest(params),
+      createRequestId: (requestId) => this.createRequestId(requestId),
+      supportsGenerativeUi: () => this.lastServerInfoMessage?.features?.generativeUi === true,
     });
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
@@ -1866,38 +1849,7 @@ export class DaemonClient {
     agentId: string,
     options: FetchAgentTimelineOptions = {},
   ): Promise<FetchAgentTimelinePayload> {
-    const resolvedRequestId = this.createRequestId(options.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agent_timeline_request",
-      agentId,
-      requestId: resolvedRequestId,
-      ...(options.direction ? { direction: options.direction } : {}),
-      ...(options.cursor ? { cursor: options.cursor } : {}),
-      ...(typeof options.limit === "number" ? { limit: options.limit } : {}),
-      ...(options.projection ? { projection: options.projection } : {}),
-    });
-
-    const payload = await this.sendRequest({
-      requestId: resolvedRequestId,
-      message,
-      timeout: DEFAULT_FETCH_AGENT_TIMELINE_TIMEOUT_MS,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "fetch_agent_timeline_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== resolvedRequestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-
-    if (payload.error) {
-      throw new Error(payload.error);
-    }
-
-    return payload;
+    return this.agentInteraction.fetchAgentTimeline(agentId, options);
   }
 
   // ============================================================================
@@ -1909,39 +1861,11 @@ export class DaemonClient {
     text: string,
     options?: SendMessageOptions,
   ): Promise<void> {
-    const requestId = this.createRequestId();
-    const messageId = options?.messageId ?? crypto.randomUUID();
-    const message = SessionInboundMessageSchema.parse({
-      type: "send_agent_message_request",
-      requestId,
-      agentId,
-      text,
-      ...(messageId ? { messageId } : {}),
-      ...(options?.images ? { images: options.images } : {}),
-      ...(options?.attachments ? { attachments: options.attachments } : {}),
-    });
-    const payload = await this.sendRequest({
-      requestId,
-      message,
-      timeout: 15000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "send_agent_message_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "sendAgentMessage rejected");
-    }
+    return this.agentInteraction.sendAgentMessage(agentId, text, options);
   }
 
   async sendMessage(agentId: string, text: string, options?: SendMessageOptions): Promise<void> {
-    await this.sendAgentMessage(agentId, text, options);
+    return this.sendAgentMessage(agentId, text, options);
   }
 
   /**
@@ -1963,41 +1887,13 @@ export class DaemonClient {
     payload: unknown,
     options?: { timeout?: number },
   ): Promise<void> {
-    if (this.lastServerInfoMessage?.features?.generativeUi !== true) {
-      throw new DaemonRpcError({
-        requestId: "",
-        error: "generative UI actions are not supported by this server",
-        requestType: "generative_ui.action.request",
-      });
-    }
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "generative_ui.action.request",
-      requestId,
+    return this.agentInteraction.sendGenerativeUiAction(
       agentId,
       instanceId,
       action,
       payload,
-      timestamp: Date.now(),
-    });
-    const result = await this.sendRequest({
-      requestId,
-      message,
-      timeout: options?.timeout ?? 10000,
-      options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "generative_ui.action.response") return null;
-        if (msg.payload.requestId !== requestId) return null;
-        return msg.payload;
-      },
-    });
-    if (!result.received) {
-      throw new DaemonRpcError({
-        requestId,
-        error: result.error ?? "generative_ui.action rejected",
-        requestType: "generative_ui.action.request",
-      });
-    }
+      options,
+    );
   }
 
   async rewindAgent(
