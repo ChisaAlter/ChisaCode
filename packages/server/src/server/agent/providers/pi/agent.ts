@@ -72,6 +72,17 @@ import {
   type PiToolResult,
   type PiTrackedToolCall,
 } from "./tool-call-mapper.js";
+import { isRecord, optionalString } from "./event-values.js";
+import {
+  buildCombinedAskUserSelectionResponse,
+  buildExtensionUiResponse,
+  isCombinedAskUserPermission,
+  isOptionalInputPlaceholder,
+  mapExtensionUiRequestToPermission,
+  readActiveAskUserDialog,
+  type ActiveAskUserDialog,
+  type PendingCombinedAskUserResponse,
+} from "./permission-mapper.js";
 
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
@@ -81,10 +92,6 @@ const CHISACODE_PI_CAPTURE_EXTENSION_COMMAND = "chisacode_capture_entries";
 const CHISACODE_PI_ENTRY_CAPTURE_MARKER = "CHISACODE_ENTRY_CAPTURE";
 const CHISACODE_PI_COMMAND_RESULT_MARKER = "CHISACODE_COMMAND_RESULT";
 const CHISACODE_PI_EXTENSION_RESULT_TIMEOUT_MS = 10_000;
-const QUESTION_RESPONSE_HEADER = "Response";
-const QUESTION_COMMENT_HEADER = "Comment";
-const PI_ASK_USER_FREEFORM_SENTINEL = "✏️ Type custom response...";
-const COMBINED_ASK_USER_METADATA = "ask_user_select_optional_comment";
 
 const PI_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -189,22 +196,6 @@ interface PendingExtensionResult {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
-}
-
-interface ActiveAskUserDialog {
-  allowComment: boolean;
-  allowFreeform: boolean;
-  allowMultiple: boolean;
-}
-
-interface PendingCombinedAskUserResponse {
-  comment: string;
-  freeform: string | null;
-}
-
-interface ExtensionUiMappingOptions {
-  combineOptionalComment?: boolean;
-  allowFreeform?: boolean;
 }
 
 const CHISACODE_MODEL_PREFIX_ENV = "CHISACODE_MODEL_PREFIX";
@@ -615,14 +606,6 @@ function latestPiErrorMessage(messages: PiAgentMessage[]): string | null {
   return formatPiErrorMessage(latestAssistant);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
 function parseExtensionMarkerPayload(
   message: string,
   marker: string,
@@ -661,250 +644,6 @@ function parseCapturedEntries(value: unknown): PiCapturedEntry[] {
       },
     ];
   });
-}
-
-function optionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function readActiveAskUserDialog(toolName: string, args: unknown): ActiveAskUserDialog | null {
-  if (toolName !== "ask_user" || !isRecord(args)) {
-    return null;
-  }
-  return {
-    allowComment: optionalBoolean(args.allowComment) ?? false,
-    allowFreeform: optionalBoolean(args.allowFreeform) ?? true,
-    allowMultiple: optionalBoolean(args.allowMultiple) ?? false,
-  };
-}
-
-function isOptionalInputPlaceholder(placeholder: string | undefined): boolean {
-  return /\boptional\b|\bskip\b/i.test(placeholder ?? "");
-}
-
-function getInputQuestionTitle(title: string | undefined, placeholder: string | undefined): string {
-  if (!isOptionalInputPlaceholder(placeholder)) {
-    return title ?? "Enter a value";
-  }
-  if (/\bcomment\b/i.test(`${title ?? ""}\n${placeholder ?? ""}`)) {
-    return "Optional comment";
-  }
-  return "Optional response";
-}
-
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : [];
-}
-
-function isPiAskUserFreeformOption(option: string): boolean {
-  return option === PI_ASK_USER_FREEFORM_SENTINEL;
-}
-
-function mapExtensionUiRequestToPermission(
-  event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
-  options: ExtensionUiMappingOptions = {},
-): AgentPermissionRequest | null {
-  switch (event.method) {
-    case "select": {
-      const selectOptions = readStringArray(event.options);
-      if (options.combineOptionalComment) {
-        return buildCombinedAskUserQuestionPermission(event, {
-          question: optionalString(event.title) ?? "Select an option",
-          options: selectOptions,
-          allowFreeform: options.allowFreeform === true,
-        });
-      }
-      return buildExtensionUiQuestionPermission(event, {
-        question: optionalString(event.title) ?? "Select an option",
-        options: selectOptions,
-        multiSelect: false,
-      });
-    }
-    case "input": {
-      const placeholder = optionalString(event.placeholder);
-      const title = optionalString(event.title);
-      const allowEmpty = isOptionalInputPlaceholder(placeholder);
-      return buildExtensionUiQuestionPermission(event, {
-        question: getInputQuestionTitle(title, placeholder),
-        options: [],
-        multiSelect: false,
-        ...(placeholder ? { placeholder } : {}),
-        ...(allowEmpty ? { allowEmpty: true, dismissLabel: "Skip" } : {}),
-      });
-    }
-    case "editor":
-      return buildExtensionUiQuestionPermission(event, {
-        question: optionalString(event.title) ?? "Edit text",
-        options: [],
-        multiSelect: false,
-      });
-    case "confirm":
-      return buildExtensionUiQuestionPermission(event, {
-        question: [optionalString(event.title), optionalString(event.message)]
-          .filter(Boolean)
-          .join("\n\n"),
-        options: ["Yes", "No"],
-        multiSelect: false,
-      });
-    default:
-      return null;
-  }
-}
-
-function buildExtensionUiQuestionPermission(
-  event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
-  input: {
-    question: string;
-    options: string[];
-    multiSelect: boolean;
-    placeholder?: string;
-    allowEmpty?: boolean;
-    dismissLabel?: string;
-  },
-): AgentPermissionRequest {
-  return {
-    id: event.id,
-    provider: PI_PROVIDER,
-    name: `Pi ${event.method}`,
-    kind: "question",
-    title: input.question,
-    input: {
-      questions: [
-        {
-          question: input.question,
-          header: QUESTION_RESPONSE_HEADER,
-          options: input.options.map((label) => ({ label })),
-          multiSelect: input.multiSelect,
-          ...(input.placeholder ? { placeholder: input.placeholder } : {}),
-          ...(input.allowEmpty ? { allowEmpty: true } : {}),
-          ...(input.dismissLabel ? { dismissLabel: input.dismissLabel } : {}),
-        },
-      ],
-    },
-    metadata: {
-      extensionUiMethod: event.method,
-      answerHeader: QUESTION_RESPONSE_HEADER,
-    },
-  };
-}
-
-function buildCombinedAskUserQuestionPermission(
-  event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
-  input: {
-    question: string;
-    options: string[];
-    allowFreeform: boolean;
-  },
-): AgentPermissionRequest {
-  const visibleOptions = input.options.filter((option) => !isPiAskUserFreeformOption(option));
-  const allowOther = input.allowFreeform || visibleOptions.length !== input.options.length;
-  return {
-    id: event.id,
-    provider: PI_PROVIDER,
-    name: "Pi ask_user",
-    kind: "question",
-    title: input.question,
-    input: {
-      questions: [
-        {
-          question: input.question,
-          header: QUESTION_RESPONSE_HEADER,
-          options: visibleOptions.map((label) => ({ label })),
-          multiSelect: false,
-          ...(allowOther ? { allowOther: true } : {}),
-        },
-        {
-          question: "Optional comment",
-          header: QUESTION_COMMENT_HEADER,
-          options: [],
-          multiSelect: false,
-          placeholder: "Optional comment (press Enter to skip)...",
-          allowEmpty: true,
-        },
-      ],
-    },
-    metadata: {
-      extensionUiMethod: event.method,
-      answerHeader: QUESTION_RESPONSE_HEADER,
-      commentHeader: QUESTION_COMMENT_HEADER,
-      combinedAskUser: COMBINED_ASK_USER_METADATA,
-      selectOptions: visibleOptions,
-      ...(allowOther ? { freeformSentinel: PI_ASK_USER_FREEFORM_SENTINEL } : {}),
-    },
-  };
-}
-
-function permissionAnswer(input: AgentMetadata | undefined, header: string): string | null {
-  const answers = isRecord(input?.answers) ? input.answers : null;
-  if (!answers) {
-    return null;
-  }
-  const answer = answers[header];
-  return typeof answer === "string" ? answer : null;
-}
-
-function firstPermissionAnswer(input: AgentMetadata | undefined): string | null {
-  const answers = isRecord(input?.answers) ? input.answers : null;
-  if (!answers) {
-    return null;
-  }
-  const first = Object.values(answers).find((value) => typeof value === "string");
-  return typeof first === "string" ? first : null;
-}
-
-function isCombinedAskUserPermission(request: AgentPermissionRequest): boolean {
-  return request.metadata?.combinedAskUser === COMBINED_ASK_USER_METADATA;
-}
-
-function buildCombinedAskUserSelectionResponse(
-  request: AgentPermissionRequest,
-  response: AgentPermissionResponse,
-): {
-  uiResponse: { value?: string; cancelled?: boolean };
-  pendingResponse: PendingCombinedAskUserResponse | null;
-} {
-  if (response.behavior === "deny") {
-    return { uiResponse: { cancelled: true }, pendingResponse: null };
-  }
-
-  const answer = permissionAnswer(response.updatedInput, QUESTION_RESPONSE_HEADER);
-  if (answer === null) {
-    return { uiResponse: { cancelled: true }, pendingResponse: null };
-  }
-
-  const selectOptions = readStringArray(request.metadata?.selectOptions);
-  const freeformSentinel = optionalString(request.metadata?.freeformSentinel);
-  const isFreeform = Boolean(freeformSentinel) && !selectOptions.includes(answer);
-  const comment = permissionAnswer(response.updatedInput, QUESTION_COMMENT_HEADER) ?? "";
-  return {
-    uiResponse: { value: isFreeform ? freeformSentinel : answer },
-    pendingResponse: {
-      comment,
-      freeform: isFreeform ? answer : null,
-    },
-  };
-}
-
-function buildExtensionUiResponse(
-  request: AgentPermissionRequest,
-  response: AgentPermissionResponse,
-): { value?: string; confirmed?: boolean; cancelled?: boolean } {
-  if (response.behavior === "deny") {
-    return { cancelled: true };
-  }
-
-  const method = optionalString(request.metadata?.extensionUiMethod);
-  const answer = firstPermissionAnswer(response.updatedInput);
-  if (answer === null) {
-    return { cancelled: true };
-  }
-
-  if (method === "confirm") {
-    return { confirmed: /^yes$/i.test(answer.trim()) };
-  }
-  return { value: answer };
 }
 
 function mapPiModel(model: PiModel): AgentModelDefinition {

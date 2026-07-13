@@ -13,11 +13,12 @@
 - Claude 已完成十四个边界切片：`timeline-assembler.ts`、`sdk-pump.ts`、`message-router.ts`、`message-translator.ts`、`query-lifecycle.ts`、`rewind-controller.ts`、`history-converter.ts`、`session-history.ts`、`tool-call-handlers.ts`、`sdk-types-mapping.ts`、`permission-controller.ts` 与 `options-builder.ts` 分别拥有 timeline、SDK reader、turn routing、message/usage translation、query/input/pump lifecycle、rewind state/selection、history conversion、persisted replay、tool lifecycle、纯映射、permission 生命周期与 SDK options/env 职责；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner；`session.ts` 独立承载 `ClaudeAgentSession`，`agent.ts` 收敛为 16 行兼容 façade。
 - OpenCode 已完成 façade、session、client runtime、session runtime、session lifecycle、turn execution、event translator、event values、message translator、permission translator、sub-agent tracking、history、session event bus、permission controller、MCP controller、helpers、catalog、runtime、abort coordinator 与 event-stream controller 二十个边界切片；原入口为 64 行兼容 façade，foreground turn、message、permission、sub-agent、runtime 与 shutdown 资源状态已统一。
 - ACP 已完成六个边界切片：tool/permission mapper、session config、NDJSON transport、process runtime、terminal controller 与 workspace path 分别拥有投影、配置、编解码兼容、process lifecycle、terminal ownership 和 fs/terminal 意图边界；`acp-agent.ts` 继续拥有 Session 业务状态、写入时序与事件编排，并兼容重导出原公开 API。
+- Pi 已完成首个边界切片：`pi/permission-mapper.ts` 独立拥有 extension UI/ask_user permission request/response 映射，`pi/event-values.ts` 提供 unknown payload 解析；`pi/agent.ts` 保留 pending request、runtime response、event routing 与 session lifecycle。
 
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 1225 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行；ACP 主文件为 1866 行，tool mapper 为 431 行，session config 为 283 行，NDJSON transport 为 107 行，process runtime 为 208 行，terminal controller 为 186 行，workspace path 为 20 行。OpenCode 主路由已收敛，后续继续拆 ACP、Pi 与 Claude Session 的剩余大职责。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 1225 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行；ACP 主文件为 1866 行，tool mapper 为 431 行，session config 为 283 行，NDJSON transport 为 107 行，process runtime 为 208 行，terminal controller 为 186 行，workspace path 为 20 行。Pi 主文件为 1613 行，permission mapper 为 295 行，event values 为 21 行。OpenCode 主路由已收敛，后续继续拆 ACP、Pi 与 Claude Session 的剩余大职责。
 
 | 文件                                | 行数 | Session 类                    | Client 类                          | private 方法数 | import 数 |
 | ----------------------------------- | ---- | ----------------------------- | ---------------------------------- | -------------- | --------- |
@@ -53,6 +54,9 @@
 | `acp/terminal-controller.ts`        | 186  | terminal process/state        | ACP client terminal methods        | 1              | 5         |
 | `acp/workspace-path.ts`             | 20   | fs/terminal path intent       | shared helper                      | 0              | 1         |
 | `acp/tool-call-mapper.ts`           | 431  | tool/permission projection    | —                                  | 0              | 2         |
+| `pi/agent.ts`                       | 1613 | `PiRpcAgentSession`           | `PiRpcAgentClient`                 | —              | —         |
+| `pi/permission-mapper.ts`           | 295  | extension UI permissions      | —                                  | 0              | 3         |
+| `pi/event-values.ts`                | 21   | unknown payload parsing       | shared Pi helper                   | 0              | 0         |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
 
@@ -212,6 +216,14 @@
 - `acp-agent.ts` —— 保留 Client/Session orchestration、写入时序、terminal ownership、进程与 transport 生命周期（进行中，1866 行；原公开 mapper/config/transport/process 类型兼容重导出）
 
 **验收**：server typecheck、目标 lint、新 mapper 5 个断言、既有 generic permission、mode/model/config 7 个、stream/compat 3 个、initialize fail-cleanup、terminal 3 个与 workspace path 1 个聚焦场景通过。
+
+### Slice 3.6：Pi 拆分（进行中）
+
+- `pi/permission-mapper.ts` —— extension UI select/input/editor/confirm、ask_user comment/freeform 与 permission response 映射（已完成，295 行）
+- `pi/event-values.ts` —— unknown record/string/boolean/string-array 窄解析（已完成，21 行）
+- `pi/agent.ts` —— 保留 Session/Client orchestration、extension marker/history、event routing 与 runtime lifecycle（进行中，1613 行）
+
+**验收**：server typecheck、目标 lint 与既有 extension UI/ask_user 6 个聚焦场景通过。
 
 ### Slice 4：跨 provider 共享 rewind / tool-call-mapper
 
