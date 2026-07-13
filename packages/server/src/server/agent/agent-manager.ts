@@ -78,6 +78,7 @@ import {
   AgentSessionRescueController,
   type AgentSessionRescueTimeouts,
 } from "./agent-session-rescue-controller.js";
+import { AgentSessionTeardownController } from "./agent-session-teardown-controller.js";
 import {
   AgentWaitController,
   type WaitForAgentOptions,
@@ -324,6 +325,7 @@ export class AgentManager {
   private readonly runControl: AgentRunControlController;
   private readonly runtimeConfiguration: AgentRuntimeConfigurationController;
   private readonly sessionRescue: AgentSessionRescueController;
+  private readonly sessionTeardown: AgentSessionTeardownController;
   private readonly timeline: AgentTimelineController;
   private readonly waits: AgentWaitController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
@@ -472,6 +474,24 @@ export class AgentManager {
       refreshRuntimeInfo: (agent) => this.refreshRuntimeInfo(agent),
       timeline: this.timeline,
       touchUpdatedAt: (agent) => this.touchUpdatedAt(agent),
+    });
+    this.sessionTeardown = new AgentSessionTeardownController({
+      clearGenerativeUi: (agentId) => this.generativeUiActionQueue.clearAgent(agentId),
+      closeReloadedSession: (session, agentId) =>
+        this.sessionRescue.closeReloadedSession(session, agentId),
+      coalescer: this.agentStreamCoalescer,
+      deleteAgent: (agentId) => {
+        this.agents.delete(agentId);
+      },
+      deletePreviousStatus: (agentId) => {
+        this.previousStatuses.delete(agentId);
+      },
+      emitState: (agent, emitOptions) => this.emitState(agent, emitOptions),
+      foregroundRuns: this.foregroundRuns,
+      getAgent: (agentId) => this.requireSessionAgent(agentId),
+      logger: this.logger,
+      persistSnapshot: (agent) => this.persistSnapshot(agent),
+      timeline: this.timeline,
     });
   }
 
@@ -831,15 +851,7 @@ export class AgentManager {
       ? await client.resumeSession(reloadHandle, launchConfig, launchContext)
       : await client.createSession(launchConfig, launchContext);
 
-    this.agentStreamCoalescer.flushAndDiscard(agentId);
-    // Remove the existing agent entry before swapping sessions
-    this.agents.delete(agentId);
-    if (existing.unsubscribeSession) {
-      existing.unsubscribeSession();
-      existing.unsubscribeSession = null;
-    }
-    this.foregroundRuns.clearAgent(agentId, existing);
-    await this.sessionRescue.closeReloadedSession(existing.session, agentId);
+    await this.sessionTeardown.detachForReload(existing);
 
     if (rehydrateFromDisk) {
       // Wipe both durable and in-memory timeline so registerSession mints a
@@ -863,33 +875,7 @@ export class AgentManager {
   }
 
   async closeAgent(agentId: string): Promise<void> {
-    const agent = this.requireAgent(agentId);
-    this.generativeUiActionQueue.clearAgent(agentId);
-    this.logger.trace(
-      {
-        agentId,
-        provider: agent.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId: agent.activeForegroundTurnId ?? undefined,
-        lifecycle: agent.lifecycle,
-        activeForegroundTurnId: agent.activeForegroundTurnId,
-        pendingPermissions: agent.pendingPermissions.size,
-      },
-      "agent.manager.close.start",
-    );
-    const closedAgent = this.prepareAgentForClosure(agent, "agent closed");
-    await agent.session.close();
-    this.timeline.deleteMemory(agentId);
-    await this.persistSnapshot(closedAgent);
-    this.emitClosedAgent(closedAgent, { persist: false });
-    this.logger.trace(
-      {
-        agentId,
-        provider: closedAgent.provider,
-        sessionId: closedAgent.persistence?.sessionId ?? undefined,
-      },
-      "agent.manager.close.complete",
-    );
+    await this.sessionTeardown.close(agentId);
   }
 
   async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
@@ -1288,35 +1274,6 @@ export class AgentManager {
     } as ActiveManagedAgent;
   }
 
-  private prepareAgentForClosure(
-    agent: ActiveManagedAgent,
-    cancelReason: string,
-  ): ManagedAgentClosed {
-    this.agentStreamCoalescer.flushAndDiscard(agent.id);
-    this.agents.delete(agent.id);
-    this.previousStatuses.delete(agent.id);
-    if (agent.unsubscribeSession) {
-      agent.unsubscribeSession();
-      agent.unsubscribeSession = null;
-    }
-    this.foregroundRuns.cancelWaiters(agent, (turnId) => ({
-      type: "turn_canceled",
-      provider: agent.provider,
-      reason: cancelReason,
-      turnId,
-    }));
-    this.foregroundRuns.settlePendingRun(agent.id);
-    return {
-      ...agent,
-      lifecycle: "closed",
-      session: null,
-      activeForegroundTurnId: null,
-    };
-  }
-
-  private emitClosedAgent(agent: ManagedAgentClosed, options?: { persist?: boolean }): void {
-    this.emitState(agent, options);
-  }
   private subscribeToSession(agent: ActiveManagedAgent): void {
     if (agent.unsubscribeSession) {
       return;
