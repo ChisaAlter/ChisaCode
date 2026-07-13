@@ -13,44 +13,21 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import {
-  Copy,
-  Ellipsis,
-  EllipsisVertical,
-  Globe,
-  Import as ImportIcon,
-  ListTree,
-  PanelRight,
-  Settings,
-  SquarePen,
-  SquareTerminal,
-} from "lucide-react-native";
+
 import { GestureDetector } from "react-native-gesture-handler";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { Theme } from "@/styles/theme";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
-import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import { ScreenHeader } from "@/components/headers/screen-header";
-import { BranchSwitcher } from "@/components/branch-switcher";
-import type { ShortcutKey } from "@/utils/format-shortcut";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   FloatingPanelPortalHost,
   FloatingPanelPortalHostNameProvider,
 } from "@/components/ui/floating-panel-portal";
 import { ExplorerSidebar } from "@/components/explorer-sidebar";
 import { SplitContainer } from "@/components/split-container";
-import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { useGitActions } from "@/git/use-actions";
-import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { ExplorerSidebarAnimationProvider } from "@/contexts/explorer-sidebar-animation-context";
 import { useToast } from "@/contexts/toast-context";
@@ -83,15 +60,12 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import { useBrowserStore } from "@/stores/browser-store";
 import { getDesktopHost } from "@/desktop/host";
 import { buildProviderCommand } from "@/utils/provider-command-templates";
+import { WorkspaceTabPresentationResolver } from "@/screens/workspace/workspace-tab-presentation";
 import {
   getWorkspaceExecutionAuthority,
   resolveWorkspaceRouteId,
   type WorkspaceExecutionAuthorityResult,
 } from "@/utils/workspace-execution";
-import {
-  WorkspaceTabPresentationResolver,
-  WorkspaceTabIcon,
-} from "@/screens/workspace/workspace-tab-presentation";
 import {
   useWorkspaceTabRename,
   WorkspaceTabRenameModal,
@@ -105,6 +79,10 @@ import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace
 import { useWorkspacePaneContentModels } from "@/screens/workspace/use-workspace-pane-content-models";
 import { useWorkspaceEnvironmentPanelState } from "@/screens/workspace/use-workspace-environment-panel-state";
 import { useWorkspaceEnvironmentData } from "@/screens/workspace/use-workspace-environment-data";
+import {
+  WorkspaceHeaderRightControls,
+  WorkspaceHeaderTitleBar,
+} from "@/screens/workspace/workspace-header";
 import {
   WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
   WorkspaceEnvironmentPanelRail,
@@ -139,7 +117,6 @@ import {
 } from "@/screens/workspace/workspace-pane-content";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
 
-import { isAbsolutePath } from "@/utils/path";
 import { useIsCompactFormFactor, supportsDesktopPaneSplits } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
@@ -180,31 +157,8 @@ function getWorkspaceScripts(
 }
 
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
-const ThemedEllipsis = withUnistyles(Ellipsis);
-const ThemedEllipsisVertical = withUnistyles(EllipsisVertical);
-const ThemedCopy = withUnistyles(Copy);
-const ThemedSquarePen = withUnistyles(SquarePen);
-const ThemedSquareTerminal = withUnistyles(SquareTerminal);
-const ThemedGlobe = withUnistyles(Globe);
-const ThemedImport = withUnistyles(ImportIcon);
-const ThemedSettings = withUnistyles(Settings);
-const ThemedPanelRight = withUnistyles(PanelRight);
-const ThemedListTree = withUnistyles(ListTree);
-const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
-
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-const sourceControlPanelStrokeWidth15 = { strokeWidth: 1.5 };
-
-const MENU_NEW_AGENT_ICON = <ThemedSquarePen size={16} uniProps={mutedColorMapping} />;
-const MENU_NEW_TERMINAL_ICON = <ThemedSquareTerminal size={16} uniProps={mutedColorMapping} />;
-const MENU_NEW_BROWSER_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
-const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedColorMapping} />;
-const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedColorMapping} />;
-const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedColorMapping} />;
-const MENU_GIT_DOCK_ICON = <ThemedSourceControlPanelIcon size={16} uniProps={mutedColorMapping} />;
-const MENU_BROWSER_CONTEXT_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
 const GATED_WORKSPACE_HEADER_LEFT = <SidebarMenuToggle />;
 
 interface WorkspaceScreenProps {
@@ -356,473 +310,6 @@ export function WorkspaceScreen({ serverId, workspaceId, isRouteFocused }: Works
         />
       </ErrorBoundary>
     </ExplorerSidebarAnimationProvider>
-  );
-}
-
-interface WorkspaceHeaderMenuProps {
-  normalizedWorkspaceId: string;
-  currentBranchName: string | null;
-  showWorkspaceSetup: boolean;
-  showCreateBrowserTab: boolean;
-  isMobile: boolean;
-  createTerminalDisabled: boolean;
-  importAgentDisabled: boolean;
-  menuNewAgentIcon: ReactElement;
-  menuNewTerminalIcon: ReactElement;
-  menuNewBrowserIcon: ReactElement;
-  menuImportIcon: ReactElement;
-  menuCopyIcon: ReactElement;
-  menuSettingsIcon: ReactElement;
-  menuGitDockIcon: ReactElement;
-  menuBrowserContextIcon: ReactElement;
-  browserContextDockDisabled: boolean;
-  onCreateDraftTab: () => void;
-  onCreateTerminal: () => void;
-  onCreateBrowser: () => void;
-  onOpenGitDock: () => void;
-  onOpenBrowserContextDock: () => void;
-  onOpenImportSheet: () => void;
-  onCopyWorkspacePath: () => void;
-  onCopyBranchName: () => void;
-  onOpenSetupTab: () => void;
-}
-
-function WorkspaceHeaderMenuTriggerIcon({
-  hovered,
-  open,
-  isMobile,
-}: {
-  hovered: boolean;
-  open: boolean;
-  isMobile: boolean;
-}) {
-  const Icon = isMobile ? ThemedEllipsisVertical : ThemedEllipsis;
-  const colorMapping = hovered || open ? foregroundColorMapping : mutedColorMapping;
-  return <Icon size={16} uniProps={colorMapping} />;
-}
-
-function WorkspaceHeaderMenu({
-  normalizedWorkspaceId,
-  currentBranchName,
-  showWorkspaceSetup,
-  showCreateBrowserTab,
-  isMobile,
-  createTerminalDisabled,
-  importAgentDisabled,
-  menuNewAgentIcon,
-  menuNewTerminalIcon,
-  menuNewBrowserIcon,
-  menuImportIcon,
-  menuCopyIcon,
-  menuSettingsIcon,
-  menuGitDockIcon,
-  menuBrowserContextIcon,
-  browserContextDockDisabled,
-  onCreateDraftTab,
-  onCreateTerminal,
-  onCreateBrowser,
-  onOpenGitDock,
-  onOpenBrowserContextDock,
-  onOpenImportSheet,
-  onCopyWorkspacePath,
-  onCopyBranchName,
-  onOpenSetupTab,
-}: WorkspaceHeaderMenuProps) {
-  const { t } = useTranslation();
-  const renderTriggerIcon = useCallback(
-    ({ hovered, open }: { hovered: boolean; open: boolean }) => (
-      <WorkspaceHeaderMenuTriggerIcon hovered={hovered} open={open} isMobile={isMobile} />
-    ),
-    [isMobile],
-  );
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        testID="workspace-header-menu-trigger"
-        style={isMobile ? styles.compactHeaderActionButton : styles.headerActionButton}
-        accessibilityRole="button"
-        accessibilityLabel={t("workspace.actions")}
-      >
-        {renderTriggerIcon}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" width={220} testID="workspace-header-menu">
-        <DropdownMenuItem
-          testID="workspace-header-new-agent"
-          leading={menuNewAgentIcon}
-          onSelect={onCreateDraftTab}
-        >
-          {t("workspace.newAgent")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID="workspace-header-new-terminal"
-          leading={menuNewTerminalIcon}
-          disabled={createTerminalDisabled}
-          onSelect={onCreateTerminal}
-        >
-          {t("workspace.newTerminal")}
-        </DropdownMenuItem>
-        {showCreateBrowserTab ? (
-          <DropdownMenuItem
-            testID="workspace-header-new-browser"
-            leading={menuNewBrowserIcon}
-            onSelect={onCreateBrowser}
-          >
-            {t("workspace.newBrowserTab")}
-          </DropdownMenuItem>
-        ) : null}
-        {!isMobile ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              testID="workspace-header-open-git-dock"
-              leading={menuGitDockIcon}
-              onSelect={onOpenGitDock}
-            >
-              {t("workspace.openGitDock")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              testID="workspace-header-open-browser-context-dock"
-              leading={menuBrowserContextIcon}
-              disabled={browserContextDockDisabled}
-              description={
-                browserContextDockDisabled ? t("workspace.noBrowserContextDock") : undefined
-              }
-              tooltip={browserContextDockDisabled ? t("workspace.noBrowserContextDock") : undefined}
-              onSelect={onOpenBrowserContextDock}
-            >
-              {t("workspace.openBrowserContextDock")}
-            </DropdownMenuItem>
-          </>
-        ) : null}
-        <DropdownMenuItem
-          testID="workspace-header-import-agent"
-          leading={menuImportIcon}
-          disabled={importAgentDisabled}
-          onSelect={onOpenImportSheet}
-        >
-          {t("session.importSession")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID="workspace-header-copy-path"
-          leading={menuCopyIcon}
-          disabled={!isAbsolutePath(normalizedWorkspaceId)}
-          onSelect={onCopyWorkspacePath}
-        >
-          {t("workspace.screen.copyWorkspacePath")}
-        </DropdownMenuItem>
-        {currentBranchName ? (
-          <DropdownMenuItem
-            testID="workspace-header-copy-branch-name"
-            leading={menuCopyIcon}
-            onSelect={onCopyBranchName}
-          >
-            {t("workspace.screen.copyBranchName")}
-          </DropdownMenuItem>
-        ) : null}
-        {showWorkspaceSetup ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              testID="workspace-header-show-setup"
-              leading={menuSettingsIcon}
-              onSelect={onOpenSetupTab}
-            >
-              {t("workspace.screen.showSetup")}
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-interface WorkspaceHeaderTitleBarProps {
-  isLoading: boolean;
-  title: string;
-  subtitle: string;
-  showSubtitle: boolean;
-  activeTab: WorkspaceTabDescriptor | null;
-  currentBranchName: string | null;
-  isGitCheckout: boolean;
-  normalizedServerId: string;
-  normalizedWorkspaceId: string;
-  workspaceScripts: WorkspaceDescriptor["scripts"];
-  liveTerminalIds: string[];
-  showWorkspaceSetup: boolean;
-  showCreateBrowserTab: boolean;
-  isMobile: boolean;
-  createTerminalDisabled: boolean;
-  importAgentDisabled: boolean;
-  menuNewAgentIcon: ReactElement;
-  menuNewTerminalIcon: ReactElement;
-  menuNewBrowserIcon: ReactElement;
-  menuImportIcon: ReactElement;
-  menuCopyIcon: ReactElement;
-  menuSettingsIcon: ReactElement;
-  menuGitDockIcon: ReactElement;
-  menuBrowserContextIcon: ReactElement;
-  browserContextDockDisabled: boolean;
-  onCreateDraftTab: () => void;
-  onCreateTerminal: () => void;
-  onCreateBrowser: () => void;
-  onOpenGitDock: () => void;
-  onOpenBrowserContextDock: () => void;
-  onOpenImportSheet: () => void;
-  onCopyWorkspacePath: () => void;
-  onCopyBranchName: () => void;
-  onOpenSetupTab: () => void;
-  onScriptTerminalStarted: (terminalId: string) => void;
-  onViewScriptTerminal: (terminalId: string) => void;
-  onOpenUrlInBrowserTab: (url: string) => void;
-}
-
-function WorkspaceHeaderTitleBar({
-  isLoading,
-  title,
-  subtitle,
-  showSubtitle,
-  activeTab,
-  currentBranchName,
-  isGitCheckout,
-  normalizedServerId,
-  normalizedWorkspaceId,
-  workspaceScripts,
-  liveTerminalIds,
-  showWorkspaceSetup,
-  showCreateBrowserTab,
-  isMobile,
-  createTerminalDisabled,
-  importAgentDisabled,
-  menuNewAgentIcon,
-  menuNewTerminalIcon,
-  menuNewBrowserIcon,
-  menuImportIcon,
-  menuCopyIcon,
-  menuSettingsIcon,
-  menuGitDockIcon,
-  menuBrowserContextIcon,
-  browserContextDockDisabled,
-  onCreateDraftTab,
-  onCreateTerminal,
-  onCreateBrowser,
-  onOpenGitDock,
-  onOpenBrowserContextDock,
-  onOpenImportSheet,
-  onCopyWorkspacePath,
-  onCopyBranchName,
-  onOpenSetupTab,
-  onScriptTerminalStarted,
-  onViewScriptTerminal,
-  onOpenUrlInBrowserTab,
-}: WorkspaceHeaderTitleBarProps) {
-  return (
-    <View style={styles.headerTitleContainer}>
-      {isLoading ? (
-        <View style={styles.headerTitleTextGroup}>
-          <View style={styles.headerTitleSkeleton} />
-        </View>
-      ) : (
-        <View style={styles.headerTitleTextGroup}>
-          {isMobile ? (
-            <BranchSwitcher
-              currentBranchName={currentBranchName}
-              title={title}
-              serverId={normalizedServerId}
-              workspaceId={normalizedWorkspaceId}
-              isGitCheckout={isGitCheckout}
-            />
-          ) : (
-            <DesktopWorkspaceHeaderTitle
-              activeTab={activeTab}
-              fallbackTitle={title}
-              serverId={normalizedServerId}
-              workspaceId={normalizedWorkspaceId}
-            />
-          )}
-          {isMobile && showSubtitle ? (
-            <Text
-              testID="workspace-header-subtitle"
-              style={styles.headerProjectTitle}
-              numberOfLines={1}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
-      )}
-      <View style={styles.compactHeaderMenuCluster}>
-        <WorkspaceHeaderMenu
-          normalizedWorkspaceId={normalizedWorkspaceId}
-          currentBranchName={currentBranchName}
-          showWorkspaceSetup={showWorkspaceSetup}
-          showCreateBrowserTab={showCreateBrowserTab}
-          isMobile={isMobile}
-          createTerminalDisabled={createTerminalDisabled}
-          importAgentDisabled={importAgentDisabled}
-          menuNewAgentIcon={menuNewAgentIcon}
-          menuNewTerminalIcon={menuNewTerminalIcon}
-          menuNewBrowserIcon={menuNewBrowserIcon}
-          menuImportIcon={menuImportIcon}
-          menuCopyIcon={menuCopyIcon}
-          menuSettingsIcon={menuSettingsIcon}
-          menuGitDockIcon={menuGitDockIcon}
-          menuBrowserContextIcon={menuBrowserContextIcon}
-          browserContextDockDisabled={browserContextDockDisabled}
-          onCreateDraftTab={onCreateDraftTab}
-          onCreateTerminal={onCreateTerminal}
-          onCreateBrowser={onCreateBrowser}
-          onOpenGitDock={onOpenGitDock}
-          onOpenBrowserContextDock={onOpenBrowserContextDock}
-          onOpenImportSheet={onOpenImportSheet}
-          onCopyWorkspacePath={onCopyWorkspacePath}
-          onCopyBranchName={onCopyBranchName}
-          onOpenSetupTab={onOpenSetupTab}
-        />
-        {isMobile && workspaceScripts.length > 0 ? (
-          <WorkspaceScriptsButton
-            serverId={normalizedServerId}
-            workspaceId={normalizedWorkspaceId}
-            scripts={workspaceScripts}
-            liveTerminalIds={liveTerminalIds}
-            onScriptTerminalStarted={onScriptTerminalStarted}
-            onViewTerminal={onViewScriptTerminal}
-            onOpenUrlInBrowserTab={onOpenUrlInBrowserTab}
-            hideLabels
-            presentation="ghost"
-          />
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function DesktopWorkspaceHeaderTitle({
-  activeTab,
-  fallbackTitle,
-  serverId,
-  workspaceId,
-}: {
-  activeTab: WorkspaceTabDescriptor | null;
-  fallbackTitle: string;
-  serverId: string;
-  workspaceId: string;
-}) {
-  const { t } = useTranslation();
-
-  if (!activeTab) {
-    return (
-      <View style={styles.desktopHeaderTitleRow}>
-        <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
-          {fallbackTitle}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <WorkspaceTabPresentationResolver tab={activeTab} serverId={serverId} workspaceId={workspaceId}>
-      {(presentation) => (
-        <View style={styles.desktopHeaderTitleRow}>
-          <WorkspaceTabIcon presentation={presentation} active />
-          <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
-            {presentation.titleState === "loading"
-              ? t("workspace.screen.loading")
-              : presentation.label}
-          </Text>
-        </View>
-      )}
-    </WorkspaceTabPresentationResolver>
-  );
-}
-
-function WorkspaceHeaderRightControls({
-  isMobile,
-  isGitCheckout,
-  isExplorerOpen,
-  canToggleExplorer,
-  isEnvironmentPanelVisible,
-  canShowEnvironmentPanel,
-  explorerToggleAccessibilityState,
-  onToggleExplorer,
-  onToggleEnvironmentPanel,
-}: {
-  isMobile: boolean;
-  isGitCheckout: boolean;
-  isExplorerOpen: boolean;
-  canToggleExplorer: boolean;
-  isEnvironmentPanelVisible: boolean;
-  canShowEnvironmentPanel: boolean;
-  explorerToggleAccessibilityState: { expanded: boolean };
-  onToggleExplorer: () => void;
-  onToggleEnvironmentPanel: () => void;
-}) {
-  const { t } = useTranslation();
-  const environmentToggleAccessibilityState = useMemo(
-    () => ({ expanded: isEnvironmentPanelVisible }),
-    [isEnvironmentPanelVisible],
-  );
-  const environmentToggleLabel = isEnvironmentPanelVisible
-    ? t("workspace.environment.hideFloatingPanel")
-    : t("workspace.environment.showFloatingPanel");
-
-  const explorerButton = (
-    <HeaderToggleButton
-      testID="workspace-explorer-toggle"
-      onPress={onToggleExplorer}
-      tooltipLabel={t("workspace.screen.toggleExplorer")}
-      tooltipKeys={EXPLORER_TOGGLE_KEYS}
-      tooltipSide="left"
-      style={styles.headerActionButton}
-      disabled={!canToggleExplorer}
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={
-        isExplorerOpen ? t("workspace.screen.closeExplorer") : t("workspace.screen.openExplorer")
-      }
-      accessibilityState={explorerToggleAccessibilityState}
-    >
-      {({ hovered }) => {
-        const colorMapping = isExplorerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
-        return isGitCheckout ? (
-          <ThemedSourceControlPanelIcon
-            size={20}
-            uniProps={colorMapping}
-            {...sourceControlPanelStrokeWidth15}
-          />
-        ) : (
-          <ThemedPanelRight size={20} uniProps={colorMapping} />
-        );
-      }}
-    </HeaderToggleButton>
-  );
-
-  if (isMobile) {
-    return <View style={styles.headerRight}>{explorerButton}</View>;
-  }
-
-  return (
-    <View style={styles.headerRight}>
-      <HeaderToggleButton
-        testID="workspace-environment-toggle"
-        onPress={onToggleEnvironmentPanel}
-        tooltipLabel={environmentToggleLabel}
-        tooltipKeys={ENVIRONMENT_TOGGLE_KEYS}
-        tooltipSide="left"
-        style={styles.headerActionButton}
-        disabled={!canShowEnvironmentPanel}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel={environmentToggleLabel}
-        accessibilityState={environmentToggleAccessibilityState}
-      >
-        {({ hovered }) => {
-          const colorMapping =
-            isEnvironmentPanelVisible || hovered ? foregroundColorMapping : mutedColorMapping;
-          return <ThemedListTree size={20} uniProps={colorMapping} />;
-        }}
-      </HeaderToggleButton>
-    </View>
   );
 }
 
@@ -1977,10 +1464,6 @@ function WorkspaceScreenContent({
 
   const containerStyle = containerWithWorkspaceBackgroundStyle;
 
-  const menuNewAgentIcon = MENU_NEW_AGENT_ICON;
-  const menuNewTerminalIcon = MENU_NEW_TERMINAL_ICON;
-  const menuCopyIcon = MENU_COPY_ICON;
-  const menuSettingsIcon = MENU_SETTINGS_ICON;
   const workspaceScreenGate = renderWorkspaceRouteGate({
     state: workspaceRouteState,
     actions: {
@@ -2151,14 +1634,6 @@ function WorkspaceScreenContent({
                   isMobile={isMobile}
                   createTerminalDisabled={createTerminalDisabled}
                   importAgentDisabled={!canOpenImportSheet}
-                  menuNewAgentIcon={menuNewAgentIcon}
-                  menuNewTerminalIcon={menuNewTerminalIcon}
-                  menuNewBrowserIcon={MENU_NEW_BROWSER_ICON}
-                  menuImportIcon={MENU_IMPORT_ICON}
-                  menuCopyIcon={menuCopyIcon}
-                  menuSettingsIcon={menuSettingsIcon}
-                  menuGitDockIcon={MENU_GIT_DOCK_ICON}
-                  menuBrowserContextIcon={MENU_BROWSER_CONTEXT_ICON}
                   browserContextDockDisabled={!hasEnvironmentBrowserContext}
                   onCreateDraftTab={handleCreateDraftTab}
                   onCreateTerminal={handleCreateTerminal}
@@ -2315,111 +1790,6 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     minHeight: 0,
     position: "relative",
-  },
-  headerTitle: {
-    fontSize: theme.fontSize.base,
-    fontWeight: {
-      xs: "400",
-      md: "300",
-    },
-    color: theme.colors.foreground,
-    flexShrink: 1,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    flexShrink: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: {
-      xs: theme.spacing[1],
-      md: theme.spacing[2],
-    },
-    overflow: "hidden",
-  },
-  headerTitleTextGroup: {
-    minWidth: 0,
-    overflow: "hidden",
-    flexShrink: 1,
-    flexGrow: {
-      xs: 1,
-      md: 0,
-    },
-    flexDirection: {
-      xs: "column",
-      md: "row",
-    },
-    alignItems: {
-      xs: "flex-start",
-      md: "center",
-    },
-    justifyContent: "flex-start",
-    gap: {
-      xs: 0,
-      md: theme.spacing[2],
-    },
-  },
-  desktopHeaderTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    minWidth: 0,
-    flexShrink: 1,
-    maxWidth: 360,
-  },
-  headerProjectTitle: {
-    color: theme.colors.foregroundMuted,
-    fontSize: {
-      xs: theme.fontSize.sm,
-      md: theme.fontSize.base,
-    },
-    flexShrink: 1,
-    minWidth: 0,
-    maxWidth: "60%",
-  },
-  headerTitleSkeleton: {
-    width: 220,
-    maxWidth: "100%",
-    height: 22,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface3,
-    opacity: 0.25,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: {
-      xs: theme.spacing[1],
-      md: theme.spacing[2],
-    },
-  },
-  headerActionButton: {
-    width: 32,
-    height: 32,
-    padding: 0,
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface0,
-    alignItems: "center",
-    justifyContent: "center",
-    ...theme.shadow.sm,
-  },
-  compactHeaderActionButton: {
-    width: theme.spacing[8],
-    height: theme.spacing[8],
-    padding: 0,
-    borderRadius: theme.borderRadius.xl,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  compactHeaderMenuCluster: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: {
-      xs: 0,
-      md: theme.spacing[2],
-    },
   },
   newTabActions: {
     flexDirection: "row",
@@ -2587,6 +1957,3 @@ const containerWithWorkspaceBackgroundStyle = [
   styles.container,
   styles.containerWorkspaceBackground,
 ];
-
-const EXPLORER_TOGGLE_KEYS: ShortcutKey[] = ["mod", "E"];
-const ENVIRONMENT_TOGGLE_KEYS: ShortcutKey[] = [];
