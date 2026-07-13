@@ -73,7 +73,7 @@
     "lru-cache": "^11.5.1",
     "mnemonic-id": "^3.2.7",
     "node-pty": "1.2.0-beta.11",
-    "openai": "^4.20.0",
+    "openai": "^6.46.0",
     "p-limit": "^7.3.0",
     "p-memoize": "^8.0.0",
     "pino": "^10.2.0",
