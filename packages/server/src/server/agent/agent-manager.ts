@@ -57,7 +57,7 @@ import {
 import { ForegroundRunState, type ForegroundTurnWaiter } from "./foreground-run-state.js";
 import type { RewindMode } from "./rewind/rewind.js";
 import { formatSystemNotificationPrompt, isSystemInjectedEnvelope } from "./agent-prompt.js";
-import { createUsageEventRecord, type UsageStore } from "../usage/usage-store.js";
+import type { UsageStore } from "../usage/usage-store.js";
 import {
   GenerativeUiActionQueue,
   type GenerativeUiQueuedAction,
@@ -77,6 +77,7 @@ import { AgentSessionLifecycleController } from "./agent-session-lifecycle-contr
 import { AgentSessionRegistrationController } from "./agent-session-registration-controller.js";
 import { AgentSessionStateController } from "./agent-session-state-controller.js";
 import { AgentSessionTeardownController } from "./agent-session-teardown-controller.js";
+import { AgentTurnEventController } from "./agent-turn-event-controller.js";
 import {
   AgentWaitController,
   type WaitForAgentOptions,
@@ -275,8 +276,6 @@ type ActiveManagedAgent =
   | ManagedAgentRunning
   | ManagedAgentError;
 
-const SYSTEM_ERROR_PREFIX = "[System Error]";
-
 function attachPersistenceCwd(
   handle: AgentPersistenceHandle | null,
   cwd: string,
@@ -328,6 +327,7 @@ export class AgentManager {
   private readonly sessionState: AgentSessionStateController;
   private readonly sessionTeardown: AgentSessionTeardownController;
   private readonly timeline: AgentTimelineController;
+  private readonly turnEvents: AgentTurnEventController;
   private readonly waits: AgentWaitController;
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
@@ -341,13 +341,11 @@ export class AgentManager {
   private readonly generativeUiActionQueue: GenerativeUiActionQueue;
   private onAgentAttention?: AgentAttentionCallback;
   private logger: Logger;
-  private readonly usageStore?: UsageStore;
 
   constructor(options: AgentManagerOptions) {
     this.idFactory = options?.idFactory ?? (() => randomUUID());
     this.registry = options?.registry;
     this.onAgentAttention = options?.onAgentAttention;
-    this.usageStore = options.usageStore;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.eventBus = new AgentManagerEventBus({
       logger: this.logger,
@@ -407,6 +405,16 @@ export class AgentManager {
       durableStore: options.durableTimelineStore,
       logger: this.logger,
       trackBackgroundTask: (task) => this.trackBackgroundTask(task),
+    });
+    this.turnEvents = new AgentTurnEventController({
+      dispatchStream: (agentId, event, metadata) => this.dispatchStream(agentId, event, metadata),
+      emitState: (agent) => this.emitState(agent),
+      logger: this.logger,
+      permissions: this.permissions,
+      sessionState: this.sessionState,
+      timeline: this.timeline,
+      trackBackgroundTask: (task) => this.trackBackgroundTask(task),
+      usageStore: options.usageStore,
     });
     this.sessionRegistration = new AgentSessionRegistrationController({
       addAgent: (agent) => {
@@ -879,7 +887,7 @@ export class AgentManager {
       } else if (event.type === "turn_completed") {
         usage = event.usage;
       } else if (event.type === "turn_failed") {
-        throw new Error(this.formatTurnFailedMessage(event));
+        throw new Error(this.turnEvents.formatFailure(event));
       } else if (event.type === "turn_canceled") {
         canceled = true;
       }
@@ -1349,7 +1357,7 @@ export class AgentManager {
       case "timeline":
         return this.onStreamTimelineEvent({ agent, event, options, isForegroundEvent, flags });
       case "turn_completed":
-        this.onStreamTurnCompleted({
+        this.turnEvents.onCompleted({
           agent,
           event,
           eventTurnId,
@@ -1358,7 +1366,7 @@ export class AgentManager {
         });
         return undefined;
       case "turn_failed":
-        return this.onStreamTurnFailed({
+        return this.turnEvents.onFailed({
           agent,
           event,
           eventTurnId,
@@ -1366,10 +1374,10 @@ export class AgentManager {
           options,
         });
       case "turn_canceled":
-        this.onStreamTurnCanceled({ agent, event, eventTurnId, isForegroundEvent, options });
+        this.turnEvents.onCanceled({ agent, event, eventTurnId, isForegroundEvent, options });
         return undefined;
       case "turn_started":
-        this.onStreamTurnStarted({ agent, eventTurnId, isForegroundEvent });
+        this.turnEvents.onStarted({ agent, eventTurnId, isForegroundEvent });
         return undefined;
       case "permission_requested":
         this.permissions.onRequested(agent, event);
@@ -1421,160 +1429,6 @@ export class AgentManager {
     flags.shouldNotifyWaiters = true;
   }
 
-  private onStreamTurnCompleted(params: {
-    agent: ActiveManagedAgent;
-    event: Extract<AgentStreamEvent, { type: "turn_completed" }>;
-    eventTurnId: string | undefined;
-    isForegroundEvent: boolean;
-    fromHistory: boolean;
-  }): void {
-    const { agent, event, eventTurnId, isForegroundEvent, fromHistory } = params;
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: agent.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId: eventTurnId,
-        lifecycle: agent.lifecycle,
-        activeForegroundTurnId: agent.activeForegroundTurnId,
-      },
-      "agent.manager.turn.completed",
-    );
-    agent.lastUsage = event.usage;
-    if (!fromHistory) {
-      this.recordUsageEvent(agent, event, eventTurnId);
-    }
-    agent.lastError = undefined;
-    if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
-      (agent as ActiveManagedAgent).lifecycle = "idle";
-      this.emitState(agent);
-    }
-    void this.sessionState.refreshRuntimeInfo(agent);
-  }
-
-  private recordUsageEvent(
-    agent: ActiveManagedAgent,
-    event: Extract<AgentStreamEvent, { type: "turn_completed" }>,
-    eventTurnId: string | undefined,
-  ): void {
-    if (!this.usageStore || !event.usage) {
-      return;
-    }
-    const record = createUsageEventRecord({
-      agentId: agent.id,
-      cwd: agent.cwd,
-      provider: event.provider,
-      model: agent.runtimeInfo?.model ?? agent.config.model ?? null,
-      turnId: eventTurnId,
-      usage: event.usage,
-      messageCount: 1,
-    });
-    if (!record) {
-      return;
-    }
-    const appendTask = this.usageStore.append(record).catch((error) => {
-      this.logger.warn({ err: error, agentId: agent.id }, "Failed to record usage event");
-    });
-    this.backgroundTasks.add(appendTask);
-    appendTask.finally(() => this.backgroundTasks.delete(appendTask));
-  }
-
-  private async onStreamTurnFailed(params: {
-    agent: ActiveManagedAgent;
-    event: Extract<AgentStreamEvent, { type: "turn_failed" }>;
-    eventTurnId: string | undefined;
-    isForegroundEvent: boolean;
-    options: { fromHistory?: boolean } | undefined;
-  }): Promise<void> {
-    const { agent, event, eventTurnId, isForegroundEvent, options } = params;
-    this.logger.warn(
-      {
-        agentId: agent.id,
-        provider: agent.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId: eventTurnId,
-        lifecycle: agent.lifecycle,
-        activeForegroundTurnId: agent.activeForegroundTurnId,
-        eventTurnId,
-        error: event.error,
-        code: event.code,
-        diagnostic: event.diagnostic,
-      },
-      "handleStreamEvent: turn_failed",
-    );
-    if (!isForegroundEvent) {
-      agent.lifecycle = "error";
-    }
-    agent.lastError = event.error;
-    await this.appendSystemErrorTimelineMessage(
-      agent,
-      event.provider,
-      this.formatTurnFailedMessage(event),
-      options,
-    );
-    this.permissions.resolvePending(agent, event.provider, options, "Turn failed");
-    if (!isForegroundEvent) {
-      this.emitState(agent);
-    }
-  }
-
-  private onStreamTurnCanceled(params: {
-    agent: ActiveManagedAgent;
-    event: Extract<AgentStreamEvent, { type: "turn_canceled" }>;
-    eventTurnId: string | undefined;
-    isForegroundEvent: boolean;
-    options:
-      | {
-          fromHistory?: boolean;
-        }
-      | undefined;
-  }): void {
-    const { agent, event, eventTurnId, isForegroundEvent, options } = params;
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: agent.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId: eventTurnId,
-        lifecycle: agent.lifecycle,
-        activeForegroundTurnId: agent.activeForegroundTurnId,
-        eventTurnId,
-      },
-      "agent.manager.turn.canceled",
-    );
-    if (!isForegroundEvent && !agent.pendingReplacement) {
-      agent.lifecycle = "idle";
-    }
-    agent.lastError = undefined;
-    this.permissions.resolvePending(agent, event.provider, options, "Interrupted");
-    if (!isForegroundEvent) {
-      this.emitState(agent);
-    }
-  }
-
-  private onStreamTurnStarted(params: {
-    agent: ActiveManagedAgent;
-    eventTurnId: string | undefined;
-    isForegroundEvent: boolean;
-  }): void {
-    const { agent, eventTurnId, isForegroundEvent } = params;
-    this.logger.trace(
-      {
-        agentId: agent.id,
-        provider: agent.provider,
-        sessionId: agent.persistence?.sessionId ?? undefined,
-        turnId: eventTurnId,
-        lifecycle: agent.lifecycle,
-        activeForegroundTurnId: agent.activeForegroundTurnId,
-      },
-      "agent.manager.turn.started",
-    );
-    if (!isForegroundEvent) {
-      agent.lifecycle = "running";
-      this.emitState(agent);
-    }
-  }
-
   private recordAndDispatchTimelineItem(
     agentId: string,
     item: AgentTimelineItem,
@@ -1594,60 +1448,6 @@ export class AgentManager {
       timestamp: row.timestamp,
     });
     return event;
-  }
-
-  private async appendSystemErrorTimelineMessage(
-    agent: ActiveManagedAgent,
-    provider: AgentProvider,
-    message: string,
-    options?: { fromHistory?: boolean },
-  ): Promise<void> {
-    if (options?.fromHistory) {
-      return;
-    }
-
-    const normalized = message.trim();
-    if (!normalized) {
-      return;
-    }
-
-    const text = `${SYSTEM_ERROR_PREFIX} ${normalized}`;
-    const lastItem = await this.timeline.getLastItem(agent.id);
-    if (lastItem?.type === "assistant_message" && lastItem.text === text) {
-      return;
-    }
-
-    const item: AgentTimelineItem = { type: "assistant_message", text };
-    const row = this.recordTimeline(agent.id, item);
-    this.dispatchStream(
-      agent.id,
-      {
-        type: "timeline",
-        item,
-        provider,
-      },
-      {
-        seq: row.seq,
-        epoch: this.timeline.getEpoch(agent.id),
-        timestamp: row.timestamp,
-      },
-    );
-  }
-
-  private formatTurnFailedMessage(
-    event: Extract<AgentStreamEvent, { type: "turn_failed" }>,
-  ): string {
-    const base = event.error.trim();
-    const parts = [base.length > 0 ? base : "Provider run failed"];
-    const code = event.code?.trim();
-    if (code) {
-      parts.push(`code: ${code}`);
-    }
-    const diagnostic = event.diagnostic?.trim();
-    if (diagnostic && diagnostic !== base) {
-      parts.push(diagnostic);
-    }
-    return parts.join("\n\n");
   }
 
   private recordTimeline(
