@@ -126,6 +126,7 @@ import {
   type AgentMcpTransportFactory,
 } from "./session-internal-types.js";
 import {
+  AgentDirectoryHandler,
   AgentLifecycleHandler,
   ChatScheduleLoopHandler,
   CheckoutGitHandler,
@@ -365,6 +366,7 @@ export class Session {
   private readonly providerHandler: ProviderHandler;
   private readonly terminalScriptHandler: TerminalScriptHandler;
   private readonly workspaceProjectHandler: WorkspaceProjectHandler;
+  private readonly agentDirectoryHandler: AgentDirectoryHandler;
   private readonly agentLifecycleHandler: AgentLifecycleHandler;
   private readonly generativeUiHandler: GenerativeUiHandler;
   private readonly voiceDictationHandler: VoiceDictationHandler;
@@ -461,14 +463,7 @@ export class Session {
       archiveAgentForClose: (agentId) => this.archiveAgentForClose(agentId),
       archiveWorkspaceRecord: (workspaceId) => this.archiveWorkspaceRecord(workspaceId),
       emit: (message) => this.emit(message),
-      emitAgentRemove: (agentId) => {
-        if (this.agentUpdatesSubscription) {
-          this.bufferOrEmitAgentUpdate(this.agentUpdatesSubscription, {
-            kind: "remove",
-            agentId,
-          });
-        }
-      },
+      emitAgentRemove: (agentId) => this.agentDirectoryHandler.publishAgentRemoval(agentId),
       emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds) =>
         this.emitWorkspaceUpdatesForWorkspaceIds(workspaceIds),
       markWorkspaceArchiving: (workspaceIds, archivingAt) =>
@@ -508,10 +503,6 @@ export class Session {
       buildWorkspaceDescriptor: (input) => this.buildWorkspaceDescriptor(input),
     });
 
-    // Initialize agent MCP client asynchronously
-    void this.initializeAgentMcp();
-    this.subscribeToAgentEvents();
-
     // Initialize handlers with a shared SessionContext facade.
     const sessionContext = this.createSessionContext();
     this.checkoutGitHandler = new CheckoutGitHandler(sessionContext);
@@ -520,8 +511,16 @@ export class Session {
     this.providerHandler = new ProviderHandler(sessionContext);
     this.terminalScriptHandler = new TerminalScriptHandler(sessionContext);
     this.workspaceProjectHandler = new WorkspaceProjectHandler(sessionContext);
-    this.agentLifecycleHandler = new AgentLifecycleHandler(sessionContext);
+    this.agentDirectoryHandler = new AgentDirectoryHandler(sessionContext);
+    this.agentLifecycleHandler = new AgentLifecycleHandler(
+      sessionContext,
+      this.agentDirectoryHandler,
+    );
     this.generativeUiHandler = new GenerativeUiHandler(sessionContext);
+
+    // Initialize asynchronous collaborators only after their handlers exist.
+    void this.initializeAgentMcp();
+    this.subscribeToAgentEvents();
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
   }
@@ -607,7 +606,7 @@ export class Session {
         this.forwardAgentUpdate(agent as Parameters<typeof this.forwardAgentUpdate>[0]),
       buildStoredAgentPayload: (record) =>
         this.buildStoredAgentPayload(record as Parameters<typeof this.buildStoredAgentPayload>[0]),
-      buildProjectPlacementForCwd: (cwd) => this.buildProjectPlacementForCwd(cwd),
+      buildProjectPlacementForCwd: (cwd, options) => this.buildProjectPlacementForCwd(cwd, options),
       buildAgentSessionConfig: (config, gitOptions, legacyWorktreeName, firstAgentContext) =>
         this.buildAgentSessionConfig(
           config as Parameters<typeof this.buildAgentSessionConfig>[0],
@@ -1048,43 +1047,8 @@ export class Session {
   }
 
   private async forwardAgentUpdate(agent: ManagedAgent): Promise<void> {
-    try {
-      const subscription = this.agentUpdatesSubscription;
-      const payload = await this.buildAgentPayload(agent);
-      if (subscription) {
-        const project = await this.buildProjectPlacementForCwd(payload.cwd, {
-          refreshGit: false,
-          fallback: true,
-        });
-        if (!project) {
-          throw new Error(`Workspace not found for agent ${payload.id}`);
-        }
-        const matches = this.matchesAgentFilter({
-          agent: payload,
-          project,
-          filter: subscription.filter,
-        });
-
-        if (matches) {
-          this.bufferOrEmitAgentUpdate(subscription, {
-            kind: "upsert",
-            agent: payload,
-            project,
-          });
-        } else {
-          this.bufferOrEmitAgentUpdate(subscription, {
-            kind: "remove",
-            agentId: payload.id,
-          });
-        }
-      }
-
-      await this.emitWorkspaceUpdateForCwd(payload.cwd);
-    } catch (error) {
-      this.sessionLogger.error({ err: error }, "Failed to emit agent update");
-    }
+    await this.agentDirectoryHandler.publishAgentUpdate(agent);
   }
-
   /**
    * Main entry point for processing session messages
    */
@@ -1389,36 +1353,7 @@ export class Session {
       agentId,
     );
 
-    if (this.agentUpdatesSubscription) {
-      const payload = this.buildStoredAgentPayload(archivedRecord);
-      const project = await this.buildProjectPlacementForCwd(payload.cwd);
-      if (project) {
-        const matches = this.matchesAgentFilter({
-          agent: payload,
-          project,
-          filter: this.agentUpdatesSubscription.filter,
-        });
-        this.bufferOrEmitAgentUpdate(
-          this.agentUpdatesSubscription,
-          matches
-            ? {
-                kind: "upsert",
-                agent: payload,
-                project,
-              }
-            : {
-                kind: "remove",
-                agentId,
-              },
-        );
-      } else {
-        this.bufferOrEmitAgentUpdate(this.agentUpdatesSubscription, {
-          kind: "remove",
-          agentId,
-        });
-      }
-      await this.emitWorkspaceUpdateForCwd(payload.cwd);
-    }
+    await this.agentDirectoryHandler.publishStoredAgentUpdate(archivedRecord);
 
     return { agentId, archivedAt };
   }
@@ -1908,7 +1843,7 @@ export class Session {
   async listFetchAgentsEntries(
     request: Parameters<AgentLifecycleHandler["listFetchAgentsEntries"]>[0],
   ): ReturnType<AgentLifecycleHandler["listFetchAgentsEntries"]> {
-    return this.agentLifecycleHandler.listFetchAgentsEntries(request);
+    return this.agentDirectoryHandler.listFetchAgentsEntries(request);
   }
 
   /**
@@ -2665,6 +2600,7 @@ export class Session {
     this.providerHandler.dispose();
     this.terminalScriptHandler.dispose();
     this.workspaceProjectHandler.dispose();
+    this.agentDirectoryHandler.dispose();
     this.agentLifecycleHandler.dispose();
     this.generativeUiHandler.dispose();
 

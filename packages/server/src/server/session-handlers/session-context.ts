@@ -182,7 +182,10 @@ export interface AgentLifecycleContext {
   buildStoredAgentPayload(record: unknown): unknown;
 
   // Agent creation helpers
-  buildProjectPlacementForCwd(cwd: string): Promise<unknown>;
+  buildProjectPlacementForCwd(
+    cwd: string,
+    options?: { refreshGit?: boolean; fallback?: boolean },
+  ): Promise<unknown>;
   buildAgentSessionConfig(
     config: unknown,
     gitOptions?: unknown,
@@ -339,14 +342,47 @@ export type TerminalScriptHandlerContext = SessionIdentityContext &
     "workspaceRegistry" | "workspaceGitService" | "emitWorkspaceScriptStatusUpdate"
   >;
 
+/** Context needed by AgentDirectoryHandler. */
+export type AgentDirectoryHandlerContext = SessionIdentityContext &
+  Pick<
+    AgentLifecycleContext,
+    | "agentManager"
+    | "agentStorage"
+    | "providerSnapshotManager"
+    | "listAgentPayloads"
+    | "getAgentPayloadById"
+    | "buildAgentPayload"
+    | "buildStoredAgentPayload"
+    | "bufferOrEmitAgentUpdate"
+    | "getAgentUpdatesSubscription"
+    | "setAgentUpdatesSubscription"
+    | "flushBootstrappedAgentUpdates"
+    | "matchesAgentFilter"
+  > &
+  Pick<
+    WorkspaceProjectContext,
+    "workspaceRegistry" | "projectRegistry" | "emitWorkspaceUpdateForCwd"
+  > &
+  Pick<CheckoutGitContext, "resolveAgentIdentifier"> &
+  Pick<AgentLifecycleContext, "buildProjectPlacementForCwd">;
+
 /** Context needed by AgentLifecycleHandler. */
 export type AgentLifecycleHandlerContext = SessionIdentityContext &
-  AgentLifecycleContext &
+  Pick<
+    AgentLifecycleContext,
+    | "agentManager"
+    | "agentStorage"
+    | "providerSnapshotManager"
+    | "createAgentLifecycleDispatch"
+    | "buildAgentPayload"
+    | "buildStoredAgentPayload"
+    | "getAgentPayloadById"
+    | "buildAgentSessionConfig"
+    | "resolveCreateAgentWorkspace"
+  > &
   Pick<
     WorkspaceProjectContext,
     | "workspaceGitService"
-    | "workspaceRegistry"
-    | "projectRegistry"
     | "findOrCreateWorkspaceForDirectory"
     | "syncWorkspaceGitObserverForWorkspace"
     | "describeWorkspaceRecord"

@@ -1,3 +1,4 @@
+export { AgentDirectoryHandler } from "./agent-directory-handler.js";
 export { AgentLifecycleHandler } from "./agent-lifecycle-handler.js";
 export { ChatScheduleLoopHandler } from "./chat-schedule-loop-handler.js";
 export { CheckoutGitHandler } from "./checkout-git-handler.js";
