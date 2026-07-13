@@ -1577,6 +1577,24 @@ test("non-git workspace uses deterministic directory name and no unknown branch 
   expect(result.entries[0]?.name).not.toBe("Unknown branch");
 });
 
+test("fetch_workspaces_request reports invalid cursors with the stable error code", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests({
+    onMessage: (message) => emitted.push(message),
+  });
+
+  await session.handleMessage({
+    type: "fetch_workspaces_request",
+    requestId: "req-invalid-workspace-cursor",
+    page: { cursor: "not-a-valid-cursor" },
+  });
+
+  expect(findByType(emitted, "rpc_error")?.payload).toMatchObject({
+    requestId: "req-invalid-workspace-cursor",
+    requestType: "fetch_workspaces_request",
+    code: "invalid_cursor",
+  });
+});
 test("active-scoped fetch_agents includes only unarchived agents in active exact workspaces", async () => {
   const session = createSessionForWorkspaceTests();
   const archivedAt = "2026-03-02T12:00:00.000Z";

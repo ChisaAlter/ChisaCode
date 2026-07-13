@@ -25,10 +25,7 @@ import {
   FileTransferOpcode,
 } from "@chisacode/protocol/binary-frames/index";
 import { CursorError } from "../pagination/cursor.js";
-import {
-  summarizeFetchWorkspacesEntries,
-  type WorkspaceUpdatesFilter,
-} from "../workspace-directory.js";
+import { summarizeFetchWorkspacesEntries } from "../workspace-directory.js";
 import { resolveSubscriptionId } from "../session-helpers.js";
 import { attemptFirstAgentBranchAutoName } from "../chisacode-worktree-service.js";
 import { generateBranchNameFromFirstAgentContext } from "../worktree-branch-name-generator.js";
@@ -48,18 +45,6 @@ type FetchWorkspacesResponsePayload = Extract<
 >["payload"];
 type FetchWorkspacesResponseEntry = FetchWorkspacesResponsePayload["entries"][number];
 type FetchWorkspacesResponsePageInfo = FetchWorkspacesResponsePayload["pageInfo"];
-type WorkspaceUpdatePayload = Extract<
-  SessionOutboundMessage,
-  { type: "workspace_update" }
->["payload"];
-
-interface WorkspaceUpdatesSubscriptionState {
-  subscriptionId: string;
-  filter?: WorkspaceUpdatesFilter;
-  isBootstrapping: boolean;
-  pendingUpdatesByWorkspaceId: Map<string, WorkspaceUpdatePayload>;
-  lastEmittedByWorkspaceId: Map<string, WorkspaceUpdatePayload>;
-}
 
 class SessionRequestError extends Error {
   constructor(
@@ -80,7 +65,7 @@ export class WorkspaceProjectHandler implements DisposableHandler {
   }
 
   dispose(): void {
-    this.context.setWorkspaceUpdatesSubscription(null);
+    this.context.cancelWorkspaceUpdatesSubscription();
   }
 
   // --- Dispatch ---
@@ -139,13 +124,7 @@ export class WorkspaceProjectHandler implements DisposableHandler {
         "fetch_workspaces_request_received",
       );
       if (subscriptionId) {
-        this.context.setWorkspaceUpdatesSubscription({
-          subscriptionId,
-          filter: request.filter,
-          isBootstrapping: true,
-          pendingUpdatesByWorkspaceId: new Map(),
-          lastEmittedByWorkspaceId: new Map(),
-        });
+        this.context.startWorkspaceUpdatesSubscription(subscriptionId, request.filter);
       }
 
       const payload = await this.listFetchWorkspacesEntries(request);
@@ -159,15 +138,6 @@ export class WorkspaceProjectHandler implements DisposableHandler {
         },
         "fetch_workspaces_response_ready",
       );
-      const snapshotLatestActivityByWorkspaceId = new Map<string, number>();
-      for (const entry of payload.entries) {
-        const parsedLatestActivity = entry.activityAt
-          ? Date.parse(entry.activityAt)
-          : Number.NEGATIVE_INFINITY;
-        if (!Number.isNaN(parsedLatestActivity)) {
-          snapshotLatestActivityByWorkspaceId.set(entry.id, parsedLatestActivity);
-        }
-      }
 
       this.context.emit({
         type: "fetch_workspaces_response",
@@ -178,17 +148,12 @@ export class WorkspaceProjectHandler implements DisposableHandler {
         },
       });
 
-      const currentSubscription =
-        this.context.getWorkspaceUpdatesSubscription() as WorkspaceUpdatesSubscriptionState | null;
-      if (subscriptionId && currentSubscription?.subscriptionId === subscriptionId) {
-        this.context.flushBootstrappedWorkspaceUpdates({ snapshotLatestActivityByWorkspaceId });
-        void this.context.reconcileAndEmitWorkspaceUpdates();
+      if (subscriptionId) {
+        this.context.completeWorkspaceUpdatesBootstrap(subscriptionId, payload.entries);
       }
     } catch (error) {
-      const currentSubscription =
-        this.context.getWorkspaceUpdatesSubscription() as WorkspaceUpdatesSubscriptionState | null;
-      if (subscriptionId && currentSubscription?.subscriptionId === subscriptionId) {
-        this.context.setWorkspaceUpdatesSubscription(null);
+      if (subscriptionId) {
+        this.context.cancelWorkspaceUpdatesSubscription(subscriptionId);
       }
       const code = error instanceof SessionRequestError ? error.code : "fetch_workspaces_failed";
       const message = error instanceof Error ? error.message : "Failed to fetch workspaces";
@@ -725,36 +690,13 @@ export class WorkspaceProjectHandler implements DisposableHandler {
     pageInfo: FetchWorkspacesResponsePageInfo;
   }> {
     try {
-      return (await this.context.listFetchWorkspacesEntries(request)) as unknown as {
-        entries: FetchWorkspacesResponseEntry[];
-        pageInfo: FetchWorkspacesResponsePageInfo;
-      };
+      return await this.context.listFetchWorkspacesEntries(request);
     } catch (error) {
       if (error instanceof CursorError) {
         throw new SessionRequestError("invalid_cursor", error.message);
       }
       throw error;
     }
-  }
-
-  // --- Workspace subscription state machine ---
-
-  /** Emit or buffer a workspace update through the subscription state machine. */
-  bufferOrEmitWorkspaceUpdate(
-    subscription: WorkspaceUpdatesSubscriptionState,
-    payload: WorkspaceUpdatePayload,
-  ): void {
-    if (subscription.isBootstrapping) {
-      const workspaceId = payload.kind === "upsert" ? payload.workspace.id : payload.id;
-      subscription.pendingUpdatesByWorkspaceId.set(workspaceId, payload);
-      return;
-    }
-    const workspaceId = payload.kind === "upsert" ? payload.workspace.id : payload.id;
-    subscription.lastEmittedByWorkspaceId.set(workspaceId, payload);
-    this.context.emit({
-      type: "workspace_update",
-      payload,
-    });
   }
 
   // --- Workspace auto-name ---

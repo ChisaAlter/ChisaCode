@@ -12,10 +12,11 @@ import type { AgentStorage } from "../agent/agent-storage.js";
 import type { AgentPresetStore } from "../agent/agent-preset-store.js";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
-import type { SessionOutboundMessage } from "../messages.js";
+import type { SessionInboundMessage, SessionOutboundMessage } from "../messages.js";
 import type { CheckoutDiffManager } from "../checkout-diff-manager.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
+import type { WorkspaceUpdatesFilter } from "../workspace-directory.js";
 import type { ProviderSnapshotManager } from "../agent/provider-snapshot-manager.js";
 import type { FileBackedChatService } from "../chat/chat-service.js";
 import type { ScheduleService } from "../schedule/service.js";
@@ -101,7 +102,9 @@ export interface WorkspaceProjectContext {
 
   // Workspace helpers
   resolveKnownProjectRootForConfig(repoRoot: string): Promise<string | null>;
-  listFetchWorkspacesEntries(request: unknown): Promise<{
+  listFetchWorkspacesEntries(
+    request: Extract<SessionInboundMessage, { type: "fetch_workspaces_request" }>,
+  ): Promise<{
     entries: WorkspaceDescriptorPayload[];
     pageInfo: { nextCursor: string | null; prevCursor: string | null; hasMore: boolean };
   }>;
@@ -128,12 +131,12 @@ export interface WorkspaceProjectContext {
   isPathWithinRoot(rootPath: string, candidatePath: string): boolean;
 
   // Workspace subscription state machine
-  bufferOrEmitWorkspaceUpdate(subscription: unknown, payload: unknown): void;
-  flushBootstrappedWorkspaceUpdates(options?: unknown): void;
-  matchesWorkspaceFilter(input: unknown): boolean;
-  reconcileAndEmitWorkspaceUpdates(): Promise<void>;
-  getWorkspaceUpdatesSubscription(): unknown;
-  setWorkspaceUpdatesSubscription(subscription: unknown | null): void;
+  startWorkspaceUpdatesSubscription(subscriptionId: string, filter?: WorkspaceUpdatesFilter): void;
+  completeWorkspaceUpdatesBootstrap(
+    subscriptionId: string,
+    entries: Iterable<WorkspaceDescriptorPayload>,
+  ): boolean;
+  cancelWorkspaceUpdatesSubscription(subscriptionId?: string): void;
 
   // Script status
   emitWorkspaceScriptStatusUpdate(workspaceId: string, workspaceDirectory: string): void;
