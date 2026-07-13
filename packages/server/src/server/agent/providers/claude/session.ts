@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { promises } from "node:fs";
 import {
   type CanUseTool,
@@ -16,7 +15,7 @@ import {
   type ClaudeAgentSessionOptions,
 } from "./client.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
-import { isImageMimeType, type ClaudeContentChunk } from "./sdk-types-mapping.js";
+import type { ClaudeContentChunk } from "./sdk-types-mapping.js";
 import {
   ClaudeMessageRouter,
   type ClaudeAutonomousTurnState,
@@ -25,6 +24,7 @@ import {
 import { ClaudeTimelineAssembler } from "./timeline-assembler.js";
 import { ClaudePermissionController } from "./permission-controller.js";
 import { ClaudeOptionsBuilder } from "./options-builder.js";
+import { ClaudeForegroundTurnController } from "./foreground-turn-controller.js";
 import { ClaudeMessageTranslator } from "./message-translator.js";
 import { ClaudeSessionIdentityController } from "./session-identity.js";
 import { type ClaudeAsyncMessageInput, ClaudeQueryLifecycle } from "./query-lifecycle.js";
@@ -36,9 +36,8 @@ import { ClaudeToolCallHandler, type ClaudeToolUseCacheEntry } from "./tool-call
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import { isClaudeTranscriptNoiseText } from "./history-converter.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
-import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
-import { ClaudeRewindController, type ClaudeRewindInvocation } from "./rewind-controller.js";
+import { ClaudeRewindController } from "./rewind-controller.js";
 
 import {
   getAgentStreamEventTurnId,
@@ -120,6 +119,7 @@ export class ClaudeAgentSession implements AgentSession {
   private readonly optionsBuilder: ClaudeOptionsBuilder;
   private readonly queryLifecycle: ClaudeQueryLifecycle;
   private readonly sessionIdentity: ClaudeSessionIdentityController;
+  private readonly foregroundTurns: ClaudeForegroundTurnController;
   private currentMode: PermissionMode;
   private planResumeMode: PermissionMode | null = null;
   private availableModes: AgentMode[] = DEFAULT_MODES;
@@ -246,6 +246,21 @@ export class ClaudeAgentSession implements AgentSession {
         this.translateMessageToEvents(message, routeOptions),
       assembleTimelineItems: (input) => this.timelineAssembler.consume(input),
     });
+    this.foregroundTurns = new ClaudeForegroundTurnController({
+      logger: this.logger,
+      queryLifecycle: this.queryLifecycle,
+      messageRouter: this.messageRouter,
+      rewindController: this.rewindController,
+      getSessionId: () => this.sessionIdentity.id,
+      isClosed: () => this.closed,
+      clearRecentStderr: () => this.clearRecentStderr(),
+      interruptActiveTurn: () => this.interruptActiveTurn(),
+      rejectAllPendingPermissions: (error) => this.rejectAllPendingPermissions(error),
+      flushPendingToolCalls: () => this.flushPendingToolCalls(),
+      notifySubscribers: (event) => this.notifySubscribers(event),
+      emitSubmittedUserMessage: (message, turnId) => this.emitSubmittedUserMessage(message, turnId),
+      buildTurnFailedEvent: (errorMessage) => this.buildTurnFailedEvent(errorMessage),
+    });
     if (this.sessionIdentity.id) {
       this.historyController.load(this.sessionIdentity.id);
     }
@@ -346,14 +361,6 @@ export class ClaudeAgentSession implements AgentSession {
     this.messageRouter.setNextTurnOrdinal(ordinal);
   }
 
-  private get cancelCurrentTurn(): (() => void) | null {
-    return this.messageRouter.getCancelCurrentTurn();
-  }
-
-  private set cancelCurrentTurn(cancel: (() => void) | null) {
-    this.messageRouter.setCancelCurrentTurn(cancel);
-  }
-
   private get pendingInterruptAbort(): boolean {
     return this.messageRouter.isPendingInterruptAbort();
   }
@@ -372,10 +379,6 @@ export class ClaudeAgentSession implements AgentSession {
 
   private get activeTurnHasAssistantText(): boolean {
     return this.messageRouter.hasActiveTurnAssistantText();
-  }
-
-  private set activeTurnHasAssistantText(hasText: boolean) {
-    this.messageRouter.setActiveTurnAssistantText(hasText);
   }
 
   get id(): string | null {
@@ -416,74 +419,7 @@ export class ClaudeAgentSession implements AgentSession {
     prompt: AgentPromptInput,
     _options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
-    if (this.closed) {
-      throw new Error("Claude session is closed");
-    }
-    if (this.activeForegroundTurnId) {
-      throw new Error("A foreground turn is already active");
-    }
-
-    const slashCommand = this.rewindController.resolveSlashCommandInvocation(prompt);
-    if (slashCommand) {
-      const turnId = this.createTurnId("foreground");
-      this.activeForegroundTurnId = turnId;
-      this.transitionTurnState("foreground", "rewind command");
-      void this.executeRewindTurn(turnId, slashCommand);
-      return { turnId };
-    }
-
-    if (this.autonomousTurn) {
-      this.completeAutonomousTurn();
-    }
-
-    const sdkMessage = this.toSdkUserMessage(prompt);
-    const sdkUserMessageId =
-      typeof sdkMessage.uuid === "string" && sdkMessage.uuid.length > 0 ? sdkMessage.uuid : null;
-    this.rewindController.rememberUserAnchor(sdkUserMessageId);
-    const turnId = this.createTurnId("foreground");
-    this.activeForegroundTurnId = turnId;
-    this.foregroundHasVisibleActivity = false;
-    this.activeTurnHasAssistantText = false;
-    this.transitionTurnState("foreground", "foreground turn started");
-    this.clearRecentStderr();
-
-    let cancelIssued = false;
-    const requestCancel = () => {
-      if (cancelIssued) {
-        return;
-      }
-      cancelIssued = true;
-      if (this.cancelCurrentTurn === requestCancel) {
-        this.cancelCurrentTurn = null;
-      }
-      this.rejectAllPendingPermissions(new Error("Permission request aborted"));
-      this.finishForegroundTurn({
-        type: "turn_canceled",
-        provider: "claude",
-        reason: "Interrupted",
-      });
-      void this.interruptActiveTurn().catch((error) => {
-        this.logger.warn({ err: error }, "Failed to interrupt during cancel");
-      });
-    };
-    this.cancelCurrentTurn = requestCancel;
-
-    this.notifySubscribers({ type: "turn_started", provider: "claude" });
-
-    try {
-      await this.queryLifecycle.send(sdkMessage);
-      setTimeout(() => {
-        if (this.activeForegroundTurnId === turnId) {
-          this.emitSubmittedUserMessage(sdkMessage, turnId);
-        }
-      }, 0);
-    } catch (error) {
-      this.finishForegroundTurn(
-        this.buildTurnFailedEvent(error instanceof Error ? error.message : "Claude stream failed"),
-      );
-    }
-
-    return { turnId };
+    return this.foregroundTurns.startTurn(prompt);
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
@@ -494,17 +430,7 @@ export class ClaudeAgentSession implements AgentSession {
   }
 
   async interrupt(): Promise<void> {
-    if (this.cancelCurrentTurn) {
-      this.cancelCurrentTurn();
-      return;
-    }
-
-    if (this.autonomousTurn) {
-      this.flushPendingToolCalls();
-      this.completeAutonomousTurn();
-    }
-
-    await this.interruptActiveTurn();
+    await this.foregroundTurns.interrupt();
   }
 
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
@@ -627,12 +553,8 @@ export class ClaudeAgentSession implements AgentSession {
     );
     this.queryLifecycle.beginClose();
     this.rejectAllPendingPermissions(new Error("Claude session closed"));
-    this.cancelCurrentTurn?.();
+    this.foregroundTurns.close();
     this.subscribers.clear();
-    this.activeForegroundTurnId = null;
-    this.autonomousTurn = null;
-    this.cancelCurrentTurn = null;
-    this.turnState = "idle";
     this.sidechainTracker.clear();
     await this.queryLifecycle.closeTransport();
     if (this.persistSession === false && this.sessionIdentity.id) {
@@ -768,60 +690,6 @@ export class ClaudeAgentSession implements AgentSession {
     return this.queryLifecycle.ensureQuery();
   }
 
-  private toSdkUserMessage(prompt: AgentPromptInput): SDKUserMessage {
-    const content: Array<
-      | { type: "text"; text: string }
-      | {
-          type: "image";
-          source: {
-            type: "base64";
-            media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-            data: string;
-          };
-        }
-    > = [];
-    if (Array.isArray(prompt)) {
-      for (const chunk of prompt) {
-        if (chunk.type === "text") {
-          content.push({ type: "text", text: chunk.text });
-        } else if (chunk.type === "image") {
-          if (isImageMimeType(chunk.mimeType)) {
-            content.push({
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: chunk.mimeType,
-                data: chunk.data,
-              },
-            });
-          }
-        } else {
-          content.push({ type: "text", text: renderPromptAttachmentAsText(chunk) });
-        }
-      }
-    } else {
-      content.push({ type: "text", text: prompt });
-    }
-
-    const messageId = randomUUID();
-    this.rewindController.rememberUserMessageId(messageId);
-
-    return {
-      type: "user",
-      message: {
-        role: "user",
-        content,
-      },
-      parent_tool_use_id: null,
-      uuid: messageId,
-      session_id: this.sessionIdentity.id ?? "",
-    };
-  }
-
-  private transitionTurnState(next: ClaudeTurnState, reason: string): void {
-    this.messageRouter.transitionTurnState(next, reason);
-  }
-
   private syncTurnState(reason: string): void {
     this.messageRouter.syncTurnState(reason);
   }
@@ -854,60 +722,8 @@ export class ClaudeAgentSession implements AgentSession {
     return this.queryLifecycle.getRecentStderrDiagnostic();
   }
 
-  private createTurnId(owner: "foreground" | "autonomous"): string {
-    return this.messageRouter.createTurnId(owner);
-  }
-
-  private async executeRewindTurn(
-    _turnId: string,
-    invocation: ClaudeRewindInvocation,
-  ): Promise<void> {
-    this.notifySubscribers({ type: "turn_started", provider: "claude" });
-    try {
-      const rewindAttempt = await this.rewindController.attempt(invocation.args);
-      if (!rewindAttempt.messageId || !rewindAttempt.result) {
-        this.finishForegroundTurn({
-          type: "turn_failed",
-          provider: "claude",
-          error:
-            rewindAttempt.error ??
-            "No prior user message available to rewind. Use /rewind <user_message_uuid>.",
-        });
-        return;
-      }
-      this.notifySubscribers({
-        type: "timeline",
-        provider: "claude",
-        item: {
-          type: "assistant_message",
-          text: this.rewindController.buildSuccessMessage(
-            rewindAttempt.messageId,
-            rewindAttempt.result,
-          ),
-        },
-      });
-      this.finishForegroundTurn({ type: "turn_completed", provider: "claude" });
-    } catch (error) {
-      this.finishForegroundTurn({
-        type: "turn_failed",
-        provider: "claude",
-        error: error instanceof Error ? error.message : "Failed to rewind tracked files",
-      });
-    }
-  }
-
-  private finishForegroundTurn(
-    event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
-  ): void {
-    this.messageRouter.finishForegroundTurn(event);
-  }
-
   private dispatchEvents(events: AgentStreamEvent[]): void {
     this.messageRouter.dispatchEvents(events);
-  }
-
-  private completeAutonomousTurn(): void {
-    this.messageRouter.completeAutonomousTurn();
   }
 
   private failActiveTurns(errorMessage: string): void {

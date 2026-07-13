@@ -10,7 +10,7 @@
 - 删除未接线的 `BaseAgentClient` / `BaseAgentSession`。复核发现它们的默认 turn ID、interrupt、close、runtime info 与 persistence 语义会改变现有 provider 行为，不能作为无风险公共基类。
 - 拆分策略从“先强制继承基类”调整为 **composition-first**：先提取无状态 helper、transport、event translator、runtime 和领域 handler；只有在至少两个 provider 出现经过测试证明的稳定同构契约后，才重新引入共享基类。
 - Codex 已完成三十二个边界切片：`skills.ts`、`notifications.ts`、`notification-router.ts`、`turn-config.ts`、`models.ts`、`launch.ts`、`runtime-config.ts`、`client.ts`、`client-runtime.ts`、`session.ts`、`thread-bootstrap.ts`、`session-metadata.ts`、`session-history.ts`、`session-connection.ts`、`session-commands.ts`、`session-runtime.ts`、`session-turn-execution.ts`、`tool-notification-handler.ts`、`delta-notification-handler.ts`、`item-notification-handler.ts`、`turn-notification-handler.ts`、`notification-stream-state.ts`、`context-compaction-state.ts`、`notification-timeline.ts`、`sub-agent-tracker.ts`、`permission-state.ts`、`permissions.ts`、`permission-controller.ts`、`session-event-bus.ts`、`user-message-turn-state.ts`、`image-attachments.ts` 与 `history.ts`；client/session factory、launch/runtime/router/parser 负责运行与协议入口，controller/state/领域模块负责 handler 生命周期、事件、rewind 索引与映射。
-- Claude 已完成十五个边界切片：既有 timeline、SDK reader、turn routing、message/usage translation、query/input/pump lifecycle、rewind、history、tool、permission 与 options 分域外，新增 `session-identity.ts` 独立拥有 session identity、fresh/rebind、persistence、query/runtime model 与 runtime-info cache；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner，`agent.ts` 保持 16 行兼容 façade。
+- Claude 已完成十六个边界切片：既有 timeline、SDK reader、turn routing、message/usage translation、query/input/pump lifecycle、rewind、history、tool、permission 与 options 分域外，`session-identity.ts` 独立拥有 session identity、fresh/rebind、persistence、query/runtime model 与 runtime-info cache，`foreground-turn-controller.ts` 独立拥有 prompt/附件转换、foreground turn 启动/取消、autonomous turn 收口、`/rewind` 与 close reset；`client.ts` 独立拥有 Client API、session factory、binary/auth 诊断与 persisted-session scanner，`agent.ts` 保持 16 行兼容 façade。
 - OpenCode 已完成 façade、session、client runtime、session runtime、session lifecycle、turn execution、event translator、event values、message translator、permission translator、sub-agent tracking、history、session event bus、permission controller、MCP controller、helpers、catalog、runtime、abort coordinator 与 event-stream controller 二十个边界切片；原入口为 64 行兼容 façade，foreground turn、message、permission、sub-agent、runtime 与 shutdown 资源状态已统一。
 - ACP 已完成十一个边界切片：tool/permission mapper、session config mapping/controller、NDJSON transport、process runtime、terminal controller、workspace path、session update controller、foreground turn controller、command catalog 与 session lifecycle controller 分别拥有投影、配置映射/状态、编解码、process/session lifecycle、terminal/path、message/tool update、prompt/turn/usage/终态及 slash-command wait；`acp-agent.ts` 已收敛为 Client/Session façade 与领域接线，并兼容重导出原公开 API。
 - Pi 核心拆分完成：permission/event values、extension history、session event、session runtime 与 session lifecycle 分别拥有 permission 映射、unknown payload、entry/tree bridge、turn/tool/event 状态、模型/思考/usage/persistence 及 new/resume/MCP/cleanup；`pi/agent.ts` 仅保留 Session/Client orchestration 与诊断入口。
@@ -18,55 +18,56 @@
 ## 现状
 
 三个 provider agent 实现均直接 `implements AgentSession` / `implements AgentClient`，
-**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 1057 行、session identity 为 258 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行；ACP 主文件为 926 行，session config controller 为 550 行，lifecycle controller 为 361 行，foreground turn controller 为 280 行，tool mapper 为 431 行，session config mapping 为 283 行，session update controller 为 190 行，process runtime 为 208 行，terminal controller 为 186 行，NDJSON transport 为 107 行，command catalog 为 93 行，workspace path 为 20 行。Pi 主文件为 581 行，session lifecycle 为 446 行，session runtime 为 249 行，session event controller 为 394 行，extension history controller 为 253 行，permission mapper 为 295 行，event values 为 21 行。Codex/OpenCode/ACP/Pi 核心拆分已完成，后续集中处理 Claude Session。
+**无共享基类、无 mixin、无 abstract class**。Codex Session 已收敛到 715 行；Claude Session 为 873 行、foreground turn controller 为 219 行、session identity 为 258 行、message translator 为 428 行、query lifecycle 为 345 行、rewind controller 为 263 行；OpenCode façade 为 64 行、Session 为 395 行、turn execution 为 433 行、event translator 为 226 行、message translator 为 400 行、permission translator 为 214 行、sub-agent tracking 为 307 行、history 为 298 行、Client runtime 为 507 行；ACP 主文件为 926 行，session config controller 为 550 行，lifecycle controller 为 361 行，foreground turn controller 为 280 行，tool mapper 为 431 行，session config mapping 为 283 行，session update controller 为 190 行，process runtime 为 208 行，terminal controller 为 186 行，NDJSON transport 为 107 行，command catalog 为 93 行，workspace path 为 20 行。Pi 主文件为 581 行，session lifecycle 为 446 行，session runtime 为 249 行，session event controller 为 394 行，extension history controller 为 253 行，permission mapper 为 295 行，event values 为 21 行。Codex/Claude/OpenCode/ACP/Pi 核心拆分已完成。
 
-| 文件                                  | 行数 | Session 类                     | Client 类                          | private 方法数 | import 数 |
-| ------------------------------------- | ---- | ------------------------------ | ---------------------------------- | -------------- | --------- |
-| `codex-app-server-agent.ts`           | 55   | compatibility façade           | public wrapper → `codex/client.ts` | 0              | 4         |
-| `codex/session.ts`                    | 715  | `CodexAppServerAgentSession`   | —                                  | 15             | 29        |
-| `claude/agent.ts`                     | 16   | compatibility façade           | wrapper → `claude/client.ts`       | 0              | 2         |
-| `claude/session.ts`                   | 1057 | `ClaudeAgentSession`           | —                                  | 45             | 22        |
-| `claude/session-identity.ts`          | 258  | identity/runtime cache         | —                                  | 3              | 7         |
-| `claude/message-translator.ts`        | 428  | SDK message/usage translation  | —                                  | 9              | 5         |
-| `claude/query-lifecycle.ts`           | 345  | query/input/pump lifecycle     | —                                  | 5              | 7         |
-| `claude/rewind-controller.ts`         | 263  | rewind state/checkpoint logic  | —                                  | 2              | 3         |
-| `claude/options-builder.ts`           | 468  | SDK options/env construction   | —                                  | 5              | 9         |
-| `claude/session-history.ts`           | 329  | persisted replay/block map     | —                                  | 5              | 8         |
-| `claude/permission-controller.ts`     | 278  | permission lifecycle           | —                                  | 3              | 5         |
-| `opencode-agent.ts`                   | 64   | compatibility façade           | compatibility wrappers             | 0              | 4         |
-| `opencode/session.ts`                 | 395  | `OpenCodeAgentSession`         | —                                  | 1              | 18        |
-| `opencode/turn-execution.ts`          | 433  | foreground turn orchestration  | —                                  | 5              | 15        |
-| `opencode/event-translator.ts`        | 226  | event router/session mapping   | —                                  | 0              | 8         |
-| `opencode/message-translator.ts`      | 400  | message/part/usage mapping     | —                                  | 0              | 6         |
-| `opencode/permission-translator.ts`   | 214  | permission/question mapping    | —                                  | 0              | 4         |
-| `opencode/event-values.ts`            | 11   | event value parsing            | —                                  | 0              | 0         |
-| `opencode/sub-agent-tracking.ts`      | 307  | sub-agent state/actions        | —                                  | 0              | 4         |
-| `opencode/history.ts`                 | 298  | history pipeline               | —                                  | 0              | 8         |
-| `opencode/permission-controller.ts`   | 108  | permission state               | —                                  | 2              | 5         |
-| `opencode/mcp-controller.ts`          | 73   | MCP setup state                | —                                  | 2              | 5         |
-| `opencode/session-event-bus.ts`       | 134  | turn/event state               | —                                  | 1              | 1         |
-| `opencode/session-runtime.ts`         | 186  | runtime/catalog state          | —                                  | 2              | 5         |
-| `opencode/session-lifecycle.ts`       | 108  | shutdown/resource state        | —                                  | 1              | 4         |
-| `opencode/client.ts`                  | 507  | —                              | `OpenCodeAgentClientRuntime`       | 2              | 13        |
-| `acp-agent.ts`                        | 926  | `ACPAgentSession`              | `ACPAgentClient`                   | —              | —         |
-| `acp/foreground-turn-controller.ts`   | 280  | foreground prompt/turn state   | —                                  | 4              | 4         |
-| `acp/command-catalog.ts`              | 93   | slash-command snapshot/wait    | —                                  | 3              | 1         |
-| `acp/session-update-controller.ts`    | 190  | message/tool update state      | —                                  | 3              | 3         |
-| `acp/session-config.ts`               | 283  | mode/model/config mapping      | —                                  | 0              | 4         |
-| `acp/session-config-controller.ts`    | 550  | mode/model/thinking state      | —                                  | 11             | 4         |
-| `acp/session-lifecycle-controller.ts` | 361  | process/session lifecycle      | —                                  | 5              | 7         |
-| `acp/ndjson-stream.ts`                | 107  | transport/compat parsing       | —                                  | 0              | 3         |
-| `acp/process-runtime.ts`              | 208  | spawn/initialize/cleanup       | shared runtime                     | 0              | 7         |
-| `acp/terminal-controller.ts`          | 186  | terminal process/state         | ACP client terminal methods        | 1              | 5         |
-| `acp/workspace-path.ts`               | 20   | fs/terminal path intent        | shared helper                      | 0              | 1         |
-| `acp/tool-call-mapper.ts`             | 431  | tool/permission projection     | —                                  | 0              | 2         |
-| `pi/agent.ts`                         | 581  | `PiRpcAgentSession`            | `PiRpcAgentClient`                 | —              | —         |
-| `pi/session-lifecycle.ts`             | 446  | new/resume/resource lifecycle  | client session factory             | 5              | 9         |
-| `pi/session-runtime.ts`               | 249  | state/config/usage/persistence | —                                  | 0              | 6         |
-| `pi/session-event-controller.ts`      | 394  | event/permission/turn state    | —                                  | 9              | 8         |
-| `pi/extension-history-controller.ts`  | 253  | extension history/state        | —                                  | 9              | 5         |
-| `pi/permission-mapper.ts`             | 295  | extension UI permissions       | —                                  | 0              | 3         |
-| `pi/event-values.ts`                  | 21   | unknown payload parsing        | shared Pi helper                   | 0              | 0         |
+| 文件                                   | 行数 | Session 类                     | Client 类                          | private 方法数 | import 数 |
+| -------------------------------------- | ---- | ------------------------------ | ---------------------------------- | -------------- | --------- |
+| `codex-app-server-agent.ts`            | 55   | compatibility façade           | public wrapper → `codex/client.ts` | 0              | 4         |
+| `codex/session.ts`                     | 715  | `CodexAppServerAgentSession`   | —                                  | 15             | 29        |
+| `claude/agent.ts`                      | 16   | compatibility façade           | wrapper → `claude/client.ts`       | 0              | 2         |
+| `claude/session.ts`                    | 873  | `ClaudeAgentSession`           | —                                  | 42             | 22        |
+| `claude/foreground-turn-controller.ts` | 219  | foreground prompt/turn state   | —                                  | 3              | 9         |
+| `claude/session-identity.ts`           | 258  | identity/runtime cache         | —                                  | 3              | 7         |
+| `claude/message-translator.ts`         | 428  | SDK message/usage translation  | —                                  | 9              | 5         |
+| `claude/query-lifecycle.ts`            | 345  | query/input/pump lifecycle     | —                                  | 5              | 7         |
+| `claude/rewind-controller.ts`          | 263  | rewind state/checkpoint logic  | —                                  | 2              | 3         |
+| `claude/options-builder.ts`            | 468  | SDK options/env construction   | —                                  | 5              | 9         |
+| `claude/session-history.ts`            | 329  | persisted replay/block map     | —                                  | 5              | 8         |
+| `claude/permission-controller.ts`      | 278  | permission lifecycle           | —                                  | 3              | 5         |
+| `opencode-agent.ts`                    | 64   | compatibility façade           | compatibility wrappers             | 0              | 4         |
+| `opencode/session.ts`                  | 395  | `OpenCodeAgentSession`         | —                                  | 1              | 18        |
+| `opencode/turn-execution.ts`           | 433  | foreground turn orchestration  | —                                  | 5              | 15        |
+| `opencode/event-translator.ts`         | 226  | event router/session mapping   | —                                  | 0              | 8         |
+| `opencode/message-translator.ts`       | 400  | message/part/usage mapping     | —                                  | 0              | 6         |
+| `opencode/permission-translator.ts`    | 214  | permission/question mapping    | —                                  | 0              | 4         |
+| `opencode/event-values.ts`             | 11   | event value parsing            | —                                  | 0              | 0         |
+| `opencode/sub-agent-tracking.ts`       | 307  | sub-agent state/actions        | —                                  | 0              | 4         |
+| `opencode/history.ts`                  | 298  | history pipeline               | —                                  | 0              | 8         |
+| `opencode/permission-controller.ts`    | 108  | permission state               | —                                  | 2              | 5         |
+| `opencode/mcp-controller.ts`           | 73   | MCP setup state                | —                                  | 2              | 5         |
+| `opencode/session-event-bus.ts`        | 134  | turn/event state               | —                                  | 1              | 1         |
+| `opencode/session-runtime.ts`          | 186  | runtime/catalog state          | —                                  | 2              | 5         |
+| `opencode/session-lifecycle.ts`        | 108  | shutdown/resource state        | —                                  | 1              | 4         |
+| `opencode/client.ts`                   | 507  | —                              | `OpenCodeAgentClientRuntime`       | 2              | 13        |
+| `acp-agent.ts`                         | 926  | `ACPAgentSession`              | `ACPAgentClient`                   | —              | —         |
+| `acp/foreground-turn-controller.ts`    | 280  | foreground prompt/turn state   | —                                  | 4              | 4         |
+| `acp/command-catalog.ts`               | 93   | slash-command snapshot/wait    | —                                  | 3              | 1         |
+| `acp/session-update-controller.ts`     | 190  | message/tool update state      | —                                  | 3              | 3         |
+| `acp/session-config.ts`                | 283  | mode/model/config mapping      | —                                  | 0              | 4         |
+| `acp/session-config-controller.ts`     | 550  | mode/model/thinking state      | —                                  | 11             | 4         |
+| `acp/session-lifecycle-controller.ts`  | 361  | process/session lifecycle      | —                                  | 5              | 7         |
+| `acp/ndjson-stream.ts`                 | 107  | transport/compat parsing       | —                                  | 0              | 3         |
+| `acp/process-runtime.ts`               | 208  | spawn/initialize/cleanup       | shared runtime                     | 0              | 7         |
+| `acp/terminal-controller.ts`           | 186  | terminal process/state         | ACP client terminal methods        | 1              | 5         |
+| `acp/workspace-path.ts`                | 20   | fs/terminal path intent        | shared helper                      | 0              | 1         |
+| `acp/tool-call-mapper.ts`              | 431  | tool/permission projection     | —                                  | 0              | 2         |
+| `pi/agent.ts`                          | 581  | `PiRpcAgentSession`            | `PiRpcAgentClient`                 | —              | —         |
+| `pi/session-lifecycle.ts`              | 446  | new/resume/resource lifecycle  | client session factory             | 5              | 9         |
+| `pi/session-runtime.ts`                | 249  | state/config/usage/persistence | —                                  | 0              | 6         |
+| `pi/session-event-controller.ts`       | 394  | event/permission/turn state    | —                                  | 9              | 8         |
+| `pi/extension-history-controller.ts`   | 253  | extension history/state        | —                                  | 9              | 5         |
+| `pi/permission-mapper.ts`              | 295  | extension UI permissions       | —                                  | 0              | 3         |
+| `pi/event-values.ts`                   | 21   | unknown payload parsing        | shared Pi helper                   | 0              | 0         |
 
 **已存在的共享设施**（仅模块级 helper，无基类）：
 
@@ -167,11 +168,12 @@
 
 **验收**：原入口收敛为显式兼容 façade；session/client/transport 分离；typecheck 与对应 Codex 聚焦测试通过；Session 已降至 715 行 orchestrator。`rewind.ts` 已拥有 fork/rollback 核心语义，保留 Session 中的窄接线，不再创建重复 controller。
 
-### Slice 2：Claude 拆分（继续进行）
+### Slice 2：Claude 拆分（核心完成）
 
-原 `claude/agent.ts` 从 5185 行收敛为 16 行兼容 façade；Session 主实现迁至 `claude/session.ts`（1057 行）：
+原 `claude/agent.ts` 从 5185 行收敛为 16 行兼容 façade；Session 主实现迁至 `claude/session.ts`（873 行）：
 
-- `claude/session.ts` —— `ClaudeAgentSession` orchestration，保持 `implements AgentSession`（进行中，1057 行；下一步评估 foreground turn/input orchestration）
+- `claude/session.ts` —— `ClaudeAgentSession` orchestration，保持 `implements AgentSession`（核心完成，873 行；仅保留 provider 事件、配置与领域控制器接线）
+- `claude/foreground-turn-controller.ts` —— prompt/图片/附件转换、foreground turn 启动、取消/interrupt、autonomous turn 收口、`/rewind` 与 close reset（已完成，219 行）
 - `claude/session-identity.ts` —— session identity、fresh/rebind、persistence、query/runtime model、gateway override 与 runtime-info cache（已完成，258 行；修复三类 stale diagnostic）
 - `claude/client.ts` —— Client API、显式 Session factory、binary/auth 诊断与 persisted-session scanner（已完成，523 行；`agent.ts` 保留兼容包装）
 - `claude/timeline-assembler.ts` —— assistant/reasoning delta、message identity、去重与 finalize 状态（已完成，325 行）
@@ -187,7 +189,7 @@
 - `claude/permission-controller.ts` —— SDK canUseTool、pending map、abort cleanup、question/plan/tool resolution 与 close rejection（已完成，278 行）
 - `claude/options-builder.ts` —— SDK env overlays、Model Gateway override、thinking/ultracode、fast settings、MCP/system prompt 与安全日志摘要（已完成，468 行）
 
-**验收**：既有 Slice 1 契约继续有效；本批新增 server typecheck、4 个目标文件 lint，以及 mode cache、SDK session capture、default model、ephemeral/persisted transcript 和 mid-turn session switch 共 6 个聚焦场景。
+**验收**：既有 Slice 1 契约继续有效；identity 批次通过 server typecheck、4 个目标文件 lint，以及 mode cache、SDK session capture、default model、ephemeral/persisted transcript 和 mid-turn session switch 共 6 个聚焦场景；foreground turn 批次通过 server typecheck、2 个目标文件 lint，以及 interrupt、query reuse、stale abort 与 `/rewind` 共 5 个聚焦场景。
 
 ### Slice 3：Opencode 拆分
 
