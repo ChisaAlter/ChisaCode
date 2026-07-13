@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { TTLCache } from "@isaacs/ttlcache";
 import pMemoize from "p-memoize";
-import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
+
 import type { ClientCapability } from "@chisacode/protocol/client-capabilities";
 import {
   type AgentSnapshotPayload,
@@ -129,6 +129,7 @@ import {
   emitWorkspaceScriptStatusUpdate as emitWorkspaceScriptStatusUpdateCore,
 } from "./workspace-core.js";
 import { AgentEventForwarder } from "./agent-event-forwarder.js";
+import { SessionMcpClientController } from "./session-mcp-client-controller.js";
 import { GitMetadataGenerator } from "./git-metadata-generator.js";
 import { WorkspaceDescriptorBuilder } from "./workspace-descriptor-builder.js";
 import { WorkspaceGitObserverController } from "./workspace-git-observer-controller.js";
@@ -238,8 +239,6 @@ export class Session {
   private operationAbortController: AbortController;
   private disposed = false;
 
-  // Per-session MCP client
-  private agentMcpClient: MCPClient | null = null;
   private agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
   private readonly usageStore: UsageStore | null;
@@ -305,6 +304,7 @@ export class Session {
   private readonly daemonRuntimeConfig: SessionOptions["daemonRuntimeConfig"];
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
   private readonly agentEventForwarder: AgentEventForwarder;
+  private readonly sessionMcpClientController: SessionMcpClientController;
   private readonly checkoutGitHandler: CheckoutGitHandler;
   private readonly chatScheduleLoopHandler: ChatScheduleLoopHandler;
   private readonly configControlHandler: ConfigControlHandler;
@@ -438,6 +438,10 @@ export class Session {
     this.daemonVersion = daemonVersion;
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.operationAbortController = new AbortController();
+    this.sessionMcpClientController = new SessionMcpClientController({
+      mcpBaseUrl: this.mcpBaseUrl,
+      sessionLogger: this.sessionLogger,
+    });
     this.gitMetadataGenerator = new GitMetadataGenerator({
       agentManager: this.agentManager,
       workspaceGitService: this.workspaceGitService,
@@ -514,7 +518,7 @@ export class Session {
     });
 
     // Initialize asynchronous collaborators only after their handlers exist.
-    void this.initializeAgentMcp();
+    void this.sessionMcpClientController.start();
     this.agentEventForwarder.start();
 
     this.sessionLogger.trace({}, "agent.session.lifecycle.created");
@@ -766,32 +770,6 @@ export class Session {
   /** Send the initial state payload to the newly connected client. */
   public async sendInitialState(): Promise<void> {
     // No unsolicited agent list hydration. Callers must use fetch_agents_request.
-  }
-
-  /**
-   * Initialize Agent MCP client for this session using the daemon's HTTP MCP endpoint.
-   */
-  private async initializeAgentMcp(): Promise<void> {
-    try {
-      if (!this.mcpBaseUrl) {
-        this.sessionLogger.info(
-          "Skipping Agent MCP initialization because no MCP base URL is configured",
-        );
-        return;
-      }
-      this.agentMcpClient = await createMCPClient({
-        transport: {
-          type: "http",
-          url: this.mcpBaseUrl,
-        },
-      });
-
-      const agentTools = await this.agentMcpClient.tools();
-      const agentToolCount = Object.keys(agentTools).length;
-      this.sessionLogger.trace({ agentToolCount }, "agent.session.mcp_init");
-    } catch (error) {
-      this.sessionLogger.error({ err: error }, "Failed to initialize Agent MCP");
-    }
   }
 
   private async buildAgentPayload(agent: ManagedAgent): Promise<AgentSnapshotPayload> {
@@ -1785,15 +1763,7 @@ export class Session {
     this.operationAbortController.abort();
     this.voiceDictationHandler.dispose();
 
-    // Close MCP clients
-    if (this.agentMcpClient) {
-      try {
-        await this.agentMcpClient.close();
-      } catch (error) {
-        this.sessionLogger.error({ err: error }, "Failed to close Agent MCP client");
-      }
-      this.agentMcpClient = null;
-    }
+    await this.sessionMcpClientController.dispose();
 
     this.terminalController.dispose();
 
