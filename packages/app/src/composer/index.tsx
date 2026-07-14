@@ -31,15 +31,10 @@ import { focusWithRetries } from "@/utils/web-focus";
 import {
   cancelComposerAgent,
   dispatchComposerAgentMessage,
-  editQueuedComposerMessage,
   openComposerAttachment,
   pickAndPersistImages,
-  queueComposerMessage,
   removeComposerAttachmentAtIndex,
-  sendQueuedComposerMessageNow,
   type AgentStreamWriter,
-  type QueueWriter,
-  type QueuedComposerMessage,
 } from "@/composer/actions";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
@@ -76,10 +71,9 @@ import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-qu
 import { useComposerAttachmentMenu } from "./attachment-menu";
 import { useComposerGithubPicker } from "./github/picker";
 import { useComposerKeyboardController } from "./keyboard-controller";
+import { useComposerQueueController } from "./queue-controller";
 import { useComposerRuntimeControls } from "./runtime-controls";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
-
-type QueuedMessage = QueuedComposerMessage;
 
 type AttachmentListUpdater =
   | UserComposerAttachment[]
@@ -180,7 +174,6 @@ interface ComposerProps {
   externalKeyboardShift?: boolean;
 }
 
-const EMPTY_ARRAY: readonly QueuedMessage[] = [];
 const StableMessageInput = memo(MessageInput);
 
 export function Composer({
@@ -235,12 +228,6 @@ export function Composer({
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
 
-  const queuedMessagesRaw = useSessionStore((state) =>
-    state.sessions[serverId]?.queuedMessages?.get(agentId),
-  );
-  const queuedMessages = queuedMessagesRaw ?? EMPTY_ARRAY;
-
-  const setQueuedMessages = useSessionStore((state) => state.setQueuedMessages);
   const setAgentStreamTail = useSessionStore((state) => state.setAgentStreamTail);
   const setAgentStreamHead = useSessionStore((state) => state.setAgentStreamHead);
 
@@ -439,39 +426,30 @@ export function Composer({
   const isAgentRunning = agentState.status === "running";
   const hasAgent = agentState.status !== null;
 
-  const queueWriter = useMemo<QueueWriter>(
-    () => ({
-      read: (id) => useSessionStore.getState().sessions[serverId]?.queuedMessages?.get(id) ?? [],
-      write: (updater) => setQueuedMessages(serverId, updater),
-    }),
-    [serverId, setQueuedMessages],
+  const canSubmitQueuedMessage = useCallback(
+    () => Boolean(sendAgentMessageRef.current || onSubmitMessageRef.current),
+    [],
   );
-
-  const queueMessage = useCallback(
-    (queuedMessage: string, queuedAttachments: ComposerAttachment[]) => {
-      const result = queueComposerMessage({
-        agentId,
-        text: queuedMessage,
-        attachments: queuedAttachments,
-        queue: queueWriter,
-      });
-      if (!result.queued) return;
-
-      setUserInput("");
-      setSelectedAttachments([]);
-      resetSuppression();
-      clearSentAttachments(queuedAttachments);
-    },
-    [
-      agentId,
-      clearSentAttachments,
-      queueWriter,
-      resetSuppression,
-      setSelectedAttachments,
-      setUserInput,
-    ],
-  );
-
+  const {
+    queuedMessages,
+    queueMessage,
+    handleEditQueuedMessage,
+    handleSendQueuedNow,
+    handleQueue,
+  } = useComposerQueueController({
+    serverId,
+    agentId,
+    attachments,
+    buildOutgoingAttachments,
+    setUserInput,
+    setSelectedAttachments,
+    resetSuppression,
+    clearSentAttachments,
+    runClientSlashCommand,
+    canSubmitQueuedMessage,
+    submitMessage,
+    setSendError,
+  });
   const sendMessageWithContent = useCallback(
     async (
       outgoingMessage: string,
@@ -644,53 +622,6 @@ export function Composer({
     mode: "translate",
     enabled: !externalKeyboardShift,
   });
-
-  const handleEditQueuedMessage = useCallback(
-    (id: string) => {
-      const result = editQueuedComposerMessage({
-        agentId,
-        messageId: id,
-        queue: queueWriter,
-      });
-      if (!result) return;
-      setUserInput(result.text);
-      setSelectedAttachments(result.attachments);
-    },
-    [agentId, queueWriter, setSelectedAttachments, setUserInput],
-  );
-
-  const handleSendQueuedNow = useCallback(
-    async (id: string) => {
-      if (!sendAgentMessageRef.current && !onSubmitMessageRef.current) return;
-      // Reuse the regular send path; server-side send atomically interrupts any active run.
-      const result = await sendQueuedComposerMessageNow({
-        agentId,
-        messageId: id,
-        queue: queueWriter,
-        submitMessage: ({ text, attachments: queuedAttachments }) =>
-          submitMessage(text, queuedAttachments),
-      });
-      if (result.status === "failed") {
-        setSendError(result.errorMessage);
-      }
-    },
-    [agentId, queueWriter, submitMessage],
-  );
-
-  const handleQueue = useCallback(
-    (payload: MessagePayload) => {
-      const outgoingAttachments = buildOutgoingAttachments(attachments);
-      const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
-        hasAttachments: outgoingAttachments.length > 0,
-      });
-      if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
-        return;
-      }
-      queueMessage(payload.text, outgoingAttachments);
-    },
-    [attachments, buildOutgoingAttachments, queueMessage, runClientSlashCommand],
-  );
 
   const hasSendableContent = userInput.trim().length > 0 || selectedAttachments.length > 0;
 
