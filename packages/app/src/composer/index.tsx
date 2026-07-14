@@ -50,7 +50,6 @@ import {
 } from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
-import { submitAgentInput } from "@/composer/submit";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
 import type {
@@ -63,7 +62,7 @@ import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { AttachmentLightbox } from "@/components/attachment-lightbox";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
-import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
+import type { ClientSlashCommand } from "@/client-slash-commands";
 import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
 import { useComposerAttachmentMenu } from "./attachment-menu";
 import { useComposerDeliveryController } from "./delivery-controller";
@@ -71,6 +70,7 @@ import { useComposerGithubPicker } from "./github/picker";
 import { useComposerKeyboardController } from "./keyboard-controller";
 import { useComposerQueueController } from "./queue-controller";
 import { useComposerRuntimeControls } from "./runtime-controls";
+import { useComposerSubmissionController } from "./submission-controller";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
 
 type AttachmentListUpdater =
@@ -369,85 +369,26 @@ export function Composer({
     submitMessage,
     setSendError,
   });
-  const sendMessageWithContent = useCallback(
-    async (
-      outgoingMessage: string,
-      outgoingAttachments: ComposerAttachment[],
-      forceSend?: boolean,
-    ) => {
-      const result = await submitAgentInput({
-        message: outgoingMessage,
-        attachments: outgoingAttachments,
-        hasExternalContent,
-        allowEmptySubmit,
-        forceSend,
-        submitBehavior,
-        isAgentRunning,
-        // Parent-managed submits are still valid submit paths even when the
-        // transport is disconnected, because the parent decides the failure mode.
-        canSubmit: canSubmitMessage(),
-        queueMessage: ({ message: queuedText, attachments: queuedAttachments }) => {
-          queueMessage(queuedText, queuedAttachments);
-        },
-        submitMessage: async ({ message: submitText, attachments: submitAttachments }) => {
-          await submitMessage(submitText, submitAttachments);
-        },
-        clearDraft,
-        setUserInput,
-        setAttachments: (nextAttachments) => {
-          setSelectedAttachments(composerWorkspaceAttachment.userAttachmentsOnly(nextAttachments));
-        },
-        setSendError,
-        setIsProcessing,
-        onSubmitError: (error) => {
-          console.error("[AgentInput] Failed to send message:", error);
-        },
-      });
-      completeSubmit({
-        result,
-        outgoingAttachments,
-      });
-    },
-    [
-      allowEmptySubmit,
-      canSubmitMessage,
-      clearDraft,
-      completeSubmit,
-      hasExternalContent,
-      isAgentRunning,
-      queueMessage,
-      setSelectedAttachments,
-      setUserInput,
-      submitBehavior,
-      submitMessage,
-    ],
-  );
-
-  const handleSubmit = useCallback(
-    (payload: MessagePayload) => {
-      const outgoingAttachments = buildOutgoingAttachments(attachments);
-      const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
-        hasAttachments: outgoingAttachments.length > 0,
-      });
-      if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
-        return;
-      }
-
-      if (blurOnSubmit) {
-        messageInputRef.current?.blur();
-      }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
-    },
-    [
-      attachments,
-      blurOnSubmit,
-      buildOutgoingAttachments,
-      runClientSlashCommand,
-      sendMessageWithContent,
-    ],
-  );
-
+  const { handleSubmit } = useComposerSubmissionController({
+    attachments,
+    buildOutgoingAttachments,
+    runClientSlashCommand,
+    blurOnSubmit,
+    messageInputRef,
+    hasExternalContent,
+    allowEmptySubmit,
+    submitBehavior,
+    isAgentRunning,
+    canSubmitMessage,
+    queueMessage,
+    submitMessage,
+    clearDraft,
+    setUserInput,
+    setSelectedAttachments,
+    completeSubmit,
+    setSendError,
+    setIsProcessing,
+  });
   const handlePickImage = useCallback(async () => {
     const newImages = await pickAndPersistImages({
       pickImages,
