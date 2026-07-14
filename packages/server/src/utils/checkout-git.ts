@@ -2,20 +2,13 @@ import { resolve, dirname, basename } from "path";
 import { existsSync, realpathSync } from "fs";
 import { readFile } from "fs/promises";
 
-import { TTLCache } from "@isaacs/ttlcache";
 import type { Logger } from "pino";
 
 import { parseGitHubRepoFromRemote } from "../server/workspace-git-metadata.js";
 import {
-  GitHubAuthenticationError,
-  GitHubCliMissingError,
-  GitHubCommandError,
   createGitHubService,
   resolveGitHubRepo,
-  type GitHubCurrentPullRequestStatus,
-  type GitHubPullRequestStatusFacts,
   type GitHubService,
-  type PullRequestMergeable,
 } from "../services/github-service.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { runGitCommand } from "./run-git-command.js";
@@ -24,6 +17,11 @@ import {
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
 } from "./checkout-git-diff.js";
+import {
+  createCheckoutPullRequestStatusAuthority,
+  type PullRequestStatusLookupTarget,
+  type PullRequestStatusResult,
+} from "./checkout-git-pull-request-status.js";
 import {
   createCheckoutShortstatAuthority,
   type CheckoutShortstat,
@@ -47,6 +45,13 @@ export {
   type RemoteOnlyBranchCheckoutResolution,
 } from "./checkout-git-branches.js";
 export type { CheckoutDiffCompare, CheckoutDiffResult } from "./checkout-git-diff.js";
+export type {
+  ChecksStatus,
+  PullRequestCheck,
+  PullRequestStatus,
+  PullRequestStatusResult,
+  ReviewDecision,
+} from "./checkout-git-pull-request-status.js";
 export type { CheckoutShortstat } from "./checkout-git-shortstat.js";
 const PULL_REQUEST_REMOTE_PREFIXES = ["chisacode-pr-", "chisacode-pr-"] as const;
 
@@ -58,22 +63,9 @@ function isManagedPullRequestRemote(remoteName: string | null | undefined): remo
   );
 }
 
-const DEFAULT_PULL_REQUEST_STATUS_CACHE_TTL_MS = 30_000;
-const PULL_REQUEST_STATUS_CACHE_MAX = 1_000;
-
-let pullRequestStatusCacheTtlMs = DEFAULT_PULL_REQUEST_STATUS_CACHE_TTL_MS;
-let pullRequestStatusCache = createPullRequestStatusCache(pullRequestStatusCacheTtlMs);
-const pullRequestStatusInFlight = new Map<string, Promise<PullRequestStatusResult>>();
-const lastSuccessfulPullRequestStatus = new Map<string, PullRequestStatusResult>();
-
 interface CheckoutReadCacheOptions {
   force?: boolean;
   reason?: string;
-}
-
-interface PullRequestStatusLookupTarget {
-  headRef: string;
-  headRepositoryOwner?: string;
 }
 
 function getErrorStderr(error: Error): string {
@@ -82,47 +74,6 @@ function getErrorStderr(error: Error): string {
 
 function getErrorStdout(error: Error): string {
   return "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
-}
-
-function createPullRequestStatusCache(ttlMs: number) {
-  return new TTLCache<string, PullRequestStatusResult>({
-    ttl: ttlMs,
-    max: PULL_REQUEST_STATUS_CACHE_MAX,
-    checkAgeOnGet: true,
-  });
-}
-
-function getPullRequestStatusCacheKey(cwd: string): string {
-  return resolve(cwd);
-}
-
-function rememberPullRequestStatus(cacheKey: string, status: PullRequestStatusResult): void {
-  lastSuccessfulPullRequestStatus.set(cacheKey, status);
-  if (lastSuccessfulPullRequestStatus.size <= PULL_REQUEST_STATUS_CACHE_MAX) {
-    return;
-  }
-  const oldest = lastSuccessfulPullRequestStatus.keys().next();
-  if (!oldest.done) {
-    lastSuccessfulPullRequestStatus.delete(oldest.value);
-  }
-}
-
-export function __resetPullRequestStatusCacheForTests(): void {
-  pullRequestStatusCache.clear();
-  pullRequestStatusCache.cancelTimer();
-  pullRequestStatusCacheTtlMs = DEFAULT_PULL_REQUEST_STATUS_CACHE_TTL_MS;
-  pullRequestStatusCache = createPullRequestStatusCache(pullRequestStatusCacheTtlMs);
-  pullRequestStatusInFlight.clear();
-  lastSuccessfulPullRequestStatus.clear();
-}
-
-export function __setPullRequestStatusCacheTtlForTests(ttlMs: number): void {
-  pullRequestStatusCache.clear();
-  pullRequestStatusCache.cancelTimer();
-  pullRequestStatusCacheTtlMs = ttlMs;
-  pullRequestStatusCache = createPullRequestStatusCache(ttlMs);
-  pullRequestStatusInFlight.clear();
-  lastSuccessfulPullRequestStatus.clear();
 }
 
 export class MergeConflictError extends Error {
@@ -1489,41 +1440,6 @@ export interface CreatePullRequestOptions {
   draft?: boolean;
 }
 
-export interface PullRequestStatus {
-  number?: number;
-  repoOwner?: string;
-  repoName?: string;
-  url: string;
-  title: string;
-  state: string;
-  baseRefName: string;
-  headRefName: string;
-  isMerged: boolean;
-  isDraft?: boolean;
-  mergeable?: PullRequestMergeable;
-  checks?: PullRequestCheck[];
-  checksStatus?: ChecksStatus;
-  reviewDecision?: ReviewDecision;
-  github?: GitHubPullRequestStatusFacts;
-}
-
-export interface PullRequestStatusResult {
-  status: PullRequestStatus | null;
-  githubFeaturesEnabled: boolean;
-}
-
-export interface PullRequestCheck {
-  name: string;
-  status: "success" | "failure" | "pending" | "skipped" | "cancelled";
-  url: string | null;
-  workflow?: string;
-  duration?: string;
-}
-
-export type ChecksStatus = "none" | "pending" | "success" | "failure";
-
-export type ReviewDecision = "approved" | "changes_requested" | "pending" | null;
-
 export async function createPullRequest(
   cwd: string,
   options: CreatePullRequestOptions,
@@ -1564,99 +1480,36 @@ export async function createPullRequest(
   return result;
 }
 
+const checkoutPullRequestStatusAuthority =
+  createCheckoutPullRequestStatusAuthority<CheckoutContext>({
+    getFacts: (context) => context?.facts,
+    getCurrentBranch,
+    resolveLookupTarget: resolvePullRequestStatusLookupTarget,
+  });
+
+/** Resets pull request status cache state for isolated tests. */
+export function __resetPullRequestStatusCacheForTests(): void {
+  checkoutPullRequestStatusAuthority.resetCacheForTests();
+}
+
+/** Overrides pull request status cache TTL for isolated tests. */
+export function __setPullRequestStatusCacheTtlForTests(ttlMs: number): void {
+  checkoutPullRequestStatusAuthority.setCacheTtlForTests(ttlMs);
+}
+
+/**
+ * Reads cached or fresh pull request status for a checkout.
+ * @param cwd Repository working directory
+ * @param github GitHub service used for status lookup
+ * @param options Cache control and observability options
+ * @param context Optional cached checkout facts and logger
+ * @returns Pull request status and GitHub feature availability
+ */
 export async function getPullRequestStatus(
   cwd: string,
   github: GitHubService = createGitHubService(),
   options?: CheckoutReadCacheOptions,
   context?: CheckoutContext,
 ): Promise<PullRequestStatusResult> {
-  const cacheKey = getPullRequestStatusCacheKey(cwd);
-  if (!options?.force) {
-    const cached = pullRequestStatusCache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const existing = pullRequestStatusInFlight.get(cacheKey);
-    if (existing) {
-      return existing;
-    }
-  }
-
-  const lookup = getPullRequestStatusUncached(cwd, github, options, context)
-    .then((status) => {
-      pullRequestStatusCache.set(cacheKey, status);
-      rememberPullRequestStatus(cacheKey, status);
-      return status;
-    })
-    .catch((error) => {
-      if (!options?.force && error instanceof GitHubCommandError) {
-        const stale = lastSuccessfulPullRequestStatus.get(cacheKey);
-        if (stale) {
-          return stale;
-        }
-      }
-      throw error;
-    })
-    .finally(() => {
-      pullRequestStatusInFlight.delete(cacheKey);
-    });
-
-  pullRequestStatusInFlight.set(cacheKey, lookup);
-  return lookup;
-}
-
-async function getPullRequestStatusUncached(
-  cwd: string,
-  github: GitHubService,
-  options?: CheckoutReadCacheOptions,
-  context?: CheckoutContext,
-): Promise<PullRequestStatusResult> {
-  if (context?.facts?.isGit === false) {
-    return {
-      status: null,
-      githubFeaturesEnabled: false,
-    };
-  }
-  if (!context?.facts?.isGit) {
-    await requireGitRepo(cwd);
-  }
-  const head = context?.facts?.isGit ? context.facts.currentBranch : await getCurrentBranch(cwd);
-  if (!head) {
-    return {
-      status: null,
-      githubFeaturesEnabled: false,
-    };
-  }
-  try {
-    const lookupTarget = await resolvePullRequestStatusLookupTarget(cwd, head, context);
-    let status: GitHubCurrentPullRequestStatus | null;
-    if (options?.force) {
-      const reason = options.reason;
-      if (!reason) {
-        throw new Error("Forced PR status read requires a reason");
-      }
-      status = await github.getCurrentPullRequestStatus({
-        cwd,
-        ...lookupTarget,
-        force: true,
-        reason,
-      });
-    } else {
-      status = await github.getCurrentPullRequestStatus({
-        cwd,
-        ...lookupTarget,
-        reason: options?.reason,
-      });
-    }
-    return {
-      status,
-      githubFeaturesEnabled: true,
-    };
-  } catch (error) {
-    if (error instanceof GitHubCliMissingError || error instanceof GitHubAuthenticationError) {
-      return { status: null, githubFeaturesEnabled: false };
-    }
-    throw error;
-  }
+  return checkoutPullRequestStatusAuthority.get(cwd, github, options, context);
 }
