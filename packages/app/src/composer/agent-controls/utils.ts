@@ -16,6 +16,10 @@ export function getAgentControlHint(selector: ExplainedAgentControl): string {
   }
 }
 
+export function formatCompactModelLabel(label: string): string {
+  const separatorIndex = label.lastIndexOf("/");
+  return separatorIndex === -1 ? label : label.slice(separatorIndex + 1);
+}
 export function normalizeModelId(modelId: string | null | undefined): string | null {
   const normalized = typeof modelId === "string" ? modelId.trim() : "";
   if (!normalized) {

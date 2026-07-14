@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildToggleFeatureMenuItems,
   formatAgentModeLabel,
+  formatCompactModelLabel,
   getFeatureHighlightColor,
   getFeatureTooltip,
   getAgentControlHint,
@@ -71,6 +72,12 @@ describe("feature metadata helpers", () => {
   });
 });
 
+describe("formatCompactModelLabel", () => {
+  it("strips only the final provider namespace", () => {
+    expect(formatCompactModelLabel("openrouter/openai/gpt-5.5")).toBe("gpt-5.5");
+    expect(formatCompactModelLabel("gpt-5.5")).toBe("gpt-5.5");
+  });
+});
 describe("normalizeModelId", () => {
   it("treats empty values as unset", () => {
     expect(normalizeModelId("")).toBeNull();
