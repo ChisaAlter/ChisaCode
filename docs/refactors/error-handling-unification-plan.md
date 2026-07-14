@@ -55,11 +55,19 @@
 - 兜底：错误为空、`null` 或不透明对象时使用现有中英文 `load/save/install/uninstall/deleteFailed` 文案。
 - 保持：卸载技能和删除 MCP 服务器的阻塞式确认逻辑不变。
 
+### Slice B3：模型与 Provider 设置错误边界
+
+- 状态：本批次完成。
+- 操作 Toast：自定义模型保存/删除、Provider 开关与安装/更新/重装、自定义 Provider 列表测试/删除、合成模型保存/删除。
+- Inline：自定义 Provider 的模型校验、模型测试、表单保存，以及 MoA 测试结果错误。
+- 后台刷新：保存成功后的 Provider snapshot 刷新失败继续只记 warning，避免把已成功的保存误报为失败。
+- 产品修复：Provider tooling action 的 RPC rejection 与 `success: false` 命令失败均不再静默吞错；自定义 Provider 列表测试失败不再产生未处理 rejection。
+- 架构：纯错误 authority 支持注入 presenter，Toast、表单错误区和测试结果区共用日志与消息归一化。
+
 ## 后续切片
 
-1. **Slice B3：模型与 Provider 设置**：区分表单 inline 校验、后台刷新失败和操作 Toast。
-2. **Slice C：生产路径分层**：只处理用户操作失败或连接中断；内部诊断日志继续保留。
-3. **Slice D：查询错误去重**：将 desktop 已有的同一 Error 实例去重能力推广到需要自动查询提示的跨平台页面。
+1. **Slice C：生产路径分层**：只处理用户操作失败或连接中断；内部诊断日志继续保留。
+2. **Slice D：查询错误去重**：将 desktop 已有的同一 Error 实例去重能力推广到需要自动查询提示的跨平台页面。
 
 ## 不做项
 

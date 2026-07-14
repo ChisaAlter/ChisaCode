@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ToastApi } from "@/components/toast-host";
-import { reportUserVisibleError } from "./user-visible-error";
+import { reportPresentedError, reportUserVisibleError } from "./user-visible-error";
 
 function createToast(): ToastApi {
   return {
@@ -59,6 +59,21 @@ describe("reportUserVisibleError", () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith("Unable to load settings");
+  });
+
+  it("presents normalized errors through an inline presenter", () => {
+    const present = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    reportPresentedError({
+      logLabel: "[Settings] Failed to validate",
+      error: {},
+      fallbackMessage: "Validation failed",
+      present,
+    });
+
+    expect(console.error).toHaveBeenCalledOnce();
+    expect(present).toHaveBeenCalledWith("Validation failed");
   });
 
   it("normalizes the original error when no display message is provided", () => {

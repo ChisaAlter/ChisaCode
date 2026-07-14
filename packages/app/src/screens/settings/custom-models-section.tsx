@@ -17,7 +17,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { useToast } from "@/contexts/toast-context";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import {
   buildDeleteCustomModelPatch,
   buildSaveCustomModelPatch,
@@ -306,7 +306,7 @@ function CustomModelEditorSheet({
 export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const { entries, refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingModelState | null>(null);
@@ -348,10 +348,14 @@ export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
         }
         setEditorState(null);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: "[CustomModels] Failed to save custom model",
+          fallbackMessage: t("customModels.saveFailed"),
+        });
       }
     },
-    [config?.providers, patchConfig, refresh, toast],
+    [config?.providers, patchConfig, refresh, reportError, t],
   );
 
   const handleDelete = useCallback(
@@ -381,13 +385,17 @@ export function CustomModelsSection({ serverId }: CustomModelsSectionProps) {
             await refresh(changedProviderIds as AgentProvider[]);
           }
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : String(error));
+          reportError({
+            error,
+            logLabel: `[CustomModels] Failed to delete custom model ${model.id}`,
+            fallbackMessage: t("customModels.deleteFailed"),
+          });
         } finally {
           setDeletingModelId((current) => (current === model.id ? null : current));
         }
       })();
     },
-    [config?.providers, patchConfig, refresh, toast],
+    [config?.providers, patchConfig, refresh, reportError, t],
   );
 
   const headerActions = useMemo(

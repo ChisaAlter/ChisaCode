@@ -420,6 +420,44 @@ describe("CustomModelProvidersSection", () => {
     expect(container.querySelector('[data-testid="custom-provider-editor-sheet"]')).toBeNull();
   });
 
+  it("keeps save failures visible inside the provider editor", async () => {
+    const error = new Error("Gateway rejected config");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    patchConfigMock.mockRejectedValueOnce(error);
+
+    act(() => {
+      root.render(<CustomModelProvidersSection serverId="server-1" />);
+    });
+
+    const editProvider = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Edit ZAI"]',
+    );
+    expect(editProvider).not.toBeNull();
+
+    act(() => {
+      editProvider!.click();
+    });
+
+    const saveButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Save",
+    );
+    expect(saveButton).not.toBeUndefined();
+
+    await act(async () => {
+      saveButton!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="custom-provider-editor-sheet"]')).not.toBeNull();
+    expect(container.textContent).toContain("Gateway rejected config");
+    expect(consoleError).toHaveBeenCalledWith(
+      "[CustomModelProviders] Failed to save custom provider",
+      error,
+    );
+    consoleError.mockRestore();
+  });
+
   it("shows visible feedback when testing a saved model row", async () => {
     let resolveRefresh: (() => void) | null = null;
     refreshMock.mockImplementationOnce(

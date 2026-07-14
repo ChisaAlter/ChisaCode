@@ -34,7 +34,8 @@ import {
 } from "@/screens/settings/synthetic-models";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { useToast } from "@/contexts/toast-context";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
+import { reportPresentedError } from "@/utils/user-visible-error";
 
 interface SyntheticModelsSectionProps {
   serverId: string;
@@ -1031,15 +1032,22 @@ function MoaTesterSheet({
       })
       .then(setResultPayload)
       .catch((error: unknown) => {
-        setResultPayload({
-          requestId: "",
-          gatewayId: values.gatewayId,
-          result: null,
-          error: error instanceof Error ? error.message : String(error),
+        reportPresentedError({
+          error,
+          logLabel: "[SyntheticModels] Failed to run MoA test",
+          fallbackMessage: t("syntheticModels.testFailed"),
+          present: (message) => {
+            setResultPayload({
+              requestId: "",
+              gatewayId: values.gatewayId,
+              result: null,
+              error: message,
+            });
+          },
         });
       })
       .finally(() => setRunning(false));
-  }, [client, running, values]);
+  }, [client, running, t, values]);
   const canRun = canRunMoaTest(values, gateways, running, client !== null);
 
   return (
@@ -1157,7 +1165,7 @@ function GatewayModelRadioRow({
 export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const { refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingSyntheticModelState | null>(null);
@@ -1221,10 +1229,14 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           console.warn("[SyntheticModels] Failed to refresh providers after save", error);
         });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: "[SyntheticModels] Failed to save synthetic model",
+          fallbackMessage: t("syntheticModels.saveFailed"),
+        });
       }
     },
-    [config?.modelGateways, patchConfig, refreshGatewayProviders, toast, t],
+    [config?.modelGateways, patchConfig, refreshGatewayProviders, reportError, t],
   );
   const handleDelete = useCallback(
     (model: SyntheticModelEntry) => {
@@ -1251,10 +1263,14 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           console.warn("[SyntheticModels] Failed to refresh providers after delete", error);
         });
       })().catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: `[SyntheticModels] Failed to delete synthetic model ${model.id}`,
+          fallbackMessage: t("syntheticModels.deleteFailed"),
+        });
       });
     },
-    [config?.modelGateways, patchConfig, refreshGatewayProviders, toast, t],
+    [config?.modelGateways, patchConfig, refreshGatewayProviders, reportError, t],
   );
   const headerActions = useMemo(
     () => (

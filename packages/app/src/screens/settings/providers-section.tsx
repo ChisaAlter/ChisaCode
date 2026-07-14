@@ -17,7 +17,7 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/screens/settings/settings-section";
-import { useToast } from "@/contexts/toast-context";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { ChevronRight, Download, RefreshCw } from "lucide-react-native";
@@ -88,6 +88,7 @@ function ProviderRow({
   onToggleEnabled,
 }: ProviderRowProps) {
   const { t } = useTranslation();
+  const reportError = useUserVisibleErrorReporter();
   const isCompact = useIsCompactFormFactor();
   const client = useHostRuntimeClient(serverId);
   const [toolingAction, setToolingAction] = useState<"install" | "update" | "reinstall" | null>(
@@ -125,17 +126,27 @@ function ProviderRow({
       setToolingAction(action);
       void client
         .runProviderToolingAction(def.id, action)
-        .then(() => {
-          return;
+        .then((result) => {
+          if (result.success) return;
+          const message = result.stderr.trim() || result.stdout.trim();
+          throw new Error(
+            message ||
+              (action === "update" ? t("providers.updateFailed") : t("providers.installFailed")),
+          );
         })
-        .catch(() => {
-          return;
+        .catch((error) => {
+          reportError({
+            error,
+            logLabel: `[ProvidersSettings] Failed to ${action} provider ${def.id}`,
+            fallbackMessage:
+              action === "update" ? t("providers.updateFailed") : t("providers.installFailed"),
+          });
         })
         .finally(() => {
           setToolingAction(null);
         });
     },
-    [client, def.id, toolingAction],
+    [client, def.id, reportError, t, toolingAction],
   );
   const canInstall = entry.installAvailable === true || entry.status === "unavailable";
   const canUpdate = entry.updateAvailable === true;
@@ -423,7 +434,7 @@ export interface ProvidersSectionProps {
 
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
-  const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { entries, isLoading } = useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
@@ -445,12 +456,16 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: `[ProvidersSettings] Failed to update provider ${providerId}`,
+          fallbackMessage: t("providers.updateFailed"),
+        });
       } finally {
         setPendingProviderId((current) => (current === providerId ? null : current));
       }
     },
-    [patchConfig, toast],
+    [patchConfig, reportError, t],
   );
 
   return (

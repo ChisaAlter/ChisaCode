@@ -13,6 +13,7 @@ const {
   configState,
   patchConfigMock,
   openProviderSettingsMock,
+  reportErrorMock,
   compactState,
 } = vi.hoisted(() => ({
   theme: {
@@ -48,6 +49,7 @@ const {
   },
   patchConfigMock: vi.fn(async () => undefined),
   openProviderSettingsMock: vi.fn(),
+  reportErrorMock: vi.fn(),
   compactState: {
     value: false,
   },
@@ -142,6 +144,8 @@ vi.mock("react-i18next", () => ({
       if (key === "providers.modelCount") return `${params?.count} models`;
       if (key === "providers.install") return "Install";
       if (key === "providers.update") return "Update";
+      if (key === "providers.installFailed") return "Install failed";
+      if (key === "providers.updateFailed") return "Unable to update provider";
       if (key === "settings.integrations.reinstall") return "Reinstall";
       if (key === "settings.integrations.reinstallAgentTool")
         return `Reinstall ${params?.provider}`;
@@ -219,6 +223,10 @@ vi.mock("@/hooks/use-providers-snapshot", () => ({
     refresh: vi.fn(async () => {}),
     refetchIfStale: vi.fn(),
   }),
+}));
+
+vi.mock("@/hooks/use-user-visible-error", () => ({
+  useUserVisibleErrorReporter: () => reportErrorMock,
 }));
 
 vi.mock("@/hooks/use-daemon-config", () => ({
@@ -321,6 +329,7 @@ describe("ProvidersSection", () => {
     patchConfigMock.mockReset();
     patchConfigMock.mockResolvedValue(undefined);
     openProviderSettingsMock.mockReset();
+    reportErrorMock.mockReset();
     compactState.value = false;
   });
 
@@ -453,6 +462,38 @@ describe("ProvidersSection", () => {
     });
 
     expect(openProviderSettingsMock).toHaveBeenCalledWith("claude", "reinstall");
+  });
+
+  it("reports provider tooling failures instead of swallowing them", async () => {
+    snapshotState.entries = [currentClaudeEntry];
+    configState.config = makeConfig();
+    openProviderSettingsMock.mockResolvedValue({
+      provider: "claude",
+      action: "reinstall",
+      exitCode: 1,
+      stdout: "",
+      stderr: "npm install failed",
+      success: false,
+      requestId: "tooling-test",
+    });
+
+    render();
+
+    const reinstallButton = container?.querySelector<HTMLElement>(
+      '[aria-label="Reinstall Claude"]',
+    );
+    expect(reinstallButton).not.toBeNull();
+
+    await act(async () => {
+      reinstallButton?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(reportErrorMock).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: "npm install failed" }),
+      logLabel: "[ProvidersSettings] Failed to reinstall provider claude",
+      fallbackMessage: "Install failed",
+    });
   });
 
   it("uses a wrapped compact layout for provider maintenance controls", () => {

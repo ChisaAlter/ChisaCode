@@ -17,7 +17,8 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { useToast } from "@/contexts/toast-context";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
+import { reportPresentedError } from "@/utils/user-visible-error";
 import {
   buildDisableCustomModelProviderPatch,
   buildModelGatewayProviderIdList,
@@ -652,7 +653,6 @@ function ProviderEditorSheet({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const toast = useToast();
   const [values, setValues] = useState<ProviderEditorValues>(createEmptyEditorValues);
   const [modelEditor, setModelEditor] = useState<ModelEditorState | null>(null);
   const [modelTestMessage, setModelTestMessage] = useState<string | null>(null);
@@ -767,9 +767,10 @@ function ProviderEditorSheet({
     }
     const model = normalizeModelDraft(modelEditor.draft);
     if (!model) {
-      toast.error(t("customModelProviders.modelRequired"));
+      setFormError(t("customModelProviders.modelRequired"));
       return;
     }
+    setFormError(null);
     setValues((current) => {
       const models =
         modelEditor.index === null
@@ -778,7 +779,7 @@ function ProviderEditorSheet({
       return { ...current, models };
     });
     setModelEditor(null);
-  }, [modelEditor, toast, t]);
+  }, [modelEditor, t]);
   const handleTestModel = useCallback(
     (model: CustomModelProviderModelInput) => {
       const gatewayId = values.id.trim();
@@ -795,7 +796,12 @@ function ProviderEditorSheet({
           return undefined;
         })
         .catch((error) => {
-          setModelTestMessage(error instanceof Error ? error.message : String(error));
+          reportPresentedError({
+            error,
+            logLabel: `[CustomModelProviders] Failed to test model ${model.id}`,
+            fallbackMessage: t("customModelProviders.testFailedShort"),
+            present: setModelTestMessage,
+          });
         })
         .finally(() => {
           setTestingModelId((current) => (current === model.id ? null : current));
@@ -809,10 +815,15 @@ function ProviderEditorSheet({
     setSaving(true);
     void onSave(values, previousId)
       .catch((error) => {
-        setFormError(error instanceof Error ? error.message : String(error));
+        reportPresentedError({
+          error,
+          logLabel: "[CustomModelProviders] Failed to save custom provider",
+          fallbackMessage: t("customModelProviders.saveFailed"),
+          present: setFormError,
+        });
       })
       .finally(() => setSaving(false));
-  }, [onSave, previousId, saving, values]);
+  }, [onSave, previousId, saving, t, values]);
   const header = useMemo<SheetHeader>(
     () => ({
       title:
@@ -933,7 +944,7 @@ function ProviderEditorSheet({
 export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const { entries, refresh } = useProvidersSnapshot(serverId);
   const [editorState, setEditorState] = useState<EditingProviderState | null>(null);
@@ -997,11 +1008,19 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
   const handleTest = useCallback(
     (provider: CollectedCustomModelProvider) => {
       setTestingId(provider.id);
-      void refresh(provider.providerIds as AgentProvider[]).finally(() => {
-        setTestingId((current) => (current === provider.id ? null : current));
-      });
+      void refresh(provider.providerIds as AgentProvider[])
+        .catch((error) => {
+          reportError({
+            error,
+            logLabel: `[CustomModelProviders] Failed to test provider ${provider.id}`,
+            fallbackMessage: t("customModelProviders.testFailedShort"),
+          });
+        })
+        .finally(() => {
+          setTestingId((current) => (current === provider.id ? null : current));
+        });
     },
-    [refresh],
+    [refresh, reportError, t],
   );
   const handleDelete = useCallback(
     (provider: CollectedCustomModelProvider) => {
@@ -1015,13 +1034,20 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
         });
         if (!confirmed) return;
         const patch = buildDisableCustomModelProviderPatch(provider.id);
-        await patchConfig(patch);
+        const updatedConfig = await patchConfig(patch);
+        if (!updatedConfig) {
+          throw new Error(t("customModelProviders.deleteFailed"));
+        }
         await refresh(buildModelGatewayProviderIdList(provider.id) as AgentProvider[]);
       })().catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: `[CustomModelProviders] Failed to delete provider ${provider.id}`,
+          fallbackMessage: t("customModelProviders.deleteFailed"),
+        });
       });
     },
-    [patchConfig, refresh, toast, t],
+    [patchConfig, refresh, reportError, t],
   );
   const headerActions = useMemo(
     () => (
