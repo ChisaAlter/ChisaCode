@@ -1,4 +1,4 @@
-import { View, Pressable, Text, type GestureResponderEvent } from "react-native";
+import { View, Text } from "react-native";
 import {
   useState,
   useEffect,
@@ -6,14 +6,12 @@ import {
   useCallback,
   useMemo,
   memo,
-  type MutableRefObject,
   type ReactElement,
   type ReactNode,
 } from "react";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
-import { Github, ListTodo, Paperclip, Target } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
@@ -24,9 +22,9 @@ import {
 } from "@/composer/agent-controls";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { useSessionStore } from "@/stores/session-store";
-import { MessageInput, type MessageInputRef, type AttachmentMenuItem } from "./input/input";
+import { MessageInput, type MessageInputRef } from "./input/input";
 import type { ImageAttachment, MessagePayload } from "./types";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { encodeImages } from "@/utils/encode-images";
 import { focusWithRetries } from "@/utils/web-focus";
@@ -66,7 +64,6 @@ import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
-import type { AgentFeature } from "@chisacode/protocol/agent-types";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -78,8 +75,8 @@ import { AttachmentLightbox } from "@/components/attachment-lightbox";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
-import { buildToggleFeatureMenuItems } from "@/composer/agent-controls/utils";
 import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
+import { useComposerAttachmentMenu } from "./attachment-menu";
 import { useComposerGithubPicker } from "./github/picker";
 import { useComposerRuntimeControls } from "./runtime-controls";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
@@ -229,116 +226,6 @@ function resolveMessageInputPassthroughAction(
     default:
       return null;
   }
-}
-
-function FeatureMenuSwitch({
-  value,
-  featureId,
-  label,
-  disabled,
-  onToggleFeature,
-}: {
-  value: boolean;
-  featureId: string;
-  label: string;
-  disabled: boolean;
-  onToggleFeature: (featureId: string, value: boolean) => void;
-}) {
-  const { theme } = useUnistyles();
-  const handlePress = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      if (disabled) return;
-      onToggleFeature(featureId, !value);
-    },
-    [disabled, featureId, onToggleFeature, value],
-  );
-  const trackStyle = useMemo(
-    () => [
-      styles.featureMenuSwitchTrack,
-      {
-        backgroundColor: value ? theme.colors.accent : theme.colors.surface3,
-        opacity: disabled ? theme.opacity[50] : 1,
-      },
-    ],
-    [disabled, theme.colors.accent, theme.colors.surface3, theme.opacity, value],
-  );
-  const thumbStyle = useMemo(
-    () => [styles.featureMenuSwitchThumb, value ? styles.featureMenuSwitchThumbOn : null],
-    [value],
-  );
-  const accessibilityState = useMemo(() => ({ checked: value, disabled }), [disabled, value]);
-
-  return (
-    <Pressable
-      onPress={handlePress}
-      disabled={disabled}
-      hitSlop={8}
-      accessibilityRole="switch"
-      accessibilityState={accessibilityState}
-      accessibilityLabel={label}
-      testID={`composer-feature-switch-${featureId}`}
-    >
-      <View style={trackStyle}>
-        <View style={thumbStyle} />
-      </View>
-    </Pressable>
-  );
-}
-
-function useComposerFeatureMenu(input: {
-  agentControls: DraftAgentControlsProps | undefined;
-  agentFeatures: AgentFeature[];
-  agentProvider: string | null;
-  agentId: string;
-  client: ReturnType<typeof useHostRuntimeClient>;
-  focusInput: () => void;
-  setUserInput: (text: string) => void;
-  toastErrorRef: MutableRefObject<(message: string) => void>;
-}) {
-  const {
-    agentControls,
-    agentFeatures,
-    agentProvider,
-    agentId,
-    client,
-    focusInput,
-    setUserInput,
-    toastErrorRef,
-  } = input;
-  const activeProvider = agentControls?.selectedProvider ?? agentProvider;
-  const featureMenuDescriptors = useMemo(
-    () => buildToggleFeatureMenuItems(agentControls?.features ?? agentFeatures),
-    [agentControls?.features, agentFeatures],
-  );
-  const handleSetFeatureFromMenu = useCallback(
-    (featureId: string, nextValue: boolean) => {
-      if (agentControls?.onSetFeature) {
-        agentControls.onSetFeature(featureId, nextValue);
-        return;
-      }
-      if (!client) {
-        return;
-      }
-      void client.setAgentFeature(agentId, featureId, nextValue).catch((error) => {
-        console.warn("[Composer] setAgentFeature failed", error);
-        toastErrorRef.current(error instanceof Error ? error.message : String(error));
-      });
-    },
-    [agentControls, agentId, client, toastErrorRef],
-  );
-
-  const handleOpenGoalCommand = useCallback(() => {
-    setUserInput("/goal ");
-    focusInput();
-  }, [focusInput, setUserInput]);
-
-  return {
-    activeProvider,
-    featureMenuDescriptors,
-    handleOpenGoalCommand,
-    handleSetFeatureFromMenu,
-  };
 }
 
 interface ComposerProps {
@@ -778,12 +665,7 @@ export function Composer({
     addImages(newImages);
   }, [addImages, pickImages]);
 
-  const {
-    activeProvider,
-    featureMenuDescriptors,
-    handleOpenGoalCommand,
-    handleSetFeatureFromMenu,
-  } = useComposerFeatureMenu({
+  const attachmentMenuItems = useComposerAttachmentMenu({
     agentControls,
     agentFeatures: agentState.features,
     agentProvider: agentState.provider,
@@ -792,6 +674,9 @@ export function Composer({
     focusInput,
     setUserInput,
     toastErrorRef,
+    isComposerLocked,
+    onPickImage: handlePickImage,
+    openGithubPicker,
   });
 
   const handleRemoveAttachment = useCallback(
@@ -983,65 +868,6 @@ export function Composer({
     contextWindowUsedTokens: agentState.contextWindowUsedTokens,
     totalCostUsd: agentState.totalCostUsd,
   });
-  const attachmentMenuItems = useMemo<AttachmentMenuItem[]>(() => {
-    const items: AttachmentMenuItem[] = [
-      {
-        id: "image",
-        label: t("composer.addPhotosAndFiles"),
-        icon: <ThemedPaperclip size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
-        onSelect: () => {
-          void handlePickImage();
-        },
-      },
-      {
-        id: "github",
-        label: t("composer.addIssueOrPr"),
-        icon: <ThemedGithub size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
-        onSelect: openGithubPicker,
-      },
-    ];
-
-    for (const feature of featureMenuDescriptors) {
-      items.push({
-        id: `feature-${feature.id}`,
-        label: feature.label,
-        icon: <ThemedListTodo size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
-        trailing: (
-          <FeatureMenuSwitch
-            value={feature.selected}
-            featureId={feature.id}
-            label={feature.label}
-            disabled={isComposerLocked}
-            onToggleFeature={handleSetFeatureFromMenu}
-          />
-        ),
-        disabled: isComposerLocked,
-        closeOnSelect: false,
-        onSelect: () => handleSetFeatureFromMenu(feature.id, !feature.selected),
-      });
-    }
-
-    if (activeProvider === "codex") {
-      items.push({
-        id: "goal",
-        label: t("composer.pursueGoal"),
-        icon: <ThemedTarget size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
-        onSelect: handleOpenGoalCommand,
-      });
-    }
-
-    return items;
-  }, [
-    activeProvider,
-    featureMenuDescriptors,
-    handleOpenGoalCommand,
-    handlePickImage,
-    handleSetFeatureFromMenu,
-    isComposerLocked,
-    openGithubPicker,
-    t,
-  ]);
-
   const leftContent = useMemo(
     () => renderLeftContent({ agentControls, agentId, serverId, focusInput }),
     [agentId, focusInput, serverId, agentControls],
@@ -1275,36 +1101,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "100%",
     gap: theme.spacing[3],
   },
-  featureMenuSwitchTrack: {
-    width: 34,
-    height: 20,
-    borderRadius: 10,
-    padding: 2,
-    justifyContent: "center",
-  },
-  featureMenuSwitchThumb: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: theme.colors.palette.white,
-    shadowColor: "rgba(0, 0, 0, 0.25)",
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 2,
-    shadowOpacity: 1,
-    elevation: 2,
-  },
-  featureMenuSwitchThumbOn: {
-    transform: [{ translateX: 14 }],
-  },
   sendErrorText: {
     color: theme.colors.palette.red[500],
     fontSize: theme.fontSize.sm,
   },
 })) as unknown as Record<string, object>;
-
-const ThemedPaperclip = withUnistyles(Paperclip);
-const ThemedGithub = withUnistyles(Github);
-const ThemedListTodo = withUnistyles(ListTodo);
-const ThemedTarget = withUnistyles(Target);
-
-const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
