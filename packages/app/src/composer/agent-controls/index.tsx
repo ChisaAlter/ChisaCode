@@ -23,21 +23,17 @@ import { useShallow } from "zustand/shallow";
 import { Brain, ChevronDown, ListTodo, Settings2, ShieldCheck, Zap } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
-import {
-  buildProviderSelectorProviders,
-  buildSelectableProviderSelectorProviders,
-  filterProviderSelectorProvidersByRuntimeProvider,
-  type ProviderModelSelectionValue,
-  type ProviderSelectorProvider,
+import type {
+  ProviderModelSelectionValue,
+  ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
 import { resolveProviderSnapshotLoadingState } from "@/provider-selection/provider-snapshot-loading";
-import {
-  resolveDraftModelSelectorLoading,
-  resolveRunningAgentModelLoading,
-} from "@/composer/agent-controls/model-loading";
+import { resolveDraftModelSelectorLoading } from "@/composer/agent-controls/model-loading";
+import { ProviderCapabilityHints } from "@/composer/agent-controls/provider-capability-hints";
+import { useRunningAgentModelControls } from "@/composer/agent-controls/running-agent-model-controls";
 import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import { resolveProviderDefinition } from "@/utils/provider-definitions";
+
 import {
   buildFavoriteModelKey,
   mergeProviderPreferences,
@@ -66,23 +62,15 @@ import {
   getFeatureTooltip,
   getAgentControlHint,
   formatThinkingOptionLabel,
-  resolveAgentModelSelection,
 } from "@/composer/agent-controls/utils";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
-import {
-  buildProviderCapabilityHintSummaryLabel,
-  getProviderCapabilityHints,
-  summarizeProviderCapabilityHints,
-} from "@/utils/provider-capability-hints";
-import type { ProviderCapabilityHint } from "@/utils/provider-capability-hints";
 
 interface AgentControlOption {
   id: string;
   label: string;
 }
-
 type AgentControlSelector = "provider" | "mode" | "model" | "thinking" | `feature-${string}`;
 
 interface ControlledAgentControlsProps {
@@ -272,90 +260,6 @@ function buildFallbackModelSelectorProviders(
   ];
 }
 
-function ProviderCapabilityHints({ provider }: { provider: string | null }) {
-  const { t } = useTranslation();
-  const { theme } = useUnistyles();
-  const hints = useMemo(() => getProviderCapabilityHints(provider), [provider]);
-  const summary = useMemo(() => summarizeProviderCapabilityHints(hints), [hints]);
-  const iconColor =
-    summary.unsupportedCount === 0 ? theme.colors.statusSuccess : theme.colors.foregroundMuted;
-  const badgeStyle = useMemo(
-    () => [
-      styles.capabilityHintBadge,
-      summary.unsupportedCount === 0 && styles.capabilityHintBadgeComplete,
-    ],
-    [summary.unsupportedCount],
-  );
-  const accessibilityLabel = useMemo(
-    () =>
-      buildProviderCapabilityHintSummaryLabel(hints, {
-        title: t("providerCapabilities.title"),
-        supportedLabel: t("providerCapabilities.supported"),
-        limitedLabel: t("providerCapabilities.limited"),
-        formatCount: ({ supported, total }) =>
-          t("providerCapabilities.shortLabelWithCount", { supported, total }),
-        labelForHint: (id) => t(`providerCapabilities.items.${id}`),
-      }),
-    [hints, t],
-  );
-
-  if (!provider) {
-    return null;
-  }
-
-  return (
-    <Tooltip delayDuration={150} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger asChild>
-        <View
-          accessible
-          accessibilityLabel={accessibilityLabel}
-          accessibilityRole="text"
-          style={badgeStyle}
-          testID="provider-capability-hints"
-        >
-          <ShieldCheck size={14} color={iconColor} />
-          <Text style={styles.capabilityHintBadgeText} numberOfLines={1} ellipsizeMode="tail">
-            {t("providerCapabilities.shortLabelWithCount", {
-              supported: summary.supportedCount,
-              total: summary.totalCount,
-            })}
-          </Text>
-        </View>
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
-        <View style={styles.capabilityHintTooltip}>
-          <Text style={styles.tooltipText}>{t("providerCapabilities.title")}</Text>
-          <View style={styles.capabilityHintGrid}>
-            {hints.map((hint) => (
-              <ProviderCapabilityHintRow key={hint.id} hint={hint} />
-            ))}
-          </View>
-        </View>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function ProviderCapabilityHintRow({ hint }: { hint: ProviderCapabilityHint }) {
-  const { t } = useTranslation();
-  const dotStyle = useMemo(
-    () => [
-      styles.capabilityHintDot,
-      hint.supported ? styles.capabilityHintDotSupported : styles.capabilityHintDotMuted,
-    ],
-    [hint.supported],
-  );
-  return (
-    <View style={styles.capabilityHintRow}>
-      <View style={dotStyle} />
-      <Text style={styles.capabilityHintText}>{t(`providerCapabilities.items.${hint.id}`)}</Text>
-      <Text style={styles.capabilityHintStatusText}>
-        {hint.supported ? t("providerCapabilities.supported") : t("providerCapabilities.limited")}
-      </Text>
-    </View>
-  );
-}
-
 function makeBadgePressableStyle(
   baseStyle: StyleProp<ViewStyle>,
   disabledStyle: StyleProp<ViewStyle>,
@@ -434,7 +338,6 @@ type AgentControlsSlice = {
   thinkingOptionId: string | null | undefined;
   lastUsage: unknown;
 } | null;
-
 function selectAgentControlsSlice(
   state: ReturnType<typeof useSessionStore.getState>,
   serverId: string,
@@ -453,184 +356,6 @@ function selectAgentControlsSlice(
     features: currentAgent.features,
     thinkingOptionId: currentAgent.thinkingOptionId,
     lastUsage: currentAgent.lastUsage,
-  };
-}
-
-function resolveSnapshotSelectedEntry(
-  snapshotEntries: ReturnType<typeof useProvidersSnapshot>["entries"],
-  agentProvider: string | undefined,
-) {
-  if (!snapshotEntries || !agentProvider) {
-    return null;
-  }
-  return snapshotEntries.find((e) => e.provider === agentProvider) ?? null;
-}
-
-function buildAgentProviderDefinitions(
-  agentProvider: string | undefined,
-  snapshotEntries: ReturnType<typeof useProvidersSnapshot>["entries"],
-): AgentProviderDefinition[] {
-  const definition = agentProvider
-    ? resolveProviderDefinition(agentProvider, snapshotEntries)
-    : undefined;
-  return definition ? [definition] : [];
-}
-
-function buildAgentProviderModels(
-  agentProvider: string | undefined,
-  models: AgentModelDefinition[] | null,
-): Map<string, AgentModelDefinition[]> {
-  const map = new Map<string, AgentModelDefinition[]>();
-  if (agentProvider && models) {
-    map.set(agentProvider, models);
-  }
-  return map;
-}
-
-function resolveAgentRuntimeProvider(agent: AgentControlsSlice): string | null {
-  return agent?.runtimeProvider ?? agent?.provider ?? null;
-}
-
-function resolveProviderModels(input: {
-  runtimeEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
-  selectedEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
-}): AgentModelDefinition[] | null {
-  return input.runtimeEntry?.models ?? input.selectedEntry?.models ?? null;
-}
-
-function buildRunningAgentModelSelectorProviders(input: {
-  agentProvider: string | undefined;
-  agentRuntimeProvider: string | null;
-  snapshotEntries: ReturnType<typeof useProvidersSnapshot>["entries"];
-  selectedEntry: ReturnType<typeof resolveSnapshotSelectedEntry>;
-  providerDefinitions: AgentProviderDefinition[];
-  modelsByProvider: Map<string, AgentModelDefinition[]>;
-  copy: {
-    defaultModelLabel: string;
-    unavailable: string;
-    unknownError: string;
-  };
-}): ProviderSelectorProvider[] {
-  const filterToRuntime = (providers: ProviderSelectorProvider[]) =>
-    filterProviderSelectorProvidersByRuntimeProvider(providers, input.agentRuntimeProvider);
-  const groupedProviders = filterToRuntime(
-    buildSelectableProviderSelectorProviders(input.snapshotEntries, {
-      defaultModelLabel: input.copy.defaultModelLabel,
-      unavailable: input.copy.unavailable,
-      unknownError: input.copy.unknownError,
-    }).filter((provider) => provider.id === input.agentProvider),
-  );
-  if (groupedProviders.length > 0) {
-    return groupedProviders;
-  }
-  if (input.selectedEntry) {
-    return filterToRuntime(
-      buildSelectableProviderSelectorProviders([input.selectedEntry], {
-        defaultModelLabel: input.copy.defaultModelLabel,
-        unavailable: input.copy.unavailable,
-        unknownError: input.copy.unknownError,
-      }),
-    );
-  }
-  return filterToRuntime(
-    buildProviderSelectorProviders({
-      providerDefinitions: input.providerDefinitions,
-      modelsByProvider: input.modelsByProvider,
-      copy: {
-        defaultModelLabel: input.copy.defaultModelLabel,
-      },
-    }),
-  );
-}
-
-function useRunningAgentModelControls(input: {
-  agent: AgentControlsSlice;
-  snapshotEntries: ReturnType<typeof useProvidersSnapshot>["entries"];
-  defaultModelLabel: string;
-  unavailable: string;
-  unknownError: string;
-}) {
-  const { agent, snapshotEntries } = input;
-  const agentProvider = agent?.provider;
-  const agentRuntimeProvider = resolveAgentRuntimeProvider(agent);
-  const snapshotSelectedEntry = useMemo(
-    () => resolveSnapshotSelectedEntry(snapshotEntries, agentProvider),
-    [snapshotEntries, agentProvider],
-  );
-  const snapshotRuntimeEntry = useMemo(
-    () => resolveSnapshotSelectedEntry(snapshotEntries, agentRuntimeProvider ?? undefined),
-    [snapshotEntries, agentRuntimeProvider],
-  );
-  const models = resolveProviderModels({
-    runtimeEntry: snapshotRuntimeEntry,
-    selectedEntry: snapshotSelectedEntry,
-  });
-  const selectedProviderIsLoading = resolveRunningAgentModelLoading({
-    configuredModelId: agent?.model,
-    runtimeModelId: agent?.runtimeModelId,
-    runtimeProvider: agentRuntimeProvider,
-    runtimeEntry: snapshotRuntimeEntry,
-    selectedEntry: snapshotSelectedEntry,
-  });
-  const agentProviderDefinitions = useMemo(
-    () => buildAgentProviderDefinitions(agentProvider, snapshotEntries),
-    [agentProvider, snapshotEntries],
-  );
-  const agentProviderModels = useMemo(
-    () => buildAgentProviderModels(agentProvider, models),
-    [agentProvider, models],
-  );
-  const agentModelSelectorProviders = useMemo(
-    () =>
-      buildRunningAgentModelSelectorProviders({
-        agentProvider,
-        agentRuntimeProvider,
-        snapshotEntries,
-        selectedEntry: snapshotSelectedEntry,
-        providerDefinitions: agentProviderDefinitions,
-        modelsByProvider: agentProviderModels,
-        copy: {
-          defaultModelLabel: input.defaultModelLabel,
-          unavailable: input.unavailable,
-          unknownError: input.unknownError,
-        },
-      }),
-    [
-      agentProvider,
-      agentRuntimeProvider,
-      agentProviderDefinitions,
-      agentProviderModels,
-      input.defaultModelLabel,
-      input.unavailable,
-      input.unknownError,
-      snapshotEntries,
-      snapshotSelectedEntry,
-    ],
-  );
-  const modelSelection = resolveAgentModelSelection({
-    models,
-    runtimeModelId: agent?.runtimeModelId,
-    configuredModelId: agent?.model,
-    explicitThinkingOptionId: agent?.thinkingOptionId,
-  });
-  const modelOptions = useMemo<AgentControlOption[]>(() => {
-    return (models ?? []).map((model) => ({ id: model.id, label: model.label }));
-  }, [models]);
-  const thinkingOptions = useMemo<AgentControlOption[]>(() => {
-    return (modelSelection.thinkingOptions ?? []).map((option) => ({
-      id: option.id,
-      label: formatThinkingOptionLabel(option),
-    }));
-  }, [modelSelection.thinkingOptions]);
-  return {
-    agentProvider,
-    agentRuntimeProvider,
-    agentModelSelectorProviders,
-    models,
-    modelOptions,
-    modelSelection,
-    selectedProviderIsLoading,
-    thinkingOptions,
   };
 }
 
@@ -2086,65 +1811,6 @@ const styles = StyleSheet.create((theme) => ({
   modeBadgeText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  capabilityHintBadge: {
-    height: 28,
-    minWidth: 0,
-    flexShrink: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-  },
-  capabilityHintBadgeComplete: {
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
-  },
-  capabilityHintBadgeText: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-  },
-  capabilityHintTooltip: {
-    gap: theme.spacing[2],
-    minWidth: 180,
-  },
-  capabilityHintGrid: {
-    gap: theme.spacing[1],
-  },
-  capabilityHintRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  capabilityHintDot: {
-    width: 7,
-    height: 7,
-    borderRadius: theme.borderRadius.full,
-  },
-  capabilityHintDotSupported: {
-    backgroundColor: theme.colors.statusSuccess,
-  },
-  capabilityHintDotMuted: {
-    backgroundColor: theme.colors.foregroundMuted,
-  },
-  capabilityHintText: {
-    flex: 1,
-    minWidth: 0,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-  },
-  capabilityHintStatusText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
   },
   tooltipText: {
