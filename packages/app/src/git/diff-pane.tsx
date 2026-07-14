@@ -26,26 +26,17 @@ import {
   type ViewStyle,
   type TextStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
-  AlignJustify,
   Archive,
   ArrowDownUp,
-  ChevronDown,
-  Columns2,
   Download,
   GitBranch,
   GitCommitHorizontal,
   GitMerge,
-  ListChevronsDownUp,
-  ListChevronsUpDown,
-  Pilcrow,
   RefreshCcw,
-  RotateCw,
   Upload,
-  WrapText,
 } from "lucide-react-native";
 import {
   useCheckoutDiffQuery,
@@ -58,7 +49,6 @@ import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
 import { DiffScroll } from "@/components/diff-scroll";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
-import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { Fonts } from "@/constants/theme";
 import { shouldAnchorHeaderBeforeCollapse } from "@/git/diff-scroll";
 import {
@@ -68,13 +58,7 @@ import {
   type SplitDiffDisplayLine,
   type SplitDiffRow,
 } from "@/utils/diff-layout";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { GitHubIcon } from "@/components/icons/github-icon";
 import { lineNumberGutterWidth } from "@/components/code-insets";
@@ -85,7 +69,6 @@ import { useGitActions } from "@/git/use-actions";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { useToast } from "@/contexts/toast-context";
 import { useSessionStore } from "@/stores/session-store";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
@@ -115,7 +98,8 @@ import {
   useInlineReviewController,
   type InlineReviewActions,
 } from "@/review";
-import { buildReviewSummaryModel, type ReviewSummaryModel } from "@/git/review-summary";
+import { buildReviewSummaryModel } from "@/git/review-summary";
+import { DiffPaneControls, ReviewSummaryBand } from "@/git/diff-pane-controls";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -1080,266 +1064,6 @@ interface GitDiffPaneProps {
   enabled?: boolean;
 }
 
-type PressableStyleFn = (
-  state: PressableStateCallbackType & { hovered?: boolean; open?: boolean },
-) => StyleProp<ViewStyle>;
-
-interface DiffLayoutToggleGroupProps {
-  layout: "unified" | "split";
-  unifiedToggleStyle: PressableStyleFn;
-  splitToggleStyle: PressableStyleFn;
-  onUnified: () => void;
-  onSplit: () => void;
-}
-
-function DiffLayoutToggleGroup({
-  layout,
-  unifiedToggleStyle,
-  splitToggleStyle,
-  onUnified,
-  onSplit,
-}: DiffLayoutToggleGroupProps) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  return (
-    <View style={styles.toggleButtonGroup}>
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("git.unifiedDiff")}
-            testID="changes-layout-unified"
-            onPress={onUnified}
-            style={unifiedToggleStyle}
-          >
-            <AlignJustify
-              size={14}
-              color={layout === "unified" ? theme.colors.foreground : theme.colors.foregroundMuted}
-            />
-          </Pressable>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <Text style={styles.tooltipText}>{t("git.unifiedDiff")}</Text>
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("git.splitDiff")}
-            testID="changes-layout-split"
-            onPress={onSplit}
-            style={splitToggleStyle}
-          >
-            <Columns2
-              size={14}
-              color={layout === "split" ? theme.colors.foreground : theme.colors.foregroundMuted}
-            />
-          </Pressable>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <Text style={styles.tooltipText}>{t("git.splitDiff")}</Text>
-        </TooltipContent>
-      </Tooltip>
-    </View>
-  );
-}
-
-interface DiffWhitespaceToggleProps {
-  hideWhitespace: boolean;
-  isMobile: boolean;
-  toggleStyle: PressableStyleFn;
-  onToggle: () => void;
-}
-
-function DiffWhitespaceToggle({
-  hideWhitespace,
-  isMobile,
-  toggleStyle,
-  onToggle,
-}: DiffWhitespaceToggleProps) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  return (
-    <Tooltip delayDuration={300}>
-      <TooltipTrigger asChild>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("git.hideWhitespace")}
-          testID="changes-toggle-whitespace"
-          style={toggleStyle}
-          onPress={onToggle}
-        >
-          <Pilcrow
-            size={isMobile ? 18 : 14}
-            color={hideWhitespace ? theme.colors.foreground : theme.colors.foregroundMuted}
-          />
-        </Pressable>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        <Text style={styles.tooltipText}>{t("git.hideWhitespace")}</Text>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-interface DiffFilesToolbarProps {
-  wrapLines: boolean;
-  allExpanded: boolean;
-  isMobile: boolean;
-  wrapLinesToggleStyle: PressableStyleFn;
-  expandAllToggleStyle: PressableStyleFn;
-  onToggleWrapLines: () => void;
-  onToggleExpandAll: () => void;
-}
-
-function DiffFilesToolbar({
-  wrapLines,
-  allExpanded,
-  isMobile,
-  wrapLinesToggleStyle,
-  expandAllToggleStyle,
-  onToggleWrapLines,
-  onToggleExpandAll,
-}: DiffFilesToolbarProps) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  return (
-    <View style={styles.diffStatusButtons}>
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <Pressable
-            style={wrapLinesToggleStyle}
-            onPress={onToggleWrapLines}
-            accessibilityRole="button"
-            accessibilityLabel={wrapLines ? t("git.scrollLongLines") : t("git.wrapLongLines")}
-          >
-            <WrapText
-              size={isMobile ? 18 : 14}
-              color={wrapLines ? theme.colors.foreground : theme.colors.foregroundMuted}
-            />
-          </Pressable>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <Text style={styles.tooltipText}>
-            {wrapLines ? t("git.scrollLongLines") : t("git.wrapLongLines")}
-          </Text>
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <Pressable
-            style={expandAllToggleStyle}
-            onPress={onToggleExpandAll}
-            accessibilityRole="button"
-            accessibilityLabel={allExpanded ? t("git.collapseAllFiles") : t("git.expandAllFiles")}
-          >
-            {allExpanded ? (
-              <ListChevronsDownUp size={isMobile ? 18 : 14} color={theme.colors.foregroundMuted} />
-            ) : (
-              <ListChevronsUpDown size={isMobile ? 18 : 14} color={theme.colors.foregroundMuted} />
-            )}
-          </Pressable>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <Text style={styles.tooltipText}>
-            {allExpanded ? t("git.collapseAllFiles") : t("git.expandAllFiles")}
-          </Text>
-        </TooltipContent>
-      </Tooltip>
-    </View>
-  );
-}
-
-interface DiffRefreshButtonProps {
-  isRefreshing: boolean;
-  toggleStyle: PressableStyleFn;
-  onPress: () => void;
-}
-
-function ReviewSummaryBand({
-  model,
-  diffModeLabel,
-  gitActions,
-}: {
-  model: ReviewSummaryModel;
-  diffModeLabel: string;
-  gitActions: ReturnType<typeof useGitActions>["gitActions"];
-}) {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.reviewSummaryBand} testID="changes-review-summary">
-      <View style={styles.reviewSummaryTextGroup}>
-        <Text style={styles.reviewSummaryTitle}>{t("git.reviewMode")}</Text>
-        <Text style={styles.reviewSummaryDescription} numberOfLines={1}>
-          {t("git.reviewSummary", {
-            count: model.changedFileCount,
-            additions: model.additions,
-            deletions: model.deletions,
-            mode: diffModeLabel,
-          })}
-        </Text>
-      </View>
-      <View style={styles.reviewSummaryMeta}>
-        {model.pullRequestLabel ? (
-          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
-            {model.pullRequestLabel}
-          </Text>
-        ) : null}
-        {model.pullRequestTerminalState ? (
-          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
-            {t(`git.reviewPullRequestState.${model.pullRequestTerminalState}`)}
-          </Text>
-        ) : null}
-        {model.checksStatus ? (
-          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
-            {t(`git.reviewChecksStatus.${model.checksStatus}`)}
-          </Text>
-        ) : null}
-        {model.reviewDecision ? (
-          <Text style={styles.reviewSummaryMetaText} numberOfLines={1}>
-            {t(`git.reviewDecision.${model.reviewDecision}`)}
-          </Text>
-        ) : null}
-        <GitActionsSplitButton gitActions={gitActions} hideLabels />
-      </View>
-    </View>
-  );
-}
-
-const ThemedRotateCw = withUnistyles(RotateCw);
-const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const refreshIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
-function DiffRefreshButton({ isRefreshing, toggleStyle, onPress }: DiffRefreshButtonProps) {
-  const { t } = useTranslation();
-  return (
-    <Tooltip delayDuration={300}>
-      <TooltipTrigger asChild>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isRefreshing ? t("git.refreshing") : t("git.refreshState")}
-          testID="changes-refresh"
-          style={toggleStyle}
-          onPress={onPress}
-          disabled={isRefreshing}
-        >
-          <View style={styles.refreshIcon}>
-            {isRefreshing ? (
-              <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={refreshIconColorMapping} />
-            ) : (
-              <ThemedRotateCw size={ICON_SIZE.sm} uniProps={refreshIconColorMapping} />
-            )}
-          </View>
-        </Pressable>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        <Text style={styles.tooltipText}>{t("git.refresh")}</Text>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 type DiffFlatItem =
   | { type: "header"; file: ParsedDiffFile; fileIndex: number; isExpanded: boolean }
   | { type: "body"; file: ParsedDiffFile; fileIndex: number };
@@ -1563,33 +1287,6 @@ function computePrErrorMessage(
   return prPayloadError?.message ?? null;
 }
 
-function buildDiffModeTriggerStyle(surfaceColor: string): PressableStyleFn {
-  return ({ hovered, pressed, open }) => [
-    styles.diffModeTrigger,
-    (Boolean(hovered) || pressed || Boolean(open)) &&
-      inlineUnistylesStyle({ backgroundColor: surfaceColor }),
-  ];
-}
-
-function buildExpandAllButtonStyle(surfaceColor: string): PressableStyleFn {
-  return ({ hovered, pressed }) => [
-    styles.expandAllButton,
-    (Boolean(hovered) || pressed) && inlineUnistylesStyle({ backgroundColor: surfaceColor }),
-  ];
-}
-
-function buildToggleButtonStyle(
-  selected: boolean,
-  baseStyles: StyleProp<ViewStyle> | StyleProp<ViewStyle>[],
-  surfaceColor: string,
-): PressableStyleFn {
-  return ({ hovered, pressed }) => [
-    baseStyles,
-    (selected || Boolean(hovered) || pressed) &&
-      inlineUnistylesStyle({ backgroundColor: surfaceColor }),
-  ];
-}
-
 function shouldEnableCheckoutDiff(input: { paneEnabled: boolean; isGit: boolean }): boolean {
   return input.paneEnabled && input.isGit;
 }
@@ -1637,65 +1334,6 @@ export function GitDiffPane({
 
   // handleSelectUncommitted/handleSelectBase are defined later, after reviewDraftScopeKey
   // and setActiveReviewMode are available, so they can record the active review mode.
-
-  const handleLayoutUnified = useCallback(() => {
-    handleLayoutChange("unified");
-  }, [handleLayoutChange]);
-
-  const handleLayoutSplit = useCallback(() => {
-    handleLayoutChange("split");
-  }, [handleLayoutChange]);
-
-  const controlSurfaceColor = theme.colors.surface2;
-  const diffModeTriggerStyle = useMemo(
-    () => buildDiffModeTriggerStyle(controlSurfaceColor),
-    [controlSurfaceColor],
-  );
-
-  const unifiedToggleStyle = useMemo(
-    () =>
-      buildToggleButtonStyle(
-        changesPreferences.layout === "unified",
-        [styles.toggleButton, styles.toggleButtonGroupStart],
-        controlSurfaceColor,
-      ),
-    [changesPreferences.layout, controlSurfaceColor],
-  );
-
-  const splitToggleStyle = useMemo(
-    () =>
-      buildToggleButtonStyle(
-        changesPreferences.layout === "split",
-        [styles.toggleButton, styles.toggleButtonGroupEnd],
-        controlSurfaceColor,
-      ),
-    [changesPreferences.layout, controlSurfaceColor],
-  );
-
-  const hideWhitespaceToggleStyle = useMemo(
-    () =>
-      buildToggleButtonStyle(
-        changesPreferences.hideWhitespace,
-        styles.expandAllButton,
-        controlSurfaceColor,
-      ),
-    [changesPreferences.hideWhitespace, controlSurfaceColor],
-  );
-
-  const wrapLinesToggleStyle = useMemo(
-    () => buildToggleButtonStyle(wrapLines, styles.expandAllButton, controlSurfaceColor),
-    [wrapLines, controlSurfaceColor],
-  );
-
-  const expandAllToggleStyle = useMemo(
-    () => buildExpandAllButtonStyle(controlSurfaceColor),
-    [controlSurfaceColor],
-  );
-
-  const refreshToggleStyle = useMemo(
-    () => buildExpandAllButtonStyle(controlSurfaceColor),
-    [controlSurfaceColor],
-  );
 
   const toast = useToast();
   const refreshSupported = useSessionStore(
@@ -2215,78 +1853,27 @@ export function GitDiffPane({
         ) : null}
 
         {isGit ? (
-          <View style={styles.diffStatusContainer}>
-            <View style={styles.diffStatusInner}>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  style={diffModeTriggerStyle}
-                  testID="changes-diff-status"
-                  accessibilityRole="button"
-                  accessibilityLabel={t("git.diffMode")}
-                >
-                  <Text style={styles.diffStatusText} numberOfLines={1}>
-                    {diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
-                  </Text>
-                  <ChevronDown size={12} color={theme.colors.foregroundMuted} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" width={260} testID="changes-diff-status-menu">
-                  <DropdownMenuItem
-                    testID="changes-diff-mode-uncommitted"
-                    selected={diffMode === "uncommitted"}
-                    onSelect={handleSelectUncommitted}
-                  >
-                    {t("git.uncommitted")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    testID="changes-diff-mode-committed"
-                    selected={diffMode === "base"}
-                    description={committedDiffDescription}
-                    onSelect={handleSelectBase}
-                  >
-                    {t("git.committed")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <View style={styles.diffStatusButtons}>
-                {canUseSplitLayout ? (
-                  <DiffLayoutToggleGroup
-                    layout={changesPreferences.layout}
-                    unifiedToggleStyle={unifiedToggleStyle}
-                    splitToggleStyle={splitToggleStyle}
-                    onUnified={handleLayoutUnified}
-                    onSplit={handleLayoutSplit}
-                  />
-                ) : null}
-                <DiffWhitespaceToggle
-                  hideWhitespace={changesPreferences.hideWhitespace}
-                  isMobile={isMobile}
-                  toggleStyle={hideWhitespaceToggleStyle}
-                  onToggle={handleToggleHideWhitespace}
-                />
-                {files.length > 0 ? (
-                  <DiffFilesToolbar
-                    wrapLines={wrapLines}
-                    allExpanded={allExpanded}
-                    isMobile={isMobile}
-                    wrapLinesToggleStyle={wrapLinesToggleStyle}
-                    expandAllToggleStyle={expandAllToggleStyle}
-                    onToggleWrapLines={handleToggleWrapLines}
-                    onToggleExpandAll={handleToggleExpandAll}
-                  />
-                ) : null}
-                {refreshSupported ? (
-                  <DiffRefreshButton
-                    isRefreshing={isRefreshing}
-                    toggleStyle={refreshToggleStyle}
-                    onPress={handleRefresh}
-                  />
-                ) : null}
-              </View>
-            </View>
-          </View>
+          <DiffPaneControls
+            diffMode={diffMode}
+            committedDiffDescription={committedDiffDescription}
+            canUseSplitLayout={canUseSplitLayout}
+            layout={changesPreferences.layout}
+            hideWhitespace={changesPreferences.hideWhitespace}
+            wrapLines={wrapLines}
+            allExpanded={allExpanded}
+            hasFiles={files.length > 0}
+            isMobile={isMobile}
+            refreshSupported={refreshSupported}
+            isRefreshing={isRefreshing}
+            onSelectUncommitted={handleSelectUncommitted}
+            onSelectBase={handleSelectBase}
+            onLayoutChange={handleLayoutChange}
+            onToggleHideWhitespace={handleToggleHideWhitespace}
+            onToggleWrapLines={handleToggleWrapLines}
+            onToggleExpandAll={handleToggleExpandAll}
+            onRefresh={handleRefresh}
+          />
         ) : null}
-
         {prErrorMessage ? <Text style={styles.actionErrorText}>{prErrorMessage}</Text> : null}
         {shouldShowReviewSummary ? (
           <ReviewSummaryBand
@@ -2333,176 +1920,11 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
   },
-  diffStatusContainer: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  diffStatusInner: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingRight: theme.spacing[3],
-  },
-  diffModeTrigger: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[1],
-    // Align text with header branch icon (at spacing[3] from edge, minus our horizontal padding)
-    marginLeft: theme.spacing[3] - theme.spacing[1],
-    paddingHorizontal: theme.spacing[1],
-    height: {
-      xs: 28,
-      sm: 28,
-      md: 24,
-    },
-    borderRadius: theme.borderRadius.base,
-    flexShrink: 0,
-  },
-  diffModeTriggerHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  diffModeTriggerPressed: {
-    backgroundColor: theme.colors.surface2,
-  },
-  diffStatusRowHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  diffStatusText: {
-    fontSize: theme.fontSize.xs,
-    lineHeight: theme.fontSize.xs * 1.25,
-    color: theme.colors.foregroundMuted,
-  },
-  diffStatusIconHidden: {
-    opacity: 0,
-  },
-  diffStatusButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    flexWrap: "wrap",
-  },
-  toggleButtonGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  toggleButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: {
-      xs: 32,
-      sm: 32,
-      md: 24,
-    },
-    height: {
-      xs: 32,
-      sm: 32,
-      md: 24,
-    },
-    paddingHorizontal: {
-      xs: theme.spacing[2],
-      sm: theme.spacing[2],
-      md: theme.spacing[1],
-    },
-  },
-  toggleButtonGroupStart: {
-    borderTopLeftRadius: theme.borderRadius.base,
-    borderBottomLeftRadius: theme.borderRadius.base,
-  },
-  toggleButtonGroupEnd: {
-    borderTopRightRadius: theme.borderRadius.base,
-    borderBottomRightRadius: theme.borderRadius.base,
-  },
-  toggleButtonSelected: {
-    backgroundColor: theme.colors.surface2,
-  },
-  refreshIcon: {
-    width: ICON_SIZE.md,
-    height: ICON_SIZE.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  expandAllButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[1],
-    minWidth: {
-      xs: 32,
-      sm: 32,
-      md: 24,
-    },
-    height: {
-      xs: 32,
-      sm: 32,
-      md: 24,
-    },
-    paddingHorizontal: {
-      xs: theme.spacing[2],
-      sm: theme.spacing[2],
-      md: theme.spacing[1],
-    },
-    borderRadius: theme.borderRadius.base,
-    flexShrink: 0,
-  },
   actionErrorText: {
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[1],
     fontSize: theme.fontSize.xs,
     color: theme.colors.destructive,
-  },
-  reviewSummaryBand: {
-    marginHorizontal: theme.spacing[3],
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[1],
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-    flexDirection: {
-      xs: "column",
-      md: "row",
-    },
-    alignItems: {
-      xs: "stretch",
-      md: "center",
-    },
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-  },
-  reviewSummaryTextGroup: {
-    minWidth: 0,
-    flex: 1,
-    gap: 1,
-  },
-  reviewSummaryTitle: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  reviewSummaryDescription: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-  },
-  reviewSummaryMeta: {
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    gap: theme.spacing[2],
-  },
-  reviewSummaryMetaText: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
   },
   diffContainer: {
     flex: 1,
