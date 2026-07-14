@@ -58,9 +58,6 @@ import {
 } from "@/attachments/service";
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
-import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
-import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
-import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
@@ -78,6 +75,7 @@ import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-sla
 import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
 import { useComposerAttachmentMenu } from "./attachment-menu";
 import { useComposerGithubPicker } from "./github/picker";
+import { useComposerKeyboardController } from "./keyboard-controller";
 import { useComposerRuntimeControls } from "./runtime-controls";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
 
@@ -92,10 +90,6 @@ function resolveIsComposerLocked(
   isSubmitLoading: boolean,
 ): boolean {
   return submitBehavior === "preserve-and-lock" && isSubmitLoading;
-}
-
-function resolveKeyboardPriority(isMessageInputFocused: boolean): number {
-  return isMessageInputFocused ? 200 : 100;
 }
 
 function resolveIsDesktopWebBreakpoint(isMobile: boolean): boolean {
@@ -135,97 +129,6 @@ function renderComposerFooter(footer: ReactNode, footerRight: ReactNode): ReactE
       </View>
     </View>
   );
-}
-
-function focusMessageInputWithPlatformStrategy(messageInputRef: {
-  current: MessageInputRef | null;
-}): void {
-  if (isNative) {
-    messageInputRef.current?.focus();
-    return;
-  }
-  focusWithRetries({
-    focus: () => messageInputRef.current?.focus(),
-    isFocused: () => {
-      const el = messageInputRef.current?.getNativeElement?.() ?? null;
-      const active = typeof document !== "undefined" ? document.activeElement : null;
-      return Boolean(el) && active === el;
-    },
-  });
-}
-
-interface DispatchComposerKeyboardActionArgs {
-  action: KeyboardActionDefinition;
-  isPaneFocused: boolean;
-  messageInputRef: { current: MessageInputRef | null };
-  isAgentRunning: boolean;
-  isCancellingAgent: boolean;
-  isConnected: boolean;
-  handleCancelAgent: () => void;
-  focusMessageInputForKeyboardAction: () => void;
-  onCycleAgentMode: () => void;
-}
-
-function dispatchComposerKeyboardAction(args: DispatchComposerKeyboardActionArgs): boolean {
-  const {
-    action,
-    isPaneFocused,
-    messageInputRef,
-    isAgentRunning,
-    isCancellingAgent,
-    isConnected,
-    handleCancelAgent,
-    focusMessageInputForKeyboardAction,
-  } = args;
-  if (!isPaneFocused) return false;
-
-  if (action.id === "agent.interrupt") {
-    if (messageInputRef.current?.runKeyboardAction("dictation-cancel")) return true;
-    if (!isAgentRunning || isCancellingAgent || !isConnected) return false;
-    handleCancelAgent();
-    return true;
-  }
-
-  if (action.id === "message-input.focus") {
-    focusMessageInputForKeyboardAction();
-    return true;
-  }
-
-  if (action.id === "message-input.mode-cycle") {
-    args.onCycleAgentMode();
-    return true;
-  }
-
-  const passthroughAction = resolveMessageInputPassthroughAction(action.id);
-  if (!passthroughAction) return false;
-  const result = messageInputRef.current?.runKeyboardAction(passthroughAction);
-  if (passthroughAction === "send" || passthroughAction === "dictation-confirm") {
-    return result ?? false;
-  }
-  return true;
-}
-
-function resolveMessageInputPassthroughAction(
-  actionId: string,
-): MessageInputKeyboardActionKind | null {
-  switch (actionId) {
-    case "message-input.send":
-      return "send";
-    case "message-input.dictation-confirm":
-      return "dictation-confirm";
-    case "message-input.dictation-toggle":
-      return "dictation-toggle";
-    case "message-input.dictation-cancel":
-      return "dictation-cancel";
-    case "message-input.voice-toggle":
-      return "voice-toggle";
-    case "message-input.voice-mute-toggle":
-      return "voice-mute-toggle";
-    case "message-input.mode-cycle":
-      return "mode-cycle";
-    default:
-      return null;
-  }
 }
 
 interface ComposerProps {
@@ -368,7 +271,6 @@ export function Composer({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancellingAgent, setIsCancellingAgent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [isMessageInputFocused, setIsMessageInputFocused] = useState(false);
   const [lightboxMetadata, setLightboxMetadata] = useState<AttachmentMetadata | null>(null);
   const attachButtonRef = useRef<View | null>(null);
   const messageInputRef = useRef<MessageInputRef>(null);
@@ -384,9 +286,6 @@ export function Composer({
     isConnected,
     anchorRef: attachButtonRef,
   });
-  const keyboardHandlerIdRef = useRef(
-    `message-input:${serverId}:${agentId}:${Math.random().toString(36).slice(2)}`,
-  );
 
   const runClientSlashCommand = useCallback(
     (command: ClientSlashCommand): boolean => {
@@ -729,67 +628,18 @@ export function Composer({
     messageInputRef.current?.focus();
   }, [client, isAgentRunning, isCancellingAgent, isConnected]);
 
-  const focusMessageInputForKeyboardAction = useCallback(() => {
-    focusMessageInputWithPlatformStrategy(messageInputRef);
-  }, []);
-
-  const onCycleAgentMode = useCallback(() => {
-    const agent = useSessionStore.getState().sessions[serverId]?.agents?.get(agentId);
-    if (!agent) return;
-    const modes = agent.availableModes;
-    if (modes.length <= 1) return;
-    const currentIndex = modes.findIndex((m) => m.id === agent.currentModeId);
-    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % modes.length;
-    const next = modes[nextIndex];
-    if (!next || !client) return;
-    void client.setAgentMode(agentId, next.id).catch((error: Error) => {
-      console.warn("[Composer] cycleAgentMode failed", error);
-    });
-  }, [agentId, client, serverId]);
-
-  const handleKeyboardAction = useCallback(
-    (action: KeyboardActionDefinition): boolean =>
-      dispatchComposerKeyboardAction({
-        action,
-        isPaneFocused,
-        messageInputRef,
-        isAgentRunning,
-        isCancellingAgent,
-        isConnected,
-        handleCancelAgent,
-        focusMessageInputForKeyboardAction,
-        onCycleAgentMode,
-      }),
-    [
-      focusMessageInputForKeyboardAction,
-      handleCancelAgent,
-      isAgentRunning,
-      isCancellingAgent,
-      isConnected,
-      isPaneFocused,
-      onCycleAgentMode,
-    ],
-  );
-
-  useKeyboardActionHandler({
-    handlerId: keyboardHandlerIdRef.current,
-    actions: [
-      "agent.interrupt",
-      "message-input.focus",
-      "message-input.send",
-      "message-input.dictation-toggle",
-      "message-input.dictation-cancel",
-      "message-input.dictation-confirm",
-      "message-input.voice-toggle",
-      "message-input.voice-mute-toggle",
-      "message-input.mode-cycle",
-    ],
-    enabled: isPaneFocused,
-    priority: resolveKeyboardPriority(isMessageInputFocused),
-    isActive: () => isPaneFocused,
-    handle: handleKeyboardAction,
+  const { handleFocusChange } = useComposerKeyboardController({
+    serverId,
+    agentId,
+    client,
+    isPaneFocused,
+    messageInputRef,
+    isAgentRunning,
+    isCancellingAgent,
+    isConnected,
+    handleCancelAgent,
+    onAttentionInputFocus,
   });
-
   const { style: keyboardAnimatedStyle } = useKeyboardShiftStyle({
     mode: "translate",
     enabled: !externalKeyboardShift,
@@ -880,16 +730,6 @@ export function Composer({
   const handleSelectionChange = useCallback((selection: { start: number; end: number }) => {
     setCursorIndex(selection.start);
   }, []);
-
-  const handleFocusChange = useCallback(
-    (focused: boolean) => {
-      setIsMessageInputFocused(focused);
-      if (focused) {
-        onAttentionInputFocus?.();
-      }
-    },
-    [onAttentionInputFocus],
-  );
 
   const handleLightboxClose = useCallback(() => {
     setLightboxMetadata(null);
