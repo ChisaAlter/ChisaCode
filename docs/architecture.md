@@ -275,11 +275,18 @@ tooling version metadata.
 ## Assistant presets
 
 Assistant presets are draft templates for the new-agent form. Built-in presets
-live in protocol/app source, while user presets load from
-`$CHISACODE_HOME/presets/*.json`. Applying a preset only fills provider, mode,
-model, system prompt, skills, MCP servers, and sample prompt fields; it does not
-start an agent. Missing providers, skills, or MCP server ids keep the draft
-editable and should be surfaced as non-fatal UI warnings.
+live in protocol source, while user presets load from
+`$CHISACODE_HOME/presets/*.json`. The App, `chisacode preset ls`, and top-level
+`list_agent_presets` MCP tool read the same daemon catalog. Agent-scoped MCP
+sessions intentionally do not receive preset discovery because user presets may
+contain private system prompts, skill ids, and MCP server ids.
+
+Applying a preset only fills provider, mode, model, system prompt, and sample
+prompt fields; it does not start an agent. Missing providers, modes, or models
+leave the existing draft selection in place and surface a non-fatal UI warning.
+Skill and MCP server ids remain catalog metadata until the draft API gains a
+resolver for those references, so the App reports them as unapplied instead of
+silently pretending they were attached.
 
 ## Data flow: running an agent
 

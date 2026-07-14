@@ -5,6 +5,7 @@ import { createChatCommand } from "./commands/chat/index.js";
 import { createLoopCommand } from "./commands/loop/index.js";
 import { createPermitCommand } from "./commands/permit/index.js";
 import { createProviderCommand } from "./commands/provider/index.js";
+import { createPresetCommand } from "./commands/preset/index.js";
 import { createScheduleCommand } from "./commands/schedule/index.js";
 import { createSpeechCommand } from "./commands/speech/index.js";
 import { createTerminalCommand } from "./commands/terminal/index.js";
@@ -149,6 +150,9 @@ export function createCli(): Command {
 
   // Provider commands
   program.addCommand(createProviderCommand());
+
+  // Assistant preset commands
+  program.addCommand(createPresetCommand());
 
   // Local usage commands
   program.addCommand(createUsageCommand());

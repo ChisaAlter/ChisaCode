@@ -1,0 +1,166 @@
+import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { Text, View } from "react-native";
+import { Bot, ChevronDown, TriangleAlert } from "lucide-react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import type { AgentPreset } from "@chisacode/protocol/agent-presets";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MAX_CONTENT_WIDTH } from "@/constants/layout";
+
+interface PresetMenuItemProps {
+  preset: AgentPreset;
+  selected: boolean;
+  onSelect: (preset: AgentPreset) => void;
+}
+
+function PresetMenuItem({ preset, selected, onSelect }: PresetMenuItemProps) {
+  const handleSelect = useCallback(() => onSelect(preset), [onSelect, preset]);
+  return (
+    <DropdownMenuItem
+      testID={`assistant-preset-${preset.id}`}
+      description={preset.description}
+      selected={selected}
+      onSelect={handleSelect}
+    >
+      {preset.label}
+    </DropdownMenuItem>
+  );
+}
+
+interface AssistantPresetPickerProps {
+  presets: AgentPreset[];
+  selectedPresetId: string | null;
+  isLoading: boolean;
+  isError: boolean;
+  disabled?: boolean;
+  warningText?: string | null;
+  onSelect: (preset: AgentPreset | null) => void;
+}
+
+export function AssistantPresetPicker({
+  presets,
+  selectedPresetId,
+  isLoading,
+  isError,
+  disabled = false,
+  warningText = null,
+  onSelect,
+}: AssistantPresetPickerProps) {
+  const { t } = useTranslation();
+  const { theme } = useUnistyles();
+  const selectedPreset = useMemo(
+    () => presets.find((preset) => preset.id === selectedPresetId) ?? null,
+    [presets, selectedPresetId],
+  );
+  const handleClear = useCallback(() => onSelect(null), [onSelect]);
+  const triggerLabel = isLoading
+    ? t("workspace.presets.loading")
+    : (selectedPreset?.label ?? t("workspace.presets.label"));
+
+  return (
+    <View style={styles.container}>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          accessibilityLabel={t("workspace.presets.select")}
+          disabled={disabled || isLoading || isError}
+          testID="assistant-preset-picker"
+          style={styles.trigger}
+        >
+          <Bot size={16} color={theme.colors.foregroundMuted} />
+          <Text style={styles.triggerText} numberOfLines={1}>
+            {triggerLabel}
+          </Text>
+          <ChevronDown size={16} color={theme.colors.foregroundMuted} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" minWidth={280} maxWidth={420} scrollable maxHeight={360}>
+          <DropdownMenuItem selected={selectedPresetId === null} onSelect={handleClear}>
+            {t("workspace.presets.none")}
+          </DropdownMenuItem>
+          {presets.map((preset) => (
+            <PresetMenuItem
+              key={preset.id}
+              preset={preset}
+              selected={preset.id === selectedPresetId}
+              onSelect={onSelect}
+            />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {selectedPreset ? (
+        <View style={styles.details}>
+          <Text style={styles.description}>{selectedPreset.description}</Text>
+          {selectedPreset.systemPrompt ? (
+            <Text style={styles.meta}>{t("workspace.presets.systemPromptActive")}</Text>
+          ) : null}
+          {warningText ? (
+            <View style={styles.warningRow}>
+              <TriangleAlert size={14} color={theme.colors.foregroundMuted} />
+              <Text style={styles.warningText}>{warningText}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {isError ? <Text style={styles.errorText}>{t("workspace.presets.unavailable")}</Text> : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  container: {
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
+    gap: theme.spacing[2],
+  },
+  trigger: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderWidth: 1,
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+  },
+  triggerText: {
+    minWidth: 0,
+    flex: 1,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  details: {
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[1],
+  },
+  description: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  meta: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  warningRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[1],
+  },
+  warningText: {
+    minWidth: 0,
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  errorText: {
+    color: theme.colors.destructive,
+    fontSize: theme.fontSize.sm,
+  },
+}));

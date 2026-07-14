@@ -10,6 +10,7 @@ describe("workspace-draft-agent-config", () => {
         modeId: "auto",
         model: "gpt-5.4",
         thinkingOptionId: "high",
+        systemPrompt: "Review changes carefully.",
       }),
     ).toEqual({
       provider: "codex",
@@ -17,6 +18,7 @@ describe("workspace-draft-agent-config", () => {
       modeId: "auto",
       model: "gpt-5.4",
       thinkingOptionId: "high",
+      systemPrompt: "Review changes carefully.",
     });
   });
 });

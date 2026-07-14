@@ -20,7 +20,9 @@ import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { UsageStore } from "../usage/usage-store.js";
+import type { AgentPreset } from "@chisacode/protocol/agent-presets";
 import { registerAgentControlMcpTools } from "./agent-control-mcp-tools.js";
+import { registerAgentPresetMcpTools } from "./agent-preset-mcp-tools.js";
 import { registerCreateAgentMcpTool } from "./create-agent-mcp-tool.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
@@ -41,6 +43,7 @@ export interface AgentMcpServerOptions {
   chatService?: ChatMcpService | null;
   loopService?: LoopMcpService | null;
   usageStore?: Pick<UsageStore, "list"> | null;
+  listAgentPresets?: (() => Promise<AgentPreset[]>) | null;
   providerSnapshotManager: ProviderSnapshotManager;
   github?: GitHubService;
   workspaceGitService?: Pick<
@@ -403,6 +406,11 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     agentManager,
     providerSnapshotManager,
     resolveScopedCwd,
+  });
+  registerAgentPresetMcpTools({
+    registerTool,
+    listPresets: options.listAgentPresets,
+    callerAgentId,
   });
   const getDiagnostics = options.getDiagnostics;
   if (getDiagnostics) {

@@ -273,6 +273,7 @@ import { rebuildAgentIndexIfEmpty } from "./agent-index/agent-index-rebuilder.js
 import { createSqliteAgentIndex } from "./agent-index/sqlite-agent-index.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
+import { AgentPresetStore } from "./agent/agent-preset-store.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import { createDaemonDiagnosticReport } from "./diagnostics-report.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
@@ -891,6 +892,10 @@ export async function createChisaCodeDaemon(
   httpServer.on("upgrade", scriptProxyUpgradeHandler);
 
   const agentStorage = new AgentStorage(config.agentStoragePath, logger);
+  const agentPresetStore = new AgentPresetStore({
+    chisacodeHome: config.chisacodeHome,
+    logger,
+  });
   const usageStore = new FileBackedUsageStore(
     path.join(config.chisacodeHome, "usage", "usage-events.jsonl"),
   );
@@ -1124,6 +1129,7 @@ export async function createChisaCodeDaemon(
         github,
         workspaceGitService,
         usageStore,
+        listAgentPresets: () => agentPresetStore.list(),
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
         emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
         markWorkspaceArchiving: markWorkspaceArchivingExternal,

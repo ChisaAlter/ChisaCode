@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
@@ -9,6 +9,12 @@ import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
+import { AssistantPresetPicker } from "@/agent-presets/assistant-preset-picker";
+import {
+  resolveAgentPresetApplication,
+  type AgentPresetUnappliedField,
+} from "@/agent-presets/apply-preset";
+import { useAgentPresetsQuery } from "@/agent-presets/use-agent-presets-query";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
@@ -31,7 +37,8 @@ import {
   shouldWaitForDraftModelReadiness,
   validateDraftSubmission,
 } from "@/composer/draft/workspace-tab-core";
-import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
+import type { AgentCapabilityFlags, AgentProvider } from "@chisacode/protocol/agent-types";
+import type { AgentPreset } from "@chisacode/protocol/agent-presets";
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
@@ -127,6 +134,7 @@ function buildSubmitDraftAgentConfig(input: {
     effectiveThinkingOptionId: string | null;
     featureValues: Record<string, unknown> | undefined;
   };
+  systemPrompt?: string;
 }) {
   const { provider, runtimeProvider, workspaceDirectory, autoSubmitConfig, composerState } = input;
   const modeIdOverride = resolveDraftModeIdOverride({
@@ -143,6 +151,7 @@ function buildSubmitDraftAgentConfig(input: {
     thinkingOptionId:
       autoSubmitConfig?.thinkingOptionId ?? (composerState.effectiveThinkingOptionId || undefined),
     featureValues: autoSubmitConfig?.featureValues ?? composerState.featureValues,
+    systemPrompt: input.systemPrompt,
   });
 }
 
@@ -155,6 +164,7 @@ async function submitDraftCreateRequest(input: {
   workspaceDirectory: string | null;
   workspaceExecutionAuthority: { workspaceId: string } | null;
   autoSubmitConfig: AutoSubmitConfig | null;
+  systemPrompt?: string;
   composerState: {
     selectedProvider: string | null;
     selectedRuntimeProvider: string | null;
@@ -174,6 +184,7 @@ async function submitDraftCreateRequest(input: {
     workspaceDirectory,
     workspaceExecutionAuthority,
     autoSubmitConfig,
+    systemPrompt,
     composerState,
   } = input;
 
@@ -195,6 +206,7 @@ async function submitDraftCreateRequest(input: {
     workspaceDirectory,
     autoSubmitConfig,
     composerState,
+    systemPrompt,
   });
 
   const imagesData = await encodeImages(images);
@@ -380,6 +392,12 @@ export function WorkspaceDraftAgentTab({
       lockedWorkingDir: draftWorkingDirectory ?? undefined,
     },
   });
+  const presetQuery = useAgentPresetsQuery(serverId);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [presetSystemPrompt, setPresetSystemPrompt] = useState<string | undefined>();
+  const [presetUnappliedFields, setPresetUnappliedFields] = useState<AgentPresetUnappliedField[]>(
+    [],
+  );
   const composerState = draftInput.composerState;
   if (!composerState) {
     throw new Error("Workspace draft composer state is required");
@@ -387,6 +405,74 @@ export function WorkspaceDraftAgentTab({
   const clearDraftInput = draftInput.clear;
   const setDraftText = draftInput.setText;
   const setDraftAttachments = draftInput.setAttachments;
+  const handleSelectPreset = useCallback(
+    (preset: AgentPreset | null) => {
+      if (!preset) {
+        setSelectedPresetId(null);
+        setPresetSystemPrompt(undefined);
+        setPresetUnappliedFields([]);
+        return;
+      }
+
+      const targetProvider =
+        preset.provider === "default" ? composerState.selectedProvider : preset.provider;
+      const targetEntry = targetProvider
+        ? composerState.allProviderEntries?.find((entry) => entry.provider === targetProvider)
+        : undefined;
+      const targetModels = targetProvider
+        ? composerState.allProviderModels.get(targetProvider)
+        : undefined;
+      const application = resolveAgentPresetApplication({
+        draft: {
+          provider: composerState.selectedProvider,
+          modeId: composerState.selectedMode,
+          model: composerState.selectedModel,
+          systemPrompt: presetSystemPrompt,
+          samplePrompt: draftInput.text,
+        },
+        preset,
+        availability: {
+          providerIds: new Set(
+            composerState.providerDefinitions.map((definition) => definition.id),
+          ),
+          ...(targetEntry
+            ? { modeIds: new Set((targetEntry.modes ?? []).map((mode) => mode.id)) }
+            : {}),
+          ...(targetModels ? { modelIds: new Set(targetModels.map((model) => model.id)) } : {}),
+        },
+      });
+      const nextProvider = application.draft.provider as AgentProvider | null | undefined;
+      const nextModel = application.draft.model;
+
+      if (nextProvider && nextProvider !== composerState.selectedProvider) {
+        if (nextModel) {
+          composerState.setProviderAndModelFromUser(nextProvider, nextModel);
+        } else {
+          composerState.setProviderFromUser(nextProvider);
+        }
+      } else if (nextModel && nextModel !== composerState.selectedModel) {
+        composerState.setModelFromUser(nextModel);
+      }
+      if (application.draft.modeId && application.draft.modeId !== composerState.selectedMode) {
+        composerState.setModeFromUser(application.draft.modeId);
+      }
+      if (application.draft.samplePrompt !== draftInput.text) {
+        setDraftText(application.draft.samplePrompt ?? "");
+      }
+
+      setSelectedPresetId(preset.id);
+      setPresetSystemPrompt(application.draft.systemPrompt);
+      setPresetUnappliedFields(application.unappliedFields);
+    },
+    [composerState, draftInput.text, presetSystemPrompt, setDraftText],
+  );
+  const presetWarningText = useMemo(() => {
+    if (presetUnappliedFields.length === 0) {
+      return null;
+    }
+    const fields = presetUnappliedFields.map((field) => t(`workspace.presets.fields.${field}`));
+    return t("workspace.presets.unapplied", { fields: fields.join(", ") });
+  }, [presetUnappliedFields, t]);
   const pendingAutoSubmit = useWorkspaceDraftSubmissionStore((state) => {
     const pending = state.pendingByDraftId[draftId] ?? null;
     return pending?.serverId === serverId && pending.workspaceId === workspaceId ? pending : null;
@@ -506,6 +592,7 @@ export function WorkspaceDraftAgentTab({
         workspaceDirectory: draftWorkingDirectory,
         workspaceExecutionAuthority,
         autoSubmitConfig,
+        systemPrompt: presetSystemPrompt,
         composerState,
       }),
     onCreateSuccess: ({ result }) => {
@@ -704,6 +791,15 @@ export function WorkspaceDraftAgentTab({
               contentContainerStyle={styles.configScrollContent}
             >
               <View style={styles.configSection}>
+                <AssistantPresetPicker
+                  presets={presetQuery.presets}
+                  selectedPresetId={selectedPresetId}
+                  isLoading={presetQuery.isLoading}
+                  isError={presetQuery.isError}
+                  disabled={isSubmitting}
+                  warningText={presetWarningText}
+                  onSelect={handleSelectPreset}
+                />
                 {formErrorMessage ? (
                   <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{formErrorMessage}</Text>

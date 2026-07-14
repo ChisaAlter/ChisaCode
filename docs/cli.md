@@ -98,6 +98,15 @@ chisacode provider inspect codex
 chisacode provider inspect claude --json
 ```
 
+List built-in and user-defined assistant presets:
+
+```bash
+chisacode preset ls
+chisacode preset ls --json
+```
+
+Preset listing is read-only. Applying a preset fills draft settings; it does not start an agent.
+
 Use a different daemon:
 
 ```bash
@@ -237,6 +246,15 @@ chisacode daemon diagnostics --json
 chisacode provider inspect codex
 chisacode provider inspect claude --json
 ```
+
+列出内置和用户定义的 assistant presets：
+
+```bash
+chisacode preset ls
+chisacode preset ls --json
+```
+
+预设列表是只读能力。应用预设只会填充草稿配置，不会自动启动 agent。
 
 连接另一台 daemon：
 

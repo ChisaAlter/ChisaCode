@@ -1,5 +1,15 @@
-import { BUILTIN_AGENT_PRESETS, type AgentPreset } from "@chisacode/protocol/agent-presets";
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
+import type { AgentPreset } from "@chisacode/protocol/agent-presets";
 
-export function getBuiltinAgentPresetCatalog(): AgentPreset[] {
-  return Array.from(BUILTIN_AGENT_PRESETS);
+export const AGENT_PRESETS_QUERY_ROOT = "agentPresets";
+
+export type AgentPresetsClient = Pick<DaemonClient, "listAgentPresets">;
+
+export function agentPresetsQueryKey(serverId: string) {
+  return [AGENT_PRESETS_QUERY_ROOT, serverId] as const;
+}
+
+export async function fetchAgentPresets(client: AgentPresetsClient): Promise<AgentPreset[]> {
+  const response = await client.listAgentPresets();
+  return response.presets;
 }
