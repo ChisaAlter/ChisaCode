@@ -2,9 +2,7 @@ import { watch } from "node:fs";
 import { readdir } from "node:fs/promises";
 import type pino from "pino";
 import type { ProjectCheckoutLitePayload } from "@chisacode/protocol/messages";
-import type { CheckoutContext } from "../utils/checkout-git.js";
 import {
-  type CheckoutSnapshotFacts,
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
   getCheckoutDiff,
@@ -17,14 +15,8 @@ import {
   resolveBranchCheckout,
   resolveAbsoluteGitDir,
 } from "../utils/checkout-git.js";
-import {
-  createGitHubService,
-  type GitHubPullRequestStatusFacts,
-  type GitHubService,
-  type PullRequestMergeable,
-} from "../services/github-service.js";
+import { createGitHubService, type GitHubService } from "../services/github-service.js";
 import { runGitCommand } from "../utils/run-git-command.js";
-import { resolveGitHubRemote, type GitHubRemoteIdentity } from "../utils/github-remote.js";
 import { listChisaCodeWorktrees } from "../utils/worktree.js";
 import {
   WorkspaceGitAuxiliaryReadAuthority,
@@ -44,6 +36,11 @@ import {
 } from "./workspace-git-refresh-coordinator.js";
 import { WorkspaceGitHubPollBinding } from "./workspace-git-github-poll-binding.js";
 import { WorkspaceGitRepositoryFetchAuthority } from "./workspace-git-repository-fetch-authority.js";
+import {
+  WorkspaceGitSnapshotMaterializer,
+  type WorkspaceGitRuntimeSnapshot,
+  type WorkspaceGitSnapshotState,
+} from "./workspace-git-snapshot-materializer.js";
 import { WorkspaceGitWorkingTreeObserver } from "./workspace-git-working-tree-observer.js";
 import type { WorkspaceGitMetadata } from "./workspace-git-metadata.js";
 import { checkoutLiteFromGitSnapshot, normalizeWorkspaceId } from "./workspace-registry-model.js";
@@ -53,52 +50,6 @@ export const WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS = 60_000;
 
 // Non-forced snapshot refresh triggers share this minimum gap to absorb watcher/self-heal bursts.
 const WORKSPACE_GIT_INTERNAL_MIN_GAP_MS = 2_000;
-
-export interface WorkspaceGitRuntimeSnapshot {
-  cwd: string;
-  git: {
-    isGit: boolean;
-    repoRoot: string | null;
-    mainRepoRoot: string | null;
-    currentBranch: string | null;
-    remoteUrl: string | null;
-    isChisaCodeOwnedWorktree: boolean;
-    isDirty: boolean | null;
-    baseRef: string | null;
-    aheadBehind: { ahead: number; behind: number } | null;
-    aheadOfOrigin: number | null;
-    behindOfOrigin: number | null;
-    hasRemote: boolean;
-    diffStat: { additions: number; deletions: number } | null;
-  };
-  github: {
-    featuresEnabled: boolean;
-    pullRequest: {
-      number?: number;
-      repoOwner?: string;
-      repoName?: string;
-      url: string;
-      title: string;
-      state: string;
-      baseRefName: string;
-      headRefName: string;
-      isMerged: boolean;
-      isDraft?: boolean;
-      mergeable?: PullRequestMergeable;
-      checks?: Array<{
-        name: string;
-        status: "success" | "failure" | "pending" | "skipped" | "cancelled";
-        url: string | null;
-        workflow?: string;
-        duration?: string;
-      }>;
-      checksStatus?: "none" | "pending" | "success" | "failure";
-      reviewDecision?: "approved" | "changes_requested" | "pending" | null;
-      github?: GitHubPullRequestStatusFacts;
-    } | null;
-    error: { message: string } | null;
-  };
-}
 
 export interface WorkspaceGitService {
   registerWorkspace(
@@ -163,6 +114,7 @@ export type {
   WorkspaceGitStashListOptions,
   WorkspaceGitWorktreeInfo,
 } from "./workspace-git-auxiliary-read-authority.js";
+export type { WorkspaceGitRuntimeSnapshot } from "./workspace-git-snapshot-materializer.js";
 export type WorkspaceGitListener = (snapshot: WorkspaceGitRuntimeSnapshot) => void;
 export type WorkspaceGitSnapshotUpdatedListener = (snapshot: WorkspaceGitRuntimeSnapshot) => void;
 
@@ -207,21 +159,12 @@ interface WorkspaceGitServiceOptions {
   deps?: Partial<WorkspaceGitServiceDependencies>;
 }
 
-interface WorkspaceGitTarget {
-  cwd: string;
+interface WorkspaceGitTarget extends WorkspaceGitSnapshotState {
   listeners: Set<WorkspaceGitListener>;
   debounceTimer: NodeJS.Timeout | null;
   selfHealTimer: NodeJS.Timeout | null;
   refreshState: WorkspaceGitRefreshState<WorkspaceGitRuntimeSnapshot>;
-  latestGit: WorkspaceGitRuntimeSnapshot["git"] | null;
-  latestGitLoadedAtMs: number | null;
-  latestGithub: WorkspaceGitRuntimeSnapshot["github"] | null;
-  latestGithubLoadedAtMs: number | null;
-  latestSnapshot: WorkspaceGitRuntimeSnapshot | null;
-  latestSnapshotLoadedAtMs: number | null;
   latestFingerprint: string | null;
-  lastShellOutAtMs: number | null;
-  cachedGitHubRemote: { remoteUrl: string; identity: GitHubRemoteIdentity | null } | null;
   closed: boolean;
 }
 
@@ -262,6 +205,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly workingTreeObserver: WorkspaceGitWorkingTreeObserver;
   private readonly auxiliaryReadAuthority: WorkspaceGitAuxiliaryReadAuthority;
   private readonly checkoutObservation: WorkspaceGitCheckoutObservationAuthority;
+  private readonly snapshotMaterializer: WorkspaceGitSnapshotMaterializer;
   private readonly refreshCoordinator: WorkspaceGitRefreshCoordinator<
     WorkspaceGitRuntimeSnapshot,
     WorkspaceGitTarget
@@ -272,14 +216,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.chisacodeHome = options.chisacodeHome;
     this.deps = resolveWorkspaceGitServiceDeps(options.deps, this.logger);
-    this.refreshCoordinator = new WorkspaceGitRefreshCoordinator({
-      now: this.deps.now,
-      minGapMs: WORKSPACE_GIT_INTERNAL_MIN_GAP_MS,
-      refreshSnapshot: (target, request) => this.refreshSnapshot(target, request),
-      rememberSnapshot: (target, snapshot, rememberOptions) => {
-        this.rememberSnapshot(target, snapshot, rememberOptions);
-      },
-    });
     this.auxiliaryReadAuthority = new WorkspaceGitAuxiliaryReadAuthority({
       chisacodeHome: this.chisacodeHome,
       deps: {
@@ -321,6 +257,27 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       },
       repositoryFetchAuthority: this.repositoryFetchAuthority,
       scheduleRefresh: (cwd) => this.scheduleWorkspaceRefresh(cwd),
+    });
+    this.snapshotMaterializer = new WorkspaceGitSnapshotMaterializer({
+      logger: this.logger,
+      chisacodeHome: this.chisacodeHome,
+      deps: {
+        getCheckoutStatus: this.deps.getCheckoutStatus,
+        getCheckoutShortstat: this.deps.getCheckoutShortstat,
+        getPullRequestStatus: this.deps.getPullRequestStatus,
+        github: this.deps.github,
+        loadFacts: (cwd, context, loadOptions) =>
+          this.checkoutObservation.loadFacts(cwd, context, loadOptions),
+        now: this.deps.now,
+      },
+    });
+    this.refreshCoordinator = new WorkspaceGitRefreshCoordinator({
+      now: this.deps.now,
+      minGapMs: WORKSPACE_GIT_INTERNAL_MIN_GAP_MS,
+      refreshSnapshot: (target, request) => this.snapshotMaterializer.refresh(target, request),
+      rememberSnapshot: (target, snapshot, rememberOptions) => {
+        this.rememberSnapshot(target, snapshot, rememberOptions);
+      },
     });
     this.githubPollBinding = new WorkspaceGitHubPollBinding({
       logger: this.logger,
@@ -540,20 +497,12 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
   private createWorkspaceTarget(cwd: string): WorkspaceGitTarget {
     const target: WorkspaceGitTarget = {
-      cwd,
+      ...this.snapshotMaterializer.createState(cwd),
       listeners: new Set(),
       debounceTimer: null,
       selfHealTimer: null,
       refreshState: { status: "idle" },
-      latestGit: null,
-      latestGitLoadedAtMs: null,
-      latestGithub: null,
-      latestGithubLoadedAtMs: null,
-      latestSnapshot: null,
-      latestSnapshotLoadedAtMs: null,
       latestFingerprint: null,
-      lastShellOutAtMs: null,
-      cachedGitHubRemote: null,
       closed: false,
     };
 
@@ -635,25 +584,20 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   }
 
   private updateGitHubPollForTarget(target: WorkspaceGitTarget): void {
-    const git = target.latestGit;
-    const headRef = target.listeners.size > 0 ? (git?.currentBranch ?? null) : null;
-    const hasGitHubRemote =
-      git !== null &&
-      target.cachedGitHubRemote?.remoteUrl === git.remoteUrl &&
-      target.cachedGitHubRemote.identity !== null;
-    const remoteUrl = hasGitHubRemote ? git.remoteUrl : null;
+    const pollTarget =
+      target.listeners.size > 0 ? this.snapshotMaterializer.getGitHubPollTarget(target) : null;
+    const headRef = pollTarget?.headRef ?? null;
 
     this.githubPollBinding.sync({
       cwd: target.cwd,
-      remoteUrl,
+      remoteUrl: pollTarget?.remoteUrl ?? null,
       headRef,
       onStatus: (status) => {
         if (!this.isActiveObservedWorkspaceTarget(target)) {
           return;
         }
-        this.rememberGitHubSnapshot(target, buildGitHubSnapshotFromStatus(status), {
-          notify: true,
-        });
+        const snapshot = this.snapshotMaterializer.applyGitHubStatus(target, status);
+        this.rememberSnapshot(target, snapshot, { notify: true, forceEmit: false });
       },
       onError: (error) => {
         this.logger.warn(
@@ -678,155 +622,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         "Failed to refresh workspace git snapshot",
       );
     }
-  }
-
-  private async resolveGitHubRemoteForTarget(
-    target: WorkspaceGitTarget,
-    remoteUrl: string | null,
-  ): Promise<GitHubRemoteIdentity | null> {
-    if (!remoteUrl) {
-      target.cachedGitHubRemote = null;
-      return null;
-    }
-    if (target.cachedGitHubRemote?.remoteUrl === remoteUrl) {
-      return target.cachedGitHubRemote.identity;
-    }
-    const identity = await resolveGitHubRemote({ remoteUrl });
-    target.cachedGitHubRemote = { remoteUrl, identity };
-    return identity;
-  }
-
-  private async refreshSnapshot(
-    target: WorkspaceGitTarget,
-    request: WorkspaceGitRefreshRequest,
-  ): Promise<WorkspaceGitRuntimeSnapshot> {
-    const facts = await this.refreshGitSnapshot(target, request);
-    if (request.includeGitHub) {
-      await this.refreshGitHubSnapshot(target, request, facts);
-    }
-
-    const snapshot = this.combineSnapshot(target);
-    target.latestSnapshotLoadedAtMs = this.deps.now().getTime();
-    return snapshot;
-  }
-
-  private async refreshGitSnapshot(
-    target: WorkspaceGitTarget,
-    request: WorkspaceGitRefreshRequest,
-  ): Promise<CheckoutSnapshotFacts> {
-    const now = this.deps.now();
-    target.lastShellOutAtMs = now.getTime();
-
-    const cwd = target.cwd;
-    const previousGitHubPollKey = this.getGitHubPollKey(target);
-    const baseContext: CheckoutContext = { chisacodeHome: this.chisacodeHome, logger: this.logger };
-    const facts = await this.checkoutObservation.loadFacts(target.cwd, baseContext, {
-      allowRecent: !request.force,
-    });
-    const context: CheckoutContext = { ...baseContext, facts };
-    const checkoutStatus = await this.deps.getCheckoutStatus(cwd, context);
-    if (!checkoutStatus.isGit) {
-      target.latestGit = buildNotGitSnapshot(cwd).git;
-      target.latestGitLoadedAtMs = this.deps.now().getTime();
-      target.cachedGitHubRemote = null;
-      target.latestGithub = buildGitHubUnavailableSnapshot();
-      target.latestGithubLoadedAtMs = target.latestGitLoadedAtMs;
-      return facts;
-    }
-
-    await this.resolveGitHubRemoteForTarget(target, checkoutStatus.remoteUrl);
-    const diffStat = await this.deps
-      .getCheckoutShortstat(cwd, context, { force: request.force })
-      .catch(() => null);
-
-    target.latestGit = {
-      isGit: true,
-      repoRoot: checkoutStatus.repoRoot,
-      mainRepoRoot: checkoutStatus.mainRepoRoot,
-      currentBranch: checkoutStatus.currentBranch,
-      remoteUrl: checkoutStatus.remoteUrl,
-      isChisaCodeOwnedWorktree: checkoutStatus.isChisaCodeOwnedWorktree,
-      isDirty: checkoutStatus.isDirty,
-      baseRef: checkoutStatus.baseRef,
-      aheadBehind: checkoutStatus.aheadBehind,
-      aheadOfOrigin: checkoutStatus.aheadOfOrigin,
-      behindOfOrigin: checkoutStatus.behindOfOrigin,
-      hasRemote: checkoutStatus.hasRemote,
-      diffStat,
-    };
-    target.latestGitLoadedAtMs = this.deps.now().getTime();
-
-    if (previousGitHubPollKey !== this.getGitHubPollKey(target)) {
-      target.latestGithub = buildGitHubUnavailableSnapshot();
-      target.latestGithubLoadedAtMs = target.latestGitLoadedAtMs;
-    }
-    return facts;
-  }
-
-  private async refreshGitHubSnapshot(
-    target: WorkspaceGitTarget,
-    request: WorkspaceGitRefreshRequest,
-    facts: CheckoutSnapshotFacts,
-  ): Promise<void> {
-    const githubRemote = target.cachedGitHubRemote?.identity ?? null;
-    const forceGitHub = request.force && request.includeGitHub;
-    if (forceGitHub) {
-      this.deps.github.invalidate({ cwd: target.cwd });
-    }
-
-    target.latestGithub = await loadGitHubSnapshot({
-      cwd: target.cwd,
-      githubRemote,
-      now: this.deps.now(),
-      deps: this.deps,
-      force: forceGitHub,
-      reason: request.reason,
-      facts,
-    });
-    target.latestGithubLoadedAtMs = this.deps.now().getTime();
-  }
-
-  private combineSnapshot(target: WorkspaceGitTarget): WorkspaceGitRuntimeSnapshot {
-    if (!target.latestGit) {
-      return target.latestSnapshot ?? buildNotGitSnapshot(target.cwd);
-    }
-
-    return {
-      cwd: target.cwd,
-      git: target.latestGit,
-      github: target.latestGithub ?? buildGitHubUnavailableSnapshot(),
-    };
-  }
-
-  private getGitHubPollKey(target: WorkspaceGitTarget): string | null {
-    const git = target.latestGit;
-    if (!git?.currentBranch || !git.remoteUrl) {
-      return null;
-    }
-
-    const githubRemote = target.cachedGitHubRemote;
-    if (!githubRemote || githubRemote.remoteUrl !== git.remoteUrl || !githubRemote.identity) {
-      return null;
-    }
-
-    return JSON.stringify([git.remoteUrl, git.currentBranch]);
-  }
-
-  private rememberGitHubSnapshot(
-    target: WorkspaceGitTarget,
-    github: WorkspaceGitRuntimeSnapshot["github"],
-    options?: { notify?: boolean },
-  ): void {
-    if (target.closed || this.workspaceTargets.get(target.cwd) !== target) {
-      return;
-    }
-
-    target.latestGithub = github;
-    target.latestGithubLoadedAtMs = this.deps.now().getTime();
-    this.rememberSnapshot(target, this.combineSnapshot(target), {
-      notify: options?.notify,
-      forceEmit: false,
-    });
   }
 
   private rememberSnapshot(
@@ -900,99 +695,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     this.checkoutObservation.remove(target.cwd);
     target.listeners.clear();
   }
-}
-
-async function loadGitHubSnapshot(options: {
-  cwd: string;
-  githubRemote: GitHubRemoteIdentity | null;
-  now: Date;
-  deps: Pick<WorkspaceGitServiceDependencies, "getPullRequestStatus" | "github">;
-  force?: boolean;
-  reason?: string;
-  facts?: CheckoutSnapshotFacts;
-}): Promise<WorkspaceGitRuntimeSnapshot["github"]> {
-  if (!options.githubRemote) {
-    return {
-      featuresEnabled: false,
-      pullRequest: null,
-      error: null,
-    };
-  }
-
-  try {
-    await options.deps.github.isAuthenticated({ cwd: options.cwd });
-  } catch {
-    return {
-      featuresEnabled: false,
-      pullRequest: null,
-      error: null,
-    };
-  }
-
-  try {
-    const result = await options.deps.getPullRequestStatus(
-      options.cwd,
-      options.deps.github,
-      {
-        force: options.force,
-        reason: options.reason,
-      },
-      { facts: options.facts },
-    );
-    return {
-      featuresEnabled: true,
-      pullRequest: result.status,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      featuresEnabled: true,
-      pullRequest: null,
-      error: {
-        message: error instanceof Error ? error.message : String(error),
-      },
-    };
-  }
-}
-
-function buildNotGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
-  return {
-    cwd,
-    git: {
-      isGit: false,
-      repoRoot: null,
-      mainRepoRoot: null,
-      currentBranch: null,
-      remoteUrl: null,
-      isChisaCodeOwnedWorktree: false,
-      isDirty: null,
-      baseRef: null,
-      aheadBehind: null,
-      aheadOfOrigin: null,
-      behindOfOrigin: null,
-      hasRemote: false,
-      diffStat: null,
-    },
-    github: buildGitHubUnavailableSnapshot(),
-  };
-}
-
-function buildGitHubUnavailableSnapshot(): WorkspaceGitRuntimeSnapshot["github"] {
-  return {
-    featuresEnabled: false,
-    pullRequest: null,
-    error: null,
-  };
-}
-
-function buildGitHubSnapshotFromStatus(
-  status: WorkspaceGitRuntimeSnapshot["github"]["pullRequest"],
-): WorkspaceGitRuntimeSnapshot["github"] {
-  return {
-    featuresEnabled: true,
-    pullRequest: status,
-    error: null,
-  };
 }
 
 async function runGitFetch(cwd: string): Promise<void> {

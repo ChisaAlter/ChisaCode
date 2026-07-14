@@ -357,6 +357,27 @@ describe("WorkspaceGitServiceImpl", () => {
     service.dispose();
   });
 
+  test("getSnapshot treats a false GitHub authentication result as unavailable", async () => {
+    const getPullRequestStatus = vi.fn(async () => createPullRequestStatusResult());
+    const github = {
+      ...createGitHubServiceStub(),
+      isAuthenticated: vi.fn(async () => false),
+    };
+    const service = createService({ github, getPullRequestStatus });
+
+    await expect(service.getSnapshot(REPO_CWD)).resolves.toEqual(
+      createSnapshot(REPO_CWD, {
+        github: {
+          featuresEnabled: false,
+          pullRequest: null,
+        },
+      }),
+    );
+    expect(getPullRequestStatus).not.toHaveBeenCalled();
+
+    service.dispose();
+  });
+
   test("getSnapshot keeps plain git classification when shortstat lookup fails", async () => {
     const getCheckoutShortstat = vi.fn(async () => {
       throw new Error(
