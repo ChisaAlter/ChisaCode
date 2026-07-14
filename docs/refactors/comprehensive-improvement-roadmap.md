@@ -355,7 +355,8 @@
 - **边界保护**：异步操作在组件卸载后仍记录 late rejection，但可抑制 Toast，避免向已销毁页面投递反馈。
 - **Skills / MCP 切片**：加载、策略保存、安装/卸载、删除和表单保存共 8 条失败路径已迁移；真实 daemon 错误优先展示，不透明错误使用现有中英文本地化 fallback，并补齐稳定日志标签。
 - **模型 / Provider 切片**：自定义模型、Provider、自定义 Provider 与合成模型已按操作 Toast、表单 inline、测试结果 inline 和后台 warning 分层；Provider tooling action 的 RPC rejection / `success: false` 静默失败与自定义 Provider 测试的未处理 rejection 已修复，纯错误 authority 支持注入 presenter。
-- **状态**：进行中；下一批进入生产路径分层，只迁移真实用户操作失败或连接中断，内部诊断日志继续保留。
+- **生产交互 Slice C1**：解归档与权限响应失败接入统一错误 authority 和中英文本地化 fallback；权限与解归档按钮在失败后恢复可重试。同步删除 `SessionContext` 中 9 个从未接线的 legacy 操作回调、闲置 timeout ref 和死路径 refetch helper，减少 150 余行不可达代码。
+- **状态**：进行中；下一批继续生产路径分层，只迁移真实用户操作失败或连接中断，内部诊断日志继续保留。
 
 ### Provider God-File 拆分（草案 + 部分执行，2026-07-03 起草）
 

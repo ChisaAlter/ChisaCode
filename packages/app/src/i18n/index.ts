@@ -515,6 +515,7 @@ export const resources = {
         archived: "已归档",
         archivedCallout: "此智能体已归档",
         unarchive: "取消归档",
+        unarchiveFailed: "取消归档失败",
         connectToImport: "连接到主机以导入会话",
         updateHostToImport: "更新主机后即可导入会话。",
         noImportableProviders: "没有启用可导入的提供商。",
@@ -1144,6 +1145,7 @@ export const resources = {
         execute: "执行",
         deniedByUser: "用户已拒绝",
         daemonClientUnavailable: "主机服务客户端不可用",
+        responseFailed: "响应权限请求失败",
       },
       contextWindow: {
         title: "上下文窗口",
@@ -2268,6 +2270,7 @@ export const resources = {
         archived: "Archived",
         archivedCallout: "This agent has been archived",
         unarchive: "Unarchive",
+        unarchiveFailed: "Unable to unarchive agent",
         connectToImport: "Connect to host to import sessions",
         updateHostToImport: "Update the host to import sessions.",
         noImportableProviders: "No importable providers are enabled.",
@@ -2929,6 +2932,7 @@ export const resources = {
         execute: "Execute",
         deniedByUser: "Denied by user",
         daemonClientUnavailable: "daemon client unavailable",
+        responseFailed: "Unable to respond to the permission request",
       },
       contextWindow: {
         title: "Context window",

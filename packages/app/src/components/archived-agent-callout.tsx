@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 
@@ -21,6 +22,7 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
+  const reportError = useUserVisibleErrorReporter();
 
   const { style: keyboardAnimatedStyle } = useKeyboardShiftStyle({ mode: "translate" });
 
@@ -35,10 +37,14 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
     try {
       await client.refreshAgent(agentId);
     } catch (error) {
-      console.error("[ArchivedAgentCallout] Failed to unarchive agent:", error);
+      reportError({
+        logLabel: "[ArchivedAgentCallout] Failed to unarchive agent",
+        error,
+        fallbackMessage: t("session.unarchiveFailed"),
+      });
       setIsUnarchiving(false);
     }
-  }, [client, isConnected, isUnarchiving, agentId]);
+  }, [agentId, client, isConnected, isUnarchiving, reportError, t]);
 
   return (
     <Animated.View style={containerStyle}>

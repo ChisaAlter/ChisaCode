@@ -64,9 +64,17 @@
 - 产品修复：Provider tooling action 的 RPC rejection 与 `success: false` 命令失败均不再静默吞错；自定义 Provider 列表测试失败不再产生未处理 rejection。
 - 架构：纯错误 authority 支持注入 presenter，Toast、表单错误区和测试结果区共用日志与消息归一化。
 
+### Slice C1：归档与权限交互恢复
+
+- 状态：本批次完成。
+- 用户反馈：解归档失败不再只写控制台；权限响应失败通过统一 authority 记录原始错误并展示中英文本地化 fallback。
+- 交互恢复：权限响应失败会清空当前 action 的处理中状态，按钮恢复可重试；解归档失败同样恢复按钮。
+- 代码质量：删除 `SessionContext` 中 9 个从未接线的 legacy 操作回调、1 个闲置 timeout ref，以及只服务死路径的 refetch helper，减少 150 余行不可达代码。
+- 边界：后台 timeline、hydration、缓存和音频诊断日志保持原有分层，不机械改成 Toast。
+
 ## 后续切片
 
-1. **Slice C：生产路径分层**：只处理用户操作失败或连接中断；内部诊断日志继续保留。
+1. **Slice C2：生产路径分层续批**：继续追踪剩余真实用户操作失败或连接中断；内部诊断日志继续保留。
 2. **Slice D：查询错误去重**：将 desktop 已有的同一 Error 实例去重能力推广到需要自动查询提示的跨平台页面。
 
 ## 不做项
