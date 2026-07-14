@@ -47,6 +47,20 @@ describe("reportUserVisibleError", () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
+  it("uses a localized fallback for opaque errors", () => {
+    const toast = createToast();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    reportUserVisibleError({
+      toast,
+      logLabel: "[Settings] Failed to load",
+      error: {},
+      fallbackMessage: "Unable to load settings",
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("Unable to load settings");
+  });
+
   it("normalizes the original error when no display message is provided", () => {
     const toast = createToast();
     vi.spyOn(console, "error").mockImplementation(() => {});

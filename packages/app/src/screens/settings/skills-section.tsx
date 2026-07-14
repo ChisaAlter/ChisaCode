@@ -17,7 +17,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Download, FolderInput, Plus, RefreshCw, Search, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
-import { useToast } from "@/contexts/toast-context";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
@@ -190,7 +190,7 @@ function SkillRow({ skill, index, selectedScope, working, onToggle, onUninstall 
 export function SkillsSection({ serverId }: SkillsSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
   const [scopes, setScopes] = useState<AgentSkillScopePayload[]>([]);
@@ -230,11 +230,15 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
         setSelectedScope({ type: "global" });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      reportError({
+        error,
+        logLabel: "[SkillsSettings] Failed to load skills",
+        fallbackMessage: t("settings.skills.loadFailed"),
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [client, connected, selectedScope, t]);
+  }, [client, connected, reportError, selectedScope, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -284,12 +288,16 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
           setPolicy(response.policy);
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: "[SkillsSettings] Failed to update skill policy",
+          fallbackMessage: t("settings.skills.saveFailed"),
+        });
       } finally {
         setWorkingSkill(null);
       }
     },
-    [client, policy, selectedScope, t],
+    [client, policy, reportError, selectedScope, t],
   );
 
   const handleOpenInstall = useCallback((mode: InstallMode) => {
@@ -425,11 +433,15 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
       handleCloseInstall();
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      reportError({
+        error,
+        logLabel: "[SkillsSettings] Failed to install skill",
+        fallbackMessage: t("settings.skills.installFailed"),
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [client, handleCloseInstall, installMode, installValue, refresh, t]);
+  }, [client, handleCloseInstall, installMode, installValue, refresh, reportError, t]);
 
   const handleUninstall = useCallback(
     async (sourceId: string) => {
@@ -450,12 +462,16 @@ export function SkillsSection({ serverId }: SkillsSectionProps) {
         await client.uninstallAgentSkill({ sourceId });
         await refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: "[SkillsSettings] Failed to uninstall skill",
+          fallbackMessage: t("settings.skills.uninstallFailed"),
+        });
       } finally {
         setIsLoading(false);
       }
     },
-    [client, refresh, t],
+    [client, refresh, reportError, t],
   );
 
   const selectedScopeLabel = useMemo(() => {

@@ -353,7 +353,8 @@
 - **首个代码切片**：新增跨平台 `useUserVisibleErrorReporter`，统一保留原始错误日志、规范化 fallback 消息和错误 Toast；既有 Desktop IPC helper 改为委托该 authority，避免重复实现。
 - **产品修复**：Host 设置的删除连接、重启 daemon、保存附加系统提示词、删除主机已迁移；其中系统提示词保存失败从“仅控制台可见”修复为中英文用户提示。
 - **边界保护**：异步操作在组件卸载后仍记录 late rejection，但可抑制 Toast，避免向已销毁页面投递反馈。
-- **状态**：进行中；下一批迁移 Skills / MCP 设置，再处理模型与 Provider 设置，不做全 App 一次性替换。
+- **Skills / MCP 切片**：加载、策略保存、安装/卸载、删除和表单保存共 8 条失败路径已迁移；真实 daemon 错误优先展示，不透明错误使用现有中英文本地化 fallback，并补齐稳定日志标签。
+- **状态**：进行中；下一批处理模型与 Provider 设置，区分表单 inline 校验、后台刷新和操作 Toast，不做全 App 一次性替换。
 
 ### Provider God-File 拆分（草案 + 部分执行，2026-07-03 起草）
 

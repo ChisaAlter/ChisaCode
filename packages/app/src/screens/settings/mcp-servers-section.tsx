@@ -17,7 +17,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Edit3, Globe2, Plus, RefreshCw, Search, Terminal, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
-import { useToast } from "@/contexts/toast-context";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
@@ -331,9 +331,9 @@ function McpServerRow({
 export function McpServersSection({ serverId }: McpServersSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const reportError = useUserVisibleErrorReporter();
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
-  const toast = useToast();
   const [scopes, setScopes] = useState<AgentMcpServerScopePayload[]>([]);
   const [servers, setServers] = useState<AgentMcpServerPayload[]>([]);
   const [policy, setPolicy] = useState<McpServerManagementConfig | null>(null);
@@ -363,11 +363,15 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         setSelectedScope({ type: "global" });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      reportError({
+        error,
+        logLabel: "[McpSettings] Failed to load MCP servers",
+        fallbackMessage: t("settings.mcpServers.loadFailed"),
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [client, connected, selectedScope, t]);
+  }, [client, connected, reportError, selectedScope, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -417,12 +421,16 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
           setPolicy(response.policy);
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: "[McpSettings] Failed to update MCP server policy",
+          fallbackMessage: t("settings.mcpServers.saveFailed"),
+        });
       } finally {
         setWorkingServer(null);
       }
     },
-    [client, policy, selectedScope, toast, t],
+    [client, policy, reportError, selectedScope, t],
   );
 
   const handleCloseCreateMenu = useCallback(() => {
@@ -561,12 +569,16 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         await client.deleteAgentMcpServer({ name: server.name });
         await refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        reportError({
+          error,
+          logLabel: `[McpSettings] Failed to delete MCP server ${server.name}`,
+          fallbackMessage: t("settings.mcpServers.deleteFailed"),
+        });
       } finally {
         setIsLoading(false);
       }
     },
-    [client, refresh, toast, t],
+    [client, refresh, reportError, t],
   );
 
   const handleCloseForm = useCallback(() => {
@@ -586,11 +598,15 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
       setForm(null);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      reportError({
+        error,
+        logLabel: "[McpSettings] Failed to save MCP server",
+        fallbackMessage: t("settings.mcpServers.saveFailed"),
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [client, form, refresh, t]);
+  }, [client, form, refresh, reportError, t]);
 
   const selectedScopeLabel = useMemo(() => {
     if (selectedScope.type === "global") return t("settings.mcpServers.all");
@@ -613,7 +629,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         {createMenu}
       </View>
     ),
-    [createButton, createMenu, refresh, toast, t],
+    [createButton, createMenu, refresh, t],
   );
 
   const scopeButtons = useMemo(
@@ -626,7 +642,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
           label: scope.label,
         })),
     ],
-    [scopes, toast, t],
+    [scopes, t],
   );
 
   const filteredServers = useMemo(
@@ -671,7 +687,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
     () => ({
       title: formTitle(form, t),
     }),
-    [form, toast, t],
+    [form, t],
   );
 
   const formFooter = useMemo(
@@ -685,7 +701,7 @@ export function McpServersSection({ serverId }: McpServersSectionProps) {
         </Button>
       </View>
     ),
-    [form?.name, handleCloseForm, handleSaveForm, isLoading, toast, t],
+    [form?.name, handleCloseForm, handleSaveForm, isLoading, t],
   );
 
   let serverContent: ReactNode;
