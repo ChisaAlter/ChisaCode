@@ -71,7 +71,7 @@ Host header validation and CORS origin checks are defense-in-depth controls for 
 
 CORS is not a complete security boundary. It controls which browser origins can make requests, but does not prevent a malicious website from resolving its domain to your local machine (DNS rebinding).
 
-ChisaCode validates the `Host` header on every HTTP request and every WebSocket upgrade against an allowlist (Vite-style semantics). By default, only `localhost`, `*.localhost`, and any literal IP address (IPv4 or IPv6) are accepted. Additional hostnames can be configured via `hostnames` in `config.json` or the `CHISACODE_HOSTNAMES` env var (comma-separated; entries beginning with `.` match a domain and its subdomains; the value `true` disables the allowlist entirely). Requests with unrecognized hosts are rejected with `403 Host not allowed`.
+ChisaCode validates the complete `Host` authority on every HTTP request and every WebSocket upgrade. By default, only `localhost`, `*.localhost`, and loopback IP literals (`127.0.0.0/8`, `::1`, and IPv4-mapped loopback addresses) are accepted. LAN, VPN, public, and other non-loopback IP addresses must be added explicitly through `hostnames` in `config.json` or `CHISACODE_HOSTNAMES` (comma-separated); the same applies to custom DNS names. Entries beginning with `.` match a domain and its subdomains. The value `true` disables allowlist filtering, but malformed authorities, invalid ports, missing hosts, and suffix-smuggling forms remain rejected. Requests with unrecognized hosts are rejected with `403 Host not allowed`.
 
 ## Agent authentication
 

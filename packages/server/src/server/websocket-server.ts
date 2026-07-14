@@ -580,7 +580,7 @@ export class VoiceAssistantWebSocketServer {
     const requestMetadata = extractSocketRequestMetadata(req);
     const origin = requestMetadata.origin;
     const requestHost = requestMetadata.host ?? null;
-    if (requestHost && !isHostnameAllowed(requestHost, hostnames)) {
+    if (!requestHost || !isHostnameAllowed(requestHost, hostnames)) {
       this.incrementRuntimeCounter("hostRejected");
       this.logger.warn(
         { ...requestMetadata, host: requestHost },

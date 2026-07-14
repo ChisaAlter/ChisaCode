@@ -152,7 +152,7 @@
 - [x] 审查批次 A（2026-07-05）— LOW #2: `SECURITY.md` 第 47 行仍称「replay protection is not yet implemented」，与 `bf0a8e9a1` 的 salt+seq 单调计数器 + fatal close 语义矛盾。更新文档对齐代码现状。
 - [x] 审查批次 A（2026-07-05）— LOW #1 复核: `DOWNLOAD_OPEN_FLAGS` 在 POSIX 含 `O_NOFOLLOW`，Windows 仅 `O_RDONLY`（Windows 不支持 `O_NOFOLLOW`，路径已由 realpath 规范化），无 bug，归档不再追踪。
 - [x] 审查批次 A 遗留: MEDIUM #4（relay `webSocketMessage` 抢占无抖动退避，DoS 放大）— server-control/server-data 替换路径已先验签再 close 旧 socket，错误/无签名 server socket 不能再抢占既有 daemon socket
-- [ ] 审查批次 A 遗留: LOW #3（`hostnames.ts` IP 字面量默认放行 = DNS rebinding 到公网 IP 可绕过 Host 检查）属 Vite 原始语义取舍，非 ChisaCode 引入，待在 SECURITY.md 注明取舍，后续专项
+- [x] 审查批次 A 遗留: LOW #3（`hostnames.ts` IP 字面量默认放行）— 默认 authority 收紧为仅允许 `localhost`、`*.localhost`、`127.0.0.0/8`、`::1` 与 IPv4-mapped loopback；LAN/VPN/公网 IP 必须显式配置。Host parser 现在拒绝无效端口、bracket/suffix 夹带、控制字符及缺失 Host，`hostnames: true` 仅关闭 allowlist 而不关闭语法校验；HTTP、主 WebSocket 与 script proxy 复用同一 fail-closed authority。`hostnames.test.ts` 15 个场景、`bootstrap-auth.test.ts` 12 个场景、server typecheck 与 4 个目标文件 lint 通过。
 - [ ] HIGH #3/#5/#6/#7/#8/#9/#10/#11 + MEDIUM #12-#20 + 测试覆盖 M-TC1-9 + LOW #1-8（归档批次历史编号，未在本批次执行）
 
 **防回滚机制**：每项修复提交时在 commit message 引用根因诊断；安全测试不得改 `not.toThrow`，硬语义降级必须经 opt-in flag 而非默认。

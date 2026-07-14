@@ -636,7 +636,7 @@ export async function createChisaCodeDaemon(
     logger,
   });
 
-  // Host allowlist / DNS rebinding protection (vite-like semantics).
+  // Host allowlist / DNS rebinding protection with loopback-only IP defaults.
   // For non-TCP (unix sockets), skip host validation.
   if (listenTarget.type === "tcp") {
     app.use((req, res, next) => {

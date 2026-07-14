@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PersistedConfigSchema } from "./persisted-config.js";
 import { isHostnameAllowed, mergeHostnames, parseHostnamesEnv } from "./hostnames.js";
 
-describe("hostnames (vite-style)", () => {
+describe("hostname authority", () => {
   it("allows localhost by default", () => {
     expect(isHostnameAllowed("localhost:6767", undefined)).toBe(true);
   });
@@ -11,9 +11,30 @@ describe("hostnames (vite-style)", () => {
     expect(isHostnameAllowed("foo.localhost:6767", undefined)).toBe(true);
   });
 
-  it("allows IP addresses by default", () => {
+  it("allows loopback IP addresses by default", () => {
     expect(isHostnameAllowed("127.0.0.1:6767", undefined)).toBe(true);
+    expect(isHostnameAllowed("127.42.0.9:6767", undefined)).toBe(true);
     expect(isHostnameAllowed("[::1]:6767", undefined)).toBe(true);
+    expect(isHostnameAllowed("[0:0:0:0:0:0:0:1]:6767", undefined)).toBe(true);
+    expect(isHostnameAllowed("[::ffff:127.0.0.1]:6767", undefined)).toBe(true);
+  });
+
+  it("requires non-loopback IP addresses to be explicitly configured", () => {
+    expect(isHostnameAllowed("192.168.1.20:6767", undefined)).toBe(false);
+    expect(isHostnameAllowed("203.0.113.10:6767", undefined)).toBe(false);
+    expect(isHostnameAllowed("[2001:db8::10]:6767", undefined)).toBe(false);
+    expect(isHostnameAllowed("192.168.1.20:6767", ["192.168.1.20"])).toBe(true);
+    expect(isHostnameAllowed("[2001:db8::10]:6767", ["2001:db8::10"])).toBe(true);
+  });
+
+  it.each([
+    "[::1]evil.example:6767",
+    "[::1]:not-a-port",
+    "localhost:6767:evil",
+    "localhost:not-a-port",
+    "localhost:70000",
+  ])("rejects malformed Host authorities: %s", (hostHeader) => {
+    expect(isHostnameAllowed(hostHeader, true)).toBe(false);
   });
 
   it("rejects non-default hosts when no allowlist is provided", () => {
