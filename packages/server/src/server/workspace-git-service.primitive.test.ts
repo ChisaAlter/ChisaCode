@@ -819,6 +819,64 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     service.dispose();
   });
 
+  test("GitHub poll binding restarts and invalidates cached status when the remote changes", async () => {
+    let nowMs = 0;
+    const firstUnsubscribe = vi.fn();
+    const secondUnsubscribe = vi.fn();
+    const retainCurrentPullRequestStatusPoll = vi
+      .fn()
+      .mockReturnValueOnce({ unsubscribe: firstUnsubscribe })
+      .mockReturnValueOnce({ unsubscribe: secondUnsubscribe });
+    const invalidate = vi.fn();
+    const github = {
+      ...createGitHubServiceStub(),
+      retainCurrentPullRequestStatusPoll,
+      invalidate,
+    };
+    const getCheckoutStatus = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createCheckoutStatus(REPO_CWD, {
+          currentBranch: "feature",
+          remoteUrl: "https://github.com/acme/first.git",
+        }),
+      )
+      .mockResolvedValueOnce(
+        createCheckoutStatus(REPO_CWD, {
+          currentBranch: "feature",
+          remoteUrl: "https://github.com/acme/second.git",
+        }),
+      );
+    const service = createService({
+      getCheckoutStatus,
+      github,
+      now: () => new Date(nowMs),
+    });
+
+    await service.getSnapshot(REPO_CWD);
+    const subscription = service.registerWorkspace({ cwd: REPO_CWD }, vi.fn());
+    await vi.waitFor(() => {
+      expect(retainCurrentPullRequestStatusPoll).toHaveBeenCalledTimes(1);
+    });
+
+    nowMs = 3_000;
+    await service.refresh(REPO_CWD);
+    await vi.waitFor(() => {
+      expect(retainCurrentPullRequestStatusPoll).toHaveBeenCalledTimes(2);
+    });
+
+    expect(firstUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({ cwd: REPO_CWD });
+    expect(retainCurrentPullRequestStatusPoll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cwd: REPO_CWD, headRef: "feature" }),
+    );
+
+    subscription.unsubscribe();
+    expect(secondUnsubscribe).toHaveBeenCalledTimes(1);
+    service.dispose();
+  });
+
   test("subscription starts GitHub self-heal reads within the fast poll window", async () => {
     let nowMs = 0;
     const githubReadCalls: Array<{ reason: string | undefined; tickMs: number }> = [];

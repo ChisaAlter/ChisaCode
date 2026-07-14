@@ -38,6 +38,7 @@ import {
   type WorkspaceGitStashListOptions,
   type WorkspaceGitWorktreeInfo,
 } from "./workspace-git-auxiliary-read-authority.js";
+import { WorkspaceGitHubPollBinding } from "./workspace-git-github-poll-binding.js";
 import { WorkspaceGitRepositoryFetchAuthority } from "./workspace-git-repository-fetch-authority.js";
 import { WorkspaceGitWorkingTreeObserver } from "./workspace-git-working-tree-observer.js";
 import type { WorkspaceGitMetadata } from "./workspace-git-metadata.js";
@@ -236,8 +237,6 @@ interface WorkspaceGitTarget {
   watchers: FSWatcher[];
   debounceTimer: NodeJS.Timeout | null;
   selfHealTimer: NodeJS.Timeout | null;
-  githubPollSubscription: { unsubscribe: () => void } | null;
-  githubPollHeadRef: string | null;
   refreshState: WorkspaceGitRefreshState;
   latestGit: WorkspaceGitRuntimeSnapshot["git"] | null;
   latestGitLoadedAtMs: number | null;
@@ -294,6 +293,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly workspaceTargets = new Map<string, WorkspaceGitTarget>();
   private readonly workingTreeObserver: WorkspaceGitWorkingTreeObserver;
   private readonly auxiliaryReadAuthority: WorkspaceGitAuxiliaryReadAuthority;
+  private readonly githubPollBinding: WorkspaceGitHubPollBinding;
   private readonly repositoryFetchAuthority: WorkspaceGitRepositoryFetchAuthority;
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
@@ -329,6 +329,10 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
           });
         },
       },
+    });
+    this.githubPollBinding = new WorkspaceGitHubPollBinding({
+      logger: this.logger,
+      github: this.deps.github,
     });
     this.workingTreeObserver = new WorkspaceGitWorkingTreeObserver({
       logger: this.logger,
@@ -527,6 +531,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     this.workspaceTargets.clear();
 
     this.repositoryFetchAuthority.dispose();
+    this.githubPollBinding.dispose();
     this.workingTreeObserver.dispose();
     this.snapshotUpdatedListeners.clear();
   }
@@ -547,8 +552,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       watchers: [],
       debounceTimer: null,
       selfHealTimer: null,
-      githubPollSubscription: null,
-      githubPollHeadRef: null,
       refreshState: { status: "idle" },
       latestGit: null,
       latestGitLoadedAtMs: null,
@@ -798,33 +801,17 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   }
 
   private updateGitHubPollForTarget(target: WorkspaceGitTarget): void {
-    if (target.listeners.size === 0) {
-      this.stopGitHubPollForTarget(target);
-      return;
-    }
-
     const git = target.latestGit;
-    if (!git || !this.deps.github.retainCurrentPullRequestStatusPoll) {
-      this.stopGitHubPollForTarget(target);
-      return;
-    }
-
-    const headRef = git.currentBranch;
+    const headRef = target.listeners.size > 0 ? (git?.currentBranch ?? null) : null;
     const hasGitHubRemote =
+      git !== null &&
       target.cachedGitHubRemote?.remoteUrl === git.remoteUrl &&
       target.cachedGitHubRemote.identity !== null;
-    if (!headRef || !hasGitHubRemote) {
-      this.stopGitHubPollForTarget(target);
-      return;
-    }
-    if (target.githubPollHeadRef === headRef && target.githubPollSubscription) {
-      return;
-    }
+    const remoteUrl = hasGitHubRemote ? git.remoteUrl : null;
 
-    this.stopGitHubPollForTarget(target);
-    target.githubPollHeadRef = headRef;
-    target.githubPollSubscription = this.deps.github.retainCurrentPullRequestStatusPoll({
+    this.githubPollBinding.sync({
       cwd: target.cwd,
+      remoteUrl,
       headRef,
       onStatus: (status) => {
         if (!this.isActiveObservedWorkspaceTarget(target)) {
@@ -842,13 +829,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       },
     });
   }
-
-  private stopGitHubPollForTarget(target: WorkspaceGitTarget): void {
-    target.githubPollSubscription?.unsubscribe();
-    target.githubPollSubscription = null;
-    target.githubPollHeadRef = null;
-  }
-
   private async refreshWorkspaceTarget(
     target: WorkspaceGitTarget,
     request: WorkspaceGitRefreshRequest,
@@ -1203,7 +1183,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       clearInterval(target.selfHealTimer);
       target.selfHealTimer = null;
     }
-    this.stopGitHubPollForTarget(target);
+    this.githubPollBinding.remove(target.cwd);
 
     for (const watcher of target.watchers) {
       watcher.close();
