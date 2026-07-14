@@ -7,21 +7,18 @@ import {
   memo,
   type ReactElement,
   type ReactNode,
-  type RefObject,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { DiffStat } from "@/components/diff-stat";
 import {
   View,
   Text,
-  ActivityIndicator,
   Pressable,
   FlatList,
   type LayoutChangeEvent,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
   type PressableStateCallbackType,
-  type FlatListProps,
   type StyleProp,
   type ViewStyle,
   type TextStyle,
@@ -100,6 +97,11 @@ import {
 } from "@/review";
 import { buildReviewSummaryModel } from "@/git/review-summary";
 import { DiffPaneControls, ReviewSummaryBand } from "@/git/diff-pane-controls";
+import {
+  DiffPaneBody,
+  type DiffPaneFlatItem,
+  type DiffPaneFlatItemLayoutGetter,
+} from "@/git/diff-pane-body";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -1064,11 +1066,6 @@ interface GitDiffPaneProps {
   enabled?: boolean;
 }
 
-type DiffFlatItem =
-  | { type: "header"; file: ParsedDiffFile; fileIndex: number; isExpanded: boolean }
-  | { type: "body"; file: ParsedDiffFile; fileIndex: number };
-type DiffFlatItemLayoutGetter = NonNullable<FlatListProps<DiffFlatItem>["getItemLayout"]>;
-
 function getUnifiedDiffLineCount(file: ParsedDiffFile): number {
   let lineCount = 0;
   for (const hunk of file.hunks) {
@@ -1104,120 +1101,6 @@ function computeEmptyMessage(
     return copy.noUncommittedChanges;
   }
   return copy.noChangesVs(baseRefLabel);
-}
-
-interface DiffBodyContentProps {
-  isStatusLoading: boolean;
-  statusErrorMessage: string | null;
-  notGit: boolean;
-  isDiffLoading: boolean;
-  diffErrorMessage: string | null;
-  hasChanges: boolean;
-  emptyMessage: string;
-  flatItems: DiffFlatItem[];
-  stickyHeaderIndices: number[];
-  renderFlatItem: ({ item }: { item: DiffFlatItem }) => ReactElement;
-  flatKeyExtractor: (item: DiffFlatItem) => string;
-  getFlatItemLayout: DiffFlatItemLayoutGetter;
-  flatExtraData: unknown;
-  diffListRef: RefObject<FlatList<DiffFlatItem> | null>;
-  handleDiffListLayout: (event: LayoutChangeEvent) => void;
-  handleDiffListScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-  onContentSizeChange: (width: number, height: number) => void;
-  showDesktopWebScrollbar: boolean;
-  foregroundMutedColor: string;
-}
-
-function DiffBodyContent({
-  isStatusLoading,
-  statusErrorMessage,
-  notGit,
-  isDiffLoading,
-  diffErrorMessage,
-  hasChanges,
-  emptyMessage,
-  flatItems,
-  stickyHeaderIndices,
-  renderFlatItem,
-  flatKeyExtractor,
-  getFlatItemLayout,
-  flatExtraData,
-  diffListRef,
-  handleDiffListLayout,
-  handleDiffListScroll,
-  onContentSizeChange,
-  showDesktopWebScrollbar,
-  foregroundMutedColor,
-}: DiffBodyContentProps) {
-  const { t } = useTranslation();
-  if (isStatusLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={foregroundMutedColor} />
-        <Text style={styles.loadingText}>{t("git.checkingRepository")}</Text>
-      </View>
-    );
-  }
-  if (statusErrorMessage) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{statusErrorMessage}</Text>
-      </View>
-    );
-  }
-  if (notGit) {
-    return (
-      <View style={styles.emptyContainer} testID="changes-not-git">
-        <Text style={styles.emptyText}>{t("git.notGitRepository")}</Text>
-      </View>
-    );
-  }
-  if (isDiffLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={foregroundMutedColor} />
-      </View>
-    );
-  }
-  if (diffErrorMessage) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{diffErrorMessage}</Text>
-      </View>
-    );
-  }
-  if (!hasChanges) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>{emptyMessage}</Text>
-      </View>
-    );
-  }
-  return (
-    <FlatList
-      ref={diffListRef}
-      data={flatItems}
-      renderItem={renderFlatItem}
-      keyExtractor={flatKeyExtractor}
-      getItemLayout={getFlatItemLayout}
-      stickyHeaderIndices={stickyHeaderIndices}
-      extraData={flatExtraData}
-      style={styles.scrollView}
-      contentContainerStyle={styles.contentContainer}
-      testID="git-diff-scroll"
-      onLayout={handleDiffListLayout}
-      onScroll={handleDiffListScroll}
-      onContentSizeChange={onContentSizeChange}
-      scrollEventThrottle={16}
-      showsVerticalScrollIndicator={!showDesktopWebScrollbar}
-      // Mixed-height rows (header + potentially very large body) are prone to clipping artifacts.
-      // Keep a larger render window and disable clipping to avoid bodies disappearing mid-scroll.
-      removeClippedSubviews={false}
-      initialNumToRender={12}
-      maxToRenderPerBatch={12}
-      windowSize={10}
-    />
-  );
 }
 
 interface DeriveStatusStateInputs {
@@ -1475,7 +1358,7 @@ export function GitDiffPane({
     (state) => state.setDiffExpandedPathsForWorkspace,
   );
   const expandedPaths = useMemo(() => new Set(expandedPathsArray ?? []), [expandedPathsArray]);
-  const diffListRef = useRef<FlatList<DiffFlatItem>>(null);
+  const diffListRef = useRef<FlatList<DiffPaneFlatItem>>(null);
   const scrollbar = useWebScrollViewScrollbar(diffListRef, {
     enabled: showDesktopWebScrollbar,
   });
@@ -1489,7 +1372,7 @@ export function GitDiffPane({
   const diffBodyChromeHeight = theme.borderWidth[1] * 2;
   const statusBodyHeightEstimate = diffBodyChromeHeight + theme.spacing[4] * 2 + diffBodyLineHeight;
   const { flatItems, stickyHeaderIndices } = useMemo(() => {
-    const items: DiffFlatItem[] = [];
+    const items: DiffPaneFlatItem[] = [];
     const stickyIndices: number[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -1675,7 +1558,7 @@ export function GitDiffPane({
   }, [autoDiffMode]);
 
   const renderFlatItem = useCallback(
-    ({ item }: { item: DiffFlatItem }) => {
+    ({ item }: { item: DiffPaneFlatItem }) => {
       if (item.type === "header") {
         return (
           <DiffFileHeader
@@ -1709,12 +1592,12 @@ export function GitDiffPane({
   );
 
   const flatKeyExtractor = useCallback(
-    (item: DiffFlatItem) => `${item.type}-${item.file.path}`,
+    (item: DiffPaneFlatItem) => `${item.type}-${item.file.path}`,
     [],
   );
 
   const getFlatItemHeight = useCallback(
-    (item: DiffFlatItem): number => {
+    (item: DiffPaneFlatItem): number => {
       if (item.type === "header") {
         return headerHeightByPathRef.current[item.file.path] ?? defaultHeaderHeightRef.current;
       }
@@ -1725,7 +1608,7 @@ export function GitDiffPane({
     [estimateBodyHeight, getBodyHeightKey],
   );
 
-  const getFlatItemLayout = useCallback<DiffFlatItemLayoutGetter>(
+  const getFlatItemLayout = useCallback<DiffPaneFlatItemLayoutGetter>(
     (_data, index) => {
       let offset = 0;
       for (let itemIndex = 0; itemIndex < index; itemIndex += 1) {
@@ -1802,7 +1685,7 @@ export function GitDiffPane({
   );
 
   const bodyContent: ReactElement = (
-    <DiffBodyContent
+    <DiffPaneBody
       isStatusLoading={isStatusLoading}
       statusErrorMessage={statusErrorMessage}
       notGit={notGit}
@@ -1930,45 +1813,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     position: "relative",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingBottom: theme.spacing[8],
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: theme.spacing[16],
-    gap: theme.spacing[4],
-  },
-  loadingText: {
-    fontSize: theme.fontSize.base,
-    color: theme.colors.foregroundMuted,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: theme.spacing[16],
-    paddingHorizontal: theme.spacing[6],
-  },
-  errorText: {
-    fontSize: theme.fontSize.base,
-    color: theme.colors.destructive,
-    textAlign: "center",
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: theme.spacing[16],
-  },
-  emptyText: {
-    fontSize: theme.fontSize.lg,
-    color: theme.colors.foregroundMuted,
   },
   fileSection: {
     overflow: "hidden",
