@@ -1,6 +1,7 @@
 import { resolve, dirname, basename } from "path";
 import { existsSync, realpathSync } from "fs";
-import { readFile, stat as statFile } from "fs/promises";
+import { readFile } from "fs/promises";
+
 import { TTLCache } from "@isaacs/ttlcache";
 import type { Logger } from "pino";
 
@@ -23,7 +24,10 @@ import {
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
 } from "./checkout-git-diff.js";
-import { PER_FILE_DIFF_MAX_BYTES, isLikelyBinaryFile } from "./checkout-git-file-inspection.js";
+import {
+  createCheckoutShortstatAuthority,
+  type CheckoutShortstat,
+} from "./checkout-git-shortstat.js";
 import { READ_ONLY_GIT_ENV, requireGitRepo } from "./checkout-git-repository.js";
 import { isChisaCodeOwnedWorktreeCwd } from "./worktree.js";
 import { readChisaCodeWorktreeMetadata } from "./worktree-metadata.js";
@@ -43,6 +47,7 @@ export {
   type RemoteOnlyBranchCheckoutResolution,
 } from "./checkout-git-branches.js";
 export type { CheckoutDiffCompare, CheckoutDiffResult } from "./checkout-git-diff.js";
+export type { CheckoutShortstat } from "./checkout-git-shortstat.js";
 const PULL_REQUEST_REMOTE_PREFIXES = ["chisacode-pr-", "chisacode-pr-"] as const;
 
 function isManagedPullRequestRemote(remoteName: string | null | undefined): remoteName is string {
@@ -55,16 +60,11 @@ function isManagedPullRequestRemote(remoteName: string | null | undefined): remo
 
 const DEFAULT_PULL_REQUEST_STATUS_CACHE_TTL_MS = 30_000;
 const PULL_REQUEST_STATUS_CACHE_MAX = 1_000;
-const DEFAULT_SHORTSTAT_CACHE_TTL_MS = 15_000;
-const SHORTSTAT_CACHE_MAX = 1_000;
 
 let pullRequestStatusCacheTtlMs = DEFAULT_PULL_REQUEST_STATUS_CACHE_TTL_MS;
 let pullRequestStatusCache = createPullRequestStatusCache(pullRequestStatusCacheTtlMs);
 const pullRequestStatusInFlight = new Map<string, Promise<PullRequestStatusResult>>();
 const lastSuccessfulPullRequestStatus = new Map<string, PullRequestStatusResult>();
-let shortstatCacheTtlMs = DEFAULT_SHORTSTAT_CACHE_TTL_MS;
-let shortstatCache = createShortstatCache(shortstatCacheTtlMs);
-const shortstatInFlight = new Map<string, Promise<CheckoutShortstat | null>>();
 
 interface CheckoutReadCacheOptions {
   force?: boolean;
@@ -92,14 +92,6 @@ function createPullRequestStatusCache(ttlMs: number) {
   });
 }
 
-function createShortstatCache(ttlMs: number) {
-  return new TTLCache<string, CheckoutShortstat | null>({
-    ttl: ttlMs,
-    max: SHORTSTAT_CACHE_MAX,
-    checkAgeOnGet: true,
-  });
-}
-
 function getPullRequestStatusCacheKey(cwd: string): string {
   return resolve(cwd);
 }
@@ -113,10 +105,6 @@ function rememberPullRequestStatus(cacheKey: string, status: PullRequestStatusRe
   if (!oldest.done) {
     lastSuccessfulPullRequestStatus.delete(oldest.value);
   }
-}
-
-function getShortstatCacheKey(cwd: string): string {
-  return resolve(cwd);
 }
 
 export function __resetPullRequestStatusCacheForTests(): void {
@@ -135,22 +123,6 @@ export function __setPullRequestStatusCacheTtlForTests(ttlMs: number): void {
   pullRequestStatusCache = createPullRequestStatusCache(ttlMs);
   pullRequestStatusInFlight.clear();
   lastSuccessfulPullRequestStatus.clear();
-}
-
-export function __resetCheckoutShortstatCacheForTests(): void {
-  shortstatCache.clear();
-  shortstatCache.cancelTimer();
-  shortstatCacheTtlMs = DEFAULT_SHORTSTAT_CACHE_TTL_MS;
-  shortstatCache = createShortstatCache(shortstatCacheTtlMs);
-  shortstatInFlight.clear();
-}
-
-export function __setCheckoutShortstatCacheTtlForTests(ttlMs: number): void {
-  shortstatCache.clear();
-  shortstatCache.cancelTimer();
-  shortstatCacheTtlMs = ttlMs;
-  shortstatCache = createShortstatCache(ttlMs);
-  shortstatInFlight.clear();
 }
 
 export class MergeConflictError extends Error {
@@ -1148,220 +1120,52 @@ export async function getCheckoutStatus(
   };
 }
 
-export interface CheckoutShortstat {
-  additions: number;
-  deletions: number;
+const checkoutShortstatAuthority = createCheckoutShortstatAuthority<CheckoutContext>({
+  getFacts: (context) => context?.facts,
+  getResolvedBaseRefForCwd,
+  getCurrentBranch,
+  resolveBestComparisonBaseRef: (cwd, baseRef) => resolveBestComparisonBaseRef(cwd, baseRef),
+  doesGitRefExist: (cwd, fullRef) => doesGitRefExist(cwd, fullRef),
+});
+
+/** Resets checkout shortstat cache state for isolated tests. */
+export function __resetCheckoutShortstatCacheForTests(): void {
+  checkoutShortstatAuthority.resetCacheForTests();
 }
 
-function parseCheckoutShortstat(text: string): CheckoutShortstat | null {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  let additions = 0;
-  let deletions = 0;
-  const addMatch = trimmed.match(/(\d+)\s+insertion/);
-  if (addMatch) {
-    additions = Number.parseInt(addMatch[1], 10);
-  }
-  const delMatch = trimmed.match(/(\d+)\s+deletion/);
-  if (delMatch) {
-    deletions = Number.parseInt(delMatch[1], 10);
-  }
-
-  if (additions === 0 && deletions === 0) {
-    return null;
-  }
-
-  return { additions, deletions };
+/** Overrides checkout shortstat cache TTL for isolated tests. */
+export function __setCheckoutShortstatCacheTtlForTests(ttlMs: number): void {
+  checkoutShortstatAuthority.setCacheTtlForTests(ttlMs);
 }
 
-const UNTRACKED_SHORTSTAT_MAX_FILES = 500;
-
-async function countUntrackedAdditions(cwd: string): Promise<number> {
-  try {
-    const { stdout } = await runGitCommand(["ls-files", "--others", "--exclude-standard"], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    const files = stdout
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-
-    let additions = 0;
-    for (const file of files.slice(0, UNTRACKED_SHORTSTAT_MAX_FILES)) {
-      const absolutePath = resolve(cwd, file);
-      try {
-        const metadata = await statFile(absolutePath);
-        if (metadata.size > PER_FILE_DIFF_MAX_BYTES) continue;
-        if (await isLikelyBinaryFile(absolutePath)) continue;
-        const content = await readFile(absolutePath, "utf-8");
-        if (content.length === 0) continue;
-        const normalized = content.replace(/\r\n/g, "\n");
-        const lineCount = normalized.split("\n").length;
-        additions += normalized.endsWith("\n") ? lineCount - 1 : lineCount;
-      } catch {
-        // Skip unreadable files.
-      }
-    }
-    return additions;
-  } catch {
-    return 0;
-  }
-}
-
-async function getCheckoutShortstatUncached(
-  cwd: string,
-  context?: CheckoutContext,
-): Promise<CheckoutShortstat | null> {
-  if (context?.facts?.isGit === false) {
-    return null;
-  }
-  if (!context?.facts?.isGit) {
-    try {
-      await requireGitRepo(cwd);
-    } catch {
-      return null;
-    }
-  }
-
-  const facts = context?.facts;
-  const localBaseRef = facts?.isGit
-    ? facts.resolvedBaseRef
-    : await getResolvedBaseRefForCwd(cwd, context);
-  const currentBranch = facts?.isGit ? facts.currentBranch : await getCurrentBranch(cwd);
-  const comparisonRef = await resolveShortstatComparisonRef({
-    cwd,
-    currentBranch,
-    localBaseRef,
-    facts,
-  });
-  if (!comparisonRef) {
-    return null;
-  }
-
-  try {
-    const { stdout: mergeBaseOut } = await runGitCommand(["merge-base", "HEAD", comparisonRef], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    const mergeBase = mergeBaseOut.trim();
-    if (!mergeBase) {
-      return null;
-    }
-
-    const [{ stdout }, untrackedAdditions] = await Promise.all([
-      runGitCommand(["diff", "--shortstat", mergeBase], {
-        cwd,
-        envOverlay: READ_ONLY_GIT_ENV,
-      }),
-      countUntrackedAdditions(cwd),
-    ]);
-
-    const tracked = parseCheckoutShortstat(stdout);
-
-    if (tracked) {
-      return { additions: tracked.additions + untrackedAdditions, deletions: tracked.deletions };
-    }
-    if (untrackedAdditions > 0) {
-      return { additions: untrackedAdditions, deletions: 0 };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function resolveShortstatComparisonRef(input: {
-  cwd: string;
-  currentBranch: string | null;
-  localBaseRef: string | null;
-  facts?: CheckoutSnapshotFacts | null;
-}): Promise<string | null> {
-  const { cwd, currentBranch, localBaseRef, facts } = input;
-  if (!currentBranch) {
-    return null;
-  }
-
-  if (localBaseRef && currentBranch !== localBaseRef) {
-    try {
-      return facts?.isGit && facts.resolvedBaseRef === localBaseRef && facts.comparisonBaseRef
-        ? facts.comparisonBaseRef
-        : await resolveBestComparisonBaseRef(cwd, localBaseRef);
-    } catch {
-      return null;
-    }
-  }
-
-  const hasOrigin = await doesGitRefExist(cwd, `refs/remotes/origin/${currentBranch}`);
-  return hasOrigin ? `origin/${currentBranch}` : null;
-}
-
-function getOrLoadCheckoutShortstat(
-  cwd: string,
-  context?: CheckoutContext,
-  options?: CheckoutReadCacheOptions,
-): Promise<CheckoutShortstat | null> {
-  const cacheKey = getShortstatCacheKey(cwd);
-  if (!options?.force) {
-    const cached = shortstatCache.get(cacheKey);
-    if (cached !== undefined) {
-      return Promise.resolve(cached);
-    }
-
-    const existing = shortstatInFlight.get(cacheKey);
-    if (existing) {
-      return existing;
-    }
-  }
-
-  const load = getCheckoutShortstatUncached(cwd, context)
-    .then((shortstat) => {
-      shortstatCache.set(cacheKey, shortstat);
-      return shortstat;
-    })
-    .finally(() => {
-      shortstatInFlight.delete(cacheKey);
-    });
-
-  shortstatInFlight.set(cacheKey, load);
-  return load;
-}
-
+/**
+ * Reads cached or fresh aggregate line changes for a checkout.
+ * @param cwd Repository working directory
+ * @param context Optional cached checkout facts and logger
+ * @param options Cache control options
+ * @returns Aggregate additions/deletions, or null when there is no comparison
+ */
 export async function getCheckoutShortstat(
   cwd: string,
   context?: CheckoutContext,
   options?: CheckoutReadCacheOptions,
 ): Promise<CheckoutShortstat | null> {
-  return getOrLoadCheckoutShortstat(cwd, context, options);
+  return checkoutShortstatAuthority.get(cwd, context, options);
 }
 
+/** Returns the current cached shortstat without starting Git work. */
 export function getCachedCheckoutShortstat(cwd: string): CheckoutShortstat | null | undefined {
-  return shortstatCache.get(getShortstatCacheKey(cwd));
+  return checkoutShortstatAuthority.getCached(cwd);
 }
 
+/** Starts a best-effort shortstat warmup when no cached or in-flight value exists. */
 export function warmCheckoutShortstatInBackground(
   cwd: string,
   context?: CheckoutContext,
   onComplete?: () => void,
 ): void {
-  const cacheKey = getShortstatCacheKey(cwd);
-  if (shortstatCache.get(cacheKey) !== undefined || shortstatInFlight.has(cacheKey)) {
-    return;
-  }
-
-  void getOrLoadCheckoutShortstat(cwd, context)
-    .then(() => {
-      onComplete?.();
-      return;
-    })
-    .catch(() => {
-      // Non-critical: keep listing path resilient even if git commands fail.
-    });
+  checkoutShortstatAuthority.warm(cwd, context, onComplete);
 }
-
 const checkoutDiffReader = createCheckoutDiffReader<CheckoutContext>({
   resolveBaseRefForCwd,
   resolveBestComparisonBaseRef: (cwd, baseRef) => resolveBestComparisonBaseRef(cwd, baseRef),
