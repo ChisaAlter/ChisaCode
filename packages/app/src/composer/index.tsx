@@ -26,15 +26,12 @@ import { MessageInput, type MessageInputRef } from "./input/input";
 import type { ImageAttachment, MessagePayload } from "./types";
 import type { Theme } from "@/styles/theme";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
-import { encodeImages } from "@/utils/encode-images";
 import { focusWithRetries } from "@/utils/web-focus";
 import {
   cancelComposerAgent,
-  dispatchComposerAgentMessage,
   openComposerAttachment,
   pickAndPersistImages,
   removeComposerAttachmentAtIndex,
-  type AgentStreamWriter,
 } from "@/composer/actions";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
@@ -69,6 +66,7 @@ import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
 import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
 import { useComposerAttachmentMenu } from "./attachment-menu";
+import { useComposerDeliveryController } from "./delivery-controller";
 import { useComposerGithubPicker } from "./github/picker";
 import { useComposerKeyboardController } from "./keyboard-controller";
 import { useComposerQueueController } from "./queue-controller";
@@ -228,9 +226,6 @@ export function Composer({
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
 
-  const setAgentStreamTail = useSessionStore((state) => state.setAgentStreamTail);
-  const setAgentStreamHead = useSessionStore((state) => state.setAgentStreamHead);
-
   const isMobile = useIsCompactFormFactor();
   const isDesktopWebBreakpoint = resolveIsDesktopWebBreakpoint(isMobile);
   const messagePlaceholder = resolveMessagePlaceholder({
@@ -274,41 +269,24 @@ export function Composer({
     anchorRef: attachButtonRef,
   });
 
-  const runClientSlashCommand = useCallback(
-    (command: ClientSlashCommand): boolean => {
-      if (command.execution !== "immediate" || !onClientSlashCommand) {
-        return false;
-      }
-
-      if (blurOnSubmit) {
-        messageInputRef.current?.blur();
-      }
-      clearDraft("sent");
-      setUserInput("");
-      setSelectedAttachments([]);
-      resetSuppression();
-      setSendError(null);
-      setIsProcessing(true);
-      void onClientSlashCommand(command)
-        .catch((error) => {
-          console.error("[Composer] Failed to run client slash command:", error);
-          setSendError(error instanceof Error ? error.message : String(error));
-        })
-        .finally(() => {
-          setIsProcessing(false);
-        });
-      return true;
-    },
-    [
-      blurOnSubmit,
-      clearDraft,
-      onClientSlashCommand,
-      resetSuppression,
-      setSelectedAttachments,
-      setUserInput,
-    ],
-  );
-
+  const { runClientSlashCommand, submitMessage, canSubmitMessage } = useComposerDeliveryController({
+    serverId,
+    agentId,
+    cwd,
+    client,
+    messageInputRef,
+    blurOnSubmit,
+    onSubmitMessage,
+    onClientSlashCommand,
+    onMessageSent,
+    onAttentionPromptSend,
+    clearDraft,
+    setUserInput,
+    setSelectedAttachments,
+    resetSuppression,
+    setSendError,
+    setIsProcessing,
+  });
   const autocomplete = useAgentAutocomplete({
     userInput,
     cursorIndex,
@@ -337,11 +315,6 @@ export function Composer({
   }, [userInput.length]);
 
   const { pickImages } = useImageAttachmentPicker();
-  const agentIdRef = useRef(agentId);
-  const sendAgentMessageRef = useRef<
-    ((agentId: string, text: string, attachments: ComposerAttachment[]) => Promise<void>) | null
-  >(null);
-  const onSubmitMessageRef = useRef(onSubmitMessage);
 
   // Expose addImages function to parent for drag-and-drop support
   const addImages = useCallback(
@@ -373,63 +346,9 @@ export function Composer({
     onFocusInput?.(focusInput);
   }, [focusInput, onFocusInput]);
 
-  const submitMessage = useCallback(
-    async (text: string, submitAttachments: ComposerAttachment[]) => {
-      onMessageSent?.();
-      if (onSubmitMessageRef.current) {
-        await onSubmitMessageRef.current({ text, attachments: submitAttachments, cwd });
-        return;
-      }
-      if (!sendAgentMessageRef.current) {
-        throw new Error("Host is not connected");
-      }
-      await sendAgentMessageRef.current(agentIdRef.current, text, submitAttachments);
-    },
-    [cwd, onMessageSent],
-  );
-
-  useEffect(() => {
-    agentIdRef.current = agentId;
-  }, [agentId]);
-
-  useEffect(() => {
-    sendAgentMessageRef.current = async (
-      targetAgentId: string,
-      text: string,
-      sendAttachments: ComposerAttachment[],
-    ) => {
-      if (!client) {
-        throw new Error("Host is not connected");
-      }
-      const stream: AgentStreamWriter = {
-        getTail: (id) => useSessionStore.getState().sessions[serverId]?.agentStreamTail?.get(id),
-        getHead: (id) => useSessionStore.getState().sessions[serverId]?.agentStreamHead?.get(id),
-        setHead: (updater) => setAgentStreamHead(serverId, updater),
-        setTail: (updater) => setAgentStreamTail(serverId, updater),
-      };
-      await dispatchComposerAgentMessage({
-        client,
-        agentId: targetAgentId,
-        text,
-        attachments: sendAttachments,
-        encodeImages,
-        stream,
-      });
-      onAttentionPromptSend?.();
-    };
-  }, [client, onAttentionPromptSend, serverId, setAgentStreamTail, setAgentStreamHead]);
-
-  useEffect(() => {
-    onSubmitMessageRef.current = onSubmitMessage;
-  }, [onSubmitMessage]);
-
   const isAgentRunning = agentState.status === "running";
   const hasAgent = agentState.status !== null;
 
-  const canSubmitQueuedMessage = useCallback(
-    () => Boolean(sendAgentMessageRef.current || onSubmitMessageRef.current),
-    [],
-  );
   const {
     queuedMessages,
     queueMessage,
@@ -446,7 +365,7 @@ export function Composer({
     resetSuppression,
     clearSentAttachments,
     runClientSlashCommand,
-    canSubmitQueuedMessage,
+    canSubmitQueuedMessage: canSubmitMessage,
     submitMessage,
     setSendError,
   });
@@ -466,7 +385,7 @@ export function Composer({
         isAgentRunning,
         // Parent-managed submits are still valid submit paths even when the
         // transport is disconnected, because the parent decides the failure mode.
-        canSubmit: Boolean(sendAgentMessageRef.current || onSubmitMessageRef.current),
+        canSubmit: canSubmitMessage(),
         queueMessage: ({ message: queuedText, attachments: queuedAttachments }) => {
           queueMessage(queuedText, queuedAttachments);
         },
@@ -491,6 +410,7 @@ export function Composer({
     },
     [
       allowEmptySubmit,
+      canSubmitMessage,
       clearDraft,
       completeSubmit,
       hasExternalContent,
@@ -596,7 +516,7 @@ export function Composer({
   const handleCancelAgent = useCallback(() => {
     const didCancel = cancelComposerAgent({
       client,
-      agentId: agentIdRef.current,
+      agentId,
       isAgentRunning,
       isCancellingAgent,
       isConnected,
@@ -604,7 +524,7 @@ export function Composer({
     if (!didCancel) return;
     setIsCancellingAgent(true);
     messageInputRef.current?.focus();
-  }, [client, isAgentRunning, isCancellingAgent, isConnected]);
+  }, [agentId, client, isAgentRunning, isCancellingAgent, isConnected]);
 
   const { handleFocusChange } = useComposerKeyboardController({
     serverId,
