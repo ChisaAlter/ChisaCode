@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { runProviderInspectCommand } from "./inspect.js";
 import { runLsCommand } from "./ls.js";
 import { runModelsCommand } from "./models.js";
 import { withOutput } from "../../output/index.js";
@@ -11,6 +12,12 @@ export function createProviderCommand(): Command {
   addJsonAndDaemonHostOptions(
     provider.command("ls").description(tCli("provider.ls.description")),
   ).action(withOutput(runLsCommand));
+  addJsonAndDaemonHostOptions(
+    provider
+      .command("inspect")
+      .description(tCli("provider.inspect.description"))
+      .argument("<provider>", tCli("provider.inspect.provider")),
+  ).action(withOutput(runProviderInspectCommand));
 
   addJsonAndDaemonHostOptions(
     provider

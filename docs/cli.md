@@ -91,6 +91,13 @@ chisacode daemon diagnostics --logs --log-lines 100
 chisacode daemon diagnostics --json
 ```
 
+Inspect a provider's effective command, environment presence, tooling version, and MCP injection status:
+
+```bash
+chisacode provider inspect codex
+chisacode provider inspect claude --json
+```
+
 Use a different daemon:
 
 ```bash
@@ -222,6 +229,13 @@ chisacode daemon stop
 ```bash
 chisacode daemon diagnostics --logs --log-lines 100
 chisacode daemon diagnostics --json
+```
+
+检查 provider 的有效命令、环境变量存在性、工具版本和 MCP 注入状态：
+
+```bash
+chisacode provider inspect codex
+chisacode provider inspect claude --json
 ```
 
 连接另一台 daemon：
