@@ -76,7 +76,10 @@ interface RegisteredMcpTool {
 }
 
 interface RegisteredMcpToolWithHandler extends RegisteredMcpTool {
-  handler: (input: unknown) => Promise<{
+  handler: (
+    input: unknown,
+    extra?: unknown,
+  ) => Promise<{
     structuredContent: LooseStructuredContent;
     content?: Array<{ type: string; text?: string }>;
   }>;
@@ -812,6 +815,189 @@ describe("terminal MCP tools", () => {
   });
 });
 
+describe("agent MCP workspace scope", () => {
+  const logger = createTestLogger();
+
+  it("keeps explicit list_agents cwd inside the caller workspace scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const scopeRoot = resolvePath(REPO_CWD, "scope");
+    const outsideCwd = resolvePath(REPO_CWD, "outside");
+    const caller = createManagedAgent({ id: "caller-agent", cwd: scopeRoot });
+    const inside = createManagedAgent({ id: "inside-agent", cwd: join(scopeRoot, "child") });
+    const outside = createManagedAgent({ id: "outside-agent", cwd: outsideCwd });
+    spies.agentManager.getAgent.mockImplementation((agentId: string) =>
+      agentId === caller.id ? caller : null,
+    );
+    spies.agentManager.listAgents.mockReturnValue([inside, outside]);
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      callerAgentId: caller.id,
+      resolveCallerContext: () => ({ lockedCwd: scopeRoot, allowCustomCwd: false }),
+      logger,
+    });
+
+    const response = await registeredTool(server, "list_agents").handler({ cwd: outsideCwd });
+
+    expect(agentsOf(response).map((agent) => agent.id)).toEqual([inside.id]);
+  });
+
+  it("rejects direct agent tools outside the caller workspace scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const scopeRoot = resolvePath(REPO_CWD, "scope");
+    const caller = createManagedAgent({ id: "caller-agent", cwd: scopeRoot });
+    const outside = createManagedAgent({
+      id: "outside-agent",
+      cwd: resolvePath(REPO_CWD, "outside"),
+    });
+    spies.agentManager.getAgent.mockImplementation((agentId: string) => {
+      if (agentId === caller.id) return caller;
+      if (agentId === outside.id) return outside;
+      return null;
+    });
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      callerAgentId: caller.id,
+      resolveCallerContext: () => ({ lockedCwd: scopeRoot, allowCustomCwd: false }),
+      logger,
+    });
+    const cases: Array<{ name: string; input: Record<string, unknown>; extra?: unknown }> = [
+      {
+        name: "wait_for_agent",
+        input: { agentId: outside.id },
+        extra: { signal: new AbortController().signal },
+      },
+      {
+        name: "send_agent_prompt",
+        input: { agentId: outside.id, prompt: "Do work", background: true },
+      },
+      { name: "get_agent_status", input: { agentId: outside.id } },
+      { name: "cancel_agent", input: { agentId: outside.id } },
+      { name: "archive_agent", input: { agentId: outside.id } },
+      { name: "kill_agent", input: { agentId: outside.id } },
+      { name: "update_agent", input: { agentId: outside.id, name: "Nope" } },
+      { name: "get_agent_activity", input: { agentId: outside.id } },
+      { name: "set_agent_mode", input: { agentId: outside.id, modeId: "default" } },
+      {
+        name: "respond_to_permission",
+        input: {
+          agentId: outside.id,
+          requestId: "request-outside",
+          response: { behavior: "deny" },
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      await expect(
+        registeredTool(server, testCase.name).handler(testCase.input, testCase.extra),
+        testCase.name,
+      ).rejects.toThrow("outside the caller workspace scope");
+    }
+    expect(spies.agentManager.updateAgentMetadata).not.toHaveBeenCalled();
+    expect(spies.agentManager.archiveAgent).not.toHaveBeenCalled();
+    expect(spies.agentManager.respondToPermission).not.toHaveBeenCalled();
+  });
+
+  it("rejects stored agents outside the caller workspace before loading them", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const scopeRoot = resolvePath(REPO_CWD, "scope");
+    const caller = createManagedAgent({ id: "caller-agent", cwd: scopeRoot });
+    const outside = createStoredRecord({
+      id: "outside-stored-agent",
+      cwd: resolvePath(REPO_CWD, "outside"),
+    });
+    spies.agentManager.getAgent.mockImplementation((agentId: string) =>
+      agentId === caller.id ? caller : null,
+    );
+    spies.agentStorage.get.mockImplementation(async (agentId: string) =>
+      agentId === outside.id ? outside : null,
+    );
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      callerAgentId: caller.id,
+      resolveCallerContext: () => ({ lockedCwd: scopeRoot, allowCustomCwd: false }),
+      logger,
+    });
+
+    await expect(
+      registeredTool(server, "get_agent_activity").handler({ agentId: outside.id }),
+    ).rejects.toThrow("outside the caller workspace scope");
+    expect(spies.agentManager.resumeAgentFromPersistence).not.toHaveBeenCalled();
+  });
+
+  it("filters pending permissions to the caller workspace scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const scopeRoot = resolvePath(REPO_CWD, "scope");
+    const caller = createManagedAgent({ id: "caller-agent", cwd: scopeRoot });
+    const inside = createManagedAgent({
+      id: "inside-agent",
+      cwd: scopeRoot,
+      pendingPermissions: new Map([
+        [
+          "request-inside",
+          {
+            id: "request-inside",
+            provider: "claude",
+            name: "Bash",
+            kind: "tool",
+          },
+        ],
+      ]) as ManagedAgent["pendingPermissions"],
+    });
+    const outside = createManagedAgent({
+      id: "outside-agent",
+      cwd: resolvePath(REPO_CWD, "outside"),
+      pendingPermissions: new Map([
+        [
+          "request-outside",
+          {
+            id: "request-outside",
+            provider: "claude",
+            name: "Bash",
+            kind: "tool",
+          },
+        ],
+      ]) as ManagedAgent["pendingPermissions"],
+    });
+    spies.agentManager.getAgent.mockImplementation((agentId: string) =>
+      agentId === caller.id ? caller : null,
+    );
+    spies.agentManager.listAgents.mockReturnValue([inside, outside]);
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      callerAgentId: caller.id,
+      resolveCallerContext: () => ({ lockedCwd: scopeRoot, allowCustomCwd: false }),
+      logger,
+    });
+
+    const response = await registeredTool(server, "list_pending_permissions").handler({});
+    const permissions = z
+      .array(
+        z.object({
+          agentId: z.string(),
+          status: z.string(),
+          request: z.object({ id: z.string() }),
+        }),
+      )
+      .parse(response.structuredContent.permissions);
+
+    expect(permissions).toEqual([
+      {
+        agentId: inside.id,
+        status: "idle",
+        request: expect.objectContaining({ id: "request-inside" }),
+      },
+    ]);
+  });
+});
 describe("create_agent MCP tool", () => {
   const logger = createTestLogger();
   const existingCwd = process.cwd();
@@ -4086,6 +4272,7 @@ describe("agent snapshot MCP serialization", () => {
       currentModeId: "default",
     } as ManagedAgent;
     spies.agentManager.getAgent
+      .mockReturnValueOnce(null)
       .mockReturnValueOnce(null)
       .mockReturnValue(snapshot)
       .mockReturnValue(snapshot);

@@ -10,33 +10,15 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import type { AgentMode, AgentProvider } from "./agent-sdk-types.js";
-import type { AgentManager, WaitForAgentResult } from "./agent-manager.js";
-import {
-  AgentFeatureSchema,
-  AgentPermissionRequestPayloadSchema,
-  AgentListItemPayloadSchema,
-  AgentPermissionResponseSchema,
-  AgentSnapshotPayloadSchema,
-} from "../messages.js";
-import type { AgentListItemPayload } from "../messages.js";
-import {
-  buildStoredAgentPayload,
-  toAgentListItemPayload,
-  toAgentPayload,
-} from "./agent-projections.js";
-import { curateAgentActivity } from "./activity-curator.js";
-import { selectItemsByProjectedLimit } from "./timeline-projection.js";
+import type { AgentManager } from "./agent-manager.js";
+import { AgentFeatureSchema, AgentPermissionRequestPayloadSchema } from "../messages.js";
 import type { AgentStorage } from "./agent-storage.js";
-import { ensureAgentLoaded } from "./agent-loading.js";
-import { isStoredAgentProviderAvailable } from "../persistence-hooks.js";
 import type { ArchiveChisaCodeWorktreeDependencies } from "../chisacode-worktree-archive-service.js";
-import { WaitForAgentTracker } from "./wait-for-agent-tracker.js";
 import { createAgentCommand } from "./create-agent/create.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "../voice-types.js";
-import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../path-utils.js";
+import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type { CreateChisaCodeWorktreeWorkflowFn } from "../worktree-session.js";
-
 import { resolveSnapshotCwd, type ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import {
   AgentModelSchema,
@@ -47,21 +29,12 @@ import {
   resolveProviderAndOptionalModel,
   resolveRequiredProviderModel,
   sanitizePermissionRequest,
-  serializeSnapshotWithMetadata,
   waitForAgentWithTimeout,
 } from "./mcp-shared.js";
-import { sendPromptToAgent, setupFinishNotification } from "./agent-prompt.js";
-import { respondToAgentPermission } from "./permission-response.js";
-import {
-  archiveAgentCommand,
-  cancelAgentRunCommand,
-  closeAgentCommand,
-  setAgentModeCommand,
-  updateAgentCommand,
-} from "./lifecycle-command.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { UsageStore } from "../usage/usage-store.js";
+import { registerAgentControlMcpTools } from "./agent-control-mcp-tools.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
 import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
@@ -193,24 +166,6 @@ function relaxMcpToolOutputSchema<TConfig extends { outputSchema?: unknown }>(
 
 type McpToolContext = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
-function parseTimestamp(value: string | null | undefined): number {
-  if (!value) {
-    return 0;
-  }
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function resolveAgentListActivityTime(agent: AgentListItemPayload): number {
-  return Math.max(
-    parseTimestamp(agent.updatedAt),
-    parseTimestamp(agent.lastUserMessageAt),
-    parseTimestamp(agent.attentionTimestamp),
-    parseTimestamp(agent.archivedAt),
-    parseTimestamp(agent.createdAt),
-  );
-}
-
 interface ProviderSummary {
   id: AgentProvider;
   label: string;
@@ -239,28 +194,6 @@ function toProviderSummary(entry: {
     status: entry.status === "ready" ? "available" : entry.status,
     ...(entry.error ? { error: entry.error } : {}),
   };
-}
-
-function compareAgentListItems(a: AgentListItemPayload, b: AgentListItemPayload): number {
-  const attentionDelta =
-    Number(b.requiresAttention ?? false) - Number(a.requiresAttention ?? false);
-  if (attentionDelta !== 0) {
-    return attentionDelta;
-  }
-
-  const statusOrder = {
-    running: 0,
-    initializing: 1,
-    idle: 2,
-    error: 3,
-    closed: 4,
-  } as Record<string, number>;
-  const statusDelta = (statusOrder[a.status] ?? 999) - (statusOrder[b.status] ?? 999);
-  if (statusDelta !== 0) {
-    return statusDelta;
-  }
-
-  return resolveAgentListActivityTime(b) - resolveAgentListActivityTime(a);
 }
 
 function resolveChildAgentCwd(params: {
@@ -300,7 +233,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     logger,
   } = options;
   const childLogger = logger.child({ module: "agent", component: "mcp-server" });
-  const waitTracker = new WaitForAgentTracker(logger);
+
   const callerContext = callerAgentId ? (resolveCallerContext?.(callerAgentId) ?? null) : null;
   if (companionParentAgentId || companionToken) {
     if (!companionParentAgentId || !companionToken) {
@@ -407,21 +340,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
         .describe("Provider-specific feature values, for example { fast_mode: true } for Codex."),
     })
     .strict();
-  const UpdateAgentSettingsInputSchema = z
-    .object({
-      modeId: z.string().optional().describe("Session mode ID."),
-      model: z.string().nullable().optional().describe("Model ID. Pass null to clear."),
-      thinkingOptionId: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Thinking option ID. Pass null to clear."),
-      features: z
-        .record(z.unknown())
-        .optional()
-        .describe("Provider-specific feature values, for example { fast_mode: true } for Codex."),
-    })
-    .strict();
+
   const InspectProviderSettingsInputSchema = z
     .object({
       modeId: z.string().optional().describe("Draft session mode ID."),
@@ -801,413 +720,16 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     };
   }
 
-  registerTool(
-    "wait_for_agent",
-    {
-      title: "Wait for agent",
-      description:
-        "Block until the agent requests permission or the current run completes. Returns the pending permission (if any) and recent activity summary.",
-      inputSchema: {
-        agentId: z.string().describe("Agent identifier returned by the create_agent tool"),
-      },
-      outputSchema: {
-        agentId: z.string(),
-        status: AgentStatusEnum,
-        permission: AgentPermissionRequestPayloadSchema.nullable(),
-        lastMessage: z.string().nullable(),
-      },
-    },
-    async ({ agentId }, { signal }) => {
-      const abortController = new AbortController();
-      const cleanupFns: Array<() => void> = [];
-
-      const cleanup = () => {
-        while (cleanupFns.length) {
-          const fn = cleanupFns.pop();
-          try {
-            fn?.();
-          } catch {
-            // ignore cleanup errors
-          }
-        }
-      };
-
-      const forwardExternalAbort = () => {
-        if (!abortController.signal.aborted) {
-          const reason = signal?.reason ?? new Error("wait_for_agent aborted");
-          abortController.abort(reason);
-        }
-      };
-
-      if (signal) {
-        if (signal.aborted) {
-          forwardExternalAbort();
-        } else {
-          signal.addEventListener("abort", forwardExternalAbort, { once: true });
-          cleanupFns.push(() => signal.removeEventListener("abort", forwardExternalAbort));
-        }
-      }
-
-      const unregister = waitTracker.register(agentId, (reason) => {
-        if (!abortController.signal.aborted) {
-          abortController.abort(new Error(reason ?? "wait_for_agent cancelled"));
-        }
-      });
-      cleanupFns.push(unregister);
-
-      try {
-        const result: WaitForAgentResult = await waitForAgentWithTimeout(agentManager, agentId, {
-          signal: abortController.signal,
-        });
-
-        const validJson = ensureValidJson({
-          agentId,
-          status: result.status,
-          permission: sanitizePermissionRequest(result.permission),
-          lastMessage: result.lastMessage,
-        });
-
-        const response = {
-          content: [],
-          structuredContent: validJson,
-        };
-        return response;
-      } finally {
-        cleanup();
-      }
-    },
-  );
-
-  registerTool(
-    "send_agent_prompt",
-    {
-      title: "Send agent prompt",
-      description:
-        "Send a task to a running agent. Returns immediately after the agent begins processing.",
-      inputSchema: {
-        agentId: z.string(),
-        prompt: z.string(),
-        sessionMode: z
-          .string()
-          .optional()
-          .describe("Optional mode to set before running the prompt."),
-        background: z
-          .boolean()
-          .optional()
-          .default(false)
-          .describe(
-            "Run agent in background. If false (default), waits for completion or permission request. If true, returns immediately.",
-          ),
-        notifyOnFinish: z
-          .boolean()
-          .optional()
-          .default(false)
-          .describe(
-            "Send a notification prompt to the caller agent when this agent finishes, errors, or needs permission.",
-          ),
-      },
-      outputSchema: {
-        success: z.boolean(),
-        status: AgentStatusEnum,
-        lastMessage: z.string().nullable().optional(),
-        permission: AgentPermissionRequestPayloadSchema.nullable().optional(),
-      },
-    },
-    async ({ agentId, prompt, sessionMode, background = false, notifyOnFinish = false }) => {
-      if (agentManager.hasInFlightRun(agentId)) {
-        waitTracker.cancel(agentId, "Agent run interrupted by new prompt");
-      }
-
-      await sendPromptToAgent({
-        agentManager,
-        agentStorage,
-        agentId,
-        prompt,
-        sessionMode,
-        logger: childLogger,
-      });
-
-      if (notifyOnFinish && callerAgentId) {
-        setupFinishNotification({
-          agentManager,
-          agentStorage,
-          childAgentId: agentId,
-          callerAgentId,
-          logger: childLogger,
-        });
-      }
-
-      // If not running in background, wait for completion
-      if (!background) {
-        const result = await waitForAgentWithTimeout(agentManager, agentId, {
-          waitForActive: true,
-        });
-
-        const responseData = {
-          success: true,
-          status: result.status,
-          lastMessage: result.lastMessage,
-          permission: sanitizePermissionRequest(result.permission),
-        };
-        const validJson = ensureValidJson(responseData);
-
-        const response = {
-          content: [],
-          structuredContent: validJson,
-        };
-        return response;
-      }
-
-      // Return immediately if background=true
-      // Re-fetch snapshot since the state may have changed
-      const currentSnapshot = agentManager.getAgent(agentId);
-
-      const responseData = {
-        success: true,
-        status: currentSnapshot?.lifecycle ?? "idle",
-        lastMessage: null,
-        permission: null,
-      };
-      const validJson = ensureValidJson(responseData);
-
-      const response = {
-        content: [],
-        structuredContent: validJson,
-      };
-      return response;
-    },
-  );
-
-  registerTool(
-    "get_agent_status",
-    {
-      title: "Get agent status",
-      description:
-        "Return the latest snapshot for an agent, including lifecycle state, capabilities, and pending permissions.",
-      inputSchema: {
-        agentId: z.string(),
-      },
-      outputSchema: {
-        status: AgentStatusEnum,
-        snapshot: AgentSnapshotPayloadSchema,
-      },
-    },
-    async ({ agentId }) => {
-      const snapshot = agentManager.getAgent(agentId);
-      if (snapshot) {
-        const structuredSnapshot = await serializeSnapshotWithMetadata(
-          agentStorage,
-          snapshot,
-          childLogger,
-        );
-        return {
-          content: [],
-          structuredContent: ensureValidJson({
-            status: snapshot.lifecycle,
-            snapshot: structuredSnapshot,
-          }),
-        };
-      }
-
-      const record = await agentStorage.get(agentId);
-      if (!record || record.internal) {
-        throw new Error(`Agent ${agentId} not found`);
-      }
-
-      const structuredSnapshot = buildStoredAgentPayload(
-        record,
-        providerSnapshotManager.listRegisteredProviderIds(),
-      );
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          status: structuredSnapshot.status,
-          snapshot: structuredSnapshot,
-        }),
-      };
-    },
-  );
-
-  registerTool(
-    "list_agents",
-    {
-      title: "List agents",
-      description: "List recent agents as compact metadata.",
-      inputSchema: {
-        includeArchived: z.boolean().optional().default(false),
-        cwd: z.string().optional(),
-        sinceHours: z
-          .number()
-          .int()
-          .positive()
-          .max(24 * 30)
-          .optional()
-          .default(48),
-        statuses: z.array(AgentStatusEnum).optional(),
-        limit: z.number().int().positive().max(200).optional().default(50),
-      },
-      outputSchema: {
-        agents: z.array(AgentListItemPayloadSchema),
-      },
-    },
-    async ({ includeArchived = false, cwd, sinceHours = 48, statuses, limit = 50 }) => {
-      const callerCwd = callerAgentId ? resolveCallerAgent()?.cwd : undefined;
-      const requestedCwd = cwd?.trim() ? expandUserPath(cwd) : callerCwd;
-      const statusFilter = statuses && statuses.length > 0 ? new Set(statuses) : null;
-      const sinceMs = Date.now() - sinceHours * 60 * 60 * 1000;
-      const liveSnapshots = agentManager.listAgents();
-      const liveAgents = await Promise.all(
-        liveSnapshots.map((snapshot) =>
-          serializeSnapshotWithMetadata(agentStorage, snapshot, childLogger),
-        ),
-      );
-      const liveIds = new Set(liveSnapshots.map((snapshot) => snapshot.id));
-      const storedRecords = await agentStorage.list();
-      const registeredProviderIds = providerSnapshotManager.listRegisteredProviderIds();
-      const storedAgents = storedRecords
-        .filter((record) => !record.internal && !liveIds.has(record.id))
-        .filter((record) => includeArchived || !record.archivedAt)
-        .filter(
-          (record) =>
-            includeArchived || isStoredAgentProviderAvailable(record, registeredProviderIds),
-        )
-        .map((record) => buildStoredAgentPayload(record, registeredProviderIds));
-      const agents = [...liveAgents, ...storedAgents]
-        .map(toAgentListItemPayload)
-        .filter((agent) => !requestedCwd || isSameOrDescendantPath(requestedCwd, agent.cwd))
-        .filter((agent) => !statusFilter || statusFilter.has(agent.status))
-        .filter((agent) => !agent.archivedAt || resolveAgentListActivityTime(agent) >= sinceMs)
-        .sort(compareAgentListItems)
-        .slice(0, limit);
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ agents }),
-      };
-    },
-  );
-
-  registerTool(
-    "cancel_agent",
-    {
-      title: "Cancel agent run",
-      description: "Abort the agent's current run but keep the agent alive for future tasks.",
-      inputSchema: {
-        agentId: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ agentId }) => {
-      const { cancelled } = await cancelAgentRunCommand(
-        { agentManager, logger: childLogger },
-        agentId,
-      );
-      if (cancelled) {
-        waitTracker.cancel(agentId, "Agent run cancelled");
-      }
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: cancelled }),
-      };
-    },
-  );
-
-  registerTool(
-    "archive_agent",
-    {
-      title: "Archive agent",
-      description:
-        "Archive an agent (soft-delete). The agent is interrupted if running and removed from the active list.",
-      inputSchema: {
-        agentId: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ agentId }) => {
-      await archiveAgentCommand(
-        {
-          agentManager,
-          agentStorage,
-          logger: childLogger,
-        },
-        agentId,
-      );
-      waitTracker.cancel(agentId, "Agent archived");
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
-    "kill_agent",
-    {
-      title: "Kill agent",
-      description: "Terminate an agent session permanently.",
-      inputSchema: {
-        agentId: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ agentId }) => {
-      await closeAgentCommand({ agentManager }, agentId);
-      waitTracker.cancel(agentId, "Agent terminated");
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
-    "update_agent",
-    {
-      title: "Update agent",
-      description: "Update an agent name, labels, and/or runtime settings.",
-      inputSchema: {
-        agentId: z.string(),
-        name: z.string().optional(),
-        labels: z.record(z.string(), z.string()).optional().describe("Labels to set on the agent"),
-        settings: UpdateAgentSettingsInputSchema.optional().describe(
-          "Runtime settings to apply to the agent.",
-        ),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ agentId, name, labels, settings }) => {
-      if (settings?.modeId !== undefined) {
-        await agentManager.setAgentMode(agentId, settings.modeId);
-      }
-      if (settings?.model !== undefined) {
-        await agentManager.setAgentModel(agentId, settings.model);
-      }
-      if (settings?.thinkingOptionId !== undefined) {
-        await agentManager.setAgentThinkingOption(agentId, settings.thinkingOptionId);
-      }
-      if (settings?.features) {
-        for (const [featureId, value] of Object.entries(settings.features)) {
-          await agentManager.setAgentFeature(agentId, featureId, value);
-        }
-      }
-
-      await updateAgentCommand({ agentManager }, { agentId, name, labels });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
+  registerAgentControlMcpTools({
+    registerTool,
+    agentManager,
+    agentStorage,
+    providerSnapshotManager,
+    callerAgentId,
+    logger: childLogger,
+    resolveScopedCwd,
+    resolveScopeRoot,
+  });
   registerTool(
     "list_providers",
     {
@@ -1313,150 +835,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
           selectedModel: selectedModel ?? null,
           features,
         }),
-      };
-    },
-  );
-
-  registerTool(
-    "get_agent_activity",
-    {
-      title: "Get agent activity",
-      description: "Return recent agent timeline entries as a curated summary.",
-      inputSchema: {
-        agentId: z.string(),
-        limit: z
-          .number()
-          .optional()
-          .describe("Optional limit for number of activities to include (most recent first)."),
-      },
-      outputSchema: {
-        agentId: z.string(),
-        updateCount: z.number(),
-        currentModeId: z.string().nullable(),
-        content: z.string(),
-      },
-    },
-    async ({ agentId, limit }) => {
-      await ensureAgentLoaded(agentId, {
-        agentManager,
-        agentStorage,
-        logger: childLogger,
-      });
-      const timeline = agentManager.getTimeline(agentId);
-      const snapshot = agentManager.getAgent(agentId);
-
-      const selection = selectItemsByProjectedLimit({
-        items: timeline,
-        direction: "tail",
-        limit: limit ?? 0,
-      });
-      const curatedContent = curateAgentActivity(selection.items);
-      const { totalProjected, shownProjected } = selection;
-
-      const noun = totalProjected === 1 ? "activity" : "activities";
-      const countHeader =
-        limit && shownProjected < totalProjected
-          ? `Showing ${shownProjected} of ${totalProjected} ${noun} (limited to ${limit})`
-          : `Showing all ${totalProjected} ${noun}`;
-
-      const contentWithCount = `${countHeader}\n\n${curatedContent}`;
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          agentId,
-          updateCount: timeline.length,
-          currentModeId: snapshot?.currentModeId ?? null,
-          content: contentWithCount,
-        }),
-      };
-    },
-  );
-
-  registerTool(
-    "set_agent_mode",
-    {
-      title: "Set agent session mode",
-      description:
-        "Switch the agent's session mode (plan, bypassPermissions, read-only, auto, etc.).",
-      inputSchema: {
-        agentId: z.string(),
-        modeId: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-        newMode: z.string(),
-      },
-    },
-    async ({ agentId, modeId }) => {
-      const result = await setAgentModeCommand({ agentManager }, { agentId, modeId });
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true, newMode: result.modeId }),
-      };
-    },
-  );
-
-  registerTool(
-    "list_pending_permissions",
-    {
-      title: "List pending permissions",
-      description:
-        "Return all pending permission requests across all agents with the normalized payloads.",
-      inputSchema: {},
-      outputSchema: {
-        permissions: z.array(
-          z.object({
-            agentId: z.string(),
-            status: AgentStatusEnum,
-            request: AgentPermissionRequestPayloadSchema,
-          }),
-        ),
-      },
-    },
-    async () => {
-      const permissions = agentManager.listAgents().flatMap((agent) => {
-        const payload = toAgentPayload(agent);
-        return payload.pendingPermissions.map((request) => ({
-          agentId: agent.id,
-          status: payload.status,
-          request,
-        }));
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ permissions }),
-      };
-    },
-  );
-
-  registerTool(
-    "respond_to_permission",
-    {
-      title: "Respond to permission",
-      description:
-        "Approve or deny a pending permission request with an AgentManager-compatible response payload.",
-      inputSchema: {
-        agentId: z.string(),
-        requestId: z.string(),
-        response: AgentPermissionResponseSchema,
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ agentId, requestId, response }) => {
-      await respondToAgentPermission({
-        agentManager,
-        agentId,
-        requestId,
-        response,
-        logger: childLogger,
-      });
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
       };
     },
   );
