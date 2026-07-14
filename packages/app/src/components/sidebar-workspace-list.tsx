@@ -32,21 +32,15 @@ import { type GestureType } from "react-native-gesture-handler";
 import * as Clipboard from "expo-clipboard";
 import { DiffStat } from "@/components/diff-stat";
 import {
-  Archive,
   CircleAlert,
   ChevronDown,
   ChevronRight,
-  Copy,
   FolderPlus,
   FolderGit2,
   Globe,
-  Settings,
   SquareTerminal,
   Monitor,
-  MoreVertical,
-  Pencil,
   Plus,
-  Trash2,
 } from "lucide-react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
@@ -56,7 +50,6 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { projectIconQueryKey, projectIconToDataUri } from "@/hooks/use-project-icon-query";
 import {
   buildHostNewWorkspaceRoute,
-  buildProjectSettingsRoute,
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
@@ -73,12 +66,7 @@ import {
   ContextMenuTrigger,
   useContextMenu,
 } from "@/components/ui/context-menu";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+
 import { SyncedLoader } from "@/components/synced-loader";
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
@@ -112,6 +100,7 @@ import {
 } from "@/workspace/workspace-archive";
 import { WorkspaceHoverCard } from "@/components/workspace-hover-card";
 import { PrBadge } from "@/components/pr-badge";
+import { ProjectKebabMenu, WorkspaceKebabMenu } from "@/components/sidebar-workspace-menus";
 import { GitHubIcon } from "@/components/icons/github-icon";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
 import { generateDraftId } from "@/stores/draft-keys";
@@ -134,12 +123,6 @@ const ThemedFolderGit2 = withUnistyles(FolderGit2);
 const ThemedFolderPlus = withUnistyles(FolderPlus);
 const ThemedGlobe = withUnistyles(Globe);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
-const ThemedMoreVertical = withUnistyles(MoreVertical);
-const ThemedTrash2 = withUnistyles(Trash2);
-const ThemedSettings = withUnistyles(Settings);
-const ThemedCopy = withUnistyles(Copy);
-const ThemedArchive = withUnistyles(Archive);
-const ThemedPencil = withUnistyles(Pencil);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -237,18 +220,6 @@ function useSidebarWorkspaceEntry(
   );
 
   return useWorkspaceFields(serverId, workspaceId, projectWorkspaceEntry);
-}
-
-function projectKebabStyle({
-  hovered = false,
-}: PressableStateCallbackType & { hovered?: boolean }) {
-  return [styles.projectKebabButton, hovered && styles.projectKebabButtonHovered];
-}
-
-function workspaceKebabStyle({
-  hovered = false,
-}: PressableStateCallbackType & { hovered?: boolean }) {
-  return [styles.kebabButton, hovered && styles.kebabButtonHovered];
 }
 
 function noop() {}
@@ -479,71 +450,6 @@ function ProjectRowTrailingActions({
   );
 }
 
-const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={foregroundMutedColorMapping} />;
-const settingsLeadingIcon = <ThemedSettings size={14} uniProps={foregroundMutedColorMapping} />;
-const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
-const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
-const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
-
-function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
-  return (
-    <ThemedMoreVertical
-      size={14}
-      uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
-    />
-  );
-}
-
-function ProjectKebabMenu({
-  projectKey,
-  onRemoveProject,
-  removeProjectStatus,
-}: {
-  projectKey: string;
-  onRemoveProject: () => void;
-  removeProjectStatus: "idle" | "pending" | "success";
-}) {
-  const { t } = useTranslation();
-  const handleOpenProjectSettings = useCallback(() => {
-    if (projectKey.trim().length === 0) return;
-    router.navigate(buildProjectSettingsRoute(projectKey));
-  }, [projectKey]);
-  const canOpenProjectSettings = projectKey.trim().length > 0;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        hitSlop={8}
-        style={projectKebabStyle}
-        accessibilityRole={platformIsWeb ? undefined : "button"}
-        accessibilityLabel={t("sidebar.projectActions")}
-        testID={`sidebar-project-kebab-${projectKey}`}
-      >
-        {renderKebabTriggerIcon}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={220}>
-        {canOpenProjectSettings ? (
-          <DropdownMenuItem
-            testID={`sidebar-project-menu-open-settings-${projectKey}`}
-            leading={settingsLeadingIcon}
-            onSelect={handleOpenProjectSettings}
-          >
-            {t("sidebar.openProjectSettings")}
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          testID={`sidebar-project-menu-remove-${projectKey}`}
-          leading={trash2LeadingIcon}
-          status={removeProjectStatus}
-          pendingLabel={t("sidebar.removing")}
-          onSelect={onRemoveProject}
-        >
-          {t("sidebar.removeProject")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 function WorkspaceRowRightGroup({
   workspace,
   isHovered,
@@ -620,86 +526,6 @@ function WorkspaceRowRightGroup({
         </View>
       ) : null}
     </View>
-  );
-}
-
-function WorkspaceKebabMenu({
-  workspaceKey,
-  onCopyPath,
-  onCopyBranchName,
-  onRename,
-  onArchive,
-  archiveLabel,
-  archiveStatus,
-  archivePendingLabel,
-  archiveShortcutKeys,
-}: {
-  workspaceKey: string;
-  onCopyPath?: () => void;
-  onCopyBranchName?: () => void;
-  onRename?: () => void;
-  onArchive: () => void;
-  archiveLabel?: string;
-  archiveStatus?: "idle" | "pending" | "success";
-  archivePendingLabel?: string;
-  archiveShortcutKeys?: ShortcutKey[][] | null;
-}) {
-  const { t } = useTranslation();
-  const archiveTrailing = useMemo(
-    () => (archiveShortcutKeys ? <Shortcut chord={archiveShortcutKeys} /> : null),
-    [archiveShortcutKeys],
-  );
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        hitSlop={8}
-        style={workspaceKebabStyle}
-        accessibilityRole={platformIsWeb ? undefined : "button"}
-        accessibilityLabel={t("sidebar.workspaceActions")}
-        testID={`sidebar-workspace-kebab-${workspaceKey}`}
-      >
-        {renderKebabTriggerIcon}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={260}>
-        {onCopyPath ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-copy-path-${workspaceKey}`}
-            leading={copyLeadingIcon}
-            onSelect={onCopyPath}
-          >
-            {t("sidebar.copyPath")}
-          </DropdownMenuItem>
-        ) : null}
-        {onCopyBranchName ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-copy-branch-name-${workspaceKey}`}
-            leading={copyLeadingIcon}
-            onSelect={onCopyBranchName}
-          >
-            {t("sidebar.copyBranchName")}
-          </DropdownMenuItem>
-        ) : null}
-        {onRename ? (
-          <DropdownMenuItem
-            testID={`sidebar-workspace-menu-rename-${workspaceKey}`}
-            leading={renameLeadingIcon}
-            onSelect={onRename}
-          >
-            {t("sidebar.renameWorkspace")}
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
-          leading={archiveLeadingIcon}
-          trailing={archiveTrailing}
-          status={archiveStatus}
-          pendingLabel={archivePendingLabel}
-          onSelect={onArchive}
-        >
-          {archiveLabel ?? t("sidebar.archive")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -2505,19 +2331,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: 2,
     flexShrink: 0,
   },
-  projectKebabButton: {
-    width: 24,
-    height: 24,
-    borderRadius: theme.borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
   projectKebabButtonHidden: {
     opacity: 0,
-  },
-  projectKebabButtonHovered: {
-    backgroundColor: theme.colors.surface2,
   },
   projectTrailingControlSlot: {
     width: 24,
@@ -2647,17 +2462,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     flexShrink: 0,
-  },
-  kebabButton: {
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
-    marginLeft: 2,
-  },
-  kebabButtonHovered: {
-    backgroundColor: theme.colors.surface2,
   },
   shortcutBadge: {
     minWidth: 18,
