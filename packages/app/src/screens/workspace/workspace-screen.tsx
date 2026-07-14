@@ -3,7 +3,6 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 import { View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsFocused, useRouter, type Href } from "expo-router";
-import * as Clipboard from "expo-clipboard";
 
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -45,7 +44,6 @@ import { checkoutStatusQueryKey } from "@/git/query-keys";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useBrowserStore } from "@/stores/browser-store";
 import { getDesktopHost } from "@/desktop/host";
-import { buildProviderCommand } from "@/utils/provider-command-templates";
 import { WorkspaceTabPresentationResolver } from "@/screens/workspace/workspace-tab-presentation";
 import {
   getWorkspaceExecutionAuthority,
@@ -65,6 +63,7 @@ import { useWorkspacePaneLayoutActions } from "@/screens/workspace/use-workspace
 import { useWorkspacePaneContentModels } from "@/screens/workspace/use-workspace-pane-content-models";
 import { useWorkspaceEnvironmentPanelState } from "@/screens/workspace/use-workspace-environment-panel-state";
 import { useWorkspaceEnvironmentData } from "@/screens/workspace/use-workspace-environment-data";
+import { useWorkspaceUtilityActions } from "@/screens/workspace/use-workspace-utility-actions";
 import { WORKSPACE_ENVIRONMENT_PANEL_WIDTH } from "@/screens/workspace/workspace-environment-panel";
 import {
   WorkspaceCenterColumn,
@@ -851,6 +850,21 @@ function WorkspaceScreenContent({
     workspaceDescriptor,
     currentBranchName,
   });
+  const {
+    handleCopyAgentId,
+    handleCopyResumeCommand,
+    handleCopyEnvironmentResumeCommand,
+    handleReloadAgent,
+    handleCopyWorkspacePath,
+    handleCopyBranchName,
+  } = useWorkspaceUtilityActions({
+    client,
+    isConnected,
+    serverId: normalizedServerId,
+    workspaceDirectory,
+    currentBranchName,
+    environmentPanelAgentId,
+  });
   const workspaceReviewArchiveAction = useMemo(() => {
     if (
       !workspaceDirectory ||
@@ -1028,120 +1042,6 @@ function WorkspaceScreenContent({
     openWorkspaceTabFocused,
     openWorkspaceTabInBackground,
   });
-
-  const handleCopyAgentId = useCallback(
-    async (agentId: string) => {
-      if (!agentId) return;
-      try {
-        await Clipboard.setStringAsync(agentId);
-        toast.copied(t("workspace.screen.agentIdCopied"));
-      } catch {
-        toast.error(t("workspace.screen.copyFailed"));
-      }
-    },
-    [t, toast],
-  );
-
-  const handleCopyResumeCommand = useCallback(
-    async (agentId: string) => {
-      if (!agentId) return;
-      const agent =
-        useSessionStore.getState().sessions[normalizedServerId]?.agents?.get(agentId) ?? null;
-      const providerSessionId =
-        agent?.runtimeInfo?.sessionId ?? agent?.persistence?.sessionId ?? null;
-      if (!agent || !providerSessionId) {
-        toast.error(t("workspace.screen.resumeIdUnavailable"));
-        return;
-      }
-
-      const command =
-        buildProviderCommand({
-          provider: agent.provider,
-          id: "resume",
-          sessionId: providerSessionId,
-        }) ?? null;
-      if (!command) {
-        toast.error(t("workspace.screen.resumeCommandUnavailable"));
-        return;
-      }
-      try {
-        await Clipboard.setStringAsync(command);
-        toast.copied(t("workspace.screen.resumeCommandCopied"));
-      } catch {
-        toast.error(t("workspace.screen.copyFailed"));
-      }
-    },
-    [normalizedServerId, t, toast],
-  );
-
-  const handleCopyEnvironmentResumeCommand = useCallback(() => {
-    if (environmentPanelAgentId) {
-      void handleCopyResumeCommand(environmentPanelAgentId);
-      return;
-    }
-    toast.error(t("workspace.screen.resumeIdUnavailable"));
-  }, [environmentPanelAgentId, handleCopyResumeCommand, t, toast]);
-
-  const handleReloadAgent = useCallback(
-    async (agentId: string) => {
-      if (!client || !isConnected) {
-        toast.error(t("workspace.screen.hostDisconnected"));
-        return;
-      }
-
-      toast.show(t("workspace.screen.reloadingAgent"), { durationMs: null });
-      try {
-        await client.refreshAgent(agentId);
-        // Send the existing cursor so the server detects the new epoch and
-        // returns reset:true. Without a cursor, the server returns reset:false
-        // and the client takes the incremental path, where new-epoch rows are
-        // dropped against the stale cursor.
-        const sessionState = useSessionStore.getState().sessions[normalizedServerId];
-        const currentCursor = sessionState?.agentTimelineCursor.get(agentId);
-        await client.fetchAgentTimeline(agentId, {
-          direction: "tail",
-          projection: "canonical",
-          ...(currentCursor
-            ? { cursor: { epoch: currentCursor.epoch, seq: currentCursor.endSeq } }
-            : {}),
-        });
-        toast.show(t("workspace.screen.agentReloaded"), { variant: "success" });
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : t("workspace.screen.reloadAgentFailed"),
-        );
-      }
-    },
-    [client, isConnected, normalizedServerId, t, toast],
-  );
-
-  const handleCopyWorkspacePath = useCallback(async () => {
-    if (!workspaceDirectory) {
-      toast.error(t("workspace.screen.workspacePathUnavailable"));
-      return;
-    }
-
-    try {
-      await Clipboard.setStringAsync(workspaceDirectory);
-      toast.copied(t("workspace.screen.workspacePathCopied"));
-    } catch {
-      toast.error(t("workspace.screen.copyFailed"));
-    }
-  }, [t, toast, workspaceDirectory]);
-
-  const handleCopyBranchName = useCallback(async () => {
-    if (!currentBranchName) {
-      toast.error(t("workspace.screen.branchNameUnavailable"));
-      return;
-    }
-
-    try {
-      await Clipboard.setStringAsync(currentBranchName);
-      toast.copied(t("workspace.screen.branchNameCopied"));
-    } catch {
-      toast.error(t("workspace.screen.copyFailed"));
-    }
-  }, [currentBranchName, t, toast]);
 
   const handleOpenSetupTab = useCallback(() => {
     if (!persistenceKey) {
