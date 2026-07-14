@@ -8,6 +8,7 @@ import { createProviderCommand } from "./commands/provider/index.js";
 import { createScheduleCommand } from "./commands/schedule/index.js";
 import { createSpeechCommand } from "./commands/speech/index.js";
 import { createTerminalCommand } from "./commands/terminal/index.js";
+import { createUsageCommand } from "./commands/usage/index.js";
 import { createWorktreeCommand } from "./commands/worktree/index.js";
 import { startCommand as daemonStartCommand } from "./commands/daemon/start.js";
 import { runStatusCommand as runDaemonStatusCommand } from "./commands/daemon/status.js";
@@ -148,6 +149,9 @@ export function createCli(): Command {
 
   // Provider commands
   program.addCommand(createProviderCommand());
+
+  // Local usage commands
+  program.addCommand(createUsageCommand());
 
   // Speech model commands
   program.addCommand(createSpeechCommand());
