@@ -1,5 +1,5 @@
-import { resolve, dirname, basename } from "path";
-import { existsSync, realpathSync } from "fs";
+import { resolve } from "path";
+import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 
 import type { Logger } from "pino";
@@ -10,7 +10,7 @@ import {
   resolveGitHubRepo,
   type GitHubService,
 } from "../services/github-service.js";
-import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
+import { resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { runGitCommand } from "./run-git-command.js";
 import {
   createCheckoutDiffReader,
@@ -32,8 +32,14 @@ import {
   type CheckoutShortstat,
 } from "./checkout-git-shortstat.js";
 import { READ_ONLY_GIT_ENV, requireGitRepo } from "./checkout-git-repository.js";
-import { isChisaCodeOwnedWorktreeCwd } from "./worktree.js";
-import { readChisaCodeWorktreeMetadata } from "./worktree-metadata.js";
+import {
+  getChisaCodeWorktreeForCwd,
+  getMainRepoRootFromCommonDir,
+  getWorktreePathForBranch,
+  getWorktreeRoot,
+  readChisaCodeWorktreeBaseRef,
+  type ChisaCodeWorktreeForCwd,
+} from "./checkout-git-worktree-topology.js";
 
 export { NotGitRepoError } from "./checkout-git-repository.js";
 export {
@@ -64,6 +70,13 @@ export type {
   ReviewDecision,
 } from "./checkout-git-pull-request-status.js";
 export type { CheckoutShortstat } from "./checkout-git-shortstat.js";
+export {
+  getMainRepoRoot,
+  isChisaCodeWorktreePath,
+  isDescendantPath,
+  parseWorktreeList,
+  type GitWorktreeEntry,
+} from "./checkout-git-worktree-topology.js";
 const PULL_REQUEST_REMOTE_PREFIXES = ["chisacode-pr-", "chisacode-pr-"] as const;
 
 function isManagedPullRequestRemote(remoteName: string | null | undefined): remoteName is string {
@@ -195,134 +208,6 @@ async function getRebaseHeadBranch(cwd: string): Promise<string | null> {
   return results.find((result): result is string => result !== null) ?? null;
 }
 
-async function getWorktreeRoot(cwd: string, context?: CheckoutContext): Promise<string | null> {
-  try {
-    const { stdout } = await runGitCommand(["rev-parse", "--show-toplevel"], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-      logger: context?.logger,
-    });
-    return parseGitRevParsePath(stdout);
-  } catch {
-    return null;
-  }
-}
-
-export async function getMainRepoRoot(cwd: string): Promise<string> {
-  const { stdout: commonDirOut } = await runGitCommand(["rev-parse", "--git-common-dir"], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-  });
-  return getMainRepoRootFromCommonDir(cwd, resolveGitRevParsePath(cwd, commonDirOut));
-}
-
-function isChisaCodeWorktreeListEntry(path: string, context?: CheckoutContext): boolean {
-  if (isChisaCodeWorktreePath(path)) {
-    return true;
-  }
-  return context?.chisacodeHome
-    ? isDescendantPath(path, resolve(context.chisacodeHome, "worktrees"))
-    : false;
-}
-
-async function getMainRepoRootFromCommonDir(
-  cwd: string,
-  commonDir: string | null,
-  context?: CheckoutContext,
-): Promise<string> {
-  if (!commonDir) {
-    throw new Error("Not in a git repository");
-  }
-  const normalized = realpathSync(commonDir);
-
-  if (basename(normalized) === ".git") {
-    return dirname(normalized);
-  }
-
-  const { stdout: worktreeOut } = await runGitCommand(["worktree", "list", "--porcelain"], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-  });
-  const worktrees = parseWorktreeList(worktreeOut);
-  const nonBareNonChisaCode = worktrees.filter(
-    (wt) => !wt.isBare && !isChisaCodeWorktreeListEntry(wt.path, context),
-  );
-  const childrenOfBareRepo = nonBareNonChisaCode.filter((wt) =>
-    isDescendantPath(wt.path, normalized),
-  );
-  const mainChild = childrenOfBareRepo.find((wt) => basename(wt.path) === "main");
-  return (
-    mainChild?.path ?? childrenOfBareRepo[0]?.path ?? nonBareNonChisaCode[0]?.path ?? normalized
-  );
-}
-
-export interface GitWorktreeEntry {
-  path: string;
-  branchRef?: string;
-  isBare?: boolean;
-}
-
-/** Check whether a path contains a managed worktrees segment (both `/` and `\`). */
-export function isChisaCodeWorktreePath(p: string): boolean {
-  return /[/\\]\.(?:chisacode|chisacode)[/\\]worktrees[/\\]/.test(p);
-}
-
-/** True when `child` is strictly inside `parent` (handles both `/` and `\`). */
-export function isDescendantPath(child: string, parent: string): boolean {
-  let c = child.replace(/\\/g, "/").replace(/\/+$/, "");
-  let p = parent.replace(/\\/g, "/").replace(/\/+$/, "");
-  // Case-insensitive on Windows (drive letter like C: or D:)
-  if (/^[A-Za-z]:/.test(c) || /^[A-Za-z]:/.test(p)) {
-    c = c.toLowerCase();
-    p = p.toLowerCase();
-  }
-  if (!c.startsWith(p)) return false;
-  if (c.length === p.length) return false;
-  return c[p.length] === "/";
-}
-
-export function parseWorktreeList(output: string): GitWorktreeEntry[] {
-  const entries: GitWorktreeEntry[] = [];
-  let current: GitWorktreeEntry | null = null;
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    if (trimmed.startsWith("worktree ")) {
-      if (current) {
-        entries.push(current);
-      }
-      current = { path: trimmed.slice("worktree ".length).trim() };
-      continue;
-    }
-    if (current && trimmed.startsWith("branch ")) {
-      current.branchRef = trimmed.slice("branch ".length).trim();
-    }
-    if (current && trimmed === "bare") {
-      current.isBare = true;
-    }
-  }
-  if (current) {
-    entries.push(current);
-  }
-  return entries;
-}
-
-async function getWorktreePathForBranch(cwd: string, branchName: string): Promise<string | null> {
-  try {
-    const { stdout } = await runGitCommand(["worktree", "list", "--porcelain"], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    const entries = parseWorktreeList(stdout);
-    const ref = branchName.startsWith("refs/heads/") ? branchName : `refs/heads/${branchName}`;
-    return entries.find((entry) => entry.branchRef === ref)?.path ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export async function localBranchExists(cwd: string, branchName: string): Promise<boolean> {
   return doesGitRefExist(cwd, `refs/heads/${branchName}`);
 }
@@ -345,37 +230,6 @@ export async function renameCurrentBranch(
 
   const currentBranch = await getCurrentBranch(cwd);
   return { previousBranch, currentBranch };
-}
-
-type ChisaCodeWorktreeForCwd =
-  | { isChisaCodeOwnedWorktree: false }
-  | { isChisaCodeOwnedWorktree: true; worktreeRoot: string };
-
-async function getChisaCodeWorktreeForCwd(
-  cwd: string,
-  context?: CheckoutContext,
-  knownWorktreeRoot?: string | null,
-): Promise<ChisaCodeWorktreeForCwd> {
-  // Fast-path reject: non-worktree paths do not need expensive ownership checks.
-  if (!/[\\/]worktrees[\\/]/.test(cwd)) {
-    return { isChisaCodeOwnedWorktree: false };
-  }
-
-  const ownership = await isChisaCodeOwnedWorktreeCwd(cwd, {
-    chisacodeHome: context?.chisacodeHome,
-  });
-  if (!ownership.allowed) {
-    return { isChisaCodeOwnedWorktree: false };
-  }
-
-  return {
-    isChisaCodeOwnedWorktree: true,
-    worktreeRoot: knownWorktreeRoot ?? (await getWorktreeRoot(cwd)) ?? cwd,
-  };
-}
-
-function readChisaCodeWorktreeBaseRef(worktreeRoot: string): string | null {
-  return readChisaCodeWorktreeMetadata(worktreeRoot)?.baseRefName ?? null;
 }
 
 async function getStoredBaseRefForCwd(
