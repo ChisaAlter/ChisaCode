@@ -3,7 +3,6 @@ import {
   Pressable,
   Text,
   ActivityIndicator,
-  Image,
   type GestureResponderEvent,
   type PressableStateCallbackType,
 } from "react-native";
@@ -21,18 +20,7 @@ import {
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
-import {
-  ArrowUp,
-  Square,
-  Pencil,
-  AudioLines,
-  CircleDot,
-  GitPullRequest,
-  Github,
-  ListTodo,
-  Paperclip,
-  Target,
-} from "lucide-react-native";
+import { Square, AudioLines, Github, ListTodo, Paperclip, Target } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
@@ -101,9 +89,7 @@ import type {
   WorkspaceComposerAttachment,
 } from "@/attachments/types";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
-import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
-import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
-import { AttachmentPill } from "@/components/attachment-pill";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { AttachmentLightbox } from "@/components/attachment-lightbox";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
@@ -112,6 +98,11 @@ import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
 import { buildToggleFeatureMenuItems } from "@/composer/agent-controls/utils";
+import {
+  GithubPickerOption,
+  renderAttachmentTray,
+  renderQueueTrack,
+} from "@/composer/attachment-queue-renderers";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
 import { COMPOSER_VOICE_UI_VISIBLE } from "./voice-visibility";
 
@@ -233,13 +224,6 @@ function renderLeftContent(args: RenderLeftContentArgs): ReactElement {
   return <AgentControls agentId={agentId} serverId={serverId} onDropdownClose={focusInput} />;
 }
 
-interface RenderAttachmentTrayArgs {
-  selectedAttachments: ComposerAttachment[];
-  isComposerLocked: boolean;
-  handleOpenAttachment: (attachment: ComposerAttachment) => void;
-  handleRemoveAttachment: (index: number) => void;
-}
-
 function renderComposerFooter(footer: ReactNode, footerRight: ReactNode): ReactElement | null {
   if (!footer && !footerRight) return null;
   return (
@@ -249,91 +233,6 @@ function renderComposerFooter(footer: ReactNode, footerRight: ReactNode): ReactE
         <View style={styles.footerRight}>{footerRight}</View>
       </View>
     </View>
-  );
-}
-
-function renderAttachmentTray(args: RenderAttachmentTrayArgs): ReactElement | null {
-  const { selectedAttachments, isComposerLocked, handleOpenAttachment, handleRemoveAttachment } =
-    args;
-  if (selectedAttachments.length === 0) return null;
-  return (
-    <View style={styles.attachmentTray} testID="composer-attachment-tray">
-      {selectedAttachments.map((attachment, index) =>
-        renderComposerAttachmentPill({
-          attachment,
-          index,
-          disabled: isComposerLocked,
-          onOpen: handleOpenAttachment,
-          onRemove: handleRemoveAttachment,
-        }),
-      )}
-    </View>
-  );
-}
-
-interface RenderQueueTrackArgs {
-  queuedMessages: readonly QueuedMessage[];
-  handleEditQueuedMessage: (id: string) => void;
-  handleSendQueuedNow: (id: string) => Promise<void>;
-}
-
-function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
-  const { queuedMessages, handleEditQueuedMessage, handleSendQueuedNow } = args;
-  if (queuedMessages.length === 0) return null;
-  return (
-    <View style={styles.queueTrack}>
-      {queuedMessages.map((item) => (
-        <QueuedMessageRow
-          key={item.id}
-          item={item}
-          onEdit={handleEditQueuedMessage}
-          onSendNow={handleSendQueuedNow}
-        />
-      ))}
-    </View>
-  );
-}
-
-interface RenderComposerAttachmentPillArgs {
-  attachment: ComposerAttachment;
-  index: number;
-  disabled: boolean;
-  onOpen: (attachment: ComposerAttachment) => void;
-  onRemove: (index: number) => void;
-}
-
-function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): ReactElement {
-  const { attachment, index, disabled, onOpen, onRemove } = args;
-  if (attachment.kind === "image") {
-    return (
-      <ImageAttachmentPill
-        key={attachment.metadata.id}
-        attachment={attachment}
-        index={index}
-        disabled={disabled}
-        onOpen={onOpen}
-        onRemove={onRemove}
-      />
-    );
-  }
-  if (composerWorkspaceAttachment.is(attachment)) {
-    return composerWorkspaceAttachment.renderPill({
-      attachment,
-      index,
-      disabled,
-      onOpen,
-      onRemove,
-    });
-  }
-  return (
-    <GithubAttachmentPill
-      key={`${attachment.item.kind}:${attachment.item.number}`}
-      attachment={attachment}
-      index={index}
-      disabled={disabled}
-      onOpen={onOpen}
-      onRemove={onRemove}
-    />
   );
 }
 
@@ -455,188 +354,6 @@ function resolveMessageInputPassthroughAction(
     default:
       return null;
   }
-}
-
-interface QueuedMessageRowProps {
-  item: QueuedMessage;
-  onEdit: (id: string) => void;
-  onSendNow: (id: string) => void;
-}
-
-function QueuedMessageRow({ item, onEdit, onSendNow }: QueuedMessageRowProps) {
-  const { t } = useTranslation();
-  const handleEdit = useCallback(() => {
-    onEdit(item.id);
-  }, [onEdit, item.id]);
-  const handleSendNow = useCallback(() => {
-    onSendNow(item.id);
-  }, [onSendNow, item.id]);
-  return (
-    <View style={styles.queueItem}>
-      <Text style={styles.queueText} numberOfLines={2} ellipsizeMode="tail">
-        {item.text}
-      </Text>
-      <View style={styles.queueActions}>
-        <Pressable
-          onPress={handleEdit}
-          style={styles.queueActionButton}
-          accessibilityLabel={t("composer.editQueuedMessage")}
-          accessibilityRole="button"
-        >
-          <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
-        </Pressable>
-        <Pressable
-          onPress={handleSendNow}
-          style={QUEUE_SEND_BUTTON_STYLE}
-          accessibilityLabel={t("composer.sendQueuedMessageNow")}
-          accessibilityRole="button"
-        >
-          <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function ImageAttachmentThumbnail({ image }: { image: ImageAttachment }) {
-  const uri = useAttachmentPreviewUrl(image);
-  const source = useMemo(() => ({ uri: uri ?? "" }), [uri]);
-  if (!uri) {
-    return <View style={styles.imageThumbnailPlaceholder} />;
-  }
-  return <Image source={source} style={styles.imageThumbnail} />;
-}
-
-interface ImageAttachmentPillProps {
-  attachment: Extract<ComposerAttachment, { kind: "image" }>;
-  index: number;
-  disabled: boolean;
-  onOpen: (attachment: ComposerAttachment) => void;
-  onRemove: (index: number) => void;
-}
-
-function ImageAttachmentPill({
-  attachment,
-  index,
-  disabled,
-  onOpen,
-  onRemove,
-}: ImageAttachmentPillProps) {
-  const { t } = useTranslation();
-  const handleOpen = useCallback(() => {
-    onOpen(attachment);
-  }, [onOpen, attachment]);
-  const handleRemove = useCallback(() => {
-    onRemove(index);
-  }, [onRemove, index]);
-  return (
-    <AttachmentPill
-      testID="composer-image-attachment-pill"
-      onOpen={handleOpen}
-      onRemove={handleRemove}
-      openAccessibilityLabel={t("composer.openImageAttachment")}
-      removeAccessibilityLabel={t("composer.removeImageAttachment")}
-      disabled={disabled}
-    >
-      <ImageAttachmentThumbnail image={attachment.metadata} />
-    </AttachmentPill>
-  );
-}
-
-interface GithubAttachmentPillProps {
-  attachment: Extract<ComposerAttachment, { kind: "github_pr" | "github_issue" }>;
-  index: number;
-  disabled: boolean;
-  onOpen: (attachment: ComposerAttachment) => void;
-  onRemove: (index: number) => void;
-}
-
-function GithubAttachmentPill({
-  attachment,
-  index,
-  disabled,
-  onOpen,
-  onRemove,
-}: GithubAttachmentPillProps) {
-  const { t: githubT } = useTranslation();
-  const item = attachment.item;
-  const kindLabel = item.kind === "pr" ? "PR" : "issue";
-  const handleOpen = useCallback(() => {
-    onOpen(attachment);
-  }, [onOpen, attachment]);
-  const handleRemove = useCallback(() => {
-    onRemove(index);
-  }, [onRemove, index]);
-  return (
-    <AttachmentPill
-      testID="composer-github-attachment-pill"
-      onOpen={handleOpen}
-      onRemove={handleRemove}
-      openAccessibilityLabel={githubT("composer.openGithubItem", {
-        kind: kindLabel,
-        number: item.number,
-      })}
-      removeAccessibilityLabel={githubT("composer.removeGithubItem", {
-        kind: kindLabel,
-        number: item.number,
-      })}
-      disabled={disabled}
-    >
-      <View style={styles.githubPillBody}>
-        <View style={styles.githubPillIcon}>
-          {item.kind === "pr" ? (
-            <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
-          ) : (
-            <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
-          )}
-        </View>
-        <Text style={styles.githubPillText} numberOfLines={1}>
-          #{item.number} {item.title}
-        </Text>
-      </View>
-    </AttachmentPill>
-  );
-}
-
-interface GithubPickerOptionProps {
-  label: string;
-  testID: string;
-  active: boolean;
-  selected: boolean;
-  item: GitHubSearchItem;
-  onToggle: (item: GitHubSearchItem) => void;
-}
-
-function GithubPickerOption({
-  label,
-  testID,
-  active,
-  selected,
-  item,
-  onToggle,
-}: GithubPickerOptionProps) {
-  const handlePress = useCallback(() => {
-    onToggle(item);
-  }, [onToggle, item]);
-  const leadingSlot = useMemo(
-    () =>
-      item.kind === "pr" ? (
-        <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
-      ) : (
-        <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
-      ),
-    [item.kind],
-  );
-  return (
-    <ComboboxItem
-      testID={testID}
-      label={label}
-      selected={selected}
-      active={active}
-      onPress={handlePress}
-      leadingSlot={leadingSlot}
-    />
-  );
 }
 
 function FeatureMenuSwitch({
@@ -2088,41 +1805,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
   iconButtonHovered: {
     backgroundColor: theme.colors.surface2,
   },
-  attachmentTray: {
-    flexDirection: "row",
-    gap: theme.spacing[2],
-    flexWrap: "wrap",
-  },
-  imageThumbnail: {
-    width: 32,
-    height: 32,
-  },
-  imageThumbnailPlaceholder: {
-    width: 32,
-    height: 32,
-    backgroundColor: theme.colors.surface2,
-  },
-  githubPillBody: {
-    minHeight: 32,
-    maxWidth: 260,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
-  },
-  githubPillIcon: {
-    width: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  githubPillText: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-  },
   tooltipRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2135,55 +1817,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
   buttonDisabled: {
     opacity: 0.5,
   },
-  queueTrack: {
-    flexDirection: "column",
-    gap: theme.spacing[2],
-  },
-  queueItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    gap: theme.spacing[2],
-  },
-  queueText: {
-    flex: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-  },
-  queueActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  queueActionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: theme.borderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.colors.surface2,
-  },
-  queueSendButton: {
-    backgroundColor: theme.colors.accent,
-  },
   sendErrorText: {
     color: theme.colors.palette.red[500],
     fontSize: theme.fontSize.sm,
   },
 })) as unknown as Record<string, object>;
 
-const QUEUE_SEND_BUTTON_STYLE = [styles.queueActionButton, styles.queueSendButton];
-
-const ThemedPencil = withUnistyles(Pencil);
-const ThemedArrowUp = withUnistyles(ArrowUp);
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedAudioLines = withUnistyles(AudioLines);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedGithub = withUnistyles(Github);
@@ -2192,4 +1831,3 @@ const ThemedTarget = withUnistyles(Target);
 
 const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const iconAccentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
