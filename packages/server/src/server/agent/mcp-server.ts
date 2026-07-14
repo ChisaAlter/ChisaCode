@@ -71,6 +71,7 @@ import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
 import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
 import { registerScheduleMcpTools, type ScheduleMcpService } from "./schedule-mcp-tools.js";
 import { registerUsageMcpTools } from "./usage-mcp-tools.js";
+import { registerTerminalMcpTools } from "./terminal-mcp-tools.js";
 import { resolveAgentIdentifier } from "../agent-session-helpers.js";
 import {
   archiveChisaCodeWorktreeCommand,
@@ -291,51 +292,12 @@ function resolveChildAgentCwd(params: {
   return resolvePathFromBase(params.parentCwd, requestedCwd);
 }
 
-const TerminalSummarySchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  cwd: z.string(),
-});
-
 const WorktreeSummarySchema = z.object({
   path: z.string(),
   createdAt: z.string(),
   branchName: z.string().optional(),
   head: z.string().optional(),
 });
-
-function resolveTerminalKeyToken(key: string, literal: boolean): string {
-  if (literal) {
-    return key;
-  }
-
-  switch (key) {
-    case "Enter":
-      return "\r";
-    case "Tab":
-      return "\t";
-    case "Escape":
-      return "\u001b";
-    case "Space":
-      return " ";
-    case "BSpace":
-      return "\u007f";
-    case "C-c":
-      return "\u0003";
-    case "C-d":
-      return "\u0004";
-    case "C-z":
-      return "\u001a";
-    case "C-l":
-      return "\u000c";
-    case "C-a":
-      return "\u0001";
-    case "C-e":
-      return "\u0005";
-    default:
-      return key;
-  }
-}
 
 export async function createAgentMcpServer(options: AgentMcpServerOptions): Promise<McpServer> {
   const {
@@ -685,6 +647,21 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     usageStore,
     callerAgentId,
     lockedCwd: callerContext?.lockedCwd,
+  });
+  registerTerminalMcpTools({
+    registerTool,
+    terminalManager,
+    resolveScopedCwd,
+    resolveScopeRoot: () => {
+      const lockedCwd = callerContext?.lockedCwd?.trim();
+      if (lockedCwd) {
+        return expandUserPath(lockedCwd);
+      }
+      if (!callerAgentId || (callerContext?.allowCustomCwd ?? true)) {
+        return null;
+      }
+      return resolveCallerAgent()?.cwd ?? null;
+    },
   });
 
   registerTool(
@@ -1222,200 +1199,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       }
 
       await updateAgentCommand({ agentManager }, { agentId, name, labels });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
-    "list_terminals",
-    {
-      title: "List terminals",
-      description: "List terminals for a working directory or across all working directories.",
-      inputSchema: {
-        cwd: z
-          .string()
-          .optional()
-          .describe("Optional working directory. Defaults to the caller agent cwd."),
-        all: z.boolean().optional().describe("List terminals across all working directories."),
-      },
-      outputSchema: {
-        terminals: z.array(TerminalSummarySchema),
-      },
-    },
-    async ({ cwd, all }) => {
-      if (!terminalManager) {
-        throw new Error("Terminal manager is not configured");
-      }
-
-      const terminals = all
-        ? (
-            await Promise.all(
-              terminalManager.listDirectories().map(async (directory) =>
-                (await terminalManager.getTerminals(directory)).map((terminal) => ({
-                  id: terminal.id,
-                  name: terminal.name,
-                  cwd: terminal.cwd,
-                })),
-              ),
-            )
-          ).flat()
-        : (await terminalManager.getTerminals(resolveScopedCwd(cwd, { required: true }))).map(
-            (terminal) => ({
-              id: terminal.id,
-              name: terminal.name,
-              cwd: terminal.cwd,
-            }),
-          );
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ terminals }),
-      };
-    },
-  );
-
-  registerTool(
-    "create_terminal",
-    {
-      title: "Create terminal",
-      description: "Create a terminal session for a working directory.",
-      inputSchema: {
-        cwd: z
-          .string()
-          .optional()
-          .describe("Optional working directory. Defaults to the caller agent cwd."),
-        name: z.string().optional().describe("Optional terminal name."),
-      },
-      outputSchema: TerminalSummarySchema.shape,
-    },
-    async ({ cwd, name }) => {
-      if (!terminalManager) {
-        throw new Error("Terminal manager is not configured");
-      }
-
-      const terminal = await terminalManager.createTerminal({
-        cwd: resolveScopedCwd(cwd, { required: true }),
-        ...(name?.trim() ? { name: name.trim() } : {}),
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          id: terminal.id,
-          name: terminal.name,
-          cwd: terminal.cwd,
-        }),
-      };
-    },
-  );
-
-  registerTool(
-    "kill_terminal",
-    {
-      title: "Kill terminal",
-      description: "Kill an existing terminal session.",
-      inputSchema: {
-        terminalId: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ terminalId }) => {
-      if (!terminalManager) {
-        throw new Error("Terminal manager is not configured");
-      }
-
-      const terminal = terminalManager.getTerminal(terminalId);
-      if (!terminal) {
-        throw new Error(`Terminal ${terminalId} not found`);
-      }
-
-      terminal.kill();
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
-    "capture_terminal",
-    {
-      title: "Capture terminal",
-      description: "Capture plain-text terminal output lines from a terminal session.",
-      inputSchema: {
-        terminalId: z.string(),
-        start: z.number().optional(),
-        end: z.number().optional(),
-        scrollback: z.boolean().optional(),
-        stripAnsi: z.boolean().optional().default(true),
-      },
-      outputSchema: {
-        terminalId: z.string(),
-        lines: z.array(z.string()),
-        totalLines: z.number().int().nonnegative(),
-      },
-    },
-    async ({ terminalId, start, end, scrollback, stripAnsi = true }) => {
-      if (!terminalManager) {
-        throw new Error("Terminal manager is not configured");
-      }
-
-      if (!terminalManager.getTerminal(terminalId)) {
-        throw new Error(`Terminal ${terminalId} not found`);
-      }
-
-      const capture = await terminalManager.captureTerminal(terminalId, {
-        start: scrollback ? 0 : start,
-        end,
-        stripAnsi,
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          terminalId,
-          lines: capture.lines,
-          totalLines: capture.totalLines,
-        }),
-      };
-    },
-  );
-
-  registerTool(
-    "send_terminal_keys",
-    {
-      title: "Send terminal keys",
-      description: "Send literal text or special key tokens to a terminal session.",
-      inputSchema: {
-        terminalId: z.string(),
-        keys: z.string(),
-        literal: z.boolean().optional(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ terminalId, keys, literal = false }) => {
-      if (!terminalManager) {
-        throw new Error("Terminal manager is not configured");
-      }
-
-      const terminal = terminalManager.getTerminal(terminalId);
-      if (!terminal) {
-        throw new Error(`Terminal ${terminalId} not found`);
-      }
-
-      terminal.send({
-        type: "input",
-        data: resolveTerminalKeyToken(keys, literal),
-      });
 
       return {
         content: [],

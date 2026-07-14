@@ -745,6 +745,71 @@ describe("terminal MCP tools", () => {
       totalLines: 42,
     });
   });
+
+  it("filters all terminal listings to the caller locked workspace", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const lockedCwd = resolvePath(REPO_CWD, "locked");
+    const outsideCwd = resolvePath(REPO_CWD, "outside");
+    const insideTerminal = {
+      id: "term-inside",
+      name: "inside",
+      cwd: lockedCwd,
+    };
+    const outsideTerminal = {
+      id: "term-outside",
+      name: "outside",
+      cwd: outsideCwd,
+    };
+    const terminalManager = createTerminalManagerStub({
+      listDirectories: vi.fn().mockReturnValue([lockedCwd, outsideCwd]),
+      getTerminals: vi.fn(async (cwd: string) =>
+        cwd === lockedCwd ? [insideTerminal] : [outsideTerminal],
+      ),
+    });
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      terminalManager,
+      callerAgentId: "caller-agent",
+      resolveCallerContext: () => ({ lockedCwd }),
+      logger,
+    });
+
+    const response = await registeredTool(server, "list_terminals").handler({ all: true });
+
+    expect(response.structuredContent.terminals).toEqual([insideTerminal]);
+  });
+
+  it("rejects terminal capture outside the caller locked workspace", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const lockedCwd = resolvePath(REPO_CWD, "locked");
+    const outsideTerminal = {
+      id: "term-outside",
+      name: "outside",
+      cwd: resolvePath(REPO_CWD, "outside"),
+      getState: vi.fn().mockReturnValue({ scrollback: [], grid: [[]] }),
+    };
+    const captureTerminal = vi.fn().mockResolvedValue({ lines: ["secret"], totalLines: 1 });
+    const terminalManager = createTerminalManagerStub({
+      getTerminal: vi.fn().mockReturnValue(outsideTerminal),
+      captureTerminal,
+    });
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      terminalManager,
+      callerAgentId: "caller-agent",
+      resolveCallerContext: () => ({ lockedCwd }),
+      logger,
+    });
+
+    await expect(
+      registeredTool(server, "capture_terminal").handler({ terminalId: "term-outside" }),
+    ).rejects.toThrow("outside the caller workspace scope");
+    expect(captureTerminal).not.toHaveBeenCalled();
+  });
 });
 
 describe("create_agent MCP tool", () => {
