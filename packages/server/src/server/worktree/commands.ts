@@ -1,3 +1,4 @@
+import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 
 import { getChisaCodeWorktreesRoot, isChisaCodeOwnedWorktreeCwd } from "../../utils/worktree.js";
@@ -10,6 +11,7 @@ import type {
   CreateChisaCodeWorktreeResult,
 } from "../chisacode-worktree-service.js";
 import { toWorktreeWireError, type WorktreeWireError } from "../worktree-errors.js";
+import { isSameOrDescendantPath } from "../path-utils.js";
 import type { WorkspaceGitService, WorkspaceGitWorktreeInfo } from "../workspace-git-service.js";
 
 export interface ListChisaCodeWorktreesCommandDependencies {
@@ -97,6 +99,8 @@ export interface ArchiveChisaCodeWorktreeCommandInput {
   worktreePath?: string;
   worktreeSlug?: string;
   branchName?: string;
+  /** Limits archive to the worktree containing this caller path when supplied. */
+  allowedScopeRoot?: string | null;
 }
 
 export type ArchiveChisaCodeWorktreeCommandResult =
@@ -116,6 +120,17 @@ export async function archiveChisaCodeWorktreeCommand(
   input: ArchiveChisaCodeWorktreeCommandInput,
 ): Promise<ArchiveChisaCodeWorktreeCommandResult> {
   const resolvedTarget = await resolveArchiveTarget(dependencies, input);
+  if (
+    input.allowedScopeRoot &&
+    !(await isArchiveTargetWithinScope(resolvedTarget.targetPath, input.allowedScopeRoot))
+  ) {
+    return {
+      ok: false,
+      code: "NOT_ALLOWED",
+      message: "Worktree is outside the caller workspace scope",
+      removedAgents: [],
+    };
+  }
   const ownership = await isChisaCodeOwnedWorktreeCwd(resolvedTarget.targetPath, {
     chisacodeHome: dependencies.chisacodeHome,
   });
@@ -141,6 +156,22 @@ export async function archiveChisaCodeWorktreeCommand(
     ok: true,
     removedAgents,
   };
+}
+
+async function isArchiveTargetWithinScope(targetPath: string, scopeRoot: string): Promise<boolean> {
+  const [resolvedTargetPath, resolvedScopeRoot] = await Promise.all([
+    resolvePathForScopeCheck(targetPath),
+    resolvePathForScopeCheck(scopeRoot),
+  ]);
+  return isSameOrDescendantPath(resolvedTargetPath, resolvedScopeRoot);
+}
+
+async function resolvePathForScopeCheck(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    return path;
+  }
 }
 
 interface ResolvedArchiveTarget {

@@ -29,10 +29,7 @@ import { selectItemsByProjectedLimit } from "./timeline-projection.js";
 import type { AgentStorage } from "./agent-storage.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
 import { isStoredAgentProviderAvailable } from "../persistence-hooks.js";
-import {
-  killTerminalsUnderPath,
-  type ArchiveChisaCodeWorktreeDependencies,
-} from "../chisacode-worktree-archive-service.js";
+import type { ArchiveChisaCodeWorktreeDependencies } from "../chisacode-worktree-archive-service.js";
 import { WaitForAgentTracker } from "./wait-for-agent-tracker.js";
 import { createAgentCommand } from "./create-agent/create.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "../voice-types.js";
@@ -65,7 +62,6 @@ import {
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { UsageStore } from "../usage/usage-store.js";
-import { WorktreeRequestError } from "../worktree-errors.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
 import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
@@ -73,13 +69,7 @@ import { registerScheduleMcpTools, type ScheduleMcpService } from "./schedule-mc
 import { registerUsageMcpTools } from "./usage-mcp-tools.js";
 import { registerTerminalMcpTools } from "./terminal-mcp-tools.js";
 import { resolveAgentIdentifier } from "../agent-session-helpers.js";
-import {
-  archiveChisaCodeWorktreeCommand,
-  type ArchiveChisaCodeWorktreeCommandDependencies,
-  createChisaCodeWorktreeCommand,
-  type CreateChisaCodeWorktreeCommandInput,
-  listChisaCodeWorktreesCommand,
-} from "../worktree/commands.js";
+import { registerWorktreeMcpTools } from "./worktree-mcp-tools.js";
 
 export interface AgentMcpServerOptions {
   agentManager: AgentManager;
@@ -292,13 +282,6 @@ function resolveChildAgentCwd(params: {
   return resolvePathFromBase(params.parentCwd, requestedCwd);
 }
 
-const WorktreeSummarySchema = z.object({
-  path: z.string(),
-  createdAt: z.string(),
-  branchName: z.string().optional(),
-  head: z.string().optional(),
-});
-
 export async function createAgentMcpServer(options: AgentMcpServerOptions): Promise<McpServer> {
   const {
     agentManager,
@@ -373,6 +356,16 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     return expandUserPath(trimmedCwd);
   };
 
+  const resolveScopeRoot = (): string | null => {
+    const lockedCwd = callerContext?.lockedCwd?.trim();
+    if (lockedCwd) {
+      return expandUserPath(lockedCwd);
+    }
+    if (!callerAgentId || (callerContext?.allowCustomCwd ?? true)) {
+      return null;
+    }
+    return resolveCallerAgent()?.cwd ?? null;
+  };
   const ProviderModelInputSchema = AgentProviderEnum.trim()
     .refine((value) => value.includes("/"), {
       message: "provider must be provider/model, for example codex/gpt-5.4",
@@ -652,16 +645,24 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     registerTool,
     terminalManager,
     resolveScopedCwd,
-    resolveScopeRoot: () => {
-      const lockedCwd = callerContext?.lockedCwd?.trim();
-      if (lockedCwd) {
-        return expandUserPath(lockedCwd);
-      }
-      if (!callerAgentId || (callerContext?.allowCustomCwd ?? true)) {
-        return null;
-      }
-      return resolveCallerAgent()?.cwd ?? null;
-    },
+    resolveScopeRoot,
+  });
+  registerWorktreeMcpTools({
+    registerTool,
+    agentManager,
+    agentStorage,
+    terminalManager,
+    github: options.github,
+    workspaceGitService: options.workspaceGitService,
+    archiveWorkspaceRecord: options.archiveWorkspaceRecord,
+    emitWorkspaceUpdatesForWorkspaceIds: options.emitWorkspaceUpdatesForWorkspaceIds,
+    markWorkspaceArchiving: options.markWorkspaceArchiving,
+    clearWorkspaceArchiving: options.clearWorkspaceArchiving,
+    createChisaCodeWorktree: options.createChisaCodeWorktree,
+    chisacodeHome: options.chisacodeHome,
+    logger: childLogger,
+    resolveScopedCwd,
+    resolveScopeRoot,
   });
 
   registerTool(
@@ -1317,166 +1318,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
   );
 
   registerTool(
-    "list_worktrees",
-    {
-      title: "List worktrees",
-      description: "List ChisaCode-managed git worktrees for a repository.",
-      inputSchema: {
-        cwd: z
-          .string()
-          .optional()
-          .describe("Optional repository cwd. Defaults to the caller agent cwd."),
-      },
-      outputSchema: {
-        worktrees: z.array(WorktreeSummarySchema),
-      },
-    },
-    async ({ cwd }) => {
-      const resolvedCwd = resolveScopedCwd(cwd, { required: true });
-      if (!options.workspaceGitService) {
-        throw new Error("WorkspaceGitService is required to list worktrees");
-      }
-      const worktrees = await listChisaCodeWorktreesCommand(
-        { workspaceGitService: options.workspaceGitService },
-        {
-          cwd: resolvedCwd,
-          reason: "mcp:list-worktrees",
-        },
-      );
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ worktrees }),
-      };
-    },
-  );
-
-  registerTool(
-    "create_worktree",
-    {
-      title: "Create worktree",
-      description:
-        "Create a ChisaCode-managed git worktree. Branch off a new branch, check out an existing branch, or check out a GitHub PR.",
-      inputSchema: {
-        cwd: z.string().optional().describe("Repository directory. Defaults to the agent's cwd."),
-        target: z
-          .discriminatedUnion("mode", [
-            z
-              .object({
-                mode: z.literal("branch-off"),
-                newBranch: z.string().min(1).describe("Name for the new branch."),
-                base: z
-                  .string()
-                  .min(1)
-                  .optional()
-                  .describe("Base ref. Defaults to the repo's default branch."),
-              })
-              .describe("Create a new branch off a base."),
-            z
-              .object({
-                mode: z.literal("checkout-branch"),
-                branch: z.string().min(1).describe("Existing branch to check out."),
-              })
-              .describe("Check out an existing branch."),
-            z
-              .object({
-                mode: z.literal("checkout-pr"),
-                prNumber: z.number().int().positive().describe("Pull request number."),
-              })
-              .describe("Check out a GitHub pull request."),
-          ])
-          .describe("What the worktree should contain."),
-      },
-      outputSchema: {
-        branchName: z.string(),
-        worktreePath: z.string(),
-      },
-    },
-    async ({ cwd, target }) => {
-      const repoRoot = resolveScopedCwd(cwd, { required: true });
-      const commandResult = await createChisaCodeWorktreeCommand(
-        {
-          chisacodeHome: options.chisacodeHome,
-          createChisaCodeWorktreeWorkflow: options.createChisaCodeWorktree,
-        },
-        createMcpWorktreeCommandInput(repoRoot, target),
-      );
-      if (!commandResult.ok) {
-        throw new WorktreeRequestError(commandResult.error);
-      }
-      const { worktree } = commandResult.createdWorktree;
-      await options.workspaceGitService?.listWorktrees?.(repoRoot, {
-        force: true,
-        reason: "mcp:create-worktree",
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          branchName: worktree.branchName,
-          worktreePath: worktree.worktreePath,
-        }),
-      };
-    },
-  );
-
-  registerTool(
-    "archive_worktree",
-    {
-      title: "Archive worktree",
-      description: "Delete a ChisaCode-managed git worktree.",
-      inputSchema: {
-        cwd: z
-          .string()
-          .optional()
-          .describe("Optional repository cwd. Defaults to the caller agent cwd."),
-        worktreePath: z.string().optional(),
-        worktreeSlug: z.string().optional(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ cwd, worktreePath, worktreeSlug }) => {
-      const resolvedCwd = resolveScopedCwd(cwd, { required: true });
-      if (!worktreePath && !worktreeSlug) {
-        throw new Error("worktreePath or worktreeSlug is required");
-      }
-      if (!options.workspaceGitService) {
-        throw new Error("WorkspaceGitService is required to archive worktrees");
-      }
-      const repoRoot = await options.workspaceGitService.resolveRepoRoot(resolvedCwd);
-
-      const result = await archiveChisaCodeWorktreeCommand(
-        archiveWorktreeDependencies(options, {
-          agentManager,
-          agentStorage,
-          terminalManager: terminalManager ?? null,
-          logger: childLogger,
-        }),
-        {
-          requestId: "mcp:archive_worktree",
-          repoRoot,
-          worktreePath,
-          worktreeSlug,
-        },
-      );
-      if (!result.ok) {
-        throw new Error(result.message);
-      }
-      await options.workspaceGitService.listWorktrees(repoRoot, {
-        force: true,
-        reason: "mcp:archive-worktree",
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
     "get_agent_activity",
     {
       title: "Get agent activity",
@@ -1641,85 +1482,4 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
   }
 
   return server;
-}
-
-type McpCreateWorktreeTarget =
-  | { mode: "branch-off"; newBranch: string; base?: string }
-  | { mode: "checkout-branch"; branch: string }
-  | { mode: "checkout-pr"; prNumber: number };
-
-interface ArchiveWorktreeCommandContext {
-  agentManager: AgentManager;
-  agentStorage: AgentStorage;
-  terminalManager: TerminalManager | null;
-  logger: Logger;
-}
-
-function archiveWorktreeDependencies(
-  options: AgentMcpServerOptions,
-  context: ArchiveWorktreeCommandContext,
-): ArchiveChisaCodeWorktreeCommandDependencies {
-  if (!options.github) {
-    throw new Error("GitHub service is required to archive worktrees");
-  }
-  if (!options.workspaceGitService) {
-    throw new Error("WorkspaceGitService is required to archive worktrees");
-  }
-  if (!options.archiveWorkspaceRecord) {
-    throw new Error("Workspace registry archiver is required to archive worktrees");
-  }
-  if (!options.emitWorkspaceUpdatesForWorkspaceIds) {
-    throw new Error("Workspace update emitter is required to archive worktrees");
-  }
-  if (!options.markWorkspaceArchiving) {
-    throw new Error("Workspace archiving marker is required to archive worktrees");
-  }
-  if (!options.clearWorkspaceArchiving) {
-    throw new Error("Workspace archiving clearer is required to archive worktrees");
-  }
-  return {
-    chisacodeHome: options.chisacodeHome,
-    github: options.github,
-    workspaceGitService: options.workspaceGitService,
-    agentManager: context.agentManager,
-    agentStorage: context.agentStorage,
-    archiveWorkspaceRecord: options.archiveWorkspaceRecord,
-    emitWorkspaceUpdatesForWorkspaceIds: options.emitWorkspaceUpdatesForWorkspaceIds,
-    markWorkspaceArchiving: options.markWorkspaceArchiving,
-    clearWorkspaceArchiving: options.clearWorkspaceArchiving,
-    isPathWithinRoot: isSameOrDescendantPath,
-    killTerminalsUnderPath: (rootPath: string) =>
-      killTerminalsUnderPath(
-        {
-          terminalManager: context.terminalManager,
-          isPathWithinRoot: isSameOrDescendantPath,
-          killTrackedTerminal: () => {},
-          sessionLogger: context.logger,
-        },
-        rootPath,
-      ),
-    sessionLogger: context.logger,
-  };
-}
-
-function createMcpWorktreeCommandInput(
-  repoRoot: string,
-  target: McpCreateWorktreeTarget,
-): CreateChisaCodeWorktreeCommandInput {
-  const base = { cwd: repoRoot } as const;
-  switch (target.mode) {
-    case "branch-off":
-      return {
-        ...base,
-        worktreeSlug: target.newBranch,
-        action: "branch-off",
-        ...(target.base ? { refName: target.base } : {}),
-      };
-    case "checkout-branch":
-      return { ...base, action: "checkout", refName: target.branch };
-    case "checkout-pr":
-      return { ...base, action: "checkout", githubPrNumber: target.prNumber };
-    default:
-      throw new Error("unreachable");
-  }
 }

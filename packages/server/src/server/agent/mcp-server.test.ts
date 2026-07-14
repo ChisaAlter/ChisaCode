@@ -1818,6 +1818,123 @@ describe("create_agent MCP tool", () => {
     ]);
   });
 
+  it("filters list_worktrees to the caller worktree scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const selfWorktree = resolvePath(REPO_CWD, "worktrees", "self");
+    const callerCwd = join(selfWorktree, "packages", "server");
+    const siblingWorktree = resolvePath(REPO_CWD, "worktrees", "sibling");
+    spies.agentManager.getAgent.mockReturnValue({
+      id: "caller-agent",
+      cwd: callerCwd,
+      provider: "codex",
+      currentModeId: "full-access",
+    } as ManagedAgent);
+    const workspaceGitService = {
+      getSnapshot: vi.fn(async () => null),
+      listWorktrees: vi.fn(async () => [
+        {
+          path: selfWorktree,
+          branchName: "self",
+          createdAt: "2026-07-14T00:00:00.000Z",
+        },
+        {
+          path: siblingWorktree,
+          branchName: "sibling",
+          createdAt: "2026-07-14T00:00:00.000Z",
+        },
+      ]),
+      resolveRepoRoot: vi.fn(async () => REPO_CWD),
+    };
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      workspaceGitService: workspaceGitService as unknown as Pick<
+        WorkspaceGitService,
+        "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
+      >,
+      callerAgentId: "caller-agent",
+      resolveCallerContext: () => ({ lockedCwd: callerCwd, allowCustomCwd: false }),
+      logger,
+    });
+
+    const response = await registeredTool(server, "list_worktrees").handler({});
+
+    expect(response.structuredContent.worktrees).toEqual([
+      {
+        path: selfWorktree,
+        branchName: "self",
+        createdAt: "2026-07-14T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("rejects create_worktree from a caller worktree scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const callerCwd = resolvePath(REPO_CWD, "worktrees", "self");
+    const createChisaCodeWorktree = vi.fn();
+    spies.agentManager.getAgent.mockReturnValue({
+      id: "caller-agent",
+      cwd: callerCwd,
+      provider: "codex",
+      currentModeId: "full-access",
+    } as ManagedAgent);
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      createChisaCodeWorktree,
+      callerAgentId: "caller-agent",
+      resolveCallerContext: () => ({ lockedCwd: callerCwd, allowCustomCwd: false }),
+      logger,
+    });
+
+    await expect(
+      registeredTool(server, "create_worktree").handler({
+        target: { mode: "branch-off", newBranch: "sibling" },
+      }),
+    ).rejects.toThrow("cannot create worktrees outside its workspace scope");
+    expect(createChisaCodeWorktree).not.toHaveBeenCalled();
+  });
+
+  it("rejects archive_worktree outside the caller worktree scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const callerCwd = resolvePath(REPO_CWD, "worktrees", "self", "packages", "server");
+    const siblingWorktree = resolvePath(REPO_CWD, "worktrees", "sibling");
+    spies.agentManager.getAgent.mockReturnValue({
+      id: "caller-agent",
+      cwd: callerCwd,
+      provider: "codex",
+      currentModeId: "full-access",
+    } as ManagedAgent);
+    const workspaceGitService = {
+      getSnapshot: vi.fn(async () => null),
+      listWorktrees: vi.fn(async () => []),
+      resolveRepoRoot: vi.fn(async () => REPO_CWD),
+    };
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      workspaceGitService: workspaceGitService as unknown as Pick<
+        WorkspaceGitService,
+        "getSnapshot" | "listWorktrees" | "resolveRepoRoot"
+      >,
+      archiveWorkspaceRecord: vi.fn(async () => undefined),
+      emitWorkspaceUpdatesForWorkspaceIds: vi.fn(async () => undefined),
+      markWorkspaceArchiving: vi.fn(),
+      clearWorkspaceArchiving: vi.fn(),
+      github: createGitHubServiceStub(),
+      callerAgentId: "caller-agent",
+      resolveCallerContext: () => ({ lockedCwd: callerCwd, allowCustomCwd: false }),
+      logger,
+    });
+
+    await expect(
+      registeredTool(server, "archive_worktree").handler({ worktreePath: siblingWorktree }),
+    ).rejects.toThrow("outside the caller workspace scope");
+    expect(workspaceGitService.getSnapshot).not.toHaveBeenCalled();
+  });
   it("accepts custom provider IDs in create_agent input validation", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const server = await createAgentMcpServer({
