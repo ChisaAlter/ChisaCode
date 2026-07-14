@@ -65,6 +65,30 @@ export interface ResolvedProviderModel {
   model: string | undefined;
 }
 
+/**
+ * Resolves a provider input that may optionally include a model suffix.
+ * @param providerValue Provider id or provider/model input
+ * @param defaultProvider Provider used when the input is empty
+ * @returns The resolved provider and optional model
+ */
+export function resolveProviderAndOptionalModel(
+  providerValue: string | undefined,
+  defaultProvider: AgentProvider,
+): ResolvedProviderModel {
+  const providerInput = providerValue?.trim() || defaultProvider;
+  const slashIndex = providerInput.indexOf("/");
+  if (slashIndex === -1) {
+    return { provider: providerInput, model: undefined };
+  }
+
+  const provider = providerInput.slice(0, slashIndex).trim();
+  const model = providerInput.slice(slashIndex + 1).trim();
+  if (!provider || !model) {
+    throw new Error("provider must be <provider> or <provider>/<model>");
+  }
+  return { provider, model };
+}
+
 export function resolveRequiredProviderModel(
   providerValue: string,
 ): Required<ResolvedProviderModel> {

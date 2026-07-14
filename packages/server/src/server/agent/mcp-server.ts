@@ -39,14 +39,7 @@ import type { VoiceCallerContext, VoiceSpeakHandler } from "../voice-types.js";
 import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../path-utils.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type { CreateChisaCodeWorktreeWorkflowFn } from "../worktree-session.js";
-import type { ScheduleService } from "../schedule/service.js";
-import {
-  ScheduleRunSchema,
-  ScheduleSummarySchema,
-  StoredScheduleSchema,
-  type ScheduleCadence,
-  type UpdateScheduleInput,
-} from "@chisacode/protocol/schedule/types";
+
 import { resolveSnapshotCwd, type ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import {
   AgentModelSchema,
@@ -54,11 +47,10 @@ import {
   AgentStatusEnum,
   ProviderModeSchema,
   ProviderSummarySchema,
-  parseDurationString,
+  resolveProviderAndOptionalModel,
   resolveRequiredProviderModel,
   sanitizePermissionRequest,
   serializeSnapshotWithMetadata,
-  toScheduleSummary,
   waitForAgentWithTimeout,
 } from "./mcp-shared.js";
 import { sendPromptToAgent, setupFinishNotification } from "./agent-prompt.js";
@@ -76,6 +68,7 @@ import { WorktreeRequestError } from "../worktree-errors.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
 import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
+import { registerScheduleMcpTools, type ScheduleMcpService } from "./schedule-mcp-tools.js";
 import { resolveAgentIdentifier } from "../agent-session-helpers.js";
 import {
   archiveChisaCodeWorktreeCommand,
@@ -90,7 +83,7 @@ export interface AgentMcpServerOptions {
   agentStorage: AgentStorage;
   terminalManager?: TerminalManager | null;
   getDaemonTcpPort?: () => number | null;
-  scheduleService?: ScheduleService | null;
+  scheduleService?: ScheduleMcpService | null;
   chatService?: ChatMcpService | null;
   loopService?: LoopMcpService | null;
   providerSnapshotManager: ProviderSnapshotManager;
@@ -276,151 +269,6 @@ function compareAgentListItems(a: AgentListItemPayload, b: AgentListItemPayload)
   return resolveAgentListActivityTime(b) - resolveAgentListActivityTime(a);
 }
 
-function resolveScheduleProviderAndModel(params: {
-  provider?: string;
-  defaultProvider: AgentProvider;
-}): { provider: AgentProvider; model?: string } {
-  const providerInput = params.provider?.trim() || params.defaultProvider;
-  const slashIndex = providerInput.indexOf("/");
-  if (slashIndex === -1) {
-    return { provider: providerInput };
-  }
-
-  const provider = providerInput.slice(0, slashIndex).trim();
-  const model = providerInput.slice(slashIndex + 1).trim();
-  if (!provider || !model) {
-    throw new Error("provider must be <provider> or <provider>/<model>");
-  }
-
-  return {
-    provider: provider,
-    model,
-  };
-}
-
-function resolveScheduleUpdateProviderAndModel(params: {
-  provider?: string;
-  model?: string | null;
-}): { provider?: string; model?: string | null } {
-  const providerInput = params.provider?.trim();
-  const modelInput = typeof params.model === "string" ? params.model.trim() : params.model;
-
-  if (params.model !== undefined && modelInput === "") {
-    throw new Error("model cannot be empty");
-  }
-
-  if (!providerInput) {
-    return params.model !== undefined ? { model: modelInput } : {};
-  }
-
-  const slashIndex = providerInput.indexOf("/");
-  if (slashIndex === -1) {
-    return {
-      provider: providerInput,
-      ...(params.model !== undefined ? { model: modelInput } : {}),
-    };
-  }
-
-  const provider = providerInput.slice(0, slashIndex).trim();
-  const modelFromProvider = providerInput.slice(slashIndex + 1).trim();
-  if (!provider || !modelFromProvider) {
-    throw new Error("provider must be <provider> or <provider>/<model>");
-  }
-  if (params.model === null) {
-    throw new Error("provider specifies a model but model is null");
-  }
-  if (typeof modelInput === "string" && modelInput !== modelFromProvider) {
-    throw new Error("Conflicting model values provided");
-  }
-
-  return {
-    provider,
-    model: modelInput ?? modelFromProvider,
-  };
-}
-
-interface ScheduleUpdateToolInput {
-  id: string;
-  every?: string;
-  cron?: string;
-  name?: string | null;
-  prompt?: string;
-  maxRuns?: number | null;
-  provider?: string;
-  model?: string | null;
-  mode?: string | null;
-  cwd?: string;
-  expiresIn?: string;
-  clearExpires?: boolean;
-}
-
-function normalizeScheduleCadenceArg(value: string | undefined): string | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  return trimmed;
-}
-
-function resolveScheduleUpdateCadence(input: ScheduleUpdateToolInput): ScheduleCadence | undefined {
-  const every = normalizeScheduleCadenceArg(input.every);
-  const cron = normalizeScheduleCadenceArg(input.cron);
-
-  if (every !== undefined && cron !== undefined) {
-    throw new Error("Specify at most one of every or cron");
-  }
-  if (every !== undefined) {
-    return { type: "every", everyMs: parseDurationString(every) };
-  }
-  if (cron !== undefined) {
-    return { type: "cron", expression: cron };
-  }
-  return undefined;
-}
-
-function resolveScheduleUpdateExpiresAt(input: ScheduleUpdateToolInput): string | null | undefined {
-  if (input.expiresIn !== undefined && input.clearExpires) {
-    throw new Error("Specify at most one of expiresIn or clearExpires");
-  }
-  if (input.expiresIn !== undefined) {
-    return new Date(Date.now() + parseDurationString(input.expiresIn)).toISOString();
-  }
-  if (input.clearExpires) {
-    return null;
-  }
-  return undefined;
-}
-
-function buildScheduleUpdateInput(input: ScheduleUpdateToolInput): UpdateScheduleInput {
-  const cadence = resolveScheduleUpdateCadence(input);
-  const expiresAt = resolveScheduleUpdateExpiresAt(input);
-  const providerModelPatch = resolveScheduleUpdateProviderAndModel({
-    provider: input.provider,
-    model: input.model,
-  });
-  const newAgentConfig = {
-    ...(providerModelPatch.provider !== undefined ? { provider: providerModelPatch.provider } : {}),
-    ...(providerModelPatch.model !== undefined ? { model: providerModelPatch.model } : {}),
-    ...(input.mode !== undefined ? { modeId: input.mode } : {}),
-    ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
-  };
-
-  return {
-    id: input.id,
-    ...(input.name !== undefined ? { name: input.name } : {}),
-    ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
-    ...(cadence !== undefined ? { cadence } : {}),
-    ...(input.maxRuns !== undefined ? { maxRuns: input.maxRuns } : {}),
-    ...(expiresAt !== undefined ? { expiresAt } : {}),
-    ...(Object.keys(newAgentConfig).length > 0 ? { newAgentConfig } : {}),
-  };
-}
-
 function resolveChildAgentCwd(params: {
   parentCwd: string;
   requestedCwd?: string;
@@ -559,90 +407,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     return expandUserPath(trimmedCwd);
   };
 
-  const buildCallerAgentScheduleConfigExtras = (
-    callerAgent: NonNullable<ReturnType<typeof resolveCallerAgent>>,
-  ): Record<string, unknown> => {
-    return {
-      ...(callerAgent.config.thinkingOptionId
-        ? { thinkingOptionId: callerAgent.config.thinkingOptionId }
-        : {}),
-      ...(callerAgent.config.approvalPolicy
-        ? { approvalPolicy: callerAgent.config.approvalPolicy }
-        : {}),
-      ...(callerAgent.config.sandboxMode ? { sandboxMode: callerAgent.config.sandboxMode } : {}),
-      ...(typeof callerAgent.config.networkAccess === "boolean"
-        ? { networkAccess: callerAgent.config.networkAccess }
-        : {}),
-      ...(typeof callerAgent.config.webSearch === "boolean"
-        ? { webSearch: callerAgent.config.webSearch }
-        : {}),
-      ...(callerAgent.config.title ? { title: callerAgent.config.title } : {}),
-      ...(callerAgent.config.extra ? { extra: callerAgent.config.extra } : {}),
-      ...(callerAgent.config.featureValues
-        ? { featureValues: callerAgent.config.featureValues }
-        : {}),
-      ...(callerAgent.config.systemPrompt ? { systemPrompt: callerAgent.config.systemPrompt } : {}),
-      ...(callerAgent.config.mcpServers ? { mcpServers: callerAgent.config.mcpServers } : {}),
-    };
-  };
-
-  const buildCallerAgentScheduleConfig = (
-    callerAgent: NonNullable<ReturnType<typeof resolveCallerAgent>>,
-    params?: { provider?: string; cwd?: string },
-  ) => {
-    const hasProviderOverride = params?.provider !== undefined;
-    const resolvedProviderModel = hasProviderOverride
-      ? resolveScheduleProviderAndModel({
-          provider: params?.provider,
-          defaultProvider: callerAgent.provider,
-        })
-      : null;
-    const resolvedProvider = resolvedProviderModel?.provider ?? callerAgent.provider;
-    let resolvedModel: string | undefined;
-    if (resolvedProviderModel?.model) {
-      resolvedModel = resolvedProviderModel.model;
-    } else if (!hasProviderOverride && callerAgent.config.model) {
-      resolvedModel = callerAgent.config.model;
-    }
-    return {
-      provider: resolvedProvider,
-      cwd: params?.cwd?.trim() ? expandUserPath(params.cwd) : callerAgent.cwd,
-      ...(callerAgent.currentModeId && callerAgent.provider === resolvedProvider
-        ? {
-            modeId: callerAgent.currentModeId,
-          }
-        : {}),
-      ...(resolvedModel ? { model: resolvedModel } : {}),
-      ...buildCallerAgentScheduleConfigExtras(callerAgent),
-    };
-  };
-
-  const resolveNewAgentScheduleTarget = (params?: { provider?: string; cwd?: string }) => {
-    if (!params?.provider?.trim()) {
-      throw new Error("provider is required when target is new-agent");
-    }
-
-    const callerAgent = resolveCallerAgent();
-    if (callerAgent) {
-      return {
-        type: "new-agent" as const,
-        config: buildCallerAgentScheduleConfig(callerAgent, params),
-      };
-    }
-
-    const resolvedProviderModel = resolveScheduleProviderAndModel({
-      provider: params?.provider,
-      defaultProvider: params.provider,
-    });
-    return {
-      type: "new-agent" as const,
-      config: {
-        provider: resolvedProviderModel.provider,
-        cwd: params?.cwd?.trim() ? expandUserPath(params.cwd) : process.cwd(),
-        ...(resolvedProviderModel.model ? { model: resolvedProviderModel.model } : {}),
-      },
-    };
-  };
   const ProviderModelInputSchema = AgentProviderEnum.trim()
     .refine((value) => value.includes("/"), {
       message: "provider must be provider/model, for example codex/gpt-5.4",
@@ -903,6 +667,13 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
   registerLoopMcpTools({
     registerTool,
     loopService,
+    resolveScopedCwd,
+  });
+  registerScheduleMcpTools({
+    registerTool,
+    scheduleService,
+    callerAgentId,
+    resolveCallerAgent,
     resolveScopedCwd,
   });
 
@@ -1644,301 +1415,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
   );
 
   registerTool(
-    "create_schedule",
-    {
-      title: "Create schedule",
-      description: "Create a recurring schedule that runs on an agent or a new agent.",
-      inputSchema: {
-        prompt: z.string().trim().min(1, "prompt is required"),
-        every: z.string().optional(),
-        cron: z.string().optional(),
-        name: z.string().optional(),
-        target: z.enum(["self", "new-agent"]).optional(),
-        provider: AgentProviderEnum.optional().describe(
-          "Provider, or provider/model (for example: codex or codex/gpt-5.4).",
-        ),
-        cwd: z.string().optional(),
-        maxRuns: z.number().int().positive().optional(),
-        expiresIn: z.string().optional(),
-      },
-      outputSchema: ScheduleSummarySchema.shape,
-    },
-    async ({ prompt, every, cron, name, target, provider, cwd, maxRuns, expiresIn }) => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      const normalizedEvery = normalizeScheduleCadenceArg(every);
-      const normalizedCron = normalizeScheduleCadenceArg(cron);
-      const cadenceCount =
-        Number(normalizedEvery !== undefined) + Number(normalizedCron !== undefined);
-      if (cadenceCount !== 1) {
-        throw new Error("Specify exactly one of every or cron");
-      }
-
-      const scheduleTarget =
-        target === "self"
-          ? (() => {
-              const callerAgent = resolveCallerAgent();
-              if (!callerAgentId || !callerAgent) {
-                throw new Error("target=self requires a caller agent");
-              }
-              const trimmedCwd = cwd?.trim();
-              if (trimmedCwd && expandUserPath(trimmedCwd) !== callerAgent.cwd) {
-                throw new Error("cwd can only differ from the caller agent when target=new-agent");
-              }
-              if (provider !== undefined) {
-                const resolved = resolveScheduleProviderAndModel({
-                  provider,
-                  defaultProvider: callerAgent.provider,
-                });
-                if (
-                  resolved.provider !== callerAgent.provider ||
-                  (resolved.model !== undefined && resolved.model !== callerAgent.config.model)
-                ) {
-                  throw new Error(
-                    "provider can only differ from the caller agent when target=new-agent",
-                  );
-                }
-              }
-              return { type: "agent" as const, agentId: callerAgentId };
-            })()
-          : (() => {
-              return resolveNewAgentScheduleTarget({ provider, cwd });
-            })();
-
-      const schedule = await scheduleService.create({
-        prompt: prompt.trim(),
-        cadence:
-          normalizedEvery !== undefined
-            ? { type: "every" as const, everyMs: parseDurationString(normalizedEvery) }
-            : { type: "cron" as const, expression: normalizedCron! },
-        target: scheduleTarget,
-        ...(name?.trim() ? { name: name.trim() } : {}),
-        ...(maxRuns === undefined ? {} : { maxRuns }),
-        ...(expiresIn === undefined
-          ? {}
-          : { expiresAt: new Date(Date.now() + parseDurationString(expiresIn)).toISOString() }),
-      });
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson(toScheduleSummary(schedule)),
-      };
-    },
-  );
-
-  registerTool(
-    "list_schedules",
-    {
-      title: "List schedules",
-      description: "List all schedules managed by the daemon.",
-      inputSchema: {},
-      outputSchema: {
-        schedules: z.array(ScheduleSummarySchema),
-      },
-    },
-    async () => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      const schedules = (await scheduleService.list()).map((schedule) =>
-        toScheduleSummary(schedule),
-      );
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ schedules }),
-      };
-    },
-  );
-
-  registerTool(
-    "inspect_schedule",
-    {
-      title: "Inspect schedule",
-      description: "Inspect a schedule and its run history.",
-      inputSchema: {
-        id: z.string(),
-      },
-      outputSchema: StoredScheduleSchema.shape,
-    },
-    async ({ id }) => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      const schedule = await scheduleService.inspect(id);
-      return {
-        content: [],
-        structuredContent: ensureValidJson(schedule),
-      };
-    },
-  );
-
-  registerTool(
-    "pause_schedule",
-    {
-      title: "Pause schedule",
-      description: "Pause an active schedule.",
-      inputSchema: {
-        id: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ id }) => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      await scheduleService.pause(id);
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
-    "resume_schedule",
-    {
-      title: "Resume schedule",
-      description: "Resume a paused schedule.",
-      inputSchema: {
-        id: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ id }) => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      await scheduleService.resume(id);
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
-    "delete_schedule",
-    {
-      title: "Delete schedule",
-      description: "Delete a schedule permanently.",
-      inputSchema: {
-        id: z.string(),
-      },
-      outputSchema: {
-        success: z.boolean(),
-      },
-    },
-    async ({ id }) => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      await scheduleService.delete(id);
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ success: true }),
-      };
-    },
-  );
-
-  registerTool(
-    "update_schedule",
-    {
-      title: "Update schedule",
-      description:
-        "Update an existing schedule. Only provided fields are changed; omitted fields remain unchanged.",
-      inputSchema: {
-        id: z.string(),
-        every: z.string().optional().describe("New interval duration string (e.g. 5m, 1h)."),
-        cron: z.string().optional().describe("New cron expression."),
-        name: z.string().nullable().optional().describe("New name (null to clear)."),
-        prompt: z.string().trim().min(1).optional().describe("New prompt text."),
-        maxRuns: z
-          .number()
-          .int()
-          .positive()
-          .nullable()
-          .optional()
-          .describe("New max runs limit (null to clear)."),
-        provider: z
-          .string()
-          .trim()
-          .min(1)
-          .optional()
-          .describe("New provider for new-agent target."),
-        model: z
-          .string()
-          .trim()
-          .min(1)
-          .nullable()
-          .optional()
-          .describe("New model for new-agent target (null to clear)."),
-        mode: z
-          .string()
-          .trim()
-          .min(1)
-          .nullable()
-          .optional()
-          .describe("New mode for new-agent target (null to clear)."),
-        cwd: z.string().trim().min(1).optional().describe("New cwd for new-agent target."),
-        expiresIn: z
-          .string()
-          .optional()
-          .describe("New relative expiry duration (for example: 1h, 2d)."),
-        clearExpires: z.boolean().optional().describe("Clear any schedule expiry."),
-      },
-      outputSchema: StoredScheduleSchema.shape,
-    },
-    async (input) => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      const schedule = await scheduleService.update(buildScheduleUpdateInput(input));
-
-      return {
-        content: [],
-        structuredContent: ensureValidJson(schedule),
-      };
-    },
-  );
-
-  registerTool(
-    "schedule_logs",
-    {
-      title: "Schedule logs",
-      description: "Get the run history (logs) for a schedule.",
-      inputSchema: {
-        id: z.string(),
-      },
-      outputSchema: {
-        runs: z.array(ScheduleRunSchema),
-      },
-    },
-    async ({ id }) => {
-      if (!scheduleService) {
-        throw new Error("Schedule service is not configured");
-      }
-
-      const runs = await scheduleService.logs(id);
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ runs }),
-      };
-    },
-  );
-
-  registerTool(
     "list_providers",
     {
       title: "List providers",
@@ -2007,10 +1483,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       },
     },
     async ({ provider, cwd, settings }) => {
-      const resolvedProviderModel = resolveScheduleProviderAndModel({
-        provider,
-        defaultProvider: provider,
-      });
+      const resolvedProviderModel = resolveProviderAndOptionalModel(provider, provider);
       const providerId = resolvedProviderModel.provider;
       const resolvedCwd = resolveScopedCwd(cwd, { required: true });
       const entry = await providerSnapshotManager.getProvider({

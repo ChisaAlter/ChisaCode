@@ -2559,6 +2559,51 @@ describe("create_schedule MCP tool", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("keeps scheduled new-agent cwd inside the caller's locked scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const lockedCwd = join(REPO_CWD, "locked");
+    spies.agentManager.getAgent.mockReturnValue({
+      id: "parent-agent",
+      provider: "codex",
+      cwd: REPO_CWD,
+      lifecycle: "idle",
+      currentModeId: "full-access",
+      availableModes: [],
+      config: { model: "gpt-5.4" },
+    } as ManagedAgent);
+    const create = vi.fn(async (input: CreateScheduleInput) => createStoredSchedule(input));
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      scheduleService: { create } as unknown as ScheduleService,
+      callerAgentId: "parent-agent",
+      resolveCallerContext: () => ({
+        lockedCwd,
+        allowCustomCwd: false,
+      }),
+      logger,
+    });
+    const tool = registeredTool(server, "create_schedule");
+
+    await tool.handler({
+      prompt: "run later",
+      every: "5m",
+      target: "new-agent",
+      provider: "codex",
+      cwd: join(REPO_CWD, "outside"),
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({
+          type: "new-agent",
+          config: expect.objectContaining({ cwd: lockedCwd }),
+        }),
+      }),
+    );
+  });
+
   it.each([
     {
       label: "missing both cadence fields",
@@ -2585,6 +2630,34 @@ describe("create_schedule MCP tool", () => {
     );
 
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("run_schedule MCP tool", () => {
+  const logger = createTestLogger();
+
+  it("triggers one immediate run and returns the updated schedule", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const schedule = createStoredSchedule({
+      prompt: "run now",
+      cadence: { type: "every", everyMs: 300000 },
+      target: { type: "new-agent", config: { provider: "codex", cwd: REPO_CWD } },
+    });
+    const runOnce = vi.fn(async (_id: string) => schedule);
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      scheduleService: { runOnce } as unknown as ScheduleService,
+      logger,
+    });
+    const tool = registeredTool(server, "run_schedule");
+
+    const result = await tool.handler({ id: "schedule-1" });
+
+    expect(runOnce).toHaveBeenCalledWith("schedule-1");
+    expect(result.structuredContent).toEqual(schedule);
+    expectOutputSchemaAccepts(tool, result.structuredContent);
   });
 });
 
@@ -2777,10 +2850,49 @@ describe("update_schedule MCP tool", () => {
         provider: "codex",
         model: "gpt-5.4",
         modeId: "full-access",
-        cwd: "/home/user/project",
+        cwd: resolvePath("/home/user/project"),
       },
     });
     expect(updateInput?.expiresAt).toEqual(expect.any(String));
+  });
+
+  it("keeps updated new-agent cwd inside the caller's locked scope", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const lockedCwd = join(REPO_CWD, "locked");
+    spies.agentManager.getAgent.mockReturnValue({
+      id: "parent-agent",
+      provider: "codex",
+      cwd: REPO_CWD,
+      lifecycle: "idle",
+      currentModeId: "full-access",
+      availableModes: [],
+      config: { model: "gpt-5.4" },
+    } as ManagedAgent);
+    const stored = makeStoredSchedule();
+    const update = vi.fn(async (_input: UpdateScheduleInput) => stored);
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      scheduleService: { update } as unknown as ScheduleService,
+      callerAgentId: "parent-agent",
+      resolveCallerContext: () => ({
+        lockedCwd,
+        allowCustomCwd: false,
+      }),
+      logger,
+    });
+    const tool = registeredTool(server, "update_schedule");
+
+    await tool.handler({
+      id: "schedule-1",
+      cwd: join(REPO_CWD, "outside"),
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      id: "schedule-1",
+      newAgentConfig: { cwd: lockedCwd },
+    });
   });
 
   it("clears model, mode, max runs, and expiry", async () => {
