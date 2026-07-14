@@ -1,13 +1,10 @@
 import { watch, type FSWatcher } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { LRUCache } from "lru-cache";
 import type pino from "pino";
 import type { ProjectCheckoutLitePayload } from "@chisacode/protocol/messages";
 import type { CheckoutContext } from "../utils/checkout-git.js";
 import {
-  type BranchCheckoutResolution,
-  type BranchSuggestion,
   type CheckoutSnapshotFacts,
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
@@ -30,27 +27,27 @@ import {
 } from "../services/github-service.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { resolveGitHubRemote, type GitHubRemoteIdentity } from "../utils/github-remote.js";
-import { listChisaCodeWorktrees, type ChisaCodeWorktreeInfo } from "../utils/worktree.js";
-import { READ_ONLY_GIT_ENV } from "./checkout-git-utils.js";
-import { WorkspaceGitWorkingTreeObserver } from "./workspace-git-working-tree-observer.js";
+import { listChisaCodeWorktrees } from "../utils/worktree.js";
 import {
-  buildWorkspaceGitMetadataFromSnapshot,
-  type WorkspaceGitMetadata,
-} from "./workspace-git-metadata.js";
+  WorkspaceGitAuxiliaryReadAuthority,
+  type WorkspaceGitBranchSuggestion,
+  type WorkspaceGitBranchSuggestionsOptions,
+  type WorkspaceGitBranchValidationResult,
+  type WorkspaceGitReadOptions,
+  type WorkspaceGitStashEntry,
+  type WorkspaceGitStashListOptions,
+  type WorkspaceGitWorktreeInfo,
+} from "./workspace-git-auxiliary-read-authority.js";
+import { WorkspaceGitWorkingTreeObserver } from "./workspace-git-working-tree-observer.js";
+import type { WorkspaceGitMetadata } from "./workspace-git-metadata.js";
 import { checkoutLiteFromGitSnapshot, normalizeWorkspaceId } from "./workspace-registry-model.js";
 
 const WORKSPACE_GIT_WATCH_DEBOUNCE_MS = 500;
 const BACKGROUND_GIT_FETCH_INTERVAL_MS = 180_000;
 export const WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS = 60_000;
 
-// Auxiliary reads may reuse cached values within this window; snapshots do not expire on read.
-const WORKSPACE_GIT_AUXILIARY_READ_TTL_MS = 15_000;
-// Non-forced refresh triggers share this minimum gap to absorb watcher/self-heal bursts; force bypasses it.
+// Non-forced snapshot refresh triggers share this minimum gap to absorb watcher/self-heal bursts.
 const WORKSPACE_GIT_INTERNAL_MIN_GAP_MS = 2_000;
-// Heavy values (multi-MB highlighted diffs); cap aggressively. Ephemeral worktree cwds would otherwise pile up forever.
-const WORKSPACE_GIT_CHECKOUT_DIFF_CACHE_MAX = 64;
-// Small values (booleans, short strings, small arrays); generous cap.
-const WORKSPACE_GIT_AUXILIARY_CACHE_MAX = 256;
 const WORKSPACE_GIT_FACTS_REUSE_TTL_MS = 1_000;
 
 export interface WorkspaceGitRuntimeSnapshot {
@@ -153,42 +150,21 @@ export interface WorkspaceGitService {
   dispose(): void;
 }
 
+export type {
+  WorkspaceGitBranchSuggestion,
+  WorkspaceGitBranchSuggestionsOptions,
+  WorkspaceGitBranchValidationResult,
+  WorkspaceGitReadOptions,
+  WorkspaceGitStashEntry,
+  WorkspaceGitStashListOptions,
+  WorkspaceGitWorktreeInfo,
+} from "./workspace-git-auxiliary-read-authority.js";
 export type WorkspaceGitListener = (snapshot: WorkspaceGitRuntimeSnapshot) => void;
 export type WorkspaceGitSnapshotUpdatedListener = (snapshot: WorkspaceGitRuntimeSnapshot) => void;
 
 export interface WorkspaceGitSubscription {
   unsubscribe: () => void;
 }
-
-export type WorkspaceGitReadOptions =
-  | {
-      force?: false;
-      reason?: string;
-    }
-  | {
-      force: true;
-      reason: string;
-    };
-
-export interface WorkspaceGitBranchSuggestionsOptions {
-  query?: string;
-  limit?: number;
-}
-
-export interface WorkspaceGitStashListOptions {
-  chisacodeOnly?: boolean;
-}
-
-export interface WorkspaceGitStashEntry {
-  index: number;
-  message: string;
-  branch: string | null;
-  isChisaCode: boolean;
-}
-
-export type WorkspaceGitBranchValidationResult = BranchCheckoutResolution;
-export type WorkspaceGitBranchSuggestion = BranchSuggestion;
-export type WorkspaceGitWorktreeInfo = ChisaCodeWorktreeInfo;
 
 export type WorkspaceGitSnapshotOptions =
   | {
@@ -289,13 +265,6 @@ interface RepoGitTarget {
   fetchInFlight: boolean;
 }
 
-interface WorkspaceGitAuxiliaryReadCacheEntry<T> {
-  value: T | null;
-  loadedAtMs: number | null;
-  lastShellOutAtMs: number | null;
-  inFlight: Promise<T> | null;
-}
-
 function buildDefaultWorkspaceGitServiceDeps(logger: pino.Logger): WorkspaceGitServiceDependencies {
   return {
     watch,
@@ -333,38 +302,24 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly workspaceTargets = new Map<string, WorkspaceGitTarget>();
   private readonly repoTargets = new Map<string, RepoGitTarget>();
   private readonly workingTreeObserver: WorkspaceGitWorkingTreeObserver;
-  private readonly branchValidationCache = new LRUCache<
-    string,
-    WorkspaceGitAuxiliaryReadCacheEntry<WorkspaceGitBranchValidationResult>
-  >({ max: WORKSPACE_GIT_AUXILIARY_CACHE_MAX });
-  private readonly localBranchCache = new LRUCache<
-    string,
-    WorkspaceGitAuxiliaryReadCacheEntry<boolean>
-  >({ max: WORKSPACE_GIT_AUXILIARY_CACHE_MAX });
-  private readonly branchSuggestionsCache = new LRUCache<
-    string,
-    WorkspaceGitAuxiliaryReadCacheEntry<WorkspaceGitBranchSuggestion[]>
-  >({ max: WORKSPACE_GIT_AUXILIARY_CACHE_MAX });
-  private readonly stashListCache = new LRUCache<
-    string,
-    WorkspaceGitAuxiliaryReadCacheEntry<WorkspaceGitStashEntry[]>
-  >({ max: WORKSPACE_GIT_AUXILIARY_CACHE_MAX });
-  private readonly worktreeListCache = new LRUCache<
-    string,
-    WorkspaceGitAuxiliaryReadCacheEntry<WorkspaceGitWorktreeInfo[]>
-  >({ max: WORKSPACE_GIT_AUXILIARY_CACHE_MAX });
-  private readonly defaultBranchCache = new LRUCache<
-    string,
-    WorkspaceGitAuxiliaryReadCacheEntry<string>
-  >({ max: WORKSPACE_GIT_AUXILIARY_CACHE_MAX });
-  private readonly checkoutDiffCache = new LRUCache<
-    string,
-    WorkspaceGitAuxiliaryReadCacheEntry<CheckoutDiffResult>
-  >({ max: WORKSPACE_GIT_CHECKOUT_DIFF_CACHE_MAX });
+  private readonly auxiliaryReadAuthority: WorkspaceGitAuxiliaryReadAuthority;
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.chisacodeHome = options.chisacodeHome;
     this.deps = resolveWorkspaceGitServiceDeps(options.deps, this.logger);
+    this.auxiliaryReadAuthority = new WorkspaceGitAuxiliaryReadAuthority({
+      chisacodeHome: this.chisacodeHome,
+      deps: {
+        getCheckoutDiff: this.deps.getCheckoutDiff,
+        resolveBranchCheckout: this.deps.resolveBranchCheckout,
+        resolveRepositoryDefaultBranch: this.deps.resolveRepositoryDefaultBranch,
+        listBranchSuggestions: this.deps.listBranchSuggestions,
+        listChisaCodeWorktrees: this.deps.listChisaCodeWorktrees,
+        runGitCommand: this.deps.runGitCommand,
+        getSnapshot: (cwd, readOptions) => this.getSnapshot(cwd, readOptions),
+        now: this.deps.now,
+      },
+    });
     this.workingTreeObserver = new WorkspaceGitWorkingTreeObserver({
       logger: this.logger,
       deps: {
@@ -472,38 +427,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     options: CheckoutDiffCompare,
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<CheckoutDiffResult> {
-    const normalizedCwd = normalizeWorkspaceId(cwd);
-    const normalizedOptions = this.normalizeCheckoutDiffOptions(options);
-    const key = this.buildCheckoutDiffCacheKey(normalizedCwd, normalizedOptions);
-    return this.readAuxiliaryCache(this.checkoutDiffCache, key, readOptions, () =>
-      this.deps.getCheckoutDiff(normalizedCwd, normalizedOptions, {
-        chisacodeHome: this.chisacodeHome,
-      }),
-    );
-  }
-
-  private normalizeCheckoutDiffOptions(options: CheckoutDiffCompare): CheckoutDiffCompare {
-    return {
-      mode: options.mode,
-      ...(options.mode === "base" && options.baseRef !== undefined
-        ? { baseRef: options.baseRef }
-        : {}),
-      ...(options.ignoreWhitespace === true ? { ignoreWhitespace: true } : {}),
-      ...(options.includeStructured === true ? { includeStructured: true } : {}),
-    };
-  }
-
-  private buildCheckoutDiffCacheKey(cwd: string, options: CheckoutDiffCompare): string {
-    // Diff content varies by compare signature. Keep the cache per exact diff read shape so
-    // hot diff panes coalesce while base refs and rendering options never share stale patches.
-    return JSON.stringify([
-      "checkout-diff",
-      cwd,
-      options.mode,
-      options.mode === "base" ? (options.baseRef ?? null) : null,
-      options.ignoreWhitespace === true,
-      options.includeStructured === true,
-    ]);
+    return this.auxiliaryReadAuthority.getCheckoutDiff(cwd, options, readOptions);
   }
 
   validateBranchRef(
@@ -511,27 +435,11 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     ref: string,
     options?: WorkspaceGitReadOptions,
   ): Promise<WorkspaceGitBranchValidationResult> {
-    const normalizedCwd = normalizeWorkspaceId(cwd);
-    const normalizedRef = ref.trim();
-    const key = JSON.stringify(["branch-validation", normalizedCwd, normalizedRef]);
-    return this.readAuxiliaryCache(this.branchValidationCache, key, options, () =>
-      this.deps.resolveBranchCheckout(normalizedCwd, normalizedRef),
-    );
+    return this.auxiliaryReadAuthority.validateBranchRef(cwd, ref, options);
   }
 
   hasLocalBranch(cwd: string, branch: string, options?: WorkspaceGitReadOptions): Promise<boolean> {
-    const normalizedCwd = normalizeWorkspaceId(cwd);
-    const normalizedBranch = branch.trim();
-    const ref = `refs/heads/${normalizedBranch}`;
-    const key = JSON.stringify(["local-branch", normalizedCwd, ref]);
-    return this.readAuxiliaryCache(this.localBranchCache, key, options, async () => {
-      const result = await this.deps.runGitCommand(["rev-parse", "--verify", "--quiet", ref], {
-        cwd: normalizedCwd,
-        envOverlay: READ_ONLY_GIT_ENV,
-        acceptExitCodes: [0, 1],
-      });
-      return result.exitCode === 0;
-    });
+    return this.auxiliaryReadAuthority.hasLocalBranch(cwd, branch, options);
   }
 
   suggestBranchesForCwd(
@@ -539,13 +447,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     options?: WorkspaceGitBranchSuggestionsOptions,
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<WorkspaceGitBranchSuggestion[]> {
-    const normalizedCwd = normalizeWorkspaceId(cwd);
-    const query = options?.query ?? "";
-    const limit = options?.limit;
-    const key = JSON.stringify(["branch-suggestions", normalizedCwd, query, limit ?? null]);
-    return this.readAuxiliaryCache(this.branchSuggestionsCache, key, readOptions, () =>
-      this.deps.listBranchSuggestions(normalizedCwd, options),
-    );
+    return this.auxiliaryReadAuthority.suggestBranchesForCwd(cwd, options, readOptions);
   }
 
   listStashes(
@@ -553,84 +455,34 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     options?: WorkspaceGitStashListOptions,
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<WorkspaceGitStashEntry[]> {
-    const normalizedCwd = normalizeWorkspaceId(cwd);
-    const chisacodeOnly = options?.chisacodeOnly !== false;
-    const key = JSON.stringify(["stashes", normalizedCwd, chisacodeOnly]);
-    return this.readAuxiliaryCache(this.stashListCache, key, readOptions, async () => {
-      const { stdout } = await this.deps.runGitCommand(["stash", "list", "--format=%gd%x00%s"], {
-        cwd: normalizedCwd,
-        envOverlay: READ_ONLY_GIT_ENV,
-      });
-      return parseWorkspaceGitStashList(stdout, { chisacodeOnly });
-    });
+    return this.auxiliaryReadAuthority.listStashes(cwd, options, readOptions);
   }
 
-  async listWorktrees(
+  listWorktrees(
     cwdOrRepoRoot: string,
     options?: WorkspaceGitReadOptions,
   ): Promise<WorkspaceGitWorktreeInfo[]> {
-    const repoRoot = await this.resolveRepoRoot(cwdOrRepoRoot, options);
-    const key = JSON.stringify(["worktrees", repoRoot]);
-    return this.readAuxiliaryCache(this.worktreeListCache, key, options, () =>
-      this.deps.listChisaCodeWorktrees({
-        cwd: repoRoot,
-        chisacodeHome: this.chisacodeHome,
-      }),
-    );
+    return this.auxiliaryReadAuthority.listWorktrees(cwdOrRepoRoot, options);
   }
 
-  async resolveRepoRoot(cwd: string, options?: WorkspaceGitReadOptions): Promise<string> {
-    const snapshot = await this.getSnapshot(cwd, options);
-    if (!snapshot.git.isGit) {
-      throw new Error("Create worktree requires a git repository");
-    }
-
-    return snapshot.git.isChisaCodeOwnedWorktree
-      ? (snapshot.git.mainRepoRoot ?? snapshot.git.repoRoot ?? normalizeWorkspaceId(cwd))
-      : (snapshot.git.repoRoot ?? normalizeWorkspaceId(cwd));
+  resolveRepoRoot(cwd: string, options?: WorkspaceGitReadOptions): Promise<string> {
+    return this.auxiliaryReadAuthority.resolveRepoRoot(cwd, options);
   }
 
-  async resolveDefaultBranch(
-    cwdOrRepoRoot: string,
-    options?: WorkspaceGitReadOptions,
-  ): Promise<string> {
-    const cwd = normalizeWorkspaceId(cwdOrRepoRoot);
-    const key = JSON.stringify(["default-branch", cwd]);
-    return this.readAuxiliaryCache(this.defaultBranchCache, key, options, async () => {
-      const defaultBranch = await this.deps.resolveRepositoryDefaultBranch(cwd);
-      if (!defaultBranch) {
-        throw new Error("Unable to resolve repository default branch");
-      }
-      return defaultBranch;
-    });
+  resolveDefaultBranch(cwdOrRepoRoot: string, options?: WorkspaceGitReadOptions): Promise<string> {
+    return this.auxiliaryReadAuthority.resolveDefaultBranch(cwdOrRepoRoot, options);
   }
 
-  async getWorkspaceGitMetadata(
+  getWorkspaceGitMetadata(
     cwd: string,
     options?: WorkspaceGitReadOptions & { directoryName?: string },
   ): Promise<WorkspaceGitMetadata> {
-    const snapshot = await this.getSnapshot(cwd, options);
-    const directoryName =
-      options?.directoryName ?? normalizeWorkspaceId(cwd).split(/[\\/]/).findLast(Boolean) ?? cwd;
-    return buildWorkspaceGitMetadataFromSnapshot({
-      cwd: normalizeWorkspaceId(cwd),
-      directoryName,
-      isGit: snapshot.git.isGit,
-      repoRoot: snapshot.git.repoRoot,
-      mainRepoRoot: snapshot.git.mainRepoRoot,
-      currentBranch: snapshot.git.currentBranch,
-      remoteUrl: snapshot.git.remoteUrl,
-    });
+    return this.auxiliaryReadAuthority.getWorkspaceGitMetadata(cwd, options);
   }
 
-  async resolveRepoRemoteUrl(
-    cwd: string,
-    options?: WorkspaceGitReadOptions,
-  ): Promise<string | null> {
-    const snapshot = await this.getSnapshot(cwd, options);
-    return snapshot.git.remoteUrl;
+  resolveRepoRemoteUrl(cwd: string, options?: WorkspaceGitReadOptions): Promise<string | null> {
+    return this.auxiliaryReadAuthority.resolveRepoRemoteUrl(cwd, options);
   }
-
   async refresh(cwd: string, _options?: { priority?: "normal" | "high" }): Promise<void> {
     cwd = normalizeWorkspaceId(cwd);
     const target = this.ensureWorkspaceTarget(cwd);
@@ -680,67 +532,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
 
     return this.createWorkspaceTarget(cwd);
-  }
-
-  private readAuxiliaryCache<T>(
-    cache: LRUCache<string, WorkspaceGitAuxiliaryReadCacheEntry<T>>,
-    key: string,
-    options: WorkspaceGitReadOptions | undefined,
-    load: () => Promise<T>,
-  ): Promise<T> {
-    if (options?.force && !options.reason) {
-      throw new Error("WorkspaceGitService forced read requires a reason");
-    }
-
-    const entry = this.ensureAuxiliaryCacheEntry(cache, key);
-    const nowMs = this.deps.now().getTime();
-    if (!options?.force && entry.value !== null && entry.loadedAtMs !== null) {
-      const ageMs = nowMs - entry.loadedAtMs;
-      if (ageMs <= WORKSPACE_GIT_AUXILIARY_READ_TTL_MS) {
-        return Promise.resolve(entry.value);
-      }
-      if (
-        entry.lastShellOutAtMs !== null &&
-        nowMs - entry.lastShellOutAtMs < WORKSPACE_GIT_INTERNAL_MIN_GAP_MS
-      ) {
-        return Promise.resolve(entry.value);
-      }
-    }
-
-    if (entry.inFlight) {
-      return entry.inFlight;
-    }
-
-    entry.lastShellOutAtMs = nowMs;
-    entry.inFlight = load()
-      .then((value) => {
-        entry.value = value;
-        entry.loadedAtMs = this.deps.now().getTime();
-        return value;
-      })
-      .finally(() => {
-        entry.inFlight = null;
-      });
-    return entry.inFlight;
-  }
-
-  private ensureAuxiliaryCacheEntry<T>(
-    cache: LRUCache<string, WorkspaceGitAuxiliaryReadCacheEntry<T>>,
-    key: string,
-  ): WorkspaceGitAuxiliaryReadCacheEntry<T> {
-    const existing = cache.get(key);
-    if (existing) {
-      return existing;
-    }
-
-    const entry: WorkspaceGitAuxiliaryReadCacheEntry<T> = {
-      value: null,
-      loadedAtMs: null,
-      lastShellOutAtMs: null,
-      inFlight: null,
-    };
-    cache.set(key, entry);
-    return entry;
   }
 
   private createWorkspaceTarget(cwd: string): WorkspaceGitTarget {
@@ -1540,46 +1331,6 @@ async function loadGitHubSnapshot(options: {
       },
     };
   }
-}
-
-function parseWorkspaceGitStashList(
-  stdout: string,
-  options: { chisacodeOnly: boolean },
-): WorkspaceGitStashEntry[] {
-  const entries: WorkspaceGitStashEntry[] = [];
-  const lines = stdout.trim().split("\n").filter(Boolean);
-
-  for (const line of lines) {
-    const sepIdx = line.indexOf("\0");
-    if (sepIdx < 0) {
-      continue;
-    }
-
-    const refPart = line.slice(0, sepIdx);
-    const subject = line.slice(sepIdx + 1);
-    const indexMatch = refPart.match(/\{(\d+)\}/);
-    if (!indexMatch) {
-      continue;
-    }
-
-    const index = Number(indexMatch[1]);
-    const prefixes = ["chisacode-auto-stash:", "chisacode-auto-stash:"] as const;
-    const matchedPrefix = prefixes.find((prefix) => subject.includes(prefix));
-    const prefixIdx = matchedPrefix ? subject.indexOf(matchedPrefix) : -1;
-    const isChisaCode = matchedPrefix !== undefined;
-    const branch =
-      isChisaCode && matchedPrefix
-        ? subject.slice(prefixIdx + matchedPrefix.length).trim() || null
-        : null;
-
-    if (options.chisacodeOnly && !isChisaCode) {
-      continue;
-    }
-
-    entries.push({ index, message: subject, branch, isChisaCode });
-  }
-
-  return entries;
 }
 
 function buildNotGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
