@@ -2,53 +2,9 @@ import { z } from "zod/v3";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { SyntheticModelConfigSchema } from "@chisacode/protocol/provider-config";
 import {
-  ChatCreateRequestSchema,
-  ChatListRequestSchema,
-  ChatInspectRequestSchema,
-  ChatDeleteRequestSchema,
-  ChatPostRequestSchema,
-  ChatReadRequestSchema,
-  ChatWaitRequestSchema,
-  ChatCreateResponseSchema,
-  ChatListResponseSchema,
-  ChatInspectResponseSchema,
-  ChatDeleteResponseSchema,
-  ChatPostResponseSchema,
-  ChatReadResponseSchema,
-  ChatWaitResponseSchema,
-} from "./chat/rpc-schemas.js";
-import {
-  ScheduleCreateRequestSchema,
-  ScheduleListRequestSchema,
-  ScheduleInspectRequestSchema,
-  ScheduleLogsRequestSchema,
-  SchedulePauseRequestSchema,
-  ScheduleResumeRequestSchema,
-  ScheduleDeleteRequestSchema,
-  ScheduleRunOnceRequestSchema,
-  ScheduleUpdateRequestSchema,
-  ScheduleCreateResponseSchema,
-  ScheduleListResponseSchema,
-  ScheduleInspectResponseSchema,
-  ScheduleLogsResponseSchema,
-  SchedulePauseResponseSchema,
-  ScheduleResumeResponseSchema,
-  ScheduleDeleteResponseSchema,
-  ScheduleRunOnceResponseSchema,
-  ScheduleUpdateResponseSchema,
-} from "@chisacode/protocol/schedule/rpc-schemas";
-import {
-  LoopRunRequestSchema,
-  LoopListRequestSchema,
-  LoopInspectRequestSchema,
-  LoopLogsRequestSchema,
-  LoopStopRequestSchema,
-  LoopRunResponseSchema,
-  LoopListResponseSchema,
-  LoopInspectResponseSchema,
-  LoopLogsResponseSchema,
-  LoopStopResponseSchema,
-} from "@chisacode/protocol/loop/rpc-schemas";
+  AutomationInboundMessageSchemas,
+  AutomationOutboundMessageSchemas,
+} from "./automation/messages.js";
 import {
   GenerativeUiActionRequestSchema,
   GenerativeUiActionResponseSchema,
@@ -91,6 +47,7 @@ import {
   AgentStatusPayloadSchemas,
 } from "./agent/messages.js";
 export * from "./agent/attachments.js";
+export * from "./automation/messages.js";
 export * from "./agent/extensions.js";
 export * from "./agent/messages.js";
 export * from "./agent/state.js";
@@ -210,27 +167,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   PingMessageSchema,
   RegisterPushTokenMessageSchema,
   ...TerminalInboundMessageSchemas,
-  ChatCreateRequestSchema,
-  ChatListRequestSchema,
-  ChatInspectRequestSchema,
-  ChatDeleteRequestSchema,
-  ChatPostRequestSchema,
-  ChatReadRequestSchema,
-  ChatWaitRequestSchema,
-  ScheduleCreateRequestSchema,
-  ScheduleListRequestSchema,
-  ScheduleInspectRequestSchema,
-  ScheduleLogsRequestSchema,
-  SchedulePauseRequestSchema,
-  ScheduleResumeRequestSchema,
-  ScheduleDeleteRequestSchema,
-  ScheduleRunOnceRequestSchema,
-  ScheduleUpdateRequestSchema,
-  LoopRunRequestSchema,
-  LoopListRequestSchema,
-  LoopInspectRequestSchema,
-  LoopLogsRequestSchema,
-  LoopStopRequestSchema,
+  ...AutomationInboundMessageSchemas,
   GenerativeUiActionRequestSchema,
   // COMPAT(generativeUiActionFlatRpc): added in v0.1.101; remove after 2027-01-11 once the client floor is >= v0.1.101.
   LegacyGenerativeUiActionRequestSchema,
@@ -473,27 +410,7 @@ type SessionOutboundMessageSchemaOptions = [
   typeof ModelGatewayMoaTestResponseMessageSchema,
   ...typeof AgentExtensionOutboundMessageSchemas,
   ...typeof TerminalOutboundMessageSchemas,
-  typeof ChatCreateResponseSchema,
-  typeof ChatListResponseSchema,
-  typeof ChatInspectResponseSchema,
-  typeof ChatDeleteResponseSchema,
-  typeof ChatPostResponseSchema,
-  typeof ChatReadResponseSchema,
-  typeof ChatWaitResponseSchema,
-  typeof ScheduleCreateResponseSchema,
-  typeof ScheduleListResponseSchema,
-  typeof ScheduleInspectResponseSchema,
-  typeof ScheduleLogsResponseSchema,
-  typeof SchedulePauseResponseSchema,
-  typeof ScheduleResumeResponseSchema,
-  typeof ScheduleDeleteResponseSchema,
-  typeof ScheduleRunOnceResponseSchema,
-  typeof ScheduleUpdateResponseSchema,
-  typeof LoopRunResponseSchema,
-  typeof LoopListResponseSchema,
-  typeof LoopInspectResponseSchema,
-  typeof LoopLogsResponseSchema,
-  typeof LoopStopResponseSchema,
+  ...typeof AutomationOutboundMessageSchemas,
   typeof GenerativeUiActionResponseSchema,
 ];
 
@@ -519,27 +436,7 @@ export const SessionOutboundMessageSchema: z.ZodDiscriminatedUnion<
   ModelGatewayMoaTestResponseMessageSchema,
   ...AgentExtensionOutboundMessageSchemas,
   ...TerminalOutboundMessageSchemas,
-  ChatCreateResponseSchema,
-  ChatListResponseSchema,
-  ChatInspectResponseSchema,
-  ChatDeleteResponseSchema,
-  ChatPostResponseSchema,
-  ChatReadResponseSchema,
-  ChatWaitResponseSchema,
-  ScheduleCreateResponseSchema,
-  ScheduleListResponseSchema,
-  ScheduleInspectResponseSchema,
-  ScheduleLogsResponseSchema,
-  SchedulePauseResponseSchema,
-  ScheduleResumeResponseSchema,
-  ScheduleDeleteResponseSchema,
-  ScheduleRunOnceResponseSchema,
-  ScheduleUpdateResponseSchema,
-  LoopRunResponseSchema,
-  LoopListResponseSchema,
-  LoopInspectResponseSchema,
-  LoopLogsResponseSchema,
-  LoopStopResponseSchema,
+  ...AutomationOutboundMessageSchemas,
   GenerativeUiActionResponseSchema,
 ]);
 
@@ -558,27 +455,6 @@ export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponseP
 export type ModelGatewayMoaTestResponseMessage = z.infer<
   typeof ModelGatewayMoaTestResponseMessageSchema
 >;
-export type ChatCreateResponse = z.infer<typeof ChatCreateResponseSchema>;
-export type ChatListResponse = z.infer<typeof ChatListResponseSchema>;
-export type ChatInspectResponse = z.infer<typeof ChatInspectResponseSchema>;
-export type ChatDeleteResponse = z.infer<typeof ChatDeleteResponseSchema>;
-export type ChatPostResponse = z.infer<typeof ChatPostResponseSchema>;
-export type ChatReadResponse = z.infer<typeof ChatReadResponseSchema>;
-export type ChatWaitResponse = z.infer<typeof ChatWaitResponseSchema>;
-export type ScheduleCreateResponse = z.infer<typeof ScheduleCreateResponseSchema>;
-export type ScheduleListResponse = z.infer<typeof ScheduleListResponseSchema>;
-export type ScheduleInspectResponse = z.infer<typeof ScheduleInspectResponseSchema>;
-export type ScheduleLogsResponse = z.infer<typeof ScheduleLogsResponseSchema>;
-export type SchedulePauseResponse = z.infer<typeof SchedulePauseResponseSchema>;
-export type ScheduleResumeResponse = z.infer<typeof ScheduleResumeResponseSchema>;
-export type ScheduleDeleteResponse = z.infer<typeof ScheduleDeleteResponseSchema>;
-export type ScheduleRunOnceResponse = z.infer<typeof ScheduleRunOnceResponseSchema>;
-export type ScheduleUpdateResponse = z.infer<typeof ScheduleUpdateResponseSchema>;
-export type LoopRunResponse = z.infer<typeof LoopRunResponseSchema>;
-export type LoopListResponse = z.infer<typeof LoopListResponseSchema>;
-export type LoopInspectResponse = z.infer<typeof LoopInspectResponseSchema>;
-export type LoopLogsResponse = z.infer<typeof LoopLogsResponseSchema>;
-export type LoopStopResponse = z.infer<typeof LoopStopResponseSchema>;
 
 // Type exports for payload types
 export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
@@ -587,27 +463,7 @@ export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
 export type ModelGatewayMoaTestRequestMessage = z.infer<
   typeof ModelGatewayMoaTestRequestMessageSchema
 >;
-export type ChatCreateRequest = z.infer<typeof ChatCreateRequestSchema>;
-export type ChatListRequest = z.infer<typeof ChatListRequestSchema>;
-export type ChatInspectRequest = z.infer<typeof ChatInspectRequestSchema>;
-export type ChatDeleteRequest = z.infer<typeof ChatDeleteRequestSchema>;
-export type ChatPostRequest = z.infer<typeof ChatPostRequestSchema>;
-export type ChatReadRequest = z.infer<typeof ChatReadRequestSchema>;
-export type ChatWaitRequest = z.infer<typeof ChatWaitRequestSchema>;
-export type ScheduleCreateRequest = z.infer<typeof ScheduleCreateRequestSchema>;
-export type ScheduleListRequest = z.infer<typeof ScheduleListRequestSchema>;
-export type ScheduleInspectRequest = z.infer<typeof ScheduleInspectRequestSchema>;
-export type ScheduleLogsRequest = z.infer<typeof ScheduleLogsRequestSchema>;
-export type SchedulePauseRequest = z.infer<typeof SchedulePauseRequestSchema>;
-export type ScheduleResumeRequest = z.infer<typeof ScheduleResumeRequestSchema>;
-export type ScheduleDeleteRequest = z.infer<typeof ScheduleDeleteRequestSchema>;
-export type ScheduleRunOnceRequest = z.infer<typeof ScheduleRunOnceRequestSchema>;
-export type ScheduleUpdateRequest = z.infer<typeof ScheduleUpdateRequestSchema>;
-export type LoopRunRequest = z.infer<typeof LoopRunRequestSchema>;
-export type LoopListRequest = z.infer<typeof LoopListRequestSchema>;
-export type LoopInspectRequest = z.infer<typeof LoopInspectRequestSchema>;
-export type LoopLogsRequest = z.infer<typeof LoopLogsRequestSchema>;
-export type LoopStopRequest = z.infer<typeof LoopStopRequestSchema>;
+
 export type ProjectRenameRequest = z.infer<typeof ProjectRenameRequestSchema>;
 export type ClientHeartbeatMessage = z.infer<typeof ClientHeartbeatMessageSchema>;
 export type RegisterPushTokenMessage = z.infer<typeof RegisterPushTokenMessageSchema>;
