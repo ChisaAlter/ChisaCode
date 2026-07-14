@@ -542,6 +542,31 @@ describe("GitHubService", () => {
     ]);
   });
 
+  it.each(["BEHIND", "UNSTABLE"] as const)(
+    "enables auto-merge while GitHub merge requirements are waiting in %s state",
+    async (mergeStateStatus) => {
+      const runner = createRunner([""]);
+      const service = createGitHubService({
+        runner: runner.runner,
+      });
+
+      await expect(
+        service.enablePullRequestAutoMerge({
+          cwd: "/tmp/repo",
+          prNumber: 42,
+          mergeMethod: "squash",
+          status: createCurrentPullRequestStatus({
+            github: githubStatusFacts({
+              mergeStateStatus,
+              viewerCanEnableAutoMerge: true,
+            }),
+          }),
+        }),
+      ).resolves.toEqual({ success: true });
+
+      expect(runner.calls[0]?.args).toEqual(["pr", "merge", "42", "--auto", "--squash"]);
+    },
+  );
   it("disables auto-merge with gh", async () => {
     const runner = createRunner([""]);
     const service = createGitHubService({

@@ -10,9 +10,20 @@ import {
   loadGitHubCurrentPullRequestStatus,
   loadGitHubRepoView,
   type GitHubCurrentPullRequestStatus,
-  type GitHubPullRequestStatusFacts,
-  type PullRequestMergeable,
 } from "./github-current-pr.js";
+import {
+  createGitHubPullRequest,
+  disableGitHubPullRequestAutoMerge,
+  enableGitHubPullRequestAutoMerge,
+  mergeGitHubPullRequest,
+  type CreateGitHubPullRequestOptions,
+  type DisableGitHubPullRequestAutoMergeOptions,
+  type EnableGitHubPullRequestAutoMergeOptions,
+  type GitHubPullRequestAutoMergeResult,
+  type GitHubPullRequestCreateResult,
+  type GitHubPullRequestMergeResult,
+  type MergeGitHubPullRequestOptions,
+} from "./github-pr-mutations.js";
 import {
   loadGitHubPullRequestTimeline,
   type GitHubPullRequestTimeline,
@@ -36,6 +47,22 @@ export type {
   PullRequestMergeable,
   PullRequestReviewDecision,
 } from "./github-current-pr.js";
+export {
+  assertPullRequestAutoMergeDisableReady,
+  assertPullRequestAutoMergeEnableReady,
+  isPullRequestMergeMethodAllowed,
+} from "./github-pr-mutations.js";
+export type {
+  CreateGitHubPullRequestOptions,
+  DisableGitHubPullRequestAutoMergeOptions,
+  EnableGitHubPullRequestAutoMergeOptions,
+  GitHubPullRequestAutoMergeResult,
+  GitHubPullRequestCommandStatus,
+  GitHubPullRequestCreateResult,
+  GitHubPullRequestMergeMethod,
+  GitHubPullRequestMergeResult,
+  MergeGitHubPullRequestOptions,
+} from "./github-pr-mutations.js";
 export { parseStatusCheckRollup } from "./github-pr-checks.js";
 export type {
   PullRequestCheck,
@@ -190,47 +217,6 @@ export interface GitHubIssueSummary {
   updatedAt: string;
 }
 
-export interface GitHubPullRequestCreateResult {
-  url: string;
-  number: number;
-}
-
-export type GitHubPullRequestMergeMethod = "merge" | "squash" | "rebase";
-const DIRECT_PULL_REQUEST_MERGE_STATE_ALLOWLIST = new Set(["CLEAN", "HAS_HOOKS"]);
-
-export interface GitHubPullRequestCommandStatus {
-  mergeable?: PullRequestMergeable;
-  github?: GitHubPullRequestStatusFacts;
-}
-
-export interface MergeGitHubPullRequestOptions {
-  cwd: string;
-  prNumber: number;
-  mergeMethod: GitHubPullRequestMergeMethod;
-  status?: GitHubPullRequestCommandStatus | null;
-}
-
-export interface EnableGitHubPullRequestAutoMergeOptions {
-  cwd: string;
-  prNumber: number;
-  mergeMethod: GitHubPullRequestMergeMethod;
-  status?: GitHubPullRequestCommandStatus | null;
-}
-
-export interface DisableGitHubPullRequestAutoMergeOptions {
-  cwd: string;
-  prNumber: number;
-  status?: GitHubPullRequestCommandStatus | null;
-}
-
-export interface GitHubPullRequestMergeResult {
-  success: true;
-}
-
-export interface GitHubPullRequestAutoMergeResult {
-  success: true;
-}
-
 export type ListGitHubPullRequestsOptions = {
   cwd: string;
   query?: string;
@@ -254,15 +240,6 @@ export type GetGitHubPullRequestTimelineOptions = {
   repoOwner: string;
   repoName: string;
 } & GitHubReadOptions;
-
-export interface CreateGitHubPullRequestOptions {
-  cwd: string;
-  repo: string;
-  title: string;
-  head: string;
-  base: string;
-  body?: string;
-}
 
 export interface GitHubService {
   listPullRequests(options: ListGitHubPullRequestsOptions): Promise<GitHubPullRequestSummary[]>;
@@ -625,48 +602,20 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
       });
     },
 
-    async createPullRequest(input) {
-      const args = ["api", "-X", "POST", `repos/${input.repo}/pulls`, "-f", `title=${input.title}`];
-      args.push("-f", `head=${input.head}`);
-      args.push("-f", `base=${input.base}`);
-      if (input.body) {
-        args.push("-f", `body=${input.body}`);
-      }
-      const stdout = await run(args, { cwd: input.cwd });
-      const parsed = z
-        .object({
-          url: z.string(),
-          number: z.number(),
-        })
-        .parse(JSON.parse(stdout || "{}"));
-      return parsed;
+    createPullRequest(input) {
+      return createGitHubPullRequest(input, { run });
     },
 
-    async mergePullRequest(input) {
-      assertDirectPullRequestMergeReady(input);
-      await run(["pr", "merge", String(input.prNumber), `--${input.mergeMethod}`], {
-        cwd: input.cwd,
-        envOverlay: { GH_PROMPT_DISABLED: "1" },
-      });
-      return { success: true };
+    mergePullRequest(input) {
+      return mergeGitHubPullRequest(input, { run });
     },
 
-    async enablePullRequestAutoMerge(input) {
-      assertPullRequestAutoMergeEnableReady(input);
-      await run(["pr", "merge", String(input.prNumber), "--auto", `--${input.mergeMethod}`], {
-        cwd: input.cwd,
-        envOverlay: { GH_PROMPT_DISABLED: "1" },
-      });
-      return { success: true };
+    enablePullRequestAutoMerge(input) {
+      return enableGitHubPullRequestAutoMerge(input, { run });
     },
 
-    async disablePullRequestAutoMerge(input) {
-      assertPullRequestAutoMergeDisableReady(input);
-      await run(["pr", "merge", String(input.prNumber), "--disable-auto"], {
-        cwd: input.cwd,
-        envOverlay: { GH_PROMPT_DISABLED: "1" },
-      });
-      return { success: true };
+    disablePullRequestAutoMerge(input) {
+      return disableGitHubPullRequestAutoMerge(input, { run });
     },
 
     isAuthenticated(input) {
@@ -717,89 +666,6 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
   };
 
   return api;
-}
-
-function assertDirectPullRequestMergeReady(input: MergeGitHubPullRequestOptions): void {
-  const github = input.status?.github;
-  if (!github) {
-    throw new Error("GitHub merge facts are unavailable for this pull request");
-  }
-
-  if (!DIRECT_PULL_REQUEST_MERGE_STATE_ALLOWLIST.has(github.mergeStateStatus ?? "")) {
-    throw new Error("GitHub does not report this pull request as ready for direct merge");
-  }
-  if (github.isMergeQueueEnabled || github.isInMergeQueue) {
-    throw new Error("Direct merge is not available because this repository uses a merge queue");
-  }
-  if (github.autoMergeRequest !== null) {
-    throw new Error("Direct merge is not available because auto-merge is already enabled");
-  }
-  if (!isPullRequestMergeMethodAllowed(github.repository, input.mergeMethod)) {
-    throw new Error(`Direct merge is not available because ${input.mergeMethod} is disabled`);
-  }
-}
-
-export function assertPullRequestAutoMergeEnableReady(
-  input: Pick<EnableGitHubPullRequestAutoMergeOptions, "mergeMethod" | "status">,
-): void {
-  const github = input.status?.github;
-  if (!github) {
-    throw new Error("GitHub auto-merge facts are unavailable for this pull request");
-  }
-
-  if (github.mergeStateStatus !== "BLOCKED") {
-    throw new Error("GitHub does not report this pull request as blocked for auto-merge");
-  }
-  if (!github.viewerCanEnableAutoMerge) {
-    throw new Error("GitHub does not allow this viewer to enable auto-merge");
-  }
-  if (!github.repository.autoMergeAllowed) {
-    throw new Error("Auto-merge is disabled for this repository");
-  }
-  if (!isPullRequestMergeMethodAllowed(github.repository, input.mergeMethod)) {
-    throw new Error(`Auto-merge is not available because ${input.mergeMethod} is disabled`);
-  }
-  if (github.autoMergeRequest !== null) {
-    throw new Error("Auto-merge is already enabled for this pull request");
-  }
-  if (github.isMergeQueueEnabled || github.isInMergeQueue) {
-    throw new Error("Auto-merge is not available because this repository uses a merge queue");
-  }
-  if (input.status?.mergeable === "CONFLICTING") {
-    throw new Error("Auto-merge is not available because this pull request has conflicts");
-  }
-}
-
-export function assertPullRequestAutoMergeDisableReady(
-  input: Pick<DisableGitHubPullRequestAutoMergeOptions, "status">,
-): void {
-  const github = input.status?.github;
-  if (!github) {
-    throw new Error("GitHub auto-merge facts are unavailable for this pull request");
-  }
-
-  if (github.autoMergeRequest === null) {
-    throw new Error("Auto-merge is not enabled for this pull request");
-  }
-  if (!github.viewerCanDisableAutoMerge) {
-    throw new Error("GitHub does not allow this viewer to disable auto-merge");
-  }
-  if (github.isMergeQueueEnabled || github.isInMergeQueue) {
-    throw new Error("Auto-merge is not available because this repository uses a merge queue");
-  }
-}
-
-export function isPullRequestMergeMethodAllowed(
-  repository: GitHubPullRequestStatusFacts["repository"],
-  method: GitHubPullRequestMergeMethod,
-): boolean {
-  if (method === "squash") {
-    return repository.squashMergeAllowed;
-  }
-  if (method === "merge") {
-    return repository.mergeCommitAllowed;
-  }
-  return repository.rebaseMergeAllowed;
 }
 
 export function computeGithubNextInterval(
