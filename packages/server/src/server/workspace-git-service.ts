@@ -38,12 +38,12 @@ import {
   type WorkspaceGitStashListOptions,
   type WorkspaceGitWorktreeInfo,
 } from "./workspace-git-auxiliary-read-authority.js";
+import { WorkspaceGitRepositoryFetchAuthority } from "./workspace-git-repository-fetch-authority.js";
 import { WorkspaceGitWorkingTreeObserver } from "./workspace-git-working-tree-observer.js";
 import type { WorkspaceGitMetadata } from "./workspace-git-metadata.js";
 import { checkoutLiteFromGitSnapshot, normalizeWorkspaceId } from "./workspace-registry-model.js";
 
 const WORKSPACE_GIT_WATCH_DEBOUNCE_MS = 500;
-const BACKGROUND_GIT_FETCH_INTERVAL_MS = 180_000;
 export const WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS = 60_000;
 
 // Non-forced snapshot refresh triggers share this minimum gap to absorb watcher/self-heal bursts.
@@ -257,14 +257,6 @@ interface WorkspaceGitTarget {
   closed: boolean;
 }
 
-interface RepoGitTarget {
-  repoGitRoot: string;
-  cwd: string;
-  workspaceKeys: Set<string>;
-  intervalId: NodeJS.Timeout | null;
-  fetchInFlight: boolean;
-}
-
 function buildDefaultWorkspaceGitServiceDeps(logger: pino.Logger): WorkspaceGitServiceDependencies {
   return {
     watch,
@@ -300,9 +292,9 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly deps: WorkspaceGitServiceDependencies;
   private readonly snapshotUpdatedListeners = new Set<WorkspaceGitSnapshotUpdatedListener>();
   private readonly workspaceTargets = new Map<string, WorkspaceGitTarget>();
-  private readonly repoTargets = new Map<string, RepoGitTarget>();
   private readonly workingTreeObserver: WorkspaceGitWorkingTreeObserver;
   private readonly auxiliaryReadAuthority: WorkspaceGitAuxiliaryReadAuthority;
+  private readonly repositoryFetchAuthority: WorkspaceGitRepositoryFetchAuthority;
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.chisacodeHome = options.chisacodeHome;
@@ -318,6 +310,24 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         runGitCommand: this.deps.runGitCommand,
         getSnapshot: (cwd, readOptions) => this.getSnapshot(cwd, readOptions),
         now: this.deps.now,
+      },
+    });
+    this.repositoryFetchAuthority = new WorkspaceGitRepositoryFetchAuthority({
+      logger: this.logger,
+      deps: {
+        runGitFetch: this.deps.runGitFetch,
+        refreshWorkspace: async (cwd) => {
+          const target = this.workspaceTargets.get(cwd);
+          if (!target) {
+            return;
+          }
+          await this.refreshWorkspaceTarget(target, {
+            force: false,
+            includeGitHub: false,
+            reason: "repo-fetch",
+            notify: true,
+          });
+        },
       },
     });
     this.workingTreeObserver = new WorkspaceGitWorkingTreeObserver({
@@ -516,11 +526,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
     this.workspaceTargets.clear();
 
-    for (const target of this.repoTargets.values()) {
-      this.closeRepoTarget(target);
-    }
-    this.repoTargets.clear();
-
+    this.repositoryFetchAuthority.dispose();
     this.workingTreeObserver.dispose();
     this.snapshotUpdatedListeners.clear();
   }
@@ -726,43 +732,20 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       return;
     }
 
-    const existingTarget = this.repoTargets.get(repoGitRoot);
-    if (existingTarget) {
-      existingTarget.workspaceKeys.add(workspaceTarget.cwd);
-      return;
-    }
-
     const facts = workspaceTarget.latestFacts;
     const hasOrigin =
       facts?.isGit === true
         ? facts.remoteUrl !== null
         : await this.deps.hasOriginRemote(workspaceTarget.cwd);
-    if (!this.isActiveObservedWorkspaceTarget(workspaceTarget)) {
-      return;
-    }
-    if (!hasOrigin) {
+    if (!this.isActiveObservedWorkspaceTarget(workspaceTarget) || !hasOrigin) {
       return;
     }
 
-    const targetAfterProbe = this.repoTargets.get(repoGitRoot);
-    if (targetAfterProbe) {
-      targetAfterProbe.workspaceKeys.add(workspaceTarget.cwd);
-      return;
-    }
-
-    const repoTarget: RepoGitTarget = {
+    this.repositoryFetchAuthority.attachWorkspace({
       repoGitRoot,
       cwd: workspaceTarget.cwd,
-      workspaceKeys: new Set([workspaceTarget.cwd]),
-      intervalId: setInterval(() => {
-        void this.runRepoFetch(repoTarget);
-      }, BACKGROUND_GIT_FETCH_INTERVAL_MS),
-      fetchInFlight: false,
-    };
-    this.repoTargets.set(repoGitRoot, repoTarget);
-    void this.runRepoFetch(repoTarget);
+    });
   }
-
   private scheduleWorkspaceRefresh(
     targetOrCwd: WorkspaceGitTarget | string,
     options?: { force?: boolean; reason?: string },
@@ -1187,43 +1170,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
   }
 
-  private async runRepoFetch(target: RepoGitTarget): Promise<void> {
-    if (target.fetchInFlight) {
-      return;
-    }
-
-    target.fetchInFlight = true;
-    this.logger.debug(
-      { repoGitRoot: target.repoGitRoot, cwd: target.cwd },
-      "Running background git fetch",
-    );
-
-    try {
-      await this.deps.runGitFetch(target.cwd);
-    } catch (error) {
-      this.logger.warn(
-        { err: error, repoGitRoot: target.repoGitRoot, cwd: target.cwd },
-        "Background git fetch failed",
-      );
-    } finally {
-      target.fetchInFlight = false;
-      await Promise.all(
-        Array.from(target.workspaceKeys, async (workspaceKey) => {
-          const workspaceTarget = this.workspaceTargets.get(workspaceKey);
-          if (!workspaceTarget) {
-            return;
-          }
-          await this.refreshWorkspaceTarget(workspaceTarget, {
-            force: false,
-            includeGitHub: false,
-            reason: "repo-fetch",
-            notify: true,
-          });
-        }),
-      );
-    }
-  }
-
   private removeWorkspaceListener(cwd: string, listener: WorkspaceGitListener): void {
     const target = this.workspaceTargets.get(cwd);
     if (!target) {
@@ -1240,12 +1186,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
   private removeWorkspaceTarget(target: WorkspaceGitTarget): void {
     if (target.repoGitRoot) {
-      const repoTarget = this.repoTargets.get(target.repoGitRoot);
-      repoTarget?.workspaceKeys.delete(target.cwd);
-      if (repoTarget && repoTarget.workspaceKeys.size === 0) {
-        this.closeRepoTarget(repoTarget);
-        this.repoTargets.delete(target.repoGitRoot);
-      }
+      this.repositoryFetchAuthority.detachWorkspace(target.repoGitRoot, target.cwd);
     }
 
     this.closeWorkspaceTarget(target);
@@ -1269,14 +1210,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     }
     target.watchers = [];
     target.listeners.clear();
-  }
-
-  private closeRepoTarget(target: RepoGitTarget): void {
-    if (target.intervalId) {
-      clearInterval(target.intervalId);
-      target.intervalId = null;
-    }
-    target.workspaceKeys.clear();
   }
 }
 

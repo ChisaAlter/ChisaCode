@@ -546,6 +546,39 @@ describe("WorkspaceGitServiceImpl", () => {
     service.dispose();
   });
 
+  test("repo-level fetch reselects a remaining workspace cwd after the original unsubscribes", async () => {
+    const runGitFetch = vi.fn(async () => {});
+    const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
+      ...createCheckoutSnapshotFacts(cwd),
+      gitCommonDir: join(REPO_CWD, ".git"),
+      absoluteGitDir: join(REPO_CWD, ".git"),
+    }));
+    const service = createService({ getCheckoutSnapshotFacts, runGitFetch });
+    const siblingCwd = join(REPO_CWD, "packages", "server");
+
+    const first = service.registerWorkspace({ cwd: REPO_CWD }, vi.fn());
+    await vi.waitFor(() => {
+      expect(runGitFetch).toHaveBeenCalledTimes(1);
+    });
+
+    const second = service.registerWorkspace({ cwd: siblingCwd }, vi.fn());
+    await vi.waitFor(() => {
+      expect(getCheckoutSnapshotFacts).toHaveBeenCalledTimes(2);
+    });
+    await flushPromises();
+
+    first.unsubscribe();
+    runGitFetch.mockClear();
+    await vi.advanceTimersByTimeAsync(180_000);
+    await flushPromises();
+
+    expect(runGitFetch).toHaveBeenCalledTimes(1);
+    expect(runGitFetch).toHaveBeenCalledWith(siblingCwd);
+
+    second.unsubscribe();
+    service.dispose();
+  });
+
   test("explicit forced snapshot refresh recomputes github state and notifies listeners", async () => {
     const getPullRequestStatus = vi
       .fn<() => Promise<PullRequestStatusResult>>()
