@@ -296,7 +296,7 @@ interface WorkspaceGitAuxiliaryReadCacheEntry<T> {
   inFlight: Promise<T> | null;
 }
 
-function buildDefaultWorkspaceGitServiceDeps(): WorkspaceGitServiceDependencies {
+function buildDefaultWorkspaceGitServiceDeps(logger: pino.Logger): WorkspaceGitServiceDependencies {
   return {
     watch,
     readdir,
@@ -309,7 +309,7 @@ function buildDefaultWorkspaceGitServiceDeps(): WorkspaceGitServiceDependencies 
     resolveRepositoryDefaultBranch,
     listBranchSuggestions,
     listChisaCodeWorktrees,
-    github: createGitHubService(),
+    github: createGitHubService({ logger }),
     resolveAbsoluteGitDir,
     hasOriginRemote,
     runGitFetch,
@@ -320,8 +320,9 @@ function buildDefaultWorkspaceGitServiceDeps(): WorkspaceGitServiceDependencies 
 
 function resolveWorkspaceGitServiceDeps(
   deps: Partial<WorkspaceGitServiceDependencies> | undefined,
+  logger: pino.Logger,
 ): WorkspaceGitServiceDependencies {
-  return { ...buildDefaultWorkspaceGitServiceDeps(), ...deps };
+  return { ...buildDefaultWorkspaceGitServiceDeps(logger), ...deps };
 }
 
 export class WorkspaceGitServiceImpl implements WorkspaceGitService {
@@ -363,7 +364,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.chisacodeHome = options.chisacodeHome;
-    this.deps = resolveWorkspaceGitServiceDeps(options.deps);
+    this.deps = resolveWorkspaceGitServiceDeps(options.deps, this.logger);
     this.workingTreeObserver = new WorkspaceGitWorkingTreeObserver({
       logger: this.logger,
       deps: {

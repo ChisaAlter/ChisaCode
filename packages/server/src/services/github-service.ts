@@ -1,9 +1,11 @@
 import { z } from "zod/v3";
+import type pino from "pino";
 import type { GitHubSearchKind } from "@chisacode/protocol/messages";
 import { findExecutable } from "../utils/executable.js";
 import { resolveGitHubRemote } from "../utils/github-remote.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { execCommand } from "../utils/spawn.js";
+import { GitHubCurrentPullRequestPoller } from "./github-current-pr-poller.js";
 
 const DEFAULT_GITHUB_CACHE_TTL_MS = 30_000;
 export const GITHUB_POLL_FAST_INTERVAL_MS = 20_000;
@@ -691,6 +693,7 @@ interface CreateGitHubServiceOptions {
   runner?: GitHubCommandRunner;
   resolveGhPath?: () => Promise<string | null>;
   now?: () => number;
+  logger?: Pick<pino.Logger, "warn">;
 }
 
 interface CommandFailureLike {
@@ -717,17 +720,6 @@ interface InFlightCacheEntry {
   force: boolean;
 }
 
-interface GitHubPollTarget {
-  cwd: string;
-  headRef: string;
-  retainCount: number;
-  timer: NodeJS.Timeout | null;
-  latestStatus: GitHubCurrentPullRequestStatus | null;
-  consecutiveErrors: number;
-  callbacks: Set<(status: GitHubCurrentPullRequestStatus | null) => void>;
-  errorCallbacks: Set<(error: unknown) => void>;
-}
-
 interface ResolvedPullRequestCandidate {
   status: GitHubCurrentPullRequestStatus;
   headRepositoryOwner?: string;
@@ -742,8 +734,17 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
   };
   const cache = new Map<string, CacheEntry>();
   const inFlight = new Map<string, InFlightCacheEntry>();
-  const pollTargets = new Map<string, GitHubPollTarget>();
   let api!: GitHubService;
+  const currentPullRequestPoller = new GitHubCurrentPullRequestPoller({
+    loadStatus: (input) => api.getCurrentPullRequestStatus(input),
+    computeNextInterval: computeGithubNextInterval,
+    onSubscriberError: (error, context) => {
+      options.logger?.warn(
+        { err: error, ...context },
+        "GitHub current pull request poll subscriber threw",
+      );
+    },
+  });
 
   async function cached<T>(params: {
     cwd: string;
@@ -811,86 +812,6 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
         cwd: runOptions.cwd,
       });
     }
-  }
-
-  function getPollTargetKey(target: { cwd: string; headRef: string }): string {
-    return buildCacheKey({
-      cwd: target.cwd,
-      method: "getCurrentPullRequestStatus",
-      args: { headRef: target.headRef },
-    });
-  }
-
-  function updatePollTargetAfterSuccess(update: {
-    cwd: string;
-    headRef: string;
-    status: GitHubCurrentPullRequestStatus | null;
-    notify: boolean;
-  }): void {
-    const target = pollTargets.get(getPollTargetKey(update));
-    if (!target) {
-      return;
-    }
-
-    target.latestStatus = update.status;
-    target.consecutiveErrors = 0;
-    if (update.notify) {
-      for (const callback of target.callbacks) {
-        callback(update.status);
-      }
-    }
-    scheduleGitHubPoll(target);
-  }
-
-  function scheduleGitHubPoll(target: GitHubPollTarget): void {
-    scheduleGitHubPollAfter(
-      target,
-      computeGithubNextInterval(target.latestStatus, target.consecutiveErrors),
-    );
-  }
-
-  function scheduleImmediateGitHubPoll(target: GitHubPollTarget): void {
-    scheduleGitHubPollAfter(target, 0);
-  }
-
-  function scheduleGitHubPollAfter(target: GitHubPollTarget, delayMs: number): void {
-    if (target.retainCount <= 0) {
-      return;
-    }
-    if (target.timer) {
-      clearTimeout(target.timer);
-    }
-
-    target.timer = setTimeout(() => {
-      target.timer = null;
-      void runGitHubPoll(target);
-    }, delayMs);
-  }
-
-  async function runGitHubPoll(target: GitHubPollTarget): Promise<void> {
-    try {
-      await api.getCurrentPullRequestStatus({
-        cwd: target.cwd,
-        headRef: target.headRef,
-        reason: "self-heal-github",
-      });
-    } catch (error) {
-      target.consecutiveErrors += 1;
-      for (const callback of target.errorCallbacks) {
-        callback(error);
-      }
-      scheduleGitHubPoll(target);
-    }
-  }
-
-  function closeGitHubPollTarget(target: GitHubPollTarget): void {
-    if (target.timer) {
-      clearTimeout(target.timer);
-      target.timer = null;
-    }
-    target.retainCount = 0;
-    target.callbacks.clear();
-    target.errorCallbacks.clear();
   }
 
   api = {
@@ -1024,7 +945,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
           return addCurrentPullRequestGithubFacts({ cwd: input.cwd, status, run });
         },
       }).then((status) => {
-        updatePollTargetAfterSuccess({
+        currentPullRequestPoller.acceptStatus({
           cwd: input.cwd,
           headRef: input.headRef,
           status,
@@ -1235,57 +1156,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
     },
 
     retainCurrentPullRequestStatusPoll(input) {
-      const key = getPollTargetKey(input);
-      let target = pollTargets.get(key);
-      if (!target) {
-        target = {
-          cwd: input.cwd,
-          headRef: input.headRef,
-          retainCount: 0,
-          timer: null,
-          latestStatus: null,
-          consecutiveErrors: 0,
-          callbacks: new Set(),
-          errorCallbacks: new Set(),
-        };
-        pollTargets.set(key, target);
-      }
-
-      const isNewlyRetained = target.retainCount === 0;
-      target.retainCount += 1;
-      if (input.onStatus) {
-        target.callbacks.add(input.onStatus);
-      }
-      if (input.onError) {
-        target.errorCallbacks.add(input.onError);
-      }
-      if (isNewlyRetained) {
-        scheduleImmediateGitHubPoll(target);
-      } else {
-        scheduleGitHubPoll(target);
-      }
-
-      let unsubscribed = false;
-      return {
-        unsubscribe: () => {
-          if (unsubscribed) {
-            return;
-          }
-          unsubscribed = true;
-          if (input.onStatus) {
-            target.callbacks.delete(input.onStatus);
-          }
-          if (input.onError) {
-            target.errorCallbacks.delete(input.onError);
-          }
-          target.retainCount -= 1;
-          if (target.retainCount > 0) {
-            return;
-          }
-          closeGitHubPollTarget(target);
-          pollTargets.delete(key);
-        },
-      };
+      return currentPullRequestPoller.retain(input);
     },
 
     invalidate(input) {
@@ -1304,10 +1175,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
     },
 
     dispose() {
-      for (const target of pollTargets.values()) {
-        closeGitHubPollTarget(target);
-      }
-      pollTargets.clear();
+      currentPullRequestPoller.dispose();
     },
   };
 

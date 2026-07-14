@@ -753,6 +753,106 @@ describe("GitHubService", () => {
     service.dispose?.();
   });
 
+  it("isolates status subscriber failures without reporting a GitHub poll error", async () => {
+    let now = 0;
+    const runner = createRunner([
+      currentPullRequestJson({
+        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
+      }),
+      currentPullRequestGithubFactsJson(),
+      currentPullRequestJson({
+        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
+      }),
+      currentPullRequestGithubFactsJson(),
+    ]);
+    const service = createGitHubService({
+      ttlMs: 0,
+      runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      now: () => now,
+    });
+    const failingStatus = vi.fn(() => {
+      throw new Error("status subscriber failed");
+    });
+    const healthyStatus = vi.fn();
+    const pollError = vi.fn();
+    const first = service.retainCurrentPullRequestStatusPoll?.({
+      cwd: "/repo",
+      headRef: "feature/fork",
+      onStatus: failingStatus,
+    });
+    const second = service.retainCurrentPullRequestStatusPoll?.({
+      cwd: "/repo",
+      headRef: "feature/fork",
+      onStatus: healthyStatus,
+      onError: pollError,
+    });
+    await service.getCurrentPullRequestStatus({ cwd: "/repo", headRef: "feature/fork" });
+
+    now = EXPECTED_GITHUB_FAST_POLL_MS;
+    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
+
+    expect(failingStatus).toHaveBeenCalledTimes(1);
+    expect(healthyStatus).toHaveBeenCalledTimes(1);
+    expect(pollError).not.toHaveBeenCalled();
+
+    first?.unsubscribe();
+    second?.unsubscribe();
+    service.dispose?.();
+  });
+
+  it("isolates error subscriber failures and keeps polling", async () => {
+    let now = 0;
+    const runner = createScriptedRunner([
+      currentPullRequestJson({
+        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "PENDING" }],
+      }),
+      currentPullRequestGithubFactsJson(),
+      { error: new Error("network down") },
+      currentPullRequestJson({
+        statusCheckRollup: [{ __typename: "StatusContext", context: "ci", state: "SUCCESS" }],
+      }),
+      currentPullRequestGithubFactsJson(),
+    ]);
+    const service = createGitHubService({
+      ttlMs: 0,
+      runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      now: () => now,
+    });
+    const failingError = vi.fn(() => {
+      throw new Error("error subscriber failed");
+    });
+    const healthyError = vi.fn();
+    const healthyStatus = vi.fn();
+    const first = service.retainCurrentPullRequestStatusPoll?.({
+      cwd: "/repo",
+      headRef: "feature/fork",
+      onError: failingError,
+    });
+    const second = service.retainCurrentPullRequestStatusPoll?.({
+      cwd: "/repo",
+      headRef: "feature/fork",
+      onStatus: healthyStatus,
+      onError: healthyError,
+    });
+    await service.getCurrentPullRequestStatus({ cwd: "/repo", headRef: "feature/fork" });
+
+    now = EXPECTED_GITHUB_FAST_POLL_MS;
+    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
+    now += EXPECTED_GITHUB_FAST_POLL_MS;
+    await vi.advanceTimersByTimeAsync(EXPECTED_GITHUB_FAST_POLL_MS);
+
+    expect(failingError).toHaveBeenCalledTimes(1);
+    expect(healthyError).toHaveBeenCalledTimes(1);
+    expect(healthyStatus).toHaveBeenCalledTimes(1);
+    expect(currentPullRequestStatusCalls(runner.calls)).toHaveLength(3);
+
+    first?.unsubscribe();
+    second?.unsubscribe();
+    service.dispose?.();
+  });
+
   it("unsubscribe clears the adaptive GitHub poll timer", async () => {
     let now = 0;
     const runner = createRunner([
