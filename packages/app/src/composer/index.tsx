@@ -42,14 +42,11 @@ import {
   cancelComposerAgent,
   dispatchComposerAgentMessage,
   editQueuedComposerMessage,
-  findGithubItemByOption,
-  isAttachmentSelectedForGithubItem,
   openComposerAttachment,
   pickAndPersistImages,
   queueComposerMessage,
   removeComposerAttachmentAtIndex,
   sendQueuedComposerMessageNow,
-  toggleGithubAttachmentFromPicker,
   type AgentStreamWriter,
   type QueueWriter,
   type QueuedComposerMessage,
@@ -81,7 +78,6 @@ import { submitAgentInput } from "@/composer/submit";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentFeature } from "@chisacode/protocol/agent-types";
-import type { GitHubSearchItem } from "@chisacode/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -89,20 +85,13 @@ import type {
   WorkspaceComposerAttachment,
 } from "@/attachments/types";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { AttachmentLightbox } from "@/components/attachment-lightbox";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useIsDictationReady } from "@/hooks/use-is-dictation-ready";
-import { useGithubSearchQuery } from "@/git/use-github-search-query";
-import { useCheckoutStatusQuery } from "@/git/use-status-query";
-import { useComposerGithubAutoAttach } from "./github/auto-attach";
 import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-slash-commands";
 import { buildToggleFeatureMenuItems } from "@/composer/agent-controls/utils";
-import {
-  GithubPickerOption,
-  renderAttachmentTray,
-  renderQueueTrack,
-} from "@/composer/attachment-queue-renderers";
+import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
+import { useComposerGithubPicker } from "./github/picker";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
 import { COMPOSER_VOICE_UI_VISIBLE } from "./voice-visibility";
 
@@ -111,8 +100,6 @@ type QueuedMessage = QueuedComposerMessage;
 type AttachmentListUpdater =
   | UserComposerAttachment[]
   | ((prev: UserComposerAttachment[]) => UserComposerAttachment[]);
-
-function noop() {}
 
 function resolveComposerButtonIconSize(): number {
   return isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
@@ -147,20 +134,6 @@ function resolveMessagePlaceholder(input: {
   mobile: string;
 }): string {
   return input.isDesktopWebBreakpoint ? input.desktop : input.mobile;
-}
-
-function resolveGithubSearchEnabled(
-  isGithubPickerOpen: boolean,
-  isConnected: boolean,
-  cwd: string,
-): boolean {
-  return isGithubPickerOpen && isConnected && cwd.trim().length > 0;
-}
-
-function resolveCheckoutRemoteUrl(
-  checkoutStatus: ReturnType<typeof useCheckoutStatusQuery>["status"],
-): string | null {
-  return checkoutStatus?.remoteUrl ?? null;
 }
 
 function buildCancelButtonStyle(isConnected: boolean, isCancellingAgent: boolean): object[] {
@@ -768,28 +741,26 @@ export function Composer({
     onOpenWorkspaceAttachment,
   });
   const setSelectedAttachments = onChangeAttachments;
-  const checkoutStatusQuery = useCheckoutStatusQuery({ serverId, cwd });
-  const githubAutoAttach = useComposerGithubAutoAttach({
-    text: userInput,
-    remoteUrl: resolveCheckoutRemoteUrl(checkoutStatusQuery.status),
-    attachments,
-    client,
-    isConnected,
-    serverId,
-    cwd,
-    setAttachments: setSelectedAttachments,
-  });
   const [cursorIndex, setCursorIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancellingAgent, setIsCancellingAgent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [isMessageInputFocused, setIsMessageInputFocused] = useState(false);
-  const [isGithubPickerOpen, setIsGithubPickerOpen] = useState(false);
-  const [githubSearchQuery, setGithubSearchQuery] = useState("");
   const [lightboxMetadata, setLightboxMetadata] = useState<AttachmentMetadata | null>(null);
   const attachButtonRef = useRef<View | null>(null);
   const messageInputRef = useRef<MessageInputRef>(null);
   const isComposerLocked = resolveIsComposerLocked(submitBehavior, isSubmitLoading);
+  const { githubPicker, markGithubAttachmentRemoved, openGithubPicker } = useComposerGithubPicker({
+    client,
+    serverId,
+    cwd,
+    text: userInput,
+    attachments,
+    selectedAttachments,
+    setAttachments: setSelectedAttachments,
+    isConnected,
+    anchorRef: attachButtonRef,
+  });
   const keyboardHandlerIdRef = useRef(
     `message-input:${serverId}:${agentId}:${Math.random().toString(36).slice(2)}`,
   );
@@ -1089,7 +1060,7 @@ export function Composer({
 
   const handleRemoveAttachment = useCallback(
     (index: number) => {
-      githubAutoAttach.markGithubAttachmentRemoved(selectedAttachments[index]);
+      markGithubAttachmentRemoved(selectedAttachments[index]);
       const didRemoveWorkspaceAttachment = removeAttachment({
         selectedAttachments,
         index,
@@ -1101,7 +1072,7 @@ export function Composer({
         removeComposerAttachmentAtIndex({ attachments: prev, index, deleteAttachments }),
       );
     },
-    [githubAutoAttach, removeAttachment, selectedAttachments, setSelectedAttachments],
+    [markGithubAttachmentRemoved, removeAttachment, selectedAttachments, setSelectedAttachments],
   );
 
   const handleOpenAttachment = useCallback(
@@ -1366,27 +1337,6 @@ export function Composer({
     [contextWindowMeter, isMobile],
   );
 
-  const githubSearchQueryTrimmed = githubSearchQuery.trim();
-  const githubSearchResultsQuery = useGithubSearchQuery({
-    client,
-    serverId,
-    cwd,
-    query: githubSearchQueryTrimmed,
-    enabled: resolveGithubSearchEnabled(isGithubPickerOpen, isConnected, cwd),
-  });
-
-  const githubSearchItemsRaw = githubSearchResultsQuery.data?.items;
-  const githubSearchItems = useMemo(() => githubSearchItemsRaw ?? [], [githubSearchItemsRaw]);
-  const githubSearchOptions: ComboboxOption[] = useMemo(
-    () =>
-      githubSearchItems.map((item) => ({
-        id: `${item.kind}:${item.number}`,
-        label: `#${item.number} ${item.title}`,
-        description: githubSearchQueryTrimmed,
-      })),
-    [githubSearchItems, githubSearchQueryTrimmed],
-  );
-
   const attachmentMenuItems = useMemo<AttachmentMenuItem[]>(() => {
     const items: AttachmentMenuItem[] = [
       {
@@ -1401,9 +1351,7 @@ export function Composer({
         id: "github",
         label: t("composer.addIssueOrPr"),
         icon: <ThemedGithub size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
-        onSelect: () => {
-          setIsGithubPickerOpen(true);
-        },
+        onSelect: openGithubPicker,
       },
     ];
 
@@ -1444,28 +1392,9 @@ export function Composer({
     handlePickImage,
     handleSetFeatureFromMenu,
     isComposerLocked,
+    openGithubPicker,
     t,
   ]);
-
-  const handleToggleGithubItem = useCallback(
-    (item: GitHubSearchItem) => {
-      const nextAttachments = toggleGithubAttachmentFromPicker({
-        current: attachments,
-        item,
-        markGithubAttachmentRemoved: githubAutoAttach.markGithubAttachmentRemoved,
-      });
-      setSelectedAttachments(nextAttachments);
-      setIsGithubPickerOpen(false);
-      setGithubSearchQuery("");
-    },
-    [
-      attachments,
-      githubAutoAttach,
-      setSelectedAttachments,
-      setGithubSearchQuery,
-      setIsGithubPickerOpen,
-    ],
-  );
 
   const leftContent = useMemo(
     () => renderLeftContent({ agentControls, agentId, serverId, focusInput }),
@@ -1493,38 +1422,6 @@ export function Composer({
   const handleLightboxClose = useCallback(() => {
     setLightboxMetadata(null);
   }, []);
-
-  const handleGithubPickerOpenChange = useCallback(
-    (open: boolean) => {
-      setIsGithubPickerOpen(open);
-      if (!open) {
-        setGithubSearchQuery("");
-      }
-    },
-    [setGithubSearchQuery],
-  );
-
-  const renderGithubPickerOption = useCallback(
-    ({ option, active }: { option: ComboboxOption; selected: boolean; active: boolean }) => {
-      const item = findGithubItemByOption(githubSearchItems, option.id);
-      if (!item) {
-        return <View key={option.id} />;
-      }
-      const selected = isAttachmentSelectedForGithubItem(selectedAttachments, item);
-      return (
-        <GithubPickerOption
-          key={option.id}
-          testID={`composer-github-option-${option.id}`}
-          label={option.label}
-          selected={selected}
-          active={active}
-          item={item}
-          onToggle={handleToggleGithubItem}
-        />
-      );
-    },
-    [githubSearchItems, selectedAttachments, handleToggleGithubItem],
-  );
 
   const composerContainerStyle = useMemo(
     () => [styles.container, keyboardAnimatedStyle],
@@ -1560,9 +1457,6 @@ export function Composer({
     () => (sendError ? <Text style={styles.sendErrorText}>{sendError}</Text> : null),
     [sendError],
   );
-  const githubEmptyText = githubSearchResultsQuery.isFetching
-    ? t("workspace.searching")
-    : t("composer.noGithubResults");
   const autocompleteVisible = autocomplete.isVisible && isPaneFocused;
 
   const composerFallback = useCallback(
@@ -1640,22 +1534,7 @@ export function Composer({
                 inputWrapperStyle={inputWrapperStyle}
                 attachmentSlot={attachmentTray}
               />
-              <Combobox
-                options={githubSearchOptions}
-                value=""
-                onSelect={noop}
-                keepOpenOnSelect
-                searchable
-                searchPlaceholder={t("composer.searchIssuesAndPrs")}
-                title={t("composer.addIssueOrPr")}
-                open={isGithubPickerOpen}
-                onOpenChange={handleGithubPickerOpenChange}
-                onSearchQueryChange={setGithubSearchQuery}
-                desktopPlacement="top-start"
-                anchorRef={attachButtonRef}
-                emptyText={githubEmptyText}
-                renderOption={renderGithubPickerOption}
-              />
+              {githubPicker}
             </View>
           </View>
         </View>
