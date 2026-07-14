@@ -9,24 +9,14 @@ import type {
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import type { AgentMode, AgentProvider } from "./agent-sdk-types.js";
 import type { AgentManager } from "./agent-manager.js";
-import { AgentFeatureSchema } from "../messages.js";
 import type { AgentStorage } from "./agent-storage.js";
 import type { ArchiveChisaCodeWorktreeDependencies } from "../chisacode-worktree-archive-service.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "../voice-types.js";
 import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type { CreateChisaCodeWorktreeWorkflowFn } from "../worktree-session.js";
-import { resolveSnapshotCwd, type ProviderSnapshotManager } from "./provider-snapshot-manager.js";
-import {
-  AgentModelSchema,
-  AgentProviderEnum,
-  ProviderModeSchema,
-  ProviderSummarySchema,
-  resolveProviderAndOptionalModel,
-  resolveRequiredProviderModel,
-} from "./mcp-shared.js";
+import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { UsageStore } from "../usage/usage-store.js";
@@ -35,6 +25,7 @@ import { registerCreateAgentMcpTool } from "./create-agent-mcp-tool.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
 import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
+import { registerProviderMcpTools } from "./provider-mcp-tools.js";
 import { registerScheduleMcpTools, type ScheduleMcpService } from "./schedule-mcp-tools.js";
 import { registerUsageMcpTools } from "./usage-mcp-tools.js";
 import { registerTerminalMcpTools } from "./terminal-mcp-tools.js";
@@ -163,36 +154,6 @@ function relaxMcpToolOutputSchema<TConfig extends { outputSchema?: unknown }>(
 
 type McpToolContext = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
-interface ProviderSummary {
-  id: AgentProvider;
-  label: string;
-  description: string;
-  enabled: boolean;
-  modes: AgentMode[];
-  status: string;
-  error?: string;
-}
-
-function toProviderSummary(entry: {
-  provider: AgentProvider;
-  label?: string;
-  description?: string;
-  enabled: boolean;
-  modes?: AgentMode[];
-  status: string;
-  error?: string;
-}): ProviderSummary {
-  return {
-    id: entry.provider,
-    label: entry.label ?? entry.provider,
-    description: entry.description ?? "",
-    enabled: entry.enabled,
-    modes: entry.modes ?? [],
-    status: entry.status === "ready" ? "available" : entry.status,
-    ...(entry.error ? { error: entry.error } : {}),
-  };
-}
-
 function resolveChildAgentCwd(params: {
   parentCwd: string;
   requestedCwd?: string;
@@ -295,42 +256,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       return null;
     }
     return resolveCallerAgent()?.cwd ?? null;
-  };
-  const ProviderOrProviderModelInputSchema = AgentProviderEnum.trim()
-    .min(1, "provider is required")
-    .refine(
-      (value) => {
-        if (!value.includes("/")) {
-          return true;
-        }
-        try {
-          resolveRequiredProviderModel(value);
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      { message: "provider must be provider or provider/model, for example codex/gpt-5.4" },
-    );
-  const InspectProviderSettingsInputSchema = z
-    .object({
-      modeId: z.string().optional().describe("Draft session mode ID."),
-      model: z.string().optional().describe("Draft model ID."),
-      thinkingOptionId: z.string().optional().describe("Draft thinking option ID."),
-      features: z.record(z.unknown()).optional().describe("Draft provider feature values."),
-    })
-    .strict();
-  const inspectProviderInputSchema = {
-    provider: ProviderOrProviderModelInputSchema.describe(
-      "Provider ID, optionally with a model ID (for example codex or codex/gpt-5.4).",
-    ),
-    cwd: z
-      .string()
-      .optional()
-      .describe("Working directory used to resolve provider feature availability."),
-    settings: InspectProviderSettingsInputSchema.optional().describe(
-      "Draft provider settings used to compute available features.",
-    ),
   };
   if (options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools) {
     registerTool(
@@ -473,115 +398,12 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     resolveScopedCwd,
     resolveScopeRoot,
   });
-  registerTool(
-    "list_providers",
-    {
-      title: "List providers",
-      description: "List configured agent providers, availability, and their modes.",
-      inputSchema: {},
-      outputSchema: {
-        providers: z.array(ProviderSummarySchema),
-      },
-    },
-    async () => {
-      const providers = (await providerSnapshotManager.listProviders({ wait: true })).map(
-        toProviderSummary,
-      );
-      return {
-        content: [],
-        structuredContent: ensureValidJson({ providers }),
-      };
-    },
-  );
-
-  registerTool(
-    "list_models",
-    {
-      title: "List models",
-      description: "List models for an agent provider.",
-      inputSchema: {
-        provider: AgentProviderEnum,
-      },
-      outputSchema: {
-        provider: z.string(),
-        models: z.array(AgentModelSchema),
-      },
-    },
-    async ({ provider }) => {
-      const models = await providerSnapshotManager.listModels({
-        cwd: resolveSnapshotCwd(),
-        provider,
-        wait: true,
-      });
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          provider,
-          models,
-        }),
-      };
-    },
-  );
-
-  registerTool(
-    "inspect_provider",
-    {
-      title: "Inspect provider",
-      description:
-        "Inspect compact provider capabilities for orchestration, including modes and draft feature settings. Use list_models for the full model list.",
-      inputSchema: inspectProviderInputSchema,
-      outputSchema: {
-        provider: AgentProviderEnum,
-        label: z.string().nullable().optional(),
-        description: z.string().nullable().optional(),
-        enabled: z.boolean(),
-        status: z.string(),
-        modes: z.array(ProviderModeSchema).nullish(),
-        selectedModel: z.string().nullable(),
-        features: z.array(AgentFeatureSchema),
-      },
-    },
-    async ({ provider, cwd, settings }) => {
-      const resolvedProviderModel = resolveProviderAndOptionalModel(provider, provider);
-      const providerId = resolvedProviderModel.provider;
-      const resolvedCwd = resolveScopedCwd(cwd, { required: true });
-      const entry = await providerSnapshotManager.getProvider({
-        cwd: resolvedCwd,
-        provider: providerId,
-        wait: true,
-      });
-      const summary = toProviderSummary(entry);
-      if (!entry.enabled) {
-        throw new Error(`Provider '${providerId}' is disabled`);
-      }
-      if (entry.status !== "ready") {
-        throw new Error(entry.error ?? `Provider '${providerId}' is unavailable`);
-      }
-      const selectedModel = settings?.model ?? resolvedProviderModel.model;
-      const features = await agentManager.listDraftFeatures({
-        provider: providerId,
-        cwd: resolvedCwd,
-        ...(settings?.modeId ? { modeId: settings.modeId } : {}),
-        ...(selectedModel ? { model: selectedModel } : {}),
-        ...(settings?.thinkingOptionId ? { thinkingOptionId: settings.thinkingOptionId } : {}),
-        ...(settings?.features ? { featureValues: settings.features } : {}),
-      });
-      return {
-        content: [],
-        structuredContent: ensureValidJson({
-          provider: providerId,
-          label: summary.label,
-          description: summary.description,
-          enabled: summary.enabled,
-          status: summary.status,
-          modes: summary.modes,
-          selectedModel: selectedModel ?? null,
-          features,
-        }),
-      };
-    },
-  );
-
+  registerProviderMcpTools({
+    registerTool,
+    agentManager,
+    providerSnapshotManager,
+    resolveScopedCwd,
+  });
   const getDiagnostics = options.getDiagnostics;
   if (getDiagnostics) {
     registerTool(
