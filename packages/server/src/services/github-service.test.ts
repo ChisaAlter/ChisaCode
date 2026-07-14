@@ -1009,6 +1009,41 @@ describe("GitHubService", () => {
     ]);
   });
 
+  it("does not expose pending review drafts as published timeline activity", async () => {
+    const runner = createRunner([
+      pullRequestTimelineJson({
+        reviews: {
+          nodes: [
+            {
+              id: "PRR_pending",
+              state: "PENDING",
+              body: "Unsubmitted review draft",
+              url: "https://github.com/parentOwner/parentRepo/pull/42#pullrequestreview-draft",
+              submittedAt: null,
+              author: { login: "reviewer", url: "https://github.com/reviewer" },
+            },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+        comments: { nodes: [], pageInfo: { hasNextPage: false } },
+      }),
+    ]);
+    const service = createGitHubService({
+      runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      now: () => 100,
+    });
+
+    const timeline = await service.getPullRequestTimeline({
+      cwd: "/repo",
+      prNumber: 42,
+      repoOwner: "parentOwner",
+      repoName: "parentRepo",
+    });
+
+    expect(timeline.items).toEqual([]);
+  });
+
   it("marks PR timeline results truncated when reviews or comments hit the pagination cap", async () => {
     const runner = createRunner([
       pullRequestTimelineJson({

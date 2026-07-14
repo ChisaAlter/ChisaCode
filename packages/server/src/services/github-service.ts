@@ -13,6 +13,11 @@ import {
   type PullRequestChecksStatus,
 } from "./github-pr-checks.js";
 import {
+  loadGitHubPullRequestTimeline,
+  type GitHubPullRequestTimeline,
+  type GitHubPullRequestTimelineFailure,
+} from "./github-pr-timeline.js";
+import {
   searchGitHubIssuesAndPrs,
   type GitHubReadOptions,
   type GitHubSearchResult,
@@ -30,6 +35,13 @@ export type {
   PullRequestChecksStatus,
   PullRequestCheckStatus,
 } from "./github-pr-checks.js";
+export type {
+  GitHubPullRequestTimeline,
+  GitHubPullRequestTimelineError,
+  GitHubPullRequestTimelineErrorKind,
+  PullRequestTimelineItem,
+  PullRequestTimelineReviewState,
+} from "./github-pr-timeline.js";
 
 const DEFAULT_GITHUB_CACHE_TTL_MS = 30_000;
 export const GITHUB_POLL_FAST_INTERVAL_MS = 20_000;
@@ -140,65 +152,6 @@ const CurrentPullRequestStatusSchema = z.object({
   headRepositoryOwner: HeadRepositoryOwnerSchema,
 });
 
-const TimelineAuthorSchema = z
-  .object({
-    login: z.string().optional(),
-    url: z.string().nullable().optional(),
-  })
-  .nullable()
-  .optional();
-
-const PullRequestTimelineReviewNodeSchema = z.object({
-  id: z.string().catch(""),
-  state: z.string().catch(""),
-  body: z.string().nullable().catch(null),
-  url: z.string().catch(""),
-  submittedAt: z.string().nullable().catch(null),
-  author: TimelineAuthorSchema,
-});
-
-const PullRequestTimelineCommentNodeSchema = z.object({
-  id: z.string().catch(""),
-  body: z.string().nullable().catch(null),
-  url: z.string().catch(""),
-  createdAt: z.string().nullable().catch(null),
-  author: TimelineAuthorSchema,
-});
-
-const PullRequestTimelinePageInfoSchema = z.object({
-  hasNextPage: z.boolean().catch(false),
-});
-
-const PullRequestTimelineGraphqlSchema = z.object({
-  data: z
-    .object({
-      repository: z
-        .object({
-          pullRequest: z
-            .object({
-              number: z.number().optional(),
-              reviews: z
-                .object({
-                  nodes: z.array(PullRequestTimelineReviewNodeSchema).catch([]),
-                  pageInfo: PullRequestTimelinePageInfoSchema.catch({ hasNextPage: false }),
-                })
-                .catch({ nodes: [], pageInfo: { hasNextPage: false } }),
-              comments: z
-                .object({
-                  nodes: z.array(PullRequestTimelineCommentNodeSchema).catch([]),
-                  pageInfo: PullRequestTimelinePageInfoSchema.catch({ hasNextPage: false }),
-                })
-                .catch({ nodes: [], pageInfo: { hasNextPage: false } }),
-            })
-            .nullable()
-            .optional(),
-        })
-        .nullable()
-        .optional(),
-    })
-    .optional(),
-});
-
 const GitHubRepoViewSchema = z.object({
   owner: z
     .object({
@@ -295,46 +248,6 @@ query PullRequestStatusFacts($owner: String!, $name: String!, $number: Int!) {
       viewerCanUpdateBranch
       isMergeQueueEnabled
       isInMergeQueue
-    }
-  }
-}`;
-
-const PULL_REQUEST_TIMELINE_QUERY = `
-query PullRequestTimeline($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
-      number
-      reviews(first: 100) {
-        nodes {
-          id
-          state
-          body
-          url
-          submittedAt
-          author {
-            login
-            url
-          }
-        }
-        pageInfo {
-          hasNextPage
-        }
-      }
-      comments(first: 100) {
-        nodes {
-          id
-          body
-          url
-          createdAt
-          author {
-            login
-            url
-          }
-        }
-        pageInfo {
-          hasNextPage
-        }
-      }
     }
   }
 }`;
@@ -439,42 +352,6 @@ export interface GitHubCurrentPullRequestStatus {
   checksStatus: PullRequestChecksStatus;
   reviewDecision: PullRequestReviewDecision;
   github?: GitHubPullRequestStatusFacts;
-}
-
-export type PullRequestTimelineReviewState = "approved" | "changes_requested" | "commented";
-
-interface PullRequestTimelineItemBase {
-  id: string;
-  author: string;
-  authorUrl: string | null;
-  body: string;
-  createdAt: number;
-  url: string;
-}
-
-export type PullRequestTimelineItem =
-  | (PullRequestTimelineItemBase & {
-      kind: "review";
-      reviewState: PullRequestTimelineReviewState;
-    })
-  | (PullRequestTimelineItemBase & {
-      kind: "comment";
-    });
-
-export type GitHubPullRequestTimelineErrorKind = "not_found" | "forbidden" | "unknown";
-
-export interface GitHubPullRequestTimelineError {
-  kind: GitHubPullRequestTimelineErrorKind;
-  message: string;
-}
-
-export interface GitHubPullRequestTimeline {
-  prNumber: number;
-  repoOwner: string;
-  repoName: string;
-  items: PullRequestTimelineItem[];
-  truncated: boolean;
-  error: GitHubPullRequestTimelineError | null;
 }
 
 export interface GitHubPullRequestCreateResult {
@@ -899,39 +776,11 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
         method: "getPullRequestTimeline",
         args: { prNumber: input.prNumber },
         readOptions: input,
-        load: async () => {
-          try {
-            const stdout = await run(
-              [
-                "api",
-                "graphql",
-                "-f",
-                `query=${PULL_REQUEST_TIMELINE_QUERY}`,
-                "-F",
-                `owner=${input.repoOwner}`,
-                "-F",
-                `name=${input.repoName}`,
-                "-F",
-                `number=${input.prNumber}`,
-              ],
-              { cwd: input.cwd },
-            );
-            return parsePullRequestTimeline(stdout, {
-              prNumber: input.prNumber,
-              repoOwner: input.repoOwner,
-              repoName: input.repoName,
-            });
-          } catch (error) {
-            return {
-              prNumber: input.prNumber,
-              repoOwner: input.repoOwner,
-              repoName: input.repoName,
-              items: [],
-              truncated: false,
-              error: mapPullRequestTimelineError(error),
-            };
-          }
-        },
+        load: () =>
+          loadGitHubPullRequestTimeline(input, {
+            run,
+            normalizeFailure: normalizeGitHubPullRequestTimelineFailure,
+          }),
       });
     },
 
@@ -1244,6 +1093,21 @@ function bufferOrStringToString(value: string | Buffer | undefined): string {
 
 function isGitHubAuthenticationError(error: unknown): error is GitHubAuthenticationError {
   return error instanceof GitHubAuthenticationError;
+}
+
+function normalizeGitHubPullRequestTimelineFailure(
+  error: unknown,
+): GitHubPullRequestTimelineFailure {
+  if (error instanceof GitHubCommandError) {
+    return { kind: "command", stderr: error.stderr, message: error.message };
+  }
+  if (error instanceof GitHubAuthenticationError) {
+    return { kind: "authentication", stderr: error.stderr, message: error.message };
+  }
+  return {
+    kind: "unknown",
+    message: error instanceof Error ? error.message : String(error),
+  };
 }
 
 function isAuthFailureText(text: string): boolean {
@@ -1641,136 +1505,6 @@ function parseIssueSummaries(stdout: string): GitHubIssueSummary[] {
   }));
 }
 
-function parsePullRequestTimeline(
-  stdout: string,
-  identity: { prNumber: number; repoOwner: string; repoName: string },
-): GitHubPullRequestTimeline {
-  const parsed = PullRequestTimelineGraphqlSchema.parse(JSON.parse(stdout || "{}"));
-  const pullRequest = parsed.data?.repository?.pullRequest;
-  const items = pullRequest
-    ? [
-        ...pullRequest.reviews.nodes.flatMap(toPullRequestTimelineReviewItem),
-        ...pullRequest.comments.nodes.map(toPullRequestTimelineCommentItem),
-      ].sort(compareTimelineItems)
-    : [];
-  return {
-    prNumber: pullRequest?.number ?? identity.prNumber,
-    repoOwner: identity.repoOwner,
-    repoName: identity.repoName,
-    items,
-    // S3 deliberately caps timeline fetches at the first 100 reviews and first 100 comments.
-    truncated: Boolean(
-      pullRequest?.reviews.pageInfo.hasNextPage || pullRequest?.comments.pageInfo.hasNextPage,
-    ),
-    error: pullRequest ? null : { kind: "not_found", message: "Pull request not found" },
-  };
-}
-
-function toPullRequestTimelineReviewItem(
-  review: z.infer<typeof PullRequestTimelineReviewNodeSchema>,
-): PullRequestTimelineItem[] {
-  const reviewState = mapTimelineReviewState(review.state, review.body ?? "");
-  if (!reviewState) {
-    return [];
-  }
-  return [
-    {
-      kind: "review",
-      id: review.id,
-      author: review.author?.login ?? "unknown",
-      authorUrl: review.author?.url ?? null,
-      body: review.body ?? "",
-      createdAt: parseOptionalTime(review.submittedAt ?? null),
-      url: review.url,
-      reviewState,
-    },
-  ];
-}
-
-function toPullRequestTimelineCommentItem(
-  comment: z.infer<typeof PullRequestTimelineCommentNodeSchema>,
-): PullRequestTimelineItem {
-  return {
-    kind: "comment",
-    id: comment.id,
-    author: comment.author?.login ?? "unknown",
-    authorUrl: comment.author?.url ?? null,
-    body: comment.body ?? "",
-    createdAt: parseOptionalTime(comment.createdAt ?? null),
-    url: comment.url,
-  };
-}
-
-function mapTimelineReviewState(
-  state: string,
-  body: string,
-): PullRequestTimelineReviewState | null {
-  switch (state) {
-    case "APPROVED":
-      return "approved";
-    case "CHANGES_REQUESTED":
-      return "changes_requested";
-    case "COMMENTED":
-      return "commented";
-    case "DISMISSED":
-    case "PENDING":
-      return body.trim().length > 0 ? "commented" : null;
-    default:
-      return body.trim().length > 0 ? "commented" : null;
-  }
-}
-
-function compareTimelineItems(
-  left: PullRequestTimelineItem,
-  right: PullRequestTimelineItem,
-): number {
-  if (left.createdAt !== right.createdAt) {
-    return left.createdAt - right.createdAt;
-  }
-  return left.id.localeCompare(right.id);
-}
-
-function mapPullRequestTimelineError(error: unknown): GitHubPullRequestTimelineError {
-  if (error instanceof GitHubCommandError) {
-    return {
-      kind: classifyPullRequestTimelineError(error.stderr),
-      message: error.stderr || error.message,
-    };
-  }
-  if (error instanceof GitHubAuthenticationError) {
-    return {
-      kind: "forbidden",
-      message: error.stderr || error.message,
-    };
-  }
-  return {
-    kind: "unknown",
-    message: error instanceof Error ? error.message : String(error),
-  };
-}
-
-function classifyPullRequestTimelineError(stderr: string): GitHubPullRequestTimelineErrorKind {
-  const normalized = stderr.toLowerCase();
-  if (
-    normalized.includes("could not resolve to a pullrequest") ||
-    normalized.includes("pull request not found") ||
-    normalized.includes("pullrequest not found")
-  ) {
-    return "not_found";
-  }
-  if (
-    normalized.includes("forbidden") ||
-    normalized.includes("resource not accessible") ||
-    normalized.includes("permission") ||
-    normalized.includes("access denied") ||
-    normalized.includes("requires authentication") ||
-    normalized.includes("http 403")
-  ) {
-    return "forbidden";
-  }
-  return "unknown";
-}
-
 function toCurrentPullRequestStatus(
   item: CurrentPullRequestStatusItem,
   fallbackHeadRefName: string,
@@ -1821,14 +1555,6 @@ function parseGitHubPullRequestRepo(url: string): { owner: string; name: string 
   } catch {
     return null;
   }
-}
-
-function parseOptionalTime(timestamp: string | null): number {
-  if (!timestamp) {
-    return 0;
-  }
-  const time = Date.parse(timestamp);
-  return Number.isNaN(time) ? 0 : time;
 }
 
 function mapReviewDecision(value: unknown): PullRequestReviewDecision {
