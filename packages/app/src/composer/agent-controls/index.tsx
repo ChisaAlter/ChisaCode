@@ -17,10 +17,10 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/shallow";
-import { Brain, ChevronDown, ListTodo, Settings2, ShieldCheck, Zap } from "lucide-react-native";
+import { Brain, ChevronDown, Settings2 } from "lucide-react-native";
 import { getProviderIcon } from "@/components/provider-icons";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import type {
@@ -30,22 +30,17 @@ import type {
 import { resolveProviderSnapshotLoadingState } from "@/provider-selection/provider-snapshot-loading";
 import { resolveDraftModelSelectorLoading } from "@/composer/agent-controls/model-loading";
 import { ProviderCapabilityHints } from "@/composer/agent-controls/provider-capability-hints";
+import { DesktopFeatureItem, SheetFeatureItem } from "@/composer/agent-controls/feature-controls";
+import { styles } from "@/composer/agent-controls/agent-control-styles";
 import { useRunningAgentModelControls } from "@/composer/agent-controls/running-agent-model-controls";
 import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-
 import {
   buildFavoriteModelKey,
   mergeProviderPreferences,
   toggleFavoriteModel,
   useFormPreferences,
 } from "@/hooks/use-form-preferences";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { DraftAgentModeControl, AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
@@ -57,12 +52,7 @@ import type {
   AgentProvider,
 } from "@chisacode/protocol/agent-types";
 import type { AgentProviderDefinition } from "@chisacode/protocol/provider-manifest";
-import {
-  getFeatureHighlightColor,
-  getFeatureTooltip,
-  getAgentControlHint,
-  formatThinkingOptionLabel,
-} from "@/composer/agent-controls/utils";
+import { getAgentControlHint, formatThinkingOptionLabel } from "@/composer/agent-controls/utils";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -152,42 +142,6 @@ function findOptionLabel(
   }
   const selected = options.find((option) => option.id === selectedId);
   return selected?.label ?? fallback;
-}
-
-const FEATURE_ICONS: Record<string, typeof Zap> = {
-  "list-todo": ListTodo,
-  "shield-check": ShieldCheck,
-  zap: Zap,
-};
-
-function getFeatureIcon(icon?: string) {
-  return (icon && FEATURE_ICONS[icon]) || Settings2;
-}
-
-function getFeatureIconColor(
-  featureId: string,
-  enabled: boolean,
-  palette: {
-    blue: { 400: string };
-    green: { 400: string };
-    yellow: { 400: string };
-  },
-  foregroundMuted: string,
-): string {
-  if (!enabled) {
-    return foregroundMuted;
-  }
-
-  switch (getFeatureHighlightColor(featureId)) {
-    case "blue":
-      return palette.blue[400];
-    case "green":
-      return palette.green[400];
-    case "yellow":
-      return palette.yellow[400];
-    default:
-      return foregroundMuted;
-  }
 }
 
 // Mobile agent controls only — strip namespace prefix so providers like OpenCode
@@ -1100,261 +1054,6 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   );
 }
 
-function DesktopFeatureItem({
-  feature,
-  disabled,
-  openSelector,
-  handleOpenChange,
-  onSetFeature,
-}: {
-  feature: AgentFeature;
-  disabled: boolean;
-  openSelector: AgentControlSelector | null;
-  handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  onSetFeature?: (featureId: string, value: unknown) => void;
-}) {
-  const { theme } = useUnistyles();
-  const featureSelector: AgentControlSelector = `feature-${feature.id}`;
-
-  const handleFeatureOpenChange = useMemo(
-    () => handleOpenChange(featureSelector),
-    [handleOpenChange, featureSelector],
-  );
-
-  const handleTogglePress = useCallback(() => {
-    if (feature.type === "toggle") {
-      onSetFeature?.(feature.id, !feature.value);
-    }
-  }, [feature, onSetFeature]);
-
-  const handleSelectOption = useCallback(
-    (optionId: string) => {
-      onSetFeature?.(feature.id, optionId);
-    },
-    [feature.id, onSetFeature],
-  );
-
-  const togglePressableStyle = useCallback(
-    ({ pressed, hovered }: PressableStateCallbackType) => [
-      styles.modeIconBadge,
-      hovered && styles.modeBadgeHovered,
-      pressed && styles.modeBadgePressed,
-      disabled && styles.disabledBadge,
-    ],
-    [disabled],
-  );
-
-  const selectPressableStyle = useCallback(
-    ({ pressed, hovered }: PressableStateCallbackType) => [
-      styles.modeBadge,
-      hovered && styles.modeBadgeHovered,
-      (pressed || openSelector === featureSelector) && styles.modeBadgePressed,
-      disabled && styles.disabledBadge,
-    ],
-    [disabled, openSelector, featureSelector],
-  );
-
-  if (feature.type === "toggle") {
-    const FeatureIcon = getFeatureIcon(feature.icon);
-    return (
-      <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-        <TooltipTrigger asChild triggerRefProp="ref">
-          <Pressable
-            disabled={disabled}
-            onPress={handleTogglePress}
-            style={togglePressableStyle}
-            accessibilityRole="button"
-            accessibilityLabel={getFeatureTooltip(feature)}
-            testID={`agent-feature-${feature.id}`}
-          >
-            <FeatureIcon
-              size={theme.iconSize.md}
-              color={getFeatureIconColor(
-                feature.id,
-                feature.value,
-                theme.colors.palette,
-                theme.colors.foregroundMuted,
-              )}
-            />
-          </Pressable>
-        </TooltipTrigger>
-        <TooltipContent side="top" align="center" offset={8}>
-          <Text style={styles.tooltipText}>{getFeatureTooltip(feature)}</Text>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  if (feature.type === "select") {
-    const FeatureIcon = getFeatureIcon(feature.icon);
-    const selectedOption = feature.options.find((o) => o.id === feature.value);
-    return (
-      <DropdownMenu open={openSelector === featureSelector} onOpenChange={handleFeatureOpenChange}>
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-          <TooltipTrigger asChild triggerRefProp="ref">
-            <DropdownMenuTrigger
-              disabled={disabled}
-              style={selectPressableStyle}
-              accessibilityRole="button"
-              accessibilityLabel={getFeatureTooltip(feature)}
-              testID={`agent-feature-${feature.id}`}
-            >
-              <FeatureIcon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-              <Text style={styles.modeBadgeText}>{selectedOption?.label ?? feature.label}</Text>
-              <ChevronDown size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.tooltipText}>{getFeatureTooltip(feature)}</Text>
-          </TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent side="top" align="start">
-          {feature.options.map((option) => (
-            <FeatureOptionMenuItem
-              key={option.id}
-              option={option}
-              selected={option.id === feature.value}
-              onSelect={handleSelectOption}
-            />
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  }
-
-  return null;
-}
-
-function SheetFeatureItem({
-  feature,
-  disabled,
-  openSelector,
-  handleOpenChange,
-  onSetFeature,
-}: {
-  feature: AgentFeature;
-  disabled: boolean;
-  openSelector: AgentControlSelector | null;
-  handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  onSetFeature?: (featureId: string, value: unknown) => void;
-}) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  const featureSelector: AgentControlSelector = `feature-${feature.id}`;
-
-  const handleFeatureOpenChange = useMemo(
-    () => handleOpenChange(featureSelector),
-    [handleOpenChange, featureSelector],
-  );
-
-  const handleTogglePress = useCallback(() => {
-    if (feature.type === "toggle") {
-      onSetFeature?.(feature.id, !feature.value);
-    }
-  }, [feature, onSetFeature]);
-
-  const handleSelectOption = useCallback(
-    (optionId: string) => {
-      onSetFeature?.(feature.id, optionId);
-    },
-    [feature.id, onSetFeature],
-  );
-
-  const togglePressableStyle = useCallback(
-    ({ pressed }: PressableStateCallbackType) => [
-      styles.sheetSelect,
-      pressed && styles.sheetSelectPressed,
-      disabled && styles.disabledSheetSelect,
-    ],
-    [disabled],
-  );
-
-  if (feature.type === "toggle") {
-    const FeatureIcon = getFeatureIcon(feature.icon);
-    return (
-      <View style={styles.sheetSection}>
-        <Pressable
-          disabled={disabled}
-          onPress={handleTogglePress}
-          style={togglePressableStyle}
-          accessibilityRole="button"
-          accessibilityLabel={getFeatureTooltip(feature)}
-          testID={`agent-feature-${feature.id}`}
-        >
-          <FeatureIcon
-            size={theme.iconSize.md}
-            color={getFeatureIconColor(
-              feature.id,
-              feature.value,
-              theme.colors.palette,
-              theme.colors.foregroundMuted,
-            )}
-          />
-          <Text style={styles.sheetSelectText}>{feature.label}</Text>
-          <Text style={styles.modeBadgeText}>
-            {feature.value ? t("composer.controls.on") : t("composer.controls.off")}
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  if (feature.type === "select") {
-    const selectedOption = feature.options.find((o) => o.id === feature.value);
-    return (
-      <View style={styles.sheetSection}>
-        <DropdownMenu
-          open={openSelector === featureSelector}
-          onOpenChange={handleFeatureOpenChange}
-        >
-          <DropdownMenuTrigger
-            disabled={disabled}
-            style={togglePressableStyle}
-            accessibilityRole="button"
-            accessibilityLabel={getFeatureTooltip(feature)}
-            testID={`agent-feature-${feature.id}`}
-          >
-            <Text style={styles.sheetSelectText}>{selectedOption?.label ?? feature.label}</Text>
-            <ChevronDown size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start">
-            {feature.options.map((option) => (
-              <FeatureOptionMenuItem
-                key={option.id}
-                option={option}
-                selected={option.id === feature.value}
-                onSelect={handleSelectOption}
-              />
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </View>
-    );
-  }
-
-  return null;
-}
-
-function FeatureOptionMenuItem({
-  option,
-  selected,
-  onSelect,
-}: {
-  option: { id: string; label: string };
-  selected: boolean;
-  onSelect: (optionId: string) => void;
-}) {
-  const handleSelect = useCallback(() => {
-    onSelect(option.id);
-  }, [onSelect, option.id]);
-
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {option.label}
-    </DropdownMenuItem>
-  );
-}
-
 function ThinkingComboboxOption({
   option,
   selected,
@@ -1770,95 +1469,3 @@ export function DraftAgentControls({
     />
   );
 }
-
-const styles = StyleSheet.create((theme) => ({
-  container: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: theme.spacing[1],
-  },
-  compactContainer: {
-    minWidth: 0,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-  modeBadge: {
-    height: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "transparent",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
-  },
-  modeIconBadge: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-    borderRadius: theme.borderRadius.full,
-  },
-  modeBadgeHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  modeBadgePressed: {
-    backgroundColor: theme.colors.surface0,
-  },
-  disabledBadge: {
-    opacity: 0.5,
-  },
-  modeBadgeText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-  },
-  tooltipText: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
-  },
-  prefsButton: {
-    height: 28,
-    minWidth: 0,
-    flexShrink: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
-  },
-  prefsButtonText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-    flexShrink: 1,
-  },
-  sheetSection: {
-    gap: theme.spacing[2],
-  },
-  sheetSelect: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.surface2,
-    backgroundColor: theme.colors.surface0,
-  },
-  sheetSelectPressed: {
-    backgroundColor: theme.colors.surface2,
-  },
-  disabledSheetSelect: {
-    opacity: 0.5,
-  },
-  sheetSelectText: {
-    flex: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.semibold,
-  },
-}));
