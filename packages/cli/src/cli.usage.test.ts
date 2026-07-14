@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { Command } from "commander";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +13,7 @@ vi.mock("./utils/client.js", () => ({
 }));
 
 import { createCli } from "./cli.js";
+import { runUsageClearCommandWithDependencies } from "./commands/usage/clear.js";
 import { runUsageSummaryCommandWithDependencies } from "./commands/usage/summary.js";
 
 describe("usage CLI commands", () => {
@@ -82,6 +86,84 @@ describe("usage CLI commands", () => {
     await expect(
       runUsageSummaryCommandWithDependencies({ range: "14" }, new Command(), { connect }),
     ).rejects.toThrow("--range");
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it("exports raw usage only to an explicit output file", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "chisacode-usage-cli-"));
+    const outputPath = path.join(directory, "usage.json");
+    const exportUsage = vi.fn(async () => ({
+      requestId: "usage-export",
+      format: "json" as const,
+      filename: "chisacode-usage.json",
+      content: '[{"inputTokens":10}]',
+    }));
+    const close = vi.fn(async () => undefined);
+    mocks.connectToDaemon.mockResolvedValue({ exportUsage, close });
+    const output: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      output.push(String(chunk));
+      return true;
+    });
+    const program = createCli().exitOverride();
+    program.configureOutput({ writeErr: () => undefined, writeOut: () => undefined });
+
+    try {
+      await program.parseAsync([
+        "node",
+        "chisacode",
+        "usage",
+        "export",
+        "--type",
+        "json",
+        "--output",
+        outputPath,
+        "--host",
+        "127.0.0.1:6767",
+        "--json",
+      ]);
+
+      expect(exportUsage).toHaveBeenCalledWith({ format: "json" });
+      expect(await readFile(outputPath, "utf8")).toBe('[{"inputTokens":10}]');
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(output.join(""))).toMatchObject({
+        format: "json",
+        outputPath,
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("clears usage only when --yes is explicit", async () => {
+    const clearUsage = vi.fn(async () => ({ requestId: "usage-clear", cleared: true }));
+    const close = vi.fn(async () => undefined);
+    mocks.connectToDaemon.mockResolvedValue({ clearUsage, close });
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const program = createCli().exitOverride();
+    program.configureOutput({ writeErr: () => undefined, writeOut: () => undefined });
+
+    await program.parseAsync([
+      "node",
+      "chisacode",
+      "usage",
+      "clear",
+      "--yes",
+      "--host",
+      "127.0.0.1:6767",
+      "--json",
+    ]);
+
+    expect(clearUsage).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects usage clearing before connecting when --yes is absent", async () => {
+    const connect = vi.fn();
+
+    await expect(
+      runUsageClearCommandWithDependencies({}, new Command(), { connect }),
+    ).rejects.toThrow("--yes");
     expect(connect).not.toHaveBeenCalled();
   });
 });
