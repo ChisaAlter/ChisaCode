@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { ToastApi } from "@/components/toast-host";
-import { useToast } from "@/contexts/toast-context";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
+import { reportUserVisibleError } from "@/utils/user-visible-error";
 
 interface DesktopIpcErrorReport {
   toast: ToastApi;
@@ -22,22 +23,15 @@ interface DesktopIpcErrorReporterInput {
 }
 
 export function reportDesktopIpcError(input: DesktopIpcErrorReport): void {
-  console.error(input.logLabel, input.error);
-  input.toast.error(input.message);
+  reportUserVisibleError(input);
 }
 
 export function useDesktopIpcErrorReporter(): (input: DesktopIpcErrorReporterInput) => void {
-  const toast = useToast();
-  return useCallback(
-    (input: DesktopIpcErrorReporterInput) => {
-      reportDesktopIpcError({ ...input, toast });
-    },
-    [toast],
-  );
+  return useUserVisibleErrorReporter();
 }
 
 export function useDesktopIpcQueryErrorToast(options: DesktopIpcQueryErrorToastOptions): void {
-  const toast = useToast();
+  const reportError = useDesktopIpcErrorReporter();
   const lastReportedErrorRef = useRef<Error | null>(null);
 
   useEffect(() => {
@@ -46,11 +40,10 @@ export function useDesktopIpcQueryErrorToast(options: DesktopIpcQueryErrorToastO
     }
 
     lastReportedErrorRef.current = options.error;
-    reportDesktopIpcError({
-      toast,
+    reportError({
       logLabel: options.logLabel,
       message: options.message,
       error: options.error,
     });
-  }, [options.error, options.logLabel, options.message, toast]);
+  }, [options.error, options.logLabel, options.message, reportError]);
 }

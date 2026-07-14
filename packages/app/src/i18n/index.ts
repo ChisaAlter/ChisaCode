@@ -1583,6 +1583,7 @@ export const resources = {
             reset: "重置",
             save: "保存",
             saving: "保存中...",
+            saveFailed: "无法保存系统提示词",
           },
           dangerZone: {
             title: "危险操作",
@@ -3371,6 +3372,7 @@ export const resources = {
             reset: "Reset",
             save: "Save",
             saving: "Saving...",
+            saveFailed: "Failed to save system prompt",
           },
           dangerZone: {
             title: "Danger zone",

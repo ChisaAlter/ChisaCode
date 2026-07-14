@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
 import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import {
   getHostRuntimeStore,
@@ -232,7 +233,7 @@ export function HostRenameButton({ host }: { host: HostProfile }) {
 
 function ConnectionsSection({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
-  const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const { removeConnection } = useHostMutations();
   const snapshot = useHostRuntimeSnapshot(host.serverId);
   const probeByConnectionId = snapshot?.probeByConnectionId ?? new Map();
@@ -265,11 +266,14 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
     void removeConnection(host.serverId, connectionId)
       .then(() => setPendingRemoveConnection(null))
       .catch((error) => {
-        console.error("[HostPage] Failed to remove connection", error);
-        toast.error(t("settings.hostPage.removeConnection.failed"));
+        reportError({
+          error,
+          logLabel: "[HostPage] Failed to remove connection",
+          message: t("settings.hostPage.removeConnection.failed"),
+        });
       })
       .finally(() => setIsRemovingConnection(false));
-  }, [pendingRemoveConnection, removeConnection, host.serverId, toast, t]);
+  }, [pendingRemoveConnection, removeConnection, host.serverId, reportError, t]);
 
   return (
     <SettingsSection title={t("settings.hostPage.connections.title")}>
@@ -420,6 +424,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const daemonClient = useHostRuntimeClient(host.serverId);
   const isConnected = useHostRuntimeIsConnected(host.serverId);
   const runtime = getHostRuntimeStore();
@@ -488,19 +493,35 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
         void daemonClient
           .restartServer(`settings_daemon_restart_${host.serverId}`)
           .catch((error) => {
-            console.error(`[HostPage] Failed to restart daemon ${host.label}`, error);
-            if (!isMountedRef.current) return;
-            setIsRestarting(false);
-            toast.error(t("settings.hostPage.restart.requestFailed"));
+            const notify = isMountedRef.current;
+            if (notify) setIsRestarting(false);
+            reportError({
+              error,
+              logLabel: `[HostPage] Failed to restart daemon ${host.label}`,
+              message: t("settings.hostPage.restart.requestFailed"),
+              notify,
+            });
           });
         void waitForDaemonRestart();
         return;
       })
       .catch((error) => {
-        console.error(`[HostPage] Failed to open restart confirmation for ${host.label}`, error);
-        toast.error(t("settings.hostPage.restart.dialogFailed"));
+        reportError({
+          error,
+          logLabel: `[HostPage] Failed to open restart confirmation for ${host.label}`,
+          message: t("settings.hostPage.restart.dialogFailed"),
+        });
       });
-  }, [daemonClient, host.label, host.serverId, isHostConnected, waitForDaemonRestart, toast, t]);
+  }, [
+    daemonClient,
+    host.label,
+    host.serverId,
+    isHostConnected,
+    reportError,
+    waitForDaemonRestart,
+    toast,
+    t,
+  ]);
 
   const restartIcon = useMemo(
     () => <RotateCw size={theme.iconSize.sm} color={theme.colors.foreground} />,
@@ -568,6 +589,7 @@ function InjectChisaCodeToolsCard({ serverId }: { serverId: string }) {
 
 function AppendSystemPromptCard({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
+  const reportError = useUserVisibleErrorReporter();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
   const persistedPrompt = config?.appendSystemPrompt ?? "";
@@ -604,10 +626,14 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
         return;
       })
       .catch((error) => {
-        console.error("[HostPage] Failed to save append system prompt", error);
+        reportError({
+          error,
+          logLabel: "[HostPage] Failed to save append system prompt",
+          message: t("settings.hostPage.systemPrompt.saveFailed"),
+        });
       })
       .finally(() => setIsSaving(false));
-  }, [draft, patchConfig]);
+  }, [draft, patchConfig, reportError, t]);
 
   const handleReset = useCallback(() => {
     setDraft(persistedPrompt);
@@ -712,7 +738,7 @@ function PairDeviceRow() {
 function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?: () => void }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
-  const toast = useToast();
+  const reportError = useUserVisibleErrorReporter();
   const { removeHost } = useHostMutations();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -737,11 +763,14 @@ function RemoveHostSection({ host, onRemoved }: { host: HostProfile; onRemoved?:
         return;
       })
       .catch((error) => {
-        console.error("[HostPage] Failed to remove host", error);
-        toast.error(t("settings.hostPage.removeHost.failed"));
+        reportError({
+          error,
+          logLabel: "[HostPage] Failed to remove host",
+          message: t("settings.hostPage.removeHost.failed"),
+        });
       })
       .finally(() => setIsRemoving(false));
-  }, [host.serverId, onRemoved, removeHost, toast, t]);
+  }, [host.serverId, onRemoved, removeHost, reportError, t]);
 
   const removeIcon = useMemo(
     () => <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />,

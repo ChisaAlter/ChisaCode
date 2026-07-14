@@ -1,90 +1,62 @@
 # 错误提示机制统一设计
 
-> 状态：**草案**（2026-07-03 起草）。本批次未执行代码改动，仅设计文档。
+> 状态：**执行中**（2026-07-15 启动代码收口）。
 >
-> 背景：app 包存在五套错误展示机制并存无明确边界规则，是 P2 粗糙点。
+> 目标：让用户可感知的失败都经过同一套“保留诊断日志、规范化消息、按交互边界展示”的入口，同时保留阻塞式确认和 inline 错误的适用场景。
 
-## 现状
+## 当前代码真值
 
-五套机制并存：
+旧草案已经部分被后续改动超越：
 
-1. **Toast** —— `packages/app/src/contexts/toast-context.tsx` + `toast-host.tsx`
-   - 统一 API：`ToastApi.show/.copied/.error`
-   - 三种 variant：`default/success/error`
-   - **单条不可堆叠**（`toast-host.tsx:52` 单 state）
-2. **`Alert.alert`** —— 35 处分布在 14 个文件
-   - 集中在 `settings/` 子目录：host-page(7)/skills-section(5)/mcp-servers-section(5)/custom-models(4)/synthetic-models(2)/providers(1)/usage-statistics(1)
-   - 其他：pair-scan/add-host-modal/pair-link-modal/desktop-updates(3)/integrations(2)
-3. **`console.error`/`console.warn`** —— 70+ 文件 80+ 处，仅本地 daemon.log 可见
-4. **`<Alert>` 组件** —— inline 错误提示
-5. **`confirmDialog`** —— 确认对话框
+- Toast 已完成队列化，最多同时显示 3 条，溢出项进入等待队列。
+- 非测试 App 代码中的 `Alert.alert` 已从 35 处降到 9 处；剩余项主要是删除确认、权限申请或配对失败等需要立即处理的场景。
+- Desktop IPC 已有局部的日志 + Toast helper，但此前只服务 desktop hooks。
+- 普通 App 页面仍大量手写 `console.error(...)` 与 `toast.error(...)`，并存在只记日志、不提示用户的生产路径。
 
-## 问题
+## 展示边界
 
-- **无边界规则**：`Alert.alert` 与 `useToast` 并存，开发者不知道何时用哪个
-- **Toast 不可堆叠**：快速连续操作只显示最后一条，与 Cursor/Cline 的多消息 snackbar 体验差距明显
-- **`Alert.alert` 滥用**：35 处中多数是"操作成功/失败"提示，本应用 toast，但开发者随手用 `Alert.alert`
-- **`console.error` 散落**：80+ 处生产路径错误仅写本地日志，用户无感知
+| 场景                             | 机制                                     | 约束                       |
+| -------------------------------- | ---------------------------------------- | -------------------------- |
+| 保存、复制、切换等非阻塞操作结果 | Toast                                    | 失败必须保留原始错误日志   |
+| 删除、重置、重启等破坏性操作     | `confirmDialog` 或带按钮的 `Alert.alert` | 必须由用户明确确认         |
+| 连接失败、配置冲突等持续阻塞状态 | inline `<Alert>`                         | 状态解除前持续可见         |
+| 需要用户立即修正或授权           | 带按钮的 `Alert.alert`                   | 只在确实需要动作时使用     |
+| 不应发生的内部状态               | `console.error` + ErrorBoundary          | 不重复弹出无行动价值的消息 |
 
-## 设计：边界规则
+## 统一入口
 
-### 决策矩阵
+`packages/app/src/utils/user-visible-error.ts` 提供纯错误报告 authority，`packages/app/src/hooks/use-user-visible-error.ts` 只负责绑定当前 Toast 上下文：
 
-| 场景                                         | 机制                                | 理由                     |
-| -------------------------------------------- | ----------------------------------- | ------------------------ |
-| 非阻塞操作反馈（保存成功/失败、复制成功）    | **Toast**                           | 不打断用户，自动消失     |
-| 需要用户确认的破坏性操作（删除、重置）       | **confirmDialog**                   | 需要明确 yes/no          |
-| 需要用户知悉的阻塞错误（连接失败、配置冲突） | **`<Alert>` inline**                | 错误需可见但不需立即操作 |
-| 需要用户立即操作的错误（重试、修正输入）     | **`Alert.alert` with buttons**      | 需要按钮选项             |
-| 内部错误（不应发生的状态）                   | **`console.error` + ErrorBoundary** | 用户不需感知，开发者排查 |
+- 始终把原始 `unknown` 错误和稳定标签写入日志。
+- 优先展示调用方提供的本地化消息；未提供时使用 `toErrorMessage` 归一化。
+- 支持异步操作在组件卸载后只记日志、不再触发 Toast。
+- Desktop IPC helper 委托给该入口，避免形成第二套实现。
 
-### 改造清单
+## 已完成切片
 
-#### 1. Toast 队列化（高优）
+### Slice A：Toast 队列
 
-`toast-host.tsx:52` 单 state 改为队列：
+- 状态：已完成。
+- 代码：`toast-host.tsx`、`toast-queue.ts`。
+- 结果：可见项和等待项分离，现有 `ToastApi` 保持兼容。
 
-- 新增 `toast-queue.ts`，维护 `ToastItem[]` 队列
-- 同时最多显示 3 条，超出排队
-- 每条独立消失计时
-- API 不变（`ToastApi.show/.copied/.error`），底层改队列
+### Slice B1：Host 设置错误收口
 
-#### 2. `Alert.alert` 降级为 Toast（中优）
+- 状态：本批次完成。
+- 范围：删除连接、重启 daemon、保存附加系统提示词、删除主机。
+- 修复：保存附加系统提示词失败不再只写控制台，用户会收到本地化错误 Toast。
+- 复用：Desktop IPC 错误路径已切换到通用入口，既有调用方 API 不变。
 
-35 处 `Alert.alert` 按"是否需要用户操作"分类：
+## 后续切片
 
-- **不需操作**（仅告知结果，~25 处）→ 改 `useToast().show(...)`
-- **需要操作**（带 buttons，~10 处）→ 保留 `Alert.alert`
-
-重点文件：
-
-- `host-page.tsx` 7 处 → 大部分降级 toast
-- `skills-section.tsx` 5 处 → 大部分降级 toast
-- `mcp-servers-section.tsx` 5 处 → 大部分降级 toast
-
-#### 3. `console.error` 分层（低优）
-
-80+ 处 `console.error` 分两类：
-
-- **用户可感知的错误**（操作失败、连接中断）→ 加 `useToast().error(...)` 同时保留 console
-- **内部错误**（不应发生）→ 保留 `console.error`，靠 ErrorBoundary 兜底
-
-不强行替换所有 `console.error`——本地 daemon.log 仍是开发者排查依据。
-
-## 实施顺序
-
-1. **Slice A：Toast 队列化** —— 改 `toast-host.tsx` + 新增 `toast-queue.ts`，不破坏现有 API
-2. **Slice B：Alert.alert 降级** —— 按文件批量替换，每文件单独提���
-3. **Slice C：console.error 分层** —— 仅在已加 ErrorBoundary 的区域补 toast
+1. **Slice B2：Skills / MCP 设置**：迁移重复的原始错误转字符串和 Toast 调用，统一本地化 fallback。
+2. **Slice B3：模型与 Provider 设置**：区分表单 inline 校验、后台刷新失败和操作 Toast。
+3. **Slice C：生产路径分层**：只处理用户操作失败或连接中断；内部诊断日志继续保留。
+4. **Slice D：查询错误去重**：将 desktop 已有的同一 Error 实例去重能力推广到需要自动查询提示的跨平台页面。
 
 ## 不做项
 
-- 不删除 `Alert.alert` / `confirmDialog` / `<Alert>` / `console.error` 任一机制
-- 不改 `toast-context.tsx` 公共 API（向后兼容）
-- 不引入第三方 toast 库（rn 生态 toast 库维护差，自维护队列足够）
-
-## 参考
-
-- `packages/app/src/contexts/toast-context.tsx` —— 现有 Toast API
-- `packages/app/src/components/toast-host.tsx:52` —— 单 state 限制点
-- `docs/design.md` §10 —— empty state 规范（与错误提示相关）
+- 不删除 `Alert.alert`、`confirmDialog`、inline `<Alert>` 或 `console.error`。
+- 不把所有错误都强制改成 Toast。
+- 不引入第三方 Toast 库。
+- 不在一次提交中迁移整个 App。

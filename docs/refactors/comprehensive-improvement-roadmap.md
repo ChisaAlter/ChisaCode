@@ -346,12 +346,14 @@
 - **验证**：typecheck 9 包全绿 / lint 0 错误 / relay 33 单测 + desktop 30 单测 + cli 3 单测全过。
 - **状态**：已完成。
 
-### 错误提示机制统一设计（草案，2026-07-03 起草）
+### 错误提示机制统一（执行中，2026-07-15 启动）
 
 - **计划**：[error-handling-unification-plan.md](error-handling-unification-plan.md)
-- **背景**：app 包存在五套错误展示机制并存，无明确边界规则，是 P2 粗糙点。
-- **状态**：草案，本批次未执行代码改动，仅设计文档。
-- **后续**：待排期执行。
+- **代码真值校准**：Toast 队列已在历史批次完成，非测试 App 代码中的 `Alert.alert` 已从旧草案记录的 35 处降到 9 处；剩余调用主要承担确认、权限或立即处理职责，不再按旧清单机械替换。
+- **首个代码切片**：新增跨平台 `useUserVisibleErrorReporter`，统一保留原始错误日志、规范化 fallback 消息和错误 Toast；既有 Desktop IPC helper 改为委托该 authority，避免重复实现。
+- **产品修复**：Host 设置的删除连接、重启 daemon、保存附加系统提示词、删除主机已迁移；其中系统提示词保存失败从“仅控制台可见”修复为中英文用户提示。
+- **边界保护**：异步操作在组件卸载后仍记录 late rejection，但可抑制 Toast，避免向已销毁页面投递反馈。
+- **状态**：进行中；下一批迁移 Skills / MCP 设置，再处理模型与 Provider 设置，不做全 App 一次性替换。
 
 ### Provider God-File 拆分（草案 + 部分执行，2026-07-03 起草）
 
