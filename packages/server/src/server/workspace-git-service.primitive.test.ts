@@ -633,6 +633,48 @@ describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
     service.dispose();
   });
 
+  test("a cold GitHub-inclusive read upgrades an in-flight git-only refresh", async () => {
+    const initialGitRefresh = createDeferred<CheckoutStatusGit>();
+    const getCheckoutStatus = vi
+      .fn<() => Promise<CheckoutStatusGit>>()
+      .mockImplementationOnce(async () => initialGitRefresh.promise)
+      .mockImplementation(async () => createCheckoutStatus(REPO_CWD));
+    const getPullRequestStatus = vi.fn(async () =>
+      createPullRequestStatusResult("Cold read GitHub state"),
+    );
+    const service = createService({ getCheckoutStatus, getPullRequestStatus });
+
+    const backgroundRefresh = service.refresh(REPO_CWD);
+    await flushPromises();
+
+    const coldRead = service.getSnapshot(REPO_CWD);
+    await flushPromises();
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(1);
+
+    initialGitRefresh.resolve(createCheckoutStatus(REPO_CWD));
+
+    await expect(coldRead).resolves.toEqual(
+      createSnapshot(REPO_CWD, {
+        github: {
+          pullRequest: {
+            url: "https://github.com/acme/repo/pull/123",
+            title: "Cold read GitHub state",
+            state: "open",
+            baseRefName: "main",
+            headRefName: "feature",
+            isMerged: false,
+          },
+        },
+      }),
+    );
+    await backgroundRefresh;
+
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(2);
+    expect(getPullRequestStatus).toHaveBeenCalledTimes(1);
+
+    service.dispose();
+  });
+
   test("ref-watch firing during an in-flight forced refresh does not produce an extra shell burst", async () => {
     const forcedRefresh = createDeferred<CheckoutStatusGit>();
     const getCheckoutStatus = vi

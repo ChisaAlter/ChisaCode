@@ -37,6 +37,11 @@ import {
   type WorkspaceGitWorktreeInfo,
 } from "./workspace-git-auxiliary-read-authority.js";
 import { WorkspaceGitCheckoutObservationAuthority } from "./workspace-git-checkout-observation-authority.js";
+import {
+  WorkspaceGitRefreshCoordinator,
+  type WorkspaceGitRefreshRequest,
+  type WorkspaceGitRefreshState,
+} from "./workspace-git-refresh-coordinator.js";
 import { WorkspaceGitHubPollBinding } from "./workspace-git-github-poll-binding.js";
 import { WorkspaceGitRepositoryFetchAuthority } from "./workspace-git-repository-fetch-authority.js";
 import { WorkspaceGitWorkingTreeObserver } from "./workspace-git-working-tree-observer.js";
@@ -177,32 +182,6 @@ export type WorkspaceGitSnapshotOptions =
       reason: string;
     };
 
-interface WorkspaceGitRefreshRequest {
-  force: boolean;
-  includeGitHub: boolean;
-  reason: string;
-  notify: boolean;
-}
-
-interface QueuedWorkspaceGitRefresh {
-  force: boolean;
-  includeGitHub: boolean;
-  reason: string;
-  notify: boolean;
-}
-
-type WorkspaceGitRefreshState =
-  | {
-      status: "idle";
-    }
-  | {
-      status: "in-flight";
-      promise: Promise<WorkspaceGitRuntimeSnapshot>;
-      force: boolean;
-      includeGitHub: boolean;
-      queued: QueuedWorkspaceGitRefresh | null;
-    };
-
 interface WorkspaceGitServiceDependencies {
   watch: typeof watch;
   readdir: typeof readdir;
@@ -233,7 +212,7 @@ interface WorkspaceGitTarget {
   listeners: Set<WorkspaceGitListener>;
   debounceTimer: NodeJS.Timeout | null;
   selfHealTimer: NodeJS.Timeout | null;
-  refreshState: WorkspaceGitRefreshState;
+  refreshState: WorkspaceGitRefreshState<WorkspaceGitRuntimeSnapshot>;
   latestGit: WorkspaceGitRuntimeSnapshot["git"] | null;
   latestGitLoadedAtMs: number | null;
   latestGithub: WorkspaceGitRuntimeSnapshot["github"] | null;
@@ -283,12 +262,24 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly workingTreeObserver: WorkspaceGitWorkingTreeObserver;
   private readonly auxiliaryReadAuthority: WorkspaceGitAuxiliaryReadAuthority;
   private readonly checkoutObservation: WorkspaceGitCheckoutObservationAuthority;
+  private readonly refreshCoordinator: WorkspaceGitRefreshCoordinator<
+    WorkspaceGitRuntimeSnapshot,
+    WorkspaceGitTarget
+  >;
   private readonly githubPollBinding: WorkspaceGitHubPollBinding;
   private readonly repositoryFetchAuthority: WorkspaceGitRepositoryFetchAuthority;
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.chisacodeHome = options.chisacodeHome;
     this.deps = resolveWorkspaceGitServiceDeps(options.deps, this.logger);
+    this.refreshCoordinator = new WorkspaceGitRefreshCoordinator({
+      now: this.deps.now,
+      minGapMs: WORKSPACE_GIT_INTERNAL_MIN_GAP_MS,
+      refreshSnapshot: (target, request) => this.refreshSnapshot(target, request),
+      rememberSnapshot: (target, snapshot, rememberOptions) => {
+        this.rememberSnapshot(target, snapshot, rememberOptions);
+      },
+    });
     this.auxiliaryReadAuthority = new WorkspaceGitAuxiliaryReadAuthority({
       chisacodeHome: this.chisacodeHome,
       deps: {
@@ -386,13 +377,13 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     options?: WorkspaceGitSnapshotOptions,
   ): Promise<WorkspaceGitRuntimeSnapshot> {
     cwd = normalizeWorkspaceId(cwd);
-    const request = this.normalizeRefreshRequest(options, "getSnapshot", true);
+    const request = this.refreshCoordinator.normalizeRequest(options, "getSnapshot", true);
     const target = this.ensureWorkspaceTarget(cwd);
     if (!request.force && target.latestSnapshot) {
       return target.latestSnapshot;
     }
 
-    return this.requestWorkspaceSnapshot(target, request);
+    return this.refreshCoordinator.request(target, request);
   }
 
   async getCheckout(cwd: string): Promise<ProjectCheckoutLitePayload> {
@@ -680,66 +671,13 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       return;
     }
     try {
-      await this.requestWorkspaceSnapshot(target, request);
+      await this.refreshCoordinator.request(target, request);
     } catch (error) {
       this.logger.warn(
         { err: error, cwd: target.cwd, reason: request.reason },
         "Failed to refresh workspace git snapshot",
       );
     }
-  }
-
-  private requestWorkspaceSnapshot(
-    target: WorkspaceGitTarget,
-    request: WorkspaceGitRefreshRequest,
-  ): Promise<WorkspaceGitRuntimeSnapshot> {
-    if (target.refreshState.status === "in-flight") {
-      const needsForcedRefresh = request.force && !target.refreshState.force;
-      const needsGitHubRefresh =
-        request.force && request.includeGitHub && !target.refreshState.includeGitHub;
-      if (needsForcedRefresh || needsGitHubRefresh) {
-        target.refreshState.queued = this.mergeQueuedRefresh(target.refreshState.queued, request);
-      }
-      return target.refreshState.promise;
-    }
-
-    if (!request.force && this.shouldThrottleNonForcedRefresh(target)) {
-      return Promise.resolve(target.latestSnapshot);
-    }
-
-    const promise = this.runWorkspaceRefreshLoop(target, request).finally(() => {
-      const state = target.refreshState;
-      if (state.status === "in-flight" && state.promise === promise) {
-        target.refreshState = { status: "idle" };
-      }
-    });
-    target.refreshState = {
-      status: "in-flight",
-      promise,
-      force: request.force,
-      includeGitHub: request.includeGitHub,
-      queued: null,
-    };
-
-    return promise;
-  }
-
-  private normalizeRefreshRequest(
-    options: WorkspaceGitSnapshotOptions | undefined,
-    defaultReason: string,
-    notify: boolean,
-  ): WorkspaceGitRefreshRequest {
-    if (options?.force && !options.reason) {
-      throw new Error("WorkspaceGitService.getSnapshot force refresh requires a reason");
-    }
-
-    const force = options?.force === true;
-    return {
-      force,
-      includeGitHub: options?.includeGitHub ?? true,
-      reason: options?.reason ?? defaultReason,
-      notify,
-    };
   }
 
   private async resolveGitHubRemoteForTarget(
@@ -756,70 +694,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const identity = await resolveGitHubRemote({ remoteUrl });
     target.cachedGitHubRemote = { remoteUrl, identity };
     return identity;
-  }
-
-  private shouldThrottleNonForcedRefresh(
-    target: WorkspaceGitTarget,
-  ): target is WorkspaceGitTarget & {
-    latestSnapshot: WorkspaceGitRuntimeSnapshot;
-  } {
-    if (!target.latestSnapshot || target.lastShellOutAtMs === null) {
-      return false;
-    }
-
-    return this.deps.now().getTime() - target.lastShellOutAtMs < WORKSPACE_GIT_INTERNAL_MIN_GAP_MS;
-  }
-
-  private mergeQueuedRefresh(
-    queued: QueuedWorkspaceGitRefresh | null,
-    request: WorkspaceGitRefreshRequest,
-  ): QueuedWorkspaceGitRefresh {
-    if (!queued) {
-      return {
-        force: request.force,
-        includeGitHub: request.includeGitHub,
-        reason: request.reason,
-        notify: request.notify,
-      };
-    }
-
-    const force = queued.force || request.force;
-    const upgradesForce = request.force && !queued.force;
-    const upgradesGitHub = request.includeGitHub && !queued.includeGitHub;
-    return {
-      force,
-      includeGitHub: queued.includeGitHub || request.includeGitHub,
-      reason: upgradesForce || upgradesGitHub ? request.reason : queued.reason,
-      notify: queued.notify || request.notify,
-    };
-  }
-
-  private async runWorkspaceRefreshLoop(
-    target: WorkspaceGitTarget,
-    initialRequest: WorkspaceGitRefreshRequest,
-  ): Promise<WorkspaceGitRuntimeSnapshot> {
-    let request = initialRequest;
-    let snapshot!: WorkspaceGitRuntimeSnapshot;
-
-    while (true) {
-      snapshot = await this.refreshSnapshot(target, request);
-      this.rememberSnapshot(target, snapshot, {
-        notify: request.notify,
-        forceEmit: request.force,
-      });
-
-      const state = target.refreshState;
-      if (state.status !== "in-flight" || !state.queued) {
-        break;
-      }
-
-      request = state.queued;
-      state.queued = null;
-      state.force = request.force;
-      state.includeGitHub = request.includeGitHub;
-    }
-
-    return snapshot;
   }
 
   private async refreshSnapshot(
