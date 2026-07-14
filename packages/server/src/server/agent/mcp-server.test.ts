@@ -619,6 +619,86 @@ describe("diagnostics MCP tool", () => {
   });
 });
 
+describe("usage MCP tool", () => {
+  it("returns a summary scoped to the caller workspace", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const timestamp = new Date().toISOString();
+    const usageStore = {
+      list: vi.fn(async () => [
+        {
+          id: "usage-local",
+          timestamp,
+          agentId: "caller-agent",
+          cwd: REPO_CWD,
+          provider: "codex",
+          model: "gpt-5.4",
+          inputTokens: 10,
+          cachedInputTokens: 2,
+          outputTokens: 5,
+          messageCount: 1,
+        },
+        {
+          id: "usage-other",
+          timestamp,
+          agentId: "other-agent",
+          cwd: TARGET_CWD,
+          provider: "claude",
+          model: "claude-sonnet",
+          inputTokens: 100,
+          cachedInputTokens: 0,
+          outputTokens: 50,
+          messageCount: 1,
+        },
+      ]),
+    };
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      usageStore,
+      callerAgentId: "caller-agent",
+      resolveCallerContext: () => ({ lockedCwd: REPO_CWD }),
+      logger: createTestLogger(),
+    });
+    const tool = registeredTool(server, "get_usage_summary");
+
+    const response = await invokeToolWithParsedInput(tool, { rangeDays: 7 });
+
+    expect(usageStore.list).toHaveBeenCalledTimes(1);
+    expect(response.structuredContent.summary).toMatchObject({
+      rangeDays: 7,
+      totals: {
+        inputTokens: 10,
+        cachedInputTokens: 2,
+        outputTokens: 5,
+        totalTokens: 15,
+        turnCount: 1,
+      },
+      mostUsedModel: {
+        model: "gpt-5.4",
+        totalTokens: 15,
+        turnCount: 1,
+        percentage: 100,
+      },
+    });
+    expectOutputSchemaAccepts(tool, response.structuredContent);
+  });
+
+  it("does not register usage access for an agent caller without a locked workspace", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      usageStore: { list: vi.fn(async () => []) },
+      callerAgentId: "caller-agent",
+      logger: createTestLogger(),
+    });
+
+    expect(lookupTool(server, "get_usage_summary")).toBeUndefined();
+  });
+});
+
 describe("terminal MCP tools", () => {
   const logger = createTestLogger();
 

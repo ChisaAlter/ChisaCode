@@ -1123,6 +1123,7 @@ export async function createChisaCodeDaemon(
           ),
         github,
         workspaceGitService,
+        usageStore,
         archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
         emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
         markWorkspaceArchiving: markWorkspaceArchivingExternal,

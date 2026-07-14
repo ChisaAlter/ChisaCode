@@ -64,11 +64,13 @@ import {
 } from "./lifecycle-command.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
+import type { UsageStore } from "../usage/usage-store.js";
 import { WorktreeRequestError } from "../worktree-errors.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
 import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
 import { registerScheduleMcpTools, type ScheduleMcpService } from "./schedule-mcp-tools.js";
+import { registerUsageMcpTools } from "./usage-mcp-tools.js";
 import { resolveAgentIdentifier } from "../agent-session-helpers.js";
 import {
   archiveChisaCodeWorktreeCommand,
@@ -86,6 +88,7 @@ export interface AgentMcpServerOptions {
   scheduleService?: ScheduleMcpService | null;
   chatService?: ChatMcpService | null;
   loopService?: LoopMcpService | null;
+  usageStore?: Pick<UsageStore, "list"> | null;
   providerSnapshotManager: ProviderSnapshotManager;
   github?: GitHubService;
   workspaceGitService?: Pick<
@@ -342,6 +345,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     scheduleService,
     chatService,
     loopService,
+    usageStore,
     providerSnapshotManager,
     callerAgentId,
     companionParentAgentId,
@@ -675,6 +679,12 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     callerAgentId,
     resolveCallerAgent,
     resolveScopedCwd,
+  });
+  registerUsageMcpTools({
+    registerTool,
+    usageStore,
+    callerAgentId,
+    lockedCwd: callerContext?.lockedCwd,
   });
 
   registerTool(
