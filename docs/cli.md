@@ -98,6 +98,16 @@ chisacode provider inspect codex
 chisacode provider inspect claude --json
 ```
 
+Install, update, or reinstall a provider CLI through the connected daemon:
+
+```bash
+chisacode provider install codex
+chisacode provider update claude
+chisacode provider reinstall opencode --json
+```
+
+These commands explicitly modify global provider tooling. Agent-scoped MCP remains read-only for provider tooling and cannot trigger global package installation.
+
 List built-in and user-defined assistant presets:
 
 ```bash
@@ -246,6 +256,16 @@ chisacode daemon diagnostics --json
 chisacode provider inspect codex
 chisacode provider inspect claude --json
 ```
+
+通过已连接的 daemon 安装、更新或重新安装 provider CLI：
+
+```bash
+chisacode provider install codex
+chisacode provider update claude
+chisacode provider reinstall opencode --json
+```
+
+这些命令会显式修改全局 provider 工具。Agent-scoped MCP 对 provider 工具继续保持只读，不能触发全局包安装。
 
 列出内置和用户定义的 assistant presets：
 

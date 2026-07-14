@@ -106,8 +106,8 @@ Commander.js CLI with Docker-style commands. Common agent operations are also ex
 - `chisacode terminal ls/create/capture/send-keys/kill`
 - `chisacode loop run/ls/inspect/logs/stop`
 - `chisacode schedule create/ls/inspect/update/pause/resume/run-once/logs/delete`
+- `chisacode provider ls/inspect/models/install/update/reinstall`
 - `chisacode permit allow/deny/ls`
-- `chisacode provider ls/models`
 - `chisacode worktree create/ls/archive`
 - `chisacode speech …`
 
