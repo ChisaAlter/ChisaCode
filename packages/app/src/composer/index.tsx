@@ -1,11 +1,4 @@
-import {
-  View,
-  Pressable,
-  Text,
-  ActivityIndicator,
-  type GestureResponderEvent,
-  type PressableStateCallbackType,
-} from "react-native";
+import { View, Pressable, Text, type GestureResponderEvent } from "react-native";
 import {
   useState,
   useEffect,
@@ -20,7 +13,7 @@ import {
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
-import { Square, AudioLines, Github, ListTodo, Paperclip, Target } from "lucide-react-native";
+import { Github, ListTodo, Paperclip, Target } from "lucide-react-native";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
@@ -29,7 +22,6 @@ import {
   DraftAgentControls,
   type DraftAgentControlsProps,
 } from "@/composer/agent-controls";
-import { ContextWindowMeter } from "@/components/context-window-meter";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { useSessionStore } from "@/stores/session-store";
 import { MessageInput, type MessageInputRef, type AttachmentMenuItem } from "./input/input";
@@ -53,9 +45,6 @@ import {
 } from "@/composer/actions";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Shortcut } from "@/components/ui/shortcut";
-import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { AutocompletePopover } from "@/components/ui/autocomplete-popover";
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 import { useAgentAutocomplete } from "@/hooks/use-agent-autocomplete";
@@ -92,8 +81,8 @@ import { resolveClientSlashCommand, type ClientSlashCommand } from "@/client-sla
 import { buildToggleFeatureMenuItems } from "@/composer/agent-controls/utils";
 import { renderAttachmentTray, renderQueueTrack } from "@/composer/attachment-queue-renderers";
 import { useComposerGithubPicker } from "./github/picker";
+import { useComposerRuntimeControls } from "./runtime-controls";
 import { buildAgentStateSelector } from "@/composer/agent-state-selector";
-import { COMPOSER_VOICE_UI_VISIBLE } from "./voice-visibility";
 
 type QueuedMessage = QueuedComposerMessage;
 
@@ -101,23 +90,11 @@ type AttachmentListUpdater =
   | UserComposerAttachment[]
   | ((prev: UserComposerAttachment[]) => UserComposerAttachment[]);
 
-function resolveComposerButtonIconSize(): number {
-  return isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
-}
-
 function resolveIsComposerLocked(
   submitBehavior: "clear" | "preserve-and-lock",
   isSubmitLoading: boolean,
 ): boolean {
   return submitBehavior === "preserve-and-lock" && isSubmitLoading;
-}
-
-function resolveIsVoiceModeForAgent(
-  voice: ReturnType<typeof useVoiceOptional>,
-  serverId: string,
-  agentId: string,
-): boolean {
-  return voice?.isVoiceModeForAgent(serverId, agentId) ?? false;
 }
 
 function resolveKeyboardPriority(isMessageInputFocused: boolean): number {
@@ -134,52 +111,6 @@ function resolveMessagePlaceholder(input: {
   mobile: string;
 }): string {
   return input.isDesktopWebBreakpoint ? input.desktop : input.mobile;
-}
-
-function buildCancelButtonStyle(isConnected: boolean, isCancellingAgent: boolean): object[] {
-  const disabled = !isConnected || isCancellingAgent ? styles.buttonDisabled : undefined;
-  return [styles.cancelButton, disabled].filter((value): value is object => Boolean(value));
-}
-
-function buildRealtimeVoiceButtonStyle(
-  hovered: boolean | undefined,
-  voiceButtonDisabled: boolean,
-): object[] {
-  const hoveredStyle = hovered ? styles.iconButtonHovered : undefined;
-  const disabledStyle = voiceButtonDisabled ? styles.buttonDisabled : undefined;
-  return [styles.realtimeVoiceButton, hoveredStyle, disabledStyle].filter(
-    (value): value is object => Boolean(value),
-  );
-}
-
-function renderContextWindowMeter(
-  contextWindowMaxTokens: number | null,
-  contextWindowUsedTokens: number | null,
-  totalCostUsd: number | null,
-): ReactElement | null {
-  if (contextWindowMaxTokens === null || contextWindowUsedTokens === null) {
-    return null;
-  }
-  return (
-    <ContextWindowMeter
-      maxTokens={contextWindowMaxTokens}
-      usedTokens={contextWindowUsedTokens}
-      totalCostUsd={totalCostUsd}
-    />
-  );
-}
-
-function resolveContextWindowPlacement(
-  meter: ReactElement | null,
-  isMobile: boolean,
-): { beforeVoiceContent: ReactNode; footerRight: ReactNode } {
-  if (isMobile) {
-    return { beforeVoiceContent: null, footerRight: meter };
-  }
-  return {
-    beforeVoiceContent: <View style={styles.contextWindowMeterSlot}>{meter}</View>,
-    footerRight: null,
-  };
 }
 
 interface RenderLeftContentArgs {
@@ -207,35 +138,6 @@ function renderComposerFooter(footer: ReactNode, footerRight: ReactNode): ReactE
       </View>
     </View>
   );
-}
-
-function resolveVoiceStartErrorMessage(error: unknown): string | null {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return null;
-}
-
-interface AttemptStartRealtimeVoiceArgs {
-  voice: ReturnType<typeof useVoiceOptional>;
-  isConnected: boolean;
-  hasAgent: boolean;
-  serverId: string;
-  agentId: string;
-  toastErrorRef: { current: (message: string) => void };
-}
-
-function attemptStartRealtimeVoice(args: AttemptStartRealtimeVoiceArgs): void {
-  const { voice, isConnected, hasAgent, serverId, agentId, toastErrorRef } = args;
-  if (!voice || !isConnected || !hasAgent) return;
-  if (voice.isVoiceSwitching) return;
-  if (voice.isVoiceModeForAgent(serverId, agentId)) return;
-  void voice.startVoice(serverId, agentId).catch((error) => {
-    console.error("[Composer] Failed to start voice mode", error);
-    const message = resolveVoiceStartErrorMessage(error);
-    if (message && message.trim().length > 0) {
-      toastErrorRef.current(message);
-    }
-  });
 }
 
 function focusMessageInputWithPlatformStrategy(messageInputRef: {
@@ -491,169 +393,6 @@ interface ComposerProps {
 const EMPTY_ARRAY: readonly QueuedMessage[] = [];
 const StableMessageInput = memo(MessageInput);
 
-function resolveContextWindowValues(
-  rawMax: number | null,
-  rawUsed: number | null,
-): { contextWindowMaxTokens: number | null; contextWindowUsedTokens: number | null } {
-  if (typeof rawMax === "number" && typeof rawUsed === "number") {
-    return { contextWindowMaxTokens: rawMax, contextWindowUsedTokens: rawUsed };
-  }
-  return { contextWindowMaxTokens: null, contextWindowUsedTokens: null };
-}
-
-interface ComposerCancelButtonProps {
-  buttonIconSize: number;
-  cancelButtonStyle: (object | undefined)[];
-  handleCancelAgent: () => void;
-  isConnected: boolean;
-  isCancellingAgent: boolean;
-  agentInterruptKeys: ReturnType<typeof useShortcutKeys>;
-}
-
-function ComposerCancelButton({
-  buttonIconSize,
-  cancelButtonStyle,
-  handleCancelAgent,
-  isConnected,
-  isCancellingAgent,
-  agentInterruptKeys,
-}: ComposerCancelButtonProps) {
-  const { t } = useTranslation();
-  const accessibilityLabel = isCancellingAgent
-    ? t("composer.cancellingAgent")
-    : t("composer.stopAgent");
-  const icon = isCancellingAgent ? (
-    <ActivityIndicator size="small" color="white" />
-  ) : (
-    <Square size={buttonIconSize} color="white" fill="white" />
-  );
-  const shortcutNode = agentInterruptKeys ? <Shortcut chord={agentInterruptKeys} /> : null;
-  return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger
-        onPress={handleCancelAgent}
-        disabled={!isConnected || isCancellingAgent}
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="button"
-        style={cancelButtonStyle}
-      >
-        {icon}
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
-        <View style={styles.tooltipRow}>
-          <Text style={styles.tooltipText}>{t("composer.interrupt")}</Text>
-          {shortcutNode}
-        </View>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-interface ComposerCancelButtonSlotProps extends ComposerCancelButtonProps {
-  isAgentRunning: boolean;
-  hasSendableContent: boolean;
-  isProcessing: boolean;
-}
-
-function ComposerCancelButtonSlot({
-  isAgentRunning,
-  hasSendableContent,
-  isProcessing,
-  ...rest
-}: ComposerCancelButtonSlotProps) {
-  if (!isAgentRunning || hasSendableContent || isProcessing) return null;
-  return <ComposerCancelButton {...rest} />;
-}
-
-interface ComposerVoiceModeButtonProps {
-  buttonIconSize: number;
-  handleToggleRealtimeVoice: () => void;
-  isConnected: boolean;
-  isVoiceSwitching: boolean;
-  realtimeVoiceButtonStyle: (
-    state: PressableStateCallbackType & { hovered?: boolean },
-  ) => (object | undefined)[];
-  voiceToggleKeys: ReturnType<typeof useShortcutKeys>;
-}
-
-interface ComposerRightControlsSlotProps extends ComposerVoiceModeButtonProps {
-  isVoiceModeForAgent: boolean;
-  hasAgent: boolean;
-  isAgentRunning: boolean;
-  hasSendableContent: boolean;
-  isProcessing: boolean;
-  isCompact: boolean;
-  cancelButton: ReactElement;
-}
-
-function ComposerRightControlsSlot({
-  isVoiceModeForAgent,
-  hasAgent,
-  isAgentRunning,
-  hasSendableContent,
-  isProcessing,
-  isCompact,
-  cancelButton,
-  ...voiceProps
-}: ComposerRightControlsSlotProps) {
-  const hideVoiceForCompactInput = isCompact && hasSendableContent;
-  const showVoiceModeButton =
-    COMPOSER_VOICE_UI_VISIBLE &&
-    !isVoiceModeForAgent &&
-    hasAgent &&
-    !isAgentRunning &&
-    !hideVoiceForCompactInput;
-  const shouldShowCancelButton = isAgentRunning && !hasSendableContent && !isProcessing;
-  if (!showVoiceModeButton && !shouldShowCancelButton) return null;
-  return (
-    <View style={styles.rightControls}>
-      {showVoiceModeButton ? <ComposerVoiceModeButton {...voiceProps} /> : null}
-      {cancelButton}
-    </View>
-  );
-}
-
-function ComposerVoiceModeButton({
-  buttonIconSize,
-  handleToggleRealtimeVoice,
-  isConnected,
-  isVoiceSwitching,
-  realtimeVoiceButtonStyle,
-  voiceToggleKeys,
-}: ComposerVoiceModeButtonProps) {
-  const { t } = useTranslation();
-  const shortcutNode = voiceToggleKeys ? <Shortcut chord={voiceToggleKeys} /> : null;
-  const renderTriggerContent = useCallback(
-    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => {
-      if (isVoiceSwitching) {
-        return <ActivityIndicator size="small" color="white" />;
-      }
-      const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
-      return <ThemedAudioLines size={buttonIconSize} uniProps={colorMapping} />;
-    },
-    [buttonIconSize, isVoiceSwitching],
-  );
-  return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger
-        onPress={handleToggleRealtimeVoice}
-        disabled={!isConnected || isVoiceSwitching}
-        accessibilityLabel={t("composer.enableVoiceMode")}
-        accessibilityRole="button"
-        style={realtimeVoiceButtonStyle}
-      >
-        {renderTriggerContent}
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
-        <View style={styles.tooltipRow}>
-          <Text style={styles.tooltipText}>{t("composer.voiceMode")}</Text>
-          {shortcutNode}
-        </View>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 export function Composer({
   agentId,
   serverId,
@@ -689,7 +428,6 @@ export function Composer({
   externalKeyboardShift,
 }: ComposerProps) {
   const { t } = useTranslation();
-  const buttonIconSize = resolveComposerButtonIconSize();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const agentDirectoryStatus = useHostRuntimeAgentDirectoryStatus(serverId);
@@ -697,8 +435,6 @@ export function Composer({
   const toastErrorRef = useRef(toast.error);
   toastErrorRef.current = toast.error;
   const voice = useVoiceOptional();
-  const voiceToggleKeys = useShortcutKeys("voice-toggle");
-  const agentInterruptKeys = useShortcutKeys("agent-interrupt");
   const isDictationReady = useIsDictationReady({
     serverId,
     isConnected,
@@ -1174,19 +910,6 @@ export function Composer({
     enabled: !externalKeyboardShift,
   });
 
-  const isVoiceModeForAgent = resolveIsVoiceModeForAgent(voice, serverId, agentId);
-
-  const handleToggleRealtimeVoice = useCallback(() => {
-    attemptStartRealtimeVoice({
-      voice,
-      isConnected,
-      hasAgent,
-      serverId,
-      agentId,
-      toastErrorRef,
-    });
-  }, [agentId, hasAgent, isConnected, serverId, voice]);
-
   const handleEditQueuedMessage = useCallback(
     (id: string) => {
       const result = editQueuedComposerMessage({
@@ -1243,100 +966,23 @@ export function Composer({
     [],
   );
 
-  const cancelButtonStyle = useMemo(
-    () => buildCancelButtonStyle(isConnected, isCancellingAgent),
-    [isConnected, isCancellingAgent],
-  );
-
-  const isVoiceSwitching = voice?.isVoiceSwitching ?? false;
-  const voiceButtonDisabled = !isConnected || isVoiceSwitching;
-  const realtimeVoiceButtonStyle = useCallback(
-    (state: PressableStateCallbackType & { hovered?: boolean }) =>
-      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled),
-    [voiceButtonDisabled],
-  );
-
-  const cancelButton = useMemo(
-    () => (
-      <ComposerCancelButtonSlot
-        isAgentRunning={isAgentRunning}
-        hasSendableContent={hasSendableContent}
-        isProcessing={isProcessing}
-        buttonIconSize={buttonIconSize}
-        cancelButtonStyle={cancelButtonStyle}
-        handleCancelAgent={handleCancelAgent}
-        isConnected={isConnected}
-        isCancellingAgent={isCancellingAgent}
-        agentInterruptKeys={agentInterruptKeys}
-      />
-    ),
-    [
-      agentInterruptKeys,
-      buttonIconSize,
-      cancelButtonStyle,
-      handleCancelAgent,
-      hasSendableContent,
-      isAgentRunning,
-      isCancellingAgent,
-      isConnected,
-      isProcessing,
-    ],
-  );
-
-  const rightContent = useMemo(
-    () => (
-      <ComposerRightControlsSlot
-        isVoiceModeForAgent={isVoiceModeForAgent}
-        hasAgent={hasAgent}
-        isAgentRunning={isAgentRunning}
-        hasSendableContent={hasSendableContent}
-        isProcessing={isProcessing}
-        isCompact={isMobile}
-        buttonIconSize={buttonIconSize}
-        handleToggleRealtimeVoice={handleToggleRealtimeVoice}
-        isConnected={isConnected}
-        isVoiceSwitching={isVoiceSwitching}
-        realtimeVoiceButtonStyle={realtimeVoiceButtonStyle}
-        voiceToggleKeys={voiceToggleKeys}
-        cancelButton={cancelButton}
-      />
-    ),
-    [
-      buttonIconSize,
-      cancelButton,
-      handleToggleRealtimeVoice,
-      hasAgent,
-      hasSendableContent,
-      isAgentRunning,
-      isConnected,
-      isMobile,
-      isProcessing,
-      isVoiceModeForAgent,
-      isVoiceSwitching,
-      realtimeVoiceButtonStyle,
-      voiceToggleKeys,
-    ],
-  );
-
-  const { contextWindowMaxTokens, contextWindowUsedTokens } = resolveContextWindowValues(
-    agentState.contextWindowMaxTokens,
-    agentState.contextWindowUsedTokens,
-  );
-
-  const contextWindowMeter = useMemo(
-    () =>
-      renderContextWindowMeter(
-        contextWindowMaxTokens,
-        contextWindowUsedTokens,
-        agentState.totalCostUsd,
-      ),
-    [contextWindowMaxTokens, contextWindowUsedTokens, agentState.totalCostUsd],
-  );
-  const { beforeVoiceContent, footerRight } = useMemo(
-    () => resolveContextWindowPlacement(contextWindowMeter, isMobile),
-    [contextWindowMeter, isMobile],
-  );
-
+  const { beforeVoiceContent, footerRight, rightContent } = useComposerRuntimeControls({
+    voice,
+    serverId,
+    agentId,
+    isConnected,
+    hasAgent,
+    isAgentRunning,
+    hasSendableContent,
+    isProcessing,
+    isCompact: isMobile,
+    isCancellingAgent,
+    handleCancelAgent,
+    toastErrorRef,
+    contextWindowMaxTokens: agentState.contextWindowMaxTokens,
+    contextWindowUsedTokens: agentState.contextWindowUsedTokens,
+    totalCostUsd: agentState.totalCostUsd,
+  });
   const attachmentMenuItems = useMemo<AttachmentMenuItem[]>(() => {
     const items: AttachmentMenuItem[] = [
       {
@@ -1629,33 +1275,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "100%",
     gap: theme.spacing[3],
   },
-  cancelButton: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.palette.red[600],
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: theme.spacing[1],
-  },
-  rightControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  contextWindowMeterSlot: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  realtimeVoiceButton: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.borderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   featureMenuSwitchTrack: {
     width: 34,
     height: 20,
@@ -1677,36 +1296,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
   featureMenuSwitchThumbOn: {
     transform: [{ translateX: 14 }],
   },
-  realtimeVoiceButtonActive: {
-    backgroundColor: theme.colors.palette.green[600],
-    borderColor: theme.colors.palette.green[800],
-  },
-  iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  tooltipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  tooltipText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.popoverForeground,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
   sendErrorText: {
     color: theme.colors.palette.red[500],
     fontSize: theme.fontSize.sm,
   },
 })) as unknown as Record<string, object>;
 
-const ThemedAudioLines = withUnistyles(AudioLines);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedGithub = withUnistyles(Github);
 const ThemedListTodo = withUnistyles(ListTodo);
 const ThemedTarget = withUnistyles(Target);
 
-const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
