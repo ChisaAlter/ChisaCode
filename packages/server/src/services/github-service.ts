@@ -7,6 +7,12 @@ import { runGitCommand } from "../utils/run-git-command.js";
 import { execCommand } from "../utils/spawn.js";
 import { GitHubCurrentPullRequestPoller } from "./github-current-pr-poller.js";
 import {
+  computePullRequestChecksStatus,
+  parseStatusCheckRollup,
+  type PullRequestCheck,
+  type PullRequestChecksStatus,
+} from "./github-pr-checks.js";
+import {
   searchGitHubIssuesAndPrs,
   type GitHubReadOptions,
   type GitHubSearchResult,
@@ -18,6 +24,12 @@ export type {
   GitHubSearchResult,
   SearchGitHubIssuesAndPrsOptions,
 } from "./github-search.js";
+export { parseStatusCheckRollup } from "./github-pr-checks.js";
+export type {
+  PullRequestCheck,
+  PullRequestChecksStatus,
+  PullRequestCheckStatus,
+} from "./github-pr-checks.js";
 
 const DEFAULT_GITHUB_CACHE_TTL_MS = 30_000;
 export const GITHUB_POLL_FAST_INTERVAL_MS = 20_000;
@@ -51,46 +63,6 @@ const GitHubPullRequestSummarySchema = z.object({
   headRefName: z.string().catch(""),
   labels: z.array(LabelSchema).catch([]),
   updatedAt: z.string().catch(""),
-});
-
-const PullRequestCheckRunNodeSchema = z.object({
-  __typename: z.literal("CheckRun"),
-  name: z.string(),
-  workflowName: z.string().nullable().optional(),
-  conclusion: z.string().nullable().optional(),
-  status: z.string().nullable().optional(),
-  detailsUrl: z.string().nullable().optional(),
-  startedAt: z.string().nullable().optional(),
-  completedAt: z.string().nullable().optional(),
-  checkSuite: z
-    .object({
-      workflowRun: z
-        .object({
-          databaseId: z.number().nullable().optional(),
-        })
-        .nullable()
-        .optional(),
-    })
-    .nullable()
-    .optional(),
-});
-
-const PullRequestStatusContextNodeSchema = z.object({
-  __typename: z.literal("StatusContext"),
-  context: z.string(),
-  state: z.string().nullable().optional(),
-  targetUrl: z.string().nullable().optional(),
-  createdAt: z.string().nullable().optional(),
-});
-
-const PullRequestStatusCheckRollupNodeSchema = z.discriminatedUnion("__typename", [
-  PullRequestCheckRunNodeSchema,
-  PullRequestStatusContextNodeSchema,
-]);
-
-const PullRequestStatusCheckRollupArraySchema = z.array(z.unknown());
-const LegacyPullRequestStatusCheckRollupSchema = z.object({
-  contexts: z.array(z.unknown()),
 });
 
 const PullRequestReviewDecisionSchema = z
@@ -426,17 +398,6 @@ export interface GitHubIssueSummary {
   updatedAt: string;
 }
 
-export type PullRequestCheckStatus = "pending" | "success" | "failure" | "cancelled" | "skipped";
-
-export interface PullRequestCheck {
-  name: string;
-  status: PullRequestCheckStatus;
-  url: string | null;
-  workflow?: string;
-  duration?: string;
-}
-
-export type PullRequestChecksStatus = "none" | "pending" | "success" | "failure";
 export type PullRequestReviewDecision = "approved" | "changes_requested" | "pending" | null;
 export type PullRequestMergeable = "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
 
@@ -682,8 +643,6 @@ interface CommandFailureLike {
   message?: string;
 }
 
-type PullRequestCheckRunNode = z.infer<typeof PullRequestCheckRunNodeSchema>;
-type PullRequestStatusContextNode = z.infer<typeof PullRequestStatusContextNodeSchema>;
 type CurrentPullRequestStatusItem = z.infer<typeof CurrentPullRequestStatusSchema>;
 type GitHubPullRequestFactsGraphql = z.infer<typeof GitHubPullRequestFactsGraphqlSchema>;
 type GitHubPullRequestFactsRepository = NonNullable<
@@ -1843,7 +1802,7 @@ function toCurrentPullRequestStatus(
     isDraft: item.isDraft ?? false,
     mergeable: item.mergeable,
     checks,
-    checksStatus: computeChecksStatus(checks),
+    checksStatus: computePullRequestChecksStatus(checks),
     reviewDecision: mapReviewDecision(item.reviewDecision),
   };
 }
@@ -1864,155 +1823,12 @@ function parseGitHubPullRequestRepo(url: string): { owner: string; name: string 
   }
 }
 
-export function parseStatusCheckRollup(value: unknown): PullRequestCheck[] {
-  const directContexts = PullRequestStatusCheckRollupArraySchema.safeParse(value);
-  if (!directContexts.success) {
-    const legacyContexts = LegacyPullRequestStatusCheckRollupSchema.safeParse(value);
-    if (!legacyContexts.success) {
-      return [];
-    }
-    return parseStatusCheckRollup(legacyContexts.data.contexts);
-  }
-
-  const dedupedChecks = new Map<string, PullRequestCheck & { recency: number }>();
-  for (const entry of directContexts.data) {
-    const parsed = PullRequestStatusCheckRollupNodeSchema.safeParse(entry);
-    if (!parsed.success) {
-      continue;
-    }
-    const check = buildPullRequestCheck(parsed.data);
-    if (!check) {
-      continue;
-    }
-    const existing = dedupedChecks.get(check.name);
-    if (!existing || check.recency > existing.recency) {
-      dedupedChecks.set(check.name, check);
-    }
-  }
-
-  return Array.from(dedupedChecks.values(), ({ recency: _recency, ...check }) => check);
-}
-
-function buildPullRequestCheck(
-  context: z.infer<typeof PullRequestStatusCheckRollupNodeSchema>,
-): (PullRequestCheck & { recency: number }) | null {
-  if (context.__typename === "CheckRun") {
-    return {
-      name: context.name,
-      status: mapCheckRunStatus(context.status, context.conclusion),
-      url: typeof context.detailsUrl === "string" ? context.detailsUrl : null,
-      ...(typeof context.workflowName === "string" && context.workflowName.trim().length > 0
-        ? { workflow: context.workflowName }
-        : {}),
-      ...formatCheckRunDuration(context),
-      recency: getCheckRunRecency(context),
-    };
-  }
-  if (context.__typename === "StatusContext") {
-    return {
-      name: context.context,
-      status: mapStatusContextState(context.state),
-      url: typeof context.targetUrl === "string" ? context.targetUrl : null,
-      recency: getStatusContextRecency(context),
-    };
-  }
-  return null;
-}
-
-function mapCheckRunStatus(status: unknown, conclusion: unknown): PullRequestCheckStatus {
-  if (status !== "COMPLETED") {
-    return "pending";
-  }
-  switch (conclusion) {
-    case "SUCCESS":
-      return "success";
-    case "FAILURE":
-    case "TIMED_OUT":
-    case "ACTION_REQUIRED":
-      return "failure";
-    case "CANCELLED":
-      return "cancelled";
-    case "SKIPPED":
-    case "NEUTRAL":
-      return "skipped";
-    default:
-      return "pending";
-  }
-}
-
-function mapStatusContextState(state: unknown): PullRequestCheckStatus {
-  switch (state) {
-    case "SUCCESS":
-      return "success";
-    case "FAILURE":
-    case "ERROR":
-      return "failure";
-    case "EXPECTED":
-    case "PENDING":
-      return "pending";
-    default:
-      return "pending";
-  }
-}
-
-function getCheckRunRecency(context: PullRequestCheckRunNode): number {
-  const workflowRunId = context.checkSuite?.workflowRun?.databaseId;
-  if (typeof workflowRunId === "number") {
-    return workflowRunId;
-  }
-  return parseOptionalTime(context.completedAt ?? context.startedAt ?? null);
-}
-
-function formatCheckRunDuration(context: PullRequestCheckRunNode): { duration?: string } {
-  const startedAt = parseOptionalTime(context.startedAt ?? null);
-  const completedAt = parseOptionalTime(context.completedAt ?? null);
-  if (startedAt <= 0 || completedAt <= 0 || completedAt < startedAt) {
-    return {};
-  }
-  const durationSeconds = Math.floor((completedAt - startedAt) / 1_000);
-  return { duration: formatDurationSeconds(durationSeconds) };
-}
-
-function formatDurationSeconds(totalSeconds: number): string {
-  const hours = Math.floor(totalSeconds / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-  const parts: string[] = [];
-  if (hours > 0) {
-    parts.push(`${hours}h`);
-  }
-  if (minutes > 0) {
-    parts.push(`${minutes}m`);
-  }
-  if (seconds > 0 || parts.length === 0) {
-    parts.push(`${seconds}s`);
-  }
-  return parts.join(" ");
-}
-
-function getStatusContextRecency(context: PullRequestStatusContextNode): number {
-  return parseOptionalTime(context.createdAt ?? null);
-}
-
 function parseOptionalTime(timestamp: string | null): number {
   if (!timestamp) {
     return 0;
   }
   const time = Date.parse(timestamp);
   return Number.isNaN(time) ? 0 : time;
-}
-
-function computeChecksStatus(checks: PullRequestCheck[]): PullRequestChecksStatus {
-  if (checks.length === 0) {
-    return "none";
-  }
-  if (checks.some((check) => check.status === "failure")) {
-    return "failure";
-  }
-  if (checks.some((check) => check.status === "pending")) {
-    return "pending";
-  }
-  return "success";
 }
 
 function mapReviewDecision(value: unknown): PullRequestReviewDecision {

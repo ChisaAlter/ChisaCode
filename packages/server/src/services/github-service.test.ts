@@ -9,6 +9,7 @@ import {
   GitHubCommandError,
   computeGithubNextInterval,
   createGitHubService,
+  parseStatusCheckRollup,
   resolveGitHubRepo,
   type GitHubCommandRunner,
   type GitHubCommandRunnerOptions,
@@ -1385,6 +1386,40 @@ describe("GitHubService", () => {
     const fresh = await freshRequest;
     expect(fresh.items.at(-1)?.body).toBe("Fresh post-invalidation result");
     expect(runner.calls).toHaveLength(2);
+  });
+
+  it("keeps same-named checks from different workflows while deduping reruns", () => {
+    const checks = parseStatusCheckRollup([
+      {
+        __typename: "CheckRun",
+        name: "build",
+        workflowName: "server",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        checkSuite: { workflowRun: { databaseId: 10 } },
+      },
+      {
+        __typename: "CheckRun",
+        name: "build",
+        workflowName: "client",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        checkSuite: { workflowRun: { databaseId: 20 } },
+      },
+      {
+        __typename: "CheckRun",
+        name: "build",
+        workflowName: "server",
+        status: "COMPLETED",
+        conclusion: "FAILURE",
+        checkSuite: { workflowRun: { databaseId: 30 } },
+      },
+    ]);
+
+    expect(checks).toEqual([
+      { name: "build", workflow: "server", status: "failure", url: null },
+      { name: "build", workflow: "client", status: "success", url: null },
+    ]);
   });
 
   it("requests and surfaces current PR number, draft state, workflow names, and formatted check durations", async () => {
