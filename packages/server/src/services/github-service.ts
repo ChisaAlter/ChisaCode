@@ -774,7 +774,11 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
       return cached({
         cwd: input.cwd,
         method: "getPullRequestTimeline",
-        args: { prNumber: input.prNumber },
+        args: {
+          prNumber: input.prNumber,
+          repoOwner: input.repoOwner,
+          repoName: input.repoName,
+        },
         readOptions: input,
         load: () =>
           loadGitHubPullRequestTimeline(input, {

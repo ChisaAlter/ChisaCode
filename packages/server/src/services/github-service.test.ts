@@ -1304,6 +1304,63 @@ describe("GitHubService", () => {
     expect(timeline.error?.message).toContain("JSON");
   });
 
+  it("isolates PR timeline cache entries by repository identity", async () => {
+    const runner = createRunner([
+      pullRequestTimelineJson({
+        comments: {
+          nodes: [
+            {
+              id: "IC_repo_one",
+              body: "Repository one timeline",
+              url: "https://github.com/owner/repo-one/pull/42#issuecomment-1",
+              createdAt: "2026-04-02T13:55:00Z",
+              author: { login: "commenter", url: "https://github.com/commenter" },
+            },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+      }),
+      pullRequestTimelineJson({
+        comments: {
+          nodes: [
+            {
+              id: "IC_repo_two",
+              body: "Repository two timeline",
+              url: "https://github.com/owner/repo-two/pull/42#issuecomment-2",
+              createdAt: "2026-04-02T13:56:00Z",
+              author: { login: "commenter", url: "https://github.com/commenter" },
+            },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+      }),
+    ]);
+    const service = createGitHubService({
+      ttlMs: 1_000,
+      runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      now: () => 100,
+    });
+
+    const first = await service.getPullRequestTimeline({
+      cwd: "/repo",
+      prNumber: 42,
+      repoOwner: "owner",
+      repoName: "repo-one",
+    });
+    const second = await service.getPullRequestTimeline({
+      cwd: "/repo",
+      prNumber: 42,
+      repoOwner: "owner",
+      repoName: "repo-two",
+    });
+
+    expect(first.items.at(-1)?.body).toBe("Repository one timeline");
+    expect(second.items.at(-1)?.body).toBe("Repository two timeline");
+    expect(second.repoName).toBe("repo-two");
+    expect(runner.calls).toHaveLength(2);
+  });
+
   it("caches PR timelines by cwd and PR number until invalidated", async () => {
     const runner = createRunner([
       pullRequestTimelineJson({
