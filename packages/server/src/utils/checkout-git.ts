@@ -19,11 +19,24 @@ import {
 } from "../services/github-service.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { runGitCommand } from "./run-git-command.js";
+import { READ_ONLY_GIT_ENV, requireGitRepo } from "./checkout-git-repository.js";
 import { isChisaCodeOwnedWorktreeCwd } from "./worktree.js";
 import { readChisaCodeWorktreeMetadata } from "./worktree-metadata.js";
-const READ_ONLY_GIT_ENV = {
-  GIT_OPTIONAL_LOCKS: "0",
-} as const;
+
+export { NotGitRepoError } from "./checkout-git-repository.js";
+export {
+  checkoutResolvedBranch,
+  listBranchSuggestions,
+  resolveBranchCheckout,
+  type BranchCheckoutResolution,
+  type BranchCheckoutSource,
+  type BranchSuggestion,
+  type CheckoutExistingBranchResult,
+  type CheckoutResolvedBranchInput,
+  type LocalBranchCheckoutResolution,
+  type NotFoundBranchCheckoutResolution,
+  type RemoteOnlyBranchCheckoutResolution,
+} from "./checkout-git-branches.js";
 const PULL_REQUEST_REMOTE_PREFIXES = ["chisacode-pr-", "chisacode-pr-"] as const;
 
 function isManagedPullRequestRemote(remoteName: string | null | undefined): remoteName is string {
@@ -63,10 +76,6 @@ function getErrorStderr(error: Error): string {
 
 function getErrorStdout(error: Error): string {
   return "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
-}
-
-function throwBranchNotFound(branch: string | undefined): never {
-  throw new Error(`Branch not found: ${branch ?? "unknown"}`);
 }
 
 function createPullRequestStatusCache(ttlMs: number) {
@@ -155,259 +164,6 @@ interface CheckoutDiffRefs {
 
 function getCheckoutDiffRefArgs(refs: CheckoutDiffRefs): string[] {
   return [refs.baseRef, ...(refs.targetRef ? [refs.targetRef] : [])];
-}
-
-function normalizeBranchSuggestionName(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  let normalized = trimmed;
-  if (normalized.startsWith("refs/heads/")) {
-    normalized = normalized.slice("refs/heads/".length);
-  } else if (normalized.startsWith("refs/remotes/")) {
-    normalized = normalized.slice("refs/remotes/".length);
-  }
-
-  if (normalized.startsWith("origin/")) {
-    normalized = normalized.slice("origin/".length);
-  }
-
-  if (!normalized || normalized === "HEAD" || normalized === "origin") {
-    return null;
-  }
-
-  return normalized;
-}
-
-interface GitRef {
-  name: string;
-  committerDate: number;
-}
-
-export interface BranchSuggestion {
-  name: string;
-  committerDate: number;
-  hasLocal: boolean;
-  hasRemote: boolean;
-}
-
-async function listGitRefs(cwd: string, refPrefix: string): Promise<GitRef[]> {
-  const { stdout } = await runGitCommand(
-    [
-      "for-each-ref",
-      "--sort=-committerdate",
-      "--format=%(refname)%09%(committerdate:unix)",
-      refPrefix,
-    ],
-    { cwd, envOverlay: READ_ONLY_GIT_ENV },
-  );
-  return stdout
-    .split("\n")
-    .map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return null;
-      const [name, dateStr] = trimmed.split("\t");
-      if (!name) return null;
-      return { name, committerDate: Number(dateStr) || 0 };
-    })
-    .filter((ref): ref is GitRef => ref !== null);
-}
-
-interface BranchSuggestionMeta {
-  committerDate: number;
-  hasLocal: boolean;
-  hasRemote: boolean;
-}
-
-function sortBranchSuggestions(
-  branchNames: string[],
-  branchMeta: Map<string, BranchSuggestionMeta>,
-  query: string,
-): string[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  const hasQuery = normalizedQuery.length > 0;
-  return branchNames.sort((a, b) => {
-    if (hasQuery) {
-      const aPrefix = a.toLowerCase().startsWith(normalizedQuery);
-      const bPrefix = b.toLowerCase().startsWith(normalizedQuery);
-      if (aPrefix !== bPrefix) {
-        return aPrefix ? -1 : 1;
-      }
-    }
-
-    const aMeta = branchMeta.get(a);
-    const bMeta = branchMeta.get(b);
-    const aDate = aMeta?.committerDate ?? 0;
-    const bDate = bMeta?.committerDate ?? 0;
-    if (aDate !== bDate) {
-      return bDate - aDate;
-    }
-
-    return a.localeCompare(b);
-  });
-}
-
-export async function listBranchSuggestions(
-  cwd: string,
-  options?: { query?: string; limit?: number },
-): Promise<BranchSuggestion[]> {
-  await requireGitRepo(cwd);
-
-  const requestedLimit = options?.limit ?? 50;
-  const limit = Math.max(1, Math.min(200, requestedLimit));
-  const query = options?.query?.trim().toLowerCase() ?? "";
-
-  const [localRefs, remoteRefs] = await Promise.all([
-    listGitRefs(cwd, "refs/heads"),
-    listGitRefs(cwd, "refs/remotes/origin"),
-  ]);
-
-  const branchMeta = new Map<string, BranchSuggestionMeta>();
-
-  for (const ref of localRefs) {
-    const normalized = normalizeBranchSuggestionName(ref.name);
-    if (!normalized) continue;
-    const existing = branchMeta.get(normalized);
-    branchMeta.set(normalized, {
-      hasLocal: true,
-      hasRemote: existing?.hasRemote ?? false,
-      committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
-    });
-  }
-
-  for (const ref of remoteRefs) {
-    const normalized = normalizeBranchSuggestionName(ref.name);
-    if (!normalized) continue;
-    const existing = branchMeta.get(normalized);
-    if (!existing) {
-      branchMeta.set(normalized, {
-        hasLocal: false,
-        hasRemote: true,
-        committerDate: ref.committerDate,
-      });
-    } else {
-      branchMeta.set(normalized, {
-        ...existing,
-        hasRemote: true,
-        committerDate: Math.max(ref.committerDate, existing.committerDate),
-      });
-    }
-  }
-
-  const filteredNames = Array.from(branchMeta.keys()).filter((name) =>
-    query ? name.toLowerCase().includes(query) : true,
-  );
-  if (filteredNames.length === 0) {
-    return [];
-  }
-
-  const ordered = sortBranchSuggestions(filteredNames, branchMeta, query);
-  return ordered.slice(0, limit).map((name) => {
-    const meta = branchMeta.get(name);
-    return {
-      name,
-      committerDate: meta?.committerDate ?? 0,
-      hasLocal: meta?.hasLocal ?? false,
-      hasRemote: meta?.hasRemote ?? false,
-    };
-  });
-}
-
-export interface LocalBranchCheckoutResolution {
-  kind: "local";
-  name: string;
-}
-
-export interface RemoteOnlyBranchCheckoutResolution {
-  kind: "remote-only";
-  name: string;
-  remoteRef: string;
-}
-
-export interface NotFoundBranchCheckoutResolution {
-  kind: "not-found";
-}
-
-export type BranchCheckoutResolution =
-  | LocalBranchCheckoutResolution
-  | RemoteOnlyBranchCheckoutResolution
-  | NotFoundBranchCheckoutResolution;
-
-export async function resolveBranchCheckout(
-  cwd: string,
-  name: string,
-): Promise<BranchCheckoutResolution> {
-  await requireGitRepo(cwd);
-
-  const normalized = normalizeBranchSuggestionName(name);
-  if (!normalized) {
-    return { kind: "not-found" };
-  }
-
-  const localRef = `refs/heads/${normalized}`;
-  const localResult = await runGitCommand(["rev-parse", "--verify", "--quiet", localRef], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-    acceptExitCodes: [0, 1],
-  });
-  const hasLocal = localResult.exitCode === 0;
-  if (hasLocal) {
-    return { kind: "local", name: normalized };
-  }
-
-  const remoteRef = `origin/${normalized}`;
-  const remoteRefPath = `refs/remotes/${remoteRef}`;
-  const remoteResult = await runGitCommand(["rev-parse", "--verify", "--quiet", remoteRefPath], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-    acceptExitCodes: [0, 1],
-  });
-  const hasRemote = remoteResult.exitCode === 0;
-  if (hasRemote) {
-    return { kind: "remote-only", name: normalized, remoteRef };
-  }
-
-  return { kind: "not-found" };
-}
-
-export type BranchCheckoutSource = "local" | "remote";
-
-export interface CheckoutExistingBranchResult {
-  source: BranchCheckoutSource;
-}
-
-export interface CheckoutResolvedBranchInput {
-  cwd: string;
-  resolution: BranchCheckoutResolution;
-  requestedBranch?: string;
-}
-
-export async function checkoutResolvedBranch(
-  input: CheckoutResolvedBranchInput,
-): Promise<CheckoutExistingBranchResult> {
-  const { cwd, resolution } = input;
-
-  switch (resolution.kind) {
-    case "local": {
-      const { stdout } = await runGitCommand(["rev-parse", "--abbrev-ref", "HEAD"], { cwd });
-      const current = stdout.trim();
-      if (current === resolution.name) {
-        return { source: "local" };
-      }
-
-      await runGitCommand(["checkout", resolution.name], { cwd });
-      return { source: "local" };
-    }
-    case "remote-only":
-      await runGitCommand(["checkout", "-b", resolution.name, "--track", resolution.remoteRef], {
-        cwd,
-      });
-      return { source: "remote" };
-    default:
-      return throwBranchNotFound(input.requestedBranch);
-  }
 }
 
 async function listCheckoutFileChanges(
@@ -622,17 +378,6 @@ function isTrackedDiffTooLarge(stat: FileStat): boolean {
   return stat.additions + stat.deletions > TRACKED_MAX_CHANGED_LINES;
 }
 
-export class NotGitRepoError extends Error {
-  readonly cwd: string;
-  readonly code = "NOT_GIT_REPO";
-
-  constructor(cwd: string) {
-    super(`Not a git repository: ${cwd}`);
-    this.name = "NotGitRepoError";
-    this.cwd = cwd;
-  }
-}
-
 export class MergeConflictError extends Error {
   readonly baseRef: string;
   readonly currentBranch: string;
@@ -762,14 +507,6 @@ function isGitError(error: unknown): boolean {
     return false;
   }
   return /not a git repository/i.test(error.message) || /git repository/i.test(error.message);
-}
-
-async function requireGitRepo(cwd: string): Promise<void> {
-  try {
-    await runGitCommand(["rev-parse", "--git-dir"], { cwd, envOverlay: READ_ONLY_GIT_ENV });
-  } catch {
-    throw new NotGitRepoError(cwd);
-  }
 }
 
 export async function getCurrentBranch(cwd: string): Promise<string | null> {

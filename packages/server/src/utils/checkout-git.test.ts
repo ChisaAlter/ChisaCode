@@ -1547,6 +1547,21 @@ const x = 1;
     });
   });
 
+  it("reads branch suggestions from one local and remote ref snapshot", async () => {
+    execFileSync("git", ["checkout", "-b", "feature/one-snapshot"], { cwd: repoDir });
+    execFileSync("git", ["checkout", "main"], { cwd: repoDir });
+
+    startGitCommandMetrics();
+    await listBranchSuggestions(repoDir, { limit: 50 });
+    const metrics = stopGitCommandMetrics();
+    const refReads = metrics.commands.filter((command) => command.args[0] === "for-each-ref");
+
+    expect(refReads).toHaveLength(1);
+    expect(refReads[0]?.args).toEqual(
+      expect.arrayContaining(["refs/heads", "refs/remotes/origin"]),
+    );
+  });
+
   it("resolves branch checkout targets with local precedence and origin normalization", async () => {
     const remoteDir = join(tempDir, "remote.git");
     execFileSync("git", ["init", "--bare", "-b", "main", remoteDir]);
