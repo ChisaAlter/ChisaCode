@@ -40,10 +40,8 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  ExternalLink,
   FolderPlus,
   FolderGit2,
-  GitPullRequest,
   Globe,
   Settings,
   SquareTerminal,
@@ -106,7 +104,6 @@ import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspac
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
-import { openExternalUrl } from "@/utils/open-external-url";
 import {
   requireWorkspaceExecutionDirectory,
   resolveWorkspaceExecutionDirectory,
@@ -117,6 +114,7 @@ import {
   archiveWorkspacesOptimistically,
 } from "@/workspace/workspace-archive";
 import { WorkspaceHoverCard } from "@/components/workspace-hover-card";
+import { PrBadge } from "@/components/pr-badge";
 import { GitHubIcon } from "@/components/icons/github-icon";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
 import { generateDraftId } from "@/stores/draft-keys";
@@ -130,8 +128,6 @@ const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
 const DEFAULT_STATUS_DOT_OFFSET = 0;
 const EMPHASIZED_STATUS_DOT_OFFSET = -1;
-const ThemedExternalLink = withUnistyles(ExternalLink);
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedGitHubIcon = withUnistyles(GitHubIcon);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
@@ -155,25 +151,12 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 const redColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[500] });
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
-const greenColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
-const purpleColorMapping = (theme: Theme) => ({ color: theme.colors.palette.purple[500] });
 const syncedLoaderColorMapping = (theme: Theme) => ({
   color:
     theme.colorScheme === "light"
       ? theme.colors.palette.amber[700]
       : theme.colors.palette.amber[500],
 });
-
-function getPrIconUniMapping(state: PrHint["state"]) {
-  switch (state) {
-    case "merged":
-      return purpleColorMapping;
-    case "open":
-      return greenColorMapping;
-    case "closed":
-      return redColorMapping;
-  }
-}
 
 interface SidebarWorkspaceListProps {
   projects: SidebarProjectEntry[];
@@ -259,54 +242,6 @@ function useSidebarWorkspaceEntry(
   return useWorkspaceFields(serverId, workspaceId, projectWorkspaceEntry);
 }
 
-export function PrBadge({ hint }: { hint: PrHint }) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  const handlePressIn = useCallback((event: GestureResponderEvent) => {
-    event.stopPropagation();
-  }, []);
-
-  const handlePress = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      void openExternalUrl(hint.url);
-    },
-    [hint.url],
-  );
-
-  const handleHoverIn = useCallback(() => setIsHovered(true), []);
-  const handleHoverOut = useCallback(() => setIsHovered(false), []);
-
-  const textStyle = isHovered ? prBadgeTextHoveredCombined : prBadgeStyles.text;
-  const iconUniProps = isHovered ? foregroundColorMapping : getPrIconUniMapping(hint.state);
-
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={`Pull request #${hint.number}`}
-      hitSlop={4}
-      onPressIn={handlePressIn}
-      onPress={handlePress}
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      style={prBadgePressableStyle}
-    >
-      {isHovered ? (
-        <ThemedExternalLink size={12} uniProps={iconUniProps} />
-      ) : (
-        <ThemedGitPullRequest size={12} uniProps={iconUniProps} />
-      )}
-      <Text style={textStyle} numberOfLines={1}>
-        #{hint.number}
-      </Text>
-    </Pressable>
-  );
-}
-
-function prBadgePressableStyle({ pressed }: PressableStateCallbackType) {
-  return [prBadgeStyles.badge, pressed && prBadgeStyles.badgePressed];
-}
-
 function projectKebabStyle({
   hovered = false,
 }: PressableStateCallbackType & { hovered?: boolean }) {
@@ -320,28 +255,6 @@ function workspaceKebabStyle({
 }
 
 function noop() {}
-
-const prBadgeStyles = StyleSheet.create((theme) => ({
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  badgePressed: {
-    opacity: 0.82,
-  },
-  text: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
-    color: theme.colors.foregroundMuted,
-  },
-  textHovered: {
-    color: theme.colors.foreground,
-  },
-}));
-
-const prBadgeTextHoveredCombined = [prBadgeStyles.text, prBadgeStyles.textHovered];
 
 function ChecksBadge({ checks }: { checks: PrHint["checks"] }): ReactElement | null {
   if (!checks || checks.length === 0) return null;
