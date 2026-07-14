@@ -1,4 +1,4 @@
-import type { GitHubCurrentPullRequestStatus } from "./github-service.js";
+import type { GitHubCurrentPullRequestStatus } from "./github-current-pr.js";
 
 const DISPOSED_ERROR_MESSAGE = "GitHub current pull request poller is disposed";
 
