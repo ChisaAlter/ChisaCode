@@ -2288,6 +2288,22 @@ describe("GitHubService", () => {
     ]);
   });
 
+  it("caps combined GitHub search results to the requested limit", async () => {
+    const runner = createRunner([issueJson("Issue title"), searchPullRequestJson("PR title")]);
+    const service = createGitHubService({
+      runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      now: () => 100,
+    });
+
+    await expect(
+      service.searchIssuesAndPrs({ cwd: "/repo", query: "cache", limit: 1 }),
+    ).resolves.toMatchObject({
+      githubFeaturesEnabled: true,
+      items: [{ kind: "pr", number: 123 }],
+    });
+  });
+
   it("treats a GitHub issue or PR URL as a search for that number", async () => {
     const runner = createRunner([issueJson("Issue title"), searchPullRequestJson("PR title")]);
     const service = createGitHubService({

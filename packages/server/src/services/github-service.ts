@@ -1,11 +1,23 @@
 import { z } from "zod/v3";
 import type pino from "pino";
-import type { GitHubSearchKind } from "@chisacode/protocol/messages";
+
 import { findExecutable } from "../utils/executable.js";
 import { resolveGitHubRemote } from "../utils/github-remote.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { execCommand } from "../utils/spawn.js";
 import { GitHubCurrentPullRequestPoller } from "./github-current-pr-poller.js";
+import {
+  searchGitHubIssuesAndPrs,
+  type GitHubReadOptions,
+  type GitHubSearchResult,
+  type SearchGitHubIssuesAndPrsOptions,
+} from "./github-search.js";
+
+export type {
+  GitHubReadOptions,
+  GitHubSearchResult,
+  SearchGitHubIssuesAndPrsOptions,
+} from "./github-search.js";
 
 const DEFAULT_GITHUB_CACHE_TTL_MS = 30_000;
 export const GITHUB_POLL_FAST_INTERVAL_MS = 20_000;
@@ -545,16 +557,6 @@ export interface GitHubPullRequestAutoMergeResult {
   success: true;
 }
 
-export type GitHubReadOptions =
-  | {
-      force?: false;
-      reason?: string;
-    }
-  | {
-      force: true;
-      reason: string;
-    };
-
 export type ListGitHubPullRequestsOptions = {
   cwd: string;
   query?: string;
@@ -577,29 +579,6 @@ export type GetGitHubPullRequestTimelineOptions = {
   prNumber: number;
   repoOwner: string;
   repoName: string;
-} & GitHubReadOptions;
-
-export interface GitHubSearchResult {
-  items: Array<{
-    kind: "issue" | "pr";
-    number: number;
-    title: string;
-    url: string;
-    state: string;
-    body: string | null;
-    labels: string[];
-    baseRefName?: string | null;
-    headRefName?: string | null;
-    updatedAt?: string;
-  }>;
-  githubFeaturesEnabled: boolean;
-}
-
-export type SearchGitHubIssuesAndPrsOptions = {
-  cwd: string;
-  query: string;
-  limit?: number;
-  kinds?: GitHubSearchKind[];
 } & GitHubReadOptions;
 
 export interface CreateGitHubPullRequestOptions {
@@ -997,95 +976,13 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
       });
     },
 
-    async searchIssuesAndPrs(input) {
-      if (input.force && !input.reason) {
-        throw new Error("GitHubService forced read requires a reason");
-      }
-
-      const kinds = input.kinds ?? ["github-issue", "github-pr"];
-      const shouldFetchIssues = kinds.includes("github-issue");
-      const shouldFetchPullRequests = kinds.includes("github-pr");
-      const readOptions: GitHubReadOptions = input.force
-        ? { force: true, reason: input.reason }
-        : { force: false, reason: input.reason };
-      const query = normalizeGitHubSearchQuery(input.query);
-      const [issuesResult, prsResult] = await Promise.allSettled([
-        shouldFetchIssues
-          ? this.listIssues({
-              cwd: input.cwd,
-              query,
-              limit: input.limit,
-              ...readOptions,
-            })
-          : Promise.resolve(null),
-        shouldFetchPullRequests
-          ? this.listPullRequests({
-              cwd: input.cwd,
-              query,
-              limit: input.limit,
-              ...readOptions,
-            })
-          : Promise.resolve(null),
-      ]);
-
-      const items: GitHubSearchResult["items"] = [];
-      const requestedResults = [
-        shouldFetchIssues ? issuesResult : null,
-        shouldFetchPullRequests ? prsResult : null,
-      ].filter((result) => result !== null);
-      if (
-        requestedResults.length > 0 &&
-        requestedResults.every(
-          (result) =>
-            result.status === "rejected" &&
-            (result.reason instanceof GitHubCliMissingError ||
-              result.reason instanceof GitHubAuthenticationError),
-        )
-      ) {
-        return { items: [], githubFeaturesEnabled: false };
-      }
-
-      if (shouldFetchIssues && issuesResult.status === "fulfilled") {
-        for (const item of issuesResult.value ?? []) {
-          items.push({
-            kind: "issue",
-            number: item.number,
-            title: item.title,
-            url: item.url,
-            state: item.state,
-            body: item.body,
-            labels: item.labels,
-            baseRefName: null,
-            headRefName: null,
-            updatedAt: item.updatedAt,
-          });
-        }
-      }
-
-      if (shouldFetchPullRequests && prsResult.status === "fulfilled") {
-        for (const item of prsResult.value ?? []) {
-          items.push({
-            kind: "pr",
-            number: item.number,
-            title: item.title,
-            url: item.url,
-            state: item.state,
-            body: item.body,
-            labels: item.labels,
-            baseRefName: item.baseRefName,
-            headRefName: item.headRefName,
-            updatedAt: item.updatedAt,
-          });
-        }
-      }
-
-      items.sort((left, right) => {
-        const leftTime = parseOptionalTime(left.updatedAt ?? null);
-        const rightTime = parseOptionalTime(right.updatedAt ?? null);
-        return rightTime - leftTime;
+    searchIssuesAndPrs(input) {
+      return searchGitHubIssuesAndPrs(input, {
+        listIssues: (readOptions) => api.listIssues(readOptions),
+        listPullRequests: (readOptions) => api.listPullRequests(readOptions),
+        isFeatureUnavailableError: (error) =>
+          error instanceof GitHubCliMissingError || error instanceof GitHubAuthenticationError,
       });
-
-      return { items, githubFeaturesEnabled: true };
     },
 
     async createPullRequest(input) {
@@ -1302,15 +1199,6 @@ async function runGhCommand(
     envOverlay: { ...GITHUB_ENV, ...options.envOverlay },
     maxBuffer: 10 * 1024 * 1024,
   });
-}
-
-const GITHUB_ISSUE_OR_PR_URL_PATTERN =
-  /^https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/(?:pull|issues)\/(\d+)(?:[/?#].*)?$/i;
-
-function normalizeGitHubSearchQuery(query: string): string {
-  const trimmed = query.trim();
-  const match = trimmed.match(GITHUB_ISSUE_OR_PR_URL_PATTERN);
-  return match ? match[1] : query;
 }
 
 function buildCacheKey(params: { cwd: string; method: string; args: unknown }): string {
