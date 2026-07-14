@@ -13,6 +13,15 @@ import {
 import { resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { runGitCommand } from "./run-git-command.js";
 import {
+  doesGitRefExist,
+  getResolvedBaseRefForCwd,
+  normalizeLocalBranchRefName,
+  resolveBaseRefForCwd,
+  resolveBaseRefForKnownWorktree,
+  resolveBestComparisonBaseRef,
+  resolveMostAheadBaseRef,
+} from "./checkout-git-base-ref.js";
+import {
   createCheckoutDiffReader,
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
@@ -37,10 +46,10 @@ import {
   getMainRepoRootFromCommonDir,
   getWorktreePathForBranch,
   getWorktreeRoot,
-  readChisaCodeWorktreeBaseRef,
   type ChisaCodeWorktreeForCwd,
 } from "./checkout-git-worktree-topology.js";
 
+export { resolveRepositoryDefaultBranch } from "./checkout-git-base-ref.js";
 export { NotGitRepoError } from "./checkout-git-repository.js";
 export {
   checkoutResolvedBranch,
@@ -232,54 +241,6 @@ export async function renameCurrentBranch(
   return { previousBranch, currentBranch };
 }
 
-async function getStoredBaseRefForCwd(
-  cwd: string,
-  context?: CheckoutContext,
-): Promise<string | null> {
-  if (context?.facts?.isGit) {
-    return context.facts.storedBaseRef;
-  }
-  const chisacodeWorktree = await getChisaCodeWorktreeForCwd(cwd, context);
-  if (!chisacodeWorktree.isChisaCodeOwnedWorktree) {
-    return null;
-  }
-
-  return readChisaCodeWorktreeBaseRef(chisacodeWorktree.worktreeRoot);
-}
-
-async function getResolvedBaseRefForCwd(
-  cwd: string,
-  context?: CheckoutContext,
-): Promise<string | null> {
-  if (context?.facts?.isGit) {
-    return context.facts.resolvedBaseRef;
-  }
-  const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  return resolvedBaseRef;
-}
-
-interface BaseRefResolution {
-  storedBaseRef: string | null;
-  resolvedBaseRef: string | null;
-}
-
-async function resolveBaseRefForCwd(
-  cwd: string,
-  context?: CheckoutContext,
-): Promise<BaseRefResolution> {
-  if (context?.facts?.isGit) {
-    return {
-      storedBaseRef: context.facts.storedBaseRef,
-      resolvedBaseRef: context.facts.resolvedBaseRef,
-    };
-  }
-  const storedBaseRef = await getStoredBaseRefForCwd(cwd, context);
-  return {
-    storedBaseRef,
-    resolvedBaseRef: storedBaseRef ?? (await resolveBaseRef(cwd)),
-  };
-}
-
 async function isWorkingTreeDirty(cwd: string, context?: CheckoutContext): Promise<boolean> {
   const { stdout } = await runGitCommand(["status", "--porcelain"], {
     cwd,
@@ -412,157 +373,6 @@ async function abortGitPullConflictState(cwd: string): Promise<void> {
       // ignore
     }
   }
-}
-
-export async function resolveRepositoryDefaultBranch(repoRoot: string): Promise<string | null> {
-  try {
-    const { stdout } = await runGitCommand(
-      ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
-      {
-        cwd: repoRoot,
-        envOverlay: READ_ONLY_GIT_ENV,
-      },
-    );
-    const ref = stdout.trim();
-    if (ref) {
-      // Prefer a local branch name (e.g. "main") over the remote-tracking ref (e.g. "origin/main")
-      // so that status/diff/merge all operate against the same base ref.
-      const remoteShort = ref.replace(/^refs\/remotes\//, "");
-      const localName = remoteShort.startsWith("origin/")
-        ? remoteShort.slice("origin/".length)
-        : remoteShort;
-      try {
-        await runGitCommand(["show-ref", "--verify", "--quiet", `refs/heads/${localName}`], {
-          cwd: repoRoot,
-          envOverlay: READ_ONLY_GIT_ENV,
-        });
-        return localName;
-      } catch {
-        return remoteShort;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  const { stdout } = await runGitCommand(["branch", "--format=%(refname:short)"], {
-    cwd: repoRoot,
-    envOverlay: READ_ONLY_GIT_ENV,
-  });
-  const branches = new Set(
-    stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0),
-  );
-
-  if (branches.has("main")) {
-    return "main";
-  }
-  if (branches.has("master")) {
-    return "master";
-  }
-
-  return null;
-}
-
-async function resolveBaseRef(repoRoot: string): Promise<string | null> {
-  return resolveRepositoryDefaultBranch(repoRoot);
-}
-
-function normalizeLocalBranchRefName(input: string): string {
-  if (input.startsWith("refs/remotes/origin/")) {
-    return input.slice("refs/remotes/origin/".length);
-  }
-  if (input.startsWith("refs/heads/")) {
-    return input.slice("refs/heads/".length);
-  }
-  if (input.startsWith("origin/")) {
-    return input.slice("origin/".length);
-  }
-  return input;
-}
-
-interface ComparisonBaseRefName {
-  localName: string;
-  originRef: string;
-}
-
-function normalizeComparisonBaseRefName(input: string): ComparisonBaseRefName {
-  const localName = normalizeLocalBranchRefName(input);
-  return { localName, originRef: `origin/${localName}` };
-}
-
-async function doesGitRefExist(
-  cwd: string,
-  fullRef: string,
-  context?: CheckoutContext,
-): Promise<boolean> {
-  const result = await runGitCommand(["show-ref", "--verify", "--quiet", fullRef], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-    acceptExitCodes: [0, 1],
-    logger: context?.logger,
-  });
-  return result.exitCode === 0;
-}
-
-async function resolveBestComparisonBaseRef(
-  cwd: string,
-  baseRef: string,
-  context?: CheckoutContext,
-): Promise<string> {
-  const normalized = normalizeComparisonBaseRefName(baseRef);
-  const [hasLocal, hasOrigin] = await Promise.all([
-    doesGitRefExist(cwd, `refs/heads/${normalized.localName}`, context),
-    doesGitRefExist(cwd, `refs/remotes/origin/${normalized.localName}`, context),
-  ]);
-
-  if (hasOrigin) {
-    return normalized.originRef;
-  }
-  if (hasLocal) {
-    return normalized.localName;
-  }
-
-  const refName =
-    baseRef.startsWith("origin/") || baseRef.startsWith("refs/remotes/origin/")
-      ? normalized.originRef
-      : normalized.localName;
-  throw new Error(`Base branch not found locally or on origin: ${refName}`);
-}
-
-async function resolveMostAheadBaseRef(cwd: string, normalizedBaseRef: string): Promise<string> {
-  const [hasLocal, hasOrigin] = await Promise.all([
-    doesGitRefExist(cwd, `refs/heads/${normalizedBaseRef}`),
-    doesGitRefExist(cwd, `refs/remotes/origin/${normalizedBaseRef}`),
-  ]);
-
-  if (hasLocal && !hasOrigin) {
-    return normalizedBaseRef;
-  }
-  if (!hasLocal && hasOrigin) {
-    return `origin/${normalizedBaseRef}`;
-  }
-  if (!hasLocal && !hasOrigin) {
-    throw new Error(`Base branch not found locally or on origin: ${normalizedBaseRef}`);
-  }
-
-  const { stdout } = await runGitCommand(
-    ["rev-list", "--left-right", "--count", `${normalizedBaseRef}...origin/${normalizedBaseRef}`],
-    { cwd, envOverlay: READ_ONLY_GIT_ENV },
-  );
-  const [localOnlyRaw, originOnlyRaw] = stdout.trim().split(/\s+/);
-  const localOnly = Number.parseInt(localOnlyRaw ?? "0", 10);
-  const originOnly = Number.parseInt(originOnlyRaw ?? "0", 10);
-  if (Number.isNaN(localOnly) || Number.isNaN(originOnly)) {
-    return normalizedBaseRef;
-  }
-  if (originOnly > localOnly) {
-    return `origin/${normalizedBaseRef}`;
-  }
-
-  return normalizedBaseRef;
 }
 
 async function getAheadBehind(
@@ -753,10 +563,10 @@ export async function getCheckoutSnapshotFacts(
     return { isGit: false };
   }
 
-  const storedBaseRef = inspected.chisacodeWorktree.isChisaCodeOwnedWorktree
-    ? readChisaCodeWorktreeBaseRef(inspected.chisacodeWorktree.worktreeRoot)
-    : null;
-  const resolvedBaseRef = storedBaseRef ?? (await resolveBaseRef(cwd));
+  const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForKnownWorktree(
+    cwd,
+    inspected.chisacodeWorktree,
+  );
   const mainRepoRoot = await getMainRepoRootFromCommonDir(
     cwd,
     inspected.gitCommonDir,
