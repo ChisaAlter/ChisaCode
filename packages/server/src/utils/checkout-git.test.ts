@@ -16,6 +16,7 @@ import {
   __resetPullRequestStatusCacheForTests,
   __setPullRequestStatusCacheTtlForTests,
   commitAll,
+  createPullRequest,
   getCachedCheckoutShortstat,
   getCheckoutSnapshotFacts,
   getCurrentBranch,
@@ -2284,6 +2285,37 @@ const x = 1;
     });
 
     await expect(resolveRepositoryDefaultBranch(repoDir)).resolves.toBe("main");
+  });
+
+  it("reports the configured base when an explicit override mismatches metadata", async () => {
+    execFileSync("git", ["checkout", "-b", "develop"], { cwd: repoDir });
+    execFileSync("git", ["checkout", "main"], { cwd: repoDir });
+    execFileSync("git", ["remote", "add", "origin", "https://github.com/acme/repo.git"], {
+      cwd: repoDir,
+    });
+    const worktree = await createLegacyWorktreeForTest({
+      branchName: "feature-mismatch",
+      cwd: repoDir,
+      baseBranch: "develop",
+      worktreeSlug: "merge-base-mismatch",
+      chisacodeHome,
+    });
+    const expectedMessage = "Base ref mismatch: expected develop, got main";
+
+    await expect(
+      mergeToBase(worktree.worktreePath, { baseRef: "main" }, { chisacodeHome }),
+    ).rejects.toThrow(expectedMessage);
+    await expect(
+      mergeFromBase(worktree.worktreePath, { baseRef: "main" }, { chisacodeHome }),
+    ).rejects.toThrow(expectedMessage);
+    await expect(
+      createPullRequest(
+        worktree.worktreePath,
+        { title: "Mismatch base", base: "main" },
+        createGitHubServiceForStatus(null),
+        { chisacodeHome },
+      ),
+    ).rejects.toThrow(expectedMessage);
   });
 
   it("merges to stored baseRefName when baseRef is not provided", async () => {

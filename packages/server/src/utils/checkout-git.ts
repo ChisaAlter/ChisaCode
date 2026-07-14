@@ -18,6 +18,11 @@ import {
   type CheckoutDiffResult,
 } from "./checkout-git-diff.js";
 import {
+  createCheckoutMergeAuthority,
+  type MergeFromBaseOptions,
+  type MergeToBaseOptions,
+} from "./checkout-git-merge.js";
+import {
   createCheckoutPullRequestStatusAuthority,
   type PullRequestStatusLookupTarget,
   type PullRequestStatusResult,
@@ -45,6 +50,12 @@ export {
   type RemoteOnlyBranchCheckoutResolution,
 } from "./checkout-git-branches.js";
 export type { CheckoutDiffCompare, CheckoutDiffResult } from "./checkout-git-diff.js";
+export {
+  MergeConflictError,
+  MergeFromBaseConflictError,
+  type MergeFromBaseOptions,
+  type MergeToBaseOptions,
+} from "./checkout-git-merge.js";
 export type {
   ChecksStatus,
   PullRequestCheck,
@@ -66,44 +77,6 @@ function isManagedPullRequestRemote(remoteName: string | null | undefined): remo
 interface CheckoutReadCacheOptions {
   force?: boolean;
   reason?: string;
-}
-
-function getErrorStderr(error: Error): string {
-  return "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
-}
-
-function getErrorStdout(error: Error): string {
-  return "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
-}
-
-export class MergeConflictError extends Error {
-  readonly baseRef: string;
-  readonly currentBranch: string;
-  readonly conflictFiles: string[];
-
-  constructor(options: { baseRef: string; currentBranch: string; conflictFiles: string[] }) {
-    super(`Merge conflict while merging ${options.currentBranch} into ${options.baseRef}`);
-    this.name = "MergeConflictError";
-    this.baseRef = options.baseRef;
-    this.currentBranch = options.currentBranch;
-    this.conflictFiles = options.conflictFiles;
-  }
-}
-
-export class MergeFromBaseConflictError extends Error {
-  readonly baseRef: string;
-  readonly currentBranch: string;
-  readonly conflictFiles: string[];
-
-  constructor(options: { baseRef: string; currentBranch: string; conflictFiles: string[] }) {
-    super(
-      `Merge conflict while merging ${options.baseRef} into ${options.currentBranch}. Please merge manually.`,
-    );
-    this.name = "MergeFromBaseConflictError";
-    this.baseRef = options.baseRef;
-    this.currentBranch = options.currentBranch;
-    this.conflictFiles = options.conflictFiles;
-  }
 }
 
 export interface AheadBehind {
@@ -148,17 +121,6 @@ export interface CheckoutStatusGitChisaCode {
 export type CheckoutStatusGit = CheckoutStatusGitNonChisaCode | CheckoutStatusGitChisaCode;
 
 export type CheckoutStatusResult = CheckoutStatus | CheckoutStatusGit;
-
-export interface MergeToBaseOptions {
-  baseRef?: string;
-  mode?: "merge" | "squash";
-  commitMessage?: string;
-}
-
-export interface MergeFromBaseOptions {
-  baseRef?: string;
-  requireCleanTarget?: boolean;
-}
 
 export interface CheckoutContext {
   chisacodeHome?: string;
@@ -1155,250 +1117,45 @@ export async function commitAll(cwd: string, message: string): Promise<void> {
   await commitChanges(cwd, { message, addAll: true });
 }
 
-interface DetectMergeToBaseConflictInput {
-  operationCwd: string;
-  error: unknown;
-  baseRef: string;
-  currentBranch: string;
-}
+const checkoutMergeAuthority = createCheckoutMergeAuthority<CheckoutContext>({
+  getCurrentBranch,
+  getWorktreeRoot: (cwd) => getWorktreeRoot(cwd),
+  getWorktreePathForBranch,
+  resolveBaseRefForCwd,
+  normalizeLocalBranchRefName,
+  resolveMostAheadBaseRef,
+});
 
-async function detectAndThrowMergeToBaseConflict(
-  input: DetectMergeToBaseConflictInput,
-): Promise<void> {
-  const { operationCwd, error, baseRef, currentBranch } = input;
-  const errorDetails =
-    error instanceof Error
-      ? `${error.message}\n${getErrorStderr(error)}\n${getErrorStdout(error)}`
-      : String(error);
-  try {
-    const [unmergedOutput, lsFilesOutput, statusOutput] = await Promise.all([
-      runGitCommand(["diff", "--name-only", "--diff-filter=U"], { cwd: operationCwd }),
-      runGitCommand(["ls-files", "-u"], { cwd: operationCwd }),
-      runGitCommand(["status", "--porcelain"], { cwd: operationCwd }),
-    ]);
-    const statusConflicts = statusOutput.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .filter((line) => /^(UU|AA|DD|AU|UA|UD|DU)\s/.test(line))
-      .map((line) => line.slice(3).trim());
-    const conflicts = [
-      ...unmergedOutput.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
-      ...lsFilesOutput.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => line.split("\t").at(-1) ?? ""),
-      ...statusConflicts,
-    ].filter(Boolean);
-    const conflictDetected =
-      conflicts.length > 0 || /CONFLICT|Automatic merge failed/i.test(errorDetails);
-    if (conflictDetected) {
-      try {
-        await runGitCommand(["merge", "--abort"], { cwd: operationCwd, timeout: 120_000 });
-      } catch {
-        // ignore
-      }
-      throw new MergeConflictError({
-        baseRef,
-        currentBranch,
-        conflictFiles: conflicts.length > 0 ? conflicts : [],
-      });
-    }
-  } catch (innerError) {
-    if (innerError instanceof MergeConflictError) {
-      throw innerError;
-    }
-    // ignore detection failures
-  }
-}
-
+/**
+ * Merges the current checkout branch into its configured base branch.
+ * @param cwd Repository working directory
+ * @param options Merge mode, base override, and optional squash message
+ * @param context Optional cached checkout facts and ChisaCode home
+ * @returns The checkout directory mutated by the merge
+ * @throws {MergeConflictError} If the merge produces conflicts
+ */
 export async function mergeToBase(
   cwd: string,
   options: MergeToBaseOptions = {},
   context?: CheckoutContext,
 ): Promise<string> {
-  await requireGitRepo(cwd);
-  const currentBranch = await getCurrentBranch(cwd);
-  const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = options.baseRef ?? resolvedBaseRef;
-  if (!baseRef) {
-    throw new Error("Unable to determine base branch for merge");
-  }
-  if (storedBaseRef && options.baseRef && options.baseRef !== storedBaseRef) {
-    throw new Error(`Base ref mismatch: expected ${baseRef}, got ${options.baseRef}`);
-  }
-  if (!currentBranch) {
-    throw new Error("Unable to determine current branch for merge");
-  }
-  let normalizedBaseRef = baseRef;
-  normalizedBaseRef = normalizeLocalBranchRefName(normalizedBaseRef);
-  const currentWorktreeRoot = (await getWorktreeRoot(cwd)) ?? cwd;
-  if (normalizedBaseRef === currentBranch) {
-    return currentWorktreeRoot;
-  }
-
-  const baseWorktree = await getWorktreePathForBranch(cwd, normalizedBaseRef);
-  const operationCwd = baseWorktree ?? currentWorktreeRoot;
-  const isSameCheckout = resolve(operationCwd) === resolve(currentWorktreeRoot);
-  const originalBranch = await getCurrentBranch(operationCwd);
-  const mode = options.mode ?? "merge";
-  try {
-    await runGitCommand(["checkout", normalizedBaseRef], {
-      cwd: operationCwd,
-      timeout: 120_000,
-    });
-    if (mode === "squash") {
-      await runGitCommand(["merge", "--squash", currentBranch], {
-        cwd: operationCwd,
-        timeout: 120_000,
-      });
-      const message =
-        options.commitMessage ?? `Squash merge ${currentBranch} into ${normalizedBaseRef}`;
-      await runGitCommand(["-c", "commit.gpgsign=false", "commit", "-m", message], {
-        cwd: operationCwd,
-        timeout: 120_000,
-      });
-    } else {
-      await runGitCommand(["merge", currentBranch], { cwd: operationCwd, timeout: 120_000 });
-    }
-  } catch (error) {
-    await detectAndThrowMergeToBaseConflict({
-      operationCwd,
-      error,
-      baseRef: normalizedBaseRef,
-      currentBranch,
-    });
-    throw error;
-  } finally {
-    if (isSameCheckout && originalBranch && originalBranch !== normalizedBaseRef) {
-      try {
-        await runGitCommand(["checkout", originalBranch], {
-          cwd: operationCwd,
-          timeout: 120_000,
-        });
-      } catch {
-        // ignore
-      }
-    }
-  }
-  return operationCwd;
+  return checkoutMergeAuthority.toBase(cwd, options, context);
 }
 
+/**
+ * Merges the configured base branch into the current checkout branch.
+ * @param cwd Repository working directory
+ * @param options Base override and clean-target policy
+ * @param context Optional cached checkout facts and ChisaCode home
+ * @throws {MergeFromBaseConflictError} If the merge produces conflicts
+ */
 export async function mergeFromBase(
   cwd: string,
   options: MergeFromBaseOptions = {},
   context?: CheckoutContext,
 ): Promise<void> {
-  await requireGitRepo(cwd);
-  const currentBranch = await getCurrentBranch(cwd);
-  if (!currentBranch || currentBranch === "HEAD") {
-    throw new Error("Unable to determine current branch for merge");
-  }
-
-  const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = options.baseRef ?? resolvedBaseRef;
-  if (!baseRef) {
-    throw new Error("Unable to determine base branch for merge");
-  }
-  if (storedBaseRef && options.baseRef && options.baseRef !== storedBaseRef) {
-    throw new Error(`Base ref mismatch: expected ${baseRef}, got ${options.baseRef}`);
-  }
-
-  const requireCleanTarget = options.requireCleanTarget ?? true;
-  if (requireCleanTarget) {
-    const { stdout } = await runGitCommand(["status", "--porcelain"], {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    });
-    if (stdout.trim().length > 0) {
-      throw new Error("Working directory has uncommitted changes.");
-    }
-  }
-
-  const normalizedBaseRef = normalizeLocalBranchRefName(baseRef);
-  const bestBaseRef = await resolveMostAheadBaseRef(cwd, normalizedBaseRef);
-  if (bestBaseRef === currentBranch) {
-    return;
-  }
-
-  try {
-    await runGitCommand(["merge", bestBaseRef], { cwd, timeout: 120_000 });
-  } catch (error) {
-    await detectAndThrowMergeFromBaseConflict({
-      cwd,
-      error,
-      baseRef: bestBaseRef,
-      currentBranch,
-    });
-    throw error;
-  }
+  return checkoutMergeAuthority.fromBase(cwd, options, context);
 }
-
-interface DetectMergeFromBaseConflictInput {
-  cwd: string;
-  error: unknown;
-  baseRef: string;
-  currentBranch: string;
-}
-
-async function detectAndThrowMergeFromBaseConflict(
-  input: DetectMergeFromBaseConflictInput,
-): Promise<void> {
-  const { cwd, error, baseRef, currentBranch } = input;
-  const errorDetails =
-    error instanceof Error
-      ? `${error.message}\n${getErrorStderr(error)}\n${getErrorStdout(error)}`
-      : String(error);
-  try {
-    const [unmergedOutput, lsFilesOutput, statusOutput] = await Promise.all([
-      runGitCommand(["diff", "--name-only", "--diff-filter=U"], { cwd }),
-      runGitCommand(["ls-files", "-u"], { cwd }),
-      runGitCommand(["status", "--porcelain"], { cwd }),
-    ]);
-    const statusConflicts = statusOutput.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .filter((line) => /^(UU|AA|DD|AU|UA|UD|DU)\s/.test(line))
-      .map((line) => line.slice(3).trim());
-    const conflicts = [
-      ...unmergedOutput.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
-      ...lsFilesOutput.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => line.split("\t").at(-1) ?? ""),
-      ...statusConflicts,
-    ].filter(Boolean);
-    const conflictDetected =
-      conflicts.length > 0 || /CONFLICT|Automatic merge failed/i.test(errorDetails);
-    if (conflictDetected) {
-      try {
-        await runGitCommand(["merge", "--abort"], { cwd, timeout: 120_000 });
-      } catch {
-        // ignore
-      }
-      throw new MergeFromBaseConflictError({
-        baseRef,
-        currentBranch,
-        conflictFiles: conflicts.length > 0 ? conflicts : [],
-      });
-    }
-  } catch (innerError) {
-    if (innerError instanceof MergeFromBaseConflictError) {
-      throw innerError;
-    }
-    // ignore detection failures
-  }
-}
-
 export async function pullCurrentBranch(cwd: string, github?: GitHubService): Promise<void> {
   await requireGitRepo(cwd);
   const currentBranch = await getCurrentBranch(cwd);
@@ -1463,7 +1220,7 @@ export async function createPullRequest(
   }
   const normalizedBase = normalizeLocalBranchRefName(base);
   if (storedBaseRef && options.base && options.base !== storedBaseRef) {
-    throw new Error(`Base ref mismatch: expected ${base}, got ${options.base}`);
+    throw new Error(`Base ref mismatch: expected ${storedBaseRef}, got ${options.base}`);
   }
 
   await runGitCommand(["push", "-u", "origin", head], { cwd, timeout: 120_000 });
