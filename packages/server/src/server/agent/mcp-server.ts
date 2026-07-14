@@ -11,10 +11,9 @@ import type {
 
 import type { AgentMode, AgentProvider } from "./agent-sdk-types.js";
 import type { AgentManager } from "./agent-manager.js";
-import { AgentFeatureSchema, AgentPermissionRequestPayloadSchema } from "../messages.js";
+import { AgentFeatureSchema } from "../messages.js";
 import type { AgentStorage } from "./agent-storage.js";
 import type { ArchiveChisaCodeWorktreeDependencies } from "../chisacode-worktree-archive-service.js";
-import { createAgentCommand } from "./create-agent/create.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "../voice-types.js";
 import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -23,18 +22,16 @@ import { resolveSnapshotCwd, type ProviderSnapshotManager } from "./provider-sna
 import {
   AgentModelSchema,
   AgentProviderEnum,
-  AgentStatusEnum,
   ProviderModeSchema,
   ProviderSummarySchema,
   resolveProviderAndOptionalModel,
   resolveRequiredProviderModel,
-  sanitizePermissionRequest,
-  waitForAgentWithTimeout,
 } from "./mcp-shared.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { UsageStore } from "../usage/usage-store.js";
 import { registerAgentControlMcpTools } from "./agent-control-mcp-tools.js";
+import { registerCreateAgentMcpTool } from "./create-agent-mcp-tool.js";
 import { registerCompanionMcpTools } from "./companion-mcp-tools.js";
 import { registerChatMcpTools, type ChatMcpService } from "./chat-mcp-tools.js";
 import { registerLoopMcpTools, type LoopMcpService } from "./loop-mcp-tools.js";
@@ -299,21 +296,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     }
     return resolveCallerAgent()?.cwd ?? null;
   };
-  const ProviderModelInputSchema = AgentProviderEnum.trim()
-    .refine((value) => value.includes("/"), {
-      message: "provider must be provider/model, for example codex/gpt-5.4",
-    })
-    .refine(
-      (value) => {
-        try {
-          resolveRequiredProviderModel(value);
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      { message: "provider must be provider/model, for example codex/gpt-5.4" },
-    );
   const ProviderOrProviderModelInputSchema = AgentProviderEnum.trim()
     .min(1, "provider is required")
     .refine(
@@ -330,17 +312,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       },
       { message: "provider must be provider or provider/model, for example codex/gpt-5.4" },
     );
-  const CreateAgentSettingsInputSchema = z
-    .object({
-      modeId: z.string().optional().describe("Session mode to configure before the first run."),
-      thinkingOptionId: z.string().optional().describe("Thinking option ID."),
-      features: z
-        .record(z.unknown())
-        .optional()
-        .describe("Provider-specific feature values, for example { fast_mode: true } for Codex."),
-    })
-    .strict();
-
   const InspectProviderSettingsInputSchema = z
     .object({
       modeId: z.string().optional().describe("Draft session mode ID."),
@@ -349,109 +320,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       features: z.record(z.unknown()).optional().describe("Draft provider feature values."),
     })
     .strict();
-  const agentToAgentInputSchema = {
-    cwd: z
-      .string()
-      .optional()
-      .describe("Optional working directory. Defaults to the caller agent working directory."),
-    title: z
-      .string()
-      .trim()
-      .min(1, "Title is required")
-      .max(60, "Title must be 60 characters or fewer")
-      .describe("Short descriptive title (<= 60 chars) summarizing the agent's focus."),
-    provider: ProviderModelInputSchema.describe(
-      "Required provider/model pair, for example codex/gpt-5.4.",
-    ),
-    relationKind: z
-      .enum(["subagent", "detached", "handoff", "team-slot"])
-      .optional()
-      .describe("Relationship to the caller agent. Defaults to subagent for agent-scoped calls."),
-    labels: z.record(z.string(), z.string()).optional().describe("Labels to set on the agent"),
-    settings: CreateAgentSettingsInputSchema.optional().describe(
-      "Initial runtime settings for the new agent.",
-    ),
-    initialPrompt: z
-      .string()
-      .trim()
-      .min(1, "initialPrompt is required")
-      .describe("Required first task to run immediately after creation."),
-    background: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        "Run agent in background. If false (default), waits for completion or permission request. If true, returns immediately.",
-      ),
-    notifyOnFinish: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        "Send a notification prompt to the caller agent when this agent finishes, errors, or needs permission. Requires a caller agent context.",
-      ),
-  };
-
-  const topLevelInputSchema = {
-    cwd: z
-      .string()
-      .describe("Required working directory for the agent (absolute, relative, or ~)."),
-    title: z
-      .string()
-      .trim()
-      .min(1, "Title is required")
-      .max(60, "Title must be 60 characters or fewer")
-      .describe("Short descriptive title (<= 60 chars) summarizing the agent's focus."),
-    provider: ProviderModelInputSchema.describe(
-      "Required provider/model pair, for example codex/gpt-5.4.",
-    ),
-    labels: z.record(z.string(), z.string()).optional().describe("Labels to set on the agent"),
-    settings: CreateAgentSettingsInputSchema.optional().describe(
-      "Initial runtime settings for the new agent.",
-    ),
-    initialPrompt: z
-      .string()
-      .trim()
-      .min(1, "initialPrompt is required")
-      .describe("Required first task to run immediately after creation."),
-    worktreeName: z
-      .string()
-      .optional()
-      .describe("Optional git worktree branch name (lowercase alphanumerics + hyphen)."),
-    baseBranch: z
-      .string()
-      .optional()
-      .describe("Required when worktreeName is set: the base branch to diff/merge against."),
-    refName: z.string().min(1).optional().describe("Optional source ref for worktree creation."),
-    action: z
-      .enum(["branch-off", "checkout"])
-      .optional()
-      .describe("Optional worktree creation action."),
-    githubPrNumber: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe("Optional GitHub pull request number to checkout."),
-    background: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        "Run agent in background. If false (default), waits for completion or permission request. If true, returns immediately.",
-      ),
-    notifyOnFinish: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        "Send a notification prompt to the caller agent when this agent finishes, errors, or needs permission. Requires a caller agent context.",
-      ),
-  };
-
-  const createAgentInputSchema = callerAgentId ? agentToAgentInputSchema : topLevelInputSchema;
-  const agentToAgentCreateAgentArgsSchema = z.object(agentToAgentInputSchema).strict();
-  const topLevelCreateAgentArgsSchema = z.object(topLevelInputSchema).strict();
   const inspectProviderInputSchema = {
     provider: ProviderOrProviderModelInputSchema.describe(
       "Provider ID, optionally with a model ID (for example codex or codex/gpt-5.4).",
@@ -464,8 +332,6 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
       "Draft provider settings used to compute available features.",
     ),
   };
-  type TopLevelCreateAgentArgs = z.infer<typeof topLevelCreateAgentArgsSchema>;
-
   if (options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools) {
     registerTool(
       "speak",
@@ -584,142 +450,19 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     resolveScopeRoot,
   });
 
-  registerTool(
-    "create_agent",
-    {
-      title: "Create agent",
-      description:
-        "Create an agent tied to a working directory. Requires provider/model, for example codex/gpt-5.4. Do not guess; call list_providers and list_models first if uncertain. Optionally run an initial prompt immediately or create a git worktree for the agent.",
-      inputSchema: createAgentInputSchema,
-      outputSchema: {
-        agentId: z.string(),
-        type: AgentProviderEnum,
-        status: AgentStatusEnum,
-        cwd: z.string(),
-        currentModeId: z.string().nullable(),
-        availableModes: z.array(ProviderModeSchema),
-        lastMessage: z.string().nullable().optional(),
-        permission: AgentPermissionRequestPayloadSchema.nullable().optional(),
-      },
-    },
-    async (args: unknown) => {
-      const { parsedArgs, worktree } = resolveCreateAgentToolArgs(args);
-      const { snapshot, background, initialPromptStarted } = await createAgentCommand(
-        {
-          agentManager,
-          agentStorage,
-          logger: childLogger,
-          chisacodeHome: options.chisacodeHome,
-          workspaceGitService: options.workspaceGitService,
-          terminalManager,
-          providerSnapshotManager,
-          createChisaCodeWorktree: options.createChisaCodeWorktree,
-        },
-        {
-          kind: "mcp",
-          provider: parsedArgs.provider,
-          title: parsedArgs.title,
-          initialPrompt: parsedArgs.initialPrompt,
-          cwd: parsedArgs.cwd,
-          thinking: parsedArgs.settings?.thinkingOptionId,
-          features: parsedArgs.settings?.features,
-          labels: parsedArgs.labels,
-          relationKind: "relationKind" in parsedArgs ? parsedArgs.relationKind : undefined,
-          mode: parsedArgs.settings?.modeId,
-          background: parsedArgs.background ?? false,
-          notifyOnFinish: parsedArgs.notifyOnFinish ?? false,
-          callerAgentId,
-          callerContext,
-          worktree,
-        },
-      );
-
-      try {
-        if (!background && initialPromptStarted) {
-          const result = await waitForAgentWithTimeout(agentManager, snapshot.id, {
-            waitForActive: true,
-          });
-
-          const liveSnapshot = agentManager.getAgent(snapshot.id) ?? snapshot;
-          const responseData = {
-            agentId: snapshot.id,
-            type: snapshot.provider,
-            status: result.status,
-            cwd: liveSnapshot.cwd,
-            currentModeId: liveSnapshot.currentModeId,
-            availableModes: liveSnapshot.availableModes,
-            lastMessage: result.lastMessage,
-            permission: sanitizePermissionRequest(result.permission),
-          };
-          const validJson = ensureValidJson(responseData);
-
-          const response = {
-            content: [],
-            structuredContent: validJson,
-          };
-          return response;
-        }
-      } catch (error) {
-        childLogger.error({ err: error, agentId: snapshot.id }, "Failed to run initial prompt");
-        throw error;
-      }
-
-      // Return immediately if background=true
-      const currentSnapshot = agentManager.getAgent(snapshot.id) ?? snapshot;
-      const response = {
-        content: [],
-        structuredContent: ensureValidJson({
-          agentId: currentSnapshot.id,
-          type: snapshot.provider,
-          status: currentSnapshot.lifecycle,
-          cwd: currentSnapshot.cwd,
-          currentModeId: currentSnapshot.currentModeId,
-          availableModes: currentSnapshot.availableModes,
-          lastMessage: null,
-          permission: null,
-        }),
-      };
-      return response;
-    },
-  );
-
-  function resolveCreateAgentToolArgs(args: unknown): {
-    parsedArgs:
-      | z.infer<typeof agentToAgentCreateAgentArgsSchema>
-      | z.infer<typeof topLevelCreateAgentArgsSchema>;
-    worktree: ReturnType<typeof resolveTopLevelCreateAgentWorktree>;
-  } {
-    if (callerAgentId) {
-      return {
-        parsedArgs: agentToAgentCreateAgentArgsSchema.parse(args),
-        worktree: undefined,
-      };
-    }
-    const parsedArgs = topLevelCreateAgentArgsSchema.parse(args);
-    return {
-      parsedArgs,
-      worktree: resolveTopLevelCreateAgentWorktree(parsedArgs),
-    };
-  }
-
-  function resolveTopLevelCreateAgentWorktree(args: TopLevelCreateAgentArgs):
-    | {
-        worktreeName?: string;
-        baseBranch?: string;
-        refName?: string;
-        action?: "branch-off" | "checkout";
-        githubPrNumber?: number;
-      }
-    | undefined {
-    return {
-      worktreeName: args.worktreeName,
-      baseBranch: args.baseBranch,
-      refName: args.refName,
-      action: args.action,
-      githubPrNumber: args.githubPrNumber,
-    };
-  }
-
+  registerCreateAgentMcpTool({
+    registerTool,
+    agentManager,
+    agentStorage,
+    terminalManager,
+    providerSnapshotManager,
+    callerAgentId,
+    callerContext,
+    logger: childLogger,
+    chisacodeHome: options.chisacodeHome,
+    workspaceGitService: options.workspaceGitService,
+    createChisaCodeWorktree: options.createChisaCodeWorktree,
+  });
   registerAgentControlMcpTools({
     registerTool,
     agentManager,
