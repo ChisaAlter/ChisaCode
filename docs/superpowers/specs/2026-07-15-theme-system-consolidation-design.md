@@ -1,125 +1,117 @@
-# Theme System Consolidation Design
+# 主题系统收口设计
 
-## Goal
+## 目标
 
-Align the shipped ChisaCode theme system with `design/web3-themes-v2.html` across the
-Electron desktop app and Android app. New installations default to Blockchain Light. Both
-surfaces expose the same five product themes plus the system-adaptive option.
+让 Electron 桌面端和 Android 端实际交付的主题系统与
+`design/web3-themes-v2.html` 保持一致。新安装默认使用 Blockchain Light，两端展示相同的
+五套产品主题，并提供跟随系统选项。
 
-## Product Decisions
+## 产品决策
 
-The visible theme picker order is:
+主题选择器按以下顺序展示：
 
-1. Follow system (`auto`)
-2. Blockchain Light (`light`) - default
-3. Cyber Dark (`dark`)
-4. Liquid Glass (`liquid-neon`)
-5. Chisaki (`chisaki`)
-6. Aemeath (`aemeath`)
+1. 跟随系统（`auto`）
+2. Blockchain Light（`light`，默认）
+3. Cyber Dark（`dark`）
+4. Liquid Glass（`liquid-neon`）
+5. Chisaki（`chisaki`）
+6. Aemeath（`aemeath`）
 
-Internal identifiers remain stable so existing persisted settings and Unistyles registration
-do not require a destructive rename. User-facing labels use the design names above.
+内部标识符保持不变，避免对已有持久化设置和 Unistyles 注册进行破坏性重命名。用户界面使用
+上述设计名称。
 
-Electron and Android use the same catalog, ordering, preview metadata, and default. Android no
-longer has a smaller theme whitelist or a Liquid Glass fallback.
+Electron 和 Android 共用主题目录、排序、预览元数据和默认值。Android 不再维护更小的主题
+白名单，也不再以 Liquid Glass 作为兜底主题。
 
-## Approaches Considered
+## 方案比较
 
-### 1. Delete legacy identifiers outright
+### 方案一：直接删除旧主题标识符
 
-This gives the smallest type surface, but old stored values become invalid without an explicit
-migration path. It risks surprising existing users after an update.
+类型和代码表面最小，但旧版本保存的主题值会立即失效，而且缺少明确迁移路径。应用升级后可能
+无提示地改变用户设置。
 
-### 2. Hide legacy themes and migrate stored values (selected)
+### 方案二：隐藏旧主题并迁移保存值（采用）
 
-The four legacy themes (`zinc`, `midnight`, `claude`, and `ghostty`) disappear from theme menus
-and keyboard cycling. Storage still recognizes them and rewrites them to Cyber Dark, preserving
-dark-mode intent without continuing to expose an obsolete product catalog.
+`zinc`、`midnight`、`claude` 和 `ghostty` 不再出现在主题菜单和快捷键循环中。设置存储仍能
+识别这些值，并将其迁移为 Cyber Dark。这样既保留用户原先选择暗色主题的意图，也不会继续
+暴露已经废弃的产品主题目录。
 
-### 3. Keep legacy themes in an advanced section
+### 方案三：在高级区域保留旧主题
 
-This avoids migration, but preserves the current fragmented product identity and keeps theme
-selection larger than the design target. It does not solve the reported problem.
+不需要迁移，但会继续保留当前割裂的主题产品定义，也无法解决主题入口过多的问题。
 
-## Theme Authority
+## 主题权威来源
 
-`packages/app/src/styles/theme.ts` owns one canonical visible-theme order and its preview
-metadata. Settings menus, keyboard theme cycling, Android policy, storage validation, and tests
-consume that authority instead of maintaining separate arrays.
+`packages/app/src/styles/theme.ts` 维护唯一的可见主题顺序和预览元数据。设置菜单、快捷键主题
+循环、Android 主题策略、设置校验和测试都消费同一份定义，不再各自维护数组。
 
-The canonical visible order is:
+五套固定主题的循环顺序为：
 
 ```text
 light -> dark -> liquid-neon -> chisaki -> aemeath
 ```
 
-`auto` is available in settings but is not part of manual theme cycling because cycling must
-produce deterministic visual themes rather than depend on the operating-system state.
+`auto` 可以在设置中选择，但不参与手动主题循环。快捷键循环必须得到确定的视觉主题，不能让
+结果取决于操作系统当前状态。
 
-## Defaults And Migration
+## 默认值与迁移
 
-- `DEFAULT_CLIENT_SETTINGS.theme` becomes `light`.
-- Android fallback becomes `light`.
-- Empty storage resolves to `light` on both supported surfaces.
-- Stored `zinc`, `midnight`, `claude`, or `ghostty` values normalize to `dark` and are rewritten
-  to storage during the normal load path.
-- Stored values for the five active themes and `auto` remain unchanged.
-- Unknown values continue to fall back to the default.
+- `DEFAULT_CLIENT_SETTINGS.theme` 改为 `light`。
+- Android 兜底主题改为 `light`。
+- Electron 和 Android 在没有已保存设置时都使用 `light`。
+- 已保存的 `zinc`、`midnight`、`claude` 或 `ghostty` 统一归一化为 `dark`，并在正常加载
+  流程中回写存储。
+- 五套有效主题和 `auto` 保持原值不变。
+- 未知值继续回退到默认主题。
 
-This is a local settings migration. It does not alter protocol schemas or daemon state.
+这只是客户端本地设置迁移，不修改协议 schema 或 daemon 状态。
 
-## Visual Rules
+## 视觉规则
 
-- Blockchain Light is the calm default and must retain readable borders and secondary text on
-  white working surfaces.
-- Cyber Dark is the primary dark counterpart, not a secondary novelty theme.
-- Liquid Glass remains optional. Glass, glow, and backdrop effects must not reduce text contrast,
-  obscure panel boundaries, or create overlapping content.
-- Chisaki brand red must remain distinct from destructive-state red through separate semantic
-  tokens.
-- Aemeath pastel accents must preserve readable text, borders, selected states, and disabled
-  states.
-- Layout, typography, spacing, radius, and component structure continue to follow
-  `docs/design.md`; themes change presentation tokens, not component anatomy.
+- Blockchain Light 是安静、清晰的默认主题；白色工作表面上的边框和次级文字必须保持可读。
+- Cyber Dark 是正式的暗色对应主题，不是次要的趣味主题。
+- Liquid Glass 保留为可选主题。玻璃、辉光和背景效果不能降低文字对比度、模糊面板边界或
+  造成内容重叠。
+- Chisaki 的品牌红与危险状态红必须使用不同的语义 token，避免品牌强调和破坏性操作混淆。
+- Aemeath 的粉彩强调色必须保证文字、边框、选中状态和禁用状态可读。
+- 布局、排版、间距、圆角和组件结构继续遵循 `docs/design.md`；主题只改变表现 token，不改变
+  组件骨架。
 
-## Settings Experience
+## 设置体验
 
-The existing dropdown remains the correct picker because the catalog is small and fixed. It
-shows `auto` first, followed by the five canonical themes. Each item uses the existing miniature
-theme preview and a checkmark for the selected value.
+继续使用现有下拉菜单，因为主题数量少且固定。菜单先展示 `auto`，随后展示五套固定主题。每个
+选项继续使用现有微型主题预览，并用勾选状态标识当前主题。
 
-Desktop and Android display the same names and order. No platform-specific theme names or hidden
-fallback behavior are allowed.
+Electron 和 Android 显示相同名称与顺序，不允许再出现平台专属主题名或隐藏的不同兜底行为。
 
-## Verification
+## 验证要求
 
-Automated coverage must prove:
+自动化测试需要证明：
 
-- the canonical visible catalog contains exactly five themes in the intended order;
-- new settings default to `light`;
-- each legacy stored theme migrates to `dark` and is rewritten;
-- active themes and `auto` round-trip unchanged;
-- settings options and keyboard cycling consume the canonical catalog;
-- Android accepts all five themes plus `auto` and falls back to `light`;
-- theme metadata still exposes correct light/dark status and complete preview tokens.
+- 可见主题目录严格包含五套主题，且顺序正确；
+- 新设置默认使用 `light`；
+- 四个旧主题值都会迁移为 `dark` 并回写；
+- 五套有效主题和 `auto` 可以保持原值往返；
+- 设置选项和快捷键循环消费统一的主题目录；
+- Android 接受五套主题和 `auto`，并以 `light` 兜底；
+- 主题元数据仍能提供正确的明暗状态和完整预览 token。
 
-Run only focused Vitest files, followed by app typecheck and targeted lint/format checks.
+本地只运行相关 Vitest 文件，再执行 app typecheck、目标文件 lint 和格式检查，不运行完整重型
+测试套件。
 
-Visual acceptance must use the real target surface:
+视觉验收必须使用真实目标端：
 
-- Electron: open the real desktop settings screen, switch through all five themes, and inspect
-  the workspace, sidebar, composer, menus, floating panels, and settings surfaces.
-- Android: use a connected device or emulator, switch through all five themes, relaunch to prove
-  persistence, and inspect status/navigation bars, sidebar, workspace, composer, menus, and
-  compact settings.
+- Electron：在真实桌面设置页依次切换五套主题，检查工作区、左侧栏、输入框、菜单、浮动面板
+  和设置页。
+- Android：使用已连接设备或模拟器依次切换五套主题，重启应用验证持久化，并检查状态栏、导航
+  栏、侧栏、工作区、输入框、菜单和紧凑设置页。
 
-Browser preview results may support comparison with the design source, but they cannot replace
-Electron or Android acceptance.
+浏览器预览只能辅助对照设计源，不能替代 Electron 或 Android 验收。
 
-## Non-Goals
+## 非目标
 
-- Renaming persisted theme identifiers to `blockchain-light`, `cyber-dark`, or `liquid-glass`
-- Adding iOS support
-- Redesigning component layout or navigation
-- Adding more themes or a theme editor
-- Migrating syntax-highlight theme selection
+- 把持久化主题标识符重命名为 `blockchain-light`、`cyber-dark` 或 `liquid-glass`
+- 增加 iOS 支持
+- 重新设计组件布局或导航
+- 增加更多主题或主题编辑器
+- 改造代码语法高亮主题选择
