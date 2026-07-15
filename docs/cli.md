@@ -91,6 +91,15 @@ chisacode daemon diagnostics --logs --log-lines 100
 chisacode daemon diagnostics --json
 ```
 
+List providers with runtime availability, installed/latest CLI versions, and the next tooling action:
+
+```bash
+chisacode provider ls
+chisacode provider ls --json
+```
+
+`TOOLING` reports `install`, `update`, `current`, `unknown`, or `not-checked`. If the daemon is unavailable, the command still lists manifest providers and marks tooling as `not-checked` instead of guessing version state.
+
 Inspect a provider's effective command, environment presence, tooling version, and MCP injection status:
 
 ```bash
@@ -249,6 +258,15 @@ chisacode daemon stop
 chisacode daemon diagnostics --logs --log-lines 100
 chisacode daemon diagnostics --json
 ```
+
+列出 provider 的运行状态、已安装/最新 CLI 版本，以及下一步工具操作：
+
+```bash
+chisacode provider ls
+chisacode provider ls --json
+```
+
+`TOOLING` 会显示 `install`、`update`、`current`、`unknown` 或 `not-checked`。daemon 不可达时，命令仍会列出 manifest provider，并用 `not-checked` 表示尚未检查，而不是猜测版本状态。
 
 检查 provider 的有效命令、环境变量存在性、工具版本和 MCP 注入状态：
 

@@ -1,16 +1,28 @@
+import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { Command } from "commander";
 import type { CommandOptions, ListResult, OutputSchema } from "../../output/index.js";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import { AGENT_PROVIDER_DEFINITIONS } from "@chisacode/protocol/provider-manifest";
 import { tryConnectToDaemon } from "../../utils/client.js";
 
+type ProviderToolingStatus = "install" | "update" | "current" | "unknown" | "not-checked";
+
+type ProviderListClient = Pick<DaemonClient, "getProvidersSnapshot" | "close">;
+
 export interface ProviderListItem {
   provider: ProviderSnapshotEntry["provider"];
   label: string;
   status: string;
   enabled: "Enabled" | "Disabled";
+  installedVersion: string;
+  latestVersion: string;
+  toolingStatus: ProviderToolingStatus;
   defaultMode: string;
   modes: string;
+}
+
+export interface ProviderLsCommandDependencies {
+  tryConnect(options: { host?: string }): Promise<ProviderListClient | null>;
 }
 
 /** Derive provider list from the manifest — single source of truth */
@@ -19,6 +31,9 @@ const PROVIDERS: ProviderListItem[] = AGENT_PROVIDER_DEFINITIONS.map((def) => ({
   label: def.label,
   status: "available",
   enabled: "Enabled",
+  installedVersion: "-",
+  latestVersion: "-",
+  toolingStatus: "not-checked",
   defaultMode: def.defaultModeId ?? "-",
   modes: def.modes.length > 0 ? def.modes.map((m) => m.label).join(", ") : "-",
 }));
@@ -26,6 +41,31 @@ const PROVIDERS: ProviderListItem[] = AGENT_PROVIDER_DEFINITIONS.map((def) => ({
 function getStaticProviders(): ProviderListItem[] {
   return PROVIDERS;
 }
+
+function formatProviderVersion(version: string | null | undefined): string {
+  const trimmed = version?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "-";
+}
+
+function getProviderToolingStatus(entry: ProviderSnapshotEntry): ProviderToolingStatus {
+  if (entry.versionStatus === "not-installed" || entry.installAvailable === true) {
+    return "install";
+  }
+  if (entry.versionStatus === "outdated" || entry.updateAvailable === true) {
+    return "update";
+  }
+  if (entry.versionStatus === "current") {
+    return "current";
+  }
+  if (entry.versionStatus === "unknown" || Boolean(entry.checkedAt?.trim())) {
+    return "unknown";
+  }
+  return "not-checked";
+}
+
+const defaultDependencies: ProviderLsCommandDependencies = {
+  tryConnect: tryConnectToDaemon,
+};
 
 /** Schema for provider ls output */
 export const providerLsSchema: OutputSchema<ProviderListItem> = {
@@ -44,6 +84,9 @@ export const providerLsSchema: OutputSchema<ProviderListItem> = {
       },
     },
     { header: "ENABLED", field: "enabled", width: 10 },
+    { header: "INSTALLED", field: "installedVersion", width: 14 },
+    { header: "LATEST", field: "latestVersion", width: 14 },
+    { header: "TOOLING", field: "toolingStatus", width: 14 },
     { header: "DEFAULT MODE", field: "defaultMode", width: 14 },
     { header: "MODES", field: "modes", width: 30 },
   ],
@@ -57,9 +100,17 @@ export interface ProviderLsOptions extends CommandOptions {
 
 export async function runLsCommand(
   options: ProviderLsOptions,
-  _command: Command,
+  command: Command,
 ): Promise<ProviderLsResult> {
-  const client = await tryConnectToDaemon({ host: options.host });
+  return runProviderLsCommandWithDependencies(options, command, defaultDependencies);
+}
+
+export async function runProviderLsCommandWithDependencies(
+  options: ProviderLsOptions,
+  _command: Command,
+  dependencies: ProviderLsCommandDependencies,
+): Promise<ProviderLsResult> {
+  const client = await dependencies.tryConnect({ host: options.host });
 
   if (!client) {
     return {
@@ -78,6 +129,9 @@ export async function runLsCommand(
         label: entry.label ?? entry.provider,
         status: entry.status === "ready" ? "available" : entry.status,
         enabled: !entry.enabled ? "Disabled" : "Enabled",
+        installedVersion: formatProviderVersion(entry.installedVersion),
+        latestVersion: formatProviderVersion(entry.latestVersion),
+        toolingStatus: getProviderToolingStatus(entry),
         defaultMode: entry.defaultModeId ?? "default",
         modes: (entry.modes ?? []).map((mode) => mode.label).join(", "),
       })),
@@ -90,6 +144,6 @@ export async function runLsCommand(
       schema: providerLsSchema,
     };
   } finally {
-    await client.close().catch(() => {});
+    await client.close().catch(() => undefined);
   }
 }
