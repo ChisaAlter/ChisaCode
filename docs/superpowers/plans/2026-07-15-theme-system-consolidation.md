@@ -33,6 +33,9 @@ Blockchain Light，并把四套旧暗色主题平滑迁移到 Cyber Dark。
 - 修改：`packages/app/src/styles/theme.test.ts`
 - 修改：`packages/app/src/styles/theme.ts`
 - 修改：`packages/app/src/styles/unistyles.ts`
+- 修改：`packages/app/src/app/_layout/AppContainer.tsx`
+- 修改：`packages/app/src/screens/settings-screen.tsx`
+- 修改：`packages/app/src/hooks/use-settings/storage.test.ts`
 
 **接口：**
 
@@ -112,6 +115,16 @@ export const ANDROID_FALLBACK_THEME: ActiveThemeName = "light";
 `dark*Theme` 导出、预览和 swatch。`THEME_TO_UNISTYLES` 仅保留五套现役主题。
 
 在 `packages/app/src/styles/unistyles.ts` 删除四套旧主题导入、注册和类型声明。
+
+因为 `ThemeName` 会在本任务中立即收窄，必须在同一个可编译提交内同步迁移现有消费者：
+
+- `AppContainer.tsx` 让 `THEME_CYCLE_ORDER` 直接使用 `ACTIVE_THEME_NAMES`；
+- `settings-screen.tsx` 让主题菜单直接遍历 `THEME_PICKER_OPTIONS`，删除旧主题数组、Android
+  分支、分隔线及对应无用导入；
+- `storage.test.ts` 删除主动保存 `ghostty` 的旧测试，因为旧主题只允许作为历史存储输入。
+
+这三个改动只消除类型收窄产生的即时编译回归；默认值、存储迁移和主题名称仍分别留给 Task 2
+和 Task 3。
 
 - [ ] **步骤 4：运行主题测试确认转绿**
 
@@ -266,20 +279,18 @@ git commit -m "fix(app): migrate legacy themes to cyber dark"
 
 ---
 
-### Task 3：统一设置菜单、快捷键循环和主题名称
+### Task 3：统一主题名称并完成消费者验证
 
 **文件：**
 
-- 修改：`packages/app/src/app/_layout/AppContainer.tsx`
-- 修改：`packages/app/src/screens/settings-screen.tsx`
 - 修改：`packages/app/src/i18n/index.test.ts`
 - 修改：`packages/app/src/i18n/index.ts`
 
 **接口：**
 
-- 消费：任务一导出的 `ACTIVE_THEME_NAMES` 和 `THEME_PICKER_OPTIONS`
-- 行为：快捷键只在五套固定主题间循环
-- 行为：两端设置菜单展示同一顺序和同一产品名称
+- 消费：Task 1 已接入的 `ACTIVE_THEME_NAMES` 和 `THEME_PICKER_OPTIONS`
+- 行为：两端设置菜单展示相同的产品名称
+- 验证：快捷键循环和两端设置菜单继续消费统一主题目录
 
 - [ ] **步骤 1：先写主题名称失败测试**
 
@@ -308,35 +319,11 @@ npx vitest run packages/app/src/i18n/index.test.ts --bail=1
 
 预期：当前“浅色”“深色”“玻璃”等旧名称导致失败。
 
-- [ ] **步骤 3：让界面消费统一目录**
+- [ ] **步骤 3：更新中英文主题名称**
 
-在 `packages/app/src/app/_layout/AppContainer.tsx`：
-
-```typescript
-import { ACTIVE_THEME_NAMES, type ThemeName } from "@/styles/theme";
-
-export const THEME_CYCLE_ORDER: readonly ThemeName[] = ACTIVE_THEME_NAMES;
-```
-
-在 `packages/app/src/screens/settings-screen.tsx` 删除 `STANDARD_THEME_OPTIONS`、
-`CUSTOM_THEME_OPTIONS`、Android 条件分支和分隔线，同时删除不再使用的 `isAndroid`、
-`ANDROID_THEME_OPTIONS` 与 `DropdownMenuSeparator` 导入，改为：
-
-```typescript
-{THEME_PICKER_OPTIONS.map((themeValue) => (
-  <ThemeMenuItem
-    key={themeValue}
-    themeValue={themeValue}
-    selected={settings.theme === themeValue}
-    previewHeight={themePreviewHeight}
-    iconColor={iconColor}
-    label={t(`settings.general.theme.options.${themeValue}`)}
-    onChange={handleThemeChange}
-  />
-))}
-```
-
-更新 `packages/app/src/i18n/index.ts` 的中英文主题名称，删除旧主题名称资源。
+更新 `packages/app/src/i18n/index.ts` 的中英文主题名称，删除旧主题名称资源。复核
+`AppContainer.tsx` 和 `settings-screen.tsx` 已分别消费 `ACTIVE_THEME_NAMES` 与
+`THEME_PICKER_OPTIONS`；若 Task 1 已正确完成，不重复改写这些消费者。
 
 - [ ] **步骤 4：运行 i18n 和主题测试确认转绿**
 
@@ -364,7 +351,7 @@ npm run format:files -- packages/app/src/styles/theme.ts packages/app/src/styles
 - [ ] **步骤 6：提交任务三**
 
 ```powershell
-git add -- packages/app/src/app/_layout/AppContainer.tsx packages/app/src/screens/settings-screen.tsx packages/app/src/i18n/index.ts packages/app/src/i18n/index.test.ts
+git add -- packages/app/src/i18n/index.ts packages/app/src/i18n/index.test.ts
 git commit -m "feat(app): unify theme selection across desktop and Android"
 ```
 
