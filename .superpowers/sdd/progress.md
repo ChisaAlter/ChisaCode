@@ -41,3 +41,18 @@ Task 11 test-audit blocker: base `f42694468` and Task 11 both report moduleMock 
 Task 11 lockfile blocker: the exact required npm package-lock-only command succeeds and refreshes the Node type dependency layout, but preserves 42 pre-existing `registry.npmmirror.com` resolved URLs, so the unchanged CI lockfile-lint allowlist still fails. Attempts to obtain authoritative npm-only output without editing hosts produced platform-pruned/incomplete lockfiles and were discarded; the final 63-line lockfile diff is npm-generated and all changed resolved URLs use npmjs.
 Task 11 unavailable: `scripts/ci_monitor.cjs` is absent, so only local static workflow review was possible; no remote workflow was triggered.
 Task 11 follow-up: the 42 inherited `registry.npmmirror.com` lockfile URLs were structurally normalized to `registry.npmjs.org` without changing versions or integrity, and lockfile-lint now passes. The stale test-audit baseline was regenerated from the base-identical repository debt (moduleMock 303, spyOn 34, unconditionalSkip 11, conditionalSkip 105, fixedWait 228, weakAssertion 349, processEnvMutation 151), restoring the CI no-new-debt gate while preserving the cleanup debt in the roadmap.
+
+# Theme System Consolidation Progress
+
+Plan: `docs/superpowers/plans/2026-07-15-theme-system-consolidation.md`
+Branch base: `0b10f5b31`
+Baseline: theme 4 passed; settings storage 31 passed; i18n 8 passed.
+Task 1: complete (commits 0b10f5b31..62e6c0412, review clean after compile-boundary fix)
+Task 2: complete (commit f9f1c0ee8, review approved)
+Task 2 minor: resolved by adding focused unknown-theme fallback and storage-rewrite coverage in the final verification pass.
+Task 3: complete (commit f5c15a06a, review clean)
+Task 4: complete with Android device limitation recorded.
+Task 4 automated verification: theme 8 passed; settings storage 35 passed; i18n 9 passed; app typecheck, targeted lint, targeted formatting, and diff checks passed before the final focused test addition; final gates are rerun below before completion.
+Task 4 Electron verification: real Electron launched against Metro with the desktop daemon connected; settings showed auto plus the five product themes in order; each option persisted the expected identifier; the real workspace cycled light, dark, liquid-neon, chisaki, and aemeath with the sidebar and message input remaining visible; final persisted theme was restored to light.
+Task 4 Electron residual: opening a new-workspace composer surfaced the pre-existing React DOM warning for the `uniProps` prop; theme switching itself produced no new runtime errors.
+Task 4 Android limitation: Android SDK and adb were found at C:\Users\48818\AppData\Local\Android\Sdk, but `adb devices -l` returned no connected devices and the SDK has no emulator, cmdline-tools, or configured AVD. Real Android visual and persistence verification is therefore not claimed; Electron or web results were not used as a substitute.

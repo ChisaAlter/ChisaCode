@@ -170,6 +170,20 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.theme).toBe(theme);
   });
 
+  it("normalizes an unknown theme to blockchain light and rewrites storage", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "future-theme", language: "en" }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.theme).toBe("light");
+    expect(result.language).toBe("en");
+    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(JSON.stringify(result));
+  });
+
   it("normalizes terminal scrollback lines from storage", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
