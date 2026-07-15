@@ -9,6 +9,13 @@
 
 ## 进行中
 
+### Electron / Android 工作台视觉重构（2026-07-15 启动）
+
+- **问题**：主题系统已经统一，但真实产品仍保留宽侧栏、大面积新工作区空态、悬浮环境卡片和宽松 Composer，和 `design/web3-themes-v2.html` 的紧凑工作台差异明显，用户无法感知实质视觉变化。
+- **影响范围**：`packages/app` 的 LeftSidebar、workspace header/center column/environment panel、Composer、新工作区和设置页；Electron 与 Android 共同受影响。
+- **方案**：复用现有真实状态和交互边界，把 Electron 重排为 200px 会话栏、42px 标题栏、38px 标签栏、贴底 Composer 和 280px 固定环境面板；Android 同步收紧 header、抽屉、Composer 与设置列表，不增加 iOS 工作。
+- **状态**：进行中，实施计划见 `docs/superpowers/plans/2026-07-15-workbench-visual-rebuild.md`。
+
 ### Reanimated 4.5 / Unistyles 样式边界修复（2026-07-15 启动）
 
 - **问题**：Expo 57 升级后的 Reanimated 4.5 会把传入 `Animated.View` 的 Unistyles 注册哈希解析为普通样式属性，桌面端在 Agent 状态点和设置页 Switch 渲染时因哈希值为空对象直接崩溃；同类边界还存在于 Composer、终端、文件拖放、消息流与原生 shimmer。
