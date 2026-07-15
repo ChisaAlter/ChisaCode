@@ -1,14 +1,45 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ACTIVE_THEME_NAMES,
+  ANDROID_FALLBACK_THEME,
+  ANDROID_THEME_OPTIONS,
+  LEGACY_THEME_MIGRATIONS,
+  THEME_PICKER_OPTIONS,
   THEME_PREVIEWS,
   THEME_SWATCHES,
+  THEME_TO_UNISTYLES,
   aemeathTheme,
   chisakiTheme,
   darkTheme,
   lightTheme,
   liquidNeonTheme,
 } from "./theme";
+
+describe("theme catalog", () => {
+  it("exposes exactly the five product themes in product order", () => {
+    expect(ACTIVE_THEME_NAMES).toEqual(["light", "dark", "liquid-neon", "chisaki", "aemeath"]);
+    expect(THEME_PICKER_OPTIONS).toEqual(["auto", ...ACTIVE_THEME_NAMES]);
+  });
+
+  it("shares the complete catalog with Android and defaults Android to light", () => {
+    expect(ANDROID_THEME_OPTIONS).toEqual(THEME_PICKER_OPTIONS);
+    expect(ANDROID_FALLBACK_THEME).toBe("light");
+  });
+
+  it("maps every legacy dark theme to cyber dark", () => {
+    expect(LEGACY_THEME_MIGRATIONS).toEqual({
+      zinc: "dark",
+      midnight: "dark",
+      claude: "dark",
+      ghostty: "dark",
+    });
+  });
+
+  it("registers runtime mappings only for active product themes", () => {
+    expect(Object.keys(THEME_TO_UNISTYLES)).toEqual(ACTIVE_THEME_NAMES);
+  });
+});
 
 describe("theme brightness", () => {
   it("exposes status bar brightness independently of the theme name", () => {

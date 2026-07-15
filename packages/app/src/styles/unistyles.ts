@@ -1,24 +1,10 @@
 import { StyleSheet } from "react-native-unistyles";
-import {
-  lightTheme,
-  darkTheme,
-  darkZincTheme,
-  darkMidnightTheme,
-  darkClaudeTheme,
-  darkGhosttyTheme,
-  liquidNeonTheme,
-  chisakiTheme,
-  aemeathTheme,
-} from "./theme";
+import { darkTheme, aemeathTheme, chisakiTheme, lightTheme, liquidNeonTheme } from "./theme";
 
 StyleSheet.configure({
   themes: {
     light: lightTheme,
     dark: darkTheme,
-    darkZinc: darkZincTheme,
-    darkMidnight: darkMidnightTheme,
-    darkClaude: darkClaudeTheme,
-    darkGhostty: darkGhosttyTheme,
     liquidNeon: liquidNeonTheme,
     chisaki: chisakiTheme,
     aemeath: aemeathTheme,
@@ -39,10 +25,6 @@ StyleSheet.configure({
 interface AppThemes {
   light: typeof lightTheme;
   dark: typeof darkTheme;
-  darkZinc: typeof darkZincTheme;
-  darkMidnight: typeof darkMidnightTheme;
-  darkClaude: typeof darkClaudeTheme;
-  darkGhostty: typeof darkGhosttyTheme;
   liquidNeon: typeof liquidNeonTheme;
   chisaki: typeof chisakiTheme;
   aemeath: typeof aemeathTheme;
