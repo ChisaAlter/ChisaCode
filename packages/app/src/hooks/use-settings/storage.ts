@@ -1,6 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
-import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
+import {
+  LEGACY_THEME_MIGRATIONS,
+  THEME_PICKER_OPTIONS,
+  type LegacyThemeName,
+  type ThemeName,
+} from "@/styles/theme";
 
 export const APP_SETTINGS_KEY = "@chisacode:app-settings";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
@@ -12,7 +17,8 @@ export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type AppLanguage = "zh-CN" | "en";
 
-const VALID_THEMES = new Set<string>([...Object.keys(THEME_TO_UNISTYLES), "auto"]);
+const VALID_THEMES = new Set<string>(THEME_PICKER_OPTIONS);
+const LEGACY_THEMES = new Set<string>(Object.keys(LEGACY_THEME_MIGRATIONS));
 const VALID_SERVICE_URL_BEHAVIORS = new Set<ServiceUrlBehavior>(["ask", "in-app", "external"]);
 const VALID_APP_LANGUAGES = new Set<AppLanguage>(["zh-CN", "en"]);
 export const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
@@ -34,7 +40,7 @@ export interface Settings extends AppSettings {
 }
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
-  theme: "liquid-neon",
+  theme: "light",
   language: "zh-CN",
   sendBehavior: "interrupt",
   serviceUrlBehavior: "ask",
@@ -189,11 +195,9 @@ function pickAppSettingsFromLegacy(
   deps: SettingsDeps,
 ): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
-  if (legacy.theme === "dark" || legacy.theme === "light" || legacy.theme === "auto") {
-    const theme = normalizeTheme(legacy.theme, deps);
-    if (theme) {
-      result.theme = theme;
-    }
+  const theme = normalizeTheme(legacy.theme, deps);
+  if (theme) {
+    result.theme = theme;
   }
   return result;
 }
@@ -210,11 +214,19 @@ function normalizeTheme(
   theme: unknown,
   deps?: Pick<SettingsDeps, "allowedThemes" | "fallbackTheme">,
 ): AppSettings["theme"] | null {
-  if (typeof theme !== "string" || !VALID_THEMES.has(theme)) {
+  if (typeof theme !== "string") {
     return null;
   }
-  if (!deps?.allowedThemes || deps.allowedThemes.has(theme)) {
-    return theme as AppSettings["theme"];
+
+  const migratedTheme = LEGACY_THEMES.has(theme)
+    ? LEGACY_THEME_MIGRATIONS[theme as LegacyThemeName]
+    : theme;
+
+  if (!VALID_THEMES.has(migratedTheme)) {
+    return null;
+  }
+  if (!deps?.allowedThemes || deps.allowedThemes.has(migratedTheme)) {
+    return migratedTheme as AppSettings["theme"];
   }
   return deps.fallbackTheme ?? DEFAULT_CLIENT_SETTINGS.theme;
 }
