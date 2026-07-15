@@ -32,4 +32,41 @@ describe("ProviderCommandClient", () => {
       },
     ]);
   });
+
+  test("keeps provider tooling transport alive beyond the complete server budget", async () => {
+    const requests: Array<Parameters<DaemonCommandTransport["request"]>[0]> = [];
+    const client = new ProviderCommandClient({
+      request: async (params) => {
+        requests.push(params);
+        return {} as never;
+      },
+    });
+    const toolingCommandBudgetMs = 120_000;
+    const availabilityRefreshBudgetMs = 30_000;
+    const modelsAndModesRefreshBudgetMs = 30_000;
+    const versionMetadataRefreshBudgetMs = 8_000;
+    const responseDeliveryGraceMs = 10_000;
+
+    await client.runProviderToolingAction("codex", "update", {
+      requestId: "provider-tooling-1",
+    });
+
+    expect(requests).toEqual([
+      {
+        requestId: "provider-tooling-1",
+        message: {
+          type: "provider.tooling.run.request",
+          provider: "codex",
+          action: "update",
+        },
+        responseType: "provider.tooling.run.response",
+        timeout:
+          toolingCommandBudgetMs +
+          availabilityRefreshBudgetMs +
+          modelsAndModesRefreshBudgetMs +
+          versionMetadataRefreshBudgetMs +
+          responseDeliveryGraceMs,
+      },
+    ]);
+  });
 });

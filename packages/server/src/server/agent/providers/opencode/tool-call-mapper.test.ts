@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { mapOpencodeToolCall } from "./tool-call-mapper.js";
 
 function expectMapped<T>(item: T | null): T {
-  expect(item).toBeTruthy();
   if (!item) {
     throw new Error("Expected mapped tool call");
   }

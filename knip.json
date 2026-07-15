@@ -40,6 +40,7 @@
       "paths": {
         "@server/*": ["../server/src/*"]
       },
+      "ignoreDependencies": ["react-test-renderer"],
       "ignore": ["android/**", "ios/**", ".expo/**", "dist/**", "scripts/reset-project.js"]
     },
     "packages/cli": {

@@ -13,7 +13,6 @@ const {
   configState,
   patchConfigMock,
   openProviderSettingsMock,
-  reportErrorMock,
   compactState,
 } = vi.hoisted(() => ({
   theme: {
@@ -49,7 +48,6 @@ const {
   },
   patchConfigMock: vi.fn(async () => undefined),
   openProviderSettingsMock: vi.fn(),
-  reportErrorMock: vi.fn(),
   compactState: {
     value: false,
   },
@@ -225,10 +223,6 @@ vi.mock("@/hooks/use-providers-snapshot", () => ({
   }),
 }));
 
-vi.mock("@/hooks/use-user-visible-error", () => ({
-  useUserVisibleErrorReporter: () => reportErrorMock,
-}));
-
 vi.mock("@/hooks/use-daemon-config", () => ({
   useDaemonConfig: () => ({
     config: configState.config,
@@ -329,7 +323,6 @@ describe("ProvidersSection", () => {
     patchConfigMock.mockReset();
     patchConfigMock.mockResolvedValue(undefined);
     openProviderSettingsMock.mockReset();
-    reportErrorMock.mockReset();
     compactState.value = false;
   });
 
@@ -462,38 +455,6 @@ describe("ProvidersSection", () => {
     });
 
     expect(openProviderSettingsMock).toHaveBeenCalledWith("claude", "reinstall");
-  });
-
-  it("reports provider tooling failures instead of swallowing them", async () => {
-    snapshotState.entries = [currentClaudeEntry];
-    configState.config = makeConfig();
-    openProviderSettingsMock.mockResolvedValue({
-      provider: "claude",
-      action: "reinstall",
-      exitCode: 1,
-      stdout: "",
-      stderr: "npm install failed",
-      success: false,
-      requestId: "tooling-test",
-    });
-
-    render();
-
-    const reinstallButton = container?.querySelector<HTMLElement>(
-      '[aria-label="Reinstall Claude"]',
-    );
-    expect(reinstallButton).not.toBeNull();
-
-    await act(async () => {
-      reinstallButton?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(reportErrorMock).toHaveBeenCalledWith({
-      error: expect.objectContaining({ message: "npm install failed" }),
-      logLabel: "[ProvidersSettings] Failed to reinstall provider claude",
-      fallbackMessage: "Install failed",
-    });
   });
 
   it("uses a wrapped compact layout for provider maintenance controls", () => {

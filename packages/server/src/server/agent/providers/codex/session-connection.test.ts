@@ -45,11 +45,6 @@ describe("CodexSessionConnection", () => {
       },
     });
     const successfulServer = createFakeCodexAppServer();
-    const failedKill = vi.spyOn(failedServer.child, "kill").mockImplementation((signal) => {
-      failedServer.child.signalCode = typeof signal === "string" ? signal : null;
-      failedServer.child.emit("exit", null, signal ?? null);
-      return true;
-    });
     const spawnAppServer = vi
       .fn<() => Promise<ChildProcessWithoutNullStreams>>()
       .mockResolvedValueOnce(failedServer.child)
@@ -57,7 +52,7 @@ describe("CodexSessionConnection", () => {
     const connection = createConnection(spawnAppServer);
 
     await expect(connection.connect()).rejects.toThrow("initialize failed");
-    expect(failedKill).toHaveBeenCalledWith("SIGTERM");
+    expect(failedServer.killSignals).toEqual(["SIGTERM"]);
     expect(connection.getClient()).toBeNull();
     expect(connection.isConnected()).toBe(false);
 
@@ -71,11 +66,6 @@ describe("CodexSessionConnection", () => {
 
   test("disposes a child that finishes spawning after close", async () => {
     const appServer = createFakeCodexAppServer();
-    const kill = vi.spyOn(appServer.child, "kill").mockImplementation((signal) => {
-      appServer.child.signalCode = typeof signal === "string" ? signal : null;
-      appServer.child.emit("exit", null, signal ?? null);
-      return true;
-    });
     let resolveSpawn!: (child: ChildProcessWithoutNullStreams) => void;
     const spawnAppServer = () =>
       new Promise<ChildProcessWithoutNullStreams>((resolve) => {
@@ -91,7 +81,7 @@ describe("CodexSessionConnection", () => {
     await expect(connectPromise).rejects.toThrow(
       "Codex session connection was closed during initialization",
     );
-    expect(kill).toHaveBeenCalledWith("SIGTERM");
+    expect(appServer.killSignals).toEqual(["SIGTERM"]);
     expect(onInitialized).not.toHaveBeenCalled();
     expect(connection.getClient()).toBeNull();
   });

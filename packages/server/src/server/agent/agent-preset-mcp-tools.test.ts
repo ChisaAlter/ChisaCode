@@ -37,8 +37,11 @@ describe("registerAgentPresetMcpTools", () => {
     });
 
     const tool = registry.tools.get("list_agent_presets");
-    expect(tool).toBeDefined();
-    await expect(tool?.handler()).resolves.toMatchObject({
+    expect(registry.tools.has("list_agent_presets")).toBe(true);
+    if (!tool) {
+      throw new Error("Expected list_agent_presets to be registered");
+    }
+    await expect(tool.handler()).resolves.toMatchObject({
       structuredContent: {
         presets: [
           {

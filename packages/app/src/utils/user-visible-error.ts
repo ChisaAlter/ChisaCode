@@ -1,9 +1,14 @@
 import type { ToastApi } from "@/components/toast-host";
 import { toErrorMessage } from "@/utils/error-messages";
 
+export interface ErrorLogger {
+  error(label: string, error: unknown): void;
+}
+
 export interface PresentedErrorReport {
   logLabel: string;
   error: unknown;
+  logger?: ErrorLogger;
   message?: string;
   fallbackMessage?: string;
   notify?: boolean;
@@ -17,7 +22,8 @@ export type UserVisibleErrorReport = Omit<PresentedErrorReport, "present"> & {
 export type UserVisibleErrorReporterInput = Omit<UserVisibleErrorReport, "toast">;
 
 export function reportPresentedError(input: PresentedErrorReport): void {
-  console.error(input.logLabel, input.error);
+  const logger = input.logger ?? console;
+  logger.error(input.logLabel, input.error);
   if (input.notify === false) return;
   input.present(input.message?.trim() || toErrorMessage(input.error, input.fallbackMessage));
 }

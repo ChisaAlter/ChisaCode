@@ -18,7 +18,7 @@ import {
   resolveProviderAndOptionalModel,
   resolveRequiredProviderModel,
 } from "./mcp-shared.js";
-import { resolveSnapshotCwd, type ProviderSnapshotManager } from "./provider-snapshot-manager.js";
+import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 
 const ProviderOrProviderModelInputSchema = AgentProviderEnum.trim()
   .min(1, "provider is required")
@@ -78,6 +78,7 @@ export interface RegisterProviderMcpToolsOptions {
   registerTool: McpServer["registerTool"];
   agentManager: Pick<AgentManager, "listDraftFeatures">;
   providerSnapshotManager: ProviderSnapshotManager;
+  resolveProviderDiscoveryCwd(requestedCwd?: string): string;
   resolveScopedCwd(requestedCwd?: string, options?: { required?: boolean }): string;
 }
 
@@ -88,15 +89,18 @@ export function registerProviderMcpTools(options: RegisterProviderMcpToolsOption
     {
       title: "List providers",
       description: "List configured agent providers, availability, and their modes.",
-      inputSchema: {},
+      inputSchema: {
+        cwd: z.string().optional().describe("Working directory used to resolve provider state."),
+      },
       outputSchema: {
         providers: z.array(ProviderSummarySchema),
       },
     },
-    async () => {
-      const providers = (await options.providerSnapshotManager.listProviders({ wait: true })).map(
-        toProviderSummary,
-      );
+    async ({ cwd }) => {
+      const resolvedCwd = options.resolveProviderDiscoveryCwd(cwd);
+      const providers = (
+        await options.providerSnapshotManager.listProviders({ cwd: resolvedCwd, wait: true })
+      ).map(toProviderSummary);
       return {
         content: [],
         structuredContent: ensureValidJson({ providers }),
@@ -111,15 +115,17 @@ export function registerProviderMcpTools(options: RegisterProviderMcpToolsOption
       description: "List models for an agent provider.",
       inputSchema: {
         provider: AgentProviderEnum,
+        cwd: z.string().optional().describe("Working directory used to resolve provider models."),
       },
       outputSchema: {
         provider: z.string(),
         models: z.array(AgentModelSchema),
       },
     },
-    async ({ provider }) => {
+    async ({ provider, cwd }) => {
+      const resolvedCwd = options.resolveProviderDiscoveryCwd(cwd);
       const models = await options.providerSnapshotManager.listModels({
-        cwd: resolveSnapshotCwd(),
+        cwd: resolvedCwd,
         provider,
         wait: true,
       });

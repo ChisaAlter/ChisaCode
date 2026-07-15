@@ -1,9 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { submitPermissionResponse } from "./permission-response";
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 describe("submitPermissionResponse", () => {
   it("reports a failed response and restores the retry state", async () => {
@@ -11,7 +7,7 @@ describe("submitPermissionResponse", () => {
     const respond = vi.fn().mockRejectedValue(error);
     const presentError = vi.fn();
     const onFailure = vi.fn();
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    const logError = vi.fn();
 
     const succeeded = await submitPermissionResponse({
       agentId: "agent-1",
@@ -21,6 +17,7 @@ describe("submitPermissionResponse", () => {
       presentError,
       fallbackMessage: "Unable to respond to the permission request",
       onFailure,
+      logger: { error: logError },
     });
 
     expect(succeeded).toBe(false);
@@ -29,7 +26,7 @@ describe("submitPermissionResponse", () => {
       requestId: "permission-1",
       response: { behavior: "allow", selectedActionId: "accept" },
     });
-    expect(console.error).toHaveBeenCalledWith(
+    expect(logError).toHaveBeenCalledWith(
       "[PermissionRequestCard] Failed to respond to permission",
       error,
     );

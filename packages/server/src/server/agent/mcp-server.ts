@@ -16,7 +16,7 @@ import type { VoiceCallerContext, VoiceSpeakHandler } from "../voice-types.js";
 import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type { CreateChisaCodeWorktreeWorkflowFn } from "../worktree-session.js";
-import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
+import { resolveSnapshotCwd, type ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import type { GitHubService } from "../../services/github-service.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { UsageStore } from "../usage/usage-store.js";
@@ -250,6 +250,15 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     return expandUserPath(trimmedCwd);
   };
 
+  const resolveProviderDiscoveryCwd = (requestedCwd?: string): string => {
+    if (resolveCallerAgent()) {
+      return resolveScopedCwd(requestedCwd, { required: true });
+    }
+
+    const trimmedCwd = requestedCwd?.trim();
+    return trimmedCwd ? expandUserPath(trimmedCwd) : resolveSnapshotCwd();
+  };
+
   const resolveScopeRoot = (): string | null => {
     const lockedCwd = callerContext?.lockedCwd?.trim();
     if (lockedCwd) {
@@ -405,6 +414,7 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
     registerTool,
     agentManager,
     providerSnapshotManager,
+    resolveProviderDiscoveryCwd,
     resolveScopedCwd,
   });
   registerAgentPresetMcpTools({

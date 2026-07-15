@@ -7,7 +7,6 @@ interface PendingWaiter {
   predicate(message: SessionOutboundMessage): unknown | null;
   resolve(value: unknown): void;
   reject(error: Error): void;
-  timeoutHandle: ReturnType<typeof setTimeout> | null;
 }
 
 class MessageWaiterHarness {
@@ -15,21 +14,13 @@ class MessageWaiterHarness {
 
   waitFor<T>(
     predicate: (message: SessionOutboundMessage) => T | null,
-    timeout = 30_000,
+    _timeout = 30_000,
   ): VoiceWaitHandle<T> {
     let settled = false;
     let waiter: PendingWaiter;
     let rejectPromise: (error: Error) => void = () => {};
     const promise = new Promise<T>((resolve, reject) => {
       rejectPromise = reject;
-      const timeoutHandle =
-        timeout > 0
-          ? setTimeout(() => {
-              this.waiters.delete(waiter);
-              settled = true;
-              reject(new Error(`Timeout waiting for message (${timeout}ms)`));
-            }, timeout)
-          : null;
       waiter = {
         predicate,
         resolve: (value) => {
@@ -46,7 +37,6 @@ class MessageWaiterHarness {
           settled = true;
           reject(error);
         },
-        timeoutHandle,
       };
       this.waiters.add(waiter);
     });
@@ -58,9 +48,6 @@ class MessageWaiterHarness {
         }
         settled = true;
         this.waiters.delete(waiter);
-        if (waiter.timeoutHandle) {
-          clearTimeout(waiter.timeoutHandle);
-        }
         rejectPromise(error);
       },
     };
@@ -73,9 +60,6 @@ class MessageWaiterHarness {
         continue;
       }
       this.waiters.delete(waiter);
-      if (waiter.timeoutHandle) {
-        clearTimeout(waiter.timeoutHandle);
-      }
       waiter.resolve(value);
     }
   }

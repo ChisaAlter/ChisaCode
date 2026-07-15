@@ -7,36 +7,44 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
-const { theme, configState, snapshotState, patchConfigMock, refreshMock, confirmDialogMock } =
-  vi.hoisted(() => ({
-    theme: {
-      spacing: { 1: 4, 2: 8, 3: 12, 4: 16 },
-      iconSize: { sm: 14 },
-      fontSize: { xs: 11, sm: 13 },
-      fontWeight: { medium: "500" },
-      borderRadius: { full: 999, lg: 8 },
-      opacity: { 50: 0.5 },
-      glass: { enabled: false },
-      shadow: { sm: {}, md: {}, lg: {} },
-      colors: {
-        surface1: "#111",
-        surface2: "#222",
-        foreground: "#fff",
-        foregroundMuted: "#aaa",
-        border: "#555",
-        destructive: "#f00",
-      },
+const {
+  theme,
+  configState,
+  snapshotState,
+  patchConfigMock,
+  refreshMock,
+  confirmDialogMock,
+  errorLogger,
+} = vi.hoisted(() => ({
+  theme: {
+    spacing: { 1: 4, 2: 8, 3: 12, 4: 16 },
+    iconSize: { sm: 14 },
+    fontSize: { xs: 11, sm: 13 },
+    fontWeight: { medium: "500" },
+    borderRadius: { full: 999, lg: 8 },
+    opacity: { 50: 0.5 },
+    glass: { enabled: false },
+    shadow: { sm: {}, md: {}, lg: {} },
+    colors: {
+      surface1: "#111",
+      surface2: "#222",
+      foreground: "#fff",
+      foregroundMuted: "#aaa",
+      border: "#555",
+      destructive: "#f00",
     },
-    configState: {
-      config: null as MutableDaemonConfig | null,
-    },
-    snapshotState: {
-      entries: undefined as ProviderSnapshotEntry[] | undefined,
-    },
-    patchConfigMock: vi.fn<() => Promise<MutableDaemonConfig | undefined>>(async () => undefined),
-    refreshMock: vi.fn<() => Promise<void>>(async () => undefined),
-    confirmDialogMock: vi.fn(async () => true),
-  }));
+  },
+  configState: {
+    config: null as MutableDaemonConfig | null,
+  },
+  snapshotState: {
+    entries: undefined as ProviderSnapshotEntry[] | undefined,
+  },
+  patchConfigMock: vi.fn<() => Promise<MutableDaemonConfig | undefined>>(async () => undefined),
+  refreshMock: vi.fn<() => Promise<void>>(async () => undefined),
+  confirmDialogMock: vi.fn(async () => true),
+  errorLogger: { error: vi.fn() },
+}));
 
 vi.mock("react-native", () => ({
   View: ({ children, testID }: { children?: React.ReactNode; testID?: string; style?: unknown }) =>
@@ -329,6 +337,7 @@ describe("CustomModelProvidersSection", () => {
     patchConfigMock.mockResolvedValue(makeConfig());
     refreshMock.mockReset();
     refreshMock.mockResolvedValue(undefined);
+    errorLogger.error.mockReset();
   });
 
   afterEach(() => {
@@ -422,11 +431,10 @@ describe("CustomModelProvidersSection", () => {
 
   it("keeps save failures visible inside the provider editor", async () => {
     const error = new Error("Gateway rejected config");
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     patchConfigMock.mockRejectedValueOnce(error);
 
     act(() => {
-      root.render(<CustomModelProvidersSection serverId="server-1" />);
+      root.render(<CustomModelProvidersSection serverId="server-1" errorLogger={errorLogger} />);
     });
 
     const editProvider = container.querySelector<HTMLButtonElement>(
@@ -451,11 +459,10 @@ describe("CustomModelProvidersSection", () => {
 
     expect(container.querySelector('[data-testid="custom-provider-editor-sheet"]')).not.toBeNull();
     expect(container.textContent).toContain("Gateway rejected config");
-    expect(consoleError).toHaveBeenCalledWith(
+    expect(errorLogger.error).toHaveBeenCalledWith(
       "[CustomModelProviders] Failed to save custom provider",
       error,
     );
-    consoleError.mockRestore();
   });
 
   it("shows visible feedback when testing a saved model row", async () => {

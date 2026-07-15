@@ -5,6 +5,9 @@ import type {
   DaemonCommandTransport,
 } from "./daemon-client-command-transport.js";
 
+// Covers the server npm command, provider refresh, tooling metadata, and response delivery.
+const PROVIDER_TOOLING_RPC_TIMEOUT_MS = 198_000;
+
 type ListCommandsDraftConfig = Pick<
   AgentSessionConfig,
   "provider" | "cwd" | "modeId" | "model" | "thinkingOptionId" | "featureValues"
@@ -128,7 +131,7 @@ export class ProviderCommandClient {
       requestId: options?.requestId,
       message: { type: "provider.tooling.run.request", provider, action },
       responseType: "provider.tooling.run.response",
-      timeout: 120000,
+      timeout: PROVIDER_TOOLING_RPC_TIMEOUT_MS,
     });
   }
 

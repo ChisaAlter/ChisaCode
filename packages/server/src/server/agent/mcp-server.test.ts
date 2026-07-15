@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { realpathSync } from "node:fs";
 import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve as resolvePath } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import Ajv from "ajv";
 import { z } from "zod/v3";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -42,6 +42,7 @@ import { PARENT_AGENT_ID_LABEL } from "@chisacode/protocol/agent-labels";
 
 const REPO_CWD = resolvePath("/tmp/repo");
 const TARGET_CWD = resolvePath("/tmp/target");
+const HOME_CWD = resolvePath(homedir());
 
 interface LooseSafeParseResult {
   success: boolean;
@@ -3475,6 +3476,40 @@ describe("schedule_logs MCP tool", () => {
 describe("provider listing MCP tool", () => {
   const logger = createTestLogger();
 
+  it("scopes list_providers to the caller cwd and preserves the top-level home fallback", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    spies.agentManager.getAgent.mockReturnValue(
+      createManagedAgent({ id: "caller-agent", cwd: REPO_CWD }),
+    );
+    const callerStub = createProviderSnapshotManagerStub();
+    const callerServer = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: callerStub.manager,
+      callerAgentId: "caller-agent",
+      logger,
+    });
+
+    await invokeToolWithParsedInput(registeredTool(callerServer, "list_providers"), {});
+
+    expect(callerStub.listProviders).toHaveBeenCalledWith({ cwd: REPO_CWD, wait: true });
+
+    const topLevelStub = createProviderSnapshotManagerStub();
+    const topLevelServer = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: topLevelStub.manager,
+      logger,
+    });
+    const topLevelTool = registeredTool(topLevelServer, "list_providers");
+
+    await invokeToolWithParsedInput(topLevelTool, { cwd: TARGET_CWD });
+
+    expect(topLevelStub.listProviders).toHaveBeenCalledWith({ cwd: TARGET_CWD, wait: true });
+    await invokeToolWithParsedInput(topLevelTool, {});
+    expect(topLevelStub.listProviders).toHaveBeenLastCalledWith({ cwd: HOME_CWD, wait: true });
+  });
+
   it("returns providers from the registry, including custom providers", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const provStub = createProviderSnapshotManagerStub();
@@ -3507,7 +3542,7 @@ describe("provider listing MCP tool", () => {
       logger,
     });
     const tool = registeredTool(server, "list_providers");
-    const response = await tool.handler({});
+    const response = await tool.handler({ cwd: REPO_CWD });
     const modelVisibleText = String(response.content[0]?.text);
 
     expect(response.structuredContent).toEqual({
@@ -3562,7 +3597,7 @@ describe("provider listing MCP tool", () => {
     });
     const tool = registeredTool(server, "list_providers");
 
-    const response = await tool.handler({});
+    const response = await tool.handler({ cwd: REPO_CWD });
 
     expect(response.structuredContent.providers).toEqual([
       expect.objectContaining({
@@ -3592,7 +3627,7 @@ describe("provider listing MCP tool", () => {
       logger,
     });
     const tool = registeredTool(server, "list_providers");
-    const response = await tool.handler({});
+    const response = await tool.handler({ cwd: REPO_CWD });
 
     expect(response.structuredContent).toEqual({
       providers: [
@@ -3615,6 +3650,54 @@ describe("provider listing MCP tool", () => {
 
 describe("provider MCP tools", () => {
   const logger = createTestLogger();
+
+  it("scopes list_models to the caller cwd and preserves the top-level home fallback", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    spies.agentManager.getAgent.mockReturnValue(
+      createManagedAgent({ id: "caller-agent", cwd: REPO_CWD }),
+    );
+    const callerStub = createProviderSnapshotManagerStub();
+    const callerServer = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: callerStub.manager,
+      callerAgentId: "caller-agent",
+      logger,
+    });
+
+    await invokeToolWithParsedInput(registeredTool(callerServer, "list_models"), {
+      provider: "codex",
+    });
+
+    expect(callerStub.listModels).toHaveBeenCalledWith({
+      cwd: REPO_CWD,
+      provider: "codex",
+      wait: true,
+    });
+
+    const topLevelStub = createProviderSnapshotManagerStub();
+    const topLevelServer = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: topLevelStub.manager,
+      logger,
+    });
+    const topLevelTool = registeredTool(topLevelServer, "list_models");
+
+    await invokeToolWithParsedInput(topLevelTool, { provider: "codex", cwd: TARGET_CWD });
+
+    expect(topLevelStub.listModels).toHaveBeenCalledWith({
+      cwd: TARGET_CWD,
+      provider: "codex",
+      wait: true,
+    });
+    await invokeToolWithParsedInput(topLevelTool, { provider: "codex" });
+    expect(topLevelStub.listModels).toHaveBeenLastCalledWith({
+      cwd: HOME_CWD,
+      provider: "codex",
+      wait: true,
+    });
+  });
 
   it("does not register the replaced feature-specific provider discovery MCP tool", async () => {
     const { agentManager, agentStorage } = createTestDeps();
@@ -3718,7 +3801,7 @@ describe("provider MCP tools", () => {
     });
     const tool = registeredTool(server, "list_models");
 
-    await expect(tool.handler({ provider: "codex" })).rejects.toThrow(
+    await expect(tool.handler({ provider: "codex", cwd: REPO_CWD })).rejects.toThrow(
       "Provider 'codex' is disabled",
     );
   });

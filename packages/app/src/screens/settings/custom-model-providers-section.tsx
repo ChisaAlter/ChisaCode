@@ -18,7 +18,7 @@ import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
-import { reportPresentedError } from "@/utils/user-visible-error";
+import { reportPresentedError, type ErrorLogger } from "@/utils/user-visible-error";
 import {
   buildDisableCustomModelProviderPatch,
   buildModelGatewayProviderIdList,
@@ -33,6 +33,7 @@ import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
 interface CustomModelProvidersSectionProps {
   serverId: string;
+  errorLogger?: ErrorLogger;
 }
 
 interface EditingProviderState {
@@ -644,12 +645,14 @@ function ProviderEditorSheet({
   onClose,
   onSave,
   onTestGateway,
+  errorLogger,
 }: {
   state: EditingProviderState | null;
   config: MutableDaemonConfig | null;
   onClose: () => void;
   onSave: (values: ProviderEditorValues, previousId: string | null) => Promise<void>;
   onTestGateway: (gatewayId: string) => Promise<void>;
+  errorLogger?: ErrorLogger;
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -801,13 +804,14 @@ function ProviderEditorSheet({
             logLabel: `[CustomModelProviders] Failed to test model ${model.id}`,
             fallbackMessage: t("customModelProviders.testFailedShort"),
             present: setModelTestMessage,
+            logger: errorLogger,
           });
         })
         .finally(() => {
           setTestingModelId((current) => (current === model.id ? null : current));
         });
     },
-    [onTestGateway, previousId, state?.mode, t, values.id],
+    [errorLogger, onTestGateway, previousId, state?.mode, t, values.id],
   );
   const handleSave = useCallback(() => {
     if (saving) return;
@@ -820,10 +824,11 @@ function ProviderEditorSheet({
           logLabel: "[CustomModelProviders] Failed to save custom provider",
           fallbackMessage: t("customModelProviders.saveFailed"),
           present: setFormError,
+          logger: errorLogger,
         });
       })
       .finally(() => setSaving(false));
-  }, [onSave, previousId, saving, t, values]);
+  }, [errorLogger, onSave, previousId, saving, t, values]);
   const header = useMemo<SheetHeader>(
     () => ({
       title:
@@ -941,7 +946,10 @@ function ProviderEditorSheet({
   );
 }
 
-export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSectionProps) {
+export function CustomModelProvidersSection({
+  serverId,
+  errorLogger,
+}: CustomModelProvidersSectionProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
@@ -1099,6 +1107,7 @@ export function CustomModelProvidersSection({ serverId }: CustomModelProvidersSe
         onClose={closeEditor}
         onSave={handleSave}
         onTestGateway={handleTestGatewayId}
+        errorLogger={errorLogger}
       />
     </>
   );

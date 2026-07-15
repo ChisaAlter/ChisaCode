@@ -9,6 +9,7 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
 import { Button } from "@/components/ui/button";
+import { unarchiveAgent } from "@/components/archived-agent-unarchive";
 import type { Theme } from "@/styles/theme";
 
 interface ArchivedAgentCalloutProps {
@@ -33,17 +34,13 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
 
   const handleUnarchive = useCallback(async () => {
     if (!client || !isConnected || isUnarchiving) return;
-    setIsUnarchiving(true);
-    try {
-      await client.refreshAgent(agentId);
-    } catch (error) {
-      reportError({
-        logLabel: "[ArchivedAgentCallout] Failed to unarchive agent",
-        error,
-        fallbackMessage: t("session.unarchiveFailed"),
-      });
-      setIsUnarchiving(false);
-    }
+    await unarchiveAgent({
+      agentId,
+      refreshAgent: (id) => client.refreshAgent(id),
+      reportError,
+      fallbackMessage: t("session.unarchiveFailed"),
+      setPending: setIsUnarchiving,
+    });
   }, [agentId, client, isConnected, isUnarchiving, reportError, t]);
 
   return (

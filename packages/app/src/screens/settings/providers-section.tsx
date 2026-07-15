@@ -23,6 +23,10 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { ChevronRight, Download, RefreshCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import {
+  runProviderToolingAction,
+  type ProviderToolingAction,
+} from "@/screens/settings/provider-tooling-action";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -91,9 +95,7 @@ function ProviderRow({
   const reportError = useUserVisibleErrorReporter();
   const isCompact = useIsCompactFormFactor();
   const client = useHostRuntimeClient(serverId);
-  const [toolingAction, setToolingAction] = useState<"install" | "update" | "reinstall" | null>(
-    null,
-  );
+  const [toolingAction, setToolingAction] = useState<ProviderToolingAction | null>(null);
   const ProviderIcon = getProviderIcon(def.id);
   const providerError =
     enabled &&
@@ -121,30 +123,19 @@ function ProviderRow({
     [def.id, onToggleEnabled],
   );
   const handleRunToolingAction = useCallback(
-    (action: "install" | "update" | "reinstall") => {
+    (action: ProviderToolingAction) => {
       if (!client || toolingAction) return;
       setToolingAction(action);
-      void client
-        .runProviderToolingAction(def.id, action)
-        .then((result) => {
-          if (result.success) return;
-          const message = result.stderr.trim() || result.stdout.trim();
-          throw new Error(
-            message ||
-              (action === "update" ? t("providers.updateFailed") : t("providers.installFailed")),
-          );
-        })
-        .catch((error) => {
-          reportError({
-            error,
-            logLabel: `[ProvidersSettings] Failed to ${action} provider ${def.id}`,
-            fallbackMessage:
-              action === "update" ? t("providers.updateFailed") : t("providers.installFailed"),
-          });
-        })
-        .finally(() => {
-          setToolingAction(null);
-        });
+      void runProviderToolingAction({
+        client,
+        providerId: def.id,
+        action,
+        reportError,
+        fallbackMessage:
+          action === "update" ? t("providers.updateFailed") : t("providers.installFailed"),
+      }).finally(() => {
+        setToolingAction(null);
+      });
     },
     [client, def.id, reportError, t, toolingAction],
   );

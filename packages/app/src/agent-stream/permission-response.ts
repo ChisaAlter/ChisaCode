@@ -1,5 +1,5 @@
 import type { AgentPermissionResponse } from "@chisacode/protocol/agent-types";
-import { reportPresentedError } from "@/utils/user-visible-error";
+import { reportPresentedError, type ErrorLogger } from "@/utils/user-visible-error";
 
 interface SubmitPermissionResponseInput {
   agentId: string;
@@ -13,6 +13,7 @@ interface SubmitPermissionResponseInput {
   presentError: (message: string) => void;
   fallbackMessage: string;
   onFailure: (error: unknown) => void;
+  logger?: ErrorLogger;
 }
 
 /**
@@ -36,6 +37,7 @@ export async function submitPermissionResponse(
       error,
       fallbackMessage: input.fallbackMessage,
       present: input.presentError,
+      logger: input.logger,
     });
     input.onFailure(error);
     return false;

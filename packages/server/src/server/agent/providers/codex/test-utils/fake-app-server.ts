@@ -10,10 +10,12 @@ type CodexAppServerChildProcess = ChildProcessWithoutNullStreams & {
   stdin: PassThrough;
   stdout: PassThrough;
   stderr: PassThrough;
+  killSignals: Array<NodeJS.Signals | number | undefined>;
 };
 
 export interface FakeCodexAppServer {
   readonly child: CodexAppServerChildProcess;
+  readonly killSignals: readonly (NodeJS.Signals | number | undefined)[];
   readonly recordedRollbacks: JsonObject[];
   assertNoErrors(): void;
   waitForTurnStart(): Promise<JsonObject>;
@@ -37,8 +39,11 @@ export function createCodexAppServerChildProcess(): CodexAppServerChildProcess {
     stderr: new PassThrough(),
     exitCode: null,
     signalCode: null,
-  }) as CodexAppServerChildProcess;
+    killSignals: [] as Array<NodeJS.Signals | number | undefined>,
+  }) as unknown as CodexAppServerChildProcess;
   child.kill = ((signal?: NodeJS.Signals | number) => {
+    child.killSignals.push(signal);
+    Reflect.set(child, "signalCode", typeof signal === "string" ? signal : null);
     queueMicrotask(() => child.emit("exit", null, signal ?? null));
     return true;
   }) as ChildProcessWithoutNullStreams["kill"];
@@ -197,6 +202,7 @@ export function createFakeCodexAppServer(
 
   return {
     child,
+    killSignals: child.killSignals,
     recordedRollbacks,
     assertNoErrors() {
       if (errors.length > 0) {
