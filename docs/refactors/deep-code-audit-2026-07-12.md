@@ -6,9 +6,9 @@
 | -------- | -------: | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
 | 架构设计 |      9.9 | dependency-cruiser 0 违规；protocol 721 行；workspace 1541 行；Claude 873 行；ACP 926 行；Pi 581 行                            | workspace 仍承担 route/authority 与跨域 view-model 协调，应只按真实职责继续拆分                 |
 | 安全设计 |      9.7 | relay E2EE 单调 nonce；Ed25519 socket 认证；Expo 57/Bundle Mode 已迁移；生产审计 12 项且 0 high/0 critical                     | 当前 Expo 工具链仍含 `xcode` 嵌套 UUID；EAS 云端验证与 relay 认证升级需持续兼容性发布管理       |
-| 产品能力 |      9.4 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat 与 loop                             | diagnostics/update 等平台相关能力的暴露深度仍不完全一致                                         |
+| 产品能力 |      9.6 | app、CLI、MCP 已覆盖 agents、terminals、schedules、worktrees、providers、permissions、chat、loop 与只读 diagnostics/tooling    | 更新安装仍属于 desktop 平台生命周期；其余差距主要是发布验证与少量 surface 深度差异              |
 | 代码质量 |      9.9 | typecheck/lint/format/test-audit/高信号 Knip/依赖边界均有门禁；Expo 57 通过 Doctor、Android Kotlin 编译与 Hermes bundle export | 历史 test debt 高，核心测试文件超过 5k 行，完整 Knip unused-export 结果仍有大量噪声与真实债混合 |
-| 综合     |  **9.8** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                                                    | 继续提升需要完成 EAS 认证发布验证、diagnostics surface parity 与测试减债                        |
+| 综合     |  **9.8** | 核心安全、主要产品域 parity、依赖迁移与持续领域拆分均有代码级实现和精确验证                                                    | 继续提升需要完成 EAS 认证发布验证、测试减债与剩余小型 surface 收口                              |
 
 ## 本轮已修
 
@@ -84,18 +84,18 @@
 
 ## 产品能力矩阵
 
-| 能力域                                    | App/Desktop        | CLI                      | MCP                             | 结论                               |
-| ----------------------------------------- | ------------------ | ------------------------ | ------------------------------- | ---------------------------------- |
-| Agent 生命周期、发送、等待、归档、终止    | 完整               | 完整                     | 完整                            | 核心能力一致                       |
-| Terminal 列表、创建、捕获、输入、终止     | 完整               | 完整                     | 完整                            | 一致                               |
-| Schedule 创建、查询、更新、暂停、运行记录 | 完整               | 完整                     | 完整                            | 一致                               |
-| Worktree 创建、列表、归档                 | 完整               | 完整                     | 完整                            | 一致                               |
-| Provider/model discovery                  | 完整               | 完整                     | 完整                            | 本轮修复旧客户端过滤回归           |
-| Provider 工具安装/更新/重装               | 完整               | 完整                     | 只读 inspect                    | MCP 禁止全局包变更是安全边界       |
-| Permission 查询与响应                     | 完整               | allow/deny/list          | 完整                            | 语义一致，CLI 偏运维表达           |
-| Chat                                      | 完整               | 完整                     | 完整：房间、消息、等待、mention | 一致；复用共享投递/fan-out 命令    |
-| Loop                                      | 完整               | 完整                     | 完整：启动、查询、日志、停止    | 一致；cwd 继承 caller scope        |
-| Diagnostics/update                        | Desktop/App 最完整 | daemon/provider 状态为主 | provider inspect 为主           | surface 深度不一致但有合理平台差异 |
+| 能力域                                    | App/Desktop            | CLI                                    | MCP                                      | 结论                                 |
+| ----------------------------------------- | ---------------------- | -------------------------------------- | ---------------------------------------- | ------------------------------------ |
+| Agent 生命周期、发送、等待、归档、终止    | 完整                   | 完整                                   | 完整                                     | 核心能力一致                         |
+| Terminal 列表、创建、捕获、输入、终止     | 完整                   | 完整                                   | 完整                                     | 一致                                 |
+| Schedule 创建、查询、更新、暂停、运行记录 | 完整                   | 完整                                   | 完整                                     | 一致                                 |
+| Worktree 创建、列表、归档                 | 完整                   | 完整                                   | 完整                                     | 一致                                 |
+| Provider/model discovery                  | 完整                   | 完整                                   | 完整                                     | 本轮修复旧客户端过滤回归             |
+| Provider 工具安装/更新/重装               | 完整                   | 完整                                   | 只读版本/状态                            | MCP 禁止全局包变更是安全边界         |
+| Permission 查询与响应                     | 完整                   | allow/deny/list                        | 完整                                     | 语义一致，CLI 偏运维表达             |
+| Chat                                      | 完整                   | 完整                                   | 完整：房间、消息、等待、mention          | 一致；复用共享投递/fan-out 命令      |
+| Loop                                      | 完整                   | 完整                                   | 完整：启动、查询、日志、停止             | 一致；cwd 继承 caller scope          |
+| Diagnostics/update                        | daemon 诊断 + 平台更新 | daemon 诊断 + provider inspect/refresh | 脱敏 daemon 诊断 + 只读 provider tooling | 诊断读能力基本一致；安装仍是平台边界 |
 
 ## 最高优先级剩余项
 
@@ -103,7 +103,7 @@
 2. **P1 provider 文件拆分（核心完成）**：`providers/base/` 错误抽象已删除，Codex/OpenCode/ACP/Pi/Claude 均已完成 composition-first 核心拆分；后续只在真实复杂度或缺陷证明收益时继续分域，不再按行数做低收益碎片化拆分。
 3. **P1 client/protocol 拆分（核心完成）**：`daemon-client.ts` 已完成主要领域、request 与 connection 分域并降至 2319 行；protocol `messages.ts` 已完成 terminal/checkout/workspace/provider/attachment/agent-extension/daemon/usage/voice-dictation/agent-state/agent-message 域提取并降至 721 行，当前只保留跨域 session/WS 聚合、server info 与通用控制消息。后续仅在真实复杂度或缺陷证明收益时继续拆分。
 4. **P2 app 工作台拆分（核心完成）**：移动端 navigation、workspace command routing、layout/setup persistence/hydration、tab/pane/dock/content、environment panel state/data/view、header/center-column view、explorer 与 open-intent 已提取，`workspace-screen.tsx` 从 5453 降至 1541 行；后续只在 route/authority 或跨域协调出现真实复杂度时继续分域，并保持 native/web/electron surface 验证分离。
-5. **P2 产品 parity（持续收口）**：MCP 已补齐一等 chat/loop 工具；CLI 已补齐 provider install/update/reinstall。App/CLI 可显式修改全局 provider 工具，agent-scoped MCP 保持只读，避免把全局包安装权限下放给 agent。
+5. **P2 产品 parity（持续收口）**：MCP 已补齐一等 chat/loop 工具与脱敏 daemon diagnostics；CLI 已补齐 provider install/update/reinstall，并可主动刷新 tooling snapshot。CLI/MCP 复用 protocol 的五态只读 tooling 投影；App/CLI 可显式修改全局 provider 工具，agent-scoped MCP 继续只读，避免把全局包安装权限下放给 agent。
 6. **P2 测试减债**：按包逐步降低 module mock、conditional skip、fixed wait、weak assertion、process.env mutation 基线，不再只维持 no-new-debt。
 
 ## 验证证据
@@ -166,5 +166,6 @@
 - 2026-07-13 Claude session identity 批次：server typecheck、4 个目标文件 lint 与 6 个 mode/session/model/persistence/session-switch 聚焦场景通过
 - 2026-07-13 Claude foreground turn 批次：server typecheck、2 个目标文件 lint 与 5 个 interrupt/reuse/stale abort/rewind 聚焦场景通过
 - 2026-07-15 CLI Provider 工具管理批次：CLI typecheck、4 个目标文件 lint、2 个成功/失败 runner 场景，以及 `provider --help` / `provider install --help` 真实命令入口通过；MCP 继续只读
+- 2026-07-15 Provider tooling 只读状态 parity 批次：protocol/CLI/server build、CLI/server typecheck、8 个目标文件 lint、CLI 3 个 refresh/list/降级场景、MCP 2 个 list/inspect 场景与真实 `provider ls --help` 入口通过；MCP 未新增任何全局工具变更能力
 
 未在本地运行全仓测试或全量 Playwright/Maestro；按仓库规则只做改动对应的聚焦验证，普通开发不触发远端 CI。

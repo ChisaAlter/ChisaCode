@@ -1,13 +1,18 @@
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { Command } from "commander";
 import type { CommandOptions, ListResult, OutputSchema } from "../../output/index.js";
-import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
+import {
+  resolveProviderToolingStatus,
+  type ProviderSnapshotEntry,
+  type ProviderToolingStatus,
+} from "@chisacode/protocol/agent-types";
 import { AGENT_PROVIDER_DEFINITIONS } from "@chisacode/protocol/provider-manifest";
 import { tryConnectToDaemon } from "../../utils/client.js";
 
-type ProviderToolingStatus = "install" | "update" | "current" | "unknown" | "not-checked";
-
-type ProviderListClient = Pick<DaemonClient, "getProvidersSnapshot" | "close">;
+type ProviderListClient = Pick<
+  DaemonClient,
+  "getProvidersSnapshot" | "refreshProvidersSnapshot" | "close"
+>;
 
 export interface ProviderListItem {
   provider: ProviderSnapshotEntry["provider"];
@@ -47,22 +52,6 @@ function formatProviderVersion(version: string | null | undefined): string {
   return trimmed && trimmed.length > 0 ? trimmed : "-";
 }
 
-function getProviderToolingStatus(entry: ProviderSnapshotEntry): ProviderToolingStatus {
-  if (entry.versionStatus === "not-installed" || entry.installAvailable === true) {
-    return "install";
-  }
-  if (entry.versionStatus === "outdated" || entry.updateAvailable === true) {
-    return "update";
-  }
-  if (entry.versionStatus === "current") {
-    return "current";
-  }
-  if (entry.versionStatus === "unknown" || Boolean(entry.checkedAt?.trim())) {
-    return "unknown";
-  }
-  return "not-checked";
-}
-
 const defaultDependencies: ProviderLsCommandDependencies = {
   tryConnect: tryConnectToDaemon,
 };
@@ -96,6 +85,7 @@ export type ProviderLsResult = ListResult<ProviderListItem>;
 
 export interface ProviderLsOptions extends CommandOptions {
   host?: string;
+  refresh?: boolean;
 }
 
 export async function runLsCommand(
@@ -121,6 +111,9 @@ export async function runProviderLsCommandWithDependencies(
   }
 
   try {
+    if (options.refresh) {
+      await client.refreshProvidersSnapshot();
+    }
     const snapshot = await client.getProvidersSnapshot();
     return {
       type: "list",
@@ -131,7 +124,7 @@ export async function runProviderLsCommandWithDependencies(
         enabled: !entry.enabled ? "Disabled" : "Enabled",
         installedVersion: formatProviderVersion(entry.installedVersion),
         latestVersion: formatProviderVersion(entry.latestVersion),
-        toolingStatus: getProviderToolingStatus(entry),
+        toolingStatus: resolveProviderToolingStatus(entry),
         defaultMode: entry.defaultModeId ?? "default",
         modes: (entry.modes ?? []).map((mode) => mode.label).join(", "),
       })),

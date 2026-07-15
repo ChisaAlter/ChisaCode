@@ -104,6 +104,35 @@ export interface ProviderSnapshotEntry {
   updateAvailable?: boolean;
 }
 
+/** Stable read-only tooling state shared by CLI and MCP provider projections. */
+export type ProviderToolingStatus = "install" | "update" | "current" | "unknown" | "not-checked";
+
+/**
+ * Resolves the next provider tooling state from snapshot metadata.
+ * @param entry Provider snapshot fields produced by the daemon tooling authority
+ * @returns A stable status suitable for read-only product surfaces
+ */
+export function resolveProviderToolingStatus(
+  entry: Pick<
+    ProviderSnapshotEntry,
+    "versionStatus" | "installAvailable" | "updateAvailable" | "checkedAt"
+  >,
+): ProviderToolingStatus {
+  if (entry.versionStatus === "not-installed" || entry.installAvailable === true) {
+    return "install";
+  }
+  if (entry.versionStatus === "outdated" || entry.updateAvailable === true) {
+    return "update";
+  }
+  if (entry.versionStatus === "current") {
+    return "current";
+  }
+  if (entry.versionStatus === "unknown" || Boolean(entry.checkedAt?.trim())) {
+    return "unknown";
+  }
+  return "not-checked";
+}
+
 export interface AgentFeatureToggle {
   type: "toggle";
   id: string;

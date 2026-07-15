@@ -95,10 +95,11 @@ List providers with runtime availability, installed/latest CLI versions, and the
 
 ```bash
 chisacode provider ls
+chisacode provider ls --refresh
 chisacode provider ls --json
 ```
 
-`TOOLING` reports `install`, `update`, `current`, `unknown`, or `not-checked`. If the daemon is unavailable, the command still lists manifest providers and marks tooling as `not-checked` instead of guessing version state.
+`TOOLING` reports `install`, `update`, `current`, `unknown`, or `not-checked`. Add `--refresh` to make the daemon recheck provider availability and tooling versions before the list is read. If the daemon is unavailable, the command still lists manifest providers and marks tooling as `not-checked` instead of guessing version state.
 
 Inspect a provider's effective command, environment presence, tooling version, and MCP injection status:
 
@@ -263,10 +264,11 @@ chisacode daemon diagnostics --json
 
 ```bash
 chisacode provider ls
+chisacode provider ls --refresh
 chisacode provider ls --json
 ```
 
-`TOOLING` 会显示 `install`、`update`、`current`、`unknown` 或 `not-checked`。daemon 不可达时，命令仍会列出 manifest provider，并用 `not-checked` 表示尚未检查，而不是猜测版本状态。
+`TOOLING` 会显示 `install`、`update`、`current`、`unknown` 或 `not-checked`。添加 `--refresh` 会要求 daemon 先重新检查 provider 可用性和工具版本，再读取列表。daemon 不可达时，命令仍会列出 manifest provider，并用 `not-checked` 表示尚未检查，而不是猜测版本状态。
 
 检查 provider 的有效命令、环境变量存在性、工具版本和 MCP 注入状态：
 

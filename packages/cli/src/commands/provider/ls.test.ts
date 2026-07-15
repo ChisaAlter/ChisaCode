@@ -115,6 +115,45 @@ describe("runProviderLsCommand", () => {
     expect(closed).toBe(true);
   });
 
+  test("refreshes provider tooling before reading the list when requested", async () => {
+    let refreshed = false;
+    let closed = false;
+
+    const result = await runProviderLsCommandWithDependencies({ refresh: true }, new Command(), {
+      tryConnect: async () => ({
+        refreshProvidersSnapshot: async () => {
+          refreshed = true;
+          return { acknowledged: true, requestId: "provider-refresh-1" };
+        },
+        getProvidersSnapshot: async () => {
+          expect(refreshed).toBe(true);
+          return {
+            entries: [
+              {
+                provider: "codex",
+                status: "ready" as const,
+                enabled: true,
+                installedVersion: "1.2.3",
+                latestVersion: "1.3.0",
+                versionStatus: "outdated" as const,
+              },
+            ],
+            requestId: "provider-snapshot-refreshed",
+          };
+        },
+        close: async () => {
+          closed = true;
+        },
+      }),
+    });
+
+    expect(result.data[0]).toMatchObject({
+      provider: "codex",
+      latestVersion: "1.3.0",
+      toolingStatus: "update",
+    });
+    expect(closed).toBe(true);
+  });
   test("falls back to manifest providers with unchecked tooling when snapshot loading fails", async () => {
     let closed = false;
 

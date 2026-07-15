@@ -1,4 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  resolveProviderToolingStatus,
+  type ProviderSnapshotEntry,
+  type ProviderToolingStatus,
+} from "@chisacode/protocol/agent-types";
 import { z } from "zod/v3";
 
 import { ensureValidJson } from "../json-utils.js";
@@ -61,6 +66,10 @@ interface ProviderSummary {
   enabled: boolean;
   modes: AgentMode[];
   status: string;
+  installedVersion: string | null;
+  latestVersion: string | null;
+  toolingStatus: ProviderToolingStatus;
+  checkedAt: string | null;
   error?: string;
 }
 
@@ -136,6 +145,10 @@ export function registerProviderMcpTools(options: RegisterProviderMcpToolsOption
         status: z.string(),
         modes: z.array(ProviderModeSchema).nullish(),
         selectedModel: z.string().nullable(),
+        installedVersion: z.string().nullable(),
+        latestVersion: z.string().nullable(),
+        toolingStatus: z.enum(["install", "update", "current", "unknown", "not-checked"]),
+        checkedAt: z.string().nullable(),
         features: z.array(AgentFeatureSchema),
       },
     },
@@ -174,6 +187,10 @@ export function registerProviderMcpTools(options: RegisterProviderMcpToolsOption
           status: summary.status,
           modes: summary.modes,
           selectedModel: selectedModel ?? null,
+          installedVersion: summary.installedVersion,
+          latestVersion: summary.latestVersion,
+          toolingStatus: summary.toolingStatus,
+          checkedAt: summary.checkedAt,
           features,
         }),
       };
@@ -181,15 +198,12 @@ export function registerProviderMcpTools(options: RegisterProviderMcpToolsOption
   );
 }
 
-function toProviderSummary(entry: {
-  provider: AgentProvider;
-  label?: string;
-  description?: string;
-  enabled: boolean;
-  modes?: AgentMode[];
-  status: string;
-  error?: string;
-}): ProviderSummary {
+function normalizeProviderVersion(version: string | null | undefined): string | null {
+  const trimmed = version?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+function toProviderSummary(entry: ProviderSnapshotEntry): ProviderSummary {
   return {
     id: entry.provider,
     label: entry.label ?? entry.provider,
@@ -197,6 +211,10 @@ function toProviderSummary(entry: {
     enabled: entry.enabled,
     modes: entry.modes ?? [],
     status: entry.status === "ready" ? "available" : entry.status,
+    installedVersion: normalizeProviderVersion(entry.installedVersion),
+    latestVersion: normalizeProviderVersion(entry.latestVersion),
+    toolingStatus: resolveProviderToolingStatus(entry),
+    checkedAt: entry.checkedAt ?? null,
     ...(entry.error ? { error: entry.error } : {}),
   };
 }

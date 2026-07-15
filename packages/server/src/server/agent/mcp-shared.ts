@@ -31,6 +31,10 @@ export const ProviderSummarySchema = z
     description: z.string().nullish(),
     enabled: z.boolean().optional().default(true),
     modes: z.array(ProviderModeSchema).nullish(),
+    installedVersion: z.string().nullable(),
+    latestVersion: z.string().nullable(),
+    toolingStatus: z.enum(["install", "update", "current", "unknown", "not-checked"]),
+    checkedAt: z.string().nullable(),
   })
   .passthrough();
 

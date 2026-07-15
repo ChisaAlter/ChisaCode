@@ -232,6 +232,12 @@ interface ConfigureProviderEntry {
   enabled?: boolean;
   defaultModeId?: string;
   modes?: AgentMode[];
+  installedVersion?: string | null;
+  latestVersion?: string | null;
+  versionStatus?: ProviderSnapshotEntry["versionStatus"];
+  checkedAt?: string;
+  installAvailable?: boolean;
+  updateAvailable?: boolean;
 }
 
 // Builds a ProviderSnapshotEntry for tests that need to configure listProviders /
@@ -239,6 +245,14 @@ interface ConfigureProviderEntry {
 // status: "ready" for enabled+available, "unavailable" for disabled.
 function buildSnapshotEntry(entry: ConfigureProviderEntry): ProviderSnapshotEntry {
   const enabled = entry.enabled ?? true;
+  const tooling = {
+    ...(entry.installedVersion !== undefined ? { installedVersion: entry.installedVersion } : {}),
+    ...(entry.latestVersion !== undefined ? { latestVersion: entry.latestVersion } : {}),
+    ...(entry.versionStatus !== undefined ? { versionStatus: entry.versionStatus } : {}),
+    ...(entry.checkedAt !== undefined ? { checkedAt: entry.checkedAt } : {}),
+    ...(entry.installAvailable !== undefined ? { installAvailable: entry.installAvailable } : {}),
+    ...(entry.updateAvailable !== undefined ? { updateAvailable: entry.updateAvailable } : {}),
+  };
   if (!enabled) {
     return {
       provider: entry.provider,
@@ -248,6 +262,7 @@ function buildSnapshotEntry(entry: ConfigureProviderEntry): ProviderSnapshotEntr
       ...(entry.description !== undefined ? { description: entry.description } : {}),
       ...(entry.defaultModeId !== undefined ? { defaultModeId: entry.defaultModeId } : {}),
       modes: [],
+      ...tooling,
     };
   }
   return {
@@ -258,6 +273,7 @@ function buildSnapshotEntry(entry: ConfigureProviderEntry): ProviderSnapshotEntr
     ...(entry.description !== undefined ? { description: entry.description } : {}),
     ...(entry.defaultModeId !== undefined ? { defaultModeId: entry.defaultModeId } : {}),
     modes: entry.modes ?? [],
+    ...tooling,
   };
 }
 
@@ -3469,6 +3485,11 @@ describe("provider listing MCP tool", () => {
         label: "Claude",
         description: "Test provider",
         modes: [{ id: "default", label: "Default", description: "Built-in mode" }],
+        installedVersion: "1.2.3",
+        latestVersion: "1.3.0",
+        versionStatus: "outdated",
+        updateAvailable: true,
+        checkedAt: "2026-07-15T02:00:00.000Z",
       }),
       buildSnapshotEntry({
         provider: "zai" as AgentProvider,
@@ -3498,6 +3519,10 @@ describe("provider listing MCP tool", () => {
           enabled: true,
           status: "available",
           modes: [{ id: "default", label: "Default", description: "Built-in mode" }],
+          installedVersion: "1.2.3",
+          latestVersion: "1.3.0",
+          toolingStatus: "update",
+          checkedAt: "2026-07-15T02:00:00.000Z",
         },
         {
           id: "zai",
@@ -3506,6 +3531,10 @@ describe("provider listing MCP tool", () => {
           description: "Custom Claude profile",
           enabled: true,
           modes: [{ id: "default", label: "Default", description: "Custom mode" }],
+          installedVersion: null,
+          latestVersion: null,
+          toolingStatus: "not-checked",
+          checkedAt: null,
         },
       ],
     });
@@ -3574,6 +3603,10 @@ describe("provider listing MCP tool", () => {
           enabled: false,
           status: "unavailable",
           modes: [],
+          installedVersion: null,
+          latestVersion: null,
+          toolingStatus: "not-checked",
+          checkedAt: null,
         },
       ],
     });
@@ -3612,6 +3645,10 @@ describe("provider MCP tools", () => {
       label: "Codex",
       description: "OpenAI coding agent",
       modes: [{ id: "full-access", label: "Full Access", description: "Can edit files" }],
+      installedVersion: "2.4.0",
+      latestVersion: "2.4.0",
+      versionStatus: "current",
+      checkedAt: "2026-07-15T03:00:00.000Z",
     });
     provStub.listProviders.mockResolvedValue([codexEntry]);
     provStub.getProvider.mockResolvedValue(codexEntry);
@@ -3653,6 +3690,10 @@ describe("provider MCP tools", () => {
       status: "available",
       modes: [{ id: "full-access", label: "Full Access", description: "Can edit files" }],
       selectedModel: "gpt-5.4",
+      installedVersion: "2.4.0",
+      latestVersion: "2.4.0",
+      toolingStatus: "current",
+      checkedAt: "2026-07-15T03:00:00.000Z",
       features: [
         {
           type: "toggle",

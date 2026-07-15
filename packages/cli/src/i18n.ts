@@ -98,6 +98,7 @@ const translations = {
     "worktree.error.archiveFailed": "归档 worktree 失败：{{message}}",
     "provider.description": "管理 agent providers",
     "provider.ls.description": "列出可用 provider 和状态",
+    "provider.ls.refresh": "刷新 provider 状态和工具版本后再列出",
     "provider.inspect.description": "检查 provider 配置、命令、版本与 MCP 状态",
     "provider.inspect.provider": "Provider 名称（例如 claude、codex、opencode）",
     "provider.inspect.report": "诊断报告",
@@ -497,6 +498,7 @@ const translations = {
     "worktree.error.archiveFailed": "Failed to archive worktree: {{message}}",
     "provider.description": "Manage agent providers",
     "provider.ls.description": "List available providers and status",
+    "provider.ls.refresh": "Refresh provider status and tooling versions before listing",
     "provider.inspect.description":
       "Inspect provider configuration, command, version, and MCP status",
     "provider.inspect.provider": "Provider name (for example claude, codex, or opencode)",

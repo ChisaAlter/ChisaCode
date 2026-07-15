@@ -28,7 +28,10 @@ export function createProviderCommand(): Command {
   const provider = new Command("provider").description(tCli("provider.description"));
 
   addJsonAndDaemonHostOptions(
-    provider.command("ls").description(tCli("provider.ls.description")),
+    provider
+      .command("ls")
+      .description(tCli("provider.ls.description"))
+      .option("--refresh", tCli("provider.ls.refresh")),
   ).action(withOutput(runLsCommand));
   addJsonAndDaemonHostOptions(
     provider
