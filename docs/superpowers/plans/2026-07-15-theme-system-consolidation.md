@@ -26,7 +26,7 @@ Blockchain Light，并把四套旧暗色主题平滑迁移到 Cyber Dark。
 
 ---
 
-### 任务一：建立唯一的五主题权威
+### Task 1：建立唯一的五主题权威
 
 **文件：**
 
@@ -132,7 +132,7 @@ git commit -m "refactor(app): consolidate active theme catalog"
 
 ---
 
-### 任务二：迁移默认值、历史设置和 Android 策略
+### Task 2：迁移默认值、历史设置和 Android 策略
 
 **文件：**
 
@@ -266,7 +266,7 @@ git commit -m "fix(app): migrate legacy themes to cyber dark"
 
 ---
 
-### 任务三：统一设置菜单、快捷键循环和主题名称
+### Task 3：统一设置菜单、快捷键循环和主题名称
 
 **文件：**
 
@@ -370,7 +370,7 @@ git commit -m "feat(app): unify theme selection across desktop and Android"
 
 ---
 
-### 任务四：真实端验收与收尾
+### Task 4：真实端验收与收尾
 
 **文件：**
 
