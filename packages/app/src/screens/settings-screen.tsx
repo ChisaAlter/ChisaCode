@@ -49,7 +49,7 @@ import {
   type ServiceUrlBehavior,
   type Settings as EffectiveSettings,
 } from "@/hooks/use-settings";
-import { ANDROID_THEME_OPTIONS, THEME_PREVIEWS, type ThemeName } from "@/styles/theme";
+import { THEME_PICKER_OPTIONS, THEME_PREVIEWS, type ThemeName } from "@/styles/theme";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -75,7 +75,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
@@ -97,7 +96,6 @@ import { McpServersSection } from "@/screens/settings/mcp-servers-section";
 import { UsageStatisticsSection } from "@/screens/settings/usage-statistics-section";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
-import { isAndroid } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
@@ -245,16 +243,6 @@ const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
 
 const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
 const APP_LANGUAGE_VALUES: AppLanguage[] = ["zh-CN", "en"];
-const STANDARD_THEME_OPTIONS = ["light", "dark", "auto"] as const;
-const CUSTOM_THEME_OPTIONS = [
-  "zinc",
-  "midnight",
-  "claude",
-  "ghostty",
-  "liquid-neon",
-  "chisaki",
-  "aemeath",
-] as const;
 
 // ---------------------------------------------------------------------------
 // Section components
@@ -406,7 +394,7 @@ function GeneralSection({
               <ChevronDown size={theme.iconSize.sm} color={iconColor} />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end" width={200}>
-              {(isAndroid ? ANDROID_THEME_OPTIONS : STANDARD_THEME_OPTIONS).map((themeValue) => (
+              {THEME_PICKER_OPTIONS.map((themeValue) => (
                 <ThemeMenuItem
                   key={themeValue}
                   themeValue={themeValue}
@@ -417,22 +405,6 @@ function GeneralSection({
                   onChange={handleThemeChange}
                 />
               ))}
-              {isAndroid ? null : (
-                <>
-                  <DropdownMenuSeparator />
-                  {CUSTOM_THEME_OPTIONS.map((themeValue) => (
-                    <ThemeMenuItem
-                      key={themeValue}
-                      themeValue={themeValue}
-                      selected={settings.theme === themeValue}
-                      previewHeight={themePreviewHeight}
-                      iconColor={iconColor}
-                      label={t(`settings.general.theme.options.${themeValue}`)}
-                      onChange={handleThemeChange}
-                    />
-                  ))}
-                </>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </View>

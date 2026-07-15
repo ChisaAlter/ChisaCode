@@ -474,29 +474,6 @@ describe("saveAppSettings", () => {
       }),
     );
   });
-
-  it("normalizes disallowed Android theme updates to glass before saving", async () => {
-    const deps = makeDeps({
-      ...androidThemePolicy,
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify(DEFAULT_CLIENT_SETTINGS),
-      }),
-    });
-    const queryClient = new QueryClient();
-
-    await saveAppSettings({
-      queryClient,
-      updates: { theme: "ghostty" },
-      deps,
-    });
-
-    expect(deps.storage.entries.get(APP_SETTINGS_KEY)).toBe(
-      JSON.stringify({
-        ...DEFAULT_CLIENT_SETTINGS,
-        theme: "liquid-neon",
-      }),
-    );
-  });
 });
 
 describe("parseTerminalScrollbackLines", () => {

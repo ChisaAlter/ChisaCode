@@ -12,7 +12,7 @@ import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-
 import { useAppSettings } from "@/hooks/use-settings";
 import { useHosts } from "@/runtime/host-runtime";
 import { usePanelStore } from "@/stores/panel-store";
-import { type ThemeName } from "@/styles/theme";
+import { ACTIVE_THEME_NAMES, type ThemeName } from "@/styles/theme";
 import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { resolveActiveHost } from "@/utils/active-host";
@@ -40,16 +40,7 @@ export interface AppContainerProps {
   chromeEnabled?: boolean;
 }
 
-export const THEME_CYCLE_ORDER: ThemeName[] = [
-  "dark",
-  "zinc",
-  "midnight",
-  "claude",
-  "ghostty",
-  "liquid-neon",
-  "chisaki",
-  "light",
-];
+export const THEME_CYCLE_ORDER: readonly ThemeName[] = ACTIVE_THEME_NAMES;
 
 function AppContainer({
   children,
