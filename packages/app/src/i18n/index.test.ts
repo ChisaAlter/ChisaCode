@@ -24,9 +24,26 @@ describe("createAppI18n", () => {
     expect(i18n.t("settings.general.language.title")).toBe("Language");
   });
 
-  it("labels the glass theme in Chinese and English", () => {
-    expect(createAppI18n("zh-CN").t("settings.general.theme.options.liquid-neon")).toBe("玻璃");
-    expect(createAppI18n("en").t("settings.general.theme.options.liquid-neon")).toBe("Glass");
+  it("uses the five product theme names in Chinese", () => {
+    const i18n = createAppI18n("zh-CN");
+
+    expect(i18n.t("settings.general.theme.options.light")).toBe("Blockchain Light");
+    expect(i18n.t("settings.general.theme.options.dark")).toBe("Cyber Dark");
+    expect(i18n.t("settings.general.theme.options.liquid-neon")).toBe("Liquid Glass");
+    expect(i18n.t("settings.general.theme.options.chisaki")).toBe("Chisaki");
+    expect(i18n.t("settings.general.theme.options.aemeath")).toBe("Aemeath");
+    expect(i18n.t("settings.general.theme.options.auto")).toBe("跟随系统");
+  });
+
+  it("uses the five product theme names in English", () => {
+    const i18n = createAppI18n("en");
+
+    expect(i18n.t("settings.general.theme.options.light")).toBe("Blockchain Light");
+    expect(i18n.t("settings.general.theme.options.dark")).toBe("Cyber Dark");
+    expect(i18n.t("settings.general.theme.options.liquid-neon")).toBe("Liquid Glass");
+    expect(i18n.t("settings.general.theme.options.chisaki")).toBe("Chisaki");
+    expect(i18n.t("settings.general.theme.options.aemeath")).toBe("Aemeath");
+    expect(i18n.t("settings.general.theme.options.auto")).toBe("System");
   });
 
   it("labels the reasoning display setting in Chinese and English", () => {
