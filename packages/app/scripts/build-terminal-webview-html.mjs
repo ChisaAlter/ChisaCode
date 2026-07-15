@@ -46,6 +46,59 @@ const aliasPlugin = {
   },
 };
 
+const browserNodeBuiltinsPlugin = {
+  name: "chisacode-browser-node-builtins",
+  setup(build) {
+    // The ligatures addon bundles lru-cache's Node diagnostics import into its browser build.
+    build.onResolve({ filter: /^node:diagnostics_channel$/ }, () => ({
+      path: "node:diagnostics_channel",
+      namespace: "chisacode-browser-shim",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "chisacode-browser-shim" }, () => ({
+      contents: `
+const channelInstance = {
+  hasSubscribers: false,
+  publish() {},
+  subscribe() {},
+  unsubscribe() {},
+  bindStore() {},
+  unbindStore() {},
+  runStores(_context, fn, thisArg, ...args) {
+    return Reflect.apply(fn, thisArg, args);
+  },
+};
+
+const tracingChannelInstance = {
+  hasSubscribers: false,
+  start: channelInstance,
+  end: channelInstance,
+  asyncStart: channelInstance,
+  asyncEnd: channelInstance,
+  error: channelInstance,
+  traceSync(fn, _context, thisArg, ...args) {
+    return Reflect.apply(fn, thisArg, args);
+  },
+  tracePromise(fn, _context, thisArg, ...args) {
+    return Promise.resolve(Reflect.apply(fn, thisArg, args));
+  },
+  traceCallback(fn, _position, _context, thisArg, ...args) {
+    return Reflect.apply(fn, thisArg, args);
+  },
+};
+
+export function channel() {
+  return channelInstance;
+}
+
+export function tracingChannel() {
+  return tracingChannelInstance;
+}
+`,
+      loader: "js",
+    }));
+  },
+};
+
 const result = await esbuild.build({
   entryPoints: [entry],
   bundle: true,
@@ -56,7 +109,7 @@ const result = await esbuild.build({
   loader: {
     ".css": "text",
   },
-  plugins: [aliasPlugin],
+  plugins: [browserNodeBuiltinsPlugin, aliasPlugin],
   logLevel: "info",
 });
 
