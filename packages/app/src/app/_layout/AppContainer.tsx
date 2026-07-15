@@ -219,7 +219,6 @@ export const layoutStyles = StyleSheet.create((theme) => ({
     flexDirection: "row",
   },
   desktopAppRow: {
-    padding: 8,
     backgroundColor: theme.colors.surfaceWorkspace,
   },
   appContent: {

@@ -1785,8 +1785,8 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
   },
   content: {
-    padding: theme.spacing[4],
-    paddingTop: theme.spacing[6],
+    padding: theme.spacing[3],
+    paddingTop: theme.spacing[4],
     width: "100%",
     maxWidth: 720,
     alignSelf: "center",
@@ -1864,7 +1864,7 @@ const desktopStyles = StyleSheet.create((theme) => ({
 
 const sidebarStyles = StyleSheet.create((theme) => ({
   desktopContainer: {
-    width: 320,
+    width: 240,
     flexShrink: 0,
     borderRightWidth: theme.glass.enabled ? 0 : 1,
     borderRightColor: theme.colors.border,
@@ -1898,8 +1898,8 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
+    minHeight: 32,
+    paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
     borderWidth: 1,

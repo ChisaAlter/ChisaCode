@@ -7,11 +7,29 @@ import {
 import {
   buildOpenFileExplorerPatch,
   buildToggleFileExplorerPatch,
+  DEFAULT_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  migratePanelState,
   selectIsAgentListOpen,
   selectIsFileExplorerOpen,
   selectPanelVisibility,
   type PanelCoreState,
 } from "./state";
+
+describe("panel-store compact workbench migration", () => {
+  it("uses the 200px workbench sidebar as the new default", () => {
+    expect(DEFAULT_SIDEBAR_WIDTH).toBe(200);
+    expect(MAX_SIDEBAR_WIDTH).toBe(320);
+  });
+
+  it("resets legacy desktop widths for the compact workbench", () => {
+    expect(migratePanelState({ sidebarWidth: 320 }, 12, { isWeb: true }).sidebarWidth).toBe(200);
+    expect(migratePanelState({ sidebarWidth: 273 }, 12, { isWeb: true }).sidebarWidth).toBe(200);
+    expect(migratePanelState({ sidebarWidth: 273 }, 13, { isWeb: true }).sidebarWidth).toBe(200);
+    expect(migratePanelState({ sidebarWidth: 248 }, 14, { isWeb: true }).sidebarWidth).toBe(248);
+    expect(migratePanelState({ sidebarWidth: 248 }, 12, { isWeb: false }).sidebarWidth).toBe(248);
+  });
+});
 
 function makePanelState(overrides: Partial<PanelCoreState> = {}): PanelCoreState {
   return {

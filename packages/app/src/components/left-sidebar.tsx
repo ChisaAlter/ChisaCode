@@ -545,18 +545,29 @@ function SidebarTopActions({
   return (
     <View style={styles.sidebarTopArea}>
       <View style={styles.sidebarTopActions}>
-        <SidebarTopAction
-          icon={PanelLeftClose}
-          label={t("sidebar.closeSidebar")}
-          onPress={onCloseSidebar}
-          testID="sidebar-close-left"
-        />
-        <SidebarTopAction
-          icon={MessagesSquare}
-          label={t("sidebar.allSessions")}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("sidebar.allSessions")}
           onPress={onViewSessions}
+          style={styles.sidebarTopHeadingButton}
           testID="sidebar-all-sessions"
-        />
+        >
+          <Text style={styles.sidebarTopHeading}>{t("sidebar.allSessions")}</Text>
+        </Pressable>
+        <View style={styles.sidebarTopIconCluster}>
+          <SidebarTopAction
+            icon={Search}
+            label={t("common.search")}
+            onPress={onSearch}
+            testID="sidebar-search"
+          />
+          <SidebarTopAction
+            icon={PanelLeftClose}
+            label={t("sidebar.closeSidebar")}
+            onPress={onCloseSidebar}
+            testID="sidebar-close-left"
+          />
+        </View>
       </View>
       <View style={styles.sidebarPrimaryActions}>
         <SidebarPrimaryAction
@@ -564,12 +575,6 @@ function SidebarTopActions({
           label={t("sidebar.newConversation")}
           onPress={onNewConversation}
           testID="sidebar-new-conversation"
-        />
-        <SidebarPrimaryAction
-          icon={Search}
-          label={t("common.search")}
-          onPress={onSearch}
-          testID="sidebar-search"
         />
       </View>
     </View>
@@ -1474,8 +1479,6 @@ const staticStyles = RNStyleSheet.create({
     left: 0,
     bottom: 0,
     overflow: "hidden" as const,
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
   },
   desktopSidebar: {
     position: "relative" as const,
@@ -1575,12 +1578,10 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
   },
   desktopSidebarBorder: {
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: 14,
-    backgroundColor: theme.colors.surface0,
+    borderRightWidth: theme.borderWidth[1],
+    borderRightColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceWorkspace,
     overflow: "hidden",
-    ...theme.shadow.lg,
   },
   desktopSidebarRail: {
     width: 44,
@@ -1623,10 +1624,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarTopArea: {
     paddingTop: theme.spacing[2],
-    paddingRight: theme.spacing[3],
-    paddingBottom: theme.spacing[3],
-    paddingLeft: theme.spacing[3],
-    gap: theme.spacing[2],
+    paddingRight: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+    paddingLeft: theme.spacing[2],
+    gap: theme.spacing[1],
     userSelect: "none",
   },
   sidebarTopActions: {
@@ -1635,16 +1636,29 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     gap: theme.spacing[2],
   },
+  sidebarTopHeadingButton: {
+    minWidth: 0,
+    flexShrink: 1,
+    minHeight: 28,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing[1],
+  },
+  sidebarTopHeading: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  sidebarTopIconCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 0,
+  },
   sidebarTopAction: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface0,
-    ...theme.shadow.sm,
+    borderRadius: theme.borderRadius.md,
   },
   sidebarTopActionHovered: {
     backgroundColor: theme.colors.surface2,
@@ -1658,12 +1672,15 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   sidebarPrimaryAction: {
-    minHeight: 30,
+    minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    justifyContent: "center",
   },
   sidebarPrimaryActionHovered: {
     backgroundColor: theme.colors.surface1,
@@ -1710,10 +1727,10 @@ const styles = StyleSheet.create((theme) => ({
     borderTopColor: theme.colors.border,
   },
   desktopSidebarFooter: {
-    height: 54,
-    paddingLeft: 18,
-    paddingRight: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    height: 46,
+    paddingLeft: theme.spacing[2],
+    paddingRight: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     marginHorizontal: 0,
     marginBottom: 0,
     borderTopWidth: theme.borderWidth[1],
@@ -1734,7 +1751,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopFooterIconRow: {
-    gap: 6,
+    gap: 2,
   },
   footerIconButton: {
     width: 28,
@@ -1749,8 +1766,8 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
   },
   desktopFooterIconButton: {
-    width: 32,
-    height: 32,
+    width: 26,
+    height: 26,
   },
   hostPickerList: {
     gap: theme.spacing[2],

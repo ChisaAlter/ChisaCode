@@ -1428,7 +1428,7 @@ const styles = StyleSheet.create((theme) => ({
     position: "relative",
     flexDirection: "row",
     alignItems: "stretch",
-    gap: 12,
+    gap: 0,
     backgroundColor: "transparent",
     overflow: "hidden",
   },

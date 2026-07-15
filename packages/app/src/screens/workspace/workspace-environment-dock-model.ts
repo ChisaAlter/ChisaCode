@@ -8,6 +8,14 @@ export type WorkspaceEnvironmentDockTab =
   | "subagents"
   | "browser-context";
 
+export const WORKSPACE_ENVIRONMENT_TABS: readonly WorkspaceEnvironmentDockTab[] = [
+  "git-summary",
+  "pull-request",
+  "tasks",
+  "subagents",
+  "browser-context",
+];
+
 export interface WorkspaceEnvironmentDockState {
   open: boolean;
   activeTab: WorkspaceEnvironmentDockTab;

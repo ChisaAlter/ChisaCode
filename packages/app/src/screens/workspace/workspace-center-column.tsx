@@ -293,6 +293,29 @@ export function WorkspaceCenterColumn({
     ),
     [headerRightControls, isEnvironmentPanelVisible, isMobile],
   );
+  const desktopHeaderLeft = useMemo(
+    () => (
+      <WorkspaceHeaderTitleBar
+        {...headerTitleBar}
+        activeTab={activeTabDescriptor}
+        normalizedServerId={normalizedServerId}
+        normalizedWorkspaceId={normalizedWorkspaceId}
+        showCreateBrowserTab={showCreateBrowserTab}
+        isMobile={false}
+        createTerminalDisabled={isCreateTerminalPending}
+        browserContextDockDisabled={!hasEnvironmentBrowserContext}
+      />
+    ),
+    [
+      activeTabDescriptor,
+      hasEnvironmentBrowserContext,
+      headerTitleBar,
+      isCreateTerminalPending,
+      normalizedServerId,
+      normalizedWorkspaceId,
+      showCreateBrowserTab,
+    ],
+  );
 
   const content = useMemo(
     () => (
@@ -341,13 +364,12 @@ export function WorkspaceCenterColumn({
         isWorkspaceFocused={isRouteFocused}
         showCreateBrowserTab={showCreateBrowserTab}
         renderPaneEmptyState={renderSplitPaneEmptyState}
-        topRightControls={headerRight}
+        topRightControls={null}
       />
     );
   }, [
     content,
     desktopFocusModeEnabled,
-    headerRight,
     isRouteFocused,
     normalizedServerId,
     normalizedWorkspaceId,
@@ -360,6 +382,9 @@ export function WorkspaceCenterColumn({
 
   return (
     <View style={styles.centerColumn}>
+      {showScreenHeader && !isMobile ? (
+        <ScreenHeader left={desktopHeaderLeft} right={headerRight} />
+      ) : null}
       {showScreenHeader && isMobile ? (
         <ScreenHeader
           left={
@@ -457,7 +482,7 @@ const styles = StyleSheet.create((theme) => ({
     position: "relative",
     flexDirection: "row",
     alignItems: "stretch",
-    gap: 12,
+    gap: 0,
     backgroundColor: "transparent",
     overflow: "hidden",
   },
@@ -472,12 +497,11 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     minHeight: 0,
     position: "relative",
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: 14,
+    flexDirection: "row",
+    borderLeftWidth: theme.borderWidth[1],
+    borderLeftColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
     overflow: "hidden",
-    ...theme.shadow.lg,
   },
   content: {
     flex: 1,

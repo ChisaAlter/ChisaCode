@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native-unistyles";
 
 export const settingsStyles = StyleSheet.create((theme) => ({
   section: {
-    marginBottom: theme.spacing[6],
+    marginBottom: theme.spacing[4],
   },
   sectionHeader: {
     alignItems: "center",
@@ -59,8 +59,8 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: theme.spacing[4],
-    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
   },
   rowBorder: {
     borderTopWidth: 1,

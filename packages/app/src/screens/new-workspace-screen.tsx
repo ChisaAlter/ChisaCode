@@ -26,7 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
-import { HEADER_INNER_HEIGHT, MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useOpenProject } from "@/hooks/use-open-project";
@@ -285,16 +285,11 @@ function ImportSessionCard({ onPress, disabled }: { onPress: () => void; disable
       style={cardStyle}
     >
       <View style={styles.importCardIcon}>
-        <Inbox size={18} color={theme.colors.destructive} />
+        <Inbox size={16} color={theme.colors.foregroundMuted} />
       </View>
-      <View style={styles.importCardContent}>
-        <Text style={styles.importCardTitle} numberOfLines={1}>
-          导入会话
-        </Text>
-        <Text style={styles.importCardDescription} numberOfLines={2}>
-          导入最近的外部 CLI 会话
-        </Text>
-      </View>
+      <Text style={styles.importCardTitle} numberOfLines={1}>
+        导入会话
+      </Text>
     </Pressable>
   );
 }
@@ -1523,8 +1518,8 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
   },
   contentCentered: {
-    justifyContent: "center",
-    paddingBottom: HEADER_INNER_HEIGHT + theme.spacing[6],
+    justifyContent: "flex-end",
+    paddingBottom: theme.spacing[3],
   },
   contentCompact: {
     justifyContent: "flex-end",
@@ -1535,17 +1530,16 @@ const styles = StyleSheet.create((theme) => ({
     alignSelf: "center",
   },
   draftTitle: {
-    marginBottom: theme.spacing[4],
+    marginBottom: theme.spacing[2],
     paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize["3xl"],
-    fontWeight: "500",
-    lineHeight: 34,
-    textAlign: "center",
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+    lineHeight: 20,
+    textAlign: "left",
   },
   draftComposerInputWrapper: {
-    borderWidth: 0,
-    ...theme.shadow.lg,
+    borderColor: theme.colors.borderAccent,
   },
   headerLeft: {
     gap: theme.spacing[2],
@@ -1577,7 +1571,7 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 20,
   },
   cardsRow: {
-    marginTop: theme.spacing[6],
+    marginTop: theme.spacing[2],
     paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1585,17 +1579,17 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   importCard: {
-    width: 220,
-    minHeight: 92,
+    minWidth: 116,
+    minHeight: 34,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surface0,
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: theme.spacing[3],
+    alignItems: "center",
+    gap: theme.spacing[2],
   },
   importCardHovered: {
     backgroundColor: theme.colors.surface1,
@@ -1607,25 +1601,15 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.6,
   },
   importCardIcon: {
-    width: theme.iconSize.lg,
-    height: theme.iconSize.lg,
+    width: 22,
+    height: 22,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
-  importCardContent: {
-    flex: 1,
-    minWidth: 0,
-    gap: theme.spacing[1],
-  },
   importCardTitle: {
-    fontSize: theme.fontSize.base,
-    color: theme.colors.foreground,
-  },
-  importCardDescription: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.foregroundMuted,
-    lineHeight: 18,
+    color: theme.colors.foreground,
   },
   optionsRow: {
     flexDirection: "row",

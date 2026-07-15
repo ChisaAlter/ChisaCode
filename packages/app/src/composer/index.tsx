@@ -659,9 +659,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "flex-start",
     width: "100%",
     overflow: "visible",
-    paddingLeft: 14,
-    paddingRight: 14,
-    paddingBottom: 14,
+    paddingLeft: {
+      xs: theme.spacing[2],
+      md: theme.spacing[3],
+    },
+    paddingRight: {
+      xs: theme.spacing[2],
+      md: theme.spacing[3],
+    },
+    paddingBottom: {
+      xs: theme.spacing[2],
+      md: theme.spacing[2],
+    },
   },
   inputAreaLocked: {
     opacity: 0.6,
@@ -669,12 +678,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContent: {
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
   },
   footer: {
     width: "100%",
-    paddingLeft: 14,
-    paddingRight: 14,
+    paddingLeft: theme.spacing[3],
+    paddingRight: theme.spacing[3],
     // Negative margin collapses the gap between input area and footer toolbar.
     // Mobile (xs): spacing[4] (16px) minus 3px leaves a 3px visual gap — the
     // smallest value below spacing[1] (4px) that still provides breathing room.

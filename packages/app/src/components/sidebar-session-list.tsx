@@ -1043,10 +1043,10 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   scrollContent: {
-    paddingTop: theme.spacing[2],
-    paddingRight: theme.spacing[3],
-    paddingBottom: theme.spacing[4],
-    paddingLeft: theme.spacing[3],
+    paddingTop: theme.spacing[1],
+    paddingRight: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
+    paddingLeft: theme.spacing[2],
   },
   group: {
     marginBottom: theme.spacing[2],
@@ -1059,7 +1059,7 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomColor: theme.colors.border,
   },
   groupHeader: {
-    minHeight: 32,
+    minHeight: 26,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1079,7 +1079,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flex: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.normal,
   },
   groupAddButton: {
@@ -1095,7 +1095,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   groupRows: {
     gap: 0,
-    paddingLeft: theme.spacing[4],
+    paddingLeft: 0,
   },
   row: {
     minHeight: 48,
@@ -1132,13 +1132,13 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopRow: {
-    minHeight: 34,
+    minHeight: 30,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    paddingLeft: theme.spacing[3],
-    paddingRight: 68,
+    paddingLeft: theme.spacing[2],
+    paddingRight: 32,
     borderRadius: theme.borderRadius.md,
   },
   desktopRowContainer: {
@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create((theme) => ({
     top: 3,
     right: theme.spacing[1],
     bottom: 3,
-    width: 60,
+    width: 30,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -1231,8 +1231,8 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopRowQuickButton: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.sm,

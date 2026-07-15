@@ -29,9 +29,10 @@ const DRAG_OVERLAY_STYLE: React.CSSProperties = {
   WebkitAppRegion: "drag",
 };
 
-const TOP_RESIZER_STYLE: React.CSSProperties = {
+export const TITLEBAR_TOP_RESIZER_STYLE: React.CSSProperties = {
   position: "absolute",
   top: 0,
+  left: 0,
   width: "100%",
   height: 4,
   // @ts-expect-error — WebkitAppRegion is not in CSSProperties
@@ -59,7 +60,7 @@ export function TitlebarDragRegion() {
       {/* Drag overlay — VS Code .titlebar-drag-region (titlebarpart.css:57-64) */}
       <div style={DRAG_OVERLAY_STYLE} />
       {/* Top-edge resizer — VS Code .resizer (titlebarpart.css:249-256) */}
-      <div style={TOP_RESIZER_STYLE} />
+      <div style={TITLEBAR_TOP_RESIZER_STYLE} />
     </>
   );
 }

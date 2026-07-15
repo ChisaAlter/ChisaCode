@@ -139,7 +139,7 @@ export interface MessageInputRef {
 }
 
 const MIN_INPUT_HEIGHT_MOBILE = 30;
-const MIN_INPUT_HEIGHT_DESKTOP = 46;
+const MIN_INPUT_HEIGHT_DESKTOP = 34;
 const DEFAULT_MAX_INPUT_HEIGHT = 160;
 const MAX_INPUT_VIEWPORT_RATIO = 0.5;
 const MIN_INPUT_HEIGHT = isWeb ? MIN_INPUT_HEIGHT_DESKTOP : MIN_INPUT_HEIGHT_MOBILE;
@@ -1970,18 +1970,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   inputWrapper: {
     flexDirection: "column",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     backgroundColor: theme.colors.surface1,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius["2xl"],
+    borderRadius: theme.borderRadius.lg,
     paddingVertical: {
       xs: theme.spacing[2],
-      md: theme.spacing[4],
+      md: theme.spacing[2],
     },
     paddingHorizontal: {
       xs: theme.spacing[3],
-      md: theme.spacing[4],
+      md: theme.spacing[3],
     },
     ...(isWeb
       ? {

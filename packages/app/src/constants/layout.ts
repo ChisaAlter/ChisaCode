@@ -2,15 +2,19 @@ import { Dimensions } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
 import { isAndroid, isWeb } from "@/constants/platform";
 
-export const FOOTER_HEIGHT = 75;
+export const FOOTER_HEIGHT = 60;
 
 // Shared header inner height (excluding safe area insets and border)
 // Used by both agent header (ScreenHeader) and explorer sidebar header
 // This ensures both headers have the same visual height
-export const HEADER_INNER_HEIGHT = 48;
-export const HEADER_INNER_HEIGHT_MOBILE = 56;
-export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 56;
-export const HEADER_TOP_PADDING_MOBILE = 8;
+export const HEADER_INNER_HEIGHT = 42;
+export const HEADER_INNER_HEIGHT_MOBILE = 48;
+export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 38;
+export const HEADER_TOP_PADDING_MOBILE = 4;
+
+// Dense workbench dimensions shared by the real Electron layout.
+export const WORKBENCH_ENVIRONMENT_PANEL_WIDTH = 280;
+export const WORKBENCH_SIDEBAR_WIDTH = 200;
 
 // Max width for chat content (stream view, input area, new agent form)
 export const MAX_CONTENT_WIDTH = 1008;
@@ -21,14 +25,14 @@ export const MIN_CHAT_WIDTH = 400;
 
 // Horizontal gap between desktop sidebar and the center column.
 // Applied as marginRight on the sidebar when open.
-export const DESKTOP_SIDEBAR_GAP = 12;
+export const DESKTOP_SIDEBAR_GAP = 0;
 
 // Width of the tab dropdown menu (new tab "+" button overflow menu)
 export const TAB_DROPDOWN_WIDTH = 220;
 
 // Desktop sidebar footer dimensions
-export const SIDEBAR_FOOTER_HEIGHT = 54;
-export const SIDEBAR_FOOTER_PADDING_LEFT = 18;
+export const SIDEBAR_FOOTER_HEIGHT = 46;
+export const SIDEBAR_FOOTER_PADDING_LEFT = 10;
 
 // Composer horizontal padding (left/right of the input area)
 export const COMPOSER_HORIZONTAL_PADDING = 14;

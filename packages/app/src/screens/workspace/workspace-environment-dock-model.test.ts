@@ -7,8 +7,21 @@ import {
   resolveDockStateAfterAction,
   resolveDockTabAvailability,
   resolveWorkspacePaneCommand,
+  WORKSPACE_ENVIRONMENT_TABS,
   type WorkspaceEnvironmentDockState,
 } from "./workspace-environment-dock-model";
+
+describe("WORKSPACE_ENVIRONMENT_TABS", () => {
+  it("keeps the five workbench tabs in product order", () => {
+    expect(WORKSPACE_ENVIRONMENT_TABS).toEqual([
+      "git-summary",
+      "pull-request",
+      "tasks",
+      "subagents",
+      "browser-context",
+    ]);
+  });
+});
 import type { StreamItem } from "@/types/stream";
 
 function turnChanges(

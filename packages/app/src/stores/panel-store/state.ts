@@ -16,9 +16,9 @@ export interface DesktopSidebarState {
 
 export type SortOption = "name" | "modified" | "size";
 
-export const DEFAULT_SIDEBAR_WIDTH = 320;
+export const DEFAULT_SIDEBAR_WIDTH = 200;
 export const MIN_SIDEBAR_WIDTH = 200;
-export const MAX_SIDEBAR_WIDTH = 360;
+export const MAX_SIDEBAR_WIDTH = 320;
 
 export const DEFAULT_EXPLORER_SIDEBAR_WIDTH = 400;
 export const MIN_EXPLORER_SIDEBAR_WIDTH = 280;
@@ -229,6 +229,10 @@ export function migratePanelState(
     migratePanelDesktopFocusMode(state);
   }
   if (version < 6 || typeof state.sidebarWidth !== "number") {
+    state.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
+  } else if (isWeb && version < 14) {
+    // Version 14 introduces the compact desktop workbench. Reset legacy saved
+    // widths so existing installs receive the same 200px rail as fresh installs.
     state.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   } else {
     state.sidebarWidth = clampSidebarWidth(state.sidebarWidth);
