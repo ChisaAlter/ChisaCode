@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { View } from "react-native";
+import { StyleSheet as RNStyleSheet, View } from "react-native";
 import ReanimatedAnimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,7 +8,7 @@ import ReanimatedAnimated, {
   withSequence,
   Easing,
 } from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useUnistyles } from "react-native-unistyles";
 
 interface VolumeMeterProps {
   volume: number;
@@ -163,7 +163,7 @@ export function VolumeMeter({
   });
 
   const containerStyle = useMemo(
-    () => [styles.container, { height: containerHeight }],
+    () => [staticStyles.container, { height: containerHeight }],
     [containerHeight],
   );
   const lineBase = useMemo(
@@ -172,15 +172,15 @@ export function VolumeMeter({
   );
   const spacerStyle = useMemo(() => ({ width: LINE_SPACING }), [LINE_SPACING]);
   const line1CombinedStyle = useMemo(
-    () => [styles.line, lineBase, line1Style],
+    () => [staticStyles.line, lineBase, line1Style],
     [lineBase, line1Style],
   );
   const line2CombinedStyle = useMemo(
-    () => [styles.line, lineBase, line2Style],
+    () => [staticStyles.line, lineBase, line2Style],
     [lineBase, line2Style],
   );
   const line3CombinedStyle = useMemo(
-    () => [styles.line, lineBase, line3Style],
+    () => [staticStyles.line, lineBase, line3Style],
     [lineBase, line3Style],
   );
 
@@ -195,13 +195,13 @@ export function VolumeMeter({
   );
 }
 
-const styles = StyleSheet.create((theme) => ({
+const staticStyles = RNStyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },
   line: {
-    borderRadius: theme.borderRadius.full,
+    borderRadius: 9999,
   },
-}));
+});

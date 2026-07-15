@@ -1,4 +1,4 @@
-import { View, Text } from "react-native";
+import { StyleSheet as RNStyleSheet, View, Text } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import Animated, { useAnimatedStyle, withTiming, useSharedValue } from "react-native-reanimated";
 import { useEffect, useMemo } from "react";
@@ -36,7 +36,7 @@ export function FileDropZone({ children, onFilesDropped, disabled = false }: Fil
   }));
 
   const overlayStyle = useMemo(
-    () => [styles.overlay, overlayAnimatedStyle],
+    () => [staticStyles.overlay, overlayAnimatedStyle],
     [overlayAnimatedStyle],
   );
 
@@ -72,12 +72,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     position: "relative",
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: theme.colors.surface0,
@@ -93,3 +87,12 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
 }));
+
+const staticStyles = RNStyleSheet.create({
+  overlay: {
+    ...RNStyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+});

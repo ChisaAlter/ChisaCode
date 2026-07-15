@@ -1,4 +1,4 @@
-import { View, Text } from "react-native";
+import { StyleSheet as RNStyleSheet, View, Text } from "react-native";
 import {
   useState,
   useEffect,
@@ -528,7 +528,7 @@ export function Composer({
   }, []);
 
   const composerContainerStyle = useMemo(
-    () => [styles.container, keyboardAnimatedStyle],
+    () => [staticStyles.container, keyboardAnimatedStyle],
     [keyboardAnimatedStyle],
   );
   const inputAreaContainerStyle = useMemo(
@@ -649,10 +649,6 @@ export function Composer({
 }
 
 const styles = StyleSheet.create((theme: Theme) => ({
-  container: {
-    flexDirection: "column",
-    position: "relative",
-  },
   borderSeparator: {
     height: theme.borderWidth[1],
     backgroundColor: theme.colors.border,
@@ -738,3 +734,10 @@ const styles = StyleSheet.create((theme: Theme) => ({
     fontSize: theme.fontSize.sm,
   },
 })) as unknown as Record<string, object>;
+
+const staticStyles = RNStyleSheet.create({
+  container: {
+    flexDirection: "column",
+    position: "relative",
+  },
+});

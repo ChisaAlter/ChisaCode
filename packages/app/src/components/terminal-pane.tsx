@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
+  StyleSheet as RNStyleSheet,
   Text,
   View,
   type PressableStateCallbackType,
@@ -732,8 +733,12 @@ export function TerminalPane({
   );
 
   const containerStyle = useMemo(
-    () => [styles.container, keyboardPaddingStyle],
-    [keyboardPaddingStyle],
+    () => [
+      staticStyles.container,
+      { backgroundColor: theme.colors.surface0 },
+      keyboardPaddingStyle,
+    ],
+    [keyboardPaddingStyle, theme.colors.surface0],
   );
 
   const handleSwipeRight = useCallback(() => {
@@ -893,11 +898,6 @@ export function TerminalPane({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  container: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: theme.colors.surface0,
-  },
   outputContainer: {
     flex: 1,
     minHeight: 0,
@@ -980,6 +980,13 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
+
+const staticStyles = RNStyleSheet.create({
+  container: {
+    flex: 1,
+    minHeight: 0,
+  },
+});
 
 const TERMINAL_EMULATOR_DOM_PROPS = {
   style: { flex: 1 },

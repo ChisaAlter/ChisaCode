@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Keyboard, ScrollView, Text, View } from "react-native";
+import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -730,7 +730,7 @@ export function WorkspaceDraftAgentTab({
   });
 
   const inputAreaWrapperStyle = useMemo(
-    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
+    () => [staticStyles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
     [insets.bottom, composerKeyboardStyle],
   );
 
@@ -811,37 +811,39 @@ export function WorkspaceDraftAgentTab({
         </View>
 
         <ReanimatedAnimated.View style={inputAreaWrapperStyle}>
-          {importPillPress ? (
-            <View style={styles.importPillRow}>
-              <View style={styles.importPillContent}>
-                <ComposerImportPill onPress={importPillPress} />
+          <View style={styles.inputAreaWrapper}>
+            {importPillPress ? (
+              <View style={styles.importPillRow}>
+                <View style={styles.importPillContent}>
+                  <ComposerImportPill onPress={importPillPress} />
+                </View>
               </View>
-            </View>
-          ) : null}
-          <Composer
-            agentId={tabId}
-            serverId={serverId}
-            externalKeyboardShift
-            isPaneFocused={isPaneFocused}
-            onSubmitMessage={handleCreateFromInput}
-            isSubmitLoading={isSubmitting}
-            blurOnSubmit={true}
-            value={draftInput.text}
-            onChangeText={draftInput.setText}
-            attachments={draftInput.attachments}
-            workspaceAttachments={workspaceAttachments}
-            onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
-            onChangeAttachments={draftInput.setAttachments}
-            cwd={composerState.workingDir}
-            clearDraft={draftInput.clear}
-            autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
-            onAddImages={handleAddImagesCallback}
-            onFocusInput={handleFocusInputCallback}
-            commandDraftConfig={composerState.commandDraftConfig}
-            agentControls={composerAgentControls}
-            footer={composerFooter}
-            inputWrapperStyle={styles.composerInputWrapper}
-          />
+            ) : null}
+            <Composer
+              agentId={tabId}
+              serverId={serverId}
+              externalKeyboardShift
+              isPaneFocused={isPaneFocused}
+              onSubmitMessage={handleCreateFromInput}
+              isSubmitLoading={isSubmitting}
+              blurOnSubmit={true}
+              value={draftInput.text}
+              onChangeText={draftInput.setText}
+              attachments={draftInput.attachments}
+              workspaceAttachments={workspaceAttachments}
+              onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
+              onChangeAttachments={draftInput.setAttachments}
+              cwd={composerState.workingDir}
+              clearDraft={draftInput.clear}
+              autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
+              onAddImages={handleAddImagesCallback}
+              onFocusInput={handleFocusInputCallback}
+              commandDraftConfig={composerState.commandDraftConfig}
+              agentControls={composerAgentControls}
+              footer={composerFooter}
+              inputWrapperStyle={styles.composerInputWrapper}
+            />
+          </View>
         </ReanimatedAnimated.View>
       </View>
     </FileDropZone>
@@ -904,3 +906,9 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.destructive,
   },
 }));
+
+const staticStyles = RNStyleSheet.create({
+  inputAreaWrapper: {
+    width: "100%",
+  },
+});

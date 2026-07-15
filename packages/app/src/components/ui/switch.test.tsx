@@ -31,6 +31,9 @@ vi.mock("react-native-reanimated", () => ({
 }));
 
 vi.mock("react-native", () => ({
+  StyleSheet: {
+    create: (styles: unknown) => styles,
+  },
   Pressable: ({
     "aria-checked": ariaChecked,
     accessibilityLabel,

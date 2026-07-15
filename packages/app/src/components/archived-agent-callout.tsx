@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text } from "react-native";
+import { StyleSheet as RNStyleSheet, View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import Animated from "react-native-reanimated";
@@ -28,7 +28,7 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
   const { style: keyboardAnimatedStyle } = useKeyboardShiftStyle({ mode: "translate" });
 
   const containerStyle = useMemo(
-    () => [styles.container, { paddingBottom: insets.bottom }, keyboardAnimatedStyle],
+    () => [staticStyles.container, { paddingBottom: insets.bottom }, keyboardAnimatedStyle],
     [insets.bottom, keyboardAnimatedStyle],
   );
 
@@ -65,10 +65,6 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
 }
 
 const styles = StyleSheet.create((theme: Theme) => ({
-  container: {
-    flexDirection: "column",
-    position: "relative",
-  },
   inputAreaContainer: {
     position: "relative",
     minHeight: FOOTER_HEIGHT,
@@ -105,3 +101,10 @@ const styles = StyleSheet.create((theme: Theme) => ({
     fontSize: theme.fontSize.base,
   },
 })) as unknown as Record<string, object>;
+
+const staticStyles = RNStyleSheet.create({
+  container: {
+    flexDirection: "column",
+    position: "relative",
+  },
+});

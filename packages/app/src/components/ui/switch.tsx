@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import {
   Pressable,
+  StyleSheet as RNStyleSheet,
   type GestureResponderEvent,
   type StyleProp,
   type ViewStyle,
@@ -72,7 +73,7 @@ export function Switch({
   );
   const trackStyle = useMemo(
     () => [
-      styles.track,
+      staticStyles.track,
       {
         width: track.width,
         height: track.height,
@@ -85,11 +86,16 @@ export function Switch({
   );
   const thumbStyle = useMemo(
     () => [
-      styles.thumb,
-      { width: thumb, height: thumb, borderRadius: thumb / 2 },
+      staticStyles.thumb,
+      {
+        width: thumb,
+        height: thumb,
+        borderRadius: thumb / 2,
+        backgroundColor: theme.colors.palette.white,
+      },
       thumbAnimatedStyle,
     ],
-    [thumb, thumbAnimatedStyle],
+    [theme.colors.palette.white, thumb, thumbAnimatedStyle],
   );
 
   return (
@@ -112,18 +118,20 @@ export function Switch({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  disabled: {
+    opacity: theme.opacity[50],
+  },
+}));
+
+const staticStyles = RNStyleSheet.create({
   track: {
     justifyContent: "center",
   },
   thumb: {
-    backgroundColor: theme.colors.palette.white,
     shadowColor: "rgba(0, 0, 0, 0.25)",
     shadowOffset: { width: 0, height: 1 },
     shadowRadius: 2,
     shadowOpacity: 1,
     elevation: 2,
   },
-  disabled: {
-    opacity: theme.opacity[50],
-  },
-}));
+});

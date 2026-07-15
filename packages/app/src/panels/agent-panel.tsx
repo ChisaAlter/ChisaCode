@@ -1,7 +1,7 @@
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import { SquarePen } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -1074,7 +1074,7 @@ function ChatAgentContent({
   }, [hasAppliedAuthoritativeHistory, missingAgentState.kind]);
 
   const animatedContentStyle = useMemo(
-    () => [styles.content, animatedKeyboardStyle],
+    () => [staticStyles.content, animatedKeyboardStyle],
     [animatedKeyboardStyle],
   );
 
@@ -1517,7 +1517,7 @@ function ActiveAgentComposer({
   });
 
   const inputAreaStyle = useMemo(
-    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
+    () => [staticStyles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
     [insets.bottom, composerKeyboardStyle],
   );
 
@@ -1531,35 +1531,37 @@ function ActiveAgentComposer({
 
   return (
     <ReanimatedAnimated.View style={inputAreaStyle}>
-      <SubagentsTrack
-        rows={subagentRows}
-        onOpenSubagent={handleOpenSubagent}
-        onArchiveSubagent={handleArchiveSubagent}
-      />
-      <Composer
-        agentId={agentId}
-        serverId={serverId}
-        externalKeyboardShift
-        isPaneFocused={isPaneFocused}
-        value={agentInputDraft.text}
-        onChangeText={agentInputDraft.setText}
-        attachments={agentInputDraft.attachments}
-        workspaceAttachments={workspaceAttachments}
-        onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
-        onChangeAttachments={agentInputDraft.setAttachments}
-        cwd={cwd}
-        clearDraft={agentInputDraft.clear}
-        autoFocus={isPaneFocused}
-        isSubmitLoading={isSubmitLoading}
-        onAttentionInputFocus={onAttentionInputFocus}
-        onAttentionPromptSend={onAttentionPromptSend}
-        onAddImages={onAddImages}
-        onComposerHeightChange={onComposerHeightChange}
-        onMessageSent={onMessageSent}
-        onClientSlashCommand={handleClientSlashCommand}
-        footer={composerFooter}
-        inputWrapperStyle={styles.composerInputWrapper}
-      />
+      <View style={styles.inputAreaWrapper}>
+        <SubagentsTrack
+          rows={subagentRows}
+          onOpenSubagent={handleOpenSubagent}
+          onArchiveSubagent={handleArchiveSubagent}
+        />
+        <Composer
+          agentId={agentId}
+          serverId={serverId}
+          externalKeyboardShift
+          isPaneFocused={isPaneFocused}
+          value={agentInputDraft.text}
+          onChangeText={agentInputDraft.setText}
+          attachments={agentInputDraft.attachments}
+          workspaceAttachments={workspaceAttachments}
+          onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
+          onChangeAttachments={agentInputDraft.setAttachments}
+          cwd={cwd}
+          clearDraft={agentInputDraft.clear}
+          autoFocus={isPaneFocused}
+          isSubmitLoading={isSubmitLoading}
+          onAttentionInputFocus={onAttentionInputFocus}
+          onAttentionPromptSend={onAttentionPromptSend}
+          onAddImages={onAddImages}
+          onComposerHeightChange={onComposerHeightChange}
+          onMessageSent={onMessageSent}
+          onClientSlashCommand={handleClientSlashCommand}
+          footer={composerFooter}
+          inputWrapperStyle={styles.composerInputWrapper}
+        />
+      </View>
     </ReanimatedAnimated.View>
   );
 }
@@ -1645,9 +1647,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
-  },
-  content: {
-    flex: 1,
   },
   inputAreaWrapper: {
     width: "100%",
@@ -1778,3 +1777,12 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
+
+const staticStyles = RNStyleSheet.create({
+  content: {
+    flex: 1,
+  },
+  inputAreaWrapper: {
+    width: "100%",
+  },
+});

@@ -1,4 +1,5 @@
 import {
+  StyleSheet as RNStyleSheet,
   View,
   Text,
   TextInput,
@@ -1814,9 +1815,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       void handleStopRealtimeVoice();
     }, [handleStopRealtimeVoice]);
 
-    const inputWrapperCombinedStyle = useMemo(
-      () => [styles.inputWrapper, inputWrapperStyle, inputAnimatedStyle],
-      [inputWrapperStyle, inputAnimatedStyle],
+    const inputWrapperSurfaceStyle = useMemo(
+      () => [styles.inputWrapper, inputWrapperStyle],
+      [inputWrapperStyle],
     );
     const textInputStyle = useMemo(
       () => [styles.textInput, computeTextInputHeightStyle(inputHeight, maxInputHeight)],
@@ -1827,7 +1828,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [isSendButtonDisabled],
     );
     const overlayContainerStyle = useMemo(
-      () => [styles.overlayContainer, overlayAnimatedStyle],
+      () => [staticStyles.overlayContainer, overlayAnimatedStyle],
       [overlayAnimatedStyle],
     );
 
@@ -1857,82 +1858,84 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     return (
       <View ref={rootRef} style={styles.container} testID="message-input-root">
         {/* Regular input */}
-        <Animated.View ref={inputWrapperRef} style={inputWrapperCombinedStyle}>
-          {attachmentSlot}
-          {/* Text input */}
-          <View style={styles.textInputScrollWrapper}>
-            <ThemedTextInput
-              ref={textInputRef}
-              value={value}
-              onChangeText={handleInputChange}
-              placeholder={placeholder ?? t("composer.placeholder")}
-              uniProps={textInputPlaceholderColorMapping}
-              accessibilityLabel={t("composer.messageAgent")}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
-              style={textInputStyle}
-              multiline
-              scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
-              onContentSizeChange={handleContentSizeChange}
-              editable={!isDictating && !isRealtimeVoiceForCurrentAgent && !disabled}
-              onKeyPress={keyPressHandler}
-              onSelectionChange={handleSelectionChange}
-              autoFocus={isWeb && autoFocus}
-            />
-            {inputScrollbar}
-            <FocusHint
-              visible={isWeb && isPaneFocused && !isInputFocused && !value}
-              focusInputKeys={focusInputKeys}
-              label={t("composer.focusHint")}
-            />
-          </View>
-
-          {/* Button row */}
-          <View style={styles.buttonRow}>
-            {/* Toolbar left: attachment button + agent controls */}
-            <View style={styles.leftButtonGroup}>
-              <AttachmentDropdown
-                isConnected={isConnected}
-                disabled={disabled}
-                attachButtonStyle={attachButtonStyle}
-                renderAttachButtonIcon={renderAttachButtonIcon}
-                attachmentMenuItems={attachmentMenuItems}
-                addAttachmentLabel={t("composer.addAttachment")}
+        <Animated.View style={inputAnimatedStyle}>
+          <View ref={inputWrapperRef} style={inputWrapperSurfaceStyle}>
+            {attachmentSlot}
+            {/* Text input */}
+            <View style={styles.textInputScrollWrapper}>
+              <ThemedTextInput
+                ref={textInputRef}
+                value={value}
+                onChangeText={handleInputChange}
+                placeholder={placeholder ?? t("composer.placeholder")}
+                uniProps={textInputPlaceholderColorMapping}
+                accessibilityLabel={t("composer.messageAgent")}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
+                style={textInputStyle}
+                multiline
+                scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
+                onContentSizeChange={handleContentSizeChange}
+                editable={!isDictating && !isRealtimeVoiceForCurrentAgent && !disabled}
+                onKeyPress={keyPressHandler}
+                onSelectionChange={handleSelectionChange}
+                autoFocus={isWeb && autoFocus}
               />
-              {leftContent}
+              {inputScrollbar}
+              <FocusHint
+                visible={isWeb && isPaneFocused && !isInputFocused && !value}
+                focusInputKeys={focusInputKeys}
+                label={t("composer.focusHint")}
+              />
             </View>
 
-            {/* Right: voice button, contextual button (realtime/send/cancel) */}
-            <View style={styles.rightButtonGroup}>
-              {beforeVoiceContent}
-              {COMPOSER_VOICE_UI_VISIBLE ? (
-                <VoiceButtonTooltip
-                  onVoicePress={handleVoicePress}
-                  isDictationStartEnabled={isDictationStartEnabled}
-                  voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
-                  voiceButtonStyle={voiceButtonStyle}
-                  renderVoiceButtonIcon={renderVoiceButtonIcon}
-                  voiceTooltipText={voiceTooltipText}
-                  isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
-                  voiceMuteToggleKeys={voiceMuteToggleKeys}
-                  dictationToggleKeys={dictationToggleKeys}
+            {/* Button row */}
+            <View style={styles.buttonRow}>
+              {/* Toolbar left: attachment button + agent controls */}
+              <View style={styles.leftButtonGroup}>
+                <AttachmentDropdown
+                  isConnected={isConnected}
+                  disabled={disabled}
+                  attachButtonStyle={attachButtonStyle}
+                  renderAttachButtonIcon={renderAttachButtonIcon}
+                  attachmentMenuItems={attachmentMenuItems}
+                  addAttachmentLabel={t("composer.addAttachment")}
                 />
-              ) : null}
-              {rightContent}
-              <SendButtonTooltip
-                shouldShow={shouldShowSendButton}
-                canPressLoadingButton={canPressLoadingButton}
-                onSubmitLoadingPress={onSubmitLoadingPress}
-                onDefaultSendAction={handleDefaultSendAction}
-                isSendButtonDisabled={isSendButtonDisabled}
-                submitAccessibilityLabel={submitAccessibilityLabel}
-                sendButtonCombinedStyle={sendButtonCombinedStyle}
-                isSubmitLoading={isSubmitLoading}
-                submitIcon={submitIcon}
-                buttonIconSize={buttonIconSize}
-                sendKeys={sendKeys}
-                sendTooltipLabel={sendTooltipLabel}
-              />
+                {leftContent}
+              </View>
+
+              {/* Right: voice button, contextual button (realtime/send/cancel) */}
+              <View style={styles.rightButtonGroup}>
+                {beforeVoiceContent}
+                {COMPOSER_VOICE_UI_VISIBLE ? (
+                  <VoiceButtonTooltip
+                    onVoicePress={handleVoicePress}
+                    isDictationStartEnabled={isDictationStartEnabled}
+                    voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
+                    voiceButtonStyle={voiceButtonStyle}
+                    renderVoiceButtonIcon={renderVoiceButtonIcon}
+                    voiceTooltipText={voiceTooltipText}
+                    isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
+                    voiceMuteToggleKeys={voiceMuteToggleKeys}
+                    dictationToggleKeys={dictationToggleKeys}
+                  />
+                ) : null}
+                {rightContent}
+                <SendButtonTooltip
+                  shouldShow={shouldShowSendButton}
+                  canPressLoadingButton={canPressLoadingButton}
+                  onSubmitLoadingPress={onSubmitLoadingPress}
+                  onDefaultSendAction={handleDefaultSendAction}
+                  isSendButtonDisabled={isSendButtonDisabled}
+                  submitAccessibilityLabel={submitAccessibilityLabel}
+                  sendButtonCombinedStyle={sendButtonCombinedStyle}
+                  isSubmitLoading={isSubmitLoading}
+                  submitIcon={submitIcon}
+                  buttonIconSize={buttonIconSize}
+                  sendKeys={sendKeys}
+                  sendTooltipLabel={sendTooltipLabel}
+                />
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -2080,6 +2083,9 @@ const styles = StyleSheet.create((theme: Theme) => ({
   buttonDisabled: {
     opacity: 0.5,
   },
+})) as unknown as Record<string, object>;
+
+const staticStyles = RNStyleSheet.create({
   overlayContainer: {
     position: "absolute",
     display: "flex",
@@ -2092,7 +2098,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     right: 0,
     bottom: 0,
   },
-})) as unknown as Record<string, object>;
+});
 
 const ThemedPlus = withUnistyles(Plus);
 const ThemedMic = withUnistyles(Mic);

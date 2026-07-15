@@ -1,5 +1,11 @@
 import React, { useEffect } from "react";
-import { Text, View, type TextStyle, type ViewStyle } from "react-native";
+import {
+  StyleSheet as RNStyleSheet,
+  Text,
+  View,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -62,7 +68,7 @@ export function AgentStatusIndicator({
         { color: theme.colors.statusWarning } satisfies TextStyle,
       ],
       warningDot: [
-        styles.dot,
+        staticStyles.dot,
         {
           backgroundColor: theme.colors.statusWarning,
           width: dotSize,
@@ -70,7 +76,7 @@ export function AgentStatusIndicator({
         } satisfies ViewStyle,
       ],
       dangerDot: [
-        styles.dot,
+        staticStyles.dot,
         {
           backgroundColor: theme.colors.statusDanger,
           width: dotSize,
@@ -183,7 +189,7 @@ function PulsingDot({ color, size }: { color: string; size: number }) {
   }));
   const dotStyle = React.useMemo(
     () => [
-      styles.dot,
+      staticStyles.dot,
       { backgroundColor: color, width: size, height: size } satisfies ViewStyle,
       animatedStyle,
     ],
@@ -194,9 +200,6 @@ function PulsingDot({ color, size }: { color: string; size: number }) {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  dot: {
-    borderRadius: 9999,
-  },
   permissionWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -224,3 +227,9 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: "500",
   },
 }));
+
+const staticStyles = RNStyleSheet.create({
+  dot: {
+    borderRadius: 9999,
+  },
+});

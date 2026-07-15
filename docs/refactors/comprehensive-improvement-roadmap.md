@@ -9,6 +9,13 @@
 
 ## 进行中
 
+### Reanimated 4.5 / Unistyles 样式边界修复（2026-07-15 启动）
+
+- **问题**：Expo 57 升级后的 Reanimated 4.5 会把传入 `Animated.View` 的 Unistyles 注册哈希解析为普通样式属性，桌面端在 Agent 状态点和设置页 Switch 渲染时因哈希值为空对象直接崩溃；同类边界还存在于 Composer、终端、文件拖放、消息流与原生 shimmer。
+- **影响范围**：`packages/app` 中所有 Reanimated 节点与 `react-native-unistyles` / `inlineUnistylesStyle` 的交叉使用。
+- **方案**：Animated 节点只接收 React Native 静态样式、普通内联主题值和 Reanimated 动画样式；主题化内容优先下沉到普通 `View`；增加源码边界回归测试，并用真实 Electron 设置页和日志验证。
+- **状态**：完成。Agent 状态点、Switch、音量计、文件拖放、Composer/终端/Agent 面板键盘动画、消息流滚动按钮、原生 shimmer 与浮动面板均已迁出冲突边界；19 个源码边界断言、Switch/Composer/message 聚焦测试、App/全仓 typecheck 与 lint、Electron renderer export、真实设置页全分区巡检及错误日志检查通过。
+
 ### 架构/依赖安全/本地质量提升目标（2026-07-12 启动）
 
 - **目标**：继续拆解 client/provider/workspace 超大责任中心；完成 AI SDK、Claude SDK 与 Expo/EAS major migration；以聚焦本地验证维持可信质量基线，GitHub Actions 仅作为显式发布门禁。Expo 55/56/57 本地迁移已落地，EAS 云端解析留到具备 Expo 登录的显式发布阶段。

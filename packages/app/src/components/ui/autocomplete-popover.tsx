@@ -15,7 +15,6 @@ import {
   useFloatingPanelPortalHostName,
 } from "@/components/ui/floating-panel-portal";
 import { SPACING } from "@/styles/theme";
-import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
 const OFFSET_FROM_ANCHOR = SPACING[3];
 
@@ -133,12 +132,12 @@ export function AutocompletePopover({
 
   const baseStyle = useMemo(() => {
     if (!relativeAnchorRect) return null;
-    return inlineUnistylesStyle({
+    return {
       position: "absolute" as const,
       bottom: relativeAnchorRect.hostHeight - relativeAnchorRect.y + OFFSET_FROM_ANCHOR,
       left: relativeAnchorRect.x,
       width: relativeAnchorRect.width,
-    });
+    };
   }, [relativeAnchorRect]);
 
   const animatedTransformStyle = useAnimatedStyle(() => ({

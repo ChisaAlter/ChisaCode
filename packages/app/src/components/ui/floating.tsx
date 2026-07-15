@@ -37,7 +37,7 @@ export const FloatingSurface = forwardRef<View, FloatingSurfaceProps>(function F
 ): ReactElement {
   const inlineFrameStyle = useMemo(() => {
     const flattened = StyleSheet.flatten(frameStyle);
-    return flattened ? inlineUnistylesStyle(flattened) : undefined;
+    return flattened || undefined;
   }, [frameStyle]);
   const surfaceStyle = useMemo(
     () => [style, fillFrame ? styles.frameFill : null],

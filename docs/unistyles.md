@@ -251,6 +251,8 @@ This is the dominant pattern in the app today (see `sidebar-workspace-list.tsx`,
 
 Do not apply `StyleSheet.create((theme) => ...)` styles to a Reanimated `Animated.View`. Unistyles wraps styled components in a `<UnistylesComponent>` and patches native view props from C++ via the ShadowRegistry. Reanimated also reaches into the same native node from its worklet runtime. When a theme change fires, both systems try to mutate the same node and the app crashes with `Unable to find node on an unmounted component.` This was a real iOS sidebar crash on theme toggle (commit `4896cfe9`).
 
+On web with Reanimated 4.5, the same ownership violation can fail immediately during render with `[Reanimated] Invalid value for "unistyles_xxx": an empty object is not a valid style value.` Unistyles stores its registered hash as an enumerable `unistyles_*: {}` marker, which Reanimated then attempts to parse as a normal style property. Do not pass `inlineUnistylesStyle(...)` output to a Reanimated component either: that helper's `unistyles_inline_style: {}` marker is only for ordinary Unistyles-managed React Native components. Reanimated nodes should receive React Native static styles, ordinary inline objects, and Reanimated animated styles only.
+
 Fix: keep static positioning on the `Animated.View` in plain React Native `StyleSheet`, and pass theme-dependent values (e.g. `backgroundColor`) as inline style from `useUnistyles()` — the inline path is acceptable here because no other escape works:
 
 ```tsx

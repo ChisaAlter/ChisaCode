@@ -14,6 +14,7 @@ import {
   View,
   Text,
   Pressable,
+  StyleSheet as RNStyleSheet,
   Platform,
   ActivityIndicator,
   type PressableStateCallbackType,
@@ -759,7 +760,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           </MessageOuterSpacingProvider>
           {!isNearBottom && (
             <Animated.View
-              style={stylesheet.scrollToBottomContainer}
+              style={staticStyles.scrollToBottomContainer}
               entering={scrollIndicatorFadeIn}
               exiting={scrollIndicatorFadeOut}
             >
@@ -1141,14 +1142,6 @@ const stylesheet = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textAlign: "center",
   },
-  scrollToBottomContainer: {
-    position: "absolute",
-    bottom: 16,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    pointerEvents: "box-none",
-  },
   scrollToBottomInner: {
     width: "100%",
     alignSelf: "center",
@@ -1167,6 +1160,17 @@ const stylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
 }));
+
+const staticStyles = RNStyleSheet.create({
+  scrollToBottomContainer: {
+    position: "absolute",
+    bottom: 16,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    pointerEvents: "box-none",
+  },
+});
 
 const permissionStyles = StyleSheet.create((theme) => ({
   container: {

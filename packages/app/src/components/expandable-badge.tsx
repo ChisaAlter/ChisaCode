@@ -1,5 +1,6 @@
 import {
   Pressable,
+  StyleSheet as RNStyleSheet,
   Text,
   View,
   type GestureResponderEvent,
@@ -352,12 +353,6 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     left: 0,
     overflow: "hidden",
   },
-  nativeShimmerPeak: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-  },
 }));
 
 interface NativeExpandableBadgeShimmerProps {
@@ -424,7 +419,7 @@ const NativeExpandableBadgeShimmer = memo(function NativeExpandableBadgeShimmer(
 
   const nativeShimmerPeakCombinedStyle = useMemo(
     () => [
-      expandableBadgeStylesheet.nativeShimmerPeak,
+      staticStyles.nativeShimmerPeak,
       nativeShimmerPeakStyle,
       { width: peakWidth, height: rowHeight },
     ],
@@ -460,6 +455,15 @@ const NativeExpandableBadgeShimmer = memo(function NativeExpandableBadgeShimmer(
       </MaskedView>
     </View>
   );
+});
+
+const staticStyles = RNStyleSheet.create({
+  nativeShimmerPeak: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+  },
 });
 
 function NativeShimmerPeakSvg({ gradientId }: { gradientId: string }) {
