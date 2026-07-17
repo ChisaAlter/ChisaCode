@@ -14,6 +14,10 @@ const patchedPackages = [
     patchPrefix: "react-native-gesture-handler+",
   },
   {
+    nodeModulesPath: "node_modules/react-native-worklets",
+    patchPrefix: "react-native-worklets+",
+  },
+  {
     nodeModulesPath: "node_modules/metro",
     patchPrefix: "metro+",
   },

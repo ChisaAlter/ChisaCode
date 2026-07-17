@@ -152,6 +152,8 @@ export function resolveRuntimeTitleBarOverlayOptions(
   return {
     color: state.backgroundColor?.trim() === "" ? undefined : state.backgroundColor,
     symbolColor: state.foregroundColor?.trim() === "" ? undefined : state.foregroundColor,
+    // Keep the native caption buttons inside their own row and leave its final
+    // pixel to the renderer so the divider continues beneath the controls.
     height: Math.max(0, state.height - 1),
   };
 }

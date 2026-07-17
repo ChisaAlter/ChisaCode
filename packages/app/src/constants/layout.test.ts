@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DESKTOP_WINDOW_CONTROLS_HEIGHT,
   SETTINGS_CONTROL_HEIGHT,
   SETTINGS_DESKTOP_BACK_HEIGHT,
   SETTINGS_DESKTOP_BODY_PADDING,
@@ -88,11 +89,12 @@ describe("workbench layout constants", () => {
   });
 
   it("locks the reference workbench chrome geometry", () => {
+    expect(DESKTOP_WINDOW_CONTROLS_HEIGHT).toBe(30);
     expect(WORKBENCH_NEW_CHAT_RADIUS).toBe(8);
     expect(WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT).toBe(16);
     expect(SIDEBAR_FOOTER_HEIGHT).toBe(78);
-    expect(WORKBENCH_TAB_MIN_WIDTH).toBe(110);
-    expect(WORKBENCH_TAB_MAX_WIDTH).toBe(140);
+    expect(WORKBENCH_TAB_MIN_WIDTH).toBe(160);
+    expect(WORKBENCH_TAB_MAX_WIDTH).toBe(220);
     expect(WORKBENCH_TAB_GAP).toBe(5);
     expect(WORKBENCH_TAB_ESTIMATED_CHAR_WIDTH).toBeCloseTo(35 / 3);
     expect(WORKBENCH_FRAME_HAIRLINE_OFFSET).toBeCloseTo(2 / 3);

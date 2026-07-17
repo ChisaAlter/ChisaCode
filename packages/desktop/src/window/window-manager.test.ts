@@ -88,7 +88,7 @@ describe("window-manager", () => {
   });
 
   describe("resolveRuntimeTitleBarOverlayOptions", () => {
-    it("applies the VS Code height minus border adjustment", () => {
+    it("leaves the renderer titlebar divider visible below native controls", () => {
       expect(
         resolveRuntimeTitleBarOverlayOptions({
           height: 48,

@@ -12,7 +12,6 @@ import {
   Settings,
   SquarePen,
   SquareTerminal,
-  X,
   type LucideIcon,
 } from "lucide-react-native";
 import {
@@ -592,7 +591,7 @@ function SidebarTopActions({
               icon={PanelLeftClose}
               label={t("sidebar.closeSidebar")}
               onPress={onCloseSidebar}
-              testID="sidebar-close-left"
+              testID="sidebar-close"
             />
           ) : null}
         </View>
@@ -839,7 +838,7 @@ function MobileSidebarQuickActions({
     },
     sessions: {
       icon: MessagesSquare,
-      label: t("sidebar.allSessions"),
+      label: t("sidebar.sessions"),
       accessibilityLabel: t("sidebar.allSessionsLabel", { title: agentLabel }),
       testID: "mobile-sidebar-quick-sessions",
       onPress: onViewMore,
@@ -1243,25 +1242,6 @@ function MobileSidebar({
               onNewConversation={handleOpenProject}
               onSearch={handleSearch}
             />
-            <Pressable
-              style={styles.mobileCloseButton}
-              onPress={closeToAgent}
-              testID="sidebar-close"
-              nativeID="sidebar-close"
-              accessible
-              accessibilityRole="button"
-              accessibilityLabel={t("sidebar.closeSidebar")}
-              hitSlop={8}
-            >
-              {({ hovered, pressed }) => (
-                <X
-                  size={theme.iconSize.md}
-                  color={
-                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
-                  }
-                />
-              )}
-            </Pressable>
 
             <MobileSidebarQuickActions
               agent={quickActionAgent}
@@ -1535,18 +1515,6 @@ const styles = StyleSheet.create((theme) => ({
   sidebarContent: {
     flex: 1,
     minHeight: 0,
-  },
-  mobileCloseButton: {
-    position: "absolute",
-    top: theme.spacing[3],
-    right: theme.spacing[4],
-    zIndex: 2,
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surfaceWorkspace,
   },
   mobileQuickActions: {
     marginHorizontal: theme.spacing[3],

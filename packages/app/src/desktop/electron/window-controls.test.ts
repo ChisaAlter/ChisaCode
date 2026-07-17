@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getDesktopWindowControlsBackground } from "./window-controls";
 
 describe("getDesktopWindowControlsBackground", () => {
-  it("uses the workspace chrome color for the native window controls background", () => {
+  it("uses the titlebar color for the native window controls background", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#09090b",
@@ -11,14 +11,25 @@ describe("getDesktopWindowControlsBackground", () => {
         surfaceSidebar: "#f4f4f5",
         surfaceWorkspace: "#ffffff",
       }),
-    ).toBe("#ffffff");
+    ).toBe("#f8fafc");
   });
 
-  it("uses the sidebar color when the workspace color cannot be sent to Electron", () => {
+  it("uses the workspace color when the titlebar color cannot be sent to Electron", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#09090b",
-        surface0: "#f8fafc",
+        surface0: "transparent",
+        surfaceSidebar: "#f4f4f5",
+        surfaceWorkspace: "#ffffff",
+      }),
+    ).toBe("#ffffff");
+  });
+
+  it("uses the sidebar color when the titlebar and workspace colors are transparent", () => {
+    expect(
+      getDesktopWindowControlsBackground({
+        foreground: "#09090b",
+        surface0: "transparent",
         surfaceSidebar: "#f4f4f5",
         surfaceWorkspace: "transparent",
       }),

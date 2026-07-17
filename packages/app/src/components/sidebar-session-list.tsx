@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -27,6 +27,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { DraggableList, type DraggableRenderItemInfo } from "@/components/draggable-list";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import {
   useIsCompactFormFactor,
@@ -58,6 +59,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useArchiveAgent, useSuppressedArchiveAgentIds } from "@/hooks/use-archive-agent";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
 import { useSessionStore } from "@/stores/session-store";
+import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { generateDraftId } from "@/stores/draft-keys";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -65,8 +67,10 @@ import { rememberArchivedAgentDetail } from "@/utils/agent-history-navigation";
 import type { SidebarSessionDraft } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
+  applyStableSidebarSessionOrder,
   PINNED_SIDEBAR_SESSION_GROUP_KEY,
   groupAgentsForSidebar,
+  reconcileSidebarSessionOrder,
   type SidebarSessionGroup,
 } from "@/utils/sidebar-session-groups";
 import { buildHostNewWorkspaceRoute } from "@/utils/host-routes";
@@ -118,6 +122,14 @@ interface SidebarPinnedCacheSnapshot {
 
 function getAgentActionKey(agent: AggregatedAgent): string {
   return `${agent.serverId}:${agent.id}`;
+}
+
+function sidebarSessionKeyExtractor(agent: AggregatedAgent): string {
+  return getAgentActionKey(agent);
+}
+
+function ordersEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((key, index) => key === right[index]);
 }
 
 function isSidebarAgentPinned(agent: AggregatedAgent): boolean {
@@ -345,6 +357,8 @@ function SidebarSessionRow({
   isPinning,
   isArchiving,
   isDeleting,
+  isDragging = false,
+  drag,
 }: {
   agent: AggregatedAgent;
   selectedAgentId?: string;
@@ -356,6 +370,8 @@ function SidebarSessionRow({
   isPinning: boolean;
   isArchiving: boolean;
   isDeleting: boolean;
+  isDragging?: boolean;
+  drag?: () => void;
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -388,9 +404,10 @@ function SidebarSessionRow({
       rowBaseStyle,
       Boolean(hovered) && rowHoveredStyle,
       isSelected && rowSelectedStyle,
+      isDragging && styles.desktopRowDragging,
       pressed && rowPressedStyle,
     ],
-    [isSelected, rowBaseStyle, rowHoveredStyle, rowPressedStyle, rowSelectedStyle],
+    [isDragging, isSelected, rowBaseStyle, rowHoveredStyle, rowPressedStyle, rowSelectedStyle],
   );
   const titleStyle = useMemo(
     () => [rowTitleStyle, isSelected && rowTitleSelectedStyle],
@@ -563,6 +580,7 @@ function SidebarSessionRow({
       <Pressable
         style={rowStyle}
         onPress={handlePress}
+        onLongPress={drag}
         testID={`sidebar-session-${agent.serverId}-${agent.id}`}
         accessibilityRole="button"
         accessibilityLabel={sessionTitle}
@@ -587,6 +605,7 @@ function SidebarSessionRow({
           enabledOnMobile={false}
           style={rowStyle}
           onPress={handlePress}
+          onLongPress={drag}
           testID={`sidebar-session-${agent.serverId}-${agent.id}`}
           accessibilityRole="button"
           accessibilityLabel={sessionTitle}
@@ -760,6 +779,7 @@ interface SidebarSessionGroupViewProps {
   deletingAgentKey: string | null;
   isArchivingAgent: (input: { serverId: string; agentId: string }) => boolean;
   onToggleCollapsed: (groupKey: string) => void;
+  onReorderAgents: (groupKey: string, agents: AggregatedAgent[]) => void;
 }
 
 function SidebarSessionGroupView({
@@ -779,6 +799,7 @@ function SidebarSessionGroupView({
   deletingAgentKey,
   isArchivingAgent,
   onToggleCollapsed,
+  onReorderAgents,
 }: SidebarSessionGroupViewProps) {
   const handleToggleCollapsed = useCallback(
     () => onToggleCollapsed(group.key),
@@ -788,6 +809,71 @@ function SidebarSessionGroupView({
     () => [styles.groupRows, !isCompact && group.cwd && styles.desktopWorkspaceGroupRows],
     [group.cwd, isCompact],
   );
+  const renderAgent = useCallback(
+    ({ item, drag, isActive }: DraggableRenderItemInfo<AggregatedAgent>) => (
+      <SidebarSessionRow
+        agent={item}
+        selectedAgentId={selectedAgentId}
+        onAgentPress={onAgentPress}
+        onTogglePin={onTogglePin}
+        onRename={onRename}
+        onArchive={onArchive}
+        onDelete={onDelete}
+        isPinning={pinningAgentKey === getAgentActionKey(item)}
+        isArchiving={isArchivingAgent({ serverId: item.serverId, agentId: item.id })}
+        isDeleting={deletingAgentKey === getAgentActionKey(item)}
+        isDragging={isActive}
+        drag={drag}
+      />
+    ),
+    [
+      deletingAgentKey,
+      isArchivingAgent,
+      onAgentPress,
+      onArchive,
+      onDelete,
+      onRename,
+      onTogglePin,
+      pinningAgentKey,
+      selectedAgentId,
+    ],
+  );
+  const handleDragEnd = useCallback(
+    (agents: AggregatedAgent[]) => onReorderAgents(group.key, agents),
+    [group.key, onReorderAgents],
+  );
+  let renderedRows: React.ReactNode = null;
+  if (!collapsed) {
+    renderedRows = isCompact ? (
+      <View style={groupRowsStyle}>
+        {group.agents.map((agent) => (
+          <SidebarSessionRow
+            key={`${agent.serverId}:${agent.id}`}
+            agent={agent}
+            selectedAgentId={selectedAgentId}
+            onAgentPress={onAgentPress}
+            onTogglePin={onTogglePin}
+            onRename={onRename}
+            onArchive={onArchive}
+            onDelete={onDelete}
+            isPinning={pinningAgentKey === getAgentActionKey(agent)}
+            isArchiving={isArchivingAgent({ serverId: agent.serverId, agentId: agent.id })}
+            isDeleting={deletingAgentKey === getAgentActionKey(agent)}
+          />
+        ))}
+      </View>
+    ) : (
+      <DraggableList
+        data={group.agents}
+        keyExtractor={sidebarSessionKeyExtractor}
+        renderItem={renderAgent}
+        onDragEnd={handleDragEnd}
+        scrollEnabled={false}
+        containerStyle={groupRowsStyle}
+        testID={`sidebar-session-order-${group.key}`}
+      />
+    );
+  }
 
   return (
     <View style={groupStyle} testID={`sidebar-session-group-${group.key}`}>
@@ -800,25 +886,7 @@ function SidebarSessionGroupView({
           onToggleCollapsed={handleToggleCollapsed}
         />
       ) : null}
-      {!collapsed ? (
-        <View style={groupRowsStyle}>
-          {group.agents.map((agent) => (
-            <SidebarSessionRow
-              key={`${agent.serverId}:${agent.id}`}
-              agent={agent}
-              selectedAgentId={selectedAgentId}
-              onAgentPress={onAgentPress}
-              onTogglePin={onTogglePin}
-              onRename={onRename}
-              onArchive={onArchive}
-              onDelete={onDelete}
-              isPinning={pinningAgentKey === getAgentActionKey(agent)}
-              isArchiving={isArchivingAgent({ serverId: agent.serverId, agentId: agent.id })}
-              isDeleting={deletingAgentKey === getAgentActionKey(agent)}
-            />
-          ))}
-        </View>
-      ) : null}
+      {renderedRows}
     </View>
   );
 }
@@ -850,6 +918,15 @@ export function SidebarSessionList({
   const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const sessionGroupOrderByServerId = useSidebarOrderStore(
+    (state) => state.sessionGroupOrderByServerId,
+  );
+  const sessionOrderByServerAndGroup = useSidebarOrderStore(
+    (state) => state.sessionOrderByServerAndGroup,
+  );
+  const getSessionOrder = useSidebarOrderStore((state) => state.getSessionOrder);
+  const setSessionGroupOrder = useSidebarOrderStore((state) => state.setSessionGroupOrder);
+  const setSessionOrder = useSidebarOrderStore((state) => state.setSessionOrder);
   const visibleAgents = useMemo(
     () => agents.filter((agent) => !agent.archivedAt && !suppressedArchiveAgentIds.has(agent.id)),
     [agents, suppressedArchiveAgentIds],
@@ -862,7 +939,7 @@ export function SidebarSessionList({
       ? `${visibleAgents[0].serverId}:${visibleAgents[0].id}`
       : undefined;
   }, [selectedAgentId, visibleAgents]);
-  const groups = useMemo(() => {
+  const activitySortedGroups = useMemo(() => {
     const unknownWorkspaceLabel = t("sidebar.unknownWorkspace");
     const agentGroups = groupAgentsForSidebar(visibleAgents, {
       unknownWorkspaceLabel,
@@ -871,6 +948,57 @@ export function SidebarSessionList({
     });
     return buildRenderGroups(agentGroups);
   }, [t, visibleAgents]);
+  const storedGroupOrder = useMemo(
+    () => (serverId ? (sessionGroupOrderByServerId[serverId] ?? []) : []),
+    [serverId, sessionGroupOrderByServerId],
+  );
+  const storedAgentOrderByGroup = useMemo(() => {
+    void sessionOrderByServerAndGroup;
+    if (!serverId) {
+      return {};
+    }
+    return Object.fromEntries(
+      activitySortedGroups.map((group) => [group.key, getSessionOrder(serverId, group.key)]),
+    );
+  }, [activitySortedGroups, getSessionOrder, serverId, sessionOrderByServerAndGroup]);
+  const groups = useMemo(
+    () =>
+      applyStableSidebarSessionOrder(activitySortedGroups, {
+        groupOrder: storedGroupOrder,
+        agentOrderByGroup: storedAgentOrderByGroup,
+      }),
+    [activitySortedGroups, storedAgentOrderByGroup, storedGroupOrder],
+  );
+
+  useEffect(() => {
+    if (!serverId) {
+      return;
+    }
+    const currentGroupKeys = activitySortedGroups
+      .filter((group) => group.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY)
+      .map((group) => group.key);
+    const nextGroupOrder = reconcileSidebarSessionOrder(storedGroupOrder, currentGroupKeys);
+    if (!ordersEqual(storedGroupOrder, nextGroupOrder)) {
+      setSessionGroupOrder(serverId, nextGroupOrder);
+    }
+    for (const group of activitySortedGroups) {
+      const storedOrder = getSessionOrder(serverId, group.key);
+      const nextOrder = reconcileSidebarSessionOrder(
+        storedOrder,
+        group.agents.map((agent) => agent.id),
+      );
+      if (!ordersEqual(storedOrder, nextOrder)) {
+        setSessionOrder(serverId, group.key, nextOrder);
+      }
+    }
+  }, [
+    activitySortedGroups,
+    getSessionOrder,
+    serverId,
+    setSessionGroupOrder,
+    setSessionOrder,
+    storedGroupOrder,
+  ]);
   const pinnedGroup = useMemo(
     () => groups.find((group) => group.key === PINNED_SIDEBAR_SESSION_GROUP_KEY) ?? null,
     [groups],
@@ -1004,6 +1132,19 @@ export function SidebarSessionList({
       return next;
     });
   }, []);
+  const handleReorderAgents = useCallback(
+    (groupKey: string, reorderedAgents: AggregatedAgent[]) => {
+      if (!serverId) {
+        return;
+      }
+      setSessionOrder(
+        serverId,
+        groupKey,
+        reorderedAgents.map((agent) => agent.id),
+      );
+    },
+    [serverId, setSessionOrder],
+  );
 
   const handleRenameSubmit = useCallback(
     async (nextTitle: string) => {
@@ -1102,6 +1243,7 @@ export function SidebarSessionList({
           deletingAgentKey={deletingAgentKey}
           isArchivingAgent={isArchivingAgent}
           onToggleCollapsed={toggleCollapsedGroup}
+          onReorderAgents={handleReorderAgents}
         />
       ) : null}
       {workspaceGroups.length > 0 && !isCompact && showGroupTitles ? (
@@ -1126,6 +1268,7 @@ export function SidebarSessionList({
           deletingAgentKey={deletingAgentKey}
           isArchivingAgent={isArchivingAgent}
           onToggleCollapsed={toggleCollapsedGroup}
+          onReorderAgents={handleReorderAgents}
         />
       ))}
       {hasMore ? (
@@ -1309,6 +1452,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopRowPressed: {
     opacity: 0.9,
+  },
+  desktopRowDragging: {
+    backgroundColor: theme.colors.surface2,
+    opacity: 0.86,
   },
   desktopRowSelected: {
     backgroundColor: theme.colors.surfaceSidebarHover,

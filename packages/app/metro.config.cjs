@@ -80,4 +80,28 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return resolveWithCustomWebOverlay(context, moduleName, platform);
 };
 
-module.exports = getBundleModeMetroConfig(wrapWithReanimatedMetroConfig(config));
+function withWorkletsBundleModeGuard(metroConfig) {
+  const customSerializer = metroConfig.serializer.customSerializer;
+
+  metroConfig.serializer.customSerializer = async (entryPoint, preModules, graph, options) => {
+    if (graph.transformOptions.platform !== "web") {
+      const workletsEntryPath = [...graph.dependencies.keys()].find((modulePath) =>
+        modulePath.replaceAll("\\", "/").endsWith("react-native-worklets/src/index.ts"),
+      );
+
+      if (workletsEntryPath && options.createModuleId(workletsEntryPath) !== -2) {
+        throw new Error(
+          "Worklets Bundle Mode requires the react-native-worklets entry module to use ID -2.",
+        );
+      }
+    }
+
+    return customSerializer(entryPoint, preModules, graph, options);
+  };
+
+  return metroConfig;
+}
+
+module.exports = withWorkletsBundleModeGuard(
+  getBundleModeMetroConfig(wrapWithReanimatedMetroConfig(config)),
+);

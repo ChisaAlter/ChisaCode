@@ -105,6 +105,36 @@ The route list includes workspace, new workspace, open project, sessions, the le
 settings root, every desktop settings section, host settings, project list/detail, and welcome. The
 native camera scan route is not an Electron product surface and remains outside this desktop result.
 
+## Desktop Follow-up Regression QA (2026-07-17)
+
+- Workspace tab widths were raised to a 160-220 px responsive range. The packaged Electron capture
+  shows the complete `新项目入口` and `修复 dock 状态` titles without the previous premature
+  truncation.
+- The Windows controls overlay reports `{ x: 0, y: 0, width: 1064, height: 29 }` inside a dedicated
+  30 px titlebar row at the validated 1200 x 800 viewport. The final row pixel remains renderer-owned,
+  so the divider is continuous below minimize, maximize, and close.
+- Clicking a different sidebar session changed the active title but preserved the complete ordered
+  session ID array. A pointer drag changed only the two dragged rows, and a second drag restored the
+  original order. Activity timestamps no longer reorder project groups or sessions.
+- Focused verification: 3 Vitest files / 28 assertions passed, targeted lint reported 0 warnings and
+  0 errors, App and Desktop typechecks passed, and `git diff --check` passed.
+- Evidence: `C:\Ai\ChisaCode\.qa-tmp\topbar-session-order-followup.png`,
+  `C:\Ai\ChisaCode\.qa-tmp\topbar-desktop-fixed-full-dpi.png`, and
+  `C:\Ai\ChisaCode\.qa-tmp\topbar-desktop-fixed-crop-dpi.png`.
+- The shared topbar regression was repeated across all five product themes. Both target tabs measured
+  160 px in every theme with `scrollWidth <= clientWidth`, and the native-control divider remained
+  continuous. Contact sheet:
+  `C:\Ai\ChisaCode\.qa-tmp\topbar-five-themes-contact-sheet.png`.
+
+## Android Follow-up Status (2026-07-17)
+
+- A current release APK was built successfully from the present worktree:
+  `C:\Ai\ChisaCode\packages\app\android\app\build\outputs\apk\release\app-release.apk`.
+- A physical Xiaomi `23124RN87C` device running Android 15 is connected over ADB.
+- Installation is currently waiting on the device's MIUI USB-install authorization. The package
+  manager returned `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`, so no Android visual
+  result is claimed yet.
+
 ## Platform Boundary
 
 Android native visual QA was not performed in this pass. No Android/device validation is claimed, and browser rendering is not used as a substitute.

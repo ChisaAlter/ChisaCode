@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ProjectPlacementPayload } from "@chisacode/protocol/messages";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import {
+  applyStableSidebarSessionOrder,
   getAgentCwdGroupLabel,
   groupAgentsForSidebar,
   normalizeAgentCwdGroupKey,
+  reconcileSidebarSessionOrder,
 } from "@/utils/sidebar-session-groups";
 
 function agent(input: {
@@ -149,5 +151,32 @@ describe("sidebar session groups", () => {
     );
 
     expect(groups[0]?.agents.map((entry) => entry.id)).toEqual(["pinned-valid", "pinned-invalid"]);
+  });
+
+  it("keeps stored group and session order when activity timestamps change", () => {
+    const groups = groupAgentsForSidebar([
+      agent({ id: "new-a", cwd: "C:\\ai\\a", updatedAt: "2026-01-04T00:00:00.000Z" }),
+      agent({ id: "old-a", cwd: "C:\\ai\\a", updatedAt: "2026-01-01T00:00:00.000Z" }),
+      agent({ id: "new-b", cwd: "C:\\ai\\b", updatedAt: "2026-01-03T00:00:00.000Z" }),
+    ]);
+
+    const ordered = applyStableSidebarSessionOrder(groups, {
+      groupOrder: ["c:/ai/a", "c:/ai/b"],
+      agentOrderByGroup: {
+        "c:/ai/a": ["old-a", "new-a"],
+      },
+    });
+
+    expect(ordered.map((group) => group.label)).toEqual(["a", "b"]);
+    expect(ordered[0]?.agents.map((entry) => entry.id)).toEqual(["old-a", "new-a"]);
+  });
+
+  it("removes stale keys and appends newly discovered sessions without moving existing ones", () => {
+    expect(
+      reconcileSidebarSessionOrder(
+        ["session-b", "stale", "session-a"],
+        ["session-a", "session-b", "session-c"],
+      ),
+    ).toEqual(["session-b", "session-a", "session-c"]);
   });
 });

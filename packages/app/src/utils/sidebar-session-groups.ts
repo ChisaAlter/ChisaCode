@@ -10,6 +10,70 @@ export interface SidebarSessionGroup {
 
 export const PINNED_SIDEBAR_SESSION_GROUP_KEY = "__pinned__";
 
+export function reconcileSidebarSessionOrder(
+  storedOrder: readonly string[],
+  currentKeys: readonly string[],
+): string[] {
+  const currentKeySet = new Set(currentKeys);
+  const resolved = storedOrder.filter((key) => currentKeySet.has(key));
+  const resolvedKeySet = new Set(resolved);
+  for (const key of currentKeys) {
+    if (!resolvedKeySet.has(key)) {
+      resolved.push(key);
+      resolvedKeySet.add(key);
+    }
+  }
+  return resolved;
+}
+
+function orderItemsByKeys<T>(
+  items: T[],
+  keys: readonly string[],
+  getKey: (item: T) => string,
+): T[] {
+  const itemByKey = new Map(items.map((item) => [getKey(item), item] as const));
+  const ordered: T[] = [];
+  for (const key of reconcileSidebarSessionOrder(keys, items.map(getKey))) {
+    const item = itemByKey.get(key);
+    if (item) {
+      ordered.push(item);
+    }
+  }
+  return ordered;
+}
+
+export function applyStableSidebarSessionOrder<T extends SidebarSessionGroup>(
+  groups: T[],
+  input: {
+    groupOrder: readonly string[];
+    agentOrderByGroup: Readonly<Record<string, readonly string[]>>;
+  },
+): T[] {
+  const pinnedGroup = groups.find((group) => group.key === PINNED_SIDEBAR_SESSION_GROUP_KEY);
+  const workspaceGroups = groups.filter((group) => group.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY);
+  const orderedWorkspaceGroups = orderItemsByKeys(
+    workspaceGroups,
+    input.groupOrder,
+    (group) => group.key,
+  );
+  const orderedGroups = pinnedGroup
+    ? [pinnedGroup, ...orderedWorkspaceGroups]
+    : orderedWorkspaceGroups;
+
+  const result: T[] = [];
+  for (const group of orderedGroups) {
+    result.push({
+      ...group,
+      agents: orderItemsByKeys(
+        group.agents,
+        input.agentOrderByGroup[group.key] ?? [],
+        (agent) => agent.id,
+      ),
+    });
+  }
+  return result;
+}
+
 const WINDOWS_DRIVE_PREFIX = /^[a-z]:/i;
 const WINDOWS_SEPARATOR = "\\";
 const POSIX_SEPARATOR = "/";

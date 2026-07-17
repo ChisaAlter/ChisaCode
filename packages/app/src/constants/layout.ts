@@ -25,8 +25,8 @@ export const WORKBENCH_MICRO_LINE_HEIGHT = 14;
 export const MIN_INTERACTIVE_TARGET_SIZE = 28;
 export const WORKBENCH_NEW_CHAT_RADIUS = 8;
 export const WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT = 16;
-export const WORKBENCH_TAB_MIN_WIDTH = 110;
-export const WORKBENCH_TAB_MAX_WIDTH = 140;
+export const WORKBENCH_TAB_MIN_WIDTH = 160;
+export const WORKBENCH_TAB_MAX_WIDTH = 220;
 export const WORKBENCH_TAB_ESTIMATED_CHAR_WIDTH = 35 / 3;
 export const WORKBENCH_FRAME_HAIRLINE_OFFSET = 2 / 3;
 export const WORKBENCH_COMPOSER_HEIGHT = 133;
@@ -100,7 +100,7 @@ export const DESKTOP_TRAFFIC_LIGHT_HEIGHT = 45;
 
 // Windows/Linux window controls (minimize/maximize/close) — top-right
 export const DESKTOP_WINDOW_CONTROLS_WIDTH = 140;
-export const DESKTOP_WINDOW_CONTROLS_HEIGHT = 22;
+export const DESKTOP_WINDOW_CONTROLS_HEIGHT = 30;
 
 export {
   getIsElectron as getIsElectronRuntime,
