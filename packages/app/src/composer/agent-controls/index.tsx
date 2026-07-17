@@ -353,7 +353,7 @@ function ControlledAgentControls({
     providerOptions,
     canSelectModel,
     thinkingOptions,
-    features,
+    features: isCompact ? features : undefined,
     hasDesktopExtras: desktopExtras !== null && desktopExtras !== undefined,
   });
 
@@ -461,8 +461,6 @@ function ControlledAgentControls({
           selectedRuntimeProviderId={selectedRuntimeProviderId}
           thinkingOptions={formattedThinkingOptions}
           selectedThinkingOptionId={selectedThinkingOptionId}
-          features={features}
-          onSetFeature={onSetFeature}
           onToggleFavoriteModel={onToggleFavoriteModel}
           onDropdownClose={onDropdownClose}
           onModelSelectorOpen={onModelSelectorOpen}
@@ -494,7 +492,6 @@ function ControlledAgentControls({
           handleDesktopModelSelect={handleDesktopModelSelect}
           handleProviderOpenChange={handleProviderOpenChange}
           handleThinkingOpenChange={handleThinkingOpenChange}
-          handleOpenChange={handleOpenChange}
           extras={desktopExtras}
           modelSelectorServerId={modelSelectorServerId}
         />

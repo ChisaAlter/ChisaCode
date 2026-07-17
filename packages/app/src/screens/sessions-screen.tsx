@@ -11,6 +11,9 @@ import { AgentList } from "@/components/agent-list";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { buildHostOpenProjectRoute } from "@/utils/host-routes";
 
+const SESSION_SKELETON_KEYS = ["one", "two", "three", "four", "five"] as const;
+const SLOW_LOADING_DELAY_MS = 4_000;
+
 export function SessionsScreen({ serverId }: { serverId: string }) {
   const isFocused = useIsFocused();
 
@@ -31,6 +34,7 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
 
   // Track user-initiated refresh to avoid showing spinner on background revalidation
   const [isManualRefresh, setIsManualRefresh] = useState(false);
+  const [showSlowLoadingStatus, setShowSlowLoadingStatus] = useState(false);
 
   const handleRefresh = useCallback(() => {
     setIsManualRefresh(true);
@@ -43,6 +47,15 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
       setIsManualRefresh(false);
     }
   }, [isRevalidating, isManualRefresh]);
+
+  useEffect(() => {
+    if (!isInitialLoad) {
+      setShowSlowLoadingStatus(false);
+      return;
+    }
+    const timeout = setTimeout(() => setShowSlowLoadingStatus(true), SLOW_LOADING_DELAY_MS);
+    return () => clearTimeout(timeout);
+  }, [isInitialLoad]);
 
   const sortedAgents = useMemo(() => {
     return [...agents].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -69,7 +82,26 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
       <MenuHeader title={t("sidebar.sessions")} />
       {isInitialLoad ? (
         <View style={styles.loadingContainer}>
-          <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
+          <View style={styles.loadingList} accessibilityLabel={t("session.loadingRecentSessions")}>
+            {SESSION_SKELETON_KEYS.map((key) => (
+              <View key={key} style={styles.loadingRow}>
+                <View style={styles.loadingIcon} />
+                <View style={styles.loadingTextColumn}>
+                  <View style={styles.loadingTitle} />
+                  <View style={styles.loadingMeta} />
+                </View>
+              </View>
+            ))}
+          </View>
+          <View style={styles.loadingStatusRow}>
+            <LoadingSpinner size={14} color={theme.colors.foregroundMuted} />
+            <Text style={styles.loadingStatusText}>{t("session.loadingRecentSessions")}</Text>
+            {showSlowLoadingStatus ? (
+              <Button variant="ghost" size="sm" onPress={refreshAll}>
+                {t("common.retry")}
+              </Button>
+            ) : null}
+          </View>
         </View>
       ) : null}
       {!isInitialLoad && sortedAgents.length === 0 ? (
@@ -112,8 +144,57 @@ const styles = StyleSheet.create((theme) => ({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
+    alignItems: "stretch",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[6],
+    paddingVertical: theme.spacing[4],
+  },
+  loadingList: {
+    gap: theme.spacing[2],
+  },
+  loadingRow: {
+    minHeight: 58,
+    flexDirection: "row",
     alignItems: "center",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
+  },
+  loadingIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface3,
+  },
+  loadingTextColumn: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[2],
+  },
+  loadingTitle: {
+    width: "46%",
+    height: 12,
+    borderRadius: theme.borderRadius.base,
+    backgroundColor: theme.colors.surface3,
+  },
+  loadingMeta: {
+    width: "28%",
+    height: 8,
+    borderRadius: theme.borderRadius.base,
+    backgroundColor: theme.colors.surface2,
+  },
+  loadingStatusRow: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+  },
+  loadingStatusText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
   },
   footer: {
     alignItems: "center",

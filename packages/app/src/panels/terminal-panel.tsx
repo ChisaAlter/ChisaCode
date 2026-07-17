@@ -57,9 +57,12 @@ function useTerminalPanelDescriptor(
   );
   const terminal =
     terminalsQuery.data?.terminals.find((entry) => entry.id === target.terminalId) ?? null;
+  const terminalTitle = trimNonEmpty(terminal?.title ?? terminal?.name ?? null);
+  const terminalLabel =
+    terminalTitle && !/[\\/]|\.exe$/i.test(terminalTitle) ? terminalTitle : "终端";
 
   return {
-    label: trimNonEmpty(terminal?.title ?? terminal?.name ?? null) ?? "终端",
+    label: terminalLabel,
     subtitle: "终端",
     titleState: "ready",
     icon: Terminal,

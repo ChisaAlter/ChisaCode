@@ -1,6 +1,9 @@
 import { type ReactNode, useEffect, useMemo } from "react";
 import {
+  DarkTheme,
+  DefaultTheme,
   Stack,
+  ThemeProvider,
   useGlobalSearchParams,
   usePathname,
   useRootNavigationState,
@@ -26,6 +29,7 @@ import { resolveSelectedSidebarAgentIdFromWorkspaceLayout } from "@/utils/select
 import { AppContainer } from "./AppContainer";
 import { useStoreReady } from "./BootstrapProvider";
 import { OpenProjectListener } from "./LinkListeners";
+import { resolveAppSurfaceBackgrounds } from "./app-surface-backgrounds";
 
 function AppWithSidebar({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -111,42 +115,63 @@ const AGENT_SCREEN_OPTIONS = { gestureEnabled: false };
 function RootStack() {
   const storeReady = useStoreReady();
   const { theme } = useUnistyles();
+  const stackBackground = resolveAppSurfaceBackgrounds({
+    frameEnabled: false,
+    glassEnabled: theme.glass.enabled,
+    surfaceWorkspace: theme.colors.surfaceWorkspace,
+    surface0: theme.colors.surface0,
+    glassShell: theme.glass.shell,
+    borderAccent: theme.colors.borderAccent,
+  }).stack;
   const stackScreenOptions = useMemo(
     () => ({
       headerShown: false,
       animation: "none" as const,
       contentStyle: {
-        backgroundColor: theme.colors.surface0,
+        backgroundColor: stackBackground,
       },
     }),
-    [theme.colors.surface0],
+    [stackBackground],
   );
+  const navigationTheme = useMemo(() => {
+    const baseTheme = theme.isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...baseTheme,
+      colors: {
+        ...baseTheme.colors,
+        background: stackBackground,
+        card: theme.glass.enabled ? "transparent" : baseTheme.colors.card,
+      },
+    };
+  }, [stackBackground, theme.glass.enabled, theme.isDark]);
   return (
-    <Stack screenOptions={stackScreenOptions}>
-      <Stack.Screen name="index" />
-      <Stack.Protected guard={storeReady}>
-        <Stack.Screen name="welcome" />
-        <Stack.Screen name="pair-scan" />
-      </Stack.Protected>
-      {/*
+    <ThemeProvider value={navigationTheme}>
+      <Stack screenOptions={stackScreenOptions}>
+        <Stack.Screen name="index" />
+        <Stack.Protected guard={storeReady}>
+          <Stack.Screen name="welcome" />
+          <Stack.Screen name="pair-scan" />
+        </Stack.Protected>
+        {/*
         Do not add getId or dangerouslySingular back to the workspace route.
         Expo Router maps dangerouslySingular to React Navigation getId, and
         getId repeatedly breaks Android native-stack/Fabric by reordering an
         already-mounted workspace screen. Keep workspace identity/retention
         outside this route-level native-stack API.
       */}
-      <Stack.Screen name="h/[serverId]/workspace/[workspaceId]/index" />
-      <Stack.Screen name="h/[serverId]/agent/[agentId]" options={AGENT_SCREEN_OPTIONS} />
-      <Stack.Screen name="h/[serverId]/index" />
-      <Stack.Screen name="h/[serverId]/sessions" />
-      <Stack.Screen name="h/[serverId]/open-project" />
-      <Stack.Screen name="h/[serverId]/settings" />
-      <Stack.Screen name="settings/index" />
-      <Stack.Screen name="settings/[section]" />
-      <Stack.Screen name="settings/projects/index" />
-      <Stack.Screen name="settings/projects/[projectKey]" />
-      <Stack.Screen name="settings/hosts/[serverId]" />
-    </Stack>
+        <Stack.Screen name="h/[serverId]/workspace/[workspaceId]/index" />
+        <Stack.Screen name="h/[serverId]/agent/[agentId]" options={AGENT_SCREEN_OPTIONS} />
+        <Stack.Screen name="h/[serverId]/index" />
+        <Stack.Screen name="h/[serverId]/sessions" />
+        <Stack.Screen name="h/[serverId]/open-project" />
+        <Stack.Screen name="h/[serverId]/settings" />
+        <Stack.Screen name="settings/index" />
+        <Stack.Screen name="settings/[section]" />
+        <Stack.Screen name="settings/projects/index" />
+        <Stack.Screen name="settings/projects/[projectKey]" />
+        <Stack.Screen name="settings/hosts/[serverId]" />
+      </Stack>
+    </ThemeProvider>
   );
 }
 

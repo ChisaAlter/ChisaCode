@@ -41,13 +41,21 @@ import {
   Check,
   CheckSquare,
   Copy,
-  Scissors,
   MicVocal,
+  Cog,
 } from "lucide-react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { type Theme } from "@/styles/theme";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { createMarkdownStyles } from "@/styles/markdown-styles";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
+import {
+  useIsCompactFormFactor,
+  WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
+  WORKBENCH_BODY_FONT_SIZE,
+  WORKBENCH_BODY_LINE_HEIGHT,
+  WORKBENCH_MESSAGE_LINE_HEIGHT,
+  WORKBENCH_USER_MESSAGE_MAX_WIDTH,
+} from "@/constants/layout";
+import { createWorkbenchMarkdownStyles } from "@/styles/markdown-styles";
 import { Fonts } from "@/constants/theme";
 import type { GenerativeUiItem, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
 import type { AgentAttachment } from "@chisacode/protocol/messages";
@@ -151,7 +159,7 @@ const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
 
 interface MarkdownWithStableRendererProps {
   children: ReactNode;
-  style: ReturnType<typeof createMarkdownStyles>;
+  style: ReturnType<typeof createWorkbenchMarkdownStyles>;
   rules: RenderRules;
   markdownit: MarkdownIt;
   onLinkPress: (url: string) => boolean;
@@ -162,11 +170,12 @@ interface MarkdownWithStableRendererProps {
 const MarkdownWithStableRenderer = Markdown as ComponentType<MarkdownWithStableRendererProps>;
 const ThemedMarkdown = withUnistyles(MarkdownWithStableRenderer);
 const markdownStyleMapping = (theme: Theme): Partial<MarkdownWithStableRendererProps> => ({
-  style: createMarkdownStyles(theme),
+  style: createWorkbenchMarkdownStyles(theme),
 });
 
 const ThemedMicVocal = withUnistyles(MicVocal);
 const ThemedTodoCheckIcon = withUnistyles(Check);
+const ThemedCog = withUnistyles(Cog);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -182,7 +191,8 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   },
   content: {
     alignItems: "flex-end",
-    maxWidth: "100%",
+    position: "relative",
+    maxWidth: WORKBENCH_USER_MESSAGE_MAX_WIDTH,
     minWidth: 0,
     flexShrink: 1,
     cursor: "auto",
@@ -197,19 +207,24 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   bubble: {
-    backgroundColor: theme.colors.surface3,
-    borderRadius: theme.borderRadius["2xl"],
-    borderTopRightRadius: theme.borderRadius.sm,
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[4],
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.borderRadius.xl,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: 9,
     minWidth: 0,
     flexShrink: 1,
-    ...theme.shadow.sm,
+    ...(isWeb
+      ? ({
+          backgroundImage: theme.colors.userBubbleGradient,
+          boxShadow: `0 6px 16px color-mix(in srgb, ${theme.colors.accent} 16%, transparent)`,
+        } as object)
+      : theme.shadow.sm),
   },
   text: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    lineHeight: 22,
+    color: theme.colors.accentForeground,
+    fontFamily: isWeb ? "system-ui" : Fonts.sans,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_MESSAGE_LINE_HEIGHT,
     minWidth: 0,
     maxWidth: "100%",
     flexShrink: 1,
@@ -270,10 +285,16 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     marginTop: theme.spacing[2],
+    ...(isWeb
+      ? {
+          position: "absolute" as const,
+          top: "100%",
+          right: 0,
+          zIndex: 1,
+        }
+      : {}),
   },
-  trailingRowHidden: {
-    opacity: 0,
-  },
+  trailingRowHidden: isWeb ? { display: "none" as const } : { opacity: 0 },
   trailingRowVisible: {
     opacity: 1,
   },
@@ -622,6 +643,62 @@ export const LiveElapsed = memo(function LiveElapsed({
   );
 });
 
+const assistantTurnHeaderStylesheet = StyleSheet.create((theme) => ({
+  container: {
+    minHeight: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 5,
+  },
+  badge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.accent,
+    ...(isWeb
+      ? ({
+          backgroundImage: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.accentNeon})`,
+        } as object)
+      : {}),
+  },
+  name: {
+    color: theme.colors.foreground,
+    fontSize: 12,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  duration: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 11,
+  },
+}));
+
+const assistantTurnIconColorMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground,
+});
+
+export const AssistantTurnHeader = memo(function AssistantTurnHeader({
+  durationMs,
+}: {
+  durationMs?: number;
+}) {
+  return (
+    <View style={assistantTurnHeaderStylesheet.container} testID="assistant-turn-header">
+      <View style={assistantTurnHeaderStylesheet.badge}>
+        <ThemedCog size={10} uniProps={assistantTurnIconColorMapping} />
+      </View>
+      <Text style={assistantTurnHeaderStylesheet.name}>AI</Text>
+      {durationMs !== undefined ? (
+        <Text style={assistantTurnHeaderStylesheet.duration}>
+          Worked for {formatDuration(durationMs)}
+        </Text>
+      ) : null}
+    </View>
+  );
+});
+
 interface AssistantMessageProps {
   message: string;
   timestamp: number;
@@ -634,17 +711,23 @@ interface AssistantMessageProps {
 
 export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
   container: {
-    paddingVertical: theme.spacing[3],
+    paddingVertical: 0,
     ...(isWeb ? { userSelect: "text" as const } : {}),
   },
   textSurface: {
-    backgroundColor: theme.colors.surface1,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    backgroundColor: "transparent",
+    borderRadius: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     minWidth: 0,
-    maxWidth: "100%",
-    ...theme.shadow.sm,
+    width: "100%",
+    maxWidth: WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
+    ...(isWeb
+      ? { boxShadow: "none" as const }
+      : {
+          shadowOpacity: 0,
+          elevation: 0,
+        }),
   },
   textSurfaceCompactTop: {
     borderTopLeftRadius: 0,
@@ -1790,25 +1873,18 @@ interface CompactionMarkerProps {
 
 const compactionStylesheet = StyleSheet.create((theme) => ({
   container: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
-    gap: theme.spacing[2],
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: theme.colors.border,
-  },
-  label: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
+    alignSelf: "center",
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
   },
   text: {
     fontFamily: Fonts.sans,
-    fontSize: 13,
+    fontSize: 11,
+    lineHeight: 14,
     color: theme.colors.foregroundMuted,
   },
 }));
@@ -1818,21 +1894,14 @@ export const CompactionMarker = memo(function CompactionMarker({
   trigger,
   preTokens,
 }: CompactionMarkerProps) {
-  const { theme } = useUnistyles();
-  const label = getCompactionMarkerLabel({ status, trigger, preTokens });
+  const { t } = useTranslation();
+  const generatedLabel = getCompactionMarkerLabel({ status, trigger, preTokens });
+  const label =
+    generatedLabel === "Context compacted" ? t("message.compactedContext") : generatedLabel;
 
   return (
     <View style={compactionStylesheet.container}>
-      <View style={compactionStylesheet.line} />
-      <View style={compactionStylesheet.label}>
-        {status === "loading" ? (
-          <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
-        ) : (
-          <Scissors size={12} color={theme.colors.foregroundMuted} />
-        )}
-        <Text style={compactionStylesheet.text}>{label}</Text>
-      </View>
-      <View style={compactionStylesheet.line} />
+      <Text style={compactionStylesheet.text}>{label}</Text>
     </View>
   );
 });
@@ -1840,6 +1909,7 @@ export const CompactionMarker = memo(function CompactionMarker({
 interface TodoListCardProps {
   items: TodoEntry[];
   disableOuterSpacing?: boolean;
+  presentation?: "default" | "workbench";
 }
 
 interface TodoListItemRowProps {
@@ -1912,11 +1982,56 @@ const todoListCardStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
   },
+  workbenchCard: {
+    width: "100%",
+    maxWidth: 400,
+    marginTop: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).chrome,
+  },
+  workbenchTitle: {
+    marginBottom: 6,
+    color: theme.colors.foreground,
+    fontFamily: isWeb ? "system-ui" : Fonts.sans,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  workbenchList: {
+    gap: 3,
+    paddingBottom: 3,
+  },
+  workbenchItemRow: {
+    minHeight: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  workbenchCheck: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.accent,
+  },
+  workbenchItemText: {
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontFamily: isWeb ? "system-ui" : Fonts.sans,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
+  },
 }));
 
 export const TodoListCard = memo(function TodoListCard({
   items,
   disableOuterSpacing,
+  presentation = "default",
 }: TodoListCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -1942,6 +2057,26 @@ export const TodoListCard = memo(function TodoListCard({
     );
   }, [items]);
 
+  if (presentation === "workbench") {
+    return (
+      <View style={todoListCardStylesheet.workbenchCard} testID="workbench-todo-card">
+        <Text style={todoListCardStylesheet.workbenchTitle}>计划 / Todos</Text>
+        <View style={todoListCardStylesheet.workbenchList}>
+          {items.map((item) => (
+            <View key={item.text} style={todoListCardStylesheet.workbenchItemRow}>
+              <View style={todoListCardStylesheet.workbenchCheck}>
+                {item.completed ? (
+                  <ThemedTodoCheckIcon size={10} uniProps={primaryForegroundColorMapping} />
+                ) : null}
+              </View>
+              <Text style={todoListCardStylesheet.workbenchItemText}>{item.text}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <ExpandableBadge
       label="Tasks"
@@ -1966,6 +2101,8 @@ interface ToolCallProps {
   metadata?: Record<string, unknown>;
   isLastInSequence?: boolean;
   disableOuterSpacing?: boolean;
+  badgeStyle?: StyleProp<ViewStyle>;
+  badgePresentation?: "default" | "workbench";
   onInlineDetailsHoverChange?: (hovered: boolean) => void;
   onInlineDetailsExpandedChange?: (expanded: boolean) => void;
   onOpenFilePath?: (filePath: string) => void;
@@ -1982,6 +2119,8 @@ export const ToolCall = memo(function ToolCall({
   metadata,
   isLastInSequence = false,
   disableOuterSpacing,
+  badgeStyle,
+  badgePresentation = "default",
   onInlineDetailsHoverChange,
   onInlineDetailsExpandedChange,
   onOpenFilePath,
@@ -2103,6 +2242,8 @@ export const ToolCall = memo(function ToolCall({
   return (
     <ExpandableBadge
       testID="tool-call-badge"
+      style={badgeStyle}
+      presentation={badgePresentation}
       label={presentation.displayName}
       secondaryLabel={presentation.summary}
       icon={presentation.icon}
@@ -2130,6 +2271,8 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.metadata !== next.metadata) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
   if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
+  if (previous.badgeStyle !== next.badgeStyle) return false;
+  if (previous.badgePresentation !== next.badgePresentation) return false;
   if (previous.onOpenFilePath !== next.onOpenFilePath) return false;
   return true;
 }

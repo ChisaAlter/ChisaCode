@@ -33,7 +33,11 @@ import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { useToast } from "@/contexts/toast-context";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import {
+  useIsCompactFormFactor,
+  WORKBENCH_COMPOSER_CONTROL_HEIGHT,
+  WORKBENCH_META_LINE_HEIGHT,
+} from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { formatAgentModeLabel } from "@/composer/agent-controls/utils";
 import type { AgentMode, AgentProvider } from "@chisacode/protocol/agent-types";
@@ -106,6 +110,7 @@ interface AgentModeControlViewProps {
   modeOptions: AgentMode[];
   selectedModeId: string | null | undefined;
   onSelectMode: (modeId: string) => void;
+  isCompact: boolean;
   disabled?: boolean;
 }
 
@@ -119,6 +124,7 @@ function AgentModeControlView({
   modeOptions,
   selectedModeId,
   onSelectMode,
+  isCompact,
   disabled = false,
 }: AgentModeControlViewProps) {
   const { theme } = useUnistyles();
@@ -190,11 +196,12 @@ function AgentModeControlView({
   const pressableStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType) => [
       styles.chip,
+      !isCompact && styles.desktopChip,
       hovered && styles.chipHovered,
       (pressed || open) && styles.chipPressed,
       disabled && styles.chipDisabled,
     ],
-    [open, disabled],
+    [disabled, isCompact, open],
   );
 
   const labelStyle = useMemo(
@@ -314,6 +321,7 @@ export const AgentModeControl = memo(function AgentModeControl({
       modeOptions={availableModes}
       selectedModeId={slice.currentModeId}
       onSelectMode={handleSelectMode}
+      isCompact={isCompact}
       disabled={!client}
     />
   );
@@ -348,6 +356,7 @@ export function DraftAgentModeControl({
       modeOptions={modeOptions}
       selectedModeId={selectedMode}
       onSelectMode={onSelectMode}
+      isCompact={isCompact}
       disabled={disabled}
     />
   );
@@ -363,6 +372,16 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius["2xl"],
   },
+  desktopChip: {
+    minWidth: 90,
+    height: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
+    backgroundColor: theme.colors.surface2,
+    gap: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+  },
   chipHovered: {
     backgroundColor: theme.colors.surface2,
   },
@@ -374,7 +393,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   chipLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
 }));

@@ -82,7 +82,11 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
   },
   infoButton: {
-    padding: theme.spacing[1],
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
     marginLeft: -theme.spacing[1],
   },
   tooltipText: {

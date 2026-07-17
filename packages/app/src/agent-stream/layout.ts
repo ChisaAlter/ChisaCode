@@ -21,7 +21,12 @@ export interface StreamLayoutItem {
   gapBelow: number;
   assistantSpacing: "default" | "compactTop" | "compactBottom" | "compactBoth";
   completedFooter: TurnFooterHost | null;
+  turnTiming?: TurnTiming;
+  showAssistantTurnHeader: boolean;
   toolSequence: StreamToolSequence;
+  toolSequenceGroup: StreamLayoutItem[] | null;
+  toolSequenceGroupGapBelow: number;
+  isToolSequenceGroupContinuation: boolean;
   isFirstInUserGroup: boolean;
   isLastInUserGroup: boolean;
   isLastInToolSequence: boolean;
@@ -191,8 +196,39 @@ function getSegmentNeighbor(input: {
   return null;
 }
 
+function assignToolSequenceGroups(items: StreamLayoutItem[]): StreamLayoutItem[] {
+  for (let index = 0; index < items.length; index += 1) {
+    const layoutItem = items[index];
+    if (
+      !layoutItem ||
+      (layoutItem.toolSequence !== "first" && layoutItem.toolSequence !== "single")
+    ) {
+      continue;
+    }
+
+    const group = [layoutItem];
+    let cursor = index + 1;
+    while (cursor < items.length) {
+      const candidate = items[cursor];
+      if (!candidate || !isToolSequenceItem(candidate.item)) {
+        break;
+      }
+      group.push(candidate);
+      candidate.isToolSequenceGroupContinuation = true;
+      cursor += 1;
+      if (candidate.toolSequence === "last" || candidate.toolSequence === "single") {
+        break;
+      }
+    }
+
+    layoutItem.toolSequenceGroup = group;
+    layoutItem.toolSequenceGroupGapBelow = group.at(-1)?.gapBelow ?? layoutItem.gapBelow;
+  }
+  return items;
+}
+
 function layoutSegment(input: LayoutSegmentInput): StreamLayoutItem[] {
-  return input.items.map((item, index) => {
+  const items = input.items.map((item, index) => {
     const aboveItem = getSegmentNeighbor({
       strategy: input.strategy,
       items: input.items,
@@ -237,13 +273,21 @@ function layoutSegment(input: LayoutSegmentInput): StreamLayoutItem[] {
       gapBelow: completedFooter ? 0 : getGapBetweenStreamItems(item, belowItem),
       assistantSpacing,
       completedFooter,
+      turnTiming:
+        item.kind === "assistant_message" ? input.timingByAssistantId.get(item.id) : undefined,
+      showAssistantTurnHeader:
+        item.kind === "assistant_message" && aboveItem?.kind !== "assistant_message",
       toolSequence: getToolSequence({ item, aboveItem, belowItem }),
+      toolSequenceGroup: null,
+      toolSequenceGroupGapBelow: 0,
+      isToolSequenceGroupContinuation: false,
       isFirstInUserGroup: item.kind === "user_message" && aboveItem?.kind !== "user_message",
       isLastInUserGroup: item.kind === "user_message" && belowItem?.kind !== "user_message",
       isLastInToolSequence: isToolSequenceItem(item) && !isToolSequenceItem(belowItem),
       frameOrder: input.frameOrder,
     };
   });
+  return assignToolSequenceGroups(items);
 }
 
 export function layoutStream(input: StreamLayoutInput): StreamLayout {

@@ -12,12 +12,14 @@ const metrics = {
   maxTabWidth: 200,
   tabIconWidth: 14,
   tabHorizontalPadding: 12,
+  tabContentGap: 4,
   estimatedCharWidth: 7,
   closeButtonWidth: 22,
+  minTabWidth: 88,
 };
 
 describe("computeWorkspaceTabLayout", () => {
-  it("caps equal-width tabs at the ideal width when there is extra horizontal space", () => {
+  it("sizes tabs from their labels when there is extra horizontal space", () => {
     const result = computeWorkspaceTabLayout({
       viewportWidth: 1200,
       tabLabelLengths: [8, 10, 7],
@@ -28,10 +30,10 @@ describe("computeWorkspaceTabLayout", () => {
     expect(result.requiresHorizontalScrollFallback).toBe(false);
     expect(result.items).toHaveLength(3);
     expect(result.items.every((item) => item.showLabel)).toBe(true);
-    expect(result.items.map((item) => item.width)).toEqual([200, 200, 200]);
+    expect(result.items.map((item) => item.width)).toEqual([120, 134, 113]);
   });
 
-  it("shrinks equal-width tabs proportionally to fit the pane", () => {
+  it("shrinks content-sized tabs proportionally to fit the pane", () => {
     const result = computeWorkspaceTabLayout({
       viewportWidth: 520,
       tabLabelLengths: [24, 12, 8],
@@ -40,11 +42,11 @@ describe("computeWorkspaceTabLayout", () => {
 
     expect(result.closeButtonPolicy).toBe("all");
     expect(result.requiresHorizontalScrollFallback).toBe(false);
-    expect(result.items.map((item) => item.width)).toEqual([125, 125, 125]);
+    expect(result.items.map((item) => item.width)).toEqual([149, 121, 106]);
     expect(result.items.every((item) => item.showLabel)).toBe(true);
   });
 
-  it("uses the split width for evenly sized tabs when space is available", () => {
+  it("keeps content-sized widths when a split pane has extra space", () => {
     const result = computeWorkspaceTabLayout({
       viewportWidth: 743,
       tabLabelLengths: [8, 8, 8, 8],
@@ -58,10 +60,10 @@ describe("computeWorkspaceTabLayout", () => {
 
     expect(result.closeButtonPolicy).toBe("all");
     expect(result.requiresHorizontalScrollFallback).toBe(false);
-    expect(result.items.map((item) => item.width)).toEqual([175, 175, 175, 175]);
+    expect(result.items.map((item) => item.width)).toEqual([120, 120, 120, 120]);
   });
 
-  it("collapses labels only while icon-only tabs still fit without scrolling", () => {
+  it("uses readable overflow widths instead of collapsing below the source minimum", () => {
     const result = computeWorkspaceTabLayout({
       viewportWidth: 388,
       tabLabelLengths: [14, 14, 14, 14],
@@ -69,9 +71,9 @@ describe("computeWorkspaceTabLayout", () => {
     });
 
     expect(result.closeButtonPolicy).toBe("all");
-    expect(result.requiresHorizontalScrollFallback).toBe(false);
-    expect(result.items.map((item) => item.width)).toEqual([60, 60, 60, 60]);
-    expect(result.items.every((item) => !item.showLabel)).toBe(true);
+    expect(result.requiresHorizontalScrollFallback).toBe(true);
+    expect(result.items.map((item) => item.width)).toEqual([132, 132, 132, 132]);
+    expect(result.items.every((item) => item.showLabel)).toBe(true);
   });
 
   it("uses readable tab widths instead of icon-only chips in scroll fallback", () => {

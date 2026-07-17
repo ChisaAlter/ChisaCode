@@ -8,8 +8,11 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
-import { StyleSheet } from "react-native-unistyles";
+import { useUnistyles } from "react-native-unistyles";
 
+import { isWeb } from "@/constants/platform";
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import { buildLiquidNeonBackdropStyle } from "./liquid-neon-backdrop-style";
 /**
  * Returns true on Android devices with limited GPU / memory where the
  * three-band animated SVG backdrop is likely to cause jank.
@@ -30,11 +33,23 @@ function isAndroidLowEndDevice(): boolean {
 }
 
 export function LiquidNeonBackdrop() {
-  if (isAndroidLowEndDevice()) return null;
-  return <LiquidNeonBackdropAnimated />;
+  const { theme } = useUnistyles();
+  if (!theme.glass.enabled || isAndroidLowEndDevice()) return null;
+  return (
+    <LiquidNeonBackdropAnimated
+      backgroundCss={theme.colors.backgroundCss}
+      surface0={theme.colors.surface0}
+    />
+  );
 }
 
-function LiquidNeonBackdropAnimated() {
+function LiquidNeonBackdropAnimated({
+  backgroundCss,
+  surface0,
+}: {
+  backgroundCss: string;
+  surface0: string;
+}) {
   const driftA = useSharedValue(0);
   const driftB = useSharedValue(0);
   const driftC = useSharedValue(0);
@@ -96,9 +111,16 @@ function LiquidNeonBackdropAnimated() {
     () => [staticStyles.band, staticStyles.bandC, bandCStyle],
     [bandCStyle],
   );
+  const rootStyle = useMemo(
+    () => [
+      staticStyles.root,
+      inlineUnistylesStyle(buildLiquidNeonBackdropStyle({ isWeb, surface0, backgroundCss })),
+    ],
+    [backgroundCss, surface0],
+  );
 
   return (
-    <View pointerEvents="none" style={styles.root}>
+    <View pointerEvents="none" style={rootStyle}>
       <Animated.View style={bandACombinedStyle}>
         <Svg height="100%" preserveAspectRatio="none" viewBox="0 0 1200 760" width="100%">
           <Defs>
@@ -148,15 +170,25 @@ function LiquidNeonBackdropAnimated() {
           />
         </Svg>
       </Animated.View>
-      <View style={styles.noiseVeil} />
+      <View style={staticStyles.noiseVeil} />
     </View>
   );
 }
 
 const staticStyles = RNStyleSheet.create({
+  root: {
+    ...RNStyleSheet.absoluteFill,
+    overflow: "hidden",
+  },
+  noiseVeil: {
+    ...RNStyleSheet.absoluteFill,
+    display: "none",
+    backgroundColor: "rgba(255, 255, 255, 0.58)",
+  },
   band: {
     position: "absolute",
     top: -120,
+    display: "none",
     left: -120,
     width: "125%",
     height: "125%",
@@ -174,16 +206,3 @@ const staticStyles = RNStyleSheet.create({
     height: "118%",
   },
 });
-
-const styles = StyleSheet.create((theme) => ({
-  root: {
-    ...RNStyleSheet.absoluteFill,
-    display: theme.glass.enabled ? "flex" : "none",
-    backgroundColor: "#f3f7fb",
-    overflow: "hidden",
-  },
-  noiseVeil: {
-    ...RNStyleSheet.absoluteFill,
-    backgroundColor: "rgba(255, 255, 255, 0.58)",
-  },
-}));

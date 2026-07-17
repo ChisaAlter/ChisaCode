@@ -170,40 +170,41 @@ const darkStatusColors = {
 
 // Semantic color tokens - Layer-based system
 const lightSemanticColors = {
-  // Surfaces (layers) — Blockchain Light (蓝紫浅色)
+  // Exact Blockchain Light tokens from design/web3-themes-v2.html.
   surface0: "#f8fafc",
-  surface1: "#f1f5f9",
-  surface2: "#e2e8f0",
-  surface3: "#cbd5e1",
-  surface4: "#94a3b8",
+  surface1: "#ffffff",
+  surface2: "#f4f7fb",
+  surface3: "#edf2f8",
+  surface4: "#cbd7e6",
   surfaceDiffEmpty: "#f8fafc",
-  surfaceSidebar: "#ffffff",
-  surfaceSidebarHover: "#f1f5f9",
+  surfaceSidebar: "#f1f5f9",
+  surfaceSidebarHover: "#eef4ff",
   surfaceWorkspace: "#ffffff",
 
-  // Text
   foreground: "#0f172a",
   foregroundMuted: "#64748b",
+  foregroundFaint: "#94a3b8",
+  foregroundSubtleText: "#64748b",
 
-  // Controls
-  scrollbarHandle: "#3f3f46", // zinc-700
+  scrollbarHandle: "#94a3b8",
 
-  // Borders
-  border: "#e2e8f0",
-  borderAccent: "#cbd5e1",
+  border: "#dce5f0",
+  borderAccent: "#cbd7e6",
 
-  // Brand
-  accent: "#3B82F6", // blue-500
-  accentBright: "#6366F1", // indigo-500
+  accent: "#3b82f6",
+  accentBright: "#6366f1",
+  accentNeon: "#8b5cf6",
   accentForeground: "#ffffff",
 
-  // Semantic
   destructive: "#ef4444",
   destructiveForeground: "#ffffff",
-  success: "#20744A",
+  success: "#16a34a",
   successForeground: "#ffffff",
+  warning: "#f59e0b",
   overlay: lightOverlay,
-  blockquoteBorder: "#3B82F6",
+  blockquoteBorder: "#3b82f6",
+  backgroundCss: "#f8fafc",
+  userBubbleGradient: "linear-gradient(135deg, #3b82f6, #6366f1 56%, #8b5cf6)",
 
   // Legacy aliases (for gradual migration)
   background: "#f8fafc",
@@ -211,13 +212,13 @@ const lightSemanticColors = {
   popoverForeground: "#0f172a",
   primary: "#0f172a",
   primaryForeground: "#f8fafc",
-  secondary: "#f1f5f9",
+  secondary: "#f4f7fb",
   secondaryForeground: "#0f172a",
-  muted: "#f1f5f9",
+  muted: "#f4f7fb",
   mutedForeground: "#64748b",
-  accentBorder: "#cbd5e1",
-  input: "#f1f5f9",
-  ring: "#3B82F6",
+  accentBorder: "#cbd7e6",
+  input: "#f4f7fb",
+  ring: "#3b82f6",
 
   ...lightDiffColors,
   ...lightStatusColors,
@@ -263,14 +264,23 @@ interface DarkThemeConfig {
   surfaceDiffEmpty: string;
   surfaceSidebar: string;
   surfaceSidebarHover: string;
+  surfaceWorkspace: string;
+  foreground: string;
   foregroundMuted: string;
+  foregroundFaint: string;
+  foregroundSubtleText: string;
   scrollbarHandle: string;
   border: string;
   borderAccent: string;
   accent: string;
   accentBright: string;
+  accentNeon: string;
   accentForeground?: string;
   destructive: string;
+  success: string;
+  warning: string;
+  backgroundCss: string;
+  userBubbleGradient: string;
   ringColor?: string;
 }
 
@@ -301,10 +311,12 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surfaceDiffEmpty: tint.surfaceDiffEmpty,
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover,
-    surfaceWorkspace: tint.surface1,
+    surfaceWorkspace: tint.surfaceWorkspace,
 
-    foreground: "#fafafa",
+    foreground: tint.foreground,
     foregroundMuted: tint.foregroundMuted,
+    foregroundFaint: tint.foregroundFaint,
+    foregroundSubtleText: tint.foregroundSubtleText,
 
     scrollbarHandle: tint.scrollbarHandle,
 
@@ -313,28 +325,32 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
 
     accent: tint.accent,
     accentBright: tint.accentBright,
+    accentNeon: tint.accentNeon,
     accentForeground: tint.accentForeground ?? "#ffffff",
 
     destructive: tint.destructive,
     destructiveForeground: "#ffffff",
-    success: tint.accent,
+    success: tint.success,
     successForeground: "#ffffff",
+    warning: tint.warning,
     overlay: darkOverlay,
-    blockquoteBorder: tint.accent, // match the theme accent color
+    blockquoteBorder: tint.accent,
+    backgroundCss: tint.backgroundCss,
+    userBubbleGradient: tint.userBubbleGradient,
 
     // Legacy aliases (for gradual migration)
     background: tint.surface0,
     popover: tint.surface2,
-    popoverForeground: "#fafafa",
-    primary: "#fafafa",
+    popoverForeground: tint.foreground,
+    primary: tint.foreground,
     primaryForeground: tint.surface0,
     secondary: tint.surface2,
-    secondaryForeground: "#fafafa",
+    secondaryForeground: tint.foreground,
     muted: tint.surface2,
     mutedForeground: tint.foregroundMuted,
     accentBorder: tint.borderAccent,
     input: tint.surface2,
-    ring: tint.ringColor ?? "#d4d4d8",
+    ring: tint.ringColor ?? tint.accent,
 
     ...darkDiffColors,
     ...darkStatusColors,
@@ -359,60 +375,77 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
 
 // Cyber Dark — 蓝紫暗色 (default)
 const chisacodeDarkColors = buildDarkSemanticColors({
-  surface0: "#0a0c10",
-  surface1: "#12141c",
-  surface2: "#1a1d28",
-  surface3: "#252836",
-  surface4: "#3a3d4e",
-  surfaceDiffEmpty: "#12141c",
-  surfaceSidebar: "#0e1018",
-  surfaceSidebarHover: "#1a1d28",
-  foregroundMuted: "#8b8fa3",
-  scrollbarHandle: "#3a3d4e",
-  border: "#252836",
-  borderAccent: "#3a3d4e",
-  accent: "#6366F1", // indigo-500
-  accentBright: "#818CF8", // indigo-400
-  destructive: "#ef4444",
-  ringColor: "#6366F1",
+  surface0: "#090b11",
+  surface1: "#121722",
+  surface2: "#171d2a",
+  surface3: "#202838",
+  surface4: "#30394c",
+  surfaceDiffEmpty: "#121722",
+  surfaceSidebar: "#0b0e14",
+  surfaceSidebarHover: "#1c2434",
+  surfaceWorkspace: "#0f1219",
+  foreground: "#e5e7eb",
+  foregroundMuted: "#8994a8",
+  foregroundFaint: "#596579",
+  foregroundSubtleText: "#8994a8",
+  scrollbarHandle: "#30394c",
+  border: "#232b3a",
+  borderAccent: "#30394c",
+  accent: "#6366f1",
+  accentBright: "#818cf8",
+  accentNeon: "#3b82f6",
+  destructive: "#ff4772",
+  success: "#22c55e",
+  warning: "#eab308",
+  backgroundCss: "#090b11",
+  userBubbleGradient: "linear-gradient(135deg, rgba(99, 102, 241, 0.92), rgba(59, 130, 246, 0.85))",
+  ringColor: "#6366f1",
 });
 
 const liquidNeonLightColors = {
   surface0: "#06111f",
-  surface1: "#0a1628",
-  surface2: "#0f1e34",
-  surface3: "#1a2840",
-  surface4: "#243450",
-  surfaceDiffEmpty: "#0a1628",
-  surfaceSidebar: "#081424",
-  surfaceSidebarHover: "#0f1e34",
-  surfaceWorkspace: "#091828",
-  foreground: "#F7FBFF",
-  foregroundMuted: "#BFD0EA",
-  scrollbarHandle: "#243450",
-  border: "rgba(255,255,255,0.20)",
-  borderAccent: "rgba(99,230,255,0.34)",
-  accent: "#00A3FF",
-  accentBright: "#63E6FF",
+  surface1: "rgba(255, 255, 255, 0.09)",
+  surface2: "rgba(255, 255, 255, 0.13)",
+  surface3: "rgba(255, 255, 255, 0.19)",
+  surface4: "rgba(255, 255, 255, 0.28)",
+  surfaceDiffEmpty: "rgba(255, 255, 255, 0.09)",
+  surfaceSidebar: "rgba(255, 255, 255, 0.055)",
+  surfaceSidebarHover: "rgba(99, 230, 255, 0.13)",
+  surfaceWorkspace: "rgba(8, 18, 32, 0.46)",
+  foreground: "#f7fbff",
+  foregroundMuted: "#bfd0ea",
+  foregroundFaint: "#8fa7c9",
+  foregroundSubtleText: "#9fb5d3",
+  scrollbarHandle: "rgba(255, 255, 255, 0.28)",
+  border: "rgba(255, 255, 255, 0.18)",
+  borderAccent: "rgba(99, 230, 255, 0.32)",
+  accent: "#00a3ff",
+  accentBright: "#63e6ff",
+  accentNeon: "#a855f7",
   accentForeground: "#ffffff",
-  destructive: "#FF4466",
+  destructive: "#ff6fbe",
   destructiveForeground: "#ffffff",
-  success: "#00A3FF",
+  success: "#68f6b4",
   successForeground: "#ffffff",
+  warning: "#ffe083",
   overlay: darkOverlay,
-  blockquoteBorder: "#00A3FF",
+  blockquoteBorder: "#00a3ff",
+  backgroundCss:
+    "radial-gradient(circle at 12% -8%, rgba(0, 163, 255, 0.45), transparent 34%), radial-gradient(circle at 92% 10%, rgba(255, 79, 216, 0.3), transparent 30%), linear-gradient(150deg, #06111f 0%, #071726 46%, #0a0820 100%)",
+  userBubbleGradient:
+    "linear-gradient(135deg, rgba(0, 163, 255, 0.55), rgba(99, 230, 255, 0.32) 48%, rgba(168, 85, 247, 0.45))",
   background: "#06111f",
-  popover: "#0f1e34",
-  popoverForeground: "#F7FBFF",
-  primary: "#F7FBFF",
+  popover: "rgba(255, 255, 255, 0.13)",
+  popoverForeground: "#f7fbff",
+  primary: "#f7fbff",
   primaryForeground: "#06111f",
-  secondary: "#0f1e34",
-  secondaryForeground: "#F7FBFF",
-  muted: "#0f1e34",
-  mutedForeground: "#BFD0EA",
-  accentBorder: "rgba(99,230,255,0.34)",
-  input: "#0f1e34",
-  ring: "#00A3FF",
+  secondary: "rgba(255, 255, 255, 0.13)",
+  secondaryForeground: "#f7fbff",
+  muted: "rgba(255, 255, 255, 0.13)",
+  mutedForeground: "#bfd0ea",
+  accentBorder: "rgba(99, 230, 255, 0.32)",
+  input: "rgba(255, 255, 255, 0.13)",
+  ring: "#00a3ff",
   diffAddition: "#4ade80",
   diffDeletion: "#ef4444",
   diffAdditionBg: "rgba(74, 222, 128, 0.15)",
@@ -567,6 +600,7 @@ const darkShadow = {
 const defaultGlass = {
   enabled: false,
   blurIntensity: 0,
+  shell: "transparent",
   panel: "transparent",
   popover: "transparent",
   sheet: "transparent",
@@ -587,9 +621,10 @@ const defaultGlass = {
 const liquidNeonGlass = {
   enabled: true,
   blurIntensity: 22,
+  shell: "rgba(7, 14, 27, 0.3)",
   panel: "rgba(255,255,255,0.08)",
-  popover: "rgba(255,255,255,0.06)",
-  sheet: "rgba(255,255,255,0.06)",
+  popover: "rgba(6,17,31,0.94)",
+  sheet: "rgba(6,17,31,0.92)",
   chrome: "rgba(255,255,255,0.04)",
   border: "rgba(255,255,255,0.16)",
   highlight: "rgba(255,255,255,0.20)",
@@ -698,22 +733,31 @@ export const lightTheme = buildLightTheme(lightSemanticColors);
 
 // Deep rose-black dark theme
 const chisakiDarkColors = buildDarkSemanticColors({
-  surface0: "#09070A",
+  surface0: "#09070a",
   surface1: "#171116",
   surface2: "#211820",
-  surface3: "#2A1F28",
-  surface4: "#382630",
+  surface3: "#2b2028",
+  surface4: "#56303c",
   surfaceDiffEmpty: "#171116",
-  surfaceSidebar: "#130F14",
-  surfaceSidebarHover: "#211820",
-  foregroundMuted: "#B49DA7",
-  scrollbarHandle: "#382630",
-  border: "#34242D",
-  borderAccent: "#56303C",
-  accent: "#B7132F",
-  accentBright: "#FF4B67",
-  destructive: "#991b1b",
-  ringColor: "#B7132F",
+  surfaceSidebar: "#0d090d",
+  surfaceSidebarHover: "#2a1721",
+  surfaceWorkspace: "#120d12",
+  foreground: "#f8eef2",
+  foregroundMuted: "#b49da7",
+  foregroundFaint: "#826c76",
+  foregroundSubtleText: "#b49da7",
+  scrollbarHandle: "#56303c",
+  border: "#34242d",
+  borderAccent: "#56303c",
+  accent: "#b7132f",
+  accentBright: "#ff4b67",
+  accentNeon: "#ff3158",
+  destructive: "#ff3158",
+  success: "#2dd49d",
+  warning: "#f6b954",
+  backgroundCss: "#09070a",
+  userBubbleGradient: "linear-gradient(135deg, #b7132f, #ff3158)",
+  ringColor: "#b7132f",
 });
 export const chisakiTheme = buildDarkTheme(chisakiDarkColors);
 
@@ -721,42 +765,48 @@ export const chisakiTheme = buildDarkTheme(chisakiDarkColors);
 const aemeathSemanticColors = {
   ...lightSemanticColors,
 
-  surface0: "#FBFDFF",
-  surface1: "#FFFEFE",
-  surface2: "#FFF7FB",
-  surface3: "#F0E3EB",
-  surface4: "#E0D0DC",
-  surfaceDiffEmpty: "#FBFDFF",
-  surfaceSidebar: "#FFF9FC",
-  surfaceSidebarHover: "#FFF0F6",
-  surfaceWorkspace: "#FBFDFF",
+  surface0: "#fbfdff",
+  surface1: "#fffefe",
+  surface2: "#fff7fb",
+  surface3: "#eef9ff",
+  surface4: "#dbeef8",
+  surfaceDiffEmpty: "#fbfdff",
+  surfaceSidebar: "#fff8fc",
+  surfaceSidebarHover: "#f8edf5",
+  surfaceWorkspace: "#ffffff",
 
-  foreground: "#2B2028",
-  foregroundMuted: "#806F7C",
+  foreground: "#2b2028",
+  foregroundMuted: "#806f7c",
+  foregroundFaint: "#a2939f",
+  foregroundSubtleText: "#806f7c",
 
-  border: "#F0E3EB",
-  borderAccent: "#DBEEF8",
+  border: "#f0e3eb",
+  borderAccent: "#dbeef8",
 
-  accent: "#E87BA8",
-  accentBright: "#F2A7C8",
-  accentForeground: "#ffffff",
-  destructive: "#dc2626",
-  success: "#15803d",
+  accent: "#f2a7c8",
+  accentBright: "#f6b3d0",
+  accentNeon: "#9bdcf2",
+  accentForeground: "#342333",
+  destructive: "#d94c78",
+  success: "#39af83",
   successForeground: "#ffffff",
+  warning: "#d9932f",
 
-  blockquoteBorder: "#E87BA8",
-  background: "#FBFDFF",
-  popover: "#FFFEFE",
-  popoverForeground: "#2B2028",
-  primary: "#2B2028",
-  primaryForeground: "#FFFEFE",
-  secondary: "#FFF7FB",
-  secondaryForeground: "#2B2028",
-  muted: "#FFF7FB",
-  mutedForeground: "#806F7C",
-  accentBorder: "#F0D8E8",
-  input: "#FFF7FB",
-  ring: "#E87BA8",
+  blockquoteBorder: "#f2a7c8",
+  backgroundCss: "#fbfdff",
+  userBubbleGradient: "linear-gradient(135deg, #f2a7c8, #9bdcf2)",
+  background: "#fbfdff",
+  popover: "#fffefe",
+  popoverForeground: "#2b2028",
+  primary: "#2b2028",
+  primaryForeground: "#fffefe",
+  secondary: "#fff7fb",
+  secondaryForeground: "#2b2028",
+  muted: "#fff7fb",
+  mutedForeground: "#806f7c",
+  accentBorder: "#dbeef8",
+  input: "#fff7fb",
+  ring: "#f2a7c8",
 
   terminal: {
     ...lightSemanticColors.terminal,
@@ -799,11 +849,11 @@ export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
 };
 
 export const THEME_SWATCHES: Record<ThemeName, string> = {
-  light: "#ffffff",
-  dark: "#6366F1",
-  "liquid-neon": "#00A3FF",
-  chisaki: "#B7132F",
-  aemeath: "#E87BA8",
+  light: "#3b82f6",
+  dark: "#6366f1",
+  "liquid-neon": "#00a3ff",
+  chisaki: "#b7132f",
+  aemeath: "#f2a7c8",
 };
 
 export const THEME_PREVIEWS: Record<

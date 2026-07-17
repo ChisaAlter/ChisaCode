@@ -256,7 +256,7 @@ export function buildWorkspaceReviewCalloutModel(input: {
     }),
     showViewChanges: hasChanges,
     showOpenPullRequest: Boolean(pullRequest?.url),
-    showCopyResume: hasResumeSession(input.activeAgent),
+    showCopyResume: agentStatus === "error" && hasResumeSession(input.activeAgent),
   };
 }
 

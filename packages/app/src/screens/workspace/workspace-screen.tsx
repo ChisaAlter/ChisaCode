@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsFocused, useRouter, type Href } from "expo-router";
 
 import { StyleSheet } from "react-native-unistyles";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import { useTranslation } from "react-i18next";
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 import {
@@ -18,7 +19,6 @@ import { ExplorerSidebarAnimationProvider } from "@/contexts/explorer-sidebar-an
 import { useToast } from "@/contexts/toast-context";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import {
   buildWorkspaceTabPersistenceKey,
   collectAllTabs,
@@ -78,6 +78,7 @@ import {
 } from "@/screens/workspace/workspace-header-source";
 import {
   resolveWorkspaceRouteState,
+  selectWorkspaceRouteContent,
   type WorkspaceRouteState,
 } from "@/screens/workspace/workspace-route-state";
 import { useWorkspaceRouteLoadingTimedOut } from "@/screens/workspace/use-workspace-route-loading-timeout";
@@ -89,7 +90,7 @@ import {
 import { deriveWorkspacePaneState } from "@/screens/workspace/workspace-pane-state";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
 
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor, WORKBENCH_PANE_CONTENT_RIGHT_INSET } from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { canCreateWorkspaceTerminal } from "@/screens/workspace/terminals/state";
@@ -103,6 +104,10 @@ import {
 const WORKSPACE_FLOATING_PANEL_PORTAL_HOST_PREFIX = "workspace-floating-panels";
 const EMPTY_UI_TABS: WorkspaceTab[] = [];
 const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
+function resolveWorkspacePaneContentRightInset(_isEnvironmentPanelVisible: boolean): number {
+  return WORKBENCH_PANE_CONTENT_RIGHT_INSET;
+}
+
 const EMPTY_PINNED_AGENT_IDS = new Set<string>();
 const EMPTY_SET = new Set<string>();
 const EMPTY_GIT_ACTION_ICON = <View />;
@@ -745,8 +750,6 @@ function WorkspaceScreenContent({
     isMobile,
     isRouteFocused,
   });
-  const isLocalDaemon = useIsLocalDaemon(normalizedServerId);
-
   const {
     environmentDockState,
     setEnvironmentDockState,
@@ -760,6 +763,7 @@ function WorkspaceScreenContent({
     isMobile,
     isExplorerOpen,
     activeExplorerCheckout,
+    closeDesktopFileExplorer,
     openFileExplorerForCheckout,
     toggleFileExplorerForCheckout,
     setExplorerTabForCheckout,
@@ -1266,6 +1270,7 @@ function WorkspaceScreenContent({
       onMoveTabToPane: handleMoveTabToPane,
       onResizeSplit: handleResizePaneSplit,
       onReorderTabsInPane: handleReorderTabsInPane,
+      paneContentRightInset: resolveWorkspacePaneContentRightInset(isEnvironmentPanelVisible),
     }),
     [
       buildDesktopPaneContentModel,
@@ -1288,6 +1293,7 @@ function WorkspaceScreenContent({
       handleResizePaneSplit,
       handleSplitPane,
       hoveredCloseTabKey,
+      isEnvironmentPanelVisible,
       navigateToTabId,
       uiTabs,
     ],
@@ -1298,7 +1304,6 @@ function WorkspaceScreenContent({
       workspaceDirectory,
       currentBranchName,
       isGitCheckout,
-      isLocalDaemon,
       diffStat: workspaceDescriptor?.diffStat ?? null,
       githubRuntime: workspaceDescriptor?.githubRuntime,
       browserContext: environmentBrowserContext,
@@ -1315,6 +1320,7 @@ function WorkspaceScreenContent({
       onOpenChanges: handleOpenEnvironmentChanges,
       onOpenSubagent: handleOpenEnvironmentSubagent,
       onCopyResumeCommand: handleCopyResumeCommand,
+      onClose: handleToggleEnvironmentPanel,
     }),
     [
       currentBranchName,
@@ -1327,11 +1333,11 @@ function WorkspaceScreenContent({
       environmentTurnChanges,
       environmentWorkspaceStatus,
       handleCopyResumeCommand,
+      handleToggleEnvironmentPanel,
       handleOpenEnvironmentChanges,
       handleOpenEnvironmentSubagent,
       handleOpenWorkspaceDockPane,
       isGitCheckout,
-      isLocalDaemon,
       normalizedServerId,
       workspaceActivityItems,
       workspaceDescriptor?.diffStat,
@@ -1341,8 +1347,10 @@ function WorkspaceScreenContent({
     ],
   );
 
-  return (
-    gatedWorkspaceScreen ?? (
+  return selectWorkspaceRouteContent({
+    gate: workspaceScreenGate,
+    gatedContent: gatedWorkspaceScreen,
+    readyContent: (
       <WorkspaceFocusProvider workspaceKey={persistenceKey}>
         <View style={containerStyle}>
           <WorkspaceDocumentTitleEffectSlot
@@ -1410,8 +1418,8 @@ function WorkspaceScreenContent({
           />
         </View>
       </WorkspaceFocusProvider>
-    )
-  );
+    ),
+  });
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -1420,7 +1428,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
   },
   containerWorkspaceBackground: {
-    backgroundColor: theme.colors.surfaceWorkspace,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).workspace,
   },
   threePaneRow: {
     flex: 1,

@@ -1,13 +1,15 @@
 import { router, usePathname, type Href } from "expo-router";
 import {
+  FolderOpen,
   GitCompare,
+  House,
   MessageSquareText,
   MessagesSquare,
   PanelLeft,
   PanelLeftClose,
+  Plus,
   Search,
   Settings,
-  Smartphone,
   SquarePen,
   SquareTerminal,
   X,
@@ -52,7 +54,15 @@ import { useTranslation } from "react-i18next";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { GlassSurface } from "@/components/ui/glass-surface";
-import { useIsCompactFormFactor, MIN_CHAT_WIDTH, DESKTOP_SIDEBAR_GAP } from "@/constants/layout";
+import {
+  useIsCompactFormFactor,
+  DESKTOP_SIDEBAR_GAP,
+  MIN_CHAT_WIDTH,
+  SIDEBAR_FOOTER_HEIGHT,
+  WORKBENCH_META_FONT_SIZE,
+  WORKBENCH_META_LINE_HEIGHT,
+  WORKBENCH_NEW_CHAT_RADIUS,
+} from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
 import { useAgentHistory } from "@/hooks/use-agent-history";
@@ -426,6 +436,7 @@ interface HostPickerTriggerProps {
   hostOptionsEmpty: boolean;
   hostStatusDotStyle: StyleProp<ViewStyle>;
   activeHostLabel: string;
+  variant?: "mobile" | "desktop";
 }
 
 function HostPickerTrigger({
@@ -434,13 +445,15 @@ function HostPickerTrigger({
   hostOptionsEmpty,
   hostStatusDotStyle,
   activeHostLabel,
+  variant = "mobile",
 }: HostPickerTriggerProps) {
   const pressableStyle = useCallback(
     ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.hostTrigger,
+      variant === "desktop" && styles.desktopHostTrigger,
       hovered && styles.hostTriggerHovered,
     ],
-    [],
+    [variant],
   );
   const handlePress = useCallback(() => setIsHostPickerOpen(true), [setIsHostPickerOpen]);
   return (
@@ -534,16 +547,29 @@ function SidebarTopActions({
   onViewSessions,
   onNewConversation,
   onSearch,
+  variant = "mobile",
 }: {
   onCloseSidebar: () => void;
   onViewSessions: () => void;
   onNewConversation: () => void;
   onSearch: () => void;
+  variant?: "mobile" | "desktop";
 }) {
   const { t } = useTranslation();
+  const topAreaStyle = useMemo(
+    () => [styles.sidebarTopArea, variant === "desktop" && styles.desktopSidebarTopArea],
+    [variant],
+  );
+  const primaryActionsStyle = useMemo(
+    () => [
+      styles.sidebarPrimaryActions,
+      variant === "desktop" && styles.desktopSidebarPrimaryActions,
+    ],
+    [variant],
+  );
 
   return (
-    <View style={styles.sidebarTopArea}>
+    <View style={topAreaStyle}>
       <View style={styles.sidebarTopActions}>
         <Pressable
           accessibilityRole="button"
@@ -561,17 +587,19 @@ function SidebarTopActions({
             onPress={onSearch}
             testID="sidebar-search"
           />
-          <SidebarTopAction
-            icon={PanelLeftClose}
-            label={t("sidebar.closeSidebar")}
-            onPress={onCloseSidebar}
-            testID="sidebar-close-left"
-          />
+          {variant !== "desktop" ? (
+            <SidebarTopAction
+              icon={PanelLeftClose}
+              label={t("sidebar.closeSidebar")}
+              onPress={onCloseSidebar}
+              testID="sidebar-close-left"
+            />
+          ) : null}
         </View>
       </View>
-      <View style={styles.sidebarPrimaryActions}>
+      <View style={primaryActionsStyle}>
         <SidebarPrimaryAction
-          icon={SquarePen}
+          icon={variant === "desktop" ? Plus : SquarePen}
           label={t("sidebar.newConversation")}
           onPress={onNewConversation}
           testID="sidebar-new-conversation"
@@ -676,6 +704,7 @@ function SidebarFooter({
   handleHostSelect,
   renderHostOption,
   handleHome,
+  handleOpenProject,
   handleSettings,
   variant = "mobile",
 }: {
@@ -690,6 +719,7 @@ function SidebarFooter({
   handleHostSelect: (nextServerId: string) => void;
   renderHostOption: SidebarSharedProps["renderHostOption"];
   handleHome: () => void;
+  handleOpenProject: () => void;
   handleSettings: () => void;
   variant?: "mobile" | "desktop";
 }) {
@@ -702,23 +732,36 @@ function SidebarFooter({
     () => [styles.footerIconRow, variant === "desktop" && styles.desktopFooterIconRow],
     [variant],
   );
+  const hostSlotStyle = useMemo(
+    () => [styles.footerHostSlot, variant === "desktop" && styles.desktopFooterHostSlot],
+    [variant],
+  );
   return (
     <View style={footerStyle}>
-      <View style={styles.footerHostSlot}>
+      <View style={hostSlotStyle}>
         <HostPickerTrigger
           triggerRef={hostTriggerRef}
           setIsHostPickerOpen={setIsHostPickerOpen}
           hostOptionsEmpty={hostOptions.length === 0}
           hostStatusDotStyle={hostStatusDotStyle}
           activeHostLabel={activeHostLabel}
+          variant={variant}
         />
       </View>
       <View style={iconRowStyle}>
         <FooterIconButton
+          onPress={handleOpenProject}
+          testID="sidebar-open-project"
+          accessibilityLabel={t("sidebar.addProject")}
+          icon={FolderOpen}
+          theme={theme}
+          variant={variant}
+        />
+        <FooterIconButton
           onPress={handleHome}
           testID="sidebar-home"
           accessibilityLabel={t("sidebar.home")}
-          icon={Smartphone}
+          icon={House}
           theme={theme}
           variant={variant}
         />
@@ -1260,6 +1303,7 @@ function MobileSidebar({
               handleHostSelect={handleHostSelect}
               renderHostOption={renderHostOption}
               handleHome={handleHome}
+              handleOpenProject={handleOpenProject}
               handleSettings={handleSettings}
             />
           </GlassSurface>
@@ -1416,6 +1460,7 @@ function DesktopSidebar({
               onViewSessions={handleViewSessions}
               onNewConversation={handleOpenProject}
               onSearch={handleSearch}
+              variant="desktop"
             />
           </View>
 
@@ -1447,6 +1492,7 @@ function DesktopSidebar({
             handleHostSelect={handleHostSelect}
             renderHostOption={renderHostOption}
             handleHome={handleHome}
+            handleOpenProject={handleOpenProject}
             handleSettings={handleSettings}
             variant="desktop"
           />
@@ -1580,7 +1626,7 @@ const styles = StyleSheet.create((theme) => ({
   desktopSidebarBorder: {
     borderRightWidth: theme.borderWidth[1],
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceWorkspace,
+    backgroundColor: theme.colors.surfaceSidebar,
     overflow: "hidden",
   },
   desktopSidebarRail: {
@@ -1630,6 +1676,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     userSelect: "none",
   },
+  desktopSidebarTopArea: {
+    paddingTop: 12,
+    paddingRight: 12,
+    paddingBottom: 8,
+    paddingLeft: 12,
+    gap: 8,
+  },
   sidebarTopActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -1645,8 +1698,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarTopHeading: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
   },
   sidebarTopIconCluster: {
     flexDirection: "row",
@@ -1658,7 +1712,10 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 8,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
   },
   sidebarTopActionHovered: {
     backgroundColor: theme.colors.surface2,
@@ -1671,15 +1728,19 @@ const styles = StyleSheet.create((theme) => ({
   sidebarPrimaryActions: {
     gap: theme.spacing[1],
   },
+  desktopSidebarPrimaryActions: {
+    minHeight: 36,
+  },
   sidebarPrimaryAction: {
-    minHeight: 28,
+    minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: WORKBENCH_NEW_CHAT_RADIUS,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface2,
     justifyContent: "center",
   },
   sidebarPrimaryActionHovered: {
@@ -1689,8 +1750,8 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    fontWeight: theme.fontWeight.semibold,
   },
   hostTrigger: {
     flexDirection: "row",
@@ -1703,6 +1764,13 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
   },
+  desktopHostTrigger: {
+    minHeight: 28,
+    height: 28,
+    paddingVertical: 0,
+    paddingHorizontal: 6,
+    borderRadius: theme.borderRadius.md,
+  },
   hostTriggerHovered: {
     backgroundColor: theme.colors.surface1,
   },
@@ -1712,7 +1780,8 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
   },
   hostTriggerText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
     minWidth: 0,
@@ -1727,10 +1796,14 @@ const styles = StyleSheet.create((theme) => ({
     borderTopColor: theme.colors.border,
   },
   desktopSidebarFooter: {
-    height: 46,
-    paddingLeft: theme.spacing[2],
-    paddingRight: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
+    height: SIDEBAR_FOOTER_HEIGHT,
+    paddingLeft: 10,
+    paddingRight: 10,
+    paddingVertical: 8,
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    gap: 6,
     marginHorizontal: 0,
     marginBottom: 0,
     borderTopWidth: theme.borderWidth[1],
@@ -1744,6 +1817,11 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     marginRight: theme.spacing[2],
   },
+  desktopFooterHostSlot: {
+    width: "100%",
+    height: 28,
+    marginRight: 0,
+  },
   footerIconRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1751,7 +1829,9 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopFooterIconRow: {
-    gap: 2,
+    alignSelf: "stretch",
+    justifyContent: "space-between",
+    gap: 6,
   },
   footerIconButton: {
     width: 28,
@@ -1766,8 +1846,14 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
   },
   desktopFooterIconButton: {
-    width: 26,
-    height: 26,
+    width: "auto",
+    height: 28,
+    flex: 1,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
   },
   hostPickerList: {
     gap: theme.spacing[2],

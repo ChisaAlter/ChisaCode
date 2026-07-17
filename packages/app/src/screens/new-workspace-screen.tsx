@@ -12,6 +12,7 @@ import {
   GitBranch,
   GitPullRequest,
   Inbox,
+  SquarePen,
   X,
 } from "lucide-react-native";
 import { useRouter, type Href } from "expo-router";
@@ -22,11 +23,16 @@ import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { Combobox, ComboboxItem } from "@/components/ui/combobox";
 import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combobox";
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
-import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  MAX_CONTENT_WIDTH,
+  WORKSPACE_SECONDARY_HEADER_HEIGHT,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useOpenProject } from "@/hooks/use-open-project";
@@ -235,7 +241,8 @@ function DirectoryTrigger({
   iconColor: string;
   iconSize: number;
 }) {
-  const label = directory ? shortenPath(directory) : "选择工作目录";
+  const { t } = useTranslation();
+  const label = directory ? shortenPath(directory) : t("workspace.directoryPicker.select");
   return (
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
@@ -246,7 +253,7 @@ function DirectoryTrigger({
           disabled={disabled}
           style={badgePressableStyle}
           accessibilityRole="button"
-          accessibilityLabel="选择工作目录"
+          accessibilityLabel={t("workspace.directoryPicker.select")}
         >
           <View style={styles.badgeIconBox}>
             <Folder size={iconSize} color={iconColor} />
@@ -258,39 +265,27 @@ function DirectoryTrigger({
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
-        <Text style={styles.tooltipText}>选择工作目录</Text>
+        <Text style={styles.tooltipText}>{t("workspace.directoryPicker.select")}</Text>
       </TooltipContent>
     </Tooltip>
   );
 }
 
-function ImportSessionCard({ onPress, disabled }: { onPress: () => void; disabled: boolean }) {
-  const { theme } = useUnistyles();
-  const cardStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.importCard,
-      Boolean(hovered) && !disabled && styles.importCardHovered,
-      pressed && !disabled && styles.importCardPressed,
-      disabled && styles.importCardDisabled,
-    ],
-    [disabled],
-  );
+function ImportSessionAction({ onPress, disabled }: { onPress: () => void; disabled: boolean }) {
+  const { t } = useTranslation();
   return (
-    <Pressable
+    <Button
       testID="new-workspace-import-session-card"
-      accessibilityRole="button"
-      accessibilityLabel="导入会话"
+      accessibilityLabel={t("openProject.importSession.title")}
       onPress={onPress}
       disabled={disabled}
-      style={cardStyle}
+      variant="ghost"
+      size="sm"
+      leftIcon={Inbox}
+      style={styles.importAction}
     >
-      <View style={styles.importCardIcon}>
-        <Inbox size={16} color={theme.colors.foregroundMuted} />
-      </View>
-      <Text style={styles.importCardTitle} numberOfLines={1}>
-        导入会话
-      </Text>
-    </Pressable>
+      {t("openProject.importSession.title")}
+    </Button>
   );
 }
 
@@ -388,9 +383,11 @@ function NewWorkspaceComposerFooter({
           open={directoryPickerOpen}
           onOpenChange={handleDirectoryPickerOpenChange}
           onSearchQueryChange={setDirectorySearchQuery}
-          desktopPlacement="bottom-start"
+          desktopPlacement="top-start"
+          desktopMinWidth={440}
+          desktopFixedHeight={340}
           anchorRef={directoryAnchorRef}
-          emptyText="没有匹配的目录"
+          emptyText={t("workspace.directoryPicker.empty")}
         />
       </View>
       <View>
@@ -414,7 +411,9 @@ function NewWorkspaceComposerFooter({
           open={pickerOpen}
           onOpenChange={handlePickerOpenChange}
           onSearchQueryChange={setPickerSearchQuery}
-          desktopPlacement="bottom-start"
+          desktopPlacement="top-start"
+          desktopMinWidth={400}
+          desktopFixedHeight={340}
           anchorRef={pickerAnchorRef}
           emptyText={pickerEmptyText}
           renderOption={renderPickerOption}
@@ -1247,7 +1246,7 @@ export function NewWorkspaceScreen({
       try {
         setErrorMessage(null);
         if (!normalizedSelectedDirectory) {
-          throw new Error("请选择工作目录");
+          throw new Error(t("workspace.directoryPicker.required"));
         }
         const payloadWithDirectory = {
           ...payload,
@@ -1279,7 +1278,7 @@ export function NewWorkspaceScreen({
         toast.error(message);
       }
     },
-    [composerState, draftKey, ensureWorkspace, normalizedSelectedDirectory, serverId, toast],
+    [composerState, draftKey, ensureWorkspace, normalizedSelectedDirectory, serverId, t, toast],
   );
 
   const workspaceTitle = computeWorkspaceTitle(workspace, displayName, sourceDirectory);
@@ -1325,7 +1324,9 @@ export function NewWorkspaceScreen({
         : `new-workspace-ref-picker-pr-${item.item.number}`;
 
       const description =
-        !isBranch && item.item.baseRefName ? `into ${item.item.baseRefName}` : undefined;
+        !isBranch && item.item.baseRefName
+          ? t("workspace.intoBaseRef", { baseRefName: item.item.baseRefName })
+          : undefined;
 
       return (
         <PickerOptionItem
@@ -1342,13 +1343,13 @@ export function NewWorkspaceScreen({
         />
       );
     },
-    [isPending, itemById, theme.colors.foregroundMuted, theme.iconSize.sm],
+    [isPending, itemById, t, theme.colors.foregroundMuted, theme.iconSize.sm],
   );
 
   const contentStyle = useMemo(
     () => [
       styles.content,
-      isCompact ? styles.contentCompact : styles.contentCentered,
+      isCompact ? styles.contentCompact : styles.contentDesktop,
       isCompact ? { paddingBottom: insets.bottom } : null,
     ],
     [isCompact, insets.bottom],
@@ -1459,10 +1460,28 @@ export function NewWorkspaceScreen({
           leftStyle={styles.headerLeft}
           borderless
         />
+        {!isCompact ? (
+          <View style={styles.desktopDraftTabsRow}>
+            <View style={styles.desktopDraftTab}>
+              <SquarePen size={14} color={theme.colors.accent} />
+              <Text style={styles.desktopDraftTabText} numberOfLines={1}>
+                {t("workspace.newWorkspace")}
+              </Text>
+            </View>
+          </View>
+        ) : null}
         <View style={contentStyle}>
           <TitlebarDragRegion />
-          <View style={styles.centered}>
-            <Text style={styles.draftTitle}>{t("workspace.startUsingChisaCode")}</Text>
+          <View style={styles.draftShell}>
+            <View style={styles.draftLeadRow}>
+              <View style={styles.draftLeadCopy}>
+                <SquarePen size={14} color={theme.colors.accent} />
+                <Text style={styles.draftLeadText} numberOfLines={1}>
+                  {t("workspace.startUsingChisaCode")}
+                </Text>
+              </View>
+              <ImportSessionAction onPress={handleOpenImportSheet} disabled={isPending} />
+            </View>
             <Composer
               agentId={`new-workspace:${serverId}:${sourceDirectory}`}
               serverId={serverId}
@@ -1487,10 +1506,11 @@ export function NewWorkspaceScreen({
               footer={composerFooter}
               inputWrapperStyle={styles.draftComposerInputWrapper}
             />
-            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-            <View style={styles.cardsRow}>
-              <ImportSessionCard onPress={handleOpenImportSheet} disabled={isPending} />
-            </View>
+            {errorMessage ? (
+              <View style={styles.errorRow}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <ImportSessionSheet
@@ -1509,37 +1529,88 @@ export function NewWorkspaceScreen({
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceWorkspace,
     userSelect: "none",
   },
   content: {
     position: "relative",
     flex: 1,
-    alignItems: "center",
+    minHeight: 0,
   },
-  contentCentered: {
+  desktopDraftTabsRow: {
+    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingLeft: 10,
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  desktopDraftTab: {
+    height: 30,
+    minWidth: 88,
+    maxWidth: 180,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: 8,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderWidth: theme.borderWidth[1],
+    borderBottomWidth: 0,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+  },
+  desktopDraftTabText: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  contentDesktop: {
     justifyContent: "flex-end",
-    paddingBottom: theme.spacing[3],
   },
   contentCompact: {
     justifyContent: "flex-end",
   },
-  centered: {
+  draftShell: {
+    width: "100%",
+    flexShrink: 0,
+  },
+  draftLeadRow: {
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
+    minHeight: 36,
     alignSelf: "center",
-  },
-  draftTitle: {
-    marginBottom: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
     paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
+    paddingBottom: theme.spacing[1],
+  },
+  draftLeadCopy: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+  },
+  draftLeadText: {
+    minWidth: 0,
+    flexShrink: 1,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-    lineHeight: 20,
-    textAlign: "left",
+    lineHeight: 18,
+  },
+  importAction: {
+    minHeight: 28,
+    paddingVertical: 0,
+    paddingHorizontal: theme.spacing[2],
   },
   draftComposerInputWrapper: {
     borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
   },
   headerLeft: {
     gap: theme.spacing[2],
@@ -1570,52 +1641,19 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.destructive,
     lineHeight: 20,
   },
-  cardsRow: {
-    marginTop: theme.spacing[2],
+  errorRow: {
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
     paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-start",
-    gap: theme.spacing[3],
-  },
-  importCard: {
-    minWidth: 116,
-    minHeight: 34,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface0,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  importCardHovered: {
-    backgroundColor: theme.colors.surface1,
-  },
-  importCardPressed: {
-    backgroundColor: theme.colors.surface2,
-  },
-  importCardDisabled: {
-    opacity: 0.6,
-  },
-  importCardIcon: {
-    width: 22,
-    height: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  importCardTitle: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foreground,
+    paddingTop: theme.spacing[1],
   },
   optionsRow: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
     gap: theme.spacing[2],
+    paddingTop: theme.spacing[1],
   },
   badge: {
     flexDirection: "row",
@@ -1623,7 +1661,10 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     maxWidth: 240,
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
     gap: theme.spacing[1],
   },
   checkoutHintBadge: {

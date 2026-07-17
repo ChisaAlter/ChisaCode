@@ -11,8 +11,10 @@ export interface WorkspaceTabLayoutInput {
     maxTabWidth: number;
     tabIconWidth: number;
     tabHorizontalPadding: number;
+    tabContentGap?: number;
     estimatedCharWidth: number;
     closeButtonWidth: number;
+    minTabWidth?: number;
     minScrollableTabWidth?: number;
   };
 }
@@ -92,20 +94,34 @@ export function computeWorkspaceTabLayout(
   const iconOnlyTabWidth =
     input.metrics.tabIconWidth +
     input.metrics.tabHorizontalPadding * 2 +
-    input.metrics.closeButtonWidth;
-  const minScrollableTabWidth = Math.max(
-    iconOnlyTabWidth,
-    input.metrics.minScrollableTabWidth ?? 132,
+    input.metrics.closeButtonWidth +
+    (input.metrics.tabContentGap ?? 0);
+  const minTabWidth = Math.max(iconOnlyTabWidth, input.metrics.minTabWidth ?? iconOnlyTabWidth);
+  const minScrollableTabWidth = Math.max(minTabWidth, input.metrics.minScrollableTabWidth ?? 132);
+  const minimumTotalTabsWidth = minTabWidth * tabCount;
+  const requiresHorizontalScrollFallback = availableTabsWidth < minimumTotalTabsWidth;
+  const idealWidths = input.tabLabelLengths.map((labelLength) =>
+    clamp(
+      iconOnlyTabWidth + Math.max(0, labelLength) * input.metrics.estimatedCharWidth,
+      minTabWidth,
+      input.metrics.maxTabWidth,
+    ),
   );
-  const iconOnlyTotalTabsWidth = iconOnlyTabWidth * tabCount;
-  const requiresHorizontalScrollFallback = availableTabsWidth < iconOnlyTotalTabsWidth;
-  const resolvedWidth = requiresHorizontalScrollFallback
-    ? minScrollableTabWidth
-    : clamp(availableTabsWidth / tabCount, iconOnlyTabWidth, input.metrics.maxTabWidth);
-  const resolvedWidths = Array.from({ length: tabCount }, () => resolvedWidth);
+  const idealTotalTabsWidth = idealWidths.reduce((total, width) => total + width, 0);
+  let resolvedWidths: number[];
+
+  if (requiresHorizontalScrollFallback) {
+    resolvedWidths = Array.from({ length: tabCount }, () => minScrollableTabWidth);
+  } else if (idealTotalTabsWidth <= availableTabsWidth) {
+    resolvedWidths = idealWidths;
+  } else {
+    const shrinkableWidth = Math.max(1, idealTotalTabsWidth - minimumTotalTabsWidth);
+    const shrinkRatio = clamp((idealTotalTabsWidth - availableTabsWidth) / shrinkableWidth, 0, 1);
+    resolvedWidths = idealWidths.map((width) => width - (width - minTabWidth) * shrinkRatio);
+  }
 
   const roundedWidths = resolvedWidths.map((width) =>
-    Math.round(clamp(width, iconOnlyTabWidth, input.metrics.maxTabWidth)),
+    Math.round(clamp(width, minTabWidth, input.metrics.maxTabWidth)),
   );
 
   return {

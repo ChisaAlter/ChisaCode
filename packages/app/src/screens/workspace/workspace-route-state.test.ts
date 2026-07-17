@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-import { resolveWorkspaceRouteState } from "./workspace-route-state";
+import { resolveWorkspaceRouteState, selectWorkspaceRouteContent } from "./workspace-route-state";
 
 function createWorkspaceDescriptor(): WorkspaceDescriptor {
   return {
@@ -20,6 +20,15 @@ function createWorkspaceDescriptor(): WorkspaceDescriptor {
 }
 
 describe("resolveWorkspaceRouteState", () => {
+  it("selects ready workspace content when no route gate is active", () => {
+    expect(
+      selectWorkspaceRouteContent({
+        gate: null,
+        gatedContent: "gated",
+        readyContent: "ready",
+      }),
+    ).toBe("ready");
+  });
   it("returns unreachable when no descriptor is cached and the host is offline", () => {
     expect(
       resolveWorkspaceRouteState({

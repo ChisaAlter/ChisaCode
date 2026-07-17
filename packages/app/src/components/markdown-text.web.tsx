@@ -11,8 +11,17 @@ interface MarkdownTextSpanProps {
 // react-native-uitextview: its transitive import of codegenNativeComponent
 // pulls in setUpReactDevTools, which doesn't resolve under Metro's web
 // target in dev mode.
+export const MARKDOWN_TEXT_SPAN_WEB_STYLE = {
+  display: "block",
+  width: "100%",
+} as const;
+
 export function MarkdownTextSpan({ style, children }: MarkdownTextSpanProps) {
-  return <Text style={style}>{children}</Text>;
+  const textStyle = useMemo(
+    () => [style, MARKDOWN_TEXT_SPAN_WEB_STYLE as unknown as TextStyle],
+    [style],
+  );
+  return <Text style={textStyle}>{children}</Text>;
 }
 
 interface MarkdownParagraphViewProps {

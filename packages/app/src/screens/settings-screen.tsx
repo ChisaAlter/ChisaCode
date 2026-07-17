@@ -20,19 +20,19 @@ import {
   ArrowLeft,
   Monitor,
   ChevronDown,
-  Settings,
+  Sun,
   Server,
   Keyboard,
-  Stethoscope,
+  Activity,
   Info,
   Shield,
-  Puzzle,
+  Zap,
   Plus,
-  FolderGit2,
-  Bot,
-  Blocks,
-  ChartNoAxesColumnIncreasing,
-  Bug,
+  Folder,
+  Brain,
+  Wrench,
+  ChartNoAxesCombined,
+  MessageSquare,
   Copy,
 } from "lucide-react-native";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
@@ -70,7 +70,6 @@ import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
-import { GlassSurface } from "@/components/ui/glass-surface";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,7 +95,17 @@ import { McpServersSection } from "@/screens/settings/mcp-servers-section";
 import { UsageStatisticsSection } from "@/screens/settings/usage-statistics-section";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import {
+  SETTINGS_CONTROL_HEIGHT,
+  SETTINGS_DESKTOP_BODY_PADDING,
+  SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH,
+  SETTINGS_DESKTOP_HEADER_HEIGHT,
+  SETTINGS_DESKTOP_NAV_ITEM_HEIGHT,
+  SETTINGS_DESKTOP_SIDEBAR_WIDTH,
+  SETTINGS_INPUT_WIDTH,
+  SETTINGS_LIQUID_CONTENT_BACKGROUND,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 import { resolveAppVersion } from "@/utils/app-version";
@@ -134,21 +143,21 @@ interface SidebarSectionItem {
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
-  { id: "general", labelKey: "settings.sections.general", icon: Settings },
-  { id: "models", labelKey: "settings.sections.models", icon: Bot },
-  { id: "usage", labelKey: "settings.sections.usage", icon: ChartNoAxesColumnIncreasing },
-  { id: "skills", labelKey: "settings.sections.skills", icon: Blocks },
+  { id: "general", labelKey: "settings.sections.general", icon: Sun },
+  { id: "models", labelKey: "settings.sections.models", icon: Brain },
+  { id: "usage", labelKey: "settings.sections.usage", icon: ChartNoAxesCombined },
+  { id: "skills", labelKey: "settings.sections.skills", icon: Wrench },
   { id: "mcp", labelKey: "settings.sections.mcp", icon: Server },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
   {
     id: "integrations",
     labelKey: "settings.sections.integrations",
-    icon: Puzzle,
+    icon: Zap,
     desktopOnly: true,
   },
   { id: "permissions", labelKey: "settings.sections.permissions", icon: Shield, desktopOnly: true },
-  { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
-  { id: "feedback", labelKey: "settings.sections.feedback", icon: Bug },
+  { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Activity },
+  { id: "feedback", labelKey: "settings.sections.feedback", icon: MessageSquare },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -168,7 +177,7 @@ function ThemeIcon({
   return theme === "auto" ? (
     <Monitor size={size} color={color} />
   ) : (
-    <ThemePreview theme={theme} width={size + 12} height={size} />
+    <ThemePreview theme={theme} width={size + 4} height={size} />
   );
 }
 
@@ -194,22 +203,13 @@ function ThemePreview({
     }),
     [height, preview.border, preview.surface, width],
   );
-  const lineStyle = useMemo(
-    () => ({
-      height: 1,
-      backgroundColor: preview.line,
-      marginHorizontal: 3,
-      marginTop: 3,
-    }),
-    [preview.line],
-  );
   const accentStyle = useMemo(
     () => ({
       position: "absolute" as const,
-      top: 0,
+      right: 0,
       bottom: 0,
       left: 0,
-      width: 4,
+      height: 4,
       backgroundColor: preview.accent,
     }),
     [preview.accent],
@@ -217,8 +217,6 @@ function ThemePreview({
   return (
     <View style={previewStyle}>
       <View style={accentStyle} />
-      <View style={lineStyle} />
-      <View style={lineStyle} />
     </View>
   );
 }
@@ -234,6 +232,25 @@ function sidebarItemStyle({ hovered }: PressableStateCallbackType & { hovered?: 
 function selectedSidebarItemStyle({ hovered }: PressableStateCallbackType & { hovered?: boolean }) {
   return [
     sidebarStyles.item,
+    Boolean(hovered) && sidebarStyles.itemHovered,
+    sidebarStyles.itemSelected,
+  ];
+}
+
+function hostSidebarItemStyle({ hovered }: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    sidebarStyles.item,
+    sidebarStyles.hostItem,
+    Boolean(hovered) && sidebarStyles.itemHovered,
+  ];
+}
+
+function selectedHostSidebarItemStyle({
+  hovered,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    sidebarStyles.item,
+    sidebarStyles.hostItem,
     Boolean(hovered) && sidebarStyles.itemHovered,
     sidebarStyles.itemSelected,
   ];
@@ -411,7 +428,6 @@ function GeneralSection({
         <View style={ROW_WITH_BORDER_STYLE}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.general.language.title")}</Text>
-            <Text style={settingsStyles.rowHint}>{t("settings.general.language.description")}</Text>
           </View>
           <DropdownMenu>
             <DropdownMenuTrigger style={themeTriggerStyle}>
@@ -442,6 +458,7 @@ function GeneralSection({
           </View>
           <SegmentedControl
             size="sm"
+            compact
             value={settings.sendBehavior}
             onValueChange={handleSendBehaviorChange}
             options={sendBehaviorOptions}
@@ -464,9 +481,6 @@ function GeneralSection({
           <View style={ROW_WITH_BORDER_STYLE}>
             <View style={settingsStyles.rowContent}>
               <Text style={settingsStyles.rowTitle}>{t("settings.general.serviceUrls.title")}</Text>
-              <Text style={settingsStyles.rowHint}>
-                {t("settings.general.serviceUrls.description")}
-              </Text>
             </View>
             <DropdownMenu>
               <DropdownMenuTrigger style={themeTriggerStyle}>
@@ -493,9 +507,6 @@ function GeneralSection({
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>
               {t("settings.general.terminalScrollback.title")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {t("settings.general.terminalScrollback.description")}
             </Text>
           </View>
           <TextInput
@@ -1067,8 +1078,11 @@ function SidebarSectionButton({
   }, [onSelect, itemId]);
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const labelStyle = useMemo(
-    () => [sidebarStyles.label, isSelected && { color: theme.colors.foreground }],
-    [isSelected, theme.colors.foreground],
+    () => [
+      sidebarStyles.navigationLabel,
+      isSelected && { color: theme.colors.accent, fontWeight: theme.fontWeight.semibold },
+    ],
+    [isSelected, theme.colors.accent, theme.fontWeight.semibold],
   );
   return (
     <Pressable
@@ -1080,7 +1094,7 @@ function SidebarSectionButton({
     >
       <IconComponent
         size={theme.iconSize.md}
-        color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
+        color={isSelected ? theme.colors.accent : theme.colors.foregroundMuted}
       />
       <Text style={labelStyle} numberOfLines={1}>
         {label}
@@ -1099,8 +1113,11 @@ function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonPr
   const { t } = useTranslation();
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const labelStyle = useMemo(
-    () => [sidebarStyles.label, isSelected && { color: theme.colors.foreground }],
-    [isSelected, theme.colors.foreground],
+    () => [
+      sidebarStyles.navigationLabel,
+      isSelected && { color: theme.colors.accent, fontWeight: theme.fontWeight.semibold },
+    ],
+    [isSelected, theme.colors.accent, theme.fontWeight.semibold],
   );
   return (
     <Pressable
@@ -1110,9 +1127,9 @@ function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonPr
       testID="settings-projects"
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
-      <FolderGit2
+      <Folder
         size={theme.iconSize.md}
-        color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
+        color={isSelected ? theme.colors.accent : theme.colors.foregroundMuted}
       />
       <Text style={labelStyle} numberOfLines={1}>
         {t("settings.projects")}
@@ -1131,14 +1148,16 @@ interface SidebarHostItemProps {
 
 function SidebarHostItem({ serverId, label, isSelected, isLocal, onSelect }: SidebarHostItemProps) {
   const { theme } = useUnistyles();
-  const { t } = useTranslation();
   const handlePress = useCallback(() => {
     onSelect(serverId);
   }, [onSelect, serverId]);
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const labelStyle = useMemo(
-    () => [sidebarStyles.label, isSelected && { color: theme.colors.foreground }],
-    [isSelected, theme.colors.foreground],
+    () => [
+      sidebarStyles.label,
+      isSelected && { color: theme.colors.accent, fontWeight: theme.fontWeight.semibold },
+    ],
+    [isSelected, theme.colors.accent, theme.fontWeight.semibold],
   );
   return (
     <Pressable
@@ -1146,20 +1165,19 @@ function SidebarHostItem({ serverId, label, isSelected, isLocal, onSelect }: Sid
       accessibilityState={accessibilityState}
       onPress={handlePress}
       testID={`settings-host-entry-${serverId}`}
-      style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
+      style={isSelected ? selectedHostSidebarItemStyle : hostSidebarItemStyle}
     >
-      <Server
-        size={theme.iconSize.md}
-        color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
-      />
+      {isLocal ? (
+        <View style={sidebarStyles.localDot} />
+      ) : (
+        <Server
+          size={theme.iconSize.md}
+          color={isSelected ? theme.colors.accent : theme.colors.foregroundMuted}
+        />
+      )}
       <Text style={labelStyle} numberOfLines={1}>
         {label}
       </Text>
-      {isLocal ? (
-        <Text style={sidebarStyles.localMarker} testID="settings-host-local-marker">
-          {t("settings.local")}
-        </Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -1206,7 +1224,6 @@ function SettingsSidebar({
   const padding = useWindowControlsPadding("sidebar");
   const webScrollbarStyle = useWebScrollbarStyle();
   const isDesktop = layout === "desktop";
-  const isGlassDesktop = isDesktop && theme.glass.enabled;
   const containerStyle = useMemo(
     () => [
       isDesktop ? sidebarStyles.desktopContainer : sidebarStyles.mobileContainer,
@@ -1225,6 +1242,7 @@ function SettingsSidebar({
 
   const backButton = isDesktop ? (
     <SidebarHeaderRow
+      compact
       icon={ArrowLeft}
       label={t("settings.back")}
       onPress={onBackToWorkspace}
@@ -1268,10 +1286,10 @@ function SettingsSidebar({
         accessibilityLabel={t("settings.addHost")}
         onPress={onAddHost}
         testID="settings-add-host"
-        style={sidebarItemStyle}
+        style={sidebarStyles.addHostItem}
       >
-        <Plus size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-        <Text style={sidebarStyles.label} numberOfLines={1}>
+        <Plus size={theme.iconSize.sm} color={theme.colors.accent} />
+        <Text style={sidebarStyles.addHostLabel} numberOfLines={1}>
           {t("settings.addHost")}
         </Text>
       </Pressable>
@@ -1303,14 +1321,6 @@ function SettingsSidebar({
   ) : (
     scrollableContent
   );
-
-  if (isGlassDesktop) {
-    return (
-      <GlassSurface variant="chrome" style={containerStyle}>
-        {innerContent}
-      </GlassSurface>
-    );
-  }
 
   return (
     <View style={containerStyle} testID="settings-sidebar">
@@ -1556,7 +1566,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
       return { title: t(item.labelKey), Icon: item.icon };
     }
     if (view.kind === "project" || view.kind === "projects") {
-      return { title: t("settings.projects"), Icon: FolderGit2 };
+      return { title: t("settings.projects"), Icon: Folder };
     }
     return null;
   })();
@@ -1732,18 +1742,21 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
         />
         <View style={desktopStyles.contentPane}>
           <ScreenHeader
+            backgroundColor={theme.glass.enabled ? "transparent" : undefined}
             borderless={!detailHeader}
+            height={SETTINGS_DESKTOP_HEADER_HEIGHT}
+            horizontalPadding={20}
             windowControlsPaddingRole="detailHeader"
             left={
               detailHeader ? (
                 <>
-                  <HeaderIconBadge>
-                    <detailHeader.Icon
-                      size={theme.iconSize.md}
-                      color={theme.colors.foregroundMuted}
-                    />
+                  <HeaderIconBadge variant="settings">
+                    <detailHeader.Icon size={theme.iconSize.sm} color={theme.colors.accent} />
                   </HeaderIconBadge>
-                  <ScreenTitle testID="settings-detail-header-title">
+                  <ScreenTitle
+                    testID="settings-detail-header-title"
+                    style={desktopStyles.detailTitle}
+                  >
                     {detailHeader.title}
                   </ScreenTitle>
                   {detailHeader.titleAccessory}
@@ -1753,7 +1766,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
             leftStyle={desktopStyles.detailLeft}
           />
           <ScrollView style={scrollViewStyle} contentContainerStyle={insetBottomStyle}>
-            <View style={styles.content}>{content}</View>
+            <View style={desktopStyles.content}>{content}</View>
           </ScrollView>
         </View>
       </View>
@@ -1779,7 +1792,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   container: {
     flex: 1,
-    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surface0,
+    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surfaceWorkspace,
   },
   scrollView: {
     flex: 1,
@@ -1811,11 +1824,11 @@ const styles = StyleSheet.create((theme) => ({
   themeTrigger: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
-    minHeight: 36,
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    gap: theme.spacing[1.5],
+    height: SETTINGS_CONTROL_HEIGHT,
+    paddingVertical: 0,
+    paddingHorizontal: 10,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
     borderColor: theme.colors.borderAccent,
     backgroundColor: theme.colors.surface2,
@@ -1825,17 +1838,17 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
   },
   terminalScrollbackInput: {
-    width: 112,
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    width: SETTINGS_INPUT_WIDTH,
+    height: 30,
+    paddingVertical: 0,
+    paddingHorizontal: theme.spacing[1.5],
+    borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
     borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surface2,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    textAlign: "right",
+    textAlign: "center",
   },
   placeholder: {
     flex: 1,
@@ -1856,29 +1869,43 @@ const desktopStyles = StyleSheet.create((theme) => ({
   },
   contentPane: {
     flex: 1,
+    backgroundColor: theme.glass.enabled
+      ? SETTINGS_LIQUID_CONTENT_BACKGROUND
+      : theme.colors.surfaceWorkspace,
+  },
+  content: {
+    width: "100%",
+    maxWidth: SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH,
+    alignSelf: "center",
+    padding: SETTINGS_DESKTOP_BODY_PADDING,
   },
   detailLeft: {
     gap: theme.spacing[2],
+  },
+  detailTitle: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.semibold,
   },
 }));
 
 const sidebarStyles = StyleSheet.create((theme) => ({
   desktopContainer: {
-    width: 240,
+    width: SETTINGS_DESKTOP_SIDEBAR_WIDTH,
     flexShrink: 0,
-    borderRightWidth: theme.glass.enabled ? 0 : 1,
+    borderRightWidth: 1,
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surfaceWorkspace,
+    backgroundColor: theme.colors.surfaceSidebar,
     overflow: "hidden",
   },
   mobileContainer: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   list: {
     paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    gap: theme.spacing[1],
+    paddingHorizontal: { xs: 0, md: theme.spacing[1.5] },
+    gap: 0,
   },
   desktopBody: {
     flex: 1,
@@ -1898,35 +1925,55 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minHeight: 32,
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
+    minHeight: { xs: 44, md: SETTINGS_DESKTOP_NAV_ITEM_HEIGHT },
+    paddingVertical: 0,
+    paddingHorizontal: { xs: theme.spacing[4], md: 10 },
     borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: "transparent",
   },
   itemHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   itemSelected: {
     backgroundColor: theme.colors.surfaceSidebarHover,
-    borderColor: theme.colors.borderAccent,
-    ...theme.shadow.sm,
+  },
+  hostItem: {
+    minHeight: 34,
+    paddingHorizontal: 10,
+  },
+  addHostItem: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+    paddingHorizontal: 10,
+  },
+  navigationLabel: {
+    fontSize: { xs: theme.fontSize.sm, md: 13 },
+    lineHeight: { xs: 18, md: 18 },
+    color: { xs: theme.colors.foregroundMuted, md: theme.colors.foreground },
+    fontWeight: theme.fontWeight.normal,
+    flex: 1,
   },
   label: {
-    fontSize: theme.fontSize.base,
+    fontSize: { xs: theme.fontSize.sm, md: 13 },
+    lineHeight: { xs: 18, md: 18 },
     color: theme.colors.foregroundMuted,
     fontWeight: theme.fontWeight.normal,
     flex: 1,
   },
-  localMarker: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+  addHostLabel: {
+    color: theme.colors.accent,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  localDot: {
+    width: 7,
+    height: 7,
+    flexShrink: 0,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.success,
+    shadowColor: theme.colors.success,
+    shadowRadius: 6,
+    shadowOpacity: 1,
   },
 }));

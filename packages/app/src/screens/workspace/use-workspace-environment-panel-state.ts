@@ -9,11 +9,11 @@ import {
 } from "react";
 import type { LayoutChangeEvent } from "react-native";
 
+import { MIN_CHAT_WIDTH, WORKBENCH_ENVIRONMENT_PANEL_INSET } from "@/constants/layout";
 import type { ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
 import type { WorkspaceEnvironmentDockState } from "@/screens/workspace/workspace-environment-dock-model";
 
-const ENVIRONMENT_PANEL_SAFE_GAP = 44;
-const ENVIRONMENT_PANEL_MIN_CONTENT_WIDTH = 1008;
+const ENVIRONMENT_PANEL_HORIZONTAL_INSETS = WORKBENCH_ENVIRONMENT_PANEL_INSET * 2;
 
 type WorkspaceEnvironmentPanelMode = "auto" | "forced-open" | "forced-closed";
 type ExplorerPanelAction = (input: {
@@ -29,6 +29,7 @@ interface UseWorkspaceEnvironmentPanelStateInput {
   isMobile: boolean;
   isExplorerOpen: boolean;
   activeExplorerCheckout: ExplorerCheckoutContext | null;
+  closeDesktopFileExplorer: () => void;
   openFileExplorerForCheckout: ExplorerPanelAction;
   toggleFileExplorerForCheckout: ExplorerPanelAction;
   setExplorerTabForCheckout: SetExplorerTabForCheckout;
@@ -48,6 +49,11 @@ function getEnvironmentExplorerTab(checkout: ExplorerCheckoutContext): "changes"
   return checkout.isGit ? "changes" : "files";
 }
 
+/** Returns whether the floating inspector leaves enough usable chat width. */
+export function shouldAutoShowEnvironmentPanel(contentWidth: number, panelWidth: number): boolean {
+  return contentWidth - panelWidth - ENVIRONMENT_PANEL_HORIZONTAL_INSETS >= MIN_CHAT_WIDTH;
+}
+
 /** Owns responsive environment-panel visibility, dock state, and explorer transitions. */
 export function useWorkspaceEnvironmentPanelState(
   input: UseWorkspaceEnvironmentPanelStateInput,
@@ -57,6 +63,7 @@ export function useWorkspaceEnvironmentPanelState(
     isMobile,
     isExplorerOpen,
     activeExplorerCheckout,
+    closeDesktopFileExplorer,
     openFileExplorerForCheckout,
     toggleFileExplorerForCheckout,
     setExplorerTabForCheckout,
@@ -76,10 +83,7 @@ export function useWorkspaceEnvironmentPanelState(
     if (!centerContentSize) {
       return true;
     }
-    return (
-      centerContentSize.width >=
-      panelWidth + ENVIRONMENT_PANEL_SAFE_GAP + ENVIRONMENT_PANEL_MIN_CONTENT_WIDTH
-    );
+    return shouldAutoShowEnvironmentPanel(centerContentSize.width, panelWidth);
   }, [centerContentSize, panelWidth]);
   const previousHasEnoughSpaceRef = useRef(hasEnoughSpaceForEnvironmentPanel);
   const isEnvironmentPanelVisible =
@@ -98,6 +102,12 @@ export function useWorkspaceEnvironmentPanelState(
     }
   }, [environmentPanelMode, hasEnoughSpaceForEnvironmentPanel]);
 
+  useEffect(() => {
+    if (!isMobile && isEnvironmentPanelVisible && isExplorerOpen) {
+      closeDesktopFileExplorer();
+    }
+  }, [closeDesktopFileExplorer, isEnvironmentPanelVisible, isExplorerOpen, isMobile]);
+
   const handleCenterContentLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setCenterContentSize((current) =>
@@ -111,13 +121,18 @@ export function useWorkspaceEnvironmentPanelState(
     }
     setEnvironmentPanelMode(isEnvironmentPanelVisible ? "forced-closed" : "forced-open");
     if (!isEnvironmentPanelVisible && isExplorerOpen && activeExplorerCheckout) {
-      toggleFileExplorerForCheckout({
-        isCompact: isMobile,
-        checkout: activeExplorerCheckout,
-      });
+      if (isMobile) {
+        toggleFileExplorerForCheckout({
+          isCompact: true,
+          checkout: activeExplorerCheckout,
+        });
+      } else {
+        closeDesktopFileExplorer();
+      }
     }
   }, [
     activeExplorerCheckout,
+    closeDesktopFileExplorer,
     isEnvironmentPanelVisible,
     isExplorerOpen,
     isMobile,

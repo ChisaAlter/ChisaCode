@@ -1,6 +1,6 @@
 # Task 4 Code-Quality Remediation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use workflow:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the fresh Task 4 code-quality review without weakening process ownership, relay capacity, loop cancellation/deadline, or command-output compatibility contracts.
 
@@ -227,8 +227,8 @@ Run the new multibyte tests plus existing zero/fractional/Infinity and independe
 **Files:**
 
 - Modify: `docs/refactors/comprehensive-improvement-roadmap.md`
-- Modify local report: `.superpowers/sdd/task-4-report.md`
-- Generate local review diff: `.superpowers/sdd/review-3decd3a59..<HEAD>.diff`
+- Modify local report: `.workflow/sdd/task-4-report.md`
+- Generate local review diff: `.workflow/sdd/review-3decd3a59..<HEAD>.diff`
 
 - [x] **Step 1: Add a pending architecture item**
 

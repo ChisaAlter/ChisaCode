@@ -15,6 +15,21 @@ export interface DesktopSidebarState {
 }
 
 export type SortOption = "name" | "modified" | "size";
+export type EnvironmentPanelTabPreference =
+  | "git-summary"
+  | "pull-request"
+  | "tasks"
+  | "subagents"
+  | "browser-context";
+
+export const DEFAULT_ENVIRONMENT_PANEL_OPACITY = 0.97;
+export const DEFAULT_ENVIRONMENT_PANEL_TABS: readonly EnvironmentPanelTabPreference[] = [
+  "git-summary",
+  "pull-request",
+  "tasks",
+  "subagents",
+  "browser-context",
+];
 
 export const DEFAULT_SIDEBAR_WIDTH = 200;
 export const MIN_SIDEBAR_WIDTH = 200;
@@ -66,6 +81,10 @@ export function clampExplorerWidth(width: number): number {
 
 export function clampExplorerFilesSplitRatio(ratio: number): number {
   return clampNumber(ratio, MIN_EXPLORER_FILES_SPLIT_RATIO, MAX_EXPLORER_FILES_SPLIT_RATIO);
+}
+
+export function clampEnvironmentPanelOpacity(opacity: number): number {
+  return clampNumber(opacity, 0.72, 1);
 }
 
 export function selectPanelVisibility(
@@ -251,6 +270,18 @@ export function migratePanelState(
   ) {
     state.diffExpandedPathsByWorkspace = {};
   }
+  if (version < 16 || typeof state.environmentPanelOpacity !== "number") {
+    state.environmentPanelOpacity = DEFAULT_ENVIRONMENT_PANEL_OPACITY;
+  } else {
+    state.environmentPanelOpacity = clampEnvironmentPanelOpacity(state.environmentPanelOpacity);
+  }
+  const visibleTabs = Array.isArray(state.environmentPanelVisibleTabs)
+    ? state.environmentPanelVisibleTabs.filter((tab): tab is EnvironmentPanelTabPreference =>
+        DEFAULT_ENVIRONMENT_PANEL_TABS.includes(tab as EnvironmentPanelTabPreference),
+      )
+    : [];
+  state.environmentPanelVisibleTabs =
+    visibleTabs.length > 0 ? [...new Set(visibleTabs)] : [...DEFAULT_ENVIRONMENT_PANEL_TABS];
 
   return state;
 }

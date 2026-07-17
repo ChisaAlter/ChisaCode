@@ -1,7 +1,7 @@
 # 主题系统收口实施计划
 
-> **面向执行代理：** 必须使用 `superpowers:subagent-driven-development`（推荐）或
-> `superpowers:executing-plans`，按任务逐项实施。所有步骤使用复选框跟踪。
+> **面向执行代理：** 必须使用 `workflow:subagent-driven-development`（推荐）或
+> `workflow:executing-plans`，按任务逐项实施。所有步骤使用复选框跟踪。
 
 **目标：** Electron 桌面端和 Android 端统一使用“跟随系统 + 五套产品主题”，新安装默认
 Blockchain Light，并把四套旧暗色主题平滑迁移到 Cyber Dark。

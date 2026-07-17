@@ -10,8 +10,26 @@
 
 - Electron 默认以 Blockchain Light 呈现紧凑三栏工作台。
 - Android 使用同一套视觉 token，采用紧凑聊天、抽屉侧栏和移动设置页。
+- 五套主题在桌面工作台、桌面设置、移动聊天、移动抽屉和移动设置上都与
+  `design/web3-themes-v2.html` 对应画面一致，而不是只共享近似颜色。
 - 所有界面继续消费真实会话、Agent、workspace、Git、PR、Tasks、Subagents 和 Browser 数据。
 - 保留现有导航、持久化、快捷键、拖拽、菜单、语音、附件和 Agent 控制行为。
+
+## 视觉真值与验收边界
+
+- 唯一视觉真值是 `design/web3-themes-v2.html`，现有应用样式和历史截图不能反向修改目标。
+- 固定验收矩阵为 5 个主题 x 5 个画面：桌面工作台、桌面设置、移动聊天、移动抽屉、移动设置。
+- 桌面捕获使用真实打包 Electron、`1200 x 800` CSS viewport 和相同页面状态；移动捕获使用真实
+  Android 应用、`320 x 660` 对照 viewport。Web 预览不得替代 Electron 或 Android 结果。
+- QA 数据可以来自隔离的 `$CHISACODE_HOME` 和可重复 seed，但生产组件不得内置演示数据、静态壳或
+  仅为截图存在的业务分支。
+- 每个画面必须保存参考图、实现图、并排图、差分图和度量 JSON。动态文本允许在度量中使用明确的
+  矩形 mask，但布局边界、背景、控件、图标、间距、字号和可见状态不得被 mask。
+- 几何边界误差不得超过 `2px`；对齐后的非动态区域平均绝对颜色误差（MAD）不得超过 `3.0`；任一
+  RGB 通道误差大于 `12` 的像素比例不得超过 `3%`。阈值不满足时 `design-qa.md` 必须保持
+  `final result: in progress`。
+- 不再使用“没有 P0/P1/P2”作为通过条件。所有可见差异都必须修复，或在最终报告中以目标源码差异、
+  平台字体栅格化或真实系统控件限制给出可复现证据；不能用主观措辞豁免。
 
 ## 桌面布局
 
@@ -24,8 +42,9 @@
 4. 消息流占满顶部栏与 Composer 之间的空间。已有 Agent tab 直接显示真实聊天；新工作区页改为紧凑
    草稿态，不再使用居中的超大标题和大面积留白。
 5. Composer 贴底，桌面输入面板改为紧凑双层结构：上层文本/附件，下层 Agent 控制、语音和发送。
-6. 环境面板作为右侧固定列，宽度 `280px`，不再悬浮覆盖消息。顶部展示 Git、PR、Tasks、
-   Subagents、Browser 标签；各标签读取现有 `dockState` 和真实聚合数据。
+6. 环境面板按设计稿作为右侧悬浮 inspector，宽度 `240px`，四周内缩 `8px`；消息与 Composer
+   为右侧边缘保留避让空间。顶部展示 Git、PR、Tasks、Subagents、Browser 标签；各标签读取
+   现有 `dockState` 和真实聚合数据。
 
 ## Android 布局
 
@@ -50,7 +69,7 @@
 
 - 目标测试锁定侧栏默认/迁移尺寸、桌面环境面板标签模型和关键布局常量。
 - 运行 App typecheck、目标 lint、目标格式化和相关 Vitest 文件。
-- 使用真实 Electron 启动并保存截图，确认工作区不是旧的大空态布局。
+- 使用真实 Electron 启动并保存五主题工作台与设置截图，生成像素度量并逐项达到视觉阈值。
 - Android 只在真实设备或模拟器上声明通过；若本机无设备，明确记录未完成，Web 不替代。
 - 完成后重建 `packages/desktop/release/win-unpacked/ChisaCode.exe`，刷新桌面与仓库内两个快捷方式，
   并运行 packaged smoke。

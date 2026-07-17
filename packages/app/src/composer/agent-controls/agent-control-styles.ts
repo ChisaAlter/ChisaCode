@@ -1,10 +1,11 @@
 import { StyleSheet } from "react-native-unistyles";
+import { WORKBENCH_COMPOSER_CONTROL_HEIGHT, WORKBENCH_META_LINE_HEIGHT } from "@/constants/layout";
 
 export const styles = StyleSheet.create((theme) => ({
   container: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    gap: theme.spacing[1],
+    alignItems: "center",
+    gap: 5,
   },
   compactContainer: {
     minWidth: 0,
@@ -12,13 +13,15 @@ export const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
   },
   modeBadge: {
-    height: 28,
+    height: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "transparent",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
+    backgroundColor: theme.colors.surface2,
+    gap: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
   },
   modeIconBadge: {
     width: 28,
@@ -39,7 +42,8 @@ export const styles = StyleSheet.create((theme) => ({
   },
   modeBadgeText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
   tooltipText: {

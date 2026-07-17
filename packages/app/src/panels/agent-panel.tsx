@@ -60,6 +60,7 @@ import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
 import type { Theme } from "@/styles/theme";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import { useArchiveSubagent, useSubagentsForParent } from "@/subagents";
 import { SubagentsTrack } from "@/subagents/track";
 import { loadCachedAgentStreamTail } from "@/timeline/agent-stream-tail-cache";
@@ -1637,11 +1638,11 @@ const foregroundColorMapping = (theme: Theme) => ({
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   contentContainer: {
     flex: 1,
@@ -1650,11 +1651,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   inputAreaWrapper: {
     width: "100%",
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   composerInputWrapper: {
-    borderWidth: 0,
-    ...theme.shadow.sm,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
   },
   historySyncProgressBanner: {
     position: "absolute",

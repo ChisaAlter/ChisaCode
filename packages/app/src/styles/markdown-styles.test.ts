@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { createMarkdownStyles } from "./markdown-styles";
+import { createMarkdownStyles, createWorkbenchMarkdownStyles } from "./markdown-styles";
 import { darkTheme } from "./theme";
 
 describe("createMarkdownStyles", () => {
+  it("provides compact workbench markdown typography", () => {
+    const styles = createWorkbenchMarkdownStyles(darkTheme);
+
+    expect(styles.body).toMatchObject({ fontSize: 13, lineHeight: 18 });
+    expect(styles.paragraph).toMatchObject({
+      fontSize: 13,
+      lineHeight: 18,
+      marginBottom: 6,
+    });
+    expect(styles.text).toMatchObject({ fontSize: 13, lineHeight: 18 });
+  });
   it("applies shrink-and-wrap constraints to long markdown text and links", () => {
     const styles = createMarkdownStyles(darkTheme);
 

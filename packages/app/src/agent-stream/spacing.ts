@@ -51,7 +51,7 @@ export function getGapBetweenStreamItems(
     return SPACING[4];
   }
   if (item.kind === "assistant_message" && isToolSequenceItem(belowItem)) {
-    return SPACING[1];
+    return 6;
   }
   if (isToolSequenceItem(item) && belowItem.kind === "assistant_message") {
     return SPACING[1];
@@ -59,5 +59,5 @@ export function getGapBetweenStreamItems(
   if (isSameAssistantBlockGroup({ item, other: belowItem })) {
     return 0;
   }
-  return SPACING[4];
+  return 10;
 }

@@ -70,6 +70,7 @@ import {
 import type { WorkspaceTab } from "@/stores/workspace-tabs-store";
 import { workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import { isNative } from "@/constants/platform";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 
 interface SplitContainerProps {
   layout: WorkspaceLayout;
@@ -1206,20 +1207,20 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     minHeight: 0,
     overflow: "hidden",
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).pane,
   },
   paneTabs: {
     position: "relative",
     minWidth: 0,
     zIndex: 30,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).pane,
   },
   paneContent: {
     position: "relative",
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).pane,
     overflow: "hidden",
   },
   dragOverlayChip: {

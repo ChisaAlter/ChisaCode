@@ -1150,8 +1150,8 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
   },
   iconButton: {
-    width: 22,
-    height: 22,
+    width: 28,
+    height: 28,
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",

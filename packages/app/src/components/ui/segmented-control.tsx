@@ -2,6 +2,7 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { SETTINGS_CONTROL_HEIGHT } from "@/constants/layout";
 
 type SegmentedControlSize = "sm" | "md";
 
@@ -23,6 +24,7 @@ interface SegmentedControlProps<T extends string> {
   hideLabels?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  compact?: boolean;
 }
 
 export function SegmentedControl<T extends string>({
@@ -33,6 +35,7 @@ export function SegmentedControl<T extends string>({
   hideLabels = false,
   style,
   testID,
+  compact = false,
 }: SegmentedControlProps<T>) {
   const { theme } = useUnistyles();
   const containerSizeStyle = size === "sm" ? styles.containerSm : styles.containerMd;
@@ -41,8 +44,16 @@ export function SegmentedControl<T extends string>({
   const iconSize = size === "sm" ? theme.iconSize.sm : theme.iconSize.md;
 
   const containerStyle = useMemo(
-    () => [styles.container, containerSizeStyle, style],
-    [containerSizeStyle, style],
+    () => [styles.container, containerSizeStyle, compact && styles.containerCompact, style],
+    [compact, containerSizeStyle, style],
+  );
+  const segmentStyle = useMemo(
+    () => [segmentSizeStyle, compact && styles.segmentCompact],
+    [compact, segmentSizeStyle],
+  );
+  const labelStyle = useMemo(
+    () => [labelSizeStyle, compact && styles.labelCompact],
+    [compact, labelSizeStyle],
   );
 
   return (
@@ -59,8 +70,8 @@ export function SegmentedControl<T extends string>({
             iconColor={iconColor}
             iconSize={iconSize}
             hideLabels={hideLabels}
-            segmentSizeStyle={segmentSizeStyle}
-            labelSizeStyle={labelSizeStyle}
+            segmentSizeStyle={segmentStyle}
+            labelSizeStyle={labelStyle}
             currentValue={value}
             onValueChange={onValueChange}
           />
@@ -152,6 +163,14 @@ const styles = StyleSheet.create((theme) => ({
   containerMd: {
     padding: 3,
   },
+  containerCompact: {
+    height: SETTINGS_CONTROL_HEIGHT,
+    padding: 0,
+    gap: 0,
+    borderWidth: 1,
+    borderColor: theme.colors.borderAccent,
+    overflow: "hidden",
+  },
   segment: {
     flexDirection: "row",
     alignItems: "center",
@@ -167,6 +186,12 @@ const styles = StyleSheet.create((theme) => ({
   segmentMd: {
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[6],
+  },
+  segmentCompact: {
+    height: 30,
+    paddingVertical: 0,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: 0,
   },
   segmentSelected: {
     backgroundColor: theme.colors.surface0,
@@ -199,7 +224,12 @@ const styles = StyleSheet.create((theme) => ({
   labelMd: {
     fontSize: theme.fontSize.base,
   },
+  labelCompact: {
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+  },
   labelSelected: {
     color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.semibold,
   },
 }));

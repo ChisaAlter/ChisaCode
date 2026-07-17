@@ -33,6 +33,7 @@ import { QuittingOverlay } from "@/components/quitting-overlay";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
 import { appI18n } from "@/i18n";
 import { MobileGestureWrapper } from "./MobileGesture";
+import { resolveAppSurfaceBackgrounds } from "./app-surface-backgrounds";
 
 export interface AppContainerProps {
   children: ReactNode;
@@ -42,12 +43,40 @@ export interface AppContainerProps {
 
 export const THEME_CYCLE_ORDER: readonly ThemeName[] = ACTIVE_THEME_NAMES;
 
+const DESKTOP_WORKBENCH_FONT_CSS = `[data-testid="app-surface"] * {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}`;
+
 function AppContainer({
   children,
   selectedAgentId,
   chromeEnabled: chromeEnabledOverride,
 }: AppContainerProps) {
   const { theme } = useUnistyles();
+  const isCompactLayout = useIsCompactFormFactor();
+  const surfaceBackgrounds = resolveAppSurfaceBackgrounds({
+    frameEnabled: !isCompactLayout && getIsElectronRuntime(),
+    glassEnabled: theme.glass.enabled,
+    surfaceWorkspace: theme.colors.surfaceWorkspace,
+    surface0: theme.colors.surface0,
+    glassShell: theme.glass.shell,
+    borderAccent: theme.colors.borderAccent,
+  });
+  const surfaceFillStyle = useMemo(
+    () => [
+      layoutStyles.surfaceFill,
+      {
+        backgroundColor: surfaceBackgrounds.root,
+        borderWidth: surfaceBackgrounds.frameBorderWidth,
+        borderColor: surfaceBackgrounds.frameBorderColor,
+      },
+    ],
+    [
+      surfaceBackgrounds.frameBorderColor,
+      surfaceBackgrounds.frameBorderWidth,
+      surfaceBackgrounds.root,
+    ],
+  );
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
@@ -64,7 +93,6 @@ function AppContainer({
     void updateSettings({ theme: THEME_CYCLE_ORDER[nextIndex] });
   }, [settings.theme, updateSettings]);
 
-  const isCompactLayout = useIsCompactFormFactor();
   useCompactWebViewportZoomLock(isCompactLayout);
   const chromeEnabled = chromeEnabledOverride ?? daemons.length > 0;
   const pathname = usePathname();
@@ -99,17 +127,22 @@ function AppContainer({
   // global concerns like keyboard shortcuts. Split those out so settings (and
   // other non-workspace routes) don't need a special-case to keep shortcuts alive.
   const keyboardShortcutsEnabled = chromeEnabled || pathname.startsWith("/settings");
-  const windowControlsPadding = useWindowControlsPadding("sidebar");
+  const desktopWorkbenchFontEnabled =
+    !isCompactLayout && getIsElectronRuntime() && pathname.includes("/workspace/");
+  const titlebarPadding = useWindowControlsPadding("titlebar");
   const titlebarSpacerStyle = useMemo(
     () =>
-      !isCompactLayout && windowControlsPadding.top > 0
-        ? { height: windowControlsPadding.top, flexShrink: 0 }
+      !isCompactLayout && titlebarPadding.top > 0
+        ? [layoutStyles.desktopTitlebarSpacer, { height: titlebarPadding.top }]
         : null,
-    [isCompactLayout, windowControlsPadding.top],
+    [isCompactLayout, titlebarPadding.top],
   );
   const appRowStyle = useMemo(
-    () => [layoutStyles.appRow, !isCompactLayout && layoutStyles.desktopAppRow],
-    [isCompactLayout],
+    () => [
+      layoutStyles.appRow,
+      !isCompactLayout && { backgroundColor: surfaceBackgrounds.desktopRow },
+    ],
+    [isCompactLayout, surfaceBackgrounds.desktopRow],
   );
   const desktopSidebarRestoreButtonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -159,7 +192,8 @@ function AppContainer({
   );
 
   const content = (
-    <View style={layoutStyles.surfaceFill}>
+    <View style={surfaceFillStyle} testID="app-surface">
+      <DesktopWorkbenchFontStyle enabled={desktopWorkbenchFontEnabled} />
       <LiquidNeonBackdrop />
       <DesktopTitlebarDragStrip />
       {titlebarSpacerStyle ? <View style={titlebarSpacerStyle} /> : null}
@@ -187,8 +221,16 @@ function AppContainer({
   return <MobileGestureWrapper chromeEnabled={chromeEnabled}>{content}</MobileGestureWrapper>;
 }
 
+function DesktopWorkbenchFontStyle({ enabled }: { enabled: boolean }) {
+  if (isNative || !enabled) {
+    return null;
+  }
+
+  return <style>{DESKTOP_WORKBENCH_FONT_CSS}</style>;
+}
+
 function DesktopTitlebarDragStrip() {
-  const padding = useWindowControlsPadding("explorerSidebar");
+  const padding = useWindowControlsPadding("titlebar");
   const stripStyle = useMemo<CSSProperties>(
     () => ({
       position: "absolute",
@@ -212,14 +254,16 @@ export const layoutStyles = StyleSheet.create((theme) => ({
   surfaceFill: {
     flex: 1,
     position: "relative",
-    backgroundColor: theme.colors.surfaceWorkspace,
+  },
+  desktopTitlebarSpacer: {
+    flexShrink: 0,
+    backgroundColor: theme.colors.surface0,
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
   },
   appRow: {
     flex: 1,
     flexDirection: "row",
-  },
-  desktopAppRow: {
-    backgroundColor: theme.colors.surfaceWorkspace,
   },
   appContent: {
     flex: 1,

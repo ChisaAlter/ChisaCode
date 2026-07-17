@@ -355,7 +355,7 @@ describe("buildWorkspaceReviewCalloutModel", () => {
       ],
       showViewChanges: true,
       showOpenPullRequest: false,
-      showCopyResume: true,
+      showCopyResume: false,
     });
   });
 

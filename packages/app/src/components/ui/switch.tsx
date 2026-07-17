@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { SETTINGS_SWITCH_HEIGHT, SETTINGS_SWITCH_WIDTH } from "@/constants/layout";
 
 interface SwitchProps {
   value: boolean;
@@ -24,8 +25,8 @@ interface SwitchProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const TRACK = { width: 34, height: 20 };
-const THUMB = 16;
+const TRACK = { width: SETTINGS_SWITCH_WIDTH, height: SETTINGS_SWITCH_HEIGHT };
+const THUMB = 20;
 
 const TIMING = { duration: 180, easing: Easing.inOut(Easing.ease) };
 
@@ -50,6 +51,11 @@ export function Switch({
       progress.value,
       [0, 1],
       [theme.colors.surface3, theme.colors.accent],
+    ),
+    borderColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      [theme.colors.border, theme.colors.accent],
     ),
   }));
 
@@ -126,6 +132,7 @@ const styles = StyleSheet.create((theme) => ({
 const staticStyles = RNStyleSheet.create({
   track: {
     justifyContent: "center",
+    borderWidth: 1,
   },
   thumb: {
     shadowColor: "rgba(0, 0, 0, 0.25)",

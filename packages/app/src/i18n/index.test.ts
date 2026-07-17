@@ -46,8 +46,25 @@ describe("createAppI18n", () => {
     expect(i18n.t("settings.general.theme.options.auto")).toBe("System");
   });
 
+  it("keeps the workbench environment labels aligned with the visual reference", () => {
+    const i18n = createAppI18n("zh-CN");
+
+    expect(i18n.t("workspace.environment.dockTabs.tasks")).toBe("Tasks");
+    expect(i18n.t("workspace.environment.dockTabs.subagents")).toBe("Subagents");
+    expect(i18n.t("workspace.environment.dockTabs.browser-context")).toBe("Browser");
+    expect(i18n.t("workspace.reviewCallout.completedTitle")).toBe("Review completed work");
+    expect(i18n.t("workspace.environment.changeSummary")).toBe(
+      "已完成主题预览结构复核，可查看变更或继续提交。",
+    );
+    expect(i18n.t("workspace.environment.recentActivity")).toBe("最近活动");
+  });
+
+  it("uses the compact usage navigation label in Chinese", () => {
+    expect(createAppI18n("zh-CN").t("settings.sections.usage")).toBe("用量");
+  });
+
   it("labels the reasoning display setting in Chinese and English", () => {
-    expect(createAppI18n("zh-CN").t("settings.general.showReasoning.title")).toBe("显示思考内容");
+    expect(createAppI18n("zh-CN").t("settings.general.showReasoning.title")).toBe("显示思考");
     expect(createAppI18n("en").t("settings.general.showReasoning.title")).toBe("Show reasoning");
   });
 

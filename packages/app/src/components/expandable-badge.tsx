@@ -224,6 +224,11 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   container: {
     ...expandableBadgeBaseLayout.container,
   },
+  workbenchContainer: {
+    width: "auto",
+    maxWidth: 220,
+    alignSelf: "flex-start",
+  },
   containerSpacing: {
     marginBottom: theme.spacing[1],
   },
@@ -238,12 +243,24 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
     overflow: "hidden",
   },
+  workbenchPressable: {
+    height: 28,
+    minHeight: 28,
+    paddingHorizontal: 7,
+    paddingVertical: 0,
+    borderRadius: 6,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+  },
   pressablePressed: {
     opacity: 0.9,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  workbenchHeaderRow: {
+    height: 28,
   },
   labelRow: {
     flex: 1,
@@ -260,11 +277,22 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     marginRight: theme.spacing[1],
     backgroundColor: "transparent",
   },
+  workbenchIconBadge: {
+    width: 12,
+    height: 28,
+    borderRadius: 0,
+    marginRight: 4,
+  },
   label: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     flexShrink: 0,
+  },
+  workbenchLabel: {
+    fontFamily: isWeb ? "system-ui" : undefined,
+    fontSize: 12,
+    lineHeight: 16,
   },
   labelActive: {
     color: theme.colors.foreground,
@@ -280,6 +308,12 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     marginLeft: theme.spacing[2],
+  },
+  workbenchSecondaryLabel: {
+    fontFamily: isWeb ? "system-ui" : undefined,
+    fontSize: 12,
+    lineHeight: 16,
+    marginLeft: 4,
   },
   secondaryLabelActive: {
     color: theme.colors.foreground,
@@ -297,8 +331,11 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     transform: [{ scale: 1.3 }],
   },
   openFileButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
     marginLeft: theme.spacing[1],
-    padding: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
     flexShrink: 0,
   },
@@ -487,6 +524,7 @@ interface ExpandableBadgeProps {
   icon?: ComponentType<{ size?: number; color?: string }>;
   isExpanded: boolean;
   style?: StyleProp<ViewStyle>;
+  presentation?: "default" | "workbench";
   onToggle?: () => void;
   onOpenFile?: () => void;
   onDetailHoverChange?: (hovered: boolean) => void;
@@ -692,6 +730,10 @@ function ExpandableBadgeLabelRow({
 // with a tight viewBox per icon — see option (2) in the design discussion.
 const LUCIDE_TOOL_ICON_NUDGE_LEFT: ViewStyle = { marginLeft: -1 };
 const LUCIDE_CHEVRON_NUDGE_LEFT: ViewStyle = { marginLeft: -4 };
+const WORKBENCH_CHEVRON_DOWN_STYLE: ViewStyle = {
+  marginLeft: -1,
+  transform: [{ rotate: "90deg" }],
+};
 
 function renderExpandableBadgeIcon({
   isError,
@@ -843,6 +885,7 @@ function buildShimmerTextStyle(input: {
 export const ExpandableBadge = memo(function ExpandableBadge({
   label,
   style,
+  presentation = "default",
   secondaryLabel,
   icon,
   isExpanded,
@@ -1010,22 +1053,41 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const containerStyle = useMemo(
     () => [
       expandableBadgeStylesheet.container,
+      presentation === "workbench" && !isExpanded
+        ? expandableBadgeStylesheet.workbenchContainer
+        : null,
       !resolvedDisableOuterSpacing &&
         (isLastInSequence
           ? expandableBadgeStylesheet.containerLastInSequence
           : expandableBadgeStylesheet.containerSpacing),
       style,
     ],
-    [isLastInSequence, resolvedDisableOuterSpacing, style],
+    [isExpanded, isLastInSequence, presentation, resolvedDisableOuterSpacing, style],
   );
 
   const pressableStyle = useMemo(
     () => [
       expandableBadgeStylesheet.pressable,
+      presentation === "workbench" ? expandableBadgeStylesheet.workbenchPressable : null,
       isPressed && isInteractive ? expandableBadgeStylesheet.pressablePressed : null,
       isExpanded && expandableBadgeStylesheet.pressableExpanded,
     ],
-    [isExpanded, isInteractive, isPressed],
+    [isExpanded, isInteractive, isPressed, presentation],
+  );
+
+  const headerRowStyle = useMemo(
+    () => [
+      expandableBadgeStylesheet.headerRow,
+      presentation === "workbench" ? expandableBadgeStylesheet.workbenchHeaderRow : null,
+    ],
+    [presentation],
+  );
+  const iconBadgeStyle = useMemo(
+    () => [
+      expandableBadgeStylesheet.iconBadge,
+      presentation === "workbench" ? expandableBadgeStylesheet.workbenchIconBadge : null,
+    ],
+    [presentation],
   );
 
   const accessibilityState = useMemo(
@@ -1038,18 +1100,20 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const labelStyle = useMemo(
     () => [
       expandableBadgeStylesheet.label,
+      presentation === "workbench" ? expandableBadgeStylesheet.workbenchLabel : null,
       isActive && expandableBadgeStylesheet.labelActive,
       isLoading && expandableBadgeStylesheet.labelLoading,
     ],
-    [isActive, isLoading],
+    [isActive, isLoading, presentation],
   );
 
   const secondaryLabelStyle = useMemo(
     () => [
       expandableBadgeStylesheet.secondaryLabel,
+      presentation === "workbench" ? expandableBadgeStylesheet.workbenchSecondaryLabel : null,
       isActive && expandableBadgeStylesheet.secondaryLabelActive,
     ],
-    [isActive],
+    [isActive, presentation],
   );
 
   const shimmerLabelTextStyle = useMemo(
@@ -1082,11 +1146,20 @@ export const ExpandableBadge = memo(function ExpandableBadge({
 
   const ThemedIcon = useMemo(() => (icon ? withUnistyles(icon) : null), [icon]);
   const iconNode = renderExpandableBadgeIcon({ isError, isActive, ThemedIcon });
-  const iconSlotNode = renderExpandableBadgeIconSlot({
-    showChevron: isInteractive && isHovered,
-    chevronStyle,
-    iconNode,
-  });
+  const iconSlotNode =
+    presentation === "workbench" && !isExpanded ? (
+      <ThemedChevronRightIcon
+        size={10}
+        style={WORKBENCH_CHEVRON_DOWN_STYLE}
+        uniProps={mutedForegroundColorMapping}
+      />
+    ) : (
+      renderExpandableBadgeIconSlot({
+        showChevron: isInteractive && isHovered,
+        chevronStyle,
+        iconNode,
+      })
+    );
 
   const pressHandlers = isInteractive
     ? {
@@ -1110,8 +1183,8 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         accessibilityState={accessibilityState}
         style={pressableStyle}
       >
-        <View style={expandableBadgeStylesheet.headerRow}>
-          <View style={expandableBadgeStylesheet.iconBadge}>{iconSlotNode}</View>
+        <View style={headerRowStyle}>
+          <View style={iconBadgeStyle}>{iconSlotNode}</View>
           <ExpandableBadgeLabelRow
             label={label}
             labelStyle={labelStyle}
@@ -1159,6 +1232,7 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
   if (previous.icon !== next.icon) return false;
   if (previous.isExpanded !== next.isExpanded) return false;
   if (previous.style !== next.style) return false;
+  if (previous.presentation !== next.presentation) return false;
   if (previous.isLoading !== next.isLoading) return false;
   if (previous.isError !== next.isError) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;

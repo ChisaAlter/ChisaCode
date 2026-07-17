@@ -7,7 +7,7 @@ HEAD reviewed: `f5c15a06af3293febc8db6b190d199af4b32f0f1`
 
 Changed files reviewed:
 
-- `docs/superpowers/plans/2026-07-15-theme-system-consolidation.md`
+- `docs/workflow/plans/2026-07-15-theme-system-consolidation.md`
 - `packages/app/src/app/_layout/AppContainer.tsx`
 - `packages/app/src/hooks/use-settings/storage.test.ts`
 - `packages/app/src/hooks/use-settings/storage.ts`
@@ -18,7 +18,7 @@ Changed files reviewed:
 - `packages/app/src/styles/theme.ts`
 - `packages/app/src/styles/unistyles.ts`
 
-Workspace note: `.superpowers/sdd/progress.md` remains unreviewed and excluded. The current
+Workspace note: `.workflow/sdd/progress.md` remains unreviewed and excluded. The current
 uncommitted `packages/app/src/hooks/use-settings/storage.test.ts` hunk was explicitly included
 in this final review because it adds the unknown-theme fallback coverage requested by the user.
 

@@ -18,6 +18,19 @@ export type WorkspaceRouteState =
   | { kind: "loading"; hostName: string }
   | { kind: "missing"; hostName: string };
 
+/**
+ * Selects the gated or ready workspace branch from the rendered route gate value.
+ * @param input Route gate and the corresponding render branches
+ * @returns The gated branch when a gate exists, otherwise the ready workspace branch
+ */
+export function selectWorkspaceRouteContent<T>(input: {
+  gate: unknown;
+  gatedContent: T;
+  readyContent: T;
+}): T {
+  return input.gate === null || input.gate === undefined ? input.readyContent : input.gatedContent;
+}
+
 export function resolveWorkspaceRouteState(input: {
   hostName: string;
   connectionStatus: HostRuntimeConnectionStatus;

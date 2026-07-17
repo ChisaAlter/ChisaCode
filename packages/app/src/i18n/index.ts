@@ -78,10 +78,13 @@ export const resources = {
         hostProjectLoadError: "无法从主机 {{serverName}} 加载项目：{{message}}",
         directoryPicker: {
           title: "工作目录",
+          select: "选择工作目录",
           searchProjects: "搜索项目",
           searchOrInputDirectory: "搜索或输入工作目录",
           customValuePrefix: "使用",
           customValueDescription: "使用这个工作目录",
+          empty: "没有匹配的目录。",
+          required: "请选择工作目录",
         },
         presets: {
           label: "智能体预设",
@@ -124,6 +127,7 @@ export const resources = {
         noMatchingRefs: "没有匹配的引用。",
         startRef: "起始引用",
         chooseStartRef: "选择从哪里开始",
+        intoBaseRef: "合并到 {{baseRefName}}",
         checkoutPrPrompt: "检出 PR #{{number}}？",
         checkoutPr: "检出 PR #{{number}}",
         dismissCheckoutHint: "关闭 PR #{{number}} 检出提示",
@@ -142,14 +146,17 @@ export const resources = {
           panelTitle: "环境面板",
           title: "环境信息",
           outline: "大纲",
-          changes: "变更",
+          changes: "查看变更",
           showPanel: "显示环境信息",
           hidePanel: "隐藏环境信息",
           showFloatingPanel: "显示环境面板",
           hideFloatingPanel: "隐藏环境面板",
+          panelSettings: "环境面板设置",
+          visibleModules: "显示模块",
+          panelOpacity: "面板透明度",
           changedLines: "变更行数",
           recentChanges: "最近改动",
-          changeSummary: "改动摘要",
+          changeSummary: "已完成主题预览结构复核，可查看变更或继续提交。",
           progress: "进度",
           browserReady: "就绪",
           browserLoading: "加载中",
@@ -157,9 +164,9 @@ export const resources = {
           dockTabs: {
             "git-summary": "Git",
             "pull-request": "PR",
-            tasks: "任务",
-            subagents: "子智能体",
-            "browser-context": "浏览器",
+            tasks: "Tasks",
+            subagents: "Subagents",
+            "browser-context": "Browser",
           },
           gitState: {
             "not-git": "非 Git",
@@ -170,6 +177,7 @@ export const resources = {
           local: "本地",
           remote: "远程",
           branch: "分支",
+          currentBranch: "当前分支",
           commitOrPush: "提交或推送",
           gitActions: {
             commitMessagePlaceholder: "提交信息（留空将自动生成）...",
@@ -191,7 +199,7 @@ export const resources = {
           moreTasks: "还有 {{count}} 条",
           task: "任务",
           currentTask: "当前任务",
-          recentActivity: "最近动态",
+          recentActivity: "最近活动",
           noRecentActivity: "暂无最近动态",
           resume: "恢复",
           checksStatus: {
@@ -262,7 +270,7 @@ export const resources = {
           workspaceReady: "工作区就绪",
         },
         reviewCallout: {
-          completedTitle: "工作已完成，准备审查",
+          completedTitle: "Review completed work",
           interruptedTitle: "任务已中断，先审查现场",
           description: "查看变更、拉取请求和后续操作",
           viewChanges: "查看变更",
@@ -416,6 +424,7 @@ export const resources = {
         noSessions: "还没有会话",
         unknownWorkspace: "未知工作区",
         pinnedSessions: "置顶",
+        projects: "项目",
         loadMoreSessions: "加载更多会话",
         sessionActions: "会话操作",
         pinSession: "置顶",
@@ -666,6 +675,7 @@ export const resources = {
         copyMessage: "复制消息",
         copyTurn: "复制回合",
         openFile: "打开文件",
+        compactedContext: "已压缩早期上下文",
       },
       files: {
         open: "打开",
@@ -1339,14 +1349,14 @@ export const resources = {
       settings: {
         title: "设置",
         loading: "正在加载设置...",
-        back: "返回",
+        back: "返回工作区",
         projects: "项目",
-        addHost: "添加主机",
+        addHost: "添加 Host",
         local: "本机",
         sections: {
           general: "通用",
           models: "模型",
-          usage: "用量统计",
+          usage: "用量",
           skills: "技能",
           mcp: "MCP 服务器",
           shortcuts: "快捷键",
@@ -1357,7 +1367,7 @@ export const resources = {
           about: "关于",
         },
         general: {
-          title: "通用",
+          title: "外观",
           theme: {
             title: "主题",
             options: {
@@ -1378,20 +1388,20 @@ export const resources = {
             },
           },
           defaultSend: {
-            title: "默认发送",
-            description: "智能体运行时按 Enter 的行为",
+            title: "发送行为",
+            description: "按 Enter 时的行为",
             options: {
               interrupt: "打断",
               queue: "排队",
             },
           },
           showReasoning: {
-            title: "显示思考内容",
-            description: "在对话中显示模型返回的推理过程",
-            accessibilityLabel: "显示思考内容",
+            title: "显示思考",
+            description: "展示 AI 思考过程",
+            accessibilityLabel: "显示思考",
           },
           serviceUrls: {
-            title: "服务 URL",
+            title: "Service URLs",
             description: "运行脚本打开 URL 时使用的位置",
             options: {
               ask: "询问",
@@ -1400,7 +1410,7 @@ export const resources = {
             },
           },
           terminalScrollback: {
-            title: "终端回滚",
+            title: "终端回滚行数",
             description: "内置终端缓冲区保留的行数",
             accessibilityLabel: "终端回滚行数",
           },
@@ -1820,10 +1830,13 @@ export const resources = {
         hostProjectLoadError: "Failed to load projects from host {{serverName}}: {{message}}",
         directoryPicker: {
           title: "Working directory",
+          select: "Choose working directory",
           searchProjects: "Search projects",
           searchOrInputDirectory: "Search or enter a working directory",
           customValuePrefix: "Use",
           customValueDescription: "Use this working directory",
+          empty: "No matching directories.",
+          required: "Choose a working directory",
         },
         presets: {
           label: "Agent preset",
@@ -1866,6 +1879,7 @@ export const resources = {
         noMatchingRefs: "No matching refs.",
         startRef: "Start ref",
         chooseStartRef: "Choose where to start",
+        intoBaseRef: "Into {{baseRefName}}",
         checkoutPrPrompt: "Check out PR #{{number}}?",
         checkoutPr: "Check out PR #{{number}}",
         dismissCheckoutHint: "Dismiss PR #{{number}} checkout hint",
@@ -1884,14 +1898,17 @@ export const resources = {
           panelTitle: "Environment panel",
           title: "Environment",
           outline: "Outline",
-          changes: "Changes",
+          changes: "View changes",
           showPanel: "Show environment",
           hidePanel: "Hide environment",
           showFloatingPanel: "Show environment panel",
           hideFloatingPanel: "Hide environment panel",
+          panelSettings: "Environment panel settings",
+          visibleModules: "Visible modules",
+          panelOpacity: "Panel opacity",
           changedLines: "Changed lines",
           recentChanges: "Recent changes",
-          changeSummary: "Change summary",
+          changeSummary: "Work is complete. Review the changes or continue to commit.",
           progress: "Progress",
           browserReady: "Ready",
           browserLoading: "Loading",
@@ -1912,6 +1929,7 @@ export const resources = {
           local: "Local",
           remote: "Remote",
           branch: "Branch",
+          currentBranch: "Current branch",
           commitOrPush: "Commit or push",
           gitActions: {
             commitMessagePlaceholder: "Commit message (leave blank to generate automatically)...",
@@ -2162,6 +2180,7 @@ export const resources = {
         noSessions: "No sessions yet",
         unknownWorkspace: "Unknown workspace",
         pinnedSessions: "Pinned",
+        projects: "Projects",
         loadMoreSessions: "Load more sessions",
         sessionActions: "Session actions",
         pinSession: "Pin",
@@ -2420,6 +2439,7 @@ export const resources = {
         copyMessage: "Copy message",
         copyTurn: "Copy turn",
         openFile: "Open file",
+        compactedContext: "Context compacted",
       },
       files: {
         open: "Open",
@@ -3122,9 +3142,9 @@ export const resources = {
       settings: {
         title: "Settings",
         loading: "Loading settings...",
-        back: "Back",
+        back: "Back to workspace",
         projects: "Projects",
-        addHost: "Add host",
+        addHost: "Add Host",
         local: "Local",
         sections: {
           general: "General",
@@ -3140,7 +3160,7 @@ export const resources = {
           about: "About",
         },
         general: {
-          title: "General",
+          title: "Appearance",
           theme: {
             title: "Theme",
             options: {
@@ -3161,8 +3181,8 @@ export const resources = {
             },
           },
           defaultSend: {
-            title: "Default send",
-            description: "What happens when you press Enter while the agent is running",
+            title: "Send behavior",
+            description: "What happens when you press Enter",
             options: {
               interrupt: "Interrupt",
               queue: "Queue",

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useUnistyles } from "react-native-unistyles";
+import { DESKTOP_WINDOW_CONTROLS_HEIGHT } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { updateDesktopWindowControls } from "@/desktop/electron/window";
 import { getDesktopWindowControlsBackground } from "@/desktop/electron/window-controls";
@@ -9,11 +10,12 @@ import { useStatusBarTheme } from "@/hooks/use-status-bar-theme";
 function DesktopWindowControlsSync({ enabled }: { enabled: boolean }) {
   const { theme } = useUnistyles();
   const windowChromeBackground = getDesktopWindowControlsBackground(theme.colors);
-  const foreground = theme.colors.foreground;
+  const foreground = theme.colors.foregroundMuted;
 
   useEffect(() => {
     if (!enabled || isNative) return;
     void updateDesktopWindowControls({
+      height: DESKTOP_WINDOW_CONTROLS_HEIGHT,
       backgroundColor: windowChromeBackground,
       foregroundColor: foreground,
     }).catch((error) => {

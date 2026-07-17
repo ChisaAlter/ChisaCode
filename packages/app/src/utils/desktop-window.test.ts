@@ -8,6 +8,22 @@ const rawPadding = {
 };
 
 describe("resolveWindowControlsPadding", () => {
+  it("integrates desktop content into the titlebar instead of reserving a top spacer", () => {
+    expect(
+      resolveWindowControlsPadding({
+        role: "sidebar",
+        rawPadding,
+        sidebarClosed: false,
+        explorerOpen: false,
+        focusModeEnabled: false,
+      }),
+    ).toEqual({
+      left: 80,
+      right: 0,
+      top: 0,
+    });
+  });
+
   it("pads the main header for window controls when the app sidebar is closed", () => {
     expect(
       resolveWindowControlsPadding({

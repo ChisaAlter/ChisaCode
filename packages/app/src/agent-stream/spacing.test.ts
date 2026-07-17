@@ -125,6 +125,25 @@ describe("getAssistantBlockSpacing", () => {
     ).toBe("compactTop");
   });
 
+  it("uses the reference ten-pixel rhythm between distinct workbench messages", () => {
+    const user: Extract<StreamItem, { kind: "user_message" }> = {
+      kind: "user_message",
+      id: "user-1",
+      text: "Hello",
+      timestamp: new Date("2026-05-01T00:00:00.000Z"),
+    };
+    const assistant = assistantBlock({ id: "assistant-1", blockGroupId: "group-1", blockIndex: 0 });
+
+    expect(getGapBetweenStreamItems(user, assistant)).toBe(10);
+  });
+
+  it("uses the six-pixel reference inset before grouped tool rows", () => {
+    const assistant = assistantBlock({ id: "assistant-1", blockGroupId: "group-1", blockIndex: 0 });
+    const tool = toolCallBlock("tool-1");
+
+    expect(getGapBetweenStreamItems(assistant, tool)).toBe(6);
+  });
+
   it("uses no visual gap between blocks in the same assistant response", () => {
     const firstBlock = assistantBlock({
       id: "group-1:block:0",

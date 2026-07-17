@@ -2,7 +2,11 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
-import { HEADER_INNER_HEIGHT, HEADER_INNER_HEIGHT_MOBILE } from "@/constants/layout";
+import {
+  HEADER_INNER_HEIGHT,
+  HEADER_INNER_HEIGHT_MOBILE,
+  SETTINGS_DESKTOP_BACK_HEIGHT,
+} from "@/constants/layout";
 
 interface SidebarHeaderRowProps {
   icon: LucideIcon;
@@ -13,6 +17,7 @@ interface SidebarHeaderRowProps {
   nativeID?: string;
   accessibilityLabel?: string;
   trailing?: ReactNode;
+  compact?: boolean;
 }
 
 /**
@@ -30,15 +35,17 @@ export function SidebarHeaderRow({
   nativeID,
   accessibilityLabel,
   trailing,
+  compact = false,
 }: SidebarHeaderRowProps) {
   const { theme } = useUnistyles();
 
   const buttonStyle = useCallback(
     ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.button,
+      compact && styles.compactButton,
       (Boolean(hovered) || isActive) && styles.buttonHovered,
     ],
-    [isActive],
+    [compact, isActive],
   );
 
   const renderChildren = useCallback(
@@ -49,7 +56,7 @@ export function SidebarHeaderRow({
         <>
           <View style={styles.titleGroup}>
             <Icon size={theme.iconSize.md} color={iconColor} />
-            <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
+            <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} compact={compact} />
           </View>
           {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
         </>
@@ -57,6 +64,7 @@ export function SidebarHeaderRow({
     },
     [
       Icon,
+      compact,
       isActive,
       label,
       theme.colors.foreground,
@@ -66,8 +74,13 @@ export function SidebarHeaderRow({
     ],
   );
 
+  const containerStyle = useMemo(
+    () => [styles.container, compact && styles.compactContainer],
+    [compact],
+  );
+
   return (
-    <View style={styles.container}>
+    <View style={containerStyle}>
       <Pressable
         onPress={onPress}
         testID={testID}
@@ -86,13 +99,15 @@ export function SidebarHeaderRow({
 function SidebarHeaderRowLabel({
   label,
   isHighlighted,
+  compact,
 }: {
   label: string;
   isHighlighted: boolean;
+  compact: boolean;
 }) {
   const labelStyle = useMemo(
-    () => [styles.label, isHighlighted && styles.labelHighlighted],
-    [isHighlighted],
+    () => [styles.label, compact && styles.compactLabel, isHighlighted && styles.labelHighlighted],
+    [compact, isHighlighted],
   );
   return <Text style={labelStyle}>{label}</Text>;
 }
@@ -139,5 +154,19 @@ const styles = StyleSheet.create((theme) => ({
   },
   labelHighlighted: {
     color: theme.colors.foreground,
+  },
+  compactContainer: {
+    height: SETTINGS_DESKTOP_BACK_HEIGHT,
+    paddingHorizontal: theme.spacing[3],
+  },
+  compactButton: {
+    flex: 1,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderRadius: 0,
+  },
+  compactLabel: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 }));

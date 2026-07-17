@@ -8,9 +8,11 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
   useIsCompactFormFactor,
+  WORKBENCH_HEADER_HORIZONTAL_PADDING,
 } from "@/constants/layout";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 
 interface ScreenHeaderProps {
   left?: ReactNode;
@@ -20,6 +22,9 @@ interface ScreenHeaderProps {
   borderless?: boolean;
   windowControlsPaddingRole?: "header" | "detailHeader";
   onRowLayout?: (event: LayoutChangeEvent) => void;
+  height?: number;
+  horizontalPadding?: number;
+  backgroundColor?: string;
 }
 
 /**
@@ -34,6 +39,9 @@ export function ScreenHeader({
   borderless,
   windowControlsPaddingRole = "header",
   onRowLayout,
+  height,
+  horizontalPadding,
+  backgroundColor,
 }: ScreenHeaderProps) {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
@@ -41,7 +49,8 @@ export function ScreenHeader({
   const padding = useWindowControlsPadding(windowControlsPaddingRole);
   // Only add extra padding on mobile for better touch targets; on desktop, only use safe area insets
   const topPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
-  const baseHorizontalPadding = theme.spacing[2];
+  const baseHorizontalPadding =
+    horizontalPadding ?? (isMobile ? theme.spacing[2] : WORKBENCH_HEADER_HORIZONTAL_PADDING);
 
   const innerStyle = useMemo(
     () => [styles.inner, { paddingTop: insets.top + topPadding }],
@@ -50,19 +59,24 @@ export function ScreenHeader({
   const rowStyle = useMemo(
     () => [
       styles.row,
+      height === undefined ? null : { height },
       {
         paddingLeft: baseHorizontalPadding + padding.left,
         paddingRight: baseHorizontalPadding + padding.right,
       },
       borderless && styles.borderless,
     ],
-    [baseHorizontalPadding, padding.left, padding.right, borderless],
+    [baseHorizontalPadding, borderless, height, padding.left, padding.right],
+  );
+  const headerStyle = useMemo(
+    () => [styles.header, backgroundColor ? { backgroundColor } : null],
+    [backgroundColor],
   );
   const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
   const rightCombinedStyle = useMemo(() => [styles.right, rightStyle], [rightStyle]);
 
   return (
-    <View style={styles.header}>
+    <View style={headerStyle}>
       <View style={innerStyle}>
         <View onLayout={onRowLayout} style={rowStyle}>
           <TitlebarDragRegion />
@@ -76,7 +90,7 @@ export function ScreenHeader({
 
 const styles = StyleSheet.create((theme) => ({
   header: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   inner: {},
   row: {

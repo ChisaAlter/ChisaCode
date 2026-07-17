@@ -1311,7 +1311,11 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   nameEditorIconButton: {
-    padding: theme.spacing[1],
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
   },
   nameEditorInput: {
     flex: 1,
@@ -1409,7 +1413,11 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   scriptKebab: {
-    padding: theme.spacing[1],
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
   },
   calloutWrap: {
     marginTop: theme.spacing[3],

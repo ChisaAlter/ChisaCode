@@ -14,6 +14,7 @@ import { ContextWindowMeter } from "@/components/context-window-meter";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isWeb } from "@/constants/platform";
+import { WORKBENCH_COMPOSER_CONTROL_HEIGHT } from "@/constants/layout";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -421,8 +422,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[1],
   },
   contextWindowMeterSlot: {
-    width: 28,
-    height: 28,
+    width: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
+    height: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
   },

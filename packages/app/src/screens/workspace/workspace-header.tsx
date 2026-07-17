@@ -26,15 +26,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
-import {
-  WorkspaceTabIcon,
-  WorkspaceTabPresentationResolver,
-} from "@/screens/workspace/workspace-tab-presentation";
+import { WorkspaceTabPresentationResolver } from "@/screens/workspace/workspace-tab-presentation";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { isAbsolutePath } from "@/utils/path";
+import { WORKBENCH_BODY_FONT_SIZE } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 
 const ThemedCopy = withUnistyles(Copy);
 const ThemedEllipsis = withUnistyles(Ellipsis);
@@ -394,7 +393,9 @@ function DesktopWorkspaceHeaderTitle({
     <WorkspaceTabPresentationResolver tab={activeTab} serverId={serverId} workspaceId={workspaceId}>
       {(presentation) => (
         <View style={styles.desktopHeaderTitleRow}>
-          <WorkspaceTabIcon presentation={presentation} active />
+          <View style={styles.desktopHeaderTabIcon}>
+            <Text style={styles.desktopHeaderTabGlyph}>✦</Text>
+          </View>
           <Text testID="workspace-header-title" style={styles.headerTitle} numberOfLines={1}>
             {presentation.titleState === "loading"
               ? t("workspace.screen.loading")
@@ -461,12 +462,12 @@ export function WorkspaceHeaderRightControls({
         const colorMapping = isExplorerOpen || hovered ? foregroundColorMapping : mutedColorMapping;
         return isGitCheckout ? (
           <ThemedSourceControlPanelIcon
-            size={20}
+            size={16}
             uniProps={colorMapping}
             {...sourceControlPanelStrokeWidth15}
           />
         ) : (
-          <ThemedPanelRight size={20} uniProps={colorMapping} />
+          <ThemedPanelRight size={16} uniProps={colorMapping} />
         );
       }}
     </HeaderToggleButton>
@@ -494,7 +495,7 @@ export function WorkspaceHeaderRightControls({
         {({ hovered }) => {
           const colorMapping =
             isEnvironmentPanelVisible || hovered ? foregroundColorMapping : mutedColorMapping;
-          return <ThemedListTree size={20} uniProps={colorMapping} />;
+          return <ThemedListTree size={16} uniProps={colorMapping} />;
         }}
       </HeaderToggleButton>
     </View>
@@ -503,10 +504,17 @@ export function WorkspaceHeaderRightControls({
 
 const styles = StyleSheet.create((theme) => ({
   headerTitle: {
-    fontSize: theme.fontSize.base,
+    fontSize: {
+      xs: theme.fontSize.base,
+      md: WORKBENCH_BODY_FONT_SIZE,
+    },
+    lineHeight: {
+      xs: theme.fontSize.base,
+      md: WORKBENCH_BODY_FONT_SIZE,
+    },
     fontWeight: {
       xs: "400",
-      md: "300",
+      md: "600",
     },
     color: theme.colors.foreground,
     flexShrink: 1,
@@ -553,6 +561,25 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     maxWidth: 360,
   },
+  desktopHeaderTabIcon: {
+    width: 20,
+    height: 20,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    backgroundColor: theme.colors.accent,
+    ...(isWeb
+      ? ({
+          backgroundImage: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.accentNeon})`,
+        } as object)
+      : {}),
+  },
+  desktopHeaderTabGlyph: {
+    color: theme.colors.palette.white,
+    fontSize: 12,
+    lineHeight: 12,
+  },
   headerProjectTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: {
@@ -574,22 +601,24 @@ const styles = StyleSheet.create((theme) => ({
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: {
-      xs: theme.spacing[1],
-      md: theme.spacing[2],
-    },
+    gap: theme.spacing[1],
   },
   headerActionButton: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     padding: 0,
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface0,
+    borderRadius: 6,
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
-    ...theme.shadow.sm,
+    ...(isWeb
+      ? { boxShadow: "none" as const }
+      : {
+          shadowOpacity: 0,
+          elevation: 0,
+        }),
   },
   compactHeaderActionButton: {
     width: theme.spacing[8],
@@ -600,6 +629,10 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   compactHeaderMenuCluster: {
+    marginLeft: {
+      xs: 0,
+      md: "auto",
+    },
     flexDirection: "row",
     alignItems: "center",
     gap: {

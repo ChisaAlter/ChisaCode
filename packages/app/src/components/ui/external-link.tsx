@@ -63,6 +63,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+    minHeight: 28,
   },
   label: {
     color: theme.colors.foregroundMuted,

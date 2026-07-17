@@ -1,5 +1,6 @@
 interface DesktopWindowControlsColors {
   readonly foreground?: string;
+  readonly surface0: string;
   readonly surfaceSidebar: string;
   readonly surfaceWorkspace: string;
 }
@@ -33,6 +34,11 @@ export function getDesktopWindowControlsBackground(colors: DesktopWindowControls
   const sidebarColor = colors.surfaceSidebar.trim();
   if (isOpaqueHexColor(sidebarColor)) {
     return sidebarColor;
+  }
+
+  const baseColor = colors.surface0.trim();
+  if (isOpaqueHexColor(baseColor)) {
+    return baseColor;
   }
 
   return shouldUseDarkFallback(colors.foreground)

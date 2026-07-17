@@ -14,6 +14,8 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
   Archive,
+  ChevronDown,
+  ChevronRight,
   Copy,
   Folder,
   MoreHorizontal,
@@ -26,7 +28,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import {
+  useIsCompactFormFactor,
+  WORKBENCH_BODY_FONT_SIZE,
+  WORKBENCH_BODY_LINE_HEIGHT,
+  WORKBENCH_META_FONT_SIZE,
+  WORKBENCH_META_LINE_HEIGHT,
+  WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT,
+} from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
+import { resolveSidebarSessionGroupPresentation } from "@/components/sidebar-session-presentation";
 import { Button } from "@/components/ui/button";
 import { AgentStatusIndicator } from "@/components/ui/agent-status-indicator";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -355,6 +366,7 @@ function SidebarSessionRow({
   const isSelected = selectedAgentId === `${agent.serverId}:${agent.id}`;
   const isPinned = isSidebarAgentPinned(agent);
   const [isHovered, setIsHovered] = useState(false);
+
   const sessionTitle = getSidebarSessionTitle(agent, t("session.newSession"));
   const rowBaseStyle = isCompact ? styles.row : styles.desktopRow;
   const rowHoveredStyle = isCompact ? styles.rowHovered : styles.desktopRowHovered;
@@ -366,18 +378,11 @@ function SidebarSessionRow({
   const rowTitleSelectedStyle = isCompact
     ? styles.rowTitleSelected
     : styles.desktopRowTitleSelected;
-  const rowQuickActionsStyle = isCompact ? styles.rowQuickActions : styles.desktopRowQuickActions;
-  const rowQuickButtonStyle = isCompact ? styles.rowQuickButton : styles.desktopRowQuickButton;
-  const rowQuickButtonActiveStyle = isCompact
-    ? styles.rowQuickButtonActive
-    : styles.desktopRowQuickButtonActive;
-  const rowQuickButtonPressedStyle = isCompact
-    ? styles.rowQuickButtonPressed
-    : styles.desktopRowQuickButtonPressed;
+
   const selectedIndicatorStyle = isCompact
     ? styles.rowSelectedIndicator
     : styles.desktopRowSelectedIndicator;
-  const showQuickActions = isCompact || isHovered || isPinning || isArchiving;
+
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       rowBaseStyle,
@@ -393,8 +398,13 @@ function SidebarSessionRow({
   );
   const rowAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const rowIconColor = isSelected ? theme.colors.foreground : theme.colors.foregroundMuted;
-  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
-  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
+  const showDesktopMenu = isHovered || isPinning || isArchiving || isDeleting;
+  const handleHoverIn = useCallback(() => setIsHovered(true), []);
+  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const desktopMenuSlotStyle = useMemo(
+    () => [styles.desktopRowMenuSlot, !showDesktopMenu && styles.desktopRowMenuHidden],
+    [showDesktopMenu],
+  );
 
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -452,38 +462,14 @@ function SidebarSessionRow({
     () => <Trash2 size={16} color={theme.colors.foregroundMuted} />,
     [theme.colors.foregroundMuted],
   );
-  const handleQuickPin = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      handleTogglePin();
-    },
-    [handleTogglePin],
-  );
-  const handleQuickArchive = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      handleArchive();
-    },
-    [handleArchive],
-  );
+
   const menuButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.rowMenuButton,
+      !isCompact && styles.desktopRowMenuButton,
       (Boolean(hovered) || pressed) && styles.rowMenuButtonActive,
     ],
-    [],
-  );
-  const quickButtonStyle = useCallback(
-    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      rowQuickButtonStyle,
-      (Boolean(hovered) || pressed) && rowQuickButtonActiveStyle,
-      pressed && rowQuickButtonPressedStyle,
-    ],
-    [rowQuickButtonActiveStyle, rowQuickButtonPressedStyle, rowQuickButtonStyle],
-  );
-  const quickActionsStyle = useMemo(
-    () => [rowQuickActionsStyle, !showQuickActions && styles.rowQuickHidden],
-    [rowQuickActionsStyle, showQuickActions],
+    [isCompact],
   );
 
   const rowMainContent = (
@@ -507,110 +493,70 @@ function SidebarSessionRow({
     </>
   );
 
-  let rowTrailingContent: React.ReactNode;
-  if (isCompact) {
-    rowTrailingContent = (
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          testID={`sidebar-session-menu-${agent.serverId}-${agent.id}`}
-          accessibilityLabel={t("sidebar.sessionActions")}
-          style={menuButtonStyle}
-        >
-          <MoreHorizontal size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" width={220}>
-          <DropdownMenuItem
-            testID={`sidebar-session-toggle-pin-${agent.serverId}-${agent.id}`}
-            onSelect={handleTogglePin}
-            status={isPinning ? "pending" : "idle"}
-            leading={pinLeading}
-          >
-            {isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            testID={`sidebar-session-archive-${agent.serverId}-${agent.id}`}
-            onSelect={handleArchive}
-            disabled={Boolean(agent.archivedAt)}
-            status={isArchiving ? "pending" : "idle"}
-            pendingLabel={t("sidebar.archiving")}
-            destructive={!agent.archivedAt}
-            leading={archiveLeading}
-          >
-            {agent.archivedAt ? t("session.archived") : t("sidebar.archive")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            testID={`sidebar-session-copy-path-${agent.serverId}-${agent.id}`}
-            onSelect={handleCopyPath}
-            disabled={!agent.cwd}
-            leading={copyLeading}
-          >
-            {t("sidebar.copyPath")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            testID={`sidebar-session-copy-agent-id-${agent.serverId}-${agent.id}`}
-            onSelect={handleCopyAgentId}
-            leading={copyLeading}
-          >
-            {t("workspace.tabMenu.copyAgentId")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            testID={`sidebar-session-rename-${agent.serverId}-${agent.id}`}
-            onSelect={handleRename}
-            leading={renameLeading}
-          >
-            {t("workspace.screen.rename")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            testID={`sidebar-session-delete-${agent.serverId}-${agent.id}`}
-            onSelect={handleDelete}
-            status={isDeleting ? "pending" : "idle"}
-            pendingLabel={t("sidebar.deletingSession")}
-            destructive
-            leading={deleteLeading}
-          >
-            {t("sidebar.deleteSession")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  } else {
-    rowTrailingContent = (
-      <View
-        pointerEvents={showQuickActions ? "auto" : "none"}
-        style={quickActionsStyle}
-        testID={`sidebar-session-quick-actions-${agent.serverId}-${agent.id}`}
+  const rowTrailingContent = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        testID={`sidebar-session-menu-${agent.serverId}-${agent.id}`}
+        accessibilityLabel={t("sidebar.sessionActions")}
+        style={menuButtonStyle}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            isPinned
-              ? t("sidebar.unpinSessionLabel", { title: sessionTitle })
-              : t("sidebar.pinSessionLabel", { title: sessionTitle })
-          }
-          testID={`sidebar-session-quick-pin-${agent.serverId}-${agent.id}`}
-          style={quickButtonStyle}
-          onPress={handleQuickPin}
-          disabled={isPinning}
-          pointerEvents={isPinning ? "none" : "auto"}
+        <MoreHorizontal size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width={220}>
+        <DropdownMenuItem
+          testID={`sidebar-session-toggle-pin-${agent.serverId}-${agent.id}`}
+          onSelect={handleTogglePin}
+          status={isPinning ? "pending" : "idle"}
+          leading={pinLeading}
         >
-          <Pin
-            size={theme.iconSize.sm}
-            color={isPinned ? theme.colors.accent : theme.colors.foregroundMuted}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("sidebar.archiveSessionLabel", { title: sessionTitle })}
-          testID={`sidebar-session-quick-archive-${agent.serverId}-${agent.id}`}
-          style={quickButtonStyle}
-          onPress={handleQuickArchive}
-          disabled={isArchiving || Boolean(agent.archivedAt)}
+          {isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID={`sidebar-session-archive-${agent.serverId}-${agent.id}`}
+          onSelect={handleArchive}
+          disabled={Boolean(agent.archivedAt)}
+          status={isArchiving ? "pending" : "idle"}
+          pendingLabel={t("sidebar.archiving")}
+          destructive={!agent.archivedAt}
+          leading={archiveLeading}
         >
-          <Archive size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        </Pressable>
-      </View>
-    );
-  }
+          {agent.archivedAt ? t("session.archived") : t("sidebar.archive")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID={`sidebar-session-copy-path-${agent.serverId}-${agent.id}`}
+          onSelect={handleCopyPath}
+          disabled={!agent.cwd}
+          leading={copyLeading}
+        >
+          {t("sidebar.copyPath")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID={`sidebar-session-copy-agent-id-${agent.serverId}-${agent.id}`}
+          onSelect={handleCopyAgentId}
+          leading={copyLeading}
+        >
+          {t("workspace.tabMenu.copyAgentId")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID={`sidebar-session-rename-${agent.serverId}-${agent.id}`}
+          onSelect={handleRename}
+          leading={renameLeading}
+        >
+          {t("workspace.screen.rename")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID={`sidebar-session-delete-${agent.serverId}-${agent.id}`}
+          onSelect={handleDelete}
+          status={isDeleting ? "pending" : "idle"}
+          pendingLabel={t("sidebar.deletingSession")}
+          destructive
+          leading={deleteLeading}
+        >
+          {t("sidebar.deleteSession")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   if (isCompact) {
     return (
@@ -630,11 +576,11 @@ function SidebarSessionRow({
 
   return (
     <ContextMenu>
-      <View
+      <Pressable
         key={agentActionKey}
         style={styles.desktopRowContainer}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
+        onHoverIn={handleHoverIn}
+        onHoverOut={handleHoverOut}
         testID={`sidebar-session-container-${agent.serverId}-${agent.id}`}
       >
         <ContextMenuTrigger
@@ -648,8 +594,10 @@ function SidebarSessionRow({
         >
           {rowMainContent}
         </ContextMenuTrigger>
-        {rowTrailingContent}
-      </View>
+        <View pointerEvents={showDesktopMenu ? "auto" : "none"} style={desktopMenuSlotStyle}>
+          {rowTrailingContent}
+        </View>
+      </Pressable>
       <ContextMenuContent
         align="start"
         width={220}
@@ -696,13 +644,22 @@ function SidebarSessionRow({
 function SidebarSessionGroupHeader({
   group,
   serverId,
+  isCompact,
+  collapsed,
+  onToggleCollapsed,
 }: {
   group: SidebarSessionRenderGroup;
   serverId: string | null;
+  isCompact: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const presentation = resolveSidebarSessionGroupPresentation(isCompact);
   const canOpenDraft = Boolean(serverId && group.cwd);
+  const canCollapse = Boolean(group.cwd);
+  const isWorkspaceGroup = Boolean(group.cwd);
   const handleNewDraft = useCallback(
     (event: GestureResponderEvent) => {
       event.stopPropagation();
@@ -724,16 +681,53 @@ function SidebarSessionGroupHeader({
     ],
     [],
   );
+  const headerStyle =
+    presentation.variant === "workbench" ? styles.desktopGroupHeader : styles.groupHeader;
+  const headerLabelStyle =
+    presentation.variant === "workbench" ? styles.desktopGroupHeaderLabel : styles.groupHeaderLabel;
+  const titleStyle =
+    presentation.variant === "workbench" ? styles.desktopGroupTitle : styles.groupTitle;
+  const accessibilityState = useMemo(
+    () => (canCollapse ? { expanded: !collapsed } : undefined),
+    [canCollapse, collapsed],
+  );
+  const resolvedTitleStyle = useMemo(
+    () => [titleStyle, !isCompact && isWorkspaceGroup && styles.desktopWorkspaceGroupTitle],
+    [isCompact, isWorkspaceGroup, titleStyle],
+  );
+  let collapseIndicator: React.ReactNode = null;
+  if (canCollapse && presentation.showCollapseIndicator) {
+    collapseIndicator = collapsed ? (
+      <ChevronRight size={theme.iconSize.xs} color={theme.colors.foregroundSubtleText} />
+    ) : (
+      <ChevronDown size={theme.iconSize.xs} color={theme.colors.foregroundSubtleText} />
+    );
+  }
 
   return (
-    <View style={styles.groupHeader}>
-      <View style={styles.groupHeaderLabel}>
-        <Folder size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        <Text style={styles.groupTitle} numberOfLines={1}>
+    <View style={headerStyle}>
+      <Pressable
+        accessibilityRole={canCollapse ? "button" : undefined}
+        accessibilityState={accessibilityState}
+        disabled={!canCollapse}
+        onPress={onToggleCollapsed}
+        style={headerLabelStyle}
+        testID={canCollapse ? `sidebar-session-group-toggle-${group.key}` : undefined}
+      >
+        {collapseIndicator}
+        {presentation.showWorkspaceIcon && group.cwd ? (
+          <Folder
+            size={theme.iconSize.md}
+            color={
+              isWorkspaceGroup ? theme.colors.foregroundMuted : theme.colors.foregroundSubtleText
+            }
+          />
+        ) : null}
+        <Text style={resolvedTitleStyle} numberOfLines={1}>
           {group.label}
         </Text>
-      </View>
-      {canOpenDraft ? (
+      </Pressable>
+      {canOpenDraft && presentation.showAddButton ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("sidebar.newSessionInWorkspace", { workspace: group.label })}
@@ -749,6 +743,87 @@ function SidebarSessionGroupHeader({
   );
 }
 
+interface SidebarSessionGroupViewProps {
+  group: SidebarSessionRenderGroup;
+  groupStyle: StyleProp<ViewStyle>;
+  serverId: string;
+  isCompact: boolean;
+  showGroupTitles: boolean;
+  collapsed: boolean;
+  selectedAgentId?: string;
+  onAgentPress?: () => void;
+  onTogglePin: (agent: AggregatedAgent) => void;
+  onRename: (agent: AggregatedAgent) => void;
+  onArchive: (agent: AggregatedAgent) => void;
+  onDelete: (agent: AggregatedAgent) => void;
+  pinningAgentKey: string | null;
+  deletingAgentKey: string | null;
+  isArchivingAgent: (input: { serverId: string; agentId: string }) => boolean;
+  onToggleCollapsed: (groupKey: string) => void;
+}
+
+function SidebarSessionGroupView({
+  group,
+  groupStyle,
+  serverId,
+  isCompact,
+  showGroupTitles,
+  collapsed,
+  selectedAgentId,
+  onAgentPress,
+  onTogglePin,
+  onRename,
+  onArchive,
+  onDelete,
+  pinningAgentKey,
+  deletingAgentKey,
+  isArchivingAgent,
+  onToggleCollapsed,
+}: SidebarSessionGroupViewProps) {
+  const handleToggleCollapsed = useCallback(
+    () => onToggleCollapsed(group.key),
+    [group.key, onToggleCollapsed],
+  );
+  const groupRowsStyle = useMemo(
+    () => [styles.groupRows, !isCompact && group.cwd && styles.desktopWorkspaceGroupRows],
+    [group.cwd, isCompact],
+  );
+
+  return (
+    <View style={groupStyle} testID={`sidebar-session-group-${group.key}`}>
+      {showGroupTitles ? (
+        <SidebarSessionGroupHeader
+          group={group}
+          serverId={serverId}
+          isCompact={isCompact}
+          collapsed={collapsed}
+          onToggleCollapsed={handleToggleCollapsed}
+        />
+      ) : null}
+      {!collapsed ? (
+        <View style={groupRowsStyle}>
+          {group.agents.map((agent) => (
+            <SidebarSessionRow
+              key={`${agent.serverId}:${agent.id}`}
+              agent={agent}
+              selectedAgentId={selectedAgentId}
+              onAgentPress={onAgentPress}
+              onTogglePin={onTogglePin}
+              onRename={onRename}
+              onArchive={onArchive}
+              onDelete={onDelete}
+              isPinning={pinningAgentKey === getAgentActionKey(agent)}
+              isArchiving={isArchivingAgent({ serverId: agent.serverId, agentId: agent.id })}
+              isDeleting={deletingAgentKey === getAgentActionKey(agent)}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// eslint-disable-next-line complexity -- Session orchestration spans query caches, async actions, and responsive states.
 export function SidebarSessionList({
   agents,
   serverId,
@@ -764,6 +839,7 @@ export function SidebarSessionList({
 }: SidebarSessionListProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const queryClient = useQueryClient();
   const toast = useToast();
   const { archiveAgent, isArchivingAgent } = useArchiveAgent();
@@ -771,6 +847,9 @@ export function SidebarSessionList({
   const [renamingAgent, setRenamingAgent] = useState<AggregatedAgent | null>(null);
   const [pinningAgentKey, setPinningAgentKey] = useState<string | null>(null);
   const [deletingAgentKey, setDeletingAgentKey] = useState<string | null>(null);
+  const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const visibleAgents = useMemo(
     () => agents.filter((agent) => !agent.archivedAt && !suppressedArchiveAgentIds.has(agent.id)),
     [agents, suppressedArchiveAgentIds],
@@ -914,6 +993,17 @@ export function SidebarSessionList({
   const handleRenameClose = useCallback(() => {
     setRenamingAgent(null);
   }, []);
+  const toggleCollapsedGroup = useCallback((groupKey: string) => {
+    setCollapsedGroupKeys((current) => {
+      const next = new Set(current);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }, []);
 
   const handleRenameSubmit = useCallback(
     async (nextTitle: string) => {
@@ -969,6 +1059,7 @@ export function SidebarSessionList({
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.emptyScrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}
       >
         <View style={styles.emptyContainer}>
@@ -984,42 +1075,59 @@ export function SidebarSessionList({
     );
   }
 
-  const renderSessionGroup = (
-    group: SidebarSessionRenderGroup,
-    groupStyle: StyleProp<ViewStyle> = styles.group,
-  ) => (
-    <View key={group.key} style={groupStyle} testID={`sidebar-session-group-${group.key}`}>
-      {showGroupTitles ? <SidebarSessionGroupHeader group={group} serverId={serverId} /> : null}
-      <View style={styles.groupRows}>
-        {group.agents.map((agent) => (
-          <SidebarSessionRow
-            key={`${agent.serverId}:${agent.id}`}
-            agent={agent}
-            selectedAgentId={resolvedSelectedAgentId}
-            onAgentPress={onAgentPress}
-            onTogglePin={handleTogglePin}
-            onRename={handleRename}
-            onArchive={handleArchive}
-            onDelete={handleDelete}
-            isPinning={pinningAgentKey === getAgentActionKey(agent)}
-            isArchiving={isArchivingAgent({ serverId: agent.serverId, agentId: agent.id })}
-            isDeleting={deletingAgentKey === getAgentActionKey(agent)}
-          />
-        ))}
-      </View>
-    </View>
-  );
+  const defaultGroupStyle = isCompact ? styles.group : styles.desktopGroup;
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={isCompact ? styles.scrollContent : styles.desktopScrollContent}
+      showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
     >
-      {pinnedGroup
-        ? renderSessionGroup(pinnedGroup, showGroupTitles ? styles.pinnedGroup : styles.group)
-        : null}
-      {workspaceGroups.map((group) => renderSessionGroup(group))}
+      {pinnedGroup ? (
+        <SidebarSessionGroupView
+          group={pinnedGroup}
+          groupStyle={isCompact && showGroupTitles ? styles.pinnedGroup : defaultGroupStyle}
+          serverId={serverId}
+          isCompact={isCompact}
+          showGroupTitles={showGroupTitles}
+          collapsed={false}
+          selectedAgentId={resolvedSelectedAgentId}
+          onAgentPress={onAgentPress}
+          onTogglePin={handleTogglePin}
+          onRename={handleRename}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          pinningAgentKey={pinningAgentKey}
+          deletingAgentKey={deletingAgentKey}
+          isArchivingAgent={isArchivingAgent}
+          onToggleCollapsed={toggleCollapsedGroup}
+        />
+      ) : null}
+      {workspaceGroups.length > 0 && !isCompact && showGroupTitles ? (
+        <Text style={styles.desktopSectionLabel}>{t("sidebar.projects")}</Text>
+      ) : null}
+      {workspaceGroups.map((group) => (
+        <SidebarSessionGroupView
+          key={group.key}
+          group={group}
+          groupStyle={defaultGroupStyle}
+          serverId={serverId}
+          isCompact={isCompact}
+          showGroupTitles={showGroupTitles}
+          collapsed={Boolean(group.cwd && collapsedGroupKeys.has(group.key))}
+          selectedAgentId={resolvedSelectedAgentId}
+          onAgentPress={onAgentPress}
+          onTogglePin={handleTogglePin}
+          onRename={handleRename}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          pinningAgentKey={pinningAgentKey}
+          deletingAgentKey={deletingAgentKey}
+          isArchivingAgent={isArchivingAgent}
+          onToggleCollapsed={toggleCollapsedGroup}
+        />
+      ))}
       {hasMore ? (
         <Button
           variant="ghost"
@@ -1048,8 +1156,17 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[3],
     paddingLeft: theme.spacing[2],
   },
+  desktopScrollContent: {
+    paddingTop: 10,
+    paddingRight: 6,
+    paddingBottom: 0,
+    paddingLeft: 6,
+  },
   group: {
     marginBottom: theme.spacing[2],
+  },
+  desktopGroup: {
+    marginBottom: 0,
   },
   pinnedGroup: {
     marginHorizontal: theme.spacing[2],
@@ -1075,11 +1192,51 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  desktopGroupHeader: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 4,
+    marginBottom: 2,
+    marginLeft: 4,
+    paddingHorizontal: 6,
+  },
+  desktopGroupHeaderLabel: {
+    minWidth: 0,
+    minHeight: 28,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   groupTitle: {
     minWidth: 0,
     flex: 1,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+  },
+  desktopGroupTitle: {
+    minWidth: 0,
+    flex: 1,
+    color: theme.colors.foregroundSubtleText,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.normal,
+  },
+  desktopWorkspaceGroupTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
+  },
+  desktopSectionLabel: {
+    marginTop: 14,
+    marginRight: 10,
+    marginBottom: 6,
+    marginLeft: 10,
+    color: theme.colors.foregroundSubtleText,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
   groupAddButton: {
@@ -1096,6 +1253,9 @@ const styles = StyleSheet.create((theme) => ({
   groupRows: {
     gap: 0,
     paddingLeft: 0,
+  },
+  desktopWorkspaceGroupRows: {
+    paddingLeft: 20,
   },
   row: {
     minHeight: 48,
@@ -1132,36 +1292,34 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopRow: {
-    minHeight: 30,
+    minHeight: 32,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    paddingLeft: theme.spacing[2],
-    paddingRight: 32,
+    paddingVertical: 0,
+    paddingLeft: 8,
+    paddingRight: 34,
     borderRadius: theme.borderRadius.md,
   },
   desktopRowContainer: {
     position: "relative",
   },
   desktopRowHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   desktopRowPressed: {
     opacity: 0.9,
   },
   desktopRowSelected: {
-    backgroundColor: theme.colors.surface2,
-    ...theme.shadow.md,
+    backgroundColor: theme.colors.surfaceSidebarHover,
+    ...(isWeb
+      ? ({
+          backgroundColor: `color-mix(in srgb, ${theme.colors.accent} 10%, ${theme.colors.surfaceSidebarHover})`,
+        } as object)
+      : {}),
   },
   desktopRowSelectedIndicator: {
-    position: "absolute",
-    left: theme.spacing[1],
-    top: 7,
-    bottom: 7,
-    width: 3,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.accent,
+    display: "none",
   },
   desktopRowLeading: {
     width: 18,
@@ -1184,8 +1342,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: 6,
   },
   rowMenuButton: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
@@ -1193,6 +1351,17 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowMenuButtonActive: {
     backgroundColor: theme.colors.surface1,
+  },
+  desktopRowMenuButton: {
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  desktopRowMenuSlot: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+  },
+  desktopRowMenuHidden: {
+    opacity: 0,
   },
   rowQuickActions: {
     width: 56,
@@ -1256,13 +1425,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowTitleSelected: {
     color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: theme.fontWeight.normal,
   },
   desktopRowTitle: {
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
   desktopRowTitleSelected: {

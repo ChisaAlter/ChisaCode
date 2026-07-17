@@ -875,11 +875,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   inputAreaWrapper: {
     width: "100%",
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   composerInputWrapper: {
-    borderWidth: 0,
-    ...theme.shadow.sm,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
   },
   importPillRow: {
     width: "100%",

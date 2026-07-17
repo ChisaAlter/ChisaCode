@@ -23,13 +23,14 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { WORKBENCH_FRAME_HAIRLINE_OFFSET, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check, ChevronDown, X } from "lucide-react-native";
 import { usePanelStore } from "@/stores/panel-store";
 import {
   AssistantMessage,
+  AssistantTurnHeader,
   SpeakMessage,
   UserMessage,
   ActivityLog,
@@ -82,6 +83,7 @@ import { navigateToPreparedWorkspaceTab } from "@/utils/workspace-navigation";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { isWeb } from "@/constants/platform";
 import { useAppSettings } from "@/hooks/use-settings";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import type { Theme } from "@/styles/theme";
 
 function renderLiveAuxiliaryNode(input: {
@@ -449,23 +451,28 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const renderAssistantMessageItem = useCallback(
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "assistant_message" }>) => {
         return (
-          <AssistantFileLinkResolverProvider
-            client={client}
-            serverId={resolvedServerId}
-            workspaceRoot={workspaceRoot}
-            onOpenWorkspaceFile={handleInlinePathPress}
-            toast={toast}
-          >
-            <AssistantMessage
-              message={item.text}
-              timestamp={item.timestamp.getTime()}
-              workspaceRoot={workspaceRoot}
-              serverId={resolvedServerId}
-              agentId={agentId}
+          <View style={stylesheet.workbenchAssistantTurn}>
+            {layoutItem.showAssistantTurnHeader ? (
+              <AssistantTurnHeader durationMs={layoutItem.turnTiming?.durationMs} />
+            ) : null}
+            <AssistantFileLinkResolverProvider
               client={client}
-              spacing={layoutItem.assistantSpacing}
-            />
-          </AssistantFileLinkResolverProvider>
+              serverId={resolvedServerId}
+              workspaceRoot={workspaceRoot}
+              onOpenWorkspaceFile={handleInlinePathPress}
+              toast={toast}
+            >
+              <AssistantMessage
+                message={item.text}
+                timestamp={item.timestamp.getTime()}
+                workspaceRoot={workspaceRoot}
+                serverId={resolvedServerId}
+                agentId={agentId}
+                client={client}
+                spacing={layoutItem.assistantSpacing}
+              />
+            </AssistantFileLinkResolverProvider>
+          </View>
         );
       },
       [client, handleInlinePathPress, resolvedServerId, toast, workspaceRoot, agentId],
@@ -489,7 +496,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     );
 
     const renderToolCallItem = useCallback(
-      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "tool_call" }>) => {
+      (
+        layoutItem: StreamLayoutItem,
+        item: Extract<StreamItem, { kind: "tool_call" }>,
+        badgeStyle?: StyleProp<ViewStyle>,
+        badgePresentation?: "default" | "workbench",
+      ) => {
         const { payload } = item;
 
         if (payload.source === "agent") {
@@ -517,6 +529,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               cwd={agent.cwd}
               metadata={data.metadata}
               isLastInSequence={layoutItem.isLastInToolSequence}
+              badgeStyle={badgeStyle}
+              badgePresentation={badgePresentation}
               onOpenFilePath={handleToolCallOpenFile}
             />
           );
@@ -532,11 +546,60 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             result={data.result}
             status={data.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
+            badgeStyle={badgeStyle}
+            badgePresentation={badgePresentation}
             onOpenFilePath={handleToolCallOpenFile}
           />
         );
       },
       [agent.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+    );
+
+    const renderToolSequenceGroup = useCallback(
+      (layoutItem: StreamLayoutItem) => {
+        const group = layoutItem.toolSequenceGroup;
+        if (!group) {
+          return null;
+        }
+        const toolCalls = group.filter(
+          (
+            candidate,
+          ): candidate is StreamLayoutItem & {
+            item: Extract<StreamItem, { kind: "tool_call" }>;
+          } => candidate.item.kind === "tool_call",
+        );
+        const supportingItems = group.filter((candidate) => candidate.item.kind !== "tool_call");
+
+        return (
+          <View style={stylesheet.workbenchToolSequenceGroup}>
+            {toolCalls.length > 0 ? (
+              <View style={stylesheet.workbenchToolBadgeRow}>
+                {toolCalls.map((candidate) => (
+                  <View key={candidate.item.id} style={stylesheet.workbenchToolBadgeSlot}>
+                    {renderToolCallItem(
+                      candidate,
+                      candidate.item,
+                      stylesheet.workbenchToolBadge,
+                      "workbench",
+                    )}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {supportingItems.map((candidate) => {
+              const item = candidate.item;
+              if (item.kind === "thought") {
+                return <View key={item.id}>{renderThoughtItem(candidate, item)}</View>;
+              }
+              if (item.kind === "todo_list") {
+                return <TodoListCard key={item.id} items={item.items} presentation="workbench" />;
+              }
+              return null;
+            })}
+          </View>
+        );
+      },
+      [renderThoughtItem, renderToolCallItem],
     );
 
     const renderStreamItemContent = useCallback(
@@ -600,6 +663,16 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const renderStreamItem = useCallback(
       (layoutItem: StreamLayoutItem) => {
+        if (layoutItem.isToolSequenceGroupContinuation) {
+          return null;
+        }
+        if (layoutItem.toolSequenceGroup) {
+          return (
+            <StreamItemWrapper gapBelow={layoutItem.toolSequenceGroupGapBelow}>
+              {renderToolSequenceGroup(layoutItem)}
+            </StreamItemWrapper>
+          );
+        }
         const content = renderStreamItemContent(layoutItem);
         return renderStreamItemWithTurnFooter({
           content,
@@ -607,7 +680,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           strategy: streamRenderStrategy,
         });
       },
-      [renderStreamItemContent, streamRenderStrategy],
+      [renderStreamItemContent, renderToolSequenceGroup, streamRenderStrategy],
     );
 
     const pendingPermissionItems = useMemo(
@@ -1083,7 +1156,7 @@ function PermissionRequestCard({
 const stylesheet = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   contentWrapper: {
     width: "100%",
@@ -1099,16 +1172,49 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
   },
   forwardListContentContainer: {
-    paddingTop: theme.spacing[4],
-    paddingBottom: theme.spacing[4],
+    paddingTop: 14,
+    paddingBottom: 10,
+    ...(isWeb
+      ? {
+          marginTop: -WORKBENCH_FRAME_HAIRLINE_OFFSET,
+        }
+      : {}),
   },
   list: {
     flex: 1,
   },
+  workbenchAssistantTurn: {
+    width: "100%",
+    maxWidth: 580,
+  },
+  workbenchToolSequenceGroup: {
+    width: "100%",
+    maxWidth: 580,
+    gap: 8,
+  },
+  workbenchToolBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 5,
+  },
+  workbenchToolBadgeSlot: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: 220,
+  },
+  workbenchToolBadge: {
+    width: "auto",
+    maxWidth: 220,
+    alignSelf: "flex-start",
+  },
   streamItemWrapper: {
     width: "100%",
     alignSelf: "stretch",
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: {
+      xs: theme.spacing[2],
+      md: 0,
+    },
   },
   emptyState: {
     flex: 1,

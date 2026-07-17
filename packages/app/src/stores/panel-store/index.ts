@@ -11,11 +11,14 @@ import { type ExplorerCheckoutContext } from "../explorer-checkout-context";
 import {
   buildOpenFileExplorerPatch,
   buildToggleFileExplorerPatch,
+  clampEnvironmentPanelOpacity,
   clampExplorerFilesSplitRatio,
   clampExplorerWidth,
   clampSidebarWidth,
   DEFAULT_EXPLORER_FILES_SPLIT_RATIO,
   DEFAULT_EXPLORER_SIDEBAR_WIDTH,
+  DEFAULT_ENVIRONMENT_PANEL_OPACITY,
+  DEFAULT_ENVIRONMENT_PANEL_TABS,
   DEFAULT_SIDEBAR_WIDTH,
   MAX_EXPLORER_FILES_SPLIT_RATIO,
   MAX_EXPLORER_SIDEBAR_WIDTH,
@@ -28,6 +31,7 @@ import {
   selectIsFileExplorerOpen,
   selectPanelVisibility,
   type DesktopSidebarState,
+  type EnvironmentPanelTabPreference,
   type ExplorerPanelIntent,
   type MobilePanelView,
   type PanelLayoutInput,
@@ -39,6 +43,7 @@ export type { ExplorerTab } from "../explorer-tab-memory";
 export type { ExplorerCheckoutContext } from "../explorer-checkout-context";
 export type {
   DesktopSidebarState,
+  EnvironmentPanelTabPreference,
   ExplorerPanelIntent,
   MobilePanelView,
   PanelLayoutInput,
@@ -48,6 +53,8 @@ export type {
 export {
   DEFAULT_EXPLORER_FILES_SPLIT_RATIO,
   DEFAULT_EXPLORER_SIDEBAR_WIDTH,
+  DEFAULT_ENVIRONMENT_PANEL_OPACITY,
+  DEFAULT_ENVIRONMENT_PANEL_TABS,
   DEFAULT_SIDEBAR_WIDTH,
   MAX_EXPLORER_FILES_SPLIT_RATIO,
   MAX_EXPLORER_SIDEBAR_WIDTH,
@@ -76,6 +83,8 @@ export interface PanelState {
   explorerWidth: number;
   explorerSortOption: SortOption;
   explorerFilesSplitRatio: number;
+  environmentPanelOpacity: number;
+  environmentPanelVisibleTabs: EnvironmentPanelTabPreference[];
 
   // Actions
   toggleFocusMode: () => void;
@@ -102,6 +111,8 @@ export interface PanelState {
   setExplorerWidth: (width: number) => void;
   setExplorerSortOption: (option: SortOption) => void;
   setExplorerFilesSplitRatio: (ratio: number) => void;
+  setEnvironmentPanelOpacity: (opacity: number) => void;
+  toggleEnvironmentPanelTab: (tab: EnvironmentPanelTabPreference) => void;
 }
 
 const DEFAULT_DESKTOP_OPEN = isWeb;
@@ -128,6 +139,8 @@ export const usePanelStore = create<PanelState>()(
       explorerWidth: DEFAULT_EXPLORER_SIDEBAR_WIDTH,
       explorerSortOption: "name",
       explorerFilesSplitRatio: DEFAULT_EXPLORER_FILES_SPLIT_RATIO,
+      environmentPanelOpacity: DEFAULT_ENVIRONMENT_PANEL_OPACITY,
+      environmentPanelVisibleTabs: [...DEFAULT_ENVIRONMENT_PANEL_TABS],
 
       toggleFocusMode: () =>
         set((state) => ({
@@ -268,10 +281,27 @@ export const usePanelStore = create<PanelState>()(
             ? clampExplorerFilesSplitRatio(ratio)
             : DEFAULT_EXPLORER_FILES_SPLIT_RATIO,
         }),
+      setEnvironmentPanelOpacity: (opacity) =>
+        set({ environmentPanelOpacity: clampEnvironmentPanelOpacity(opacity) }),
+      toggleEnvironmentPanelTab: (tab) =>
+        set((state) => {
+          const isVisible = state.environmentPanelVisibleTabs.includes(tab);
+          if (isVisible && state.environmentPanelVisibleTabs.length === 1) {
+            return state;
+          }
+          return {
+            environmentPanelVisibleTabs: isVisible
+              ? state.environmentPanelVisibleTabs.filter((candidate) => candidate !== tab)
+              : DEFAULT_ENVIRONMENT_PANEL_TABS.filter(
+                  (candidate) =>
+                    candidate === tab || state.environmentPanelVisibleTabs.includes(candidate),
+                ),
+          };
+        }),
     }),
     {
       name: "panel-state",
-      version: 14,
+      version: 16,
       storage: createJSONStorage(() => AsyncStorage),
       migrate: (persistedState, version) =>
         migratePanelState(persistedState, version, { isWeb }) as unknown as PanelState,
@@ -286,6 +316,8 @@ export const usePanelStore = create<PanelState>()(
         explorerWidth: state.explorerWidth,
         explorerSortOption: state.explorerSortOption,
         explorerFilesSplitRatio: state.explorerFilesSplitRatio,
+        environmentPanelOpacity: state.environmentPanelOpacity,
+        environmentPanelVisibleTabs: state.environmentPanelVisibleTabs,
       }),
     },
   ),

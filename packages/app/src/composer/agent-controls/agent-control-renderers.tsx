@@ -22,7 +22,7 @@ import type {
   AgentControlOption,
   AgentControlSelector,
 } from "@/composer/agent-controls/agent-control-types";
-import { DesktopFeatureItem, SheetFeatureItem } from "@/composer/agent-controls/feature-controls";
+import { SheetFeatureItem } from "@/composer/agent-controls/feature-controls";
 import { formatCompactModelLabel, getAgentControlHint } from "@/composer/agent-controls/utils";
 import type {
   ProviderModelSelectionValue,
@@ -37,8 +37,6 @@ interface DesktopAgentControlsContentProps {
   selectedRuntimeProviderId?: string | null;
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
-  features?: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
   onToggleFavoriteModel?: (provider: string, modelId: string) => void;
   onDropdownClose?: () => void;
   onModelSelectorOpen?: () => void;
@@ -68,7 +66,6 @@ interface DesktopAgentControlsContentProps {
   handleDesktopModelSelect: (selection: ProviderModelSelectionValue) => void;
   handleProviderOpenChange: (open: boolean) => void;
   handleThinkingOpenChange: (open: boolean) => void;
-  handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   extras?: ReactNode;
   modelSelectorServerId: string | null;
 }
@@ -175,8 +172,6 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
     selectedRuntimeProviderId,
     thinkingOptions,
     selectedThinkingOptionId,
-    features,
-    onSetFeature,
     onToggleFavoriteModel,
     onDropdownClose,
     onModelSelectorOpen,
@@ -206,7 +201,6 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
     handleDesktopModelSelect,
     handleProviderOpenChange,
     handleThinkingOpenChange,
-    handleOpenChange,
     extras,
     modelSelectorServerId,
   } = props;
@@ -328,19 +322,6 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
       ) : null}
 
       {extras}
-
-      {features
-        ?.filter((feature) => feature.id !== "plan_mode")
-        .map((feature) => (
-          <DesktopFeatureItem
-            key={`feature-${feature.id}`}
-            feature={feature}
-            disabled={disabled}
-            openSelector={openSelector}
-            handleOpenChange={handleOpenChange}
-            onSetFeature={onSetFeature}
-          />
-        ))}
     </>
   );
 }

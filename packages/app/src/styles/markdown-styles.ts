@@ -2,6 +2,11 @@ import type { Theme } from "./theme";
 import { Fonts } from "@/constants/theme";
 import { isWeb } from "@/constants/platform";
 import { LINE_HEIGHT } from "./theme";
+import {
+  WORKBENCH_BODY_FONT_SIZE,
+  WORKBENCH_BODY_LINE_HEIGHT,
+  WORKBENCH_MESSAGE_LINE_HEIGHT,
+} from "@/constants/layout";
 
 const webSelectableTextStyle = isWeb ? { userSelect: "text" as const } : {};
 
@@ -406,6 +411,45 @@ export function createCompactMarkdownStyles(theme: Theme) {
       ...baseStyles.fence,
       fontSize: theme.fontSize.code,
       padding: theme.spacing[2],
+    },
+  };
+}
+/**
+ * Creates the dense markdown typography used by desktop and mobile workbench chat.
+ * @param theme Active application theme
+ * @returns Markdown styles aligned with the workbench visual reference
+ */
+export function createWorkbenchMarkdownStyles(theme: Theme) {
+  const compactStyles = createCompactMarkdownStyles(theme);
+
+  return {
+    ...compactStyles,
+    body: {
+      ...compactStyles.body,
+      fontSize: WORKBENCH_BODY_FONT_SIZE,
+      lineHeight: isWeb ? WORKBENCH_BODY_LINE_HEIGHT : WORKBENCH_MESSAGE_LINE_HEIGHT,
+    },
+    paragraph: {
+      ...compactStyles.paragraph,
+      fontSize: WORKBENCH_BODY_FONT_SIZE,
+      lineHeight: isWeb ? WORKBENCH_BODY_LINE_HEIGHT : WORKBENCH_MESSAGE_LINE_HEIGHT,
+      marginBottom: 6,
+    },
+    text: {
+      ...compactStyles.text,
+      fontFamily: isWeb ? "system-ui" : Fonts.sans,
+      fontSize: WORKBENCH_BODY_FONT_SIZE,
+      lineHeight: isWeb ? WORKBENCH_BODY_LINE_HEIGHT : WORKBENCH_MESSAGE_LINE_HEIGHT,
+    },
+    bullet_list_icon: {
+      ...compactStyles.bullet_list_icon,
+      fontSize: WORKBENCH_BODY_FONT_SIZE,
+      lineHeight: WORKBENCH_MESSAGE_LINE_HEIGHT,
+    },
+    ordered_list_icon: {
+      ...compactStyles.ordered_list_icon,
+      fontSize: WORKBENCH_BODY_FONT_SIZE,
+      lineHeight: WORKBENCH_MESSAGE_LINE_HEIGHT,
     },
   };
 }

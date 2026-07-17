@@ -1,5 +1,10 @@
-import type { ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import {
+  SETTINGS_HINT_LINE_HEIGHT,
+  SETTINGS_ROW_HORIZONTAL_PADDING,
+  SETTINGS_ROW_TITLE_FONT_SIZE,
+  SETTINGS_ROW_TITLE_LINE_HEIGHT,
+} from "@/constants/layout";
 
 export const settingsStyles = StyleSheet.create((theme) => ({
   section: {
@@ -22,13 +27,17 @@ export const settingsStyles = StyleSheet.create((theme) => ({
   sectionHeaderTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
+    lineHeight: SETTINGS_HINT_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   sectionHeaderLink: {
     alignItems: "center",
     flexDirection: "row",
     gap: theme.spacing[1],
     minHeight: 28,
+    minWidth: 28,
     paddingHorizontal: theme.spacing[1],
     paddingVertical: theme.spacing[1],
   },
@@ -39,28 +48,24 @@ export const settingsStyles = StyleSheet.create((theme) => ({
   card: {
     ...(theme.glass.enabled
       ? {
-          backgroundColor: theme.glass.panel,
-          borderColor: theme.glass.cardBorder,
-          backdropFilter: theme.glass
-            .cssBackdropFilter as unknown as ViewStyle["backfaceVisibility"],
-          // react-native-web needs WebkitBackdropFilter prefix
-          WebkitBackdropFilter: theme.glass
-            .cssBackdropFilter as unknown as ViewStyle["backfaceVisibility"],
+          backgroundColor: theme.colors.surface1,
+          borderColor: theme.colors.border,
         }
       : {
           backgroundColor: theme.colors.surface1,
           borderColor: theme.colors.border,
         }),
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     overflow: "hidden",
   },
   row: {
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: SETTINGS_ROW_HORIZONTAL_PADDING,
   },
   rowBorder: {
     borderTopWidth: 1,
@@ -68,15 +73,18 @@ export const settingsStyles = StyleSheet.create((theme) => ({
   },
   rowContent: {
     flex: 1,
-    marginRight: theme.spacing[3],
+    marginRight: theme.spacing[4],
   },
   rowTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: SETTINGS_ROW_TITLE_FONT_SIZE,
+    lineHeight: SETTINGS_ROW_TITLE_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.normal,
   },
   rowHint: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    marginTop: theme.spacing[1],
+    lineHeight: SETTINGS_HINT_LINE_HEIGHT,
+    marginTop: theme.spacing[0.5],
   },
 }));

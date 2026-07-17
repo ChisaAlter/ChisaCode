@@ -54,6 +54,16 @@ function toolCall(id: string, seed: number): Extract<StreamItem, { kind: "tool_c
   };
 }
 
+function todoList(id: string, seed: number): Extract<StreamItem, { kind: "todo_list" }> {
+  return {
+    kind: "todo_list",
+    id,
+    timestamp: timestamp(seed),
+    provider: "codex",
+    items: [{ text: "Ship the visual match", completed: true }],
+  };
+}
+
 function thought(id: string, seed: number): Extract<StreamItem, { kind: "thought" }> {
   return {
     kind: "thought",
@@ -331,6 +341,36 @@ describe("layoutStream", () => {
 
     expect(findLayoutItem(layout, shell.id).toolSequence).toBe("first");
     expect(findLayoutItem(layout, thinking.id).toolSequence).toBe("last");
+  });
+
+  it("marks the first assistant block with completed turn metadata", () => {
+    const firstBlock = assistantMessage("turn:block:0", 2, { groupId: "turn", index: 0 });
+    const secondBlock = assistantMessage("turn:block:1", 3, { groupId: "turn", index: 1 });
+    const layout = layoutFor({
+      platform: "web",
+      tail: [userMessage("u1", 1), firstBlock, secondBlock, toolCall("tool-1", 4)],
+      timingIds: [firstBlock.id, secondBlock.id],
+    });
+
+    expect(findLayoutItem(layout, firstBlock.id).showAssistantTurnHeader).toBe(true);
+    expect(findLayoutItem(layout, firstBlock.id).turnTiming?.durationMs).toBe(8000);
+    expect(findLayoutItem(layout, secondBlock.id).showAssistantTurnHeader).toBe(false);
+  });
+
+  it("groups contiguous tool and todo rows under the first sequence item", () => {
+    const firstTool = toolCall("tool-1", 2);
+    const secondTool = toolCall("tool-2", 3);
+    const todos = todoList("todos-1", 4);
+    const layout = layoutFor({
+      platform: "web",
+      tail: [userMessage("u1", 1), assistantMessage("a1", 2), firstTool, secondTool, todos],
+    });
+
+    expect(
+      findLayoutItem(layout, firstTool.id).toolSequenceGroup?.map((item) => item.item.id),
+    ).toEqual([firstTool.id, secondTool.id, todos.id]);
+    expect(findLayoutItem(layout, secondTool.id).isToolSequenceGroupContinuation).toBe(true);
+    expect(findLayoutItem(layout, todos.id).isToolSequenceGroupContinuation).toBe(true);
   });
 
   it("keeps bottom and inline footer ownership mutually exclusive", () => {

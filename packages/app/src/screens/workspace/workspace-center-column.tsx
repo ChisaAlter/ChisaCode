@@ -15,6 +15,7 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { SplitContainer } from "@/components/split-container";
 import type { Theme } from "@/styles/theme";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
@@ -251,7 +252,6 @@ export function WorkspaceCenterColumn({
 }: WorkspaceCenterColumnProps) {
   const { t } = useTranslation();
   const showCreateBrowserTab = getIsElectron();
-  const showScreenHeader = !isFocusModeEnabled || isMobile;
   const environmentRailVisible = !isMobile && isEnvironmentPanelVisible;
   const desktopFocusModeEnabled = isFocusModeEnabled && !isMobile;
 
@@ -292,29 +292,6 @@ export function WorkspaceCenterColumn({
       />
     ),
     [headerRightControls, isEnvironmentPanelVisible, isMobile],
-  );
-  const desktopHeaderLeft = useMemo(
-    () => (
-      <WorkspaceHeaderTitleBar
-        {...headerTitleBar}
-        activeTab={activeTabDescriptor}
-        normalizedServerId={normalizedServerId}
-        normalizedWorkspaceId={normalizedWorkspaceId}
-        showCreateBrowserTab={showCreateBrowserTab}
-        isMobile={false}
-        createTerminalDisabled={isCreateTerminalPending}
-        browserContextDockDisabled={!hasEnvironmentBrowserContext}
-      />
-    ),
-    [
-      activeTabDescriptor,
-      hasEnvironmentBrowserContext,
-      headerTitleBar,
-      isCreateTerminalPending,
-      normalizedServerId,
-      normalizedWorkspaceId,
-      showCreateBrowserTab,
-    ],
   );
 
   const content = useMemo(
@@ -364,12 +341,13 @@ export function WorkspaceCenterColumn({
         isWorkspaceFocused={isRouteFocused}
         showCreateBrowserTab={showCreateBrowserTab}
         renderPaneEmptyState={renderSplitPaneEmptyState}
-        topRightControls={null}
+        topRightControls={headerRight}
       />
     );
   }, [
     content,
     desktopFocusModeEnabled,
+    headerRight,
     isRouteFocused,
     normalizedServerId,
     normalizedWorkspaceId,
@@ -382,10 +360,7 @@ export function WorkspaceCenterColumn({
 
   return (
     <View style={styles.centerColumn}>
-      {showScreenHeader && !isMobile ? (
-        <ScreenHeader left={desktopHeaderLeft} right={headerRight} />
-      ) : null}
-      {showScreenHeader && isMobile ? (
+      {isMobile ? (
         <ScreenHeader
           left={
             <>
@@ -433,10 +408,10 @@ export function WorkspaceCenterColumn({
         ) : (
           <View style={styles.content}>{desktopContent}</View>
         )}
-        {!isMobile ? (
-          <WorkspaceEnvironmentPanelRail {...environmentPanel} visible={environmentRailVisible} />
-        ) : null}
       </View>
+      {!isMobile ? (
+        <WorkspaceEnvironmentPanelRail {...environmentPanel} visible={environmentRailVisible} />
+      ) : null}
     </View>
   );
 }
@@ -474,7 +449,7 @@ export function WorkspaceScreenGateShell({
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   threePaneRow: {
     flex: 1,
@@ -497,17 +472,15 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     minHeight: 0,
     position: "relative",
-    flexDirection: "row",
-    borderLeftWidth: theme.borderWidth[1],
-    borderLeftColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
+
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
     overflow: "hidden",
   },
   content: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
     position: "relative",
   },
   mobileMountedTabSlotVisible: {

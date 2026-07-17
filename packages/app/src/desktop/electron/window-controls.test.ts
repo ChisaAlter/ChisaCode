@@ -7,6 +7,7 @@ describe("getDesktopWindowControlsBackground", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#09090b",
+        surface0: "#f8fafc",
         surfaceSidebar: "#f4f4f5",
         surfaceWorkspace: "#ffffff",
       }),
@@ -17,29 +18,32 @@ describe("getDesktopWindowControlsBackground", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#09090b",
+        surface0: "#f8fafc",
         surfaceSidebar: "#f4f4f5",
         surfaceWorkspace: "transparent",
       }),
     ).toBe("#f4f4f5");
   });
 
-  it("falls back to an opaque light chrome color for transparent light themes", () => {
+  it("uses the opaque base canvas for transparent light themes", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#1d1d1f",
+        surface0: "#fbfdff",
         surfaceSidebar: "rgba(255, 255, 255, 0.28)",
         surfaceWorkspace: "transparent",
       }),
-    ).toBe("#ffffff");
+    ).toBe("#fbfdff");
   });
 
-  it("falls back to an opaque dark chrome color for transparent dark themes", () => {
+  it("uses the opaque base canvas for transparent dark themes", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#fafafa",
+        surface0: "#06111f",
         surfaceSidebar: "rgba(20, 23, 22, 0.5)",
         surfaceWorkspace: "transparent",
       }),
-    ).toBe("#181B1A");
+    ).toBe("#06111f");
   });
 });

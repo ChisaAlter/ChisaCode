@@ -2,23 +2,31 @@ import { useCallback, useMemo, useRef, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ChevronDown,
+  Check,
+  CircleAlert,
   GitBranch,
   GitPullRequest,
   Globe,
-  HardDrive,
   Link2,
   ListTodo,
   ListTree,
   PanelRight,
-  Settings,
+  Settings2,
   SquareTerminal,
+  X,
 } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
@@ -33,33 +41,59 @@ import type {
 import { WORKSPACE_ENVIRONMENT_TABS } from "@/screens/workspace/workspace-environment-dock-model";
 import type { SubagentRow } from "@/subagents/select";
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
+import { usePanelStore, type EnvironmentPanelTabPreference } from "@/stores/panel-store";
 import type { TodoEntry, TurnChangesItem } from "@/types/stream";
 import type { Theme } from "@/styles/theme";
-import { WORKBENCH_ENVIRONMENT_PANEL_WIDTH } from "@/constants/layout";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
+import { isWeb } from "@/constants/platform";
+import {
+  WORKSPACE_SECONDARY_HEADER_HEIGHT,
+  WORKBENCH_BODY_FONT_SIZE,
+  WORKBENCH_BODY_LINE_HEIGHT,
+  WORKBENCH_ENVIRONMENT_ACTION_GAP,
+  WORKBENCH_ENVIRONMENT_ACTION_MARGIN_BOTTOM,
+  WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT,
+  WORKBENCH_ENVIRONMENT_CALLOUT_HEIGHT,
+  WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT,
+  WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT,
+  WORKBENCH_ENVIRONMENT_DIFF_SUMMARY_HEIGHT,
+  WORKBENCH_ENVIRONMENT_PANEL_SHADOW,
+  WORKBENCH_ENVIRONMENT_PANEL_INSET,
+  WORKBENCH_ENVIRONMENT_PANEL_WIDTH,
+  WORKBENCH_ENVIRONMENT_SECTION_GAP,
+  WORKBENCH_ENVIRONMENT_TAB_HEIGHT,
+  WORKBENCH_ENVIRONMENT_TAB_RADIUS,
+  WORKBENCH_META_FONT_SIZE,
+  WORKBENCH_META_LINE_HEIGHT,
+} from "@/constants/layout";
 
-const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedCheck = withUnistyles(Check);
+
+const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedGitBranch = withUnistyles(GitBranch);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedGlobe = withUnistyles(Globe);
-const ThemedHardDrive = withUnistyles(HardDrive);
 const ThemedLink2 = withUnistyles(Link2);
 const ThemedListTodo = withUnistyles(ListTodo);
 const ThemedListTree = withUnistyles(ListTree);
 const ThemedPanelRight = withUnistyles(PanelRight);
-const ThemedSettings = withUnistyles(Settings);
+const ThemedSettings2 = withUnistyles(Settings2);
 const ThemedSquareTerminal = withUnistyles(SquareTerminal);
 const ThemedSourceControlPanelIcon = withUnistyles(SourceControlPanelIcon);
+const ThemedX = withUnistyles(X);
 
 export const WORKSPACE_ENVIRONMENT_PANEL_WIDTH = WORKBENCH_ENVIRONMENT_PANEL_WIDTH;
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const successColorMapping = (theme: Theme) => ({ color: theme.colors.palette.green[500] });
+const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
+const ENVIRONMENT_PANEL_OPACITY_OPTIONS = [0.88, 0.97, 1] as const;
 
 interface WorkspaceEnvironmentPanelProps {
   serverId: string;
   cwd: string | null;
   currentBranchName: string | null;
   isGitCheckout: boolean;
-  isLocalDaemon: boolean;
   diffStat: WorkspaceDescriptor["diffStat"];
   githubRuntime: WorkspaceDescriptor["githubRuntime"];
   browserContext: BrowserContextSummary | null;
@@ -76,11 +110,11 @@ interface WorkspaceEnvironmentPanelProps {
   onOpenChanges: () => void;
   onOpenSubagent: (agentId: string) => void;
   onCopyResumeCommand: (agentId: string) => void;
+  onClose: () => void;
 }
 
 type EnvironmentIconName =
   | "changes"
-  | "location"
   | "locality"
   | "branch"
   | "browser"
@@ -95,7 +129,6 @@ function WorkspaceEnvironmentPanel({
   cwd,
   currentBranchName,
   isGitCheckout,
-  isLocalDaemon,
   diffStat,
   githubRuntime,
   browserContext,
@@ -112,9 +145,32 @@ function WorkspaceEnvironmentPanel({
   onOpenChanges,
   onOpenSubagent,
   onCopyResumeCommand,
+  onClose,
 }: WorkspaceEnvironmentPanelProps) {
   const { t } = useTranslation();
   const pullRequest = githubRuntime?.pullRequest ?? null;
+  const visibleTabs = usePanelStore((state) => state.environmentPanelVisibleTabs);
+  const environmentPanelOpacity = usePanelStore((state) => state.environmentPanelOpacity);
+  const toggleEnvironmentPanelTab = usePanelStore((state) => state.toggleEnvironmentPanelTab);
+  const setEnvironmentPanelOpacity = usePanelStore((state) => state.setEnvironmentPanelOpacity);
+  const renderedTabs = useMemo(
+    () => WORKSPACE_ENVIRONMENT_TABS.filter((tab) => visibleTabs.includes(tab)),
+    [visibleTabs],
+  );
+  const handleTogglePanelTab = useCallback(
+    (tab: EnvironmentPanelTabPreference) => {
+      if (visibleTabs.includes(tab) && dockState.activeTab === tab && visibleTabs.length > 1) {
+        const fallbackTab = WORKSPACE_ENVIRONMENT_TABS.find(
+          (candidate) => candidate !== tab && visibleTabs.includes(candidate),
+        );
+        if (fallbackTab) {
+          onSelectDockTab(fallbackTab);
+        }
+      }
+      toggleEnvironmentPanelTab(tab);
+    },
+    [dockState.activeTab, onSelectDockTab, toggleEnvironmentPanelTab, visibleTabs],
+  );
 
   let activeContent: ReactNode;
   if (dockState.activeTab === "pull-request") {
@@ -142,7 +198,6 @@ function WorkspaceEnvironmentPanel({
         cwd={cwd}
         currentBranchName={currentBranchName}
         isGitCheckout={isGitCheckout}
-        isLocalDaemon={isLocalDaemon}
         diffStat={diffStat}
         pullRequest={pullRequest}
         sourceLabel={sourceLabel}
@@ -162,14 +217,26 @@ function WorkspaceEnvironmentPanel({
           <Text style={styles.environmentInspectorCardTitle}>
             {t("workspace.environment.panelTitle")}
           </Text>
-          <ThemedSettings size={15} uniProps={mutedColorMapping} />
+          <View style={styles.environmentHeaderActions}>
+            <EnvironmentSettingsMenu
+              visibleTabs={visibleTabs}
+              environmentPanelOpacity={environmentPanelOpacity}
+              onToggleTab={handleTogglePanelTab}
+              onSetOpacity={setEnvironmentPanelOpacity}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
+              onPress={onClose}
+              style={styles.environmentCloseButton}
+              testID="workspace-environment-close"
+            >
+              <ThemedX size={15} uniProps={mutedColorMapping} />
+            </Pressable>
+          </View>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.environmentDockTabs}
-        >
-          {WORKSPACE_ENVIRONMENT_TABS.map((tab) => (
+        <View style={styles.environmentDockTabs} accessibilityRole="tablist">
+          {renderedTabs.map((tab) => (
             <EnvironmentDockTab
               key={tab}
               tab={tab}
@@ -177,11 +244,129 @@ function WorkspaceEnvironmentPanel({
               onPress={onSelectDockTab}
             />
           ))}
-        </ScrollView>
+        </View>
         <View style={styles.environmentBody}>{activeContent}</View>
       </View>
     </View>
   );
+}
+
+function EnvironmentSettingsHeading({ children }: { children: string }) {
+  return (
+    <View style={styles.environmentSettingsHeading}>
+      <Text style={styles.environmentSettingsHeadingText}>{children}</Text>
+    </View>
+  );
+}
+
+function EnvironmentVisibilityMenuItem({
+  tab,
+  selected,
+  onToggle,
+}: {
+  tab: EnvironmentPanelTabPreference;
+  selected: boolean;
+  onToggle: (tab: EnvironmentPanelTabPreference) => void;
+}) {
+  const { t } = useTranslation();
+  const handleSelect = useCallback(() => onToggle(tab), [onToggle, tab]);
+  return (
+    <DropdownMenuItem
+      closeOnSelect={false}
+      onSelect={handleSelect}
+      selected={selected}
+      showSelectedCheck
+    >
+      {t(`workspace.environment.dockTabs.${tab}`)}
+    </DropdownMenuItem>
+  );
+}
+
+function EnvironmentOpacityMenuItem({
+  opacity,
+  selected,
+  onSelectOpacity,
+}: {
+  opacity: number;
+  selected: boolean;
+  onSelectOpacity: (opacity: number) => void;
+}) {
+  const handleSelect = useCallback(() => onSelectOpacity(opacity), [onSelectOpacity, opacity]);
+  return (
+    <DropdownMenuItem
+      closeOnSelect={false}
+      onSelect={handleSelect}
+      selected={selected}
+      showSelectedCheck
+    >
+      {Math.round(opacity * 100)}%
+    </DropdownMenuItem>
+  );
+}
+
+function EnvironmentSettingsMenu({
+  visibleTabs,
+  environmentPanelOpacity,
+  onToggleTab,
+  onSetOpacity,
+}: {
+  visibleTabs: EnvironmentPanelTabPreference[];
+  environmentPanelOpacity: number;
+  onToggleTab: (tab: EnvironmentPanelTabPreference) => void;
+  onSetOpacity: (opacity: number) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityLabel={t("workspace.environment.panelSettings")}
+        style={styles.environmentCloseButton}
+        testID="workspace-environment-settings"
+      >
+        <ThemedSettings2 size={14} uniProps={mutedColorMapping} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width={240}>
+        <EnvironmentSettingsHeading>
+          {t("workspace.environment.visibleModules")}
+        </EnvironmentSettingsHeading>
+        {WORKSPACE_ENVIRONMENT_TABS.map((tab) => (
+          <EnvironmentVisibilityMenuItem
+            key={tab}
+            tab={tab}
+            selected={visibleTabs.includes(tab)}
+            onToggle={onToggleTab}
+          />
+        ))}
+        <EnvironmentSettingsHeading>
+          {t("workspace.environment.panelOpacity")}
+        </EnvironmentSettingsHeading>
+        {ENVIRONMENT_PANEL_OPACITY_OPTIONS.map((opacity) => (
+          <EnvironmentOpacityMenuItem
+            key={opacity}
+            opacity={opacity}
+            selected={Math.abs(environmentPanelOpacity - opacity) < 0.01}
+            onSelectOpacity={onSetOpacity}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function EnvironmentDockTabIcon({ tab }: { tab: WorkspaceEnvironmentDockTab }) {
+  if (tab === "git-summary") {
+    return <ThemedSourceControlPanelIcon size={12} uniProps={mutedColorMapping} />;
+  }
+  if (tab === "pull-request") {
+    return <ThemedGitPullRequest size={12} uniProps={mutedColorMapping} />;
+  }
+  if (tab === "tasks") {
+    return <ThemedListTodo size={12} uniProps={mutedColorMapping} />;
+  }
+  if (tab === "subagents") {
+    return <ThemedListTree size={12} uniProps={mutedColorMapping} />;
+  }
+  return <ThemedGlobe size={12} uniProps={mutedColorMapping} />;
 }
 
 function EnvironmentDockTab({
@@ -195,23 +380,30 @@ function EnvironmentDockTab({
 }) {
   const { t } = useTranslation();
   const handlePress = useCallback(() => onPress(tab), [onPress, tab]);
+  const label = t(`workspace.environment.dockTabs.${tab}`);
   const accessibilityState = useMemo(() => ({ selected: active }), [active]);
   const tabStyle = useMemo(
     () => [styles.environmentDockTab, active && styles.environmentDockTabActive],
     [active],
   );
   return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={accessibilityState}
-      onPress={handlePress}
-      style={tabStyle}
-      testID={`workspace-environment-tab-${tab}`}
-    >
-      <Text style={active ? styles.environmentDockTabTextActive : styles.environmentDockTabText}>
-        {t(`workspace.environment.dockTabs.${tab}`)}
-      </Text>
-    </Pressable>
+    <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityLabel={label}
+          accessibilityState={accessibilityState}
+          onPress={handlePress}
+          style={tabStyle}
+          testID={`workspace-environment-tab-${tab}`}
+        >
+          <EnvironmentDockTabIcon tab={tab} />
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center" offset={6}>
+        <Text style={styles.environmentDockTooltipText}>{label}</Text>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -220,7 +412,6 @@ function GitSummaryPanel({
   cwd,
   currentBranchName,
   isGitCheckout,
-  isLocalDaemon,
   diffStat,
   pullRequest,
   sourceLabel,
@@ -234,7 +425,6 @@ function GitSummaryPanel({
   | "serverId"
   | "currentBranchName"
   | "isGitCheckout"
-  | "isLocalDaemon"
   | "diffStat"
   | "sourceLabel"
   | "activityItems"
@@ -247,10 +437,8 @@ function GitSummaryPanel({
   pullRequest: NonNullable<WorkspaceDescriptor["githubRuntime"]>["pullRequest"] | null;
 }) {
   const { t } = useTranslation();
-  const locationLabel = isLocalDaemon
-    ? t("workspace.environment.local")
-    : t("workspace.environment.remote");
-  const canResume = Boolean(activeAgent?.id);
+  const isInterrupted = activeAgent?.status === "error";
+  const canResume = isInterrupted && Boolean(activeAgent?.id);
   const handleResume = useCallback(() => {
     if (activeAgent?.id) onCopyResumeCommand(activeAgent.id);
   }, [activeAgent?.id, onCopyResumeCommand]);
@@ -267,7 +455,6 @@ function GitSummaryPanel({
         </View>
       </View>
       <View style={styles.environmentDiffSummary}>
-        <EnvironmentDisplayRow icon="location" label={locationLabel} />
         <WorkspaceEnvironmentBranchRow
           serverId={serverId}
           cwd={cwd}
@@ -280,12 +467,34 @@ function GitSummaryPanel({
       </View>
       {activeAgent && (diffStat || pullRequest) ? (
         <View style={styles.environmentCallout}>
-          <Text style={styles.environmentCalloutTitle}>
-            {activeAgent.status === "error"
-              ? t("workspace.reviewCallout.interruptedTitle")
-              : t("workspace.reviewCallout.completedTitle")}
-          </Text>
-          <Text style={styles.environmentCalloutText}>
+          <View style={styles.environmentCalloutTitleRow}>
+            <View style={styles.environmentCalloutTitleLeading}>
+              {isInterrupted ? (
+                <ThemedCircleAlert size={13} uniProps={dangerColorMapping} />
+              ) : (
+                <ThemedCheck size={13} uniProps={successColorMapping} />
+              )}
+              <Text style={styles.environmentCalloutTitle} numberOfLines={1}>
+                {isInterrupted
+                  ? t("workspace.reviewCallout.interruptedTitle")
+                  : t("workspace.reviewCallout.completedTitle")}
+              </Text>
+            </View>
+            {canResume ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("workspace.environment.resume")}
+                onPress={handleResume}
+                style={styles.environmentResumeAction}
+                testID="workspace-environment-resume"
+              >
+                <Text style={styles.environmentResumeText}>
+                  {t("workspace.environment.resume")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Text style={styles.environmentCalloutText} numberOfLines={2}>
             {latestTurnChanges?.changeSummary ??
               pullRequest?.title ??
               t("workspace.environment.changeSummary")}
@@ -295,7 +504,7 @@ function GitSummaryPanel({
       <View style={styles.environmentActionRow}>
         <Button
           variant="default"
-          size="sm"
+          size="xs"
           onPress={onOpenChanges}
           style={styles.environmentAction}
         >
@@ -313,16 +522,7 @@ function GitSummaryPanel({
           </View>
         </WorkspaceEnvironmentGitPopover>
       </View>
-      {canResume ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          onPress={handleResume}
-          style={styles.environmentResumeAction}
-        >
-          {t("workspace.environment.resume")}
-        </Button>
-      ) : null}
+
       <ActivityPanel activityItems={activityItems} latestTurnChanges={latestTurnChanges} />
       <WorkspaceSourceSection sourceLabel={sourceLabel} />
     </>
@@ -465,8 +665,10 @@ function ActivityPanel({
   const { t } = useTranslation();
   const recentFiles = latestTurnChanges?.changedFiles.slice(0, 3) ?? [];
   return (
-    <View style={styles.environmentSection}>
-      <Text style={styles.environmentSourceTitle}>{t("workspace.environment.recentActivity")}</Text>
+    <View style={styles.environmentActivitySection}>
+      <Text style={ENVIRONMENT_ACTIVITY_TITLE_STYLE}>
+        {t("workspace.environment.recentActivity")}
+      </Text>
       {recentFiles.map((file) => (
         <View key={file.path} style={styles.environmentActivityRow}>
           <View style={styles.environmentActivityDot} />
@@ -506,7 +708,7 @@ function EnvironmentEmptyState({ label }: { label: string }) {
 function WorkspaceSourceSection({ sourceLabel }: { sourceLabel: string | null }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.environmentSection} testID="workspace-environment-source">
+    <View style={ENVIRONMENT_SOURCE_SECTION_STYLE} testID="workspace-environment-source">
       <Text style={styles.environmentSourceTitle}>{t("workspace.environment.source")}</Text>
       <Text style={styles.environmentSourceEmpty} numberOfLines={1}>
         {sourceLabel ?? t("workspace.environment.noSource")}
@@ -568,19 +770,26 @@ function WorkspaceEnvironmentBranchRow({
     }
   }, [canSwitchBranch, setIsOpen]);
 
+  const currentBranchLabel = t("workspace.environment.currentBranch");
+  const branchValue = <Text style={styles.environmentBranchValue}>{branchLabel}</Text>;
+
   if (!canSwitchBranch) {
-    return <EnvironmentDisplayRow icon="branch" label={branchLabel} />;
+    return (
+      <EnvironmentDisplayRow label={currentBranchLabel} compact>
+        {branchValue}
+      </EnvironmentDisplayRow>
+    );
   }
 
   return (
     <View ref={anchorRef} collapsable={false}>
       <EnvironmentActionRow
-        icon="branch"
-        label={branchLabel}
+        label={currentBranchLabel}
+        compact
         onPress={handleOpen}
         testID="workspace-environment-branch"
       >
-        <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
+        <View style={styles.environmentBranchValueRow}>{branchValue}</View>
       </EnvironmentActionRow>
       <Combobox
         options={branchOptions}
@@ -624,19 +833,21 @@ function EnvironmentActionRow({
   children,
   onPress,
   testID,
+  compact = false,
 }: {
   icon?: EnvironmentIconName;
   label: string;
   children?: ReactNode;
   onPress: () => void;
   testID?: string;
+  compact?: boolean;
 }) {
   const rowStyle = useCallback(
     ({ hovered, pressed }: { hovered?: boolean; pressed?: boolean }) => [
-      styles.environmentRow,
+      compact ? styles.environmentBranchSummaryRow : styles.environmentRow,
       (Boolean(hovered) || Boolean(pressed)) && styles.environmentRowHovered,
     ],
-    [],
+    [compact],
   );
 
   return (
@@ -647,7 +858,7 @@ function EnvironmentActionRow({
       style={rowStyle}
       testID={testID}
     >
-      <EnvironmentRowContent icon={icon} label={label}>
+      <EnvironmentRowContent icon={icon} label={label} compact={compact}>
         {children}
       </EnvironmentRowContent>
     </Pressable>
@@ -658,14 +869,16 @@ function EnvironmentDisplayRow({
   icon,
   label,
   children,
+  compact = false,
 }: {
   icon?: EnvironmentIconName;
   label: string;
   children?: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.environmentRow}>
-      <EnvironmentRowContent icon={icon} label={label}>
+    <View style={compact ? styles.environmentBranchSummaryRow : styles.environmentRow}>
+      <EnvironmentRowContent icon={icon} label={label} compact={compact}>
         {children}
       </EnvironmentRowContent>
     </View>
@@ -676,10 +889,12 @@ function EnvironmentRowContent({
   icon,
   label,
   children,
+  compact = false,
 }: {
   icon?: EnvironmentIconName;
   label: string;
   children?: ReactNode;
+  compact?: boolean;
 }) {
   return (
     <>
@@ -689,7 +904,10 @@ function EnvironmentRowContent({
             <EnvironmentIcon name={icon} />
           </View>
         ) : null}
-        <Text style={styles.environmentRowLabel} numberOfLines={1}>
+        <Text
+          style={compact ? styles.environmentBranchSummaryLabel : styles.environmentRowLabel}
+          numberOfLines={1}
+        >
           {label}
         </Text>
       </View>
@@ -697,14 +915,11 @@ function EnvironmentRowContent({
     </>
   );
 }
-
 function EnvironmentIcon({ name }: { name: EnvironmentIconName }) {
   if (name === "changes") {
     return <ThemedSourceControlPanelIcon size={15} uniProps={mutedColorMapping} />;
   }
-  if (name === "location") {
-    return <ThemedHardDrive size={15} uniProps={mutedColorMapping} />;
-  }
+
   if (name === "locality") {
     return <ThemedPanelRight size={15} uniProps={mutedColorMapping} />;
   }
@@ -740,7 +955,6 @@ export function WorkspaceEnvironmentPanelRail({
   workspaceDirectory,
   currentBranchName,
   isGitCheckout,
-  isLocalDaemon,
   diffStat,
   githubRuntime,
   browserContext,
@@ -757,13 +971,13 @@ export function WorkspaceEnvironmentPanelRail({
   onOpenChanges,
   onOpenSubagent,
   onCopyResumeCommand,
+  onClose,
 }: {
   visible: boolean;
   serverId: string;
   workspaceDirectory: string | null;
   currentBranchName: string | null;
   isGitCheckout: boolean;
-  isLocalDaemon: boolean;
   diffStat: WorkspaceDescriptor["diffStat"];
   githubRuntime: WorkspaceDescriptor["githubRuntime"];
   browserContext: BrowserContextSummary | null;
@@ -780,13 +994,27 @@ export function WorkspaceEnvironmentPanelRail({
   onOpenChanges: () => void;
   onOpenSubagent: (agentId: string) => void;
   onCopyResumeCommand: (agentId: string) => void;
+  onClose: () => void;
 }) {
+  const { theme } = useUnistyles();
+  const environmentPanelOpacity = usePanelStore((state) => state.environmentPanelOpacity);
+  const railBackgroundStyle = useMemo(
+    () => [
+      styles.environmentRailBackground,
+      {
+        backgroundColor: theme.colors.surface0,
+        opacity: theme.glass.enabled ? environmentPanelOpacity : 1,
+      },
+    ],
+    [environmentPanelOpacity, theme.colors.surface0, theme.glass.enabled],
+  );
   if (!visible) {
     return null;
   }
 
   return (
     <View style={styles.environmentRail} testID="workspace-environment-rail">
+      <View pointerEvents="none" style={railBackgroundStyle} />
       <ScrollView
         style={styles.environmentRailScroll}
         contentContainerStyle={styles.environmentRailScrollContent}
@@ -797,7 +1025,6 @@ export function WorkspaceEnvironmentPanelRail({
           cwd={workspaceDirectory}
           currentBranchName={currentBranchName}
           isGitCheckout={isGitCheckout}
-          isLocalDaemon={isLocalDaemon}
           diffStat={diffStat}
           githubRuntime={githubRuntime}
           browserContext={browserContext}
@@ -814,6 +1041,7 @@ export function WorkspaceEnvironmentPanelRail({
           onOpenChanges={onOpenChanges}
           onOpenSubagent={onOpenSubagent}
           onCopyResumeCommand={onCopyResumeCommand}
+          onClose={onClose}
         />
       </ScrollView>
     </View>
@@ -826,11 +1054,25 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentRail: {
     width: WORKSPACE_ENVIRONMENT_PANEL_WIDTH,
-    flexShrink: 0,
-    minHeight: 0,
-    borderLeftWidth: theme.borderWidth[1],
-    borderLeftColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
+    position: "absolute",
+    top: WORKSPACE_SECONDARY_HEADER_HEIGHT + WORKBENCH_ENVIRONMENT_PANEL_INSET,
+    right: WORKBENCH_ENVIRONMENT_PANEL_INSET,
+    bottom: WORKBENCH_ENVIRONMENT_PANEL_INSET,
+    zIndex: 80,
+    elevation: 80,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    backgroundColor: "transparent",
+    overflow: "hidden",
+    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.lg),
+  },
+  environmentRailBackground: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   environmentRailScroll: {
     flex: 1,
@@ -841,9 +1083,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentInspectorCard: {
     overflow: "hidden",
-    paddingVertical: theme.spacing[3],
+    paddingVertical: 0,
     paddingHorizontal: 0,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   environmentInspectorCardHeader: {
     minHeight: 38,
@@ -851,14 +1093,39 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    paddingHorizontal: 10,
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
   },
   environmentInspectorCardTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.medium,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  environmentHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  environmentCloseButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+  },
+  environmentSettingsHeading: {
+    paddingTop: 8,
+    paddingRight: 10,
+    paddingBottom: 4,
+    paddingLeft: 10,
+  },
+  environmentSettingsHeadingText: {
+    color: theme.colors.foregroundSubtleText,
+    fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
   },
   environmentInspectorRows: {
     gap: theme.spacing[1],
@@ -867,38 +1134,42 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentDockTabs: {
     minHeight: 36,
+    flexDirection: "row",
     paddingHorizontal: theme.spacing[2],
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: 2,
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
   },
   environmentDockTab: {
-    minHeight: 26,
-    paddingHorizontal: theme.spacing[2],
+    flex: 1,
+    minHeight: WORKBENCH_ENVIRONMENT_TAB_HEIGHT,
+    height: WORKBENCH_ENVIRONMENT_TAB_HEIGHT,
+    flexDirection: "row",
+    paddingHorizontal: 0,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: WORKBENCH_ENVIRONMENT_TAB_RADIUS,
+    borderWidth: theme.borderWidth[1],
+    borderColor: "transparent",
   },
   environmentDockTabActive: {
-    backgroundColor: theme.colors.surface2,
-    borderWidth: theme.borderWidth[1],
+    backgroundColor: theme.colors.surfaceSidebarHover,
     borderColor: theme.colors.borderAccent,
+    ...(isWeb ? ({ boxShadow: "0 1px 3px rgba(0, 0, 0, 0.06)" } as object) : theme.shadow.sm),
   },
-  environmentDockTabText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-  },
-  environmentDockTabTextActive: {
+  environmentDockTooltipText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
   },
   environmentBody: {
-    gap: theme.spacing[3],
+    gap: 0,
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
   },
   environmentSectionHeadingRow: {
+    marginBottom: WORKBENCH_ENVIRONMENT_SECTION_GAP,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -906,66 +1177,117 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentSectionHeading: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
   },
   environmentBranchChip: {
     maxWidth: 150,
-    minHeight: 24,
+    minHeight: 28,
+    height: 28,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: 7,
     borderRadius: theme.borderRadius.md,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
     backgroundColor: theme.colors.surface2,
+    ...(isWeb
+      ? ({
+          borderColor: `color-mix(in srgb, ${theme.colors.accent} 30%, ${theme.colors.border})`,
+          backgroundColor: `color-mix(in srgb, ${theme.colors.accent} 10%, ${theme.colors.surface2})`,
+        } as object)
+      : {}),
   },
   environmentBranchChipText: {
-    color: theme.colors.foreground,
+    color: theme.colors.accent,
     fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     flexShrink: 1,
   },
   environmentDiffSummary: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    height: WORKBENCH_ENVIRONMENT_DIFF_SUMMARY_HEIGHT,
+    marginBottom: WORKBENCH_ENVIRONMENT_SECTION_GAP,
+    overflow: "hidden",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface2,
   },
   environmentDiffNumbers: {
-    paddingHorizontal: theme.spacing[2],
-    paddingTop: theme.spacing[1],
+    paddingHorizontal: 0,
+    paddingTop: 6,
   },
   environmentCallout: {
-    gap: theme.spacing[1],
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    height: WORKBENCH_ENVIRONMENT_CALLOUT_HEIGHT,
+    marginBottom: WORKBENCH_ENVIRONMENT_SECTION_GAP,
+    overflow: "hidden",
+    gap: 3,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.accent,
     backgroundColor: theme.colors.surface1,
+    ...(isWeb
+      ? ({
+          borderColor: `color-mix(in srgb, ${theme.colors.accent} 30%, ${theme.colors.border})`,
+          backgroundColor: `color-mix(in srgb, ${theme.colors.accent} 8%, ${theme.colors.surface1})`,
+        } as object)
+      : {}),
+  },
+  environmentCalloutTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
+  environmentCalloutTitleLeading: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   environmentCalloutTitle: {
+    flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
   },
   environmentCalloutText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT,
   },
   environmentActionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
+    gap: WORKBENCH_ENVIRONMENT_ACTION_GAP,
+    marginBottom: WORKBENCH_ENVIRONMENT_ACTION_MARGIN_BOTTOM,
   },
   environmentAction: {
     flex: 1,
+    minHeight: 28,
+    height: 28,
+    borderRadius: 8,
+    borderColor: "transparent",
+    backgroundColor: theme.colors.accent,
+    ...(isWeb
+      ? ({
+          backgroundImage: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.accentNeon})`,
+          boxShadow: `0 0 12px color-mix(in srgb, ${theme.colors.accent} 20%, transparent)`,
+        } as object)
+      : {}),
   },
   environmentSecondaryAction: {
-    minHeight: 32,
+    flex: 1,
+    minHeight: 28,
+    height: 28,
     paddingHorizontal: theme.spacing[3],
     alignItems: "center",
     justifyContent: "center",
@@ -978,15 +1300,26 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
   },
   environmentResumeAction: {
-    alignSelf: "flex-start",
+    minHeight: 28,
+    paddingHorizontal: theme.spacing[1],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+  },
+  environmentResumeText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
   },
   environmentPrimaryText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
   },
   environmentSecondaryText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
   },
   environmentPillRow: {
     flexDirection: "row",
@@ -1025,21 +1358,34 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
   },
   environmentUrl: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+  },
+  environmentActivitySection: {
+    gap: theme.spacing[1],
+    marginTop: 0,
+    paddingTop: 7,
+    borderTopWidth: theme.borderWidth[1],
+    borderTopColor: theme.colors.border,
+  },
+  environmentActivityTitle: {
+    marginBottom: theme.spacing[1],
+    color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.semibold,
   },
   environmentActivityRow: {
+    minHeight: 28,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: theme.spacing[2],
-    paddingVertical: 2,
+    alignItems: "center",
+    gap: 6,
   },
   environmentActivityDot: {
-    width: 5,
-    height: 5,
-    marginTop: 5,
+    width: 6,
+    height: 6,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.accent,
   },
@@ -1049,10 +1395,29 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     paddingHorizontal: theme.spacing[3],
   },
+  environmentBranchSummaryRow: {
+    height: 28,
+    minHeight: 28,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderRadius: theme.borderRadius.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
+  environmentBranchSummaryLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.normal,
+  },
   environmentRow: {
-    minHeight: 30,
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
+    minHeight: 28,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     borderRadius: theme.borderRadius.lg,
     flexDirection: "row",
     alignItems: "center",
@@ -1077,7 +1442,8 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
   environmentRowTrailing: {
@@ -1087,6 +1453,17 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "flex-end",
   },
+  environmentBranchValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  environmentBranchValue: {
+    color: theme.colors.foreground,
+    fontSize: WORKBENCH_META_FONT_SIZE,
+    lineHeight: WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.semibold,
+  },
   environmentInlineDiffStat: {
     flexDirection: "row",
     alignItems: "center",
@@ -1095,13 +1472,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   environmentInlineDiffAddition: {
     color: theme.colors.palette.green[500],
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: theme.fontSize.lg,
+    lineHeight: 22,
+    fontWeight: theme.fontWeight.bold,
   },
   environmentInlineDiffDeletion: {
     color: theme.colors.palette.red[500],
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: theme.fontSize.lg,
+    lineHeight: 22,
+    fontWeight: theme.fontWeight.bold,
   },
   environmentCardDivider: {
     height: theme.borderWidth[1],
@@ -1113,9 +1492,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
   },
+  environmentSourceSection: {
+    display: "none",
+  },
   environmentSourceTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.medium,
   },
   environmentSourceEmpty: {
@@ -1126,3 +1509,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
   },
 }));
+
+const ENVIRONMENT_ACTIVITY_TITLE_STYLE = [
+  styles.environmentSourceTitle,
+  styles.environmentActivityTitle,
+];
+const ENVIRONMENT_SOURCE_SECTION_STYLE = [
+  styles.environmentSection,
+  styles.environmentSourceSection,
+];

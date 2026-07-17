@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { headerIconSlotStyle } from "./header-toggle-button";
 
 /**
@@ -8,6 +9,32 @@ import { headerIconSlotStyle } from "./header-toggle-button";
  * decorative headers (settings sections, host detail) line up with the sidebar
  * toggle across screens.
  */
-export function HeaderIconBadge({ children }: { children: ReactNode }) {
-  return <View style={headerIconSlotStyle.slot}>{children}</View>;
+export function HeaderIconBadge({
+  children,
+  variant = "default",
+}: {
+  children: ReactNode;
+  variant?: "default" | "settings";
+}) {
+  const style = useMemo(
+    () => [headerIconSlotStyle.slot, variant === "settings" && styles.settings],
+    [variant],
+  );
+  return <View style={style}>{children}</View>;
 }
+
+const styles = StyleSheet.create((theme) => ({
+  settings: {
+    width: 22,
+    height: 22,
+    padding: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surfaceSidebarHover,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 0,
+    elevation: 0,
+  },
+}));

@@ -45,7 +45,7 @@ export function GlassSurface({ children, fillContent = false, style, variant }: 
         <ThemedBlurView pointerEvents="none" style={styles.blurLayer} />
       )}
       <View pointerEvents="none" style={styles.materialTint} />
-      {isWeb ? <WebRefractionLayer /> : null}
+      {isWeb && variant !== "popover" && variant !== "sheet" ? <WebRefractionLayer /> : null}
       <GlassEdgeLayer />
       <View pointerEvents="none" style={styles.innerShadow} />
       <View style={contentLayerStyle}>{children}</View>

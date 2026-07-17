@@ -9,7 +9,11 @@ import {
 } from "react-native";
 import { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import {
+  useIsCompactFormFactor,
+  WORKBENCH_COMPOSER_CONTROL_HEIGHT,
+  WORKBENCH_META_LINE_HEIGHT,
+} from "@/constants/layout";
 import { isNative, isWeb as platformIsWeb } from "@/constants/platform";
 import {
   AlertTriangle,
@@ -666,9 +670,6 @@ export function CombinedModelSelector({
     [onSelect],
   );
 
-  const hasSelectedProvider = selectedProvider.trim().length > 0;
-  const ProviderIcon = hasSelectedProvider ? getProviderIcon(selectedProvider) : null;
-
   const selectedModelLabel = useMemo(() => {
     return resolveSelectedModelLabel({
       providers,
@@ -839,13 +840,10 @@ export function CombinedModelSelector({
           })
         ) : (
           <>
-            {ProviderIcon ? (
-              <ProviderIcon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-            ) : null}
             <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="tail">
               {triggerLabel}
             </Text>
-            <ChevronDown size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            <ChevronDown size={10} color={theme.colors.foregroundMuted} />
           </>
         )}
       </Pressable>
@@ -890,18 +888,20 @@ export function CombinedModelSelector({
 
 const styles = StyleSheet.create((theme) => ({
   trigger: {
-    height: 28,
-    minWidth: 0,
+    height: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
+    minWidth: 73,
     flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "transparent",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
+    backgroundColor: theme.colors.surface2,
+    gap: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
   },
   triggerHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface3,
   },
   triggerPressed: {
     backgroundColor: theme.colors.surface0,
@@ -913,7 +913,8 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
   customTriggerWrapper: {
@@ -986,8 +987,8 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 140,
   },
   rowIconButton: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
@@ -1019,8 +1020,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[8],
   },
   favoriteButton: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",

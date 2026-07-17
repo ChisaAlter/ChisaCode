@@ -50,8 +50,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
-    marginBottom: theme.spacing[3],
-    marginLeft: theme.spacing[1],
+    marginBottom: 10,
   },
   content: {
     gap: theme.spacing[3],

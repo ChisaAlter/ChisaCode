@@ -1085,7 +1085,9 @@ const styles = StyleSheet.create((theme) => ({
   urlInput: {
     flex: 1,
     minWidth: 0,
+    height: 28,
     fontSize: theme.fontSize.sm,
+    lineHeight: 20,
     paddingVertical: 0,
     paddingHorizontal: 0,
   },

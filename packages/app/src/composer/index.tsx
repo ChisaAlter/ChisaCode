@@ -1,4 +1,5 @@
 import { StyleSheet as RNStyleSheet, View, Text } from "react-native";
+import { GitBranch, Paperclip } from "lucide-react-native";
 import {
   useState,
   useEffect,
@@ -9,12 +10,19 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
+import {
+  COMPOSER_HORIZONTAL_PADDING,
+  FOOTER_HEIGHT,
+  MAX_CONTENT_WIDTH,
+  WORKBENCH_COMPOSER_CONTEXT_ROW_HEIGHT,
+  WORKBENCH_COMPOSER_HEIGHT,
+  WORKBENCH_META_LINE_HEIGHT,
+} from "@/constants/layout";
 import {
   AgentControls,
   DraftAgentControls,
@@ -22,9 +30,12 @@ import {
 } from "@/composer/agent-controls";
 import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { useSessionStore } from "@/stores/session-store";
+import { useResolveWorkspaceIdByCwd, useWorkspaceFields } from "@/stores/session-store-hooks";
+import { findLatestTurnChanges } from "@/screens/workspace/workspace-environment-dock-model";
 import { MessageInput, type MessageInputRef } from "./input/input";
 import type { ImageAttachment, MessagePayload } from "./types";
 import type { Theme } from "@/styles/theme";
+import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { focusWithRetries } from "@/utils/web-focus";
 import {
@@ -86,6 +97,13 @@ function resolveIsComposerLocked(
 
 function resolveIsDesktopWebBreakpoint(isMobile: boolean): boolean {
   return isWeb && !isMobile;
+}
+function resolveComposerWorkspaceLabel(cwd: string): string | null {
+  const normalized = cwd.trim().replaceAll("\\", "/").replace(/\/+$/, "");
+  if (!normalized) return null;
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  return segments.slice(-2).join("/");
 }
 
 function resolveMessagePlaceholder(input: {
@@ -209,6 +227,7 @@ export function Composer({
   externalKeyboardShift,
 }: ComposerProps) {
   const { t } = useTranslation();
+  const { theme } = useUnistyles();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const agentDirectoryStatus = useHostRuntimeAgentDirectoryStatus(serverId);
@@ -233,6 +252,25 @@ export function Composer({
     desktop: t("composer.desktopPlaceholder"),
     mobile: t("composer.mobilePlaceholder"),
   });
+  const composerWorkspaceLabel = useMemo(() => resolveComposerWorkspaceLabel(cwd), [cwd]);
+  const composerWorkspaceId = useResolveWorkspaceIdByCwd(serverId, cwd);
+  const composerBranchName = useWorkspaceFields(
+    serverId,
+    composerWorkspaceId,
+    (workspace) => workspace.gitRuntime?.currentBranch ?? null,
+  );
+  const composerStreamHead = useSessionStore(
+    (state) => state.sessions[serverId]?.agentStreamHead.get(agentId) ?? null,
+  );
+  const composerStreamTail = useSessionStore(
+    (state) => state.sessions[serverId]?.agentStreamTail.get(agentId) ?? null,
+  );
+  const composerLatestTurnChanges = useMemo(
+    () => findLatestTurnChanges({ head: composerStreamHead, tail: composerStreamTail }),
+    [composerStreamHead, composerStreamTail],
+  );
+  const composerPrimaryContextLabel =
+    composerLatestTurnChanges?.changedFiles[0]?.path ?? composerWorkspaceLabel;
   const userInput = value;
   const setUserInput = onChangeText;
   const {
@@ -582,6 +620,29 @@ export function Composer({
         {/* Input area */}
         <View style={inputAreaContainerStyle}>
           <View style={styles.inputAreaContent}>
+            {isDesktopWebBreakpoint ? (
+              <View style={styles.desktopContextRow}>
+                {composerPrimaryContextLabel ? (
+                  <View style={DESKTOP_PRIMARY_CONTEXT_CHIP_STYLE}>
+                    <Paperclip size={12} color={theme.colors.foregroundMuted} />
+                    <Text style={styles.desktopContextChipText} numberOfLines={1}>
+                      {composerPrimaryContextLabel}
+                    </Text>
+                  </View>
+                ) : null}
+                {composerBranchName ? (
+                  <View style={styles.desktopContextChip}>
+                    <GitBranch size={12} color={theme.colors.foregroundMuted} />
+                    <Text style={styles.desktopContextChipText} numberOfLines={1}>
+                      {composerBranchName}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={DESKTOP_SKILLS_CONTEXT_CHIP_STYLE}>
+                  <Text style={styles.desktopContextChipText}>/skills</Text>
+                </View>
+              </View>
+            ) : null}
             {queueList}
             {sendErrorNode}
 
@@ -655,21 +716,31 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   inputAreaContainer: {
     position: "relative",
-    minHeight: FOOTER_HEIGHT,
+    minHeight: {
+      xs: FOOTER_HEIGHT,
+      md: WORKBENCH_COMPOSER_HEIGHT,
+    },
     alignItems: "flex-start",
     width: "100%",
     overflow: "visible",
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).chrome,
+    borderTopWidth: theme.borderWidth[1],
+    borderTopColor: theme.colors.border,
+    paddingTop: {
+      xs: 0,
+      md: 10,
+    },
     paddingLeft: {
       xs: theme.spacing[2],
-      md: theme.spacing[3],
+      md: COMPOSER_HORIZONTAL_PADDING,
     },
     paddingRight: {
       xs: theme.spacing[2],
-      md: theme.spacing[3],
+      md: COMPOSER_HORIZONTAL_PADDING,
     },
     paddingBottom: {
       xs: theme.spacing[2],
-      md: theme.spacing[2],
+      md: theme.spacing[3],
     },
   },
   inputAreaLocked: {
@@ -678,7 +749,40 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContent: {
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
-    gap: theme.spacing[2],
+    gap: {
+      xs: theme.spacing[2],
+      md: 6,
+    },
+  },
+  desktopContextRow: {
+    height: WORKBENCH_COMPOSER_CONTEXT_ROW_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  desktopContextChip: {
+    maxWidth: 260,
+    height: WORKBENCH_COMPOSER_CONTEXT_ROW_HEIGHT,
+    paddingHorizontal: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 6,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+  },
+  desktopPrimaryContextChip: {
+    width: 205,
+  },
+  desktopSkillsContextChip: {
+    width: 48,
+  },
+  desktopContextChipText: {
+    flexShrink: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: WORKBENCH_META_LINE_HEIGHT,
   },
   footer: {
     width: "100%",
@@ -743,6 +847,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
     fontSize: theme.fontSize.sm,
   },
 })) as unknown as Record<string, object>;
+
+const DESKTOP_PRIMARY_CONTEXT_CHIP_STYLE = [
+  styles.desktopContextChip,
+  styles.desktopPrimaryContextChip,
+];
+const DESKTOP_SKILLS_CONTEXT_CHIP_STYLE = [
+  styles.desktopContextChip,
+  styles.desktopSkillsContextChip,
+];
 
 const staticStyles = RNStyleSheet.create({
   container: {
