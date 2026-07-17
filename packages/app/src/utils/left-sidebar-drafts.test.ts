@@ -35,22 +35,22 @@ describe("left sidebar drafts", () => {
     expect(drafts).toEqual([]);
   });
 
-  it("opens the singleton new-conversation page when the current route is a workspace", () => {
+  it("opens the conversation start page when the current route is a workspace", () => {
     expect(
       resolveLeftSidebarNewConversationRoute({
         activeServerId: "server-1",
         pathname: "/h/server-1/workspace/workspace-a",
       }),
-    ).toBe("/h/server-1/new");
+    ).toBe("/h/server-1/open-project");
   });
 
-  it("opens the singleton new-conversation page outside a workspace route", () => {
+  it("opens the conversation start page outside a workspace route", () => {
     expect(
       resolveLeftSidebarNewConversationRoute({
         activeServerId: "server-1",
         pathname: "/h/server-1/sessions",
       }),
-    ).toBe("/h/server-1/new");
+    ).toBe("/h/server-1/open-project");
   });
 
   it("resolves the sidebar home action to the current host open-project route", () => {

@@ -21,7 +21,7 @@
 - **问题**：Expo 57 升级后的 Reanimated 4.5 会把传入 `Animated.View` 的 Unistyles 注册哈希解析为普通样式属性，桌面端在 Agent 状态点和设置页 Switch 渲染时因哈希值为空对象直接崩溃；同类边界还存在于 Composer、终端、文件拖放、消息流与原生 shimmer。
 - **影响范围**：`packages/app` 中所有 Reanimated 节点与 `react-native-unistyles` / `inlineUnistylesStyle` 的交叉使用。
 - **方案**：Animated 节点只接收 React Native 静态样式、普通内联主题值和 Reanimated 动画样式；主题化内容优先下沉到普通 `View`；增加源码边界回归测试，并用真实 Electron 设置页和日志验证。
-- **状态**：完成。Agent 状态点、Switch、音量计、文件拖放、Composer/终端/Agent 面板键盘动画、消息流滚动按钮、原生 shimmer 与浮动面板均已迁出冲突边界；19 个源码边界断言、Switch/Composer/message 聚焦测试、App/全仓 typecheck 与 lint、Electron renderer export、真实设置页全分区巡检及错误日志检查通过。
+- **状态**：完成。Agent 状态点、Switch、音量计、文件拖放、Composer/终端/Agent 面板键盘动画、消息流滚动按钮、原生 shimmer 与浮动面板均已迁出冲突边界；19 个源码边界断言、Switch/Composer/message 聚焦测试、App/全仓 typecheck 与 lint、Electron renderer export、真实设置页全分区巡检及错误日志检查通过。2026-07-17 追加修复 `SyncedLoader` 的 worklet 回调访问 JS 模块变量导致的发送后崩溃，改为实例级 SharedValue 与无回调的时间对齐动画，并在真实 Electron 中完成消息发送、加载态和回复回归。
 
 ### 架构/依赖安全/本地质量提升目标（2026-07-12 启动）
 

@@ -159,6 +159,8 @@ interface SplitNodeViewProps extends Omit<SplitContainerProps, "layout" | "onMov
   dropPreview: SplitDropZoneHover | null;
   tabDropPreview: TabDropPreview | null;
   paneContentRightInsetPaneIds: ReadonlySet<string>;
+  canClosePane: boolean;
+  onClosePane: (pane: SplitPane) => Promise<void> | void;
 }
 
 interface SplitPaneViewProps extends Omit<
@@ -404,6 +406,19 @@ export function SplitContainer({
   );
 
   const panesById = useMemo(() => collectPanesById(layout.root), [layout.root]);
+  const closeEmptyPane = useWorkspaceLayoutStore((state) => state.closeEmptyPane);
+  const handleClosePane = useCallback(
+    async (pane: SplitPane) => {
+      if (pane.tabIds.length === 0) {
+        closeEmptyPane(workspaceKey, pane.id);
+        return;
+      }
+      for (const tabId of pane.tabIds) {
+        await onCloseTab(tabId);
+      }
+    },
+    [closeEmptyPane, onCloseTab, workspaceKey],
+  );
 
   const effectiveRoot = useMemo(() => {
     if (!focusModeEnabled) {
@@ -612,6 +627,8 @@ export function SplitContainer({
         topRightControls={topRightControls}
         paneContentRightInset={paneContentRightInset}
         paneContentRightInsetPaneIds={paneContentRightInsetPaneIds}
+        canClosePane={!focusModeEnabled && panesById.size > 1}
+        onClosePane={handleClosePane}
       />
       <DragOverlay dropAnimation={null}>
         {activeDragTabId ? (
@@ -757,6 +774,8 @@ function SplitNodeView({
   topRightControls,
   paneContentRightInset,
   paneContentRightInsetPaneIds,
+  canClosePane,
+  onClosePane,
 }: SplitNodeViewProps) {
   const groupId = node.kind === "group" ? node.group.id : null;
   const groupDirection = node.kind === "group" ? node.group.direction : null;
@@ -812,6 +831,8 @@ function SplitNodeView({
         topRightControls={topRightControls}
         paneContentRightInset={paneContentRightInset}
         paneContentRightInsetPaneIds={paneContentRightInsetPaneIds}
+        canClosePane={canClosePane}
+        onClosePane={onClosePane}
       />
     );
   }
@@ -862,6 +883,8 @@ function SplitNodeView({
               topRightControls={topRightControls}
               paneContentRightInset={paneContentRightInset}
               paneContentRightInsetPaneIds={paneContentRightInsetPaneIds}
+              canClosePane={canClosePane}
+              onClosePane={onClosePane}
             />
           </SplitGroupChild>
           {index < node.group.children.length - 1 ? (
@@ -916,6 +939,8 @@ function SplitPaneView({
   topRightControls,
   paneContentRightInset = 0,
   paneContentRightInsetPaneIds,
+  canClosePane,
+  onClosePane,
 }: SplitPaneViewProps) {
   const { theme: _theme } = useUnistyles();
   const paneRef = useRef<View | null>(null);
@@ -1039,6 +1064,9 @@ function SplitPaneView({
     [padding.left, padding.right, padding.top],
   );
   const paneTopRightControls = isFocused ? topRightControls : null;
+  const handleClosePane = useCallback(() => {
+    void onClosePane(pane);
+  }, [onClosePane, pane]);
   const effectivePaneContentRightInset = paneContentRightInsetPaneIds.has(pane.id)
     ? paneContentRightInset
     : 0;
@@ -1083,6 +1111,8 @@ function SplitPaneView({
           tabDropPreviewIndex={
             tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
           }
+          showPaneCloseAction={canClosePane}
+          onClosePane={handleClosePane}
           trailingControls={paneTopRightControls}
         />
       </View>

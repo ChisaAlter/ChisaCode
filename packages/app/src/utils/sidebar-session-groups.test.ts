@@ -64,15 +64,15 @@ describe("sidebar session groups", () => {
     expect(groups[1]?.agents.map((entry) => entry.id)).toEqual(["new-a", "old-a"]);
   });
 
-  it("labels ChisaCode-owned worktree groups with the selected project folder", () => {
+  it("labels ChisaCode-owned worktree groups with the project root directory", () => {
     const groups = groupAgentsForSidebar([
       agent({
         id: "owned-worktree",
         cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
         updatedAt: "2026-01-03T00:00:00.000Z",
         projectPlacement: {
-          projectKey: "C:\\Ai\\mimocode-desktop",
-          projectName: "mimocode-desktop",
+          projectKey: "C:\\Users\\48818\\Documents\\CodeBuddyGUI",
+          projectName: "ChisaAlter/codebuddy-gui",
           checkout: {
             cwd: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
             isGit: true,
@@ -80,14 +80,14 @@ describe("sidebar session groups", () => {
             remoteUrl: null,
             worktreeRoot: "C:\\Users\\48818\\.chisacode\\worktrees\\hash\\gallant-owl",
             isChisaCodeOwnedWorktree: true,
-            mainRepoRoot: "C:\\Ai\\mimocode-desktop",
+            mainRepoRoot: "C:\\Users\\48818\\Documents\\CodeBuddyGUI",
           },
         },
       }),
     ]);
 
-    expect(groups.map((group) => group.label)).toEqual(["mimocode-desktop"]);
-    expect(groups[0]?.key).toBe("c:/ai/mimocode-desktop");
+    expect(groups.map((group) => group.label)).toEqual(["CodeBuddyGUI"]);
+    expect(groups[0]?.key).toBe("c:/users/48818/documents/codebuddygui");
   });
 
   it("extracts pinned sessions into a global top group", () => {

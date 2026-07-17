@@ -318,6 +318,7 @@ export const resources = {
           moreTabs: "更多 {{count}} 个标签页",
           splitPaneRight: "向右拆分窗格",
           splitPaneDown: "向下拆分窗格",
+          closePane: "关闭窗格",
           loadingAgentTitle: "正在加载智能体标题",
         },
         bulkClose: {
@@ -444,6 +445,7 @@ export const resources = {
         addProjectHint: "添加一个项目即可开始",
         addProject: "添加项目",
         createWorkspaceForProject: "为 {{project}} 新建 workspace",
+        createConversationForProject: "基于 {{project}} 新建对话",
         newWorkspace: "新建工作区",
       },
       projectSettings: {
@@ -2070,6 +2072,7 @@ export const resources = {
           moreTabs: "{{count}} more tabs",
           splitPaneRight: "Split pane right",
           splitPaneDown: "Split pane down",
+          closePane: "Close pane",
           loadingAgentTitle: "Loading agent title",
         },
         bulkClose: {
@@ -2201,6 +2204,7 @@ export const resources = {
         addProjectHint: "Add a project to get started",
         addProject: "Add project",
         createWorkspaceForProject: "Create a new workspace for {{project}}",
+        createConversationForProject: "Start a new conversation in {{project}}",
         newWorkspace: "New workspace",
       },
       projectSettings: {

@@ -55,19 +55,7 @@ import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isNative, isWeb } from "@/constants/platform";
-import {
-  useIsCompactFormFactor,
-  WORKBENCH_BODY_FONT_SIZE,
-  WORKBENCH_BODY_LINE_HEIGHT,
-  WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-  WORKBENCH_COMPOSER_HINT_FONT_SIZE,
-  WORKBENCH_COMPOSER_INPUT_GAP,
-  WORKBENCH_COMPOSER_INPUT_PADDING_VERTICAL,
-  WORKBENCH_COMPOSER_TEXTAREA_HEIGHT,
-  WORKBENCH_MESSAGE_LINE_HEIGHT,
-  WORKBENCH_META_LINE_HEIGHT,
-  WORKBENCH_MICRO_LINE_HEIGHT,
-} from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { COMPOSER_VOICE_UI_VISIBLE } from "@/composer/voice-visibility";
 import { useComposerHeightMirror } from "./height-mirror";
 import { computeCanStartDictation } from "./state";
@@ -151,7 +139,7 @@ export interface MessageInputRef {
 }
 
 const MIN_INPUT_HEIGHT_MOBILE = 30;
-const MIN_INPUT_HEIGHT_DESKTOP = WORKBENCH_COMPOSER_TEXTAREA_HEIGHT;
+const MIN_INPUT_HEIGHT_DESKTOP = 46;
 const DEFAULT_MAX_INPUT_HEIGHT = 160;
 const MAX_INPUT_VIEWPORT_RATIO = 0.5;
 const MIN_INPUT_HEIGHT = isWeb ? MIN_INPUT_HEIGHT_DESKTOP : MIN_INPUT_HEIGHT_MOBILE;
@@ -182,23 +170,19 @@ interface TextAreaHandle {
 
 function AttachButtonIcon({
   hovered,
-  isCompact,
   onAttachButtonRef,
   buttonIconSize,
 }: {
   hovered: boolean;
-  isCompact: boolean;
   onAttachButtonRef: ((node: View | null) => void) | undefined;
   buttonIconSize: number;
 }) {
-  const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
   return (
     <View ref={onAttachButtonRef} collapsable={false} style={styles.attachButtonAnchor}>
-      {isCompact ? (
-        <ThemedPlus size={buttonIconSize} uniProps={colorMapping} />
-      ) : (
-        <Text style={styles.desktopAttachButtonText}>@files</Text>
-      )}
+      <ThemedPlus
+        size={buttonIconSize}
+        style={hovered ? styles.iconForeground : styles.iconForegroundMuted}
+      />
     </View>
   );
 }
@@ -283,11 +267,11 @@ function VoiceButtonIcon({
   if (isDictating) {
     return <Square size={buttonIconSize} color="white" fill="white" />;
   }
-  const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
+  const iconStyle = hovered ? styles.iconForeground : styles.iconForegroundMuted;
   if (isMutedRealtime) {
-    return <ThemedMicOff size={buttonIconSize} uniProps={colorMapping} />;
+    return <ThemedMicOff size={buttonIconSize} style={iconStyle} />;
   }
-  return <ThemedMic size={buttonIconSize} uniProps={colorMapping} />;
+  return <ThemedMic size={buttonIconSize} style={iconStyle} />;
 }
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
@@ -332,12 +316,12 @@ function SendButtonContent({
   buttonIconSize: number;
 }) {
   if (isSubmitLoading) {
-    return <ThemedActivityIndicator size="small" uniProps={iconAccentForegroundMapping} />;
+    return <ThemedActivityIndicator size="small" style={styles.iconAccentForeground} />;
   }
   if (submitIcon === "return") {
-    return <ThemedCornerDownLeft size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
+    return <ThemedCornerDownLeft size={buttonIconSize} style={styles.iconAccentForeground} />;
   }
-  return <ThemedArrowUp size={buttonIconSize} uniProps={iconAccentForegroundMapping} />;
+  return <ThemedArrowUp size={buttonIconSize} style={styles.iconAccentForeground} />;
 }
 
 function resolveSubmitAccessibilityLabel(input: {
@@ -461,28 +445,6 @@ function handleNativeKeyPress(
 function computeShouldSubmitOnEnter(web: boolean, compact: boolean, native: boolean): boolean {
   if (web && !compact) return true;
   return native;
-}
-
-function renderForCompact(isCompact: boolean, node: React.ReactNode): React.ReactNode {
-  return isCompact ? node : null;
-}
-
-function renderForDesktop(isCompact: boolean, node: React.ReactNode): React.ReactNode {
-  return isCompact ? null : node;
-}
-
-function resolveEffectiveSendButtonDisabled(input: {
-  isCompact: boolean;
-  hasSendableContent: boolean;
-  isSendButtonDisabled: boolean;
-}): boolean {
-  if (!input.isCompact && !input.hasSendableContent) return true;
-  return input.isSendButtonDisabled;
-}
-
-function resolveShouldShowSendButton(isCompact: boolean, shouldShowSendButton: boolean): boolean {
-  if (!isCompact) return true;
-  return shouldShowSendButton;
 }
 
 function resolveKeyPressHandler(
@@ -732,15 +694,6 @@ function MessageInputOverlay({
   return null;
 }
 
-function formatFocusHintLabel(
-  focusInputKeys: ShortcutChord | null | undefined,
-  label: string,
-): string | null {
-  if (!focusInputKeys) return null;
-  const shortcut = formatShortcut(focusInputKeys[0], getShortcutOs());
-  return label.replace("{{shortcut}}", shortcut);
-}
-
 function FocusHint({
   visible,
   focusInputKeys,
@@ -750,29 +703,11 @@ function FocusHint({
   focusInputKeys: ShortcutChord | null | undefined;
   label: string;
 }) {
-  const formattedLabel = formatFocusHintLabel(focusInputKeys, label);
-  if (!visible || !formattedLabel) return null;
+  if (!visible || !focusInputKeys) return null;
+  const shortcut = formatShortcut(focusInputKeys[0], getShortcutOs());
   return (
     <Text style={styles.focusHintText} pointerEvents="none">
-      {formattedLabel}
-    </Text>
-  );
-}
-
-function DesktopFocusHint({
-  visible,
-  focusInputKeys,
-  label,
-}: {
-  visible: boolean;
-  focusInputKeys: ShortcutChord | null | undefined;
-  label: string;
-}) {
-  const formattedLabel = formatFocusHintLabel(focusInputKeys, label);
-  if (!visible || !formattedLabel) return null;
-  return (
-    <Text style={styles.desktopFocusHintText} pointerEvents="none">
-      {formattedLabel}
+      {label.replace("{{shortcut}}", shortcut)}
     </Text>
   );
 }
@@ -1775,7 +1710,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       handleNativeKeyPressEvent,
     );
 
-    const { hasSendableContent, shouldShowSendButton } = computeSendableContent({
+    const { shouldShowSendButton } = computeSendableContent({
       value,
       attachments,
       hasExternalContent,
@@ -1791,11 +1726,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         defaultSendBehavior,
         isAgentRunning,
       });
-    const effectiveSendButtonDisabled = resolveEffectiveSendButtonDisabled({
-      isCompact,
-      hasSendableContent,
-      isSendButtonDisabled,
-    });
     useIosHardwareKeyboardSubmit({
       isEnabled: isInputFocused && !isSendButtonDisabled,
       onSubmit: handleDefaultSendAction,
@@ -1835,7 +1765,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       },
     });
 
-    const showFocusHint = isWeb && isPaneFocused && !isInputFocused && !value;
     const sendTooltipLabel = resolveSendTooltipLabel({
       submitButtonAccessibilityLabel,
       defaultActionQueues,
@@ -1897,8 +1826,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [inputHeight, maxInputHeight],
     );
     const sendButtonCombinedStyle = useMemo(
-      () => [styles.sendButton, effectiveSendButtonDisabled && styles.buttonDisabled],
-      [effectiveSendButtonDisabled],
+      () => [styles.sendButton, isSendButtonDisabled && styles.buttonDisabled],
+      [isSendButtonDisabled],
     );
     const overlayContainerStyle = useMemo(
       () => [staticStyles.overlayContainer, overlayAnimatedStyle],
@@ -1909,12 +1838,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       ({ hovered }: { hovered?: boolean }) => (
         <AttachButtonIcon
           hovered={Boolean(hovered)}
-          isCompact={isCompact}
           onAttachButtonRef={onAttachButtonRef}
           buttonIconSize={buttonIconSize}
         />
       ),
-      [isCompact, onAttachButtonRef, buttonIconSize],
+      [onAttachButtonRef, buttonIconSize],
     );
 
     const renderVoiceButtonIcon = useCallback(
@@ -1928,17 +1856,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       ),
       [isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted, buttonIconSize],
     );
-    const attachmentDropdown = (
-      <AttachmentDropdown
-        isConnected={isConnected}
-        disabled={disabled}
-        attachButtonStyle={attachButtonStyle}
-        renderAttachButtonIcon={renderAttachButtonIcon}
-        attachmentMenuItems={attachmentMenuItems}
-        addAttachmentLabel={t("composer.addAttachment")}
-      />
-    );
-
     return (
       <View ref={rootRef} style={styles.container} testID="message-input-root">
         {/* Regular input */}
@@ -1966,29 +1883,31 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 autoFocus={isWeb && autoFocus}
               />
               {inputScrollbar}
-              {renderForCompact(
-                isCompact,
-                <FocusHint
-                  visible={showFocusHint}
-                  focusInputKeys={focusInputKeys}
-                  label={t("composer.focusHint")}
-                />,
-              )}
+              <FocusHint
+                visible={isWeb && isPaneFocused && !isInputFocused && !value}
+                focusInputKeys={focusInputKeys}
+                label={t("composer.focusHint")}
+              />
             </View>
 
             {/* Button row */}
             <View style={styles.buttonRow}>
               {/* Toolbar left: attachment button + agent controls */}
               <View style={styles.leftButtonGroup}>
-                {renderForCompact(isCompact, attachmentDropdown)}
+                <AttachmentDropdown
+                  isConnected={isConnected}
+                  disabled={disabled}
+                  attachButtonStyle={attachButtonStyle}
+                  renderAttachButtonIcon={renderAttachButtonIcon}
+                  attachmentMenuItems={attachmentMenuItems}
+                  addAttachmentLabel={t("composer.addAttachment")}
+                />
                 {leftContent}
-                {renderForDesktop(isCompact, attachmentDropdown)}
-                {renderForDesktop(isCompact, beforeVoiceContent)}
               </View>
 
               {/* Right: voice button, contextual button (realtime/send/cancel) */}
               <View style={styles.rightButtonGroup}>
-                {renderForCompact(isCompact, beforeVoiceContent)}
+                {beforeVoiceContent}
                 {COMPOSER_VOICE_UI_VISIBLE ? (
                   <VoiceButtonTooltip
                     onVoicePress={handleVoicePress}
@@ -2004,11 +1923,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 ) : null}
                 {rightContent}
                 <SendButtonTooltip
-                  shouldShow={resolveShouldShowSendButton(isCompact, shouldShowSendButton)}
+                  shouldShow={shouldShowSendButton}
                   canPressLoadingButton={canPressLoadingButton}
                   onSubmitLoadingPress={onSubmitLoadingPress}
                   onDefaultSendAction={handleDefaultSendAction}
-                  isSendButtonDisabled={effectiveSendButtonDisabled}
+                  isSendButtonDisabled={isSendButtonDisabled}
                   submitAccessibilityLabel={submitAccessibilityLabel}
                   sendButtonCombinedStyle={sendButtonCombinedStyle}
                   isSubmitLoading={isSubmitLoading}
@@ -2021,15 +1940,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             </View>
           </View>
         </Animated.View>
-
-        {renderForDesktop(
-          isCompact,
-          <DesktopFocusHint
-            visible={showFocusHint}
-            focusInputKeys={focusInputKeys}
-            label={t("composer.focusHint")}
-          />,
-        )}
 
         <Animated.View style={overlayContainerStyle}>
           <MessageInputOverlay
@@ -2061,21 +1971,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   inputWrapper: {
     flexDirection: "column",
-    gap: {
-      xs: theme.spacing[2],
-      md: WORKBENCH_COMPOSER_INPUT_GAP,
-    },
-    backgroundColor: theme.colors.surfaceWorkspace,
+    gap: theme.spacing[3],
+    backgroundColor: theme.colors.surface1,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
-    borderRadius: 10,
+    borderRadius: theme.borderRadius["2xl"],
     paddingVertical: {
       xs: theme.spacing[2],
-      md: WORKBENCH_COMPOSER_INPUT_PADDING_VERTICAL,
+      md: theme.spacing[4],
     },
     paddingHorizontal: {
       xs: theme.spacing[3],
-      md: 10,
+      md: theme.spacing[4],
     },
     ...(isWeb
       ? {
@@ -2096,22 +2003,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
     color: theme.colors.foregroundMuted,
     opacity: 0.5,
   },
-  desktopFocusHintText: {
-    marginTop: 8,
-    marginLeft: 6,
-    color: theme.colors.foregroundSubtleText,
-    fontSize: WORKBENCH_COMPOSER_HINT_FONT_SIZE,
-    lineHeight: WORKBENCH_MICRO_LINE_HEIGHT,
-  },
   textInput: {
     width: "100%",
     color: theme.colors.foreground,
-    fontSize: WORKBENCH_BODY_FONT_SIZE,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: {
-      xs: WORKBENCH_MESSAGE_LINE_HEIGHT,
-      md: WORKBENCH_BODY_LINE_HEIGHT,
-    },
+    lineHeight: theme.fontSize.base * 1.4,
     ...(isWeb
       ? ({
           outlineStyle: "none",
@@ -2121,28 +2018,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
       : {}),
   },
   buttonRow: {
-    minHeight: {
-      xs: 28,
-      md: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-    },
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "space-between",
-    marginHorizontal: {
-      xs: -6,
-      md: 0,
-    },
+    marginHorizontal: -6,
   },
   leftButtonGroup: {
     minWidth: 0,
     flexShrink: 1,
     flexGrow: 1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: {
-      xs: theme.spacing[0],
-      md: 5,
-    },
+    alignItems: "flex-end",
+    gap: theme.spacing[0],
   },
   rightButtonGroup: {
     flexShrink: 0,
@@ -2151,60 +2038,22 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[1],
   },
   attachButton: {
-    width: {
-      xs: 28,
-      md: 53,
-    },
-    height: {
-      xs: 28,
-      md: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-    },
-    borderRadius: {
-      xs: theme.borderRadius.full,
-      md: 6,
-    },
-    borderWidth: {
-      xs: 0,
-      md: theme.borderWidth[1],
-    },
-    borderColor: theme.colors.border,
-    backgroundColor: {
-      xs: "transparent",
-      md: theme.colors.surface2,
-    },
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
   },
   attachButtonAnchor: {
-    width: {
-      xs: 28,
-      md: 53,
-    },
-    height: {
-      xs: 28,
-      md: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-    },
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
   },
-  desktopAttachButtonText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    lineHeight: WORKBENCH_META_LINE_HEIGHT,
-  },
   voiceButton: {
-    width: {
-      xs: 28,
-      md: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-    },
-    height: {
-      xs: 28,
-      md: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-    },
-    borderRadius: {
-      xs: theme.borderRadius.full,
-      md: 7,
-    },
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2213,14 +2062,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   sendButton: {
     width: 28,
-    height: {
-      xs: 28,
-      md: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-    },
-    borderRadius: {
-      xs: theme.borderRadius.full,
-      md: 8,
-    },
+    height: 28,
+    borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.accent,
     alignItems: "center",
     justifyContent: "center",
@@ -2240,6 +2083,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  iconForeground: {
+    color: theme.colors.foreground,
+  },
+  iconForegroundMuted: {
+    color: theme.colors.foregroundMuted,
+  },
+  iconAccentForeground: {
+    color: theme.colors.accentForeground,
   },
 })) as unknown as Record<string, object>;
 
@@ -2266,9 +2118,6 @@ const ThemedCornerDownLeft = withUnistyles(CornerDownLeft);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedTextInput = withUnistyles(TextInput);
 
-const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const iconAccentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 const textInputPlaceholderColorMapping = (theme: Theme) => ({
-  placeholderTextColor: theme.colors.foregroundFaint,
+  placeholderTextColor: theme.colors.surface4,
 });

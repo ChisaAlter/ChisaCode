@@ -1,10 +1,12 @@
 import { View } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
-  makeMutable,
   type SharedValue,
   useAnimatedStyle,
+  useSharedValue,
   withRepeat,
+  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import { useEffect, useMemo } from "react";
@@ -17,45 +19,40 @@ const GRID_COLUMNS = 2;
 const SNAKE_SEGMENT_OFFSETS = [0, -1, -2, -3, -4] as const;
 const SNAKE_OPACITIES = [1, 0.78, 0.56, 0.34, 0] as const;
 const DOT_KEYS = Array.from({ length: DOT_COUNT }, (_, i) => `dot-${i}`);
-const sharedStepProgress = makeMutable(0);
-let sharedLoopStarted = false;
 
-function ensureSharedStepLoopStarted(): void {
-  if (sharedLoopStarted) {
-    return;
-  }
+function useSyncedStepProgress(): SharedValue<number> {
+  const progress = useSharedValue(0);
 
-  sharedLoopStarted = true;
-  const elapsedMs = (Date.now() - SYNCED_LOADER_EPOCH_MS) % SYNCED_LOADER_DURATION_MS;
-  sharedStepProgress.value = (elapsedMs / SYNCED_LOADER_DURATION_MS) * DOT_COUNT;
-  sharedStepProgress.value = withTiming(
-    DOT_COUNT,
-    {
-      duration: Math.max(1, Math.round(SYNCED_LOADER_DURATION_MS - elapsedMs)),
-      easing: Easing.linear,
-    },
-    (finished) => {
-      if (!finished) {
-        sharedLoopStarted = false;
-        return;
-      }
-      sharedStepProgress.value = 0;
-      sharedStepProgress.value = withRepeat(
+  useEffect(() => {
+    const elapsedMs = (Date.now() - SYNCED_LOADER_EPOCH_MS) % SYNCED_LOADER_DURATION_MS;
+    const remainingMs = Math.max(1, Math.round(SYNCED_LOADER_DURATION_MS - elapsedMs));
+    progress.value = (elapsedMs / SYNCED_LOADER_DURATION_MS) * DOT_COUNT;
+    progress.value = withSequence(
+      withTiming(DOT_COUNT, {
+        duration: remainingMs,
+        easing: Easing.linear,
+      }),
+      withTiming(0, { duration: 1, easing: Easing.linear }),
+      withRepeat(
         withTiming(DOT_COUNT, {
           duration: SYNCED_LOADER_DURATION_MS,
           easing: Easing.linear,
         }),
         -1,
         false,
-      );
-    },
-  );
+      ),
+    );
+
+    return () => {
+      cancelAnimation(progress);
+    };
+  }, [progress]);
+
+  return progress;
 }
 
 export function SyncedLoader({ size = 10, color }: { size?: number; color: string }) {
-  useEffect(() => {
-    ensureSharedStepLoopStarted();
-  }, []);
+  const progress = useSyncedStepProgress();
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: 1,
@@ -96,7 +93,7 @@ export function SyncedLoader({ size = 10, color }: { size?: number; color: strin
               color={color}
               dotSize={dotSize}
               sequenceIndex={sequenceIndex}
-              progress={sharedStepProgress}
+              progress={progress}
               left={columnIndex * (dotSize + gap)}
               top={rowIndex * (dotSize + gap)}
             />

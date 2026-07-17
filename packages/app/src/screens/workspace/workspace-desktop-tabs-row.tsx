@@ -16,6 +16,8 @@ import {
   View,
   type LayoutChangeEvent,
   type PressableStateCallbackType,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import {
@@ -81,7 +83,6 @@ import {
   type WorkspaceTabMenuEntry,
 } from "@/screens/workspace/workspace-tab-menu";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
-import type { Theme } from "@/styles/theme";
 
 const LOADING_TAB_LABEL_SKELETON_WIDTH = 80;
 const OVERFLOW_MENU_RESERVED_WIDTH = 40;
@@ -109,13 +110,6 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedGlobe2 = withUnistyles(Globe2);
 const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
 
-const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
-const TAB_MORE_TERMINAL_ICON = <ThemedSquareTerminal size={16} uniProps={mutedColorMapping} />;
-const TAB_MORE_BROWSER_ICON = <ThemedGlobe2 size={16} uniProps={mutedColorMapping} />;
-const TAB_MORE_SPLIT_DOWN_ICON = <ThemedColumns2 size={16} uniProps={mutedColorMapping} />;
-
 function newTabActionButtonStyle({ hovered, pressed }: PressableStateCallbackType) {
   return [styles.newTabActionButton, (hovered || pressed) && styles.newTabActionButtonHovered];
 }
@@ -128,19 +122,19 @@ function TabContextMenuItem({
   const leading = useMemo(() => {
     switch (entry.icon) {
       case "copy":
-        return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
+        return <ThemedCopy size={16} style={ICON_MUTED_STYLE} />;
       case "rotate-cw":
-        return <ThemedRotateCw size={16} uniProps={mutedColorMapping} />;
+        return <ThemedRotateCw size={16} style={ICON_MUTED_STYLE} />;
       case "arrow-left-to-line":
-        return <ThemedArrowLeftToLine size={16} uniProps={mutedColorMapping} />;
+        return <ThemedArrowLeftToLine size={16} style={ICON_MUTED_STYLE} />;
       case "arrow-right-to-line":
-        return <ThemedArrowRightToLine size={16} uniProps={mutedColorMapping} />;
+        return <ThemedArrowRightToLine size={16} style={ICON_MUTED_STYLE} />;
       case "copy-x":
-        return <ThemedCopyX size={16} uniProps={mutedColorMapping} />;
+        return <ThemedCopyX size={16} style={ICON_MUTED_STYLE} />;
       case "pencil":
-        return <ThemedPencil size={16} uniProps={mutedColorMapping} />;
+        return <ThemedPencil size={16} style={ICON_MUTED_STYLE} />;
       case "x":
-        return <ThemedX size={16} uniProps={mutedColorMapping} />;
+        return <ThemedX size={16} style={ICON_MUTED_STYLE} />;
       default:
         return undefined;
     }
@@ -205,6 +199,8 @@ interface WorkspaceDesktopTabsRowProps {
   activeDragTabId?: string | null;
   tabDropPreviewIndex?: number | null;
   showPaneSplitActions?: boolean;
+  showPaneCloseAction?: boolean;
+  onClosePane?: () => void;
   trailingControls?: ReactNode;
 }
 
@@ -323,7 +319,7 @@ function WorkspaceTabsOverflowMenu({
             accessibilityLabel={overflowLabel}
             style={newTabActionButtonStyle}
           >
-            <ThemedMoreHorizontal size={16} uniProps={mutedColorMapping} />
+            <ThemedMoreHorizontal size={16} style={ICON_MUTED_STYLE} />
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="center" offset={8}>
@@ -432,7 +428,7 @@ function WorkspaceTabMoreMenu({
         accessibilityLabel={t("workspace.actions")}
         style={newTabActionButtonStyle}
       >
-        <ThemedMoreHorizontal size={16} uniProps={mutedColorMapping} />
+        <ThemedMoreHorizontal size={16} style={ICON_MUTED_STYLE} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width={220}>
         <DropdownMenuItem
@@ -479,13 +475,51 @@ function WorkspaceOptionalSplitRightButton({
         accessibilityLabel={t("workspace.desktopTabs.splitPaneRight")}
         style={newTabActionButtonStyle}
       >
-        <ThemedColumns2 size={16} uniProps={mutedColorMapping} />
+        <ThemedColumns2 size={16} style={ICON_MUTED_STYLE} />
       </TooltipTrigger>
       <TooltipContent side="bottom" align="center" offset={8}>
         <View style={styles.newTabTooltipRow}>
           <Text style={styles.newTabTooltipText}>{t("workspace.desktopTabs.splitPaneRight")}</Text>
           {splitRightKeys ? (
             <Shortcut chord={splitRightKeys} style={styles.newTabTooltipShortcut} />
+          ) : null}
+        </View>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function WorkspaceOptionalClosePaneButton({
+  showPaneCloseAction,
+  onClosePane,
+  closePaneKeys,
+}: {
+  showPaneCloseAction: boolean;
+  onClosePane: () => void;
+  closePaneKeys: ReturnType<typeof useShortcutKeys>;
+}) {
+  const { t } = useTranslation();
+
+  if (!showPaneCloseAction) {
+    return null;
+  }
+
+  return (
+    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+      <TooltipTrigger
+        testID="workspace-close-pane"
+        onPress={onClosePane}
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.desktopTabs.closePane")}
+        style={newTabActionButtonStyle}
+      >
+        <ThemedX size={16} style={ICON_MUTED_STYLE} />
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center" offset={8}>
+        <View style={styles.newTabTooltipRow}>
+          <Text style={styles.newTabTooltipText}>{t("workspace.desktopTabs.closePane")}</Text>
+          {closePaneKeys ? (
+            <Shortcut chord={closePaneKeys} style={styles.newTabTooltipShortcut} />
           ) : null}
         </View>
       </TooltipContent>
@@ -696,7 +730,7 @@ function TabChip({
               onHoverOut={handleTabHoverOut}
               onPressIn={handleNavigateTab}
               onPress={handleNavigateTab}
-              accessibilityRole="button"
+              accessibilityRole="tab"
               accessibilityLabel={tooltipLabel}
               accessibilityState={tabAccessibilityState}
               aria-selected={isActive}
@@ -726,16 +760,12 @@ function TabChip({
                     isClosingTab ? (
                       <ThemedActivityIndicator
                         size={12}
-                        uniProps={
-                          closeHovered || pressed ? foregroundColorMapping : mutedColorMapping
-                        }
+                        style={closeHovered || pressed ? ICON_FOREGROUND_STYLE : ICON_MUTED_STYLE}
                       />
                     ) : (
                       <ThemedX
                         size={12}
-                        uniProps={
-                          closeHovered || pressed ? foregroundColorMapping : mutedColorMapping
-                        }
+                        style={closeHovered || pressed ? ICON_FOREGROUND_STYLE : ICON_MUTED_STYLE}
                       />
                     )
                   }
@@ -798,6 +828,8 @@ export function WorkspaceDesktopTabsRow({
   activeDragTabId = null,
   tabDropPreviewIndex = null,
   showPaneSplitActions = true,
+  showPaneCloseAction = false,
+  onClosePane = () => {},
   trailingControls = null,
 }: WorkspaceDesktopTabsRowProps) {
   const { t } = useTranslation();
@@ -813,6 +845,7 @@ export function WorkspaceDesktopTabsRow({
   const newTabKeys = useShortcutKeys("workspace-tab-new");
 
   const splitRightKeys = useShortcutKeys("workspace-pane-split-right");
+  const closePaneKeys = useShortcutKeys("workspace-pane-close");
   const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
   const [tabsActionsWidth, setTabsActionsWidth] = useState<number>(0);
 
@@ -1021,7 +1054,7 @@ export function WorkspaceDesktopTabsRow({
             accessibilityLabel={t("workspace.desktopTabs.newAgentTab")}
             style={newTabActionButtonStyle}
           >
-            <ThemedPlus size={16} uniProps={mutedColorMapping} />
+            <ThemedPlus size={16} style={ICON_MUTED_STYLE} />
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
             <View style={styles.newTabTooltipRow}>
@@ -1043,7 +1076,12 @@ export function WorkspaceDesktopTabsRow({
           onCreateBrowserTab={handleCreateBrowserTab}
           onCreateTerminal={handleCreateTerminal}
           onSplitDown={onSplitDown}
-        />{" "}
+        />
+        <WorkspaceOptionalClosePaneButton
+          showPaneCloseAction={showPaneCloseAction}
+          onClosePane={onClosePane}
+          closePaneKeys={closePaneKeys}
+        />
         {trailingControls}
       </View>
     </View>
@@ -1280,6 +1318,12 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12,
     lineHeight: 16,
   },
+  iconForeground: {
+    color: theme.colors.foreground,
+  },
+  iconMuted: {
+    color: theme.colors.foregroundMuted,
+  },
   tabDropIndicator: {
     position: "absolute",
     top: theme.spacing[2],
@@ -1378,6 +1422,13 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
   },
 }));
+
+const ICON_FOREGROUND_STYLE = styles.iconForeground as unknown as StyleProp<ViewStyle>;
+const ICON_MUTED_STYLE = styles.iconMuted as unknown as StyleProp<ViewStyle>;
+
+const TAB_MORE_TERMINAL_ICON = <ThemedSquareTerminal size={16} style={ICON_MUTED_STYLE} />;
+const TAB_MORE_BROWSER_ICON = <ThemedGlobe2 size={16} style={ICON_MUTED_STYLE} />;
+const TAB_MORE_SPLIT_DOWN_ICON = <ThemedColumns2 size={16} style={ICON_MUTED_STYLE} />;
 
 const TABS_ACTIONS_STYLE = [styles.tabsActions, TITLEBAR_NO_DRAG_VIEW_STYLE];
 

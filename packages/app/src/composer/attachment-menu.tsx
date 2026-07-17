@@ -1,7 +1,7 @@
 import { useCallback, useMemo, type MutableRefObject } from "react";
 import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { Github, ListTodo, Paperclip, Target } from "lucide-react-native";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { AgentFeature } from "@chisacode/protocol/agent-types";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
@@ -40,7 +40,6 @@ function FeatureMenuSwitch({
   disabled,
   onToggleFeature,
 }: FeatureMenuSwitchProps) {
-  const { theme } = useUnistyles();
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
       event.stopPropagation();
@@ -52,12 +51,10 @@ function FeatureMenuSwitch({
   const trackStyle = useMemo(
     () => [
       styles.featureMenuSwitchTrack,
-      {
-        backgroundColor: value ? theme.colors.accent : theme.colors.surface3,
-        opacity: disabled ? theme.opacity[50] : 1,
-      },
+      value ? styles.featureMenuSwitchTrackOn : styles.featureMenuSwitchTrackOff,
+      disabled ? styles.featureMenuSwitchDisabled : null,
     ],
-    [disabled, theme.colors.accent, theme.colors.surface3, theme.opacity, value],
+    [disabled, value],
   );
   const thumbStyle = useMemo(
     () => [styles.featureMenuSwitchThumb, value ? styles.featureMenuSwitchThumbOn : null],
@@ -130,7 +127,7 @@ export function useComposerAttachmentMenu(
       {
         id: "image",
         label: t("composer.addPhotosAndFiles"),
-        icon: <ThemedPaperclip size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedPaperclip size={ICON_SIZE.md} style={styles.iconMuted} />,
         onSelect: () => {
           void onPickImage();
         },
@@ -138,7 +135,7 @@ export function useComposerAttachmentMenu(
       {
         id: "github",
         label: t("composer.addIssueOrPr"),
-        icon: <ThemedGithub size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedGithub size={ICON_SIZE.md} style={styles.iconMuted} />,
         onSelect: openGithubPicker,
       },
     ];
@@ -147,7 +144,7 @@ export function useComposerAttachmentMenu(
       items.push({
         id: `feature-${feature.id}`,
         label: feature.label,
-        icon: <ThemedListTodo size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedListTodo size={ICON_SIZE.md} style={styles.iconMuted} />,
         trailing: (
           <FeatureMenuSwitch
             value={feature.selected}
@@ -167,7 +164,7 @@ export function useComposerAttachmentMenu(
       items.push({
         id: "goal",
         label: t("composer.pursueGoal"),
-        icon: <ThemedTarget size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedTarget size={ICON_SIZE.md} style={styles.iconMuted} />,
         onSelect: handleOpenGoalCommand,
       });
     }
@@ -193,6 +190,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
     padding: 2,
     justifyContent: "center",
   },
+  featureMenuSwitchTrackOn: {
+    backgroundColor: theme.colors.accent,
+  },
+  featureMenuSwitchTrackOff: {
+    backgroundColor: theme.colors.surface3,
+  },
+  featureMenuSwitchDisabled: {
+    opacity: theme.opacity[50],
+  },
   featureMenuSwitchThumb: {
     width: 16,
     height: 16,
@@ -207,11 +213,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
   featureMenuSwitchThumbOn: {
     transform: [{ translateX: 14 }],
   },
+  iconMuted: {
+    color: theme.colors.foregroundMuted,
+  },
 })) as unknown as Record<string, object>;
 
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedGithub = withUnistyles(Github);
 const ThemedListTodo = withUnistyles(ListTodo);
 const ThemedTarget = withUnistyles(Target);
-
-const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });

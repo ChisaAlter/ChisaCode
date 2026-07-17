@@ -21,7 +21,7 @@ import {
   MoreHorizontal,
   Pencil,
   Pin,
-  Plus,
+  SquarePen,
   Trash2,
 } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
@@ -675,10 +675,13 @@ function SidebarSessionGroupHeader({
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const toast = useToast();
+  const [isHovered, setIsHovered] = useState(false);
   const presentation = resolveSidebarSessionGroupPresentation(isCompact);
   const canOpenDraft = Boolean(serverId && group.cwd);
   const canCollapse = Boolean(group.cwd);
   const isWorkspaceGroup = Boolean(group.cwd);
+  const actionsVisible = isCompact || isHovered;
   const handleNewDraft = useCallback(
     (event: GestureResponderEvent) => {
       event.stopPropagation();
@@ -699,6 +702,27 @@ function SidebarSessionGroupHeader({
       (Boolean(hovered) || pressed) && styles.groupAddButtonActive,
     ],
     [],
+  );
+  const handleCopyPath = useCallback(() => {
+    if (!group.cwd) {
+      return;
+    }
+    void copySidebarSessionText({
+      text: group.cwd,
+      copiedLabel: t("sidebar.pathCopied"),
+      copyFailedLabel: t("workspace.screen.copyFailed"),
+      toast,
+    });
+  }, [group.cwd, t, toast]);
+  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
+  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
+  const copyPathLeading = useMemo(
+    () => <Copy size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.sm],
+  );
+  const actionsStyle = useMemo(
+    () => [styles.groupActions, !actionsVisible && styles.groupActionsHidden],
+    [actionsVisible],
   );
   const headerStyle =
     presentation.variant === "workbench" ? styles.desktopGroupHeader : styles.groupHeader;
@@ -724,7 +748,11 @@ function SidebarSessionGroupHeader({
   }
 
   return (
-    <View style={headerStyle}>
+    <View
+      style={headerStyle}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+    >
       <Pressable
         accessibilityRole={canCollapse ? "button" : undefined}
         accessibilityState={accessibilityState}
@@ -746,17 +774,45 @@ function SidebarSessionGroupHeader({
           {group.label}
         </Text>
       </Pressable>
-      {canOpenDraft && presentation.showAddButton ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("sidebar.newSessionInWorkspace", { workspace: group.label })}
-          hitSlop={4}
-          onPress={handleNewDraft}
-          style={addButtonStyle}
-          testID={`sidebar-session-group-new-${serverId}-${group.key}`}
+      {canOpenDraft ? (
+        <View
+          pointerEvents={actionsVisible ? "auto" : "none"}
+          style={actionsStyle}
+          testID={`sidebar-session-group-actions-${group.key}`}
         >
-          <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        </Pressable>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              accessibilityRole={isWeb ? undefined : "button"}
+              accessibilityLabel={t("sidebar.projectActions")}
+              hitSlop={4}
+              style={addButtonStyle}
+              testID={`sidebar-session-group-menu-${group.key}`}
+            >
+              <MoreHorizontal size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" width={220}>
+              <DropdownMenuItem
+                leading={copyPathLeading}
+                onSelect={handleCopyPath}
+                testID={`sidebar-session-group-copy-path-${group.key}`}
+              >
+                {t("sidebar.copyPath")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("sidebar.createConversationForProject", {
+              project: group.label,
+            })}
+            hitSlop={4}
+            onPress={handleNewDraft}
+            style={addButtonStyle}
+            testID={`sidebar-session-group-new-${serverId}-${group.key}`}
+          >
+            <SquarePen size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );
@@ -1337,6 +1393,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopGroupHeader: {
     minHeight: 30,
+    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     marginRight: 4,
@@ -1392,6 +1449,21 @@ const styles = StyleSheet.create((theme) => ({
   },
   groupAddButtonActive: {
     backgroundColor: theme.colors.surface1,
+  },
+  groupActions: {
+    position: "absolute",
+    top: 1,
+    right: 0,
+    width: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    flexShrink: 0,
+    backgroundColor: theme.colors.surfaceSidebar,
+    zIndex: 1,
+  },
+  groupActionsHidden: {
+    opacity: 0,
   },
   groupRows: {
     gap: 0,

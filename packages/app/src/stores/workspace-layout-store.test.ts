@@ -978,6 +978,26 @@ describe("workspace-layout-store actions", () => {
     expect(collectAllPanes(layout.root).map((pane) => pane.id)).toEqual(["main"]);
   });
 
+  it("closeEmptyPane collapses an empty split without removing the final pane", () => {
+    useWorkspaceLayoutIds("dededede-dede-dede-dede-dededededede");
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    const splitPaneId = store.splitPaneEmpty(workspaceKey, {
+      targetPaneId: "main",
+      position: "right",
+    });
+    store.closeEmptyPane(workspaceKey, splitPaneId!);
+
+    let layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey]!;
+    expect(collectAllPanes(layout.root).map((pane) => pane.id)).toEqual(["main"]);
+    expect(layout.focusedPaneId).toBe("main");
+
+    store.closeEmptyPane(workspaceKey, "main");
+    layout = workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey]!;
+    expect(collectAllPanes(layout.root).map((pane) => pane.id)).toEqual(["main"]);
+  });
+
   it("splitPane enforces the maximum depth of four", () => {
     useWorkspaceLayoutIds(
       "11111111-1111-1111-1111-111111111111",

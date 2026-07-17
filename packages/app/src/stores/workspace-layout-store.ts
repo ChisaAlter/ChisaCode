@@ -86,6 +86,7 @@ interface WorkspaceLayoutStore {
   ) => string | null;
   openTabInBackground: (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
   closeTab: (workspaceKey: string, tabId: string) => void;
+  closeEmptyPane: (workspaceKey: string, paneId: string) => void;
   focusTab: (workspaceKey: string, tabId: string) => void;
   retargetTab: (workspaceKey: string, tabId: string, target: WorkspaceTabTarget) => string | null;
   convertDraftToAgent: (workspaceKey: string, tabId: string, agentId: string) => string | null;
@@ -556,6 +557,37 @@ export function createWorkspaceLayoutStore(
                     },
                   }
                 : {}),
+              layoutByWorkspace: {
+                ...state.layoutByWorkspace,
+                [normalizedWorkspaceKey]: nextLayout,
+              },
+            };
+          });
+        },
+        closeEmptyPane: (workspaceKey, paneId) => {
+          const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
+          const normalizedPaneId = trimNonEmpty(paneId);
+          if (!normalizedWorkspaceKey || !normalizedPaneId) {
+            return;
+          }
+
+          set((state) => {
+            const currentLayout = getWorkspaceLayout(
+              state.layoutByWorkspace,
+              normalizedWorkspaceKey,
+            );
+            const panes = collectAllPanes(currentLayout.root);
+            const targetPane = findPaneById(currentLayout.root, normalizedPaneId);
+            if (!targetPane || targetPane.tabIds.length > 0 || panes.length <= 1) {
+              return state;
+            }
+
+            const nextLayout = normalizeLayout({
+              ...currentLayout,
+              root: removePaneFromTree(currentLayout.root, normalizedPaneId),
+            });
+            return {
+              ...withoutFocusRestoration(state, normalizedWorkspaceKey),
               layoutByWorkspace: {
                 ...state.layoutByWorkspace,
                 [normalizedWorkspaceKey]: nextLayout,

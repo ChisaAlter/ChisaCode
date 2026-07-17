@@ -96,7 +96,6 @@ import {
   buildHostSessionsRoute,
   buildSettingsRoute,
   mapPathnameToServer,
-  parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
   resolveLeftSidebarHomeRoute,
@@ -104,7 +103,6 @@ import {
 } from "@/utils/left-sidebar-drafts";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "@/utils/sidebar-session-source";
-import { generateDraftId } from "@/stores/draft-keys";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarSessionList } from "./sidebar-session-list";
 
@@ -293,41 +291,33 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
   }, [isRevalidating, isManualRefresh]);
 
   const openProjectPicker = useOpenProjectPicker(activeServerId);
-  const activeWorkspaceRoute = parseHostWorkspaceRouteFromPathname(pathname);
-  const newConversationSourceDirectory = useWorkspaceFields(
-    activeWorkspaceRoute?.serverId === activeServerId ? activeServerId : null,
-    activeWorkspaceRoute?.serverId === activeServerId ? activeWorkspaceRoute.workspaceId : null,
-    (workspace) => workspace.projectRootPath || workspace.workspaceDirectory,
-  );
 
-  const openCurrentWorkspaceDraft = useCallback(() => {
+  const openNewConversationStart = useCallback(() => {
     const draftRoute = resolveLeftSidebarNewConversationRoute({
       activeServerId,
       pathname,
-      sourceDirectory: newConversationSourceDirectory,
-      draftKey: generateDraftId(),
     });
     if (!draftRoute) {
       return false;
     }
     router.push(draftRoute);
     return true;
-  }, [activeServerId, newConversationSourceDirectory, pathname]);
+  }, [activeServerId, pathname]);
 
   const handleOpenProjectMobile = useCallback(() => {
     showMobileAgent();
-    if (openCurrentWorkspaceDraft()) {
+    if (openNewConversationStart()) {
       return;
     }
     void openProjectPicker();
-  }, [openCurrentWorkspaceDraft, openProjectPicker, showMobileAgent]);
+  }, [openNewConversationStart, openProjectPicker, showMobileAgent]);
 
   const handleOpenProjectDesktop = useCallback(() => {
-    if (openCurrentWorkspaceDraft()) {
+    if (openNewConversationStart()) {
       return;
     }
     void openProjectPicker();
-  }, [openCurrentWorkspaceDraft, openProjectPicker]);
+  }, [openNewConversationStart, openProjectPicker]);
 
   const handleSearch = useCallback(() => {
     useKeyboardShortcutsStore.getState().setCommandCenterOpen(true);

@@ -139,8 +139,7 @@ function getSidebarSessionGroupLabel(
 ): string {
   const ownedProjectRoot = getChisaCodeOwnedProjectRoot(agent);
   if (ownedProjectRoot) {
-    const projectName = agent.projectPlacement?.projectName.trim() ?? "";
-    return projectName || getAgentCwdGroupLabel(ownedProjectRoot, fallbackLabel);
+    return getAgentCwdGroupLabel(ownedProjectRoot, fallbackLabel);
   }
   return getAgentCwdGroupLabel(agent.cwd, fallbackLabel);
 }

@@ -1,6 +1,6 @@
 import type { Href } from "expo-router";
 import type { WorkspaceLayout } from "@/stores/workspace-layout-store";
-import { buildHostOpenProjectRoute, buildHostNewWorkspaceRoute } from "@/utils/host-routes";
+import { buildHostOpenProjectRoute } from "@/utils/host-routes";
 
 export interface SidebarSessionDraft {
   serverId: string;
@@ -33,9 +33,9 @@ export function resolveLeftSidebarNewConversationRoute(input: {
     return null;
   }
   void input.pathname;
-  return buildHostNewWorkspaceRoute(activeServerId, input.sourceDirectory, {
-    draftKey: input.draftKey ?? undefined,
-  });
+  void input.sourceDirectory;
+  void input.draftKey;
+  return buildHostOpenProjectRoute(activeServerId);
 }
 
 export function resolveLeftSidebarHomeRoute(activeServerId: string | null): Href | null {

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { SidebarSessionList } from "@/components/sidebar-session-list";
@@ -133,6 +133,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.archiveSessionFailed": "Failed to archive session",
         "sidebar.archiving": "Archiving...",
         "sidebar.newSessionInWorkspace": `New session in ${values?.workspace ?? "workspace"}`,
+        "sidebar.createConversationForProject": `Start a new conversation in ${values?.project ?? "project"}`,
         "sidebar.deleteSession": "Delete",
         "sidebar.deletingSession": "Deleting...",
         "sidebar.deleteSessionTitle": "Delete session?",
@@ -371,7 +372,7 @@ vi.mock("lucide-react-native", () => ({
   MoreHorizontal: () => <span data-testid="more-icon" />,
   Pencil: () => <span data-testid="pencil-icon" />,
   Pin: () => <span data-testid="pin-icon" />,
-  Plus: () => <span data-testid="plus-icon" />,
+  SquarePen: () => <span data-testid="square-pen-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
 }));
 
@@ -443,7 +444,7 @@ describe("SidebarSessionList", () => {
     expect(screen.getByTestId("provider-icon-codex")).not.toBeNull();
   });
 
-  it("opens the singleton new-conversation page from a workspace group plus button", () => {
+  it("opens a directory-based draft from a workspace group action", () => {
     const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Project session" })];
 
     renderSidebarSessionList({ serverId: "server-1", agents });
@@ -453,6 +454,24 @@ describe("SidebarSessionList", () => {
     expect(routerPushMock).toHaveBeenCalledWith(
       "/h/server-1/new?dir=%2Frepo%2Fproject&draft=draft-fixed",
     );
+  });
+
+  it("renders project menu and new-conversation actions for desktop workspace groups", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Project session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+
+    expect(screen.getByTestId("sidebar-session-group-menu-/repo/project")).not.toBeNull();
+    expect(screen.getByLabelText("Start a new conversation in project")).not.toBeNull();
+  });
+
+  it("copies the workspace path from the project menu", async () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Project session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+    fireEvent.click(screen.getByTestId("sidebar-session-group-copy-path-/repo/project"));
+
+    await waitFor(() => expect(setStringAsyncMock).toHaveBeenCalledWith("/repo/project"));
   });
 
   it("renders session rows with title only and no status metadata", () => {
@@ -746,7 +765,7 @@ describe("SidebarSessionList", () => {
 
     renderSidebarSessionList({ serverId: "server-1", agents });
 
-    expect(screen.getByLabelText("New session in project")).not.toBeNull();
+    expect(screen.getByLabelText("Start a new conversation in project")).not.toBeNull();
   });
 
   it("keeps desktop row action targets large enough to click reliably", () => {
