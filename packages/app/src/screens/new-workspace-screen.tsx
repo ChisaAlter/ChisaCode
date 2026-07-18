@@ -58,6 +58,7 @@ import type { ImageAttachment, MessagePayload } from "@/composer/types";
 import type { AgentAttachment, GitHubSearchItem } from "@chisacode/protocol/messages";
 import type { CreateChisaCodeWorktreeInput } from "@chisacode/client/internal/daemon-client";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
+import { validateBranchSlug } from "@chisacode/protocol/branch-slug";
 import {
   buildNewWorkspaceDirectoryOptions,
   NEW_WORKSPACE_ADD_PROJECT_OPTION_ID,
@@ -66,6 +67,8 @@ import { resolveNewWorkspaceDraftReset } from "./new-workspace-draft-reset";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
 import {
   pickerItemToCheckoutRequest,
+  pickerItemToWorktreeSlug,
+  pickerOptionToRenderModel,
   type PickerCheckoutRequest,
   type PickerItem,
 } from "./new-workspace-picker-item";
@@ -406,6 +409,9 @@ function NewWorkspaceComposerFooter({
           value={selectedOptionId}
           onSelect={handleSelectOption}
           searchable
+          allowCustomValue
+          customValuePrefix={t("workspace.createBranch")}
+          customValueDescription={t("workspace.createBranchDescription")}
           searchPlaceholder={t("workspace.searchBranchesAndPrs")}
           title={t("workspace.startFrom")}
           open={pickerOpen}
@@ -494,12 +500,8 @@ function formatPrLabel(item: { number: number; title: string }): string {
   return `#${item.number} ${item.title}`;
 }
 
-function pickerItemLabel(item: PickerItem): string {
-  return item.kind === "branch" ? item.name : formatPrLabel(item.item);
-}
-
 function pickerItemTriggerLabel(item: PickerItem): string {
-  return item.kind === "branch" ? item.name : formatPrLabel(item.item);
+  return item.kind === "github-pr" ? formatPrLabel(item.item) : item.name;
 }
 
 function computePickerOptionData(
@@ -1090,9 +1092,9 @@ export function NewWorkspaceScreen({
 
   const selectedOptionId = useMemo(() => {
     if (!selectedItem) return "";
-    return selectedItem.kind === "branch"
-      ? branchOptionId(selectedItem.name)
-      : prOptionId(selectedItem.item.number);
+    if (selectedItem.kind === "branch") return branchOptionId(selectedItem.name);
+    if (selectedItem.kind === "new-branch") return selectedItem.name;
+    return prOptionId(selectedItem.item.number);
   }, [selectedItem]);
 
   const selectPickerItem = useCallback(
@@ -1118,10 +1120,19 @@ export function NewWorkspaceScreen({
   const handleSelectOption = useCallback(
     (id: string) => {
       const item = itemById.get(id);
-      if (!item) return;
-      selectPickerItem(item);
+      if (item) {
+        selectPickerItem(item);
+        return;
+      }
+      const branchName = id.trim();
+      const validation = validateBranchSlug(branchName);
+      if (!validation.valid) {
+        toast.error(t("sidebar.invalidBranchName"));
+        return;
+      }
+      selectPickerItem({ kind: "new-branch", name: branchName, baseRefName: currentBranch });
     },
-    [itemById, selectPickerItem],
+    [currentBranch, itemById, selectPickerItem, t, toast],
   );
 
   const checkoutHintPrAttachment = useMemo(
@@ -1188,7 +1199,7 @@ export function NewWorkspaceScreen({
       return {
         cwd: input.cwd,
         ...(projectId && input.cwd === normalizedSourceDirectory ? { projectId } : {}),
-        worktreeSlug: createNameId(),
+        worktreeSlug: pickerItemToWorktreeSlug(selectedItem, createNameId()),
         ...(hasFirstAgentContext
           ? {
               firstAgentContext: {
@@ -1315,29 +1326,22 @@ export function NewWorkspaceScreen({
       onPress: () => void;
     }) => {
       const item = itemById.get(option.id);
-      if (!item) return <View key={option.id} />;
-
-      const isBranch = item.kind === "branch";
-
-      const testID = isBranch
-        ? `new-workspace-ref-picker-branch-${item.name}`
-        : `new-workspace-ref-picker-pr-${item.item.number}`;
-
       const description =
-        !isBranch && item.item.baseRefName
+        item?.kind === "github-pr" && item.item.baseRefName
           ? t("workspace.intoBaseRef", { baseRefName: item.item.baseRefName })
           : undefined;
+      const renderModel = pickerOptionToRenderModel(option, item, description);
 
       return (
         <PickerOptionItem
-          testID={testID}
-          label={pickerItemLabel(item)}
-          description={description}
+          testID={renderModel.testID}
+          label={renderModel.label}
+          description={renderModel.description}
           selected={selected}
           active={active}
           disabled={isPending}
           onPress={onPress}
-          isBranch={isBranch}
+          isBranch={renderModel.isBranch}
           iconColor={theme.colors.foregroundMuted}
           iconSize={theme.iconSize.sm}
         />
@@ -1371,7 +1375,7 @@ export function NewWorkspaceScreen({
       ? t("workspace.searching")
       : t("workspace.noMatchingRefs");
 
-  const composerFooter = useMemo(
+  const workspaceControls = useMemo(
     () => (
       <NewWorkspaceComposerFooter
         directoryAnchorRef={directoryAnchorRef}
@@ -1482,6 +1486,7 @@ export function NewWorkspaceScreen({
               </View>
               <ImportSessionAction onPress={handleOpenImportSheet} disabled={isPending} />
             </View>
+            <View style={styles.workspaceControls}>{workspaceControls}</View>
             <Composer
               agentId={`new-workspace:${serverId}:${sourceDirectory}`}
               serverId={serverId}
@@ -1503,7 +1508,6 @@ export function NewWorkspaceScreen({
               commandDraftConfig={composerState?.commandDraftConfig}
               agentControls={agentControlsWithDisabled}
               onAddImages={handleAddImagesCallback}
-              footer={composerFooter}
               inputWrapperStyle={styles.draftComposerInputWrapper}
             />
             {errorMessage ? (
@@ -1653,7 +1657,13 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     flexWrap: "wrap",
     gap: theme.spacing[2],
-    paddingTop: theme.spacing[1],
+  },
+  workspaceControls: {
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: "center",
+    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
+    paddingBottom: theme.spacing[2],
   },
   badge: {
     flexDirection: "row",

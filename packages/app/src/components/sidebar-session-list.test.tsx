@@ -13,6 +13,8 @@ const {
   routerPushMock,
   archiveAgentMock,
   updateAgentMock,
+  clearAgentAttentionMock,
+  renameProjectMock,
   deleteAgentMock,
   setAgentsMock,
   setAgentDetailsMock,
@@ -27,6 +29,9 @@ const {
   confirmDialogMock,
   isCompactFormFactorMock,
   pendingArchiveAgentIdsMock,
+  openPathMock,
+  setSessionGroupPinnedMock,
+  setSessionGroupHiddenMock,
 } = vi.hoisted(() => ({
   theme: {
     spacing: { 1: 4, 2: 8, 3: 12, 4: 16, 8: 32 },
@@ -67,6 +72,8 @@ const {
   routerPushMock: vi.fn(),
   archiveAgentMock: vi.fn(),
   updateAgentMock: vi.fn(),
+  clearAgentAttentionMock: vi.fn(),
+  renameProjectMock: vi.fn(),
   deleteAgentMock: vi.fn(),
   setAgentsMock: vi.fn(),
   setAgentDetailsMock: vi.fn(),
@@ -81,6 +88,9 @@ const {
   confirmDialogMock: vi.fn(),
   isCompactFormFactorMock: vi.fn(() => false),
   pendingArchiveAgentIdsMock: vi.fn((_serverId: string) => new Set<string>()),
+  openPathMock: vi.fn(),
+  setSessionGroupPinnedMock: vi.fn(),
+  setSessionGroupHiddenMock: vi.fn(),
 }));
 
 vi.hoisted(() => {
@@ -103,6 +113,11 @@ vi.mock("@/constants/platform", () => ({
 
 vi.mock("@/constants/layout", () => ({
   useIsCompactFormFactor: () => isCompactFormFactorMock(),
+  WORKBENCH_BODY_FONT_SIZE: 13,
+  WORKBENCH_BODY_LINE_HEIGHT: 18,
+  WORKBENCH_META_FONT_SIZE: 11,
+  WORKBENCH_META_LINE_HEIGHT: 16,
+  WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT: 18,
 }));
 
 vi.mock("expo-router", () => ({
@@ -121,6 +136,13 @@ vi.mock("react-i18next", () => ({
         "sidebar.addProject": "Add project",
         "sidebar.pinnedSessions": "Pinned",
         "sidebar.loadMoreSessions": "Load more sessions",
+        "sidebar.projectActions": "Project actions",
+        "sidebar.pinProject": "Pin project",
+        "sidebar.unpinProject": "Unpin project",
+        "sidebar.openInFileExplorer": "Open in File Explorer",
+        "sidebar.renameProject": "Rename project",
+        "sidebar.markAllAsRead": "Mark all as read",
+        "sidebar.archiveProjectSessions": "Archive tasks",
         "sidebar.sessionActions": "Session actions",
         "sidebar.copyPath": "Copy path",
         "sidebar.pinSession": "Pin",
@@ -167,6 +189,32 @@ vi.mock("@/components/provider-icons", () => ({
     const ProviderIcon = () => <span data-testid={`provider-icon-${provider}`} />;
     return ProviderIcon;
   },
+}));
+
+vi.mock("@/components/ui/agent-status-indicator", () => ({
+  AgentStatusIndicator: () => null,
+}));
+
+vi.mock("@/components/draggable-list", () => ({
+  DraggableList: ({
+    data,
+    renderItem,
+  }: {
+    data: AggregatedAgent[];
+    renderItem: (input: {
+      item: AggregatedAgent;
+      drag: () => void;
+      isActive: boolean;
+    }) => React.ReactNode | null;
+  }) => (
+    <div>
+      {data.map((item) => (
+        <React.Fragment key={item.id}>
+          {renderItem({ item, drag: vi.fn(), isActive: false })}
+        </React.Fragment>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -322,6 +370,8 @@ vi.mock("@/stores/session-store", () => {
       "server-1": {
         client: {
           updateAgent: updateAgentMock,
+          clearAgentAttention: clearAgentAttentionMock,
+          renameProject: renameProjectMock,
           deleteAgent: deleteAgentMock,
         },
       },
@@ -342,6 +392,27 @@ vi.mock("@/stores/workspace-layout-store", () => ({
       unpinAgentEverywhere: unpinAgentEverywhereMock,
     }),
   },
+}));
+
+vi.mock("@/stores/sidebar-order-store", () => {
+  const state = {
+    sessionGroupOrderByServerId: {},
+    sessionOrderByServerAndGroup: {},
+    pinnedSessionGroupKeysByServerId: {},
+    hiddenSessionGroupKeysByServerId: {},
+    getSessionOrder: () => [],
+    setSessionGroupOrder: vi.fn(),
+    setSessionOrder: vi.fn(),
+    setSessionGroupPinned: setSessionGroupPinnedMock,
+    setSessionGroupHidden: setSessionGroupHiddenMock,
+  };
+  return {
+    useSidebarOrderStore: (selector: (value: typeof state) => unknown) => selector(state),
+  };
+});
+
+vi.mock("@/desktop/host", () => ({
+  getDesktopHost: () => ({ opener: { openPath: openPathMock } }),
 }));
 
 vi.mock("@/stores/session-store-hooks", () => ({
@@ -367,8 +438,12 @@ vi.mock("@/utils/agent-history-navigation", () => ({
 vi.mock("lucide-react-native", () => ({
   Archive: () => <span data-testid="archive-icon" />,
   Bot: () => <span data-testid="bot-icon" />,
+  CheckCheck: () => <span data-testid="check-check-icon" />,
+  ChevronDown: () => <span data-testid="chevron-down-icon" />,
+  ChevronRight: () => <span data-testid="chevron-right-icon" />,
   Copy: () => <span data-testid="copy-icon" />,
   Folder: () => <span data-testid="folder-icon" />,
+  FolderOpen: () => <span data-testid="folder-open-icon" />,
   MoreHorizontal: () => <span data-testid="more-icon" />,
   Pencil: () => <span data-testid="pencil-icon" />,
   Pin: () => <span data-testid="pin-icon" />,
@@ -412,6 +487,10 @@ describe("SidebarSessionList", () => {
     archiveAgentMock.mockResolvedValue(undefined);
     updateAgentMock.mockReset();
     updateAgentMock.mockResolvedValue(undefined);
+    clearAgentAttentionMock.mockReset();
+    clearAgentAttentionMock.mockResolvedValue(undefined);
+    renameProjectMock.mockReset();
+    renameProjectMock.mockResolvedValue({ customName: "Renamed session" });
     deleteAgentMock.mockReset();
     deleteAgentMock.mockResolvedValue(undefined);
     setAgentsMock.mockReset();
@@ -431,6 +510,10 @@ describe("SidebarSessionList", () => {
     isCompactFormFactorMock.mockReturnValue(false);
     pendingArchiveAgentIdsMock.mockReset();
     pendingArchiveAgentIdsMock.mockReturnValue(new Set<string>());
+    openPathMock.mockReset();
+    openPathMock.mockResolvedValue(undefined);
+    setSessionGroupPinnedMock.mockReset();
+    setSessionGroupHiddenMock.mockReset();
   });
 
   it("groups sessions by cwd basename and renders provider icons", () => {
@@ -463,6 +546,68 @@ describe("SidebarSessionList", () => {
 
     expect(screen.getByTestId("sidebar-session-group-menu-/repo/project")).not.toBeNull();
     expect(screen.getByLabelText("Start a new conversation in project")).not.toBeNull();
+    expect(screen.getByTestId("sidebar-session-group-toggle-pin-/repo/project")).not.toBeNull();
+    expect(screen.getByTestId("sidebar-session-group-open-path-/repo/project")).not.toBeNull();
+    expect(screen.getByTestId("sidebar-session-group-rename-/repo/project")).not.toBeNull();
+    expect(screen.getByTestId("sidebar-session-group-mark-read-/repo/project")).not.toBeNull();
+    expect(screen.getByTestId("sidebar-session-group-archive-/repo/project")).not.toBeNull();
+    expect(screen.getByTestId("sidebar-session-group-remove-/repo/project")).not.toBeNull();
+  });
+
+  it("pins projects and opens their directory from the project menu", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Project session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+    fireEvent.click(screen.getByTestId("sidebar-session-group-toggle-pin-/repo/project"));
+    fireEvent.click(screen.getByTestId("sidebar-session-group-open-path-/repo/project"));
+
+    expect(setSessionGroupPinnedMock).toHaveBeenCalledWith("server-1", "/repo/project", true);
+    expect(openPathMock).toHaveBeenCalledWith("/repo/project");
+  });
+
+  it("renames a project from the project menu", async () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Project session" })];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+    fireEvent.click(screen.getByTestId("sidebar-session-group-rename-/repo/project"));
+    fireEvent.click(screen.getByTestId("sidebar-session-project-rename-modal-/repo/project"));
+
+    await waitFor(() => {
+      expect(renameProjectMock).toHaveBeenCalledWith("/repo/project", "Renamed session");
+    });
+  });
+
+  it("marks every attention-requiring project session as read", async () => {
+    const agents = [
+      agent({ id: "agent-1", cwd: "/repo/project", requiresAttention: true }),
+      agent({ id: "agent-2", cwd: "/repo/project", requiresAttention: true }),
+    ];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+    fireEvent.click(screen.getByTestId("sidebar-session-group-mark-read-/repo/project"));
+
+    await waitFor(() => {
+      expect(clearAgentAttentionMock).toHaveBeenCalledWith(["agent-1", "agent-2"]);
+    });
+  });
+
+  it("archives all project sessions and can remove the project group", async () => {
+    const agents = [
+      agent({ id: "agent-1", cwd: "/repo/project" }),
+      agent({ id: "agent-2", cwd: "/repo/project" }),
+    ];
+
+    renderSidebarSessionList({ serverId: "server-1", agents });
+    fireEvent.click(screen.getByTestId("sidebar-session-group-archive-/repo/project"));
+
+    await waitFor(() => {
+      expect(archiveAgentMock).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(screen.getByTestId("sidebar-session-group-remove-/repo/project"));
+    await waitFor(() => {
+      expect(setSessionGroupHiddenMock).toHaveBeenCalledWith("server-1", "/repo/project", true);
+    });
   });
 
   it("copies the workspace path from the project menu", async () => {
@@ -979,10 +1124,12 @@ describe("SidebarSessionList", () => {
       .map((entry) => entry.backgroundColor)
       .filter(Boolean);
 
-    expect(backgrounds.at(-1)).toBe(theme.colors.surface2);
+    expect(backgrounds.at(-1)).toBe(
+      `color-mix(in srgb, ${theme.colors.accent} 10%, ${theme.colors.surfaceSidebarHover})`,
+    );
   });
 
-  it("uses stronger elevation to mark the selected session row", () => {
+  it("keeps the selected session row on the continuous sidebar surface", () => {
     const agents = [agent({ id: "agent-1", cwd: "/repo/project" })];
     renderSidebarSessionList({
       serverId: "server-1",
@@ -994,12 +1141,7 @@ describe("SidebarSessionList", () => {
       screen.getByTestId("sidebar-session-server-1-agent-1").getAttribute("data-style") ?? "[]",
     ) as Array<{ shadowColor?: string; elevation?: number } | false>;
 
-    expect(rowStyle).toContainEqual(
-      expect.objectContaining({
-        shadowColor: "rgba(0, 0, 0, 0.20)",
-        elevation: 8,
-      }),
-    );
+    expect(rowStyle.some((entry) => Boolean(entry && entry.elevation))).toBe(false);
   });
 
   it("hides desktop quick actions until the session row is hovered", () => {

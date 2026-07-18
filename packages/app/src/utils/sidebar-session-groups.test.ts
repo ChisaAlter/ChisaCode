@@ -171,6 +171,30 @@ describe("sidebar session groups", () => {
     expect(ordered[0]?.agents.map((entry) => entry.id)).toEqual(["old-a", "new-a"]);
   });
 
+  it("moves pinned project groups ahead of other projects without displacing pinned sessions", () => {
+    const groups = groupAgentsForSidebar(
+      [
+        agent({
+          id: "pinned-session",
+          cwd: "C:\\ai\\pinned-session-project",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          pinned: true,
+        }),
+        agent({ id: "project-a", cwd: "C:\\ai\\a", updatedAt: "2026-01-03T00:00:00.000Z" }),
+        agent({ id: "project-b", cwd: "C:\\ai\\b", updatedAt: "2026-01-02T00:00:00.000Z" }),
+      ],
+      { isPinnedAgent: (entry) => entry.labels["chisacode.sidebarPinned"] === "true" },
+    );
+
+    const ordered = applyStableSidebarSessionOrder(groups, {
+      groupOrder: ["c:/ai/a", "c:/ai/b"],
+      agentOrderByGroup: {},
+      pinnedGroupKeys: new Set(["c:/ai/b"]),
+    });
+
+    expect(ordered.map((group) => group.key)).toEqual(["__pinned__", "c:/ai/b", "c:/ai/a"]);
+  });
+
   it("removes stale keys and appends newly discovered sessions without moving existing ones", () => {
     expect(
       reconcileSidebarSessionOrder(

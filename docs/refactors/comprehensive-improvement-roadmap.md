@@ -14,7 +14,7 @@
 - **问题**：主题系统已经统一，但真实产品仍保留宽侧栏、大面积新工作区空态、悬浮环境卡片和宽松 Composer，和 `design/web3-themes-v2.html` 的紧凑工作台差异明显，用户无法感知实质视觉变化。
 - **影响范围**：`packages/app` 的 LeftSidebar、workspace header/center column/environment panel、Composer、新工作区和设置页；Electron 与 Android 共同受影响。
 - **方案**：复用现有真实状态和交互边界，把 Electron 重排为 200px 会话栏、42px 标题栏、38px 标签栏、贴底 Composer 和设计稿中的 240px 悬浮环境面板；Android 同步收紧 header、抽屉、Composer 与设置列表，不增加 iOS 工作。
-- **状态**：Electron 视觉重构已通过真实 packaged app 的 1200×800 阻断式对照验收。四轮截图修复了空 workspace 路由、标题栏空隙、侧栏/header/tab/Composer 密度、消息卡片化和环境面板节奏；2026-07-16 又完成五主题全桌面页面字体/UI 尺寸收口和 Codex 风格侧栏层级重构。最终验证覆盖 5 套主题 x 21 个 Electron 可访问页面，共 105 个组合，`tinyText=0`、`lowLineHeight=0`、页面横向溢出 0、连接态运行时错误 0，`design-qa.md` 结论为 passed。2026-07-17 追加真实 packaged Electron 回归，修复顶部标签过早截断、原生窗口控制区下方分割线中断，以及会话因点击/活跃时间自动改序；现仅手动拖动会改变持久顺序。Android 原生视觉验收仍待真实设备或模拟器，不以 Web 代替，因此总项继续保留在进行中。
+- **状态**：Electron 视觉重构已通过真实 packaged app 的 1200×800 阻断式对照验收。四轮截图修复了空 workspace 路由、标题栏空隙、侧栏/header/tab/Composer 密度、消息卡片化和环境面板节奏；2026-07-16 又完成五主题全桌面页面字体/UI 尺寸收口和 Codex 风格侧栏层级重构。最终验证覆盖 5 套主题 x 21 个 Electron 可访问页面，共 105 个组合，`tinyText=0`、`lowLineHeight=0`、页面横向溢出 0、连接态运行时错误 0，`design-qa.md` 结论为 passed。2026-07-17 追加真实 packaged Electron 回归，修复顶部标签过早截断、原生窗口控制区下方分割线中断，以及会话因点击/活跃时间自动改序；现仅手动拖动会改变持久顺序。2026-07-18 修复视觉重构造成的交互回退：新对话目录/分支控件回到输入框上方并支持输入新分支，会话行恢复 hover 置顶/归档双快捷操作，项目菜单恢复置顶、资源管理器、重命名、全部已读、批量归档和移除；根因是 `1eaac3205` 在压缩侧栏时以单个三点菜单替换了既有快捷动作，后续 `f15ef6427` 又只给项目菜单接了复制路径，视觉验收没有覆盖行为保真。新增组件、排序持久化、分支意图和受信 Electron 本地路径 IPC 的聚焦测试作为防回归门禁。Android 原生视觉验收仍待真实设备或模拟器，不以 Web 代替，因此总项继续保留在进行中。
 
 ### Reanimated 4.5 / Unistyles 样式边界修复（2026-07-15 启动）
 

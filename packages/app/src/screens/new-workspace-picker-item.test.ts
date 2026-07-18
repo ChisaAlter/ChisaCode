@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { GitHubSearchItem } from "@chisacode/protocol/messages";
-import { pickerItemToCheckoutRequest, type PickerItem } from "./new-workspace-picker-item";
+import {
+  pickerItemToCheckoutRequest,
+  pickerItemToWorktreeSlug,
+  pickerOptionToRenderModel,
+  type PickerItem,
+} from "./new-workspace-picker-item";
 
 const prItem: GitHubSearchItem = {
   kind: "pr",
@@ -39,6 +44,25 @@ describe("pickerItemToCheckoutRequest", () => {
     });
   });
 
+  it("creates a new branch from the current base and uses its name as the worktree slug", () => {
+    const item: PickerItem = {
+      kind: "new-branch",
+      name: "feat/sidebar-actions",
+      baseRefName: "main",
+    };
+    expect(pickerItemToCheckoutRequest(item)).toEqual({
+      action: "branch-off",
+      refName: "main",
+    });
+    expect(pickerItemToWorktreeSlug(item, "generated-name")).toBe("feat/sidebar-actions");
+  });
+
+  it("keeps the generated worktree slug for existing branch selections", () => {
+    expect(pickerItemToWorktreeSlug({ kind: "branch", name: "dev" }, "generated-name")).toBe(
+      "generated-name",
+    );
+  });
+
   it("handles a github-pr with a null baseRef", () => {
     const item: PickerItem = {
       kind: "github-pr",
@@ -54,6 +78,26 @@ describe("pickerItemToCheckoutRequest", () => {
       action: "checkout",
       refName: "orphan",
       githubPrNumber: 7,
+    });
+  });
+});
+
+describe("pickerOptionToRenderModel", () => {
+  it("renders a custom branch value as a visible create-branch row", () => {
+    expect(
+      pickerOptionToRenderModel(
+        {
+          id: "feat/sidebar-actions",
+          label: 'Create branch "feat/sidebar-actions"',
+          description: "Create from the current branch",
+        },
+        undefined,
+      ),
+    ).toEqual({
+      testID: "new-workspace-ref-picker-new-branch-feat/sidebar-actions",
+      label: 'Create branch "feat/sidebar-actions"',
+      description: "Create from the current branch",
+      isBranch: true,
     });
   });
 });

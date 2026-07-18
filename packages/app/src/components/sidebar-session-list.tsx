@@ -14,10 +14,12 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
   Archive,
+  CheckCheck,
   ChevronDown,
   ChevronRight,
   Copy,
   Folder,
+  FolderOpen,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -56,6 +58,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { useToast } from "@/contexts/toast-context";
+import { getDesktopHost } from "@/desktop/host";
 import { useArchiveAgent, useSuppressedArchiveAgentIds } from "@/hooks/use-archive-agent";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
 import { useSessionStore } from "@/stores/session-store";
@@ -180,6 +183,50 @@ function updateAgentLabelsInStore(input: {
       },
     });
     return next;
+  });
+}
+
+function clearAgentAttentionInStore(serverId: string, agentIds: ReadonlySet<string>): void {
+  const setAgents = useSessionStore.getState().setAgents;
+  setAgents(serverId, (previous) => {
+    let changed = false;
+    const next = new Map(previous);
+    for (const agentId of agentIds) {
+      const existing = next.get(agentId);
+      if (!existing?.requiresAttention) {
+        continue;
+      }
+      changed = true;
+      next.set(agentId, {
+        ...existing,
+        requiresAttention: false,
+        attentionReason: null,
+        attentionTimestamp: null,
+      });
+    }
+    return changed ? next : previous;
+  });
+}
+
+function updateProjectNameInStore(serverId: string, projectKey: string, projectName: string): void {
+  const setAgents = useSessionStore.getState().setAgents;
+  setAgents(serverId, (previous) => {
+    let changed = false;
+    const next = new Map(previous);
+    for (const [agentId, agent] of next) {
+      if (agent.projectPlacement?.projectKey !== projectKey) {
+        continue;
+      }
+      changed = true;
+      next.set(agentId, {
+        ...agent,
+        projectPlacement: {
+          ...agent.projectPlacement,
+          projectName,
+        },
+      });
+    }
+    return changed ? next : previous;
   });
 }
 
@@ -394,6 +441,14 @@ function SidebarSessionRow({
   const rowTitleSelectedStyle = isCompact
     ? styles.rowTitleSelected
     : styles.desktopRowTitleSelected;
+  const rowQuickActionsStyle = isCompact ? styles.rowQuickActions : styles.desktopRowQuickActions;
+  const rowQuickButtonStyle = isCompact ? styles.rowQuickButton : styles.desktopRowQuickButton;
+  const rowQuickButtonActiveStyle = isCompact
+    ? styles.rowQuickButtonActive
+    : styles.desktopRowQuickButtonActive;
+  const rowQuickButtonPressedStyle = isCompact
+    ? styles.rowQuickButtonPressed
+    : styles.desktopRowQuickButtonPressed;
 
   const selectedIndicatorStyle = isCompact
     ? styles.rowSelectedIndicator
@@ -415,13 +470,9 @@ function SidebarSessionRow({
   );
   const rowAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
   const rowIconColor = isSelected ? theme.colors.foreground : theme.colors.foregroundMuted;
-  const showDesktopMenu = isHovered || isPinning || isArchiving || isDeleting;
-  const handleHoverIn = useCallback(() => setIsHovered(true), []);
-  const handleHoverOut = useCallback(() => setIsHovered(false), []);
-  const desktopMenuSlotStyle = useMemo(
-    () => [styles.desktopRowMenuSlot, !showDesktopMenu && styles.desktopRowMenuHidden],
-    [showDesktopMenu],
-  );
+  const showQuickActions = isCompact || isHovered || isPinning || isArchiving;
+  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
+  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
 
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -479,14 +530,39 @@ function SidebarSessionRow({
     () => <Trash2 size={16} color={theme.colors.foregroundMuted} />,
     [theme.colors.foregroundMuted],
   );
+  const handleQuickPin = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      handleTogglePin();
+    },
+    [handleTogglePin],
+  );
+  const handleQuickArchive = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      handleArchive();
+    },
+    [handleArchive],
+  );
 
   const menuButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.rowMenuButton,
-      !isCompact && styles.desktopRowMenuButton,
       (Boolean(hovered) || pressed) && styles.rowMenuButtonActive,
     ],
-    [isCompact],
+    [],
+  );
+  const quickButtonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      rowQuickButtonStyle,
+      (Boolean(hovered) || pressed) && rowQuickButtonActiveStyle,
+      pressed && rowQuickButtonPressedStyle,
+    ],
+    [rowQuickButtonActiveStyle, rowQuickButtonPressedStyle, rowQuickButtonStyle],
+  );
+  const quickActionsStyle = useMemo(
+    () => [rowQuickActionsStyle, !showQuickActions && styles.rowQuickHidden],
+    [rowQuickActionsStyle, showQuickActions],
   );
 
   const rowMainContent = (
@@ -510,7 +586,7 @@ function SidebarSessionRow({
     </>
   );
 
-  const rowTrailingContent = (
+  const compactTrailingContent = (
     <DropdownMenu>
       <DropdownMenuTrigger
         testID={`sidebar-session-menu-${agent.serverId}-${agent.id}`}
@@ -575,6 +651,42 @@ function SidebarSessionRow({
     </DropdownMenu>
   );
 
+  const desktopTrailingContent = (
+    <View
+      pointerEvents={showQuickActions ? "auto" : "none"}
+      style={quickActionsStyle}
+      testID={`sidebar-session-quick-actions-${agent.serverId}-${agent.id}`}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          isPinned
+            ? t("sidebar.unpinSessionLabel", { title: sessionTitle })
+            : t("sidebar.pinSessionLabel", { title: sessionTitle })
+        }
+        testID={`sidebar-session-quick-pin-${agent.serverId}-${agent.id}`}
+        style={quickButtonStyle}
+        onPress={handleQuickPin}
+        disabled={isPinning}
+      >
+        <Pin
+          size={theme.iconSize.sm}
+          color={isPinned ? theme.colors.accent : theme.colors.foregroundMuted}
+        />
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("sidebar.archiveSessionLabel", { title: sessionTitle })}
+        testID={`sidebar-session-quick-archive-${agent.serverId}-${agent.id}`}
+        style={quickButtonStyle}
+        onPress={handleQuickArchive}
+        disabled={isArchiving || Boolean(agent.archivedAt)}
+      >
+        <Archive size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      </Pressable>
+    </View>
+  );
+
   if (isCompact) {
     return (
       <Pressable
@@ -587,18 +699,18 @@ function SidebarSessionRow({
         accessibilityState={rowAccessibilityState}
       >
         {rowMainContent}
-        {rowTrailingContent}
+        {compactTrailingContent}
       </Pressable>
     );
   }
 
   return (
     <ContextMenu>
-      <Pressable
+      <View
         key={agentActionKey}
         style={styles.desktopRowContainer}
-        onHoverIn={handleHoverIn}
-        onHoverOut={handleHoverOut}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
         testID={`sidebar-session-container-${agent.serverId}-${agent.id}`}
       >
         <ContextMenuTrigger
@@ -613,16 +725,32 @@ function SidebarSessionRow({
         >
           {rowMainContent}
         </ContextMenuTrigger>
-        <View pointerEvents={showDesktopMenu ? "auto" : "none"} style={desktopMenuSlotStyle}>
-          {rowTrailingContent}
-        </View>
-      </Pressable>
+        {desktopTrailingContent}
+      </View>
       <ContextMenuContent
         align="start"
         width={220}
         mobileMode="sheet"
         testID={`sidebar-session-context-${agent.serverId}-${agent.id}`}
       >
+        <ContextMenuItem
+          testID={`sidebar-session-toggle-pin-${agent.serverId}-${agent.id}`}
+          onSelect={handleTogglePin}
+          status={isPinning ? "pending" : "idle"}
+          leading={pinLeading}
+        >
+          {isPinned ? t("sidebar.unpinSession") : t("sidebar.pinSession")}
+        </ContextMenuItem>
+        <ContextMenuItem
+          testID={`sidebar-session-archive-${agent.serverId}-${agent.id}`}
+          onSelect={handleArchive}
+          disabled={Boolean(agent.archivedAt)}
+          status={isArchiving ? "pending" : "idle"}
+          pendingLabel={t("sidebar.archiving")}
+          leading={archiveLeading}
+        >
+          {agent.archivedAt ? t("session.archived") : t("sidebar.archive")}
+        </ContextMenuItem>
         <ContextMenuItem
           testID={`sidebar-session-copy-path-${agent.serverId}-${agent.id}`}
           onSelect={handleCopyPath}
@@ -666,12 +794,32 @@ function SidebarSessionGroupHeader({
   isCompact,
   collapsed,
   onToggleCollapsed,
+  isPinned,
+  isArchiving,
+  isRemoving,
+  isMarkingRead,
+  onTogglePin,
+  onOpenPath,
+  onRename,
+  onMarkAllRead,
+  onArchive,
+  onRemove,
 }: {
   group: SidebarSessionRenderGroup;
   serverId: string | null;
   isCompact: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  isPinned: boolean;
+  isArchiving: boolean;
+  isRemoving: boolean;
+  isMarkingRead: boolean;
+  onTogglePin: () => void;
+  onOpenPath: () => void;
+  onRename: () => void;
+  onMarkAllRead: () => void;
+  onArchive: () => void;
+  onRemove: () => void;
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -720,6 +868,30 @@ function SidebarSessionGroupHeader({
     () => <Copy size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
     [theme.colors.foregroundMuted, theme.iconSize.sm],
   );
+  const pinLeading = useMemo(
+    () => <Pin size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.sm],
+  );
+  const openLeading = useMemo(
+    () => <FolderOpen size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.sm],
+  );
+  const renameLeading = useMemo(
+    () => <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.sm],
+  );
+  const readLeading = useMemo(
+    () => <CheckCheck size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.sm],
+  );
+  const archiveLeading = useMemo(
+    () => <Archive size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.sm],
+  );
+  const removeLeading = useMemo(
+    () => <Trash2 size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted, theme.iconSize.sm],
+  );
   const actionsStyle = useMemo(
     () => [styles.groupActions, !actionsVisible && styles.groupActionsHidden],
     [actionsVisible],
@@ -738,14 +910,13 @@ function SidebarSessionGroupHeader({
     () => [titleStyle, !isCompact && isWorkspaceGroup && styles.desktopWorkspaceGroupTitle],
     [isCompact, isWorkspaceGroup, titleStyle],
   );
-  let collapseIndicator: React.ReactNode = null;
-  if (canCollapse && presentation.showCollapseIndicator) {
-    collapseIndicator = collapsed ? (
-      <ChevronRight size={theme.iconSize.xs} color={theme.colors.foregroundSubtleText} />
-    ) : (
-      <ChevronDown size={theme.iconSize.xs} color={theme.colors.foregroundSubtleText} />
-    );
-  }
+  const collapseIndicator = renderSidebarGroupCollapseIndicator({
+    canCollapse,
+    showCollapseIndicator: presentation.showCollapseIndicator,
+    collapsed,
+    size: theme.iconSize.xs,
+    color: theme.colors.foregroundSubtleText,
+  });
 
   return (
     <View
@@ -792,11 +963,59 @@ function SidebarSessionGroupHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" width={220}>
               <DropdownMenuItem
+                leading={pinLeading}
+                onSelect={onTogglePin}
+                testID={`sidebar-session-group-toggle-pin-${group.key}`}
+              >
+                {isPinned ? t("sidebar.unpinProject") : t("sidebar.pinProject")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                leading={openLeading}
+                onSelect={onOpenPath}
+                testID={`sidebar-session-group-open-path-${group.key}`}
+              >
+                {t("sidebar.openInFileExplorer")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                leading={renameLeading}
+                onSelect={onRename}
+                disabled={!group.projectKey}
+                testID={`sidebar-session-group-rename-${group.key}`}
+              >
+                {t("sidebar.renameProject")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                leading={readLeading}
+                onSelect={onMarkAllRead}
+                status={isMarkingRead ? "pending" : "idle"}
+                disabled={!group.agents.some((agent) => agent.requiresAttention)}
+                testID={`sidebar-session-group-mark-read-${group.key}`}
+              >
+                {t("sidebar.markAllAsRead")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                leading={archiveLeading}
+                onSelect={onArchive}
+                status={isArchiving ? "pending" : "idle"}
+                testID={`sidebar-session-group-archive-${group.key}`}
+              >
+                {t("sidebar.archiveProjectSessions")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 leading={copyPathLeading}
                 onSelect={handleCopyPath}
                 testID={`sidebar-session-group-copy-path-${group.key}`}
               >
                 {t("sidebar.copyPath")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                leading={removeLeading}
+                onSelect={onRemove}
+                status={isRemoving ? "pending" : "idle"}
+                destructive
+                testID={`sidebar-session-group-remove-${group.key}`}
+              >
+                {t("sidebar.removeProject")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -818,6 +1037,23 @@ function SidebarSessionGroupHeader({
   );
 }
 
+function renderSidebarGroupCollapseIndicator(input: {
+  canCollapse: boolean;
+  showCollapseIndicator: boolean;
+  collapsed: boolean;
+  size: number;
+  color: string;
+}): React.ReactNode {
+  if (!input.canCollapse || !input.showCollapseIndicator) {
+    return null;
+  }
+  return input.collapsed ? (
+    <ChevronRight size={input.size} color={input.color} />
+  ) : (
+    <ChevronDown size={input.size} color={input.color} />
+  );
+}
+
 interface SidebarSessionGroupViewProps {
   group: SidebarSessionRenderGroup;
   groupStyle: StyleProp<ViewStyle>;
@@ -836,6 +1072,16 @@ interface SidebarSessionGroupViewProps {
   isArchivingAgent: (input: { serverId: string; agentId: string }) => boolean;
   onToggleCollapsed: (groupKey: string) => void;
   onReorderAgents: (groupKey: string, agents: AggregatedAgent[]) => void;
+  pinnedProjectGroupKeys: ReadonlySet<string>;
+  archivingProjectGroupKey: string | null;
+  removingProjectGroupKey: string | null;
+  markingReadProjectGroupKey: string | null;
+  onToggleProjectPin: (group: SidebarSessionRenderGroup) => void;
+  onOpenProjectPath: (group: SidebarSessionRenderGroup) => void;
+  onRenameProject: (group: SidebarSessionRenderGroup) => void;
+  onMarkProjectRead: (group: SidebarSessionRenderGroup) => void;
+  onArchiveProject: (group: SidebarSessionRenderGroup) => void;
+  onRemoveProject: (group: SidebarSessionRenderGroup) => void;
 }
 
 function SidebarSessionGroupView({
@@ -856,6 +1102,16 @@ function SidebarSessionGroupView({
   isArchivingAgent,
   onToggleCollapsed,
   onReorderAgents,
+  pinnedProjectGroupKeys,
+  archivingProjectGroupKey,
+  removingProjectGroupKey,
+  markingReadProjectGroupKey,
+  onToggleProjectPin,
+  onOpenProjectPath,
+  onRenameProject,
+  onMarkProjectRead,
+  onArchiveProject,
+  onRemoveProject,
 }: SidebarSessionGroupViewProps) {
   const handleToggleCollapsed = useCallback(
     () => onToggleCollapsed(group.key),
@@ -898,6 +1154,24 @@ function SidebarSessionGroupView({
     (agents: AggregatedAgent[]) => onReorderAgents(group.key, agents),
     [group.key, onReorderAgents],
   );
+  const handleToggleProjectPin = useCallback(
+    () => onToggleProjectPin(group),
+    [group, onToggleProjectPin],
+  );
+  const handleOpenProjectPath = useCallback(
+    () => onOpenProjectPath(group),
+    [group, onOpenProjectPath],
+  );
+  const handleRenameProject = useCallback(() => onRenameProject(group), [group, onRenameProject]);
+  const handleMarkProjectRead = useCallback(
+    () => onMarkProjectRead(group),
+    [group, onMarkProjectRead],
+  );
+  const handleArchiveProject = useCallback(
+    () => onArchiveProject(group),
+    [group, onArchiveProject],
+  );
+  const handleRemoveProject = useCallback(() => onRemoveProject(group), [group, onRemoveProject]);
   let renderedRows: React.ReactNode = null;
   if (!collapsed) {
     renderedRows = isCompact ? (
@@ -940,6 +1214,16 @@ function SidebarSessionGroupView({
           isCompact={isCompact}
           collapsed={collapsed}
           onToggleCollapsed={handleToggleCollapsed}
+          isPinned={pinnedProjectGroupKeys.has(group.key)}
+          isArchiving={archivingProjectGroupKey === group.key}
+          isRemoving={removingProjectGroupKey === group.key}
+          isMarkingRead={markingReadProjectGroupKey === group.key}
+          onTogglePin={handleToggleProjectPin}
+          onOpenPath={handleOpenProjectPath}
+          onRename={handleRenameProject}
+          onMarkAllRead={handleMarkProjectRead}
+          onArchive={handleArchiveProject}
+          onRemove={handleRemoveProject}
         />
       ) : null}
       {renderedRows}
@@ -969,8 +1253,13 @@ export function SidebarSessionList({
   const { archiveAgent, isArchivingAgent } = useArchiveAgent();
   const suppressedArchiveAgentIds = useSuppressedArchiveAgentIds(serverId ?? "");
   const [renamingAgent, setRenamingAgent] = useState<AggregatedAgent | null>(null);
+  const [renamingProjectGroup, setRenamingProjectGroup] =
+    useState<SidebarSessionRenderGroup | null>(null);
   const [pinningAgentKey, setPinningAgentKey] = useState<string | null>(null);
   const [deletingAgentKey, setDeletingAgentKey] = useState<string | null>(null);
+  const [archivingProjectGroupKey, setArchivingProjectGroupKey] = useState<string | null>(null);
+  const [removingProjectGroupKey, setRemovingProjectGroupKey] = useState<string | null>(null);
+  const [markingReadProjectGroupKey, setMarkingReadProjectGroupKey] = useState<string | null>(null);
   const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -983,6 +1272,14 @@ export function SidebarSessionList({
   const getSessionOrder = useSidebarOrderStore((state) => state.getSessionOrder);
   const setSessionGroupOrder = useSidebarOrderStore((state) => state.setSessionGroupOrder);
   const setSessionOrder = useSidebarOrderStore((state) => state.setSessionOrder);
+  const pinnedSessionGroupKeysByServerId = useSidebarOrderStore(
+    (state) => state.pinnedSessionGroupKeysByServerId,
+  );
+  const hiddenSessionGroupKeysByServerId = useSidebarOrderStore(
+    (state) => state.hiddenSessionGroupKeysByServerId,
+  );
+  const setSessionGroupPinned = useSidebarOrderStore((state) => state.setSessionGroupPinned);
+  const setSessionGroupHidden = useSidebarOrderStore((state) => state.setSessionGroupHidden);
   const visibleAgents = useMemo(
     () => agents.filter((agent) => !agent.archivedAt && !suppressedArchiveAgentIds.has(agent.id)),
     [agents, suppressedArchiveAgentIds],
@@ -1017,13 +1314,22 @@ export function SidebarSessionList({
       activitySortedGroups.map((group) => [group.key, getSessionOrder(serverId, group.key)]),
     );
   }, [activitySortedGroups, getSessionOrder, serverId, sessionOrderByServerAndGroup]);
+  const pinnedProjectGroupKeys = useMemo(
+    () => new Set(serverId ? (pinnedSessionGroupKeysByServerId[serverId] ?? []) : []),
+    [pinnedSessionGroupKeysByServerId, serverId],
+  );
+  const hiddenProjectGroupKeys = useMemo(
+    () => new Set(serverId ? (hiddenSessionGroupKeysByServerId[serverId] ?? []) : []),
+    [hiddenSessionGroupKeysByServerId, serverId],
+  );
   const groups = useMemo(
     () =>
       applyStableSidebarSessionOrder(activitySortedGroups, {
         groupOrder: storedGroupOrder,
         agentOrderByGroup: storedAgentOrderByGroup,
+        pinnedGroupKeys: pinnedProjectGroupKeys,
       }),
-    [activitySortedGroups, storedAgentOrderByGroup, storedGroupOrder],
+    [activitySortedGroups, pinnedProjectGroupKeys, storedAgentOrderByGroup, storedGroupOrder],
   );
 
   useEffect(() => {
@@ -1060,8 +1366,12 @@ export function SidebarSessionList({
     [groups],
   );
   const workspaceGroups = useMemo(
-    () => groups.filter((group) => group.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY),
-    [groups],
+    () =>
+      groups.filter(
+        (group) =>
+          group.key !== PINNED_SIDEBAR_SESSION_GROUP_KEY && !hiddenProjectGroupKeys.has(group.key),
+      ),
+    [groups, hiddenProjectGroupKeys],
   );
   const refreshControl = useMemo(
     () =>
@@ -1077,11 +1387,130 @@ export function SidebarSessionList({
   const renamingClient = useSessionStore((state) =>
     renamingAgent?.serverId ? (state.sessions[renamingAgent.serverId]?.client ?? null) : null,
   );
+  const renamingProjectClient = useSessionStore((state) =>
+    serverId && renamingProjectGroup ? (state.sessions[serverId]?.client ?? null) : null,
+  );
 
   const handleRename = useCallback((agent: AggregatedAgent) => {
     rememberArchivedAgentDetail(agent);
     setRenamingAgent(agent);
   }, []);
+
+  const handleToggleProjectPin = useCallback(
+    (group: SidebarSessionRenderGroup) => {
+      if (!serverId) {
+        return;
+      }
+      setSessionGroupPinned(serverId, group.key, !pinnedProjectGroupKeys.has(group.key));
+    },
+    [pinnedProjectGroupKeys, serverId, setSessionGroupPinned],
+  );
+
+  const handleOpenProjectPath = useCallback(
+    (group: SidebarSessionRenderGroup) => {
+      if (!group.cwd) {
+        return;
+      }
+      const openPath = getDesktopHost()?.opener?.openPath;
+      if (!openPath) {
+        toast.error(t("sidebar.openInFileExplorerUnavailable"));
+        return;
+      }
+      void openPath(group.cwd).catch((error) => {
+        toast.error(error instanceof Error ? error.message : t("sidebar.openInFileExplorerFailed"));
+      });
+    },
+    [t, toast],
+  );
+
+  const handleRenameProject = useCallback((group: SidebarSessionRenderGroup) => {
+    if (group.projectKey) {
+      setRenamingProjectGroup(group);
+    }
+  }, []);
+
+  const handleMarkProjectRead = useCallback(
+    (group: SidebarSessionRenderGroup) => {
+      if (!serverId) {
+        return;
+      }
+      const actionClient = useSessionStore.getState().sessions[serverId]?.client ?? null;
+      if (!actionClient) {
+        toast.error(t("workspace.screen.hostDisconnected"));
+        return;
+      }
+      const agentIds = group.agents
+        .filter((agent) => agent.requiresAttention)
+        .map((agent) => agent.id);
+      if (agentIds.length === 0) {
+        return;
+      }
+      setMarkingReadProjectGroupKey(group.key);
+      void actionClient
+        .clearAgentAttention(agentIds)
+        .then(() => {
+          clearAgentAttentionInStore(serverId, new Set(agentIds));
+          invalidateSidebarSessionQueries(queryClient, serverId);
+          return undefined;
+        })
+        .catch((error) => {
+          toast.error(error instanceof Error ? error.message : t("sidebar.markAllAsReadFailed"));
+        })
+        .finally(() => setMarkingReadProjectGroupKey(null));
+    },
+    [queryClient, serverId, t, toast],
+  );
+
+  const handleArchiveProject = useCallback(
+    (group: SidebarSessionRenderGroup) => {
+      void (async () => {
+        const confirmed = await confirmDialog({
+          title: t("sidebar.archiveProjectSessionsTitle"),
+          message: t("sidebar.archiveProjectSessionsMessage", { name: group.label }),
+          confirmLabel: t("sidebar.archiveProjectSessions"),
+          cancelLabel: t("common.cancel"),
+        });
+        if (!confirmed) {
+          return;
+        }
+        setArchivingProjectGroupKey(group.key);
+        const results = await Promise.allSettled(
+          group.agents.map((agent) =>
+            archiveAgent({ serverId: agent.serverId, agentId: agent.id }),
+          ),
+        );
+        setArchivingProjectGroupKey(null);
+        if (results.some((result) => result.status === "rejected")) {
+          toast.error(t("sidebar.archiveProjectSessionsFailed"));
+        }
+      })();
+    },
+    [archiveAgent, t, toast],
+  );
+
+  const handleRemoveProject = useCallback(
+    (group: SidebarSessionRenderGroup) => {
+      if (!serverId) {
+        return;
+      }
+      void (async () => {
+        const confirmed = await confirmDialog({
+          title: t("sidebar.removeProjectTitle"),
+          message: t("sidebar.removeProjectMessage", { name: group.label }),
+          confirmLabel: t("sidebar.removeProject"),
+          cancelLabel: t("common.cancel"),
+          destructive: true,
+        });
+        if (!confirmed) {
+          return;
+        }
+        setRemovingProjectGroupKey(group.key);
+        setSessionGroupHidden(serverId, group.key, true);
+        setRemovingProjectGroupKey(null);
+      })();
+    },
+    [serverId, setSessionGroupHidden, t],
+  );
 
   const handleTogglePin = useCallback(
     (agent: AggregatedAgent) => {
@@ -1177,6 +1606,9 @@ export function SidebarSessionList({
   const handleRenameClose = useCallback(() => {
     setRenamingAgent(null);
   }, []);
+  const handleRenameProjectClose = useCallback(() => {
+    setRenamingProjectGroup(null);
+  }, []);
   const toggleCollapsedGroup = useCallback((groupKey: string) => {
     setCollapsedGroupKeys((current) => {
       const next = new Set(current);
@@ -1225,6 +1657,27 @@ export function SidebarSessionList({
     [queryClient, renamingAgent, renamingClient, t],
   );
 
+  const handleRenameProjectSubmit = useCallback(
+    async (nextTitle: string) => {
+      if (!serverId || !renamingProjectGroup?.projectKey) {
+        return;
+      }
+      if (!renamingProjectClient) {
+        throw new Error(t("workspace.screen.hostDisconnected"));
+      }
+      const trimmed = nextTitle.trim();
+      if (!trimmed) {
+        return;
+      }
+      await renamingProjectClient.renameProject(renamingProjectGroup.projectKey, trimmed);
+      updateProjectNameInStore(serverId, renamingProjectGroup.projectKey, trimmed);
+      invalidateSidebarSessionQueries(queryClient, serverId);
+      void queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setRenamingProjectGroup(null);
+    },
+    [queryClient, renamingProjectClient, renamingProjectGroup, serverId, t],
+  );
+
   const renameModal = (
     <AdaptiveRenameModal
       visible={renamingAgent !== null}
@@ -1241,17 +1694,34 @@ export function SidebarSessionList({
       }
     />
   );
+  const renameProjectModal = (
+    <AdaptiveRenameModal
+      visible={renamingProjectGroup !== null}
+      title={t("sidebar.renameProject")}
+      initialValue={renamingProjectGroup?.label ?? ""}
+      submitLabel={t("workspace.screen.rename")}
+      maxLength={200}
+      onClose={handleRenameProjectClose}
+      onSubmit={handleRenameProjectSubmit}
+      testID={
+        renamingProjectGroup
+          ? `sidebar-session-project-rename-modal-${renamingProjectGroup.key}`
+          : undefined
+      }
+    />
+  );
 
   if (!serverId) {
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyTitle}>{t("sidebar.noHost")}</Text>
         {renameModal}
+        {renameProjectModal}
       </View>
     );
   }
 
-  if (groups.length === 0) {
+  if (!pinnedGroup && workspaceGroups.length === 0) {
     return (
       <ScrollView
         style={styles.container}
@@ -1268,6 +1738,7 @@ export function SidebarSessionList({
           ) : null}
         </View>
         {renameModal}
+        {renameProjectModal}
       </ScrollView>
     );
   }
@@ -1300,6 +1771,16 @@ export function SidebarSessionList({
           isArchivingAgent={isArchivingAgent}
           onToggleCollapsed={toggleCollapsedGroup}
           onReorderAgents={handleReorderAgents}
+          pinnedProjectGroupKeys={pinnedProjectGroupKeys}
+          archivingProjectGroupKey={archivingProjectGroupKey}
+          removingProjectGroupKey={removingProjectGroupKey}
+          markingReadProjectGroupKey={markingReadProjectGroupKey}
+          onToggleProjectPin={handleToggleProjectPin}
+          onOpenProjectPath={handleOpenProjectPath}
+          onRenameProject={handleRenameProject}
+          onMarkProjectRead={handleMarkProjectRead}
+          onArchiveProject={handleArchiveProject}
+          onRemoveProject={handleRemoveProject}
         />
       ) : null}
       {workspaceGroups.length > 0 && !isCompact && showGroupTitles ? (
@@ -1325,6 +1806,16 @@ export function SidebarSessionList({
           isArchivingAgent={isArchivingAgent}
           onToggleCollapsed={toggleCollapsedGroup}
           onReorderAgents={handleReorderAgents}
+          pinnedProjectGroupKeys={pinnedProjectGroupKeys}
+          archivingProjectGroupKey={archivingProjectGroupKey}
+          removingProjectGroupKey={removingProjectGroupKey}
+          markingReadProjectGroupKey={markingReadProjectGroupKey}
+          onToggleProjectPin={handleToggleProjectPin}
+          onOpenProjectPath={handleOpenProjectPath}
+          onRenameProject={handleRenameProject}
+          onMarkProjectRead={handleMarkProjectRead}
+          onArchiveProject={handleArchiveProject}
+          onRemoveProject={handleRemoveProject}
         />
       ))}
       {hasMore ? (
@@ -1340,6 +1831,7 @@ export function SidebarSessionList({
         </Button>
       ) : null}
       {renameModal}
+      {renameProjectModal}
     </ScrollView>
   );
 }
@@ -1513,7 +2005,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingVertical: 0,
     paddingLeft: 8,
-    paddingRight: 34,
+    paddingRight: 68,
     borderRadius: theme.borderRadius.md,
   },
   desktopRowContainer: {
@@ -1611,16 +2103,16 @@ const styles = StyleSheet.create((theme) => ({
     top: 3,
     right: theme.spacing[1],
     bottom: 3,
-    width: 30,
+    width: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: 0,
+    gap: theme.spacing[1],
     flexShrink: 0,
   },
   desktopRowQuickButton: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.sm,

@@ -4,6 +4,7 @@ export interface SidebarSessionGroup {
   key: string;
   label: string;
   cwd: string | null;
+  projectKey: string | null;
   agents: AggregatedAgent[];
   newestActivityAt: Date;
 }
@@ -47,6 +48,7 @@ export function applyStableSidebarSessionOrder<T extends SidebarSessionGroup>(
   input: {
     groupOrder: readonly string[];
     agentOrderByGroup: Readonly<Record<string, readonly string[]>>;
+    pinnedGroupKeys?: ReadonlySet<string>;
   },
 ): T[] {
   const pinnedGroup = groups.find((group) => group.key === PINNED_SIDEBAR_SESSION_GROUP_KEY);
@@ -56,9 +58,16 @@ export function applyStableSidebarSessionOrder<T extends SidebarSessionGroup>(
     input.groupOrder,
     (group) => group.key,
   );
+  const pinnedGroupKeys = input.pinnedGroupKeys ?? new Set<string>();
+  const pinnedWorkspaceGroups = orderedWorkspaceGroups.filter((group) =>
+    pinnedGroupKeys.has(group.key),
+  );
+  const unpinnedWorkspaceGroups = orderedWorkspaceGroups.filter(
+    (group) => !pinnedGroupKeys.has(group.key),
+  );
   const orderedGroups = pinnedGroup
-    ? [pinnedGroup, ...orderedWorkspaceGroups]
-    : orderedWorkspaceGroups;
+    ? [pinnedGroup, ...pinnedWorkspaceGroups, ...unpinnedWorkspaceGroups]
+    : [...pinnedWorkspaceGroups, ...unpinnedWorkspaceGroups];
 
   const result: T[] = [];
   for (const group of orderedGroups) {
@@ -148,6 +157,14 @@ function getSidebarSessionGroupCwd(agent: AggregatedAgent): string | null {
   return (getChisaCodeOwnedProjectRoot(agent) ?? agent.cwd)?.trim() || null;
 }
 
+function getSidebarSessionProjectKey(agent: AggregatedAgent): string | null {
+  const projectKey = agent.projectPlacement?.projectKey.trim() ?? "";
+  if (projectKey) {
+    return projectKey;
+  }
+  return getSidebarSessionGroupCwd(agent);
+}
+
 function getActivityTime(value: Date): number {
   const time = value.getTime();
   return Number.isFinite(time) ? time : 0;
@@ -199,6 +216,7 @@ export function groupAgentsForSidebar(
       key,
       label: getSidebarSessionGroupLabel(agent, unknownWorkspaceLabel),
       cwd: getSidebarSessionGroupCwd(agent),
+      projectKey: getSidebarSessionProjectKey(agent),
       agents: [agent],
       newestActivityAt: agent.lastActivityAt,
     });
@@ -209,6 +227,7 @@ export function groupAgentsForSidebar(
       key: group.key,
       label: group.label,
       cwd: group.cwd,
+      projectKey: group.projectKey,
       newestActivityAt: group.newestActivityAt,
       agents: group.agents.slice().sort(compareAgentsByActivityDescending),
     }))
@@ -226,6 +245,7 @@ export function groupAgentsForSidebar(
       key: PINNED_SIDEBAR_SESSION_GROUP_KEY,
       label: pinnedGroupLabel,
       cwd: null,
+      projectKey: null,
       agents: sortedPinnedAgents,
       newestActivityAt: sortedPinnedAgents[0]?.lastActivityAt ?? new Date(0),
     },

@@ -7,6 +7,8 @@ interface SidebarOrderStoreState {
   workspaceOrderByServerAndProject: Record<string, string[]>;
   sessionGroupOrderByServerId: Record<string, string[]>;
   sessionOrderByServerAndGroup: Record<string, string[]>;
+  pinnedSessionGroupKeysByServerId: Record<string, string[]>;
+  hiddenSessionGroupKeysByServerId: Record<string, string[]>;
   getProjectOrder: (serverId: string) => string[];
   setProjectOrder: (serverId: string, keys: string[]) => void;
   getWorkspaceOrder: (serverId: string, projectKey: string) => string[];
@@ -15,6 +17,10 @@ interface SidebarOrderStoreState {
   setSessionGroupOrder: (serverId: string, keys: string[]) => void;
   getSessionOrder: (serverId: string, groupKey: string) => string[];
   setSessionOrder: (serverId: string, groupKey: string, keys: string[]) => void;
+  getPinnedSessionGroupKeys: (serverId: string) => string[];
+  setSessionGroupPinned: (serverId: string, groupKey: string, pinned: boolean) => void;
+  getHiddenSessionGroupKeys: (serverId: string) => string[];
+  setSessionGroupHidden: (serverId: string, groupKey: string, hidden: boolean) => void;
 }
 
 function normalizeKeys(keys: string[]): string[] {
@@ -44,6 +50,8 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
       workspaceOrderByServerAndProject: {},
       sessionGroupOrderByServerId: {},
       sessionOrderByServerAndGroup: {},
+      pinnedSessionGroupKeysByServerId: {},
+      hiddenSessionGroupKeysByServerId: {},
       getProjectOrder: (serverId) => {
         const key = serverId.trim();
         if (!key) {
@@ -131,6 +139,52 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
           },
         }));
       },
+      getPinnedSessionGroupKeys: (serverId) => {
+        const key = serverId.trim();
+        return key ? (get().pinnedSessionGroupKeysByServerId[key] ?? []) : [];
+      },
+      setSessionGroupPinned: (serverId, groupKey, pinned) => {
+        const serverKey = serverId.trim();
+        const groupScope = groupKey.trim();
+        if (!serverKey || !groupScope) {
+          return;
+        }
+        set((state) => {
+          const current = state.pinnedSessionGroupKeysByServerId[serverKey] ?? [];
+          const next = pinned
+            ? normalizeKeys([groupScope, ...current])
+            : current.filter((key) => key !== groupScope);
+          return {
+            pinnedSessionGroupKeysByServerId: {
+              ...state.pinnedSessionGroupKeysByServerId,
+              [serverKey]: next,
+            },
+          };
+        });
+      },
+      getHiddenSessionGroupKeys: (serverId) => {
+        const key = serverId.trim();
+        return key ? (get().hiddenSessionGroupKeysByServerId[key] ?? []) : [];
+      },
+      setSessionGroupHidden: (serverId, groupKey, hidden) => {
+        const serverKey = serverId.trim();
+        const groupScope = groupKey.trim();
+        if (!serverKey || !groupScope) {
+          return;
+        }
+        set((state) => {
+          const current = state.hiddenSessionGroupKeysByServerId[serverKey] ?? [];
+          const next = hidden
+            ? normalizeKeys([...current, groupScope])
+            : current.filter((key) => key !== groupScope);
+          return {
+            hiddenSessionGroupKeysByServerId: {
+              ...state.hiddenSessionGroupKeysByServerId,
+              [serverKey]: next,
+            },
+          };
+        });
+      },
     }),
     {
       name: "sidebar-project-workspace-order",
@@ -140,6 +194,8 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
         workspaceOrderByServerAndProject: state.workspaceOrderByServerAndProject,
         sessionGroupOrderByServerId: state.sessionGroupOrderByServerId,
         sessionOrderByServerAndGroup: state.sessionOrderByServerAndGroup,
+        pinnedSessionGroupKeysByServerId: state.pinnedSessionGroupKeysByServerId,
+        hiddenSessionGroupKeysByServerId: state.hiddenSessionGroupKeysByServerId,
       }),
     },
   ),

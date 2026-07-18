@@ -49,6 +49,7 @@ export interface DesktopNotificationBridge {
 
 export interface DesktopOpenerBridge {
   openUrl?: (url: string) => Promise<void>;
+  openPath?: (path: string) => Promise<void>;
 }
 
 export interface DesktopWebUtilsBridge {

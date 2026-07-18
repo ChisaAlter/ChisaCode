@@ -1,11 +1,16 @@
 import { ipcMain, shell } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isAllowedExternalUrl, registerOpenerHandlers } from "./opener";
+import { isAllowedExternalUrl, isAllowedLocalPath, registerOpenerHandlers } from "./opener";
 
 vi.mock("electron", () => ({
+  app: { isPackaged: true },
   ipcMain: { handle: vi.fn() },
-  shell: { openExternal: vi.fn() },
+  shell: { openExternal: vi.fn(), openPath: vi.fn(async () => "") },
+}));
+
+vi.mock("../daemon/daemon-manager.js", () => ({
+  isMainAppSenderUrl: (url: string) => url.startsWith("chisacode://app"),
 }));
 
 // opener.ts reads the configured language via getDesktopSettingsStore() to
@@ -30,10 +35,30 @@ function getRegisteredOpenUrlHandler(): (_event: unknown, url: unknown) => Promi
   return handler as (_event: unknown, url: unknown) => Promise<void>;
 }
 
+function getRegisteredOpenPathHandler(): (_event: unknown, path: unknown) => Promise<void> {
+  registerOpenerHandlers();
+  const handler = vi.mocked(ipcMain.handle).mock.calls.find(([channel]) => {
+    return channel === "chisacode:opener:openPath";
+  })?.[1];
+  if (typeof handler !== "function") {
+    throw new Error("open path handler was not registered");
+  }
+  return handler as (_event: unknown, path: unknown) => Promise<void>;
+}
+
 describe("desktop opener", () => {
   beforeEach(() => {
     vi.mocked(ipcMain.handle).mockReset();
     vi.mocked(shell.openExternal).mockReset();
+    vi.mocked(shell.openPath).mockReset();
+    vi.mocked(shell.openPath).mockResolvedValue("");
+  });
+
+  it("accepts only absolute local paths", () => {
+    expect(isAllowedLocalPath("C:\\Ai\\ChisaCode")).toBe(true);
+    expect(isAllowedLocalPath("/tmp/project")).toBe(true);
+    expect(isAllowedLocalPath("relative/project")).toBe(false);
+    expect(isAllowedLocalPath("C:\\Ai\\bad\0path")).toBe(false);
   });
 
   it("allows only http and https external URLs", () => {
@@ -60,5 +85,23 @@ describe("desktop opener", () => {
     await expect(handler({}, "file:///etc/passwd")).rejects.toThrow("Unsupported external URL");
 
     expect(shell.openExternal).not.toHaveBeenCalled();
+  });
+
+  it("opens absolute paths from the trusted main app", async () => {
+    const handler = getRegisteredOpenPathHandler();
+
+    await handler({ senderFrame: { url: "chisacode://app/" } }, "C:\\Ai\\ChisaCode");
+
+    expect(shell.openPath).toHaveBeenCalledWith("C:\\Ai\\ChisaCode");
+  });
+
+  it("rejects local path requests from untrusted frames", async () => {
+    const handler = getRegisteredOpenPathHandler();
+
+    await expect(
+      handler({ senderFrame: { url: "https://example.com" } }, "C:\\Ai\\ChisaCode"),
+    ).rejects.toThrow("not available from this context");
+
+    expect(shell.openPath).not.toHaveBeenCalled();
   });
 });

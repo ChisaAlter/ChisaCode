@@ -38,6 +38,7 @@ export interface ChisaCodeDesktopApi {
   };
   opener: {
     openUrl: (url: string) => Promise<unknown>;
+    openPath: (path: string) => Promise<unknown>;
   };
   webUtils: {
     getPathForFile: (file: File) => string;
@@ -123,6 +124,7 @@ export function createDesktopBridge(
     },
     opener: {
       openUrl: (url: string) => ipc.invoke(channel("opener:openUrl"), url),
+      openPath: (path: string) => ipc.invoke(channel("opener:openPath"), path),
     },
     webUtils: {
       getPathForFile: (file: File) => getPathForFile(file),
