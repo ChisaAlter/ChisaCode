@@ -156,6 +156,9 @@ vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
   },
+  UnistylesRuntime: {
+    pixelRatio: 2,
+  },
   useUnistyles: () => ({ theme }),
 }));
 
@@ -238,7 +241,15 @@ vi.mock("@/runtime/host-runtime", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-user-visible-error", () => ({
+  useUserVisibleErrorReporter: () => vi.fn(),
+}));
+
 vi.mock("@/constants/layout", () => ({
+  SETTINGS_HINT_LINE_HEIGHT: 16,
+  SETTINGS_ROW_HORIZONTAL_PADDING: 16,
+  SETTINGS_ROW_TITLE_FONT_SIZE: 15,
+  SETTINGS_ROW_TITLE_LINE_HEIGHT: 20,
   useIsCompactFormFactor: () => compactState.value,
 }));
 
@@ -369,6 +380,7 @@ describe("ProvidersSection", () => {
 
     const codexRow = findRow("Codex provider details");
     const codexNodes = descendants(codexRow);
+    expect(JSON.parse(codexRow.dataset.style ?? "{}")).toMatchObject({ borderTopWidth: 0.5 });
     expect(indexOfText(codexNodes, "Codex")).toBeGreaterThanOrEqual(0);
     expect(indexOfText(codexNodes, "codex")).toBe(-1);
     expect(indexOfText(codexNodes, "Disabled")).toBeGreaterThanOrEqual(0);

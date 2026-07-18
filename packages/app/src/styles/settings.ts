@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, UnistylesRuntime } from "react-native-unistyles";
 import {
   SETTINGS_HINT_LINE_HEIGHT,
   SETTINGS_ROW_HORIZONTAL_PADDING,
@@ -68,7 +68,7 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     paddingHorizontal: SETTINGS_ROW_HORIZONTAL_PADDING,
   },
   rowBorder: {
-    borderTopWidth: 1,
+    borderTopWidth: 1 / UnistylesRuntime.pixelRatio,
     borderTopColor: theme.colors.border,
   },
   rowContent: {
