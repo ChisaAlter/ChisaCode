@@ -70,7 +70,10 @@ export function FileDropZone({ children, onFilesDropped, disabled = false }: Fil
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
+    minWidth: 0,
+    width: "100%",
     position: "relative",
+    overflow: "hidden",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

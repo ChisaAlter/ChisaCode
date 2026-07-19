@@ -893,15 +893,14 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: theme.colors.surface2,
+    // Flat into the composer surface — no chip border/fill.
+    backgroundColor: "transparent",
     gap: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
   },
   triggerHovered: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface2,
   },
   triggerPressed: {
     backgroundColor: theme.colors.surface0,

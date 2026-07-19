@@ -2,18 +2,18 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
 } from "react";
 import type { LayoutChangeEvent } from "react-native";
 
-import { MIN_CHAT_WIDTH, WORKBENCH_ENVIRONMENT_PANEL_INSET } from "@/constants/layout";
+import {
+  resolveConversationColumnSize,
+  WORKBENCH_ENVIRONMENT_PANEL_INSET,
+} from "@/constants/layout";
 import type { ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
 import type { WorkspaceEnvironmentDockState } from "@/screens/workspace/workspace-environment-dock-model";
-
-const ENVIRONMENT_PANEL_HORIZONTAL_INSETS = WORKBENCH_ENVIRONMENT_PANEL_INSET * 2;
 
 type WorkspaceEnvironmentPanelMode = "auto" | "forced-open" | "forced-closed";
 type ExplorerPanelAction = (input: {
@@ -49,9 +49,30 @@ function getEnvironmentExplorerTab(checkout: ExplorerCheckoutContext): "changes"
   return checkout.isGit ? "changes" : "files";
 }
 
-/** Returns whether the floating inspector leaves enough usable chat width. */
-export function shouldAutoShowEnvironmentPanel(contentWidth: number, panelWidth: number): boolean {
-  return contentWidth - panelWidth - ENVIRONMENT_PANEL_HORIZONTAL_INSETS >= MIN_CHAT_WIDTH;
+/**
+ * Whether the floating inspector can sit fully in the right gutter without
+ * covering the left-aligned conversation column. The panel overlays chat — it
+ * does not shrink the stream — so auto-open requires spare blank space on the
+ * right only.
+ * @param contentWidth Measured center-column width
+ * @param panelWidth Floating inspector width
+ * @param contentHeight Measured center-column height (drives 1:1 / 1:3 chat bounds)
+ * @returns True only when the right gutter fits the panel plus its inset
+ */
+export function shouldAutoShowEnvironmentPanel(
+  contentWidth: number,
+  panelWidth: number,
+  contentHeight: number,
+): boolean {
+  if (!(contentWidth > 0) || !(contentHeight > 0) || !(panelWidth > 0)) {
+    return false;
+  }
+  const column = resolveConversationColumnSize(contentWidth, contentHeight);
+  // Left-aligned: right gutter is everything past the conversation column.
+  const chatWidth = column?.width ?? contentWidth;
+  const rightGutter = Math.max(0, contentWidth - chatWidth);
+  const panelOccupied = panelWidth + WORKBENCH_ENVIRONMENT_PANEL_INSET;
+  return rightGutter >= panelOccupied;
 }
 
 /** Owns responsive environment-panel visibility, dock state, and explorer transitions. */
@@ -80,27 +101,23 @@ export function useWorkspaceEnvironmentPanelState(
   });
 
   const hasEnoughSpaceForEnvironmentPanel = useMemo(() => {
+    // Stay closed until the center column has been measured — never flash open
+    // before layout, and never auto-open when the panel would cover chat.
     if (!centerContentSize) {
-      return true;
+      return false;
     }
-    return shouldAutoShowEnvironmentPanel(centerContentSize.width, panelWidth);
+    return shouldAutoShowEnvironmentPanel(
+      centerContentSize.width,
+      panelWidth,
+      centerContentSize.height,
+    );
   }, [centerContentSize, panelWidth]);
-  const previousHasEnoughSpaceRef = useRef(hasEnoughSpaceForEnvironmentPanel);
+  // auto → only when right gutter is large enough (see shouldAutoShow…).
+  // forced-open → always visible (header toggle); forced-closed → always hidden.
+  // Manual close sticks until the user opens again (does not re-auto on resize).
   const isEnvironmentPanelVisible =
     environmentPanelMode === "forced-open" ||
     (environmentPanelMode === "auto" && hasEnoughSpaceForEnvironmentPanel);
-
-  useEffect(() => {
-    const wasEnough = previousHasEnoughSpaceRef.current;
-    previousHasEnoughSpaceRef.current = hasEnoughSpaceForEnvironmentPanel;
-    if (
-      !wasEnough &&
-      hasEnoughSpaceForEnvironmentPanel &&
-      environmentPanelMode === "forced-closed"
-    ) {
-      setEnvironmentPanelMode("auto");
-    }
-  }, [environmentPanelMode, hasEnoughSpaceForEnvironmentPanel]);
 
   useEffect(() => {
     if (!isMobile && isEnvironmentPanelVisible && isExplorerOpen) {

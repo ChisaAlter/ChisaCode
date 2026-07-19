@@ -12,7 +12,6 @@ import type {
 } from "@/provider-selection/provider-selection";
 import { resolveProviderSnapshotLoadingState } from "@/provider-selection/provider-snapshot-loading";
 import { resolveDraftModelSelectorLoading } from "@/composer/agent-controls/model-loading";
-import { ProviderCapabilityHints } from "@/composer/agent-controls/provider-capability-hints";
 import { styles } from "@/composer/agent-controls/agent-control-styles";
 import {
   DesktopAgentControlsContent,
@@ -844,19 +843,6 @@ export function DraftAgentControls({
     ),
     [selectedProvider, providerDefinitions, modeOptions, selectedMode, onSelectMode, disabled],
   );
-  const draftDesktopExtras = useMemo(
-    () => (
-      <>
-        {draftModeChip}
-        <ProviderCapabilityHints provider={selectedProvider} />
-      </>
-    ),
-    [draftModeChip, selectedProvider],
-  );
-  const draftCompactExtras = useMemo(
-    () => <ProviderCapabilityHints provider={selectedProvider} />,
-    [selectedProvider],
-  );
   const modelSelectorLoading = resolveDraftModelSelectorLoading({
     isAllModelsLoading,
     isModelLoading,
@@ -895,7 +881,7 @@ export function DraftAgentControls({
             onRetryModelProvider={onRetryModelProvider}
             isRetryingModelProvider={isRetryingModelProvider}
             disabled={disabled}
-            desktopExtras={draftDesktopExtras}
+            desktopExtras={draftModeChip}
           />
         ) : null}
       </View>
@@ -923,7 +909,6 @@ export function DraftAgentControls({
       onRetryModelProvider={onRetryModelProvider}
       isRetryingModelProvider={isRetryingModelProvider}
       disabled={disabled}
-      compactExtras={draftCompactExtras}
       modelSelectorServerId={modelSelectorServerId}
     />
   );

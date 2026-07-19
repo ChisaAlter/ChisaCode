@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { FileReadResult } from "@chisacode/client/internal/daemon-client";
-import Markdown, { MarkdownIt } from "react-native-markdown-display";
 import {
   ActivityIndicator,
   Image as RNImage,
@@ -21,7 +20,7 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { lineNumberGutterWidth } from "@/components/code-insets";
 import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 import { isWeb } from "@/constants/platform";
-import { createMarkdownStyles } from "@/styles/markdown-styles";
+import { MarkdownRenderer } from "@/components/markdown";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes } from "@/attachments/service";
@@ -196,8 +195,6 @@ function FilePreviewBody({
 }: FilePreviewBodyProps) {
   const { theme } = useUnistyles();
   const filePath = location.path;
-  const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
-  const markdownParser = useMemo(() => MarkdownIt({ typographer: true, linkify: true }), []);
   const isMarkdownFile =
     preview?.kind === "text" && isRenderedMarkdownFile(filePath) && !location.lineStart;
 
@@ -280,9 +277,7 @@ function FilePreviewBody({
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={!showDesktopWebScrollbar}
           >
-            <Markdown style={markdownStyles} markdownit={markdownParser}>
-              {preview.content ?? ""}
-            </Markdown>
+            <MarkdownRenderer text={preview.content ?? ""} />
           </RNScrollView>
           {scrollbar.overlay}
         </View>

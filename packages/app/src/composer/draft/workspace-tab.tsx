@@ -15,6 +15,7 @@ import {
   type AgentPresetUnappliedField,
 } from "@/agent-presets/apply-preset";
 import { useAgentPresetsQuery } from "@/agent-presets/use-agent-presets-query";
+import { ConversationAspectColumn } from "@/components/conversation-aspect-column";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
@@ -47,7 +48,7 @@ import {
   useWorkspaceAttachmentScopeKey,
 } from "@/attachments/workspace-attachments-store";
 import type { UserMessageImageAttachment } from "@/types/stream";
-import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { WorkspaceDraftTabSetup } from "@/stores/workspace-tabs-store";
 
@@ -770,81 +771,84 @@ export function WorkspaceDraftAgentTab({
     [isCompact, composerAgentControls],
   );
 
+  const formError = formErrorMessage ? (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorText}>{formErrorMessage}</Text>
+    </View>
+  ) : null;
+
+  const importPill = importPillPress ? (
+    <View style={styles.importPillRow}>
+      <View style={styles.importPillContent}>
+        <ComposerImportPill onPress={importPillPress} />
+      </View>
+    </View>
+  ) : null;
+
+  const draftBody =
+    isSubmitting && draftAgent ? (
+      <View style={styles.streamContainer}>
+        <AgentStreamView
+          agentId={tabId}
+          serverId={serverId}
+          agent={draftAgent}
+          streamItems={optimisticStreamItems}
+          pendingPermissions={EMPTY_PENDING_PERMISSIONS}
+          onOpenWorkspaceFile={onOpenWorkspaceFile}
+        />
+      </View>
+    ) : (
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.configScrollContent}>
+        <View style={styles.configSection}>
+          <AssistantPresetPicker
+            presets={presetQuery.presets}
+            selectedPresetId={selectedPresetId}
+            isLoading={presetQuery.isLoading}
+            isError={presetQuery.isError}
+            disabled={isSubmitting}
+            warningText={presetWarningText}
+            onSelect={handleSelectPreset}
+          />
+          {formError}
+        </View>
+      </ScrollView>
+    );
+
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
       <View style={styles.container}>
-        <View style={styles.contentContainer}>
-          {isSubmitting && draftAgent ? (
-            <View style={styles.streamContainer}>
-              <AgentStreamView
+        <ConversationAspectColumn>
+          <View style={styles.contentContainer}>{draftBody}</View>
+          <ReanimatedAnimated.View style={inputAreaWrapperStyle}>
+            <View style={styles.inputAreaWrapper}>
+              {importPill}
+              <Composer
                 agentId={tabId}
                 serverId={serverId}
-                agent={draftAgent}
-                streamItems={optimisticStreamItems}
-                pendingPermissions={EMPTY_PENDING_PERMISSIONS}
-                onOpenWorkspaceFile={onOpenWorkspaceFile}
+                externalKeyboardShift
+                isPaneFocused={isPaneFocused}
+                onSubmitMessage={handleCreateFromInput}
+                isSubmitLoading={isSubmitting}
+                blurOnSubmit={true}
+                value={draftInput.text}
+                onChangeText={draftInput.setText}
+                attachments={draftInput.attachments}
+                workspaceAttachments={workspaceAttachments}
+                onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
+                onChangeAttachments={draftInput.setAttachments}
+                cwd={composerState.workingDir}
+                clearDraft={draftInput.clear}
+                autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
+                onAddImages={handleAddImagesCallback}
+                onFocusInput={handleFocusInputCallback}
+                commandDraftConfig={composerState.commandDraftConfig}
+                agentControls={composerAgentControls}
+                footer={composerFooter}
+                inputWrapperStyle={styles.composerInputWrapper}
               />
             </View>
-          ) : (
-            <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.configScrollContent}
-            >
-              <View style={styles.configSection}>
-                <AssistantPresetPicker
-                  presets={presetQuery.presets}
-                  selectedPresetId={selectedPresetId}
-                  isLoading={presetQuery.isLoading}
-                  isError={presetQuery.isError}
-                  disabled={isSubmitting}
-                  warningText={presetWarningText}
-                  onSelect={handleSelectPreset}
-                />
-                {formErrorMessage ? (
-                  <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{formErrorMessage}</Text>
-                  </View>
-                ) : null}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-
-        <ReanimatedAnimated.View style={inputAreaWrapperStyle}>
-          <View style={styles.inputAreaWrapper}>
-            {importPillPress ? (
-              <View style={styles.importPillRow}>
-                <View style={styles.importPillContent}>
-                  <ComposerImportPill onPress={importPillPress} />
-                </View>
-              </View>
-            ) : null}
-            <Composer
-              agentId={tabId}
-              serverId={serverId}
-              externalKeyboardShift
-              isPaneFocused={isPaneFocused}
-              onSubmitMessage={handleCreateFromInput}
-              isSubmitLoading={isSubmitting}
-              blurOnSubmit={true}
-              value={draftInput.text}
-              onChangeText={draftInput.setText}
-              attachments={draftInput.attachments}
-              workspaceAttachments={workspaceAttachments}
-              onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
-              onChangeAttachments={draftInput.setAttachments}
-              cwd={composerState.workingDir}
-              clearDraft={draftInput.clear}
-              autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
-              onAddImages={handleAddImagesCallback}
-              onFocusInput={handleFocusInputCallback}
-              commandDraftConfig={composerState.commandDraftConfig}
-              agentControls={composerAgentControls}
-              footer={composerFooter}
-              inputWrapperStyle={styles.composerInputWrapper}
-            />
-          </View>
-        </ReanimatedAnimated.View>
+          </ReanimatedAnimated.View>
+        </ConversationAspectColumn>
       </View>
     </FileDropZone>
   );
@@ -854,10 +858,14 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     width: "100%",
-    backgroundColor: theme.colors.surface0,
+    minWidth: 0,
+    overflow: "hidden",
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   contentContainer: {
     flex: 1,
+    width: "100%",
+    minWidth: 0,
   },
   streamContainer: {
     flex: 1,
@@ -886,11 +894,10 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[3],
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   importPillContent: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
     flexDirection: "row",
   },
   errorContainer: {

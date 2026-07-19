@@ -375,12 +375,11 @@ const styles = StyleSheet.create((theme) => ({
   desktopChip: {
     minWidth: 90,
     height: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
-    backgroundColor: theme.colors.surface2,
+    // Flat into the composer surface — no chip border/fill.
+    backgroundColor: "transparent",
     gap: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
   },
   chipHovered: {
     backgroundColor: theme.colors.surface2,

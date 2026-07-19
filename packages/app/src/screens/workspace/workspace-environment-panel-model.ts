@@ -1,6 +1,11 @@
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { Agent } from "@/stores/session-store";
-import type { StreamItem, TodoEntry } from "@/types/stream";
+import {
+  isAgentToolCallItem,
+  type StreamItem,
+  type TodoEntry,
+  type TodoListItem,
+} from "@/types/stream";
 
 export type WorkspacePullRequestRuntime = NonNullable<
   NonNullable<WorkspaceDescriptor["githubRuntime"]>["pullRequest"]
@@ -13,6 +18,40 @@ export interface TodoProgressSummary {
   visibleItems: TodoEntry[];
   hiddenCount: number;
 }
+
+/** Normalized cross-provider task/plan progress status. */
+export type AgentProgressStatus = "pending" | "in_progress" | "completed";
+
+/** One step in the provider-neutral task progress model. */
+export interface AgentProgressItem {
+  id: string;
+  text: string;
+  status: AgentProgressStatus;
+  completed: boolean;
+}
+
+/** Source of the resolved progress snapshot for the floating task card. */
+export type AgentProgressSource = "todo_list" | "plan";
+
+/**
+ * Provider-neutral progress model for the environment stack task card.
+ * Built from stream `todo_list` items (Claude/OpenCode/ACP/update_plan) or
+ * plan tool calls (Codex plan markdown).
+ */
+export interface AgentProgressModel {
+  source: AgentProgressSource;
+  items: AgentProgressItem[];
+  completedCount: number;
+  totalCount: number;
+  progress: number;
+  visibleItems: AgentProgressItem[];
+  hiddenCount: number;
+}
+
+const DEFAULT_PROGRESS_VISIBLE_ITEMS = 8;
+const PLAN_CHECKBOX_RE = /^[-*+]\s+\[([ xX])\]\s+(.+)$/;
+const PLAN_BULLET_RE = /^[-*+]\s+(.+)$/;
+const PLAN_NUMBERED_RE = /^\d+[.)]\s+(.+)$/;
 
 export type WorkspaceStatusStripTone = "neutral" | "success" | "warning" | "danger";
 
@@ -417,6 +456,84 @@ export function findLatestTodoItems(input: {
     : latestTail.items;
 }
 
+/**
+ * Parses provider-emitted plan markdown into discrete progress steps.
+ * @param text Plan tool-call markdown body
+ * @returns Parsed steps, or an empty array when no steps are found
+ */
+export function parsePlanMarkdownToProgressItems(text: string): AgentProgressItem[] {
+  const lines = text.split(/\r?\n/);
+  const items: AgentProgressItem[] = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    const checkboxMatch = line.match(PLAN_CHECKBOX_RE);
+    if (checkboxMatch) {
+      const completed = checkboxMatch[1] !== " ";
+      const stepText = checkboxMatch[2]?.trim() ?? "";
+      if (!stepText) {
+        continue;
+      }
+      items.push(createProgressItem(items.length, stepText, completed ? "completed" : "pending"));
+      continue;
+    }
+    const bulletMatch = line.match(PLAN_BULLET_RE);
+    if (bulletMatch) {
+      const stepText = bulletMatch[1]?.trim() ?? "";
+      if (!stepText || PLAN_CHECKBOX_RE.test(line)) {
+        continue;
+      }
+      // Skip pure checkbox leftovers already handled; ignore heading-like bullets.
+      if (stepText.startsWith("[")) {
+        continue;
+      }
+      items.push(createProgressItem(items.length, stepText, "pending"));
+      continue;
+    }
+    const numberedMatch = line.match(PLAN_NUMBERED_RE);
+    if (numberedMatch) {
+      const stepText = numberedMatch[1]?.trim() ?? "";
+      if (!stepText) {
+        continue;
+      }
+      items.push(createProgressItem(items.length, stepText, "pending"));
+    }
+  }
+  return items;
+}
+
+/**
+ * Resolves the latest cross-provider progress snapshot for the focused agent.
+ * Prefers the newest of todo_list (Claude/OpenCode/ACP) and plan tool calls (Codex).
+ * @param input Stream head/tail slices for the focused agent
+ * @param maxVisibleItems Max items shown in the floating task card
+ * @returns Progress model, or null when the agent has no plan/todos
+ */
+export function resolveAgentProgress(
+  input: {
+    head?: readonly StreamItem[] | null;
+    tail?: readonly StreamItem[] | null;
+  },
+  maxVisibleItems = DEFAULT_PROGRESS_VISIBLE_ITEMS,
+): AgentProgressModel | null {
+  const todoCandidate = pickLatestTimedCandidate([
+    toTodoProgressCandidate(findLatestTodoList(input.head)),
+    toTodoProgressCandidate(findLatestTodoList(input.tail)),
+  ]);
+  const planCandidate = pickLatestTimedCandidate([
+    findLatestPlanProgressCandidate(input.head),
+    findLatestPlanProgressCandidate(input.tail),
+  ]);
+
+  const selected = pickLatestTimedCandidate([todoCandidate, planCandidate]);
+  if (!selected || selected.items.length === 0) {
+    return null;
+  }
+  return buildAgentProgressModel(selected.source, selected.items, maxVisibleItems);
+}
+
 export function buildTodoProgressSummary(
   items: readonly TodoEntry[] | null | undefined,
   maxVisibleItems = 6,
@@ -443,8 +560,114 @@ export function buildTodoProgressSummary(
   };
 }
 
+function createProgressItem(
+  index: number,
+  text: string,
+  status: AgentProgressStatus,
+): AgentProgressItem {
+  return {
+    id: `progress-${index}`,
+    text,
+    status,
+    completed: status === "completed",
+  };
+}
+
+function buildAgentProgressModel(
+  source: AgentProgressSource,
+  items: readonly AgentProgressItem[],
+  maxVisibleItems: number,
+): AgentProgressModel {
+  let completedCount = 0;
+  for (const item of items) {
+    if (item.completed) {
+      completedCount += 1;
+    }
+  }
+  const visibleCount = Math.max(0, maxVisibleItems);
+  const visibleItems = items.slice(0, visibleCount);
+  return {
+    source,
+    items: [...items],
+    completedCount,
+    totalCount: items.length,
+    progress: items.length === 0 ? 0 : completedCount / items.length,
+    visibleItems,
+    hiddenCount: Math.max(0, items.length - visibleItems.length),
+  };
+}
+
+function todoEntriesToProgressItems(items: readonly TodoEntry[]): AgentProgressItem[] {
+  return items.map((item, index) =>
+    createProgressItem(index, item.text, item.completed ? "completed" : "pending"),
+  );
+}
+
+interface TimedProgressCandidate {
+  source: AgentProgressSource;
+  time: number;
+  items: AgentProgressItem[];
+}
+
+function toTodoProgressCandidate(list: TodoListItem | null): TimedProgressCandidate | null {
+  if (!list || list.items.length === 0) {
+    return null;
+  }
+  return {
+    source: "todo_list",
+    time: getStreamItemTime(list),
+    items: todoEntriesToProgressItems(list.items),
+  };
+}
+
+function findLatestPlanProgressCandidate(
+  items: readonly StreamItem[] | null | undefined,
+): TimedProgressCandidate | null {
+  if (!items) {
+    return null;
+  }
+  let latest: TimedProgressCandidate | null = null;
+  for (const item of items) {
+    if (!isAgentToolCallItem(item)) {
+      continue;
+    }
+    const detail = item.payload.data.detail;
+    if (detail.type !== "plan") {
+      continue;
+    }
+    const progressItems = parsePlanMarkdownToProgressItems(detail.text);
+    if (progressItems.length === 0) {
+      continue;
+    }
+    const time = getStreamItemTime(item);
+    if (!latest || time >= latest.time) {
+      latest = {
+        source: "plan",
+        time,
+        items: progressItems,
+      };
+    }
+  }
+  return latest;
+}
+
+function pickLatestTimedCandidate(
+  candidates: readonly (TimedProgressCandidate | null | undefined)[],
+): TimedProgressCandidate | null {
+  let latest: TimedProgressCandidate | null = null;
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    if (!latest || candidate.time >= latest.time) {
+      latest = candidate;
+    }
+  }
+  return latest;
+}
+
 function findLatestTodoList(items: readonly StreamItem[] | null | undefined) {
-  let latest: Extract<StreamItem, { kind: "todo_list" }> | null = null;
+  let latest: TodoListItem | null = null;
   if (!items) {
     return latest;
   }
@@ -453,14 +676,18 @@ function findLatestTodoList(items: readonly StreamItem[] | null | undefined) {
     if (item.kind !== "todo_list") {
       continue;
     }
-    if (!latest || getTodoListTime(item) >= getTodoListTime(latest)) {
+    if (!latest || getStreamItemTime(item) >= getStreamItemTime(latest)) {
       latest = item;
     }
   }
   return latest;
 }
 
-function getTodoListTime(item: Extract<StreamItem, { kind: "todo_list" }>): number {
+function getTodoListTime(item: TodoListItem): number {
+  return getStreamItemTime(item);
+}
+
+function getStreamItemTime(item: { timestamp: Date }): number {
   const time = item.timestamp.getTime();
   return Number.isFinite(time) ? time : 0;
 }

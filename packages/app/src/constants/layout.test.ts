@@ -54,6 +54,8 @@ import {
   WORKBENCH_TAB_MAX_WIDTH,
   WORKBENCH_TAB_MIN_WIDTH,
   WORKBENCH_USER_MESSAGE_MAX_WIDTH,
+  resolveConversationColumnMaxWidth,
+  resolveConversationColumnSize,
 } from "./layout";
 
 describe("workbench layout constants", () => {
@@ -76,16 +78,16 @@ describe("workbench layout constants", () => {
   });
 
   it("locks the reference workbench typography and message widths", () => {
-    expect(WORKBENCH_BODY_FONT_SIZE).toBe(13);
-    expect(WORKBENCH_BODY_LINE_HEIGHT).toBe(18);
+    expect(WORKBENCH_BODY_FONT_SIZE).toBe(14);
+    expect(WORKBENCH_BODY_LINE_HEIGHT).toBe(22);
     expect(WORKBENCH_META_FONT_SIZE).toBe(12);
     expect(WORKBENCH_META_LINE_HEIGHT).toBe(16);
     expect(WORKBENCH_MICRO_FONT_SIZE).toBe(11);
     expect(WORKBENCH_MICRO_LINE_HEIGHT).toBe(14);
     expect(MIN_INTERACTIVE_TARGET_SIZE).toBe(28);
-    expect(WORKBENCH_MESSAGE_LINE_HEIGHT).toBe(20);
-    expect(WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH).toBe(580);
-    expect(WORKBENCH_USER_MESSAGE_MAX_WIDTH).toBe(400);
+    expect(WORKBENCH_MESSAGE_LINE_HEIGHT).toBe(22);
+    expect(WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH).toBe(820);
+    expect(WORKBENCH_USER_MESSAGE_MAX_WIDTH).toBe(720);
   });
 
   it("locks the reference workbench chrome geometry", () => {
@@ -116,10 +118,33 @@ describe("workbench layout constants", () => {
     expect(WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT).toBe(16);
     expect(WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT).toBe(18);
     expect(WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT).toBe(16);
-    expect(WORKBENCH_ENVIRONMENT_PANEL_SHADOW).toBe("0 4px 24px rgba(0, 0, 0, 0.22)");
+    expect(WORKBENCH_ENVIRONMENT_PANEL_SHADOW).toBe("0 8px 28px rgba(0, 0, 0, 0.12)");
   });
 
   it("keeps messages and the composer full width beneath the floating inspector", () => {
     expect(WORKBENCH_PANE_CONTENT_RIGHT_INSET).toBe(0);
+  });
+
+  it("sizes the left-aligned conversation column at max 1:1 without blocking shrink", () => {
+    expect(resolveConversationColumnSize(1600, 800)).toEqual({
+      width: 800,
+      minWidth: Math.round(800 / 3),
+      maxWidth: 800,
+    });
+    // Narrower than height → fill the pane (still left-aligned under max).
+    expect(resolveConversationColumnSize(500, 900)).toEqual({
+      width: 500,
+      minWidth: 300,
+      maxWidth: 900,
+    });
+    // Below the soft 1:3 hint → still track the pane so the window can shrink.
+    expect(resolveConversationColumnSize(200, 900)).toEqual({
+      width: 200,
+      minWidth: 300,
+      maxWidth: 900,
+    });
+    expect(resolveConversationColumnMaxWidth(1600, 800)).toBe(800);
+    expect(resolveConversationColumnSize(0, 800)).toBeNull();
+    expect(resolveConversationColumnSize(1200, 0)).toBeNull();
   });
 });

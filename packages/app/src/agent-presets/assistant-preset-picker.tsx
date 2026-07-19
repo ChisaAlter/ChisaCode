@@ -10,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 
 interface PresetMenuItemProps {
   preset: AgentPreset;
@@ -114,9 +113,9 @@ export function AssistantPresetPicker({
 
 const styles = StyleSheet.create((theme) => ({
   container: {
+    // Parent ConversationAspectColumn owns horizontal bounds; stay left-aligned.
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
-    alignSelf: "center",
+    alignSelf: "stretch",
     gap: theme.spacing[2],
   },
   trigger: {

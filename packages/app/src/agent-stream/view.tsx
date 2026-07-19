@@ -1185,11 +1185,12 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   workbenchAssistantTurn: {
     width: "100%",
-    maxWidth: 580,
+    // Paseo-aligned: use prose column width, not the old dense 580px chrome cap.
+    maxWidth: 820,
   },
   workbenchToolSequenceGroup: {
     width: "100%",
-    maxWidth: 580,
+    maxWidth: 820,
     gap: 8,
   },
   workbenchToolBadgeRow: {

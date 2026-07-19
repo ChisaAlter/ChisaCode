@@ -1,6 +1,6 @@
 import { Dimensions } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
-import { isAndroid, isWeb } from "@/constants/platform";
+import { getIsElectron, isAndroid, isWeb } from "@/constants/platform";
 
 export const FOOTER_HEIGHT = 60;
 
@@ -13,11 +13,13 @@ export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 38;
 export const HEADER_TOP_PADDING_MOBILE = 4;
 
 // Dense workbench dimensions shared by the real Electron layout.
-export const WORKBENCH_ENVIRONMENT_PANEL_WIDTH = 240;
+export const WORKBENCH_ENVIRONMENT_PANEL_WIDTH = 272;
 export const WORKBENCH_ENVIRONMENT_PANEL_INSET = 8;
 export const WORKBENCH_SIDEBAR_WIDTH = 200;
-export const WORKBENCH_BODY_FONT_SIZE = 13;
-export const WORKBENCH_BODY_LINE_HEIGHT = 18;
+// Chat body typography: prefer Paseo-like readability over ultra-dense 13/18.
+// 14/22 keeps Chinese glyphs legible while remaining slightly tighter than settings base (16/22).
+export const WORKBENCH_BODY_FONT_SIZE = 14;
+export const WORKBENCH_BODY_LINE_HEIGHT = 22;
 export const WORKBENCH_META_FONT_SIZE = 12;
 export const WORKBENCH_META_LINE_HEIGHT = 16;
 export const WORKBENCH_MICRO_FONT_SIZE = 11;
@@ -48,12 +50,14 @@ export const WORKBENCH_ENVIRONMENT_ACTION_MARGIN_BOTTOM = 10;
 export const WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT = 16;
 export const WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT = 18;
 export const WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT = 16;
-export const WORKBENCH_ENVIRONMENT_PANEL_SHADOW = "0 4px 24px rgba(0, 0, 0, 0.22)";
+export const WORKBENCH_ENVIRONMENT_PANEL_SHADOW = "0 8px 28px rgba(0, 0, 0, 0.12)";
 // The inspector overlays the work surface instead of shrinking messages or the composer.
 export const WORKBENCH_PANE_CONTENT_RIGHT_INSET = 0;
-export const WORKBENCH_MESSAGE_LINE_HEIGHT = 20;
-export const WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH = 580;
-export const WORKBENCH_USER_MESSAGE_MAX_WIDTH = 400;
+export const WORKBENCH_MESSAGE_LINE_HEIGHT = 22;
+// Align with Paseo MAX_CONTENT_WIDTH-scale prose column.
+export const WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH = 820;
+// Soft cap for user bubbles (Paseo uses full available width; keep a gentle max).
+export const WORKBENCH_USER_MESSAGE_MAX_WIDTH = 720;
 
 // Desktop settings geometry from design/web3-themes-v2.html.
 export const SETTINGS_DESKTOP_SIDEBAR_WIDTH = 220;
@@ -74,6 +78,60 @@ export const SETTINGS_SWITCH_HEIGHT = 28;
 
 // Max width for chat content (stream view, input area, new agent form)
 export const MAX_CONTENT_WIDTH = 1008;
+
+/** Conversation column max width as a ratio of pane height (1:1). */
+export const CONVERSATION_COLUMN_MAX_WIDTH_RATIO = 1;
+/**
+ * Soft readability floor as a ratio of pane height (1:3).
+ * Used for layout hints only — never forced as CSS minWidth wider than the
+ * pane (that locks Electron/window horizontal resize).
+ */
+export const CONVERSATION_COLUMN_MIN_WIDTH_RATIO = 1 / 3;
+
+export interface ConversationColumnSize {
+  /** Resolved column width: min(paneWidth, maxWidth). Never exceeds the pane. */
+  width: number;
+  /** Soft floor (height/3). Do not apply as a CSS min larger than the pane. */
+  minWidth: number;
+  /** Hard cap (height × 1:1). */
+  maxWidth: number;
+}
+
+/**
+ * Left-aligned conversation column sizing.
+ * - Max width = height (1:1); extra horizontal space is blank on the right.
+ * - Width never exceeds the pane, so the window can always shrink horizontally.
+ * - Soft min (height/3) is returned for callers that need a readability hint;
+ *   it must not be applied as a layout min that expands past the parent.
+ * @param paneWidth Measured conversation pane width in px
+ * @param paneHeight Measured conversation pane height in px
+ * @returns Size bounds, or null when dimensions are not measurable yet
+ */
+export function resolveConversationColumnSize(
+  paneWidth: number,
+  paneHeight: number,
+): ConversationColumnSize | null {
+  if (!(paneWidth > 0) || !(paneHeight > 0)) {
+    return null;
+  }
+  const maxWidth = Math.round(paneHeight * CONVERSATION_COLUMN_MAX_WIDTH_RATIO);
+  const minWidth = Math.round(paneHeight * CONVERSATION_COLUMN_MIN_WIDTH_RATIO);
+  // Critical: never return a width larger than the pane. Clamping up to
+  // minWidth when paneWidth < minWidth was blocking horizontal window resize.
+  const width = Math.min(paneWidth, maxWidth);
+  return { width, minWidth, maxWidth };
+}
+
+/**
+ * Caps the conversation column at a 1:1 aspect of its height.
+ * Prefer {@link resolveConversationColumnSize} when min width is also needed.
+ * @param width Measured conversation pane width in px
+ * @param height Measured conversation pane height in px
+ * @returns Max content width, or null when not measurable
+ */
+export function resolveConversationColumnMaxWidth(width: number, height: number): number | null {
+  return resolveConversationColumnSize(width, height)?.maxWidth ?? null;
+}
 
 // Minimum width for the main chat/agent area when sidebar is open.
 // Both left-sidebar and explorer-sidebar reference this independently.
@@ -108,11 +166,20 @@ export {
 } from "./platform";
 
 /**
- * Reactive hook — re-renders the component when the breakpoint changes.
+ * Reactive hook for phone/tablet compact shell vs desktop workbench chrome.
  * Always use this instead of reading UnistylesRuntime.breakpoint directly.
+ *
+ * Electron desktop never flips to compact: width-based breakpoints would
+ * replace the workbench (pinned sidebar + PanelLeft collapse control +
+ * desktop header) with a mobile hamburger shell when the window is
+ * narrowed, which is incorrect for a resizable desktop app. Browser web
+ * and native still use xs/sm breakpoints.
  */
 export function useIsCompactFormFactor(): boolean {
   const { rt } = useUnistyles();
+  if (getIsElectron()) {
+    return false;
+  }
   return rt.breakpoint === "xs" || rt.breakpoint === "sm";
 }
 

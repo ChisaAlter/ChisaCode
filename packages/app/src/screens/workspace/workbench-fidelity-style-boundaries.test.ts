@@ -20,12 +20,16 @@ describe("workbench fidelity style boundaries", () => {
     expect(source).toContain('pathname.includes("/workspace/")');
   });
 
-  it("uses the reference environment block rhythm", () => {
+  it("uses Codex-style stacked floating environment cards", () => {
     const source = readSource("./workspace-environment-panel.tsx");
 
-    expect(source).toContain("marginBottom: WORKBENCH_ENVIRONMENT_SECTION_GAP");
-    expect(source).toContain("gap: WORKBENCH_ENVIRONMENT_ACTION_GAP");
-    expect(source).toContain("marginBottom: WORKBENCH_ENVIRONMENT_ACTION_MARGIN_BOTTOM");
+    expect(source).toContain("function EnvironmentInfoCard");
+    expect(source).toContain("function TaskProgressCard");
+    expect(source).toContain("{progress ? <TaskProgressCard progress={progress} /> : null}");
+    expect(source).toContain("WORKBENCH_ENVIRONMENT_PANEL_SHADOW");
+    expect(source).toContain('testID="workspace-environment-panel"');
+    expect(source).toContain('testID="workspace-task-progress-panel"');
+    expect(source).not.toContain("environmentDockTabs");
   });
 
   it("uses the reference glyphs for the desktop workbench tabs", () => {

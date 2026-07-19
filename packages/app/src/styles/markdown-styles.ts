@@ -1,21 +1,13 @@
 import type { Theme } from "./theme";
 import { Fonts } from "@/constants/theme";
 import { isWeb } from "@/constants/platform";
-import { LINE_HEIGHT } from "./theme";
-import {
-  WORKBENCH_BODY_FONT_SIZE,
-  WORKBENCH_BODY_LINE_HEIGHT,
-  WORKBENCH_MESSAGE_LINE_HEIGHT,
-} from "@/constants/layout";
 
 const webSelectableTextStyle = isWeb ? { userSelect: "text" as const } : {};
 
 /**
- * Creates comprehensive markdown styles for react-native-markdown-display.
- *
- * Usage:
- *   const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
- *   <Markdown style={markdownStyles}>{content}</Markdown>
+ * Theme tokens for react-native-markdown-display.
+ * Prefer MarkdownRenderer (which applies these via withUnistyles) over wiring
+ * styles by hand. Domain surfaces should not rebuild parallel style pipelines.
  */
 export function createMarkdownStyles(theme: Theme) {
   return {
@@ -27,7 +19,9 @@ export function createMarkdownStyles(theme: Theme) {
       ...webSelectableTextStyle,
       color: theme.colors.foreground,
       fontSize: theme.fontSize.base,
-      lineHeight: LINE_HEIGHT.body,
+      // Prose line-height scales with the UI ramp (≈22 at base 16), NOT the
+      // code-size-coupled lineHeight.diff token used by code/diff surfaces.
+      lineHeight: Math.round(theme.fontSize.base * 1.4),
       flexShrink: 1,
       minWidth: 0,
       width: "100%" as const,
@@ -43,7 +37,7 @@ export function createMarkdownStyles(theme: Theme) {
 
     paragraph: {
       marginTop: 0,
-      marginBottom: theme.spacing[2],
+      marginBottom: theme.spacing[3],
       flexWrap: "wrap" as const,
       flexDirection: "row" as const,
       alignItems: "flex-start" as const,
@@ -64,7 +58,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[6],
       marginBottom: theme.spacing[3],
-      lineHeight: LINE_HEIGHT.heading1,
+      lineHeight: 32,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
       paddingBottom: theme.spacing[2],
@@ -77,7 +71,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[6],
       marginBottom: theme.spacing[3],
-      lineHeight: LINE_HEIGHT.heading2,
+      lineHeight: 28,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
       paddingBottom: theme.spacing[2],
@@ -90,7 +84,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[4],
       marginBottom: theme.spacing[2],
-      lineHeight: LINE_HEIGHT.heading3,
+      lineHeight: 26,
     },
 
     heading4: {
@@ -100,7 +94,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[4],
       marginBottom: theme.spacing[2],
-      lineHeight: LINE_HEIGHT.heading4,
+      lineHeight: 24,
     },
 
     heading5: {
@@ -110,7 +104,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       marginTop: theme.spacing[3],
       marginBottom: theme.spacing[1],
-      lineHeight: LINE_HEIGHT.heading5,
+      lineHeight: 22,
     },
 
     heading6: {
@@ -120,7 +114,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foregroundMuted,
       marginTop: theme.spacing[3],
       marginBottom: theme.spacing[1],
-      lineHeight: LINE_HEIGHT.heading6,
+      lineHeight: 20,
       textTransform: "uppercase" as const,
       letterSpacing: 0.5,
     },
@@ -173,11 +167,11 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foreground,
       paddingHorizontal: theme.spacing[1],
       paddingVertical: 2,
-      marginHorizontal: 1,
       borderRadius: theme.borderRadius.md,
       borderWidth: 0,
       fontFamily: Fonts.mono,
-      fontSize: theme.fontSize.codeInline,
+      fontSize: theme.fontSize.code,
+      lineHeight: Math.round(theme.fontSize.code * 1.45),
     },
 
     code_block: {
@@ -269,8 +263,7 @@ export function createMarkdownStyles(theme: Theme) {
     },
 
     list_item: {
-      marginBottom: theme.spacing[2],
-      paddingLeft: theme.spacing[1],
+      marginBottom: theme.spacing[1],
       flexDirection: "row" as const,
       alignItems: "flex-start" as const,
       flexShrink: 1,
@@ -289,18 +282,18 @@ export function createMarkdownStyles(theme: Theme) {
     bullet_list_icon: {
       ...webSelectableTextStyle,
       color: theme.colors.foregroundMuted,
-      marginRight: theme.spacing[1],
+      marginRight: 4,
       fontSize: theme.fontSize.base,
-      lineHeight: LINE_HEIGHT.listItem,
+      lineHeight: 22,
     },
 
     ordered_list_icon: {
       ...webSelectableTextStyle,
       color: theme.colors.foregroundMuted,
-      marginRight: theme.spacing[1],
+      marginRight: 4,
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.normal,
-      lineHeight: LINE_HEIGHT.listItem,
+      lineHeight: 22,
       minWidth: 12,
     },
 
@@ -325,9 +318,7 @@ export function createMarkdownStyles(theme: Theme) {
     hr: {
       backgroundColor: theme.colors.border,
       height: 1,
-      marginTop: theme.spacing[4],
-      marginBottom: theme.spacing[4],
-      width: "100%" as const,
+      marginVertical: theme.spacing[6],
     },
 
     // =========================================================================
@@ -398,7 +389,7 @@ export function createCompactMarkdownStyles(theme: Theme) {
 
     code_inline: {
       ...baseStyles.code_inline,
-      fontSize: theme.fontSize.sm - 3,
+      fontSize: theme.fontSize.code,
     },
 
     code_block: {
@@ -414,42 +405,13 @@ export function createCompactMarkdownStyles(theme: Theme) {
     },
   };
 }
+
 /**
- * Creates the dense markdown typography used by desktop and mobile workbench chat.
+ * Chat workbench uses Paseo's full prose scale (not the dense 13px chrome
+ * tokens). Kept as a named export for call sites that predate this alignment.
  * @param theme Active application theme
- * @returns Markdown styles aligned with the workbench visual reference
+ * @returns Same styles as createMarkdownStyles
  */
 export function createWorkbenchMarkdownStyles(theme: Theme) {
-  const compactStyles = createCompactMarkdownStyles(theme);
-
-  return {
-    ...compactStyles,
-    body: {
-      ...compactStyles.body,
-      fontSize: WORKBENCH_BODY_FONT_SIZE,
-      lineHeight: isWeb ? WORKBENCH_BODY_LINE_HEIGHT : WORKBENCH_MESSAGE_LINE_HEIGHT,
-    },
-    paragraph: {
-      ...compactStyles.paragraph,
-      fontSize: WORKBENCH_BODY_FONT_SIZE,
-      lineHeight: isWeb ? WORKBENCH_BODY_LINE_HEIGHT : WORKBENCH_MESSAGE_LINE_HEIGHT,
-      marginBottom: 6,
-    },
-    text: {
-      ...compactStyles.text,
-      fontFamily: isWeb ? "system-ui" : Fonts.sans,
-      fontSize: WORKBENCH_BODY_FONT_SIZE,
-      lineHeight: isWeb ? WORKBENCH_BODY_LINE_HEIGHT : WORKBENCH_MESSAGE_LINE_HEIGHT,
-    },
-    bullet_list_icon: {
-      ...compactStyles.bullet_list_icon,
-      fontSize: WORKBENCH_BODY_FONT_SIZE,
-      lineHeight: WORKBENCH_MESSAGE_LINE_HEIGHT,
-    },
-    ordered_list_icon: {
-      ...compactStyles.ordered_list_icon,
-      fontSize: WORKBENCH_BODY_FONT_SIZE,
-      lineHeight: WORKBENCH_MESSAGE_LINE_HEIGHT,
-    },
-  };
+  return createMarkdownStyles(theme);
 }

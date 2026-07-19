@@ -144,7 +144,7 @@ describe("window-manager", () => {
   describe("getMainWindowChromeOptions", () => {
     it("sets a usable minimum size for the desktop shell", () => {
       expect(getMainWindowSizingOptions()).toEqual({
-        minWidth: 980,
+        minWidth: 720,
         minHeight: 720,
       });
     });

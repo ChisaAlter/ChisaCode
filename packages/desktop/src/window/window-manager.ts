@@ -15,7 +15,9 @@ import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.j
 
 const IPC_PREFIXES = ["chisacode"] as const;
 const OPAQUE_HEX_COLOR = /^#[\da-f]{6}$/i;
-const MAIN_WINDOW_MIN_WIDTH = 980;
+// Keep the shell usable without locking ultra-wide chat layout experiments.
+// Sidebar (~200) + min chat still fits; was 980 which felt "can't shrink".
+const MAIN_WINDOW_MIN_WIDTH = 720;
 const MAIN_WINDOW_MIN_HEIGHT = 720;
 
 export function readBadgeCount(input: unknown): number {

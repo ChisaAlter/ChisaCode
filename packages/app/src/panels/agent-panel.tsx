@@ -11,6 +11,7 @@ import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
+import { ConversationAspectColumn } from "@/components/conversation-aspect-column";
 import { Composer } from "@/composer";
 import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -1182,7 +1183,7 @@ function ChatAgentReadyContent({
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
       <View style={styles.root}>
         <FileDropZone onFilesDropped={handleFilesDropped} disabled={isArchivingCurrentAgent}>
-          <View style={styles.container}>
+          <ConversationAspectColumn>
             <View style={styles.contentContainer}>
               <ReanimatedAnimated.View style={animatedContentStyle}>
                 <AgentStreamSection
@@ -1233,7 +1234,7 @@ function ChatAgentReadyContent({
               onDismiss={panelToast.dismiss}
               placement="panel"
             />
-          </View>
+          </ConversationAspectColumn>
         </FileDropZone>
 
         {isArchivingCurrentAgent ? (
@@ -1638,19 +1639,26 @@ const foregroundColorMapping = (theme: Theme) => ({
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
+    minWidth: 0,
+    width: "100%",
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   container: {
     flex: 1,
+    minWidth: 0,
+    width: "100%",
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   contentContainer: {
     flex: 1,
+    minWidth: 0,
+    width: "100%",
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
   },
   inputAreaWrapper: {
     width: "100%",
+    minWidth: 0,
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   composerInputWrapper: {

@@ -14,7 +14,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
 import Animated from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
+import { FOOTER_HEIGHT } from "@/constants/layout";
 import {
   AgentControls,
   DraftAgentControls,
@@ -657,7 +657,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     minHeight: FOOTER_HEIGHT,
     alignItems: "flex-start",
     width: "100%",
-    overflow: "visible",
+    minWidth: 0,
+    overflow: "hidden",
     paddingLeft: 14,
     paddingRight: 14,
     paddingBottom: 14,
@@ -666,12 +667,14 @@ const styles = StyleSheet.create((theme: Theme) => ({
     opacity: 0.6,
   },
   inputAreaContent: {
+    // Width is driven by the left-aligned ConversationAspectColumn (max = height).
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
+    minWidth: 0,
     gap: theme.spacing[3],
   },
   footer: {
     width: "100%",
+    minWidth: 0,
     paddingLeft: 14,
     paddingRight: 14,
     // Negative margin collapses the gap between input area and footer toolbar.
@@ -686,7 +689,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   footerContent: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

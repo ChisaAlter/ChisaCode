@@ -9,7 +9,6 @@ import {
   ViewStyle,
   type TextStyle,
 } from "react-native";
-import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-text";
 import * as React from "react";
 import {
   useState,
@@ -22,12 +21,8 @@ import {
   Children,
   cloneElement,
 } from "react";
-import type { ReactNode, ComponentType } from "react";
-import Markdown, {
-  MarkdownIt,
-  type ASTNode,
-  type RenderRules,
-} from "react-native-markdown-display";
+import type { ReactNode } from "react";
+import { MarkdownIt, type ASTNode, type RenderRules } from "react-native-markdown-display";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -52,17 +47,19 @@ import {
   WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
   WORKBENCH_BODY_FONT_SIZE,
   WORKBENCH_BODY_LINE_HEIGHT,
-  WORKBENCH_MESSAGE_LINE_HEIGHT,
   WORKBENCH_USER_MESSAGE_MAX_WIDTH,
 } from "@/constants/layout";
-import { createWorkbenchMarkdownStyles } from "@/styles/markdown-styles";
+import {
+  MarkdownInheritedText,
+  MarkdownRenderer,
+  type MarkdownStyles,
+} from "@/components/markdown";
 import { Fonts } from "@/constants/theme";
 import type { GenerativeUiItem, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
 import type { AgentAttachment } from "@chisacode/protocol/messages";
 import type { ToolCallDetail } from "@chisacode/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
 import { resolveToolCallIcon } from "@/utils/tool-call-icon";
-import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { GenerativeHtmlPreview } from "@/components/generative-html-preview";
@@ -112,7 +109,6 @@ export type { InlinePathTarget } from "@/assistant-file-links";
 // Font size for stream metadata (timestamps, durations, live elapsed timer).
 // Lives between theme.fontSize.xs (12) and theme.fontSize.sm (14); no token.
 export const STREAM_METADATA_FONT_SIZE = 13;
-type MarkdownStyles = Record<string, TextStyle & ViewStyle & { [key: string]: unknown }>;
 
 function buildGenerativeUiItem(
   nodeKey: string,
@@ -148,30 +144,14 @@ interface UserMessageProps {
 const EMPTY_USER_MESSAGE_IMAGES: UserMessageImageAttachment[] = [];
 const EMPTY_USER_MESSAGE_ATTACHMENTS: AgentAttachment[] = [];
 
-const MARKDOWN_ALLOWED_IMAGE_HANDLERS = [
+const MARKDOWN_ALLOWED_IMAGE_HANDLERS: string[] = [
   "data:image/png;base64",
   "data:image/gif;base64",
   "data:image/jpeg;base64",
   "https://",
   "http://",
-] as const;
+];
 const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
-
-interface MarkdownWithStableRendererProps {
-  children: ReactNode;
-  style: ReturnType<typeof createWorkbenchMarkdownStyles>;
-  rules: RenderRules;
-  markdownit: MarkdownIt;
-  onLinkPress: (url: string) => boolean;
-  allowedImageHandlers: readonly string[];
-  topLevelMaxExceededItem: ReactNode;
-}
-
-const MarkdownWithStableRenderer = Markdown as ComponentType<MarkdownWithStableRendererProps>;
-const ThemedMarkdown = withUnistyles(MarkdownWithStableRenderer);
-const markdownStyleMapping = (theme: Theme): Partial<MarkdownWithStableRendererProps> => ({
-  style: createWorkbenchMarkdownStyles(theme),
-});
 
 const ThemedMicVocal = withUnistyles(MicVocal);
 const ThemedTodoCheckIcon = withUnistyles(Check);
@@ -192,6 +172,7 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   content: {
     alignItems: "flex-end",
     position: "relative",
+    // Paseo: fill available width up to a soft cap instead of a tight 400px bubble.
     maxWidth: WORKBENCH_USER_MESSAGE_MAX_WIDTH,
     minWidth: 0,
     flexShrink: 1,
@@ -207,24 +188,20 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   bubble: {
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.borderRadius.xl,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: 9,
+    // Paseo-aligned: elevated neutral surface, not accent gradients.
+    backgroundColor: theme.colors.surface3,
+    borderRadius: theme.borderRadius["2xl"],
+    borderTopRightRadius: theme.borderRadius.sm,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
     minWidth: 0,
     flexShrink: 1,
-    ...(isWeb
-      ? ({
-          backgroundImage: theme.colors.userBubbleGradient,
-          boxShadow: `0 6px 16px color-mix(in srgb, ${theme.colors.accent} 16%, transparent)`,
-        } as object)
-      : theme.shadow.sm),
   },
   text: {
-    color: theme.colors.accentForeground,
+    color: theme.colors.foreground,
     fontFamily: isWeb ? "system-ui" : Fonts.sans,
-    fontSize: WORKBENCH_BODY_FONT_SIZE,
-    lineHeight: WORKBENCH_MESSAGE_LINE_HEIGHT,
+    fontSize: theme.fontSize.base,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
     minWidth: 0,
     maxWidth: "100%",
     flexShrink: 1,
@@ -645,38 +622,37 @@ export const LiveElapsed = memo(function LiveElapsed({
 
 const assistantTurnHeaderStylesheet = StyleSheet.create((theme) => ({
   container: {
-    minHeight: 18,
+    minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 5,
+    gap: 8,
+    marginBottom: theme.spacing[3],
   },
   badge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.colors.accent,
-    ...(isWeb
-      ? ({
-          backgroundImage: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.accentNeon})`,
-        } as object)
-      : {}),
+    backgroundColor: theme.colors.surface3,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
   },
   name: {
     color: theme.colors.foreground,
-    fontSize: 12,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold,
+    lineHeight: Math.round(theme.fontSize.base * 1.4),
   },
   duration: {
     color: theme.colors.foregroundMuted,
-    fontSize: 11,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
   },
 }));
 
 const assistantTurnIconColorMapping = (theme: Theme) => ({
-  color: theme.colors.accentForeground,
+  color: theme.colors.foregroundMuted,
 });
 
 export const AssistantTurnHeader = memo(function AssistantTurnHeader({
@@ -686,8 +662,8 @@ export const AssistantTurnHeader = memo(function AssistantTurnHeader({
 }) {
   return (
     <View style={assistantTurnHeaderStylesheet.container} testID="assistant-turn-header">
-      <View style={assistantTurnHeaderStylesheet.badge}>
-        <ThemedCog size={10} uniProps={assistantTurnIconColorMapping} />
+      <View style={assistantTurnHeaderStylesheet.badge} accessibilityLabel="AI">
+        <ThemedCog size={12} uniProps={assistantTurnIconColorMapping} />
       </View>
       <Text style={assistantTurnHeaderStylesheet.name}>AI</Text>
       {durationMs !== undefined ? (
@@ -1235,62 +1211,19 @@ const MemoizedMarkdownBlock = React.memo(function MemoizedMarkdownBlock({
   parser,
   onLinkPress,
 }: MemoizedMarkdownBlockProps) {
+  // Organic integration: shared MarkdownRenderer core + domain rule overlays only.
   return (
-    <ThemedMarkdown
-      uniProps={markdownStyleMapping}
+    <MarkdownRenderer
+      text={text}
+      enableHtmlish
       rules={rules}
       markdownit={parser}
       onLinkPress={onLinkPress}
       allowedImageHandlers={MARKDOWN_ALLOWED_IMAGE_HANDLERS}
       topLevelMaxExceededItem={MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM}
-    >
-      {text}
-    </ThemedMarkdown>
+    />
   );
 });
-
-interface MarkdownInheritedTextProps {
-  inheritedStyles: TextStyle;
-  textStyle: TextStyle;
-  style?: StyleProp<TextStyle>;
-  children: ReactNode;
-}
-
-function MarkdownInheritedText({
-  inheritedStyles,
-  textStyle,
-  style: overrideStyle,
-  children,
-}: MarkdownInheritedTextProps) {
-  const style = useMemo(
-    () => [inheritedStyles, textStyle, overrideStyle],
-    [inheritedStyles, textStyle, overrideStyle],
-  );
-  return <MarkdownTextSpan style={style}>{children}</MarkdownTextSpan>;
-}
-
-interface MarkdownListItemContentProps {
-  contentStyle: ViewStyle;
-  children: ReactNode;
-}
-
-const MARKDOWN_LIST_ITEM_CONTENT_FLEX: ViewStyle = { flex: 1, flexShrink: 1, minWidth: 0 };
-
-function MarkdownListItemContent({ contentStyle, children }: MarkdownListItemContentProps) {
-  const style = useMemo(() => [contentStyle, MARKDOWN_LIST_ITEM_CONTENT_FLEX], [contentStyle]);
-  return <View style={style}>{children}</View>;
-}
-
-interface MarkdownListViewProps {
-  baseStyle: ViewStyle;
-  spacing: { marginTop: number; marginBottom: number };
-  children: ReactNode;
-}
-
-function MarkdownListView({ baseStyle, spacing, children }: MarkdownListViewProps) {
-  const style = useMemo(() => [baseStyle, spacing], [baseStyle, spacing]);
-  return <View style={style}>{children}</View>;
-}
 
 export const AssistantMessage = memo(function AssistantMessage({
   message,
@@ -1322,53 +1255,10 @@ export const AssistantMessage = memo(function AssistantMessage({
     return false;
   });
 
+  // Domain overlays only: generative UI fences, path-aware inline code, file
+  // links, workspace images. Shared prose rules merge in via MarkdownRenderer.
   const markdownRules = useMemo<RenderRules>(() => {
     return {
-      text: (
-        node: ASTNode,
-        _children: ReactNode[],
-        _parent: ASTNode[],
-        styles: MarkdownStyles,
-        inheritedStyles: TextStyle = {},
-      ) => (
-        <MarkdownInheritedText
-          key={node.key}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.text}
-        >
-          {node.content}
-        </MarkdownInheritedText>
-      ),
-      textgroup: (
-        node: ASTNode,
-        children: ReactNode[],
-        _parent: ASTNode[],
-        styles: MarkdownStyles,
-        inheritedStyles: TextStyle = {},
-      ) => (
-        <MarkdownInheritedText
-          key={node.key}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.textgroup}
-        >
-          {children}
-        </MarkdownInheritedText>
-      ),
-      code_block: (
-        node: ASTNode,
-        _children: ReactNode[],
-        _parent: ASTNode[],
-        styles: MarkdownStyles,
-        inheritedStyles: TextStyle = {},
-      ) => (
-        <HighlightedCodeBlock
-          key={node.key}
-          code={node.content}
-          language={null}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.code_block}
-        />
-      ),
       fence: (
         node: ASTNode,
         _children: ReactNode[],
@@ -1464,68 +1354,12 @@ export const AssistantMessage = memo(function AssistantMessage({
             key={node.key}
             inheritedStyles={inheritedStyles}
             textStyle={styles.code_inline}
+            monoSurface
           >
             {content}
           </MarkdownInheritedText>
         );
       },
-      bullet_list: (
-        node: ASTNode,
-        children: ReactNode[],
-        parent: ASTNode[],
-        styles: MarkdownStyles,
-      ) => (
-        <MarkdownListView
-          key={node.key}
-          baseStyle={styles.bullet_list}
-          spacing={getMarkdownListSpacing(node, parent)}
-        >
-          {children}
-        </MarkdownListView>
-      ),
-      ordered_list: (
-        node: ASTNode,
-        children: ReactNode[],
-        parent: ASTNode[],
-        styles: MarkdownStyles,
-      ) => (
-        <MarkdownListView
-          key={node.key}
-          baseStyle={styles.ordered_list}
-          spacing={getMarkdownListSpacing(node, parent)}
-        >
-          {children}
-        </MarkdownListView>
-      ),
-      list_item: (
-        node: ASTNode,
-        children: ReactNode[],
-        parent: ASTNode[],
-        styles: MarkdownStyles,
-      ) => {
-        const { isOrdered, marker } = getMarkdownListMarker(node, parent);
-        const iconStyle = isOrdered ? styles.ordered_list_icon : styles.bullet_list_icon;
-        const contentStyle = isOrdered ? styles.ordered_list_content : styles.bullet_list_content;
-
-        return (
-          <View key={node.key} style={styles.list_item}>
-            <Text style={iconStyle}>{marker}</Text>
-            <MarkdownListItemContent contentStyle={contentStyle}>
-              {children}
-            </MarkdownListItemContent>
-          </View>
-        );
-      },
-      paragraph: (
-        node: ASTNode,
-        children: ReactNode[],
-        _parent: ASTNode[],
-        styles: MarkdownStyles,
-      ) => (
-        <MarkdownParagraphView key={node.key} paragraphStyle={styles.paragraph}>
-          {children}
-        </MarkdownParagraphView>
-      ),
       link: (node: ASTNode, children: ReactNode[], _parent: ASTNode[], styles: MarkdownStyles) => (
         <AssistantMarkdownLink
           key={node.key}

@@ -751,7 +751,6 @@ function WorkspaceScreenContent({
     isRouteFocused,
   });
   const {
-    environmentDockState,
     setEnvironmentDockState,
     setEnvironmentPanelMode,
     isEnvironmentPanelVisible,
@@ -838,22 +837,13 @@ function WorkspaceScreenContent({
     }
     return target.agentId;
   }, [focusedPaneTabState.activeTab]);
-  const {
-    environmentPanelAgent,
-    environmentPanelAgentId,
-    environmentSubagents,
-    environmentTodoItems,
-    environmentTurnChanges,
-    environmentSourceLabel,
-    environmentWorkspaceStatus,
-    workspaceStatusStripModel,
-    workspaceActivityItems,
-  } = useWorkspaceEnvironmentData({
-    normalizedServerId,
-    focusedPaneAgentId,
-    workspaceDescriptor,
-    currentBranchName,
-  });
+  const { environmentPanelAgentId, environmentProgress, environmentSourceLabel } =
+    useWorkspaceEnvironmentData({
+      normalizedServerId,
+      focusedPaneAgentId,
+      workspaceDescriptor,
+      currentBranchName,
+    });
   const {
     handleCopyAgentId,
     handleCopyResumeCommand,
@@ -933,8 +923,6 @@ function WorkspaceScreenContent({
     openWorkspaceChildTabFocused,
     openWorkspaceTabInBackground,
   });
-  const handleOpenEnvironmentSubagent = handleImportedAgent;
-
   const { showWorkspaceSetup } = useWorkspacePersistenceHydration({
     client,
     isRouteFocused,
@@ -1025,27 +1013,23 @@ function WorkspaceScreenContent({
     onCreateTerminal: handleCreateTerminal,
   });
 
-  const {
-    handleOpenWorkspaceDockPane,
-    handleOpenGitDock,
-    handleOpenBrowserContextDock,
-    handleOpenPullRequestDock,
-  } = useWorkspaceDockActions({
-    isMobile,
-    hasEnvironmentBrowserContext,
-    hasEnvironmentPullRequest,
-    persistenceKey,
-    focusedPane: focusedPaneTabState.pane,
-    setEnvironmentDockState,
-    setEnvironmentPanelMode,
-    closeDesktopFileExplorer,
-    handleOpenEnvironmentChanges,
-    handleCreateTerminal,
-    focusWorkspacePane,
-    splitWorkspacePaneEmpty,
-    openWorkspaceTabFocused,
-    openWorkspaceTabInBackground,
-  });
+  const { handleOpenGitDock, handleOpenBrowserContextDock, handleOpenPullRequestDock } =
+    useWorkspaceDockActions({
+      isMobile,
+      hasEnvironmentBrowserContext,
+      hasEnvironmentPullRequest,
+      persistenceKey,
+      focusedPane: focusedPaneTabState.pane,
+      setEnvironmentDockState,
+      setEnvironmentPanelMode,
+      closeDesktopFileExplorer,
+      handleOpenEnvironmentChanges,
+      handleCreateTerminal,
+      focusWorkspacePane,
+      splitWorkspacePaneEmpty,
+      openWorkspaceTabFocused,
+      openWorkspaceTabInBackground,
+    });
 
   const handleOpenSetupTab = useCallback(() => {
     if (!persistenceKey) {
@@ -1305,45 +1289,21 @@ function WorkspaceScreenContent({
       currentBranchName,
       isGitCheckout,
       diffStat: workspaceDescriptor?.diffStat ?? null,
-      githubRuntime: workspaceDescriptor?.githubRuntime,
-      browserContext: environmentBrowserContext,
-      dockState: environmentDockState,
       sourceLabel: environmentSourceLabel,
-      taskTitle: workspaceStatusStripModel.taskTitle,
-      activityItems: workspaceActivityItems,
-      activeAgent: environmentPanelAgent,
-      workspaceStatus: environmentWorkspaceStatus,
-      subagents: environmentSubagents,
-      todoItems: environmentTodoItems,
-      latestTurnChanges: environmentTurnChanges,
-      onSelectDockTab: handleOpenWorkspaceDockPane,
+      progress: environmentProgress,
       onOpenChanges: handleOpenEnvironmentChanges,
-      onOpenSubagent: handleOpenEnvironmentSubagent,
-      onCopyResumeCommand: handleCopyResumeCommand,
       onClose: handleToggleEnvironmentPanel,
     }),
     [
       currentBranchName,
-      environmentBrowserContext,
-      environmentDockState,
-      environmentPanelAgent,
+      environmentProgress,
       environmentSourceLabel,
-      environmentSubagents,
-      environmentTodoItems,
-      environmentTurnChanges,
-      environmentWorkspaceStatus,
-      handleCopyResumeCommand,
       handleToggleEnvironmentPanel,
       handleOpenEnvironmentChanges,
-      handleOpenEnvironmentSubagent,
-      handleOpenWorkspaceDockPane,
       isGitCheckout,
       normalizedServerId,
-      workspaceActivityItems,
       workspaceDescriptor?.diffStat,
-      workspaceDescriptor?.githubRuntime,
       workspaceDirectory,
-      workspaceStatusStripModel.taskTitle,
     ],
   );
 

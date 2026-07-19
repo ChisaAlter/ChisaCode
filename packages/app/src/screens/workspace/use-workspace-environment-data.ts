@@ -2,11 +2,13 @@ import { useMemo } from "react";
 
 import { useSubagentsForParent, type SubagentRow } from "@/subagents/select";
 import { useSessionStore, type Agent, type WorkspaceDescriptor } from "@/stores/session-store";
-import type { TodoEntry, TurnChangesItem } from "@/types/stream";
+import type { StreamItem, TodoEntry, TurnChangesItem } from "@/types/stream";
 import {
   buildWorkspaceActivityItems,
   buildWorkspaceStatusStripModel,
   findLatestTodoItems,
+  resolveAgentProgress,
+  type AgentProgressModel,
   type WorkspaceActivityItem,
   type WorkspaceStatusStripModel,
 } from "@/screens/workspace/workspace-environment-panel-model";
@@ -24,6 +26,7 @@ interface UseWorkspaceEnvironmentDataResult {
   environmentPanelAgentId: string | null;
   environmentSubagents: SubagentRow[];
   environmentTodoItems: TodoEntry[] | null;
+  environmentProgress: AgentProgressModel | null;
   environmentTurnChanges: TurnChangesItem | null;
   environmentSourceLabel: string | null;
   environmentWorkspaceStatus: WorkspaceDescriptor["status"] | null;
@@ -64,6 +67,30 @@ function useEnvironmentPanelTodoItems(
   });
 }
 
+function useEnvironmentPanelStreamHead(
+  serverId: string,
+  agentId: string | null,
+): readonly StreamItem[] | null {
+  return useSessionStore((state) => {
+    if (!agentId) {
+      return null;
+    }
+    return state.sessions[serverId]?.agentStreamHead.get(agentId) ?? null;
+  });
+}
+
+function useEnvironmentPanelStreamTail(
+  serverId: string,
+  agentId: string | null,
+): readonly StreamItem[] | null {
+  return useSessionStore((state) => {
+    if (!agentId) {
+      return null;
+    }
+    return state.sessions[serverId]?.agentStreamTail.get(agentId) ?? null;
+  });
+}
+
 function useEnvironmentPanelTurnChanges(
   serverId: string,
   agentId: string | null,
@@ -95,6 +122,22 @@ export function useWorkspaceEnvironmentData(
     parentAgentId: focusedPaneAgentId ?? "",
   });
   const environmentTodoItems = useEnvironmentPanelTodoItems(normalizedServerId, focusedPaneAgentId);
+  const environmentStreamHead = useEnvironmentPanelStreamHead(
+    normalizedServerId,
+    focusedPaneAgentId,
+  );
+  const environmentStreamTail = useEnvironmentPanelStreamTail(
+    normalizedServerId,
+    focusedPaneAgentId,
+  );
+  const environmentProgress = useMemo(
+    () =>
+      resolveAgentProgress({
+        head: environmentStreamHead,
+        tail: environmentStreamTail,
+      }),
+    [environmentStreamHead, environmentStreamTail],
+  );
   const environmentTurnChanges = useEnvironmentPanelTurnChanges(
     normalizedServerId,
     focusedPaneAgentId,
@@ -124,6 +167,7 @@ export function useWorkspaceEnvironmentData(
     environmentPanelAgentId: environmentPanelAgent?.id ?? null,
     environmentSubagents,
     environmentTodoItems,
+    environmentProgress,
     environmentTurnChanges,
     environmentSourceLabel: getWorkspaceEnvironmentSourceLabel(workspaceDescriptor),
     environmentWorkspaceStatus: workspaceDescriptor?.status ?? null,

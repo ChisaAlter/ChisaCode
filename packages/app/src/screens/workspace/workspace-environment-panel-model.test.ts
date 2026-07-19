@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TodoEntry, TodoListItem } from "@/types/stream";
+import type { AgentToolCallItem, TodoEntry, TodoListItem } from "@/types/stream";
 import {
   buildWorkspaceActivityItems,
   buildWorkspaceReviewCalloutModel,
@@ -9,6 +9,8 @@ import {
   buildPullRequestLabel,
   buildTodoProgressSummary,
   findLatestTodoItems,
+  parsePlanMarkdownToProgressItems,
+  resolveAgentProgress,
   shouldEnableWorkspaceReviewArchiveAction,
   type WorkspacePullRequestRuntime,
 } from "./workspace-environment-panel-model";
@@ -147,6 +149,85 @@ describe("buildTodoProgressSummary", () => {
     const summary = buildTodoProgressSummary(items, 5);
     expect(summary?.hiddenCount).toBe(0);
     expect(summary?.progress).toBe(1);
+  });
+});
+
+function planToolCall(text: string, timestamp: number): AgentToolCallItem {
+  return {
+    kind: "tool_call",
+    id: `plan-${timestamp}`,
+    timestamp: new Date(timestamp),
+    payload: {
+      source: "agent",
+      data: {
+        provider: "codex",
+        callId: `plan-call-${timestamp}`,
+        name: "plan",
+        status: "completed",
+        error: null,
+        detail: { type: "plan", text },
+      },
+    },
+  };
+}
+
+describe("parsePlanMarkdownToProgressItems", () => {
+  it("parses bullets, numbered steps, and checkboxes", () => {
+    const items = parsePlanMarkdownToProgressItems(
+      ["# Login", "- [x] Design form", "- Wire auth", "1. Add tests"].join("\n"),
+    );
+    expect(items.map((item) => ({ text: item.text, completed: item.completed }))).toEqual([
+      { text: "Design form", completed: true },
+      { text: "Wire auth", completed: false },
+      { text: "Add tests", completed: false },
+    ]);
+  });
+
+  it("returns empty when the plan has no list steps", () => {
+    expect(parsePlanMarkdownToProgressItems("Just a prose paragraph.")).toEqual([]);
+  });
+});
+
+describe("resolveAgentProgress", () => {
+  it("returns null when the agent has no todos or plans", () => {
+    expect(resolveAgentProgress({ head: [], tail: [] })).toBeNull();
+  });
+
+  it("uses Claude-style todo_list items", () => {
+    const todos = todoListItem([todoEntry("Ship UI", false), todoEntry("Tests", true)], 1_000);
+    const model = resolveAgentProgress({ head: [], tail: [todos] });
+    expect(model?.source).toBe("todo_list");
+    expect(model?.completedCount).toBe(1);
+    expect(model?.totalCount).toBe(2);
+    expect(model?.visibleItems.map((item) => item.text)).toEqual(["Ship UI", "Tests"]);
+  });
+
+  it("uses Codex-style plan tool calls when no todo list exists", () => {
+    const plan = planToolCall("- Outline\n- Implement\n- Verify", 2_000);
+    const model = resolveAgentProgress({ head: [plan], tail: [] });
+    expect(model?.source).toBe("plan");
+    expect(model?.totalCount).toBe(3);
+    expect(model?.visibleItems.map((item) => item.text)).toEqual([
+      "Outline",
+      "Implement",
+      "Verify",
+    ]);
+  });
+
+  it("prefers the newer progress source between todos and plans", () => {
+    const todos = todoListItem([todoEntry("Old todo", false)], 1_000);
+    const plan = planToolCall("- Newer plan step", 3_000);
+    const model = resolveAgentProgress({ head: [todos], tail: [plan] });
+    expect(model?.source).toBe("plan");
+    expect(model?.visibleItems[0]?.text).toBe("Newer plan step");
+  });
+
+  it("prefers a newer todo list over an older plan", () => {
+    const plan = planToolCall("- Stale plan", 1_000);
+    const todos = todoListItem([todoEntry("Fresh todo", true)], 4_000);
+    const model = resolveAgentProgress({ head: [plan, todos], tail: [] });
+    expect(model?.source).toBe("todo_list");
+    expect(model?.visibleItems[0]?.text).toBe("Fresh todo");
   });
 });
 

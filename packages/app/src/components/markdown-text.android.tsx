@@ -4,14 +4,23 @@ import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from "reac
 interface MarkdownTextSpanProps {
   style?: StyleProp<TextStyle>;
   children: ReactNode;
+  monoSurface?: boolean;
+  onPress?: import("react-native").TextProps["onPress"];
+  accessibilityRole?: import("react-native").TextProps["accessibilityRole"];
 }
 
 // Android's <Text selectable> enables per-text-node selection natively. Each
 // sibling Text is its own selection scope — drag can't span across siblings
 // (that requires a single UITextView ancestor and is iOS-only).
-export function MarkdownTextSpan({ style, children }: MarkdownTextSpanProps) {
+export function MarkdownTextSpan({
+  style,
+  children,
+  monoSurface: _monoSurface,
+  onPress,
+  accessibilityRole,
+}: MarkdownTextSpanProps) {
   return (
-    <Text selectable style={style}>
+    <Text selectable style={style} onPress={onPress} accessibilityRole={accessibilityRole}>
       {children}
     </Text>
   );
@@ -19,6 +28,7 @@ export function MarkdownTextSpan({ style, children }: MarkdownTextSpanProps) {
 
 interface MarkdownParagraphViewProps {
   paragraphStyle: ViewStyle;
+  containsImage?: boolean;
   children: ReactNode;
 }
 
@@ -31,7 +41,11 @@ const MARKDOWN_PARAGRAPH_RESET: ViewStyle = { marginBottom: 0 };
 // images) into one-character placeholders, which destroys image row layout.
 // <View> preserves the original block layout; the trade-off is no cross-span
 // selection on Android (a UITextView-style trick has no Android equivalent).
-export function MarkdownParagraphView({ paragraphStyle, children }: MarkdownParagraphViewProps) {
+export function MarkdownParagraphView({
+  paragraphStyle,
+  containsImage: _containsImage,
+  children,
+}: MarkdownParagraphViewProps) {
   const style = useMemo(() => [paragraphStyle, MARKDOWN_PARAGRAPH_RESET], [paragraphStyle]);
   return <View style={style}>{children}</View>;
 }
