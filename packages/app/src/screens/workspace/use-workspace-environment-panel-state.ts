@@ -89,14 +89,15 @@ export function useWorkspaceEnvironmentPanelState(
     toggleFileExplorerForCheckout,
     setExplorerTabForCheckout,
   } = input;
+  // Soft Workbench: inspector starts closed (header toggle opens it).
   const [environmentPanelMode, setEnvironmentPanelMode] =
-    useState<WorkspaceEnvironmentPanelMode>("auto");
+    useState<WorkspaceEnvironmentPanelMode>("forced-closed");
   const [centerContentSize, setCenterContentSize] = useState<{
     width: number;
     height: number;
   } | null>(null);
   const [environmentDockState, setEnvironmentDockState] = useState<WorkspaceEnvironmentDockState>({
-    open: true,
+    open: false,
     activeTab: "git-summary",
   });
 

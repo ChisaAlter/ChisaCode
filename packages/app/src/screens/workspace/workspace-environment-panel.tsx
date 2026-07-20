@@ -516,12 +516,11 @@ const styles = StyleSheet.create((theme) => ({
   floatingCard: {
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    borderRadius: 16,
-    // Match the workspace canvas so the floating cards do not read as a
-    // different “sheet” color over the conversation surface.
-    backgroundColor: theme.colors.surfaceWorkspace,
+    borderRadius: theme.borderRadius["2xl"],
+    // Soft elevated surface when open — same family as composer / settings cards.
+    backgroundColor: theme.colors.surface0,
     overflow: "hidden",
-    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.md),
+    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.sm),
   },
   cardHeader: {
     minHeight: 36,

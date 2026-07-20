@@ -1663,7 +1663,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   composerInputWrapper: {
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
+    borderRadius: 18,
+    backgroundColor: theme.colors.surface0,
   },
   historySyncProgressBanner: {
     position: "absolute",

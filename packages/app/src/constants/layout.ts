@@ -12,10 +12,10 @@ export const HEADER_INNER_HEIGHT_MOBILE = 48;
 export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 38;
 export const HEADER_TOP_PADDING_MOBILE = 4;
 
-// Dense workbench dimensions shared by the real Electron layout.
+// Soft Workbench dimensions shared by the real Electron layout.
 export const WORKBENCH_ENVIRONMENT_PANEL_WIDTH = 272;
 export const WORKBENCH_ENVIRONMENT_PANEL_INSET = 8;
-export const WORKBENCH_SIDEBAR_WIDTH = 200;
+export const WORKBENCH_SIDEBAR_WIDTH = 256;
 // Chat body typography: prefer Paseo-like readability over ultra-dense 13/18.
 // 14/22 keeps Chinese glyphs legible while remaining slightly tighter than settings base (16/22).
 export const WORKBENCH_BODY_FONT_SIZE = 14;
@@ -25,7 +25,7 @@ export const WORKBENCH_META_LINE_HEIGHT = 16;
 export const WORKBENCH_MICRO_FONT_SIZE = 11;
 export const WORKBENCH_MICRO_LINE_HEIGHT = 14;
 export const MIN_INTERACTIVE_TARGET_SIZE = 28;
-export const WORKBENCH_NEW_CHAT_RADIUS = 8;
+export const WORKBENCH_NEW_CHAT_RADIUS = 12;
 export const WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT = 16;
 export const WORKBENCH_TAB_MIN_WIDTH = 160;
 export const WORKBENCH_TAB_MAX_WIDTH = 220;
@@ -50,7 +50,9 @@ export const WORKBENCH_ENVIRONMENT_ACTION_MARGIN_BOTTOM = 10;
 export const WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT = 16;
 export const WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT = 18;
 export const WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT = 16;
-export const WORKBENCH_ENVIRONMENT_PANEL_SHADOW = "0 8px 28px rgba(0, 0, 0, 0.12)";
+// Soft Workbench: lighter float than dense IDE docks.
+export const WORKBENCH_ENVIRONMENT_PANEL_SHADOW =
+  "0 2px 8px rgba(20, 23, 31, 0.04), 0 12px 28px rgba(20, 23, 31, 0.08)";
 // The inspector overlays the work surface instead of shrinking messages or the composer.
 export const WORKBENCH_PANE_CONTENT_RIGHT_INSET = 0;
 export const WORKBENCH_MESSAGE_LINE_HEIGHT = 22;
@@ -59,8 +61,8 @@ export const WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH = 820;
 // Soft cap for user bubbles (Paseo uses full available width; keep a gentle max).
 export const WORKBENCH_USER_MESSAGE_MAX_WIDTH = 720;
 
-// Desktop settings geometry from design/web3-themes-v2.html.
-export const SETTINGS_DESKTOP_SIDEBAR_WIDTH = 220;
+// Desktop settings geometry — Soft Workbench list/detail.
+export const SETTINGS_DESKTOP_SIDEBAR_WIDTH = 240;
 export const SETTINGS_DESKTOP_BACK_HEIGHT = 36;
 export const SETTINGS_DESKTOP_NAV_ITEM_HEIGHT = 36;
 export const SETTINGS_DESKTOP_HEADER_HEIGHT = 44;

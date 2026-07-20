@@ -40,11 +40,12 @@ export function resolveWorkbenchSurfaceRoles(
     };
   }
 
+  // Soft Workbench: one calm shell; elevated cards use surface0 at components.
   return {
     workspace: input.surfaceWorkspace,
     content: input.surfaceWorkspace,
     chrome: input.surfaceWorkspace,
-    pane: input.surface0,
+    pane: input.surfaceWorkspace,
   };
 }
 

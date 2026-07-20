@@ -59,8 +59,8 @@ import {
 } from "./layout";
 
 describe("workbench layout constants", () => {
-  it("locks the reference desktop settings geometry", () => {
-    expect(SETTINGS_DESKTOP_SIDEBAR_WIDTH).toBe(220);
+  it("locks the Soft Workbench desktop settings geometry", () => {
+    expect(SETTINGS_DESKTOP_SIDEBAR_WIDTH).toBe(240);
     expect(SETTINGS_DESKTOP_BACK_HEIGHT).toBe(36);
     expect(SETTINGS_DESKTOP_NAV_ITEM_HEIGHT).toBe(36);
     expect(SETTINGS_DESKTOP_HEADER_HEIGHT).toBe(44);
@@ -90,9 +90,9 @@ describe("workbench layout constants", () => {
     expect(WORKBENCH_USER_MESSAGE_MAX_WIDTH).toBe(720);
   });
 
-  it("locks the reference workbench chrome geometry", () => {
+  it("locks the Soft Workbench chrome geometry", () => {
     expect(DESKTOP_WINDOW_CONTROLS_HEIGHT).toBe(30);
-    expect(WORKBENCH_NEW_CHAT_RADIUS).toBe(8);
+    expect(WORKBENCH_NEW_CHAT_RADIUS).toBe(12);
     expect(WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT).toBe(16);
     expect(SIDEBAR_FOOTER_HEIGHT).toBe(78);
     expect(WORKBENCH_TAB_MIN_WIDTH).toBe(160);
@@ -118,7 +118,9 @@ describe("workbench layout constants", () => {
     expect(WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT).toBe(16);
     expect(WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT).toBe(18);
     expect(WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT).toBe(16);
-    expect(WORKBENCH_ENVIRONMENT_PANEL_SHADOW).toBe("0 8px 28px rgba(0, 0, 0, 0.12)");
+    expect(WORKBENCH_ENVIRONMENT_PANEL_SHADOW).toBe(
+      "0 2px 8px rgba(20, 23, 31, 0.04), 0 12px 28px rgba(20, 23, 31, 0.08)",
+    );
   });
 
   it("keeps messages and the composer full width beneath the floating inspector", () => {

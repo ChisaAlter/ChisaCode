@@ -19,7 +19,7 @@ describe("resolveWorkbenchSurfaceRoles", () => {
     });
   });
 
-  it("preserves existing opaque theme surfaces", () => {
+  it("maps opaque Soft Workbench surfaces to one calm shell", () => {
     expect(
       resolveWorkbenchSurfaceRoles({
         glassEnabled: false,
@@ -31,7 +31,7 @@ describe("resolveWorkbenchSurfaceRoles", () => {
       workspace: "#0f1219",
       content: "#0f1219",
       chrome: "#0f1219",
-      pane: "#090b11",
+      pane: "#0f1219",
     });
   });
 });

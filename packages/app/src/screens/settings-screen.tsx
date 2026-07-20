@@ -106,6 +106,7 @@ import {
   SETTINGS_LIQUID_CONTENT_BACKGROUND,
   useIsCompactFormFactor,
 } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 import { resolveAppVersion } from "@/utils/app-version";
@@ -1933,8 +1934,14 @@ const sidebarStyles = StyleSheet.create((theme) => ({
   itemHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
+  // Soft Workbench: selected nav chip uses elevated white surface.
   itemSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : {}),
   },
   hostItem: {
     minHeight: 34,

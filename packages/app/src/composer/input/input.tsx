@@ -1969,16 +1969,17 @@ const styles = StyleSheet.create((theme: Theme) => ({
   container: {
     position: "relative",
   },
+  // Soft Workbench: large floating pen-bar matching design.
   inputWrapper: {
     flexDirection: "column",
     gap: theme.spacing[3],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius["2xl"],
+    borderColor: theme.colors.border,
+    borderRadius: 18,
     paddingVertical: {
       xs: theme.spacing[2],
-      md: theme.spacing[4],
+      md: theme.spacing[3],
     },
     paddingHorizontal: {
       xs: theme.spacing[3],
@@ -1986,7 +1987,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     },
     ...(isWeb
       ? {
-          transitionProperty: "border-color",
+          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 16px 40px rgba(20, 23, 31, 0.07)",
+          transitionProperty: "border-color, box-shadow",
           transitionDuration: "200ms",
           transitionTimingFunction: "ease-in-out",
         }

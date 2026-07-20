@@ -60,7 +60,6 @@ import {
   SIDEBAR_FOOTER_HEIGHT,
   WORKBENCH_META_FONT_SIZE,
   WORKBENCH_META_LINE_HEIGHT,
-  WORKBENCH_NEW_CHAT_RADIUS,
 } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
@@ -577,14 +576,12 @@ function SidebarTopActions({
             onPress={onSearch}
             testID="sidebar-search"
           />
-          {variant !== "desktop" ? (
-            <SidebarTopAction
-              icon={PanelLeftClose}
-              label={t("sidebar.closeSidebar")}
-              onPress={onCloseSidebar}
-              testID="sidebar-close"
-            />
-          ) : null}
+          <SidebarTopAction
+            icon={PanelLeftClose}
+            label={t("sidebar.closeSidebar")}
+            onPress={onCloseSidebar}
+            testID={variant === "desktop" ? "desktop-sidebar-close" : "sidebar-close"}
+          />
         </View>
       </View>
       <View style={primaryActionsStyle}>
@@ -1588,6 +1585,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebar,
     overflow: "hidden",
   },
+  // note: Soft uses same sidebar token; elevation comes from selected rows/CTA
   desktopSidebarRail: {
     width: 44,
     alignSelf: "stretch",
@@ -1657,28 +1655,28 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarTopHeading: {
     color: theme.colors.foreground,
-    fontSize: WORKBENCH_META_FONT_SIZE,
-    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+    fontSize: 13.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.semibold,
   },
   sidebarTopIconCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 0,
+    gap: 4,
   },
   sidebarTopAction: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   sidebarTopActionHovered: {
     backgroundColor: theme.colors.surface2,
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
   },
   sidebarTopActionIconSlot: {
     alignItems: "center",
@@ -1688,17 +1686,18 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   desktopSidebarPrimaryActions: {
-    minHeight: 36,
+    minHeight: 40,
   },
+  // Soft Workbench primary CTA — design: soft filled pill button.
   sidebarPrimaryAction: {
-    minHeight: 36,
+    minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: WORKBENCH_NEW_CHAT_RADIUS,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: 12,
+    borderWidth: 0,
+    borderColor: "transparent",
     backgroundColor: theme.colors.surface2,
     justifyContent: "center",
   },
@@ -1710,7 +1709,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     color: theme.colors.foreground,
     fontSize: WORKBENCH_META_FONT_SIZE,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: theme.fontWeight.medium,
   },
   hostTrigger: {
     flexDirection: "row",
@@ -1806,13 +1805,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopFooterIconButton: {
     width: "auto",
-    height: 28,
+    height: 32,
     flex: 1,
     paddingVertical: 0,
     paddingHorizontal: 0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
   },
   hostPickerList: {
     gap: theme.spacing[2],

@@ -1447,45 +1447,54 @@ export function NewWorkspaceScreen({
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
       <View style={styles.container}>
-        <ScreenHeader
-          left={
-            <>
+        {isCompact ? (
+          <ScreenHeader
+            left={
+              <>
+                {(isCompact || isAgentListOpen) && <SidebarMenuToggle />}
+                <View style={styles.headerTitleContainer}>
+                  <Text style={styles.headerTitle} numberOfLines={1}>
+                    {t("workspace.newWorkspace")}
+                  </Text>
+                  <Text style={styles.headerProjectTitle} numberOfLines={1}>
+                    {workspaceTitle}
+                  </Text>
+                </View>
+              </>
+            }
+            leftStyle={styles.headerLeft}
+            borderless
+          />
+        ) : (
+          <View style={styles.desktopSoftTopBar}>
+            <TitlebarDragRegion />
+            <View style={styles.desktopSoftTopBarInner}>
               {(isCompact || isAgentListOpen) && <SidebarMenuToggle />}
-              <View style={styles.headerTitleContainer}>
-                <Text style={styles.headerTitle} numberOfLines={1}>
-                  {t("workspace.newWorkspace")}
-                </Text>
-                <Text style={styles.headerProjectTitle} numberOfLines={1}>
-                  {workspaceTitle}
-                </Text>
-              </View>
-            </>
-          }
-          leftStyle={styles.headerLeft}
-          borderless
-        />
-        {!isCompact ? (
-          <View style={styles.desktopDraftTabsRow}>
-            <View style={styles.desktopDraftTab}>
-              <SquarePen size={14} color={theme.colors.accent} />
-              <Text style={styles.desktopDraftTabText} numberOfLines={1}>
-                {t("workspace.newWorkspace")}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-        <View style={contentStyle}>
-          <TitlebarDragRegion />
-          <View style={styles.draftShell}>
-            <View style={styles.draftLeadRow}>
-              <View style={styles.draftLeadCopy}>
-                <SquarePen size={14} color={theme.colors.accent} />
-                <Text style={styles.draftLeadText} numberOfLines={1}>
-                  {t("workspace.startUsingChisaCode")}
-                </Text>
-              </View>
+              <View style={styles.desktopSoftTopSpacer} />
               <ImportSessionAction onPress={handleOpenImportSheet} disabled={isPending} />
             </View>
+          </View>
+        )}
+        <View style={contentStyle}>
+          {!isCompact ? <TitlebarDragRegion /> : null}
+          <View style={styles.draftShell}>
+            {!isCompact ? (
+              <View style={styles.softHero}>
+                <Text style={styles.softHeroEyebrow}>{t("workspace.softHomeEyebrow")}</Text>
+                <Text style={styles.softHeroTitle}>{t("workspace.softHomeTitle")}</Text>
+                <Text style={styles.softHeroSubtitle}>{t("workspace.softHomeSubtitle")}</Text>
+              </View>
+            ) : (
+              <View style={styles.draftLeadRow}>
+                <View style={styles.draftLeadCopy}>
+                  <SquarePen size={14} color={theme.colors.accent} />
+                  <Text style={styles.draftLeadText} numberOfLines={1}>
+                    {t("workspace.startUsingChisaCode")}
+                  </Text>
+                </View>
+                <ImportSessionAction onPress={handleOpenImportSheet} disabled={isPending} />
+              </View>
+            )}
             <View style={styles.workspaceControls}>{workspaceControls}</View>
             <Composer
               agentId={`new-workspace:${serverId}:${sourceDirectory}`}
@@ -1571,27 +1580,75 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
   },
+  desktopSoftTopBar: {
+    height: 48,
+    position: "relative",
+    backgroundColor: "transparent",
+    justifyContent: "center",
+  },
+  desktopSoftTopBarInner: {
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing[4],
+    gap: theme.spacing[2],
+  },
+  desktopSoftTopSpacer: {
+    flex: 1,
+  },
   contentDesktop: {
-    justifyContent: "flex-end",
+    justifyContent: "center",
+    paddingBottom: theme.spacing[10],
+    paddingTop: theme.spacing[4],
   },
   contentCompact: {
     justifyContent: "flex-end",
   },
   draftShell: {
     width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
     flexShrink: 0,
+    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
+  },
+  softHero: {
+    alignItems: "center",
+    paddingBottom: theme.spacing[6],
+    gap: theme.spacing[2],
+  },
+  softHeroEyebrow: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    textAlign: "center",
+  },
+  softHeroTitle: {
+    color: theme.colors.foreground,
+    fontSize: 36,
+    fontWeight: theme.fontWeight.bold,
+    letterSpacing: -0.8,
+    textAlign: "center",
+    lineHeight: 42,
+  },
+  softHeroSubtitle: {
+    color: theme.colors.foreground,
+    fontSize: 28,
+    fontWeight: theme.fontWeight.semibold,
+    letterSpacing: -0.5,
+    textAlign: "center",
+    lineHeight: 34,
+    marginBottom: theme.spacing[2],
   },
   draftLeadRow: {
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
-    minHeight: 36,
+    minHeight: 40,
     alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
     paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
-    paddingBottom: theme.spacing[1],
+    paddingBottom: theme.spacing[2],
   },
   draftLeadCopy: {
     minWidth: 0,
@@ -1605,16 +1662,18 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   importAction: {
     minHeight: 28,
     paddingVertical: 0,
     paddingHorizontal: theme.spacing[2],
   },
+  // Soft Workbench: large floating pen-bar (design home).
   draftComposerInputWrapper: {
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 18,
   },
   headerLeft: {
     gap: theme.spacing[2],
@@ -1647,10 +1706,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   errorRow: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
-    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
-    paddingTop: theme.spacing[1],
+    paddingTop: theme.spacing[2],
   },
   optionsRow: {
     flexDirection: "row",
@@ -1660,10 +1717,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceControls: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
+    maxWidth: 760,
     alignSelf: "center",
-    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
-    paddingBottom: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
   },
   badge: {
     flexDirection: "row",

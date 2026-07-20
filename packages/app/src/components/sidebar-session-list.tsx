@@ -1999,14 +1999,14 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   desktopRow: {
-    minHeight: 32,
+    minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
     paddingVertical: 0,
     paddingLeft: 8,
     paddingRight: 68,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
   },
   desktopRowContainer: {
     position: "relative",
@@ -2021,11 +2021,12 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
     opacity: 0.86,
   },
+  // Soft Workbench: selected session is a quiet elevated chip.
   desktopRowSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface0,
     ...(isWeb
       ? ({
-          backgroundColor: `color-mix(in srgb, ${theme.colors.accent} 10%, ${theme.colors.surfaceSidebarHover})`,
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
         } as object)
       : {}),
   },
@@ -2159,13 +2160,15 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: theme.spacing[3],
+    gap: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[8],
   },
   emptyTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     textAlign: "center",
+    lineHeight: 20,
   },
   loadMoreButton: {
     alignSelf: "center",

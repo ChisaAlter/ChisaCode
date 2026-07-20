@@ -45,6 +45,7 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
+  // Soft Workbench: card sits on shell as a quiet surface group.
   card: {
     ...(theme.glass.enabled
       ? {
@@ -52,7 +53,7 @@ export const settingsStyles = StyleSheet.create((theme) => ({
           borderColor: theme.colors.border,
         }
       : {
-          backgroundColor: theme.colors.surface1,
+          backgroundColor: theme.colors.surface0,
           borderColor: theme.colors.border,
         }),
     borderRadius: theme.borderRadius.xl,
@@ -60,7 +61,7 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     overflow: "hidden",
   },
   row: {
-    minHeight: 54,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

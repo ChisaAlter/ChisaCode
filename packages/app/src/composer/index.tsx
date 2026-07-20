@@ -655,13 +655,14 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContainer: {
     position: "relative",
     minHeight: FOOTER_HEIGHT,
-    alignItems: "flex-start",
+    alignItems: "center",
     width: "100%",
     minWidth: 0,
     overflow: "hidden",
-    paddingLeft: 14,
-    paddingRight: 14,
-    paddingBottom: 14,
+    paddingLeft: 28,
+    paddingRight: 28,
+    paddingBottom: 18,
+    paddingTop: 8,
   },
   inputAreaLocked: {
     opacity: 0.6,

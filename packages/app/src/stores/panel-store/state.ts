@@ -31,7 +31,8 @@ export const DEFAULT_ENVIRONMENT_PANEL_TABS: readonly EnvironmentPanelTabPrefere
   "browser-context",
 ];
 
-export const DEFAULT_SIDEBAR_WIDTH = 200;
+// Soft Workbench default nav width.
+export const DEFAULT_SIDEBAR_WIDTH = 256;
 export const MIN_SIDEBAR_WIDTH = 200;
 export const MAX_SIDEBAR_WIDTH = 320;
 
@@ -249,9 +250,8 @@ export function migratePanelState(
   }
   if (version < 6 || typeof state.sidebarWidth !== "number") {
     state.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
-  } else if (isWeb && version < 14) {
-    // Version 14 introduces the compact desktop workbench. Reset legacy saved
-    // widths so existing installs receive the same 200px rail as fresh installs.
+  } else if (isWeb && version < 17) {
+    // Version 17 Soft Workbench: migrate legacy rails to soft default width.
     state.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   } else {
     state.sidebarWidth = clampSidebarWidth(state.sidebarWidth);

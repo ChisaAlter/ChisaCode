@@ -188,12 +188,13 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   bubble: {
-    // Paseo-aligned: elevated neutral surface, not accent gradients.
-    backgroundColor: theme.colors.surface3,
+    // Soft Workbench: quiet card bubble (surface + soft radius).
+    backgroundColor: theme.colors.surface0,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
     borderRadius: theme.borderRadius["2xl"],
-    borderTopRightRadius: theme.borderRadius.sm,
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
     minWidth: 0,
     flexShrink: 1,
   },
