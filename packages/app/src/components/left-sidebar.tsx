@@ -473,13 +473,14 @@ function HostSwitchOption({
   active: boolean;
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const snapshot = useHostRuntimeSnapshot(serverId);
   const connectionStatus = snapshot?.connectionStatus ?? "connecting";
 
   return (
     <ComboboxItem
       label={label}
-      description={formatConnectionStatus(connectionStatus)}
+      description={formatConnectionStatus(connectionStatus, t)}
       selected={selected}
       active={active}
       onPress={onPress}

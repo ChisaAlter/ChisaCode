@@ -41,20 +41,26 @@ describe("useWorkspaceRouteLoadingTimedOut", () => {
       {
         initialProps: {
           routeKey: "srv:workspace-1",
-          connectionStatus: "online",
-          workspace: null,
+          connectionStatus: "online" as const,
+          workspace: null as WorkspaceDescriptor | null,
           hasHydratedWorkspaces: false,
         },
       },
     );
 
-    expect(result.current).toBe(false);
+    expect(result.current).toEqual({
+      workspaceLookupTimedOut: false,
+      connectionRecoveryTimedOut: false,
+    });
 
     act(() => {
       vi.advanceTimersByTime(WORKSPACE_ROUTE_LOADING_TIMEOUT_MS);
     });
 
-    expect(result.current).toBe(true);
+    expect(result.current).toEqual({
+      workspaceLookupTimedOut: true,
+      connectionRecoveryTimedOut: false,
+    });
 
     rerender({
       routeKey: "srv:workspace-1",
@@ -63,10 +69,13 @@ describe("useWorkspaceRouteLoadingTimedOut", () => {
       hasHydratedWorkspaces: false,
     });
 
-    expect(result.current).toBe(false);
+    expect(result.current).toEqual({
+      workspaceLookupTimedOut: false,
+      connectionRecoveryTimedOut: false,
+    });
   });
 
-  it("does not arm the timeout while the host is still connecting", () => {
+  it("arms connection recovery after the host stays connecting without a workspace", () => {
     vi.useFakeTimers();
 
     const { result } = renderHook(() =>
@@ -78,10 +87,38 @@ describe("useWorkspaceRouteLoadingTimedOut", () => {
       }),
     );
 
+    expect(result.current.connectionRecoveryTimedOut).toBe(false);
+    expect(result.current.workspaceLookupTimedOut).toBe(false);
+
     act(() => {
       vi.advanceTimersByTime(WORKSPACE_ROUTE_LOADING_TIMEOUT_MS);
     });
 
-    expect(result.current).toBe(false);
+    expect(result.current).toEqual({
+      workspaceLookupTimedOut: false,
+      connectionRecoveryTimedOut: true,
+    });
+  });
+
+  it("does not arm connection recovery while a cached workspace is available", () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() =>
+      useWorkspaceRouteLoadingTimedOut({
+        routeKey: "srv:workspace-1",
+        connectionStatus: "connecting",
+        workspace: createWorkspaceDescriptor(),
+        hasHydratedWorkspaces: true,
+      }),
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(WORKSPACE_ROUTE_LOADING_TIMEOUT_MS);
+    });
+
+    expect(result.current).toEqual({
+      workspaceLookupTimedOut: false,
+      connectionRecoveryTimedOut: false,
+    });
   });
 });

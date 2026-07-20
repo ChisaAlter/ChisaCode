@@ -1,18 +1,27 @@
 import type { HostRuntimeConnectionStatus } from "@/runtime/host-runtime";
 import { assertUnreachable } from "./exhaustive";
 
-export function formatConnectionStatus(status: HostRuntimeConnectionStatus): string {
+/**
+ * Formats a host connection status for UI using the app locale catalog.
+ * @param status Host runtime connection status
+ * @param t i18n translate function (usually from useTranslation)
+ * @returns Localized status label
+ */
+export function formatConnectionStatus(
+  status: HostRuntimeConnectionStatus,
+  t: (key: string) => string,
+): string {
   switch (status) {
     case "online":
-      return "在线";
+      return t("workspace.routeState.status.online");
     case "connecting":
-      return "连接中";
+      return t("workspace.routeState.status.connecting");
     case "offline":
-      return "离线";
+      return t("workspace.routeState.status.offline");
     case "error":
-      return "错误";
+      return t("workspace.routeState.status.error");
     case "idle":
-      return "空闲";
+      return t("workspace.routeState.status.idle");
     default:
       return assertUnreachable(status);
   }

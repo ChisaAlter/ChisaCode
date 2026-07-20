@@ -101,7 +101,7 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
   const connectionStatus = snapshot?.connectionStatus ?? "connecting";
   const activeConnection = snapshot?.activeConnection ?? null;
   const lastError = snapshot?.lastError ?? null;
-  const statusLabel = formatConnectionStatus(connectionStatus);
+  const statusLabel = formatConnectionStatus(connectionStatus, t);
   const statusTone = getConnectionStatusTone(connectionStatus);
   let statusColor: string;
   if (statusTone === "success") {

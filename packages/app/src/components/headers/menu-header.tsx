@@ -2,6 +2,7 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { PanelLeft } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { ScreenHeader } from "./screen-header";
 import { ScreenTitle } from "./screen-title";
 import { HeaderToggleButton } from "./header-toggle-button";
@@ -63,12 +64,13 @@ export function SidebarMenuToggle({
     toggleAgentListForLayout({ isCompact: isMobile });
   }, [toggleAgentListForLayout, isMobile]);
 
+  const { t } = useTranslation();
   const accessibilityState = useMemo(() => ({ expanded: isOpen }), [isOpen]);
 
   return (
     <HeaderToggleButton
       onPress={handlePress}
-      tooltipLabel="Toggle sidebar"
+      tooltipLabel={t("common.toggleSidebar")}
       tooltipKeys={toggleShortcutKeys}
       tooltipSide={tooltipSide}
       testID={testID}
@@ -76,7 +78,7 @@ export function SidebarMenuToggle({
       style={style}
       accessible
       accessibilityRole="button"
-      accessibilityLabel={isOpen ? "关闭菜单" : "打开菜单"}
+      accessibilityLabel={isOpen ? t("common.closeMenu") : t("common.openMenu")}
       accessibilityState={accessibilityState}
     >
       {isMobile ? (

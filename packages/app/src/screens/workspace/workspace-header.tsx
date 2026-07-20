@@ -146,6 +146,10 @@ function WorkspaceHeaderMenu({
           testID="workspace-header-new-terminal"
           leading={MENU_NEW_TERMINAL_ICON}
           disabled={createTerminalDisabled}
+          description={
+            createTerminalDisabled ? t("workspace.routeState.creatingTerminal") : undefined
+          }
+          tooltip={createTerminalDisabled ? t("workspace.routeState.creatingTerminal") : undefined}
           onSelect={onCreateTerminal}
         >
           {t("workspace.newTerminal")}
@@ -187,6 +191,12 @@ function WorkspaceHeaderMenu({
           testID="workspace-header-import-agent"
           leading={MENU_IMPORT_ICON}
           disabled={importAgentDisabled}
+          description={
+            importAgentDisabled ? t("workspace.routeState.importRequiresConnection") : undefined
+          }
+          tooltip={
+            importAgentDisabled ? t("workspace.routeState.importRequiresConnection") : undefined
+          }
           onSelect={onOpenImportSheet}
         >
           {t("session.importSession")}
@@ -195,6 +205,16 @@ function WorkspaceHeaderMenu({
           testID="workspace-header-copy-path"
           leading={MENU_COPY_ICON}
           disabled={!isAbsolutePath(normalizedWorkspaceId)}
+          description={
+            !isAbsolutePath(normalizedWorkspaceId)
+              ? t("workspace.screen.workspacePathUnavailable")
+              : undefined
+          }
+          tooltip={
+            !isAbsolutePath(normalizedWorkspaceId)
+              ? t("workspace.screen.workspacePathUnavailable")
+              : undefined
+          }
           onSelect={onCopyWorkspacePath}
         >
           {t("workspace.screen.copyWorkspacePath")}

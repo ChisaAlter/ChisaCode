@@ -82,7 +82,10 @@ import {
   type WorkspaceRouteState,
 } from "@/screens/workspace/workspace-route-state";
 import { useWorkspaceRouteLoadingTimedOut } from "@/screens/workspace/use-workspace-route-loading-timeout";
-import { renderWorkspaceRouteGate } from "@/screens/workspace/workspace-route-state-views";
+import {
+  renderWorkspaceRouteGate,
+  WorkspaceReconnectingBanner,
+} from "@/screens/workspace/workspace-route-state-views";
 import {
   deriveWorkspaceAgentVisibility,
   workspaceAgentVisibilityEqual,
@@ -357,7 +360,10 @@ function useResolvedWorkspaceRouteState(input: {
   workspaceId: string;
   workspace: WorkspaceDescriptor | null;
   hasHydratedWorkspaces: boolean;
-}): WorkspaceRouteState {
+}): {
+  workspaceRouteState: WorkspaceRouteState;
+  connectionRecoveryTimedOut: boolean;
+} {
   const hosts = useHosts();
   const host = useMemo(
     () => hosts.find((entry) => entry.serverId === input.serverId) ?? null,
@@ -365,7 +371,7 @@ function useResolvedWorkspaceRouteState(input: {
   );
   const hostSnapshot = useHostRuntimeSnapshot(input.serverId);
   const connectionStatus = hostSnapshot?.connectionStatus ?? "connecting";
-  const workspaceLookupTimedOut = useWorkspaceRouteLoadingTimedOut({
+  const { workspaceLookupTimedOut, connectionRecoveryTimedOut } = useWorkspaceRouteLoadingTimedOut({
     routeKey: `${input.serverId}:${input.workspaceId}`,
     connectionStatus,
     workspace: input.workspace,
@@ -382,7 +388,7 @@ function useResolvedWorkspaceRouteState(input: {
     );
   }, [hostName, input.workspaceId]);
 
-  return useMemo(
+  const workspaceRouteState = useMemo(
     () =>
       resolveWorkspaceRouteState({
         hostName,
@@ -403,6 +409,8 @@ function useResolvedWorkspaceRouteState(input: {
       routeMatchesHostName,
     ],
   );
+
+  return { workspaceRouteState, connectionRecoveryTimedOut };
 }
 
 function WorkspaceDocumentTitleEffectSlot({
@@ -709,7 +717,7 @@ function WorkspaceScreenContent({
   const hasHydratedAgents = useSessionStore(
     (state) => state.sessions[normalizedServerId]?.hasHydratedAgents ?? false,
   );
-  const workspaceRouteState = useResolvedWorkspaceRouteState({
+  const { workspaceRouteState, connectionRecoveryTimedOut } = useResolvedWorkspaceRouteState({
     serverId: normalizedServerId,
     workspaceId: normalizedWorkspaceId,
     workspace: workspaceDescriptor,
@@ -1112,6 +1120,7 @@ function WorkspaceScreenContent({
 
   const workspaceScreenGate = renderWorkspaceRouteGate({
     state: workspaceRouteState,
+    offerConnectionRecovery: connectionRecoveryTimedOut,
     actions: {
       onRetryHost: handleRetryHost,
       onManageHost: handleManageHost,
@@ -1121,6 +1130,14 @@ function WorkspaceScreenContent({
   const gatedWorkspaceScreen = (
     <WorkspaceScreenGateShell gate={workspaceScreenGate} workspaceKey={persistenceKey} />
   );
+  const reconnectingBanner =
+    workspaceRouteState.kind === "reconnecting" ? (
+      <WorkspaceReconnectingBanner
+        state={workspaceRouteState}
+        onRetry={handleRetryHost}
+        onManageHost={handleManageHost}
+      />
+    ) : null;
 
   const showExplorerSidebar = useMemo(
     () => shouldShowWorkspaceExplorerSidebar({ isRouteFocused, isFocusModeEnabled, isMobile }),
@@ -1313,6 +1330,7 @@ function WorkspaceScreenContent({
     readyContent: (
       <WorkspaceFocusProvider workspaceKey={persistenceKey}>
         <View style={containerStyle}>
+          {reconnectingBanner}
           <WorkspaceDocumentTitleEffectSlot
             tab={activeTabDescriptor}
             serverId={normalizedServerId}

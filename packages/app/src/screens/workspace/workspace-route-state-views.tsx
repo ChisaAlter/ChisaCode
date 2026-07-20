@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import { ArrowLeftToLine, RotateCw, Settings } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,8 @@ interface WorkspaceRouteStateActions {
 export function renderWorkspaceRouteGate(input: {
   state: WorkspaceRouteState;
   actions: WorkspaceRouteStateActions;
+  /** When true, stuck connecting/idle gates expose retry recovery actions. */
+  offerConnectionRecovery?: boolean;
 }): React.ReactNode {
   switch (input.state.kind) {
     case "loading":
@@ -26,6 +28,7 @@ export function renderWorkspaceRouteGate(input: {
           state={input.state}
           onRetry={input.actions.onRetryHost}
           onManageHost={input.actions.onManageHost}
+          offerConnectionRecovery={input.offerConnectionRecovery === true}
         />
       );
     case "missing":
@@ -37,8 +40,64 @@ export function renderWorkspaceRouteGate(input: {
       );
     case "ready":
     case "reconnecting":
+      // Reconnecting keeps the workspace shell mounted; banner is rendered by the ready path.
       return null;
   }
+}
+
+/**
+ * Non-blocking banner shown while a cached workspace stays open during host reconnect.
+ */
+export function WorkspaceReconnectingBanner({
+  state,
+  onRetry,
+  onManageHost,
+}: {
+  state: Extract<WorkspaceRouteState, { kind: "reconnecting" }>;
+  onRetry: () => void;
+  onManageHost: () => void;
+}) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const canRetry = state.connectionStatus === "offline" || state.connectionStatus === "error";
+  let title = t("workspace.routeState.unableToConnect", { host: state.hostName });
+  if (state.connectionStatus === "connecting" || state.connectionStatus === "idle") {
+    title = t("connection.reconnectingTo", { host: state.hostName });
+  } else if (state.connectionStatus === "offline") {
+    title = t("workspace.routeState.hostOffline", { host: state.hostName });
+  }
+
+  return (
+    <View
+      style={styles.reconnectingBanner}
+      accessibilityRole="alert"
+      testID="workspace-reconnecting-banner"
+    >
+      <View style={styles.reconnectingBannerBody}>
+        {state.connectionStatus === "connecting" || state.connectionStatus === "idle" ? (
+          <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+        ) : null}
+        <View style={styles.reconnectingTextStack}>
+          <Text style={styles.reconnectingTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.reconnectingDescription} numberOfLines={2}>
+            {state.lastError ? state.lastError : t("connection.reconnectingHint")}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.reconnectingActions}>
+        {canRetry ? (
+          <Button size="sm" variant="default" leftIcon={RotateCw} onPress={onRetry}>
+            {t("common.retry")}
+          </Button>
+        ) : null}
+        <Button size="sm" variant="outline" leftIcon={Settings} onPress={onManageHost}>
+          {t("workspace.routeState.manageHost")}
+        </Button>
+      </View>
+    </View>
+  );
 }
 
 function getWorkspaceHostStateTitle(
@@ -80,29 +139,38 @@ function WorkspaceUnreachable({
   state,
   onRetry,
   onManageHost,
+  offerConnectionRecovery,
 }: {
   state: Extract<WorkspaceRouteState, { kind: "unreachable" }>;
   onRetry: () => void;
   onManageHost: () => void;
+  offerConnectionRecovery: boolean;
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const canRetry = state.connectionStatus === "offline" || state.connectionStatus === "error";
+  const isConnectingLike =
+    state.connectionStatus === "connecting" || state.connectionStatus === "idle";
+  const canRetry =
+    state.connectionStatus === "offline" ||
+    state.connectionStatus === "error" ||
+    (isConnectingLike && offerConnectionRecovery);
+  let description = t("workspace.routeState.hostStatus", {
+    status: formatRouteConnectionStatus(state.connectionStatus, t),
+  });
+  if (isConnectingLike) {
+    description = offerConnectionRecovery
+      ? t("workspace.routeState.connectionTakingLonger", { host: state.hostName })
+      : state.hostName;
+  }
 
   return (
     <View style={styles.emptyState}>
-      {state.connectionStatus === "connecting" || state.connectionStatus === "idle" ? (
+      {isConnectingLike ? (
         <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
       ) : null}
       <View style={styles.textStack}>
         <Text style={styles.title}>{getWorkspaceHostStateTitle(state, t)}</Text>
-        <Text style={styles.description}>
-          {state.connectionStatus === "connecting" || state.connectionStatus === "idle"
-            ? state.hostName
-            : t("workspace.routeState.hostStatus", {
-                status: formatRouteConnectionStatus(state.connectionStatus, t),
-              })}
-        </Text>
+        <Text style={styles.description}>{description}</Text>
         {state.lastError ? (
           <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
             <TooltipTrigger asChild>
@@ -186,6 +254,45 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
+  reconnectingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: RNStyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.statusWarningBg,
+  },
+  reconnectingBannerBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    flex: 1,
+    minWidth: 200,
+  },
+  reconnectingTextStack: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  reconnectingTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  reconnectingDescription: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  reconnectingActions: {
+    flexDirection: "row",
+    alignItems: "center",
     flexWrap: "wrap",
     gap: theme.spacing[2],
   },

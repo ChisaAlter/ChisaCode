@@ -275,6 +275,7 @@ function WorkspaceRowRightGroup({
   workspace,
   isHovered,
   isTouchPlatform,
+  isMobileBreakpoint,
   showScriptsIcon,
   hasRunningService,
   isCreating,
@@ -292,6 +293,7 @@ function WorkspaceRowRightGroup({
   workspace: SidebarWorkspaceEntry;
   isHovered: boolean;
   isTouchPlatform: boolean;
+  isMobileBreakpoint: boolean;
   showScriptsIcon: boolean;
   hasRunningService: boolean;
   isCreating: boolean;
@@ -307,7 +309,7 @@ function WorkspaceRowRightGroup({
   onRename?: () => void;
 }) {
   const { t } = useTranslation();
-  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isMobileBreakpoint));
   return (
     <View style={styles.workspaceRowRight}>
       {showScriptsIcon ? (
@@ -605,7 +607,7 @@ function WorkspaceRowInner({
   onRename,
   archiveShortcutKeys,
 }: WorkspaceRowInnerProps) {
-  const _isCompact = useIsCompactFormFactor();
+  const isMobileBreakpoint = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
   const isTouchPlatform = platformIsNative;
   const prHint = workspace.prHint;
@@ -694,6 +696,7 @@ function WorkspaceRowInner({
               workspace={workspace}
               isHovered={isHovered}
               isTouchPlatform={isTouchPlatform}
+              isMobileBreakpoint={isMobileBreakpoint}
               showScriptsIcon={showScriptsIcon}
               hasRunningService={hasRunningService}
               isCreating={isCreating}
