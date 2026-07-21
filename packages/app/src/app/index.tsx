@@ -2,10 +2,7 @@ import React, { useEffect } from "react";
 import { Redirect, usePathname } from "expo-router";
 import { StartupSplashScreen } from "@/screens/startup-splash-screen";
 import { useEarliestOnlineHostServerId, useHostRuntimeBootstrapState } from "@/app/_layout";
-import {
-  resolveStartupRedirectRoute,
-  resolveStartupWorkspaceSelection,
-} from "@/utils/host-runtime-bootstrap";
+import { resolveStartupRedirectRoute } from "@/utils/host-runtime-bootstrap";
 import {
   forgetLastWorkspaceSelection,
   useIsLastWorkspaceSelectionHydrated,
@@ -13,7 +10,6 @@ import {
 } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
-import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-execution";
 
 const isDesktop = shouldUseDesktopDaemon();
@@ -59,35 +55,18 @@ export default function Index() {
     workspaceSelectionExists,
   ]);
 
+  // 启动不再恢复上次 workspace 的草稿 tab，统一走 Soft Home (/new)。
+  // /new 路由内部会从 last-draft-directory-store 读取上次草稿所选目录作为初始值，
+  // 让「启动默认草稿」和「点新对话」落到同一个目录。
   const redirectRoute = resolveStartupRedirectRoute({
     pathname,
     anyOnlineHostServerId,
-    workspaceSelection,
+    workspaceSelection: null,
     isWorkspaceSelectionLoaded,
     isWorkspaceSelectionValidationPending,
     workspaceSelectionExists,
     hasGivenUpWaitingForHost: bootstrapState.hasGivenUpWaitingForHost,
   });
-  const startupWorkspaceSelection = resolveStartupWorkspaceSelection({
-    pathname,
-    anyOnlineHostServerId,
-    workspaceSelection,
-    isWorkspaceSelectionLoaded,
-    isWorkspaceSelectionValidationPending,
-    workspaceSelectionExists,
-    hasGivenUpWaitingForHost: bootstrapState.hasGivenUpWaitingForHost,
-  });
-
-  if (startupWorkspaceSelection) {
-    return (
-      <Redirect
-        href={buildHostWorkspaceRoute(
-          startupWorkspaceSelection.serverId,
-          startupWorkspaceSelection.workspaceId,
-        )}
-      />
-    );
-  }
 
   if (redirectRoute) {
     return <Redirect href={redirectRoute} />;

@@ -333,15 +333,24 @@ function resolveModelField(input: {
     input;
   if (userModified) return currentModel;
   if (!provider) return "";
-  const isValidModel = (m: string) => availableModels?.some((am) => am.id === m) ?? false;
+  // While the provider snapshot has not loaded yet (availableModels is null/undefined),
+  // do NOT return a stale preferredModel/initialModel. Stale model ids that no longer
+  // exist in the provider's model list would otherwise leak into the UI (e.g. an old
+  // persisted model id rendered as the selected model with no Thinking options). Return
+  // empty so the composer shows a placeholder until the snapshot resolves, then a
+  // subsequent RESOLVE picks the default or validated preferred model.
+  if (availableModels === null || availableModels === undefined) {
+    return "";
+  }
+  const isValidModel = (m: string) => availableModels.some((am) => am.id === m) ?? false;
   const initialModel = normalizeSelectedModelId(initialValues?.model);
   const preferredModel = normalizeSelectedModelId(providerPrefs?.model);
   const defaultModelId = resolveDefaultModelId(availableModels);
   if (initialModel) {
-    return !availableModels || isValidModel(initialModel) ? initialModel : defaultModelId;
+    return isValidModel(initialModel) ? initialModel : defaultModelId;
   }
   if (preferredModel) {
-    return !availableModels || isValidModel(preferredModel) ? preferredModel : defaultModelId;
+    return isValidModel(preferredModel) ? preferredModel : defaultModelId;
   }
   return "";
 }

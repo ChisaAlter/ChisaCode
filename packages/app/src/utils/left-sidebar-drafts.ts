@@ -25,19 +25,24 @@ export function collectSidebarDraftSessions(_input: {
 /**
  * 新对话 → Soft Home (/new)，不是 open-project 卡片墙。
  * 以默认路由实机为准。
+ *
+ * 当没有显式 sourceDirectory 时，把 dir 设为「上次草稿所选目录」，
+ * 这样点「新对话」会落在用户上一次打开草稿的位置（哪怕没发消息）。
  */
 export function resolveLeftSidebarNewConversationRoute(input: {
   activeServerId: string | null;
   pathname: string;
   sourceDirectory?: string | null;
   draftKey?: string | null;
+  lastDraftDirectory?: string | null;
 }): Href | null {
   const activeServerId = input.activeServerId?.trim() || null;
   if (!activeServerId) {
     return null;
   }
   void input.pathname;
-  return buildHostNewWorkspaceRoute(activeServerId, input.sourceDirectory, {
+  const sourceDirectory = input.sourceDirectory?.trim() || input.lastDraftDirectory?.trim() || null;
+  return buildHostNewWorkspaceRoute(activeServerId, sourceDirectory, {
     draftKey: input.draftKey ?? undefined,
   });
 }

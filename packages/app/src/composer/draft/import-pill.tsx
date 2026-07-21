@@ -20,7 +20,7 @@ export function ComposerImportPill({ onPress, disabled = false }: ComposerImport
   return (
     <View style={styles.row}>
       <Pressable
-        testID="composer-import-agent-pill"
+        testID="new-workspace-import-session-card"
         accessibilityRole="button"
         accessibilityLabel="导入会话"
         onPress={onPress}

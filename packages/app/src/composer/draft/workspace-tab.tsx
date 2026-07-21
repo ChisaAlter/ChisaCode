@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, StyleSheet as RNStyleSheet, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
@@ -10,15 +10,11 @@ import { isWeb } from "@/constants/platform";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
 import {
+  SoftHomeContextRow,
   SoftHomeEmpty,
   softHomeComposerInputAreaStyle,
   softHomeComposerInputWrapperStyle,
 } from "@/composer/draft/soft-home-empty";
-import {
-  resolveAgentPresetApplication,
-  type AgentPresetUnappliedField,
-} from "@/agent-presets/apply-preset";
-import { useAgentPresetsQuery } from "@/agent-presets/use-agent-presets-query";
 import { ConversationAspectColumn } from "@/components/conversation-aspect-column";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { AgentStreamView } from "@/agent-stream/view";
@@ -28,6 +24,8 @@ import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/draft/create-flow";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useCheckoutStatusQuery } from "@/git/use-status-query";
+import { rememberLastDraftDirectory } from "@/stores/last-draft-directory-store";
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
@@ -39,11 +37,11 @@ import { encodeImages } from "@/utils/encode-images";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 import {
+  resolveSoftHomeBranchContext,
   shouldWaitForDraftModelReadiness,
   validateDraftSubmission,
 } from "@/composer/draft/workspace-tab-core";
-import type { AgentCapabilityFlags, AgentProvider } from "@chisacode/protocol/agent-types";
-import type { AgentPreset } from "@chisacode/protocol/agent-presets";
+import type { AgentCapabilityFlags } from "@chisacode/protocol/agent-types";
 import type { AgentSnapshotPayload } from "@chisacode/protocol/messages";
 import type { DaemonClient } from "@chisacode/client/internal/daemon-client";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
@@ -347,6 +345,8 @@ function resolveImportPillPress(
   return onOpenImportSheet ?? null;
 }
 
+// Soft Home draft coordinator: checkout branch context + create flow + composer chrome.
+// eslint-disable-next-line complexity
 export function WorkspaceDraftAgentTab({
   serverId,
   workspaceId,
@@ -366,25 +366,37 @@ export function WorkspaceDraftAgentTab({
   const workspaceExecutionAuthority = workspaceAuthority?.ok ? workspaceAuthority.authority : null;
   const workspaceDirectory = workspaceExecutionAuthority?.workspaceDirectory ?? null;
   const workspaceDescriptor = useWorkspace(serverId, workspaceId);
-  const softHomeBranchContext = useMemo(() => {
-    const currentBranch = workspaceDescriptor?.gitRuntime?.currentBranch ?? null;
-    const isGit =
-      workspaceDescriptor?.projectKind === "git" || Boolean(workspaceDescriptor?.gitRuntime);
-    if (!isGit || !currentBranch || currentBranch === "HEAD") {
-      return null;
-    }
-    return {
-      currentBranchName: currentBranch,
-      serverId,
-      workspaceId,
-      isGitCheckout: true as const,
-    };
-  }, [serverId, workspaceDescriptor, workspaceId]);
   const draftSetup = initialSetup ?? null;
   const draftWorkingDirectory = resolveDraftWorkingDirectory({
     workspaceDirectory,
     initialSetup: draftSetup,
   });
+  // Soft Home branch pill must work even when workspace.gitRuntime is cold:
+  // resolve checkout from the real cwd (same path /new Soft Home uses).
+  const checkoutStatus = useCheckoutStatusQuery({
+    serverId,
+    cwd: draftWorkingDirectory ?? "",
+    enabled: Boolean(draftWorkingDirectory && isConnected),
+  });
+  const softHomeBranchContext = useMemo(
+    () =>
+      resolveSoftHomeBranchContext({
+        cwd: draftWorkingDirectory,
+        checkoutIsGit: checkoutStatus.status?.isGit,
+        currentBranch:
+          checkoutStatus.status?.currentBranch ??
+          workspaceDescriptor?.gitRuntime?.currentBranch ??
+          null,
+        serverId,
+      }),
+    [
+      checkoutStatus.status?.currentBranch,
+      checkoutStatus.status?.isGit,
+      draftWorkingDirectory,
+      serverId,
+      workspaceDescriptor?.gitRuntime?.currentBranch,
+    ],
+  );
   const draftInitialValues = buildDraftInitialValues({
     workingDir: draftWorkingDirectory,
     initialSetup: draftSetup,
@@ -411,12 +423,6 @@ export function WorkspaceDraftAgentTab({
       lockedWorkingDir: draftWorkingDirectory ?? undefined,
     },
   });
-  const presetQuery = useAgentPresetsQuery(serverId);
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const [presetSystemPrompt, setPresetSystemPrompt] = useState<string | undefined>();
-  const [presetUnappliedFields, setPresetUnappliedFields] = useState<AgentPresetUnappliedField[]>(
-    [],
-  );
   const composerState = draftInput.composerState;
   if (!composerState) {
     throw new Error("Workspace draft composer state is required");
@@ -424,74 +430,6 @@ export function WorkspaceDraftAgentTab({
   const clearDraftInput = draftInput.clear;
   const setDraftText = draftInput.setText;
   const setDraftAttachments = draftInput.setAttachments;
-  const handleSelectPreset = useCallback(
-    (preset: AgentPreset | null) => {
-      if (!preset) {
-        setSelectedPresetId(null);
-        setPresetSystemPrompt(undefined);
-        setPresetUnappliedFields([]);
-        return;
-      }
-
-      const targetProvider =
-        preset.provider === "default" ? composerState.selectedProvider : preset.provider;
-      const targetEntry = targetProvider
-        ? composerState.allProviderEntries?.find((entry) => entry.provider === targetProvider)
-        : undefined;
-      const targetModels = targetProvider
-        ? composerState.allProviderModels.get(targetProvider)
-        : undefined;
-      const application = resolveAgentPresetApplication({
-        draft: {
-          provider: composerState.selectedProvider,
-          modeId: composerState.selectedMode,
-          model: composerState.selectedModel,
-          systemPrompt: presetSystemPrompt,
-          samplePrompt: draftInput.text,
-        },
-        preset,
-        availability: {
-          providerIds: new Set(
-            composerState.providerDefinitions.map((definition) => definition.id),
-          ),
-          ...(targetEntry
-            ? { modeIds: new Set((targetEntry.modes ?? []).map((mode) => mode.id)) }
-            : {}),
-          ...(targetModels ? { modelIds: new Set(targetModels.map((model) => model.id)) } : {}),
-        },
-      });
-      const nextProvider = application.draft.provider as AgentProvider | null | undefined;
-      const nextModel = application.draft.model;
-
-      if (nextProvider && nextProvider !== composerState.selectedProvider) {
-        if (nextModel) {
-          composerState.setProviderAndModelFromUser(nextProvider, nextModel);
-        } else {
-          composerState.setProviderFromUser(nextProvider);
-        }
-      } else if (nextModel && nextModel !== composerState.selectedModel) {
-        composerState.setModelFromUser(nextModel);
-      }
-      if (application.draft.modeId && application.draft.modeId !== composerState.selectedMode) {
-        composerState.setModeFromUser(application.draft.modeId);
-      }
-      if (application.draft.samplePrompt !== draftInput.text) {
-        setDraftText(application.draft.samplePrompt ?? "");
-      }
-
-      setSelectedPresetId(preset.id);
-      setPresetSystemPrompt(application.draft.systemPrompt);
-      setPresetUnappliedFields(application.unappliedFields);
-    },
-    [composerState, draftInput.text, presetSystemPrompt, setDraftText],
-  );
-  const presetWarningText = useMemo(() => {
-    if (presetUnappliedFields.length === 0) {
-      return null;
-    }
-    const fields = presetUnappliedFields.map((field) => t(`workspace.presets.fields.${field}`));
-    return t("workspace.presets.unapplied", { fields: fields.join(", ") });
-  }, [presetUnappliedFields, t]);
   const pendingAutoSubmit = useWorkspaceDraftSubmissionStore((state) => {
     const pending = state.pendingByDraftId[draftId] ?? null;
     return pending?.serverId === serverId && pending.workspaceId === workspaceId ? pending : null;
@@ -611,7 +549,7 @@ export function WorkspaceDraftAgentTab({
         workspaceDirectory: draftWorkingDirectory,
         workspaceExecutionAuthority,
         autoSubmitConfig,
-        systemPrompt: presetSystemPrompt,
+        systemPrompt: undefined,
         composerState,
       }),
     onCreateSuccess: ({ result }) => {
@@ -790,31 +728,36 @@ export function WorkspaceDraftAgentTab({
   );
 
   const isSoftHomeEmpty = !(isSubmitting && draftAgent);
-  const handleFocusSoftHomeComposer = useCallback(() => {
-    focusInputRef.current?.();
-  }, []);
+
+  // 当 workspace 草稿处于 Soft Home 空态时，把它的目录记入「最后草稿目录」，
+  // 让下次启动 / 点新对话落到同一个目录。只在 Soft Home 分支记录，
+  // 避免已发送正式对话的目录污染草稿记忆。
+  useEffect(() => {
+    if (!isSoftHomeEmpty || !serverId || !draftWorkingDirectory) {
+      return;
+    }
+    rememberLastDraftDirectory(serverId, draftWorkingDirectory);
+  }, [draftWorkingDirectory, isSoftHomeEmpty, serverId]);
+
+  const softHomeContextSlot = useMemo(
+    () => (
+      <SoftHomeContextRow
+        workspacePath={draftWorkingDirectory}
+        branchContext={softHomeBranchContext}
+        onImportPress={importPillPress}
+      />
+    ),
+    [draftWorkingDirectory, importPillPress, softHomeBranchContext],
+  );
 
   if (isSoftHomeEmpty) {
-    // Soft Home: full-width centered hero + floating pen-bar (default empty center).
-    // 以默认 draft 空中栏为准，不是 new-workspace 旁路。
+    // Soft Home: shared shell with /new — hero + context row + floating pen-bar.
     return (
       <FileDropZone onFilesDropped={handleFilesDropped}>
         <SoftHomeEmpty
-          presets={presetQuery.presets}
-          selectedPresetId={selectedPresetId}
-          isLoadingPresets={presetQuery.isLoading}
-          isErrorPresets={presetQuery.isError}
-          disabled={isSubmitting}
-          warningText={presetWarningText}
-          onSelectPreset={handleSelectPreset}
-          draftText={draftInput.text}
-          onChangeDraftText={setDraftText}
-          onFocusComposer={handleFocusSoftHomeComposer}
           formErrorMessage={formErrorMessage}
           composerKeyboardStyle={composerKeyboardStyle}
-          onImportPress={importPillPress}
-          workspacePath={draftWorkingDirectory}
-          branchContext={softHomeBranchContext}
+          contextSlot={softHomeContextSlot}
         >
           <Composer
             agentId={tabId}
@@ -822,6 +765,10 @@ export function WorkspaceDraftAgentTab({
             externalKeyboardShift
             isPaneFocused={isPaneFocused}
             onSubmitMessage={handleCreateFromInput}
+            allowEmptySubmit={true}
+            submitButtonAccessibilityLabel={t("workspace.create")}
+            submitIcon="return"
+            submitBehavior="preserve-and-lock"
             isSubmitLoading={isSubmitting}
             blurOnSubmit={true}
             value={draftInput.text}

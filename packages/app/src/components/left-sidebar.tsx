@@ -98,6 +98,7 @@ import {
   resolveLeftSidebarHomeRoute,
   resolveLeftSidebarNewConversationRoute,
 } from "@/utils/left-sidebar-drafts";
+import { useLastDraftDirectory } from "@/stores/last-draft-directory-store";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { buildSidebarLiveAgents, mergeSidebarSessionSources } from "@/utils/sidebar-session-source";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
@@ -288,18 +289,20 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
   }, [isRevalidating, isManualRefresh]);
 
   const openProjectPicker = useOpenProjectPicker(activeServerId);
+  const lastDraftDirectory = useLastDraftDirectory(activeServerId);
 
   const openNewConversationStart = useCallback(() => {
     const draftRoute = resolveLeftSidebarNewConversationRoute({
       activeServerId,
       pathname,
+      lastDraftDirectory,
     });
     if (!draftRoute) {
       return false;
     }
     router.push(draftRoute);
     return true;
-  }, [activeServerId, pathname]);
+  }, [activeServerId, lastDraftDirectory, pathname]);
 
   const handleOpenProjectMobile = useCallback(() => {
     showMobileAgent();

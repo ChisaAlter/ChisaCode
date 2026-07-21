@@ -56,3 +56,40 @@ export function validateDraftSubmission(input: {
   });
   return readiness.ok ? null : (readiness.reason ?? null);
 }
+
+export interface SoftHomeBranchContextInput {
+  cwd: string | null | undefined;
+  checkoutIsGit: boolean | null | undefined;
+  currentBranch: string | null | undefined;
+  serverId: string;
+}
+
+/**
+ * Soft Home branch pill policy: same as /new — show for any cwd until checkout proves non-git.
+ * @param input.cwd Working directory for git operations (path, not opaque workspace id)
+ * @returns Branch switcher context, or null when hidden
+ */
+export function resolveSoftHomeBranchContext(input: SoftHomeBranchContextInput): {
+  currentBranchName: string | null;
+  serverId: string;
+  workspaceId: string;
+  isGitCheckout: true;
+} | null {
+  const cwd = typeof input.cwd === "string" ? input.cwd.trim() : "";
+  if (!cwd) {
+    return null;
+  }
+  if (input.checkoutIsGit === false) {
+    return null;
+  }
+  const currentBranch =
+    typeof input.currentBranch === "string" && input.currentBranch.trim().length > 0
+      ? input.currentBranch.trim()
+      : null;
+  return {
+    currentBranchName: currentBranch === "HEAD" ? null : currentBranch,
+    serverId: input.serverId,
+    workspaceId: cwd,
+    isGitCheckout: true,
+  };
+}

@@ -53,6 +53,27 @@ describe("left sidebar drafts", () => {
     ).toBe("/h/server-1/new");
   });
 
+  it("seeds the new draft with the last draft directory when no explicit source is given", () => {
+    expect(
+      resolveLeftSidebarNewConversationRoute({
+        activeServerId: "server-1",
+        pathname: "/h/server-1/sessions",
+        lastDraftDirectory: "/repo/last-draft",
+      }),
+    ).toBe("/h/server-1/new?dir=%2Frepo%2Flast-draft");
+  });
+
+  it("prefers an explicit source directory over the last draft directory", () => {
+    expect(
+      resolveLeftSidebarNewConversationRoute({
+        activeServerId: "server-1",
+        pathname: "/h/server-1/sessions",
+        sourceDirectory: "/repo/explicit",
+        lastDraftDirectory: "/repo/last-draft",
+      }),
+    ).toBe("/h/server-1/new?dir=%2Frepo%2Fexplicit");
+  });
+
   it("resolves the sidebar home action to Soft Home (/new)", () => {
     expect(resolveLeftSidebarHomeRoute("server-1")).toBe("/h/server-1/new");
   });

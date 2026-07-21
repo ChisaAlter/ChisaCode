@@ -14,9 +14,11 @@ function trimNonEmpty(value: string | null | undefined): string | null {
 export function resolveNewWorkspaceDefaultDirectory(input: {
   routeDirectory: string | null | undefined;
   activeWorkspace: NewWorkspaceDefaultDirectoryWorkspace | null | undefined;
+  lastDraftDirectory?: string | null | undefined;
 }): string | null {
   return (
     trimNonEmpty(input.routeDirectory) ??
+    trimNonEmpty(input.lastDraftDirectory) ??
     trimNonEmpty(input.activeWorkspace?.projectRootPath) ??
     trimNonEmpty(input.activeWorkspace?.workspaceDirectory)
   );

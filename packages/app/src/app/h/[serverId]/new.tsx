@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { NewWorkspaceScreen } from "@/screens/new-workspace-screen";
 import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+import { useLastDraftDirectory } from "@/stores/last-draft-directory-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { resolveNewWorkspaceDefaultDirectory } from "@/screens/new-workspace-default-directory";
 
@@ -18,12 +19,14 @@ export default function HostNewWorkspaceRoute() {
   const projectId = typeof params.projectId === "string" ? params.projectId : undefined;
   const resetKey = typeof params.draft === "string" ? params.draft : undefined;
   const lastWorkspaceSelection = useLastWorkspaceSelection();
+  const lastDraftDirectory = useLastDraftDirectory(serverId);
   const activeWorkspace = useWorkspace(
     serverId,
     lastWorkspaceSelection?.serverId === serverId ? lastWorkspaceSelection.workspaceId : null,
   );
   const sourceDirectory = resolveNewWorkspaceDefaultDirectory({
     routeDirectory,
+    lastDraftDirectory,
     activeWorkspace,
   });
 

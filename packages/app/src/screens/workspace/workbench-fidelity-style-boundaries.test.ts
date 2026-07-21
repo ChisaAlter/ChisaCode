@@ -52,14 +52,17 @@ describe("workbench fidelity style boundaries", () => {
 
   it("keeps the new-workspace Soft Home draft vertically centered on desktop", () => {
     const source = readSource("../new-workspace-screen.tsx");
+    const softHomeSource = readSource("../../composer/draft/soft-home-empty.tsx");
 
-    expect(source).toContain("contentDesktop: {");
-    expect(source).toContain("softHomeTopInset");
-    expect(source).toContain("useWindowDimensions");
+    expect(source).toContain("SoftHomeEmpty");
+    expect(source).toContain("softHomeComposerInputAreaStyle");
     expect(source).toContain("function ImportSessionAction");
     expect(source).toContain('variant="ghost"');
     expect(source).not.toContain("contentCentered");
     expect(source).not.toContain("ImportSessionCard");
     expect(source).not.toContain("styles.importCard");
+    // Shared Soft Home shell owns optical vertical placement.
+    expect(softHomeSource).toContain("softHomeTopInset");
+    expect(softHomeSource).toContain("useWindowDimensions");
   });
 });

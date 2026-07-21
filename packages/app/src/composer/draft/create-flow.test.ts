@@ -87,4 +87,42 @@ describe("useDraftAgentCreateFlow", () => {
     });
     expect(onCreateSuccess).toHaveBeenCalledTimes(1);
   });
+
+  it("returns to draft with an error when onBeforeSubmit throws", async () => {
+    const createRequest = vi.fn(async () => ({
+      agentId: "agent-1",
+      result: { id: "agent-1" },
+    }));
+    const onCreateError = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDraftAgentCreateFlow({
+        draftId: "draft-before-submit",
+        getPendingServerId: () => "server-1",
+        onBeforeSubmit: () => {
+          throw new Error("isWeb is not defined");
+        },
+        buildDraftAgent: (currentAttempt) => ({ currentAttempt }),
+        createRequest,
+        onCreateSuccess: vi.fn(),
+        onCreateError,
+      }),
+    );
+
+    await act(async () => {
+      await expect(
+        result.current.handleCreateFromInput({
+          text: "hello",
+          attachments: [],
+          cwd: "/repo",
+        }),
+      ).rejects.toThrow("isWeb is not defined");
+    });
+
+    expect(createRequest).not.toHaveBeenCalled();
+    expect(result.current.isSubmitting).toBe(false);
+    expect(result.current.formErrorMessage).toBe("isWeb is not defined");
+    expect(onCreateError).toHaveBeenCalledTimes(1);
+    expect(useCreateFlowStore.getState().pendingByDraftId["draft-before-submit"]).toBeUndefined();
+  });
 });

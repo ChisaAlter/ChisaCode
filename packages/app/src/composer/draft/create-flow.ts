@@ -168,15 +168,15 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
         throw error;
       }
 
-      onBeforeSubmit?.({
-        attempt,
-        text: attempt.text,
-        images: attempt.images,
-        attachments: attempt.attachments,
-        cwd,
-      });
-
       try {
+        onBeforeSubmit?.({
+          attempt,
+          text: attempt.text,
+          images: attempt.images,
+          attachments: attempt.attachments,
+          cwd,
+        });
+
         const createResult = await createRequest({
           attempt,
           text: attempt.text,

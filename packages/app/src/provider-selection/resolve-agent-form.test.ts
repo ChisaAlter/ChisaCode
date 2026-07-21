@@ -395,6 +395,57 @@ describe("resolveFormState", () => {
     expect(resolved.thinkingOptionId).toBe("");
   });
 
+  it("returns empty model when availableModels is null even if a stale preferredModel exists", () => {
+    // Regression: previously, when availableModels was null/undefined (provider snapshot
+    // not yet loaded), resolveModelField returned the persisted preferredModel without
+    // validating it. A stale model id that no longer exists in the provider's model list
+    // would leak into the UI and never self-correct. Now we return empty until the
+    // snapshot resolves, then a subsequent RESOLVE picks the validated preferred or
+    // default model.
+    const resolved = resolveFormState(
+      undefined,
+      { provider: "codex", providerPreferences: { codex: { model: "gpt-5.6-terra" } } },
+      null,
+      INITIAL_USER_MODIFIED,
+      makeState({ provider: "codex" }).form,
+
+      codexProviderMap,
+    );
+
+    expect(resolved.model).toBe("");
+  });
+
+  it("returns empty model when availableModels is undefined even if a stale preferredModel exists", () => {
+    // availableModels is typed as AgentModelDefinition[] | null; cast undefined to
+    // cover the "snapshot not yet loaded" path which resolves to the same branch.
+    const resolved = resolveFormState(
+      undefined,
+      { provider: "codex", providerPreferences: { codex: { model: "gpt-5.6-terra" } } },
+      undefined as unknown as null,
+      INITIAL_USER_MODIFIED,
+      makeState({ provider: "codex" }).form,
+
+      codexProviderMap,
+    );
+
+    expect(resolved.model).toBe("");
+  });
+
+  it("replaces a stale preferredModel with the default model once availableModels loads", () => {
+    const resolved = resolveFormState(
+      undefined,
+      { provider: "codex", providerPreferences: { codex: { model: "gpt-5.6-terra" } } },
+      CODEX_MODELS,
+      INITIAL_USER_MODIFIED,
+      makeState({ provider: "codex" }).form,
+
+      codexProviderMap,
+    );
+
+    // gpt-5.6-terra is not in CODEX_MODELS, so it falls back to the default model.
+    expect(resolved.model).toBe("gpt-5.3-codex");
+  });
+
   it("auto-selects the model's default thinking option when model is preferred but thinking is not", () => {
     const resolved = resolveFormState(
       undefined,

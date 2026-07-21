@@ -46,4 +46,40 @@ describe("resolveNewWorkspaceDefaultDirectory", () => {
       }),
     ).toBeNull();
   });
+
+  it("prefers the last draft directory over the active workspace context", () => {
+    expect(
+      resolveNewWorkspaceDefaultDirectory({
+        routeDirectory: "",
+        lastDraftDirectory: "/repo/last-draft",
+        activeWorkspace: {
+          projectRootPath: "/repo/active-root",
+          workspaceDirectory: "/repo/active-workspace",
+        },
+      }),
+    ).toBe("/repo/last-draft");
+  });
+
+  it("still prefers the explicit route directory over the last draft directory", () => {
+    expect(
+      resolveNewWorkspaceDefaultDirectory({
+        routeDirectory: "/repo/from-project",
+        lastDraftDirectory: "/repo/last-draft",
+        activeWorkspace: null,
+      }),
+    ).toBe("/repo/from-project");
+  });
+
+  it("falls back to the active workspace when no route or last draft directory is available", () => {
+    expect(
+      resolveNewWorkspaceDefaultDirectory({
+        routeDirectory: null,
+        lastDraftDirectory: "",
+        activeWorkspace: {
+          projectRootPath: "/repo/active-root",
+          workspaceDirectory: "/repo/active-workspace",
+        },
+      }),
+    ).toBe("/repo/active-root");
+  });
 });

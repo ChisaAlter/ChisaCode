@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNameId } from "mnemonic-id";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -18,7 +17,11 @@ import {
 import { useRouter, type Href } from "expo-router";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
-import { SoftHomeHero } from "@/composer/draft/soft-home-empty";
+import {
+  SoftHomeEmpty,
+  softHomeComposerInputAreaStyle,
+  softHomeComposerInputWrapperStyle,
+} from "@/composer/draft/soft-home-empty";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -31,12 +34,9 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import {
   DESKTOP_WINDOW_CONTROLS_WIDTH,
-  MAX_CONTENT_WIDTH,
-  WORKSPACE_SECONDARY_HEADER_HEIGHT,
   getIsElectronRuntime,
   useIsCompactFormFactor,
 } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useOpenProject } from "@/hooks/use-open-project";
@@ -45,6 +45,7 @@ import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import { useGithubSearchQuery } from "@/git/use-github-search-query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
+import { rememberLastDraftDirectory } from "@/stores/last-draft-directory-store";
 import { normalizeWorkspaceDescriptor, useSessionStore } from "@/stores/session-store";
 import { generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
@@ -78,18 +79,6 @@ import {
 } from "./new-workspace-picker-item";
 import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
 import { useTranslation } from "react-i18next";
-
-/** Soft .composer-dock horizontal inset (design 28px). */
-const DRAFT_COMPOSER_HORIZONTAL_OFFSET = 28;
-
-/** Soft Home: strip Composer dock horizontal padding so path/import match the pen-bar. */
-const SOFT_HOME_COMPOSER_INPUT_AREA_STYLE = {
-  paddingLeft: 0,
-  paddingRight: 0,
-  // Tighten dock vertical chrome; shell gap handles spacing to the context row.
-  paddingTop: 0,
-  paddingBottom: 0,
-} as const;
 
 function resolveCheckoutRequest(
   selectedItem: PickerItem | null,
@@ -925,7 +914,6 @@ export function NewWorkspaceScreen({
   const { t } = useTranslation();
   const router = useRouter();
   const { theme } = useUnistyles();
-  const insets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
   const isAgentListOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact }));
   const toast = useToast();
@@ -987,6 +975,17 @@ export function NewWorkspaceScreen({
     },
     [toast],
   );
+
+  // Remember the directory the user most recently picked for a draft so the
+  // next Soft Home draft (startup, 新对话) opens where this one left off.
+  // Triggers on initial sourceDirectory, manual picker changes, and resets —
+  // matching "the last draft the user opened, even if no message was sent".
+  useEffect(() => {
+    if (!serverId || !normalizedSelectedDirectory) {
+      return;
+    }
+    rememberLastDraftDirectory(serverId, normalizedSelectedDirectory);
+  }, [normalizedSelectedDirectory, serverId]);
 
   const {
     directoryOptions,
@@ -1370,26 +1369,6 @@ export function NewWorkspaceScreen({
     [isPending, itemById, t, theme.colors.foregroundMuted, theme.iconSize.sm],
   );
 
-  const { height: windowHeight } = useWindowDimensions();
-  // Soft Home: push the whole hero+controls+composer block down without relying on
-  // flex-grow free space (that chain often collapses on Electron route content).
-  // ~18% of window, clamped — optical center, not true geometric center.
-  const softHomeTopInset = useMemo(() => {
-    if (isCompact) return 0;
-    return Math.min(180, Math.max(56, Math.round(windowHeight * 0.18)));
-  }, [isCompact, windowHeight]);
-
-  const contentStyle = useMemo(
-    () => [
-      styles.content,
-      isCompact ? styles.contentCompact : styles.contentDesktop,
-      isCompact
-        ? { paddingBottom: insets.bottom }
-        : { paddingTop: softHomeTopInset, paddingBottom: Math.max(insets.bottom, 40) },
-    ],
-    [isCompact, insets.bottom, softHomeTopInset],
-  );
-
   const agentControlsWithDisabled = useMemo(
     () =>
       composerState
@@ -1477,6 +1456,64 @@ export function NewWorkspaceScreen({
     ],
   );
 
+  const softHomeContextSlot = useMemo(
+    () => (
+      <>
+        {isCompact ? (
+          <View style={styles.draftLeadRow}>
+            <View style={styles.draftLeadCopy}>
+              <SquarePen size={14} color={theme.colors.accent} />
+              <Text style={styles.draftLeadText} numberOfLines={1}>
+                {t("workspace.startUsingChisaCode")}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {workspaceControls}
+      </>
+    ),
+    [isCompact, t, theme.colors.accent, workspaceControls],
+  );
+
+  const softHomeComposer = (
+    <SoftHomeEmpty
+      formErrorMessage={!isCompact ? errorMessage : null}
+      compact={isCompact}
+      contextSlot={softHomeContextSlot}
+    >
+      <Composer
+        agentId={`new-workspace:${serverId}:${sourceDirectory}`}
+        serverId={serverId}
+        isPaneFocused={true}
+        onSubmitMessage={handleSubmitNewWorkspace}
+        allowEmptySubmit={true}
+        submitButtonAccessibilityLabel={t("workspace.create")}
+        submitIcon="return"
+        isSubmitLoading={pendingAction !== null}
+        submitBehavior="preserve-and-lock"
+        blurOnSubmit={true}
+        value={chatDraft.text}
+        onChangeText={chatDraft.setText}
+        attachments={chatDraft.attachments}
+        onChangeAttachments={chatDraft.setAttachments}
+        cwd={normalizedSelectedDirectory ?? ""}
+        clearDraft={handleClearDraft}
+        autoFocus
+        commandDraftConfig={composerState?.commandDraftConfig}
+        agentControls={agentControlsWithDisabled}
+        onAddImages={handleAddImagesCallback}
+        placeholder={t("workspace.softHomeComposerPlaceholder")}
+        inputWrapperStyle={styles.draftComposerInputWrapper}
+        inputAreaStyle={!isCompact ? softHomeComposerInputAreaStyle : undefined}
+      />
+      {isCompact && errorMessage ? (
+        <View style={styles.errorRow}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : null}
+    </SoftHomeEmpty>
+  );
+
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
       <View style={styles.container}>
@@ -1507,55 +1544,7 @@ export function NewWorkspaceScreen({
             </View>
           </View>
         )}
-        <View style={contentStyle}>
-          {!isCompact ? <TitlebarDragRegion /> : null}
-          <View style={styles.draftShell}>
-            {!isCompact ? (
-              <SoftHomeHero formErrorMessage={errorMessage} />
-            ) : (
-              <View style={styles.draftLeadRow}>
-                <View style={styles.draftLeadCopy}>
-                  <SquarePen size={14} color={theme.colors.accent} />
-                  <Text style={styles.draftLeadText} numberOfLines={1}>
-                    {t("workspace.startUsingChisaCode")}
-                  </Text>
-                </View>
-              </View>
-            )}
-            {/* Path / branch / import sit just above the composer, same max width. */}
-            <View style={styles.workspaceControls}>{workspaceControls}</View>
-            <Composer
-              agentId={`new-workspace:${serverId}:${sourceDirectory}`}
-              serverId={serverId}
-              isPaneFocused={true}
-              onSubmitMessage={handleSubmitNewWorkspace}
-              allowEmptySubmit={true}
-              submitButtonAccessibilityLabel={t("workspace.create")}
-              submitIcon="return"
-              isSubmitLoading={pendingAction !== null}
-              submitBehavior="preserve-and-lock"
-              blurOnSubmit={true}
-              value={chatDraft.text}
-              onChangeText={chatDraft.setText}
-              attachments={chatDraft.attachments}
-              onChangeAttachments={chatDraft.setAttachments}
-              cwd={normalizedSelectedDirectory ?? ""}
-              clearDraft={handleClearDraft}
-              autoFocus
-              commandDraftConfig={composerState?.commandDraftConfig}
-              agentControls={agentControlsWithDisabled}
-              onAddImages={handleAddImagesCallback}
-              placeholder={!isCompact ? t("workspace.softHomeComposerPlaceholder") : undefined}
-              inputWrapperStyle={styles.draftComposerInputWrapper}
-              inputAreaStyle={!isCompact ? SOFT_HOME_COMPOSER_INPUT_AREA_STYLE : undefined}
-            />
-            {isCompact && errorMessage ? (
-              <View style={styles.errorRow}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
+        <View style={styles.content}>{softHomeComposer}</View>
         <ImportSessionSheet
           visible={isImportSheetOpen}
           client={client}
@@ -1584,39 +1573,6 @@ const styles = StyleSheet.create((theme) => ({
     // Explicit column so vertical spacers and compact flex-end placement work.
     flexDirection: "column",
   },
-  desktopDraftTabsRow: {
-    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingLeft: 10,
-    borderBottomWidth: theme.borderWidth[1],
-    // Soft .topbar: --border-soft rule on shell chrome.
-    borderBottomColor: theme.colors.secondary,
-    backgroundColor: theme.colors.surfaceWorkspace,
-  },
-  desktopDraftTab: {
-    height: 30,
-    minWidth: 88,
-    maxWidth: 180,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: 8,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderWidth: theme.borderWidth[1],
-    borderBottomWidth: 0,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-  },
-  desktopDraftTabText: {
-    minWidth: 0,
-    flexShrink: 1,
-    color: theme.colors.foreground,
-    // Soft new-workspace chrome: 12.5 meta.
-    fontSize: 12.5,
-    lineHeight: 18,
-  },
   desktopSoftTopBar: {
     height: 48,
     position: "relative",
@@ -1636,33 +1592,13 @@ const styles = StyleSheet.create((theme) => ({
   desktopSoftTopSpacer: {
     flex: 1,
   },
-  contentDesktop: {
-    // Soft Home: top inset is computed from window height (see softHomeTopInset).
-    justifyContent: "flex-start",
-    alignItems: "stretch",
-  },
-  contentCompact: {
-    justifyContent: "flex-end",
-  },
-  draftShell: {
-    width: "100%",
-    maxWidth: 760,
-    alignSelf: "center",
-    flexShrink: 0,
-    flexGrow: 0,
-    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
-    gap: theme.spacing[4],
-  },
   draftLeadRow: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
     minHeight: 40,
-    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
-    paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
     paddingBottom: theme.spacing[2],
   },
   draftLeadCopy: {
@@ -1687,17 +1623,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: 12,
     flexShrink: 0,
   },
-  // Soft Workbench: large floating pen-bar (design home).
+  // Soft Workbench: large floating pen-bar (shared Soft Home shell).
   draftComposerInputWrapper: {
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
-    borderRadius: 18,
-    ...(isWeb
-      ? ({
-          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 14px 36px rgba(20, 23, 31, 0.07)",
-        } as object)
-      : {}),
+    ...softHomeComposerInputWrapperStyle,
   },
   headerLeft: {
     gap: theme.spacing[2],
@@ -1758,13 +1689,6 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     flexWrap: "wrap",
     gap: theme.spacing[2],
-  },
-  workspaceControls: {
-    width: "100%",
-    maxWidth: "100%",
-    alignSelf: "stretch",
-    // Tight gap to the composer card below (shell gap handles spacing to hero).
-    paddingBottom: 0,
   },
   badge: {
     flexDirection: "row",

@@ -1,7 +1,11 @@
 import { describe, expect, test } from "vitest";
 
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
-import { shouldWaitForDraftModelReadiness, validateDraftSubmission } from "./workspace-tab-core";
+import {
+  resolveSoftHomeBranchContext,
+  shouldWaitForDraftModelReadiness,
+  validateDraftSubmission,
+} from "./workspace-tab-core";
 
 const baseComposerState = {
   providerDefinitions: [{ id: "deepseek-tui" }],
@@ -88,6 +92,62 @@ describe("workspace draft agent model validation", () => {
       provider: "claude",
       runtimeProvider: "deepseek-claude",
       model: "deepseek-r1",
+    });
+  });
+});
+
+describe("resolveSoftHomeBranchContext", () => {
+  test("hides the branch pill without a cwd", () => {
+    expect(
+      resolveSoftHomeBranchContext({
+        cwd: null,
+        checkoutIsGit: true,
+        currentBranch: "main",
+        serverId: "local",
+      }),
+    ).toBeNull();
+  });
+
+  test("hides the branch pill when checkout proves non-git", () => {
+    expect(
+      resolveSoftHomeBranchContext({
+        cwd: "/repo",
+        checkoutIsGit: false,
+        currentBranch: null,
+        serverId: "local",
+      }),
+    ).toBeNull();
+  });
+
+  test("shows a branch pill while checkout is still unknown", () => {
+    expect(
+      resolveSoftHomeBranchContext({
+        cwd: "/repo",
+        checkoutIsGit: undefined,
+        currentBranch: null,
+        serverId: "local",
+      }),
+    ).toEqual({
+      currentBranchName: null,
+      serverId: "local",
+      workspaceId: "/repo",
+      isGitCheckout: true,
+    });
+  });
+
+  test("uses the real cwd as BranchSwitcher workspaceId", () => {
+    expect(
+      resolveSoftHomeBranchContext({
+        cwd: "  /repo/worktree  ",
+        checkoutIsGit: true,
+        currentBranch: "feature",
+        serverId: "server-1",
+      }),
+    ).toEqual({
+      currentBranchName: "feature",
+      serverId: "server-1",
+      workspaceId: "/repo/worktree",
+      isGitCheckout: true,
     });
   });
 });

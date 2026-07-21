@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Folder } from "lucide-react-native";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
-import type { AgentPreset } from "@chisacode/protocol/agent-presets";
 import { isWeb } from "@/constants/platform";
 import { shortenPath } from "@/utils/shorten-path";
 
@@ -54,102 +53,138 @@ export interface SoftHomeBranchContext {
   isGitCheckout: boolean;
 }
 
-export interface SoftHomeEmptyProps {
-  presets: AgentPreset[];
-  selectedPresetId: string | null;
-  isLoadingPresets: boolean;
-  isErrorPresets: boolean;
-  disabled?: boolean;
-  warningText?: string | null;
-  onSelectPreset: (preset: AgentPreset | null) => void;
-  draftText: string;
-  onChangeDraftText: (text: string) => void;
-  onFocusComposer?: () => void;
-  formErrorMessage?: string | null;
-  composerKeyboardStyle: object;
-  children: ReactNode;
-  onImportPress?: (() => void) | null;
-  /** Workspace working directory shown above the composer (display-only). */
+export interface SoftHomeContextRowProps {
   workspacePath?: string | null;
-  /** Branch switcher context; omit when not a git workspace. */
   branchContext?: SoftHomeBranchContext | null;
+  onImportPress?: (() => void) | null;
+  /** Interactive path / branch / import row from /new Soft Home. */
+  children?: ReactNode;
 }
 
 /**
- * Default empty center for workspace draft tabs: Soft Home hero + floating pen-bar.
- * Path / branch / import sit just above the composer and stay within its width.
+ * Path / branch / import row above the Soft Home pen-bar.
+ * Pass `children` for interactive directory/branch pickers; otherwise display pills.
  */
-export function SoftHomeEmpty({
-  presets: _presets,
-  selectedPresetId: _selectedPresetId,
-  isLoadingPresets: _isLoadingPresets,
-  isErrorPresets: _isErrorPresets,
-  disabled: _disabled = false,
-  warningText: _warningText = null,
-  onSelectPreset: _onSelectPreset,
-  draftText: _draftText,
-  onChangeDraftText: _onChangeDraftText,
-  onFocusComposer: _onFocusComposer,
-  formErrorMessage = null,
-  composerKeyboardStyle,
-  children,
-  onImportPress = null,
+export function SoftHomeContextRow({
   workspacePath = null,
   branchContext = null,
+  onImportPress = null,
+  children = null,
+}: SoftHomeContextRowProps) {
+  if (children) {
+    return (
+      <View style={styles.softHomeContextRow} testID="soft-home-context-row">
+        {children}
+      </View>
+    );
+  }
+
+  const showContextRow = Boolean(workspacePath || branchContext || onImportPress);
+  if (!showContextRow) {
+    return null;
+  }
+
+  // Prefer a real branch name; fall back so git Soft Home still exposes the switcher
+  // (matches /new Soft Home, which shows a branch pill even before checkout resolves).
+  let branchTitle: string | null = null;
+  let branchNameForSwitcher: string | null = null;
+  if (branchContext?.isGitCheckout) {
+    const resolved =
+      branchContext.currentBranchName && branchContext.currentBranchName !== "HEAD"
+        ? branchContext.currentBranchName
+        : null;
+    branchNameForSwitcher = resolved;
+    branchTitle = resolved ?? "main";
+  }
+
+  return (
+    <View style={styles.softHomeContextRow} testID="soft-home-context-row">
+      <View style={styles.softHomeContextPills}>
+        {workspacePath ? <SoftHomePathPill path={workspacePath} /> : null}
+        {branchContext && branchTitle ? (
+          <BranchSwitcher
+            currentBranchName={branchNameForSwitcher}
+            title={branchTitle}
+            serverId={branchContext.serverId}
+            // BranchSwitcher / useBranchSwitcher treat this as git cwd (path), not opaque id.
+            workspaceId={branchContext.workspaceId}
+            isGitCheckout={branchContext.isGitCheckout}
+            presentation="soft-pill"
+          />
+        ) : null}
+      </View>
+      {onImportPress ? <ComposerImportPill onPress={onImportPress} /> : null}
+    </View>
+  );
+}
+
+export interface SoftHomeEmptyProps {
+  formErrorMessage?: string | null;
+  /** Optional keyboard shift style for the composer shell. */
+  composerKeyboardStyle?: object;
+  /**
+   * Content above the pen-bar (path/branch/import). Prefer SoftHomeContextRow.
+   */
+  contextSlot?: ReactNode;
+  /** When true, skip optical top inset (mobile new-workspace bottom sheet feel). */
+  compact?: boolean;
+  children: ReactNode;
+}
+
+/**
+ * Shared Soft Home shell: centered hero + context row + floating pen-bar.
+ * Used by default /new Soft Home and workspace draft empty center.
+ */
+export function SoftHomeEmpty({
+  formErrorMessage = null,
+  composerKeyboardStyle,
+  contextSlot = null,
+  compact = false,
+  children,
 }: SoftHomeEmptyProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
 
   // Optical vertical placement from window height — does not depend on flex free space.
-  const softHomeTopInset = useMemo(
-    () => Math.min(180, Math.max(56, Math.round(windowHeight * 0.18))),
-    [windowHeight],
-  );
+  const softHomeTopInset = useMemo(() => {
+    if (compact) {
+      return 0;
+    }
+    return Math.min(180, Math.max(56, Math.round(windowHeight * 0.18)));
+  }, [compact, windowHeight]);
 
   const containerStyle = useMemo(
     () => [
       styles.container,
-      {
-        paddingTop: softHomeTopInset,
-        paddingBottom: Math.max(insets.bottom, 40),
-      },
+      compact ? styles.containerCompact : null,
+      compact
+        ? { paddingBottom: Math.max(insets.bottom, 16) }
+        : {
+            paddingTop: softHomeTopInset,
+            paddingBottom: Math.max(insets.bottom, 40),
+          },
     ],
-    [insets.bottom, softHomeTopInset],
+    [compact, insets.bottom, softHomeTopInset],
   );
 
-  const showContextRow = Boolean(workspacePath || branchContext || onImportPress);
-  const branchLabel = branchContext?.currentBranchName ?? null;
-  const contextPills = (
-    <>
-      {workspacePath ? <SoftHomePathPill path={workspacePath} /> : null}
-      {branchContext && branchLabel ? (
-        <BranchSwitcher
-          currentBranchName={branchContext.currentBranchName}
-          title={branchLabel}
-          serverId={branchContext.serverId}
-          workspaceId={branchContext.workspaceId}
-          isGitCheckout={branchContext.isGitCheckout}
-          presentation="soft-pill"
-        />
-      ) : null}
-    </>
+  const composerShell = (
+    <View style={styles.softHomeComposerShell}>
+      {contextSlot}
+      {children}
+    </View>
   );
 
   return (
     <View style={containerStyle} testID="soft-home-empty">
       <View style={styles.softHomeInner}>
-        <SoftHomeHero formErrorMessage={formErrorMessage} />
-        <ReanimatedAnimated.View style={composerKeyboardStyle}>
-          <View style={styles.softHomeComposerShell}>
-            {showContextRow ? (
-              <View style={styles.softHomeContextRow} testID="soft-home-context-row">
-                <View style={styles.softHomeContextPills}>{contextPills}</View>
-                {onImportPress ? <ComposerImportPill onPress={onImportPress} /> : null}
-              </View>
-            ) : null}
-            {children}
-          </View>
-        </ReanimatedAnimated.View>
+        {!compact ? <SoftHomeHero formErrorMessage={formErrorMessage} /> : null}
+        {composerKeyboardStyle ? (
+          <ReanimatedAnimated.View style={composerKeyboardStyle}>
+            {composerShell}
+          </ReanimatedAnimated.View>
+        ) : (
+          composerShell
+        )}
       </View>
     </View>
   );
@@ -183,6 +218,9 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "hidden",
     backgroundColor: theme.colors.surfaceWorkspace,
     paddingHorizontal: 28,
+  },
+  containerCompact: {
+    justifyContent: "flex-end",
   },
   softHomeInner: {
     width: "100%",
