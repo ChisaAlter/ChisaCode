@@ -66,7 +66,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     marginTop: theme.spacing[4],
-    marginBottom: theme.spacing[10],
+    marginBottom: theme.spacing[8],
   },
   actions: {
     width: "100%",

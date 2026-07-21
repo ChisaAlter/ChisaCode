@@ -6,6 +6,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import invariant from "tiny-invariant";
+import { isWeb } from "@/constants/platform";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
 import {

@@ -268,8 +268,6 @@ function SavedModelRow({
 
 const ACCESSIBILITY_CHECKED = { checked: true } as const;
 const ACCESSIBILITY_UNCHECKED = { checked: false } as const;
-const CHECKBOX_STYLE_CHECKED = [styles.checkbox, styles.checkboxChecked];
-const CHECKBOX_STYLE_UNCHECKED = [styles.checkbox];
 
 function CapabilityToggle({
   label,
@@ -285,18 +283,18 @@ function CapabilityToggle({
   const handlePress = useCallback(() => {
     onChange(!value);
   }, [onChange, value]);
+  const accessibilityState = value ? ACCESSIBILITY_CHECKED : ACCESSIBILITY_UNCHECKED;
+  const checkboxStyle = value ? CHECKBOX_STYLE_CHECKED : CHECKBOX_STYLE_UNCHECKED;
 
   return (
     <Pressable
       onPress={handlePress}
       style={styles.capabilityChip}
       accessibilityRole="checkbox"
-      accessibilityState={value ? ACCESSIBILITY_CHECKED : ACCESSIBILITY_UNCHECKED}
+      accessibilityState={accessibilityState}
       testID={testID}
     >
-      <View style={value ? CHECKBOX_STYLE_CHECKED : CHECKBOX_STYLE_UNCHECKED}>
-        {value ? <Text style={styles.checkboxMark}>✓</Text> : null}
-      </View>
+      <View style={checkboxStyle}>{value ? <Text style={styles.checkboxMark}>✓</Text> : null}</View>
       <Text style={styles.capabilityLabel}>{label}</Text>
     </Pressable>
   );
@@ -1063,3 +1061,5 @@ const styles = StyleSheet.create((theme) => ({
 
 const EMPTY_CARD_STYLE = [settingsStyles.card, styles.emptyCard];
 const FORM_INPUT_STYLE = [styles.formInput, isWeb && { outlineStyle: "none" }];
+const CHECKBOX_STYLE_CHECKED = [styles.checkbox, styles.checkboxChecked];
+const CHECKBOX_STYLE_UNCHECKED = [styles.checkbox];

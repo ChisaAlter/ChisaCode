@@ -136,7 +136,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: theme.spacing[5],
+    gap: theme.spacing[6],
     padding: theme.spacing[6],
   },
   // Soft empty copy: body-adjacent muted.
