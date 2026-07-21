@@ -847,7 +847,7 @@ const styles = StyleSheet.create((theme) => ({
     width: 28,
     height: 28,
     padding: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -872,9 +872,11 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
   },
   statusText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
+  // Soft quiet host badge.
   badgePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -884,27 +886,31 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surfaceWorkspace,
     maxWidth: 200,
   },
   badgeText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
   errorText: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginBottom: theme.spacing[2],
   },
   connectionLatency: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
     marginRight: theme.spacing[2],
   },
   confirmText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
   },
   confirmActions: {
     flexDirection: "row",
@@ -923,7 +929,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));
 

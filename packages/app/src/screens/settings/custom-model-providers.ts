@@ -22,6 +22,49 @@ export interface CustomModelProviderModelInput {
   label?: string;
   contextWindowMaxTokens?: number;
   supportsImages?: boolean;
+  supportsTools?: boolean;
+  supportsThinking?: boolean;
+}
+
+export interface CollectedSavedModel {
+  key: string;
+  gatewayId: string;
+  gatewayLabel: string;
+  modelId: string;
+  label: string;
+  contextWindowMaxTokens?: number;
+  supportsImages?: boolean;
+  supportsTools?: boolean;
+  supportsThinking?: boolean;
+  providerIds: string[];
+  baseUrl?: string;
+}
+
+export interface SaveOpenAiCompatibleModelInput {
+  currentGateways: MutableDaemonConfig["modelGateways"] | undefined;
+  /** Existing gateway id when editing; omitted when creating a new gateway. */
+  gatewayId?: string | null;
+  /** Previous model id when renaming a model inside a gateway. */
+  previousModelId?: string | null;
+  modelId: string;
+  label?: string | null;
+  baseUrl: string;
+  apiKey: string;
+  contextWindowMaxTokens?: number;
+  supportsImages?: boolean;
+  supportsTools?: boolean;
+  supportsThinking?: boolean;
+  /** When true, use the advanced multi-endpoint fields below instead of simple OpenAI-only. */
+  customProtocol?: boolean;
+  anthropic?: CustomModelProviderEndpoint;
+  openai?: CustomModelProviderOpenAIEndpoint;
+  responses?: CustomModelProviderEndpoint;
+}
+
+export interface DeleteSavedModelInput {
+  currentGateways: MutableDaemonConfig["modelGateways"] | undefined;
+  gatewayId: string;
+  modelId: string;
 }
 
 export interface SaveCustomModelProviderInput {
@@ -177,6 +220,12 @@ function normalizeModelInput(
   return typeof model === "string" ? { id: model } : model;
 }
 
+const DEFAULT_THINKING_OPTION = {
+  id: "default",
+  label: "Thinking",
+  isDefault: true,
+} as const;
+
 function normalizeModels(
   models: Array<string | CustomModelProviderModelInput>,
 ): ProviderProfileModel[] {
@@ -196,10 +245,283 @@ function normalizeModels(
       label,
       ...(contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {}),
       ...(input.supportsImages === true ? { supportsImages: true } : {}),
+      ...(input.supportsTools === true ? { supportsTools: true } : {}),
+      ...(input.supportsThinking === true ? { thinkingOptions: [DEFAULT_THINKING_OPTION] } : {}),
       ...(result.length === 0 ? { isDefault: true } : {}),
     });
   }
   return result;
+}
+
+function slugifyGatewayId(value: string): string {
+  const normalized = trim(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  if (!normalized) {
+    return "custom";
+  }
+  if (/^[a-z]/.test(normalized)) {
+    return normalized;
+  }
+  return `m-${normalized}`;
+}
+
+function allocateGatewayId(
+  preferred: string,
+  currentGateways: MutableDaemonConfig["modelGateways"] | undefined,
+): string {
+  const base = slugifyGatewayId(preferred);
+  if (!currentGateways?.[base] || currentGateways[base]?.enabled === false) {
+    return base;
+  }
+  let suffix = 2;
+  while (
+    currentGateways[`${base}-${suffix}`] &&
+    currentGateways[`${base}-${suffix}`]?.enabled !== false
+  ) {
+    suffix += 1;
+  }
+  return `${base}-${suffix}`;
+}
+
+function pickPrimaryBaseUrl(gateway: ModelGatewayConfig | undefined): string {
+  if (!gateway?.upstreams) {
+    return "";
+  }
+  const { chatCompletions, responses, anthropic } = gateway.upstreams;
+  if (chatCompletions?.enabled && trim(chatCompletions.baseUrl)) {
+    return trim(chatCompletions.baseUrl);
+  }
+  if (responses?.enabled && trim(responses.baseUrl)) {
+    return trim(responses.baseUrl);
+  }
+  if (anthropic?.enabled && trim(anthropic.baseUrl)) {
+    return trim(anthropic.baseUrl);
+  }
+  return (
+    trim(chatCompletions?.baseUrl) || trim(responses?.baseUrl) || trim(anthropic?.baseUrl) || ""
+  );
+}
+
+function modelHasThinking(model: ProviderProfileModel): boolean {
+  return Array.isArray(model.thinkingOptions) && model.thinkingOptions.length > 0;
+}
+
+/**
+ * Flattens enabled model gateways into one list row per model (fig2-style catalog).
+ * @param gateways Daemon modelGateways map
+ * @returns Sorted saved-model rows
+ */
+export function collectSavedModels(
+  gateways: MutableDaemonConfig["modelGateways"] | undefined,
+): CollectedSavedModel[] {
+  const rows: CollectedSavedModel[] = [];
+  for (const gateway of Object.values(gateways ?? {})) {
+    if (!gateway?.id || gateway.enabled === false) {
+      continue;
+    }
+    const gatewayLabel = gateway.label ?? gateway.id;
+    const providerIds = buildModelGatewayProviderIdList(gateway.id);
+    const baseUrl = pickPrimaryBaseUrl(gateway);
+    for (const model of gateway.models ?? []) {
+      const modelId = trim(model.id);
+      if (!modelId) {
+        continue;
+      }
+      rows.push({
+        key: `${gateway.id}:${modelId}`,
+        gatewayId: gateway.id,
+        gatewayLabel,
+        modelId,
+        label: trim(model.label) || modelId,
+        ...(typeof model.contextWindowMaxTokens === "number"
+          ? { contextWindowMaxTokens: model.contextWindowMaxTokens }
+          : {}),
+        ...(model.supportsImages === true ? { supportsImages: true } : {}),
+        ...(model.supportsTools === true ? { supportsTools: true } : {}),
+        ...(modelHasThinking(model) ? { supportsThinking: true } : {}),
+        providerIds,
+        ...(baseUrl ? { baseUrl } : {}),
+      });
+    }
+  }
+  return rows.sort((a, b) => {
+    const labelCompare = a.label.localeCompare(b.label);
+    if (labelCompare !== 0) {
+      return labelCompare;
+    }
+    const gatewayCompare = a.gatewayLabel.localeCompare(b.gatewayLabel);
+    if (gatewayCompare !== 0) {
+      return gatewayCompare;
+    }
+    return a.modelId.localeCompare(b.modelId);
+  });
+}
+
+function emptyEndpoint(): CustomModelProviderEndpoint {
+  return { enabled: false, baseUrl: "", apiKey: "" };
+}
+
+function emptyOpenAiEndpoint(): CustomModelProviderOpenAIEndpoint {
+  return { enabled: false, baseUrl: "", apiKey: "", wireApi: "chat" };
+}
+
+function toModelInput(model: ProviderProfileModel): CustomModelProviderModelInput {
+  return {
+    id: model.id,
+    label: model.label,
+    contextWindowMaxTokens: model.contextWindowMaxTokens,
+    supportsImages: model.supportsImages,
+    supportsTools: model.supportsTools,
+    supportsThinking: modelHasThinking(model),
+  };
+}
+
+function resolveSimpleOpenAiEndpoints(input: SaveOpenAiCompatibleModelInput): {
+  anthropic: CustomModelProviderEndpoint;
+  openai: CustomModelProviderOpenAIEndpoint;
+  responses: CustomModelProviderEndpoint;
+} {
+  if (input.customProtocol) {
+    return {
+      anthropic: input.anthropic ?? emptyEndpoint(),
+      openai: input.openai ?? emptyOpenAiEndpoint(),
+      responses: input.responses ?? emptyEndpoint(),
+    };
+  }
+  const baseUrl = trim(input.baseUrl);
+  const apiKey = trim(input.apiKey);
+  if (!baseUrl || !apiKey) {
+    throw new Error("Base URL and API key are required");
+  }
+  return {
+    anthropic: emptyEndpoint(),
+    responses: emptyEndpoint(),
+    openai: {
+      enabled: true,
+      baseUrl,
+      apiKey,
+      wireApi: "chat",
+    },
+  };
+}
+
+function buildNextModelInput(
+  input: SaveOpenAiCompatibleModelInput,
+  modelId: string,
+  modelLabel: string,
+): CustomModelProviderModelInput {
+  return {
+    id: modelId,
+    label: modelLabel,
+    ...(input.contextWindowMaxTokens !== undefined
+      ? { contextWindowMaxTokens: input.contextWindowMaxTokens }
+      : {}),
+    ...(input.supportsImages ? { supportsImages: true } : {}),
+    ...(input.supportsTools ? { supportsTools: true } : {}),
+    ...(input.supportsThinking ? { supportsThinking: true } : {}),
+  };
+}
+
+function endpointFromUpstream(
+  upstream: { enabled?: boolean; baseUrl?: string; apiKey?: string } | undefined,
+): CustomModelProviderEndpoint {
+  return {
+    enabled: upstream?.enabled === true,
+    baseUrl: upstream?.baseUrl ?? "",
+    apiKey: upstream?.apiKey ?? "",
+  };
+}
+
+/**
+ * Builds a modelGateways patch for the simple OpenAI-compatible add/edit form.
+ * Creates a new gateway when gatewayId is omitted; merges into an existing gateway when editing.
+ * @param input Save payload from the fig3-style editor
+ * @returns Daemon config patch
+ */
+export function buildSaveOpenAiCompatibleModelPatch(
+  input: SaveOpenAiCompatibleModelInput,
+): MutableDaemonConfigPatch {
+  const modelId = trim(input.modelId);
+  if (!modelId) {
+    throw new Error("Model ID is required");
+  }
+  const modelLabel = trim(input.label) || modelId;
+  const previousModelId = trim(input.previousModelId) || modelId;
+  const existingGatewayId = normalizeSupplierId(input.gatewayId ?? "");
+  const currentGateways = input.currentGateways ?? {};
+  const existingGateway = existingGatewayId ? currentGateways[existingGatewayId] : undefined;
+
+  const gatewayId =
+    existingGatewayId && existingGateway
+      ? existingGatewayId
+      : allocateGatewayId(modelLabel || modelId, currentGateways);
+
+  if (!PROVIDER_ID_PATTERN.test(gatewayId)) {
+    throw new Error(
+      "Provider ID must start with a letter and use lowercase letters, numbers, or hyphens",
+    );
+  }
+
+  const gatewayLabel =
+    existingGateway?.label && existingGateway.models && existingGateway.models.length > 1
+      ? existingGateway.label
+      : modelLabel;
+
+  const { anthropic, openai, responses } = resolveSimpleOpenAiEndpoints(input);
+  const nextModelInput = buildNextModelInput(input, modelId, modelLabel);
+  const existingModels = existingGateway?.models ?? [];
+  const withoutPrevious = existingModels
+    .filter((model) => model.id !== previousModelId && model.id !== modelId)
+    .map(toModelInput);
+  const mergedModels = [...withoutPrevious, nextModelInput];
+
+  return buildSaveCustomModelProviderPatch({
+    currentGateways,
+    previousId: existingGatewayId && existingGatewayId !== gatewayId ? existingGatewayId : null,
+    id: gatewayId,
+    label: gatewayLabel,
+    models: mergedModels,
+    anthropic,
+    openai,
+    responses,
+  });
+}
+
+/**
+ * Removes one model from a gateway; disables the gateway when no models remain.
+ * @param input Delete payload
+ * @returns Daemon config patch
+ */
+export function buildDeleteSavedModelPatch(input: DeleteSavedModelInput): MutableDaemonConfigPatch {
+  const gatewayId = normalizeSupplierId(input.gatewayId);
+  const modelId = trim(input.modelId);
+  if (!gatewayId || !modelId) {
+    throw new Error("Gateway ID and model ID are required");
+  }
+  const gateway = input.currentGateways?.[gatewayId];
+  if (!gateway) {
+    return buildDisableCustomModelProviderPatch(gatewayId);
+  }
+  const remaining = (gateway.models ?? []).filter((model) => model.id !== modelId);
+  if (remaining.length === 0) {
+    return buildDisableCustomModelProviderPatch(gatewayId);
+  }
+
+  return buildSaveCustomModelProviderPatch({
+    currentGateways: input.currentGateways,
+    previousId: gatewayId,
+    id: gatewayId,
+    label: gateway.label ?? gatewayId,
+    models: remaining.map(toModelInput),
+    anthropic: endpointFromUpstream(gateway.upstreams?.anthropic),
+    openai: {
+      ...endpointFromUpstream(gateway.upstreams?.chatCompletions),
+      wireApi: "chat",
+    },
+    responses: endpointFromUpstream(gateway.upstreams?.responses),
+  });
 }
 
 function normalizeOpenCodeModels(models: ProviderProfileModel[]): ProviderProfileModel[] {

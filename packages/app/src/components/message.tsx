@@ -188,21 +188,28 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   bubble: {
-    // Soft Workbench: quiet card bubble (surface + soft radius).
+    // Soft Workbench .user-b: quiet elevated card bubble.
     backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius["2xl"],
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     minWidth: 0,
     flexShrink: 1,
+    ...(isWeb
+      ? ({
+          // Soft --shadow-soft
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+        } as object)
+      : {}),
   },
   text: {
     color: theme.colors.foreground,
     fontFamily: isWeb ? "system-ui" : Fonts.sans,
-    fontSize: theme.fontSize.base,
-    lineHeight: Math.round(theme.fontSize.base * 1.4),
+    // Soft .user-b: 14px / 1.55
+    fontSize: 14,
+    lineHeight: Math.round(14 * 1.55),
     minWidth: 0,
     maxWidth: "100%",
     flexShrink: 1,
@@ -222,10 +229,11 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   imagePreviewSpacing: {
     marginBottom: theme.spacing[2],
   },
+  // Soft quiet image chip.
   imagePill: {
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   imageThumbnail: {
@@ -235,20 +243,21 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   imageThumbnailPlaceholder: {
     width: 48,
     height: 48,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   structuredAttachmentPill: {
     maxWidth: 220,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.full,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },
   structuredAttachmentText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   copyButton: {
     alignSelf: "center",
@@ -635,20 +644,21 @@ const assistantTurnHeaderStylesheet = StyleSheet.create((theme) => ({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surfaceWorkspace,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
   },
   name: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    // Soft stream turn label: 14.5 medium/semibold.
+    fontSize: 14.5,
     fontWeight: theme.fontWeight.semibold,
-    lineHeight: Math.round(theme.fontSize.base * 1.4),
+    lineHeight: 20,
   },
   duration: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));
 
@@ -687,6 +697,7 @@ interface AssistantMessageProps {
 }
 
 export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
+  // Soft .role-a: document-like reading, no bubble chrome.
   container: {
     paddingVertical: 0,
     ...(isWeb ? { userSelect: "text" as const } : {}),
@@ -754,7 +765,8 @@ export const assistantMessageStylesheet = StyleSheet.create((theme) => ({
   },
   imageErrorText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
   },
 }));
@@ -1212,10 +1224,11 @@ const MemoizedMarkdownBlock = React.memo(function MemoizedMarkdownBlock({
   parser,
   onLinkPress,
 }: MemoizedMarkdownBlockProps) {
-  // Organic integration: shared MarkdownRenderer core + domain rule overlays only.
+  // Soft stream .a prose via workbench scale (14.5 / 1.65).
   return (
     <MarkdownRenderer
       text={text}
+      variant="workbench"
       enableHtmlish
       rules={rules}
       markdownit={parser}
@@ -1477,14 +1490,17 @@ const speakMessageStylesheet = StyleSheet.create((theme) => ({
   },
   headerLabel: {
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.base,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
   text: {
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.base,
-    lineHeight: 22,
+    // Soft .a stream body: 14.5 / 1.65.
+    fontSize: 14.5,
+    lineHeight: 24,
     color: theme.colors.foreground,
   },
 }));
@@ -1527,8 +1543,11 @@ interface ActivityLogProps {
 }
 
 const activityLogStylesheet = StyleSheet.create((theme) => ({
+  // Soft stream activity chip: quiet r12 card.
   pressable: {
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   pressableSpacing: {
@@ -1537,18 +1556,19 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
   pressableActive: {
     opacity: 0.7,
   },
+  // Soft activity washes: quiet Soft ink, not zinc/dark glass chips.
   systemBg: {
-    backgroundColor: "rgba(39, 39, 42, 0.5)",
+    backgroundColor: "rgba(20, 23, 31, 0.04)",
   },
   infoBg: {
-    backgroundColor: "rgba(30, 58, 138, 0.3)",
+    backgroundColor: "rgba(42, 108, 240, 0.1)",
   },
   successBg: {
-    backgroundColor: "rgba(20, 83, 45, 0.3)",
+    backgroundColor: "rgba(24, 163, 74, 0.1)",
   },
   errorBg: {},
   artifactBg: {
-    backgroundColor: "rgba(30, 58, 138, 0.4)",
+    backgroundColor: "rgba(42, 108, 240, 0.14)",
   },
   content: {
     paddingHorizontal: theme.spacing[3],
@@ -1568,8 +1588,9 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
     flex: 1,
   },
   messageText: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   detailsRow: {
     flexDirection: "row",
@@ -1578,13 +1599,15 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
   },
   detailsText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginRight: theme.spacing[1],
   },
+  // Soft quiet metadata card.
   metadataContainer: {
     marginTop: theme.spacing[2],
-    backgroundColor: theme.colors.overlay,
-    borderRadius: theme.borderRadius.base,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 10,
     padding: theme.spacing[2],
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
@@ -1714,12 +1737,12 @@ const compactionStylesheet = StyleSheet.create((theme) => ({
     borderRadius: 999,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   text: {
     fontFamily: Fonts.sans,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
 }));
@@ -1807,7 +1830,8 @@ const todoListCardStylesheet = StyleSheet.create((theme) => ({
   itemText: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
   itemTextCompleted: {
     color: theme.colors.foregroundMuted,
@@ -1815,15 +1839,18 @@ const todoListCardStylesheet = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   workbenchCard: {
+    // Soft quiet card family (r14).
     width: "100%",
     maxWidth: 400,
     marginTop: 0,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).chrome,
@@ -1849,7 +1876,7 @@ const todoListCardStylesheet = StyleSheet.create((theme) => ({
   workbenchCheck: {
     width: 14,
     height: 14,
-    borderRadius: 4,
+    borderRadius: theme.borderRadius.base,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.accent,

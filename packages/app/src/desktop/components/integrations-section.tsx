@@ -613,7 +613,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   mutedText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   actionsRow: {
     flexDirection: "row",
@@ -627,11 +628,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   checkedAtText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   emptyCard: {
     padding: theme.spacing[4],
@@ -639,7 +642,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft empty integrations: 12.5 muted.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 }));
 

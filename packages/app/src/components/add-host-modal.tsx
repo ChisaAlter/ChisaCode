@@ -54,17 +54,20 @@ const styles = StyleSheet.create((theme) => ({
   },
   label: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft form chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
+  // Soft form field: quiet surface, soft radius.
   input: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 12,
     height: 48,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
     lineHeight: 20,
     textAlignVertical: "center",
     includeFontPadding: false,
@@ -96,8 +99,8 @@ const styles = StyleSheet.create((theme) => ({
     height: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surface0,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
@@ -109,7 +112,7 @@ const styles = StyleSheet.create((theme) => ({
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: theme.colors.border,
     alignItems: "center",
@@ -128,7 +131,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   advancedText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft form chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   actions: {
@@ -138,11 +143,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   helper: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   error: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));
 

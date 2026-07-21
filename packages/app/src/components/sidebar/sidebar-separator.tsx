@@ -12,7 +12,8 @@ export function SidebarSeparator() {
 
 const styles = StyleSheet.create((theme) => ({
   line: {
+    // Soft quiet divider: --border-soft.
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: theme.colors.secondary,
   },
 }));

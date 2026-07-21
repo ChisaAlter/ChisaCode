@@ -1,6 +1,7 @@
 import { Component, useCallback, useMemo, type ErrorInfo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
 import { useTranslation } from "react-i18next";
 import { appI18n } from "@/i18n";
 
@@ -96,26 +97,32 @@ const fallbackStyles = StyleSheet.create({
     padding: 24,
     gap: 12,
   },
+  // Soft empty/error title scale.
   title: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: "500",
   },
   message: {
-    fontSize: 14,
+    fontSize: 14.5,
+    lineHeight: 22,
     textAlign: "center",
     maxWidth: 400,
   },
+  // Soft quiet pill control.
   retryButton: {
     marginTop: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   retryButtonPressed: {
     opacity: 0.7,
   },
   retryText: {
-    fontSize: 14,
+    // Soft error secondary: 12.5 muted.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: "500",
   },
 });
@@ -169,7 +176,14 @@ export function SectionErrorFallback({
               padding: theme.spacing[3],
               gap: theme.spacing[2],
               borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface1,
+              borderRadius: 14,
+              backgroundColor: theme.colors.surface0,
+              ...(isWeb
+                ? {
+                    boxShadow:
+                      "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+                  }
+                : theme.shadow.sm),
             },
           ]
         : [
@@ -184,23 +198,17 @@ export function SectionErrorFallback({
   );
 
   const titleStyle = useMemo(
-    () => [sectionStyles.title, { color: theme.colors.foreground, fontSize: theme.fontSize.sm }],
+    () => [sectionStyles.title, { color: theme.colors.foreground, fontSize: 14.5 }],
     [theme],
   );
 
   const messageStyle = useMemo(
-    () => [
-      sectionStyles.message,
-      { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.xs },
-    ],
+    () => [sectionStyles.message, { color: theme.colors.foregroundMuted, fontSize: 12.5 }],
     [theme],
   );
 
   const retryTextStyle = useMemo(
-    () => [
-      sectionStyles.retryText,
-      { color: theme.colors.foreground, fontSize: theme.fontSize.xs },
-    ],
+    () => [sectionStyles.retryText, { color: theme.colors.foreground, fontSize: 12.5 }],
     [theme],
   );
 
@@ -210,9 +218,9 @@ export function SectionErrorFallback({
       {
         paddingHorizontal: theme.spacing[3],
         paddingVertical: theme.spacing[2],
-        borderRadius: theme.borderRadius.md,
+        borderRadius: 10,
         borderColor: theme.colors.border,
-        backgroundColor: theme.colors.surface2,
+        backgroundColor: theme.colors.surface0,
       },
       pressed && sectionStyles.retryButtonPressed,
     ],

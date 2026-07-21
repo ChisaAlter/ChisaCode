@@ -59,7 +59,8 @@ function getMeterColors(
   percentage: number,
   theme: ReturnType<typeof useUnistyles>["theme"],
 ): { progress: string; track: string } {
-  const track = theme.colors.surface3;
+  // Soft meter track: workspace canvas wash, not solid surface1 hover fill.
+  const track = theme.colors.surfaceWorkspace;
   if (percentage > 90) {
     return { progress: theme.colors.destructive, track };
   }
@@ -166,16 +167,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft meter chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   tooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   tooltipDetail: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    lineHeight: theme.fontSize.xs * 1.4,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

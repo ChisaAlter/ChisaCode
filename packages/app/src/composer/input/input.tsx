@@ -315,13 +315,14 @@ function SendButtonContent({
   submitIcon: "arrow" | "return";
   buttonIconSize: number;
 }) {
+  // Soft .send uses --send-fg (primaryForeground), not accent chip white.
   if (isSubmitLoading) {
-    return <ThemedActivityIndicator size="small" style={styles.iconAccentForeground} />;
+    return <ThemedActivityIndicator size="small" style={styles.iconPrimaryForeground} />;
   }
   if (submitIcon === "return") {
-    return <ThemedCornerDownLeft size={buttonIconSize} style={styles.iconAccentForeground} />;
+    return <ThemedCornerDownLeft size={buttonIconSize} style={styles.iconPrimaryForeground} />;
   }
-  return <ThemedArrowUp size={buttonIconSize} style={styles.iconAccentForeground} />;
+  return <ThemedArrowUp size={buttonIconSize} style={styles.iconPrimaryForeground} />;
 }
 
 function resolveSubmitAccessibilityLabel(input: {
@@ -1969,25 +1970,26 @@ const styles = StyleSheet.create((theme: Theme) => ({
   container: {
     position: "relative",
   },
-  // Soft Workbench: large floating pen-bar matching design.
+  // Soft Workbench .composer: r18 card; textarea pad 14/16/6; cbar pad 4/8/10.
   inputWrapper: {
     flexDirection: "column",
-    gap: theme.spacing[3],
+    gap: 0,
     backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     borderRadius: 18,
-    paddingVertical: {
-      xs: theme.spacing[2],
-      md: theme.spacing[3],
+    minHeight: {
+      xs: 108,
+      md: 108,
     },
-    paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[4],
-    },
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
     ...(isWeb
       ? {
-          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 16px 40px rgba(20, 23, 31, 0.07)",
+          // Soft --shadow-composer
+          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 14px 36px rgba(20, 23, 31, 0.07)",
           transitionProperty: "border-color, box-shadow",
           transitionDuration: "200ms",
           transitionTimingFunction: "ease-in-out",
@@ -1996,21 +1998,27 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   textInputScrollWrapper: {
     position: "relative",
+    // Soft .composer textarea: padding 14px 16px 6px
+    paddingTop: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
   },
   focusHintText: {
     position: "absolute",
-    top: 0,
-    right: 0,
-    fontSize: theme.fontSize.xs,
+    top: 14,
+    right: 16,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     opacity: 0.5,
   },
   textInput: {
     width: "100%",
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    // Soft .composer textarea: 14.5px / ~1.5
+    fontSize: 14.5,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: theme.fontSize.base * 1.4,
+    lineHeight: 22,
     ...(isWeb
       ? ({
           outlineStyle: "none",
@@ -2019,60 +2027,67 @@ const styles = StyleSheet.create((theme: Theme) => ({
         } as object)
       : {}),
   },
+  // Soft .cbar: padding 4px 8px 10px, gap 4, right cluster ml auto
   buttonRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginHorizontal: -6,
+    paddingTop: 4,
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    gap: 4,
   },
   leftButtonGroup: {
     minWidth: 0,
     flexShrink: 1,
     flexGrow: 1,
     flexDirection: "row",
-    alignItems: "flex-end",
-    gap: theme.spacing[0],
+    alignItems: "center",
+    gap: 4,
   },
   rightButtonGroup: {
     flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: 4,
+    marginLeft: "auto",
   },
+  // Soft .t-icon: 32 r10 pen-bar chip.
   attachButton: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.borderRadius.full,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   attachButtonAnchor: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
   },
   voiceButton: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.borderRadius.full,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   voiceButtonRecording: {
     backgroundColor: theme.colors.destructive,
   },
+  // Soft .send — design --send #1a1d26 (primary), not accent blue.
   sendButton: {
-    width: 28,
-    height: 28,
+    width: 34,
+    height: 34,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: theme.spacing[1],
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   tooltipRow: {
     flexDirection: "row",
@@ -2080,7 +2095,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[2],
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.popoverForeground,
   },
   buttonDisabled: {
@@ -2094,6 +2110,9 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   iconAccentForeground: {
     color: theme.colors.accentForeground,
+  },
+  iconPrimaryForeground: {
+    color: theme.colors.primaryForeground,
   },
 })) as unknown as Record<string, object>;
 
@@ -2121,5 +2140,6 @@ const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedTextInput = withUnistyles(TextInput);
 
 const textInputPlaceholderColorMapping = (theme: Theme) => ({
-  placeholderTextColor: theme.colors.surface4,
+  // Soft .composer-float textarea::placeholder → --faint
+  placeholderTextColor: theme.colors.foregroundFaint,
 });

@@ -57,21 +57,21 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     // Clip any child min-content that would otherwise expand the flex chain.
     overflow: "hidden",
-    // Left-align: when maxWidth binds, extra space stays on the right.
-    alignItems: "flex-start",
+    // Soft Workbench: center the reading column (design .stream-inner).
+    alignItems: "center",
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
-  // Desktop only: keep the left-aligned column from hugging the sidebar edge.
+  // Desktop only: soft session padding around the document stream + dock.
   conversationAspectHostDesktopInset: {
-    paddingLeft: theme.spacing[6],
-    paddingRight: theme.spacing[4],
+    paddingLeft: 28,
+    paddingRight: 28,
   },
   conversationColumn: {
     flex: 1,
-    // Fill the host until maxWidth (height) clamps it.
+    // Soft reading column: cap like design stream-inner (~720).
     width: "100%",
     minWidth: 0,
-    maxWidth: "100%",
+    maxWidth: 720,
     flexShrink: 1,
   },
 }));

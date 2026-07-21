@@ -680,9 +680,10 @@ const styles = StyleSheet.create((theme) => ({
     top: 0,
   },
   createMenuSurface: {
-    backgroundColor: theme.colors.surface1,
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    // Soft floating menu: r14 card + quiet Soft-ink shadow.
+    backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     borderWidth: 1,
     gap: theme.spacing[1],
     overflow: "hidden",
@@ -690,7 +691,7 @@ const styles = StyleSheet.create((theme) => ({
     position: "absolute",
     width: CREATE_MENU_WIDTH,
     zIndex: 1,
-    ...theme.shadow.md,
+    ...theme.shadow.sm,
   },
   createMenuItem: {
     justifyContent: "flex-start",
@@ -706,8 +707,9 @@ const styles = StyleSheet.create((theme) => ({
   searchBox: {
     alignItems: "center",
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     borderWidth: 1,
+    backgroundColor: theme.colors.surface0,
     flexDirection: "row",
     gap: theme.spacing[2],
     maxWidth: 320,
@@ -719,7 +721,8 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 34,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surface0,
     color: theme.colors.foreground,
     paddingHorizontal: theme.spacing[3],
   },
@@ -736,11 +739,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   scopeTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   statusText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[1],
   },
   rowActions: {

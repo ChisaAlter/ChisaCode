@@ -180,130 +180,132 @@ function EnvironmentInfoCard({
       : 0;
 
   return (
-    <View style={styles.floatingCard} testID="workspace-environment-panel">
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{t("workspace.environment.title")}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
-          onPress={onClose}
-          style={styles.iconButton}
-          testID="workspace-environment-close"
-        >
-          <ThemedX size={14} uniProps={mutedColorMapping} />
-        </Pressable>
-      </View>
+    <View style={styles.floatingCardOuter}>
+      <View style={styles.floatingCard} testID="workspace-environment-panel">
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>{t("workspace.environment.title")}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("workspace.environment.hideFloatingPanel")}
+            onPress={onClose}
+            style={styles.iconButton}
+            testID="workspace-environment-close"
+          >
+            <ThemedX size={14} uniProps={mutedColorMapping} />
+          </Pressable>
+        </View>
 
-      <View style={styles.cardBody}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.environment.changesShort")}
-          onPress={onOpenChanges}
-          style={infoRowStyle}
-          testID="workspace-environment-changes"
-        >
-          <View style={styles.rowLeading}>
-            <View style={styles.rowIcon}>
-              <RowIcon name="changes" />
+        <View style={styles.cardBody}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("workspace.environment.changesShort")}
+            onPress={onOpenChanges}
+            style={infoRowStyle}
+            testID="workspace-environment-changes"
+          >
+            <View style={styles.rowLeading}>
+              <View style={styles.rowIcon}>
+                <RowIcon name="changes" />
+              </View>
+              <Text style={styles.rowLabel} numberOfLines={1}>
+                {t("workspace.environment.changesShort")}
+              </Text>
             </View>
-            <Text style={styles.rowLabel} numberOfLines={1}>
-              {t("workspace.environment.changesShort")}
-            </Text>
-          </View>
-          <View style={styles.rowTrailing}>
-            {changeCount > 0 ? <Text style={styles.rowMetaText}>{changeCount}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("workspace.environment.refreshStatus")}
-              disabled={!canRefreshGit}
-              hitSlop={6}
-              onPress={handleRefreshStatus}
-              style={styles.trailingIconHit}
-              testID="workspace-environment-refresh"
-            >
-              <ThemedRefreshCcw size={14} uniProps={mutedColorMapping} />
-            </Pressable>
-          </View>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.environment.local")}
-          onPress={handleToggleLocal}
-          style={infoRowStyle}
-          testID="workspace-environment-local"
-        >
-          <View style={styles.rowLeading}>
-            <View style={styles.rowIcon}>
-              <RowIcon name="local" />
-            </View>
-            <Text style={styles.rowLabel} numberOfLines={1}>
-              {t("workspace.environment.local")}
-            </Text>
-          </View>
-          <RowIcon name="chevron" />
-        </Pressable>
-        {localExpanded ? (
-          <View style={styles.expandedBlock}>
-            <Text style={styles.expandedPath} numberOfLines={3}>
-              {locationLabel || t("workspace.environment.noSource")}
-            </Text>
-            {normalizedCwd ? (
+            <View style={styles.rowTrailing}>
+              {changeCount > 0 ? <Text style={styles.rowMetaText}>{changeCount}</Text> : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={t("workspace.environment.openLocation")}
-                onPress={handleOpenLocalPath}
-                style={styles.expandedAction}
-                testID="workspace-environment-open-location"
+                accessibilityLabel={t("workspace.environment.refreshStatus")}
+                disabled={!canRefreshGit}
+                hitSlop={6}
+                onPress={handleRefreshStatus}
+                style={styles.trailingIconHit}
+                testID="workspace-environment-refresh"
               >
-                <ThemedFolder size={13} uniProps={mutedColorMapping} />
-                <Text style={styles.expandedActionText}>
-                  {t("workspace.environment.openLocation")}
-                </Text>
+                <ThemedRefreshCcw size={14} uniProps={mutedColorMapping} />
               </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        <BranchSwitcherRow
-          serverId={serverId}
-          cwd={workspaceDirectory}
-          currentBranchName={currentBranchName}
-          isGitCheckout={isGitCheckout}
-        />
-
-        <WorkspaceEnvironmentGitPopover
-          serverId={serverId}
-          cwd={workspaceDirectory}
-          currentBranchName={currentBranchName}
-        >
-          <View style={styles.rowLeading}>
-            <View style={styles.rowIcon}>
-              <RowIcon name="commit" />
             </View>
-            <Text style={styles.rowLabel} numberOfLines={1}>
-              {t("workspace.environment.commitOrPush")}
-            </Text>
-          </View>
-        </WorkspaceEnvironmentGitPopover>
+          </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workspace.environment.compareBranches")}
-          onPress={onOpenChanges}
-          style={infoRowStyle}
-          testID="workspace-environment-compare"
-        >
-          <View style={styles.rowLeading}>
-            <View style={styles.rowIcon}>
-              <RowIcon name="compare" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("workspace.environment.local")}
+            onPress={handleToggleLocal}
+            style={infoRowStyle}
+            testID="workspace-environment-local"
+          >
+            <View style={styles.rowLeading}>
+              <View style={styles.rowIcon}>
+                <RowIcon name="local" />
+              </View>
+              <Text style={styles.rowLabel} numberOfLines={1}>
+                {t("workspace.environment.local")}
+              </Text>
             </View>
-            <Text style={styles.rowLabel} numberOfLines={1}>
-              {t("workspace.environment.compareBranches")}
-            </Text>
-          </View>
-          <RowIcon name="arrow" />
-        </Pressable>
+            <RowIcon name="chevron" />
+          </Pressable>
+          {localExpanded ? (
+            <View style={styles.expandedBlock}>
+              <Text style={styles.expandedPath} numberOfLines={3}>
+                {locationLabel || t("workspace.environment.noSource")}
+              </Text>
+              {normalizedCwd ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("workspace.environment.openLocation")}
+                  onPress={handleOpenLocalPath}
+                  style={styles.expandedAction}
+                  testID="workspace-environment-open-location"
+                >
+                  <ThemedFolder size={13} uniProps={mutedColorMapping} />
+                  <Text style={styles.expandedActionText}>
+                    {t("workspace.environment.openLocation")}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          <BranchSwitcherRow
+            serverId={serverId}
+            cwd={workspaceDirectory}
+            currentBranchName={currentBranchName}
+            isGitCheckout={isGitCheckout}
+          />
+
+          <WorkspaceEnvironmentGitPopover
+            serverId={serverId}
+            cwd={workspaceDirectory}
+            currentBranchName={currentBranchName}
+          >
+            <View style={styles.rowLeading}>
+              <View style={styles.rowIcon}>
+                <RowIcon name="commit" />
+              </View>
+              <Text style={styles.rowLabel} numberOfLines={1}>
+                {t("workspace.environment.commitOrPush")}
+              </Text>
+            </View>
+          </WorkspaceEnvironmentGitPopover>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("workspace.environment.compareBranches")}
+            onPress={onOpenChanges}
+            style={infoRowStyle}
+            testID="workspace-environment-compare"
+          >
+            <View style={styles.rowLeading}>
+              <View style={styles.rowIcon}>
+                <RowIcon name="compare" />
+              </View>
+              <Text style={styles.rowLabel} numberOfLines={1}>
+                {t("workspace.environment.compareBranches")}
+              </Text>
+            </View>
+            <RowIcon name="arrow" />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -320,28 +322,30 @@ function TaskProgressCard({ progress }: { progress: AgentProgressModel }) {
   );
 
   return (
-    <View style={styles.floatingCard} testID="workspace-task-progress-panel">
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{t("workspace.environment.taskProgressTitle")}</Text>
-        <Text style={styles.cardHeaderMeta}>
-          {t("workspace.environment.taskProgress", {
-            completed: progress.completedCount,
-            total: progress.totalCount,
-          })}
-        </Text>
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.progressTrack} testID="workspace-task-progress-bar">
-          <View style={progressFillStyle} />
-        </View>
-        {progress.visibleItems.map((item) => (
-          <ProgressItemRow key={item.id} item={item} />
-        ))}
-        {progress.hiddenCount > 0 ? (
-          <Text style={styles.hiddenCountText}>
-            {t("workspace.environment.moreTasks", { count: progress.hiddenCount })}
+    <View style={styles.floatingCardOuter}>
+      <View style={styles.floatingCard} testID="workspace-task-progress-panel">
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>{t("workspace.environment.taskProgressTitle")}</Text>
+          <Text style={styles.cardHeaderMeta}>
+            {t("workspace.environment.taskProgress", {
+              completed: progress.completedCount,
+              total: progress.totalCount,
+            })}
           </Text>
-        ) : null}
+        </View>
+        <View style={styles.cardBody}>
+          <View style={styles.progressTrack} testID="workspace-task-progress-bar">
+            <View style={progressFillStyle} />
+          </View>
+          {progress.visibleItems.map((item) => (
+            <ProgressItemRow key={item.id} item={item} />
+          ))}
+          {progress.hiddenCount > 0 ? (
+            <Text style={styles.hiddenCountText}>
+              {t("workspace.environment.moreTasks", { count: progress.hiddenCount })}
+            </Text>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -513,6 +517,11 @@ const styles = StyleSheet.create((theme) => ({
     gap: 8,
     maxHeight: "100%",
   },
+  // Shadow lives on the outer shell so overflow:hidden on the card cannot clip it (Electron web).
+  floatingCardOuter: {
+    borderRadius: theme.borderRadius["2xl"],
+    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.md),
+  },
   floatingCard: {
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
@@ -520,7 +529,6 @@ const styles = StyleSheet.create((theme) => ({
     // Soft elevated surface when open — same family as composer / settings cards.
     backgroundColor: theme.colors.surface0,
     overflow: "hidden",
-    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.sm),
   },
   cardHeader: {
     minHeight: 36,
@@ -530,7 +538,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: 12,
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    // Soft elevated card header: quiet border-soft rule.
+    borderBottomColor: theme.colors.secondary,
   },
   cardTitle: {
     flex: 1,
@@ -546,12 +555,13 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.medium,
   },
+  // Soft quiet icon chip.
   iconButton: {
     width: 26,
     height: 26,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   cardBody: {
     paddingVertical: 6,
@@ -616,7 +626,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
     gap: 6,
   },
   expandedPath: {
@@ -640,7 +650,7 @@ const styles = StyleSheet.create((theme) => ({
     marginHorizontal: 8,
     marginBottom: 6,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
     overflow: "hidden",
   },
   progressFill: {

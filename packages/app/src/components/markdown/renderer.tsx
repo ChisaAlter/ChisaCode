@@ -28,7 +28,11 @@ import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-t
 import { MarkdownTableCellText } from "@/components/markdown-text-selection";
 import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
 import { markdownNodeContainsType } from "@/utils/markdown-ast";
-import { createCompactMarkdownStyles, createMarkdownStyles } from "@/styles/markdown-styles";
+import {
+  createCompactMarkdownStyles,
+  createMarkdownStyles,
+  createWorkbenchMarkdownStyles,
+} from "@/styles/markdown-styles";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
 import {
@@ -42,9 +46,15 @@ import { groupMarkdownParts, type MarkdownPartGroup } from "./part-groups";
 
 export type MarkdownStyles = Record<string, TextStyle & ViewStyle & { [key: string]: unknown }>;
 
+/** Style scale for MarkdownRenderer. Compact wins over workbench when both are set. */
+export type MarkdownStyleVariant = "default" | "compact" | "workbench";
+
 interface MarkdownWithStableRendererProps {
   children: ReactNode;
-  style: ReturnType<typeof createMarkdownStyles> | ReturnType<typeof createCompactMarkdownStyles>;
+  style:
+    | ReturnType<typeof createMarkdownStyles>
+    | ReturnType<typeof createCompactMarkdownStyles>
+    | ReturnType<typeof createWorkbenchMarkdownStyles>;
   rules?: RenderRules;
   markdownit?: ReturnType<typeof MarkdownIt>;
   onLinkPress?: (url: string) => boolean;
@@ -63,12 +73,37 @@ function compactMarkdownStyleMapping(theme: Theme): Partial<MarkdownWithStableRe
   return { style: createCompactMarkdownStyles(theme) };
 }
 
+function workbenchMarkdownStyleMapping(theme: Theme): Partial<MarkdownWithStableRendererProps> {
+  return { style: createWorkbenchMarkdownStyles(theme) };
+}
+
+function resolveMarkdownStyleMapping(
+  variant: MarkdownStyleVariant,
+): (theme: Theme) => Partial<MarkdownWithStableRendererProps> {
+  if (variant === "compact") {
+    return compactMarkdownStyleMapping;
+  }
+  if (variant === "workbench") {
+    return workbenchMarkdownStyleMapping;
+  }
+  return markdownStyleMapping;
+}
+
 const defaultMarkdownParser = MarkdownIt({ typographer: true, linkify: true });
 const EMPTY_TEXT_STYLE: TextStyle = {};
 const MARKDOWN_LIST_ITEM_CONTENT_FLEX: ViewStyle = { flex: 1, flexShrink: 1, minWidth: 0 };
 export interface MarkdownRendererProps {
   text: string;
+  /**
+   * Compact chrome (thoughts/plans). Takes precedence over `variant`.
+   * Prefer `variant="workbench"` for Soft chat stream prose.
+   */
   compact?: boolean;
+  /**
+   * Soft stream uses `"workbench"` (14.5 / 1.65). File previews keep `"default"`.
+   * When `compact` is true, this is ignored.
+   */
+  variant?: MarkdownStyleVariant;
   /**
    * Domain-specific rule overrides merged on top of createSharedMarkdownRules().
    * Pass only ChisaCode extensions (file links, generative fences, etc.) — do not
@@ -93,6 +128,7 @@ function getSharedMarkdownRules(): RenderRules {
 export function MarkdownRenderer({
   text,
   compact = false,
+  variant = "default",
   rules,
   markdownit = defaultMarkdownParser,
   onLinkPress,
@@ -107,9 +143,11 @@ export function MarkdownRenderer({
     () => (enableHtmlish ? splitHtmlishMarkdown(text) : [{ kind: "markdown" as const, text }]),
     [enableHtmlish, text],
   );
+  const styleVariant: MarkdownStyleVariant = compact ? "compact" : variant;
   const rendererProps = useMemo(
     () => ({
       compact,
+      variant: styleVariant,
       rules: markdownRules,
       markdownit,
       onLinkPress,
@@ -122,6 +160,7 @@ export function MarkdownRenderer({
       markdownRules,
       markdownit,
       onLinkPress,
+      styleVariant,
       topLevelMaxExceededItem,
     ],
   );
@@ -207,14 +246,16 @@ function MarkdownPart({
 
 function MarkdownFragment({
   text,
-  compact,
+  compact = false,
+  variant = "default",
   rules,
   markdownit,
   onLinkPress,
   allowedImageHandlers,
   topLevelMaxExceededItem,
 }: MarkdownRendererProps & { rules: RenderRules }) {
-  const uniProps = compact ? compactMarkdownStyleMapping : markdownStyleMapping;
+  const styleVariant: MarkdownStyleVariant = compact ? "compact" : variant;
+  const uniProps = resolveMarkdownStyleMapping(styleVariant);
   return (
     <ThemedMarkdown
       uniProps={uniProps}
@@ -723,12 +764,14 @@ export function createSharedMarkdownRules(): RenderRules {
 }
 
 const detailsStyles = StyleSheet.create((theme) => ({
+  // Soft .tool-like details chrome.
   container: {
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     marginBottom: theme.spacing[2],
     overflow: "hidden",
+    backgroundColor: theme.colors.surface0,
   },
   summaryRow: {
     flexDirection: "row",
@@ -736,7 +779,7 @@ const detailsStyles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   summaryIcon: {
     color: theme.colors.foregroundMuted,
@@ -745,7 +788,8 @@ const detailsStyles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 18,
   },
@@ -774,8 +818,8 @@ const detailsStyles = StyleSheet.create((theme) => ({
   flowImageFallback: {
     marginTop: 2,
     paddingHorizontal: theme.spacing[1],
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: 10,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   flowImageFallbackText: {
     fontSize: 10,

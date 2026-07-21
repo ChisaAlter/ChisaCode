@@ -74,6 +74,13 @@ interface ControlledAgentControlsProps {
   /** Extra elements rendered inline with the compact sheet controls. */
   compactExtras?: ReactNode;
   modelSelectorServerId?: string | null;
+  /**
+   * Soft desktop cbar partition.
+   * - `full`: provider/model/thinking + extras (legacy single row)
+   * - `model`: provider/model/thinking only (right cbar)
+   * - `mode`: extras only (left cbar; typically the mode chip)
+   */
+  desktopSegment?: "full" | "model" | "mode";
 }
 
 export interface DraftAgentControlsProps {
@@ -106,12 +113,24 @@ export interface DraftAgentControlsProps {
   isRetryingModelProvider?: boolean;
   disabled?: boolean;
   modelSelectorServerId?: string | null;
+  /** Soft Workbench cbar partition. Default keeps prior single-cluster layout. */
+  slot?: AgentControlsSlot;
 }
+
+/**
+ * Soft pen-bar toolbar slot.
+ * - `all`: single cluster (compact / legacy)
+ * - `mode`: left cbar — mode chip only
+ * - `model`: right cbar — provider/model/thinking (no mode)
+ */
+export type AgentControlsSlot = "all" | "mode" | "model";
 
 interface AgentControlsProps {
   agentId: string;
   serverId: string;
   onDropdownClose?: () => void;
+  /** Soft Workbench cbar partition. Default keeps prior single-cluster layout. */
+  slot?: AgentControlsSlot;
 }
 
 function findOptionLabel(
@@ -149,6 +168,36 @@ function resolveHasAnyControl({
     Boolean(features?.length) ||
     hasDesktopExtras
   );
+}
+
+function resolveDesktopSegmentVisibility(desktopSegment: "full" | "model" | "mode") {
+  return {
+    showDesktopModelCluster: desktopSegment !== "mode",
+    showDesktopModeCluster: desktopSegment !== "model",
+  };
+}
+
+function resolveSegmentedHasAnyControl(input: {
+  isCompact: boolean;
+  showDesktopModelCluster: boolean;
+  showDesktopModeCluster: boolean;
+  providerOptions: AgentControlOption[] | undefined;
+  canSelectModel: boolean;
+  thinkingOptions: AgentControlOption[] | undefined;
+  features: AgentFeature[] | undefined;
+  desktopExtras: ReactNode;
+}) {
+  const includeModelCluster = input.showDesktopModelCluster || input.isCompact;
+  return resolveHasAnyControl({
+    providerOptions: includeModelCluster ? input.providerOptions : undefined,
+    canSelectModel: includeModelCluster && input.canSelectModel,
+    thinkingOptions: includeModelCluster ? input.thinkingOptions : undefined,
+    features: input.isCompact ? input.features : undefined,
+    hasDesktopExtras:
+      input.showDesktopModeCluster &&
+      input.desktopExtras !== null &&
+      input.desktopExtras !== undefined,
+  });
 }
 
 function toComboboxOptions(options: AgentControlOption[] | undefined): ComboboxOption[] {
@@ -314,6 +363,7 @@ function ControlledAgentControls({
   desktopExtras,
   compactExtras,
   modelSelectorServerId = null,
+  desktopSegment = "full",
 }: ControlledAgentControlsProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -322,6 +372,8 @@ function ControlledAgentControls({
 
   const providerAnchorRef = useRef<View>(null);
   const thinkingAnchorRef = useRef<View>(null);
+  const { showDesktopModelCluster, showDesktopModeCluster } =
+    resolveDesktopSegmentVisibility(desktopSegment);
 
   const canSelectProvider = Boolean(
     onSelectProvider && providerOptions && providerOptions.length > 0,
@@ -348,12 +400,15 @@ function ControlledAgentControls({
 
   const ProviderIcon = resolveProviderIcon(provider);
 
-  const hasAnyControl = resolveHasAnyControl({
+  const hasAnyControl = resolveSegmentedHasAnyControl({
+    isCompact,
+    showDesktopModelCluster,
+    showDesktopModeCluster,
     providerOptions,
     canSelectModel,
     thinkingOptions,
-    features: isCompact ? features : undefined,
-    hasDesktopExtras: desktopExtras !== null && desktopExtras !== undefined,
+    features,
+    desktopExtras,
   });
 
   const modelDisabled = disabled;
@@ -491,8 +546,9 @@ function ControlledAgentControls({
           handleDesktopModelSelect={handleDesktopModelSelect}
           handleProviderOpenChange={handleProviderOpenChange}
           handleThinkingOpenChange={handleThinkingOpenChange}
-          extras={desktopExtras}
+          extras={showDesktopModeCluster ? desktopExtras : undefined}
           modelSelectorServerId={modelSelectorServerId}
+          showModelCluster={showDesktopModelCluster}
         />
       ) : (
         <>
@@ -541,6 +597,7 @@ export const AgentControls = memo(function AgentControls({
   agentId,
   serverId,
   onDropdownClose,
+  slot = "all",
 }: AgentControlsProps) {
   const { t } = useTranslation();
   const { preferences, updatePreferences } = useFormPreferences();
@@ -727,6 +784,11 @@ export const AgentControls = memo(function AgentControls({
     return null;
   }
 
+  // Soft desktop cbar: left = mode, right = model cluster. Compact keeps a single row.
+  if (slot === "mode") {
+    return modeChip;
+  }
+
   return (
     <ControlledAgentControls
       provider={agent.provider}
@@ -749,7 +811,8 @@ export const AgentControls = memo(function AgentControls({
       isRetryingModelProvider={snapshotIsRefreshing}
       onDropdownClose={onDropdownClose}
       disabled={!client}
-      desktopExtras={modeChip}
+      desktopExtras={slot === "all" ? modeChip : undefined}
+      desktopSegment={slot === "model" ? "model" : "full"}
       modelSelectorServerId={serverId}
     />
   );
@@ -781,6 +844,7 @@ export function DraftAgentControls({
   isRetryingModelProvider = false,
   disabled = false,
   modelSelectorServerId = null,
+  slot = "all",
 }: DraftAgentControlsProps) {
   const { preferences, updatePreferences } = useFormPreferences();
   const isCompact = useIsCompactFormFactor();
@@ -850,9 +914,14 @@ export function DraftAgentControls({
     selectedModelId: selectedModel,
   });
 
+  // Soft desktop cbar: left = mode, right = model cluster.
+  if (!isCompact && slot === "mode") {
+    return draftModeChip;
+  }
+
   if (!isCompact) {
-    return (
-      <View style={styles.container}>
+    const modelCluster = (
+      <>
         <CombinedModelSelector
           providers={modelSelectorProviders}
           selectedProvider={selectedProvider ?? ""}
@@ -881,9 +950,20 @@ export function DraftAgentControls({
             onRetryModelProvider={onRetryModelProvider}
             isRetryingModelProvider={isRetryingModelProvider}
             disabled={disabled}
-            desktopExtras={draftModeChip}
+            desktopSegment="model"
           />
         ) : null}
+      </>
+    );
+
+    if (slot === "model") {
+      return <View style={styles.container}>{modelCluster}</View>;
+    }
+
+    return (
+      <View style={styles.container}>
+        {modelCluster}
+        {draftModeChip}
       </View>
     );
   }

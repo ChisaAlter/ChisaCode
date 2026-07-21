@@ -66,6 +66,8 @@ export const resources = {
         docs: "文档",
       },
       openProject: {
+        heroTitle: "打开项目",
+        heroSubtitle: "选择 workspace，或继续配置 provider / 设备",
         addProject: {
           title: "添加项目",
           description: "打开本机上的文件夹",
@@ -117,6 +119,22 @@ export const resources = {
         softHomeTitle: "ChisaCode",
         softHomeSubtitle: "你的多智能体工作台",
         softHomeComposerPlaceholder: "今天在哪个 workspace 上做什么？可 @ 文件、切换 provider",
+        softHomeSegments: {
+          daily: "日常开发",
+          review: "代码审查",
+          migrate: "重构迁移",
+        },
+        softHomeChips: {
+          bug: "修 bug",
+          test: "写测试",
+          arch: "解释架构",
+          more: "更多",
+        },
+        softHomeChipPrompts: {
+          bug: "帮我定位并修复这个 bug：",
+          test: "为相关改动补测试：",
+          arch: "解释这块架构与关键路径：",
+        },
         newWorkspace: "新工作区",
         newAgent: "新建智能体",
         newTerminal: "新建终端",
@@ -1427,8 +1445,8 @@ export const resources = {
           theme: {
             title: "主题",
             options: {
-              light: "Blockchain Light",
-              dark: "Cyber Dark",
+              light: "Soft Light",
+              dark: "Soft Dark",
               "liquid-neon": "Liquid Glass",
               chisaki: "Chisaki",
               aemeath: "Aemeath",
@@ -1874,6 +1892,8 @@ export const resources = {
         docs: "Docs",
       },
       openProject: {
+        heroTitle: "Open project",
+        heroSubtitle: "Pick a workspace, or finish providers and devices",
         addProject: {
           title: "Open project",
           description: "Open a folder on this machine",
@@ -1926,6 +1946,22 @@ export const resources = {
         softHomeSubtitle: "Your multi-agent workbench",
         softHomeComposerPlaceholder:
           "What should we do in this workspace? @ files, switch provider",
+        softHomeSegments: {
+          daily: "Daily dev",
+          review: "Code review",
+          migrate: "Refactor / migrate",
+        },
+        softHomeChips: {
+          bug: "Fix a bug",
+          test: "Write tests",
+          arch: "Explain architecture",
+          more: "More",
+        },
+        softHomeChipPrompts: {
+          bug: "Help me find and fix this bug: ",
+          test: "Add tests for these changes: ",
+          arch: "Explain this architecture and key paths: ",
+        },
         newWorkspace: "New workspace",
         newAgent: "New Agent",
         newTerminal: "New terminal",
@@ -3277,8 +3313,8 @@ export const resources = {
           theme: {
             title: "Theme",
             options: {
-              light: "Blockchain Light",
-              dark: "Cyber Dark",
+              light: "Soft Light",
+              dark: "Soft Dark",
               "liquid-neon": "Liquid Glass",
               chisaki: "Chisaki",
               aemeath: "Aemeath",

@@ -484,7 +484,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   waitingText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   emptyContainer: {
@@ -493,14 +494,16 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   emptyText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   commandList: {
     gap: theme.spacing[2],
   },
+  // Soft command card: r14 quiet surface family.
   commandItem: {
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 14,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     overflow: "hidden",
@@ -511,11 +514,12 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   commandRowExpanded: {
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   commandRowPressed: {
     opacity: 0.8,
@@ -527,13 +531,16 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     flexShrink: 0,
   },
+  // Soft setup command row: 12.5 meta.
   commandText: {
     flex: 1,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
   commandDuration: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
   },
@@ -559,16 +566,18 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   emptyLogText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     fontStyle: "italic",
   },
   errorCard: {
     padding: theme.spacing[3],
-    backgroundColor: theme.colors.palette.red[100],
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
   },
   errorText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.palette.red[800],
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: theme.colors.destructive,
   },
 }));

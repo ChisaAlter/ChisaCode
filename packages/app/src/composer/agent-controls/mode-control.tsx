@@ -379,20 +379,21 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "transparent",
     gap: 3,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 10,
   },
   chipHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   chipPressed: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surface1,
   },
   chipDisabled: {
     opacity: 0.5,
   },
+  // Soft composer meta chip: 12.5 muted.
   chipLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },

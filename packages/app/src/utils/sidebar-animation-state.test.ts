@@ -88,23 +88,25 @@ describe("sidebar-animation-state", () => {
     });
   });
 
-  it("uses a compact half-drawer width on mobile viewports", () => {
-    expect(getMobileSidebarWidth(390)).toBe(280);
-    expect(getMobileSidebarWidth(720)).toBe(403);
+  it("uses Soft .drawer width 86% capped at 300 on mobile viewports", () => {
+    // Soft .drawer: width 86%, max-width 300.
+    expect(getMobileSidebarWidth(390)).toBe(300);
+    expect(getMobileSidebarWidth(720)).toBe(300);
   });
 
   it("caps the mobile drawer width on large viewports", () => {
-    expect(getMobileSidebarWidth(1200)).toBe(420);
+    expect(getMobileSidebarWidth(1200)).toBe(300);
   });
 
-  it("uses a stable fallback for invalid mobile viewport widths", () => {
-    expect(getMobileSidebarWidth(0)).toBe(280);
-    expect(getMobileSidebarWidth(Number.NaN)).toBe(280);
-    expect(getMobileSidebarWidth(Number.POSITIVE_INFINITY)).toBe(280);
+  it("uses a stable Soft max-width fallback for invalid mobile viewport widths", () => {
+    expect(getMobileSidebarWidth(0)).toBe(300);
+    expect(getMobileSidebarWidth(Number.NaN)).toBe(300);
+    expect(getMobileSidebarWidth(Number.POSITIVE_INFINITY)).toBe(300);
   });
 
   it("does not exceed extremely narrow but valid mobile viewports", () => {
-    expect(getMobileSidebarWidth(240)).toBe(240);
+    // Soft 86% of 240 ≈ 206.
+    expect(getMobileSidebarWidth(240)).toBe(206);
   });
 
   it("keeps the stored desktop sidebar width instead of resetting to the default", () => {

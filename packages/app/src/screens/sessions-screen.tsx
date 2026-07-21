@@ -127,45 +127,58 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft list canvas for recent sessions.
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: theme.spacing[6],
+    gap: theme.spacing[5],
     padding: theme.spacing[6],
   },
+  // Soft empty copy: body-adjacent muted.
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 22,
   },
+  // Soft .m-list pad for loading skeleton.
   loadingContainer: {
     flex: 1,
     alignItems: "stretch",
     gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[6],
-    paddingVertical: theme.spacing[4],
+    paddingHorizontal: {
+      xs: 12,
+      md: theme.spacing[6],
+    },
+    paddingVertical: {
+      xs: 8,
+      md: theme.spacing[4],
+    },
   },
   loadingList: {
-    gap: theme.spacing[2],
+    gap: 10,
   },
   loadingRow: {
-    minHeight: 58,
+    // Soft .m-card skeleton: r14 surface card.
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   loadingIcon: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface3,
+    borderRadius: 10,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   loadingTextColumn: {
     flex: 1,
@@ -175,14 +188,14 @@ const styles = StyleSheet.create((theme) => ({
   loadingTitle: {
     width: "46%",
     height: 12,
-    borderRadius: theme.borderRadius.base,
-    backgroundColor: theme.colors.surface3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   loadingMeta: {
     width: "28%",
     height: 8,
-    borderRadius: theme.borderRadius.base,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   loadingStatusRow: {
     minHeight: 32,
@@ -193,7 +206,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   loadingStatusText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   footer: {

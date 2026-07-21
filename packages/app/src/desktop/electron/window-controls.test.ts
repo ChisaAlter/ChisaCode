@@ -3,18 +3,18 @@ import { describe, expect, it } from "vitest";
 import { getDesktopWindowControlsBackground } from "./window-controls";
 
 describe("getDesktopWindowControlsBackground", () => {
-  it("uses the titlebar color for the native window controls background", () => {
+  it("prefers the Soft shell canvas over elevated surface0 white", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#09090b",
-        surface0: "#f8fafc",
-        surfaceSidebar: "#f4f4f5",
-        surfaceWorkspace: "#ffffff",
+        surface0: "#ffffff",
+        surfaceSidebar: "#f0f1f5",
+        surfaceWorkspace: "#f4f5f8",
       }),
-    ).toBe("#f8fafc");
+    ).toBe("#f4f5f8");
   });
 
-  it("uses the workspace color when the titlebar color cannot be sent to Electron", () => {
+  it("uses the workspace color when it is an opaque shell canvas", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#09090b",
@@ -25,7 +25,7 @@ describe("getDesktopWindowControlsBackground", () => {
     ).toBe("#ffffff");
   });
 
-  it("uses the sidebar color when the titlebar and workspace colors are transparent", () => {
+  it("uses the sidebar color when the workspace color is transparent", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#09090b",
@@ -36,7 +36,7 @@ describe("getDesktopWindowControlsBackground", () => {
     ).toBe("#f4f4f5");
   });
 
-  it("uses the opaque base canvas for transparent light themes", () => {
+  it("uses the opaque elevated surface when shell colors are transparent", () => {
     expect(
       getDesktopWindowControlsBackground({
         foreground: "#1d1d1f",

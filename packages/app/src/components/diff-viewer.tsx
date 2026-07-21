@@ -366,12 +366,14 @@ const styles = StyleSheet.create((theme) => {
       paddingHorizontal: theme.spacing[1],
     },
     statsAddText: {
-      fontSize: theme.fontSize.xs,
+      fontSize: 12.5,
+      lineHeight: 16,
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.diffAddition,
     },
     statsRemoveText: {
-      fontSize: theme.fontSize.xs,
+      fontSize: 12.5,
+      lineHeight: 16,
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.diffDeletion,
     },
@@ -386,7 +388,7 @@ const styles = StyleSheet.create((theme) => {
       flexDirection: "row" as const,
     },
     lineHovered: {
-      backgroundColor: isWeb ? `${theme.colors.surface2}88` : undefined,
+      backgroundColor: isWeb ? `${theme.colors.surface1}88` : undefined,
     },
     lineNumberText: {
       fontFamily: Fonts.mono,
@@ -395,7 +397,7 @@ const styles = StyleSheet.create((theme) => {
       textAlign: "right" as const,
       paddingRight: theme.spacing[2],
       borderRightWidth: 1,
-      borderRightColor: theme.colors.borderAccent,
+      borderRightColor: theme.colors.border,
       marginRight: theme.spacing[2],
       userSelect: "none" as const,
     },
@@ -413,8 +415,9 @@ const styles = StyleSheet.create((theme) => {
           }
         : null),
     },
+    // Soft diff chrome: quiet workspace wash.
     headerLine: {
-      backgroundColor: theme.colors.surface1,
+      backgroundColor: theme.colors.surfaceWorkspace,
     },
     headerText: {
       color: theme.colors.foregroundMuted,
@@ -438,7 +441,7 @@ const styles = StyleSheet.create((theme) => {
       backgroundColor: theme.colors.diffDeletionHighlightBg,
     },
     contextLine: {
-      backgroundColor: theme.colors.surface1,
+      backgroundColor: theme.colors.surfaceWorkspace,
     },
     contextText: {
       color: theme.colors.foregroundMuted,
@@ -451,7 +454,8 @@ const styles = StyleSheet.create((theme) => {
       justifyContent: "center" as const,
     },
     emptyText: {
-      fontSize: theme.fontSize.sm,
+      fontSize: 12.5,
+      lineHeight: 16,
       color: theme.colors.foregroundMuted,
     },
 
@@ -464,14 +468,17 @@ const styles = StyleSheet.create((theme) => {
       alignItems: "center" as const,
       gap: 4,
       padding: 4,
-      borderRadius: theme.borderRadius.lg,
-      backgroundColor: theme.colors.surface2,
+      borderRadius: 10,
+      backgroundColor: theme.colors.surface0,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
     },
     openInDiffPaneButtonHovered: {
-      backgroundColor: theme.colors.surface3,
+      backgroundColor: theme.colors.surfaceWorkspace,
     },
     openInDiffPaneText: {
-      fontSize: theme.fontSize.xs,
+      fontSize: 12.5,
+      lineHeight: 16,
       color: theme.colors.foregroundMuted,
       ...(isWeb ? { cursor: "pointer" as const } : null),
     },

@@ -28,8 +28,8 @@ const styles = StyleSheet.create((theme) => ({
   cameraWrap: {
     flex: 1,
     overflow: "hidden",
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   camera: {
     flex: 1,
@@ -81,29 +81,36 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[6],
     color: theme.colors.foregroundMuted,
     textAlign: "center",
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 22,
   },
   permissionCard: {
     marginTop: theme.spacing[6],
     padding: theme.spacing[6],
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     gap: theme.spacing[4],
   },
+  // Soft permission title: near .topbar / sheet title scale.
   permissionTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
   },
   permissionBody: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 22,
   },
+  // Soft CTA: pill family.
   permissionButton: {
     alignSelf: "flex-start",
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.palette.blue[500],
   },
   permissionButtonText: {

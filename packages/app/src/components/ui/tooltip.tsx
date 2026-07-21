@@ -572,14 +572,15 @@ const styles = StyleSheet.create((theme) => ({
     left: 0,
     zIndex: 1000,
   },
+  // Soft quiet tooltip chip.
   content: {
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: 10,
     backgroundColor: theme.colors.popover,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    ...theme.shadow.md,
+    borderColor: theme.colors.border,
+    ...theme.shadow.sm,
     zIndex: 1000,
   },
 }));

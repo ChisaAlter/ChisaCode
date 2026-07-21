@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +18,7 @@ import {
 import { useRouter, type Href } from "expo-router";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
+import { SoftHomeHero } from "@/composer/draft/soft-home-empty";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -29,10 +30,13 @@ import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import {
+  DESKTOP_WINDOW_CONTROLS_WIDTH,
   MAX_CONTENT_WIDTH,
   WORKSPACE_SECONDARY_HEADER_HEIGHT,
+  getIsElectronRuntime,
   useIsCompactFormFactor,
 } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useOpenProject } from "@/hooks/use-open-project";
@@ -75,7 +79,17 @@ import {
 import { findCheckoutHintPrAttachment, syncPickerPrAttachment } from "./new-workspace-picker-state";
 import { useTranslation } from "react-i18next";
 
-const DRAFT_COMPOSER_HORIZONTAL_OFFSET = 14;
+/** Soft .composer-dock horizontal inset (design 28px). */
+const DRAFT_COMPOSER_HORIZONTAL_OFFSET = 28;
+
+/** Soft Home: strip Composer dock horizontal padding so path/import match the pen-bar. */
+const SOFT_HOME_COMPOSER_INPUT_AREA_STYLE = {
+  paddingLeft: 0,
+  paddingRight: 0,
+  // Tighten dock vertical chrome; shell gap handles spacing to the context row.
+  paddingTop: 0,
+  paddingBottom: 0,
+} as const;
 
 function resolveCheckoutRequest(
   selectedItem: PickerItem | null,
@@ -323,6 +337,7 @@ function NewWorkspaceComposerFooter({
   checkoutHintPrAttachment,
   acceptCheckoutHint,
   dismissCheckoutHint,
+  onImportPress,
 }: {
   directoryAnchorRef: React.RefObject<View | null>;
   normalizedSelectedDirectory: string | null;
@@ -354,87 +369,92 @@ function NewWorkspaceComposerFooter({
   checkoutHintPrAttachment: ReturnType<typeof findCheckoutHintPrAttachment>;
   acceptCheckoutHint: () => void;
   dismissCheckoutHint: () => void;
+  onImportPress?: (() => void) | null;
 }) {
   const { t } = useTranslation();
   return (
-    <View testID="new-workspace-ref-picker-row" style={styles.optionsRow}>
-      <View>
-        <DirectoryTrigger
-          anchorRef={directoryAnchorRef}
-          directory={normalizedSelectedDirectory}
-          onPress={openDirectoryPicker}
-          disabled={isPending}
-          badgePressableStyle={badgePressableStyle}
-          iconColor={iconColor}
-          iconSize={iconSize}
-        />
-        <Combobox
-          options={directoryOptions}
-          value={normalizedSelectedDirectory ?? ""}
-          onSelect={handleSelectDirectoryOption}
-          searchable
-          allowCustomValue={!isLocalDaemon}
-          customValuePrefix={t("workspace.directoryPicker.customValuePrefix")}
-          customValueDescription={t("workspace.directoryPicker.customValueDescription")}
-          customValueKind="directory"
-          searchPlaceholder={
-            isLocalDaemon
-              ? t("workspace.directoryPicker.searchProjects")
-              : t("workspace.directoryPicker.searchOrInputDirectory")
-          }
-          title={t("workspace.directoryPicker.title")}
-          open={directoryPickerOpen}
-          onOpenChange={handleDirectoryPickerOpenChange}
-          onSearchQueryChange={setDirectorySearchQuery}
-          desktopPlacement="top-start"
-          desktopMinWidth={440}
-          desktopFixedHeight={340}
-          anchorRef={directoryAnchorRef}
-          emptyText={t("workspace.directoryPicker.empty")}
-        />
+    <View testID="new-workspace-ref-picker-row" style={styles.composerContextRow}>
+      <View style={styles.composerContextPills}>
+        <View>
+          <DirectoryTrigger
+            anchorRef={directoryAnchorRef}
+            directory={normalizedSelectedDirectory}
+            onPress={openDirectoryPicker}
+            disabled={isPending}
+            badgePressableStyle={badgePressableStyle}
+            iconColor={iconColor}
+            iconSize={iconSize}
+          />
+          <Combobox
+            options={directoryOptions}
+            value={normalizedSelectedDirectory ?? ""}
+            onSelect={handleSelectDirectoryOption}
+            searchable
+            allowCustomValue={!isLocalDaemon}
+            customValuePrefix={t("workspace.directoryPicker.customValuePrefix")}
+            customValueDescription={t("workspace.directoryPicker.customValueDescription")}
+            customValueKind="directory"
+            searchPlaceholder={
+              isLocalDaemon
+                ? t("workspace.directoryPicker.searchProjects")
+                : t("workspace.directoryPicker.searchOrInputDirectory")
+            }
+            title={t("workspace.directoryPicker.title")}
+            open={directoryPickerOpen}
+            onOpenChange={handleDirectoryPickerOpenChange}
+            onSearchQueryChange={setDirectorySearchQuery}
+            desktopPlacement="top-start"
+            desktopMinWidth={440}
+            desktopFixedHeight={340}
+            anchorRef={directoryAnchorRef}
+            emptyText={t("workspace.directoryPicker.empty")}
+          />
+        </View>
+        <View>
+          <RefPickerTrigger
+            pickerAnchorRef={pickerAnchorRef}
+            onPress={openPicker}
+            disabled={refPickerDisabled}
+            badgePressableStyle={badgePressableStyle}
+            selectedItem={selectedItem}
+            triggerLabel={triggerLabel}
+            iconColor={iconColor}
+            iconSize={iconSize}
+          />
+          <Combobox
+            options={options}
+            value={selectedOptionId}
+            onSelect={handleSelectOption}
+            searchable
+            allowCustomValue
+            customValuePrefix={t("workspace.createBranch")}
+            customValueDescription={t("workspace.createBranchDescription")}
+            searchPlaceholder={t("workspace.searchBranchesAndPrs")}
+            title={t("workspace.startFrom")}
+            open={pickerOpen}
+            onOpenChange={handlePickerOpenChange}
+            onSearchQueryChange={setPickerSearchQuery}
+            desktopPlacement="top-start"
+            desktopMinWidth={400}
+            desktopFixedHeight={340}
+            anchorRef={pickerAnchorRef}
+            emptyText={pickerEmptyText}
+            renderOption={renderPickerOption}
+          />
+        </View>
+        {checkoutHintPrAttachment ? (
+          <CheckoutHintBadge
+            prNumber={checkoutHintPrAttachment.item.number}
+            onAccept={acceptCheckoutHint}
+            onDismiss={dismissCheckoutHint}
+            iconColor={iconColor}
+            iconSize={iconSize}
+          />
+        ) : null}
       </View>
-      <View>
-        <RefPickerTrigger
-          pickerAnchorRef={pickerAnchorRef}
-          onPress={openPicker}
-          disabled={refPickerDisabled}
-          badgePressableStyle={badgePressableStyle}
-          selectedItem={selectedItem}
-          triggerLabel={triggerLabel}
-          iconColor={iconColor}
-          iconSize={iconSize}
-        />
-        <Combobox
-          options={options}
-          value={selectedOptionId}
-          onSelect={handleSelectOption}
-          searchable
-          allowCustomValue
-          customValuePrefix={t("workspace.createBranch")}
-          customValueDescription={t("workspace.createBranchDescription")}
-          searchPlaceholder={t("workspace.searchBranchesAndPrs")}
-          title={t("workspace.startFrom")}
-          open={pickerOpen}
-          onOpenChange={handlePickerOpenChange}
-          onSearchQueryChange={setPickerSearchQuery}
-          desktopPlacement="top-start"
-          desktopMinWidth={400}
-          desktopFixedHeight={340}
-          anchorRef={pickerAnchorRef}
-          emptyText={pickerEmptyText}
-          renderOption={renderPickerOption}
-        />
-      </View>
+      {onImportPress ? <ImportSessionAction onPress={onImportPress} disabled={isPending} /> : null}
+      {/* Mode control stays in the composer footer; keep slot for compact flows. */}
       {agentControls ? <DraftAgentModeControl placement="footer" {...agentControls} /> : null}
-      {checkoutHintPrAttachment ? (
-        <CheckoutHintBadge
-          prNumber={checkoutHintPrAttachment.item.number}
-          onAccept={acceptCheckoutHint}
-          onDismiss={dismissCheckoutHint}
-          iconColor={iconColor}
-          iconSize={iconSize}
-        />
-      ) : null}
     </View>
   );
 }
@@ -1350,13 +1370,24 @@ export function NewWorkspaceScreen({
     [isPending, itemById, t, theme.colors.foregroundMuted, theme.iconSize.sm],
   );
 
+  const { height: windowHeight } = useWindowDimensions();
+  // Soft Home: push the whole hero+controls+composer block down without relying on
+  // flex-grow free space (that chain often collapses on Electron route content).
+  // ~18% of window, clamped — optical center, not true geometric center.
+  const softHomeTopInset = useMemo(() => {
+    if (isCompact) return 0;
+    return Math.min(180, Math.max(56, Math.round(windowHeight * 0.18)));
+  }, [isCompact, windowHeight]);
+
   const contentStyle = useMemo(
     () => [
       styles.content,
       isCompact ? styles.contentCompact : styles.contentDesktop,
-      isCompact ? { paddingBottom: insets.bottom } : null,
+      isCompact
+        ? { paddingBottom: insets.bottom }
+        : { paddingTop: softHomeTopInset, paddingBottom: Math.max(insets.bottom, 40) },
     ],
-    [isCompact, insets.bottom],
+    [isCompact, insets.bottom, softHomeTopInset],
   );
 
   const agentControlsWithDisabled = useMemo(
@@ -1406,15 +1437,16 @@ export function NewWorkspaceScreen({
         setPickerSearchQuery={setPickerSearchQuery}
         pickerEmptyText={pickerEmptyText}
         renderPickerOption={renderPickerOption}
-        agentControls={agentControlsWithDisabled}
+        // Keep mode control inside the composer input footer (not this context row).
+        agentControls={undefined}
         checkoutHintPrAttachment={checkoutHintPrAttachment}
         acceptCheckoutHint={acceptCheckoutHint}
         dismissCheckoutHint={dismissCheckoutHint}
+        onImportPress={isPending ? null : handleOpenImportSheet}
       />
     ),
     [
       acceptCheckoutHint,
-      agentControlsWithDisabled,
       badgePressableStyle,
       checkoutHintPrAttachment,
       checkoutStatusQuery.data?.isGit,
@@ -1422,6 +1454,7 @@ export function NewWorkspaceScreen({
       directoryPickerOpen,
       dismissCheckoutHint,
       handleDirectoryPickerOpenChange,
+      handleOpenImportSheet,
       handlePickerOpenChange,
       handleSelectDirectoryOption,
       handleSelectOption,
@@ -1471,7 +1504,6 @@ export function NewWorkspaceScreen({
             <View style={styles.desktopSoftTopBarInner}>
               {(isCompact || isAgentListOpen) && <SidebarMenuToggle />}
               <View style={styles.desktopSoftTopSpacer} />
-              <ImportSessionAction onPress={handleOpenImportSheet} disabled={isPending} />
             </View>
           </View>
         )}
@@ -1479,11 +1511,7 @@ export function NewWorkspaceScreen({
           {!isCompact ? <TitlebarDragRegion /> : null}
           <View style={styles.draftShell}>
             {!isCompact ? (
-              <View style={styles.softHero}>
-                <Text style={styles.softHeroEyebrow}>{t("workspace.softHomeEyebrow")}</Text>
-                <Text style={styles.softHeroTitle}>{t("workspace.softHomeTitle")}</Text>
-                <Text style={styles.softHeroSubtitle}>{t("workspace.softHomeSubtitle")}</Text>
-              </View>
+              <SoftHomeHero formErrorMessage={errorMessage} />
             ) : (
               <View style={styles.draftLeadRow}>
                 <View style={styles.draftLeadCopy}>
@@ -1492,9 +1520,9 @@ export function NewWorkspaceScreen({
                     {t("workspace.startUsingChisaCode")}
                   </Text>
                 </View>
-                <ImportSessionAction onPress={handleOpenImportSheet} disabled={isPending} />
               </View>
             )}
+            {/* Path / branch / import sit just above the composer, same max width. */}
             <View style={styles.workspaceControls}>{workspaceControls}</View>
             <Composer
               agentId={`new-workspace:${serverId}:${sourceDirectory}`}
@@ -1517,9 +1545,11 @@ export function NewWorkspaceScreen({
               commandDraftConfig={composerState?.commandDraftConfig}
               agentControls={agentControlsWithDisabled}
               onAddImages={handleAddImagesCallback}
+              placeholder={!isCompact ? t("workspace.softHomeComposerPlaceholder") : undefined}
               inputWrapperStyle={styles.draftComposerInputWrapper}
+              inputAreaStyle={!isCompact ? SOFT_HOME_COMPOSER_INPUT_AREA_STYLE : undefined}
             />
-            {errorMessage ? (
+            {isCompact && errorMessage ? (
               <View style={styles.errorRow}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
@@ -1548,7 +1578,11 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     position: "relative",
     flex: 1,
+    minWidth: 0,
     minHeight: 0,
+    width: "100%",
+    // Explicit column so vertical spacers and compact flex-end placement work.
+    flexDirection: "column",
   },
   desktopDraftTabsRow: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
@@ -1556,8 +1590,9 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "flex-end",
     paddingLeft: 10,
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    // Soft .topbar: --border-soft rule on shell chrome.
+    borderBottomColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   desktopDraftTab: {
     height: 30,
@@ -1578,28 +1613,33 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft new-workspace chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   desktopSoftTopBar: {
     height: 48,
     position: "relative",
-    backgroundColor: "transparent",
+    // Match Soft shell canvas so caption overlay and content share one continuous band.
+    backgroundColor: theme.colors.surfaceWorkspace,
     justifyContent: "center",
   },
   desktopSoftTopBarInner: {
     height: 48,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: theme.spacing[4],
+    paddingLeft: theme.spacing[4],
+    // Keep “导入会话” clear of native caption buttons (Electron overlay).
+    paddingRight: theme.spacing[4] + (getIsElectronRuntime() ? DESKTOP_WINDOW_CONTROLS_WIDTH : 0),
     gap: theme.spacing[2],
   },
   desktopSoftTopSpacer: {
     flex: 1,
   },
   contentDesktop: {
-    justifyContent: "center",
-    paddingBottom: theme.spacing[10],
-    paddingTop: theme.spacing[4],
+    // Soft Home: top inset is computed from window height (see softHomeTopInset).
+    justifyContent: "flex-start",
+    alignItems: "stretch",
   },
   contentCompact: {
     justifyContent: "flex-end",
@@ -1609,34 +1649,9 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 760,
     alignSelf: "center",
     flexShrink: 0,
+    flexGrow: 0,
     paddingHorizontal: DRAFT_COMPOSER_HORIZONTAL_OFFSET,
-  },
-  softHero: {
-    alignItems: "center",
-    paddingBottom: theme.spacing[6],
-    gap: theme.spacing[2],
-  },
-  softHeroEyebrow: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    textAlign: "center",
-  },
-  softHeroTitle: {
-    color: theme.colors.foreground,
-    fontSize: 36,
-    fontWeight: theme.fontWeight.bold,
-    letterSpacing: -0.8,
-    textAlign: "center",
-    lineHeight: 42,
-  },
-  softHeroSubtitle: {
-    color: theme.colors.foreground,
-    fontSize: 28,
-    fontWeight: theme.fontWeight.semibold,
-    letterSpacing: -0.5,
-    textAlign: "center",
-    lineHeight: 34,
-    marginBottom: theme.spacing[2],
+    gap: theme.spacing[4],
   },
   draftLeadRow: {
     width: "100%",
@@ -1661,19 +1676,28 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    // Soft new-workspace muted: 12.5.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   importAction: {
-    minHeight: 28,
+    minHeight: 30,
+    height: 30,
     paddingVertical: 0,
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: 12,
+    flexShrink: 0,
   },
   // Soft Workbench: large floating pen-bar (design home).
   draftComposerInputWrapper: {
+    borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
     borderRadius: 18,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 14px 36px rgba(20, 23, 31, 0.07)",
+        } as object)
+      : {}),
   },
   headerLeft: {
     gap: theme.spacing[2],
@@ -1686,7 +1710,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   headerTitle: {
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: {
       xs: "400",
       md: "300",
@@ -1696,13 +1721,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   headerProjectTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     flexShrink: 1,
   },
   errorText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.destructive,
-    lineHeight: 20,
   },
   errorRow: {
     width: "100%",
@@ -1715,22 +1741,41 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     gap: theme.spacing[2],
   },
+  // Soft home: pills sit just above the pen-bar and must not exceed composer width.
+  composerContextRow: {
+    width: "100%",
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+    minWidth: 0,
+  },
+  composerContextPills: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
   workspaceControls: {
     width: "100%",
-    maxWidth: 760,
-    alignSelf: "center",
-    paddingBottom: theme.spacing[3],
+    maxWidth: "100%",
+    alignSelf: "stretch",
+    // Tight gap to the composer card below (shell gap handles spacing to hero).
+    paddingBottom: 0,
   },
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    height: 28,
-    maxWidth: 240,
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    height: 30,
+    maxWidth: 220,
+    paddingHorizontal: 10,
+    borderRadius: theme.borderRadius.full,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     gap: theme.spacing[1],
   },
   checkoutHintBadge: {
@@ -1739,9 +1784,11 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     maxWidth: 240,
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
+    borderRadius: theme.borderRadius.full,
     gap: theme.spacing[1],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
   },
   checkoutHintAction: {
     width: theme.iconSize.md,
@@ -1751,21 +1798,23 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
   },
   badgeHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   badgePressed: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surface1,
   },
   badgeDisabled: {
     opacity: 0.6,
   },
   badgeText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.popoverForeground,
   },
   badgeIconBox: {

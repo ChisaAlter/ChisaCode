@@ -56,12 +56,14 @@ export function Shortcut({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft kbd chip — r8 + workspace wash, 12.5 meta.
   badge: {
     paddingHorizontal: theme.spacing[1],
     paddingVertical: theme.spacing[0.5],
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface2,
-    borderWidth: 0,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   sequence: {
     flexDirection: "row",
@@ -70,7 +72,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   text: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },

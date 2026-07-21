@@ -329,10 +329,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[3],
   },
   rowCapturing: {
-    backgroundColor: theme.colors.surface2,
+    // Soft capturing/selected wash: surface3.
+    backgroundColor: theme.colors.surface3,
   },
   rowLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
     color: theme.colors.foreground,
     flexShrink: 1,
   },
@@ -342,7 +344,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   capturingText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   resetText: {
@@ -350,13 +353,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   separator: {
     height: 1,
-    backgroundColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    backgroundColor: theme.colors.secondary,
   },
   mobileCard: {
     padding: theme.spacing[4],
   },
   mobileText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
 }));

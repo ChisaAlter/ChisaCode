@@ -913,7 +913,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   headerLeft: {
     flexDirection: "row",
@@ -922,8 +923,10 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
   },
+  // Soft branch meta: 12.5.
   branchLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
@@ -931,7 +934,8 @@ const styles = StyleSheet.create((theme) => ({
   actionErrorText: {
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[1],
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.destructive,
   },
   diffContainer: {
@@ -941,15 +945,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   fileSection: {
     overflow: "hidden",
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   fileSectionHeaderContainer: {
     overflow: "hidden",
   },
   fileSectionHeaderExpanded: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   fileHeader: {
     flexDirection: "row",
@@ -978,15 +983,18 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     flexShrink: 0,
   },
+  // Soft file list label: 12.5 meta.
   fileName: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
     flexShrink: 1,
     minWidth: 0,
   },
   fileDir: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
     flex: 1,
@@ -996,11 +1004,12 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "rgba(46, 160, 67, 0.2)",
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     flexShrink: 0,
   },
   newBadgeText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.diffAddition,
   },
@@ -1008,26 +1017,30 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "rgba(248, 81, 73, 0.2)",
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     flexShrink: 0,
   },
   deletedBadgeText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.diffDeletion,
   },
   additions: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.diffAddition,
   },
   deletions: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.diffDeletion,
   },
   tooltipText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
 }));

@@ -83,10 +83,10 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     justifyContent: "center",
     gap: theme.spacing[3],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius["2xl"],
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     paddingVertical: {
       xs: theme.spacing[3],
       md: theme.spacing[4],
@@ -98,7 +98,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   calloutText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
 })) as unknown as Record<string, object>;
 

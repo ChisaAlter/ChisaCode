@@ -912,22 +912,25 @@ const styles = StyleSheet.create((theme) => ({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.16)",
+    backgroundColor: "rgba(20, 23, 31, 0.12)",
   },
   errorRow: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[1],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   statusError: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   keyboardContainer: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
     backgroundColor: theme.colors.surface0,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
@@ -940,28 +943,30 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
   },
+  // Soft .qb: h34 r10 shell tile.
   keyButton: {
     flex: 1,
     minWidth: 0,
     height: 34,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: theme.spacing[1],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   keyButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   keyButtonActive: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface3,
   },
   keyButtonText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
     textAlign: "center",
   },
@@ -976,7 +981,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   stateText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 14.5,
+    lineHeight: 22,
     textAlign: "center",
   },
 }));

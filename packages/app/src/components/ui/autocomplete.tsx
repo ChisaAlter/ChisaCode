@@ -12,6 +12,8 @@ import {
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { File, Folder } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { WORKBENCH_ENVIRONMENT_PANEL_SHADOW } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import { getAutocompleteScrollOffset } from "./autocomplete-utils";
 
@@ -73,7 +75,9 @@ function AutocompleteRow({
   const pressableStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.item,
-      (hovered || pressed || isSelected) && styles.itemActive,
+      // Soft: keyboard/selected wash surface3; hover surface1.
+      isSelected && styles.itemSelected,
+      !isSelected && (hovered || pressed) && styles.itemHovered,
     ],
     [isSelected],
   );
@@ -291,50 +295,59 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[1],
   },
   detailCard: {
-    backgroundColor: theme.colors.surface1,
+    // Soft quiet elevated card (r14 family).
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
-    ...theme.shadow.md,
+    ...theme.shadow.sm,
   },
   detailLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft autocomplete detail: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
   },
   detailDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[1],
   },
   detailHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[1],
   },
+  // Soft .menu-hint panel: r12 pad 6 + Soft ink shadow.
   container: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
     overflow: "hidden",
-    ...theme.shadow.md,
+    padding: 6,
+    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.md),
   },
   scrollView: {
     flexGrow: 0,
     flexShrink: 1,
   },
   scrollContent: {
-    paddingVertical: theme.spacing[1],
+    paddingVertical: 0,
   },
+  // Soft .menu-hint row: pad 8 10 r8 12.5.
   item: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    minHeight: 34,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   itemLeading: {
     width: 18,
@@ -342,8 +355,13 @@ const styles = StyleSheet.create((theme: Theme) => ({
     justifyContent: "center",
     marginRight: theme.spacing[1],
   },
-  itemActive: {
-    backgroundColor: theme.colors.surface2,
+  itemHovered: {
+    // Soft menu-hint hover: --hover surface1.
+    backgroundColor: theme.colors.surface1,
+  },
+  itemSelected: {
+    // Soft keyboard/selected wash: surface3.
+    backgroundColor: theme.colors.surface3,
   },
   itemMain: {
     flex: 1,
@@ -363,22 +381,26 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   itemLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   itemDetail: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   itemDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: 2,
   },
   itemDescriptionInline: {
     flex: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   emptyItem: {
     paddingHorizontal: theme.spacing[3],
@@ -386,6 +408,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft autocomplete detail: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 })) as unknown as Record<string, object>;

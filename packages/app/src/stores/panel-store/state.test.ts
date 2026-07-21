@@ -17,16 +17,16 @@ import {
 } from "./state";
 
 describe("panel-store soft workbench migration", () => {
-  it("uses the 256px soft workbench sidebar as the default", () => {
-    expect(DEFAULT_SIDEBAR_WIDTH).toBe(256);
+  it("uses the 260px Soft Workbench sidebar as the default", () => {
+    expect(DEFAULT_SIDEBAR_WIDTH).toBe(260);
     expect(MAX_SIDEBAR_WIDTH).toBe(320);
   });
 
   it("resets legacy desktop widths for the soft workbench", () => {
-    expect(migratePanelState({ sidebarWidth: 320 }, 12, { isWeb: true }).sidebarWidth).toBe(256);
-    expect(migratePanelState({ sidebarWidth: 200 }, 14, { isWeb: true }).sidebarWidth).toBe(256);
-    expect(migratePanelState({ sidebarWidth: 273 }, 16, { isWeb: true }).sidebarWidth).toBe(256);
-    expect(migratePanelState({ sidebarWidth: 248 }, 17, { isWeb: true }).sidebarWidth).toBe(248);
+    expect(migratePanelState({ sidebarWidth: 320 }, 12, { isWeb: true }).sidebarWidth).toBe(260);
+    expect(migratePanelState({ sidebarWidth: 200 }, 14, { isWeb: true }).sidebarWidth).toBe(260);
+    expect(migratePanelState({ sidebarWidth: 256 }, 17, { isWeb: true }).sidebarWidth).toBe(260);
+    expect(migratePanelState({ sidebarWidth: 248 }, 18, { isWeb: true }).sidebarWidth).toBe(248);
     expect(migratePanelState({ sidebarWidth: 248 }, 12, { isWeb: false }).sidebarWidth).toBe(248);
   });
 });

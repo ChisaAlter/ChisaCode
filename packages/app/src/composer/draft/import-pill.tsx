@@ -42,22 +42,24 @@ const styles = StyleSheet.create((theme) => ({
   row: {
     flexDirection: "row",
   },
+  // Soft .foot-chip: pill, transparent, muted, hover surface.
   body: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    gap: 6,
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: theme.borderRadius.full,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+    backgroundColor: "transparent",
   },
   bodyHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   label: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

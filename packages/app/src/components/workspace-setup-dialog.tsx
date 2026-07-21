@@ -453,12 +453,12 @@ const styles = StyleSheet.create((theme) => ({
   projectIcon: {
     width: theme.iconSize.md,
     height: theme.iconSize.md,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
   },
   projectIconFallback: {
     width: theme.iconSize.md,
     height: theme.iconSize.md,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
     alignItems: "center",
@@ -469,7 +469,9 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 9,
   },
   projectTitle: {
-    fontSize: theme.fontSize.sm,
+    // Soft setup dialog chrome: 12.5.
+    fontSize: 12.5,
+    lineHeight: 18,
     color: theme.colors.foregroundMuted,
   },
   section: {
@@ -478,11 +480,11 @@ const styles = StyleSheet.create((theme) => ({
     marginVertical: -theme.spacing[2],
   },
   errorText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.destructive,
-    lineHeight: 20,
   },
   composerInputWrapper: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
 }));

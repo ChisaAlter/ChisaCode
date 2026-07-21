@@ -27,9 +27,10 @@ interface WelcomeAction {
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft Workbench onboarding canvas.
   root: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   scrollView: {
     flex: 1,
@@ -42,41 +43,50 @@ const styles = StyleSheet.create((theme) => ({
   },
   content: {
     width: "100%",
+    maxWidth: 480,
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.medium,
+    fontSize: 28,
+    fontWeight: theme.fontWeight.bold,
+    letterSpacing: -0.5,
     textAlign: "center",
+    lineHeight: 34,
   },
   subtitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 14.5,
     textAlign: "center",
+    lineHeight: 22,
   },
   copyBlock: {
     alignItems: "center",
     gap: theme.spacing[2],
-    marginBottom: theme.spacing[12],
+    marginTop: theme.spacing[4],
+    marginBottom: theme.spacing[10],
   },
   actions: {
     width: "100%",
     maxWidth: 420,
     gap: theme.spacing[3],
   },
+  // Soft pill action buttons — quiet surface cards.
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: theme.spacing[3],
-    paddingVertical: theme.spacing[4],
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.surface2,
+    minHeight: 48,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    ...theme.shadow.sm,
   },
   actionButtonPrimary: {
     backgroundColor: theme.colors.accent,
@@ -84,7 +94,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   actionText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
   },
   actionTextPrimary: {
@@ -98,12 +109,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   setupLinkText: {
     color: theme.colors.accent,
-    fontSize: theme.fontSize.sm,
+    // Soft welcome secondary: 12.5 muted.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   versionLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
     marginTop: theme.spacing[6],
   },
@@ -264,7 +278,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         testID="welcome-screen"
       >
         <View style={styles.content}>
-          <ChisaCodeLogo size={96} />
+          <ChisaCodeLogo size={48} />
           <View style={styles.copyBlock}>
             <Text style={styles.title}>{t("onboarding.welcome")}</Text>
             <Text style={styles.subtitle}>{t("onboarding.connectToStart")}</Text>

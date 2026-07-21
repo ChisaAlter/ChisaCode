@@ -24,6 +24,7 @@ export {
   MarkdownInheritedText,
   createSharedMarkdownRules,
   type MarkdownRendererProps,
+  type MarkdownStyleVariant,
   type MarkdownStyles,
 } from "./renderer";
 export { mergeMarkdownRules } from "./merge-rules";

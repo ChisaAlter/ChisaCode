@@ -60,8 +60,6 @@ import { TITLEBAR_NO_DRAG_VIEW_STYLE } from "@/components/desktop/titlebar-drag-
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import {
   TAB_DROPDOWN_WIDTH,
-  WORKBENCH_BODY_FONT_SIZE,
-  WORKBENCH_BODY_LINE_HEIGHT,
   WORKBENCH_TAB_ESTIMATED_CHAR_WIDTH,
   WORKBENCH_TAB_GAP,
   WORKBENCH_TAB_MAX_WIDTH,
@@ -1231,11 +1229,12 @@ const styles = StyleSheet.create((theme) => ({
   tabsContainer: {
     minWidth: 0,
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
+    // Soft .topbar: 48h, pad 0 12 0 16, --border-soft rule.
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: theme.colors.secondary,
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).chrome,
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     overflow: "hidden",
   },
   tabsScroll: {
@@ -1249,24 +1248,25 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabsContent: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    paddingLeft: 10,
+    alignItems: "center",
+    paddingLeft: 16,
     paddingVertical: 0,
-    gap: 2,
+    gap: 6,
   },
   tabsActions: {
     position: "relative",
     zIndex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 10,
-    paddingBottom: 4,
+    gap: 2,
+    paddingRight: 12,
+    paddingLeft: 10,
+    paddingBottom: 0,
   },
   tab: {
-    height: 30,
-    minHeight: 30,
-    paddingHorizontal: 8,
+    height: 32,
+    minHeight: 32,
+    paddingHorizontal: 10,
     paddingVertical: 0,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -1281,12 +1281,13 @@ const styles = StyleSheet.create((theme) => ({
     userSelect: "none",
   },
   tabHighlighted: {
-    backgroundColor: theme.colors.surface2,
+    // Soft drag/highlight wash: hover family surface, not permanent solid fill.
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   tabActive: {
     backgroundColor: theme.colors.surfaceWorkspace,
     borderColor: theme.colors.border,
-    ...(isWeb ? ({ boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)" } as object) : theme.shadow.sm),
+    ...(isWeb ? ({ boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)" } as object) : {}),
   },
 
   tabSlot: {
@@ -1310,12 +1311,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabGlyph: {
     color: theme.colors.foregroundMuted,
-    fontSize: 12,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   tabGlyphActive: {
     color: theme.colors.foreground,
-    fontSize: 12,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   iconForeground: {
@@ -1344,9 +1345,10 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
     color: theme.colors.foregroundMuted,
-    fontSize: WORKBENCH_BODY_FONT_SIZE,
-    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
-    fontWeight: theme.fontWeight.normal,
+    // Soft .topbar .title: 13.5 medium.
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
     userSelect: "none",
   },
   tabLabelSkeleton: {
@@ -1356,7 +1358,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     height: 10,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surfaceWorkspace,
     opacity: 0.9,
   },
   tabLabelSkeletonWithCloseButton: {
@@ -1369,10 +1371,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   tabCloseButton: {
-    width: 28,
-    height: 28,
+    // Soft .top-tools .icon-btn: 32 r10.
+    width: 32,
+    height: 32,
     marginLeft: 0,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1380,12 +1383,13 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 1,
   },
   tabCloseButtonActive: {
+    // Soft selected wash: surface3.
     backgroundColor: theme.colors.surface3,
   },
   newTabActionButton: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.borderRadius.md,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     borderWidth: 0,
     alignItems: "center",
     justifyContent: "center",
@@ -1395,12 +1399,13 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.5,
   },
   newTabActionButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
   },
   newTabTooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   newTabTooltipRow: {
     flexDirection: "row",
@@ -1415,11 +1420,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipAgentId: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   menuItemHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));
 

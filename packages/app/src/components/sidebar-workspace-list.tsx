@@ -215,9 +215,9 @@ const checksBadgeStyles = StyleSheet.create((theme) => ({
     gap: 2,
   },
   text: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: 16,
     color: theme.colors.palette.red[500],
   },
 }));
@@ -1820,10 +1820,11 @@ const styles = StyleSheet.create((theme) => ({
   list: {
     flex: 1,
   },
+  // Soft nav list inset.
   listContent: {
-    paddingHorizontal: theme.spacing[2],
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[4],
+    paddingHorizontal: 10,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
   projectListContainer: {
     width: "100%",
@@ -1832,34 +1833,40 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[1],
   },
   workspaceListContainer: {},
+  // Soft empty project card: r14 quiet surface.
   emptyContainer: {
     marginHorizontal: theme.spacing[2],
     marginTop: theme.spacing[4],
     paddingTop: theme.spacing[6],
     paddingBottom: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 14,
     backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     alignItems: "center",
     gap: theme.spacing[3],
   },
   emptyTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
     textAlign: "center",
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
   },
+  // Soft .space-h: quiet project header.
   projectRow: {
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
-    marginBottom: theme.spacing[1],
+    minHeight: 32,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1870,15 +1877,15 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   projectRowPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   projectRowDragging: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     borderWidth: 1,
     borderColor: theme.colors.border,
     transform: [{ scale: 1.02 }],
     zIndex: 3,
-    ...theme.shadow.md,
+    ...theme.shadow.sm,
   },
   projectRowLeft: {
     flexDirection: "row",
@@ -1894,9 +1901,11 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
   },
+  // Soft .proj: 12.5 text-2 project label.
   projectTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: "400",
     minWidth: 0,
     flexShrink: 1,
@@ -1907,7 +1916,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     flexShrink: 0,
   },
   projectActionButtonHovered: {
@@ -1915,12 +1924,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectActionButtonText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   projectIconActionButton: {
     width: 24,
     height: 24,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -1954,16 +1964,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectActionTooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   projectActionTooltipShortcut: {},
+  // Soft nested workspace / session-like row.
   workspaceRow: {
-    minHeight: 36,
-    marginBottom: theme.spacing[1],
-    paddingVertical: theme.spacing[2],
-    paddingLeft: theme.spacing[3] + theme.spacing[3],
-    paddingRight: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    minHeight: 34,
+    marginBottom: 2,
+    paddingVertical: 7,
+    paddingLeft: 18,
+    paddingRight: 10,
+    borderRadius: 10,
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "center",
@@ -1994,25 +2006,31 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   workspaceRowPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   workspaceRowDragging: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     borderWidth: 1,
     borderColor: theme.colors.border,
     transform: [{ scale: 1.02 }],
     zIndex: 3,
-    ...theme.shadow.md,
+    ...theme.shadow.sm,
   },
+  // Soft selected: elevated chip, not hard hover wash.
   sidebarRowSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface0,
+    ...(platformIsWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : {}),
   },
   workspaceRowContainer: {
     position: "relative",
   },
   workspaceArchivingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     backgroundColor: `${theme.colors.surface0}cc`,
     alignItems: "center",
     justifyContent: "center",
@@ -2022,14 +2040,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceArchivingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: "600",
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "500",
   },
+  // Soft workspace branch meta: 12.5 muted-adjacent.
   workspaceBranchText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: 16,
     opacity: 0.76,
     flex: 1,
     minWidth: 0,
@@ -2048,7 +2068,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceCreatingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     flexShrink: 0,
   },
   shortcutBadge: {
@@ -2057,16 +2078,16 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[1],
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.colors.surface2,
+    borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
     flexShrink: 0,
   },
   shortcutBadgeText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     fontWeight: theme.fontWeight.medium,
-    lineHeight: 14,
+    lineHeight: 16,
   },
 }));

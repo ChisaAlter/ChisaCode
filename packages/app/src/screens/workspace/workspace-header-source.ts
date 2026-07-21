@@ -54,23 +54,26 @@ export function resolveWorkspaceHeaderRenderState(input: {
     return { kind: "skeleton" };
   }
 
-  if (input.checkoutState.kind === "pending" && input.workspace.projectKind === "git") {
-    return { kind: "skeleton" };
-  }
-
+  // Soft topbar needs workspace identity (title + workspace pill) immediately.
+  // Only the branch pill waits on checkout; do not blank the whole header for git pending.
   const header = resolveWorkspaceHeader({ workspace: input.workspace });
   const checkout = input.checkoutState.kind === "ready" ? input.checkoutState.checkout : null;
   const currentBranchName =
     checkout?.isGit && checkout.currentBranch !== "HEAD"
       ? trimNonEmpty(checkout.currentBranch)
       : null;
+  // Pending git: treat as git so tools match; branch pill still waits for currentBranchName.
+  // Error / unknown: do not invent git state from projectKind alone (matches prior contract).
+  const isGitCheckout =
+    checkout?.isGit ??
+    (input.checkoutState.kind === "pending" && input.workspace.projectKind === "git");
 
   return {
     kind: "ready",
     title: header.title,
     subtitle: header.subtitle,
     shouldShowSubtitle: !areHeaderLabelsEquivalent(header.title, header.subtitle),
-    isGitCheckout: checkout?.isGit ?? false,
+    isGitCheckout,
     currentBranchName,
   };
 }

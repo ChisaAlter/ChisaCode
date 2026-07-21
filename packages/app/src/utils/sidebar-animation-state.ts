@@ -65,12 +65,17 @@ function resolveSidebarAnimationWidth(input: SidebarAnimationTargetInput): numbe
   return 0;
 }
 
+/**
+ * Soft .drawer: width 86%, max-width 300.
+ * @param windowWidth Viewport width in CSS pixels
+ * @returns Drawer width clamped to the Soft mobile drawer geometry
+ */
 export function getMobileSidebarWidth(windowWidth: number): number {
   if (!Number.isFinite(windowWidth) || windowWidth <= 0) {
-    return 280;
+    return 300;
   }
-  const preferredWidth = windowWidth * 0.56;
-  return Math.round(Math.min(windowWidth, Math.max(280, Math.min(420, preferredWidth))));
+  const preferredWidth = windowWidth * 0.86;
+  return Math.round(Math.min(windowWidth, Math.min(300, preferredWidth)));
 }
 
 export function getDesktopSidebarResizeState(

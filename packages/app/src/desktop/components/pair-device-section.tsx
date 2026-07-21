@@ -221,16 +221,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   hint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
   },
+  // Soft QR card: r14 quiet elevation family.
   qrContainer: {
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
     width: 320,
     height: 320,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
@@ -247,7 +249,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   inputWrapper: {
     flex: 1,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
@@ -255,7 +257,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   linkInput: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     outlineStyle: "none",

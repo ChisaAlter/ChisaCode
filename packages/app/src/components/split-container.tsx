@@ -696,11 +696,11 @@ function DragOverlayTabChipInner({
     () => [
       styles.dragOverlayChip,
       {
-        backgroundColor: theme.colors.surface1,
-        borderColor: theme.colors.borderAccent,
+        backgroundColor: theme.colors.surface0,
+        borderColor: theme.colors.border,
       },
     ],
-    [theme.colors.surface1, theme.colors.borderAccent],
+    [theme.colors.surface0, theme.colors.border],
   );
   const chipLabelStyle = useMemo(
     () => [styles.dragOverlayLabel, { color: theme.colors.foreground }],
@@ -1064,6 +1064,9 @@ function SplitPaneView({
     [padding.left, padding.right, padding.top],
   );
   const paneTopRightControls = isFocused ? topRightControls : null;
+  // Soft design has no tab strip under topbar for the common single-session case.
+  // Keep the row when there are multiple tabs or a closable split pane.
+  const showDesktopTabChrome = desktopTabRowItems.length > 1 || canClosePane;
   const handleClosePane = useCallback(() => {
     void onClosePane(pane);
   }, [onClosePane, pane]);
@@ -1080,42 +1083,44 @@ function SplitPaneView({
 
   return (
     <View ref={paneRef} collapsable={false} style={styles.pane}>
-      <View style={paneTabsStyle}>
-        <TitlebarDragRegion />
-        <WorkspaceDesktopTabsRow
-          paneId={pane.id}
-          isFocused={isFocused}
-          tabs={desktopTabRowItems}
-          normalizedServerId={normalizedServerId}
-          normalizedWorkspaceId={normalizedWorkspaceId}
-          setHoveredTabKey={setHoveredTabKey}
-          setHoveredCloseTabKey={setHoveredCloseTabKey}
-          onNavigateTab={onNavigateTab}
-          onCloseTab={onCloseTab}
-          onCopyResumeCommand={onCopyResumeCommand}
-          onCopyAgentId={onCopyAgentId}
-          onReloadAgent={onReloadAgent}
-          onRenameTab={onRenameTab}
-          onCloseTabsToLeft={handleCloseTabsToLeft}
-          onCloseTabsToRight={handleCloseTabsToRight}
-          onCloseOtherTabs={handleCloseOtherTabs}
-          onCreateDraftTab={onCreateDraftTab}
-          onCreateTerminalTab={onCreateTerminalTab}
-          onCreateBrowserTab={onCreateBrowserTab}
-          showCreateBrowserTab={showCreateBrowserTab}
-          onReorderTabs={handleReorderTabs}
-          onSplitRight={handleSplitRight}
-          onSplitDown={handleSplitDown}
-          externalDndContext
-          activeDragTabId={activeDragTabId}
-          tabDropPreviewIndex={
-            tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
-          }
-          showPaneCloseAction={canClosePane}
-          onClosePane={handleClosePane}
-          trailingControls={paneTopRightControls}
-        />
-      </View>
+      {showDesktopTabChrome ? (
+        <View style={paneTabsStyle}>
+          <TitlebarDragRegion />
+          <WorkspaceDesktopTabsRow
+            paneId={pane.id}
+            isFocused={isFocused}
+            tabs={desktopTabRowItems}
+            normalizedServerId={normalizedServerId}
+            normalizedWorkspaceId={normalizedWorkspaceId}
+            setHoveredTabKey={setHoveredTabKey}
+            setHoveredCloseTabKey={setHoveredCloseTabKey}
+            onNavigateTab={onNavigateTab}
+            onCloseTab={onCloseTab}
+            onCopyResumeCommand={onCopyResumeCommand}
+            onCopyAgentId={onCopyAgentId}
+            onReloadAgent={onReloadAgent}
+            onRenameTab={onRenameTab}
+            onCloseTabsToLeft={handleCloseTabsToLeft}
+            onCloseTabsToRight={handleCloseTabsToRight}
+            onCloseOtherTabs={handleCloseOtherTabs}
+            onCreateDraftTab={onCreateDraftTab}
+            onCreateTerminalTab={onCreateTerminalTab}
+            onCreateBrowserTab={onCreateBrowserTab}
+            showCreateBrowserTab={showCreateBrowserTab}
+            onReorderTabs={handleReorderTabs}
+            onSplitRight={handleSplitRight}
+            onSplitDown={handleSplitDown}
+            externalDndContext
+            activeDragTabId={activeDragTabId}
+            tabDropPreviewIndex={
+              tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
+            }
+            showPaneCloseAction={canClosePane}
+            onClosePane={handleClosePane}
+            trailingControls={paneTopRightControls}
+          />
+        </View>
+      ) : null}
 
       <View style={paneContentStyle}>
         {mountedPaneTabIds.length > 0
@@ -1259,12 +1264,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: 1,
     maxWidth: 200,
   },
   dragOverlayLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     flexShrink: 1,
   },
 }));

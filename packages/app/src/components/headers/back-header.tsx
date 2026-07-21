@@ -55,11 +55,12 @@ const styles = StyleSheet.create((theme) => ({
   left: {
     gap: theme.spacing[2],
   },
+  // Soft header icon slot: quiet r10 pill.
   backButton: {
     padding: {
       xs: theme.spacing[3],
       md: theme.spacing[2],
     },
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
 }));

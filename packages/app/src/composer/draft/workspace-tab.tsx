@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import { Keyboard, StyleSheet as RNStyleSheet, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,8 +8,11 @@ import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
 import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
-import { ComposerImportPill } from "@/composer/draft/import-pill";
-import { AssistantPresetPicker } from "@/agent-presets/assistant-preset-picker";
+import {
+  SoftHomeEmpty,
+  softHomeComposerInputAreaStyle,
+  softHomeComposerInputWrapperStyle,
+} from "@/composer/draft/soft-home-empty";
 import {
   resolveAgentPresetApplication,
   type AgentPresetUnappliedField,
@@ -29,7 +32,7 @@ import { buildDraftStoreKey } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { Agent } from "@/stores/session-store";
-import { useWorkspaceExecutionAuthority } from "@/stores/session-store-hooks";
+import { useWorkspace, useWorkspaceExecutionAuthority } from "@/stores/session-store-hooks";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
 import { encodeImages } from "@/utils/encode-images";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
@@ -49,7 +52,6 @@ import {
 } from "@/attachments/workspace-attachments-store";
 import type { UserMessageImageAttachment } from "@/types/stream";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
 import type { WorkspaceDraftTabSetup } from "@/stores/workspace-tabs-store";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
@@ -362,6 +364,21 @@ export function WorkspaceDraftAgentTab({
   const workspaceAuthority = useWorkspaceExecutionAuthority(serverId, workspaceId);
   const workspaceExecutionAuthority = workspaceAuthority?.ok ? workspaceAuthority.authority : null;
   const workspaceDirectory = workspaceExecutionAuthority?.workspaceDirectory ?? null;
+  const workspaceDescriptor = useWorkspace(serverId, workspaceId);
+  const softHomeBranchContext = useMemo(() => {
+    const currentBranch = workspaceDescriptor?.gitRuntime?.currentBranch ?? null;
+    const isGit =
+      workspaceDescriptor?.projectKind === "git" || Boolean(workspaceDescriptor?.gitRuntime);
+    if (!isGit || !currentBranch || currentBranch === "HEAD") {
+      return null;
+    }
+    return {
+      currentBranchName: currentBranch,
+      serverId,
+      workspaceId,
+      isGitCheckout: true as const,
+    };
+  }, [serverId, workspaceDescriptor, workspaceId]);
   const draftSetup = initialSetup ?? null;
   const draftWorkingDirectory = resolveDraftWorkingDirectory({
     workspaceDirectory,
@@ -771,57 +788,82 @@ export function WorkspaceDraftAgentTab({
     [isCompact, composerAgentControls],
   );
 
-  const formError = formErrorMessage ? (
-    <View style={styles.errorContainer}>
-      <Text style={styles.errorText}>{formErrorMessage}</Text>
-    </View>
-  ) : null;
+  const isSoftHomeEmpty = !(isSubmitting && draftAgent);
+  const handleFocusSoftHomeComposer = useCallback(() => {
+    focusInputRef.current?.();
+  }, []);
 
-  const importPill = importPillPress ? (
-    <View style={styles.importPillRow}>
-      <View style={styles.importPillContent}>
-        <ComposerImportPill onPress={importPillPress} />
-      </View>
-    </View>
-  ) : null;
-
-  const draftBody =
-    isSubmitting && draftAgent ? (
-      <View style={styles.streamContainer}>
-        <AgentStreamView
-          agentId={tabId}
-          serverId={serverId}
-          agent={draftAgent}
-          streamItems={optimisticStreamItems}
-          pendingPermissions={EMPTY_PENDING_PERMISSIONS}
-          onOpenWorkspaceFile={onOpenWorkspaceFile}
-        />
-      </View>
-    ) : (
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.configScrollContent}>
-        <View style={styles.configSection}>
-          <AssistantPresetPicker
-            presets={presetQuery.presets}
-            selectedPresetId={selectedPresetId}
-            isLoading={presetQuery.isLoading}
-            isError={presetQuery.isError}
-            disabled={isSubmitting}
-            warningText={presetWarningText}
-            onSelect={handleSelectPreset}
+  if (isSoftHomeEmpty) {
+    // Soft Home: full-width centered hero + floating pen-bar (default empty center).
+    // 以默认 draft 空中栏为准，不是 new-workspace 旁路。
+    return (
+      <FileDropZone onFilesDropped={handleFilesDropped}>
+        <SoftHomeEmpty
+          presets={presetQuery.presets}
+          selectedPresetId={selectedPresetId}
+          isLoadingPresets={presetQuery.isLoading}
+          isErrorPresets={presetQuery.isError}
+          disabled={isSubmitting}
+          warningText={presetWarningText}
+          onSelectPreset={handleSelectPreset}
+          draftText={draftInput.text}
+          onChangeDraftText={setDraftText}
+          onFocusComposer={handleFocusSoftHomeComposer}
+          formErrorMessage={formErrorMessage}
+          composerKeyboardStyle={composerKeyboardStyle}
+          onImportPress={importPillPress}
+          workspacePath={draftWorkingDirectory}
+          branchContext={softHomeBranchContext}
+        >
+          <Composer
+            agentId={tabId}
+            serverId={serverId}
+            externalKeyboardShift
+            isPaneFocused={isPaneFocused}
+            onSubmitMessage={handleCreateFromInput}
+            isSubmitLoading={isSubmitting}
+            blurOnSubmit={true}
+            value={draftInput.text}
+            onChangeText={draftInput.setText}
+            attachments={draftInput.attachments}
+            workspaceAttachments={workspaceAttachments}
+            onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
+            onChangeAttachments={draftInput.setAttachments}
+            cwd={composerState.workingDir}
+            clearDraft={draftInput.clear}
+            autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
+            onAddImages={handleAddImagesCallback}
+            onFocusInput={handleFocusInputCallback}
+            commandDraftConfig={composerState.commandDraftConfig}
+            agentControls={composerAgentControls}
+            footer={composerFooter}
+            placeholder={t("workspace.softHomeComposerPlaceholder")}
+            inputWrapperStyle={styles.softHomeComposerInputWrapper}
+            inputAreaStyle={softHomeComposerInputAreaStyle}
           />
-          {formError}
-        </View>
-      </ScrollView>
+        </SoftHomeEmpty>
+      </FileDropZone>
     );
+  }
 
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
       <View style={styles.container}>
         <ConversationAspectColumn>
-          <View style={styles.contentContainer}>{draftBody}</View>
+          <View style={styles.contentContainer}>
+            <View style={styles.streamContainer}>
+              <AgentStreamView
+                agentId={tabId}
+                serverId={serverId}
+                agent={draftAgent}
+                streamItems={optimisticStreamItems}
+                pendingPermissions={EMPTY_PENDING_PERMISSIONS}
+                onOpenWorkspaceFile={onOpenWorkspaceFile}
+              />
+            </View>
+          </View>
           <ReanimatedAnimated.View style={inputAreaWrapperStyle}>
             <View style={styles.inputAreaWrapper}>
-              {importPill}
               <Composer
                 agentId={tabId}
                 serverId={serverId}
@@ -870,16 +912,11 @@ const styles = StyleSheet.create((theme) => ({
   streamContainer: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
-  configScrollContent: {
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[4],
-    paddingBottom: theme.spacing[6],
-  },
-  configSection: {
-    gap: theme.spacing[3],
+  softHomeComposerInputWrapper: {
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    ...softHomeComposerInputWrapperStyle,
   },
   inputAreaWrapper: {
     width: "100%",
@@ -887,30 +924,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   composerInputWrapper: {
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-  },
-  importPillRow: {
-    width: "100%",
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[3],
-    paddingBottom: theme.spacing[3],
-    alignItems: "flex-start",
-  },
-  importPillContent: {
-    width: "100%",
-    flexDirection: "row",
-  },
-  errorContainer: {
-    marginTop: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface2,
-    borderWidth: 1,
-    borderColor: theme.colors.destructive,
-  },
-  errorText: {
-    color: theme.colors.destructive,
+    borderColor: theme.colors.border,
+    borderRadius: 18,
+    backgroundColor: theme.colors.surface0,
   },
 }));
 

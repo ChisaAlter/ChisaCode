@@ -509,17 +509,20 @@ export const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitch
 });
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft .m-header: min-height 48, quiet border-soft rule.
   mobileTabsRow: {
+    minHeight: 48,
     backgroundColor: theme.colors.surface0,
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: theme.colors.secondary,
   },
   switcherTrigger: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2] + theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    minHeight: 48,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   switcherTriggerPressed: {
     backgroundColor: theme.colors.surface1,
@@ -534,24 +537,30 @@ const styles = StyleSheet.create((theme) => ({
   switcherTriggerIcon: {
     flexShrink: 0,
   },
+  // Soft .m-header .t: 14 medium on compact.
   switcherTriggerText: {
     minWidth: 0,
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
   },
+  // Soft .top-tools .icon-btn: 32 r10.
   mobileTabMenuTrigger: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.borderRadius.md,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   mobileTabMenuTriggerActive: {
-    backgroundColor: theme.colors.surface2,
+    // Soft selected wash: surface3.
+    backgroundColor: theme.colors.surface3,
   },
   menuItemHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

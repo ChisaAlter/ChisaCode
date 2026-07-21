@@ -194,23 +194,23 @@ const styles = StyleSheet.create((theme) => ({
   projectKebabButton: {
     width: 24,
     height: 24,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   projectKebabButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   workspaceKebabButton: {
     width: 24,
     height: 24,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 8,
     marginLeft: 2,
   },
   workspaceKebabButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
 }));

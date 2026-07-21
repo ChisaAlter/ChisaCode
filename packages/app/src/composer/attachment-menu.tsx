@@ -194,7 +194,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     backgroundColor: theme.colors.accent,
   },
   featureMenuSwitchTrackOff: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   featureMenuSwitchDisabled: {
     opacity: theme.opacity[50],
@@ -204,7 +204,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     height: 16,
     borderRadius: 8,
     backgroundColor: theme.colors.palette.white,
-    shadowColor: "rgba(0, 0, 0, 0.25)",
+    shadowColor: "rgba(20, 23, 31, 0.12)",
     shadowOffset: { width: 0, height: 1 },
     shadowRadius: 2,
     shadowOpacity: 1,

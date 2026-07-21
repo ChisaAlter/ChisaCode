@@ -2,6 +2,7 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
 import { SETTINGS_CONTROL_HEIGHT } from "@/constants/layout";
 
 type SegmentedControlSize = "sm" | "md";
@@ -150,11 +151,14 @@ function SegmentItem<T extends string>({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft .seg track: shell wash + quiet border.
   container: {
     flexDirection: "row",
     alignItems: "stretch",
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     gap: 2,
   },
   containerSm: {
@@ -167,8 +171,6 @@ const styles = StyleSheet.create((theme) => ({
     height: SETTINGS_CONTROL_HEIGHT,
     padding: 0,
     gap: 0,
-    borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
     overflow: "hidden",
   },
   segment: {
@@ -176,7 +178,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.full,
     gap: theme.spacing[1],
   },
   segmentSm: {
@@ -188,24 +190,25 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[6],
   },
   segmentCompact: {
-    height: 30,
+    // Soft .seg span: h28.
+    height: 28,
     paddingVertical: 0,
     paddingHorizontal: theme.spacing[3],
     borderRadius: 0,
   },
   segmentSelected: {
     backgroundColor: theme.colors.surface0,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : {}),
   },
   segmentHover: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
   },
   segmentPressed: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
   },
   segmentDisabled: {
     opacity: theme.opacity[50],
@@ -219,17 +222,22 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
   },
   labelSm: {
-    fontSize: theme.fontSize.sm,
+    // Soft .seg span: 12 meta.
+    fontSize: 12,
+    lineHeight: 16,
   },
   labelMd: {
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
   labelCompact: {
-    fontSize: theme.fontSize.xs,
+    // Soft .seg span: 12 meta.
+    fontSize: 12,
     lineHeight: 16,
   },
   labelSelected: {
     color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.semibold,
+    // Soft .seg span.on: medium, not heavy semibold.
+    fontWeight: theme.fontWeight.medium,
   },
 }));

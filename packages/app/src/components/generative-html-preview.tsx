@@ -98,9 +98,10 @@ const ModeButton = memo(function ModeButton({ active, icon, label, onPress }: Mo
 });
 
 const generativeHtmlPreviewStyles = StyleSheet.create((theme) => ({
+  // Soft quiet card family (r14).
   card: {
     overflow: "hidden",
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
@@ -115,8 +116,9 @@ const generativeHtmlPreviewStyles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     gap: theme.spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   titleGroup: {
     minWidth: 0,
@@ -131,26 +133,33 @@ const generativeHtmlPreviewStyles = StyleSheet.create((theme) => ({
   title: {
     color: theme.colors.foreground,
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.sm,
+    // Soft preview title: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.semibold,
   },
   subtitle: {
     color: theme.colors.foregroundMuted,
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
+  // Soft .seg micro track.
   segment: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
     padding: 2,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
+  // Soft segment chip: quiet r8, 12.5 label.
   modeButton: {
     minHeight: 26,
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
@@ -162,7 +171,8 @@ const generativeHtmlPreviewStyles = StyleSheet.create((theme) => ({
   modeButtonLabel: {
     color: theme.colors.foregroundMuted,
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
   },
   modeButtonLabelActive: {

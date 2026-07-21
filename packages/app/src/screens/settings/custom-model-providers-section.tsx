@@ -1,6 +1,6 @@
-import { Pencil, Plus, RotateCw, Trash2 } from "lucide-react-native";
+import { Brain, Pencil, Plus, Trash2 } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, Text, TextInput, View, type PressableStateCallbackType } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import {
@@ -9,26 +9,25 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
 import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import { SettingsSection } from "@/screens/settings/settings-section";
-import { settingsStyles } from "@/styles/settings";
-import { confirmDialog } from "@/utils/confirm-dialog";
 import { useUserVisibleErrorReporter } from "@/hooks/use-user-visible-error";
-import { reportPresentedError, type ErrorLogger } from "@/utils/user-visible-error";
+import { SettingsSection } from "@/screens/settings/settings-section";
 import {
-  buildDisableCustomModelProviderPatch,
+  buildDeleteSavedModelPatch,
   buildModelGatewayProviderIdList,
-  buildSaveCustomModelProviderPatch,
-  collectCustomModelProviders,
-  type CollectedCustomModelProvider,
-  type CustomModelProviderModelInput,
+  buildSaveOpenAiCompatibleModelPatch,
+  collectSavedModels,
+  type CollectedSavedModel,
+  type CustomModelProviderEndpoint,
   type CustomOpenAIWireApi,
 } from "@/screens/settings/custom-model-providers";
-import type { AgentProvider, ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
+import { settingsStyles } from "@/styles/settings";
+import { confirmDialog } from "@/utils/confirm-dialog";
+import { reportPresentedError, type ErrorLogger } from "@/utils/user-visible-error";
+import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
 interface CustomModelProvidersSectionProps {
@@ -36,56 +35,35 @@ interface CustomModelProvidersSectionProps {
   errorLogger?: ErrorLogger;
 }
 
-interface EditingProviderState {
+interface EditingModelState {
   mode: "add" | "edit";
-  provider: CollectedCustomModelProvider | null;
+  model: CollectedSavedModel | null;
 }
 
-interface ProviderEditorValues {
-  id: string;
-  label: string;
+interface ModelEditorValues {
+  baseUrl: string;
+  apiKey: string;
+  modelId: string;
+  supportsTools: boolean;
+  supportsImages: boolean;
+  supportsThinking: boolean;
+  customProtocol: boolean;
+  contextWindowText: string;
   anthropicEnabled: boolean;
   anthropicBaseUrl: string;
   anthropicApiKey: string;
   openaiEnabled: boolean;
   openaiBaseUrl: string;
   openaiApiKey: string;
-  openaiWireApi: CustomOpenAIWireApi;
   responsesEnabled: boolean;
   responsesBaseUrl: string;
   responsesApiKey: string;
-  models: CustomModelProviderModelInput[];
 }
 
-interface ModelEditorDraft {
-  id: string;
-  label?: string;
-  contextWindowText: string;
-  supportsImages: boolean;
-}
+const EDITOR_SNAP_POINTS = ["78%", "92%"];
+const EDITOR_DESKTOP_MAX_WIDTH = 720;
 
-interface ModelEditorState {
-  index: number | null;
-  draft: ModelEditorDraft;
-}
-
-const EDITOR_SNAP_POINTS = ["84%", "94%"];
-const WIRE_API_OPTIONS = [
-  { value: "responses" as const, label: "Responses" },
-  { value: "chat" as const, label: "Chat" },
-];
-
-function formatContextWindow(tokens: number | undefined): string | null {
-  if (tokens === undefined || !Number.isFinite(tokens) || tokens <= 0) {
-    return null;
-  }
-  if (tokens >= 10_000) {
-    return `${Math.round(tokens / 10_000)}万`;
-  }
-  return String(tokens);
-}
-
-function parseContextWindow(value: string): number | undefined {
+function parseContextWindowText(value: string): number | undefined {
   const normalized = value.trim().replace(/[,，_\s]/gu, "");
   if (!normalized) {
     return undefined;
@@ -97,49 +75,26 @@ function parseContextWindow(value: string): number | undefined {
   return Math.trunc(numberValue);
 }
 
-function createEmptyModelDraft(): ModelEditorDraft {
+function createEmptyEditorValues(): ModelEditorValues {
   return {
-    id: "",
-    contextWindowText: "",
+    baseUrl: "",
+    apiKey: "",
+    modelId: "",
+    supportsTools: true,
     supportsImages: false,
+    supportsThinking: false,
+    customProtocol: false,
+    contextWindowText: "",
+    anthropicEnabled: false,
+    anthropicBaseUrl: "",
+    anthropicApiKey: "",
+    openaiEnabled: true,
+    openaiBaseUrl: "",
+    openaiApiKey: "",
+    responsesEnabled: false,
+    responsesBaseUrl: "",
+    responsesApiKey: "",
   };
-}
-
-function createModelDraft(model: CustomModelProviderModelInput): ModelEditorDraft {
-  return {
-    id: model.id,
-    label: model.label,
-    contextWindowText:
-      model.contextWindowMaxTokens === undefined ? "" : String(model.contextWindowMaxTokens),
-    supportsImages: model.supportsImages === true,
-  };
-}
-
-function normalizeModelDraft(draft: ModelEditorDraft): CustomModelProviderModelInput | null {
-  const id = draft.id.trim();
-  if (!id) {
-    return null;
-  }
-  const contextWindowMaxTokens = parseContextWindow(draft.contextWindowText);
-  return {
-    id,
-    ...(draft.label?.trim() ? { label: draft.label.trim() } : {}),
-    ...(contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {}),
-    ...(draft.supportsImages ? { supportsImages: true } : {}),
-  };
-}
-
-function readProviderEnv(
-  config: MutableDaemonConfig | null,
-  providerId: string | undefined,
-  envKey: string,
-): string {
-  if (!providerId) return "";
-  const provider = (
-    config?.providers as Record<string, { env?: Record<string, unknown> }> | undefined
-  )?.[providerId];
-  const value = provider?.env?.[envKey];
-  return typeof value === "string" ? value : "";
 }
 
 function readGatewayApiKey(
@@ -151,106 +106,158 @@ function readGatewayApiKey(
   return typeof value === "string" ? value : "";
 }
 
-function summarizeProviderStatuses(
-  providerIds: string[],
-  snapshotById: Map<string, ProviderSnapshotEntry>,
-  t: ReturnType<typeof useTranslation>["t"],
-): string {
-  const entries = providerIds
-    .map((providerId) => snapshotById.get(providerId))
-    .filter((entry): entry is ProviderSnapshotEntry => entry !== undefined);
-  if (entries.length === 0) {
-    return t("customModelProviders.notTested");
+function firstNonEmpty(...values: string[]): string {
+  for (const value of values) {
+    if (value) {
+      return value;
+    }
   }
-  if (entries.some((entry) => entry.status === "loading")) {
-    return t("providers.loading");
-  }
-  const readyCount = entries.filter((entry) => entry.status === "ready").length;
-  if (readyCount === entries.length) {
-    return t("providers.ready");
-  }
-  if (readyCount > 0) {
-    return t("customModelProviders.partiallyReady", {
-      ready: readyCount,
-      total: entries.length,
-    });
-  }
-  return t("customModelProviders.testFailedShort");
+  return "";
 }
 
-function CustomProviderRow({
-  provider,
-  snapshotById,
-  testing,
+function resolvePrimaryUpstreamValue(
+  chatEnabled: boolean,
+  responsesEnabled: boolean,
+  anthropicEnabled: boolean,
+  chatValue: string,
+  responsesValue: string,
+  anthropicValue: string,
+): string {
+  return (
+    firstNonEmpty(
+      chatEnabled ? chatValue : "",
+      responsesEnabled ? responsesValue : "",
+      anthropicEnabled ? anthropicValue : "",
+    ) || firstNonEmpty(chatValue, responsesValue, anthropicValue)
+  );
+}
+
+function readUpstreamFlags(gateway: MutableDaemonConfig["modelGateways"][string] | undefined) {
+  const anthropic = gateway?.upstreams?.anthropic;
+  const chat = gateway?.upstreams?.chatCompletions;
+  const responses = gateway?.upstreams?.responses;
+  return {
+    anthropicEnabled: anthropic?.enabled === true,
+    chatEnabled: chat?.enabled === true,
+    responsesEnabled: responses?.enabled === true,
+    openaiEnabled: chat?.enabled !== false,
+    chatBase: chat?.baseUrl ?? "",
+    responsesBase: responses?.baseUrl ?? "",
+    anthropicBase: anthropic?.baseUrl ?? "",
+  };
+}
+
+function createEditorValuesFromSavedModel(
+  model: CollectedSavedModel,
+  config: MutableDaemonConfig | null,
+): ModelEditorValues {
+  const gateway = config?.modelGateways?.[model.gatewayId];
+  const flags = readUpstreamFlags(gateway);
+  const chatKey = readGatewayApiKey(config, model.gatewayId, "chatCompletions");
+  const responsesKey = readGatewayApiKey(config, model.gatewayId, "responses");
+  const anthropicKey = readGatewayApiKey(config, model.gatewayId, "anthropic");
+  const primaryBaseUrl = resolvePrimaryUpstreamValue(
+    flags.chatEnabled,
+    flags.responsesEnabled,
+    flags.anthropicEnabled,
+    flags.chatBase,
+    flags.responsesBase,
+    flags.anthropicBase,
+  );
+  const primaryApiKey = resolvePrimaryUpstreamValue(
+    flags.chatEnabled,
+    flags.responsesEnabled,
+    flags.anthropicEnabled,
+    chatKey,
+    responsesKey,
+    anthropicKey,
+  );
+  const multiProtocol =
+    Number(flags.anthropicEnabled) + Number(flags.chatEnabled) + Number(flags.responsesEnabled) > 1;
+
+  return {
+    baseUrl: primaryBaseUrl,
+    apiKey: primaryApiKey,
+    modelId: model.modelId,
+    supportsTools: model.supportsTools === true,
+    supportsImages: model.supportsImages === true,
+    supportsThinking: model.supportsThinking === true,
+    customProtocol: multiProtocol || flags.anthropicEnabled || flags.responsesEnabled,
+    contextWindowText:
+      model.contextWindowMaxTokens === undefined ? "" : String(model.contextWindowMaxTokens),
+    anthropicEnabled: flags.anthropicEnabled,
+    anthropicBaseUrl: flags.anthropicBase,
+    anthropicApiKey: anthropicKey,
+    openaiEnabled: flags.openaiEnabled,
+    openaiBaseUrl: flags.chatBase || primaryBaseUrl,
+    openaiApiKey: chatKey || primaryApiKey,
+    responsesEnabled: flags.responsesEnabled,
+    responsesBaseUrl: flags.responsesBase,
+    responsesApiKey: responsesKey,
+  };
+}
+
+function SavedModelRow({
+  model,
+  deleting,
   onEdit,
   onDelete,
-  onTest,
 }: {
-  provider: CollectedCustomModelProvider;
-  snapshotById: Map<string, ProviderSnapshotEntry>;
-  testing: boolean;
-  onEdit: (provider: CollectedCustomModelProvider) => void;
-  onDelete: (provider: CollectedCustomModelProvider) => void;
-  onTest: (provider: CollectedCustomModelProvider) => void;
+  model: CollectedSavedModel;
+  deleting: boolean;
+  onEdit: (model: CollectedSavedModel) => void;
+  onDelete: (model: CollectedSavedModel) => void;
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const handleEdit = useCallback(() => onEdit(provider), [onEdit, provider]);
-  const handleDelete = useCallback(() => onDelete(provider), [onDelete, provider]);
-  const handleTest = useCallback(() => onTest(provider), [onTest, provider]);
-  const actionButtonStyle = useCallback(
+  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
+  const handleDelete = useCallback(() => onDelete(model), [model, onDelete]);
+  const buttonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.iconButton,
       (Boolean(hovered) || pressed) && styles.iconButtonHovered,
-      testing ? styles.disabled : null,
+      deleting ? styles.disabled : null,
     ],
-    [testing],
+    [deleting],
   );
-  const statuses = summarizeProviderStatuses(provider.providerIds, snapshotById, t);
 
   return (
-    <View style={styles.providerRow} testID={`custom-provider-row-${provider.id}`}>
-      <View style={styles.providerTextColumn}>
-        <Text style={settingsStyles.rowTitle} numberOfLines={1}>
-          {provider.label}
-        </Text>
-        <Text style={styles.monoHint} numberOfLines={1} selectable>
-          {provider.id}
-        </Text>
-        <Text style={settingsStyles.rowHint} numberOfLines={2}>
-          {provider.models.map((model) => model.id).join(", ")}
-        </Text>
-        <Text style={styles.statusHint} numberOfLines={2}>
-          {statuses || t("customModelProviders.notTested")}
-        </Text>
+    <View style={styles.modelRow} testID={`saved-model-row-${model.gatewayId}-${model.modelId}`}>
+      <View style={styles.modelLeading}>
+        <View style={styles.modelBadgeIcon}>
+          <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </View>
+        <View style={styles.modelTextColumn}>
+          <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+            {model.label}
+          </Text>
+          <Text style={styles.modelSubtitle} numberOfLines={1}>
+            {t("customModelProviders.customBadge")}
+            {model.gatewayLabel && model.gatewayLabel !== model.label
+              ? ` · ${model.gatewayLabel}`
+              : ""}
+          </Text>
+        </View>
       </View>
       <View style={styles.rowActions}>
-        <Button
-          variant="outline"
-          size="sm"
-          leftIcon={RotateCw}
-          onPress={handleTest}
-          disabled={testing}
-        >
-          {testing ? t("customModelProviders.testing") : t("customModelProviders.test")}
-        </Button>
         <Pressable
           onPress={handleEdit}
           hitSlop={8}
-          style={actionButtonStyle}
+          style={buttonStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("customModelProviders.editProvider", { provider: provider.label })}
+          accessibilityLabel={t("customModelProviders.editModel", { model: model.label })}
+          testID={`edit-saved-model-${model.gatewayId}-${model.modelId}`}
         >
           <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
         </Pressable>
         <Pressable
           onPress={handleDelete}
+          disabled={deleting}
           hitSlop={8}
-          style={actionButtonStyle}
+          style={buttonStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("customModelProviders.deleteProvider", {
-            provider: provider.label,
-          })}
+          accessibilityLabel={t("customModelProviders.deleteModel", { model: model.label })}
+          testID={`delete-saved-model-${model.gatewayId}-${model.modelId}`}
         >
           <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
         </Pressable>
@@ -259,674 +266,397 @@ function CustomProviderRow({
   );
 }
 
-function createEmptyEditorValues(): ProviderEditorValues {
-  return {
-    id: "",
-    label: "",
-    anthropicEnabled: true,
-    anthropicBaseUrl: "",
-    anthropicApiKey: "",
-    openaiEnabled: true,
-    openaiBaseUrl: "",
-    openaiApiKey: "",
-    openaiWireApi: "responses",
-    responsesEnabled: false,
-    responsesBaseUrl: "",
-    responsesApiKey: "",
-    models: [],
-  };
-}
+const ACCESSIBILITY_CHECKED = { checked: true } as const;
+const ACCESSIBILITY_UNCHECKED = { checked: false } as const;
+const CHECKBOX_STYLE_CHECKED = [styles.checkbox, styles.checkboxChecked];
+const CHECKBOX_STYLE_UNCHECKED = [styles.checkbox];
 
-function createEditorValuesFromProvider(
-  provider: CollectedCustomModelProvider,
-  config: MutableDaemonConfig | null,
-): ProviderEditorValues {
-  return {
-    id: provider.id,
-    label: provider.label,
-    anthropicEnabled: provider.anthropic?.enabled ?? false,
-    anthropicBaseUrl: provider.anthropic?.baseUrl ?? "",
-    anthropicApiKey:
-      readGatewayApiKey(config, provider.id, "anthropic") ||
-      readProviderEnv(config, provider.anthropic?.providerId, "ANTHROPIC_AUTH_TOKEN"),
-    openaiEnabled: provider.openai?.enabled ?? false,
-    openaiBaseUrl: provider.openai?.baseUrl ?? "",
-    openaiApiKey:
-      readGatewayApiKey(config, provider.id, "chatCompletions") ||
-      readProviderEnv(config, provider.openai?.providerId, "OPENAI_API_KEY"),
-    openaiWireApi: provider.openai?.wireApi ?? "responses",
-    responsesEnabled: provider.responses?.enabled ?? false,
-    responsesBaseUrl: provider.responses?.baseUrl ?? "",
-    responsesApiKey: readGatewayApiKey(config, provider.id, "responses"),
-    models: provider.models.map((model) => ({
-      id: model.id,
-      label: model.label,
-      contextWindowMaxTokens: model.contextWindowMaxTokens,
-      supportsImages: model.supportsImages,
-    })),
-  };
-}
-
-function ProviderTextField({
+function CapabilityToggle({
   label,
   value,
-  resetKey,
-  placeholder,
-  placeholderColor,
-  secureTextEntry,
-  onChangeText,
+  onChange,
+  testID,
 }: {
   label: string;
-  value: string;
-  resetKey: string;
-  placeholder: string;
-  placeholderColor: string;
-  secureTextEntry?: boolean;
-  onChangeText: (value: string) => void;
+  value: boolean;
+  onChange: (value: boolean) => void;
+  testID?: string;
 }) {
+  const handlePress = useCallback(() => {
+    onChange(!value);
+  }, [onChange, value]);
+
   return (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.formLabel}>{label}</Text>
-      <AdaptiveTextInput
-        initialValue={value}
-        resetKey={resetKey}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={placeholderColor}
-        secureTextEntry={secureTextEntry}
-        autoCapitalize="none"
-        autoCorrect={false}
-        // @ts-expect-error - outlineStyle is web-only
-        style={FORM_INPUT_STYLE}
-      />
-    </View>
+    <Pressable
+      onPress={handlePress}
+      style={styles.capabilityChip}
+      accessibilityRole="checkbox"
+      accessibilityState={value ? ACCESSIBILITY_CHECKED : ACCESSIBILITY_UNCHECKED}
+      testID={testID}
+    >
+      <View style={value ? CHECKBOX_STYLE_CHECKED : CHECKBOX_STYLE_UNCHECKED}>
+        {value ? <Text style={styles.checkboxMark}>✓</Text> : null}
+      </View>
+      <Text style={styles.capabilityLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
-function EndpointEditorCard({
+function EndpointFields({
   title,
-  subtitle,
   enabled,
   baseUrl,
   apiKey,
-  apiKeyPlaceholder,
-  baseUrlPlaceholder,
   resetPrefix,
   placeholderColor,
-  wireApi,
+  baseUrlPlaceholder,
+  apiKeyPlaceholder,
   onEnabledChange,
   onBaseUrlChange,
   onApiKeyChange,
-  onWireApiChange,
 }: {
   title: string;
-  subtitle: string;
   enabled: boolean;
   baseUrl: string;
   apiKey: string;
-  apiKeyPlaceholder: string;
-  baseUrlPlaceholder: string;
   resetPrefix: string;
   placeholderColor: string;
-  wireApi?: CustomOpenAIWireApi;
+  baseUrlPlaceholder: string;
+  apiKeyPlaceholder: string;
   onEnabledChange: (value: boolean) => void;
   onBaseUrlChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
-  onWireApiChange?: (value: CustomOpenAIWireApi) => void;
 }) {
   return (
     <View style={styles.endpointCard}>
       <View style={styles.endpointHeader}>
-        <View style={styles.endpointTitleColumn}>
-          <Text style={settingsStyles.rowTitle}>{title}</Text>
-          <Text style={settingsStyles.rowHint} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        </View>
+        <Text style={settingsStyles.rowTitle}>{title}</Text>
         <Switch value={enabled} onValueChange={onEnabledChange} />
       </View>
-      <AdaptiveTextInput
-        initialValue={baseUrl}
-        resetKey={`${resetPrefix}-base`}
-        onChangeText={onBaseUrlChange}
-        placeholder={baseUrlPlaceholder}
-        placeholderTextColor={placeholderColor}
-        autoCapitalize="none"
-        // @ts-expect-error - outlineStyle is web-only
-        style={FORM_INPUT_STYLE}
-      />
-      <AdaptiveTextInput
-        initialValue={apiKey}
-        resetKey={`${resetPrefix}-key`}
-        onChangeText={onApiKeyChange}
-        placeholder={apiKeyPlaceholder}
-        placeholderTextColor={placeholderColor}
-        secureTextEntry
-        autoCapitalize="none"
-        // @ts-expect-error - outlineStyle is web-only
-        style={FORM_INPUT_STYLE}
-      />
-      {wireApi && onWireApiChange ? (
-        <SegmentedControl
-          size="sm"
-          value={wireApi}
-          onValueChange={onWireApiChange}
-          options={WIRE_API_OPTIONS}
-        />
+      {enabled ? (
+        <>
+          <AdaptiveTextInput
+            initialValue={baseUrl}
+            resetKey={`${resetPrefix}-base`}
+            onChangeText={onBaseUrlChange}
+            placeholder={baseUrlPlaceholder}
+            placeholderTextColor={placeholderColor}
+            autoCapitalize="none"
+            // @ts-expect-error - outlineStyle is web-only
+            style={FORM_INPUT_STYLE}
+          />
+          <AdaptiveTextInput
+            initialValue={apiKey}
+            resetKey={`${resetPrefix}-key`}
+            onChangeText={onApiKeyChange}
+            placeholder={apiKeyPlaceholder}
+            placeholderTextColor={placeholderColor}
+            secureTextEntry
+            autoCapitalize="none"
+            // @ts-expect-error - outlineStyle is web-only
+            style={FORM_INPUT_STYLE}
+          />
+        </>
       ) : null}
     </View>
   );
 }
 
-function ModelListRow({
-  model,
-  index,
-  testing,
-  onEdit,
-  onDelete,
-  onTest,
-}: {
-  model: CustomModelProviderModelInput;
-  index: number;
-  testing: boolean;
-  onEdit: (index: number) => void;
-  onDelete: (index: number) => void;
-  onTest: (model: CustomModelProviderModelInput) => void;
-}) {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  const actionButtonStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.iconButton,
-      (Boolean(hovered) || pressed) && styles.iconButtonHovered,
-    ],
-    [],
-  );
-  const testButtonStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      ...actionButtonStyle({ hovered, pressed }),
-      testing ? styles.disabled : null,
-    ],
-    [actionButtonStyle, testing],
-  );
-  const handleEdit = useCallback(() => onEdit(index), [index, onEdit]);
-  const handleDelete = useCallback(() => onDelete(index), [index, onDelete]);
-  const handleTest = useCallback(() => onTest(model), [model, onTest]);
-  const contextLabel = formatContextWindow(model.contextWindowMaxTokens);
-
-  return (
-    <View style={styles.modelRow} testID={`custom-provider-model-row-${model.id}`}>
-      <View style={styles.modelTextColumn}>
-        <Text style={settingsStyles.rowTitle} numberOfLines={1}>
-          {model.id}
-        </Text>
-        <View style={styles.modelBadges}>
-          {contextLabel ? (
-            <Text style={styles.modelBadge}>
-              {t("customModelProviders.contextBadge", { context: contextLabel })}
-            </Text>
-          ) : null}
-          {model.supportsImages ? (
-            <Text style={styles.modelBadge}>{t("customModelProviders.supportsImagesBadge")}</Text>
-          ) : null}
-        </View>
-      </View>
-      <View style={styles.modelRowActions}>
-        <Pressable
-          onPress={handleTest}
-          disabled={testing}
-          hitSlop={8}
-          style={testButtonStyle}
-          accessibilityRole="button"
-          accessibilityLabel={t("customModelProviders.testModel", {
-            model: model.id,
-          })}
-        >
-          <RotateCw
-            size={theme.iconSize.sm}
-            color={testing ? theme.colors.accent : theme.colors.foregroundMuted}
-          />
-        </Pressable>
-        <Pressable
-          onPress={handleEdit}
-          hitSlop={8}
-          style={actionButtonStyle}
-          accessibilityRole="button"
-          accessibilityLabel={t("customModelProviders.editModel", {
-            model: model.id,
-          })}
-        >
-          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        </Pressable>
-        <Pressable
-          onPress={handleDelete}
-          hitSlop={8}
-          style={actionButtonStyle}
-          accessibilityRole="button"
-          accessibilityLabel={t("customModelProviders.deleteModel", {
-            model: model.id,
-          })}
-        >
-          <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function ModelListField({
-  models,
-  editor,
-  testingModelId,
-  testMessage,
-  placeholderColor,
-  onAdd,
-  onEdit,
-  onDelete,
-  onTest,
-  onDraftChange,
-  onCancelEdit,
-  onSaveEdit,
-}: {
-  models: CustomModelProviderModelInput[];
-  editor: ModelEditorState | null;
-  testingModelId: string | null;
-  testMessage: string | null;
-  placeholderColor: string;
-  onAdd: () => void;
-  onEdit: (index: number) => void;
-  onDelete: (index: number) => void;
-  onTest: (model: CustomModelProviderModelInput) => void;
-  onDraftChange: (draft: ModelEditorDraft) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: () => void;
-}) {
-  const { t } = useTranslation();
-
-  const updateDraftId = useCallback(
-    (id: string) => {
-      if (!editor) return;
-      onDraftChange({ ...editor.draft, id });
-    },
-    [editor, onDraftChange],
-  );
-  const updateDraftContext = useCallback(
-    (contextWindowText: string) => {
-      if (!editor) return;
-      onDraftChange({ ...editor.draft, contextWindowText });
-    },
-    [editor, onDraftChange],
-  );
-  const updateDraftVision = useCallback(
-    (supportsImages: boolean) => {
-      if (!editor) return;
-      onDraftChange({ ...editor.draft, supportsImages });
-    },
-    [editor, onDraftChange],
-  );
-
-  return (
-    <View style={styles.fieldGroup}>
-      <View style={styles.modelsHeader}>
-        <Text style={styles.formLabel}>{t("customModelProviders.modelList")}</Text>
-        <Button variant="outline" size="sm" leftIcon={Plus} onPress={onAdd}>
-          {t("customModelProviders.addModel")}
-        </Button>
-      </View>
-      <View style={styles.modelList}>
-        {models.length > 0 ? (
-          models.map((model, index) => (
-            <ModelListRow
-              key={model.id}
-              model={model}
-              index={index}
-              testing={testingModelId === model.id}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onTest={onTest}
-            />
-          ))
-        ) : (
-          <View style={styles.emptyModelRow}>
-            <Text style={styles.emptyText}>{t("customModelProviders.noModels")}</Text>
-          </View>
-        )}
-      </View>
-      {testMessage ? <Text style={styles.statusHint}>{testMessage}</Text> : null}
-      {editor ? (
-        <View style={styles.modelEditorPanel}>
-          <Text style={settingsStyles.rowTitle}>
-            {editor.index === null
-              ? t("customModelProviders.addModel")
-              : t("customModelProviders.editModel", {
-                  model: models[editor.index]?.id ?? editor.draft.id,
-                })}
-          </Text>
-          <TextInput
-            value={editor.draft.id}
-            onChangeText={updateDraftId}
-            placeholder="glm-5"
-            placeholderTextColor={placeholderColor}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.formInput}
-          />
-          <TextInput
-            value={editor.draft.contextWindowText}
-            onChangeText={updateDraftContext}
-            placeholder={t("customModelProviders.contextPlaceholder")}
-            placeholderTextColor={placeholderColor}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="number-pad"
-            style={styles.formInput}
-          />
-          <View style={styles.modelSwitchRow}>
-            <Text style={styles.formLabel}>{t("customModelProviders.supportsImages")}</Text>
-            <Switch value={editor.draft.supportsImages} onValueChange={updateDraftVision} />
-          </View>
-          <View style={styles.formActions}>
-            <Button variant="secondary" size="sm" onPress={onCancelEdit}>
-              {t("common.cancel")}
-            </Button>
-            <Button variant="default" size="sm" onPress={onSaveEdit}>
-              {t("common.save")}
-            </Button>
-          </View>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function ProviderEditorSheet({
+function ModelEditorSheet({
   state,
   config,
   onClose,
   onSave,
-  onTestGateway,
   errorLogger,
 }: {
-  state: EditingProviderState | null;
+  state: EditingModelState | null;
   config: MutableDaemonConfig | null;
   onClose: () => void;
-  onSave: (values: ProviderEditorValues, previousId: string | null) => Promise<void>;
-  onTestGateway: (gatewayId: string) => Promise<void>;
+  onSave: (values: ModelEditorValues, previous: CollectedSavedModel | null) => Promise<void>;
   errorLogger?: ErrorLogger;
 }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const [values, setValues] = useState<ProviderEditorValues>(createEmptyEditorValues);
-  const [modelEditor, setModelEditor] = useState<ModelEditorState | null>(null);
-  const [modelTestMessage, setModelTestMessage] = useState<string | null>(null);
-  const [testingModelId, setTestingModelId] = useState<string | null>(null);
+  const [values, setValues] = useState<ModelEditorValues>(createEmptyEditorValues);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const visible = state !== null;
-  const previousId = state?.provider?.id ?? null;
-  const resetSeed = `${previousId ?? "new"}-${state?.mode ?? "closed"}`;
+  const previous = state?.model ?? null;
+  const resetSeed = `${previous?.gatewayId ?? "new"}-${previous?.modelId ?? "new"}-${state?.mode ?? "closed"}`;
 
   useEffect(() => {
     if (!state) {
       return;
     }
-    const provider = state.provider;
     setValues(
-      provider ? createEditorValuesFromProvider(provider, config) : createEmptyEditorValues(),
+      state.model
+        ? createEditorValuesFromSavedModel(state.model, config)
+        : createEmptyEditorValues(),
     );
-    setModelEditor(null);
-    setModelTestMessage(null);
-    setTestingModelId(null);
     setFormError(null);
+    setSaving(false);
   }, [config, state]);
 
-  const setFieldValue = useCallback(
-    <K extends keyof ProviderEditorValues>(key: K, value: ProviderEditorValues[K]) => {
+  const setField = useCallback(
+    <K extends keyof ModelEditorValues>(key: K, value: ModelEditorValues[K]) => {
       setValues((current) => ({ ...current, [key]: value }));
     },
     [],
   );
-  const handleIdChange = useCallback(
-    (value: string) => setFieldValue("id", value),
-    [setFieldValue],
+
+  const handleBaseUrlChange = useCallback(
+    (value: string) => setField("baseUrl", value),
+    [setField],
   );
-  const handleLabelChange = useCallback(
-    (value: string) => setFieldValue("label", value),
-    [setFieldValue],
+  const handleApiKeyChange = useCallback((value: string) => setField("apiKey", value), [setField]);
+  const handleModelIdChange = useCallback(
+    (value: string) => setField("modelId", value),
+    [setField],
+  );
+  const handleContextWindowChange = useCallback(
+    (value: string) => setField("contextWindowText", value),
+    [setField],
+  );
+  const handleSupportsToolsChange = useCallback(
+    (value: boolean) => setField("supportsTools", value),
+    [setField],
+  );
+  const handleSupportsImagesChange = useCallback(
+    (value: boolean) => setField("supportsImages", value),
+    [setField],
+  );
+  const handleSupportsThinkingChange = useCallback(
+    (value: boolean) => setField("supportsThinking", value),
+    [setField],
+  );
+  const handleCustomProtocolChange = useCallback(
+    (value: boolean) => setField("customProtocol", value),
+    [setField],
   );
   const handleAnthropicEnabledChange = useCallback(
-    (value: boolean) => setFieldValue("anthropicEnabled", value),
-    [setFieldValue],
+    (value: boolean) => setField("anthropicEnabled", value),
+    [setField],
   );
   const handleAnthropicBaseUrlChange = useCallback(
-    (value: string) => setFieldValue("anthropicBaseUrl", value),
-    [setFieldValue],
+    (value: string) => setField("anthropicBaseUrl", value),
+    [setField],
   );
   const handleAnthropicApiKeyChange = useCallback(
-    (value: string) => setFieldValue("anthropicApiKey", value),
-    [setFieldValue],
+    (value: string) => setField("anthropicApiKey", value),
+    [setField],
   );
   const handleOpenaiEnabledChange = useCallback(
-    (value: boolean) => setFieldValue("openaiEnabled", value),
-    [setFieldValue],
+    (value: boolean) => setField("openaiEnabled", value),
+    [setField],
   );
   const handleOpenaiBaseUrlChange = useCallback(
-    (value: string) => setFieldValue("openaiBaseUrl", value),
-    [setFieldValue],
+    (value: string) => setField("openaiBaseUrl", value),
+    [setField],
   );
   const handleOpenaiApiKeyChange = useCallback(
-    (value: string) => setFieldValue("openaiApiKey", value),
-    [setFieldValue],
-  );
-  const handleOpenaiWireApiChange = useCallback(
-    (value: CustomOpenAIWireApi) => setFieldValue("openaiWireApi", value),
-    [setFieldValue],
+    (value: string) => setField("openaiApiKey", value),
+    [setField],
   );
   const handleResponsesEnabledChange = useCallback(
-    (value: boolean) => setFieldValue("responsesEnabled", value),
-    [setFieldValue],
+    (value: boolean) => setField("responsesEnabled", value),
+    [setField],
   );
   const handleResponsesBaseUrlChange = useCallback(
-    (value: string) => setFieldValue("responsesBaseUrl", value),
-    [setFieldValue],
+    (value: string) => setField("responsesBaseUrl", value),
+    [setField],
   );
   const handleResponsesApiKeyChange = useCallback(
-    (value: string) => setFieldValue("responsesApiKey", value),
-    [setFieldValue],
+    (value: string) => setField("responsesApiKey", value),
+    [setField],
   );
-  const handleAddModel = useCallback(() => {
-    setFormError(null);
-    setModelEditor({ index: null, draft: createEmptyModelDraft() });
-  }, []);
-  const handleEditModel = useCallback(
-    (index: number) => {
-      setModelEditor((current) => {
-        if (current?.index === index) {
-          return current;
-        }
-        const model = values.models[index];
-        return model ? { index, draft: createModelDraft(model) } : null;
-      });
-    },
-    [values.models],
-  );
-  const handleDeleteModel = useCallback((index: number) => {
-    setFormError(null);
-    setValues((current) => ({
-      ...current,
-      models: current.models.filter((_, modelIndex) => modelIndex !== index),
-    }));
-    setModelEditor((current) => (current?.index === index ? null : current));
-  }, []);
-  const handleModelDraftChange = useCallback((draft: ModelEditorDraft) => {
-    setModelEditor((current) => (current ? { ...current, draft } : current));
-  }, []);
-  const handleCancelModelEdit = useCallback(() => {
-    setModelEditor(null);
-  }, []);
-  const handleSaveModelEdit = useCallback(() => {
-    if (!modelEditor) {
-      return;
-    }
-    const model = normalizeModelDraft(modelEditor.draft);
-    if (!model) {
-      setFormError(t("customModelProviders.modelRequired"));
-      return;
-    }
-    setFormError(null);
-    setValues((current) => {
-      const models =
-        modelEditor.index === null
-          ? [...current.models, model]
-          : current.models.map((entry, index) => (index === modelEditor.index ? model : entry));
-      return { ...current, models };
-    });
-    setModelEditor(null);
-  }, [modelEditor, t]);
-  const handleTestModel = useCallback(
-    (model: CustomModelProviderModelInput) => {
-      const gatewayId = values.id.trim();
-      const savedGatewayId = previousId?.trim().toLowerCase() ?? "";
-      if (!gatewayId || state?.mode !== "edit" || savedGatewayId !== gatewayId.toLowerCase()) {
-        setModelTestMessage(t("customModelProviders.saveBeforeTesting"));
-        return;
-      }
-      setModelTestMessage(t("customModelProviders.testingModel", { model: model.id }));
-      setTestingModelId(model.id);
-      void onTestGateway(gatewayId)
-        .then(() => {
-          setModelTestMessage(t("customModelProviders.testQueued", { model: model.id }));
-          return undefined;
-        })
-        .catch((error) => {
-          reportPresentedError({
-            error,
-            logLabel: `[CustomModelProviders] Failed to test model ${model.id}`,
-            fallbackMessage: t("customModelProviders.testFailedShort"),
-            present: setModelTestMessage,
-            logger: errorLogger,
-          });
-        })
-        .finally(() => {
-          setTestingModelId((current) => (current === model.id ? null : current));
-        });
-    },
-    [errorLogger, onTestGateway, previousId, state?.mode, t, values.id],
-  );
+
   const handleSave = useCallback(() => {
-    if (saving) return;
+    if (saving) {
+      return;
+    }
     setFormError(null);
     setSaving(true);
-    void onSave(values, previousId)
+    void onSave(values, previous)
       .catch((error) => {
         reportPresentedError({
           error,
-          logLabel: "[CustomModelProviders] Failed to save custom provider",
+          logLabel: "[CustomModelProviders] Failed to save custom model",
           fallbackMessage: t("customModelProviders.saveFailed"),
           present: setFormError,
           logger: errorLogger,
         });
       })
       .finally(() => setSaving(false));
-  }, [errorLogger, onSave, previousId, saving, t, values]);
+  }, [errorLogger, onSave, previous, saving, t, values]);
+
   const header = useMemo<SheetHeader>(
     () => ({
       title:
         state?.mode === "edit"
-          ? t("customModelProviders.editCustomProvider")
-          : t("customModelProviders.addCustomProvider"),
+          ? t("customModelProviders.editCustomModel")
+          : t("customModelProviders.addCustomModel"),
+      subtitle: t("customModelProviders.openaiOnlyHint"),
     }),
     [state?.mode, t],
   );
-  const canSave = values.id.trim().length > 0 && values.models.length > 0;
+
+  const canSave = values.modelId.trim().length > 0 && !saving;
 
   return (
     <AdaptiveModalSheet
       header={header}
       visible={visible}
       onClose={onClose}
-      desktopMaxWidth={520}
+      desktopMaxWidth={EDITOR_DESKTOP_MAX_WIDTH}
       snapPoints={EDITOR_SNAP_POINTS}
-      testID="custom-provider-editor-sheet"
+      testID="custom-model-editor-sheet"
     >
       <View style={styles.formGroup}>
+        {!values.customProtocol ? (
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldGroupGrow}>
+              <Text style={styles.formLabel}>{t("customModelProviders.baseUrl")}</Text>
+              <AdaptiveTextInput
+                initialValue={values.baseUrl}
+                resetKey={`base-url-${resetSeed}`}
+                onChangeText={handleBaseUrlChange}
+                placeholder="https://api.example.com/v1/chat/completions"
+                placeholderTextColor={theme.colors.foregroundMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                testID="custom-model-base-url-input"
+                // @ts-expect-error - outlineStyle is web-only
+                style={FORM_INPUT_STYLE}
+              />
+            </View>
+            <View style={styles.fieldGroupGrow}>
+              <Text style={styles.formLabel}>{t("customModelProviders.apiKey")}</Text>
+              <AdaptiveTextInput
+                initialValue={values.apiKey}
+                resetKey={`api-key-${resetSeed}`}
+                onChangeText={handleApiKeyChange}
+                placeholder={t("customModelProviders.apiKeyPlaceholder")}
+                placeholderTextColor={theme.colors.foregroundMuted}
+                secureTextEntry
+                autoCapitalize="none"
+                testID="custom-model-api-key-input"
+                // @ts-expect-error - outlineStyle is web-only
+                style={FORM_INPUT_STYLE}
+              />
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.fieldRow}>
-          <ProviderTextField
-            label={t("customModelProviders.providerId")}
-            value={values.id}
-            resetKey={`custom-provider-id-${resetSeed}`}
-            onChangeText={handleIdChange}
-            placeholder="zai"
-            placeholderColor={theme.colors.foregroundMuted}
-          />
-          <ProviderTextField
-            label={t("customModelProviders.providerLabel")}
-            value={values.label}
-            resetKey={`custom-provider-label-${resetSeed}`}
-            onChangeText={handleLabelChange}
-            placeholder="ZAI"
-            placeholderColor={theme.colors.foregroundMuted}
-          />
+          <View style={styles.fieldGroupGrow}>
+            <Text style={styles.formLabel}>{t("customModelProviders.modelName")}</Text>
+            <AdaptiveTextInput
+              initialValue={values.modelId}
+              resetKey={`model-id-${resetSeed}`}
+              onChangeText={handleModelIdChange}
+              placeholder={t("customModelProviders.modelNamePlaceholder")}
+              placeholderTextColor={theme.colors.foregroundMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="custom-model-id-input"
+              // @ts-expect-error - outlineStyle is web-only
+              style={FORM_INPUT_STYLE}
+            />
+          </View>
+          <View style={styles.fieldGroupGrow}>
+            <Text style={styles.formLabel}>{t("customModelProviders.inputContext")}</Text>
+            <AdaptiveTextInput
+              initialValue={values.contextWindowText}
+              resetKey={`context-window-${resetSeed}`}
+              onChangeText={handleContextWindowChange}
+              placeholder={t("customModelProviders.contextPlaceholder")}
+              placeholderTextColor={theme.colors.foregroundMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="number-pad"
+              testID="custom-model-context-input"
+              // @ts-expect-error - outlineStyle is web-only
+              style={FORM_INPUT_STYLE}
+            />
+          </View>
         </View>
-        <EndpointEditorCard
-          title={t("customModelProviders.anthropicEndpoint")}
-          subtitle={t("customModelProviders.anthropicEndpointHint")}
-          enabled={values.anthropicEnabled}
-          baseUrl={values.anthropicBaseUrl}
-          apiKey={values.anthropicApiKey}
-          apiKeyPlaceholder={t("customModelProviders.apiKey")}
-          baseUrlPlaceholder="https://api.example.com/anthropic"
-          resetPrefix={`anthropic-${resetSeed}`}
-          placeholderColor={theme.colors.foregroundMuted}
-          onEnabledChange={handleAnthropicEnabledChange}
-          onBaseUrlChange={handleAnthropicBaseUrlChange}
-          onApiKeyChange={handleAnthropicApiKeyChange}
-        />
-        <EndpointEditorCard
-          title={t("customModelProviders.openaiEndpoint")}
-          subtitle={t("customModelProviders.openaiEndpointHint")}
-          enabled={values.openaiEnabled}
-          baseUrl={values.openaiBaseUrl}
-          apiKey={values.openaiApiKey}
-          apiKeyPlaceholder={t("customModelProviders.apiKey")}
-          baseUrlPlaceholder="https://api.example.com/v1"
-          resetPrefix={`openai-${resetSeed}`}
-          placeholderColor={theme.colors.foregroundMuted}
-          wireApi={values.openaiWireApi}
-          onEnabledChange={handleOpenaiEnabledChange}
-          onBaseUrlChange={handleOpenaiBaseUrlChange}
-          onApiKeyChange={handleOpenaiApiKeyChange}
-          onWireApiChange={handleOpenaiWireApiChange}
-        />
-        <EndpointEditorCard
-          title={t("customModelProviders.responsesEndpoint")}
-          subtitle={t("customModelProviders.responsesEndpointHint")}
-          enabled={values.responsesEnabled}
-          baseUrl={values.responsesBaseUrl}
-          apiKey={values.responsesApiKey}
-          apiKeyPlaceholder={t("customModelProviders.apiKey")}
-          baseUrlPlaceholder="https://api.example.com/v1"
-          resetPrefix={`responses-${resetSeed}`}
-          placeholderColor={theme.colors.foregroundMuted}
-          onEnabledChange={handleResponsesEnabledChange}
-          onBaseUrlChange={handleResponsesBaseUrlChange}
-          onApiKeyChange={handleResponsesApiKeyChange}
-        />
-        <ModelListField
-          models={values.models}
-          editor={modelEditor}
-          testingModelId={testingModelId}
-          testMessage={modelTestMessage}
-          placeholderColor={theme.colors.foregroundMuted}
-          onAdd={handleAddModel}
-          onEdit={handleEditModel}
-          onDelete={handleDeleteModel}
-          onTest={handleTestModel}
-          onDraftChange={handleModelDraftChange}
-          onCancelEdit={handleCancelModelEdit}
-          onSaveEdit={handleSaveModelEdit}
-        />
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.formLabel}>{t("customModelProviders.advanced")}</Text>
+          <View style={styles.capabilityGrid}>
+            <CapabilityToggle
+              label={t("customModelProviders.supportsTools")}
+              value={values.supportsTools}
+              onChange={handleSupportsToolsChange}
+              testID="capability-tools"
+            />
+            <CapabilityToggle
+              label={t("customModelProviders.supportsImages")}
+              value={values.supportsImages}
+              onChange={handleSupportsImagesChange}
+              testID="capability-images"
+            />
+            <CapabilityToggle
+              label={t("customModelProviders.supportsThinking")}
+              value={values.supportsThinking}
+              onChange={handleSupportsThinkingChange}
+              testID="capability-thinking"
+            />
+            <CapabilityToggle
+              label={t("customModelProviders.customProtocol")}
+              value={values.customProtocol}
+              onChange={handleCustomProtocolChange}
+              testID="capability-custom-protocol"
+            />
+          </View>
+        </View>
+
+        {values.customProtocol ? (
+          <View style={styles.protocolStack}>
+            <EndpointFields
+              title={t("customModelProviders.anthropicEndpoint")}
+              enabled={values.anthropicEnabled}
+              baseUrl={values.anthropicBaseUrl}
+              apiKey={values.anthropicApiKey}
+              resetPrefix={`anthropic-${resetSeed}`}
+              placeholderColor={theme.colors.foregroundMuted}
+              baseUrlPlaceholder="https://api.example.com/anthropic"
+              apiKeyPlaceholder={t("customModelProviders.apiKey")}
+              onEnabledChange={handleAnthropicEnabledChange}
+              onBaseUrlChange={handleAnthropicBaseUrlChange}
+              onApiKeyChange={handleAnthropicApiKeyChange}
+            />
+            <EndpointFields
+              title={t("customModelProviders.openaiEndpoint")}
+              enabled={values.openaiEnabled}
+              baseUrl={values.openaiBaseUrl}
+              apiKey={values.openaiApiKey}
+              resetPrefix={`openai-${resetSeed}`}
+              placeholderColor={theme.colors.foregroundMuted}
+              baseUrlPlaceholder="https://api.example.com/v1"
+              apiKeyPlaceholder={t("customModelProviders.apiKey")}
+              onEnabledChange={handleOpenaiEnabledChange}
+              onBaseUrlChange={handleOpenaiBaseUrlChange}
+              onApiKeyChange={handleOpenaiApiKeyChange}
+            />
+            <EndpointFields
+              title={t("customModelProviders.responsesEndpoint")}
+              enabled={values.responsesEnabled}
+              baseUrl={values.responsesBaseUrl}
+              apiKey={values.responsesApiKey}
+              resetPrefix={`responses-${resetSeed}`}
+              placeholderColor={theme.colors.foregroundMuted}
+              baseUrlPlaceholder="https://api.example.com/v1"
+              apiKeyPlaceholder={t("customModelProviders.apiKey")}
+              onEnabledChange={handleResponsesEnabledChange}
+              onBaseUrlChange={handleResponsesBaseUrlChange}
+              onApiKeyChange={handleResponsesApiKeyChange}
+            />
+          </View>
+        ) : null}
+
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+
         <View style={styles.formActions}>
           <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
             {t("common.cancel")}
@@ -935,8 +665,9 @@ function ProviderEditorSheet({
             variant="default"
             size="sm"
             onPress={handleSave}
-            disabled={!canSave || saving}
+            disabled={!canSave}
             loading={saving}
+            testID="custom-model-save-button"
           >
             {saving ? t("customModelProviders.saving") : t("common.save")}
           </Button>
@@ -954,109 +685,117 @@ export function CustomModelProvidersSection({
   const { t } = useTranslation();
   const reportError = useUserVisibleErrorReporter();
   const { config, patchConfig } = useDaemonConfig(serverId);
-  const { entries, refresh } = useProvidersSnapshot(serverId);
-  const [editorState, setEditorState] = useState<EditingProviderState | null>(null);
-  const [testingId, setTestingId] = useState<string | null>(null);
-  const providers = useMemo(
-    () => collectCustomModelProviders(config?.modelGateways, config?.providers),
-    [config?.modelGateways, config?.providers],
+  const { refresh } = useProvidersSnapshot(serverId);
+  const [editorState, setEditorState] = useState<EditingModelState | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+
+  const savedModels = useMemo(
+    () => collectSavedModels(config?.modelGateways),
+    [config?.modelGateways],
   );
-  const snapshotById = useMemo(
-    () => new Map((entries ?? []).map((entry) => [entry.provider, entry])),
-    [entries],
-  );
-  const openAdd = useCallback(() => setEditorState({ mode: "add", provider: null }), []);
+
+  const openAdd = useCallback(() => setEditorState({ mode: "add", model: null }), []);
   const openEdit = useCallback(
-    (provider: CollectedCustomModelProvider) => setEditorState({ mode: "edit", provider }),
+    (model: CollectedSavedModel) => setEditorState({ mode: "edit", model }),
     [],
   );
   const closeEditor = useCallback(() => setEditorState(null), []);
+
   const handleSave = useCallback(
-    async (values: ProviderEditorValues, previousId: string | null) => {
-      const patch = buildSaveCustomModelProviderPatch({
+    async (values: ModelEditorValues, previous: CollectedSavedModel | null) => {
+      const anthropic: CustomModelProviderEndpoint = {
+        enabled: values.anthropicEnabled,
+        baseUrl: values.anthropicBaseUrl,
+        apiKey: values.anthropicApiKey,
+      };
+      const openai = {
+        enabled: values.openaiEnabled,
+        baseUrl: values.openaiBaseUrl,
+        apiKey: values.openaiApiKey,
+        wireApi: "chat" as CustomOpenAIWireApi,
+      };
+      const responses: CustomModelProviderEndpoint = {
+        enabled: values.responsesEnabled,
+        baseUrl: values.responsesBaseUrl,
+        apiKey: values.responsesApiKey,
+      };
+
+      const patch = buildSaveOpenAiCompatibleModelPatch({
         currentGateways: config?.modelGateways,
-        previousId,
-        id: values.id,
-        label: values.label,
-        models: values.models,
-        anthropic: {
-          enabled: values.anthropicEnabled,
-          baseUrl: values.anthropicBaseUrl,
-          apiKey: values.anthropicApiKey,
-        },
-        openai: {
-          enabled: values.openaiEnabled,
-          baseUrl: values.openaiBaseUrl,
-          apiKey: values.openaiApiKey,
-          wireApi: values.openaiWireApi,
-        },
-        responses: {
-          enabled: values.responsesEnabled,
-          baseUrl: values.responsesBaseUrl,
-          apiKey: values.responsesApiKey,
-        },
+        gatewayId: previous?.gatewayId,
+        previousModelId: previous?.modelId,
+        modelId: values.modelId,
+        label: values.modelId,
+        baseUrl: values.baseUrl,
+        apiKey: values.apiKey,
+        contextWindowMaxTokens: parseContextWindowText(values.contextWindowText),
+        supportsImages: values.supportsImages,
+        supportsTools: values.supportsTools,
+        supportsThinking: values.supportsThinking,
+        customProtocol: values.customProtocol,
+        anthropic,
+        openai,
+        responses,
       });
+
       const updatedConfig = await patchConfig(patch);
       if (!updatedConfig) {
         throw new Error(t("customModelProviders.saveUnavailable"));
       }
       setEditorState(null);
-      void refresh(buildModelGatewayProviderIdList(values.id) as AgentProvider[]).catch((error) => {
-        console.warn("[CustomModelProviders] Failed to refresh providers after save", error);
-      });
+
+      const gatewayIds = Object.keys(patch.modelGateways ?? {});
+      const providerIds = gatewayIds.flatMap(buildModelGatewayProviderIdList);
+      if (providerIds.length > 0) {
+        void refresh(providerIds as AgentProvider[]).catch((error) => {
+          console.warn("[CustomModelProviders] Failed to refresh providers after save", error);
+        });
+      }
     },
     [config?.modelGateways, patchConfig, refresh, t],
   );
-  const handleTestGatewayId = useCallback(
-    async (gatewayId: string) => {
-      await refresh(buildModelGatewayProviderIdList(gatewayId) as AgentProvider[]);
-    },
-    [refresh],
-  );
-  const handleTest = useCallback(
-    (provider: CollectedCustomModelProvider) => {
-      setTestingId(provider.id);
-      void refresh(provider.providerIds as AgentProvider[])
-        .catch((error) => {
-          reportError({
-            error,
-            logLabel: `[CustomModelProviders] Failed to test provider ${provider.id}`,
-            fallbackMessage: t("customModelProviders.testFailedShort"),
-          });
-        })
-        .finally(() => {
-          setTestingId((current) => (current === provider.id ? null : current));
-        });
-    },
-    [refresh, reportError, t],
-  );
+
   const handleDelete = useCallback(
-    (provider: CollectedCustomModelProvider) => {
+    (model: CollectedSavedModel) => {
       void (async () => {
         const confirmed = await confirmDialog({
           title: t("customModelProviders.deleteConfirmTitle"),
-          message: t("customModelProviders.deleteConfirmMessage", { provider: provider.label }),
+          message: t("customModelProviders.deleteConfirmMessage", { model: model.label }),
           confirmLabel: t("common.delete"),
           cancelLabel: t("common.cancel"),
           destructive: true,
         });
-        if (!confirmed) return;
-        const patch = buildDisableCustomModelProviderPatch(provider.id);
-        const updatedConfig = await patchConfig(patch);
-        if (!updatedConfig) {
-          throw new Error(t("customModelProviders.deleteFailed"));
+        if (!confirmed) {
+          return;
         }
-        await refresh(buildModelGatewayProviderIdList(provider.id) as AgentProvider[]);
-      })().catch((error) => {
-        reportError({
-          error,
-          logLabel: `[CustomModelProviders] Failed to delete provider ${provider.id}`,
-          fallbackMessage: t("customModelProviders.deleteFailed"),
-        });
-      });
+        setDeletingKey(model.key);
+        try {
+          const patch = buildDeleteSavedModelPatch({
+            currentGateways: config?.modelGateways,
+            gatewayId: model.gatewayId,
+            modelId: model.modelId,
+          });
+          const updatedConfig = await patchConfig(patch);
+          if (!updatedConfig) {
+            throw new Error(t("customModelProviders.deleteFailed"));
+          }
+          void refresh(model.providerIds as AgentProvider[]).catch((error) => {
+            console.warn("[CustomModelProviders] Failed to refresh providers after delete", error);
+          });
+        } catch (error) {
+          reportError({
+            error,
+            logLabel: `[CustomModelProviders] Failed to delete model ${model.modelId}`,
+            fallbackMessage: t("customModelProviders.deleteFailed"),
+          });
+        } finally {
+          setDeletingKey((current) => (current === model.key ? null : current));
+        }
+      })();
     },
-    [patchConfig, refresh, reportError, t],
+    [config?.modelGateways, patchConfig, refresh, reportError, t],
   );
+
   const headerActions = useMemo(
     () => (
       <Pressable
@@ -1064,7 +803,8 @@ export function CustomModelProvidersSection({
         hitSlop={8}
         style={settingsStyles.sectionHeaderLink}
         accessibilityRole="button"
-        accessibilityLabel={t("customModelProviders.addCustomProvider")}
+        accessibilityLabel={t("customModelProviders.addCustomModel")}
+        testID="add-custom-model-button"
       >
         <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
         <Text style={settingsStyles.sectionHeaderLinkText}>{t("customModelProviders.add")}</Text>
@@ -1079,34 +819,48 @@ export function CustomModelProvidersSection({
         title={t("customModelProviders.title")}
         trailing={headerActions}
         style={styles.sectionSpacing}
+        testID="settings-custom-models-section"
       >
-        {providers.length > 0 ? (
+        <View style={styles.infoCard} testID="custom-models-info-card">
+          <View style={styles.infoTextColumn}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("customModelProviders.localConfigTitle")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>{t("customModelProviders.localConfigHint")}</Text>
+          </View>
+          <Button variant="outline" size="sm" leftIcon={Plus} onPress={openAdd}>
+            {t("customModelProviders.addModel")}
+          </Button>
+        </View>
+
+        <Text style={styles.listHeading}>{t("customModelProviders.savedModels")}</Text>
+
+        {savedModels.length > 0 ? (
           <View style={settingsStyles.card}>
-            {providers.map((provider, index) => (
-              <View key={provider.id} style={index === 0 ? undefined : styles.providerRowBorder}>
-                <CustomProviderRow
-                  provider={provider}
-                  snapshotById={snapshotById}
-                  testing={testingId === provider.id}
+            {savedModels.map((model, index) => (
+              <View key={model.key} style={index === 0 ? undefined : styles.modelRowBorder}>
+                <SavedModelRow
+                  model={model}
+                  deleting={deletingKey === model.key}
                   onEdit={openEdit}
                   onDelete={handleDelete}
-                  onTest={handleTest}
                 />
               </View>
             ))}
           </View>
         ) : (
           <View style={EMPTY_CARD_STYLE}>
+            <Brain size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
             <Text style={styles.emptyText}>{t("customModelProviders.empty")}</Text>
           </View>
         )}
       </SettingsSection>
-      <ProviderEditorSheet
+
+      <ModelEditorSheet
         state={editorState}
         config={config}
         onClose={closeEditor}
         onSave={handleSave}
-        onTestGateway={handleTestGatewayId}
         errorLogger={errorLogger}
       />
     </>
@@ -1117,14 +871,41 @@ const styles = StyleSheet.create((theme) => ({
   sectionSpacing: {
     marginBottom: theme.spacing[4],
   },
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+    padding: theme.spacing[4],
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    marginBottom: theme.spacing[4],
+  },
+  infoTextColumn: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  listHeading: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
+    marginBottom: theme.spacing[2],
+  },
   emptyCard: {
     padding: theme.spacing[4],
+    gap: theme.spacing[2],
+    alignItems: "center",
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
-  providerRow: {
+  modelRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1132,28 +913,40 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
   },
-  providerRowBorder: {
+  modelRowBorder: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderTopColor: theme.colors.secondary,
   },
-  providerTextColumn: {
+  modelLeading: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
+  modelBadgeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modelTextColumn: {
     flex: 1,
     minWidth: 0,
     gap: theme.spacing[1],
   },
-  monoHint: {
+  modelSubtitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-  },
-  statusHint: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   rowActions: {
     flexDirection: "row",
     alignItems: "center",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
     gap: theme.spacing[1],
   },
   iconButton: {
@@ -1164,7 +957,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   disabled: {
     opacity: theme.opacity[50],
@@ -1177,30 +970,78 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   fieldGroup: {
+    gap: theme.spacing[2],
+  },
+  fieldGroupGrow: {
     flex: 1,
+    minWidth: 0,
     gap: theme.spacing[2],
   },
   formLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   formInput: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 12,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     color: theme.colors.foreground,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  capabilityGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[3],
+  },
+  capabilityChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
+    minWidth: 140,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: theme.borderRadius.base,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface0,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.foreground,
+    borderColor: theme.colors.foreground,
+  },
+  checkboxMark: {
+    color: theme.colors.surface0,
+    fontSize: 12.5,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: 16,
+  },
+  capabilityLabel: {
+    color: theme.colors.foreground,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  protocolStack: {
+    gap: theme.spacing[3],
   },
   endpointCard: {
     gap: theme.spacing[3],
     padding: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   endpointHeader: {
     flexDirection: "row",
@@ -1208,77 +1049,10 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     gap: theme.spacing[3],
   },
-  endpointTitleColumn: {
-    flex: 1,
-    minWidth: 0,
-  },
-  modelsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-  },
-  modelList: {
-    gap: theme.spacing[2],
-  },
-  modelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    padding: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  modelTextColumn: {
-    flex: 1,
-    minWidth: 0,
-    gap: theme.spacing[2],
-  },
-  modelBadges: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: theme.spacing[1],
-  },
-  modelBadge: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-  },
-  modelRowActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  emptyModelRow: {
-    padding: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  modelEditorPanel: {
-    gap: theme.spacing[3],
-    padding: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  modelSwitchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-  },
   formError: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   formActions: {
     flexDirection: "row",

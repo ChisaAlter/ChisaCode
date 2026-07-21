@@ -32,12 +32,14 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   additions: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.diffAddition,
   },
   deletions: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.diffDeletion,
   },

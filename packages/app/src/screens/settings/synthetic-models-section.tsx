@@ -1343,28 +1343,32 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
 
 const styles = StyleSheet.create((theme) => ({
   sectionSpacing: {
-    marginBottom: theme.spacing[4],
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[3],
+    opacity: 0.98,
   },
   emptyCard: {
-    padding: theme.spacing[4],
+    padding: theme.spacing[3],
     gap: theme.spacing[2],
     alignItems: "center",
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   modelRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[3],
-    paddingVertical: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
   },
   modelRowBorder: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderTopColor: theme.colors.secondary,
   },
   modelTextColumn: {
     flex: 1,
@@ -1372,7 +1376,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   modelIdText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[1],
   },
   rowActions: {
@@ -1393,7 +1398,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   disabledButton: {
     opacity: theme.opacity[50],
@@ -1416,18 +1421,20 @@ const styles = StyleSheet.create((theme) => ({
   },
   formLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   formInput: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 12,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     color: theme.colors.foreground,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
   },
   promptInput: {
     minHeight: 108,
@@ -1439,8 +1446,8 @@ const styles = StyleSheet.create((theme) => ({
   stagePanel: {
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
     overflow: "hidden",
   },
   stageHeader: {
@@ -1450,7 +1457,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     padding: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   stageTextColumn: {
     flex: 1,
@@ -1458,7 +1466,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   stageCount: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   layerModelList: {
     gap: 0,
@@ -1466,8 +1475,8 @@ const styles = StyleSheet.create((theme) => ({
   resultPanel: {
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
     padding: theme.spacing[4],
     gap: theme.spacing[3],
   },
@@ -1475,12 +1484,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingTop: theme.spacing[3],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderTopColor: theme.colors.secondary,
   },
   resultNode: {
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderRadius: 12,
     padding: theme.spacing[3],
   },
   resultNodeHeader: {
@@ -1491,16 +1501,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   resultOutputText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   resultSuccessText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   resultErrorText: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   optionRow: {
     flexDirection: "row",

@@ -69,6 +69,7 @@ export function StatusBadge({ label, variant = "muted", accessibilityLabel }: St
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft .badge — quiet pill on shell.
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -76,11 +77,10 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: "100%",
     borderRadius: theme.borderRadius.full,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceWorkspace,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[1],
-    ...theme.shadow.sm,
   },
   pillSuccess: {
     backgroundColor: theme.colors.statusSuccessBg,
@@ -97,7 +97,8 @@ const styles = StyleSheet.create((theme) => ({
   pillText: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },

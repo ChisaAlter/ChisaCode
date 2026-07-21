@@ -430,7 +430,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   branchLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft branch meta: 12.5.
+    fontSize: 12.5,
+    lineHeight: 18,
     minWidth: 0,
     flexShrink: 1,
   },
@@ -439,9 +441,10 @@ const styles = StyleSheet.create((theme) => ({
     height: 30,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: hovered || pressed ? theme.colors.surface2 : "transparent",
+    borderRadius: 10,
+    backgroundColor: hovered || pressed ? theme.colors.surface1 : "transparent",
   }),
+  // Soft commit message field: near body 14.5 readability.
   messageInput: {
     minHeight: 78,
     marginHorizontal: theme.spacing[4],
@@ -449,9 +452,9 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[3],
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
+    borderRadius: 12,
+    fontSize: 14.5,
+    lineHeight: 22,
   },
   checkboxRow: ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => ({
     flexDirection: "row",
@@ -464,9 +467,9 @@ const styles = StyleSheet.create((theme) => ({
   checkbox: {
     width: 16,
     height: 16,
-    borderRadius: 4,
+    borderRadius: theme.borderRadius.base,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.surface0,
@@ -477,8 +480,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   checkboxLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.35,
+    // Soft form label: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     minWidth: 0,
     flexShrink: 1,
   },
@@ -486,13 +490,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[2],
   },
   shortcutPill: {
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.full,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 1,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   shortcutText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

@@ -97,13 +97,10 @@ import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import {
   SETTINGS_CONTROL_HEIGHT,
-  SETTINGS_DESKTOP_BODY_PADDING,
   SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH,
   SETTINGS_DESKTOP_HEADER_HEIGHT,
-  SETTINGS_DESKTOP_NAV_ITEM_HEIGHT,
   SETTINGS_DESKTOP_SIDEBAR_WIDTH,
   SETTINGS_INPUT_WIDTH,
-  SETTINGS_LIQUID_CONTENT_BACKGROUND,
   useIsCompactFormFactor,
 } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
@@ -196,7 +193,7 @@ function ThemePreview({
     () => ({
       width,
       height,
-      borderRadius: 4,
+      borderRadius: 8,
       backgroundColor: preview.surface,
       borderWidth: 1,
       borderColor: preview.border,
@@ -1081,9 +1078,10 @@ function SidebarSectionButton({
   const labelStyle = useMemo(
     () => [
       sidebarStyles.navigationLabel,
-      isSelected && { color: theme.colors.accent, fontWeight: theme.fontWeight.semibold },
+      // Soft .set-item.on: text + medium weight, not accent ink.
+      isSelected && { color: theme.colors.foreground, fontWeight: theme.fontWeight.medium },
     ],
-    [isSelected, theme.colors.accent, theme.fontWeight.semibold],
+    [isSelected, theme.colors.foreground, theme.fontWeight.medium],
   );
   return (
     <Pressable
@@ -1093,10 +1091,7 @@ function SidebarSectionButton({
       testID={`settings-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
-      <IconComponent
-        size={theme.iconSize.md}
-        color={isSelected ? theme.colors.accent : theme.colors.foregroundMuted}
-      />
+      <IconComponent size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
       <Text style={labelStyle} numberOfLines={1}>
         {label}
       </Text>
@@ -1116,9 +1111,10 @@ function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonPr
   const labelStyle = useMemo(
     () => [
       sidebarStyles.navigationLabel,
-      isSelected && { color: theme.colors.accent, fontWeight: theme.fontWeight.semibold },
+      // Soft .set-item.on: text + medium weight, not accent ink.
+      isSelected && { color: theme.colors.foreground, fontWeight: theme.fontWeight.medium },
     ],
-    [isSelected, theme.colors.accent, theme.fontWeight.semibold],
+    [isSelected, theme.colors.foreground, theme.fontWeight.medium],
   );
   return (
     <Pressable
@@ -1128,10 +1124,7 @@ function SidebarProjectsButton({ isSelected, onSelect }: SidebarProjectsButtonPr
       testID="settings-projects"
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
-      <Folder
-        size={theme.iconSize.md}
-        color={isSelected ? theme.colors.accent : theme.colors.foregroundMuted}
-      />
+      <Folder size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
       <Text style={labelStyle} numberOfLines={1}>
         {t("settings.projects")}
       </Text>
@@ -1156,9 +1149,10 @@ function SidebarHostItem({ serverId, label, isSelected, isLocal, onSelect }: Sid
   const labelStyle = useMemo(
     () => [
       sidebarStyles.label,
-      isSelected && { color: theme.colors.accent, fontWeight: theme.fontWeight.semibold },
+      // Soft .set-item.on host chip: foreground + medium, not accent.
+      isSelected && { color: theme.colors.foreground, fontWeight: theme.fontWeight.medium },
     ],
-    [isSelected, theme.colors.accent, theme.fontWeight.semibold],
+    [isSelected, theme.colors.foreground, theme.fontWeight.medium],
   );
   return (
     <Pressable
@@ -1787,9 +1781,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  // Soft loading copy: body-adjacent.
   loadingText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 22,
   },
   container: {
     flex: 1,
@@ -1802,19 +1798,21 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[3],
     paddingTop: theme.spacing[4],
     width: "100%",
-    maxWidth: 720,
+    maxWidth: SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH,
     alignSelf: "center",
   },
   aboutValue: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   aboutVersionMismatch: {
     color: theme.colors.palette.amber[500],
   },
   aboutErrorText: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[1],
   },
   aboutUpdateActions: {
@@ -1822,6 +1820,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  // Soft settings control: quiet pill trigger.
   themeTrigger: {
     flexDirection: "row",
     alignItems: "center",
@@ -1829,26 +1828,28 @@ const styles = StyleSheet.create((theme) => ({
     height: SETTINGS_CONTROL_HEIGHT,
     paddingVertical: 0,
     paddingHorizontal: 10,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.full,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   themeTriggerText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
   },
   terminalScrollbackInput: {
     width: SETTINGS_INPUT_WIDTH,
     height: 30,
     paddingVertical: 0,
     paddingHorizontal: theme.spacing[1.5],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface2,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: "center",
   },
   placeholder: {
@@ -1859,7 +1860,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   placeholderText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));
 
@@ -1868,29 +1870,33 @@ const desktopStyles = StyleSheet.create((theme) => ({
     flex: 1,
     flexDirection: "row",
   },
+  // Soft settings main: soft shell canvas behind detail cards.
   contentPane: {
     flex: 1,
-    backgroundColor: theme.glass.enabled
-      ? SETTINGS_LIQUID_CONTENT_BACKGROUND
-      : theme.colors.surfaceWorkspace,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   content: {
     width: "100%",
     maxWidth: SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH,
     alignSelf: "center",
-    padding: SETTINGS_DESKTOP_BODY_PADDING,
+    // Soft .set-body padding.
+    paddingTop: 22,
+    paddingRight: 28,
+    paddingBottom: 36,
+    paddingLeft: 28,
   },
   detailLeft: {
     gap: theme.spacing[2],
   },
   detailTitle: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 15,
     lineHeight: 20,
     fontWeight: theme.fontWeight.semibold,
   },
 }));
 
 const sidebarStyles = StyleSheet.create((theme) => ({
+  // Soft .set-nav column.
   desktopContainer: {
     width: SETTINGS_DESKTOP_SIDEBAR_WIDTH,
     flexShrink: 0,
@@ -1903,10 +1909,11 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     paddingVertical: 0,
     paddingHorizontal: 0,
   },
+  // Soft .set-list.
   list: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: { xs: 0, md: theme.spacing[1.5] },
-    gap: 0,
+    paddingVertical: 10,
+    paddingHorizontal: { xs: 0, md: 10 },
+    gap: 2,
   },
   desktopBody: {
     flex: 1,
@@ -1922,19 +1929,20 @@ const sidebarStyles = StyleSheet.create((theme) => ({
   scrollContent: {
     paddingBottom: theme.spacing[3],
   },
+  // Soft .set-item: h38, r10, pad 0 12, gap 10, text-2.
   item: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    minHeight: { xs: 44, md: SETTINGS_DESKTOP_NAV_ITEM_HEIGHT },
+    gap: 10,
+    minHeight: { xs: 44, md: 38 },
     paddingVertical: 0,
-    paddingHorizontal: { xs: theme.spacing[4], md: 10 },
-    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: { xs: theme.spacing[4], md: 12 },
+    borderRadius: 10,
   },
   itemHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
-  // Soft Workbench: selected nav chip uses elevated white surface.
+  // Soft .set-item.on: elevated surface chip + Soft-ink shadow.
   itemSelected: {
     backgroundColor: theme.colors.surface0,
     ...(isWeb
@@ -1945,25 +1953,26 @@ const sidebarStyles = StyleSheet.create((theme) => ({
   },
   hostItem: {
     minHeight: 34,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   addHostItem: {
     minHeight: 30,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
+  // Soft .set-item label: 13px text-2 until selected.
   navigationLabel: {
-    fontSize: { xs: theme.fontSize.sm, md: 13 },
-    lineHeight: { xs: 18, md: 18 },
-    color: { xs: theme.colors.foregroundMuted, md: theme.colors.foreground },
+    fontSize: 13,
+    lineHeight: 18,
+    color: theme.colors.foregroundMuted,
     fontWeight: theme.fontWeight.normal,
     flex: 1,
   },
   label: {
-    fontSize: { xs: theme.fontSize.sm, md: 13 },
-    lineHeight: { xs: 18, md: 18 },
+    fontSize: 13,
+    lineHeight: 18,
     color: theme.colors.foregroundMuted,
     fontWeight: theme.fontWeight.normal,
     flex: 1,

@@ -300,6 +300,9 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexDirection: "row",
     gap: theme.spacing[2],
     flexWrap: "wrap",
+    // Soft pen-bar: sit with textarea horizontal pad (16), slight top lead.
+    paddingTop: 10,
+    paddingHorizontal: 16,
   },
   imageThumbnail: {
     width: 32,
@@ -308,7 +311,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   imageThumbnailPlaceholder: {
     width: 32,
     height: 32,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   githubPillBody: {
     minHeight: 32,
@@ -318,7 +321,10 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   githubPillIcon: {
     width: 18,
@@ -329,20 +335,22 @@ const styles = StyleSheet.create((theme: Theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   queueTrack: {
     flexDirection: "column",
     gap: theme.spacing[2],
   },
   queueItem: {
+    // Soft quiet chip row (r10 session/set-item family).
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 10,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     gap: theme.spacing[2],
@@ -350,7 +358,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
   queueText: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
   queueActions: {
     flexDirection: "row",
@@ -363,7 +372,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   queueSendButton: {
     backgroundColor: theme.colors.accent,

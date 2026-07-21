@@ -622,10 +622,13 @@ function WorkspaceScreenContent({
     icons: REVIEW_CALLOUT_GIT_ACTION_ICONS,
   });
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
-  const canOpenImportSheet = [client, isConnected, workspaceDirectory].every(Boolean);
+  // Soft Home draft only — conversation header/menu no longer exposes import.
   const openImportSheet = useCallback(() => {
+    if (![client, isConnected, workspaceDirectory].every(Boolean)) {
+      return;
+    }
     setIsImportSheetVisible(true);
-  }, []);
+  }, [client, isConnected, workspaceDirectory]);
   const closeImportSheet = useCallback(() => {
     setIsImportSheetVisible(false);
   }, []);
@@ -1160,13 +1163,11 @@ function WorkspaceScreenContent({
       workspaceScripts,
       liveTerminalIds,
       showWorkspaceSetup,
-      importAgentDisabled: !canOpenImportSheet,
       onCreateDraftTab: handleCreateDraftTab,
       onCreateTerminal: handleCreateTerminal,
       onCreateBrowser: handleCreateBrowserTab,
       onOpenGitDock: handleOpenGitDock,
       onOpenBrowserContextDock: handleOpenBrowserContextDock,
-      onOpenImportSheet: openImportSheet,
       onCopyWorkspacePath: handleCopyWorkspacePath,
       onCopyBranchName: handleCopyBranchName,
       onOpenSetupTab: handleOpenSetupTab,
@@ -1175,7 +1176,6 @@ function WorkspaceScreenContent({
       onOpenUrlInBrowserTab: handleOpenUrlInBrowserTab,
     }),
     [
-      canOpenImportSheet,
       currentBranchName,
       handleCopyBranchName,
       handleCopyWorkspacePath,
@@ -1191,7 +1191,6 @@ function WorkspaceScreenContent({
       isGitCheckout,
       isWorkspaceHeaderLoading,
       liveTerminalIds,
-      openImportSheet,
       shouldShowWorkspaceHeaderSubtitle,
       showWorkspaceSetup,
       workspaceHeaderSubtitle,

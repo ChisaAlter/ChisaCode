@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native-unistyles";
-import { WORKBENCH_COMPOSER_CONTROL_HEIGHT, WORKBENCH_META_LINE_HEIGHT } from "@/constants/layout";
+import { WORKBENCH_META_LINE_HEIGHT } from "@/constants/layout";
 
 export const styles = StyleSheet.create((theme) => ({
   container: {
@@ -12,43 +12,43 @@ export const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     alignItems: "center",
   },
+  // Soft .t-btn: pill, transparent, muted text, hover wash.
   modeBadge: {
-    height: WORKBENCH_COMPOSER_CONTROL_HEIGHT,
+    height: 32,
     flexDirection: "row",
     alignItems: "center",
-    // Flat into the composer surface — no chip border/fill.
     backgroundColor: "transparent",
-    gap: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    gap: 6,
+    paddingHorizontal: 10,
+    borderRadius: theme.borderRadius.full,
   },
   modeIconBadge: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
-    borderRadius: theme.borderRadius.full,
+    borderRadius: 10,
   },
   modeBadgeHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   modeBadgePressed: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surface1,
   },
   disabledBadge: {
     opacity: 0.5,
   },
   modeBadgeText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
   tooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   prefsButton: {
     height: 28,
@@ -58,11 +58,12 @@ export const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius["2xl"],
+    borderRadius: 10,
   },
   prefsButtonText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     flexShrink: 1,
   },
@@ -76,13 +77,13 @@ export const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.colors.surface2,
+    borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
   },
   sheetSelectPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   disabledSheetSelect: {
     opacity: 0.5,
@@ -90,7 +91,8 @@ export const styles = StyleSheet.create((theme) => ({
   sheetSelectText: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.semibold,
   },
 }));

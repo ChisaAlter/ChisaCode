@@ -148,7 +148,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
     borderTopWidth: theme.borderWidth[1],
-    borderTopColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
     gap: theme.spacing[2],
   },
   containerError: {
@@ -181,12 +182,15 @@ const styles = StyleSheet.create((theme) => ({
   title: {
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft callout body: 12.5.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
   },
   description: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   descriptionSlot: {
     flexShrink: 1,
@@ -202,7 +206,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: theme.borderWidth[1],
     alignItems: "center",
     justifyContent: "center",
@@ -222,7 +226,8 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.5,
   },
   actionLabel: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
   },
   actionLabelPrimary: {

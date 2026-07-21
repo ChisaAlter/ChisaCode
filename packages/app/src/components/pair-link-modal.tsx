@@ -17,19 +17,22 @@ const FLEX_ONE_STYLE = { flex: 1 } as const;
 const styles = StyleSheet.create((theme) => ({
   helper: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   field: {
     gap: theme.spacing[2],
   },
   label: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft pair modal body: 12.5.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   input: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 12,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     color: theme.colors.foreground,
@@ -38,7 +41,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   error: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   actions: {
     flexDirection: "row",

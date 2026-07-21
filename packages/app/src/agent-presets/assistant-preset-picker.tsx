@@ -125,15 +125,17 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+    backgroundColor: theme.colors.surface0,
   },
   triggerText: {
     minWidth: 0,
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft preset chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   details: {
     gap: theme.spacing[1],
@@ -141,11 +143,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   description: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   meta: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   warningRow: {
     flexDirection: "row",
@@ -156,10 +160,12 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flex: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   errorText: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

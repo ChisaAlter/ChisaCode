@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 interface Props {
   instanceId: string;
@@ -39,12 +40,12 @@ export class GenerativeUiErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <View style={errorCardStyle}>
-          <Text style={errorIconStyle}>⚠</Text>
-          <Text style={errorTitleStyle}>{this.props.componentId} 渲染失败</Text>
-          <Text style={errorDetailStyle}>组件渲染过程中发生异常，请尝试重试</Text>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorIcon}>⚠</Text>
+          <Text style={styles.errorTitle}>{this.props.componentId} 渲染失败</Text>
+          <Text style={styles.errorDetail}>组件渲染过程中发生异常，请尝试重试</Text>
           <TouchableOpacity onPress={this.handleRetry}>
-            <Text style={retryTextStyle}>重试</Text>
+            <Text style={styles.retryText}>重试</Text>
           </TouchableOpacity>
         </View>
       );
@@ -53,35 +54,38 @@ export class GenerativeUiErrorBoundary extends React.Component<Props, State> {
   }
 }
 
-const errorCardStyle = {
-  padding: 16,
-  borderRadius: 8,
-  borderWidth: 1,
-  borderColor: "#e5e7eb",
-  backgroundColor: "#fef2f2",
-  alignItems: "center" as const,
-  gap: 8,
-};
-
-const errorIconStyle = {
-  fontSize: 20,
-  fontWeight: "600" as const,
-  color: "#ef4444",
-};
-
-const errorTitleStyle = {
-  fontSize: 14,
-  fontWeight: "600" as const,
-  color: "#991b1b",
-};
-
-const errorDetailStyle = {
-  fontSize: 12,
-  color: "#7f1d1d",
-};
-
-const retryTextStyle = {
-  fontSize: 13,
-  fontWeight: "500" as const,
-  color: "#2563eb",
-};
+const styles = StyleSheet.create((theme) => ({
+  // Soft quiet elevated card (r14 family).
+  errorCard: {
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    alignItems: "center",
+    gap: 8,
+  },
+  errorIcon: {
+    fontSize: 20,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.destructive,
+  },
+  errorTitle: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foreground,
+  },
+  errorDetail: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: theme.colors.foregroundMuted,
+  },
+  retryText: {
+    // Soft error secondary: 12.5 muted.
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.accent,
+  },
+}));

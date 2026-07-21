@@ -234,7 +234,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipPath: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   tooltipHintRow: {
@@ -244,7 +245,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipHintText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
 }));

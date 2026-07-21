@@ -60,7 +60,7 @@ function AppContainer({
     surfaceWorkspace: theme.colors.surfaceWorkspace,
     surface0: theme.colors.surface0,
     glassShell: theme.glass.shell,
-    borderAccent: theme.colors.borderAccent,
+    borderAccent: theme.colors.border,
   });
   const surfaceFillStyle = useMemo(
     () => [
@@ -129,14 +129,6 @@ function AppContainer({
   const keyboardShortcutsEnabled = chromeEnabled || pathname.startsWith("/settings");
   const desktopWorkbenchFontEnabled =
     !isCompactLayout && getIsElectronRuntime() && pathname.includes("/workspace/");
-  const titlebarPadding = useWindowControlsPadding("titlebar");
-  const titlebarSpacerStyle = useMemo(
-    () =>
-      !isCompactLayout && titlebarPadding.top > 0
-        ? [layoutStyles.desktopTitlebarSpacer, { height: titlebarPadding.top }]
-        : null,
-    [isCompactLayout, titlebarPadding.top],
-  );
   const appRowStyle = useMemo(
     () => [
       layoutStyles.appRow,
@@ -196,7 +188,6 @@ function AppContainer({
       <DesktopWorkbenchFontStyle enabled={desktopWorkbenchFontEnabled} />
       <LiquidNeonBackdrop />
       <DesktopTitlebarDragStrip />
-      {titlebarSpacerStyle ? <View style={titlebarSpacerStyle} /> : null}
       <View style={appRowStyle}>{appRowContent}</View>
       <FloatingPanelPortalHost />
       {isCompactLayout && chromeEnabled && <LeftSidebar selectedAgentId={selectedAgentId} />}
@@ -255,11 +246,11 @@ export const layoutStyles = StyleSheet.create((theme) => ({
     flex: 1,
     position: "relative",
   },
+  // Soft: spacer is transparent clearance only (no white band / no hard divider).
   desktopTitlebarSpacer: {
     flexShrink: 0,
-    backgroundColor: theme.colors.surface0,
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    backgroundColor: "transparent",
+    borderBottomWidth: 0,
   },
   appRow: {
     flex: 1,
@@ -284,13 +275,13 @@ export const layoutStyles = StyleSheet.create((theme) => ({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
   },
   desktopSidebarRestoreButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
 }));
 

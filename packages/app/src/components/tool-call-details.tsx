@@ -805,11 +805,13 @@ const styles = StyleSheet.create((theme) => {
       paddingHorizontal: theme.spacing[3],
       paddingVertical: theme.spacing[2],
       borderBottomWidth: theme.borderWidth[1],
-      borderBottomColor: theme.colors.border,
+      // Soft quiet chrome rule (--border-soft).
+      borderBottomColor: theme.colors.secondary,
     },
     groupHeaderText: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.sm,
+      fontSize: 12.5,
+      lineHeight: 16,
       fontWeight: theme.fontWeight.normal,
     },
     section: {
@@ -825,34 +827,39 @@ const styles = StyleSheet.create((theme) => {
     },
     plainText: {
       fontFamily: Fonts.sans,
-      fontSize: theme.fontSize.base,
+      // Soft .a stream body: 14.5 / 1.65.
+      fontSize: 14.5,
       color: theme.colors.foreground,
-      lineHeight: 22,
+      lineHeight: 24,
       overflowWrap: "anywhere",
     },
+    // Soft tool section label: 12.5 medium muted, sentence case.
     sectionTitle: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
+      fontSize: 12.5,
+      lineHeight: 16,
+      fontWeight: theme.fontWeight.medium,
+      textTransform: "none",
+      letterSpacing: 0,
     },
     rangeText: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.xs,
+      fontSize: 12.5,
+      lineHeight: 16,
     },
     diffContainer: {
+      // Soft quiet content card (r-md).
       borderWidth: theme.borderWidth[1],
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
+      borderRadius: 12,
       overflow: "hidden",
-      backgroundColor: theme.colors.surface2,
+      backgroundColor: theme.colors.surface0,
     },
     fullBleedBlock: {
       borderWidth: 0,
       borderRadius: 0,
       overflow: "hidden",
-      backgroundColor: theme.colors.surface1,
+      backgroundColor: theme.colors.surfaceWorkspace,
     },
     codeVerticalScroll: {},
     codeVerticalContent: {
@@ -870,8 +877,8 @@ const styles = StyleSheet.create((theme) => {
     scrollArea: {
       borderWidth: theme.borderWidth[1],
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
-      backgroundColor: theme.colors.surface2,
+      borderRadius: 12,
+      backgroundColor: theme.colors.surface0,
     },
     scrollContent: {
       padding: insets.padding,
@@ -922,8 +929,8 @@ const styles = StyleSheet.create((theme) => {
     jsonScroll: {
       borderWidth: theme.borderWidth[1],
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
-      backgroundColor: theme.colors.surface2,
+      borderRadius: 12,
+      backgroundColor: theme.colors.surface0,
     },
     jsonScrollError: {
       borderColor: theme.colors.destructive,
@@ -936,7 +943,8 @@ const styles = StyleSheet.create((theme) => {
     },
     emptyStateText: {
       color: theme.colors.foregroundMuted,
-      fontSize: theme.fontSize.sm,
+      fontSize: 12.5,
+      lineHeight: 16,
       fontStyle: "italic",
     },
     loadingContainer: {
@@ -947,19 +955,19 @@ const styles = StyleSheet.create((theme) => {
       height: 12,
       width: "100%",
       borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface3,
+      backgroundColor: theme.colors.surfaceWorkspace,
     },
     loadingLineMedium: {
       height: 12,
       width: "72%",
       borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface3,
+      backgroundColor: theme.colors.surfaceWorkspace,
     },
     loadingLineShort: {
       height: 12,
       width: "48%",
       borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface3,
+      backgroundColor: theme.colors.surfaceWorkspace,
     },
   };
 });

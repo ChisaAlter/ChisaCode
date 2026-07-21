@@ -433,19 +433,25 @@ const styles = StyleSheet.create((theme) => ({
     left: 0,
     zIndex: 1000,
   },
+  // Soft hover card: quiet elevated surface + Soft ink shadow.
   card: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
     paddingTop: theme.spacing[2],
     width: HOVER_CARD_WIDTH,
-    shadowColor: "#000",
+    shadowColor: "rgba(20, 23, 31, 0.12)",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 6,
     zIndex: 1000,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+        } as object)
+      : {}),
   },
   cardHeader: {
     flexDirection: "row",
@@ -456,7 +462,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   cardTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft hover-card title: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     flex: 1,
     minWidth: 0,
@@ -473,7 +481,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.border,
   },
   listRowHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   checksSummaryRow: {
     flexDirection: "row",
@@ -484,7 +492,8 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 28,
   },
   checksSummaryLabel: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
@@ -504,17 +513,20 @@ const styles = StyleSheet.create((theme) => ({
     gap: 3,
   },
   checksStatusTextFailed: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.statusDanger,
   },
   checksStatusTextPending: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.statusWarning,
   },
   checksStatusTextPassed: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.statusSuccess,
   },

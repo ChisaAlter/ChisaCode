@@ -634,7 +634,8 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "visible",
   },
   gutterLabelActive: {
-    backgroundColor: theme.colors.surface2,
+    // Soft quiet line highlight (not solid surface1 hover fill).
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   gutterActionIcon: {
     position: "absolute",
@@ -642,7 +643,7 @@ const styles = StyleSheet.create((theme) => ({
     top: Math.floor((theme.lineHeight.diff - 22) / 2),
     width: 22,
     height: 22,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.accent,
@@ -657,10 +658,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
   },
   commentBlock: {
-    backgroundColor: theme.colors.surface2,
+    // Soft quiet card chip (r14 family).
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     flexDirection: "row",
@@ -671,8 +673,9 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
+    // Soft review list label: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   commentActions: {
     flexDirection: "row",
@@ -695,17 +698,18 @@ const styles = StyleSheet.create((theme) => ({
       : {}),
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface1,
   },
   iconButtonDestructiveHovered: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface1,
   },
   editorBlock: {
+    // Soft quiet editor card (r14 family).
     minHeight: INLINE_REVIEW_EDITOR_HEIGHT,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
     gap: theme.spacing[3],
@@ -714,14 +718,15 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     color: theme.colors.foreground,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
+    // Soft review editor body: 14.5 / ~1.5.
+    fontSize: 14.5,
+    lineHeight: 22,
     textAlignVertical: "top",
     ...(isWeb
       ? {

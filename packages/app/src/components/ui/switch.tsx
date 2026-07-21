@@ -50,12 +50,13 @@ export function Switch({
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
+      // Soft .toggle off: --active surface3; on: accent.
       [theme.colors.surface3, theme.colors.accent],
     ),
     borderColor: interpolateColor(
       progress.value,
       [0, 1],
-      [theme.colors.border, theme.colors.accent],
+      [theme.colors.surface3, theme.colors.accent],
     ),
   }));
 
@@ -135,7 +136,7 @@ const staticStyles = RNStyleSheet.create({
     borderWidth: 1,
   },
   thumb: {
-    shadowColor: "rgba(0, 0, 0, 0.25)",
+    shadowColor: "rgba(20, 23, 31, 0.12)",
     shadowOffset: { width: 0, height: 1 },
     shadowRadius: 2,
     shadowOpacity: 1,

@@ -111,14 +111,15 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
   },
   capabilityHintBadgeComplete: {
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   capabilityHintBadgeText: {
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   capabilityHintTooltip: {
@@ -148,17 +149,19 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   capabilityHintStatusText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   tooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

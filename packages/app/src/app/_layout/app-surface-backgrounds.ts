@@ -23,6 +23,7 @@ interface AppSurfaceBackgrounds {
 export function resolveAppSurfaceBackgrounds(
   input: AppSurfaceBackgroundInput,
 ): AppSurfaceBackgrounds {
+  // Soft Workbench: frame uses quiet border token, not dense borderAccent chrome.
   const frame = input.frameEnabled
     ? { frameBorderWidth: 1, frameBorderColor: input.borderAccent }
     : { frameBorderWidth: 0, frameBorderColor: "transparent" };

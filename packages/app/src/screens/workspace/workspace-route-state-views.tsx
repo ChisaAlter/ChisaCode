@@ -230,24 +230,27 @@ const styles = StyleSheet.create((theme) => ({
   },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.normal,
     textAlign: "center",
   },
   description: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
   },
   error: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
-    lineHeight: Math.round(theme.fontSize.sm * 1.4),
+    fontSize: 12.5,
+    lineHeight: 18,
     textAlign: "center",
   },
   errorTooltip: {
     color: theme.colors.popoverForeground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     maxWidth: 420,
   },
   actions: {
@@ -283,12 +286,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   reconnectingTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft reconnect chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   reconnectingDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   reconnectingActions: {
     flexDirection: "row",

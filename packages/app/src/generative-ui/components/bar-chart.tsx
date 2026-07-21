@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 
 interface BarChartDataPoint {
@@ -17,6 +18,7 @@ interface BarChartProps extends GenerativeUiComponentBaseProps {
 }
 
 export default function BarChart({ instanceId, props, sendAction }: BarChartProps) {
+  const { theme } = useUnistyles();
   const height = props.height ?? 280;
   const data = useMemo(() => props.data ?? [], [props.data]);
   const labelKey = props.label;
@@ -51,9 +53,15 @@ export default function BarChart({ instanceId, props, sendAction }: BarChartProp
       numericData.map((val) => {
         const safeVal = Number.isNaN(val) ? 0 : val;
         const barH = max > 0 ? (safeVal / max) * (height - 30) : 0;
-        return { ...barBaseStyle, height: barH };
+        return {
+          width: "100%" as const,
+          backgroundColor: theme.colors.accent,
+          borderRadius: theme.borderRadius.base,
+          minHeight: 2,
+          height: barH,
+        };
       }),
-    [numericData, max, height],
+    [numericData, max, height, theme.colors.accent, theme.borderRadius.base],
   );
 
   const barHandlers = useMemo(
@@ -74,24 +82,24 @@ export default function BarChart({ instanceId, props, sendAction }: BarChartProp
 
   if (data.length === 0) {
     return (
-      <View style={cardStyle}>
-        {props.title ? <Text style={titleStyle}>{props.title}</Text> : null}
-        <Text style={emptyStyle}>No data</Text>
+      <View style={styles.card}>
+        {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
+        <Text style={styles.empty}>No data</Text>
       </View>
     );
   }
 
   return (
-    <View style={cardStyle}>
-      {props.title ? <Text style={titleStyle}>{props.title}</Text> : null}
+    <View style={styles.card}>
+      {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
       <View style={barContainerStyle}>
         {data.map((d, i) => {
           const val = numericData[i];
           return (
-            <View key={barKeys[i]} style={barItemStyle}>
-              <Text style={barValueStyle}>{String(val ?? "")}</Text>
+            <View key={barKeys[i]} style={styles.barItem}>
+              <Text style={styles.barValue}>{String(val ?? "")}</Text>
               <TouchableOpacity style={barStyles[i]} onPress={barHandlers[i]} />
-              <Text style={barLabelStyle} numberOfLines={1}>
+              <Text style={styles.barLabel} numberOfLines={1}>
                 {String(d[labelKey] ?? "")}
               </Text>
             </View>
@@ -102,20 +110,41 @@ export default function BarChart({ instanceId, props, sendAction }: BarChartProp
   );
 }
 
-const cardStyle = { padding: 12 } as const;
-const titleStyle = { fontSize: 14, fontWeight: "600" as const, marginBottom: 8 } as const;
-const emptyStyle = { color: "#888", fontSize: 12 } as const;
-const barValueStyle = { fontSize: 10, color: "#666", marginBottom: 2 } as const;
-const barLabelStyle = {
-  fontSize: 9,
-  color: "#888",
-  marginTop: 2,
-  textAlign: "center" as const,
-} as const;
-const barItemStyle = { flex: 1, alignItems: "center" as const } as const;
-const barBaseStyle = {
-  width: "100%" as const,
-  backgroundColor: "#3b82f6",
-  borderRadius: 4,
-  minHeight: 2,
-} as const;
+const styles = StyleSheet.create((theme) => ({
+  card: {
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  title: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foreground,
+    marginBottom: 8,
+  },
+  empty: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
+  },
+  barValue: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: theme.colors.foregroundMuted,
+    marginBottom: 2,
+  },
+  barLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: theme.colors.foregroundMuted,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  barItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+}));

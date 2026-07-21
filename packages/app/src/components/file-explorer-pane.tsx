@@ -128,7 +128,9 @@ function TreeRowItem({
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.entryRow,
       { paddingLeft: theme.spacing[2] + depth * INDENT_PER_LEVEL },
-      (Boolean(hovered) || pressed || isSelected) && styles.entryRowActive,
+      // Soft: hover wash surface1; solid selected surface3.
+      isSelected && styles.entryRowSelected,
+      !isSelected && (Boolean(hovered) || pressed) && styles.entryRowHovered,
     ],
     [depth, isSelected, theme.spacing],
   );
@@ -997,8 +999,10 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     paddingRight: theme.spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft .topbar: quiet --border-soft chrome rule.
+    borderBottomColor: theme.colors.secondary,
   },
+  // Soft chrome chip: quiet r8, 12.5 muted.
   sortTrigger: {
     flexDirection: "row",
     alignItems: "center",
@@ -1007,13 +1011,14 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: theme.spacing[3] - theme.spacing[1],
     paddingHorizontal: theme.spacing[1],
     height: 24,
-    borderRadius: theme.borderRadius.base,
+    borderRadius: 8,
   },
   sortTriggerHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   sortTriggerText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   treeList: {
@@ -1034,11 +1039,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   loadingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   errorText: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     textAlign: "center",
   },
   retryButton: {
@@ -1050,7 +1057,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   retryButtonText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.semibold,
   },
   errorActions: {
@@ -1060,12 +1068,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
   },
   binaryMetaText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   entryRow: {
     flexDirection: "row",
@@ -1073,17 +1083,21 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     paddingVertical: 2,
     paddingRight: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
-  entryRowActive: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+  entryRowHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  // Soft selected explorer row: surface3 (surface1 remains hover).
+  entryRowSelected: {
+    backgroundColor: theme.colors.surface3,
   },
   indentGuide: {
     position: "absolute",
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.border,
   },
   entryInfo: {
     flex: 1,
@@ -1105,10 +1119,12 @@ const styles = StyleSheet.create((theme) => ({
   entryIcon: {
     flexShrink: 0,
   },
+  // Soft explorer row: 12.5 meta list label.
   entryName: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   menuButton: {
     width: 30,
@@ -1118,7 +1134,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   menuButtonActive: {
-    backgroundColor: theme.colors.surface2,
+    // Soft selected wash: surface3.
+    backgroundColor: theme.colors.surface3,
   },
   contextMetaBlock: {
     paddingVertical: theme.spacing[1],
@@ -1131,33 +1148,37 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
   },
   contextMetaLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
   },
   contextMetaValue: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.medium,
     flex: 1,
     minWidth: 0,
     textAlign: "right",
   },
+  // Soft explorer preview header: 12.5 meta chrome.
   previewHeaderText: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   iconButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   refreshIcon: {
     width: 16,
@@ -1194,11 +1215,12 @@ const styles = StyleSheet.create((theme) => ({
     width: "100%",
     aspectRatio: 1,
   },
+  // Soft sheet: white surface, quiet handle.
   sheetBackground: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   handleIndicator: {
-    backgroundColor: theme.colors.palette.zinc[600],
+    backgroundColor: theme.colors.foregroundFaint,
   },
   sheetHeader: {
     flexDirection: "row",
@@ -1207,11 +1229,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
+  // Soft sheet title: near .topbar title scale.
   sheetTitle: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
     flex: 1,
   },

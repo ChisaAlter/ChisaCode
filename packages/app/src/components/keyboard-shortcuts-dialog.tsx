@@ -146,16 +146,20 @@ const styles = StyleSheet.create((theme) => ({
   section: {
     gap: theme.spacing[2],
   },
+  // Soft section label: 12.5 medium muted.
   sectionTitle: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
+  // Soft quiet card family (r14).
   rows: {
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     overflow: "hidden",
+    backgroundColor: theme.colors.surface0,
   },
   row: {
     flexDirection: "row",
@@ -165,19 +169,23 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.surface2,
+    // Soft quiet list rule inside card (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   rowText: {
     flex: 1,
     minWidth: 0,
   },
   rowLabel: {
-    fontSize: theme.fontSize.sm,
+    // Soft shortcut row: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     color: theme.colors.foreground,
   },
   rowNote: {
     marginTop: 2,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   rowShortcut: {

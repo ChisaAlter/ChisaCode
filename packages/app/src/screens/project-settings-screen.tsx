@@ -1277,7 +1277,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   noTargetText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   body: {
     padding: theme.spacing[4],
@@ -1297,9 +1298,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[3],
   },
+  // Soft project title: near .topbar title scale.
   projectTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
   },
@@ -1315,19 +1318,21 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
+  // Soft name editor: match project title scale.
   nameEditorInput: {
     flex: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     minWidth: 0,
   },
   nameEditorResetButton: {
@@ -1336,34 +1341,37 @@ const styles = StyleSheet.create((theme) => ({
   },
   nameEditorResetText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   titleIcon: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   titleIconFallback: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   titleIconFallbackText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
   },
   iconColor: {
     color: theme.colors.foregroundMuted,
   },
+  // Soft host chip: quiet r10 set-item family.
   hostIndicator: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     alignSelf: "flex-start",
     minWidth: 0,
   },
@@ -1374,7 +1382,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   hostName: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     flexShrink: 1,
     minWidth: 0,
   },
@@ -1389,7 +1398,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyScripts: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   scriptRow: {
     flexDirection: "row",
@@ -1405,7 +1415,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderTopColor: theme.colors.secondary,
   },
   scriptRowMain: {
     flex: 1,
@@ -1417,7 +1428,7 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   calloutWrap: {
     marginTop: theme.spacing[3],
@@ -1432,27 +1443,32 @@ const styles = StyleSheet.create((theme) => ({
   },
   modalLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   modalInput: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   modalMultilineInput: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     minHeight: 100,
     textAlignVertical: "top",
   },
@@ -1464,7 +1480,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   fieldError: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   serviceToggleRow: {
     flexDirection: "row",
@@ -1478,12 +1495,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   serviceToggleLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   modalHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   placeholderColor: {
     color: theme.colors.foregroundMuted,

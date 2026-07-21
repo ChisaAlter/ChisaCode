@@ -49,7 +49,9 @@ export function SettingsTextAreaCard(props: SettingsTextAreaProps) {
 const styles = StyleSheet.create((theme) => ({
   input: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft settings field: 13 lead-scale body.
+    fontSize: 13,
+    lineHeight: 18,
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
     minHeight: 96,

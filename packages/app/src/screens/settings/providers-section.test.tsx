@@ -248,7 +248,7 @@ vi.mock("@/hooks/use-user-visible-error", () => ({
 vi.mock("@/constants/layout", () => ({
   SETTINGS_HINT_LINE_HEIGHT: 16,
   SETTINGS_ROW_HORIZONTAL_PADDING: 16,
-  SETTINGS_ROW_TITLE_FONT_SIZE: 15,
+  SETTINGS_ROW_TITLE_FONT_SIZE: 14,
   SETTINGS_ROW_TITLE_LINE_HEIGHT: 20,
   useIsCompactFormFactor: () => compactState.value,
 }));

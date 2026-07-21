@@ -339,25 +339,27 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   stateLabel: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
+  // Soft PR title meta: 12.5.
   title: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
-    lineHeight: 19,
   },
   divider: {
     height: 1,
-    backgroundColor: theme.colors.border,
+    backgroundColor: theme.colors.secondary,
   },
   refreshButton: {
     position: "absolute",
     top: theme.spacing[3],
     right: theme.spacing[3],
     padding: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   sectionOpen: {
     flexShrink: 1,
@@ -377,9 +379,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },
+  // Soft section label: 12.5 medium muted.
   sectionTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
   summaryWrap: {
@@ -394,7 +398,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: 3,
   },
   summaryPillText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   row: {
@@ -417,26 +422,30 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  // Soft PR row: 12.5 meta.
   rowTitle: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
     flexShrink: 1,
   },
   rowMeta: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     marginLeft: "auto",
   },
   rowMetaMid: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
   rowBody: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
     lineHeight: 16,
+    color: theme.colors.foregroundMuted,
   },
   avatar: {
     width: 20,

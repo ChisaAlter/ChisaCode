@@ -27,7 +27,7 @@ import {
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor, WORKBENCH_ENVIRONMENT_PANEL_SHADOW } from "@/constants/layout";
 import {
   BottomSheetScrollView,
   BottomSheetBackdrop,
@@ -1029,7 +1029,7 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
         {...backdropProps}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        opacity={0.45}
+        opacity={0.28}
       />
     ),
     [],
@@ -1534,8 +1534,8 @@ export function Combobox({
   useWebKeyboardListener(isOpen, handleDesktopKey);
 
   const handleIndicatorStyle = useMemo(
-    () => ({ backgroundColor: theme.colors.palette.zinc[600] }),
-    [theme.colors.palette.zinc],
+    () => ({ backgroundColor: theme.colors.foregroundFaint }),
+    [theme.colors.foregroundFaint],
   );
 
   const desktopFrameStyle = useMemo(
@@ -1648,25 +1648,29 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     paddingHorizontal: theme.spacing[3],
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft search strip: quiet border-soft rule.
+    borderBottomColor: theme.colors.secondary,
     ...(IS_WEB ? {} : { marginHorizontal: theme.spacing[1] }),
   },
   searchInput: {
     flex: 1,
     paddingVertical: theme.spacing[3],
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft combobox chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
+  // Soft menu-hint row: pad 8 10, minH 34.
   comboboxItem: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: 34,
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRadius: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
     ...(IS_WEB
       ? {}
       : {
@@ -1678,16 +1682,17 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
   },
   comboboxItemHoveredElevated: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   comboboxItemPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   comboboxItemPressedElevated: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   comboboxItemActive: {
-    backgroundColor: theme.colors.surface1,
+    // Soft selected wash: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   comboboxItemDisabled: {
     opacity: 0.55,
@@ -1718,12 +1723,14 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   comboboxItemLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
     flexShrink: 0,
   },
   comboboxItemDescription: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
   },
@@ -1731,14 +1738,18 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft combobox chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   bottomSheetHeader: {
     paddingHorizontal: theme.spacing[6],
     paddingBottom: theme.spacing[2],
   },
+  // Soft sheet title: near .topbar title scale.
   comboboxTitle: {
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
     textAlign: "left",
   },
@@ -1757,21 +1768,23 @@ const styles = StyleSheet.create((theme) => ({
     bottom: 0,
     left: 0,
   },
+  // Soft .menu-hint floating panel: r12 pad 6 + Soft ink elevation.
   desktopContainer: {
-    backgroundColor: theme.colors.popover,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    ...theme.shadow.md,
+    borderColor: theme.colors.border,
+    padding: 6,
     maxHeight: 400,
     overflow: "hidden",
+    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.md),
   },
   desktopScroll: {
     flexShrink: 1,
     minHeight: 0,
   },
   desktopScrollContent: {
-    paddingVertical: theme.spacing[1],
+    paddingVertical: 0,
   },
   desktopChildrenScrollContent: {
     // No padding — custom children (e.g. model selector) control their own spacing

@@ -111,7 +111,7 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: "100%",
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   iconRail: {
     width: 14,
@@ -124,17 +124,18 @@ const styles = StyleSheet.create((theme) => ({
     height: 4,
     borderRadius: 1,
   },
+  // Soft thought chip: 12.5 muted meta.
   label: {
     color: theme.colors.foregroundMuted,
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: 16,
     flexShrink: 0,
   },
   preview: {
     color: theme.colors.foregroundMuted,
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: 16,
     opacity: 0.7,
     minWidth: 0,
@@ -151,7 +152,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[1],
     color: theme.colors.foregroundMuted,
     fontFamily: Fonts.sans,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: 18,
   },
 }));

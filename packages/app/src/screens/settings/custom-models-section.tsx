@@ -461,7 +461,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   modelRow: {
     flexDirection: "row",
@@ -473,7 +474,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   modelRowBorder: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderTopColor: theme.colors.secondary,
   },
   modelTextColumn: {
     flex: 1,
@@ -481,7 +483,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   modelIdText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[1],
   },
   rowActions: {
@@ -497,7 +500,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   disabled: {
     opacity: theme.opacity[50],
@@ -510,18 +513,20 @@ const styles = StyleSheet.create((theme) => ({
   },
   formLabel: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
   },
   formInput: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 12,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     color: theme.colors.foreground,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
   },
   providerToggleRow: {
     flexDirection: "row",
@@ -533,7 +538,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   providerToggleBorder: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderTopColor: theme.colors.secondary,
   },
   formActions: {
     flexDirection: "row",

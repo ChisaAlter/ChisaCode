@@ -792,7 +792,8 @@ export function ProviderDiagnosticSheet({
 
 const sheetStyles = StyleSheet.create((theme) => ({
   mutedText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   monoHint: {
@@ -803,22 +804,26 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
   descriptionInline: {
     flex: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   errorText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.destructive,
   },
   formInput: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 12,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     color: theme.colors.foreground,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    fontSize: theme.fontSize.sm,
+    // Soft form field body: 14.5 readability.
+    fontSize: 14.5,
+    lineHeight: 22,
   },
   iconButton: {
     width: 28,
@@ -828,7 +833,7 @@ const sheetStyles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   disabled: {
     opacity: 0.5,
@@ -856,11 +861,14 @@ const sheetStyles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     gap: theme.spacing[3],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderTopColor: theme.colors.secondary,
   },
   modelTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     flexShrink: 0,
   },
   modelRowFiller: {
@@ -884,10 +892,12 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
   toolingOutput: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
     color: theme.colors.foregroundMuted,
     fontFamily: Fonts.mono,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     padding: theme.spacing[3],
   },
   emptyState: {
@@ -897,7 +907,8 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
   footerMeta: {
     flex: 1,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   footerActions: {
@@ -909,7 +920,9 @@ const sheetStyles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   formLabel: {
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
   },

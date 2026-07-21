@@ -263,11 +263,11 @@ const styles = StyleSheet.create((theme) => ({
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: 34,
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[1],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 8,
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
     marginHorizontal: theme.spacing[1],
@@ -284,8 +284,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   optionRowActive: {
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
-    ...theme.shadow.sm,
+    // Soft selected wash: surface3, not hover surface1.
+    backgroundColor: theme.colors.surface3,
   },
   optionLeadingSlot: {
     width: 16,
@@ -297,7 +297,8 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
   },
   optionLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
   optionTrailingSlot: {

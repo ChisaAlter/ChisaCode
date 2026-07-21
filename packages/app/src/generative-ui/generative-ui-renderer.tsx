@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback } from "react";
 import { View, Text } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { genUiRegistry } from "@/generative-ui/registry/registry";
 /* eslint-disable-next-line import/no-unassigned-import */
 import "@/generative-ui/registry/components";
@@ -90,68 +91,72 @@ function GenerativeUiRenderInner({
 
 function UnknownComponentCard({ componentId }: { componentId: string }) {
   return (
-    <View style={fallbackStyle}>
-      <Text style={fallbackTitleStyle}>未知组件</Text>
-      <Text style={fallbackTextStyle}>组件 &quot;{componentId}&quot; 未在注册表中找到</Text>
+    <View style={styles.fallback}>
+      <Text style={styles.fallbackTitle}>未知组件</Text>
+      <Text style={styles.fallbackText}>组件 &quot;{componentId}&quot; 未在注册表中找到</Text>
     </View>
   );
 }
 
 function PropsErrorCard({ componentId }: { componentId: string }) {
   return (
-    <View style={fallbackStyle}>
-      <Text style={fallbackTitleStyle}>属性校验失败</Text>
-      <Text style={fallbackTextStyle}>组件 &quot;{componentId}&quot; 的属性数据格式不正确</Text>
+    <View style={styles.fallback}>
+      <Text style={styles.fallbackTitle}>属性校验失败</Text>
+      <Text style={styles.fallbackText}>组件 &quot;{componentId}&quot; 的属性数据格式不正确</Text>
     </View>
   );
 }
 
 function FallbackCard({ message }: { message: string }) {
   return (
-    <View style={fallbackStyle}>
-      <Text style={fallbackTextStyle}>{message}</Text>
+    <View style={styles.fallback}>
+      <Text style={styles.fallbackText}>{message}</Text>
     </View>
   );
 }
 
 function LoadingSkeleton() {
   return (
-    <View style={skeletonStyle}>
-      <Text style={skeletonTextStyle}>加载中...</Text>
+    <View style={styles.skeleton}>
+      <Text style={styles.skeletonText}>加载中...</Text>
     </View>
   );
 }
 
-const fallbackStyle = {
-  padding: 12,
-  borderRadius: 8,
-  backgroundColor: "#f3f4f6",
-  borderWidth: 1,
-  borderColor: "#e5e7eb",
-};
-
-const fallbackTitleStyle = {
-  fontSize: 14,
-  fontWeight: "600" as const,
-  color: "#374151",
-  marginBottom: 4,
-};
-
-const fallbackTextStyle = {
-  fontSize: 13,
-  color: "#6b7280",
-};
-
-const skeletonStyle = {
-  padding: 16,
-  borderRadius: 8,
-  backgroundColor: "#f9fafb",
-  height: 120,
-  justifyContent: "center" as const,
-  alignItems: "center" as const,
-};
-
-const skeletonTextStyle = {
-  fontSize: 13,
-  color: "#9ca3af",
-};
+const styles = StyleSheet.create((theme) => ({
+  // Soft quiet elevated card (r14 family).
+  fallback: {
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  fallbackTitle: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foreground,
+    marginBottom: 4,
+  },
+  fallbackText: {
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: theme.colors.foregroundMuted,
+  },
+  skeleton: {
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    height: 120,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  skeletonText: {
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: theme.colors.foregroundFaint,
+  },
+}));

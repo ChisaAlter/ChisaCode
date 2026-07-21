@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { AgentStatusIndicator } from "@/components/ui/agent-status-indicator";
 import { formatTimeAgo } from "@/utils/time";
@@ -462,13 +463,20 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
   },
+  // Soft .m-list: 8 12 20 on compact; desktop keeps roomier pad.
   listContent: {
     paddingHorizontal: {
-      xs: theme.spacing[3],
+      xs: 12,
       md: theme.spacing[6],
     },
-    paddingTop: theme.spacing[4],
-    paddingBottom: theme.spacing[6],
+    paddingTop: {
+      xs: 8,
+      md: theme.spacing[4],
+    },
+    paddingBottom: {
+      xs: 20,
+      md: theme.spacing[6],
+    },
     gap: theme.spacing[1],
   },
   sectionHeading: {
@@ -479,24 +487,47 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     marginBottom: theme.spacing[2],
   },
+  // Soft .sec / .m-sec group label (no tracking).
   sectionTitle: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
+    letterSpacing: 0,
   },
+  // Soft desktop .sess chips; Soft .m-card/.m-row cards on compact.
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    minHeight: {
+      xs: 52,
+      md: 44,
+    },
+    paddingVertical: {
+      xs: 12,
+      md: 10,
+    },
+    paddingHorizontal: {
+      xs: 14,
+      md: theme.spacing[3],
+    },
     borderRadius: {
-      xs: theme.borderRadius.lg,
-      md: 0,
+      xs: 14,
+      md: 10,
     },
     marginBottom: {
-      xs: theme.spacing[1],
+      xs: 10,
+      md: theme.spacing[1],
+    },
+    backgroundColor: {
+      xs: theme.colors.surface0,
+      md: "transparent",
+    },
+    borderWidth: {
+      xs: 1,
       md: 0,
     },
+    borderColor: theme.colors.border,
   },
   rowContent: {
     flex: 1,
@@ -523,37 +554,60 @@ const styles = StyleSheet.create((theme) => ({
   rowTrailing: {
     marginLeft: theme.spacing[2],
   },
+  // Soft .sess.on: elevated white chip.
   rowSelected: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : {}),
   },
   rowHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   rowPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
+  // Soft .sess title 12.5; Soft .m-row .t 14 medium on compact.
   sessionTitle: {
     flexShrink: 1,
-    fontSize: theme.fontSize.sm,
-    fontWeight: "400",
+    fontSize: {
+      xs: 14,
+      md: 12.5,
+    },
+    lineHeight: {
+      xs: 20,
+      md: 18,
+    },
+    fontWeight: {
+      xs: "500",
+      md: "400",
+    },
     color: theme.colors.foreground,
-    opacity: 0.86,
+    opacity: 0.9,
   },
   sessionTitleHighlighted: {
     opacity: 1,
   },
+  // Soft .sess .m: 11 faint meta.
   sessionMetaText: {
     maxWidth: "100%",
-    fontSize: theme.fontSize.sm,
+    fontSize: 11,
+    lineHeight: 14,
     color: theme.colors.foregroundMuted,
   },
   sessionMetaSeparator: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 11,
+    lineHeight: 14,
     color: theme.colors.foregroundMuted,
     opacity: 0.7,
   },
   columnMeta: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
     minWidth: 60,
@@ -561,7 +615,8 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: theme.spacing[4],
   },
   columnMetaFixed: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 0,
     width: 72,
@@ -582,7 +637,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   badgeWarning: {
     backgroundColor: theme.colors.statusWarningBg,
@@ -591,7 +646,8 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.statusDangerBg,
   },
   badgeText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
@@ -614,9 +670,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.overlay,
   },
   sheetContainer: {
-    backgroundColor: theme.colors.surface2,
-    borderTopLeftRadius: theme.borderRadius["2xl"],
-    borderTopRightRadius: theme.borderRadius["2xl"],
+    backgroundColor: theme.colors.surface0,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 1,
+    borderColor: theme.colors.border,
     paddingHorizontal: theme.spacing[6],
     paddingTop: theme.spacing[4],
     gap: theme.spacing[4],
@@ -629,9 +687,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.foregroundMuted,
     opacity: 0.3,
   },
+  // Soft sheet title: near .topbar title scale.
   sheetTitle: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
     textAlign: "center",
   },
@@ -639,9 +699,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     gap: theme.spacing[3],
   },
+  // Soft sheet action: r12 quiet control.
   sheetButton: {
     flex: 1,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 12,
     paddingVertical: theme.spacing[4],
     alignItems: "center",
     justifyContent: "center",
@@ -652,18 +713,20 @@ const styles = StyleSheet.create((theme) => ({
   sheetArchiveText: {
     color: theme.colors.primaryForeground,
     fontWeight: theme.fontWeight.semibold,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
   sheetArchiveTextDisabled: {
     opacity: 0.5,
   },
   sheetCancelButton: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   sheetCancelText: {
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.semibold,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
 }));
 

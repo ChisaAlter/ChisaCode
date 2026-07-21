@@ -104,7 +104,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     paddingHorizontal: theme.spacing[2],
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    // Soft .set-main-h / .topbar: quiet border-soft rule.
+    borderBottomColor: theme.colors.secondary,
     userSelect: "none",
   },
   left: {

@@ -152,11 +152,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   previewOverlay: {
     position: "absolute",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   previewFrame: {
     position: "absolute",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: 2,
   },
   previewLeft: {

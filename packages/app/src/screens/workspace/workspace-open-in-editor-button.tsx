@@ -285,12 +285,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     flexShrink: 0,
   },
+  // Soft split control: quiet pill border.
   splitButton: {
     flexDirection: "row",
     alignItems: "stretch",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.full,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   splitButtonPrimary: {
@@ -308,14 +309,15 @@ const styles = StyleSheet.create((theme) => ({
     position: "relative",
   },
   splitButtonPrimaryHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   splitButtonPrimaryDisabled: {
     opacity: 0.6,
   },
+  // Soft split control label: 12.5 meta.
   splitButtonText: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.5,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
@@ -333,9 +335,9 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderLeftWidth: theme.borderWidth[1],
-    borderLeftColor: theme.colors.borderAccent,
+    borderLeftColor: theme.colors.border,
   },
   splitButtonCaretHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
 }));

@@ -90,9 +90,9 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.82,
   },
   text: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     fontWeight: theme.fontWeight.normal,
-    lineHeight: 14,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   textHovered: {

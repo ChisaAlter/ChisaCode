@@ -24,13 +24,21 @@ export function ScreenTitle({ children, numberOfLines = 1, testID, style }: Scre
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft .topbar .title: 13.5 medium; compact keeps 14.5 readable.
   text: {
     flexShrink: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.base,
+    fontSize: {
+      xs: 14.5,
+      md: 13.5,
+    },
+    lineHeight: {
+      xs: 20,
+      md: 18,
+    },
     fontWeight: {
-      xs: "400",
-      md: "300",
+      xs: "500",
+      md: "500",
     },
     color: theme.colors.foreground,
   },

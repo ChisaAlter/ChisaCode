@@ -85,7 +85,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   overlayText: {
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
   },

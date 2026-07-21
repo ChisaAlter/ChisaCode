@@ -1,5 +1,7 @@
 import React, { useMemo, useCallback, useEffect, useReducer, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 import {
   createGenerativeFormState,
@@ -28,93 +30,6 @@ interface FormProps extends GenerativeUiComponentBaseProps {
 
 const accessibilityDisabledState = { disabled: true } as const;
 const accessibilityEnabledState = { disabled: false } as const;
-const selectRowStyle = {
-  flexDirection: "row" as const,
-  flexWrap: "wrap" as const,
-  gap: 4,
-  marginTop: 4,
-} as const;
-
-const optionButtonBaseStyle = {
-  paddingHorizontal: 12,
-  paddingVertical: 6,
-  borderRadius: 6,
-  borderWidth: 1,
-} as const;
-
-const optionButtonSelectedStyle = {
-  ...optionButtonBaseStyle,
-  borderColor: "#3b82f6",
-  backgroundColor: "#eff6ff",
-} as const;
-
-const optionButtonUnselectedStyle = {
-  ...optionButtonBaseStyle,
-  borderColor: "#d1d5db",
-  backgroundColor: "#fff",
-} as const;
-
-const optionTextSelectedStyle = {
-  fontSize: 12,
-  color: "#3b82f6",
-} as const;
-
-const optionTextUnselectedStyle = {
-  fontSize: 12,
-  color: "#374151",
-} as const;
-
-const containerStyle = { padding: 12 } as const;
-
-const titleStyle = {
-  fontSize: 14,
-  fontWeight: "600" as const,
-  marginBottom: 12,
-} as const;
-
-const fieldWrapperStyle = { marginBottom: 12 } as const;
-
-const requiredStarStyle = { color: "#ef4444" } as const;
-
-const labelStyle = {
-  fontSize: 12,
-  fontWeight: "500" as const,
-  color: "#374151",
-  marginBottom: 4,
-} as const;
-
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: "#d1d5db",
-  borderRadius: 6,
-  padding: 8,
-  fontSize: 13,
-  color: "#111",
-  backgroundColor: "#fff",
-} as const;
-
-const submitButtonBaseStyle = {
-  marginTop: 8,
-  padding: 10,
-  borderRadius: 8,
-  alignItems: "center" as const,
-} as const;
-
-const submitButtonActiveStyle = {
-  ...submitButtonBaseStyle,
-  backgroundColor: "#3b82f6",
-} as const;
-
-const submitButtonDisabledStyle = {
-  ...submitButtonBaseStyle,
-  backgroundColor: "#9ca3af",
-} as const;
-
-const submitTextStyle = {
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: "600" as const,
-} as const;
 
 function FormFieldRenderer({
   field,
@@ -142,16 +57,16 @@ function FormFieldRenderer({
 
   if (field.type === "select" && field.options) {
     return (
-      <View style={selectRowStyle}>
+      <View style={styles.selectRow}>
         {field.options.map((opt, i) => (
           <TouchableOpacity
             key={opt.value}
             onPress={optionHandlers[i]}
             disabled={disabled}
             accessibilityState={disabled ? accessibilityDisabledState : accessibilityEnabledState}
-            style={value === opt.value ? optionButtonSelectedStyle : optionButtonUnselectedStyle}
+            style={value === opt.value ? styles.optionButtonSelected : styles.optionButton}
           >
-            <Text style={value === opt.value ? optionTextSelectedStyle : optionTextUnselectedStyle}>
+            <Text style={value === opt.value ? styles.optionTextSelected : styles.optionText}>
               {opt.label}
             </Text>
           </TouchableOpacity>
@@ -163,13 +78,14 @@ function FormFieldRenderer({
   if (field.type === "textarea") {
     return (
       <TextInput
-        style={inputStyle}
+        style={styles.textarea}
         multiline
         numberOfLines={3}
         value={value}
         onChangeText={onChange}
         placeholder={field.placeholder}
         editable={!disabled}
+        placeholderTextColor={styles.placeholder.color}
       />
     );
   }
@@ -178,12 +94,13 @@ function FormFieldRenderer({
 
   return (
     <TextInput
-      style={inputStyle}
+      style={styles.input}
       value={value}
       onChangeText={onChange}
       placeholder={field.placeholder}
       keyboardType={keyboardType}
       editable={!disabled}
+      placeholderTextColor={styles.placeholder.color}
     />
   );
 }
@@ -229,7 +146,7 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
 
   const disabled = !isGenerativeFormEditable(state);
   const submitButtonStyle = useMemo(
-    () => (disabled ? submitButtonDisabledStyle : submitButtonActiveStyle),
+    () => (disabled ? styles.submitButtonDisabled : styles.submitButton),
     [disabled],
   );
 
@@ -258,15 +175,15 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
   );
 
   return (
-    <View style={containerStyle}>
-      {props.title ? <Text style={titleStyle}>{props.title}</Text> : null}
+    <View style={styles.container}>
+      {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
 
       <ScrollView>
         {fields.map((field, fieldIdx) => (
-          <View key={field.name} style={fieldWrapperStyle}>
-            <Text style={labelStyle}>
+          <View key={field.name} style={styles.fieldWrapper}>
+            <Text style={styles.label}>
               {field.label}
-              {field.required ? <Text style={requiredStarStyle}> *</Text> : null}
+              {field.required ? <Text style={styles.requiredStar}> *</Text> : null}
             </Text>
             <FormFieldRenderer
               field={field}
@@ -279,9 +196,9 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
         ))}
       </ScrollView>
 
-      {state.error ? <Text style={errorTextStyle}>{state.error}</Text> : null}
+      {state.error ? <Text style={styles.errorText}>{state.error}</Text> : null}
       <TouchableOpacity onPress={handleSubmit} disabled={disabled} style={submitButtonStyle}>
-        <Text style={submitTextStyle}>
+        <Text style={styles.submitText}>
           {state.status === "submitted" ? "已提交" : (props.submitLabel ?? "提交")}
         </Text>
       </TouchableOpacity>
@@ -289,8 +206,126 @@ export default function GenerativeFormCard({ instanceId, props, sendAction }: Fo
   );
 }
 
-const errorTextStyle = {
-  color: "#dc2626",
-  fontSize: 12,
-  marginTop: 4,
-} as const;
+const styles = StyleSheet.create((theme) => ({
+  // Soft stream form card: quiet elevated surface0.
+  container: {
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+        } as object)
+      : theme.shadow.sm),
+  },
+  title: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foreground,
+    marginBottom: 12,
+  },
+  fieldWrapper: {
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foregroundSubtleText,
+    marginBottom: 4,
+  },
+  requiredStar: {
+    color: theme.colors.destructive,
+  },
+  selectRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 4,
+  },
+  optionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    // Soft quiet chip: r10 control family.
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+  },
+  optionButtonSelected: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    // Soft selected chip: surface3 wash under accent edge.
+    backgroundColor: theme.colors.surface3,
+  },
+  optionText: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: theme.colors.foregroundSubtleText,
+  },
+  optionTextSelected: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: theme.colors.accent,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+    padding: 8,
+    // Soft form field body: 14.5 readability.
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: theme.colors.foreground,
+    backgroundColor: theme.colors.surface0,
+  },
+  textarea: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+    padding: 8,
+    // Soft form field body: 14.5 readability.
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: theme.colors.foreground,
+    backgroundColor: theme.colors.surface0,
+    minHeight: 72,
+    textAlignVertical: "top",
+  },
+  placeholder: {
+    color: theme.colors.foregroundFaint,
+  },
+  submitButton: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    backgroundColor: theme.colors.accent,
+  },
+  submitButtonDisabled: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    backgroundColor: theme.colors.foregroundFaint,
+  },
+  submitText: {
+    color: theme.colors.accentForeground,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
+  },
+  errorText: {
+    color: theme.colors.destructive,
+    fontSize: 12.5,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+}));

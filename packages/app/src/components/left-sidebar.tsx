@@ -58,8 +58,6 @@ import {
   DESKTOP_SIDEBAR_GAP,
   MIN_CHAT_WIDTH,
   SIDEBAR_FOOTER_HEIGHT,
-  WORKBENCH_META_FONT_SIZE,
-  WORKBENCH_META_LINE_HEIGHT,
 } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useSidebarAnimation } from "@/contexts/sidebar-animation-context";
@@ -668,7 +666,9 @@ function SidebarPrimaryAction({
         const color = hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted;
         return (
           <>
-            <Icon size={theme.iconSize.sm} color={color} />
+            <View style={styles.sidebarPrimaryActionPlus}>
+              <Icon size={theme.iconSize.sm} color={color} />
+            </View>
             <Text style={styles.sidebarPrimaryActionText} numberOfLines={1}>
               {label}
             </Text>
@@ -1200,14 +1200,15 @@ function MobileSidebar({
     () => [staticStyles.backdrop, backdropAnimatedStyle],
     [backdropAnimatedStyle],
   );
+  // Soft .drawer: --nav surface, not workspace shell wash.
   const mobileSidebarStyle = useMemo(
     () => [
       staticStyles.mobileSidebar,
       mobileSidebarInsetStyle,
       sidebarAnimatedStyle,
-      { backgroundColor: theme.colors.surfaceWorkspace },
+      { backgroundColor: theme.colors.surfaceSidebar },
     ],
-    [mobileSidebarInsetStyle, sidebarAnimatedStyle, theme.colors.surfaceWorkspace],
+    [mobileSidebarInsetStyle, sidebarAnimatedStyle, theme.colors.surfaceSidebar],
   );
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={overlayPointerEvents}>
@@ -1484,8 +1485,9 @@ function DesktopSidebar({
 // tries to patch the native node that Reanimated also manages.
 const staticStyles = RNStyleSheet.create({
   backdrop: {
+    // Soft .drawer-bg: dimmer over workspace.
     ...RNStyleSheet.absoluteFill,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(15, 18, 25, 0.4)",
   },
   mobileSidebar: {
     position: "absolute" as const,
@@ -1504,59 +1506,66 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
   },
+  // Soft .quick mobile card: r12 surface + border.
   mobileQuickActions: {
-    marginHorizontal: theme.spacing[3],
-    marginBottom: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
+    marginHorizontal: 10,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
     gap: theme.spacing[2],
-    ...theme.shadow.sm,
   },
   mobileQuickActionsTextGroup: {
     minWidth: 0,
     paddingRight: theme.spacing[8],
-    gap: 1,
+    gap: 2,
   },
+  // Soft .quick .ql: 11 medium muted.
   mobileQuickActionsLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: theme.fontWeight.medium,
   },
+  // Soft .quick .qt: 13 medium.
   mobileQuickActionsTitle: {
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
   },
+  // Soft .quick-grid: 2-col, gap 6.
   mobileQuickActionsButtons: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: theme.spacing[2],
+    gap: 6,
   },
+  // Soft .qb: h34 r10 shell wash, 12px text-2.
   mobileQuickActionButton: {
-    minHeight: 32,
+    minHeight: 34,
+    height: 34,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: theme.spacing[1],
+    gap: 4,
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
+  // Soft .qb.primary: --active surface3 wash, full row (surface1 hover-only).
   mobileQuickActionPrimaryButton: {
     flexBasis: "100%",
     flexGrow: 1,
     minWidth: 0,
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface2,
-    ...theme.shadow.sm,
+    borderColor: "transparent",
+    backgroundColor: theme.colors.surface3,
   },
   mobileQuickActionSecondaryButton: {
     flexGrow: 1,
@@ -1564,7 +1573,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 64,
   },
   mobileQuickActionButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   mobileQuickActionIcon: {
     flexShrink: 0,
@@ -1572,20 +1581,25 @@ const styles = StyleSheet.create((theme) => ({
   mobileQuickActionText: {
     minWidth: 0,
     flexShrink: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
+  // Soft .qb.primary label weight.
   mobileQuickActionPrimaryText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foreground,
   },
   desktopSidebarBorder: {
     borderRightWidth: theme.borderWidth[1],
     borderRightColor: theme.colors.border,
+    // Soft Workbench: soft nav column, not hard chrome rail.
     backgroundColor: theme.colors.surfaceSidebar,
     overflow: "hidden",
   },
-  // note: Soft uses same sidebar token; elevation comes from selected rows/CTA
   desktopSidebarRail: {
     width: 44,
     alignSelf: "stretch",
@@ -1593,20 +1607,20 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[3],
     borderRightWidth: theme.borderWidth[1],
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceWorkspace,
+    backgroundColor: theme.colors.surfaceSidebar,
   },
   desktopSidebarRailButton: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
+    borderRadius: 10,
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
   },
   desktopSidebarRailButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   resizeHandle: {
     position: "absolute",
@@ -1634,49 +1648,55 @@ const styles = StyleSheet.create((theme) => ({
     userSelect: "none",
   },
   desktopSidebarTopArea: {
+    // Soft .nav-top: padding 12 12 8.
     paddingTop: 12,
     paddingRight: 12,
     paddingBottom: 8,
     paddingLeft: 12,
-    gap: 8,
+    gap: 10,
   },
   sidebarTopActions: {
+    // Soft .nav-top-row: gap 6.
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: theme.spacing[2],
+    gap: 6,
   },
   sidebarTopHeadingButton: {
+    // Soft .all-sessions: h32, quiet r10.
     minWidth: 0,
     flexShrink: 1,
-    minHeight: 28,
+    minHeight: 32,
     justifyContent: "center",
-    paddingHorizontal: theme.spacing[1],
+    paddingHorizontal: 6,
+    borderRadius: 10,
   },
   sidebarTopHeading: {
     color: theme.colors.foreground,
     fontSize: 13.5,
     lineHeight: 18,
     fontWeight: theme.fontWeight.semibold,
+    letterSpacing: -0.02 * 13.5,
   },
   sidebarTopIconCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 2,
   },
+  // Soft .ni / .icon-btn: 32 tile r10, transparent, hover fill only.
   sidebarTopAction: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
+    borderRadius: 10,
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
   },
   sidebarTopActionHovered: {
-    backgroundColor: theme.colors.surface2,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+    borderColor: "transparent",
   },
   sidebarTopActionIconSlot: {
     alignItems: "center",
@@ -1687,28 +1707,43 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopSidebarPrimaryActions: {
     minHeight: 40,
+    paddingHorizontal: 0,
   },
-  // Soft Workbench primary CTA — design: soft filled pill button.
+  // Soft .new-btn: --active fill on --nav, hover --hover.
   sidebarPrimaryAction: {
     minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    gap: 10,
+    paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 0,
     borderColor: "transparent",
-    backgroundColor: theme.colors.surface2,
-    justifyContent: "center",
+    backgroundColor: theme.colors.surface3,
+    justifyContent: "flex-start",
   },
   sidebarPrimaryActionHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  // Soft .new-btn .plus chip.
+  sidebarPrimaryActionPlus: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : {}),
   },
   sidebarPrimaryActionText: {
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: WORKBENCH_META_FONT_SIZE,
+    fontSize: 13.5,
     fontWeight: theme.fontWeight.medium,
   },
   hostTrigger: {
@@ -1720,14 +1755,18 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 28,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
+  // Soft .host: h36, white surface, border, r10, pad 0 10.
   desktopHostTrigger: {
-    minHeight: 28,
-    height: 28,
+    minHeight: 36,
+    height: 36,
     paddingVertical: 0,
-    paddingHorizontal: 6,
-    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   hostTriggerHovered: {
     backgroundColor: theme.colors.surface1,
@@ -1737,35 +1776,39 @@ const styles = StyleSheet.create((theme) => ({
     height: 8,
     borderRadius: theme.borderRadius.full,
   },
+  // Soft .host .lbl: 12.5px.
   hostTriggerText: {
-    fontSize: WORKBENCH_META_FONT_SIZE,
-    lineHeight: WORKBENCH_META_LINE_HEIGHT,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     flexShrink: 1,
     minWidth: 0,
   },
   sidebarFooter: {
+    // Soft .nav-foot family: quiet border-soft top rule.
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    borderTopColor: theme.colors.secondary,
   },
   desktopSidebarFooter: {
+    // Soft .nav-foot: pad 10 10 12, host + icons, --border-soft top rule.
     height: SIDEBAR_FOOTER_HEIGHT,
     paddingLeft: 10,
     paddingRight: 10,
-    paddingVertical: 8,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "flex-start",
-    gap: 6,
+    gap: 8,
     marginHorizontal: 0,
     marginBottom: 0,
     borderTopWidth: theme.borderWidth[1],
-    borderTopColor: theme.colors.border,
+    borderTopColor: theme.colors.secondary,
     borderRadius: 0,
     backgroundColor: "transparent",
   },
@@ -1777,7 +1820,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopFooterHostSlot: {
     width: "100%",
-    height: 28,
+    height: 36,
     marginRight: 0,
   },
   footerIconRow: {
@@ -1788,8 +1831,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopFooterIconRow: {
     alignSelf: "stretch",
-    justifyContent: "space-between",
-    gap: 6,
+    justifyContent: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   footerIconButton: {
     width: 28,
@@ -1798,20 +1843,22 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   footerIconButtonHovered: {
     backgroundColor: theme.colors.surface1,
   },
+  // Soft .foot-icons .icon-btn: 34 tile, white + border, radius 10.
   desktopFooterIconButton: {
-    width: "auto",
-    height: 32,
-    flex: 1,
+    width: 34,
+    height: 34,
+    flexGrow: 0,
+    flexShrink: 0,
     paddingVertical: 0,
     paddingHorizontal: 0,
-    borderWidth: theme.borderWidth[1],
+    borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     backgroundColor: theme.colors.surface0,
   },
   hostPickerList: {
@@ -1820,19 +1867,21 @@ const styles = StyleSheet.create((theme) => ({
   hostPickerOption: {
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
   },
   hostPickerOptionText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft host picker option: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   hostPickerCancel: {
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 12,
     backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
@@ -1840,6 +1889,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   hostPickerCancelText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

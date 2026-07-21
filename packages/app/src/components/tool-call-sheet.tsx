@@ -50,7 +50,8 @@ export function useToolCallSheet(): ToolCallSheetContextValue {
 function CustomSheetBackground({ style }: BottomSheetBackgroundProps) {
   const { theme } = useUnistyles();
   const containerStyle = useMemo(
-    () => [style, { backgroundColor: theme.colors.surface0, borderRadius: 16 }],
+    // Soft sheet surface: composer-family r18.
+    () => [style, { backgroundColor: theme.colors.surface0, borderRadius: 18 }],
     [style, theme.colors.surface0],
   );
   return <Animated.View pointerEvents="none" style={containerStyle} />;
@@ -94,7 +95,7 @@ export function ToolCallSheetProvider({ children }: ToolCallSheetProviderProps) 
 
   const renderBackdrop = useCallback(
     (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.5} />
+      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.28} />
     ),
     [],
   );
@@ -105,8 +106,8 @@ export function ToolCallSheetProvider({ children }: ToolCallSheetProviderProps) 
   );
 
   const handleIndicatorStyle = useMemo(
-    () => ({ backgroundColor: theme.colors.palette.zinc[600] }),
-    [theme.colors.palette.zinc],
+    () => ({ backgroundColor: theme.colors.foregroundFaint }),
+    [theme.colors.foregroundFaint],
   );
 
   return (
@@ -174,7 +175,7 @@ function ToolCallSheetContent({ data, onClose }: ToolCallSheetContentProps) {
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   header: {
     flexDirection: "row",
@@ -183,7 +184,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    // Soft sheet header: quiet border-soft rule.
+    borderBottomColor: theme.colors.secondary,
   },
   headerLeft: {
     flexDirection: "row",
@@ -191,9 +193,11 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     flex: 1,
   },
+  // Soft tool sheet title: near .topbar title scale.
   headerTitle: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
     flex: 1,
   },
@@ -203,7 +207,7 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   contentContainer: {
     padding: 0,

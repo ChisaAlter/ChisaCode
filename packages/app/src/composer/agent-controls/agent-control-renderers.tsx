@@ -68,6 +68,8 @@ interface DesktopAgentControlsContentProps {
   handleThinkingOpenChange: (open: boolean) => void;
   extras?: ReactNode;
   modelSelectorServerId: string | null;
+  /** When false, omit provider/model/thinking — Soft left cbar (mode only). */
+  showModelCluster?: boolean;
 }
 
 interface SheetAgentControlsContentProps {
@@ -203,6 +205,7 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
     handleThinkingOpenChange,
     extras,
     modelSelectorServerId,
+    showModelCluster = true,
   } = props;
   const renderThinkingOption = useThinkingOptionRenderer();
   const providerPressableStyle = useMemo(
@@ -228,7 +231,7 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
 
   return (
     <>
-      {providerOptions && providerOptions.length > 0 ? (
+      {showModelCluster && providerOptions && providerOptions.length > 0 ? (
         <>
           <Pressable
             ref={providerAnchorRef}
@@ -256,7 +259,7 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
         </>
       ) : null}
 
-      {canSelectModel ? (
+      {showModelCluster && canSelectModel ? (
         <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
           <TooltipTrigger asChild triggerRefProp="ref">
             <View>
@@ -284,7 +287,7 @@ export function DesktopAgentControlsContent(props: DesktopAgentControlsContentPr
         </Tooltip>
       ) : null}
 
-      {thinkingOptions && thinkingOptions.length > 0 ? (
+      {showModelCluster && thinkingOptions && thinkingOptions.length > 0 ? (
         <>
           <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
             <TooltipTrigger asChild triggerRefProp="ref">

@@ -1161,16 +1161,18 @@ const stylesheet = StyleSheet.create((theme) => ({
   contentWrapper: {
     width: "100%",
     alignSelf: "stretch",
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: 0,
   },
+  // Soft .m-stream: 12 14 8 horizontal; desktop pad owned by web strategy.
   listContentContainer: {
     paddingVertical: 0,
     flexGrow: 1,
     paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[4],
+      xs: 14,
+      md: 0,
     },
   },
+  // Soft .stream vertical rhythm: 14 top / 10 bottom (web strategy owns desktop pad).
   forwardListContentContainer: {
     paddingTop: 14,
     paddingBottom: 10,
@@ -1183,14 +1185,14 @@ const stylesheet = StyleSheet.create((theme) => ({
   list: {
     flex: 1,
   },
+  // Soft .stream-inner / .role-a: document max ~720.
   workbenchAssistantTurn: {
     width: "100%",
-    // Paseo-aligned: use prose column width, not the old dense 580px chrome cap.
-    maxWidth: 820,
+    maxWidth: 720,
   },
   workbenchToolSequenceGroup: {
     width: "100%",
-    maxWidth: 820,
+    maxWidth: 720,
     gap: 8,
   },
   workbenchToolBadgeRow: {
@@ -1238,7 +1240,8 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   syncingIndicatorText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   invertedWrapper: {
     transform: [{ scaleY: -1 }],
@@ -1246,7 +1249,8 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   emptyStateText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
   },
   scrollToBottomInner: {
@@ -1255,13 +1259,14 @@ const stylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
   },
   scrollToBottomButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.colors.surface2,
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
-    ...theme.shadow.sm,
   },
   scrollToBottomIcon: {
     color: theme.colors.foreground,
@@ -1283,30 +1288,35 @@ const permissionStyles = StyleSheet.create((theme) => ({
   container: {
     marginVertical: theme.spacing[3],
     padding: theme.spacing[3],
-    borderRadius: theme.spacing[2],
+    borderRadius: 14,
     borderWidth: 1,
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderColor: theme.colors.border,
+    ...theme.shadow.sm,
   },
   title: {
-    fontSize: theme.fontSize.base,
-    lineHeight: 22,
+    fontSize: 14.5,
+    lineHeight: 20,
     color: theme.colors.foreground,
   },
   description: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   section: {
     gap: theme.spacing[2],
   },
   sectionTitle: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
   },
   question: {
-    fontSize: theme.fontSize.sm,
+    // Soft stream chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     marginTop: theme.spacing[1],
     marginBottom: theme.spacing[1],
     color: theme.colors.foregroundMuted,
@@ -1323,14 +1333,14 @@ const permissionStyles = StyleSheet.create((theme) => ({
   optionButton: {
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.full,
     alignItems: "center",
     borderWidth: theme.borderWidth[1],
-    backgroundColor: theme.colors.surface1,
-    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
   },
   optionButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   optionButtonPressed: {
     opacity: 0.9,
@@ -1341,7 +1351,9 @@ const permissionStyles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   optionText: {
-    fontSize: theme.fontSize.sm,
+    // Soft stream chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },

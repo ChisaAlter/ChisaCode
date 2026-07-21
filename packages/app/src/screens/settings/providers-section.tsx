@@ -510,7 +510,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   headerActions: {
     flexDirection: "row",
@@ -529,10 +530,10 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   rowHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   rowPressed: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface1,
   },
   rowContent: {
     flex: 1,
@@ -584,15 +585,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   separator: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   errorText: {
     color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[1],
   },
   actionsRow: {
@@ -608,15 +612,18 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-    minHeight: 40,
-    paddingHorizontal: theme.spacing[2],
+    minHeight: 32,
+    paddingHorizontal: 10,
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   actionLabel: {
     color: theme.colors.accent,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));
 

@@ -359,8 +359,8 @@ export function CommandCenter() {
     [theme.colors.surface0],
   );
   const headerStyle = useMemo(
-    () => [styles.header, { borderBottomColor: theme.colors.border }],
-    [theme.colors.border],
+    () => [styles.header, { borderBottomColor: theme.colors.secondary }],
+    [theme.colors.secondary],
   );
   const inputStyle = useMemo(
     () => [styles.input, { color: theme.colors.foreground }],
@@ -460,26 +460,35 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     paddingTop: theme.spacing[12],
   },
+  // Soft quiet dimmer — less heavy than pure black 50%.
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(20, 23, 31, 0.28)",
   },
+  // Soft floating command palette: r18 composer-family card.
   panel: {
     width: 640,
     maxWidth: "92%",
     maxHeight: "80%",
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     overflow: "hidden",
-    ...theme.shadow.lg,
+    backgroundColor: theme.colors.surface0,
+    ...theme.shadow.md,
   },
   header: {
+    // Soft floating panel header: quiet border-soft rule.
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderBottomWidth: theme.borderWidth[1],
-    backgroundColor: theme.colors.surface1,
+    borderBottomColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surface0,
   },
   input: {
-    fontSize: theme.fontSize.lg,
+    // Soft palette query: near .a 14.5 readability.
+    fontSize: 14.5,
+    lineHeight: 22,
     paddingVertical: theme.spacing[1],
     outlineStyle: "none",
   } as object,
@@ -490,28 +499,32 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[2],
   },
+  // Soft menu section label: 12.5 medium muted.
   sectionLabel: {
     paddingHorizontal: theme.spacing[3],
     paddingTop: 0,
     paddingBottom: theme.spacing[2],
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   sectionDivider: {
     height: 1,
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[2],
   },
+  // Soft menu-hint row: quiet r10.
   row: {
     marginHorizontal: theme.spacing[1],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
   rowActive: {
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    // Soft selected command row: elevated surface0, not surface1 hover wash.
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
     ...theme.shadow.sm,
   },
   rowContent: {
@@ -530,13 +543,13 @@ const styles = StyleSheet.create((theme) => ({
   iconSlot: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: 10,
+    backgroundColor: theme.colors.surfaceWorkspace,
     alignItems: "center",
     justifyContent: "center",
   },
   iconSlotActive: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface0,
   },
   textContent: {
     flex: 1,
@@ -547,18 +560,21 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: theme.spacing[2],
     flexShrink: 0,
   },
+  // Soft menu-hint row title: 12.5 medium.
   title: {
-    fontSize: theme.fontSize.base,
-    fontWeight: "400",
-    lineHeight: 20,
+    fontSize: 12.5,
+    fontWeight: "500",
+    lineHeight: 16,
   },
   subtitle: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: 18,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
+  // Soft menu empty: 12.5 muted.
   emptyText: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[4],
-    fontSize: theme.fontSize.base,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

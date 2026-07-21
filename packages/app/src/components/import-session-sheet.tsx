@@ -516,20 +516,24 @@ const styles = StyleSheet.create((theme) => ({
   list: {
     gap: theme.spacing[1],
   },
+  // Soft list rows inside import sheet.
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    marginHorizontal: -theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    marginHorizontal: 0,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   rowHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderColor: theme.colors.border,
   },
   rowPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   rowIconWrap: {
     width: theme.iconSize.md,
@@ -552,20 +556,24 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
   rowMeta: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   rowPreview: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    // Soft import row preview: 12.5 muted.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   rowCwd: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   statusRow: {
     flexDirection: "row",
@@ -575,7 +583,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft status chrome: 12.5 muted.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   emptyState: {
     alignItems: "center",
@@ -590,16 +600,17 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyStateTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     textAlign: "center",
   },
   refreshButton: {
     padding: theme.spacing[2],
     marginRight: theme.spacing[1],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
   refreshButtonPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   refreshIconSlot: {
     width: 16,

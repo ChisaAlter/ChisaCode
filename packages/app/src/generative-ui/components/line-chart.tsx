@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 
 interface LineChartDataPoint {
@@ -22,11 +23,12 @@ interface LineChartProps extends GenerativeUiComponentBaseProps {
  * Renders a simplified line chart using react-native primitives.
  */
 export default function LineChart({ instanceId, props, sendAction }: LineChartProps) {
+  const { theme } = useUnistyles();
   const height = props.height ?? 300;
   const data = useMemo(() => props.data ?? [], [props.data]);
   const xKey = props.xAxis;
   const yKey = props.yAxis;
-  const color = props.color ?? "#3b82f6";
+  const color = props.color ?? theme.colors.accent;
 
   const numericData = useMemo(
     () =>
@@ -60,7 +62,7 @@ export default function LineChart({ instanceId, props, sendAction }: LineChartPr
   const pointStyles = useMemo(
     () =>
       points.map((p) => ({
-        ...dotBaseStyle,
+        ...styles.dot,
         left: `${p.x}%` as const,
         top: `${p.y}%` as const,
         backgroundColor: color,
@@ -84,21 +86,20 @@ export default function LineChart({ instanceId, props, sendAction }: LineChartPr
     [data, xKey, yKey],
   );
 
-  // All hooks must be called before any conditional return
   if (data.length === 0) {
     return (
-      <View style={cardStyle}>
-        {props.title ? <Text style={titleStyle}>{props.title}</Text> : null}
-        <Text style={emptyStyle}>No data</Text>
+      <View style={styles.card}>
+        {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
+        <Text style={styles.empty}>No data</Text>
       </View>
     );
   }
 
   return (
-    <View style={cardStyle}>
-      {props.title ? <Text style={titleStyle}>{props.title}</Text> : null}
+    <View style={styles.card}>
+      {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
       <View style={chartContainerStyle}>
-        <View style={chartAreaStyle}>
+        <View style={styles.chartArea}>
           {points.map((p, i) => (
             <TouchableOpacity
               key={`point-${p.x}-${p.y}`}
@@ -106,16 +107,14 @@ export default function LineChart({ instanceId, props, sendAction }: LineChartPr
               onPress={pointHandlers[i]}
             />
           ))}
-          {/* connecting lines */}
           {points.length > 1 &&
             points
               .slice(1)
-              .map((p) => <View key={`line-${p.x}-${p.y}`} style={lineSegmentStyle} />)}
+              .map((p) => <View key={`line-${p.x}-${p.y}`} style={styles.lineSegment} />)}
         </View>
-        {/* labels */}
-        <View style={labelsRowStyle}>
+        <View style={styles.labelsRow}>
           {data.map((d, i) => (
-            <Text key={labelKeys[i]} style={labelTextStyle} numberOfLines={1}>
+            <Text key={labelKeys[i]} style={styles.label} numberOfLines={1}>
               {String(d[xKey] ?? "")}
             </Text>
           ))}
@@ -125,34 +124,56 @@ export default function LineChart({ instanceId, props, sendAction }: LineChartPr
   );
 }
 
-const cardStyle = { padding: 12 } as const;
-const titleStyle = { fontSize: 14, fontWeight: "600" as const, marginBottom: 8 } as const;
-const emptyStyle = { color: "#888", fontSize: 12 } as const;
-const chartAreaStyle = {
-  flex: 1,
-  position: "relative" as const,
-  borderLeftWidth: 1,
-  borderBottomWidth: 1,
-  borderColor: "#e5e7eb",
-} as const;
-const dotBaseStyle = {
-  position: "absolute" as const,
-  width: 12,
-  height: 12,
-  borderRadius: 6,
-  marginLeft: -6,
-  marginTop: -6,
-} as const;
-const lineSegmentStyle = {
-  position: "absolute" as const,
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-} as const;
-const labelsRowStyle = {
-  flexDirection: "row" as const,
-  justifyContent: "space-between" as const,
-  paddingTop: 4,
-} as const;
-const labelTextStyle = { fontSize: 10, color: "#888" } as const;
+const styles = StyleSheet.create((theme) => ({
+  card: {
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  title: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foreground,
+    marginBottom: 8,
+  },
+  empty: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
+  },
+  chartArea: {
+    flex: 1,
+    position: "relative",
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  dot: {
+    position: "absolute",
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginLeft: -6,
+    marginTop: -6,
+  },
+  lineSegment: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  labelsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingTop: 4,
+  },
+  label: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: theme.colors.foregroundMuted,
+  },
+}));

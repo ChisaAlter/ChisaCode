@@ -1,6 +1,6 @@
 import type { Href } from "expo-router";
 import type { WorkspaceLayout } from "@/stores/workspace-layout-store";
-import { buildHostOpenProjectRoute } from "@/utils/host-routes";
+import { buildHostNewWorkspaceRoute } from "@/utils/host-routes";
 
 export interface SidebarSessionDraft {
   serverId: string;
@@ -22,6 +22,10 @@ export function collectSidebarDraftSessions(_input: {
   return [];
 }
 
+/**
+ * 新对话 → Soft Home (/new)，不是 open-project 卡片墙。
+ * 以默认路由实机为准。
+ */
 export function resolveLeftSidebarNewConversationRoute(input: {
   activeServerId: string | null;
   pathname: string;
@@ -33,15 +37,18 @@ export function resolveLeftSidebarNewConversationRoute(input: {
     return null;
   }
   void input.pathname;
-  void input.sourceDirectory;
-  void input.draftKey;
-  return buildHostOpenProjectRoute(activeServerId);
+  return buildHostNewWorkspaceRoute(activeServerId, input.sourceDirectory, {
+    draftKey: input.draftKey ?? undefined,
+  });
 }
 
+/**
+ * 侧栏主页 → Soft Home (/new)。
+ */
 export function resolveLeftSidebarHomeRoute(activeServerId: string | null): Href | null {
   const normalizedServerId = activeServerId?.trim() || null;
   if (!normalizedServerId) {
     return null;
   }
-  return buildHostOpenProjectRoute(normalizedServerId);
+  return buildHostNewWorkspaceRoute(normalizedServerId);
 }

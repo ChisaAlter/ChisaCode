@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
-import { Pressable, View, type PressableStateCallbackType } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, GitBranch } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -18,6 +18,10 @@ interface BranchSwitcherProps {
   serverId: string;
   workspaceId: string;
   isGitCheckout: boolean;
+  /**
+   * Soft desktop topbar uses a compact `.ctx` pill; default keeps the mobile/title row look.
+   */
+  presentation?: "default" | "soft-pill";
 }
 
 export function BranchSwitcher({
@@ -26,6 +30,7 @@ export function BranchSwitcher({
   serverId,
   workspaceId,
   isGitCheckout,
+  presentation = "default",
 }: BranchSwitcherProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -35,6 +40,7 @@ export function BranchSwitcher({
   const isConnected = useHostRuntimeIsConnected(serverId);
   const toast = useToast();
   const queryClient = useQueryClient();
+  const isSoftPill = presentation === "soft-pill";
 
   const { branchOptions, isOpen, setIsOpen, handleBranchSelect } = useBranchSwitcher({
     client,
@@ -47,7 +53,11 @@ export function BranchSwitcher({
     queryClient,
   });
 
-  const titleContent = (
+  const titleContent = isSoftPill ? (
+    <Text style={styles.softPillText} numberOfLines={1} testID="workspace-header-title">
+      {title}
+    </Text>
+  ) : (
     <View style={styles.titleRow}>
       {isGitCheckout ? <GitBranch size={14} color={theme.colors.foregroundMuted} /> : null}
       <ScreenTitle testID="workspace-header-title">{title}</ScreenTitle>
@@ -58,10 +68,11 @@ export function BranchSwitcher({
 
   const triggerStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.branchSwitcherTrigger,
-      (Boolean(hovered) || pressed) && styles.branchSwitcherTriggerHovered,
+      isSoftPill ? styles.softPillTrigger : styles.branchSwitcherTrigger,
+      (Boolean(hovered) || pressed) &&
+        (isSoftPill ? styles.softPillTriggerHovered : styles.branchSwitcherTriggerHovered),
     ],
-    [],
+    [isSoftPill],
   );
 
   const branchLeadingSlot = useMemo(
@@ -83,7 +94,11 @@ export function BranchSwitcher({
   );
 
   if (!currentBranchName) {
-    return <View style={styles.branchSwitcherTrigger}>{titleContent}</View>;
+    return (
+      <View style={isSoftPill ? styles.softPillTrigger : styles.branchSwitcherTrigger}>
+        {titleContent}
+      </View>
+    );
   }
 
   return (
@@ -96,7 +111,9 @@ export function BranchSwitcher({
         accessibilityLabel={t("branches.currentBranchLabel", { branch: currentBranchName })}
       >
         {titleContent}
-        {!isCompact ? <ChevronDown size={12} color={theme.colors.foregroundMuted} /> : null}
+        {!isCompact || isSoftPill ? (
+          <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+        ) : null}
       </Pressable>
       <Combobox
         options={branchOptions}
@@ -134,7 +151,7 @@ const styles = StyleSheet.create((theme) => ({
       md: theme.spacing[1],
     },
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     flexShrink: 1,
   },
   branchSwitcherTriggerHovered: {
@@ -146,5 +163,31 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     minWidth: 0,
     overflow: "hidden",
+  },
+  // Soft .ctx pill for desktop topbar branch control.
+  softPillTrigger: {
+    height: 30,
+    maxWidth: 130,
+    paddingHorizontal: 10,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  softPillTriggerHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  softPillText: {
+    // design --text-2 for Soft .ctx
+    color: theme.colors.foregroundSubtleText,
+    fontSize: 12,
+    lineHeight: 16,
+    flexShrink: 1,
+    minWidth: 0,
   },
 }));

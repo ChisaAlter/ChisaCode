@@ -85,13 +85,14 @@ function pushEscHandler(handler: EscHandler): () => void {
 const styles = StyleSheet.create((theme) => ({
   desktopOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(20, 23, 31, 0.28)",
     justifyContent: "center",
     alignItems: "center",
     padding: theme.spacing[6],
     zIndex: OVERLAY_Z.modal,
     pointerEvents: "auto" as const,
   },
+  // Soft floating modal card: composer-family r18.
   desktopCard: {
     width: "100%",
     maxWidth: 520,
@@ -99,9 +100,11 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minHeight: 0,
     backgroundColor: theme.colors.surface0,
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: 18,
     overflow: "hidden",
-    ...theme.shadow.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.md,
   },
   desktopGlassCard: {
     backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surface0,
@@ -112,8 +115,9 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
   },
   headerContainer: {
+    // Soft sheet header: quiet border-soft rule.
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.surface2,
+    borderBottomColor: theme.colors.secondary,
   },
   headerRow: {
     paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
@@ -123,7 +127,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   headerBackButton: {
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
   headerLeadingSlot: {
     alignItems: "center",
@@ -134,8 +138,10 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     minWidth: 0,
   },
+  // Soft sheet title: near .topbar title scale.
   title: {
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
   },
   headerActions: {
@@ -145,7 +151,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   closeButton: {
     padding: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
   searchRow: {
     flexDirection: "row",
@@ -172,11 +178,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   inlineTitle: {
     flex: 1,
-    fontSize: theme.fontSize.sm,
+    // Soft sheet secondary: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
   },
@@ -184,7 +193,9 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     paddingVertical: theme.spacing[2],
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft sheet secondary: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   desktopScroll: {
     flexShrink: 1,
@@ -215,7 +226,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
     paddingVertical: theme.spacing[3],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.surface2,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -480,8 +492,8 @@ export function AdaptiveModalSheet({
   const isMobile = useIsCompactFormFactor();
   const resolvedSnapPoints = useMemo(() => snapPoints ?? ["65%", "90%"], [snapPoints]);
   const handleIndicatorStyle = useMemo(
-    () => ({ backgroundColor: theme.colors.surface2 }),
-    [theme.colors.surface2],
+    () => ({ backgroundColor: theme.colors.foregroundFaint }),
+    [theme.colors.foregroundFaint],
   );
   const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
     visible,
@@ -491,7 +503,7 @@ export function AdaptiveModalSheet({
 
   const renderBackdrop = useCallback(
     (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.45} />
+      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.28} />
     ),
     [],
   );

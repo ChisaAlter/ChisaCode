@@ -66,12 +66,12 @@ function QuestionOptionRow({
   const pressableStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.optionItem,
-      (Boolean(hovered) || isSelected) && {
-        backgroundColor: theme.colors.surface2,
-      },
+      // Soft: hover wash surface1; solid selected surface3.
+      Boolean(hovered) && !isSelected && { backgroundColor: theme.colors.surface1 },
+      isSelected && { backgroundColor: theme.colors.surface3 },
       pressed && styles.optionItemPressed,
     ],
-    [isSelected, theme.colors.surface2],
+    [isSelected, theme.colors.surface1, theme.colors.surface3],
   );
 
   const optionLabelStyle = useMemo(
@@ -131,19 +131,13 @@ function QuestionOtherInput({
       [
         styles.otherInput,
         {
-          borderColor: value.length > 0 ? theme.colors.borderAccent : theme.colors.border,
+          borderColor: theme.colors.border,
           color: theme.colors.foreground,
-          backgroundColor: theme.colors.surface2,
+          backgroundColor: theme.colors.surface0,
         },
         IS_WEB ? { outlineStyle: "none", outlineWidth: 0, outlineColor: "transparent" } : null,
       ] as const,
-    [
-      value.length,
-      theme.colors.borderAccent,
-      theme.colors.border,
-      theme.colors.foreground,
-      theme.colors.surface2,
-    ],
+    [theme.colors.border, theme.colors.foreground, theme.colors.surface0],
   );
   return (
     <TextInput
@@ -252,12 +246,12 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.actionButton,
       {
-        backgroundColor: hovered ? theme.colors.surface2 : theme.colors.surface1,
-        borderColor: theme.colors.borderAccent,
+        backgroundColor: hovered ? theme.colors.surfaceWorkspace : theme.colors.surface0,
+        borderColor: theme.colors.border,
       },
       pressed && styles.optionItemPressed,
     ],
-    [theme.colors.surface2, theme.colors.surface1, theme.colors.borderAccent],
+    [theme.colors.surfaceWorkspace, theme.colors.surface0, theme.colors.border],
   );
 
   const submitDisabled = !allAnswered || isResponding;
@@ -265,30 +259,25 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.actionButton,
       {
-        backgroundColor: hovered && !submitDisabled ? theme.colors.surface2 : theme.colors.surface1,
-        borderColor: submitDisabled ? theme.colors.border : theme.colors.borderAccent,
+        backgroundColor:
+          hovered && !submitDisabled ? theme.colors.surfaceWorkspace : theme.colors.surface0,
+        borderColor: theme.colors.border,
         opacity: submitDisabled ? 0.5 : 1,
       },
       pressed && !submitDisabled ? styles.optionItemPressed : null,
     ],
-    [
-      submitDisabled,
-      theme.colors.surface2,
-      theme.colors.surface1,
-      theme.colors.border,
-      theme.colors.borderAccent,
-    ],
+    [submitDisabled, theme.colors.surfaceWorkspace, theme.colors.surface0, theme.colors.border],
   );
 
   const containerStyle = useMemo(
     () => [
       styles.container,
       {
-        backgroundColor: theme.colors.surface1,
+        backgroundColor: theme.colors.surface0,
         borderColor: theme.colors.border,
       },
     ],
-    [theme.colors.surface1, theme.colors.border],
+    [theme.colors.surface0, theme.colors.border],
   );
   const questionTextStyle = useMemo(
     () => [styles.questionText, { color: theme.colors.foreground }],
@@ -387,10 +376,13 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft .card form shell.
   container: {
     padding: theme.spacing[3],
-    borderRadius: theme.spacing[2],
+    borderRadius: 14,
     borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
     gap: theme.spacing[3],
   },
   questionBlock: {
@@ -405,7 +397,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   questionText: {
     flex: 1,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
     lineHeight: 22,
   },
   optionsWrap: {
@@ -416,7 +408,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   optionItemPressed: {
     opacity: 0.9,
@@ -432,10 +424,12 @@ const styles = StyleSheet.create((theme) => ({
     gap: 2,
   },
   optionLabel: {
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   optionDescription: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   optionCheckSlot: {
@@ -446,10 +440,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   otherInput: {
     borderWidth: 1,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
-    fontSize: theme.fontSize.sm,
+    // Soft form field body: 14.5 readability.
+    fontSize: 14.5,
+    lineHeight: 22,
   },
   actionsContainer: {
     gap: theme.spacing[2],
@@ -462,7 +458,7 @@ const styles = StyleSheet.create((theme) => ({
   actionButton: {
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     alignItems: "center",
     borderWidth: theme.borderWidth[1],
   },
@@ -472,6 +468,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   actionText: {
-    fontSize: theme.fontSize.sm,
+    // Soft chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 }));

@@ -33,9 +33,6 @@ import { DraggableList, type DraggableRenderItemInfo } from "@/components/dragga
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import {
   useIsCompactFormFactor,
-  WORKBENCH_BODY_FONT_SIZE,
-  WORKBENCH_BODY_LINE_HEIGHT,
-  WORKBENCH_META_FONT_SIZE,
   WORKBENCH_META_LINE_HEIGHT,
   WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT,
 } from "@/constants/layout";
@@ -1847,11 +1844,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[3],
     paddingLeft: theme.spacing[2],
   },
+  // Soft .nav-scroll: design padding 4 8 10.
   desktopScrollContent: {
-    paddingTop: 10,
-    paddingRight: 6,
-    paddingBottom: 0,
-    paddingLeft: 6,
+    paddingTop: 4,
+    paddingRight: 8,
+    paddingBottom: 10,
+    paddingLeft: 8,
   },
   group: {
     marginBottom: theme.spacing[2],
@@ -1864,7 +1862,8 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[3],
     paddingBottom: theme.spacing[2],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   groupHeader: {
     minHeight: 26,
@@ -1874,7 +1873,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   groupHeaderLabel: {
     minWidth: 0,
@@ -1883,15 +1882,18 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  // Soft .sec padding 10 10 4.
   desktopGroupHeader: {
-    minHeight: 30,
+    minHeight: 26,
     position: "relative",
     flexDirection: "row",
     alignItems: "center",
-    marginRight: 4,
-    marginBottom: 2,
-    marginLeft: 4,
-    paddingHorizontal: 6,
+    marginRight: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    paddingTop: 10,
+    paddingBottom: 4,
+    paddingHorizontal: 10,
   },
   desktopGroupHeaderLabel: {
     minWidth: 0,
@@ -1905,42 +1907,47 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flex: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
+  // Soft .sec: 11.5px medium muted section labels.
   desktopGroupTitle: {
     minWidth: 0,
     flex: 1,
-    color: theme.colors.foregroundSubtleText,
-    fontSize: WORKBENCH_META_FONT_SIZE,
+    color: theme.colors.foregroundMuted,
+    fontSize: 11.5,
     lineHeight: WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
   },
+  // Soft .proj group: 12.5 muted (not body 14).
   desktopWorkspaceGroupTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: WORKBENCH_BODY_FONT_SIZE,
-    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
-  },
-  desktopSectionLabel: {
-    marginTop: 14,
-    marginRight: 10,
-    marginBottom: 6,
-    marginLeft: 10,
-    color: theme.colors.foregroundSubtleText,
-    fontSize: WORKBENCH_META_FONT_SIZE,
+    fontSize: 12.5,
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
-    fontWeight: theme.fontWeight.normal,
+  },
+  // Soft .sec: 11.5 medium muted section header.
+  desktopSectionLabel: {
+    marginTop: 12,
+    marginRight: 10,
+    marginBottom: 4,
+    marginLeft: 10,
+    color: theme.colors.foregroundMuted,
+    fontSize: 11.5,
+    lineHeight: WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT,
+    fontWeight: theme.fontWeight.medium,
   },
   groupAddButton: {
     width: 28,
     height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     flexShrink: 0,
   },
   groupAddButtonActive: {
-    backgroundColor: theme.colors.surface1,
+    // Soft open/active chrome: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   groupActions: {
     position: "absolute",
@@ -1971,26 +1978,25 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
   rowHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   rowPressed: {
     opacity: 0.85,
   },
+  // Soft mobile selected: soft fill, no hard accent bar.
   rowSelected: {
-    backgroundColor: theme.colors.surface2,
-    ...theme.shadow.sm,
+    backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : theme.shadow.sm),
   },
   rowSelectedIndicator: {
-    position: "absolute",
-    left: theme.spacing[1],
-    top: theme.spacing[2],
-    bottom: theme.spacing[2],
-    width: 3,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.accent,
+    display: "none",
   },
   rowLeading: {
     width: 18,
@@ -1998,18 +2004,21 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     flexShrink: 0,
   },
+  // Soft .sess: min ~34, radius 10, quiet padding.
   desktopRow: {
     minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingVertical: 0,
-    paddingLeft: 8,
+    paddingVertical: 7,
+    paddingLeft: 10,
     paddingRight: 68,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
   desktopRowContainer: {
     position: "relative",
+    // Soft .sess margin-left 4px.
+    marginLeft: 4,
   },
   desktopRowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -2018,10 +2027,10 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.9,
   },
   desktopRowDragging: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
     opacity: 0.86,
   },
-  // Soft Workbench: selected session is a quiet elevated chip.
+  // Soft .sess.on: white/soft elevated chip, no accent rail.
   desktopRowSelected: {
     backgroundColor: theme.colors.surface0,
     ...(isWeb
@@ -2058,11 +2067,12 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     flexShrink: 0,
   },
   rowMenuButtonActive: {
-    backgroundColor: theme.colors.surface1,
+    // Soft open/active chrome: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   desktopRowMenuButton: {
     backgroundColor: theme.colors.surfaceSidebar,
@@ -2091,10 +2101,11 @@ const styles = StyleSheet.create((theme) => ({
     height: 24,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 8,
   },
   rowQuickButtonActive: {
-    backgroundColor: theme.colors.surface1,
+    // Soft open/active chrome: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   rowQuickButtonPressed: {
     opacity: 0.85,
@@ -2116,20 +2127,22 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 10,
   },
   desktopRowQuickButtonActive: {
-    backgroundColor: theme.colors.surface2,
+    // Soft open/active chrome: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   desktopRowQuickButtonPressed: {
     opacity: 0.9,
   },
+  // Soft .sess .t: 12.5 on compact session rows too.
   rowTitle: {
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    fontSize: 12.5,
+    lineHeight: 16,
     paddingTop: 4,
     transform: [{ translateY: 2 }],
     includeFontPadding: false,
@@ -2139,12 +2152,13 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
+  // Soft .sess .t: 12.5px text-2; selected uses --text.
   desktopRowTitle: {
     flex: 1,
     minWidth: 0,
-    color: theme.colors.foreground,
-    fontSize: WORKBENCH_BODY_FONT_SIZE,
-    lineHeight: WORKBENCH_BODY_LINE_HEIGHT,
+    color: theme.colors.foregroundSubtleText,
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
   },
   desktopRowTitleSelected: {
@@ -2166,9 +2180,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 16,
   },
   loadMoreButton: {
     alignSelf: "center",

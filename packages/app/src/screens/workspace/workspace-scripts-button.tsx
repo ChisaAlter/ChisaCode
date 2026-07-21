@@ -493,12 +493,11 @@ const styles = StyleSheet.create((theme) => ({
   splitButton: {
     flexDirection: "row",
     alignItems: "stretch",
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.full,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
     overflow: "hidden",
-    backgroundColor: theme.colors.surface1,
-    ...theme.shadow.sm,
+    backgroundColor: theme.colors.surface0,
   },
   ghostButtonFrame: {
     flexDirection: "row",
@@ -508,12 +507,12 @@ const styles = StyleSheet.create((theme) => ({
     width: theme.spacing[8],
     height: theme.spacing[8],
     padding: 0,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
   },
   ghostButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   splitButtonPrimary: {
     paddingHorizontal: theme.spacing[3],
@@ -521,11 +520,12 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   splitButtonPrimaryHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
+  // Soft split control label: 12.5 meta.
   splitButtonText: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.5,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
@@ -551,8 +551,9 @@ const styles = StyleSheet.create((theme) => ({
   scriptIcon: {
     flexShrink: 0,
   },
+  // Soft script menu row: 12.5 meta.
   scriptName: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
     fontWeight: theme.fontWeight.normal,
     lineHeight: 18,
     flexShrink: 1,
@@ -579,8 +580,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   hostLabel: {
     flexShrink: 1,
-    fontSize: theme.fontSize.xs,
-    lineHeight: 14,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   hostLabelActive: {
@@ -599,11 +600,11 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   exitBadgeText: {
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
@@ -616,7 +617,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: 3,
   },
   actionButtonLabel: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },

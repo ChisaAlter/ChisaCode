@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { isWeb } from "@/constants/platform";
 import { router, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -157,22 +158,31 @@ const styles = StyleSheet.create((theme) => ({
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   errorsBanner: {
+    // Soft quiet card family (r14).
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
     padding: theme.spacing[3],
     marginBottom: theme.spacing[3],
     gap: theme.spacing[1],
   },
   errorsBannerText: {
-    color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.xs,
+    color: theme.colors.destructive,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
+  // Soft project rows: quiet r-10 chip, elevated when selected.
   row: {
     gap: theme.spacing[3],
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
   rowMain: {
     flex: 1,
@@ -182,13 +192,18 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   rowHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   rowPressed: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   rowSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04)",
+        } as object)
+      : {}),
   },
   leading: {
     width: 16,
@@ -199,17 +214,18 @@ const styles = StyleSheet.create((theme) => ({
   iconImage: {
     width: 16,
     height: 16,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
   },
   iconFallback: {
     width: 16,
     height: 16,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   iconFallbackText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   spinnerColor: {
     color: theme.colors.foregroundMuted,

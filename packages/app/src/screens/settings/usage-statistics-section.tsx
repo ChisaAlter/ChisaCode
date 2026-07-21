@@ -688,16 +688,18 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[6],
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
   },
   placeholderText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   errorText: {
     color: theme.colors.palette.red[500],
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   metricGrid: {
     flexDirection: "row",
@@ -711,42 +713,49 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[4],
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
   },
   metricLabel: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
+  // Soft metric figure: quieter than display xl.
   metricValue: {
     marginTop: theme.spacing[2],
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xl,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: theme.fontWeight.semibold,
   },
   metricHint: {
     minHeight: 32,
     marginTop: theme.spacing[2],
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   chartPanel: {
     padding: theme.spacing[4],
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
     overflow: "visible",
   },
+  // Soft chart title: near sheet scale medium.
   chartTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
     marginBottom: theme.spacing[4],
   },
   chartHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: theme.spacing[3],
   },
   heatmapGrid: {
@@ -763,10 +772,10 @@ const styles = StyleSheet.create((theme) => ({
     height: 13,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
   },
   heatmapLevel0: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   heatmapLevel1: {
     backgroundColor: theme.colors.palette.blue[200],
@@ -799,14 +808,14 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 2,
     borderRadius: 5,
     overflow: "hidden",
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   trendBarSegment: {
     width: "100%",
     minHeight: 1,
   },
   trendBarEmpty: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   modelChartLayout: {
     flexDirection: "row",
@@ -825,15 +834,18 @@ const styles = StyleSheet.create((theme) => ({
     width: 96,
     alignItems: "center",
   },
+  // Soft donut center figure.
   donutValue: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xl,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: theme.fontWeight.semibold,
   },
   donutLabel: {
     marginTop: theme.spacing[1],
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     maxWidth: 92,
   },
   modelList: {
@@ -841,6 +853,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 240,
     gap: theme.spacing[2],
   },
+  // Soft model chip: r10 set-item family.
   modelRow: {
     minHeight: 44,
     flexDirection: "row",
@@ -850,12 +863,13 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     backgroundColor: theme.colors.surface0,
   },
   modelRowActive: {
+    // Soft selected model chip: elevated surface0 + accent edge, not surface1 wash.
     borderColor: theme.colors.accent,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   modelSwatch: {
     width: 10,
@@ -868,21 +882,25 @@ const styles = StyleSheet.create((theme) => ({
   },
   modelName: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
   },
   modelMeta: {
     marginTop: 2,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   modelPercent: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.semibold,
   },
   emptyText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 13,
+    lineHeight: 18,
   },
   tooltipTarget: {
     position: "relative",
@@ -892,6 +910,7 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 1,
     minWidth: 1,
   },
+  // Soft quiet tooltip bubble.
   tooltipBubble: {
     position: "absolute",
     left: 0,
@@ -902,20 +921,22 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     marginBottom: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.popover,
-    ...theme.shadow.md,
+    backgroundColor: theme.colors.surface0,
+    ...theme.shadow.sm,
   },
   tooltipTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
   },
   tooltipText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     marginTop: 2,
   },
   actions: {
@@ -925,7 +946,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   updatedAt: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));
 
@@ -939,12 +961,14 @@ const providerUsageStyles = StyleSheet.create((theme) => ({
   },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.semibold,
   },
   hint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     textAlign: "center",
   },
 }));

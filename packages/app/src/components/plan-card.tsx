@@ -41,26 +41,27 @@ export function PlanCard({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft .card: elevated surface0, 14px radius, quiet border.
   container: {
     marginVertical: theme.spacing[3],
     padding: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 14,
     borderWidth: 1,
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderColor: theme.colors.border,
   },
   containerCompact: {
     marginVertical: 0,
   },
   title: {
-    fontSize: theme.fontSize.base,
-    lineHeight: 22,
+    fontSize: 14.5,
+    lineHeight: 20,
     color: theme.colors.foreground,
   },
   description: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   footer: {

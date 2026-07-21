@@ -72,10 +72,11 @@ const styles = StyleSheet.create((theme) => ({
   wrapper: {
     position: "relative",
   },
+  // Soft quiet attachment chip.
   body: {
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   closeButton: {
@@ -85,7 +86,7 @@ const styles = StyleSheet.create((theme) => ({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     alignItems: "center",

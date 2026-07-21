@@ -328,12 +328,12 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     backgroundColor: theme.colors.surface0,
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: 14,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    ...theme.shadow.md,
+    ...theme.shadow.sm,
   },
   toastSuccess: {
     borderColor: theme.colors.border,
@@ -352,7 +352,9 @@ const styles = StyleSheet.create((theme) => ({
   message: {
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft toast body: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
   },
   messageError: {

@@ -287,7 +287,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   timerText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.semibold,
     fontVariant: ["tabular-nums"],
   },
@@ -325,8 +326,9 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   statusLabel: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
   },
 }));
 
@@ -348,7 +350,7 @@ const overlayStyles = StyleSheet.create((theme) => ({
     width: OVERLAY_BUTTON_SIZE,
     height: OVERLAY_BUTTON_SIZE,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: "rgba(0, 0, 0, 0.15)",
+    backgroundColor: "rgba(20, 23, 31, 0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -365,13 +367,17 @@ const overlayStyles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     gap: theme.spacing[4],
   },
+  // Soft timer figure: quieter than display xl.
   timerText: {
-    fontSize: theme.fontSize.xl,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: theme.fontWeight.semibold,
     fontVariant: ["tabular-nums"],
   },
   transcriptText: {
-    fontSize: theme.fontSize.sm,
+    // Soft dictation chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     textAlign: "center",
     paddingHorizontal: theme.spacing[2],

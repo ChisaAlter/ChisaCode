@@ -95,19 +95,23 @@ function resolveMessagePlaceholder(input: {
   return input.isDesktopWebBreakpoint ? input.desktop : input.mobile;
 }
 
-interface RenderLeftContentArgs {
+interface RenderAgentControlSlotArgs {
   agentControls: DraftAgentControlsProps | undefined;
   agentId: string;
   serverId: string;
   focusInput: () => void;
+  /** Soft desktop cbar partition: mode left, model right. Compact uses `all` on the left. */
+  slot: "all" | "mode" | "model";
 }
 
-function renderLeftContent(args: RenderLeftContentArgs): ReactElement {
-  const { agentControls, agentId, serverId, focusInput } = args;
+function renderAgentControlSlot(args: RenderAgentControlSlotArgs): ReactElement {
+  const { agentControls, agentId, serverId, focusInput, slot } = args;
   if (resolveAgentControlsMode(agentControls) === "draft" && agentControls) {
-    return <DraftAgentControls {...agentControls} />;
+    return <DraftAgentControls {...agentControls} slot={slot} />;
   }
-  return <AgentControls agentId={agentId} serverId={serverId} onDropdownClose={focusInput} />;
+  return (
+    <AgentControls agentId={agentId} serverId={serverId} onDropdownClose={focusInput} slot={slot} />
+  );
 }
 
 function renderComposerFooter(footer: ReactNode, footerRight: ReactNode): ReactElement | null {
@@ -165,6 +169,13 @@ interface ComposerProps {
   agentControls?: DraftAgentControlsProps;
   /** Extra styles merged onto the message input wrapper (e.g. elevated background). */
   inputWrapperStyle?: import("react-native").ViewStyle;
+  /**
+   * Extra styles merged onto the outer input-area chrome (dock padding).
+   * Soft Home uses this to zero horizontal padding so path/import match the pen-bar width.
+   */
+  inputAreaStyle?: import("react-native").ViewStyle;
+  /** Override the default composer placeholder (e.g. Soft Home draft empty). */
+  placeholder?: string;
   /** Rendered below the input, inside the keyboard-shifted container. */
   footer?: ReactNode;
   /** When true, a parent wrapper owns the keyboard shift, so the composer skips its own. */
@@ -204,6 +215,8 @@ export function Composer({
   onAttentionPromptSend,
   agentControls,
   inputWrapperStyle,
+  inputAreaStyle,
+  placeholder,
   footer,
   externalKeyboardShift,
 }: ComposerProps) {
@@ -227,11 +240,13 @@ export function Composer({
 
   const isMobile = useIsCompactFormFactor();
   const isDesktopWebBreakpoint = resolveIsDesktopWebBreakpoint(isMobile);
-  const messagePlaceholder = resolveMessagePlaceholder({
-    isDesktopWebBreakpoint,
-    desktop: t("composer.desktopPlaceholder"),
-    mobile: t("composer.mobilePlaceholder"),
-  });
+  const messagePlaceholder =
+    placeholder ??
+    resolveMessagePlaceholder({
+      isDesktopWebBreakpoint,
+      desktop: t("composer.desktopPlaceholder"),
+      mobile: t("composer.mobilePlaceholder"),
+    });
   const userInput = value;
   const setUserInput = onChangeText;
   const {
@@ -492,7 +507,11 @@ export function Composer({
     [],
   );
 
-  const { beforeVoiceContent, footerRight, rightContent } = useComposerRuntimeControls({
+  const {
+    beforeVoiceContent: runtimeBeforeVoiceContent,
+    footerRight,
+    rightContent,
+  } = useComposerRuntimeControls({
     voice,
     serverId,
     agentId,
@@ -509,10 +528,39 @@ export function Composer({
     contextWindowUsedTokens: agentState.contextWindowUsedTokens,
     totalCostUsd: agentState.totalCostUsd,
   });
+  // Soft .cbar: desktop left = mode, right = model (+ voice/send). Compact keeps one cluster left.
   const leftContent = useMemo(
-    () => renderLeftContent({ agentControls, agentId, serverId, focusInput }),
-    [agentId, focusInput, serverId, agentControls],
+    () =>
+      renderAgentControlSlot({
+        agentControls,
+        agentId,
+        serverId,
+        focusInput,
+        slot: isMobile ? "all" : "mode",
+      }),
+    [agentControls, agentId, focusInput, isMobile, serverId],
   );
+  const modelControlSlot = useMemo(() => {
+    if (isMobile) return null;
+    return renderAgentControlSlot({
+      agentControls,
+      agentId,
+      serverId,
+      focusInput,
+      slot: "model",
+    });
+  }, [agentControls, agentId, focusInput, isMobile, serverId]);
+  const beforeVoiceContent = useMemo(() => {
+    if (!modelControlSlot && !runtimeBeforeVoiceContent) return null;
+    if (!modelControlSlot) return runtimeBeforeVoiceContent;
+    if (!runtimeBeforeVoiceContent) return modelControlSlot;
+    return (
+      <View style={styles.cbarRightCluster}>
+        {modelControlSlot}
+        {runtimeBeforeVoiceContent}
+      </View>
+    );
+  }, [modelControlSlot, runtimeBeforeVoiceContent]);
 
   const handleAttachButtonRef = useCallback((node: View | null) => {
     attachButtonRef.current = node;
@@ -531,8 +579,8 @@ export function Composer({
     [keyboardAnimatedStyle],
   );
   const inputAreaContainerStyle = useMemo(
-    () => [styles.inputAreaContainer, isComposerLocked && styles.inputAreaLocked],
-    [isComposerLocked],
+    () => [styles.inputAreaContainer, isComposerLocked && styles.inputAreaLocked, inputAreaStyle],
+    [inputAreaStyle, isComposerLocked],
   );
 
   const attachmentTray = useMemo(
@@ -652,6 +700,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     height: theme.borderWidth[1],
     backgroundColor: theme.colors.border,
   },
+  // Soft .composer-dock: 8 28 16 desktop; .m-composer-wrap: 8 12 18 compact.
   inputAreaContainer: {
     position: "relative",
     minHeight: FOOTER_HEIGHT,
@@ -659,9 +708,18 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "100%",
     minWidth: 0,
     overflow: "hidden",
-    paddingLeft: 28,
-    paddingRight: 28,
-    paddingBottom: 18,
+    paddingLeft: {
+      xs: 12,
+      md: 28,
+    },
+    paddingRight: {
+      xs: 12,
+      md: 28,
+    },
+    paddingBottom: {
+      xs: 18,
+      md: 16,
+    },
     paddingTop: 8,
   },
   inputAreaLocked: {
@@ -672,6 +730,14 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "100%",
     minWidth: 0,
     gap: theme.spacing[3],
+  },
+  // Soft right cbar: model cluster then context meter, before voice/send.
+  cbarRightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 1,
+    minWidth: 0,
   },
   footer: {
     width: "100%",
@@ -733,7 +799,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   sendErrorText: {
     color: theme.colors.palette.red[500],
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 })) as unknown as Record<string, object>;
 

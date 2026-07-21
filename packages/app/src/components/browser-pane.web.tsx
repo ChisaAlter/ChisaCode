@@ -41,11 +41,14 @@ const styles = StyleSheet.create(() => ({
     gap: 8,
     padding: 16,
   },
+  // Soft empty-state title scale.
   title: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: "500",
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 }));

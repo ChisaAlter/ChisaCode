@@ -80,14 +80,15 @@ function resolveAccentColor(
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft .card-like alert: elevated surface, quiet border.
   container: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: theme.spacing[3],
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: "transparent",
-    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 14,
     paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
   },
@@ -101,12 +102,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.medium,
   },
   description: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   descriptionSlot: {
     flexShrink: 1,

@@ -223,7 +223,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: 4,
   },
   attentionText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: "500",
   },
 }));

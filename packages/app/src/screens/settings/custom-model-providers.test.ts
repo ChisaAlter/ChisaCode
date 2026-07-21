@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDeleteSavedModelPatch,
   buildDisableCustomModelProviderPatch,
   buildModelGatewayProviderIds,
   buildSaveCustomModelProviderPatch,
+  buildSaveOpenAiCompatibleModelPatch,
   collectCustomModelProviders,
+  collectSavedModels,
 } from "@/screens/settings/custom-model-providers";
 import type { MutableDaemonConfig } from "@chisacode/protocol/messages";
 
@@ -290,6 +293,193 @@ describe("custom model provider helpers", () => {
 
   it("builds a disable patch for a gateway", () => {
     expect(buildDisableCustomModelProviderPatch("zai")).toEqual({
+      modelGateways: {
+        zai: { enabled: false },
+      },
+    });
+  });
+
+  it("flattens enabled gateway models into saved-model rows", () => {
+    const gateways = {
+      zai: {
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        models: [
+          {
+            id: "glm-5",
+            label: "GLM 5",
+            isDefault: true,
+            supportsTools: true,
+            thinkingOptions: [{ id: "default", label: "Thinking", isDefault: true }],
+          },
+          { id: "glm-5-air", label: "GLM 5 Air", supportsImages: true },
+        ],
+        syntheticModels: [],
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: {
+            enabled: true,
+            baseUrl: "https://api.z.ai/v1",
+            apiKey: "sk",
+          },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      },
+      disabled: {
+        id: "disabled",
+        label: "Disabled",
+        enabled: false,
+        models: [{ id: "hidden", label: "Hidden" }],
+        syntheticModels: [],
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: { enabled: false, baseUrl: "", apiKey: "" },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      },
+    } satisfies NonNullable<MutableDaemonConfig["modelGateways"]>;
+
+    expect(collectSavedModels(gateways)).toEqual([
+      {
+        key: "zai:glm-5",
+        gatewayId: "zai",
+        gatewayLabel: "ZAI",
+        modelId: "glm-5",
+        label: "GLM 5",
+        supportsTools: true,
+        supportsThinking: true,
+        providerIds: [
+          "zai-claude",
+          "zai-codex",
+          "zai-opencode",
+          "zai-mimocode",
+          "zai-pi",
+          "zai-kimi",
+        ],
+        baseUrl: "https://api.z.ai/v1",
+      },
+      {
+        key: "zai:glm-5-air",
+        gatewayId: "zai",
+        gatewayLabel: "ZAI",
+        modelId: "glm-5-air",
+        label: "GLM 5 Air",
+        supportsImages: true,
+        providerIds: [
+          "zai-claude",
+          "zai-codex",
+          "zai-opencode",
+          "zai-mimocode",
+          "zai-pi",
+          "zai-kimi",
+        ],
+        baseUrl: "https://api.z.ai/v1",
+      },
+    ]);
+  });
+
+  it("saves an OpenAI-compatible model as a chatCompletions-only gateway", () => {
+    const patch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways: {},
+      modelId: "gpt-4o",
+      label: "GPT-4o",
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test",
+      supportsTools: true,
+      supportsImages: true,
+      supportsThinking: true,
+      contextWindowMaxTokens: 131_072,
+    });
+
+    expect(patch.modelGateways?.["gpt-4o"]).toMatchObject({
+      id: "gpt-4o",
+      label: "GPT-4o",
+      enabled: true,
+      models: [
+        {
+          id: "gpt-4o",
+          label: "GPT-4o",
+          supportsTools: true,
+          supportsImages: true,
+          contextWindowMaxTokens: 131_072,
+          thinkingOptions: [{ id: "default", label: "Thinking", isDefault: true }],
+          isDefault: true,
+        },
+      ],
+      upstreams: {
+        anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+        chatCompletions: {
+          enabled: true,
+          baseUrl: "https://api.example.com/v1",
+          apiKey: "sk-test",
+        },
+        responses: { enabled: false, baseUrl: "", apiKey: "" },
+      },
+    });
+  });
+
+  it("merges a model into an existing multi-model gateway and deletes one model without removing the rest", () => {
+    const currentGateways = {
+      zai: {
+        id: "zai",
+        label: "ZAI",
+        enabled: true,
+        models: [
+          { id: "glm-5", label: "GLM 5", isDefault: true },
+          { id: "glm-5-air", label: "GLM 5 Air" },
+        ],
+        syntheticModels: [],
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: {
+            enabled: true,
+            baseUrl: "https://api.z.ai/v1",
+            apiKey: "sk",
+          },
+          responses: { enabled: false, baseUrl: "", apiKey: "" },
+        },
+      },
+    } satisfies NonNullable<MutableDaemonConfig["modelGateways"]>;
+
+    const savePatch = buildSaveOpenAiCompatibleModelPatch({
+      currentGateways,
+      gatewayId: "zai",
+      previousModelId: "glm-5-air",
+      modelId: "glm-5-air",
+      label: "GLM 5 Air",
+      baseUrl: "https://api.z.ai/v1",
+      apiKey: "sk",
+      supportsImages: true,
+    });
+
+    expect(savePatch.modelGateways?.zai?.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "glm-5" }),
+        expect.objectContaining({ id: "glm-5-air", supportsImages: true }),
+      ]),
+    );
+
+    const deleteOne = buildDeleteSavedModelPatch({
+      currentGateways,
+      gatewayId: "zai",
+      modelId: "glm-5-air",
+    });
+    expect(deleteOne.modelGateways?.zai?.models).toEqual([
+      expect.objectContaining({ id: "glm-5", label: "GLM 5" }),
+    ]);
+
+    const deleteLast = buildDeleteSavedModelPatch({
+      currentGateways: {
+        zai: {
+          ...currentGateways.zai,
+          models: [{ id: "glm-5", label: "GLM 5", isDefault: true }],
+        },
+      },
+      gatewayId: "zai",
+      modelId: "glm-5",
+    });
+    expect(deleteLast).toEqual({
       modelGateways: {
         zai: { enabled: false },
       },

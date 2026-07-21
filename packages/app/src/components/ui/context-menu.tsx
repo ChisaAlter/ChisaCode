@@ -29,7 +29,7 @@ import {
 } from "react-native";
 import { FadeIn, FadeOut } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor, WORKBENCH_ENVIRONMENT_PANEL_SHADOW } from "@/constants/layout";
 import { Check, CheckCircle } from "lucide-react-native";
 import { BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -412,7 +412,7 @@ export function ContextMenuContent({
 
   const renderSheetBackdrop = useCallback(
     (props: ComponentProps<typeof BottomSheetBackdrop>) => (
-      <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.45} />
+      <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.28} />
     ),
     [],
   );
@@ -428,8 +428,8 @@ export function ContextMenuContent({
     [theme.colors.surface0, theme.colors.border],
   );
   const sheetHandleStyle = useMemo(
-    () => [styles.sheetHandle, { backgroundColor: theme.colors.surface2 }],
-    [theme.colors.surface2],
+    () => [styles.sheetHandle, { backgroundColor: theme.colors.foregroundFaint }],
+    [theme.colors.foregroundFaint],
   );
 
   // Measure trigger when opening (fallback) and capture point anchors.
@@ -809,13 +809,17 @@ const styles = StyleSheet.create((theme) => ({
     bottom: 0,
     left: 0,
   },
+  // Soft .menu-hint surface: r12 pad 6, Soft ink elevation.
   content: {
     backgroundColor: theme.colors.surface0,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadow.md,
+    borderRadius: 12,
+    padding: 6,
     overflow: "hidden",
+    ...(Platform.OS === "web"
+      ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object)
+      : theme.shadow.md),
   },
   sheetBackground: {
     backgroundColor: theme.colors.surface0,
@@ -825,7 +829,7 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
   },
   sheetHandle: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.foregroundFaint,
   },
   sheetScrollContent: {
     paddingTop: theme.spacing[1],
@@ -836,37 +840,46 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[1],
   },
+  // Soft menu section label: 12.5 medium muted, sentence case.
   labelText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    fontWeight: theme.fontWeight.medium,
+    textTransform: "none",
+    letterSpacing: 0,
   },
+  // Soft .menu-hint .sep: quiet border-soft.
   separator: {
     height: 1,
-    backgroundColor: theme.colors.border,
+    backgroundColor: theme.colors.secondary,
+    marginVertical: 4,
   },
   hintContainer: {
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
   },
   hintText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
+  // Soft .menu-hint row: pad 8 10, r8, 12.5px.
   item: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: 34,
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
+    borderRadius: 8,
   },
   itemHovered: {
     backgroundColor: theme.colors.surface1,
@@ -878,10 +891,11 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.5,
   },
   itemSelected: {
-    backgroundColor: theme.colors.surface1,
+    // Soft selected wash: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   itemSelectedInteractive: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface3,
   },
   itemSelectedAccent: {
     backgroundColor: theme.colors.accent,
@@ -904,8 +918,10 @@ const styles = StyleSheet.create((theme) => ({
   itemContent: {
     flexShrink: 1,
   },
+  // Soft .menu-hint: 12.5px text-2.
   itemText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foreground,
   },
@@ -920,7 +936,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   itemDescription: {
     marginTop: 2,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   itemDescriptionSelectedAccent: {

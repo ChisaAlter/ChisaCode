@@ -114,19 +114,19 @@ export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSpli
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.splitButtonPrimary,
       (Boolean(hovered) || pressed) &&
-        inlineUnistylesStyle({ backgroundColor: theme.colors.surface2 }),
+        inlineUnistylesStyle({ backgroundColor: theme.colors.surface1 }),
       primaryDisabled && styles.splitButtonPrimaryDisabled,
     ],
-    [primaryDisabled, theme.colors.surface2],
+    [primaryDisabled, theme.colors.surface1],
   );
 
   const caretTriggerStyle = useCallback(
     ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
       styles.splitButtonCaret,
       (hovered || pressed || open) &&
-        inlineUnistylesStyle({ backgroundColor: theme.colors.surface2 }),
+        inlineUnistylesStyle({ backgroundColor: theme.colors.surface1 }),
     ],
-    [theme.colors.surface2],
+    [theme.colors.surface1],
   );
 
   return (
@@ -224,10 +224,10 @@ const styles = StyleSheet.create((theme) => ({
   splitButton: {
     flexDirection: "row",
     alignItems: "stretch",
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.full,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
     overflow: "hidden",
     ...theme.shadow.sm,
   },
@@ -240,9 +240,10 @@ const styles = StyleSheet.create((theme) => ({
   splitButtonPrimaryDisabled: {
     opacity: 0.6,
   },
+  // Soft split control label: 12.5 meta.
   splitButtonText: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.5,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
@@ -260,14 +261,15 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderLeftWidth: theme.borderWidth[1],
-    borderLeftColor: theme.colors.borderAccent,
+    borderLeftColor: theme.colors.border,
   },
+  // Soft .top-tools .icon-btn: 32 r10.
   iconButton: {
     width: 32,
     height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 10,
   },
   overflowMenuButton: {
     marginRight: -theme.spacing[2],

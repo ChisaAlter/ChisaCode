@@ -22,6 +22,7 @@ import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useOpenProject } from "@/hooks/use-open-project";
 import { shouldShowOpenProjectMenuHeader } from "./open-project-screen-layout";
+import { isWeb } from "@/constants/platform";
 import type { Href } from "expo-router";
 
 export function OpenProjectScreen({ serverId }: { serverId: string }) {
@@ -72,8 +73,13 @@ export function OpenProjectScreen({ serverId }: { serverId: string }) {
       {shouldShowOpenProjectMenuHeader({ isCompactLayout }) ? <MenuHeader borderless /> : null}
       <View style={styles.content}>
         <TitlebarDragRegion />
-        <View style={styles.logo}>
-          <ChisaCodeLogo size={52} />
+        <View style={styles.hero}>
+          <View style={styles.logo}>
+            <ChisaCodeLogo size={40} />
+          </View>
+          <Text style={styles.heroEyebrow}>{t("workspace.softHomeEyebrow")}</Text>
+          <Text style={styles.heroTitle}>{t("openProject.heroTitle")}</Text>
+          <Text style={styles.heroSubtitle}>{t("openProject.heroSubtitle")}</Text>
         </View>
         <View style={styles.tiles}>
           <HomeTile
@@ -170,9 +176,10 @@ function HomeTile({ icon: Icon, title, description, onPress, testID, accent }: H
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft Workbench canvas — same quiet shell as Soft Home.
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceWorkspace,
     userSelect: "none",
   },
   content: {
@@ -188,46 +195,81 @@ const styles = StyleSheet.create((theme) => ({
       md: HEADER_INNER_HEIGHT + theme.spacing[6],
     },
   },
+  hero: {
+    width: "100%",
+    maxWidth: 520,
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+  },
   logo: {
-    marginBottom: theme.spacing[8],
+    marginBottom: theme.spacing[2],
+  },
+  heroEyebrow: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
+    textAlign: "center",
+  },
+  heroTitle: {
+    color: theme.colors.foreground,
+    fontSize: { xs: 28, md: 34 },
+    fontWeight: theme.fontWeight.bold,
+    letterSpacing: -0.7,
+    textAlign: "center",
+    lineHeight: { xs: 34, md: 40 },
+  },
+  heroSubtitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 14.5,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: theme.spacing[2],
   },
   tiles: {
-    marginTop: { xs: theme.spacing[6], md: theme.spacing[12] },
+    marginTop: { xs: theme.spacing[4], md: theme.spacing[6] },
     width: "100%",
-    maxWidth: 452,
+    maxWidth: 480,
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "flex-start",
+    justifyContent: "center",
     gap: theme.spacing[3],
   },
+  // Soft card tiles: quiet surface, soft radius, shadow only on hover.
   tile: {
-    width: { xs: "100%", md: 220 },
-    minHeight: { xs: 0, md: 132 },
+    width: { xs: "100%", md: 228 },
+    minHeight: { xs: 0, md: 128 },
     padding: theme.spacing[4],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: 14,
     gap: theme.spacing[3],
   },
   tileHovered: {
-    backgroundColor: theme.colors.surface2,
-    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
+    ...(isWeb
+      ? {
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 28px rgba(20, 23, 31, 0.06)",
+        }
+      : { backgroundColor: theme.colors.surfaceWorkspace }),
   },
   tilePressed: {
-    opacity: 0.85,
+    opacity: 0.9,
   },
   tileText: {
     gap: theme.spacing[1],
   },
   tileTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
   },
   tileDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    lineHeight: 18,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

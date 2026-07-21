@@ -29,6 +29,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Check, CheckCircle } from "lucide-react-native";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { WORKBENCH_ENVIRONMENT_PANEL_SHADOW } from "@/constants/layout";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 
 // Action status for menu items with loading/success feedback
@@ -828,62 +829,78 @@ const styles = StyleSheet.create((theme) => ({
     bottom: 0,
     left: 0,
   },
+  // Soft .menu-hint surface: r12 pad 6, Soft ink elevation.
+  // Web needs boxShadow; RN shadow* alone is near-invisible / clipped by overflow.
   content: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.xl,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
     overflow: "hidden",
-    ...theme.shadow.md,
+    padding: 6,
+    ...(Platform.OS === "web"
+      ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object)
+      : theme.shadow.md),
   },
   labelContainer: {
     paddingHorizontal: theme.spacing[3],
     paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[1],
   },
+  // Soft menu section label: 12.5 medium muted, sentence case.
   labelText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    fontWeight: theme.fontWeight.medium,
+    textTransform: "none",
+    letterSpacing: 0,
   },
+  // Soft .menu-hint .sep: quiet border-soft.
   separator: {
     height: 1,
-    backgroundColor: theme.colors.border,
+    backgroundColor: theme.colors.secondary,
+    marginVertical: 4,
   },
   hintContainer: {
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
   },
   hintText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
+  // Soft .menu-hint row: pad 8 10, r8.
   item: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: 34,
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
+    borderRadius: 8,
   },
   itemHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   itemPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   itemSelected: {
-    backgroundColor: theme.colors.surface2,
+    // Soft selected wash: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   itemSelectedInteractive: {
-    backgroundColor: theme.colors.surface2,
+    // Soft selected interactive: surface3 (surface1 remains hover).
+    backgroundColor: theme.colors.surface3,
   },
   itemSelectedAccent: {
     backgroundColor: theme.colors.accent,
@@ -894,8 +911,10 @@ const styles = StyleSheet.create((theme) => ({
   itemMuted: {
     opacity: 0.72,
   },
+  // Soft .menu-hint: 12.5px text-2.
   itemText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
   },
@@ -913,7 +932,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   itemDescription: {
     marginTop: 2,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   itemDescriptionSelectedAccent: {

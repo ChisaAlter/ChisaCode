@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 
 interface ColumnDef {
@@ -23,6 +24,7 @@ function getSortIndicator(sortKey: string | null, sortDir: string, colKey: strin
 }
 
 export default function DataTable({ instanceId, props, sendAction }: TableProps) {
+  const { theme } = useUnistyles();
   const pageSize = props.pageSize ?? 10;
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -98,30 +100,37 @@ export default function DataTable({ instanceId, props, sendAction }: TableProps)
   }, []);
 
   const prevTextStyle = useMemo(
-    () => ({ color: page === 0 ? "#ccc" : "#3b82f6", fontSize: 12 }),
-    [page],
+    () => ({
+      color: page === 0 ? theme.colors.foregroundFaint : theme.colors.accent,
+      fontSize: 12.5,
+      lineHeight: 16,
+    }),
+    [page, theme.colors.accent, theme.colors.foregroundFaint],
   );
   const nextTextStyle = useMemo(
-    () => ({ color: page >= totalPages - 1 ? "#ccc" : "#3b82f6", fontSize: 12 }),
-    [page, totalPages],
+    () => ({
+      color: page >= totalPages - 1 ? theme.colors.foregroundFaint : theme.colors.accent,
+      fontSize: 12.5,
+      lineHeight: 16,
+    }),
+    [page, totalPages, theme.colors.accent, theme.colors.foregroundFaint],
   );
 
   return (
-    <View style={containerStyle}>
-      {props.title ? <Text style={titleTextStyle}>{props.title}</Text> : null}
+    <View style={styles.container}>
+      {props.title ? <Text style={styles.title}>{props.title}</Text> : null}
 
       <ScrollView horizontal>
         <View>
-          {/* Header */}
-          <View style={headerRowStyle}>
+          <View style={styles.headerRow}>
             {columns.map((col, i) => (
               <TouchableOpacity
                 key={col.key}
-                style={cellBaseStyle}
+                style={styles.cell}
                 disabled={!col.sortable}
                 onPress={headerHandlers[i]}
               >
-                <Text style={headerTextStyle}>
+                <Text style={styles.headerText}>
                   {col.title}
                   {getSortIndicator(sortKey, sortDir, col.key)}
                 </Text>
@@ -129,16 +138,15 @@ export default function DataTable({ instanceId, props, sendAction }: TableProps)
             ))}
           </View>
 
-          {/* Rows */}
           {pageRows.map((row, rowIdx) => (
             <TouchableOpacity
               key={rowKeys[rowIdx]}
-              style={dataRowStyle}
+              style={styles.dataRow}
               onPress={rowHandlers[rowIdx]}
             >
               {columns.map((col) => (
-                <View key={col.key} style={cellBaseStyle}>
-                  <Text style={rowTextStyle} numberOfLines={1}>
+                <View key={col.key} style={styles.cell}>
+                  <Text style={styles.rowText} numberOfLines={1}>
                     {String(row[col.key] ?? "")}
                   </Text>
                 </View>
@@ -147,20 +155,19 @@ export default function DataTable({ instanceId, props, sendAction }: TableProps)
           ))}
 
           {pageRows.length === 0 ? (
-            <View style={emptyContainerStyle}>
-              <Text style={emptyTextStyle}>No data</Text>
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No data</Text>
             </View>
           ) : null}
         </View>
       </ScrollView>
 
-      {/* Pagination */}
       {totalPages > 1 ? (
-        <View style={paginationRowStyle}>
+        <View style={styles.paginationRow}>
           <TouchableOpacity disabled={page === 0} onPress={handlePrevPage}>
             <Text style={prevTextStyle}>Prev</Text>
           </TouchableOpacity>
-          <Text style={pageCountStyle}>
+          <Text style={styles.pageCount}>
             {page + 1} / {totalPages}
           </Text>
           <TouchableOpacity disabled={page >= totalPages - 1} onPress={handleNextPage}>
@@ -172,27 +179,66 @@ export default function DataTable({ instanceId, props, sendAction }: TableProps)
   );
 }
 
-const containerStyle = { padding: 12 } as const;
-const titleTextStyle = { fontSize: 14, fontWeight: "600" as const, marginBottom: 8 } as const;
-const headerRowStyle = {
-  flexDirection: "row" as const,
-  borderBottomWidth: 1,
-  borderBottomColor: "#e5e7eb",
-} as const;
-const headerTextStyle = { fontSize: 12, fontWeight: "600" as const, color: "#374151" } as const;
-const cellBaseStyle = { padding: 8, minWidth: 100 } as const;
-const dataRowStyle = {
-  flexDirection: "row" as const,
-  borderBottomWidth: 1,
-  borderBottomColor: "#f3f4f6",
-} as const;
-const rowTextStyle = { fontSize: 12, color: "#111" } as const;
-const emptyContainerStyle = { padding: 16 } as const;
-const emptyTextStyle = { color: "#888", fontSize: 12, textAlign: "center" as const } as const;
-const paginationRowStyle = {
-  flexDirection: "row" as const,
-  justifyContent: "center" as const,
-  marginTop: 8,
-  gap: 8,
-} as const;
-const pageCountStyle = { fontSize: 12, color: "#666" } as const;
+const styles = StyleSheet.create((theme) => ({
+  container: {
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  title: {
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foreground,
+    marginBottom: 8,
+  },
+  headerRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
+  },
+  headerText: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foregroundSubtleText,
+  },
+  cell: {
+    padding: 8,
+    minWidth: 100,
+  },
+  dataRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    // Soft quiet row rule (border-soft / secondary), not surface1 hover fill.
+    borderBottomColor: theme.colors.secondary,
+  },
+  rowText: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: theme.colors.foreground,
+  },
+  emptyContainer: {
+    padding: 16,
+  },
+  emptyText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
+    textAlign: "center",
+  },
+  paginationRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 8,
+    gap: 8,
+  },
+  pageCount: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: theme.colors.foregroundMuted,
+  },
+}));

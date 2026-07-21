@@ -31,8 +31,8 @@ export const DEFAULT_ENVIRONMENT_PANEL_TABS: readonly EnvironmentPanelTabPrefere
   "browser-context",
 ];
 
-// Soft Workbench default nav width.
-export const DEFAULT_SIDEBAR_WIDTH = 256;
+// Soft Workbench default nav width (--nav-w 260).
+export const DEFAULT_SIDEBAR_WIDTH = 260;
 export const MIN_SIDEBAR_WIDTH = 200;
 export const MAX_SIDEBAR_WIDTH = 320;
 
@@ -250,8 +250,8 @@ export function migratePanelState(
   }
   if (version < 6 || typeof state.sidebarWidth !== "number") {
     state.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
-  } else if (isWeb && version < 17) {
-    // Version 17 Soft Workbench: migrate legacy rails to soft default width.
+  } else if (isWeb && version < 18) {
+    // Version 18 Soft Workbench: migrate rails to design --nav-w 260.
     state.sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   } else {
     state.sidebarWidth = clampSidebarWidth(state.sidebarWidth);

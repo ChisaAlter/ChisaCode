@@ -121,13 +121,14 @@ function RootStack() {
     surfaceWorkspace: theme.colors.surfaceWorkspace,
     surface0: theme.colors.surface0,
     glassShell: theme.glass.shell,
-    borderAccent: theme.colors.borderAccent,
+    borderAccent: theme.colors.border,
   }).stack;
   const stackScreenOptions = useMemo(
     () => ({
       headerShown: false,
       animation: "none" as const,
       contentStyle: {
+        flex: 1,
         backgroundColor: stackBackground,
       },
     }),

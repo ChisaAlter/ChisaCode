@@ -55,13 +55,14 @@ function normalizeButtonSize(size: ButtonSize): ButtonSize {
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft Workbench buttons: quiet pills, shadow only when elevated.
   base: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: theme.spacing[2],
     minHeight: 36,
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.full,
     borderWidth: 1,
     borderColor: "transparent",
   },
@@ -73,46 +74,42 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 28,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.full,
   },
   sm: {
     minHeight: 32,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.full,
   },
   lg: {
     paddingVertical: theme.spacing[4],
     paddingHorizontal: theme.spacing[6],
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.full,
   },
   default: {
     backgroundColor: theme.colors.accent,
     borderColor: theme.colors.accent,
-    ...theme.shadow.sm,
   },
   secondary: {
-    backgroundColor: theme.colors.surface2,
-    borderColor: theme.colors.borderAccent,
-    ...theme.shadow.sm,
+    backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
   },
   outline: {
     backgroundColor: "transparent",
-    borderColor: theme.colors.borderAccent,
-    ...theme.shadow.sm,
+    borderColor: theme.colors.border,
   },
   ghost: {
     backgroundColor: "transparent",
     borderColor: "transparent",
   },
   ghostHovered: {
-    backgroundColor: theme.colors.surface1,
-    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderColor: "transparent",
   },
   destructive: {
     backgroundColor: theme.colors.destructive,
     borderColor: theme.colors.destructive,
-    ...theme.shadow.sm,
   },
   pressed: {
     opacity: 0.85,
@@ -124,11 +121,14 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft button sm label: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
   },
   textXs: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   textDefault: {
     color: theme.colors.palette.white,

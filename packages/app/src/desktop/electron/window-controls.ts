@@ -26,11 +26,7 @@ function shouldUseDarkFallback(foreground: string | undefined): boolean {
 }
 
 export function getDesktopWindowControlsBackground(colors: DesktopWindowControlsColors): string {
-  const titlebarColor = colors.surface0.trim();
-  if (isOpaqueHexColor(titlebarColor)) {
-    return titlebarColor;
-  }
-
+  // Soft Workbench: caption overlay matches the shell canvas, not elevated cards (surface0 white).
   const workspaceColor = colors.surfaceWorkspace.trim();
   if (isOpaqueHexColor(workspaceColor)) {
     return workspaceColor;
@@ -39,6 +35,11 @@ export function getDesktopWindowControlsBackground(colors: DesktopWindowControls
   const sidebarColor = colors.surfaceSidebar.trim();
   if (isOpaqueHexColor(sidebarColor)) {
     return sidebarColor;
+  }
+
+  const titlebarColor = colors.surface0.trim();
+  if (isOpaqueHexColor(titlebarColor)) {
+    return titlebarColor;
   }
 
   return shouldUseDarkFallback(colors.foreground)

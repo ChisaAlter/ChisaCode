@@ -897,22 +897,23 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: "transparent",
     gap: 3,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 10,
   },
   triggerHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   triggerPressed: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surface1,
   },
   triggerDisabled: {
     opacity: 0.5,
   },
+  // Soft composer meta chip: 12.5 muted.
   triggerText: {
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
     lineHeight: WORKBENCH_META_LINE_HEIGHT,
     fontWeight: theme.fontWeight.normal,
   },
@@ -922,46 +923,51 @@ const styles = StyleSheet.create((theme) => ({
     height: "auto",
   },
   favoritesContainer: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet strip rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   separator: {
     height: 1,
-    backgroundColor: theme.colors.border,
+    backgroundColor: theme.colors.secondary,
   },
   sectionHeading: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    paddingHorizontal: 10,
     paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[1],
     ...(IS_WEB ? {} : { marginHorizontal: theme.spacing[1] }),
   },
+  // Soft menu section label: 12.5 medium muted.
   sectionHeadingText: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
+  // Soft menu-hint row: pad 8 10, minH 34.
   drillDownRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    minHeight: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 34,
     ...(IS_WEB ? {} : { marginHorizontal: theme.spacing[1] }),
   },
   drillDownRowHovered: {
     backgroundColor: theme.colors.surface1,
   },
   drillDownRowPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   drillDownText: {
     flex: 1,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
   drillDownTrailing: {
@@ -970,7 +976,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   drillDownCount: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   rowStateInline: {
@@ -981,7 +988,8 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   rowErrorText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     maxWidth: 140,
   },
@@ -996,7 +1004,7 @@ const styles = StyleSheet.create((theme) => ({
     transform: [{ scale: 0.7 }],
   },
   rowIconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   rowIconButtonPressed: {
     backgroundColor: theme.colors.surface1,
@@ -1007,7 +1015,9 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   emptyStateText: {
-    fontSize: theme.fontSize.sm,
+    // Soft empty menu copy: 12.5 muted.
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   virtualizedModelList: {
@@ -1026,7 +1036,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   favoriteButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   favoriteButtonPressed: {
     backgroundColor: theme.colors.surface1,
@@ -1039,6 +1049,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   sheetLoadingText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    // Soft model sheet chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 }));

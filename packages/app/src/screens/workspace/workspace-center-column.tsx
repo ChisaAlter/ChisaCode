@@ -31,6 +31,7 @@ import {
 import {
   WorkspaceHeaderRightControls,
   WorkspaceHeaderTitleBar,
+  WorkspaceDesktopSoftTopbar,
 } from "@/screens/workspace/workspace-header";
 import { WorkspaceEnvironmentPanelRail } from "@/screens/workspace/workspace-environment-panel";
 import { supportsDesktopPaneSplits } from "@/constants/layout";
@@ -294,6 +295,35 @@ export function WorkspaceCenterColumn({
     [headerRightControls, isEnvironmentPanelVisible, isMobile],
   );
 
+  // Soft desktop topbar owns title + ctx pills + tools; tabs row keeps only tab chrome.
+  const desktopSoftTopbar = useMemo(() => {
+    if (isMobile) return null;
+    return (
+      <WorkspaceDesktopSoftTopbar
+        {...headerTitleBar}
+        {...headerRightControls}
+        activeTab={activeTabDescriptor}
+        normalizedServerId={normalizedServerId}
+        normalizedWorkspaceId={normalizedWorkspaceId}
+        showCreateBrowserTab={showCreateBrowserTab}
+        createTerminalDisabled={isCreateTerminalPending}
+        browserContextDockDisabled={!hasEnvironmentBrowserContext}
+        isEnvironmentPanelVisible={isEnvironmentPanelVisible}
+      />
+    );
+  }, [
+    activeTabDescriptor,
+    hasEnvironmentBrowserContext,
+    headerRightControls,
+    headerTitleBar,
+    isCreateTerminalPending,
+    isEnvironmentPanelVisible,
+    isMobile,
+    normalizedServerId,
+    normalizedWorkspaceId,
+    showCreateBrowserTab,
+  ]);
+
   const content = useMemo(
     () => (
       <WorkspaceContent
@@ -341,13 +371,13 @@ export function WorkspaceCenterColumn({
         isWorkspaceFocused={isRouteFocused}
         showCreateBrowserTab={showCreateBrowserTab}
         renderPaneEmptyState={renderSplitPaneEmptyState}
-        topRightControls={headerRight}
+        // Soft topbar owns explorer/env/more; keep tab-row trailing empty on desktop.
+        topRightControls={null}
       />
     );
   }, [
     content,
     desktopFocusModeEnabled,
-    headerRight,
     isRouteFocused,
     normalizedServerId,
     normalizedWorkspaceId,
@@ -360,6 +390,7 @@ export function WorkspaceCenterColumn({
 
   return (
     <View style={styles.centerColumn}>
+      {desktopSoftTopbar}
       {isMobile ? (
         <ScreenHeader
           left={

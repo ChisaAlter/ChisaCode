@@ -35,26 +35,26 @@ describe("left sidebar drafts", () => {
     expect(drafts).toEqual([]);
   });
 
-  it("opens the conversation start page when the current route is a workspace", () => {
+  it("opens Soft Home (/new) when the current route is a workspace", () => {
     expect(
       resolveLeftSidebarNewConversationRoute({
         activeServerId: "server-1",
         pathname: "/h/server-1/workspace/workspace-a",
       }),
-    ).toBe("/h/server-1/open-project");
+    ).toBe("/h/server-1/new");
   });
 
-  it("opens the conversation start page outside a workspace route", () => {
+  it("opens Soft Home (/new) outside a workspace route", () => {
     expect(
       resolveLeftSidebarNewConversationRoute({
         activeServerId: "server-1",
         pathname: "/h/server-1/sessions",
       }),
-    ).toBe("/h/server-1/open-project");
+    ).toBe("/h/server-1/new");
   });
 
-  it("resolves the sidebar home action to the current host open-project route", () => {
-    expect(resolveLeftSidebarHomeRoute("server-1")).toBe("/h/server-1/open-project");
+  it("resolves the sidebar home action to Soft Home (/new)", () => {
+    expect(resolveLeftSidebarHomeRoute("server-1")).toBe("/h/server-1/new");
   });
 
   it("does not resolve a sidebar home action without an active host", () => {

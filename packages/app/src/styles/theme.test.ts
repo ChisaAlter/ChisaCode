@@ -53,8 +53,11 @@ describe("theme brightness", () => {
 
 describe("small text contrast", () => {
   it("keeps readable subtle text separate from decorative faint color", () => {
-    expect(lightTheme.colors.foregroundSubtleText).toBe(lightTheme.colors.foregroundMuted);
-    expect(darkTheme.colors.foregroundSubtleText).toBe(darkTheme.colors.foregroundMuted);
+    // Soft Workbench: text-2 is the readable mid tier; faint stays decorative.
+    expect(lightTheme.colors.foregroundSubtleText).toBe("#3d4452");
+    expect(lightTheme.colors.foregroundSubtleText).not.toBe(lightTheme.colors.foregroundFaint);
+    expect(darkTheme.colors.foregroundSubtleText).toBe("#b6becd");
+    expect(darkTheme.colors.foregroundSubtleText).not.toBe(darkTheme.colors.foregroundFaint);
     expect(chisakiTheme.colors.foregroundSubtleText).toBe(chisakiTheme.colors.foregroundMuted);
     expect(aemeathTheme.colors.foregroundSubtleText).toBe(aemeathTheme.colors.foregroundMuted);
     expect(liquidNeonTheme.colors.foregroundSubtleText).toBe("#9fb5d3");
@@ -95,54 +98,54 @@ describe("chisaki theme surfaces", () => {
 describe("source design token parity", () => {
   const cases = [
     {
-      name: "Blockchain Light",
+      name: "Soft Light",
       theme: lightTheme,
       expected: {
-        surface0: "#f8fafc",
-        surfaceWorkspace: "#ffffff",
-        surfaceSidebar: "#f1f5f9",
-        surface1: "#ffffff",
-        surface2: "#f4f7fb",
-        surface3: "#edf2f8",
-        surfaceSidebarHover: "#eef4ff",
-        border: "#dce5f0",
-        borderAccent: "#cbd7e6",
-        foreground: "#0f172a",
-        foregroundMuted: "#64748b",
-        foregroundFaint: "#94a3b8",
-        accent: "#3b82f6",
-        accentBright: "#6366f1",
-        accentNeon: "#8b5cf6",
-        success: "#16a34a",
+        surface0: "#ffffff",
+        surfaceWorkspace: "#f4f5f8",
+        surfaceSidebar: "#f0f1f5",
+        surface1: "#e8eaef",
+        surface2: "#eef0f4",
+        surface3: "#e2e5ec",
+        surfaceSidebarHover: "#e8eaef",
+        border: "#e4e6ec",
+        borderAccent: "#d5d9e2",
+        foreground: "#14171f",
+        foregroundMuted: "#6f7686",
+        foregroundFaint: "#9aa1b0",
+        accent: "#2a6cf0",
+        accentBright: "#3d7dff",
+        accentNeon: "#5b8cff",
+        success: "#18a34a",
         destructive: "#ef4444",
-        backgroundCss: "#f8fafc",
-        userBubbleGradient: "linear-gradient(135deg, #3b82f6, #6366f1 56%, #8b5cf6)",
+        backgroundCss: "#f4f5f8",
+        userBubbleGradient: "linear-gradient(135deg, #2a6cf0, #3d7dff 56%, #5b8cff)",
       },
     },
     {
-      name: "Cyber Dark",
+      name: "Soft Dark",
       theme: darkTheme,
       expected: {
-        surface0: "#090b11",
-        surfaceWorkspace: "#0f1219",
-        surfaceSidebar: "#0b0e14",
-        surface1: "#121722",
-        surface2: "#171d2a",
-        surface3: "#202838",
-        surfaceSidebarHover: "#1c2434",
-        border: "#232b3a",
-        borderAccent: "#30394c",
-        foreground: "#e5e7eb",
-        foregroundMuted: "#8994a8",
-        foregroundFaint: "#596579",
-        accent: "#6366f1",
-        accentBright: "#818cf8",
-        accentNeon: "#3b82f6",
-        success: "#22c55e",
+        surface0: "#1a1f2a",
+        surfaceWorkspace: "#12151c",
+        surfaceSidebar: "#151922",
+        surface1: "#222836",
+        surface2: "#232a38",
+        surface3: "#2a3140",
+        surfaceSidebarHover: "#222836",
+        border: "#2c3342",
+        borderAccent: "#3a4254",
+        foreground: "#e9edf6",
+        foregroundMuted: "#8b93a7",
+        foregroundFaint: "#6b7386",
+        accent: "#6ea0ff",
+        accentBright: "#8bb4ff",
+        accentNeon: "#6ea0ff",
+        success: "#4ade80",
         destructive: "#ff4772",
-        backgroundCss: "#090b11",
+        backgroundCss: "#0b0d12",
         userBubbleGradient:
-          "linear-gradient(135deg, rgba(99, 102, 241, 0.92), rgba(59, 130, 246, 0.85))",
+          "linear-gradient(135deg, rgba(110, 160, 255, 0.92), rgba(110, 160, 255, 0.72))",
       },
     },
     {
@@ -224,7 +227,7 @@ describe("source design token parity", () => {
     },
   ] as const;
 
-  it.each(cases)("matches $name tokens from web3-themes-v2.html", ({ theme, expected }) => {
+  it.each(cases)("matches $name Soft Workbench design tokens", ({ theme, expected }) => {
     expect({
       surface0: theme.colors.surface0,
       surfaceWorkspace: theme.colors.surfaceWorkspace,

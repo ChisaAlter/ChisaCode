@@ -37,10 +37,10 @@ function PathRow({ path, active, onSelect }: PathRowProps) {
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
       (Boolean(hovered) || pressed || active) && {
-        backgroundColor: theme.colors.surface1,
+        backgroundColor: theme.colors.surfaceWorkspace,
       },
     ],
-    [active, theme.colors.surface1],
+    [active, theme.colors.surfaceWorkspace],
   );
   const rowTextStyle = useMemo(
     () => [styles.rowText, { color: theme.colors.foreground }],
@@ -81,10 +81,10 @@ function ProjectPickerActionRow({
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
       (Boolean(hovered) || pressed) && {
-        backgroundColor: theme.colors.surface1,
+        backgroundColor: theme.colors.surfaceWorkspace,
       },
     ],
-    [theme.colors.surface1],
+    [theme.colors.surfaceWorkspace],
   );
   const rowTextStyle = useMemo(
     () => [styles.rowText, { color: theme.colors.foreground }],
@@ -272,8 +272,9 @@ export function ProjectPickerModal() {
     [theme.colors.surface0],
   );
   const headerStyle = useMemo(
-    () => [styles.header, { borderBottomColor: theme.colors.border }],
-    [theme.colors.border],
+    // Soft floating panel header: quiet border-soft rule.
+    () => [styles.header, { borderBottomColor: theme.colors.secondary }],
+    [theme.colors.secondary],
   );
   const inputStyle = useMemo(
     () => [styles.input, { color: theme.colors.foreground }],
@@ -366,20 +367,26 @@ const styles = StyleSheet.create((theme) => ({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(20, 23, 31, 0.28)",
   },
+  // Soft floating project picker: r18 + Soft ink elevation.
   panel: {
     width: 640,
     maxWidth: "92%",
     maxHeight: "80%",
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     overflow: "hidden",
-    ...theme.shadow.lg,
+    backgroundColor: theme.colors.surface0,
+    ...theme.shadow.md,
   },
   header: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
+    // Soft floating panel header: quiet border-soft rule.
+    borderBottomColor: theme.colors.secondary,
   },
   searchRow: {
     flexDirection: "row",
@@ -388,7 +395,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   input: {
     flex: 1,
-    fontSize: theme.fontSize.sm,
+    // Soft picker chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     paddingVertical: theme.spacing[1],
     outlineStyle: "none",
   } as object,
@@ -398,9 +407,12 @@ const styles = StyleSheet.create((theme) => ({
   resultsContent: {
     paddingVertical: theme.spacing[2],
   },
+  // Soft quiet list row.
   row: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[2],
+    borderRadius: 10,
+    marginHorizontal: theme.spacing[2],
   },
   rowContent: {
     flexDirection: "row",
@@ -414,7 +426,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   rowText: {
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
     lineHeight: 20,
     flexShrink: 1,
   },
@@ -427,11 +439,14 @@ const styles = StyleSheet.create((theme) => ({
   emptyText: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[4],
-    fontSize: theme.fontSize.base,
+    // Soft picker chrome: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   actions: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
     paddingVertical: theme.spacing[2],
   },
 }));

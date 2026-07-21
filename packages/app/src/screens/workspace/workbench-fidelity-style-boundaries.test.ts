@@ -50,11 +50,12 @@ describe("workbench fidelity style boundaries", () => {
     expect(source).not.toContain("backgroundColor: theme.colors.surfaceWorkspace");
   });
 
-  it("keeps the new-workspace draft attached to the workbench bottom edge", () => {
+  it("keeps the new-workspace Soft Home draft vertically centered on desktop", () => {
     const source = readSource("../new-workspace-screen.tsx");
 
     expect(source).toContain("contentDesktop: {");
-    expect(source).toContain('justifyContent: "flex-end"');
+    expect(source).toContain("softHomeTopInset");
+    expect(source).toContain("useWindowDimensions");
     expect(source).toContain("function ImportSessionAction");
     expect(source).toContain('variant="ghost"');
     expect(source).not.toContain("contentCentered");

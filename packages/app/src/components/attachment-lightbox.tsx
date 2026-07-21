@@ -113,13 +113,14 @@ const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
   },
+  // Soft media dimmer: ink-tinted, not pure black.
   backdrop: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.9)",
+    backgroundColor: "rgba(20, 23, 31, 0.88)",
   },
   contentLayer: {
     position: "absolute",
@@ -145,14 +146,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   errorText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   closeButton: {
     position: "absolute",
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.colors.surface2,
+    borderRadius: 10,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     alignItems: "center",

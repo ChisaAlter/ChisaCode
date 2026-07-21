@@ -121,7 +121,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     justifyContent: "center",
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
     userSelect: "none",
   },
   button: {
@@ -131,7 +132,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    // Soft nav header hover pill: r10.
+    borderRadius: 10,
   },
   titleGroup: {
     minWidth: 0,
@@ -147,9 +149,11 @@ const styles = StyleSheet.create((theme) => ({
   buttonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
+  // Soft nav header label: 13.5 medium muted / on = foreground.
   label: {
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
   labelHighlighted: {
@@ -166,7 +170,8 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: 0,
   },
   compactLabel: {
-    fontSize: 13,
+    // Soft sidebar header chrome: 12.5 meta.
+    fontSize: 12.5,
     lineHeight: 18,
   },
 }));

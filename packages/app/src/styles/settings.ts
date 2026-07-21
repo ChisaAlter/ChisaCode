@@ -5,6 +5,7 @@ import {
   SETTINGS_ROW_TITLE_FONT_SIZE,
   SETTINGS_ROW_TITLE_LINE_HEIGHT,
 } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 
 export const settingsStyles = StyleSheet.create((theme) => ({
   section: {
@@ -17,20 +18,23 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[3],
     marginLeft: theme.spacing[1],
   },
+  // Soft .lead / section label: 13 muted, not uppercase chrome.
   sectionTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     marginBottom: theme.spacing[3],
     marginLeft: theme.spacing[1],
   },
+  // Soft section header: 13 medium muted.
   sectionHeaderTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    lineHeight: SETTINGS_HINT_LINE_HEIGHT,
-    fontWeight: theme.fontWeight.semibold,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: theme.fontWeight.medium,
+    letterSpacing: 0,
+    textTransform: "none",
   },
   sectionHeaderLink: {
     alignItems: "center",
@@ -43,34 +47,35 @@ export const settingsStyles = StyleSheet.create((theme) => ({
   },
   sectionHeaderLinkText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  // Soft Workbench: card sits on shell as a quiet surface group.
+  // Soft Workbench .card: quiet elevated surface on soft shell.
   card: {
-    ...(theme.glass.enabled
-      ? {
-          backgroundColor: theme.colors.surface1,
-          borderColor: theme.colors.border,
-        }
-      : {
-          backgroundColor: theme.colors.surface0,
-          borderColor: theme.colors.border,
-        }),
-    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden",
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+        } as object)
+      : theme.shadow.sm),
   },
+  // Soft .row: min-height 56, pad 12 16, quiet dividers.
   row: {
     minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: theme.spacing[4],
+    paddingVertical: 12,
     paddingHorizontal: SETTINGS_ROW_HORIZONTAL_PADDING,
   },
   rowBorder: {
     borderTopWidth: 1 / UnistylesRuntime.pixelRatio,
-    borderTopColor: theme.colors.border,
+    // Soft .row: quiet --border-soft divider inside elevated cards.
+    borderTopColor: theme.colors.secondary,
   },
   rowContent: {
     flex: 1,
@@ -80,11 +85,12 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: SETTINGS_ROW_TITLE_FONT_SIZE,
     lineHeight: SETTINGS_ROW_TITLE_LINE_HEIGHT,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
   },
+  // Soft .row .hint: 12 muted under title.
   rowHint: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12,
     lineHeight: SETTINGS_HINT_LINE_HEIGHT,
     marginTop: theme.spacing[0.5],
   },

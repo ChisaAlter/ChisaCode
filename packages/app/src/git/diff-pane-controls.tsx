@@ -88,7 +88,8 @@ export function DiffPaneControls({
 }: DiffPaneControlsProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const controlSurfaceColor = theme.colors.surface2;
+  // Soft selected control wash: active surface3, not solid surface1 hover fill.
+  const controlSurfaceColor = theme.colors.surface3;
 
   const diffModeTriggerStyle = useMemo(
     () => buildDiffModeTriggerStyle(controlSurfaceColor),
@@ -486,7 +487,8 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft .topbar: quiet --border-soft chrome rule.
+    borderBottomColor: theme.colors.secondary,
   },
   inner: {
     flex: 1,
@@ -507,12 +509,13 @@ const styles = StyleSheet.create((theme) => ({
       sm: 28,
       md: 24,
     },
-    borderRadius: theme.borderRadius.base,
+    // Soft toolbar control: --r-sm 8.
+    borderRadius: 8,
     flexShrink: 0,
   },
   diffStatusText: {
-    fontSize: theme.fontSize.xs,
-    lineHeight: theme.fontSize.xs * 1.25,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   buttonRow: {
@@ -545,12 +548,12 @@ const styles = StyleSheet.create((theme) => ({
     },
   },
   toggleButtonGroupStart: {
-    borderTopLeftRadius: theme.borderRadius.base,
-    borderBottomLeftRadius: theme.borderRadius.base,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
   },
   toggleButtonGroupEnd: {
-    borderTopRightRadius: theme.borderRadius.base,
-    borderBottomRightRadius: theme.borderRadius.base,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
   },
   iconButton: {
     flexDirection: "row",
@@ -572,7 +575,8 @@ const styles = StyleSheet.create((theme) => ({
       sm: theme.spacing[2],
       md: theme.spacing[1],
     },
-    borderRadius: theme.borderRadius.base,
+    // Soft toolbar control: --r-sm 8.
+    borderRadius: 8,
     flexShrink: 0,
   },
   refreshIcon: {
@@ -583,15 +587,17 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
+  // Soft quiet summary card: r14 card family.
   reviewSummaryBand: {
     marginHorizontal: theme.spacing[3],
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[1],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: 14,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface0,
@@ -613,12 +619,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   reviewSummaryTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    // Soft review summary title: 12.5 meta medium.
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
   },
   reviewSummaryDescription: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
   reviewSummaryMeta: {
@@ -633,7 +642,8 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
   },
 }));

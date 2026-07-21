@@ -1533,7 +1533,7 @@ function ActiveAgentComposer({
 
   return (
     <ReanimatedAnimated.View style={inputAreaStyle}>
-      <View style={styles.inputAreaWrapper}>
+      <View style={isCompact ? styles.inputAreaWrapperCompact : styles.inputAreaWrapper}>
         <SubagentsTrack
           rows={subagentRows}
           onOpenSubagent={handleOpenSubagent}
@@ -1656,16 +1656,34 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
   },
+  // Soft .composer-dock: padding 8 28 16 around the floating pen-bar.
   inputAreaWrapper: {
     width: "100%",
     minWidth: 0,
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
+    paddingTop: 8,
+    paddingHorizontal: 28,
+    paddingBottom: 16,
   },
+  inputAreaWrapperCompact: {
+    width: "100%",
+    minWidth: 0,
+    backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
+    paddingTop: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+  },
+  // Soft docked pen-bar: design --shadow-composer.
   composerInputWrapper: {
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     borderRadius: 18,
     backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? ({
+          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 14px 36px rgba(20, 23, 31, 0.07)",
+        } as object)
+      : {}),
   },
   historySyncProgressBanner: {
     position: "absolute",
@@ -1677,11 +1695,10 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 12,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
-    ...theme.shadow.sm,
+    backgroundColor: theme.colors.surface0,
     zIndex: 40,
   },
   historySyncProgressText: {
@@ -1689,12 +1706,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   historySyncProgressTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    // Soft meta chrome title: 12.5 medium.
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
   },
   historySyncProgressSubtitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   historySyncErrorBanner: {
     alignSelf: "center",
@@ -1704,21 +1724,23 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 12,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.destructive,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
   },
   historySyncErrorTitle: {
     color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
+    // Soft meta chrome title: 12.5 medium.
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
   },
   historySyncErrorMessage: {
     marginTop: theme.spacing[1],
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    lineHeight: Math.round(theme.fontSize.xs * 1.4),
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   archivingOverlay: {
     position: "absolute",
@@ -1733,19 +1755,24 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     zIndex: 50,
   },
+  // Soft overlay title: near sheet/topbar scale.
   archivingTitle: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
     textAlign: "center",
   },
   archivingSubtitle: {
-    fontSize: theme.fontSize.sm,
+    // Soft muted secondary copy: 12.5.
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     textAlign: "center",
   },
   loadingText: {
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 22,
     color: theme.colors.foregroundMuted,
   },
   centerState: {
@@ -1760,30 +1787,39 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  // Soft empty/error copy: body-adjacent muted.
   errorText: {
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 22,
     color: theme.colors.foregroundMuted,
     textAlign: "center",
   },
   statusText: {
     marginTop: theme.spacing[2],
     textAlign: "center",
-    fontSize: theme.fontSize.sm,
+    // Soft muted secondary copy: 12.5.
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
+  // Soft offline title: sheet-scale medium.
   offlineTitle: {
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
     textAlign: "center",
   },
   offlineDescription: {
-    fontSize: theme.fontSize.sm,
+    // Soft muted secondary copy: 12.5.
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     textAlign: "center",
   },
   offlineDetails: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     textAlign: "center",
   },

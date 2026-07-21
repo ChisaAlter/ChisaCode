@@ -29,7 +29,14 @@ import {
   type ExplorerTab,
 } from "@/stores/panel-store";
 import { useExplorerSidebarAnimation } from "@/contexts/explorer-sidebar-animation-context";
-import { HEADER_INNER_HEIGHT, useIsCompactFormFactor, MIN_CHAT_WIDTH } from "@/constants/layout";
+import {
+  HEADER_INNER_HEIGHT,
+  MIN_CHAT_WIDTH,
+  WORKBENCH_ENVIRONMENT_PANEL_INSET,
+  WORKBENCH_ENVIRONMENT_PANEL_SHADOW,
+  WORKSPACE_SECONDARY_HEADER_HEIGHT,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { GitDiffPane } from "@/git/diff-pane";
 import { FileExplorerPane } from "./file-explorer-pane";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
@@ -307,13 +314,21 @@ export function ExplorerSidebar({
       mobileKeyboardInsetStyle,
     ],
   );
+  // Soft topbar owns the first 48px of the center column. Explorer is a sibling overlay
+  // on threePaneRow and would cover top-tools if it starts at top:0 — match environment panel inset.
   const desktopSidebarStyle = useMemo(
     () => [
       explorerStaticStyles.desktopSidebar,
       resizeAnimatedStyle,
-      { paddingTop: insets.top + desktopWindowControlsPadding.top + 8 },
+      {
+        top:
+          WORKSPACE_SECONDARY_HEADER_HEIGHT +
+          WORKBENCH_ENVIRONMENT_PANEL_INSET +
+          insets.top +
+          desktopWindowControlsPadding.top,
+      },
     ],
-    [resizeAnimatedStyle, insets.top, desktopWindowControlsPadding.top],
+    [desktopWindowControlsPadding.top, insets.top, resizeAnimatedStyle],
   );
 
   const renderErrorFallback = useCallback(
@@ -370,24 +385,26 @@ export function ExplorerSidebar({
   return (
     <ErrorBoundary fallback={renderErrorFallback}>
       <Animated.View style={desktopSidebarStyle} pointerEvents={isOpen ? "auto" : "none"}>
-        <View style={DESKTOP_SIDEBAR_BORDER_STYLE}>
-          {/* Resize handle - absolutely positioned over left border */}
-          <GestureDetector gesture={resizeGesture}>
-            <View style={RESIZE_HANDLE_STYLE} />
-          </GestureDetector>
+        <View style={DESKTOP_SIDEBAR_SHADOW_STYLE}>
+          <View style={DESKTOP_SIDEBAR_BORDER_STYLE}>
+            {/* Resize handle - absolutely positioned over left border */}
+            <GestureDetector gesture={resizeGesture}>
+              <View style={RESIZE_HANDLE_STYLE} />
+            </GestureDetector>
 
-          <SidebarContent
-            activeTab={explorerTab}
-            onTabPress={handleTabPress}
-            onClose={handleDesktopClose}
-            serverId={serverId}
-            workspaceId={workspaceId}
-            workspaceRoot={workspaceRoot}
-            isGit={isGit}
-            isMobile={false}
-            isOpen={isOpen}
-            onOpenFile={onOpenFile}
-          />
+            <SidebarContent
+              activeTab={explorerTab}
+              onTabPress={handleTabPress}
+              onClose={handleDesktopClose}
+              serverId={serverId}
+              workspaceId={workspaceId}
+              workspaceRoot={workspaceRoot}
+              isGit={isGit}
+              isMobile={false}
+              isOpen={isOpen}
+              onOpenFile={onOpenFile}
+            />
+          </View>
         </View>
       </Animated.View>
     </ErrorBoundary>
@@ -623,7 +640,7 @@ function SidebarContent({
 const explorerStaticStyles = RNStyleSheet.create({
   backdrop: {
     ...RNStyleSheet.absoluteFill,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(20, 23, 31, 0.28)",
   },
   mobileSidebar: {
     position: "absolute" as const,
@@ -636,23 +653,29 @@ const explorerStaticStyles = RNStyleSheet.create({
   },
   desktopSidebar: {
     position: "absolute" as const,
-    top: 0,
+    // top is set dynamically below Soft topbar (48 + inset).
     right: 0,
     bottom: 0,
     zIndex: 20,
-    paddingRight: 8,
-    paddingBottom: 8,
+    paddingRight: WORKBENCH_ENVIRONMENT_PANEL_INSET,
+    paddingBottom: WORKBENCH_ENVIRONMENT_PANEL_INSET,
   },
 });
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft floating inspector: r14 card family + Soft --shadow-soft elevation.
+  // Keep shadow off overflow:hidden so Electron/web boxShadow is not clipped.
   desktopSidebarBorder: {
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.xl,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
     backgroundColor: theme.colors.surfaceSidebar,
     overflow: "hidden",
-    ...theme.shadow.md,
+  },
+  desktopSidebarShadow: {
+    flex: 1,
+    borderRadius: 14,
+    ...(isWeb ? ({ boxShadow: WORKBENCH_ENVIRONMENT_PANEL_SHADOW } as object) : theme.shadow.md),
   },
   resizeHandle: {
     position: "absolute",
@@ -667,6 +690,7 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
     overflow: "hidden",
   },
+  // Soft nav header: sit on --nav, no grey island wash.
   header: {
     position: "relative",
     height: HEADER_INNER_HEIGHT,
@@ -677,11 +701,12 @@ const styles = StyleSheet.create((theme) => ({
     marginHorizontal: theme.spacing[2],
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[1],
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface1,
+    // Soft quiet chrome: no heavy island radius.
+    borderRadius: 10,
+    backgroundColor: "transparent",
   },
   desktopHeader: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: "transparent",
     paddingLeft: theme.spacing[2],
   },
   tabsContainer: {
@@ -699,13 +724,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   desktopTab: {
     minHeight: 30,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     gap: theme.spacing[1],
   },
   tabActive: {
@@ -715,12 +740,15 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   tabText: {
-    fontSize: theme.fontSize.sm,
+    // Soft explorer chrome label: 12.5 meta.
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
   desktopTabText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   tabTextActive: {
     color: theme.colors.foreground,
@@ -739,7 +767,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   closeButton: {
     padding: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
   },
   desktopCloseButton: {
     width: 26,
@@ -757,5 +785,6 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
+const DESKTOP_SIDEBAR_SHADOW_STYLE = styles.desktopSidebarShadow;
 const DESKTOP_SIDEBAR_BORDER_STYLE = [styles.desktopSidebarBorder, { flex: 1 }];
 const RESIZE_HANDLE_STYLE = [styles.resizeHandle, isWeb && ({ cursor: "col-resize" } as object)];

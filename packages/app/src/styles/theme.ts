@@ -141,8 +141,8 @@ const darkDiffColors = {
   diffDeletionHighlightBg: "rgba(239, 68, 68, 0.35)", // red-500 at 35%
 };
 
-// Overlay / backdrop mask — used by modals, sheets, and dropdown backdrops
-const lightOverlay = "rgba(0, 0, 0, 0.25)";
+// Soft overlay / backdrop mask — quiet ink wash, not heavy black scrim.
+const lightOverlay = "rgba(20, 23, 31, 0.28)";
 const darkOverlay = "rgba(0, 0, 0, 0.50)";
 
 // Status colors — semantic signals for success/danger/warning/merged. Used by
@@ -170,81 +170,82 @@ const darkStatusColors = {
 
 // Semantic color tokens - Layer-based system
 const lightSemanticColors = {
-  // Exact Blockchain Light tokens from design/web3-themes-v2.html.
-  surface0: "#f8fafc",
-  surface1: "#ffffff",
-  surface2: "#f4f7fb",
-  surface3: "#edf2f8",
-  surface4: "#cbd7e6",
-  surfaceDiffEmpty: "#f8fafc",
-  surfaceSidebar: "#f1f5f9",
-  surfaceSidebarHover: "#eef4ff",
-  surfaceWorkspace: "#ffffff",
+  // Soft Workbench light — design/chisacode-surfaces-soft.html + design-language.
+  // surface0 = elevated card, surfaceWorkspace = soft shell canvas, surface1 = hover wash.
+  surface0: "#ffffff",
+  surface1: "#e8eaef",
+  surface2: "#eef0f4",
+  surface3: "#e2e5ec",
+  surface4: "#d5d9e2",
+  surfaceDiffEmpty: "#f4f5f8",
+  surfaceSidebar: "#f0f1f5",
+  surfaceSidebarHover: "#e8eaef",
+  surfaceWorkspace: "#f4f5f8",
 
-  foreground: "#0f172a",
-  foregroundMuted: "#64748b",
-  foregroundFaint: "#94a3b8",
-  foregroundSubtleText: "#64748b",
+  foreground: "#14171f",
+  foregroundMuted: "#6f7686",
+  foregroundFaint: "#9aa1b0",
+  foregroundSubtleText: "#3d4452",
 
-  scrollbarHandle: "#94a3b8",
+  scrollbarHandle: "#9aa1b0",
 
-  border: "#dce5f0",
-  borderAccent: "#cbd7e6",
+  border: "#e4e6ec",
+  borderAccent: "#d5d9e2",
 
-  accent: "#3b82f6",
-  accentBright: "#6366f1",
-  accentNeon: "#8b5cf6",
+  accent: "#2a6cf0",
+  accentBright: "#3d7dff",
+  accentNeon: "#5b8cff",
   accentForeground: "#ffffff",
 
   destructive: "#ef4444",
   destructiveForeground: "#ffffff",
-  success: "#16a34a",
+  success: "#18a34a",
   successForeground: "#ffffff",
   warning: "#f59e0b",
   overlay: lightOverlay,
-  blockquoteBorder: "#3b82f6",
-  backgroundCss: "#f8fafc",
-  userBubbleGradient: "linear-gradient(135deg, #3b82f6, #6366f1 56%, #8b5cf6)",
+  blockquoteBorder: "#2a6cf0",
+  backgroundCss: "#f4f5f8",
+  userBubbleGradient: "linear-gradient(135deg, #2a6cf0, #3d7dff 56%, #5b8cff)",
 
   // Legacy aliases (for gradual migration)
-  background: "#f8fafc",
+  background: "#f4f5f8",
   popover: "#ffffff",
-  popoverForeground: "#0f172a",
-  primary: "#0f172a",
-  primaryForeground: "#f8fafc",
-  secondary: "#f4f7fb",
-  secondaryForeground: "#0f172a",
-  muted: "#f4f7fb",
-  mutedForeground: "#64748b",
-  accentBorder: "#cbd7e6",
-  input: "#f4f7fb",
-  ring: "#3b82f6",
+  popoverForeground: "#14171f",
+  primary: "#1a1d26",
+  primaryForeground: "#ffffff",
+  secondary: "#eef0f4",
+  secondaryForeground: "#14171f",
+  muted: "#eef0f4",
+  mutedForeground: "#6f7686",
+  accentBorder: "#d5d9e2",
+  input: "#ffffff",
+  ring: "#2a6cf0",
 
   ...lightDiffColors,
   ...lightStatusColors,
 
   terminal: {
-    background: "#f8fafc",
-    foreground: "#0f172a",
-    cursor: "#3B82F6",
+    background: "#f4f5f8",
+    foreground: "#14171f",
+    cursor: "#2a6cf0",
     cursorAccent: "#ffffff",
-    selectionBackground: "rgba(0, 0, 0, 0.15)",
-    selectionForeground: "#0f172a",
+    selectionBackground: "rgba(42, 108, 240, 0.16)",
+    selectionForeground: "#14171f",
 
-    black: "#0f172a",
+    black: "#14171f",
     red: "#dc2626",
-    green: "#16a34a",
+    green: "#18a34a",
     yellow: "#ca8a04",
-    blue: "#2563eb",
+    blue: "#2a6cf0",
     magenta: "#9333ea",
     cyan: "#0891b2",
     white: "#ffffff",
 
-    brightBlack: "#3f3f46",
+    brightBlack: "#3d4452",
     brightRed: "#ef4444",
     brightGreen: "#22c55e",
     brightYellow: "#f59e0b",
-    brightBlue: "#3b82f6",
+    brightBlue: "#3d7dff",
     brightMagenta: "#a855f7",
     brightCyan: "#06b6d4",
     brightWhite: "#fafafa",
@@ -373,33 +374,34 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// Cyber Dark — 蓝紫暗色 (default)
+// Soft Workbench dark — design/chisacode-design-language.html [data-theme="dark"].
 const chisacodeDarkColors = buildDarkSemanticColors({
-  surface0: "#090b11",
-  surface1: "#121722",
-  surface2: "#171d2a",
-  surface3: "#202838",
-  surface4: "#30394c",
-  surfaceDiffEmpty: "#121722",
-  surfaceSidebar: "#0b0e14",
-  surfaceSidebarHover: "#1c2434",
-  surfaceWorkspace: "#0f1219",
-  foreground: "#e5e7eb",
-  foregroundMuted: "#8994a8",
-  foregroundFaint: "#596579",
-  foregroundSubtleText: "#8994a8",
-  scrollbarHandle: "#30394c",
-  border: "#232b3a",
-  borderAccent: "#30394c",
-  accent: "#6366f1",
-  accentBright: "#818cf8",
-  accentNeon: "#3b82f6",
+  surface0: "#1a1f2a",
+  surface1: "#222836",
+  surface2: "#232a38",
+  surface3: "#2a3140",
+  surface4: "#2c3342",
+  surfaceDiffEmpty: "#151922",
+  surfaceSidebar: "#151922",
+  surfaceSidebarHover: "#222836",
+  surfaceWorkspace: "#12151c",
+  foreground: "#e9edf6",
+  foregroundMuted: "#8b93a7",
+  foregroundFaint: "#6b7386",
+  foregroundSubtleText: "#b6becd",
+  scrollbarHandle: "#2c3342",
+  border: "#2c3342",
+  borderAccent: "#3a4254",
+  accent: "#6ea0ff",
+  accentBright: "#8bb4ff",
+  accentNeon: "#6ea0ff",
   destructive: "#ff4772",
-  success: "#22c55e",
+  success: "#4ade80",
   warning: "#eab308",
-  backgroundCss: "#090b11",
-  userBubbleGradient: "linear-gradient(135deg, rgba(99, 102, 241, 0.92), rgba(59, 130, 246, 0.85))",
-  ringColor: "#6366f1",
+  backgroundCss: "#0b0d12",
+  userBubbleGradient:
+    "linear-gradient(135deg, rgba(110, 160, 255, 0.92), rgba(110, 160, 255, 0.72))",
+  ringColor: "#6ea0ff",
 });
 
 const liquidNeonLightColors = {
@@ -542,14 +544,16 @@ export const FONT_WEIGHT = {
   bold: "bold" as const,
 } as const;
 
+// Soft Workbench radii: --r-sm 8 / --r-md 12 / --r-lg 16 / --r-xl 18–20.
+// `base` keeps 6 for 20px plus chips (design .new-btn .plus).
 export const BORDER_RADIUS = {
   none: 0,
-  sm: 2,
-  base: 4,
-  md: 6,
-  lg: 8,
-  xl: 12,
-  "2xl": 16,
+  sm: 8,
+  base: 6,
+  md: 12,
+  lg: 16,
+  xl: 18,
+  "2xl": 18,
   full: 9999,
 } as const;
 
@@ -578,22 +582,25 @@ const commonTheme = {
 
 const darkShadow = {
   sm: {
-    shadowColor: "rgba(0, 0, 0, 0.25)",
+    shadowColor: "rgba(0, 0, 0, 0.35)",
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 1,
+    elevation: 3,
   },
   md: {
-    shadowColor: "rgba(0, 0, 0, 0.20)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: "rgba(0, 0, 0, 0.35)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 20,
+    shadowOpacity: 1,
+    elevation: 10,
   },
   lg: {
-    shadowColor: "rgba(0, 0, 0, 0.40)",
+    shadowColor: "rgba(0, 0, 0, 0.50)",
     shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 24,
-    elevation: 8,
+    shadowRadius: 28,
+    shadowOpacity: 1,
+    elevation: 12,
   },
 } as const;
 
@@ -690,24 +697,29 @@ export const liquidNeonTheme = {
   ...commonTheme,
 } as const;
 
+// Soft Workbench elevation: quiet cards + floating composer only.
+// shadowOpacity is required on native; web floating panels should prefer boxShadow.
 const lightShadow = {
   sm: {
-    shadowColor: "rgba(0, 0, 0, 0.02)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    shadowColor: "rgba(20, 23, 31, 0.08)",
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 3,
+    shadowOpacity: 1,
     elevation: 2,
   },
   md: {
-    shadowColor: "rgba(0, 0, 0, 0.04)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  lg: {
-    shadowColor: "rgba(0, 0, 0, 0.08)",
+    shadowColor: "rgba(20, 23, 31, 0.12)",
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 24,
-    elevation: 8,
+    shadowOpacity: 1,
+    elevation: 6,
+  },
+  lg: {
+    shadowColor: "rgba(20, 23, 31, 0.14)",
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 36,
+    shadowOpacity: 1,
+    elevation: 10,
   },
 } as const;
 
@@ -849,8 +861,8 @@ export const THEME_TO_UNISTYLES: Record<ThemeName, UnistylesThemeKey> = {
 };
 
 export const THEME_SWATCHES: Record<ThemeName, string> = {
-  light: "#3b82f6",
-  dark: "#6366f1",
+  light: "#2a6cf0",
+  dark: "#6ea0ff",
   "liquid-neon": "#00a3ff",
   chisaki: "#b7132f",
   aemeath: "#f2a7c8",
@@ -873,7 +885,7 @@ export const THEME_PREVIEWS: Record<
   },
   dark: {
     surface: chisacodeDarkColors.surface0,
-    border: chisacodeDarkColors.borderAccent,
+    border: chisacodeDarkColors.border,
     line: chisacodeDarkColors.surface3,
     accent: chisacodeDarkColors.accent,
   },

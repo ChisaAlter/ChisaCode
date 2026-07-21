@@ -76,20 +76,31 @@ export function HeaderToggleButton({
 }
 
 export const headerIconSlotStyle = StyleSheet.create((theme) => ({
+  // Soft .top-tools .icon-btn: 32 quiet pill, hover wash.
   slot: {
+    width: {
+      xs: undefined,
+      md: 32,
+    },
+    height: {
+      xs: undefined,
+      md: 32,
+    },
     padding: {
       xs: theme.spacing[3],
-      md: theme.spacing[2],
+      md: 0,
     },
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.surface0,
-    ...theme.shadow.sm,
+    borderColor: theme.colors.border,
+    // Soft .top-tools .icon-btn: quiet r10.
+    borderRadius: 10,
+    backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
   },
   slotHovered: {
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
 }));
 
@@ -100,7 +111,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   tooltipText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.popoverForeground,
   },
   shortcut: {},

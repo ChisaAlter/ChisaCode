@@ -78,7 +78,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    // Soft settings group title: 14.5 medium-weight body.
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: theme.fontWeight.normal,
   },
   infoButton: {
@@ -86,13 +88,13 @@ const styles = StyleSheet.create((theme) => ({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     marginLeft: -theme.spacing[1],
   },
   tooltipText: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
     maxWidth: 280,
-    lineHeight: theme.fontSize.sm * 1.4,
+    lineHeight: 18,
   },
 }));

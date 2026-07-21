@@ -152,7 +152,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[4],
   },
   loadingText: {
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     color: theme.colors.foregroundMuted,
   },
   errorContainer: {
@@ -163,7 +164,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[6],
   },
   errorText: {
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
+    lineHeight: 20,
     color: theme.colors.destructive,
     textAlign: "center",
   },
@@ -173,8 +175,10 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     paddingTop: theme.spacing[16],
   },
+  // Soft empty state: body-adjacent muted copy.
   emptyText: {
-    fontSize: theme.fontSize.lg,
+    fontSize: 14.5,
+    lineHeight: 22,
     color: theme.colors.foregroundMuted,
   },
 }));

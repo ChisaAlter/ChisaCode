@@ -1041,7 +1041,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft .topbar: quiet --border-soft chrome rule.
+    borderBottomColor: theme.colors.secondary,
     backgroundColor: theme.colors.surface0,
   },
   chromeLeft: {
@@ -1054,10 +1055,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
   },
+  // Soft .top-tools .icon-btn: 32 quiet r10.
   iconButton: {
-    width: 28,
-    height: 28,
-    borderRadius: theme.borderRadius.md,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1065,29 +1067,30 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: `${String(theme.colors.accent)}20`,
   },
   iconButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   iconButtonDisabled: {
     opacity: 0.45,
   },
+  // Soft host-like URL field: h32 r10 shell pad.
   urlBarWrap: {
     flex: 1,
     minWidth: 0,
-    height: 28,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing[2],
+    height: 32,
+    borderRadius: 10,
+    paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
   urlInput: {
     flex: 1,
     minWidth: 0,
-    height: 28,
-    fontSize: theme.fontSize.sm,
-    lineHeight: 20,
+    height: 32,
+    fontSize: 12.5,
+    lineHeight: 18,
     paddingVertical: 0,
     paddingHorizontal: 0,
   },
@@ -1095,11 +1098,13 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
     backgroundColor: theme.colors.surface0,
   },
   metaError: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   webviewWrap: {
     flex: 1,
@@ -1113,11 +1118,14 @@ const styles = StyleSheet.create((theme) => ({
     padding: 24,
     gap: 8,
   },
+  // Soft empty title: near sheet/topbar scale.
   unavailableTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: "500",
   },
   unavailableSubtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 }));

@@ -303,7 +303,7 @@ const styles = StyleSheet.create((theme) => ({
   projectIcon: {
     width: "100%",
     height: "100%",
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
   },
   projectLeadingVisualSlot: {
     position: "relative",
@@ -316,7 +316,7 @@ const styles = StyleSheet.create((theme) => ({
   projectIconFallback: {
     width: "100%",
     height: "100%",
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },

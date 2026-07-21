@@ -4,23 +4,24 @@ import { getIsElectron, isAndroid, isWeb } from "@/constants/platform";
 
 export const FOOTER_HEIGHT = 60;
 
-// Shared header inner height (excluding safe area insets and border)
-// Used by both agent header (ScreenHeader) and explorer sidebar header
-// This ensures both headers have the same visual height
-export const HEADER_INNER_HEIGHT = 42;
+// Shared header inner height (excluding safe area insets and border).
+// Soft .topbar / .m-header: 48px chrome strip.
+export const HEADER_INNER_HEIGHT = 48;
 export const HEADER_INNER_HEIGHT_MOBILE = 48;
-export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 38;
+// Soft .topbar: 48px chrome strip (tabs/tool chrome sit inside).
+export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 48;
 export const HEADER_TOP_PADDING_MOBILE = 4;
 
 // Soft Workbench dimensions shared by the real Electron layout.
 export const WORKBENCH_ENVIRONMENT_PANEL_WIDTH = 272;
 export const WORKBENCH_ENVIRONMENT_PANEL_INSET = 8;
-export const WORKBENCH_SIDEBAR_WIDTH = 256;
-// Chat body typography: prefer Paseo-like readability over ultra-dense 13/18.
-// 14/22 keeps Chinese glyphs legible while remaining slightly tighter than settings base (16/22).
+// Soft Workbench --nav-w.
+export const WORKBENCH_SIDEBAR_WIDTH = 260;
+// Soft Workbench body: near .a 14.5 / 1.65 — 14/22 keeps Chinese legible.
 export const WORKBENCH_BODY_FONT_SIZE = 14;
 export const WORKBENCH_BODY_LINE_HEIGHT = 22;
-export const WORKBENCH_META_FONT_SIZE = 12;
+// Soft meta chrome (host/menu chips): 12.5 / 16.
+export const WORKBENCH_META_FONT_SIZE = 12.5;
 export const WORKBENCH_META_LINE_HEIGHT = 16;
 export const WORKBENCH_MICRO_FONT_SIZE = 11;
 export const WORKBENCH_MICRO_LINE_HEIGHT = 14;
@@ -50,33 +51,38 @@ export const WORKBENCH_ENVIRONMENT_ACTION_MARGIN_BOTTOM = 10;
 export const WORKBENCH_ENVIRONMENT_BRANCH_LINE_HEIGHT = 16;
 export const WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT = 18;
 export const WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT = 16;
-// Soft Workbench: lighter float than dense IDE docks.
+// Soft floating inspector elevation: --shadow-soft base with a slightly stronger
+// outer veil so right-rail cards read clearly against the work surface.
 export const WORKBENCH_ENVIRONMENT_PANEL_SHADOW =
-  "0 2px 8px rgba(20, 23, 31, 0.04), 0 12px 28px rgba(20, 23, 31, 0.08)";
+  "0 1px 2px rgba(20, 23, 31, 0.05), 0 8px 24px rgba(20, 23, 31, 0.08), 0 16px 40px rgba(20, 23, 31, 0.06)";
 // The inspector overlays the work surface instead of shrinking messages or the composer.
 export const WORKBENCH_PANE_CONTENT_RIGHT_INSET = 0;
 export const WORKBENCH_MESSAGE_LINE_HEIGHT = 22;
-// Align with Paseo MAX_CONTENT_WIDTH-scale prose column.
-export const WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH = 820;
-// Soft cap for user bubbles (Paseo uses full available width; keep a gentle max).
-export const WORKBENCH_USER_MESSAGE_MAX_WIDTH = 720;
+// Soft .stream-inner / .role-a document column.
+export const WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH = 720;
+// Soft .user-b: max-width min(460px, 88%).
+export const WORKBENCH_USER_MESSAGE_MAX_WIDTH = 460;
 
-// Desktop settings geometry — Soft Workbench list/detail.
+// Desktop settings geometry — Soft Workbench list/detail (.set-nav 240, .set-h 52).
 export const SETTINGS_DESKTOP_SIDEBAR_WIDTH = 240;
 export const SETTINGS_DESKTOP_BACK_HEIGHT = 36;
-export const SETTINGS_DESKTOP_NAV_ITEM_HEIGHT = 36;
-export const SETTINGS_DESKTOP_HEADER_HEIGHT = 44;
-export const SETTINGS_DESKTOP_BODY_PADDING = 24;
-export const SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH = 768;
+export const SETTINGS_DESKTOP_NAV_ITEM_HEIGHT = 38;
+export const SETTINGS_DESKTOP_HEADER_HEIGHT = 52;
+// Soft .set-body vertical lead pad family (runtime content uses 22 28 36).
+export const SETTINGS_DESKTOP_BODY_PADDING = 22;
+// Soft .set-col: max-width 720.
+export const SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH = 720;
 export const SETTINGS_ROW_HORIZONTAL_PADDING = 16;
-export const SETTINGS_ROW_TITLE_FONT_SIZE = 15;
+// Soft .row .title: 14px medium.
+export const SETTINGS_ROW_TITLE_FONT_SIZE = 14;
 export const SETTINGS_ROW_TITLE_LINE_HEIGHT = 20;
 export const SETTINGS_HINT_LINE_HEIGHT = 16;
 export const SETTINGS_CONTROL_HEIGHT = 32;
 export const SETTINGS_INPUT_WIDTH = 64;
 export const SETTINGS_LIQUID_CONTENT_BACKGROUND = "rgba(7, 14, 27, 0.25)";
+// Soft .toggle: 44 × 26 pill (design).
 export const SETTINGS_SWITCH_WIDTH = 44;
-export const SETTINGS_SWITCH_HEIGHT = 28;
+export const SETTINGS_SWITCH_HEIGHT = 26;
 
 // Max width for chat content (stream view, input area, new agent form)
 export const MAX_CONTENT_WIDTH = 1008;
@@ -146,8 +152,8 @@ export const DESKTOP_SIDEBAR_GAP = 0;
 // Width of the tab dropdown menu (new tab "+" button overflow menu)
 export const TAB_DROPDOWN_WIDTH = 220;
 
-// Desktop sidebar footer dimensions
-export const SIDEBAR_FOOTER_HEIGHT = 78;
+// Soft .nav-foot: pad 10 10 12 + host 36 + gap 8 + foot icons 34.
+export const SIDEBAR_FOOTER_HEIGHT = 100;
 export const SIDEBAR_FOOTER_PADDING_LEFT = 10;
 
 // Composer horizontal padding (left/right of the input area)

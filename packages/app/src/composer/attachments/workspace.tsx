@@ -294,7 +294,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   pillIcon: {
     width: 18,
@@ -305,7 +305,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 })) as unknown as Record<string, object>;
 

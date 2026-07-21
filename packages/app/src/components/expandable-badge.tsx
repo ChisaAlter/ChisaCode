@@ -235,22 +235,30 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   containerLastInSequence: {
     marginBottom: theme.spacing[4],
   },
+  // Soft .tool: pad 12 14, r-md, surface + --shadow-soft, 13px body.
   pressable: {
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 12,
     borderWidth: theme.borderWidth[1],
-    borderColor: "transparent",
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     overflow: "hidden",
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+        } as object)
+      : {}),
   },
   workbenchPressable: {
     height: 28,
     minHeight: 28,
     paddingHorizontal: 7,
     paddingVertical: 0,
-    borderRadius: 6,
+    borderRadius: 10,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
+    ...(isWeb ? ({ boxShadow: "none" } as object) : {}),
   },
   pressablePressed: {
     opacity: 0.9,
@@ -283,15 +291,17 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     borderRadius: 0,
     marginRight: 4,
   },
+  // Soft .tool .th / body: 13px.
   label: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: theme.fontWeight.normal,
     flexShrink: 0,
   },
   workbenchLabel: {
     fontFamily: isWeb ? "system-ui" : undefined,
-    fontSize: 12,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   labelActive: {
@@ -301,17 +311,19 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     opacity: 0.72,
   },
+  // Soft .tool .meta: mono-ish muted 12.
   secondaryLabel: {
     flexShrink: 1,
     minWidth: 0,
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
     marginLeft: theme.spacing[2],
   },
   workbenchSecondaryLabel: {
     fontFamily: isWeb ? "system-ui" : undefined,
-    fontSize: 12,
+    fontSize: 12.5,
     lineHeight: 16,
     marginLeft: 4,
   },
@@ -320,7 +332,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   },
   shimmerText: {
     color: "transparent",
-    fontSize: theme.fontSize.base,
+    fontSize: 14.5,
     fontWeight: theme.fontWeight.normal,
   },
   spacer: {
@@ -336,7 +348,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
     flexShrink: 0,
   },
   openFileButtonPlaceholderIcon: {
@@ -348,11 +360,13 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   },
   detailWrapper: {
     ...expandableBadgeBaseLayout.detailWrapper,
-    borderBottomLeftRadius: theme.borderRadius.lg,
-    borderBottomRightRadius: theme.borderRadius.lg,
+    // Soft .tool expanded: match --r-md (12).
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
     borderWidth: theme.borderWidth[1],
     borderTopWidth: 0,
     borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
     padding: 0,
     gap: 0,
     flexShrink: 1,
@@ -362,7 +376,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   },
   pressableExpanded: {
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },

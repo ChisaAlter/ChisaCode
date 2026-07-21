@@ -62,39 +62,40 @@ describe("workbench layout constants", () => {
   it("locks the Soft Workbench desktop settings geometry", () => {
     expect(SETTINGS_DESKTOP_SIDEBAR_WIDTH).toBe(240);
     expect(SETTINGS_DESKTOP_BACK_HEIGHT).toBe(36);
-    expect(SETTINGS_DESKTOP_NAV_ITEM_HEIGHT).toBe(36);
-    expect(SETTINGS_DESKTOP_HEADER_HEIGHT).toBe(44);
-    expect(SETTINGS_DESKTOP_BODY_PADDING).toBe(24);
-    expect(SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH).toBe(768);
+    expect(SETTINGS_DESKTOP_NAV_ITEM_HEIGHT).toBe(38);
+    expect(SETTINGS_DESKTOP_HEADER_HEIGHT).toBe(52);
+    expect(SETTINGS_DESKTOP_BODY_PADDING).toBe(22);
+    expect(SETTINGS_DESKTOP_CONTENT_OUTER_MAX_WIDTH).toBe(720);
     expect(SETTINGS_ROW_HORIZONTAL_PADDING).toBe(16);
-    expect(SETTINGS_ROW_TITLE_FONT_SIZE).toBe(15);
+    expect(SETTINGS_ROW_TITLE_FONT_SIZE).toBe(14);
     expect(SETTINGS_ROW_TITLE_LINE_HEIGHT).toBe(20);
     expect(SETTINGS_HINT_LINE_HEIGHT).toBe(16);
     expect(SETTINGS_CONTROL_HEIGHT).toBe(32);
     expect(SETTINGS_INPUT_WIDTH).toBe(64);
     expect(SETTINGS_LIQUID_CONTENT_BACKGROUND).toBe("rgba(7, 14, 27, 0.25)");
     expect(SETTINGS_SWITCH_WIDTH).toBe(44);
-    expect(SETTINGS_SWITCH_HEIGHT).toBe(28);
+    // Soft .toggle: 44 × 26 (design).
+    expect(SETTINGS_SWITCH_HEIGHT).toBe(26);
   });
 
   it("locks the reference workbench typography and message widths", () => {
     expect(WORKBENCH_BODY_FONT_SIZE).toBe(14);
     expect(WORKBENCH_BODY_LINE_HEIGHT).toBe(22);
-    expect(WORKBENCH_META_FONT_SIZE).toBe(12);
+    expect(WORKBENCH_META_FONT_SIZE).toBe(12.5);
     expect(WORKBENCH_META_LINE_HEIGHT).toBe(16);
     expect(WORKBENCH_MICRO_FONT_SIZE).toBe(11);
     expect(WORKBENCH_MICRO_LINE_HEIGHT).toBe(14);
     expect(MIN_INTERACTIVE_TARGET_SIZE).toBe(28);
     expect(WORKBENCH_MESSAGE_LINE_HEIGHT).toBe(22);
-    expect(WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH).toBe(820);
-    expect(WORKBENCH_USER_MESSAGE_MAX_WIDTH).toBe(720);
+    expect(WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH).toBe(720);
+    expect(WORKBENCH_USER_MESSAGE_MAX_WIDTH).toBe(460);
   });
 
   it("locks the Soft Workbench chrome geometry", () => {
     expect(DESKTOP_WINDOW_CONTROLS_HEIGHT).toBe(30);
     expect(WORKBENCH_NEW_CHAT_RADIUS).toBe(12);
     expect(WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT).toBe(16);
-    expect(SIDEBAR_FOOTER_HEIGHT).toBe(78);
+    expect(SIDEBAR_FOOTER_HEIGHT).toBe(100);
     expect(WORKBENCH_TAB_MIN_WIDTH).toBe(160);
     expect(WORKBENCH_TAB_MAX_WIDTH).toBe(220);
     expect(WORKBENCH_TAB_GAP).toBe(5);
@@ -119,7 +120,8 @@ describe("workbench layout constants", () => {
     expect(WORKBENCH_ENVIRONMENT_CALLOUT_TITLE_LINE_HEIGHT).toBe(18);
     expect(WORKBENCH_ENVIRONMENT_CALLOUT_TEXT_LINE_HEIGHT).toBe(16);
     expect(WORKBENCH_ENVIRONMENT_PANEL_SHADOW).toBe(
-      "0 2px 8px rgba(20, 23, 31, 0.04), 0 12px 28px rgba(20, 23, 31, 0.08)",
+      // Soft floating inspector: soft ink veil readable against the work surface.
+      "0 1px 2px rgba(20, 23, 31, 0.05), 0 8px 24px rgba(20, 23, 31, 0.08), 0 16px 40px rgba(20, 23, 31, 0.06)",
     );
   });
 

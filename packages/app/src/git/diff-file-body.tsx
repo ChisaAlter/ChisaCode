@@ -879,16 +879,18 @@ export function DiffFileBody({
 const styles = StyleSheet.create((theme) => ({
   fileSectionBodyContainer: {
     overflow: "hidden",
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   fileSectionBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    // Soft quiet list divider (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   diffContent: {
     borderTopWidth: theme.borderWidth[1],
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   diffContentRow: {
     flexDirection: "row",
@@ -898,10 +900,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "column",
   },
   linesContainer: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   gutterColumn: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
     zIndex: 4,
     elevation: 4,
     overflow: "visible",
@@ -917,12 +919,12 @@ const styles = StyleSheet.create((theme) => ({
   inlineReviewRow: {
     flexDirection: "row",
     alignItems: "stretch",
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   inlineReviewGutterSpacer: {
     borderRightWidth: theme.borderWidth[1],
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
     flexShrink: 0,
   },
   textLineContainer: {
@@ -938,13 +940,13 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
   },
   splitHeaderRow: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
     paddingHorizontal: theme.spacing[3],
   },
   splitCell: {
     flex: 1,
     flexBasis: 0,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   splitCellRow: {
     flexDirection: "row",
@@ -1010,13 +1012,13 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   headerLineContainer: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   headerLineText: {
     color: theme.colors.foregroundMuted,
   },
   contextLineContainer: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   contextLineText: {
     color: theme.colors.foregroundMuted,
@@ -1026,13 +1028,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusMessageContainer: {
     borderTopWidth: theme.borderWidth[1],
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    // Soft quiet chrome rule (--border-soft).
+    borderTopColor: theme.colors.secondary,
+    backgroundColor: theme.colors.surfaceWorkspace,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[4],
   },
   statusMessageText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
     fontStyle: "italic",
   },

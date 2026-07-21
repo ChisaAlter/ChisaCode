@@ -5,7 +5,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { getProviderIcon } from "@/components/provider-icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor, MAX_CONTENT_WIDTH } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import {
   WorkspaceTabIcon,
   type WorkspaceTabPresentation,
@@ -221,15 +221,21 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: MAX_CONTENT_WIDTH,
     marginBottom: -theme.spacing[4],
   },
+  // Soft subagent shelf: quiet elevated surface above pen-bar.
   surface: {
     alignSelf: "stretch",
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface0,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
     borderBottomWidth: 0,
-    borderTopLeftRadius: theme.borderRadius["2xl"],
-    borderTopRightRadius: theme.borderRadius["2xl"],
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: "hidden",
+    ...(isWeb
+      ? ({
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+        } as object)
+      : theme.shadow.sm),
   },
   surfaceExpanded: {
     paddingBottom: theme.spacing[4],
@@ -244,17 +250,20 @@ const styles = StyleSheet.create((theme) => ({
   headerCollapsed: {
     paddingBottom: theme.spacing[6],
   },
+  // Soft selected wash: surface3 (surface1 remains hover-only).
   headerActive: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface3,
   },
   headerDivider: {
     borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
+    // Soft quiet chrome rule (--border-soft).
+    borderBottomColor: theme.colors.secondary,
   },
   headerLabel: {
     flexShrink: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foregroundMuted,
   },
   scroll: {
@@ -276,12 +285,14 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
+  // Soft list row label: 12.5 meta chrome.
   rowLabel: {
     flex: 1,
     minWidth: 0,
-    fontSize: theme.fontSize.sm,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
   archiveSlotVisible: {
@@ -296,7 +307,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   tooltipText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: theme.colors.foreground,
   },
 }));

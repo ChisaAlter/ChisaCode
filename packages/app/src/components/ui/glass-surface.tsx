@@ -179,7 +179,7 @@ const styles = StyleSheet.create((theme) => ({
         borderWidth: theme.borderWidth[1],
         borderColor: theme.glass.border,
         overflow: "hidden" as const,
-        ...theme.shadow.md,
+        ...theme.shadow.sm,
       }
     : {},
   panel: theme.glass.enabled

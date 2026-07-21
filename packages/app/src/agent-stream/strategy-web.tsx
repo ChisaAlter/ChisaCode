@@ -479,14 +479,16 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   }, [cancelPendingStickToBottom, forceStickToBottom, scheduleStickToBottom, viewportRef]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
+    // Soft .stream: padding 14px 28px 10px.
     return {
       display: "flex",
       flexDirection: "column",
       minHeight: "100%",
       paddingTop: 14,
       paddingBottom: 10,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
-      paddingRight: isMobileBreakpoint ? 8 : 16,
+      // Soft .m-stream: 12 14 8; desktop .stream: 14 28 10.
+      paddingLeft: isMobileBreakpoint ? 14 : 28,
+      paddingRight: isMobileBreakpoint ? 14 : 28,
       boxSizing: "border-box",
     };
   }, [isMobileBreakpoint]);
