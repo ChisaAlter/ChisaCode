@@ -217,11 +217,21 @@ export function buildSelectableProviderSelectorProviders(
   }
 
   for (const entry of gatewayEntries) {
+    const label = entry.label ?? entry.provider;
     const targetProvider = selectorProviderById.get(entry.derivedFromProviderId ?? "");
     if (!targetProvider) {
+      // Base provider is missing (or this snapshot only has the gateway entry).
+      // Surface the gateway as its own selectable provider so running sessions whose
+      // agent.provider is the generated id (e.g. "grok-4-5-codex") still list models.
+      const standalone = {
+        id: entry.provider,
+        label,
+        modelSelection: buildEntryModelSelection(entry, label, copy),
+      };
+      selectorProviders.push(standalone);
+      selectorProviderById.set(standalone.id, standalone);
       continue;
     }
-    const label = entry.label ?? entry.provider;
     const gatewayModelSelection = buildEntryModelSelection(entry, label, copy, {
       agentProvider: targetProvider.id,
     });

@@ -68,7 +68,7 @@ import {
   removeCachedAgentStreamTail,
   saveCachedAgentStreamTail,
 } from "@/timeline/agent-stream-tail-cache";
-import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
+import { agentHistoryQueryKeys } from "@/hooks/agent-history-query-key";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -187,7 +187,9 @@ const getAgentIdFromUpdate = (update: AgentUpdatePayload): string =>
   update.kind === "remove" ? update.agentId : update.agent.id;
 
 function invalidateAgentListQueries(queryClient: QueryClient, serverId: string): void {
-  void queryClient.invalidateQueries({ queryKey: agentHistoryQueryKey(serverId) });
+  for (const queryKey of agentHistoryQueryKeys(serverId)) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
   void queryClient.invalidateQueries({ queryKey: ["sidebarAgentsList", serverId] });
   void queryClient.invalidateQueries({ queryKey: ["allAgents", serverId] });
 }

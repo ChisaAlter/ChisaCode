@@ -59,9 +59,16 @@ describe("resolveRunningAgentModelControls", () => {
     expect(result.agentRuntimeProvider).toBe("openrouter");
     expect(result.agentModelSelectorProviders).toHaveLength(1);
     expect(result.agentModelSelectorProviders[0]?.id).toBe("opencode");
+    // Full family list: native + gateway. Runtime filter is not applied for the
+    // running-session picker so users can switch back to native models.
     expect(result.agentModelSelectorProviders[0]?.modelSelection).toEqual({
       kind: "models",
       rows: [
+        expect.objectContaining({
+          agentProvider: "opencode",
+          runtimeProvider: "opencode",
+          modelId: "native-model",
+        }),
         expect.objectContaining({
           agentProvider: "opencode",
           runtimeProvider: "openrouter",
@@ -69,6 +76,7 @@ describe("resolveRunningAgentModelControls", () => {
         }),
       ],
     });
+    // modelOptions still follow the active runtime provider's models.
     expect(result.modelOptions).toEqual([{ id: "gateway-model", label: "Gateway model" }]);
     expect(result.modelSelection.activeModelId).toBe("gateway-model");
     expect(result.modelSelection.selectedThinkingId).toBe("high");
@@ -77,5 +85,184 @@ describe("resolveRunningAgentModelControls", () => {
       { id: "high", label: "高" },
     ]);
     expect(result.selectedProviderIsLoading).toBe(false);
+  });
+
+  it("lists models for a gateway agent.provider when base provider is also present", () => {
+    const snapshotEntries: ProviderSnapshotEntry[] = [
+      {
+        provider: "codex",
+        label: "Codex",
+        enabled: true,
+        status: "ready",
+        models: [
+          {
+            id: "gpt-5.4",
+            provider: "codex",
+            label: "GPT-5.4",
+          },
+        ],
+      },
+      {
+        provider: "grok-4-5-codex",
+        label: "grok-4.5 Codex",
+        enabled: true,
+        status: "ready",
+        derivedFromProviderId: "codex",
+        modelGatewayId: "grok-4-5",
+        models: [
+          {
+            id: "grok-4.5",
+            provider: "grok-4-5-codex",
+            label: "grok-4.5",
+            isDefault: true,
+          },
+        ],
+      },
+    ];
+
+    const result = resolveRunningAgentModelControls({
+      agent: {
+        provider: "grok-4-5-codex",
+        runtimeProvider: "grok-4-5-codex",
+        runtimeModelId: "grok-4.5",
+        model: "grok-4.5",
+        thinkingOptionId: null,
+      },
+      snapshotEntries,
+      defaultModelLabel: "Default",
+      unavailable: "Unavailable",
+      unknownError: "Unknown error",
+    });
+
+    expect(result.agentModelSelectorProviders).toHaveLength(1);
+    expect(result.agentModelSelectorProviders[0]?.id).toBe("grok-4-5-codex");
+    expect(result.agentModelSelectorProviders[0]?.modelSelection).toEqual({
+      kind: "models",
+      rows: [
+        expect.objectContaining({
+          agentProvider: "grok-4-5-codex",
+          runtimeProvider: "grok-4-5-codex",
+          modelId: "grok-4.5",
+        }),
+      ],
+    });
+    expect(result.modelOptions).toEqual([{ id: "grok-4.5", label: "grok-4.5" }]);
+  });
+
+  it("lists all codex family models when runtimeProvider is a gateway id", () => {
+    const snapshotEntries: ProviderSnapshotEntry[] = [
+      {
+        provider: "codex",
+        label: "Codex",
+        enabled: true,
+        status: "ready",
+        models: [
+          {
+            id: "gpt-5.4",
+            provider: "codex",
+            label: "GPT-5.4",
+          },
+          {
+            id: "gpt-5.4-mini",
+            provider: "codex",
+            label: "GPT-5.4-Mini",
+          },
+        ],
+      },
+      {
+        provider: "grok-4-5-codex",
+        label: "grok-4.5 Codex",
+        enabled: true,
+        status: "ready",
+        derivedFromProviderId: "codex",
+        modelGatewayId: "grok-4-5",
+        models: [
+          {
+            id: "grok-4.5",
+            provider: "grok-4-5-codex",
+            label: "grok-4.5",
+            isDefault: true,
+          },
+        ],
+      },
+    ];
+
+    const result = resolveRunningAgentModelControls({
+      agent: {
+        provider: "codex",
+        runtimeProvider: "grok-4-5-codex",
+        runtimeModelId: "grok-4.5",
+        model: "grok-4.5",
+        thinkingOptionId: null,
+      },
+      snapshotEntries,
+      defaultModelLabel: "Default",
+      unavailable: "Unavailable",
+      unknownError: "Unknown error",
+    });
+
+    expect(result.agentProvider).toBe("codex");
+    expect(result.agentRuntimeProvider).toBe("grok-4-5-codex");
+    expect(result.agentModelSelectorProviders).toHaveLength(1);
+    expect(result.agentModelSelectorProviders[0]?.id).toBe("codex");
+    expect(result.agentModelSelectorProviders[0]?.modelSelection).toEqual({
+      kind: "models",
+      rows: [
+        expect.objectContaining({ modelId: "gpt-5.4", runtimeProvider: "codex" }),
+        expect.objectContaining({ modelId: "gpt-5.4-mini", runtimeProvider: "codex" }),
+        expect.objectContaining({
+          modelId: "grok-4.5",
+          runtimeProvider: "grok-4-5-codex",
+          agentProvider: "codex",
+        }),
+      ],
+    });
+  });
+
+  it("lists models when only the gateway snapshot entry is available", () => {
+    const snapshotEntries: ProviderSnapshotEntry[] = [
+      {
+        provider: "grok-4-5-codex",
+        label: "grok-4.5 Codex",
+        enabled: true,
+        status: "ready",
+        derivedFromProviderId: "codex",
+        modelGatewayId: "grok-4-5",
+        models: [
+          {
+            id: "grok-4.5",
+            provider: "grok-4-5-codex",
+            label: "grok-4.5",
+            isDefault: true,
+          },
+        ],
+      },
+    ];
+
+    const result = resolveRunningAgentModelControls({
+      agent: {
+        provider: "grok-4-5-codex",
+        runtimeProvider: null,
+        runtimeModelId: "grok-4.5",
+        model: "grok-4.5",
+        thinkingOptionId: null,
+      },
+      snapshotEntries,
+      defaultModelLabel: "Default",
+      unavailable: "Unavailable",
+      unknownError: "Unknown error",
+    });
+
+    expect(result.agentModelSelectorProviders).toHaveLength(1);
+    expect(result.agentModelSelectorProviders[0]?.id).toBe("grok-4-5-codex");
+    expect(result.agentModelSelectorProviders[0]?.modelSelection).toEqual({
+      kind: "models",
+      rows: [
+        expect.objectContaining({
+          modelId: "grok-4.5",
+          agentProvider: "grok-4-5-codex",
+        }),
+      ],
+    });
   });
 });

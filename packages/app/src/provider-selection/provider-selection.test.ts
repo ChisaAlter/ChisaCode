@@ -338,6 +338,42 @@ describe("combined model selector data", () => {
     });
   });
 
+  it("surfaces gateway providers standalone when the base provider is absent", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({
+        provider: "grok-4-5-codex",
+        label: "grok-4.5 Codex",
+        derivedFromProviderId: "codex",
+        modelGatewayId: "grok-4-5",
+        models: [
+          {
+            provider: "grok-4-5-codex",
+            id: "grok-4.5",
+            label: "grok-4.5",
+          },
+        ],
+      } as Partial<ProviderSnapshotEntry> & Pick<ProviderSnapshotEntry, "provider">),
+    ]);
+
+    expect(providers).toEqual([
+      {
+        id: "grok-4-5-codex",
+        label: "grok-4.5 Codex",
+        modelSelection: {
+          kind: "models",
+          rows: [
+            expect.objectContaining({
+              provider: "grok-4-5-codex",
+              agentProvider: "grok-4-5-codex",
+              runtimeProvider: "grok-4-5-codex",
+              modelId: "grok-4.5",
+            }),
+          ],
+        },
+      },
+    ]);
+  });
+
   it("surfaces non-ready providers with their state-specific selection", () => {
     expect(
       buildSelectableProviderSelectorProviders([

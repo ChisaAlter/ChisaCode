@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { agentHistoryQueryKey } from "./agent-history-query-key";
+import { agentHistoryQueryKey, agentHistoryQueryKeys } from "./agent-history-query-key";
 
 export const ARCHIVE_AGENT_PENDING_QUERY_KEY = ["archive-agent-pending"] as const;
 export const ARCHIVE_AGENT_SUPPRESSED_QUERY_KEY = ["archive-agent-suppressed"] as const;
@@ -268,10 +268,11 @@ export function markAgentArchivedInHistoryCache(
   queryClient: QueryClient,
   input: ArchiveAgentInput & { archivedAt: string },
 ): void {
-  queryClient.setQueryData<AgentHistoryQueryData | undefined>(
-    agentHistoryQueryKey(input.serverId),
-    (current) => markAgentArchivedInHistoryPayload(current, input),
-  );
+  for (const queryKey of agentHistoryQueryKeys(input.serverId)) {
+    queryClient.setQueryData<AgentHistoryQueryData | undefined>(queryKey, (current) =>
+      markAgentArchivedInHistoryPayload(current, input),
+    );
+  }
 }
 
 export function clearArchiveAgentPending(input: IsAgentArchivingInput): void {
@@ -348,7 +349,7 @@ async function cancelArchivedAgentListQueries(queryClient: QueryClient, serverId
   await Promise.all([
     queryClient.cancelQueries({ queryKey: ["sidebarAgentsList", serverId] }),
     queryClient.cancelQueries({ queryKey: ["allAgents", serverId] }),
-    queryClient.cancelQueries({ queryKey: agentHistoryQueryKey(serverId) }),
+    ...agentHistoryQueryKeys(serverId).map((queryKey) => queryClient.cancelQueries({ queryKey })),
   ]);
 }
 
@@ -445,9 +446,9 @@ export function applyArchivedAgentCloseResults(input: ApplyArchivedAgentCloseRes
     void input.queryClient.invalidateQueries({
       queryKey: ["allAgents", input.serverId],
     });
-    void input.queryClient.invalidateQueries({
-      queryKey: agentHistoryQueryKey(input.serverId),
-    });
+    for (const queryKey of agentHistoryQueryKeys(input.serverId)) {
+      void input.queryClient.invalidateQueries({ queryKey });
+    }
   }
 }
 
@@ -581,9 +582,9 @@ export function useArchiveAgent() {
       void queryClient.invalidateQueries({
         queryKey: ["allAgents", input.serverId],
       });
-      void queryClient.invalidateQueries({
-        queryKey: agentHistoryQueryKey(input.serverId),
-      });
+      for (const queryKey of agentHistoryQueryKeys(input.serverId)) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
     },
   });
 

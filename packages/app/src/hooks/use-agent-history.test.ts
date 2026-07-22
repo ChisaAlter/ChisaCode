@@ -151,6 +151,7 @@ describe("fetchAgentHistoryPage", () => {
     expect(client.calls).toEqual([
       {
         sort: [{ key: "updated_at", direction: "desc" }],
+        filter: { includeArchived: true },
         page: { limit: 200 },
       } satisfies FetchAgentHistoryOptions,
     ]);
@@ -160,6 +161,35 @@ describe("fetchAgentHistoryPage", () => {
       prevCursor: null,
       hasMore: true,
     });
+  });
+
+  it("can request active-only history for Soft sidebar pagination", async () => {
+    const client = createClient([
+      historyPayload({
+        entries: [
+          historyEntry({
+            id: "history-active",
+            cwd: "/repo",
+            updatedAt: "2026-04-02T10:00:00.000Z",
+          }),
+        ],
+      }),
+    ]);
+
+    await fetchAgentHistoryPage({
+      client,
+      serverId: "server-1",
+      cursor: null,
+      includeArchived: false,
+    });
+
+    expect(client.calls).toEqual([
+      {
+        sort: [{ key: "updated_at", direction: "desc" }],
+        filter: { includeArchived: false },
+        page: { limit: 200 },
+      } satisfies FetchAgentHistoryOptions,
+    ]);
   });
 
   it("passes the cursor when fetching subsequent pages", async () => {
@@ -180,6 +210,7 @@ describe("fetchAgentHistoryPage", () => {
 
     expect(client.calls.at(-1)).toEqual({
       sort: [{ key: "updated_at", direction: "desc" }],
+      filter: { includeArchived: true },
       page: { limit: 200, cursor: "cursor-2" },
     } satisfies FetchAgentHistoryOptions);
   });

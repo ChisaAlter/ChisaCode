@@ -34,10 +34,15 @@ export interface AgentHistoryPage {
 
 export type AgentHistoryClient = Pick<DaemonClient, "fetchAgentHistory">;
 
-function buildHistoryPageInFlightKey(input: { serverId: string; cursor: string | null }): string {
+function buildHistoryPageInFlightKey(input: {
+  serverId: string;
+  cursor: string | null;
+  includeArchived: boolean;
+}): string {
   return JSON.stringify({
     serverId: input.serverId,
     cursor: input.cursor ?? null,
+    includeArchived: input.includeArchived,
     sort: AGENT_HISTORY_SORT,
   });
 }
@@ -46,8 +51,14 @@ export async function fetchAgentHistoryPage(input: {
   client: AgentHistoryClient;
   serverId: string;
   cursor: string | null;
+  includeArchived?: boolean;
 }): Promise<AgentHistoryPage> {
-  const inFlightKey = buildHistoryPageInFlightKey(input);
+  const includeArchived = input.includeArchived ?? true;
+  const inFlightKey = buildHistoryPageInFlightKey({
+    serverId: input.serverId,
+    cursor: input.cursor,
+    includeArchived,
+  });
   const existing = historyPageInFlight.get(inFlightKey);
   if (existing) {
     return existing;
@@ -56,6 +67,7 @@ export async function fetchAgentHistoryPage(input: {
   const request = (async () => {
     const payload = await input.client.fetchAgentHistory({
       sort: AGENT_HISTORY_SORT,
+      filter: { includeArchived },
       page: input.cursor
         ? { limit: AGENT_HISTORY_PAGE_LIMIT, cursor: input.cursor }
         : { limit: AGENT_HISTORY_PAGE_LIMIT },
@@ -100,6 +112,12 @@ export async function fetchAgentHistoryPage(input: {
 export function useAgentHistory(options: {
   serverId?: string | null;
   enabled?: boolean;
+  /**
+   * Soft sidebar only shows non-archived sessions. Pass false so pageInfo.hasMore
+   * matches the visible list and we do not offer "load more" for archived-only pages.
+   * Defaults to true to preserve history screens that include archived rows.
+   */
+  includeArchived?: boolean;
 }): AgentHistoryResult {
   const daemons = useHosts();
   const serverId = useMemo(() => {
@@ -107,9 +125,13 @@ export function useAgentHistory(options: {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
   }, [options.serverId]);
   const enabled = options.enabled ?? true;
+  const includeArchived = options.includeArchived ?? true;
   const client = useHostRuntimeClient(serverId ?? "");
   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
-  const queryKey = useMemo(() => agentHistoryQueryKey(serverId), [serverId]);
+  const queryKey = useMemo(
+    () => agentHistoryQueryKey(serverId, { includeArchived }),
+    [includeArchived, serverId],
+  );
   const serverLabel = daemons.find((daemon) => daemon.serverId === serverId)?.label ?? serverId;
 
   const historyQuery = useInfiniteQuery<
@@ -129,7 +151,12 @@ export function useAgentHistory(options: {
       if (!serverId || !client) {
         throw new Error("Host is not connected");
       }
-      return fetchAgentHistoryPage({ client, serverId, cursor: pageParam });
+      return fetchAgentHistoryPage({
+        client,
+        serverId,
+        cursor: pageParam,
+        includeArchived,
+      });
     },
   });
   const { data, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, isLoading, refetch } =

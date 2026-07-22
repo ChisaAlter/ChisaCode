@@ -361,7 +361,14 @@ vi.mock("@/hooks/use-archive-agent", () => ({
 }));
 
 vi.mock("@/hooks/agent-history-query-key", () => ({
-  agentHistoryQueryKey: (serverId: string) => ["agentHistory", serverId],
+  agentHistoryQueryKey: (serverId: string, options?: { includeArchived?: boolean }) =>
+    options?.includeArchived === false
+      ? ["agentHistory", serverId, "activeOnly"]
+      : ["agentHistory", serverId],
+  agentHistoryQueryKeys: (serverId: string) => [
+    ["agentHistory", serverId],
+    ["agentHistory", serverId, "activeOnly"],
+  ],
 }));
 
 vi.mock("@/stores/session-store", () => {
@@ -653,7 +660,8 @@ describe("SidebarSessionList", () => {
     renderSidebarSessionList({ serverId: "server-1", agents });
 
     const title = screen.getByText("问候响应");
-    expect(title.style.lineHeight).toBe("20px");
+    // Soft compact .sess .t uses workbench meta line height (16).
+    expect(title.style.lineHeight).toBe("16px");
     expect(title.style.paddingTop).toBe("4px");
     expect(title.style.transform).toBe("translateY(2px)");
   });
@@ -905,6 +913,19 @@ describe("SidebarSessionList", () => {
     ).toBe("true");
   });
 
+  it("does not invent a selected session when the route provides none", () => {
+    const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "Only session" })];
+
+    renderSidebarSessionList({
+      serverId: "server-1",
+      agents,
+    });
+
+    expect(
+      screen.getByTestId("sidebar-session-server-1-agent-1").getAttribute("aria-selected"),
+    ).not.toBe("true");
+  });
+
   it("labels workspace new-session buttons with the workspace name", () => {
     const agents = [agent({ id: "agent-1", cwd: "/repo/project", title: "First session" })];
 
@@ -1124,9 +1145,8 @@ describe("SidebarSessionList", () => {
       .map((entry) => entry.backgroundColor)
       .filter(Boolean);
 
-    expect(backgrounds.at(-1)).toBe(
-      `color-mix(in srgb, ${theme.colors.accent} 10%, ${theme.colors.surfaceSidebarHover})`,
-    );
+    // Soft selected chip uses elevated surface0, not an accent-tint hover mix.
+    expect(backgrounds.at(-1)).toBe(theme.colors.surface0);
   });
 
   it("keeps the selected session row on the continuous sidebar surface", () => {

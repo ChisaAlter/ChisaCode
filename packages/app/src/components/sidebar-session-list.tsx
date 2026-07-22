@@ -57,7 +57,7 @@ import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { useToast } from "@/contexts/toast-context";
 import { getDesktopHost } from "@/desktop/host";
 import { useArchiveAgent, useSuppressedArchiveAgentIds } from "@/hooks/use-archive-agent";
-import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
+import { agentHistoryQueryKey, agentHistoryQueryKeys } from "@/hooks/agent-history-query-key";
 import { useSessionStore } from "@/stores/session-store";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
@@ -295,15 +295,20 @@ function getPinnedCacheSnapshot(
   queryClient: ReturnType<typeof useQueryClient>,
   serverId: string,
 ): SidebarPinnedCacheSnapshot {
+  // Soft sidebar uses the active-only history key; fall back to full history for other surfaces.
   return {
     sidebarAgentsList: queryClient.getQueryData<AgentListCachePayload | undefined>([
       "sidebarAgentsList",
       serverId,
     ]),
     allAgents: queryClient.getQueryData<AgentListCachePayload | undefined>(["allAgents", serverId]),
-    agentHistory: queryClient.getQueryData<AgentHistoryCachePayload | undefined>(
-      agentHistoryQueryKey(serverId),
-    ),
+    agentHistory:
+      queryClient.getQueryData<AgentHistoryCachePayload | undefined>(
+        agentHistoryQueryKey(serverId, { includeArchived: false }),
+      ) ??
+      queryClient.getQueryData<AgentHistoryCachePayload | undefined>(
+        agentHistoryQueryKey(serverId),
+      ),
   };
 }
 
@@ -330,7 +335,9 @@ function restorePinnedCacheSnapshot(
     snapshot.sidebarAgentsList,
   );
   restoreCachedQuerySnapshot(queryClient, ["allAgents", serverId], snapshot.allAgents);
-  restoreCachedQuerySnapshot(queryClient, agentHistoryQueryKey(serverId), snapshot.agentHistory);
+  for (const queryKey of agentHistoryQueryKeys(serverId)) {
+    restoreCachedQuerySnapshot(queryClient, queryKey, snapshot.agentHistory);
+  }
 }
 
 function patchAgentLabelsInSidebarCaches(
@@ -345,10 +352,11 @@ function patchAgentLabelsInSidebarCaches(
     ["allAgents", input.serverId],
     (current) => patchAgentLabelsInListPayload(current, input),
   );
-  queryClient.setQueryData<AgentHistoryCachePayload | undefined>(
-    agentHistoryQueryKey(input.serverId),
-    (current) => patchAgentLabelsInHistoryPayload(current, input),
-  );
+  for (const queryKey of agentHistoryQueryKeys(input.serverId)) {
+    queryClient.setQueryData<AgentHistoryCachePayload | undefined>(queryKey, (current) =>
+      patchAgentLabelsInHistoryPayload(current, input),
+    );
+  }
 }
 
 function deleteAgentFromStore(input: { serverId: string; agentId: string }) {
@@ -379,7 +387,9 @@ function invalidateSidebarSessionQueries(
 ) {
   void queryClient.invalidateQueries({ queryKey: ["sidebarAgentsList", serverId] });
   void queryClient.invalidateQueries({ queryKey: ["allAgents", serverId] });
-  void queryClient.invalidateQueries({ queryKey: agentHistoryQueryKey(serverId) });
+  for (const queryKey of agentHistoryQueryKeys(serverId)) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
 }
 
 function buildRenderGroups(agentGroups: SidebarSessionGroup[]): SidebarSessionRenderGroup[] {
@@ -1281,14 +1291,9 @@ export function SidebarSessionList({
     () => agents.filter((agent) => !agent.archivedAt && !suppressedArchiveAgentIds.has(agent.id)),
     [agents, suppressedArchiveAgentIds],
   );
-  const resolvedSelectedAgentId = useMemo(() => {
-    if (selectedAgentId) {
-      return selectedAgentId;
-    }
-    return visibleAgents.length === 1
-      ? `${visibleAgents[0].serverId}:${visibleAgents[0].id}`
-      : undefined;
-  }, [selectedAgentId, visibleAgents]);
+  // Soft Home / draft routes intentionally pass no selectedAgentId — do not invent
+  // a selection from "only one visible session" or the draft home looks occupied.
+  const resolvedSelectedAgentId = selectedAgentId;
   const activitySortedGroups = useMemo(() => {
     const unknownWorkspaceLabel = t("sidebar.unknownWorkspace");
     const agentGroups = groupAgentsForSidebar(visibleAgents, {
@@ -1647,9 +1652,9 @@ export function SidebarSessionList({
       void queryClient.invalidateQueries({
         queryKey: ["allAgents", renamingAgent.serverId],
       });
-      void queryClient.invalidateQueries({
-        queryKey: agentHistoryQueryKey(renamingAgent.serverId),
-      });
+      for (const queryKey of agentHistoryQueryKeys(renamingAgent.serverId)) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
     },
     [queryClient, renamingAgent, renamingClient, t],
   );
@@ -1815,7 +1820,7 @@ export function SidebarSessionList({
           onRemoveProject={handleRemoveProject}
         />
       ))}
-      {hasMore ? (
+      {hasMore && onLoadMore ? (
         <Button
           variant="ghost"
           size="sm"
@@ -1968,8 +1973,10 @@ const styles = StyleSheet.create((theme) => ({
     gap: 0,
     paddingLeft: 0,
   },
+  // Soft session rows align with the project header label; avoid an extra tree
+  // indent that reads as empty space beside the selected chip.
   desktopWorkspaceGroupRows: {
-    paddingLeft: 20,
+    paddingLeft: 0,
   },
   row: {
     minHeight: 48,

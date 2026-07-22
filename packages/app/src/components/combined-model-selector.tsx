@@ -532,10 +532,16 @@ function SelectorContent({
     [favoriteKeys, providers],
   );
   const hasResults = favoriteRows.length > 0 || providers.length > 0;
+  let emptyMessage = t("providerSelection.noProviders");
+  if (normalizedQuery.length > 0) {
+    emptyMessage = t("modelSelector.noSearchMatches");
+  } else if (view.kind === "provider") {
+    emptyMessage = t("providerSelection.providerNoModels");
+  }
   const emptyState = (
     <View style={styles.emptyState}>
       <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-      <Text style={styles.emptyStateText}>{t("modelSelector.noSearchMatches")}</Text>
+      <Text style={styles.emptyStateText}>{emptyMessage}</Text>
     </View>
   );
 

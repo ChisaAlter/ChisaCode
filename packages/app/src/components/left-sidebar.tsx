@@ -230,6 +230,8 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
   } = useAgentHistory({
     serverId: activeServerId,
     enabled: isCompactLayout || isOpen,
+    // Soft sidebar hides archived rows; keep hasMore aligned with what is listed.
+    includeArchived: false,
   });
   const liveSessionAgents = useSessionStore((state) =>
     activeServerId ? state.sessions[activeServerId]?.agents : undefined,
@@ -532,13 +534,11 @@ function FooterIconButton({
 
 function SidebarTopActions({
   onCloseSidebar,
-  onViewSessions,
   onNewConversation,
   onSearch,
   variant = "mobile",
 }: {
   onCloseSidebar: () => void;
-  onViewSessions: () => void;
   onNewConversation: () => void;
   onSearch: () => void;
   variant?: "mobile" | "desktop";
@@ -559,15 +559,7 @@ function SidebarTopActions({
   return (
     <View style={topAreaStyle}>
       <View style={styles.sidebarTopActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("sidebar.allSessions")}
-          onPress={onViewSessions}
-          style={styles.sidebarTopHeadingButton}
-          testID="sidebar-all-sessions"
-        >
-          <Text style={styles.sidebarTopHeading}>{t("sidebar.allSessions")}</Text>
-        </Pressable>
+        <View style={styles.sidebarTopHeadingSpacer} />
         <View style={styles.sidebarTopIconCluster}>
           <SidebarTopAction
             icon={Search}
@@ -1214,7 +1206,6 @@ function MobileSidebar({
           <GlassSurface variant="chrome" style={styles.sidebarContent}>
             <SidebarTopActions
               onCloseSidebar={closeToAgent}
-              onViewSessions={handleViewMore}
               onNewConversation={handleOpenProject}
               onSearch={handleSearch}
             />
@@ -1369,12 +1360,6 @@ function DesktopSidebar({
     () => [styles.resizeHandle, isWeb && ({ cursor: "col-resize" } as object)],
     [],
   );
-  const handleViewSessions = useCallback(() => {
-    if (!activeServerId) {
-      return;
-    }
-    router.push(buildHostSessionsRoute(activeServerId));
-  }, [activeServerId]);
   // Collapsed: no rail / gray strip — workspace owns the single open control
   // (SidebarMenuToggle). Open: full panel with PanelLeftClose only.
   return (
@@ -1388,7 +1373,6 @@ function DesktopSidebar({
           <TitlebarDragRegion />
           <SidebarTopActions
             onCloseSidebar={closeDesktopAgentList}
-            onViewSessions={handleViewSessions}
             onNewConversation={handleOpenProject}
             onSearch={handleSearch}
             variant="desktop"
@@ -1601,21 +1585,9 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     gap: 6,
   },
-  sidebarTopHeadingButton: {
-    // Soft .all-sessions: h32, quiet r10.
+  sidebarTopHeadingSpacer: {
+    flex: 1,
     minWidth: 0,
-    flexShrink: 1,
-    minHeight: 32,
-    justifyContent: "center",
-    paddingHorizontal: 6,
-    borderRadius: 10,
-  },
-  sidebarTopHeading: {
-    color: theme.colors.foreground,
-    fontSize: 13.5,
-    lineHeight: 18,
-    fontWeight: theme.fontWeight.semibold,
-    letterSpacing: -0.02 * 13.5,
   },
   sidebarTopIconCluster: {
     flexDirection: "row",

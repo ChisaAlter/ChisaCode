@@ -7,9 +7,18 @@ describe("resolveProviderIconName", () => {
     expect(resolveProviderIconName("codex")).toEqual({ kind: "builtin", id: "codex" });
   });
 
-  it("falls back to the bot icon for legacy and custom providers", () => {
+  it("maps custom providers that extend a built-in family to that family's icon", () => {
+    expect(resolveProviderIconName("deepseek-codex")).toEqual({ kind: "builtin", id: "codex" });
+    expect(resolveProviderIconName("custom-claude-profile")).toEqual({
+      kind: "builtin",
+      id: "claude",
+    });
+    expect(resolveProviderIconName("Codex")).toEqual({ kind: "builtin", id: "codex" });
+  });
+
+  it("falls back to the bot icon for unknown providers", () => {
     expect(resolveProviderIconName("kiro")).toEqual({ kind: "bot" });
     expect(resolveProviderIconName("amp-acp")).toEqual({ kind: "bot" });
-    expect(resolveProviderIconName("custom-claude-profile")).toEqual({ kind: "bot" });
+    expect(resolveProviderIconName("sleepy-beaver")).toEqual({ kind: "bot" });
   });
 });
