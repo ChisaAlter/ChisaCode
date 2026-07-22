@@ -1,5 +1,7 @@
 import type { ChildProcess } from "node:child_process";
+import { homedir } from "node:os";
 import net from "node:net";
+import path from "node:path";
 import type { Logger } from "pino";
 
 import { findExecutable } from "../../../../utils/executable.js";
@@ -13,6 +15,34 @@ import {
 
 const OPENCODE_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5_000;
 const OPENCODE_SERVER_FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
+
+/**
+ * Resolves the working directory to use when spawning the OpenCode-like server.
+ *
+ * The server process inherits its working directory from the daemon process. On
+ * macOS/Linux the daemon typically runs from the user's home directory, so user
+ * project directories (e.g. `/Users/<user>/dev/<repo>`) are within the server's
+ * working directory and `provider.list({ directory })` accepts them.
+ *
+ * On Windows the daemon is launched by the Electron desktop app from the
+ * `win-unpacked` install directory (e.g. `C:\Ai\ChisaCode\packages\desktop\
+ * release\win-unpacked`), which is NOT an ancestor of user project directories
+ * (e.g. `C:\Ai\pi-desktop`). The opencode/mimo server rejects `provider.list`
+ * requests with "Access denied: directory must be within the server's working
+ * directory" in that case.
+ *
+ * Fix: on Windows, spawn the server with its working directory set to the
+ * filesystem root of the user's home drive (e.g. `C:\`). This ensures any
+ * project directory on the same drive as the user's home is accepted. On
+ * other platforms, inherit the daemon's working directory (the historical
+ * behavior) since home-relative project paths already work.
+ */
+function resolveServerSpawnCwd(): string {
+  if (process.platform === "win32") {
+    return path.parse(homedir()).root;
+  }
+  return process.cwd();
+}
 
 export interface OpenCodeLikeProviderConfig {
   providerId: string;
@@ -237,6 +267,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
         [...launchPrefix.args, ...this.providerConfig.serveArgs(String(port))],
         {
           detached: process.platform !== "win32",
+          cwd: resolveServerSpawnCwd(),
           stdio: ["ignore", "pipe", "pipe"],
           ...createProviderEnvSpec({
             runtimeSettings: this.runtimeSettings,
