@@ -13,6 +13,9 @@ export interface ChisaCodeDesktopApi {
   window: {
     getCurrentWindow: () => {
       toggleMaximize: () => Promise<unknown>;
+      minimize: () => Promise<unknown>;
+      close: () => Promise<unknown>;
+      isMaximized: () => Promise<unknown>;
       isFullscreen: () => Promise<unknown>;
       updateWindowControls: (update: {
         height?: number;
@@ -89,6 +92,9 @@ export function createDesktopBridge(
     window: {
       getCurrentWindow: () => ({
         toggleMaximize: () => ipc.invoke(channel("window:toggleMaximize")),
+        minimize: () => ipc.invoke(channel("window:minimize")),
+        close: () => ipc.invoke(channel("window:close")),
+        isMaximized: () => ipc.invoke(channel("window:isMaximized")),
         isFullscreen: () => ipc.invoke(channel("window:isFullscreen")),
         updateWindowControls: (update: {
           height?: number;

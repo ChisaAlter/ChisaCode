@@ -117,8 +117,14 @@ export function useKeyboardShortcuts({
         case "command-center-toggle": {
           if (action.nextOpen) {
             captureCommandCenterFocusRestore(event);
+            void import("@/desktop/electron/command-center-window-controls").then(
+              ({ openCommandCenter }) => openCommandCenter(),
+            );
+          } else {
+            void import("@/desktop/electron/command-center-window-controls").then(
+              ({ closeCommandCenter }) => closeCommandCenter(),
+            );
           }
-          useKeyboardShortcutsStore.getState().setCommandCenterOpen(action.nextOpen);
           return true;
         }
         case "shortcuts-dialog-toggle":

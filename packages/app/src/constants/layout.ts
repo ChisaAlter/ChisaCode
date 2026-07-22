@@ -164,9 +164,10 @@ export const COMPOSER_HORIZONTAL_PADDING = 14;
 export const DESKTOP_TRAFFIC_LIGHT_WIDTH = 78;
 export const DESKTOP_TRAFFIC_LIGHT_HEIGHT = 45;
 
-// Windows/Linux window controls (minimize/maximize/close) — top-right
-export const DESKTOP_WINDOW_CONTROLS_WIDTH = 140;
-export const DESKTOP_WINDOW_CONTROLS_HEIGHT = 30;
+// Windows/Linux custom caption buttons (minimize/maximize/close) — top-right.
+// 3×46px hit targets; 48px tall to match Soft Workbench topbar / title drag strip.
+export const DESKTOP_WINDOW_CONTROLS_WIDTH = 138;
+export const DESKTOP_WINDOW_CONTROLS_HEIGHT = 48;
 
 export {
   getIsElectron as getIsElectronRuntime,

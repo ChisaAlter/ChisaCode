@@ -89,10 +89,11 @@ export function getMainWindowChromeOptions(input: {
     };
   }
 
+  // Windows / Linux: fully custom Web caption buttons (no native titleBarOverlay).
+  // Soft Workbench paints − □ × in the renderer so dimmers and chrome match.
   return {
     titleBarStyle: "hidden",
     frame: false,
-    titleBarOverlay: getTitleBarOverlayOptions(input.theme),
     autoHideMenuBar: true,
   };
 }
@@ -176,8 +177,6 @@ export function applyWindowControlsOverlayUpdate(input: {
 }
 
 export function registerWindowManager(): void {
-  const overlayStateByWindow = new WeakMap<BrowserWindow, WindowControlsOverlayState>();
-
   const toggleMaximize = (event: Electron.IpcMainInvokeEvent) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
@@ -186,6 +185,23 @@ export function registerWindowManager(): void {
     } else {
       win.maximize();
     }
+  };
+
+  const minimize = (event: Electron.IpcMainInvokeEvent) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    win.minimize();
+  };
+
+  const closeWindow = (event: Electron.IpcMainInvokeEvent) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    win.close();
+  };
+
+  const isMaximized = (event: Electron.IpcMainInvokeEvent) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    return win?.isMaximized() ?? false;
   };
 
   const isFullscreen = (event: Electron.IpcMainInvokeEvent) => {
@@ -219,26 +235,18 @@ export function registerWindowManager(): void {
       return;
     }
 
+    // Win/Linux use Web caption buttons (no setTitleBarOverlay). Keep shell
+    // background in sync when the renderer still sends chrome color updates.
     if (nextUpdate.backgroundColor) {
       win.setBackgroundColor(nextUpdate.backgroundColor);
     }
-
-    if (process.platform === "darwin") {
-      return;
-    }
-
-    const current =
-      overlayStateByWindow.get(win) ?? createWindowControlsOverlayState(resolveSystemWindowTheme());
-    const nextState = applyWindowControlsOverlayUpdate({
-      win,
-      current,
-      update: nextUpdate,
-    });
-    overlayStateByWindow.set(win, nextState);
   };
 
   for (const prefix of IPC_PREFIXES) {
     ipcMain.handle(`${prefix}:window:toggleMaximize`, toggleMaximize);
+    ipcMain.handle(`${prefix}:window:minimize`, minimize);
+    ipcMain.handle(`${prefix}:window:close`, closeWindow);
+    ipcMain.handle(`${prefix}:window:isMaximized`, isMaximized);
     ipcMain.handle(`${prefix}:window:isFullscreen`, isFullscreen);
     ipcMain.handle(`${prefix}:window:setBadgeCount`, setBadgeCount);
     ipcMain.handle(`${prefix}:window:updateWindowControls`, updateWindowControls);
@@ -246,23 +254,17 @@ export function registerWindowManager(): void {
 }
 
 export function setupWindowResizeEvents(win: BrowserWindow): void {
-  win.on("resize", () => {
+  const sendResized = () => {
     for (const prefix of IPC_PREFIXES) {
       win.webContents.send(`${prefix}:window:resized`, {});
     }
-  });
+  };
 
-  win.on("enter-full-screen", () => {
-    for (const prefix of IPC_PREFIXES) {
-      win.webContents.send(`${prefix}:window:resized`, {});
-    }
-  });
-
-  win.on("leave-full-screen", () => {
-    for (const prefix of IPC_PREFIXES) {
-      win.webContents.send(`${prefix}:window:resized`, {});
-    }
-  });
+  win.on("resize", sendResized);
+  win.on("maximize", sendResized);
+  win.on("unmaximize", sendResized);
+  win.on("enter-full-screen", sendResized);
+  win.on("leave-full-screen", sendResized);
 }
 
 export async function buildStandardContextMenuItems(

@@ -67,6 +67,12 @@ export function SidebarMenuToggle({
   const { t } = useTranslation();
   const accessibilityState = useMemo(() => ({ expanded: isOpen }), [isOpen]);
 
+  // Desktop: workspace toggle only when the left rail is collapsed. While the
+  // sidebar is open, the sidebar owns the single close affordance (PanelLeftClose).
+  if (!isMobile && isOpen) {
+    return null;
+  }
+
   return (
     <HeaderToggleButton
       onPress={handlePress}

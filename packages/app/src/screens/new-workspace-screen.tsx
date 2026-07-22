@@ -51,7 +51,6 @@ import { generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
-import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
@@ -915,7 +914,6 @@ export function NewWorkspaceScreen({
   const router = useRouter();
   const { theme } = useUnistyles();
   const isCompact = useIsCompactFormFactor();
-  const isAgentListOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact }));
   const toast = useToast();
   const openProject = useOpenProject(serverId);
   const mergeWorkspaces = useSessionStore((state) => state.mergeWorkspaces);
@@ -1521,7 +1519,7 @@ export function NewWorkspaceScreen({
           <ScreenHeader
             left={
               <>
-                {(isCompact || isAgentListOpen) && <SidebarMenuToggle />}
+                <SidebarMenuToggle />
                 <View style={styles.headerTitleContainer}>
                   <Text style={styles.headerTitle} numberOfLines={1}>
                     {t("workspace.newWorkspace")}
@@ -1539,7 +1537,8 @@ export function NewWorkspaceScreen({
           <View style={styles.desktopSoftTopBar}>
             <TitlebarDragRegion />
             <View style={styles.desktopSoftTopBarInner}>
-              {(isCompact || isAgentListOpen) && <SidebarMenuToggle />}
+              {/* Desktop: only when collapsed (SidebarMenuToggle returns null while open). */}
+              <SidebarMenuToggle />
               <View style={styles.desktopSoftTopSpacer} />
             </View>
           </View>

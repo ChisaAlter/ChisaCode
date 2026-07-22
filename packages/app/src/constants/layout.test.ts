@@ -92,7 +92,7 @@ describe("workbench layout constants", () => {
   });
 
   it("locks the Soft Workbench chrome geometry", () => {
-    expect(DESKTOP_WINDOW_CONTROLS_HEIGHT).toBe(30);
+    expect(DESKTOP_WINDOW_CONTROLS_HEIGHT).toBe(48);
     expect(WORKBENCH_NEW_CHAT_RADIUS).toBe(12);
     expect(WORKBENCH_SIDEBAR_GROUP_LINE_HEIGHT).toBe(16);
     expect(SIDEBAR_FOOTER_HEIGHT).toBe(100);

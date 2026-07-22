@@ -149,7 +149,7 @@ describe("window-manager", () => {
       });
     });
 
-    it("uses frameless hidden title bars with overlay on windows", () => {
+    it("uses frameless hidden title bars without native overlay on windows", () => {
       expect(
         getMainWindowChromeOptions({
           platform: "win32",
@@ -159,15 +159,10 @@ describe("window-manager", () => {
         titleBarStyle: "hidden",
         frame: false,
         autoHideMenuBar: true,
-        titleBarOverlay: {
-          color: "#181B1A",
-          symbolColor: "#e4e4e7",
-          height: 29,
-        },
       });
     });
 
-    it("uses frameless hidden title bars with overlay on linux", () => {
+    it("uses frameless hidden title bars without native overlay on linux", () => {
       expect(
         getMainWindowChromeOptions({
           platform: "linux",
@@ -177,11 +172,6 @@ describe("window-manager", () => {
         titleBarStyle: "hidden",
         frame: false,
         autoHideMenuBar: true,
-        titleBarOverlay: {
-          color: "#ffffff",
-          symbolColor: "#09090b",
-          height: 29,
-        },
       });
     });
 

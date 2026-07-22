@@ -73,7 +73,6 @@ export function useCommandCenter() {
   const routeActiveServerId = useActiveServerId();
   const { overrides } = useKeyboardShortcutOverrides();
   const open = useKeyboardShortcutsStore((s) => s.commandCenterOpen);
-  const setOpen = useKeyboardShortcutsStore((s) => s.setCommandCenterOpen);
   const inputRef = useRef<TextInput>(null);
   const didNavigateRef = useRef(false);
   const prevOpenRef = useRef(open);
@@ -185,8 +184,10 @@ export function useCommandCenter() {
   }, [actionItems, agentResults, open]);
 
   const handleClose = useCallback(() => {
-    setOpen(false);
-  }, [setOpen]);
+    void import("@/desktop/electron/command-center-window-controls").then(
+      ({ closeCommandCenter }) => closeCommandCenter(),
+    );
+  }, []);
 
   const handleSelectAgent = useCallback(
     (agent: AggregatedAgent) => {
@@ -198,14 +199,16 @@ export function useCommandCenter() {
 
       // Don't restore focus back to the prior element after we navigate.
       clearCommandCenterFocusRestoreElement();
-      setOpen(false);
+      void import("@/desktop/electron/command-center-window-controls").then(
+        ({ closeCommandCenter }) => closeCommandCenter(),
+      );
       navigateToAgent({
         serverId: target.serverId,
         agentId: target.agentId,
         currentPathname: pathname,
       });
     },
-    [pathname, setOpen],
+    [pathname],
   );
 
   const openProjectPicker = useOpenProjectPicker(activeServerId);
@@ -213,7 +216,9 @@ export function useCommandCenter() {
   const handleSelectAction = useCallback(
     (action: CommandCenterActionItem) => {
       clearCommandCenterFocusRestoreElement();
-      setOpen(false);
+      void import("@/desktop/electron/command-center-window-controls").then(
+        ({ closeCommandCenter }) => closeCommandCenter(),
+      );
       if (action.id === "new-agent") {
         void openProjectPicker();
         return;
@@ -232,7 +237,7 @@ export function useCommandCenter() {
       didNavigateRef.current = true;
       router.push(action.route as Href);
     },
-    [openProjectPicker, setOpen],
+    [openProjectPicker],
   );
 
   const handleSelectItem = useCallback(

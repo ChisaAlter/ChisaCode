@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getDesktopWindowControlsBackground } from "./window-controls";
+import {
+  dimDesktopWindowControlsBackground,
+  getDesktopWindowControlsBackground,
+} from "./window-controls";
 
 describe("getDesktopWindowControlsBackground", () => {
   it("prefers the Soft shell canvas over elevated surface0 white", () => {
@@ -12,6 +15,15 @@ describe("getDesktopWindowControlsBackground", () => {
         surfaceWorkspace: "#f4f5f8",
       }),
     ).toBe("#f4f5f8");
+  });
+
+  it("dims the shell canvas to match the Soft command-center backdrop", () => {
+    // #f4f5f8 blended with rgba(20, 23, 31, 0.28)
+    expect(dimDesktopWindowControlsBackground("#f4f5f8")).toBe("#b5b7bb");
+  });
+
+  it("leaves non-hex backgrounds unchanged when dimming", () => {
+    expect(dimDesktopWindowControlsBackground("transparent")).toBe("transparent");
   });
 
   it("uses the workspace color when it is an opaque shell canvas", () => {

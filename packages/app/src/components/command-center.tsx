@@ -385,7 +385,7 @@ export function CommandCenter() {
   if (!open) return null;
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={handleClose}>
+    <Modal visible={open} transparent animationType="none" onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={handleClose} />
 

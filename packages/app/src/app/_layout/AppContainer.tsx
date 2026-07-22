@@ -17,6 +17,7 @@ import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { resolveActiveHost } from "@/utils/active-host";
 import { LeftSidebar } from "@/components/left-sidebar";
+import { DesktopWindowControls } from "@/components/desktop/window-controls";
 import { LiquidNeonBackdrop } from "@/components/liquid-neon-backdrop";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
 import { DownloadToast } from "@/components/download-toast";
@@ -195,6 +196,8 @@ function AppContainer({
       <RosettaCalloutSource />
       <UpdateCalloutSource />
       <WorktreeSetupCalloutSource />
+      {/* Win/Linux custom −□× under Command Center so the dimmer covers them. */}
+      <DesktopWindowControls />
       <CommandCenter />
       <ProjectPickerModal />
       <ProviderSettingsHost />
