@@ -357,6 +357,7 @@ function makeConfig(): MutableDaemonConfig {
         },
       },
     },
+    visionFallbackModel: null,
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,
     appendSystemPrompt: "",

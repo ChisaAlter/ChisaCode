@@ -581,7 +581,7 @@ function resolveSaveGatewayIdentity(input: {
   modelId: string;
   modelLabel: string;
   previousModelId: string;
-  gatewayId?: string;
+  gatewayId?: string | null;
   currentGateways: NonNullable<MutableDaemonConfig["modelGateways"]>;
 }): {
   gatewayId: string;

@@ -1193,7 +1193,7 @@ export function SyntheticModelsSection({ serverId }: SyntheticModelsSectionProps
           gatewayIds
             .map((gatewayId) => gatewayId?.trim())
             .filter((gatewayId): gatewayId is string => Boolean(gatewayId))
-            .flatMap(buildModelGatewayProviderIdList),
+            .flatMap((gatewayId) => buildModelGatewayProviderIdList(gatewayId)),
         ),
       ) as AgentProvider[];
       if (providers.length === 0) {

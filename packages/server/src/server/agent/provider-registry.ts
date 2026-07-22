@@ -953,7 +953,7 @@ function registerGatewayFaceOverride(params: {
   modelGatewayIds: Map<string, string>;
   gateway: ModelGatewayConfig;
   face: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
-  extendsProvider: string;
+  extendsProvider: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
   labelSuffix: string;
   baseUrl: string;
   token: string;
