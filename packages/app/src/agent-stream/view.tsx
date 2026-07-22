@@ -23,7 +23,11 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { WORKBENCH_FRAME_HAIRLINE_OFFSET, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
+  WORKBENCH_FRAME_HAIRLINE_OFFSET,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check, ChevronDown, X } from "lucide-react-native";
@@ -1185,14 +1189,14 @@ const stylesheet = StyleSheet.create((theme) => ({
   list: {
     flex: 1,
   },
-  // Soft .stream-inner / .role-a: document max ~720.
+  // Soft .stream-inner / .role-a: match ConversationAspectColumn / pen-bar.
   workbenchAssistantTurn: {
     width: "100%",
-    maxWidth: 720,
+    maxWidth: WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
   },
   workbenchToolSequenceGroup: {
     width: "100%",
-    maxWidth: 720,
+    maxWidth: WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
     gap: 8,
   },
   workbenchToolBadgeRow: {

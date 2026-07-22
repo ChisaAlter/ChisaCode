@@ -87,7 +87,7 @@ describe("workbench layout constants", () => {
     expect(WORKBENCH_MICRO_LINE_HEIGHT).toBe(14);
     expect(MIN_INTERACTIVE_TARGET_SIZE).toBe(28);
     expect(WORKBENCH_MESSAGE_LINE_HEIGHT).toBe(22);
-    expect(WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH).toBe(720);
+    expect(WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH).toBe(800);
     expect(WORKBENCH_USER_MESSAGE_MAX_WIDTH).toBe(460);
   });
 

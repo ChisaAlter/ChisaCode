@@ -1656,13 +1656,14 @@ const styles = StyleSheet.create((theme) => ({
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
   },
-  // Soft .composer-dock: padding 8 28 16 around the floating pen-bar.
+  // Soft .composer-dock vertical only: ConversationAspectColumn owns the 28px
+  // session inset so the pen-bar matches stream column width.
   inputAreaWrapper: {
     width: "100%",
     minWidth: 0,
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
     paddingTop: 8,
-    paddingHorizontal: 28,
+    paddingHorizontal: 0,
     paddingBottom: 16,
   },
   inputAreaWrapperCompact: {
@@ -1673,7 +1674,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
   },
-  // Soft docked pen-bar: design --shadow-composer.
+  // Soft docked pen-bar: short contact shadow (no long 36px trail).
   composerInputWrapper: {
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
@@ -1681,7 +1682,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
     ...(isWeb
       ? ({
-          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 14px 36px rgba(20, 23, 31, 0.07)",
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 4px 12px rgba(20, 23, 31, 0.06)",
         } as object)
       : {}),
   },

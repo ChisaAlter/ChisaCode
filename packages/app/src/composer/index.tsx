@@ -700,7 +700,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     height: theme.borderWidth[1],
     backgroundColor: theme.colors.border,
   },
-  // Soft .composer-dock: 8 28 16 desktop; .m-composer-wrap: 8 12 18 compact.
+  // Soft .composer-dock vertical only on desktop: ConversationAspectColumn /
+  // Soft Home already own the 28px session inset. Compact keeps .m-composer-wrap 12.
   inputAreaContainer: {
     position: "relative",
     minHeight: FOOTER_HEIGHT,
@@ -710,11 +711,11 @@ const styles = StyleSheet.create((theme: Theme) => ({
     overflow: "hidden",
     paddingLeft: {
       xs: 12,
-      md: 28,
+      md: 0,
     },
     paddingRight: {
       xs: 12,
-      md: 28,
+      md: 0,
     },
     paddingBottom: {
       xs: 18,

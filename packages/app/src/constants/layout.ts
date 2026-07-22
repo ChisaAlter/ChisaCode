@@ -58,8 +58,8 @@ export const WORKBENCH_ENVIRONMENT_PANEL_SHADOW =
 // The inspector overlays the work surface instead of shrinking messages or the composer.
 export const WORKBENCH_PANE_CONTENT_RIGHT_INSET = 0;
 export const WORKBENCH_MESSAGE_LINE_HEIGHT = 22;
-// Soft .stream-inner / .role-a document column.
-export const WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH = 720;
+// Soft .stream-inner / .role-a document column (pen-bar matches this width).
+export const WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH = 800;
 // Soft .user-b: max-width min(460px, 88%).
 export const WORKBENCH_USER_MESSAGE_MAX_WIDTH = 460;
 

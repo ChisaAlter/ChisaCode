@@ -11,6 +11,9 @@
 - Desktop windows and compositor watchdog behavior.
 - Desktop-specific project opening and shell environment handling.
 - Packaged desktop build integration.
+- Win/Linux custom title-bar chrome (no native `titleBarOverlay`): main process
+  frameless window + IPC for minimize/maximize/close; the **renderer** paints
+  Soft caption buttons (`packages/app` `DesktopWindowControls`).
 
 ## Dependencies
 
@@ -34,6 +37,9 @@
 - Managed desktop daemon behavior is distinct from arbitrary dev daemon state.
 - Do not restart the main daemon without permission.
 - Packaging logs may contain noisy metadata warnings; decide from exit code plus artifact existence.
+- On Windows/Linux, do **not** reintroduce native `titleBarOverlay` for the main
+  window; caption buttons must stay in the Web layer so Soft dimmers (Command
+  Center) cover them without color flash. macOS keeps traffic lights.
 
 ## Cross-Cutting Docs
 

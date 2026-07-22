@@ -174,6 +174,9 @@ ChisaCode 是 **自托管的多 provider 智能体开发环境**：在真实 pro
 - 浮卡：`surface` 白/浅 + **轻 shadow**（composer、选中会话、文件卡）
 - 静止 nav / 阅读底：**无**重 shadow
 - 阴影是「浮起」信号，不是每个控件都加
+- **钉底 pen-bar（composer）**：短接触影，默认  
+  `0 1px 2px rgba(20,23,31,0.04), 0 4px 12px rgba(20,23,31,0.06)`  
+  禁止长拖影（旧 `--shadow-composer` 的 `0 14px 36px` 已弃用）
 
 ### 5.4 分隔
 
@@ -202,7 +205,13 @@ Home 允许大标题；工作态仍靠 **foreground / muted / faint**，不靠�
 - Home：垂直呼吸大（标题区与输入卡之间 16–24）
 - 控件簇内部：4–8
 - 会话行：舒适可扫读，不为塞行而压扁
-- 阅读列 max ~720；composer 卡与阅读列同宽对齐
+- **阅读列 / pen-bar 同宽**：硬顶  
+  `WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH`（当前 **800**）  
+  `ConversationAspectColumn` 与消息列共用该 token
+- 桌面会话宿主左右 inset **20**（`conversationAspectHostDesktopInset`）；  
+  **composer 桌面不再叠一层 28px 水平 padding**——水平边距只由宿主/Home 容器承担，  
+  避免输入卡比正文更窄
+- Compact：`.m-composer-wrap` 仍可保留 12 水平内边距
 
 ### 5.7 颜色语义
 
@@ -228,10 +237,11 @@ Home 允许大标题；工作态仍靠 **foreground / muted / faint**，不靠�
 
 ### 6.2 Home hero
 
-- 居中列 max ~720
+- 居中列 max 与 Session 阅读列一致（`WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH`，当前 800）
 - 主副标题大气、字重高、字距略收
 - 可选 segmented（场景）+ 轻 chips（快捷意图）——文案贴 Chisa 场景，不抄办公/设计分类
 - **主交互是大 composer 卡**，不是第三导航
+- Soft Home 容器水平 inset 与会话宿主对齐（当前 20）
 
 ### 6.3 Session bar
 
@@ -242,6 +252,19 @@ Home 允许大标题；工作态仍靠 **foreground / muted / faint**，不靠�
 ```
 
 无多 tab 时不渲染 tab 行。
+
+### 6.3a Electron 窗控与侧栏开关（Win/Linux）
+
+- **自定义标题栏**：Win/Linux **不**使用原生 `titleBarOverlay`；  
+  Web 绘制 `− □ ×`（`packages/app/src/components/desktop/window-controls.tsx`），  
+  与 Soft dimmer 同一层，避免 Command Center 打开时原生按钮露馅/闪色
+- 主进程：`titleBarStyle: "hidden"` + `frame: false`；  
+  IPC：`window:minimize` / `close` / `isMaximized` / `toggleMaximize` + `resized`
+- 几何：3×46 命中区，高度 48 对齐 Soft topbar；  
+  `DESKTOP_WINDOW_CONTROLS_WIDTH/HEIGHT` 在 `constants/layout.ts`
+- **侧栏开关互斥**：侧栏展开时只显示侧栏 `PanelLeftClose`；  
+  收起后只显示工作区 `SidebarMenuToggle`；  
+  **折叠时不渲染** 44px 灰底 rail（无灰边、无重复展开图标）
 
 ### 6.4 Message stream
 
@@ -329,13 +352,14 @@ Workspace 更多菜单能力（`workspace-header`）：新建智能体/终端/�
 
 ## 10. 落地切片（工程）
 
-| 阶段   | 目标                                                   | 主要触点                                           |
-| ------ | ------------------------------------------------------ | -------------------------------------------------- |
-| **P0** | Soft shell：中栏软底、去 IDE 硬边；环境默认关          | `workspace-center-column`、surface roles、env 默认 |
-| **P1** | Home 空态：居中 hero + 大 composer 卡                  | `new-workspace-screen`、草稿空态                   |
-| **P2** | Session：轻 bar + 同款钉底 composer 卡；消息 soft 阅读 | `composer/*`、`message.tsx`、header                |
-| **P3** | 侧栏 soft 列表：仅「新建对话」+ project/session 树     | `left-sidebar`、`sidebar-session-list`             |
-| **P4** | tab/分屏/env 按需；token 圆角阴影扫尾                  | tabs row、environment panel、layout tokens         |
+| 阶段    | 目标                                                         | 主要触点                                                           |
+| ------- | ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| **P0**  | Soft shell：中栏软底、去 IDE 硬边；环境默认关                | `workspace-center-column`、surface roles、env 默认                 |
+| **P1**  | Home 空态：居中 hero + 大 composer 卡                        | `new-workspace-screen`、草稿空态                                   |
+| **P2**  | Session：轻 bar + 同款钉底 composer 卡；消息 soft 阅读       | `composer/*`、`message.tsx`、header                                |
+| **P3**  | 侧栏 soft 列表：仅「新建对话」+ project/session 树           | `left-sidebar`、`sidebar-session-list`                             |
+| **P4**  | tab/分屏/env 按需；token 圆角阴影扫尾                        | tabs row、environment panel、layout tokens                         |
+| **P2′** | 阅读列/pen-bar 同宽（800）、短 composer shadow、自定义标题栏 | `conversation-aspect-column`、`composer/*`、desktop window-manager |
 
 每阶段验收：**真实 Electron** 默认主题下，用第 11 节清单过一遍。
 

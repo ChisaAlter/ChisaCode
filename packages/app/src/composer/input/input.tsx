@@ -1988,8 +1988,8 @@ const styles = StyleSheet.create((theme: Theme) => ({
     paddingLeft: 0,
     ...(isWeb
       ? {
-          // Soft --shadow-composer
-          boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 14px 36px rgba(20, 23, 31, 0.07)",
+          // Soft docked pen-bar: short contact shadow (no long 36px trail).
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 4px 12px rgba(20, 23, 31, 0.06)",
           transitionProperty: "border-color, box-shadow",
           transitionDuration: "200ms",
           transitionTimingFunction: "ease-in-out",

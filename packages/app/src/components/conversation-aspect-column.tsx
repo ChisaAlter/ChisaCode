@@ -2,7 +2,11 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
-import { CONVERSATION_COLUMN_MAX_WIDTH_RATIO, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  CONVERSATION_COLUMN_MAX_WIDTH_RATIO,
+  WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { resolveThemeWorkbenchSurfaceRoles } from "@/styles/workbench-surface-roles";
 
 /**
@@ -62,16 +66,17 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: resolveThemeWorkbenchSurfaceRoles(theme).content,
   },
   // Desktop only: soft session padding around the document stream + dock.
+  // Keep modest so pen-bar and stream share the same wide column edge.
   conversationAspectHostDesktopInset: {
-    paddingLeft: 28,
-    paddingRight: 28,
+    paddingLeft: 20,
+    paddingRight: 20,
   },
   conversationColumn: {
     flex: 1,
-    // Soft reading column: cap like design stream-inner (~720).
+    // Soft reading column: same hard cap as assistant messages / pen-bar.
     width: "100%",
     minWidth: 0,
-    maxWidth: 720,
+    maxWidth: WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
     flexShrink: 1,
   },
 }));

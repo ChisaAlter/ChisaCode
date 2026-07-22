@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Folder } from "lucide-react-native";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
+import { WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { shortenPath } from "@/utils/shorten-path";
 
@@ -194,8 +195,8 @@ export const softHomeComposerInputWrapperStyle = {
   borderRadius: 18,
   ...(isWeb
     ? {
-        // Soft --shadow-composer
-        boxShadow: "0 2px 8px rgba(20, 23, 31, 0.04), 0 14px 36px rgba(20, 23, 31, 0.07)",
+        // Soft docked pen-bar: short contact shadow (no long 36px trail).
+        boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 4px 12px rgba(20, 23, 31, 0.06)",
       }
     : {}),
 } as const;
@@ -217,14 +218,15 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
     overflow: "hidden",
     backgroundColor: theme.colors.surfaceWorkspace,
-    paddingHorizontal: 28,
+    // Match session host inset so Soft Home pen-bar width tracks the chat dock.
+    paddingHorizontal: 20,
   },
   containerCompact: {
     justifyContent: "flex-end",
   },
   softHomeInner: {
     width: "100%",
-    maxWidth: 760,
+    maxWidth: WORKBENCH_ASSISTANT_MESSAGE_MAX_WIDTH,
     alignSelf: "center",
     flexShrink: 0,
     gap: theme.spacing[4],
