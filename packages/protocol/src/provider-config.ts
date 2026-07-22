@@ -144,6 +144,15 @@ export const SyntheticModelConfigSchema = z
   })
   .strict();
 
+/**
+ * Primary protocol face for a model gateway.
+ * - claude: Anthropic Messages → only `{id}-claude`
+ * - codex: OpenAI Responses → only `{id}-codex`
+ * - openai: Chat Completions → OpenAI-family agents (opencode/pi/kimi/mimocode)
+ * - all: materialize every agent face (legacy / multi-upstream)
+ */
+export const ModelGatewayProtocolPresetSchema = z.enum(["claude", "codex", "openai", "all"]);
+
 export const ModelGatewayConfigSchema = z
   .object({
     id: z.string().min(1),
@@ -151,6 +160,16 @@ export const ModelGatewayConfigSchema = z
     models: z.array(ProviderProfileModelSchema).default([]),
     syntheticModels: z.array(SyntheticModelConfigSchema).default([]),
     enabled: z.boolean().default(true),
+    /**
+     * Preferred agent attachment / upstream preset. Optional for backward
+     * compatibility; when omitted the registry infers from enabled upstreams.
+     */
+    protocolPreset: ModelGatewayProtocolPresetSchema.optional(),
+    /**
+     * When true, generate every agent face even if protocolPreset is a single
+     * protocol (gateway format conversion bridges the rest).
+     */
+    attachToAllAgents: z.boolean().optional(),
     upstreams: z
       .object({
         anthropic: ModelGatewayUpstreamSchema.default({}),
@@ -297,6 +316,7 @@ export type SyntheticModelNode = z.infer<typeof SyntheticModelNodeSchema>;
 export type SyntheticModelLayer = z.infer<typeof SyntheticModelLayerSchema>;
 export type SyntheticModelMoa = z.infer<typeof SyntheticModelMoaSchema>;
 export type SyntheticModelConfig = z.infer<typeof SyntheticModelConfigSchema>;
+export type ModelGatewayProtocolPreset = z.infer<typeof ModelGatewayProtocolPresetSchema>;
 export type ModelGatewayConfig = z.infer<typeof ModelGatewayConfigSchema>;
 export type ModelGatewayConfigs = z.infer<typeof ModelGatewayConfigsSchema>;
 export type AgentProviderRuntimeSettingsMap = Partial<

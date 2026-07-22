@@ -189,10 +189,10 @@ export class DaemonConfigStore {
   }
 }
 
-function mergeMutableConfigIntoPersistedConfig(params: {
+function buildPersistedAgentsFromMutable(params: {
   persisted: PersistedConfig;
   mutable: MutableDaemonConfig;
-}): PersistedConfig {
+}): PersistedConfig["agents"] {
   const { persisted, mutable } = params;
   const metadataGenerationProviders = readMetadataGenerationProviders(mutable);
   const providerOverrides = applyMutableProviderConfigToOverrides(
@@ -200,38 +200,45 @@ function mergeMutableConfigIntoPersistedConfig(params: {
     mutable.providers,
   );
   const modelGateways = mutable.modelGateways ?? {};
+  const visionFallbackModel = mutable.visionFallbackModel ?? null;
   const persistedAgents = persisted.agents as Record<string, unknown> | undefined;
-  const persistedMetadataGeneration = {
-    providers: metadataGenerationProviders,
-  };
+  const persistedMetadataGeneration = { providers: metadataGenerationProviders };
   const shouldPersistMetadataGeneration =
     metadataGenerationProviders.length > 0 || persisted.agents?.metadataGeneration !== undefined;
-
-  let nextAgents = persisted.agents as PersistedConfig["agents"];
+  const shouldPersistVisionFallback =
+    visionFallbackModel !== null ||
+    (persisted.agents as { visionFallbackModel?: unknown } | undefined)?.visionFallbackModel !==
+      undefined;
   const shouldPersistModelGateways =
     Object.keys(modelGateways).length > 0 || persisted.agents?.modelGateways !== undefined;
+  const hasProviderOverrides = Boolean(
+    providerOverrides && Object.keys(providerOverrides).length > 0,
+  );
 
-  if (
-    (providerOverrides && Object.keys(providerOverrides).length > 0) ||
-    shouldPersistModelGateways
-  ) {
-    nextAgents = {
-      ...persistedAgents,
-      ...(providerOverrides && Object.keys(providerOverrides).length > 0
-        ? { providers: providerOverrides }
-        : {}),
-      ...(shouldPersistModelGateways ? { modelGateways } : {}),
-      ...(shouldPersistMetadataGeneration
-        ? { metadataGeneration: persistedMetadataGeneration }
-        : {}),
-    } as PersistedConfig["agents"];
-  } else if (shouldPersistMetadataGeneration) {
-    nextAgents = {
+  if (!hasProviderOverrides && !shouldPersistModelGateways && !shouldPersistVisionFallback) {
+    if (!shouldPersistMetadataGeneration) {
+      return persisted.agents;
+    }
+    return {
       ...persistedAgents,
       metadataGeneration: persistedMetadataGeneration,
     } as PersistedConfig["agents"];
   }
 
+  return {
+    ...persistedAgents,
+    ...(hasProviderOverrides ? { providers: providerOverrides } : {}),
+    ...(shouldPersistModelGateways ? { modelGateways } : {}),
+    ...(shouldPersistVisionFallback ? { visionFallbackModel } : {}),
+    ...(shouldPersistMetadataGeneration ? { metadataGeneration: persistedMetadataGeneration } : {}),
+  } as PersistedConfig["agents"];
+}
+
+function mergeMutableConfigIntoPersistedConfig(params: {
+  persisted: PersistedConfig;
+  mutable: MutableDaemonConfig;
+}): PersistedConfig {
+  const { persisted, mutable } = params;
   return {
     ...persisted,
     daemon: {
@@ -245,7 +252,7 @@ function mergeMutableConfigIntoPersistedConfig(params: {
       skills: mutable.skills,
       mcpServers: mutable.mcpServers,
     },
-    agents: nextAgents,
+    agents: buildPersistedAgentsFromMutable(params),
   } as PersistedConfig;
 }
 

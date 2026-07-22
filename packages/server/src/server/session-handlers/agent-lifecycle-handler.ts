@@ -58,6 +58,8 @@ import type {
 import { resolveCreateAgentTitles } from "../agent/create-agent-title.js";
 import { toWorktreeWireError } from "../worktree-errors.js";
 import type { CreateChisaCodeWorktreeWorkflowResult } from "../worktree-session.js";
+import { handleModelGatewayRequest } from "../model-gateway/model-gateway.js";
+import type { ApplyVisionFallbackParams } from "../agent/vision-fallback.js";
 import { buildUsageSummary, exportUsageEvents, pruneUsageEvents } from "../usage/usage-store.js";
 export class AgentLifecycleHandler implements DisposableHandler {
   private readonly context: AgentLifecycleHandlerContext;
@@ -182,6 +184,7 @@ export class AgentLifecycleHandler implements DisposableHandler {
           agentId,
           prompt,
           messageId: msg.messageId,
+          visionFallback: await this.buildVisionFallbackParams(agentId),
           logger: this.context.sessionLogger,
         });
       } catch (error) {
@@ -541,6 +544,46 @@ export class AgentLifecycleHandler implements DisposableHandler {
   private readStructuredGenerationDaemonConfig(): StructuredGenerationDaemonConfig {
     return {
       metadataGeneration: this.context.daemonConfigStore.get().metadataGeneration,
+    };
+  }
+
+  private async buildVisionFallbackParams(
+    agentId: string,
+  ): Promise<Omit<ApplyVisionFallbackParams, "prompt" | "logger"> | undefined> {
+    const daemonConfig = this.context.daemonConfigStore.get();
+    const visionFallback = daemonConfig.visionFallbackModel ?? null;
+    if (!visionFallback) {
+      return undefined;
+    }
+
+    const agent = this.context.agentManager.getAgent(agentId);
+    const provider = agent?.provider ?? agent?.runtimeInfo?.provider;
+    const modelId = agent?.runtimeInfo?.model ?? agent?.config?.model ?? null;
+    let primarySupportsImages: boolean | undefined;
+    if (provider && modelId) {
+      try {
+        const models = await this.context.providerSnapshotManager.listModels({
+          provider,
+          cwd: agent?.cwd,
+          wait: false,
+        });
+        const match = models.find((model) => model.id === modelId);
+        primarySupportsImages = match?.supportsImages;
+      } catch {
+        primarySupportsImages = undefined;
+      }
+    }
+
+    return {
+      primarySupportsImages,
+      visionFallback,
+      modelGateways: daemonConfig.modelGateways,
+      requestGateway: ({ gateway, requestBody }) =>
+        handleModelGatewayRequest({
+          gateway,
+          targetFormat: "chatCompletions",
+          requestBody,
+        }),
     };
   }
 

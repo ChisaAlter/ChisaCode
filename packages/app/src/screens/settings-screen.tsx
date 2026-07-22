@@ -90,6 +90,7 @@ import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
 import { HostPage, HostRenameButton } from "@/screens/settings/host-page";
 import { CustomModelProvidersSection } from "@/screens/settings/custom-model-providers-section";
 import { SyntheticModelsSection } from "@/screens/settings/synthetic-models-section";
+import { VisionFallbackSection } from "@/screens/settings/vision-fallback-section";
 import { SkillsSection } from "@/screens/settings/skills-section";
 import { McpServersSection } from "@/screens/settings/mcp-servers-section";
 import { UsageStatisticsSection } from "@/screens/settings/usage-statistics-section";
@@ -1598,6 +1599,7 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
           return anyOnlineServerId ? (
             <>
               <CustomModelProvidersSection serverId={localServerId ?? anyOnlineServerId} />
+              <VisionFallbackSection serverId={localServerId ?? anyOnlineServerId} />
               <SyntheticModelsSection serverId={localServerId ?? anyOnlineServerId} />
             </>
           ) : (

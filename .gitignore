@@ -116,3 +116,14 @@ packages/desktop/.cache/
 packages/desktop/release-*/
 packages/desktop/src-tauri/resources/managed-runtime/
 app.json
+
+# Local ZCode client state (not project source)
+.zcode/
+
+# Windows reserved device name accidental files (cannot be staged by Git on Win)
+nul
+NUL
+
+# Accidental env-var path expansion pollution
+%SystemDrive%/
+**/%SystemDrive%/

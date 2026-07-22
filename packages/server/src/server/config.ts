@@ -364,6 +364,9 @@ export function loadConfig(
     metadataGeneration: persisted.agents?.metadataGeneration,
     providerOverrides,
     modelGateways: persisted.agents?.modelGateways,
+    visionFallbackModel:
+      (persisted.agents as { visionFallbackModel?: { provider: string; modelId: string } | null })
+        ?.visionFallbackModel ?? null,
     log: resolveLogConfigFromEnv(env, persisted),
   };
 }

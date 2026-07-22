@@ -267,6 +267,14 @@ export const PersistedConfigSchema = z
           .optional(),
         modelGateways: ModelGatewayConfigsSchema.optional(),
         metadataGeneration: AgentMetadataGenerationSchema.optional(),
+        visionFallbackModel: z
+          .object({
+            provider: z.string().min(1),
+            modelId: z.string().min(1),
+          })
+          .strict()
+          .nullable()
+          .optional(),
       })
       .strict()
       .optional(),

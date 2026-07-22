@@ -9,6 +9,13 @@
 
 ## 进行中
 
+### 自定义模型协议 / 思考强度 / 识图副模型（2026-07-22 启动）
+
+- **问题**：Models 设置页结构混乱；自定义模型（含 Grok）在 Codex 等 agent 下无思考强度；不存在识图副模型管线。
+- **影响范围**：`packages/app` Models 设置与 Soft thinking UI、`packages/protocol` modelGateway schema、`packages/server` provider-registry materialize、send-prompt 入口 vision fallback。
+- **方案**：`protocolPreset` + 按 preset 生成 agent faces；自定义模型思考档位 `off|single|levels(low/medium/high)`；运行中 thinking 控件 `length > 0` 显示；全局 `visionFallbackModel` + turn 前描述注入。
+- **状态**：PR1/PR2 已落地并通过聚焦测试与 lint；PR3 识图副模型 MVP（配置 + prompt 预处理 + unit）已接好，待端到端手动验收（重存 grok 思考档位 + Codex 强度 + 非 vision 主模型附图）。
+
 ### Electron / Android 工作台视觉重构（2026-07-15 启动）
 
 - **问题**：主题系统已经统一，但真实产品仍保留宽侧栏、大面积新工作区空态、悬浮环境卡片和宽松 Composer，和 `design/web3-themes-v2.html` 的紧凑工作台差异明显，用户无法感知实质视觉变化。

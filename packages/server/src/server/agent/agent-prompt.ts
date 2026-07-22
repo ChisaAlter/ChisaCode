@@ -4,6 +4,7 @@ import type { AgentPromptInput, AgentRunOptions } from "./agent-sdk-types.js";
 import type { AgentManager, ManagedAgent } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
+import { applyVisionFallbackToPrompt, type ApplyVisionFallbackParams } from "./vision-fallback.js";
 
 export type AgentRunController = Pick<
   AgentManager,
@@ -139,6 +140,11 @@ export interface SendPromptToAgentParams {
    * schedule fires, notify-on-finish).
    */
   unarchive?: boolean;
+  /**
+   * Optional vision fallback preprocessing. When provided, images may be
+   * described by a secondary model before the primary turn starts.
+   */
+  visionFallback?: Omit<ApplyVisionFallbackParams, "prompt" | "logger">;
   logger: Logger;
 }
 
@@ -201,7 +207,17 @@ export async function sendPromptToAgent(
     await params.agentManager.setAgentMode(params.agentId, params.sessionMode);
   }
 
-  return startAgentRun(params.agentManager, params.agentId, params.prompt, params.logger, {
+  let prompt = params.prompt;
+  if (params.visionFallback) {
+    const result = await applyVisionFallbackToPrompt({
+      ...params.visionFallback,
+      prompt,
+      logger: params.logger,
+    });
+    prompt = result.prompt;
+  }
+
+  return startAgentRun(params.agentManager, params.agentId, prompt, params.logger, {
     replaceRunning: true,
     runOptions: params.runOptions,
   });

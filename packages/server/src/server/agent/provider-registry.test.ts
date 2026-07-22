@@ -430,6 +430,7 @@ import {
   AGENT_PROVIDER_DEFINITIONS,
   buildProviderRegistry,
   createAllClients,
+  resolveGatewayAgentFaces,
 } from "./provider-registry.js";
 
 const logger = createTestLogger();
@@ -876,6 +877,95 @@ test("model gateway materializes provider entries for all built-in agents", asyn
       },
     ],
   });
+});
+
+test("resolveGatewayAgentFaces narrows faces by protocolPreset", () => {
+  expect(
+    resolveGatewayAgentFaces({
+      protocolPreset: "codex",
+      upstreams: {
+        responses: { enabled: true },
+      },
+    }),
+  ).toEqual({
+    claude: false,
+    codex: true,
+    opencode: false,
+    mimocode: false,
+    pi: false,
+    kimi: false,
+  });
+
+  expect(
+    resolveGatewayAgentFaces({
+      protocolPreset: "openai",
+      attachToAllAgents: true,
+    }),
+  ).toEqual({
+    claude: true,
+    codex: true,
+    opencode: true,
+    mimocode: true,
+    pi: true,
+    kimi: true,
+  });
+
+  expect(
+    resolveGatewayAgentFaces({
+      upstreams: {
+        chatCompletions: { enabled: true },
+      },
+    }),
+  ).toEqual({
+    claude: false,
+    codex: false,
+    opencode: true,
+    mimocode: true,
+    pi: true,
+    kimi: true,
+  });
+});
+
+test("model gateway with codex protocolPreset only materializes codex face", async () => {
+  const registry = buildProviderRegistry(logger, {
+    modelGateways: {
+      grok: {
+        id: "grok",
+        label: "Grok",
+        enabled: true,
+        protocolPreset: "codex",
+        models: [
+          {
+            id: "grok-4.5",
+            label: "grok-4.5",
+            thinkingOptions: [
+              { id: "low", label: "Low" },
+              { id: "medium", label: "Medium", isDefault: true },
+              { id: "high", label: "High" },
+            ],
+          },
+        ],
+        upstreams: {
+          anthropic: { enabled: false, baseUrl: "", apiKey: "" },
+          chatCompletions: { enabled: false, baseUrl: "", apiKey: "" },
+          responses: {
+            enabled: true,
+            baseUrl: "https://api.x.ai/v1",
+            apiKey: "sk-xai",
+          },
+        },
+      },
+    },
+    modelGatewayBaseUrl: "http://127.0.0.1:6767",
+    modelGatewayToken: "internal-token",
+  });
+
+  expect(registry["grok-codex"]).toBeDefined();
+  expect(registry["grok-claude"]).toBeUndefined();
+  expect(registry["grok-opencode"]).toBeUndefined();
+  expect(registry["grok-mimocode"]).toBeUndefined();
+  expect(registry["grok-pi"]).toBeUndefined();
+  expect(registry["grok-kimi"]).toBeUndefined();
 });
 
 test("xiaomi chat gateway uses native Xiaomi provider settings for OpenCode-like agents", async () => {

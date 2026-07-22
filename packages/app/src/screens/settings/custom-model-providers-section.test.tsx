@@ -150,9 +150,33 @@ vi.mock("react-i18next", () => ({
         "customModelProviders.localConfigHint":
           "Manage local custom models stored in the daemon modelGateways config.",
         "customModelProviders.localConfigTitle": "Local configuration",
+        "customModelProviders.sectionHint":
+          "Add models for Claude Messages, Codex Responses, or OpenAI-compatible Chat Completions.",
         "customModelProviders.modelName": "Model name",
         "customModelProviders.modelNamePlaceholder": "Model id, e.g. gpt-4o",
-        "customModelProviders.openaiOnlyHint": "OpenAI-compatible API only",
+        "customModelProviders.openaiOnlyHint":
+          "Configure the upstream API for the selected protocol",
+        "customModelProviders.protocolPreset": "Protocol",
+        "customModelProviders.protocolPresetHint":
+          "Primary API protocol; controls which agents list this model by default.",
+        "customModelProviders.protocolClaude": "Claude (Messages)",
+        "customModelProviders.protocolCodex": "Codex (Responses)",
+        "customModelProviders.protocolOpenai": "OpenAI-compatible (Chat)",
+        "customModelProviders.protocolClaudeHint":
+          "Anthropic Messages; attaches to Claude by default",
+        "customModelProviders.protocolCodexHint": "OpenAI Responses; attaches to Codex by default",
+        "customModelProviders.protocolOpenaiHint":
+          "Chat Completions; attaches to OpenCode / Pi / Kimi by default",
+        "customModelProviders.thinkingMode": "Thinking intensity",
+        "customModelProviders.thinkingModeHint":
+          "Levels map to Codex/Claude reasoning effort; toggle is a simple on/off control.",
+        "customModelProviders.thinkingModeOff": "Off",
+        "customModelProviders.thinkingModeSingle": "Toggle",
+        "customModelProviders.thinkingModeLevels": "Levels (low/medium/high)",
+        "customModelProviders.attachToAllAgents": "Attach to all agents",
+        "customModelProviders.supportsImagesBadge": "Images",
+        "customModelProviders.supportsToolsBadge": "Tools",
+        "customModelProviders.supportsThinkingBadge": "Thinking",
         "customModelProviders.provider": "Provider",
         "customModelProviders.saveFailed": "Failed to save custom model",
         "customModelProviders.saveUnavailable": "Host is not connected",
@@ -395,13 +419,17 @@ describe("CustomModelProvidersSection", () => {
 
     expect(container.querySelector('[data-testid="custom-model-editor-sheet"]')).not.toBeNull();
     expect(container.textContent).toContain("Add model");
-    expect(container.textContent).toContain("OpenAI-compatible API only");
+    expect(container.textContent).toContain(
+      "Chat Completions; attaches to OpenCode / Pi / Kimi by default",
+    );
     expect(container.querySelector('[data-testid="custom-model-base-url-input"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="custom-model-api-key-input"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="custom-model-id-input"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="protocol-preset-openai"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="thinking-mode-levels"]')).not.toBeNull();
     expect(container.textContent).toContain("Tool calling");
     expect(container.textContent).toContain("Image input");
-    expect(container.textContent).toContain("Thinking model");
+    expect(container.textContent).toContain("Thinking intensity");
   });
 
   it("saves an edited model and closes without waiting for provider refresh", async () => {

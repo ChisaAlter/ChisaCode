@@ -21,7 +21,9 @@ import {
   buildSaveOpenAiCompatibleModelPatch,
   collectSavedModels,
   type CollectedSavedModel,
+  type CustomModelProtocolPreset,
   type CustomModelProviderEndpoint,
+  type CustomModelThinkingMode,
   type CustomOpenAIWireApi,
 } from "@/screens/settings/custom-model-providers";
 import { settingsStyles } from "@/styles/settings";
@@ -46,7 +48,9 @@ interface ModelEditorValues {
   modelId: string;
   supportsTools: boolean;
   supportsImages: boolean;
-  supportsThinking: boolean;
+  thinkingMode: CustomModelThinkingMode;
+  protocolPreset: CustomModelProtocolPreset;
+  attachToAllAgents: boolean;
   customProtocol: boolean;
   contextWindowText: string;
   anthropicEnabled: boolean;
@@ -82,7 +86,9 @@ function createEmptyEditorValues(): ModelEditorValues {
     modelId: "",
     supportsTools: true,
     supportsImages: false,
-    supportsThinking: false,
+    thinkingMode: "off",
+    protocolPreset: "openai",
+    attachToAllAgents: false,
     customProtocol: false,
     contextWindowText: "",
     anthropicEnabled: false,
@@ -95,6 +101,27 @@ function createEmptyEditorValues(): ModelEditorValues {
     responsesBaseUrl: "",
     responsesApiKey: "",
   };
+}
+
+function resolveProtocolPresetForEditor(
+  model: CollectedSavedModel,
+  flags: {
+    anthropicEnabled: boolean;
+    chatEnabled: boolean;
+    responsesEnabled: boolean;
+  },
+): CustomModelProtocolPreset {
+  const stored = model.protocolPreset;
+  if (stored === "claude" || stored === "codex" || stored === "openai") {
+    return stored;
+  }
+  if (flags.responsesEnabled && !flags.chatEnabled && !flags.anthropicEnabled) {
+    return "codex";
+  }
+  if (flags.anthropicEnabled && !flags.chatEnabled && !flags.responsesEnabled) {
+    return "claude";
+  }
+  return "openai";
 }
 
 function readGatewayApiKey(
@@ -181,8 +208,10 @@ function createEditorValuesFromSavedModel(
     modelId: model.modelId,
     supportsTools: model.supportsTools === true,
     supportsImages: model.supportsImages === true,
-    supportsThinking: model.supportsThinking === true,
-    customProtocol: multiProtocol || flags.anthropicEnabled || flags.responsesEnabled,
+    thinkingMode: model.thinkingMode ?? (model.supportsThinking === true ? "single" : "off"),
+    protocolPreset: resolveProtocolPresetForEditor(model, flags),
+    attachToAllAgents: model.attachToAllAgents === true || multiProtocol,
+    customProtocol: multiProtocol,
     contextWindowText:
       model.contextWindowMaxTokens === undefined ? "" : String(model.contextWindowMaxTokens),
     anthropicEnabled: flags.anthropicEnabled,
@@ -221,6 +250,15 @@ function SavedModelRow({
     [deleting],
   );
 
+  let protocolLabel = t("customModelProviders.customBadge");
+  if (model.protocolPreset === "claude") {
+    protocolLabel = t("customModelProviders.protocolClaude");
+  } else if (model.protocolPreset === "codex") {
+    protocolLabel = t("customModelProviders.protocolCodex");
+  } else if (model.protocolPreset === "openai") {
+    protocolLabel = t("customModelProviders.protocolOpenai");
+  }
+
   return (
     <View style={styles.modelRow} testID={`saved-model-row-${model.gatewayId}-${model.modelId}`}>
       <View style={styles.modelLeading}>
@@ -232,11 +270,28 @@ function SavedModelRow({
             {model.label}
           </Text>
           <Text style={styles.modelSubtitle} numberOfLines={1}>
-            {t("customModelProviders.customBadge")}
+            {protocolLabel}
             {model.gatewayLabel && model.gatewayLabel !== model.label
               ? ` · ${model.gatewayLabel}`
               : ""}
           </Text>
+          <View style={styles.badgeRow}>
+            {model.supportsTools ? (
+              <Text style={styles.capabilityBadge}>
+                {t("customModelProviders.supportsToolsBadge")}
+              </Text>
+            ) : null}
+            {model.supportsImages ? (
+              <Text style={styles.capabilityBadge}>
+                {t("customModelProviders.supportsImagesBadge")}
+              </Text>
+            ) : null}
+            {model.supportsThinking ? (
+              <Text style={styles.capabilityBadge}>
+                {t("customModelProviders.supportsThinkingBadge")}
+              </Text>
+            ) : null}
+          </View>
         </View>
       </View>
       <View style={styles.rowActions}>
@@ -296,6 +351,30 @@ function CapabilityToggle({
     >
       <View style={checkboxStyle}>{value ? <Text style={styles.checkboxMark}>✓</Text> : null}</View>
       <Text style={styles.capabilityLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ChoiceChip({
+  label,
+  selected,
+  onPress,
+  testID,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={selected ? styles.presetChipSelected : styles.presetChip}
+      accessibilityRole="radio"
+      accessibilityState={selected ? ACCESSIBILITY_CHECKED : ACCESSIBILITY_UNCHECKED}
+      testID={testID}
+    >
+      <Text style={selected ? styles.presetChipTextSelected : styles.presetChipText}>{label}</Text>
     </Pressable>
   );
 }
@@ -423,8 +502,38 @@ function ModelEditorSheet({
     (value: boolean) => setField("supportsImages", value),
     [setField],
   );
-  const handleSupportsThinkingChange = useCallback(
-    (value: boolean) => setField("supportsThinking", value),
+  const handleThinkingModeOff = useCallback(() => setField("thinkingMode", "off"), [setField]);
+  const handleThinkingModeSingle = useCallback(
+    () => setField("thinkingMode", "single"),
+    [setField],
+  );
+  const handleThinkingModeLevels = useCallback(
+    () => setField("thinkingMode", "levels"),
+    [setField],
+  );
+  const handleSelectProtocolOpenai = useCallback(() => {
+    setValues((current) => ({
+      ...current,
+      protocolPreset: "openai",
+      customProtocol: false,
+    }));
+  }, []);
+  const handleSelectProtocolCodex = useCallback(() => {
+    setValues((current) => ({
+      ...current,
+      protocolPreset: "codex",
+      customProtocol: false,
+    }));
+  }, []);
+  const handleSelectProtocolClaude = useCallback(() => {
+    setValues((current) => ({
+      ...current,
+      protocolPreset: "claude",
+      customProtocol: false,
+    }));
+  }, []);
+  const handleAttachToAllAgentsChange = useCallback(
+    (value: boolean) => setField("attachToAllAgents", value),
     [setField],
   );
   const handleCustomProtocolChange = useCallback(
@@ -487,18 +596,26 @@ function ModelEditorSheet({
       .finally(() => setSaving(false));
   }, [errorLogger, onSave, previous, saving, t, values]);
 
+  let protocolSubtitle = t("customModelProviders.protocolOpenaiHint");
+  if (values.protocolPreset === "claude") {
+    protocolSubtitle = t("customModelProviders.protocolClaudeHint");
+  } else if (values.protocolPreset === "codex") {
+    protocolSubtitle = t("customModelProviders.protocolCodexHint");
+  }
+
   const header = useMemo<SheetHeader>(
     () => ({
       title:
         state?.mode === "edit"
           ? t("customModelProviders.editCustomModel")
           : t("customModelProviders.addCustomModel"),
-      subtitle: t("customModelProviders.openaiOnlyHint"),
+      subtitle: values.customProtocol ? t("customModelProviders.openaiOnlyHint") : protocolSubtitle,
     }),
-    [state?.mode, t],
+    [protocolSubtitle, state?.mode, t, values.customProtocol],
   );
 
   const canSave = values.modelId.trim().length > 0 && !saving;
+  const baseUrlPlaceholder = "https://api.example.com/v1";
 
   return (
     <AdaptiveModalSheet
@@ -510,6 +627,31 @@ function ModelEditorSheet({
       testID="custom-model-editor-sheet"
     >
       <View style={styles.formGroup}>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.formLabel}>{t("customModelProviders.protocolPreset")}</Text>
+          <Text style={styles.fieldHint}>{t("customModelProviders.protocolPresetHint")}</Text>
+          <View style={styles.presetRow}>
+            <ChoiceChip
+              label={t("customModelProviders.protocolOpenai")}
+              selected={values.protocolPreset === "openai" && !values.customProtocol}
+              onPress={handleSelectProtocolOpenai}
+              testID="protocol-preset-openai"
+            />
+            <ChoiceChip
+              label={t("customModelProviders.protocolCodex")}
+              selected={values.protocolPreset === "codex" && !values.customProtocol}
+              onPress={handleSelectProtocolCodex}
+              testID="protocol-preset-codex"
+            />
+            <ChoiceChip
+              label={t("customModelProviders.protocolClaude")}
+              selected={values.protocolPreset === "claude" && !values.customProtocol}
+              onPress={handleSelectProtocolClaude}
+              testID="protocol-preset-claude"
+            />
+          </View>
+        </View>
+
         {!values.customProtocol ? (
           <View style={styles.fieldRow}>
             <View style={styles.fieldGroupGrow}>
@@ -518,7 +660,7 @@ function ModelEditorSheet({
                 initialValue={values.baseUrl}
                 resetKey={`base-url-${resetSeed}`}
                 onChangeText={handleBaseUrlChange}
-                placeholder="https://api.example.com/v1/chat/completions"
+                placeholder={baseUrlPlaceholder}
                 placeholderTextColor={theme.colors.foregroundMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -580,6 +722,31 @@ function ModelEditorSheet({
         </View>
 
         <View style={styles.fieldGroup}>
+          <Text style={styles.formLabel}>{t("customModelProviders.thinkingMode")}</Text>
+          <Text style={styles.fieldHint}>{t("customModelProviders.thinkingModeHint")}</Text>
+          <View style={styles.presetRow}>
+            <ChoiceChip
+              label={t("customModelProviders.thinkingModeOff")}
+              selected={values.thinkingMode === "off"}
+              onPress={handleThinkingModeOff}
+              testID="thinking-mode-off"
+            />
+            <ChoiceChip
+              label={t("customModelProviders.thinkingModeSingle")}
+              selected={values.thinkingMode === "single"}
+              onPress={handleThinkingModeSingle}
+              testID="thinking-mode-single"
+            />
+            <ChoiceChip
+              label={t("customModelProviders.thinkingModeLevels")}
+              selected={values.thinkingMode === "levels"}
+              onPress={handleThinkingModeLevels}
+              testID="thinking-mode-levels"
+            />
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
           <Text style={styles.formLabel}>{t("customModelProviders.advanced")}</Text>
           <View style={styles.capabilityGrid}>
             <CapabilityToggle
@@ -595,10 +762,10 @@ function ModelEditorSheet({
               testID="capability-images"
             />
             <CapabilityToggle
-              label={t("customModelProviders.supportsThinking")}
-              value={values.supportsThinking}
-              onChange={handleSupportsThinkingChange}
-              testID="capability-thinking"
+              label={t("customModelProviders.attachToAllAgents")}
+              value={values.attachToAllAgents}
+              onChange={handleAttachToAllAgentsChange}
+              testID="capability-attach-all"
             />
             <CapabilityToggle
               label={t("customModelProviders.customProtocol")}
@@ -729,7 +896,9 @@ export function CustomModelProvidersSection({
         contextWindowMaxTokens: parseContextWindowText(values.contextWindowText),
         supportsImages: values.supportsImages,
         supportsTools: values.supportsTools,
-        supportsThinking: values.supportsThinking,
+        thinkingMode: values.thinkingMode,
+        protocolPreset: values.protocolPreset,
+        attachToAllAgents: values.attachToAllAgents,
         customProtocol: values.customProtocol,
         anthropic,
         openai,
@@ -743,7 +912,12 @@ export function CustomModelProvidersSection({
       setEditorState(null);
 
       const gatewayIds = Object.keys(patch.modelGateways ?? {});
-      const providerIds = gatewayIds.flatMap(buildModelGatewayProviderIdList);
+      const providerIds = gatewayIds.flatMap((gatewayId) =>
+        buildModelGatewayProviderIdList(gatewayId, {
+          protocolPreset: values.attachToAllAgents ? "all" : values.protocolPreset,
+          attachToAllAgents: values.attachToAllAgents,
+        }),
+      );
       if (providerIds.length > 0) {
         void refresh(providerIds as AgentProvider[]).catch((error) => {
           console.warn("[CustomModelProviders] Failed to refresh providers after save", error);
@@ -805,7 +979,9 @@ export function CustomModelProvidersSection({
         testID="add-custom-model-button"
       >
         <Plus size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        <Text style={settingsStyles.sectionHeaderLinkText}>{t("customModelProviders.add")}</Text>
+        <Text style={settingsStyles.sectionHeaderLinkText}>
+          {t("customModelProviders.addModel")}
+        </Text>
       </Pressable>
     ),
     [openAdd, t, theme.colors.foregroundMuted, theme.iconSize.sm],
@@ -819,17 +995,7 @@ export function CustomModelProvidersSection({
         style={styles.sectionSpacing}
         testID="settings-custom-models-section"
       >
-        <View style={styles.infoCard} testID="custom-models-info-card">
-          <View style={styles.infoTextColumn}>
-            <Text style={settingsStyles.rowTitle}>
-              {t("customModelProviders.localConfigTitle")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>{t("customModelProviders.localConfigHint")}</Text>
-          </View>
-          <Button variant="outline" size="sm" leftIcon={Plus} onPress={openAdd}>
-            {t("customModelProviders.addModel")}
-          </Button>
-        </View>
+        <Text style={settingsStyles.rowHint}>{t("customModelProviders.sectionHint")}</Text>
 
         <Text style={styles.listHeading}>{t("customModelProviders.savedModels")}</Text>
 
@@ -869,29 +1035,69 @@ const styles = StyleSheet.create((theme) => ({
   sectionSpacing: {
     marginBottom: theme.spacing[4],
   },
-  infoCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    padding: theme.spacing[4],
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-    marginBottom: theme.spacing[4],
-  },
-  infoTextColumn: {
-    flex: 1,
-    minWidth: 0,
-    gap: theme.spacing[1],
-  },
   listHeading: {
     color: theme.colors.foregroundMuted,
     fontSize: 12.5,
     lineHeight: 16,
     fontWeight: theme.fontWeight.medium,
+    marginTop: theme.spacing[3],
     marginBottom: theme.spacing[2],
+  },
+  fieldHint: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: theme.spacing[2],
+  },
+  presetRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
+  presetChip: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+  },
+  presetChipSelected: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surface1,
+  },
+  presetChipText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
+  },
+  presetChipTextSelected: {
+    color: theme.colors.primary,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.medium,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
+  capabilityBadge: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 11,
+    lineHeight: 14,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    overflow: "hidden",
   },
   emptyCard: {
     padding: theme.spacing[4],

@@ -54,6 +54,7 @@ describe("custom model provider helpers", () => {
           id: "zai",
           label: "ZAI",
           enabled: true,
+          protocolPreset: "all",
           models: [
             {
               id: "glm-5",
@@ -205,6 +206,7 @@ describe("custom model provider helpers", () => {
           id: "zai",
           label: "ZAI",
           enabled: true,
+          protocolPreset: "openai",
           models: [{ id: "glm-5", label: "glm-5", isDefault: true }],
           upstreams: {
             anthropic: {
@@ -349,14 +351,9 @@ describe("custom model provider helpers", () => {
         label: "GLM 5",
         supportsTools: true,
         supportsThinking: true,
-        providerIds: [
-          "zai-claude",
-          "zai-codex",
-          "zai-opencode",
-          "zai-mimocode",
-          "zai-pi",
-          "zai-kimi",
-        ],
+        thinkingMode: "single",
+        protocolPreset: "openai",
+        providerIds: ["zai-opencode", "zai-mimocode", "zai-pi", "zai-kimi"],
         baseUrl: "https://api.z.ai/v1",
       },
       {
@@ -366,14 +363,9 @@ describe("custom model provider helpers", () => {
         modelId: "glm-5-air",
         label: "GLM 5 Air",
         supportsImages: true,
-        providerIds: [
-          "zai-claude",
-          "zai-codex",
-          "zai-opencode",
-          "zai-mimocode",
-          "zai-pi",
-          "zai-kimi",
-        ],
+        thinkingMode: "off",
+        protocolPreset: "openai",
+        providerIds: ["zai-opencode", "zai-mimocode", "zai-pi", "zai-kimi"],
         baseUrl: "https://api.z.ai/v1",
       },
     ]);
@@ -388,7 +380,8 @@ describe("custom model provider helpers", () => {
       apiKey: "sk-test",
       supportsTools: true,
       supportsImages: true,
-      supportsThinking: true,
+      thinkingMode: "levels",
+      protocolPreset: "openai",
       contextWindowMaxTokens: 131_072,
     });
 
@@ -396,6 +389,7 @@ describe("custom model provider helpers", () => {
       id: "gpt-4o",
       label: "GPT-4o",
       enabled: true,
+      protocolPreset: "openai",
       models: [
         {
           id: "gpt-4o",
@@ -403,7 +397,11 @@ describe("custom model provider helpers", () => {
           supportsTools: true,
           supportsImages: true,
           contextWindowMaxTokens: 131_072,
-          thinkingOptions: [{ id: "default", label: "Thinking", isDefault: true }],
+          thinkingOptions: [
+            { id: "low", label: "Low" },
+            { id: "medium", label: "Medium", isDefault: true },
+            { id: "high", label: "High" },
+          ],
           isDefault: true,
         },
       ],

@@ -41,6 +41,14 @@ const MutableMetadataGenerationConfigSchema = z
   })
   .passthrough();
 
+/** Global secondary vision model used when the primary model cannot see images. */
+export const VisionFallbackModelSchema = z
+  .object({
+    provider: z.string().min(1),
+    modelId: z.string().min(1),
+  })
+  .strict();
+
 export const MutableDaemonConfigSchema = z
   .object({
     mcp: z
@@ -50,6 +58,12 @@ export const MutableDaemonConfigSchema = z
       .passthrough(),
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
     modelGateways: ModelGatewayConfigsSchema.default({}),
+    /**
+     * When set, prompts that attach images while the main model has
+     * `supportsImages !== true` are preprocessed: the vision model describes
+     * each image and the descriptions are injected as text for the main model.
+     */
+    visionFallbackModel: VisionFallbackModelSchema.nullable().default(null),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
     appendSystemPrompt: z.string().default(""),
@@ -75,6 +89,7 @@ export const MutableDaemonConfigPatchSchema = z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
       .optional(),
     modelGateways: z.record(z.string(), ModelGatewayConfigSchema.partial()).optional(),
+    visionFallbackModel: VisionFallbackModelSchema.nullable().optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
     appendSystemPrompt: z.string().optional(),
@@ -289,6 +304,7 @@ export const DaemonStatusPayloadSchemas = [
 
 export type MutableDaemonConfig = z.infer<typeof MutableDaemonConfigSchema>;
 export type MutableDaemonConfigPatch = z.infer<typeof MutableDaemonConfigPatchSchema>;
+export type VisionFallbackModel = z.infer<typeof VisionFallbackModelSchema>;
 export type DaemonGetStatusRequest = z.infer<typeof DaemonGetStatusRequestSchema>;
 export type DaemonGetPairingOfferRequest = z.infer<typeof DaemonGetPairingOfferRequestSchema>;
 export type GetDaemonConfigRequestMessage = z.infer<typeof GetDaemonConfigRequestMessageSchema>;

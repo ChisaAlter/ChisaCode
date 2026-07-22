@@ -471,6 +471,7 @@ export interface ChisaCodeDaemonConfig {
   };
   providerOverrides?: Record<string, ProviderOverride>;
   modelGateways?: ModelGatewayConfigs;
+  visionFallbackModel?: { provider: string; modelId: string } | null;
   modelGatewayToken?: string;
   log?: PersistedConfig["log"];
   onLifecycleIntent?: (intent: DaemonLifecycleIntent) => void;
@@ -533,6 +534,40 @@ async function cleanupFailedSpeechBootstrap(
   await resources.scheduleService.stop().catch(() => undefined);
 }
 
+function buildInitialMutableDaemonConfig(config: ChisaCodeDaemonConfig) {
+  return {
+    mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
+    providers: Object.fromEntries(
+      Object.entries(config.providerOverrides ?? {}).map(([providerId, override]) => [
+        providerId,
+        {
+          ...(override.enabled !== undefined ? { enabled: override.enabled } : {}),
+          ...(override.additionalModels ? { additionalModels: override.additionalModels } : {}),
+        },
+      ]),
+    ),
+    modelGateways: config.modelGateways ?? {},
+    visionFallbackModel: config.visionFallbackModel ?? null,
+    metadataGeneration: {
+      providers: config.metadataGeneration?.providers ?? [],
+    },
+    autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
+    appendSystemPrompt: config.appendSystemPrompt ?? "",
+    skills: config.skills ?? {
+      global: { disabledSkillNames: [] },
+      providers: {},
+      agents: {},
+      installedSources: {},
+    },
+    mcpServers: config.mcpServers ?? {
+      servers: {},
+      global: { disabledServerNames: [] },
+      providers: {},
+      agents: {},
+    },
+  };
+}
+
 export async function createChisaCodeDaemon(
   config: ChisaCodeDaemonConfig,
   rootLogger: Logger,
@@ -543,36 +578,7 @@ export async function createChisaCodeDaemon(
   const daemonVersion = resolveDaemonVersion(import.meta.url);
   const daemonConfigStore = new DaemonConfigStore(
     config.chisacodeHome,
-    {
-      mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
-      providers: Object.fromEntries(
-        Object.entries(config.providerOverrides ?? {}).map(([providerId, override]) => [
-          providerId,
-          {
-            ...(override.enabled !== undefined ? { enabled: override.enabled } : {}),
-            ...(override.additionalModels ? { additionalModels: override.additionalModels } : {}),
-          },
-        ]),
-      ),
-      modelGateways: config.modelGateways ?? {},
-      metadataGeneration: {
-        providers: config.metadataGeneration?.providers ?? [],
-      },
-      autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
-      appendSystemPrompt: config.appendSystemPrompt ?? "",
-      skills: config.skills ?? {
-        global: { disabledSkillNames: [] },
-        providers: {},
-        agents: {},
-        installedSources: {},
-      },
-      mcpServers: config.mcpServers ?? {
-        servers: {},
-        global: { disabledServerNames: [] },
-        providers: {},
-        agents: {},
-      },
-    },
+    buildInitialMutableDaemonConfig(config),
     logger,
   );
 

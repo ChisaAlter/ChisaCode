@@ -836,6 +836,228 @@ function gatewayProviderOverride(params: {
   };
 }
 
+/**
+ * Resolves which agent faces a gateway should materialize.
+ * Legacy gateways without protocolPreset keep full attachment (all faces).
+ */
+export function resolveGatewayAgentFaces(gateway: {
+  protocolPreset?: "claude" | "codex" | "openai" | "all";
+  attachToAllAgents?: boolean;
+  upstreams?: {
+    anthropic?: { enabled?: boolean };
+    chatCompletions?: { enabled?: boolean };
+    responses?: { enabled?: boolean };
+  };
+}): {
+  claude: boolean;
+  codex: boolean;
+  opencode: boolean;
+  mimocode: boolean;
+  pi: boolean;
+  kimi: boolean;
+} {
+  if (gateway.attachToAllAgents === true || gateway.protocolPreset === "all") {
+    return {
+      claude: true,
+      codex: true,
+      opencode: true,
+      mimocode: true,
+      pi: true,
+      kimi: true,
+    };
+  }
+
+  const preset = gateway.protocolPreset;
+  if (preset === "claude") {
+    return {
+      claude: true,
+      codex: false,
+      opencode: false,
+      mimocode: false,
+      pi: false,
+      kimi: false,
+    };
+  }
+  if (preset === "codex") {
+    return {
+      claude: false,
+      codex: true,
+      opencode: false,
+      mimocode: false,
+      pi: false,
+      kimi: false,
+    };
+  }
+  if (preset === "openai") {
+    return {
+      claude: false,
+      codex: false,
+      opencode: true,
+      mimocode: true,
+      pi: true,
+      kimi: true,
+    };
+  }
+
+  // Legacy: no preset → keep previous behavior (all faces).
+  // If only one upstream is enabled we can still infer a narrow set for cleaner pickers.
+  const anthropic = gateway.upstreams?.anthropic?.enabled === true;
+  const chat = gateway.upstreams?.chatCompletions?.enabled === true;
+  const responses = gateway.upstreams?.responses?.enabled === true;
+  const enabledCount = Number(anthropic) + Number(chat) + Number(responses);
+  if (enabledCount === 1) {
+    if (anthropic) {
+      return {
+        claude: true,
+        codex: false,
+        opencode: false,
+        mimocode: false,
+        pi: false,
+        kimi: false,
+      };
+    }
+    if (responses) {
+      return {
+        claude: false,
+        codex: true,
+        opencode: false,
+        mimocode: false,
+        pi: false,
+        kimi: false,
+      };
+    }
+    if (chat) {
+      return {
+        claude: false,
+        codex: false,
+        opencode: true,
+        mimocode: true,
+        pi: true,
+        kimi: true,
+      };
+    }
+  }
+
+  return {
+    claude: true,
+    codex: true,
+    opencode: true,
+    mimocode: true,
+    pi: true,
+    kimi: true,
+  };
+}
+
+function registerGatewayFaceOverride(params: {
+  gatewayOverrides: Record<string, ProviderOverride>;
+  modelGatewayIds: Map<string, string>;
+  gateway: ModelGatewayConfig;
+  face: "claude" | "codex" | "opencode" | "mimocode" | "pi" | "kimi";
+  extendsProvider: string;
+  labelSuffix: string;
+  baseUrl: string;
+  token: string;
+  models: ProviderProfileModel[];
+}): void {
+  const providerId = `${params.gateway.id}-${params.face}`;
+  params.gatewayOverrides[providerId] = gatewayProviderOverride({
+    gateway: params.gateway,
+    extendsProvider: params.extendsProvider,
+    label: `${params.gateway.label} ${params.labelSuffix}`,
+    baseUrl: params.baseUrl,
+    token: params.token,
+    models: params.models,
+  });
+  params.modelGatewayIds.set(providerId, params.gateway.id);
+}
+
+function materializeGatewayProviderOverrides(
+  gateway: ModelGatewayConfig,
+  baseUrl: string,
+  token: string,
+  gatewayOverrides: Record<string, ProviderOverride>,
+  modelGatewayIds: Map<string, string>,
+): void {
+  const faces = resolveGatewayAgentFaces(gateway);
+  const models = buildAllGatewayProviderModels(gateway);
+  const nativeXiaomi = resolveNativeXiaomiGatewayEnv(gateway);
+  const openaiPrefix = nativeXiaomi?.modelPrefix ?? "openai";
+  const shared = {
+    gatewayOverrides,
+    modelGatewayIds,
+    gateway,
+    baseUrl,
+    token,
+  };
+
+  if (faces.claude) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "claude",
+      extendsProvider: "claude",
+      labelSuffix: "Claude",
+      models,
+    });
+  }
+  if (faces.codex) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "codex",
+      extendsProvider: "codex",
+      labelSuffix: "Codex",
+      models,
+    });
+  }
+  if (faces.opencode) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "opencode",
+      extendsProvider: "opencode",
+      labelSuffix: "OpenCode",
+      models: buildAllGatewayProviderModels(gateway, {
+        modelPrefix: openaiPrefix,
+        models: gateway.generatedModels?.opencode,
+      }),
+    });
+  }
+  if (faces.mimocode) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "mimocode",
+      extendsProvider: "mimocode",
+      labelSuffix: "MiMoCode",
+      models: buildAllGatewayProviderModels(gateway, {
+        modelPrefix: openaiPrefix,
+        models: gateway.generatedModels?.mimocode,
+      }),
+    });
+  }
+  if (faces.pi) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "pi",
+      extendsProvider: "pi",
+      labelSuffix: "Pi",
+      models: buildAllGatewayProviderModels(gateway, {
+        modelPrefix: openaiPrefix,
+        models: gateway.generatedModels?.pi,
+      }),
+    });
+  }
+  if (faces.kimi) {
+    registerGatewayFaceOverride({
+      ...shared,
+      face: "kimi",
+      extendsProvider: "kimi",
+      labelSuffix: "Kimi Code",
+      models: buildAllGatewayProviderModels(gateway, {
+        models: gateway.generatedModels?.kimi,
+        supportsTools: nativeXiaomi ? false : undefined,
+      }),
+    });
+  }
+}
+
 function addResolvedModelGatewayProviders(
   resolvedProviders: Map<string, ResolvedProvider>,
   modelGateways: ModelGatewayConfigs | undefined,
@@ -854,79 +1076,7 @@ function addResolvedModelGatewayProviders(
   const gatewayOverrides: Record<string, ProviderOverride> = {};
   const modelGatewayIds = new Map<string, string>();
   for (const gateway of Object.values(modelGateways ?? {})) {
-    const gatewayId = gateway.id;
-    const models = buildAllGatewayProviderModels(gateway);
-    const nativeXiaomi = resolveNativeXiaomiGatewayEnv(gateway);
-    const opencodeProviderModels = buildAllGatewayProviderModels(gateway, {
-      modelPrefix: nativeXiaomi?.modelPrefix ?? "openai",
-      models: gateway.generatedModels?.opencode,
-    });
-    const mimocodeProviderModels = buildAllGatewayProviderModels(gateway, {
-      modelPrefix: nativeXiaomi?.modelPrefix ?? "openai",
-      models: gateway.generatedModels?.mimocode,
-    });
-    const piProviderModels = buildAllGatewayProviderModels(gateway, {
-      modelPrefix: nativeXiaomi?.modelPrefix ?? "openai",
-      models: gateway.generatedModels?.pi,
-    });
-    const kimiProviderModels = buildAllGatewayProviderModels(gateway, {
-      models: gateway.generatedModels?.kimi,
-      supportsTools: nativeXiaomi ? false : undefined,
-    });
-    gatewayOverrides[`${gatewayId}-claude`] = gatewayProviderOverride({
-      gateway,
-      extendsProvider: "claude",
-      label: `${gateway.label} Claude`,
-      baseUrl,
-      token,
-      models,
-    });
-    modelGatewayIds.set(`${gatewayId}-claude`, gatewayId);
-    gatewayOverrides[`${gatewayId}-codex`] = gatewayProviderOverride({
-      gateway,
-      extendsProvider: "codex",
-      label: `${gateway.label} Codex`,
-      baseUrl,
-      token,
-      models,
-    });
-    modelGatewayIds.set(`${gatewayId}-codex`, gatewayId);
-    gatewayOverrides[`${gatewayId}-opencode`] = gatewayProviderOverride({
-      gateway,
-      extendsProvider: "opencode",
-      label: `${gateway.label} OpenCode`,
-      baseUrl,
-      token,
-      models: opencodeProviderModels,
-    });
-    modelGatewayIds.set(`${gatewayId}-opencode`, gatewayId);
-    gatewayOverrides[`${gatewayId}-mimocode`] = gatewayProviderOverride({
-      gateway,
-      extendsProvider: "mimocode",
-      label: `${gateway.label} MiMoCode`,
-      baseUrl,
-      token,
-      models: mimocodeProviderModels,
-    });
-    modelGatewayIds.set(`${gatewayId}-mimocode`, gatewayId);
-    gatewayOverrides[`${gatewayId}-pi`] = gatewayProviderOverride({
-      gateway,
-      extendsProvider: "pi",
-      label: `${gateway.label} Pi`,
-      baseUrl,
-      token,
-      models: piProviderModels,
-    });
-    modelGatewayIds.set(`${gatewayId}-pi`, gatewayId);
-    gatewayOverrides[`${gatewayId}-kimi`] = gatewayProviderOverride({
-      gateway,
-      extendsProvider: "kimi",
-      label: `${gateway.label} Kimi Code`,
-      baseUrl,
-      token,
-      models: kimiProviderModels,
-    });
-    modelGatewayIds.set(`${gatewayId}-kimi`, gatewayId);
+    materializeGatewayProviderOverrides(gateway, baseUrl, token, gatewayOverrides, modelGatewayIds);
   }
 
   addResolvedCustomProviders(resolvedProviders, gatewayOverrides, runtimeSettings, {

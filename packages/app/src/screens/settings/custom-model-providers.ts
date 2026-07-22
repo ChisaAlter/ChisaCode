@@ -1,4 +1,7 @@
-import type { ProviderProfileModel } from "@chisacode/protocol/provider-config";
+import type {
+  ModelGatewayProtocolPreset,
+  ProviderProfileModel,
+} from "@chisacode/protocol/provider-config";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@chisacode/protocol/messages";
 
 type ProviderConfig = MutableDaemonConfig["providers"][string];
@@ -6,6 +9,17 @@ type ModelGatewayConfig = NonNullable<MutableDaemonConfig["modelGateways"]>[stri
 type ModelGatewayPatch = NonNullable<MutableDaemonConfigPatch["modelGateways"]>[string];
 
 export type CustomOpenAIWireApi = "responses" | "chat";
+
+/** User-facing protocol preset when adding a custom model (excludes legacy "all"). */
+export type CustomModelProtocolPreset = "claude" | "codex" | "openai";
+
+/**
+ * Thinking intensity presets for custom models.
+ * - off: no thinkingOptions
+ * - single: one toggle option (mapped to medium effort for Codex)
+ * - levels: low/medium/high multi-level (Codex/Claude friendly)
+ */
+export type CustomModelThinkingMode = "off" | "single" | "levels";
 
 export interface CustomModelProviderEndpoint {
   enabled: boolean;
@@ -24,6 +38,9 @@ export interface CustomModelProviderModelInput {
   supportsImages?: boolean;
   supportsTools?: boolean;
   supportsThinking?: boolean;
+  /** Explicit thinking options; when set, overrides supportsThinking boolean. */
+  thinkingOptions?: Array<{ id: string; label: string; isDefault?: boolean }>;
+  thinkingMode?: CustomModelThinkingMode;
 }
 
 export interface CollectedSavedModel {
@@ -36,6 +53,9 @@ export interface CollectedSavedModel {
   supportsImages?: boolean;
   supportsTools?: boolean;
   supportsThinking?: boolean;
+  thinkingMode?: CustomModelThinkingMode;
+  protocolPreset?: CustomModelProtocolPreset | "all";
+  attachToAllAgents?: boolean;
   providerIds: string[];
   baseUrl?: string;
 }
@@ -53,8 +73,17 @@ export interface SaveOpenAiCompatibleModelInput {
   contextWindowMaxTokens?: number;
   supportsImages?: boolean;
   supportsTools?: boolean;
+  /** @deprecated Prefer thinkingMode */
   supportsThinking?: boolean;
-  /** When true, use the advanced multi-endpoint fields below instead of simple OpenAI-only. */
+  thinkingMode?: CustomModelThinkingMode;
+  /** Primary protocol preset. Defaults to openai when omitted. */
+  protocolPreset?: CustomModelProtocolPreset;
+  /**
+   * When true, materialize all agent faces (gateway conversion).
+   * Defaults false for new models with a single preset.
+   */
+  attachToAllAgents?: boolean;
+  /** When true, use the advanced multi-endpoint fields below instead of simple single-protocol. */
   customProtocol?: boolean;
   anthropic?: CustomModelProviderEndpoint;
   openai?: CustomModelProviderOpenAIEndpoint;
@@ -76,6 +105,8 @@ export interface SaveCustomModelProviderInput {
   anthropic: CustomModelProviderEndpoint;
   openai: CustomModelProviderOpenAIEndpoint;
   responses: CustomModelProviderEndpoint;
+  protocolPreset?: ModelGatewayProtocolPreset;
+  attachToAllAgents?: boolean;
 }
 
 export interface CollectedCustomModelProvider {
@@ -165,9 +196,15 @@ export function buildModelGatewayProviderIds(id: string): {
   };
 }
 
-export function buildModelGatewayProviderIdList(id: string): string[] {
+export function buildModelGatewayProviderIdList(
+  id: string,
+  options?: {
+    protocolPreset?: ModelGatewayProtocolPreset | CustomModelProtocolPreset | null;
+    attachToAllAgents?: boolean;
+  },
+): string[] {
   const ids = buildModelGatewayProviderIds(id);
-  return [
+  const all = [
     ids.claudeProviderId,
     ids.codexProviderId,
     ids.opencodeProviderId,
@@ -175,6 +212,80 @@ export function buildModelGatewayProviderIdList(id: string): string[] {
     ids.piProviderId,
     ids.kimiProviderId,
   ];
+  if (options?.attachToAllAgents === true || options?.protocolPreset === "all") {
+    return all;
+  }
+  if (options?.protocolPreset === "claude") {
+    return [ids.claudeProviderId];
+  }
+  if (options?.protocolPreset === "codex") {
+    return [ids.codexProviderId];
+  }
+  if (options?.protocolPreset === "openai") {
+    return [ids.opencodeProviderId, ids.mimocodeProviderId, ids.piProviderId, ids.kimiProviderId];
+  }
+  return all;
+}
+
+/** Codex/Claude-friendly multi-level thinking options. */
+export const CUSTOM_MODEL_THINKING_LEVELS = [
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium", isDefault: true },
+  { id: "high", label: "High" },
+] as const;
+
+/** Single on/off thinking option that survives Codex normalize (maps to medium effort). */
+export const CUSTOM_MODEL_THINKING_SINGLE = [
+  { id: "medium", label: "Thinking", isDefault: true },
+] as const;
+
+/**
+ * Infers protocol preset from enabled upstreams when not stored on the gateway.
+ */
+export function inferProtocolPresetFromUpstreams(upstreams: {
+  anthropic?: { enabled?: boolean };
+  chatCompletions?: { enabled?: boolean };
+  responses?: { enabled?: boolean };
+}): ModelGatewayProtocolPreset {
+  const anthropic = upstreams.anthropic?.enabled === true;
+  const chat = upstreams.chatCompletions?.enabled === true;
+  const responses = upstreams.responses?.enabled === true;
+  const count = Number(anthropic) + Number(chat) + Number(responses);
+  if (count === 1) {
+    if (anthropic) return "claude";
+    if (responses) return "codex";
+    if (chat) return "openai";
+  }
+  if (count > 1) return "all";
+  return "openai";
+}
+
+export function resolveThinkingModeFromModel(
+  model: ProviderProfileModel | undefined,
+): CustomModelThinkingMode {
+  const options = model?.thinkingOptions ?? [];
+  if (options.length === 0) {
+    return "off";
+  }
+  const ids = new Set(options.map((option) => option.id));
+  if (options.length >= 3 && ids.has("low") && ids.has("medium") && ids.has("high")) {
+    return "levels";
+  }
+  return "single";
+}
+
+export function buildThinkingOptionsForMode(
+  mode: CustomModelThinkingMode | undefined,
+  supportsThinking?: boolean,
+): Array<{ id: string; label: string; isDefault?: boolean }> | undefined {
+  const resolved: CustomModelThinkingMode = mode ?? (supportsThinking === true ? "single" : "off");
+  if (resolved === "off") {
+    return undefined;
+  }
+  if (resolved === "levels") {
+    return CUSTOM_MODEL_THINKING_LEVELS.slice();
+  }
+  return CUSTOM_MODEL_THINKING_SINGLE.slice();
 }
 
 export function buildCustomModelProviderIds(id: string): {
@@ -220,12 +331,6 @@ function normalizeModelInput(
   return typeof model === "string" ? { id: model } : model;
 }
 
-const DEFAULT_THINKING_OPTION = {
-  id: "default",
-  label: "Thinking",
-  isDefault: true,
-} as const;
-
 function normalizeModels(
   models: Array<string | CustomModelProviderModelInput>,
 ): ProviderProfileModel[] {
@@ -240,13 +345,17 @@ function normalizeModels(
     seen.add(id);
     const label = trim(input.label) || id;
     const contextWindowMaxTokens = normalizePositiveInteger(input.contextWindowMaxTokens);
+    const thinkingOptions =
+      input.thinkingOptions && input.thinkingOptions.length > 0
+        ? input.thinkingOptions
+        : buildThinkingOptionsForMode(input.thinkingMode, input.supportsThinking);
     result.push({
       id,
       label,
       ...(contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {}),
       ...(input.supportsImages === true ? { supportsImages: true } : {}),
       ...(input.supportsTools === true ? { supportsTools: true } : {}),
-      ...(input.supportsThinking === true ? { thinkingOptions: [DEFAULT_THINKING_OPTION] } : {}),
+      ...(thinkingOptions && thinkingOptions.length > 0 ? { thinkingOptions } : {}),
       ...(result.length === 0 ? { isDefault: true } : {}),
     });
   }
@@ -322,13 +431,20 @@ export function collectSavedModels(
       continue;
     }
     const gatewayLabel = gateway.label ?? gateway.id;
-    const providerIds = buildModelGatewayProviderIdList(gateway.id);
+    const protocolPreset =
+      gateway.protocolPreset ?? inferProtocolPresetFromUpstreams(gateway.upstreams ?? {});
+    const attachToAllAgents = gateway.attachToAllAgents === true;
+    const providerIds = buildModelGatewayProviderIdList(gateway.id, {
+      protocolPreset,
+      attachToAllAgents,
+    });
     const baseUrl = pickPrimaryBaseUrl(gateway);
     for (const model of gateway.models ?? []) {
       const modelId = trim(model.id);
       if (!modelId) {
         continue;
       }
+      const thinkingMode = resolveThinkingModeFromModel(model);
       rows.push({
         key: `${gateway.id}:${modelId}`,
         gatewayId: gateway.id,
@@ -341,6 +457,9 @@ export function collectSavedModels(
         ...(model.supportsImages === true ? { supportsImages: true } : {}),
         ...(model.supportsTools === true ? { supportsTools: true } : {}),
         ...(modelHasThinking(model) ? { supportsThinking: true } : {}),
+        thinkingMode,
+        protocolPreset,
+        ...(attachToAllAgents ? { attachToAllAgents: true } : {}),
         providerIds,
         ...(baseUrl ? { baseUrl } : {}),
       });
@@ -368,6 +487,7 @@ function emptyOpenAiEndpoint(): CustomModelProviderOpenAIEndpoint {
 }
 
 function toModelInput(model: ProviderProfileModel): CustomModelProviderModelInput {
+  const thinkingMode = resolveThinkingModeFromModel(model);
   return {
     id: model.id,
     label: model.label,
@@ -375,6 +495,10 @@ function toModelInput(model: ProviderProfileModel): CustomModelProviderModelInpu
     supportsImages: model.supportsImages,
     supportsTools: model.supportsTools,
     supportsThinking: modelHasThinking(model),
+    thinkingMode,
+    ...(model.thinkingOptions && model.thinkingOptions.length > 0
+      ? { thinkingOptions: model.thinkingOptions.map((option) => ({ ...option })) }
+      : {}),
   };
 }
 
@@ -395,6 +519,21 @@ function resolveSimpleOpenAiEndpoints(input: SaveOpenAiCompatibleModelInput): {
   if (!baseUrl || !apiKey) {
     throw new Error("Base URL and API key are required");
   }
+  const preset: CustomModelProtocolPreset = input.protocolPreset ?? "openai";
+  if (preset === "claude") {
+    return {
+      anthropic: { enabled: true, baseUrl, apiKey },
+      openai: emptyOpenAiEndpoint(),
+      responses: emptyEndpoint(),
+    };
+  }
+  if (preset === "codex") {
+    return {
+      anthropic: emptyEndpoint(),
+      openai: emptyOpenAiEndpoint(),
+      responses: { enabled: true, baseUrl, apiKey },
+    };
+  }
   return {
     anthropic: emptyEndpoint(),
     responses: emptyEndpoint(),
@@ -412,6 +551,9 @@ function buildNextModelInput(
   modelId: string,
   modelLabel: string,
 ): CustomModelProviderModelInput {
+  const thinkingMode: CustomModelThinkingMode =
+    input.thinkingMode ?? (input.supportsThinking === true ? "single" : "off");
+  const thinkingOptions = buildThinkingOptionsForMode(thinkingMode);
   return {
     id: modelId,
     label: modelLabel,
@@ -420,7 +562,8 @@ function buildNextModelInput(
       : {}),
     ...(input.supportsImages ? { supportsImages: true } : {}),
     ...(input.supportsTools ? { supportsTools: true } : {}),
-    ...(input.supportsThinking ? { supportsThinking: true } : {}),
+    thinkingMode,
+    ...(thinkingOptions ? { thinkingOptions, supportsThinking: true } : {}),
   };
 }
 
@@ -432,6 +575,57 @@ function endpointFromUpstream(
     baseUrl: upstream?.baseUrl ?? "",
     apiKey: upstream?.apiKey ?? "",
   };
+}
+
+function resolveSaveGatewayIdentity(input: {
+  modelId: string;
+  modelLabel: string;
+  previousModelId: string;
+  gatewayId?: string;
+  currentGateways: NonNullable<MutableDaemonConfig["modelGateways"]>;
+}): {
+  gatewayId: string;
+  gatewayLabel: string;
+  existingGatewayId: string;
+  existingGateway: ModelGatewayConfig | undefined;
+  previousId: string | null;
+} {
+  const existingGatewayId = normalizeSupplierId(input.gatewayId ?? "");
+  const existingGateway = existingGatewayId ? input.currentGateways[existingGatewayId] : undefined;
+  const gatewayId =
+    existingGatewayId && existingGateway
+      ? existingGatewayId
+      : allocateGatewayId(input.modelLabel || input.modelId, input.currentGateways);
+
+  if (!PROVIDER_ID_PATTERN.test(gatewayId)) {
+    throw new Error(
+      "Provider ID must start with a letter and use lowercase letters, numbers, or hyphens",
+    );
+  }
+
+  const gatewayLabel =
+    existingGateway?.label && existingGateway.models && existingGateway.models.length > 1
+      ? existingGateway.label
+      : input.modelLabel;
+
+  return {
+    gatewayId,
+    gatewayLabel,
+    existingGatewayId,
+    existingGateway,
+    previousId: existingGatewayId && existingGatewayId !== gatewayId ? existingGatewayId : null,
+  };
+}
+
+function mergeSavedGatewayModels(
+  existingModels: ProviderProfileModel[] | undefined,
+  previousModelId: string,
+  nextModelInput: CustomModelProviderModelInput,
+): CustomModelProviderModelInput[] {
+  const withoutPrevious = (existingModels ?? [])
+    .filter((model) => model.id !== previousModelId && model.id !== nextModelInput.id)
+    .map(toModelInput);
+  return [...withoutPrevious, nextModelInput];
 }
 
 /**
@@ -449,43 +643,42 @@ export function buildSaveOpenAiCompatibleModelPatch(
   }
   const modelLabel = trim(input.label) || modelId;
   const previousModelId = trim(input.previousModelId) || modelId;
-  const existingGatewayId = normalizeSupplierId(input.gatewayId ?? "");
   const currentGateways = input.currentGateways ?? {};
-  const existingGateway = existingGatewayId ? currentGateways[existingGatewayId] : undefined;
-
-  const gatewayId =
-    existingGatewayId && existingGateway
-      ? existingGatewayId
-      : allocateGatewayId(modelLabel || modelId, currentGateways);
-
-  if (!PROVIDER_ID_PATTERN.test(gatewayId)) {
-    throw new Error(
-      "Provider ID must start with a letter and use lowercase letters, numbers, or hyphens",
-    );
-  }
-
-  const gatewayLabel =
-    existingGateway?.label && existingGateway.models && existingGateway.models.length > 1
-      ? existingGateway.label
-      : modelLabel;
+  const identity = resolveSaveGatewayIdentity({
+    modelId,
+    modelLabel,
+    previousModelId,
+    gatewayId: input.gatewayId,
+    currentGateways,
+  });
 
   const { anthropic, openai, responses } = resolveSimpleOpenAiEndpoints(input);
   const nextModelInput = buildNextModelInput(input, modelId, modelLabel);
-  const existingModels = existingGateway?.models ?? [];
-  const withoutPrevious = existingModels
-    .filter((model) => model.id !== previousModelId && model.id !== modelId)
-    .map(toModelInput);
-  const mergedModels = [...withoutPrevious, nextModelInput];
+  const mergedModels = mergeSavedGatewayModels(
+    identity.existingGateway?.models,
+    previousModelId,
+    nextModelInput,
+  );
+
+  const protocolPreset: ModelGatewayProtocolPreset = input.customProtocol
+    ? inferProtocolPresetFromUpstreams({
+        anthropic,
+        chatCompletions: openai,
+        responses,
+      })
+    : (input.protocolPreset ?? "openai");
 
   return buildSaveCustomModelProviderPatch({
     currentGateways,
-    previousId: existingGatewayId && existingGatewayId !== gatewayId ? existingGatewayId : null,
-    id: gatewayId,
-    label: gatewayLabel,
+    previousId: identity.previousId,
+    id: identity.gatewayId,
+    label: identity.gatewayLabel,
     models: mergedModels,
     anthropic,
     openai,
     responses,
+    protocolPreset,
+    attachToAllAgents: input.attachToAllAgents === true,
   });
 }
 
@@ -521,6 +714,8 @@ export function buildDeleteSavedModelPatch(input: DeleteSavedModelInput): Mutabl
       wireApi: "chat",
     },
     responses: endpointFromUpstream(gateway.upstreams?.responses),
+    protocolPreset: gateway.protocolPreset,
+    attachToAllAgents: gateway.attachToAllAgents === true,
   });
 }
 
@@ -624,11 +819,22 @@ export function buildSaveCustomModelProviderPatch(
   }
 
   const ids = buildModelGatewayProviderIds(id);
+  const protocolPreset: ModelGatewayProtocolPreset =
+    input.protocolPreset ??
+    inferProtocolPresetFromUpstreams({
+      anthropic: input.anthropic,
+      chatCompletions: input.openai,
+      responses: input.responses,
+    });
+  const attachToAllAgents = input.attachToAllAgents === true;
+
   gatewayPatches[id] = {
     id,
     label,
     enabled: true,
     models,
+    protocolPreset,
+    ...(attachToAllAgents ? { attachToAllAgents: true } : {}),
     upstreams: {
       anthropic: normalizeGatewayEndpoint(input.anthropic),
       chatCompletions: normalizeGatewayEndpoint(input.openai),
