@@ -45,7 +45,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
@@ -106,17 +107,14 @@ const DESKTOP_SIDEBAR_ANIMATION_CONFIG = {
 };
 const AnimatedPressable = createAnimatedComponent(Pressable);
 
-type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
-
 interface LeftSidebarProps {
   selectedAgentId?: string;
 }
 
 interface SidebarSharedProps {
-  theme: SidebarTheme;
   activeServerId: string | null;
   activeHostLabel: string;
-  activeHostStatusColor: string;
+  activeHostStatus: "online" | "connecting" | "error" | "idle";
   hostOptions: ComboboxOption[];
   hostTriggerRef: RefObject<View | null>;
   isHostPickerOpen: boolean;
@@ -157,7 +155,6 @@ interface DesktopSidebarProps extends SidebarSharedProps {
 }
 
 export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSidebarProps) {
-  const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isCompactLayout = useIsCompactFormFactor();
   const isOpen = usePanelStore((state) =>
@@ -181,11 +178,11 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
     ? (activeHostSnapshot?.connectionStatus ?? "connecting")
     : "idle";
   const suppressedArchiveAgentIds = useSuppressedArchiveAgentIds(activeServerId ?? "");
-  let activeHostStatusColor: string;
-  if (activeHostStatus === "online") activeHostStatusColor = theme.colors.palette.green[400];
-  else if (activeHostStatus === "connecting")
-    activeHostStatusColor = theme.colors.palette.amber[500];
-  else activeHostStatusColor = theme.colors.palette.red[500];
+  let resolvedHostStatus: "online" | "connecting" | "error" | "idle";
+  if (activeHostStatus === "online") resolvedHostStatus = "online";
+  else if (activeHostStatus === "connecting") resolvedHostStatus = "connecting";
+  else if (activeHostStatus === "idle") resolvedHostStatus = "idle";
+  else resolvedHostStatus = "error";
   const hostOptions = useMemo(
     () =>
       daemons.map((daemon) => ({
@@ -369,10 +366,9 @@ export const LeftSidebar = memo(function LeftSidebar({ selectedAgentId }: LeftSi
   );
 
   const sharedProps = {
-    theme,
     activeServerId,
     activeHostLabel,
-    activeHostStatusColor,
+    activeHostStatus: resolvedHostStatus,
     hostOptions,
     hostTriggerRef,
     isHostPickerOpen,
@@ -488,21 +484,28 @@ function HostSwitchOption({
   );
 }
 
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+
+function footerIconColorMapping(hovered: boolean) {
+  if (hovered) return foregroundColorMapping;
+  return foregroundMutedColorMapping;
+}
+
 function FooterIconButton({
   onPress,
   testID,
   accessibilityLabel,
   icon: Icon,
-  theme,
   variant = "mobile",
 }: {
   onPress: () => void;
   testID: string;
   accessibilityLabel: string;
   icon: LucideIcon;
-  theme: SidebarTheme;
   variant?: "mobile" | "desktop";
 }) {
+  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
   const buttonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.footerIconButton,
@@ -523,10 +526,7 @@ function FooterIconButton({
       onPress={onPress}
     >
       {({ hovered }) => (
-        <Icon
-          size={theme.iconSize.md}
-          color={hovered ? theme.colors.foreground : theme.colors.foregroundMuted}
-        />
+        <ThemedIcon size={ICON_SIZE.md} uniProps={footerIconColorMapping(Boolean(hovered))} />
       )}
     </Pressable>
   );
@@ -597,7 +597,7 @@ function SidebarTopAction({
   onPress: () => void;
   testID: string;
 }) {
-  const { theme } = useUnistyles();
+  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
   const actionStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.sidebarTopAction,
@@ -614,14 +614,14 @@ function SidebarTopAction({
       style={actionStyle}
       testID={testID}
     >
-      {({ hovered, pressed }) => {
-        const color = hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted;
-        return (
-          <View style={styles.sidebarTopActionIconSlot}>
-            <Icon size={theme.iconSize.sm} color={color} />
-          </View>
-        );
-      }}
+      {({ hovered, pressed }) => (
+        <View style={styles.sidebarTopActionIconSlot}>
+          <ThemedIcon
+            size={ICON_SIZE.sm}
+            uniProps={footerIconColorMapping(Boolean(hovered) || Boolean(pressed))}
+          />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -659,7 +659,6 @@ function SidebarPrimaryAction({
 }
 
 function SidebarFooter({
-  theme,
   activeServerId,
   activeHostLabel,
   hostStatusDotStyle,
@@ -674,7 +673,6 @@ function SidebarFooter({
   handleSettings,
   variant = "mobile",
 }: {
-  theme: SidebarTheme;
   activeServerId: string | null;
   activeHostLabel: string;
   hostStatusDotStyle: StyleProp<ViewStyle>;
@@ -720,7 +718,6 @@ function SidebarFooter({
           testID="sidebar-open-project"
           accessibilityLabel={t("sidebar.addProject")}
           icon={FolderOpen}
-          theme={theme}
           variant={variant}
         />
         <FooterIconButton
@@ -728,7 +725,6 @@ function SidebarFooter({
           testID="sidebar-home"
           accessibilityLabel={t("sidebar.home")}
           icon={House}
-          theme={theme}
           variant={variant}
         />
         <FooterIconButton
@@ -736,7 +732,6 @@ function SidebarFooter({
           testID="sidebar-settings"
           accessibilityLabel={t("sidebar.settings")}
           icon={Settings}
-          theme={theme}
           variant={variant}
         />
       </View>
@@ -760,7 +755,6 @@ function SidebarFooter({
 function MobileSidebarQuickActions({
   agent,
   buttons,
-  theme,
   onOpenAgent,
   onViewChanges,
   onOpenTerminal,
@@ -769,7 +763,6 @@ function MobileSidebarQuickActions({
 }: {
   agent: SidebarSharedProps["agents"][number] | null;
   buttons: MobileSidebarQuickActionButtonModel[];
-  theme: SidebarTheme;
   onOpenAgent: () => void;
   onViewChanges: () => void;
   onOpenTerminal: () => void;
@@ -846,7 +839,6 @@ function MobileSidebarQuickActions({
               label={action.label}
               accessibilityLabel={action.accessibilityLabel}
               testID={action.testID}
-              theme={theme}
               variant={button.variant}
               onPress={action.onPress}
             />
@@ -862,7 +854,6 @@ function MobileQuickActionButton({
   label,
   accessibilityLabel,
   testID,
-  theme,
   variant = "secondary",
   onPress,
 }: {
@@ -870,16 +861,18 @@ function MobileQuickActionButton({
   label: string;
   accessibilityLabel?: string;
   testID: string;
-  theme: SidebarTheme;
   variant?: "primary" | "secondary";
   onPress: () => void;
 }) {
-  const resolveIconColor = useCallback(
-    (hovered?: boolean, pressed?: boolean) =>
-      variant === "primary" || hovered || pressed
-        ? theme.colors.foreground
-        : theme.colors.foregroundMuted,
-    [theme.colors.foreground, theme.colors.foregroundMuted, variant],
+  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
+  const resolveIconColorMapping = useCallback(
+    (hovered?: boolean, pressed?: boolean) => {
+      if (variant === "primary" || hovered || pressed) {
+        return foregroundColorMapping;
+      }
+      return foregroundMutedColorMapping;
+    },
+    [variant],
   );
   const buttonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -909,7 +902,7 @@ function MobileQuickActionButton({
       {({ hovered, pressed }) => (
         <>
           <View style={styles.mobileQuickActionIcon}>
-            <Icon size={theme.iconSize.sm} color={resolveIconColor(hovered, pressed)} />
+            <ThemedIcon size={ICON_SIZE.sm} uniProps={resolveIconColorMapping(hovered, pressed)} />
           </View>
           <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
             {label}
@@ -921,10 +914,9 @@ function MobileQuickActionButton({
 }
 
 function MobileSidebar({
-  theme,
   activeServerId,
   activeHostLabel,
-  activeHostStatusColor,
+  activeHostStatus,
   hostOptions,
   hostTriggerRef,
   isHostPickerOpen,
@@ -1156,10 +1148,13 @@ function MobileSidebar({
     [mobileSidebarWidth, insetsTop, insetsBottom],
   );
 
-  const hostStatusDotStyle = useMemo(
-    () => [styles.hostStatusDot, { backgroundColor: activeHostStatusColor }],
-    [activeHostStatusColor],
-  );
+  const hostStatusDotStyle = useMemo(() => {
+    if (activeHostStatus === "online") return [styles.hostStatusDot, styles.hostStatusDotOnline];
+    if (activeHostStatus === "connecting")
+      return [styles.hostStatusDot, styles.hostStatusDotConnecting];
+    if (activeHostStatus === "idle") return [styles.hostStatusDot, styles.hostStatusDotIdle];
+    return [styles.hostStatusDot, styles.hostStatusDotError];
+  }, [activeHostStatus]);
 
   const sidebarAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -1183,11 +1178,11 @@ function MobileSidebar({
   const mobileSidebarStyle = useMemo(
     () => [
       staticStyles.mobileSidebar,
+      styles.mobileSidebarSurface,
       mobileSidebarInsetStyle,
       sidebarAnimatedStyle,
-      { backgroundColor: theme.colors.surfaceSidebar },
     ],
-    [mobileSidebarInsetStyle, sidebarAnimatedStyle, theme.colors.surfaceSidebar],
+    [mobileSidebarInsetStyle, sidebarAnimatedStyle],
   );
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={overlayPointerEvents}>
@@ -1213,7 +1208,6 @@ function MobileSidebar({
             <MobileSidebarQuickActions
               agent={quickActionAgent}
               buttons={quickActionButtons}
-              theme={theme}
               onOpenAgent={handleOpenQuickAgent}
               onViewChanges={handleViewQuickChanges}
               onOpenTerminal={handleOpenQuickTerminal}
@@ -1239,7 +1233,6 @@ function MobileSidebar({
             )}
 
             <SidebarFooter
-              theme={theme}
               activeServerId={activeServerId}
               activeHostLabel={activeHostLabel}
               hostStatusDotStyle={hostStatusDotStyle}
@@ -1261,10 +1254,9 @@ function MobileSidebar({
 }
 
 function DesktopSidebar({
-  theme,
   activeServerId,
   activeHostLabel,
-  activeHostStatusColor,
+  activeHostStatus,
   hostOptions,
   hostTriggerRef,
   isHostPickerOpen,
@@ -1304,10 +1296,13 @@ function DesktopSidebar({
   );
   const desktopSidebarWidth = desktopSidebarResizeState.width;
   const desktopSidebarMaxWidth = desktopSidebarResizeState.maxWidth;
-  const hostStatusDotStyle = useMemo(
-    () => [styles.hostStatusDot, { backgroundColor: activeHostStatusColor }],
-    [activeHostStatusColor],
-  );
+  const hostStatusDotStyle = useMemo(() => {
+    if (activeHostStatus === "online") return [styles.hostStatusDot, styles.hostStatusDotOnline];
+    if (activeHostStatus === "connecting")
+      return [styles.hostStatusDot, styles.hostStatusDotConnecting];
+    if (activeHostStatus === "idle") return [styles.hostStatusDot, styles.hostStatusDotIdle];
+    return [styles.hostStatusDot, styles.hostStatusDotError];
+  }, [activeHostStatus]);
 
   const startWidthRef = useRef(desktopSidebarWidth);
   const resizeWidth = useSharedValue(desktopSidebarWidth);
@@ -1397,7 +1392,6 @@ function DesktopSidebar({
         )}
 
         <SidebarFooter
-          theme={theme}
           activeServerId={activeServerId}
           activeHostLabel={activeHostLabel}
           hostStatusDotStyle={hostStatusDotStyle}
@@ -1684,6 +1678,22 @@ const styles = StyleSheet.create((theme) => ({
     width: 8,
     height: 8,
     borderRadius: theme.borderRadius.full,
+  },
+  hostStatusDotOnline: {
+    backgroundColor: theme.colors.palette.green[400],
+  },
+  hostStatusDotConnecting: {
+    backgroundColor: theme.colors.palette.amber[500],
+  },
+  hostStatusDotIdle: {
+    backgroundColor: theme.colors.palette.red[500],
+  },
+  hostStatusDotError: {
+    backgroundColor: theme.colors.palette.red[500],
+  },
+  // Soft .drawer: --nav surface for the animated mobile shell.
+  mobileSidebarSurface: {
+    backgroundColor: theme.colors.surfaceSidebar,
   },
   // Soft .host .lbl: 12.5px.
   hostTriggerText: {

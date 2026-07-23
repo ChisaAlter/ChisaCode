@@ -2,9 +2,13 @@ import { isLanguageSupported, type HighlightToken } from "@chisacode/highlight";
 import { extensionFromPath, tokenizeToLines } from "@/utils/highlight-cache";
 import type { DiffLine } from "@/utils/tool-call-parsers";
 
-// The leading diff marker glyph for a line. The code on the line is the content
-// with this prefix removed; we render the glyph separately so token colors
-// apply only to the code.
+/**
+ * Leading diff marker glyph for a line.
+ * The code on the line is the content with this prefix removed; we render the
+ * glyph separately so token colors apply only to the code.
+ * @param line Diff line whose type determines the marker
+ * @returns `+`, `-`, space for context, or empty for headers
+ */
 export function diffLinePrefix(line: DiffLine): string {
   switch (line.type) {
     case "add":
@@ -29,14 +33,19 @@ function diffLineCode(line: DiffLine): string {
   return content;
 }
 
-// Attach syntax-highlight tokens to each diff line. Language comes from the file
-// path (extension only). We reconstruct the old and new document text from the
-// diff lines by position — counting context/remove into "old" and context/add
-// into "new" — so this works regardless of whether the source diff carried real
-// `@@ -n,m +n,m @@` line ranges (Codex emits bare `@@`). Each document is
-// highlighted as a whole so the parser has cross-line context (multi-line
-// strings, template literals, comments). Returns the input unchanged when the
-// language is unsupported or the content exceeds the highlighter size cap.
+/**
+ * Attach syntax-highlight tokens to each diff line. Language comes from the file
+ * path (extension only). We reconstruct the old and new document text from the
+ * diff lines by position — counting context/remove into "old" and context/add
+ * into "new" — so this works regardless of whether the source diff carried real
+ * `@@ -n,m +n,m @@` line ranges (Codex emits bare `@@`). Each document is
+ * highlighted as a whole so the parser has cross-line context (multi-line
+ * strings, template literals, comments). Returns the input unchanged when the
+ * language is unsupported or the content exceeds the highlighter size cap.
+ * @param diffLines Parsed diff lines to highlight
+ * @param filePath Path used only for language/extension detection
+ * @returns Diff lines with tokens attached when highlighting succeeds
+ */
 export function highlightDiffLines(
   diffLines: DiffLine[],
   filePath: string | null | undefined,

@@ -1,6 +1,11 @@
 import type { Theme } from "@/styles/theme";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 
+/**
+ * Resolves the status-dot color for a sidebar state bucket
+ * @param input Theme tokens, status bucket, and optional inactive-done treatment
+ * @returns Theme color string, or null when no dot should be shown
+ */
 export function getStatusDotColor(input: {
   theme: Theme;
   bucket: SidebarStateBucket;
@@ -26,6 +31,11 @@ export function getStatusDotColor(input: {
   return null;
 }
 
+/**
+ * Whether a status-dot bucket should use emphasized/high-attention styling
+ * @param bucket Sidebar status bucket, if any
+ * @returns True for needs_input and attention buckets
+ */
 export function isEmphasizedStatusDotBucket(
   bucket: SidebarStateBucket | null | undefined,
 ): boolean {

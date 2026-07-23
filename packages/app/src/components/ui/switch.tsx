@@ -13,8 +13,9 @@ import Animated, {
   useDerivedValue,
   withTiming,
 } from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SETTINGS_SWITCH_HEIGHT, SETTINGS_SWITCH_WIDTH } from "@/constants/layout";
+import type { Theme } from "@/styles/theme";
 
 interface SwitchProps {
   value: boolean;
@@ -25,20 +26,35 @@ interface SwitchProps {
   style?: StyleProp<ViewStyle>;
 }
 
+interface SwitchViewProps extends SwitchProps {
+  trackOff: string;
+  trackOn: string;
+  thumbColor: string;
+}
+
 const TRACK = { width: SETTINGS_SWITCH_WIDTH, height: SETTINGS_SWITCH_HEIGHT };
 const THUMB = 20;
 
 const TIMING = { duration: 180, easing: Easing.inOut(Easing.ease) };
 
-export function Switch({
+const switchColorMapping = (theme: Theme) => ({
+  // Soft .toggle off: --active surface3; on: accent.
+  trackOff: theme.colors.surface3,
+  trackOn: theme.colors.accent,
+  thumbColor: theme.colors.palette.white,
+});
+
+function SwitchView({
   value,
   onValueChange,
   disabled = false,
   accessibilityLabel,
   testID,
   style,
-}: SwitchProps) {
-  const { theme } = useUnistyles();
+  trackOff,
+  trackOn,
+  thumbColor,
+}: SwitchViewProps) {
   const track = TRACK;
   const thumb = THUMB;
   const padding = (track.height - thumb) / 2;
@@ -47,17 +63,8 @@ export function Switch({
   const progress = useDerivedValue(() => withTiming(value ? 1 : 0, TIMING));
 
   const trackAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      // Soft .toggle off: --active surface3; on: accent.
-      [theme.colors.surface3, theme.colors.accent],
-    ),
-    borderColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      [theme.colors.surface3, theme.colors.accent],
-    ),
+    backgroundColor: interpolateColor(progress.value, [0, 1], [trackOff, trackOn]),
+    borderColor: interpolateColor(progress.value, [0, 1], [trackOff, trackOn]),
   }));
 
   const thumbAnimatedStyle = useAnimatedStyle(() => ({
@@ -98,11 +105,11 @@ export function Switch({
         width: thumb,
         height: thumb,
         borderRadius: thumb / 2,
-        backgroundColor: theme.colors.palette.white,
+        backgroundColor: thumbColor,
       },
       thumbAnimatedStyle,
     ],
-    [theme.colors.palette.white, thumb, thumbAnimatedStyle],
+    [thumbColor, thumb, thumbAnimatedStyle],
   );
 
   return (
@@ -122,6 +129,12 @@ export function Switch({
       </Animated.View>
     </Pressable>
   );
+}
+
+const ThemedSwitchView = withUnistyles(SwitchView);
+
+export function Switch(props: SwitchProps) {
+  return <ThemedSwitchView {...props} uniProps={switchColorMapping} />;
 }
 
 const styles = StyleSheet.create((theme) => ({

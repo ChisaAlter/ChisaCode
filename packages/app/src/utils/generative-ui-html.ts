@@ -47,6 +47,12 @@ interface GenerativeHtmlFence {
   language: string;
 }
 
+/**
+ * Whether a markdown fence should render as generative HTML UI
+ * @param info Fence language info string from the markdown parser
+ * @param content Fence body text checked for HTML tags
+ * @returns True when the fence language is HTML and the body looks like markup
+ */
 export function isGenerativeHtmlFence(info: string | null | undefined, content: string): boolean {
   const language = getFenceLanguage(info);
   if (!language || !HTML_LANGUAGE_IDS.has(language)) {
@@ -56,6 +62,12 @@ export function isGenerativeHtmlFence(info: string | null | undefined, content: 
   return HTML_TAG_PATTERN.test(content);
 }
 
+/**
+ * Extracts a generative HTML fence payload when the fence qualifies as HTML UI
+ * @param info Fence language info string from the markdown parser
+ * @param content Fence body text
+ * @returns Trimmed HTML and language, or null when the fence is not generative HTML
+ */
 export function getGenerativeHtmlFence(
   info: string | null | undefined,
   content: string,
@@ -70,6 +82,12 @@ export function getGenerativeHtmlFence(
   };
 }
 
+/**
+ * Builds a sandboxed HTML document for generative UI iframe rendering
+ * @param html Fragment or full HTML document from model output
+ * @param options Optional CSP overrides such as allowing inline scripts
+ * @returns Full HTML document string with CSP meta and base styles when needed
+ */
 export function buildGenerativeHtmlDocument(
   html: string,
   options?: BuildGenerativeHtmlDocumentOptions,

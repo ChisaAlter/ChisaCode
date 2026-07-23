@@ -1,4 +1,5 @@
 import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import {
   AdaptiveModalSheet,
@@ -16,7 +17,6 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import * as Clipboard from "expo-clipboard";
 import { isWeb } from "@/constants/platform";
 import { Fonts } from "@/constants/theme";
@@ -37,6 +37,29 @@ import type {
   ProviderSnapshotEntry,
 } from "@chisacode/protocol/agent-types";
 import type { ProviderProfileModel } from "@chisacode/protocol/provider-config";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+const ThemedTrash2 = withUnistyles(Trash2);
+const ThemedCopy = withUnistyles(Copy);
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedAlertTriangle = withUnistyles(AlertTriangle);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+const destructiveSmIconMapping = (theme: Theme) => ({
+  color: theme.colors.destructive,
+  size: ICON_SIZE.sm,
+});
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const mutedSmIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: ICON_SIZE.sm,
+});
+const mutedMdIconMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: ICON_SIZE.md,
+});
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -83,7 +106,6 @@ function CustomModelRow({
   deleting: boolean;
   onDelete: (modelId: string) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const handleDelete = useCallback(() => onDelete(model.id), [model.id, onDelete]);
   const deleteButtonStyle = useCallback(
@@ -112,7 +134,7 @@ function CustomModelRow({
         accessibilityRole="button"
         accessibilityLabel={t("providerDiagnostics.removeModel", { model: model.id })}
       >
-        <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
+        <ThemedTrash2 uniProps={destructiveSmIconMapping} />
       </Pressable>
     </View>
   );
@@ -226,7 +248,6 @@ function AddCustomModelSubSheet({
   onClose: () => void;
   refresh: (providers?: AgentProvider[]) => Promise<void>;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [input, setInput] = useState("");
@@ -288,7 +309,6 @@ function AddCustomModelSubSheet({
           onChangeText={setInput}
           onSubmitEditing={handleAdd}
           placeholder="e.g. openai/gpt-5"
-          placeholderTextColor={theme.colors.foregroundMuted}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="done"
@@ -320,7 +340,6 @@ function DiagnosticSubSheet({
   visible: boolean;
   onClose: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
@@ -378,7 +397,7 @@ function DiagnosticSubSheet({
             accessibilityRole="button"
             accessibilityLabel={t("providerDiagnostics.copyDiagnostic")}
           >
-            <Copy size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            <ThemedCopy uniProps={mutedSmIconMapping} />
           </Pressable>
           <Pressable
             onPress={handleRefreshPress}
@@ -393,31 +412,22 @@ function DiagnosticSubSheet({
             }
           >
             {loading ? (
-              <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedActivityIndicator size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
             ) : (
-              <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedRotateCw uniProps={mutedSmIconMapping} />
             )}
           </Pressable>
         </>
       ),
     }),
-    [
-      handleCopyPress,
-      handleRefreshPress,
-      loading,
-      diagnostic,
-      refreshButtonStyle,
-      t,
-      theme.colors.foregroundMuted,
-      theme.iconSize.sm,
-    ],
+    [handleCopyPress, handleRefreshPress, loading, diagnostic, refreshButtonStyle, t],
   );
 
   let body: React.ReactNode;
   if (loading && !diagnostic) {
     body = (
       <View style={sheetStyles.codeBlockLoading}>
-        <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+        <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
         <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.loadingDiagnostic")}</Text>
       </View>
     );
@@ -464,7 +474,6 @@ interface ProviderModalBodyProps {
   deletingModelId: string | null;
   onRefresh: () => void;
   onDeleteCustom: (modelId: string) => void;
-  theme: { iconSize: { md: number }; colors: { foregroundMuted: string } };
 }
 
 function ProviderModalBody(props: ProviderModalBodyProps) {
@@ -481,13 +490,12 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
     deletingModelId,
     onRefresh,
     onDeleteCustom,
-    theme,
   } = props;
 
   if (discoveredCount === 0 && additionalCount === 0 && providerSnapshotRefreshing) {
     return (
       <View style={sheetStyles.emptyState}>
-        <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+        <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
         <Text style={sheetStyles.mutedText}>{t("providerDiagnostics.loadingModels")}</Text>
       </View>
     );
@@ -495,7 +503,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
   if (discoveredCount === 0 && additionalCount === 0 && providerErrorMessage) {
     return (
       <View style={sheetStyles.emptyState}>
-        <AlertTriangle size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+        <ThemedAlertTriangle uniProps={mutedMdIconMapping} />
         <Text style={sheetStyles.mutedText}>{providerErrorMessage}</Text>
         <Button variant="default" size="sm" onPress={onRefresh} disabled={modelsRefreshing}>
           {modelsRefreshing ? t("modelSelector.retrying") : t("common.retry")}
@@ -622,7 +630,6 @@ export function ProviderDiagnosticSheet({
   onClose,
   serverId,
 }: ProviderDiagnosticSheetProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
@@ -770,7 +777,6 @@ export function ProviderDiagnosticSheet({
           deletingModelId={deletingModelId}
           onRefresh={handleRefreshModels}
           onDeleteCustom={handleDeleteCustom}
-          theme={theme}
         />
       </AdaptiveModalSheet>
       <AddCustomModelSubSheet

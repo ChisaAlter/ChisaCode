@@ -1,7 +1,7 @@
 import { useMemo, type Ref } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 
 export type SplitDropZonePosition = "center" | "left" | "right" | "top" | "bottom";
 
@@ -24,7 +24,6 @@ export function buildSplitDropZoneId(paneId: string): string {
 }
 
 export function SplitDropZone({ paneId, active, preview }: SplitDropZoneProps) {
-  const { theme } = useUnistyles();
   const { setNodeRef } = useDroppable({
     id: buildSplitDropZoneId(paneId),
     disabled: !active,
@@ -39,23 +38,10 @@ export function SplitDropZone({ paneId, active, preview }: SplitDropZoneProps) {
       return null;
     }
     return {
-      overlay: [
-        styles.previewOverlay,
-        getPreviewOverlayStyle(preview.position),
-        {
-          backgroundColor: theme.colors.accent,
-          opacity: 0.6,
-        },
-      ],
-      frame: [
-        styles.previewFrame,
-        getPreviewFrameStyle(preview.position),
-        {
-          borderColor: theme.colors.accent,
-        },
-      ],
+      overlay: [styles.previewOverlay, getPreviewOverlayStyle(preview.position)],
+      frame: [styles.previewFrame, getPreviewFrameStyle(preview.position)],
     };
-  }, [paneId, preview, theme.colors.accent]);
+  }, [paneId, preview]);
 
   if (!active) {
     return null;
@@ -153,11 +139,14 @@ const styles = StyleSheet.create((theme) => ({
   previewOverlay: {
     position: "absolute",
     borderRadius: 10,
+    backgroundColor: theme.colors.accent,
+    opacity: 0.6,
   },
   previewFrame: {
     position: "absolute",
     borderRadius: 10,
     borderWidth: 2,
+    borderColor: theme.colors.accent,
   },
   previewLeft: {
     left: 0,

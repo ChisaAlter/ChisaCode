@@ -28,7 +28,8 @@ import {
 } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { DraggableList, type DraggableRenderItemInfo } from "@/components/draggable-list";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import {
@@ -118,6 +119,45 @@ interface SidebarPinnedCacheSnapshot {
   sidebarAgentsList: AgentListCachePayload | undefined;
   allAgents: AgentListCachePayload | undefined;
   agentHistory: AgentHistoryCachePayload | undefined;
+}
+
+const ThemedCopy = withUnistyles(Copy);
+const ThemedPin = withUnistyles(Pin);
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedArchive = withUnistyles(Archive);
+const ThemedTrash2 = withUnistyles(Trash2);
+const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
+const ThemedFolder = withUnistyles(Folder);
+const ThemedFolderOpen = withUnistyles(FolderOpen);
+const ThemedCheckCheck = withUnistyles(CheckCheck);
+const ThemedSquarePen = withUnistyles(SquarePen);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedRefreshControl = withUnistyles(RefreshControl);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
+const foregroundSubtleTextColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundSubtleText,
+});
+const refreshTintColorMapping = (theme: Theme) => ({
+  tintColor: theme.colors.foregroundMuted,
+});
+
+function rowProviderIconColorMapping(isSelected: boolean) {
+  if (isSelected) return foregroundColorMapping;
+  return foregroundMutedColorMapping;
+}
+
+function pinIconColorMapping(isPinned: boolean) {
+  if (isPinned) return accentColorMapping;
+  return foregroundMutedColorMapping;
+}
+
+function workspaceFolderColorMapping(isWorkspaceGroup: boolean) {
+  if (isWorkspaceGroup) return foregroundMutedColorMapping;
+  return foregroundSubtleTextColorMapping;
 }
 
 function getAgentActionKey(agent: AggregatedAgent): string {
@@ -427,12 +467,12 @@ function SidebarSessionRow({
   isDragging?: boolean;
   drag?: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
   const isCompact = useIsCompactFormFactor();
   const agentActionKey = getAgentActionKey(agent);
   const ProviderIcon = getProviderIcon(agent.provider);
+  const ThemedProviderIcon = useMemo(() => withUnistyles(ProviderIcon), [ProviderIcon]);
   const isSelected = selectedAgentId === `${agent.serverId}:${agent.id}`;
   const isPinned = isSidebarAgentPinned(agent);
   const [isHovered, setIsHovered] = useState(false);
@@ -476,7 +516,6 @@ function SidebarSessionRow({
     [isSelected, rowTitleSelectedStyle, rowTitleStyle],
   );
   const rowAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
-  const rowIconColor = isSelected ? theme.colors.foreground : theme.colors.foregroundMuted;
   const showQuickActions = isCompact || isHovered || isPinning || isArchiving;
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
@@ -518,24 +557,24 @@ function SidebarSessionRow({
     });
   }, [agent.id, t, toast]);
   const copyLeading = useMemo(
-    () => <Copy size={16} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedCopy size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const pinLeading = useMemo(
-    () => <Pin size={16} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedPin size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const renameLeading = useMemo(
-    () => <Pencil size={16} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedPencil size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const archiveLeading = useMemo(
-    () => <Archive size={16} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedArchive size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const deleteLeading = useMemo(
-    () => <Trash2 size={16} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedTrash2 size={16} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const handleQuickPin = useCallback(
     (event: GestureResponderEvent) => {
@@ -576,7 +615,10 @@ function SidebarSessionRow({
     <>
       {isSelected ? <View style={selectedIndicatorStyle} /> : null}
       <View style={rowLeadingStyle}>
-        <ProviderIcon size={theme.iconSize.sm} color={rowIconColor} />
+        <ThemedProviderIcon
+          size={ICON_SIZE.sm}
+          uniProps={rowProviderIconColorMapping(isSelected)}
+        />
       </View>
       <View style={rowContentStyle}>
         <Text style={titleStyle} numberOfLines={1}>
@@ -600,7 +642,7 @@ function SidebarSessionRow({
         accessibilityLabel={t("sidebar.sessionActions")}
         style={menuButtonStyle}
       >
-        <MoreHorizontal size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedMoreHorizontal size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width={220}>
         <DropdownMenuItem
@@ -676,10 +718,7 @@ function SidebarSessionRow({
         onPress={handleQuickPin}
         disabled={isPinning}
       >
-        <Pin
-          size={theme.iconSize.sm}
-          color={isPinned ? theme.colors.accent : theme.colors.foregroundMuted}
-        />
+        <ThemedPin size={ICON_SIZE.sm} uniProps={pinIconColorMapping(isPinned)} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -689,7 +728,7 @@ function SidebarSessionRow({
         onPress={handleQuickArchive}
         disabled={isArchiving || Boolean(agent.archivedAt)}
       >
-        <Archive size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        <ThemedArchive size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
       </Pressable>
     </View>
   );
@@ -828,7 +867,6 @@ function SidebarSessionGroupHeader({
   onArchive: () => void;
   onRemove: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
   const [isHovered, setIsHovered] = useState(false);
@@ -872,32 +910,32 @@ function SidebarSessionGroupHeader({
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   const copyPathLeading = useMemo(
-    () => <Copy size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted, theme.iconSize.sm],
+    () => <ThemedCopy size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const pinLeading = useMemo(
-    () => <Pin size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted, theme.iconSize.sm],
+    () => <ThemedPin size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const openLeading = useMemo(
-    () => <FolderOpen size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted, theme.iconSize.sm],
+    () => <ThemedFolderOpen size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const renameLeading = useMemo(
-    () => <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted, theme.iconSize.sm],
+    () => <ThemedPencil size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const readLeading = useMemo(
-    () => <CheckCheck size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted, theme.iconSize.sm],
+    () => <ThemedCheckCheck size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const archiveLeading = useMemo(
-    () => <Archive size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted, theme.iconSize.sm],
+    () => <ThemedArchive size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const removeLeading = useMemo(
-    () => <Trash2 size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted, theme.iconSize.sm],
+    () => <ThemedTrash2 size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const actionsStyle = useMemo(
     () => [styles.groupActions, !actionsVisible && styles.groupActionsHidden],
@@ -921,8 +959,6 @@ function SidebarSessionGroupHeader({
     canCollapse,
     showCollapseIndicator: presentation.showCollapseIndicator,
     collapsed,
-    size: theme.iconSize.xs,
-    color: theme.colors.foregroundSubtleText,
   });
 
   return (
@@ -941,11 +977,9 @@ function SidebarSessionGroupHeader({
       >
         {collapseIndicator}
         {presentation.showWorkspaceIcon && group.cwd ? (
-          <Folder
-            size={theme.iconSize.md}
-            color={
-              isWorkspaceGroup ? theme.colors.foregroundMuted : theme.colors.foregroundSubtleText
-            }
+          <ThemedFolder
+            size={ICON_SIZE.md}
+            uniProps={workspaceFolderColorMapping(isWorkspaceGroup)}
           />
         ) : null}
         <Text style={resolvedTitleStyle} numberOfLines={1}>
@@ -966,7 +1000,7 @@ function SidebarSessionGroupHeader({
               style={addButtonStyle}
               testID={`sidebar-session-group-menu-${group.key}`}
             >
-              <MoreHorizontal size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedMoreHorizontal size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" width={220}>
               <DropdownMenuItem
@@ -1036,7 +1070,7 @@ function SidebarSessionGroupHeader({
             style={addButtonStyle}
             testID={`sidebar-session-group-new-${serverId}-${group.key}`}
           >
-            <SquarePen size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+            <ThemedSquarePen size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
           </Pressable>
         </View>
       ) : null}
@@ -1048,16 +1082,14 @@ function renderSidebarGroupCollapseIndicator(input: {
   canCollapse: boolean;
   showCollapseIndicator: boolean;
   collapsed: boolean;
-  size: number;
-  color: string;
 }): React.ReactNode {
   if (!input.canCollapse || !input.showCollapseIndicator) {
     return null;
   }
   return input.collapsed ? (
-    <ChevronRight size={input.size} color={input.color} />
+    <ThemedChevronRight size={ICON_SIZE.xs} uniProps={foregroundSubtleTextColorMapping} />
   ) : (
-    <ChevronDown size={input.size} color={input.color} />
+    <ThemedChevronDown size={ICON_SIZE.xs} uniProps={foregroundSubtleTextColorMapping} />
   );
 }
 
@@ -1252,7 +1284,6 @@ export function SidebarSessionList({
   onAgentPress,
   onAddProject,
 }: SidebarSessionListProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const queryClient = useQueryClient();
@@ -1378,13 +1409,13 @@ export function SidebarSessionList({
   const refreshControl = useMemo(
     () =>
       onRefresh ? (
-        <RefreshControl
+        <ThemedRefreshControl
           refreshing={isRefreshing}
           onRefresh={onRefresh}
-          tintColor={theme.colors.foregroundMuted}
+          uniProps={refreshTintColorMapping}
         />
       ) : undefined,
-    [isRefreshing, onRefresh, theme.colors.foregroundMuted],
+    [isRefreshing, onRefresh],
   );
   const renamingClient = useSessionStore((state) =>
     renamingAgent?.serverId ? (state.sessions[renamingAgent.serverId]?.client ?? null) : null,

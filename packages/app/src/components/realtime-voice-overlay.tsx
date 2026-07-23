@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { ActivityIndicator, Pressable, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Mic, MicOff, Square } from "lucide-react-native";
 import { FOOTER_HEIGHT } from "@/constants/layout";
 import { useVoiceTelemetry } from "@/contexts/voice-context";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { VolumeMeter } from "./volume-meter";
 
 interface RealtimeVoiceOverlayProps {
@@ -16,13 +17,24 @@ interface RealtimeVoiceOverlayProps {
 const OVERLAY_BUTTON_SIZE = 44;
 const OVERLAY_VERTICAL_PADDING = (FOOTER_HEIGHT - OVERLAY_BUTTON_SIZE) / 2;
 
+const ThemedMic = withUnistyles(Mic);
+const ThemedMicOff = withUnistyles(MicOff);
+const ThemedSquare = withUnistyles(Square);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+const whiteColorMapping = (theme: Theme) => ({ color: theme.colors.palette.white });
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const whiteFillMapping = (theme: Theme) => ({
+  color: theme.colors.palette.white,
+  fill: theme.colors.palette.white,
+});
+
 export function RealtimeVoiceOverlay({
   isMuted,
   isSwitching,
   onToggleMute,
   onStop,
 }: RealtimeVoiceOverlayProps) {
-  const { theme } = useUnistyles();
   const { volume, isSpeaking } = useVoiceTelemetry();
   const muteButtonStyle = useMemo(
     () => [
@@ -57,9 +69,9 @@ export function RealtimeVoiceOverlay({
           style={muteButtonStyle}
         >
           {isMuted ? (
-            <MicOff size={theme.iconSize.lg} color={theme.colors.palette.white} strokeWidth={2.5} />
+            <ThemedMicOff size={ICON_SIZE.lg} uniProps={whiteColorMapping} strokeWidth={2.5} />
           ) : (
-            <Mic size={theme.iconSize.lg} color={theme.colors.foreground} strokeWidth={2.5} />
+            <ThemedMic size={ICON_SIZE.lg} uniProps={foregroundColorMapping} strokeWidth={2.5} />
           )}
         </Pressable>
 
@@ -71,14 +83,9 @@ export function RealtimeVoiceOverlay({
           style={stopButtonStyle}
         >
           {isSwitching ? (
-            <ActivityIndicator size="small" color={theme.colors.palette.white} />
+            <ThemedActivityIndicator size="small" uniProps={whiteColorMapping} />
           ) : (
-            <Square
-              size={theme.iconSize.lg}
-              color={theme.colors.palette.white}
-              fill={theme.colors.palette.white}
-              strokeWidth={2.5}
-            />
+            <ThemedSquare size={ICON_SIZE.lg} uniProps={whiteFillMapping} strokeWidth={2.5} />
           )}
         </Pressable>
       </View>

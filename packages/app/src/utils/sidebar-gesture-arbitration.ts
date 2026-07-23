@@ -1,3 +1,4 @@
+/** Decision produced while tracking movement during a long-press gesture */
 export type LongPressMoveDecision =
   | "none"
   | "cancel_long_press"
@@ -5,6 +6,11 @@ export type LongPressMoveDecision =
   | "horizontal_swipe"
   | "start_drag";
 
+/**
+ * Arbitrates between scroll, swipe, drag, and long-press cancel from pointer movement
+ * @param input Drag arming state, start/current points, and optional slop thresholds
+ * @returns Gesture decision for the current movement sample
+ */
 export function decideLongPressMove(input: {
   dragArmed: boolean;
   didStartDrag: boolean;
@@ -49,6 +55,11 @@ export function decideLongPressMove(input: {
   return distance > dragSlopPx ? "start_drag" : "none";
 }
 
+/**
+ * Whether releasing a long-press should open the context menu
+ * @param input Whether long-press is armed and whether a drag already started
+ * @returns True when the press-out should open the context menu
+ */
 export function shouldOpenContextMenuOnPressOut(input: {
   longPressArmed: boolean;
   didStartDrag: boolean;

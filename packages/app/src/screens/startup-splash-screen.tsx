@@ -3,7 +3,8 @@ import { ScrollView, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { BookOpen, Copy, RotateCw, TriangleAlert } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { type Theme } from "@/styles/theme";
 import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
 import { Button } from "@/components/ui/button";
 import { Fonts } from "@/constants/theme";
@@ -24,6 +25,18 @@ const GITHUB_ISSUE_URL = "https://github.com/getchisacode/chisacode/issues/new";
 const DOCS_URL = "https://chisacode.sh/docs";
 
 const LOGO_SIZE = 96;
+
+const ThemedCopy = withUnistyles(Copy);
+const ThemedTriangleAlert = withUnistyles(TriangleAlert);
+const ThemedBookOpen = withUnistyles(BookOpen);
+const ThemedRotateCw = withUnistyles(RotateCw);
+
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const paletteWhiteColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.white,
+});
 
 function openGithubIssue(): void {
   void openExternalUrl(GITHUB_ISSUE_URL);
@@ -136,7 +149,6 @@ const styles = StyleSheet.create((theme) => ({
 }));
 
 export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const webScrollbarStyle = useWebScrollbarStyle();
   const errorScrollViewStyle = useMemo(
@@ -212,21 +224,18 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
     void Clipboard.setStringAsync(payload);
   }, [daemonLogs?.logPath, daemonLogs?.contents, logsText]);
 
-  const copyIcon = useMemo(
-    () => <Copy size={16} color={theme.colors.foreground} />,
-    [theme.colors.foreground],
-  );
+  const copyIcon = useMemo(() => <ThemedCopy size={16} uniProps={foregroundColorMapping} />, []);
   const warningIcon = useMemo(
-    () => <TriangleAlert size={16} color={theme.colors.foreground} />,
-    [theme.colors.foreground],
+    () => <ThemedTriangleAlert size={16} uniProps={foregroundColorMapping} />,
+    [],
   );
   const bookIcon = useMemo(
-    () => <BookOpen size={16} color={theme.colors.foreground} />,
-    [theme.colors.foreground],
+    () => <ThemedBookOpen size={16} uniProps={foregroundColorMapping} />,
+    [],
   );
   const retryIcon = useMemo(
-    () => <RotateCw size={16} color={theme.colors.palette.white} />,
-    [theme.colors.palette.white],
+    () => <ThemedRotateCw size={16} uniProps={paletteWhiteColorMapping} />,
+    [],
   );
 
   if (!isError) {

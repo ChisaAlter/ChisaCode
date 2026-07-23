@@ -3,6 +3,10 @@ import { getIsElectronRuntimeMac } from "@/constants/layout";
 import type { ShortcutOs } from "@/utils/format-shortcut";
 import { isNative } from "@/constants/platform";
 
+/**
+ * Detects whether shortcuts should render with Mac or non-Mac modifier labels
+ * @returns Shortcut OS style for the current runtime platform
+ */
 export function getShortcutOs(): ShortcutOs {
   if (isNative) {
     return Platform.OS === "ios" ? "mac" : "non-mac";

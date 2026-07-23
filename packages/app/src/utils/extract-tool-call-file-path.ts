@@ -55,6 +55,11 @@ function extractFromShellCommand(command: string): string | null {
   return last;
 }
 
+/**
+ * Extracts a primary file path from a tool-call detail when one is available
+ * @param detail Structured tool-call detail, if any
+ * @returns File path from read/edit/write detail or a simple shell file command
+ */
 export function extractToolCallFilePath(detail: ToolCallDetail | undefined): string | null {
   if (!detail) {
     return null;

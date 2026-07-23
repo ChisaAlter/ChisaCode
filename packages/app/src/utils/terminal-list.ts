@@ -11,6 +11,11 @@ function toTerminalListEntry(input: { terminal: CreatedTerminal }): TerminalList
   };
 }
 
+/**
+ * Inserts or replaces a terminal list entry after create/update
+ * @param input Existing terminals list and the created terminal payload
+ * @returns New terminals array with the entry upserted by id
+ */
 export function upsertTerminalListEntry(input: {
   terminals: TerminalListEntry[];
   terminal: CreatedTerminal;

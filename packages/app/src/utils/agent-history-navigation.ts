@@ -44,6 +44,10 @@ function isValidArchivedAt(value: Date | null | undefined): value is Date {
   return value instanceof Date && Number.isFinite(value.getTime());
 }
 
+/**
+ * Seeds session-store agent details for an archived agent before navigating to it
+ * @param agent Aggregated archived agent to remember in the live session store
+ */
 export function rememberArchivedAgentDetail(agent: AggregatedAgent): void {
   if (!isValidArchivedAt(agent.archivedAt)) {
     return;
@@ -62,6 +66,7 @@ export function rememberArchivedAgentDetail(agent: AggregatedAgent): void {
   });
 }
 
+/** Test-only helpers for archived agent history navigation */
 export const __private__ = {
   isValidArchivedAt,
 };

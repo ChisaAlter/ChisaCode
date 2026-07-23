@@ -1,3 +1,4 @@
+/** Supported provider-native CLI command ids */
 export type ProviderCommandId = "resume";
 
 /**
@@ -29,6 +30,11 @@ function renderTemplate(template: string, vars: Record<string, string>): string 
   return template.replace(/\{(\w+)\}/g, (_match, key: string) => vars[key] ?? "");
 }
 
+/**
+ * Builds a provider-native CLI command from a template and session id
+ * @param input Provider id, command id, and provider-native session id
+ * @returns Rendered command string, or null when no template exists
+ */
 export function buildProviderCommand(input: {
   provider: string;
   id: ProviderCommandId;

@@ -2,11 +2,25 @@
 import React, { type ReactElement, useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useToast } from "@/contexts/toast-context";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { ArrowUpRight, Copy, FileText, Activity } from "lucide-react-native";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+const ThemedArrowUpRight = withUnistyles(ArrowUpRight);
+const ThemedCopy = withUnistyles(Copy);
+const ThemedFileText = withUnistyles(FileText);
+const ThemedActivity = withUnistyles(Activity);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -314,7 +328,6 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
 }
 
 export function LocalDaemonSection() {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const showSection = shouldUseDesktopDaemon();
   const { settings, updateSettings, isLoading: isLoadingSettings } = useDesktopSettings();
@@ -371,20 +384,20 @@ export function LocalDaemonSection() {
   );
 
   const advancedSettingsIcon = useMemo(
-    () => <ArrowUpRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.iconSize.sm, theme.colors.foregroundMuted],
+    () => <ThemedArrowUpRight size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const copyIcon = useMemo(
-    () => <Copy size={theme.iconSize.sm} color={theme.colors.foreground} />,
-    [theme.iconSize.sm, theme.colors.foreground],
+    () => <ThemedCopy size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />,
+    [],
   );
   const fileTextIcon = useMemo(
-    () => <FileText size={theme.iconSize.sm} color={theme.colors.foreground} />,
-    [theme.iconSize.sm, theme.colors.foreground],
+    () => <ThemedFileText size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />,
+    [],
   );
   const activityIcon = useMemo(
-    () => <Activity size={theme.iconSize.sm} color={theme.colors.foreground} />,
-    [theme.iconSize.sm, theme.colors.foreground],
+    () => <ThemedActivity size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />,
+    [],
   );
 
   const advancedSettingsButton = useMemo(
@@ -416,7 +429,7 @@ export function LocalDaemonSection() {
     >
       {isLoading || isLoadingSettings ? (
         <View style={LOADING_CARD_STYLE}>
-          <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+          <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
         </View>
       ) : (
         <DaemonInfoCard

@@ -9,6 +9,7 @@ interface ShouldClearAgentAttentionInput {
   hasDeferredFocusEntryClear?: boolean;
 }
 
+/** UI event that may clear an agent's attention flag */
 export type AgentAttentionClearTrigger =
   | "focus-entry"
   | "input-focus"
@@ -28,6 +29,11 @@ function getAttentionPriority(reason: Agent["attentionReason"]): number | null {
   return ATTENTION_REASON_PRIORITY[reason];
 }
 
+/**
+ * Picks the highest-priority root agent that currently requires attention
+ * @param agents Agents to evaluate
+ * @returns Agent id of the preferred attention target, or null when none qualify
+ */
 export function pickAttentionAgent(agents: Agent[]): string | null {
   let selectedAgentId: string | null = null;
   let selectedPriority = Number.POSITIVE_INFINITY;
@@ -60,6 +66,11 @@ export function pickAttentionAgent(agents: Agent[]): string | null {
   return selectedAgentId;
 }
 
+/**
+ * Whether the current UI trigger should clear an agent's attention state
+ * @param input Agent attention fields plus the UI trigger that may clear them
+ * @returns True when attention should be cleared for this trigger
+ */
 export function shouldClearAgentAttention(input: ShouldClearAgentAttentionInput): boolean {
   const agentId = input.agentId?.trim();
   if (!agentId) {

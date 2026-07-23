@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, type PressableStateCallbackType, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  type PressableStateCallbackType,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
@@ -9,9 +16,9 @@ import type {
 } from "@chisacode/client/internal/daemon-client";
 import type { AgentProvider } from "@chisacode/protocol/agent-types";
 import { Inbox, RotateCw } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -32,6 +39,18 @@ import {
 
 const IMPORT_SHEET_SNAP_POINTS = ["70%", "92%"];
 const DISABLED_ACCESSIBILITY_STATE = { disabled: true };
+
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedInbox = withUnistyles(Inbox);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const mutedIconLgMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  size: ICON_SIZE.lg,
+});
 
 type RecentProviderSessionsClient = Pick<
   DaemonClient,
@@ -106,7 +125,6 @@ function SheetStatusMessages({
   importErrored,
 }: SheetStatusMessagesProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   if (!isClientReady) {
     return <Text style={styles.statusText}>{t("session.connectToImport")}</Text>;
   }
@@ -120,7 +138,7 @@ function SheetStatusMessages({
       ) : null}
       {isLoadingSessions ? (
         <View style={styles.statusRow}>
-          <LoadingSpinner color={theme.colors.foregroundMuted} />
+          <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
           <Text style={styles.statusText}>{t("session.loadingRecentSessions")}</Text>
         </View>
       ) : null}
@@ -139,7 +157,6 @@ function SheetStatusMessages({
 
 function RefreshAction({ isRefreshing, onPress }: { isRefreshing: boolean; onPress: () => void }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const pressableStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
       styles.refreshButton,
@@ -158,9 +175,9 @@ function RefreshAction({ isRefreshing, onPress }: { isRefreshing: boolean; onPre
     >
       <View style={styles.refreshIconSlot}>
         {isRefreshing ? (
-          <LoadingSpinner color={theme.colors.foregroundMuted} />
+          <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
         ) : (
-          <RotateCw size={16} color={theme.colors.foregroundMuted} />
+          <ThemedRotateCw size={16} uniProps={foregroundMutedColorMapping} />
         )}
       </View>
     </Pressable>
@@ -168,11 +185,10 @@ function RefreshAction({ isRefreshing, onPress }: { isRefreshing: boolean; onPre
 }
 
 function SheetEmptyState({ title }: { title: string }) {
-  const { theme } = useUnistyles();
   return (
     <View style={styles.emptyState} testID="import-session-empty-state">
       <View style={styles.emptyStateIcon}>
-        <Inbox size={theme.iconSize.lg} color={theme.colors.foregroundMuted} strokeWidth={1.5} />
+        <ThemedInbox uniProps={mutedIconLgMapping} strokeWidth={1.5} />
       </View>
       <Text style={styles.emptyStateTitle}>{title}</Text>
     </View>
@@ -213,7 +229,6 @@ function ImportSessionSheetRow({
   onImportSession: (entry: FetchRecentProviderSessionEntry) => void;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const title = getSessionTitle(entry);
   const promptPreview = getPromptPreview(entry);
   const lastActivity = formatTimeAgo(new Date(entry.lastActivityAt));
@@ -244,7 +259,7 @@ function ImportSessionSheetRow({
       testID={`import-session-session-${entry.providerId}-${entry.providerHandleId}`}
     >
       <View style={styles.rowIconWrap}>
-        <ProviderIcon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+        <ProviderIcon size={ICON_SIZE.md} color={styles.iconMuted.color} />
       </View>
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
@@ -489,6 +504,9 @@ export function ImportSessionSheet({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  iconMuted: {
+    color: theme.colors.foregroundMuted,
+  },
   sheetBody: {
     flex: 1,
     minHeight: 0,

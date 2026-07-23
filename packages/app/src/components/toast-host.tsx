@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Animated, Easing, Platform, Text, ToastAndroid, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { AlertTriangle, CheckCircle2 } from "lucide-react-native";
@@ -13,6 +13,7 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
+import { SPACING, type Theme } from "@/styles/theme";
 import { createToastQueue, type ToastQueue } from "./toast-queue";
 
 export type ToastVariant = "default" | "success" | "error";
@@ -46,13 +47,23 @@ type ToastViewportPlacement = "app-shell" | "panel";
 const DEFAULT_DURATION_MS = 2200;
 const TOAST_VERTICAL_GAP = 8;
 
+const ThemedCheckCircle2 = withUnistyles(CheckCircle2);
+const ThemedAlertTriangle = withUnistyles(AlertTriangle);
+
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const primaryColorMapping = (theme: Theme) => ({ color: theme.colors.primary });
+const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
+
+const successToastIcon = <ThemedCheckCircle2 size={18} uniProps={primaryColorMapping} />;
+const errorToastIcon = <ThemedAlertTriangle size={18} uniProps={destructiveColorMapping} />;
+const copiedToastIcon = <ThemedCheckCircle2 size={18} uniProps={foregroundColorMapping} />;
+
 export function useToastHost(): {
   api: ToastApi;
   toasts: ToastState[];
   dismiss: (id?: number) => void;
 } {
   const { t: toastT } = useTranslation();
-  const { theme } = useUnistyles();
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const idRef = useRef(0);
   const queueRef = useRef<ToastQueue | null>(null);
@@ -102,11 +113,11 @@ export function useToastHost(): {
       copied: (label?: string) =>
         show(label ? toastT("common.copiedWithLabel", { label }) : toastT("common.copied"), {
           variant: "success",
-          icon: <CheckCircle2 size={18} color={theme.colors.foreground} />,
+          icon: copiedToastIcon,
         }),
       error: (message: string) => show(message, { variant: "error", durationMs: 3200 }),
     }),
-    [show, theme.colors.foreground, toastT],
+    [show, toastT],
   );
 
   const dismiss = useCallback((id?: number) => {
@@ -121,7 +132,6 @@ export function useToastHost(): {
 }
 
 function ToastItem({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
-  const { theme } = useUnistyles();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-8)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -241,9 +251,9 @@ function ToastItem({ toast, onDismiss }: { toast: ToastState; onDismiss: () => v
 
   let defaultIcon: ReactNode = null;
   if (toast.variant === "success") {
-    defaultIcon = <CheckCircle2 size={18} color={theme.colors.primary} />;
+    defaultIcon = successToastIcon;
   } else if (toast.variant === "error") {
-    defaultIcon = <AlertTriangle size={18} color={theme.colors.destructive} />;
+    defaultIcon = errorToastIcon;
   }
   const icon = toast.icon ?? defaultIcon;
 
@@ -278,7 +288,6 @@ export function ToastViewport({
   onDismiss: (id: number) => void;
   placement?: ToastViewportPlacement;
 }) {
-  const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isMobile = useIsCompactFormFactor();
 
@@ -286,8 +295,8 @@ export function ToastViewport({
   const headerTopPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
   const topOffset =
     placement === "app-shell"
-      ? insets.top + headerTopPadding + headerHeight + theme.spacing[2]
-      : theme.spacing[3];
+      ? insets.top + headerTopPadding + headerHeight + SPACING[2]
+      : SPACING[3];
 
   const containerStyle = useMemo(() => [styles.container, { marginTop: topOffset }], [topOffset]);
 

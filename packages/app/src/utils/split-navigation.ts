@@ -4,6 +4,7 @@ const ROOT_MIN = 0;
 const ROOT_MAX = 1;
 const FLOAT_TOLERANCE = 0.000001;
 
+/** Normalized geometric bounds for a workspace split pane */
 export interface PaneBounds {
   paneId: string;
   left: number;
@@ -22,6 +23,13 @@ interface PaneCandidate {
   overlap: number;
 }
 
+/**
+ * Finds the best adjacent pane in a split layout for keyboard navigation
+ * @param root Root split tree for the workspace layout
+ * @param focusedPaneId Currently focused pane id
+ * @param direction Direction to move focus
+ * @returns Adjacent pane id, or null when none qualifies
+ */
 export function findAdjacentPane(
   root: SplitNode,
   focusedPaneId: string,

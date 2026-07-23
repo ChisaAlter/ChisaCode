@@ -9,13 +9,19 @@ import {
   type NativeSyntheticEvent,
   type PressableStateCallbackType,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { File, Folder } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { WORKBENCH_ENVIRONMENT_PANEL_SHADOW } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import { getAutocompleteScrollOffset } from "./autocomplete-utils";
+
+const ThemedFolder = withUnistyles(Folder);
+const ThemedFile = withUnistyles(File);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 export interface AutocompleteOption {
   id: string;
@@ -50,7 +56,6 @@ interface AutocompleteRowProps {
   index: number;
   option: AutocompleteOption;
   isSelected: boolean;
-  mutedColor: string;
   onSelect: (option: AutocompleteOption) => void;
   onRowLayout: (index: number, event: LayoutChangeEvent) => void;
 }
@@ -59,7 +64,6 @@ function AutocompleteRow({
   index,
   option,
   isSelected,
-  mutedColor,
   onSelect,
   onRowLayout,
 }: AutocompleteRowProps) {
@@ -88,9 +92,9 @@ function AutocompleteRow({
         <>
           <View style={styles.itemLeading}>
             {option.kind === "directory" ? (
-              <Folder size={14} color={mutedColor} />
+              <ThemedFolder size={14} uniProps={foregroundMutedColorMapping} />
             ) : (
-              <File size={14} color={mutedColor} />
+              <ThemedFile size={14} uniProps={foregroundMutedColorMapping} />
             )}
           </View>
           <View style={styles.itemMain}>
@@ -131,7 +135,6 @@ export function Autocomplete({
   emptyText,
   maxHeight = 220,
 }: AutocompleteProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const resolvedLoadingText = loadingText ?? t("common.loading");
   const resolvedEmptyText = emptyText ?? t("autocomplete.empty");
@@ -279,7 +282,6 @@ export function Autocomplete({
               index={index}
               option={option}
               isSelected={index === selectedIndex}
-              mutedColor={theme.colors.foregroundMuted}
               onSelect={onSelect}
               onRowLayout={handleRowLayout}
             />

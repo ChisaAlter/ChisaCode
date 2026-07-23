@@ -7,6 +7,11 @@ interface DesktopSidebarToggleInput {
   toggleFocusedFileExplorer: () => boolean;
 }
 
+/**
+ * Toggles desktop sidebars for the checkout shortcut intent
+ * @param input Open state and panel open/close callbacks
+ * @returns Always true after applying the toggle intent
+ */
 export function toggleDesktopSidebarsWithCheckoutIntent(input: DesktopSidebarToggleInput): boolean {
   if (input.isAgentListOpen || input.isFileExplorerOpen) {
     input.closeAgentList();

@@ -8,7 +8,7 @@ import ReanimatedAnimated, {
   withSequence,
   Easing,
 } from "react-native-reanimated";
-import { useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 
 interface VolumeMeterProps {
   volume: number;
@@ -16,7 +16,10 @@ interface VolumeMeterProps {
   isSpeaking?: boolean;
   orientation?: "vertical" | "horizontal";
   variant?: "default" | "compact";
+  /** Explicit hex/rgb override. Prefer `tone` for theme-reactive fills. */
   color?: string;
+  /** Theme-backed bar fill. Defaults to `foreground`. */
+  tone?: "foreground" | "accentForeground";
 }
 
 export function VolumeMeter({
@@ -26,8 +29,8 @@ export function VolumeMeter({
   orientation = "vertical",
   variant = "default",
   color,
+  tone = "foreground",
 }: VolumeMeterProps) {
-  const { theme } = useUnistyles();
   const isCompact = variant === "compact";
 
   // Base dimensions
@@ -108,7 +111,6 @@ export function VolumeMeter({
     });
   }, [animatedVolume, isMuted, volume]);
 
-  const lineColor = color ?? theme.colors.foreground;
   let containerHeight: number;
   if (orientation === "horizontal") {
     containerHeight = isCompact ? 32 : 60;
@@ -166,34 +168,60 @@ export function VolumeMeter({
     () => [staticStyles.container, { height: containerHeight }],
     [containerHeight],
   );
-  const lineBase = useMemo(
-    () => ({ width: LINE_WIDTH, backgroundColor: lineColor }),
-    [LINE_WIDTH, lineColor],
-  );
+  const lineWidthStyle = useMemo(() => ({ width: LINE_WIDTH }), [LINE_WIDTH]);
   const spacerStyle = useMemo(() => ({ width: LINE_SPACING }), [LINE_SPACING]);
-  const line1CombinedStyle = useMemo(
-    () => [staticStyles.line, lineBase, line1Style],
-    [lineBase, line1Style],
+  // Explicit `color` overrides the themed fill. Theme fill lives on a plain View
+  // child so Reanimated never receives Unistyles StyleSheet styles (see docs).
+  let themedFillStyle = styles.lineFillForeground;
+  if (tone === "accentForeground") {
+    themedFillStyle = styles.lineFillAccentForeground;
+  }
+  const lineFillStyle = useMemo(
+    () => (color ? [staticStyles.lineFill, { backgroundColor: color }] : themedFillStyle),
+    [color, themedFillStyle],
   );
-  const line2CombinedStyle = useMemo(
-    () => [staticStyles.line, lineBase, line2Style],
-    [lineBase, line2Style],
+  const line1OuterStyle = useMemo(
+    () => [staticStyles.line, lineWidthStyle, line1Style],
+    [lineWidthStyle, line1Style],
   );
-  const line3CombinedStyle = useMemo(
-    () => [staticStyles.line, lineBase, line3Style],
-    [lineBase, line3Style],
+  const line2OuterStyle = useMemo(
+    () => [staticStyles.line, lineWidthStyle, line2Style],
+    [lineWidthStyle, line2Style],
+  );
+  const line3OuterStyle = useMemo(
+    () => [staticStyles.line, lineWidthStyle, line3Style],
+    [lineWidthStyle, line3Style],
   );
 
   return (
     <View style={containerStyle}>
-      <ReanimatedAnimated.View style={line1CombinedStyle} />
+      <ReanimatedAnimated.View style={line1OuterStyle}>
+        <View style={lineFillStyle} />
+      </ReanimatedAnimated.View>
       <View style={spacerStyle} />
-      <ReanimatedAnimated.View style={line2CombinedStyle} />
+      <ReanimatedAnimated.View style={line2OuterStyle}>
+        <View style={lineFillStyle} />
+      </ReanimatedAnimated.View>
       <View style={spacerStyle} />
-      <ReanimatedAnimated.View style={line3CombinedStyle} />
+      <ReanimatedAnimated.View style={line3OuterStyle}>
+        <View style={lineFillStyle} />
+      </ReanimatedAnimated.View>
     </View>
   );
 }
+
+const styles = StyleSheet.create((theme) => ({
+  lineFillForeground: {
+    ...RNStyleSheet.absoluteFill,
+    backgroundColor: theme.colors.foreground,
+    borderRadius: 9999,
+  },
+  lineFillAccentForeground: {
+    ...RNStyleSheet.absoluteFill,
+    backgroundColor: theme.colors.accentForeground,
+    borderRadius: 9999,
+  },
+}));
 
 const staticStyles = RNStyleSheet.create({
   container: {
@@ -202,6 +230,11 @@ const staticStyles = RNStyleSheet.create({
     justifyContent: "center",
   },
   line: {
+    borderRadius: 9999,
+    overflow: "hidden",
+  },
+  lineFill: {
+    ...RNStyleSheet.absoluteFill,
     borderRadius: 9999,
   },
 });

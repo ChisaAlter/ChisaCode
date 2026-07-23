@@ -29,12 +29,22 @@ interface DesktopSidebarResizeState {
   maxWidth: number;
 }
 
+/**
+ * Whether sidebar open/width animation state needs to resync with the latest props
+ * @param input Previous and next open/window-width values
+ * @returns True when open state or window width changed
+ */
 export function shouldSyncSidebarAnimation(input: SidebarAnimationSyncInput): boolean {
   return (
     input.previousIsOpen !== input.nextIsOpen || input.previousWindowWidth !== input.nextWindowWidth
   );
 }
 
+/**
+ * Computes left sidebar translate/backdrop targets for the current open state
+ * @param input Open flag, window width, and optional measured sidebar width
+ * @returns Translate-X and backdrop opacity targets for the left drawer
+ */
 export function getLeftSidebarAnimationTargets(
   input: SidebarAnimationTargetInput,
 ): SidebarAnimationTargets {
@@ -45,6 +55,11 @@ export function getLeftSidebarAnimationTargets(
   };
 }
 
+/**
+ * Computes right sidebar translate/backdrop targets for the current open state
+ * @param input Open flag, window width, and optional measured sidebar width
+ * @returns Translate-X and backdrop opacity targets for the right drawer
+ */
 export function getRightSidebarAnimationTargets(
   input: SidebarAnimationTargetInput,
 ): SidebarAnimationTargets {
@@ -78,6 +93,11 @@ export function getMobileSidebarWidth(windowWidth: number): number {
   return Math.round(Math.min(windowWidth, Math.min(300, preferredWidth)));
 }
 
+/**
+ * Clamps a stored desktop sidebar width against viewport and content constraints
+ * @param input Stored width, viewport, and min/max geometry limits
+ * @returns The effective width and max width allowed for the current viewport
+ */
 export function getDesktopSidebarResizeState(
   input: DesktopSidebarResizeStateInput,
 ): DesktopSidebarResizeState {

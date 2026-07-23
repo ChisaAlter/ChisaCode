@@ -9,7 +9,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { Check, Folder, FolderPlus, FolderX, Search } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
@@ -22,6 +22,20 @@ import { isNative } from "@/constants/platform";
 import { useActiveServerId } from "@/hooks/use-active-server-id";
 import { pickDirectory } from "@/desktop/pick-directory";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import type { Theme } from "@/styles/theme";
+
+const ThemedCheck = withUnistyles(Check);
+const ThemedFolder = withUnistyles(Folder);
+const ThemedFolderPlus = withUnistyles(FolderPlus);
+const ThemedFolderX = withUnistyles(FolderX);
+const ThemedSearch = withUnistyles(Search);
+const ThemedTextInput = withUnistyles(TextInput, (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+}));
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface PathRowProps {
   path: string;
@@ -30,35 +44,28 @@ interface PathRowProps {
 }
 
 function PathRow({ path, active, onSelect }: PathRowProps) {
-  const { theme } = useUnistyles();
   const handlePress = useCallback(() => {
     onSelect(path);
   }, [onSelect, path]);
   const pressableStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
-      (Boolean(hovered) || pressed || active) && {
-        backgroundColor: theme.colors.surfaceWorkspace,
-      },
+      (Boolean(hovered) || pressed || active) && styles.rowActive,
     ],
-    [active, theme.colors.surfaceWorkspace],
-  );
-  const rowTextStyle = useMemo(
-    () => [styles.rowText, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
+    [active],
   );
   return (
     <Pressable style={pressableStyle} onPress={handlePress}>
       <View style={styles.rowContent}>
         <View style={styles.iconSlot}>
-          <Folder size={16} strokeWidth={2.2} color={theme.colors.foregroundMuted} />
+          <ThemedFolder size={16} strokeWidth={2.2} uniProps={foregroundMutedColorMapping} />
         </View>
-        <Text style={rowTextStyle} numberOfLines={1}>
+        <Text style={styles.rowText} numberOfLines={1}>
           {shortenPath(path)}
         </Text>
         {active ? (
           <View style={styles.checkSlot}>
-            <Check size={16} strokeWidth={2.1} color={theme.colors.foregroundMuted} />
+            <ThemedCheck size={16} strokeWidth={2.1} uniProps={foregroundMutedColorMapping} />
           </View>
         ) : null}
       </View>
@@ -77,31 +84,24 @@ function ProjectPickerActionRow({
   icon: "add" | "none";
   testID: string;
 }) {
-  const { theme } = useUnistyles();
   const rowStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
-      (Boolean(hovered) || pressed) && {
-        backgroundColor: theme.colors.surfaceWorkspace,
-      },
+      (Boolean(hovered) || pressed) && styles.rowActive,
     ],
-    [theme.colors.surfaceWorkspace],
-  );
-  const rowTextStyle = useMemo(
-    () => [styles.rowText, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
+    [],
   );
   return (
     <Pressable testID={testID} accessibilityRole="button" onPress={onPress} style={rowStyle}>
       <View style={styles.rowContent}>
         <View style={styles.iconSlot}>
           {icon === "add" ? (
-            <FolderPlus size={16} strokeWidth={2.1} color={theme.colors.foregroundMuted} />
+            <ThemedFolderPlus size={16} strokeWidth={2.1} uniProps={foregroundMutedColorMapping} />
           ) : (
-            <FolderX size={16} strokeWidth={2.1} color={theme.colors.foregroundMuted} />
+            <ThemedFolderX size={16} strokeWidth={2.1} uniProps={foregroundMutedColorMapping} />
           )}
         </View>
-        <Text style={rowTextStyle} numberOfLines={1}>
+        <Text style={styles.rowText} numberOfLines={1}>
           {label}
         </Text>
       </View>
@@ -110,7 +110,6 @@ function ProjectPickerActionRow({
 }
 
 export function ProjectPickerModal() {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const serverId = useActiveServerId();
 
@@ -264,29 +263,6 @@ export function ProjectPickerModal() {
     return () => window.removeEventListener("keydown", handler, true);
   }, [activeIndex, handleSelectPath, handleSubmitCustom, open, options, query, setOpen]);
 
-  const panelStyle = useMemo(
-    () => [
-      styles.panel,
-      {
-        backgroundColor: theme.colors.surface0,
-      },
-    ],
-    [theme.colors.surface0],
-  );
-  const headerStyle = useMemo(
-    // Soft floating panel header: quiet border-soft rule.
-    () => [styles.header, { borderBottomColor: theme.colors.secondary }],
-    [theme.colors.secondary],
-  );
-  const inputStyle = useMemo(
-    () => [styles.input, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
-  const emptyTextStyle = useMemo(
-    () => [styles.emptyText, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
-
   if (!serverId) return null;
 
   return (
@@ -294,17 +270,16 @@ export function ProjectPickerModal() {
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={handleClose} />
 
-        <View style={panelStyle}>
-          <View style={headerStyle}>
+        <View style={styles.panel}>
+          <View style={styles.header}>
             <View style={styles.searchRow}>
-              <Search size={16} strokeWidth={2} color={theme.colors.foregroundMuted} />
-              <TextInput
+              <ThemedSearch size={16} strokeWidth={2} uniProps={foregroundMutedColorMapping} />
+              <ThemedTextInput
                 ref={inputRef}
                 value={query}
                 onChangeText={handleChangeQuery}
                 placeholder={t("workspace.projectPickerSearchPlaceholder")}
-                placeholderTextColor={theme.colors.foregroundMuted}
-                style={inputStyle}
+                style={styles.input}
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoFocus
@@ -322,10 +297,10 @@ export function ProjectPickerModal() {
             showsVerticalScrollIndicator={false}
           >
             {isSubmitting ? (
-              <Text style={emptyTextStyle}>{t("workspace.projectPickerOpening")}</Text>
+              <Text style={styles.emptyText}>{t("workspace.projectPickerOpening")}</Text>
             ) : null}
             {!isSubmitting && options.length === 0 && !query.trim() ? (
-              <Text style={emptyTextStyle}>{t("workspace.projectPickerNoRecent")}</Text>
+              <Text style={styles.emptyText}>{t("workspace.projectPickerNoRecent")}</Text>
             ) : null}
             {!isSubmitting && !(options.length === 0 && !query.trim()) ? (
               <>
@@ -403,6 +378,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 18,
     paddingVertical: theme.spacing[1],
+    color: theme.colors.foreground,
     outlineStyle: "none",
   } as object,
   results: {
@@ -410,6 +386,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   resultsContent: {
     paddingVertical: theme.spacing[2],
+  },
+  rowActive: {
+    backgroundColor: theme.colors.surfaceWorkspace,
   },
   // Soft quiet list row.
   row: {
@@ -433,6 +412,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 14.5,
     lineHeight: 20,
     flexShrink: 1,
+    color: theme.colors.foreground,
   },
   checkSlot: {
     marginLeft: "auto",
@@ -446,6 +426,7 @@ const styles = StyleSheet.create((theme) => ({
     // Soft picker chrome: 12.5 meta.
     fontSize: 12.5,
     lineHeight: 18,
+    color: theme.colors.foregroundMuted,
   },
   actions: {
     borderTopWidth: 1,

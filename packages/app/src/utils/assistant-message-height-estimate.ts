@@ -53,6 +53,11 @@ function createMarkdownBlockHeightKey(input: MarkdownBlockHeightInput): string |
   return `${normalizedWidth}:${hashMarkdownBlock(input.block)}`;
 }
 
+/**
+ * Caches a measured markdown block height for later assistant message estimates
+ * @param input Markdown block text, layout width, and measured height
+ * @returns Stored height when the entry is valid, otherwise null
+ */
 export function setAssistantMarkdownBlockHeight(input: {
   block: string;
   width: number;
@@ -104,6 +109,11 @@ function estimateAssistantMarkdownBlockHeightFromCache(markdown: string): number
   );
 }
 
+/**
+ * Estimates assistant message height from cached markdown/image block measurements
+ * @param markdown Full assistant markdown content
+ * @returns Estimated height when every block is cached, otherwise null
+ */
 export function estimateAssistantMessageHeightFromCache(markdown: string): number | null {
   return (
     estimateAssistantMarkdownBlockHeightFromCache(markdown) ??
@@ -111,6 +121,9 @@ export function estimateAssistantMessageHeightFromCache(markdown: string): numbe
   );
 }
 
+/**
+ * Clears the assistant markdown block height estimate cache
+ */
 export function clearAssistantMessageHeightEstimateCache(): void {
   assistantMarkdownBlockHeightCache.clear();
 }

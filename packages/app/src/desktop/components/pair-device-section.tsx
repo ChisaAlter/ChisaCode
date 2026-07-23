@@ -3,12 +3,22 @@ import { ActivityIndicator, Image, Text, TextInput, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as QRCode from "qrcode";
 import { useQuery } from "@tanstack/react-query";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { RotateCw, Copy, Check } from "lucide-react-native";
 import { settingsStyles } from "@/styles/settings";
 import { Button } from "@/components/ui/button";
 import { getDesktopDaemonPairing, shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { useState } from "react";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedCopy = withUnistyles(Copy);
+const ThemedCheck = withUnistyles(Check);
+const ThemedTextInput = withUnistyles(TextInput);
+
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
+const textInputSelectionMapping = (theme: Theme) => ({ selectionColor: theme.colors.accent });
 
 type PairingViewState =
   | { tag: "loading" }
@@ -39,7 +49,6 @@ function resolvePairingViewState(args: {
 }
 
 export function PairDeviceSection() {
-  const { theme } = useUnistyles();
   const showSection = shouldUseDesktopDaemon();
   const [copied, setCopied] = useState(false);
 
@@ -84,17 +93,17 @@ export function PairDeviceSection() {
   );
 
   const retryIcon = useMemo(
-    () => <RotateCw size={theme.iconSize.sm} color={theme.colors.foreground} />,
-    [theme.iconSize.sm, theme.colors.foreground],
+    () => <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />,
+    [],
   );
   const copyButtonIcon = useMemo(
     () =>
       copied ? (
-        <Check size={theme.iconSize.sm} color={theme.colors.accent} />
+        <ThemedCheck size={ICON_SIZE.sm} uniProps={accentColorMapping} />
       ) : (
-        <Copy size={theme.iconSize.sm} color={theme.colors.foreground} />
+        <ThemedCopy size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />
       ),
-    [copied, theme.iconSize.sm, theme.colors.accent, theme.colors.foreground],
+    [copied],
   );
 
   if (!showSection) return null;
@@ -111,7 +120,6 @@ export function PairDeviceSection() {
       <View style={settingsStyles.card}>
         <PairDeviceBody
           viewState={viewState}
-          theme={theme}
           retryIcon={retryIcon}
           copyButtonIcon={copyButtonIcon}
           qrImageSource={qrImageSource}
@@ -127,7 +135,6 @@ export function PairDeviceSection() {
 
 interface PairDeviceBodyProps {
   viewState: PairingViewState;
-  theme: { colors: { accent: string } };
   retryIcon: React.ReactElement;
   copyButtonIcon: React.ReactElement;
   qrImageSource: { uri: string } | null;
@@ -140,7 +147,6 @@ interface PairDeviceBodyProps {
 function PairDeviceBody(props: PairDeviceBodyProps) {
   const {
     viewState,
-    theme,
     retryIcon,
     copyButtonIcon,
     qrImageSource,
@@ -178,12 +184,12 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
       </View>
       <View style={styles.linkRow}>
         <View style={styles.inputWrapper}>
-          <TextInput
+          <ThemedTextInput
             style={styles.linkInput}
             value={viewState.url}
             readOnly
             selectTextOnFocus
-            selectionColor={theme.colors.accent}
+            uniProps={textInputSelectionMapping}
           />
         </View>
         <Button variant="outline" size="sm" leftIcon={copyButtonIcon} onPress={handleCopyPress}>

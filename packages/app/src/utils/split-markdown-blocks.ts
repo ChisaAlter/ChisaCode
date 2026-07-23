@@ -3,6 +3,11 @@ function getFenceDelimiter(line: string) {
   return match?.[2] ?? null;
 }
 
+/**
+ * Splits markdown into top-level blocks using blank lines, respecting fenced code
+ * @param text Full markdown source
+ * @returns Non-empty block strings in document order
+ */
 export function splitMarkdownBlocks(text: string): string[] {
   if (text.length === 0) {
     return [];

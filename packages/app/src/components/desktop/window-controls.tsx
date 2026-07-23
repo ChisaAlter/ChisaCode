@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, View, type PressableStateCallbackType } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { TITLEBAR_NO_DRAG_VIEW_STYLE } from "@/components/desktop/titlebar-drag-region";
 import { getIsElectronRuntime, getIsElectronRuntimeMac } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
@@ -17,7 +17,6 @@ import {
  * Replaces native titleBarOverlay so − □ × live in the same Web layer as dimmers.
  */
 export function DesktopWindowControls() {
-  const { theme } = useUnistyles();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -81,72 +80,36 @@ export function DesktopWindowControls() {
     void closeDesktopWindow();
   }, []);
 
-  const iconColor = theme.colors.foregroundMuted;
-  const closeHoverIconColor = theme.colors.destructiveForeground ?? "#ffffff";
-
-  const minimizeIconStyle = useMemo(
-    () => [styles.minimizeBar, { backgroundColor: iconColor }],
-    [iconColor],
-  );
-  const maximizeIconStyle = useMemo(
-    () => [styles.maximizeBox, { borderColor: iconColor }],
-    [iconColor],
-  );
-  const restoreBackStyle = useMemo(
-    () => [styles.restoreBack, { borderColor: iconColor }],
-    [iconColor],
-  );
-  const restoreFrontStyle = useMemo(
-    () => [styles.restoreFront, { borderColor: iconColor }],
-    [iconColor],
-  );
-  const closeArmAStyle = useMemo(
-    () => [styles.closeArm, styles.closeArmA, { backgroundColor: iconColor }],
-    [iconColor],
-  );
-  const closeArmBStyle = useMemo(
-    () => [styles.closeArm, styles.closeArmB, { backgroundColor: iconColor }],
-    [iconColor],
-  );
-  const closeArmAHoverStyle = useMemo(
-    () => [styles.closeArm, styles.closeArmA, { backgroundColor: closeHoverIconColor }],
-    [closeHoverIconColor],
-  );
-  const closeArmBHoverStyle = useMemo(
-    () => [styles.closeArm, styles.closeArmB, { backgroundColor: closeHoverIconColor }],
-    [closeHoverIconColor],
-  );
-
-  const minimizeGlyph = useMemo(() => <View style={minimizeIconStyle} />, [minimizeIconStyle]);
+  const minimizeGlyph = useMemo(() => <View style={styles.minimizeBar} />, []);
   const maximizeGlyph = useMemo(
     () =>
       maximized ? (
         <View style={styles.restoreRoot}>
-          <View style={restoreBackStyle} />
-          <View style={restoreFrontStyle} />
+          <View style={styles.restoreBack} />
+          <View style={styles.restoreFront} />
         </View>
       ) : (
-        <View style={maximizeIconStyle} />
+        <View style={styles.maximizeBox} />
       ),
-    [maximizeIconStyle, maximized, restoreBackStyle, restoreFrontStyle],
+    [maximized],
   );
   const closeIdleGlyph = useMemo(
     () => (
       <View style={styles.closeRoot}>
-        <View style={closeArmAStyle} />
-        <View style={closeArmBStyle} />
+        <View style={CLOSE_ARM_A_STYLE} />
+        <View style={CLOSE_ARM_B_STYLE} />
       </View>
     ),
-    [closeArmAStyle, closeArmBStyle],
+    [],
   );
   const closeActiveGlyph = useMemo(
     () => (
       <View style={styles.closeRoot}>
-        <View style={closeArmAHoverStyle} />
-        <View style={closeArmBHoverStyle} />
+        <View style={CLOSE_ARM_A_HOVER_STYLE} />
+        <View style={CLOSE_ARM_B_HOVER_STYLE} />
       </View>
     ),
-    [closeArmAHoverStyle, closeArmBHoverStyle],
+    [],
   );
 
   if (isNative || !getIsElectronRuntime() || getIsElectronRuntimeMac()) {
@@ -246,12 +209,14 @@ const styles = StyleSheet.create((theme) => ({
     width: 10,
     height: 1.5,
     borderRadius: 1,
+    backgroundColor: theme.colors.foregroundMuted,
   },
   maximizeBox: {
     width: 10,
     height: 10,
     borderWidth: 1.5,
     borderRadius: 1,
+    borderColor: theme.colors.foregroundMuted,
     backgroundColor: "transparent",
   },
   restoreRoot: {
@@ -267,6 +232,7 @@ const styles = StyleSheet.create((theme) => ({
     height: 8,
     borderWidth: 1.5,
     borderRadius: 1,
+    borderColor: theme.colors.foregroundMuted,
   },
   restoreFront: {
     position: "absolute",
@@ -276,6 +242,7 @@ const styles = StyleSheet.create((theme) => ({
     height: 8,
     borderWidth: 1.5,
     borderRadius: 1,
+    borderColor: theme.colors.foregroundMuted,
     backgroundColor: theme.colors.surfaceWorkspace,
   },
   closeRoot: {
@@ -289,6 +256,14 @@ const styles = StyleSheet.create((theme) => ({
     width: 12,
     height: 1.5,
     borderRadius: 1,
+    backgroundColor: theme.colors.foregroundMuted,
+  },
+  closeArmHover: {
+    position: "absolute",
+    width: 12,
+    height: 1.5,
+    borderRadius: 1,
+    backgroundColor: theme.colors.destructiveForeground ?? "#ffffff",
   },
   closeArmA: {
     transform: [{ rotate: "45deg" }],
@@ -299,3 +274,7 @@ const styles = StyleSheet.create((theme) => ({
 }));
 
 const CLUSTER_STYLE = [styles.cluster, TITLEBAR_NO_DRAG_VIEW_STYLE];
+const CLOSE_ARM_A_STYLE = [styles.closeArm, styles.closeArmA];
+const CLOSE_ARM_B_STYLE = [styles.closeArm, styles.closeArmB];
+const CLOSE_ARM_A_HOVER_STYLE = [styles.closeArmHover, styles.closeArmA];
+const CLOSE_ARM_B_HOVER_STYLE = [styles.closeArmHover, styles.closeArmB];

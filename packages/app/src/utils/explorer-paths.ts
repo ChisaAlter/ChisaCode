@@ -5,6 +5,12 @@ interface BuildAbsoluteExplorerPathInput {
   entryPath: string;
 }
 
+/**
+ * Joins a workspace root with a relative explorer entry path when needed
+ * @param workspaceRoot Absolute workspace root directory
+ * @param entryPath Explorer entry path that may be relative or absolute
+ * @returns Absolute path suitable for file operations
+ */
 export function buildAbsoluteExplorerPath({
   workspaceRoot,
   entryPath,

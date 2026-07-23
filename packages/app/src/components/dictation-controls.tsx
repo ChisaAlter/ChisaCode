@@ -1,11 +1,12 @@
 import { useMemo } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { X, ArrowUp, RefreshCcw, Check, Mic, Pencil } from "lucide-react-native";
 import { VolumeMeter } from "./volume-meter";
 import { FOOTER_HEIGHT } from "@/constants/layout";
 import type { DictationStatus } from "@/hooks/use-dictation";
 import { useTranslation } from "react-i18next";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 interface DictationControlsProps {
   volume: number;
@@ -22,6 +23,27 @@ interface DictationControlsProps {
   onDiscard?: () => void;
   disabled?: boolean;
 }
+
+const ThemedX = withUnistyles(X);
+const ThemedArrowUp = withUnistyles(ArrowUp);
+const ThemedRefreshCcw = withUnistyles(RefreshCcw);
+const ThemedCheck = withUnistyles(Check);
+const ThemedMic = withUnistyles(Mic);
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const surface0ColorMapping = (theme: Theme) => ({
+  color: theme.colors.surface0,
+});
+const accentForegroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground,
+});
+const accentColorMapping = (theme: Theme) => ({
+  color: theme.colors.accent,
+});
 
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -43,7 +65,6 @@ export function DictationControls({
   onDiscard,
   disabled = false,
 }: DictationControlsProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isFailed = status === "failed";
   const showActiveState = isRecording || isProcessing || isFailed;
@@ -53,10 +74,6 @@ export function DictationControls({
   const micButtonStyle = useMemo(
     () => [styles.micButton, disabled && styles.buttonDisabled],
     [disabled],
-  );
-  const timerTextStyle = useMemo(
-    () => [styles.timerText, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
   );
   const cancelButtonStyle = useMemo(
     () => [
@@ -76,7 +93,7 @@ export function DictationControls({
         accessibilityLabel={t("composer.startDictation")}
         style={micButtonStyle}
       >
-        <Mic size={theme.iconSize.md} color={theme.colors.foreground} />
+        <ThemedMic size={ICON_SIZE.md} uniProps={foregroundColorMapping} />
       </Pressable>
     );
   }
@@ -86,7 +103,7 @@ export function DictationControls({
       <View style={styles.meterWrapper}>
         <VolumeMeter volume={volume} isMuted={false} isSpeaking={false} orientation="horizontal" />
       </View>
-      <Text style={timerTextStyle}>{formatDuration(duration)}</Text>
+      <Text style={styles.timerText}>{formatDuration(duration)}</Text>
       <View style={styles.actionGroup}>
         <Pressable
           onPress={handleCancel}
@@ -94,11 +111,11 @@ export function DictationControls({
           accessibilityLabel={t("composer.cancelDictation")}
           style={cancelButtonStyle}
         >
-          <X size={theme.iconSize.sm} color={theme.colors.foreground} />
+          <ThemedX size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />
         </Pressable>
         {actionsDisabled ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={theme.colors.foreground} />
+            <ThemedActivityIndicator size="small" uniProps={foregroundColorMapping} />
           </View>
         ) : null}
         {!actionsDisabled && isFailed ? (
@@ -107,7 +124,7 @@ export function DictationControls({
             accessibilityLabel={t("composer.retryDictation")}
             style={ACTION_CONFIRM_STYLE}
           >
-            <RefreshCcw size={theme.iconSize.sm} color={theme.colors.surface0} />
+            <ThemedRefreshCcw size={ICON_SIZE.sm} uniProps={surface0ColorMapping} />
           </Pressable>
         ) : null}
         {!actionsDisabled && !isFailed ? (
@@ -117,14 +134,14 @@ export function DictationControls({
               accessibilityLabel={t("composer.insertTranscription")}
               style={ACTION_SECONDARY_STYLE}
             >
-              <Check size={theme.iconSize.sm} color={theme.colors.foreground} />
+              <ThemedCheck size={ICON_SIZE.sm} uniProps={foregroundColorMapping} />
             </Pressable>
             <Pressable
               onPress={onAcceptAndSend}
               accessibilityLabel={t("composer.insertTranscriptionAndSend")}
               style={ACTION_CONFIRM_STYLE}
             >
-              <ArrowUp size={theme.iconSize.sm} color={theme.colors.surface0} />
+              <ThemedArrowUp size={ICON_SIZE.sm} uniProps={surface0ColorMapping} />
             </Pressable>
           </>
         ) : null}
@@ -150,17 +167,12 @@ export function DictationOverlay({
   onRetry,
   onDiscard,
 }: Omit<DictationControlsProps, "onStart" | "disabled" | "transcript"> & { errorText?: string }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isFailed = status === "failed";
   const showActiveState = isRecording || isProcessing || isFailed;
   const actionsDisabled = isProcessing;
   const handleCancel = isFailed && onDiscard ? onDiscard : onCancel;
 
-  const containerStyle = useMemo(
-    () => [overlayStyles.container, { backgroundColor: theme.colors.accent }],
-    [theme.colors.accent],
-  );
   const overlayCancelButtonStyle = useMemo(
     () => [
       overlayStyles.cancelButton,
@@ -168,26 +180,13 @@ export function DictationOverlay({
     ],
     [actionsDisabled, isFailed],
   );
-  const overlayTimerTextStyle = useMemo(
-    () => [overlayStyles.timerText, { color: theme.colors.accentForeground }],
-    [theme.colors.accentForeground],
-  );
-  const overlayTranscriptTextStyle = useMemo(
-    () => [overlayStyles.transcriptText, { color: theme.colors.accentForeground, opacity: 0.95 }],
-    [theme.colors.accentForeground],
-  );
-  const overlayRetryButtonStyle = useMemo(
-    () => [overlayStyles.actionButton, { backgroundColor: theme.colors.accentForeground }],
-    [theme.colors.accentForeground],
-  );
-  const overlayConfirmButtonStyle = overlayRetryButtonStyle;
 
   if (!showActiveState) {
     return null;
   }
 
   return (
-    <View style={containerStyle}>
+    <View style={overlayStyles.container}>
       <Pressable
         onPress={handleCancel}
         disabled={actionsDisabled && !isFailed}
@@ -195,7 +194,7 @@ export function DictationOverlay({
         accessibilityLabel={t("composer.cancelDictation")}
         style={overlayCancelButtonStyle}
       >
-        <X size={theme.iconSize.lg} color={theme.colors.accentForeground} strokeWidth={2.5} />
+        <ThemedX size={ICON_SIZE.lg} uniProps={accentForegroundColorMapping} strokeWidth={2.5} />
       </Pressable>
 
       <View style={overlayStyles.centerContainer}>
@@ -205,12 +204,12 @@ export function DictationOverlay({
             isMuted={false}
             isSpeaking={false}
             orientation="horizontal"
-            color={theme.colors.accentForeground}
+            tone="accentForeground"
           />
-          <Text style={overlayTimerTextStyle}>{formatDuration(duration)}</Text>
+          <Text style={overlayStyles.timerText}>{formatDuration(duration)}</Text>
         </View>
         {isFailed ? (
-          <Text numberOfLines={2} style={overlayTranscriptTextStyle}>
+          <Text numberOfLines={2} style={overlayStyles.transcriptText}>
             {errorText
               ? t("composer.dictationFailed", { message: errorText })
               : t("composer.dictationFailedRetry")}
@@ -221,7 +220,7 @@ export function DictationOverlay({
       <View style={overlayStyles.actionButtonsContainer}>
         {actionsDisabled ? (
           <View style={overlayStyles.loadingContainer}>
-            <ActivityIndicator size="small" color={theme.colors.accentForeground} />
+            <ThemedActivityIndicator size="small" uniProps={accentForegroundColorMapping} />
           </View>
         ) : null}
         {!actionsDisabled && isFailed ? (
@@ -229,9 +228,9 @@ export function DictationOverlay({
             onPress={onRetry}
             accessibilityRole="button"
             accessibilityLabel={t("composer.retryDictation")}
-            style={overlayRetryButtonStyle}
+            style={overlayStyles.actionButtonConfirm}
           >
-            <RefreshCcw size={theme.iconSize.lg} color={theme.colors.accent} strokeWidth={2.5} />
+            <ThemedRefreshCcw size={ICON_SIZE.lg} uniProps={accentColorMapping} strokeWidth={2.5} />
           </Pressable>
         ) : null}
         {!actionsDisabled && !isFailed ? (
@@ -242,9 +241,9 @@ export function DictationOverlay({
               accessibilityLabel={t("composer.insertTranscription")}
               style={OVERLAY_ACCEPT_BUTTON_STYLE}
             >
-              <Pencil
-                size={theme.iconSize.lg}
-                color={theme.colors.accentForeground}
+              <ThemedPencil
+                size={ICON_SIZE.lg}
+                uniProps={accentForegroundColorMapping}
                 strokeWidth={2.5}
               />
             </Pressable>
@@ -252,9 +251,9 @@ export function DictationOverlay({
               onPress={onAcceptAndSend}
               accessibilityRole="button"
               accessibilityLabel={t("composer.insertTranscriptionAndSend")}
-              style={overlayConfirmButtonStyle}
+              style={overlayStyles.actionButtonConfirm}
             >
-              <ArrowUp size={theme.iconSize.lg} color={theme.colors.accent} strokeWidth={2.5} />
+              <ThemedArrowUp size={ICON_SIZE.lg} uniProps={accentColorMapping} strokeWidth={2.5} />
             </Pressable>
           </>
         ) : null}
@@ -291,6 +290,7 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 16,
     fontWeight: theme.fontWeight.semibold,
     fontVariant: ["tabular-nums"],
+    color: theme.colors.foreground,
   },
   actionGroup: {
     flexDirection: "row",
@@ -345,6 +345,7 @@ const overlayStyles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingVertical: OVERLAY_VERTICAL_PADDING,
     height: FOOTER_HEIGHT,
+    backgroundColor: theme.colors.accent,
   },
   cancelButton: {
     width: OVERLAY_BUTTON_SIZE,
@@ -373,6 +374,7 @@ const overlayStyles = StyleSheet.create((theme) => ({
     lineHeight: 24,
     fontWeight: theme.fontWeight.semibold,
     fontVariant: ["tabular-nums"],
+    color: theme.colors.accentForeground,
   },
   transcriptText: {
     // Soft dictation chrome: 12.5 meta.
@@ -381,7 +383,8 @@ const overlayStyles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
     textAlign: "center",
     paddingHorizontal: theme.spacing[2],
-    opacity: 0.9,
+    opacity: 0.95,
+    color: theme.colors.accentForeground,
   },
   actionButtonsContainer: {
     flexDirection: "row",
@@ -394,6 +397,14 @@ const overlayStyles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     alignItems: "center",
     justifyContent: "center",
+  },
+  actionButtonConfirm: {
+    width: OVERLAY_BUTTON_SIZE,
+    height: OVERLAY_BUTTON_SIZE,
+    borderRadius: theme.borderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.accentForeground,
   },
   buttonDisabled: {
     opacity: 0.5,

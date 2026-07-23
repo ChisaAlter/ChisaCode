@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
@@ -26,6 +26,60 @@ import type {
   PrPaneData,
   PrState,
 } from "@/git/pr-pane-data";
+import { type Theme } from "@/styles/theme";
+
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedCircleCheck = withUnistyles(CircleCheck);
+const ThemedCircleDot = withUnistyles(CircleDot);
+const ThemedCircleSlash = withUnistyles(CircleSlash);
+const ThemedCircleX = withUnistyles(CircleX);
+const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedGitMerge = withUnistyles(GitMerge);
+const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+const ThemedGitPullRequestClosed = withUnistyles(GitPullRequestClosed);
+const ThemedGitPullRequestDraft = withUnistyles(GitPullRequestDraft);
+const ThemedMessageSquare = withUnistyles(MessageSquare);
+const ThemedRotateCw = withUnistyles(RotateCw);
+
+type ColorMapping = (theme: Theme) => { color: string };
+
+const statusSuccessColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.statusSuccess,
+});
+const statusDangerColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.statusDanger,
+});
+const statusWarningColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.statusWarning,
+});
+const statusMergedColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.statusMerged,
+});
+const foregroundMutedColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
+function getStateColorMapping(state: PrState): ColorMapping {
+  if (state === "open") return statusSuccessColorMapping;
+  if (state === "draft") return foregroundMutedColorMapping;
+  if (state === "merged") return statusMergedColorMapping;
+  return statusDangerColorMapping;
+}
+
+function getStateLabelStyle(state: PrState) {
+  if (state === "open") return styles.stateLabelSuccess;
+  if (state === "draft") return styles.stateLabelMuted;
+  if (state === "merged") return styles.stateLabelMerged;
+  return styles.stateLabelDanger;
+}
+
+function getStateIcon(state: PrState) {
+  if (state === "draft") return ThemedGitPullRequestDraft;
+  if (state === "merged") return ThemedGitMerge;
+  if (state === "closed") return ThemedGitPullRequestClosed;
+  return ThemedGitPullRequest;
+}
 
 function rowPressableStyle({ hovered }: { hovered?: boolean }) {
   return [styles.row, Boolean(hovered) && styles.hoverable];
@@ -37,7 +91,6 @@ function activityPressableStyle({ hovered }: { hovered?: boolean }) {
 
 export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () => void }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const [checksOpen, setChecksOpen] = useState(true);
   const [reviewsOpen, setReviewsOpen] = useState(true);
 
@@ -67,30 +120,30 @@ export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () =
     (a) => a.kind === "comment" || (a.kind === "review" && a.reviewState === "commented"),
   ).length;
 
-  const stateColor = getStateColor(data.state, theme);
+  const stateColorMapping = getStateColorMapping(data.state);
   const StateIcon = getStateIcon(data.state);
   const stateLabel = getStateLabel(data.state);
-  const stateLabelStyle = useMemo(() => [styles.stateLabel, { color: stateColor }], [stateColor]);
+  const stateLabelStyle = getStateLabelStyle(data.state);
   const keyedActivity = useMemo(
     () => data.activity.map((item, idx) => ({ key: `${item.author}-${item.kind}-${idx}`, item })),
     [data.activity],
   );
 
   const checkSuccessIcon = useMemo(
-    () => <CircleCheck size={12} color={theme.colors.statusSuccess} />,
-    [theme.colors.statusSuccess],
+    () => <ThemedCircleCheck size={12} uniProps={statusSuccessColorMapping} />,
+    [],
   );
   const checkDangerIcon = useMemo(
-    () => <CircleX size={12} color={theme.colors.statusDanger} />,
-    [theme.colors.statusDanger],
+    () => <ThemedCircleX size={12} uniProps={statusDangerColorMapping} />,
+    [],
   );
   const checkWarningIcon = useMemo(
-    () => <CircleDot size={12} color={theme.colors.statusWarning} />,
-    [theme.colors.statusWarning],
+    () => <ThemedCircleDot size={12} uniProps={statusWarningColorMapping} />,
+    [],
   );
   const commentIcon = useMemo(
-    () => <MessageSquare size={11} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedMessageSquare size={11} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
 
   return (
@@ -99,7 +152,7 @@ export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () =
         {({ hovered }) => (
           <>
             <View style={styles.stateLine}>
-              <StateIcon size={14} color={stateColor} />
+              <StateIcon size={14} uniProps={stateColorMapping} />
               <Text style={stateLabelStyle} testID="pr-pane-state">
                 {stateLabel}
               </Text>
@@ -109,7 +162,7 @@ export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () =
               {hovered ? (
                 <Text>
                   {"  "}
-                  <ExternalLink size={12} color={theme.colors.foregroundMuted} />
+                  <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
                 </Text>
               ) : null}
             </Text>
@@ -119,7 +172,7 @@ export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () =
 
       {onRefresh ? (
         <Pressable onPress={onRefresh} style={styles.refreshButton} testID="pr-pane-refresh">
-          <RotateCw size={14} color={theme.colors.foregroundMuted} />
+          <ThemedRotateCw size={14} uniProps={foregroundMutedColorMapping} />
         </Pressable>
       ) : null}
 
@@ -133,19 +186,19 @@ export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () =
           <>
             <SummaryPill
               count={passed}
-              color={theme.colors.statusSuccess}
+              textStyle={styles.pillTextSuccess}
               icon={checkSuccessIcon}
               testID="pr-pane-check-passed"
             />
             <SummaryPill
               count={failed}
-              color={theme.colors.statusDanger}
+              textStyle={styles.pillTextDanger}
               icon={checkDangerIcon}
               testID="pr-pane-check-failed"
             />
             <SummaryPill
               count={pending}
-              color={theme.colors.statusWarning}
+              textStyle={styles.pillTextWarning}
               icon={checkWarningIcon}
               testID="pr-pane-check-pending"
             />
@@ -167,19 +220,15 @@ export function PrPane({ data, onRefresh }: { data: PrPaneData; onRefresh?: () =
           <>
             <SummaryPill
               count={approvals}
-              color={theme.colors.statusSuccess}
+              textStyle={styles.pillTextSuccess}
               icon={checkSuccessIcon}
             />
             <SummaryPill
               count={changesRequested}
-              color={theme.colors.statusDanger}
+              textStyle={styles.pillTextDanger}
               icon={checkDangerIcon}
             />
-            <SummaryPill
-              count={commentCount}
-              color={theme.colors.foregroundMuted}
-              icon={commentIcon}
-            />
+            <SummaryPill count={commentCount} textStyle={styles.pillTextMuted} icon={commentIcon} />
           </>
         }
       >
@@ -200,14 +249,13 @@ interface SectionProps {
 }
 
 function Section({ title, open, onToggle, summary, children }: SectionProps) {
-  const { theme } = useUnistyles();
   return (
     <View style={open ? styles.sectionOpen : undefined}>
       <Pressable style={styles.sectionHeader} onPress={onToggle}>
         {open ? (
-          <ChevronDown size={14} color={theme.colors.foregroundMuted} />
+          <ThemedChevronDown size={14} uniProps={foregroundMutedColorMapping} />
         ) : (
-          <ChevronRight size={14} color={theme.colors.foregroundMuted} />
+          <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />
         )}
         <Text style={styles.sectionTitle}>{title}</Text>
         <View style={styles.summaryWrap}>{summary}</View>
@@ -227,21 +275,20 @@ function Section({ title, open, onToggle, summary, children }: SectionProps) {
 
 function SummaryPill({
   count,
-  color,
+  textStyle,
   icon,
   testID,
 }: {
   count: number;
-  color: string;
+  textStyle: object;
   icon: React.ReactNode;
   testID?: string;
 }) {
-  const textStyle = useMemo(() => [styles.summaryPillText, { color }], [color]);
   if (count === 0) return null;
   return (
     <View style={styles.summaryPill} testID={testID}>
       {icon}
-      <Text style={textStyle}>{count}</Text>
+      <Text style={StyleSheet.compose(styles.summaryPillText, textStyle)}>{count}</Text>
     </View>
   );
 }
@@ -267,11 +314,16 @@ function CheckRow({ check }: { check: PrPaneCheck }) {
 }
 
 function CheckStatusIcon({ status }: { status: CheckStatus }) {
-  const { theme } = useUnistyles();
-  if (status === "success") return <CircleCheck size={14} color={theme.colors.statusSuccess} />;
-  if (status === "failure") return <CircleX size={14} color={theme.colors.statusDanger} />;
-  if (status === "pending") return <CircleDot size={14} color={theme.colors.statusWarning} />;
-  return <CircleSlash size={14} color={theme.colors.foregroundMuted} />;
+  if (status === "success") {
+    return <ThemedCircleCheck size={14} uniProps={statusSuccessColorMapping} />;
+  }
+  if (status === "failure") {
+    return <ThemedCircleX size={14} uniProps={statusDangerColorMapping} />;
+  }
+  if (status === "pending") {
+    return <ThemedCircleDot size={14} uniProps={statusWarningColorMapping} />;
+  }
+  return <ThemedCircleSlash size={14} uniProps={foregroundMutedColorMapping} />;
 }
 
 function ActivityRow({ item }: { item: PrPaneActivity }) {
@@ -304,20 +356,6 @@ function ActivityRow({ item }: { item: PrPaneActivity }) {
   );
 }
 
-function getStateColor(state: PrState, theme: ReturnType<typeof useUnistyles>["theme"]): string {
-  if (state === "open") return theme.colors.statusSuccess;
-  if (state === "draft") return theme.colors.foregroundMuted;
-  if (state === "merged") return theme.colors.statusMerged;
-  return theme.colors.statusDanger;
-}
-
-function getStateIcon(state: PrState) {
-  if (state === "draft") return GitPullRequestDraft;
-  if (state === "merged") return GitMerge;
-  if (state === "closed") return GitPullRequestClosed;
-  return GitPullRequest;
-}
-
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
@@ -338,10 +376,29 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
   },
-  stateLabel: {
+  stateLabelSuccess: {
     fontSize: 12.5,
     lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
+    color: theme.colors.statusSuccess,
+  },
+  stateLabelMuted: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.foregroundMuted,
+  },
+  stateLabelMerged: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.statusMerged,
+  },
+  stateLabelDanger: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.statusDanger,
   },
   // Soft PR title meta: 12.5.
   title: {
@@ -401,6 +458,18 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 16,
     fontWeight: theme.fontWeight.normal,
+  },
+  pillTextSuccess: {
+    color: theme.colors.statusSuccess,
+  },
+  pillTextDanger: {
+    color: theme.colors.statusDanger,
+  },
+  pillTextWarning: {
+    color: theme.colors.statusWarning,
+  },
+  pillTextMuted: {
+    color: theme.colors.foregroundMuted,
   },
   row: {
     flexDirection: "row",

@@ -5,6 +5,11 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 
+/**
+ * Parses a `serverId:agentId` compound key
+ * @param key Combined server and agent id separated by a colon
+ * @returns Parsed ids, or null when the key is missing or malformed
+ */
 export function parseAgentKey(
   key: string | null | undefined,
 ): { serverId: string; agentId: string } | null {
@@ -23,6 +28,11 @@ export function parseAgentKey(
   return { serverId, agentId };
 }
 
+/**
+ * Resolves which agent context "new agent" flows should inherit from the route
+ * @param input Current pathname and optional selected agent key
+ * @returns Server/agent ids when an open-agent intent, agent route, or key is available
+ */
 export function resolveSelectedAgentForNewAgent(input: {
   pathname: string;
   selectedAgentId?: string;
@@ -58,6 +68,12 @@ function inferMainRepoRootFromChisaCodeWorktreePath(cwd: string): string | null 
   return inferred.trim() ? inferred : null;
 }
 
+/**
+ * Chooses the working directory for a new agent, preferring the main repo over worktrees
+ * @param cwd Current agent or workspace working directory
+ * @param checkout Checkout status used to detect ChisaCode-owned worktrees
+ * @returns Main repo root when known, otherwise the original cwd
+ */
 export function resolveNewAgentWorkingDir(
   cwd: string,
   checkout: CheckoutStatusPayload | null,

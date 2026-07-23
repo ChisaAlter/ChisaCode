@@ -4,11 +4,13 @@ import type {
 } from "@/hooks/use-sidebar-workspaces-list";
 import { isSidebarProjectFlattened } from "./sidebar-project-row-model";
 
+/** Workspace identity targeted by a numbered sidebar shortcut */
 export interface SidebarShortcutWorkspaceTarget {
   serverId: string;
   workspaceId: string;
 }
 
+/** Ordered shortcut targets and a workspace-key lookup of 1-based shortcut indexes */
 export interface SidebarShortcutModel {
   shortcutTargets: SidebarShortcutWorkspaceTarget[];
   shortcutIndexByWorkspaceKey: Map<string, number>;
@@ -21,6 +23,11 @@ function createShortcutTarget(workspace: SidebarWorkspaceEntry): SidebarShortcut
   };
 }
 
+/**
+ * Builds keyboard shortcut targets from the visible left-sidebar workspace list
+ * @param input Projects, collapsed project keys, and optional shortcut limit (default 9)
+ * @returns Ordered targets and a map from workspace key to 1-based shortcut number
+ */
 export function buildSidebarShortcutModel(input: {
   projects: SidebarProjectEntry[];
   collapsedProjectKeys: ReadonlySet<string>;
@@ -49,6 +56,11 @@ export function buildSidebarShortcutModel(input: {
   return { shortcutTargets, shortcutIndexByWorkspaceKey };
 }
 
+/**
+ * Resolves the next or previous workspace shortcut target relative to the current one
+ * @param input Ordered targets, current selection, and step direction
+ * @returns The adjacent target with wrap-around, or null when there are no targets
+ */
 export function getRelativeSidebarShortcutTarget(input: {
   targets: readonly SidebarShortcutWorkspaceTarget[];
   currentTarget: SidebarShortcutWorkspaceTarget | null;

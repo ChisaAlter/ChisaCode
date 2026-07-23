@@ -6,10 +6,17 @@ import {
 } from "@/hooks/use-settings";
 import { openExternalUrl } from "@/utils/open-external-url";
 
+/** Optional in-app open callback used by desktop service URL handling */
 export interface OpenServiceUrlOptions {
   openInApp?: (url: string) => void;
 }
 
+/**
+ * Opens a workspace service URL in-app or externally based on desktop settings
+ * @param url Service URL to open
+ * @param options Optional desktop in-app opener; without it the URL opens externally
+ * @returns Promise that resolves after the open decision completes
+ */
 export async function openServiceUrl(url: string, options?: OpenServiceUrlOptions): Promise<void> {
   const openInApp = options?.openInApp;
   if (!openInApp || !isElectronRuntime()) {

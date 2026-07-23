@@ -62,6 +62,11 @@ function hasMeaningfulUnknownDetail(detail: Extract<ToolCallDetail, { type: "unk
   return hasMeaningfulUnknownValue(detail.input) || hasMeaningfulUnknownValue(detail.output);
 }
 
+/**
+ * Whether a tool-call detail payload has content worth expanding in the UI
+ * @param detail Structured tool-call detail, if any
+ * @returns True when the detail has meaningful fields for its type
+ */
 export function hasMeaningfulToolCallDetail(detail: ToolCallDetail | undefined): boolean {
   if (!detail) {
     return false;
@@ -93,6 +98,11 @@ export function hasMeaningfulToolCallDetail(detail: ToolCallDetail | undefined):
   }
 }
 
+/**
+ * Whether a tool call should show a pending/loading detail state
+ * @param params Detail payload, run status, and error value for the tool call
+ * @returns True while running without an error and without meaningful detail yet
+ */
 export function isPendingToolCallDetail(params: {
   detail: ToolCallDetail | undefined;
   status: "executing" | "running" | "completed" | "failed" | "canceled";

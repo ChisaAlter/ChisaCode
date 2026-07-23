@@ -1,8 +1,14 @@
+/** Parsed mono PCM16 samples and sample rate from a WAV buffer */
 export interface Pcm16Wav {
   sampleRate: number;
   samples: Int16Array;
 }
 
+/**
+ * Parses a PCM16 WAV buffer into mono samples
+ * @param buffer Raw WAV file bytes
+ * @returns Sample rate and mono Int16 samples, or null when the WAV is unsupported
+ */
 export function parsePcm16Wav(buffer: ArrayBuffer): Pcm16Wav | null {
   if (buffer.byteLength < 44) {
     return null;

@@ -11,7 +11,8 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -21,6 +22,24 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useWorkspaceFocusRestoration } from "@/workspace/focus";
 import { useReviewDraftComments, useReviewDraftStore, type ReviewDraftComment } from "./store";
 import { buildReviewableDiffTargetKey, type ReviewableDiffTarget } from "@/utils/diff-layout";
+
+const ThemedPlus = withUnistyles(Plus);
+const ThemedPencil = withUnistyles(Pencil);
+const ThemedTrash2 = withUnistyles(Trash2);
+const ThemedTextInput = withUnistyles(TextInput);
+
+const accentForegroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground,
+});
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const destructiveColorMapping = (theme: Theme) => ({
+  color: theme.colors.destructive,
+});
+const placeholderColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+});
 
 type PressableState = PressableStateCallbackType & { hovered?: boolean };
 type WebTextInputRef = TextInput & {
@@ -284,7 +303,6 @@ export function InlineReviewGutterCell({
   onStartComment: (target: ReviewableDiffTarget) => void;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { theme } = useUnistyles();
   const canComment = Boolean(reviewTarget);
   const hasComments = comments.length > 0;
   const [isGutterHovered, setIsGutterHovered] = useState(false);
@@ -347,7 +365,7 @@ export function InlineReviewGutterCell({
           {children}
           {showAction ? (
             <View style={styles.gutterActionIcon}>
-              <Plus size={16} strokeWidth={2.4} color={theme.colors.accentForeground} />
+              <ThemedPlus size={16} strokeWidth={2.4} uniProps={accentForegroundColorMapping} />
             </View>
           ) : null}
         </View>
@@ -430,7 +448,6 @@ function CommentRow({
   onEditComment: (target: ReviewableDiffTarget, comment: ReviewDraftComment) => void;
   onDeleteComment: (id: string) => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
 
   const handleEdit = useCallback(
@@ -457,7 +474,7 @@ function CommentRow({
           onPress={handleEdit}
           style={iconButtonStyle}
         >
-          <Pencil size={14} color={theme.colors.foregroundMuted} />
+          <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -467,7 +484,7 @@ function CommentRow({
           onPress={handleDelete}
           style={iconButtonDestructiveStyle}
         >
-          <Trash2 size={14} color={theme.colors.destructive} />
+          <ThemedTrash2 size={14} uniProps={destructiveColorMapping} />
         </Pressable>
       </View>
     </View>
@@ -501,7 +518,6 @@ export function InlineReviewEditor({
   onSave: (body: string) => void;
   testID?: string;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const inputRef = useRef<TextInput | null>(null);
   const focus = useWorkspaceFocusRestoration();
@@ -575,12 +591,12 @@ export function InlineReviewEditor({
 
   return (
     <View style={styles.editorBlock} testID={testID}>
-      <TextInput
+      <ThemedTextInput
         ref={inputRef}
         accessibilityLabel={t("review.commentBody")}
         testID={testID ? `${testID}-input` : undefined}
         placeholder={t("review.commentPlaceholder")}
-        placeholderTextColor={theme.colors.foregroundMuted}
+        uniProps={placeholderColorMapping}
         multiline
         value={body}
         onChangeText={setBody}

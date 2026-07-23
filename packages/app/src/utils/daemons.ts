@@ -27,8 +27,14 @@ export function formatConnectionStatus(
   }
 }
 
+/** Visual tone used when rendering host connection status */
 export type ConnectionStatusTone = "success" | "warning" | "error" | "muted";
 
+/**
+ * Maps a host connection status to a UI tone token
+ * @param status Host runtime connection status
+ * @returns Tone used for status dots and labels
+ */
 export function getConnectionStatusTone(status: HostRuntimeConnectionStatus): ConnectionStatusTone {
   switch (status) {
     case "online":

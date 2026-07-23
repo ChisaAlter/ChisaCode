@@ -8,7 +8,7 @@ import {
   type ViewStyle,
   View,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { isWeb as platformIsWeb } from "@/constants/platform";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import {
@@ -140,7 +140,6 @@ export function WebDesktopScrollbarOverlay({
   onScrollToOffset,
   inverted = false,
 }: WebDesktopScrollbarOverlayProps) {
-  const { theme } = useUnistyles();
   const [isHandleHovered, setIsHandleHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isScrollVisible, setIsScrollVisible] = useState(false);
@@ -364,7 +363,6 @@ export function WebDesktopScrollbarOverlay({
   else if (isScrollVisible) handleOpacity = HANDLE_OPACITY_VISIBLE;
   else handleOpacity = 0;
   const handleWidth = isDragging || isHandleHovered ? HANDLE_WIDTH_ACTIVE : HANDLE_WIDTH_IDLE;
-  const handleColor = theme.colors.scrollbarHandle;
   const handleCursor = isDragging ? "grabbing" : "grab";
   const handleTravelDurationMs =
     isDragging || isScrollActive ? 0 : HANDLE_TRAVEL_TRANSITION_DURATION_MS;
@@ -402,7 +400,6 @@ export function WebDesktopScrollbarOverlay({
         marginTop: handleInsetTop,
         height: geometry.handleSize,
         width: handleWidth,
-        backgroundColor: handleColor,
         opacity: handleOpacity,
       }),
       platformIsWeb &&
@@ -412,7 +409,7 @@ export function WebDesktopScrollbarOverlay({
           transitionTimingFunction: "ease-out, cubic-bezier(0.22, 0.75, 0.2, 1), ease-out",
         } satisfies WebPointerStyle as unknown as ViewStyle),
     ],
-    [handleInsetTop, geometry.handleSize, handleWidth, handleColor, handleOpacity],
+    [handleInsetTop, geometry.handleSize, handleWidth, handleOpacity],
   );
 
   if (!enabled || !geometry.isVisible) {
@@ -439,7 +436,7 @@ export function WebDesktopScrollbarOverlay({
   );
 }
 
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create((theme) => ({
   overlay: {
     position: "absolute",
     top: 0,
@@ -454,6 +451,7 @@ const styles = StyleSheet.create(() => ({
     width: HANDLE_WIDTH_IDLE,
     borderRadius: 999,
     alignSelf: "center",
+    backgroundColor: theme.colors.scrollbarHandle,
   },
   thumbRegion: {
     position: "absolute",

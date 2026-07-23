@@ -25,13 +25,27 @@ import {
   type StyleProp,
 } from "react-native";
 import { Keyframe, runOnJS } from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Check, CheckCircle } from "lucide-react-native";
+import type { Theme } from "@/styles/theme";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WORKBENCH_ENVIRONMENT_PANEL_SHADOW } from "@/constants/layout";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedCheckCircle = withUnistyles(CheckCircle);
+const ThemedCheck = withUnistyles(Check);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const successColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.green[500],
+});
 // Action status for menu items with loading/success feedback
 export type ActionStatus = "idle" | "pending" | "success";
 
@@ -623,14 +637,13 @@ function resolveDropdownItemLeadingContent(input: {
   isPending: boolean | undefined;
   isSuccess: boolean;
   leading: ReactElement | null;
-  theme: { colors: { foregroundMuted: string; palette: { green: Record<number, string> } } };
 }): ReactElement | null {
-  const { isPending, isSuccess, leading, theme } = input;
+  const { isPending, isSuccess, leading } = input;
   if (isPending) {
-    return <ActivityIndicator size={16} color={theme.colors.foregroundMuted} />;
+    return <ThemedActivityIndicator size={16} uniProps={foregroundMutedColorMapping} />;
   }
   if (isSuccess) {
-    return <CheckCircle size={16} color={theme.colors.palette.green[500]} />;
+    return <ThemedCheckCircle size={16} uniProps={successColorMapping} />;
   }
   return leading;
 }
@@ -690,7 +703,6 @@ export function DropdownMenuItem({
   testID?: string;
   tooltip?: string;
 }>): ReactElement {
-  const { theme } = useUnistyles();
   const { selectItem } = useDropdownMenuContext("DropdownMenuItem");
 
   // Derive state from status prop (preferred) or legacy loading prop
@@ -702,7 +714,6 @@ export function DropdownMenuItem({
     isPending,
     isSuccess,
     leading: leading ?? null,
-    theme,
   });
 
   const label = resolveDropdownItemLabel({
@@ -716,7 +727,7 @@ export function DropdownMenuItem({
   const trailingContent =
     trailing ??
     (!showSelectedCheck && selected ? (
-      <Check size={16} color={theme.colors.foregroundMuted} />
+      <ThemedCheck size={16} uniProps={foregroundMutedColorMapping} />
     ) : null);
 
   const handleItemPress = useCallback(() => {
@@ -786,7 +797,7 @@ export function DropdownMenuItem({
     >
       {showSelectedCheck ? (
         <View style={styles.checkSlot}>
-          {selected ? <Check size={16} color={theme.colors.foreground} /> : null}
+          {selected ? <ThemedCheck size={16} uniProps={foregroundColorMapping} /> : null}
         </View>
       ) : null}
       {leadingContent ? <View style={styles.leadingSlot}>{leadingContent}</View> : null}

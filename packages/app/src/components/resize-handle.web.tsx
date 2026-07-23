@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { View, type PointerEvent as RNPointerEvent } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 
 import type { ResizeHandleProps } from "./resize-handle.types";
 
@@ -18,7 +18,6 @@ export function ResizeHandle({
   sizes,
   onResizeSplit,
 }: ResizeHandleProps) {
-  const { theme } = useUnistyles();
   const pointerStateRef = useRef<PointerState | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [active, setActive] = useState(false);
@@ -106,17 +105,15 @@ export function ResizeHandle({
     () => [
       styles.handle,
       direction === "horizontal" ? styles.handleHorizontal : styles.handleVertical,
-      { backgroundColor: theme.colors.border },
     ],
-    [direction, theme.colors.border],
+    [direction],
   );
   const highlightStyle = useMemo(
     () => [
       styles.highlight,
       direction === "horizontal" ? styles.highlightHorizontal : styles.highlightVertical,
-      { backgroundColor: theme.colors.accent },
     ],
-    [direction, theme.colors.accent],
+    [direction],
   );
   const hitAreaStyle = useMemo(
     () => [
@@ -144,10 +141,11 @@ export function ResizeHandle({
   );
 }
 
-const styles = StyleSheet.create((_theme) => ({
+const styles = StyleSheet.create((theme) => ({
   handle: {
     position: "relative",
     flexShrink: 0,
+    backgroundColor: theme.colors.border,
   },
   handleHorizontal: {
     width: 1,
@@ -160,6 +158,7 @@ const styles = StyleSheet.create((_theme) => ({
   highlight: {
     position: "absolute",
     zIndex: 5,
+    backgroundColor: theme.colors.accent,
   },
   highlightHorizontal: {
     top: 0,

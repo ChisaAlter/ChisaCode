@@ -16,7 +16,8 @@ import type {
   TextStyle,
   ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 
 type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive";
 type ButtonSize = "xs" | "sm" | "md" | "lg";
@@ -27,7 +28,51 @@ type LeftIcon =
   | ((color: string) => ReactElement)
   | null;
 
-const ICON_SIZE: Record<ButtonSize, number> = { xs: 12, sm: 14, md: 16, lg: 20 };
+const BUTTON_ICON_SIZE: Record<ButtonSize, number> = { xs: 12, sm: 14, md: 16, lg: 20 };
+
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+type ColorMapping = (theme: Theme) => { color: string };
+
+const accentForegroundColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.accentForeground,
+});
+const foregroundColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.foreground,
+});
+const foregroundMutedColorMapping: ColorMapping = (theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
+/** Injects a theme-reactive `color` prop into render-function left icons. */
+function IconColorHost({
+  color,
+  size: _size,
+  render,
+}: {
+  color: string;
+  size?: number;
+  render: (color: string) => ReactElement;
+}) {
+  return render(color);
+}
+
+const ThemedIconColorHost = withUnistyles(IconColorHost);
+
+/** Injects theme-reactive `color` into component-type left icons. */
+function IconComponentHost({
+  color,
+  size,
+  Icon,
+}: {
+  color: string;
+  size: number;
+  Icon: ComponentType<{ color: string; size: number }>;
+}) {
+  return <Icon color={color} size={size} />;
+}
+
+const ThemedIconComponentHost = withUnistyles(IconComponentHost);
 
 function normalizeGeneratedAccessibilityLabel(value: string | number): string | undefined {
   const normalized = String(value).trim();
@@ -52,6 +97,22 @@ function normalizeButtonSize(size: ButtonSize): ButtonSize {
     return size;
   }
   return "md";
+}
+
+function resolveIconColorMapping(
+  normalizedVariant: ButtonVariant,
+  isGhostHovered: boolean,
+): ColorMapping {
+  if (normalizedVariant === "default") {
+    return accentForegroundColorMapping;
+  }
+  if (normalizedVariant === "ghost") {
+    if (isGhostHovered) {
+      return foregroundColorMapping;
+    }
+    return foregroundMutedColorMapping;
+  }
+  return foregroundColorMapping;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -169,7 +230,6 @@ export function Button({
   }
 >) {
   const [hovered, setHovered] = useState(false);
-  const { theme } = useUnistyles();
   const isDisabled = disabled || loading;
   const normalizedVariant = normalizeButtonVariant(variant);
   const normalizedSize = normalizeButtonSize(size);
@@ -198,6 +258,7 @@ export function Button({
     sizeStyle = styles.md;
   }
   const isGhostHovered = hovered && normalizedVariant === "ghost";
+  const iconColorMapping = resolveIconColorMapping(normalizedVariant, isGhostHovered);
 
   const handleHoverIn = useCallback(() => setHovered(true), []);
   const handleHoverOut = useCallback(() => setHovered(false), []);
@@ -242,21 +303,11 @@ export function Button({
       : undefined;
   const resolvedAccessibilityLabel = explicitAccessibilityLabel ?? generatedAccessibilityLabel;
 
-  function resolveIconColor(): string {
-    if (normalizedVariant === "default") {
-      return theme.colors.accentForeground;
-    }
-    if (normalizedVariant === "ghost") {
-      return isGhostHovered ? theme.colors.foreground : theme.colors.foregroundMuted;
-    }
-    return theme.colors.foreground;
-  }
-
   function renderIcon() {
     if (loading) {
       return (
         <View>
-          <ActivityIndicator size="small" color={resolveIconColor()} />
+          <ThemedActivityIndicator size="small" uniProps={iconColorMapping} />
         </View>
       );
     }
@@ -268,8 +319,7 @@ export function Button({
       return <View>{leftIcon}</View>;
     }
 
-    const color = resolveIconColor();
-    const iconSize = ICON_SIZE[normalizedSize];
+    const iconSize = BUTTON_ICON_SIZE[normalizedSize];
 
     // Render function
     if (
@@ -277,14 +327,21 @@ export function Button({
       !leftIcon.prototype?.isReactComponent &&
       leftIcon.length > 0
     ) {
-      return <View>{(leftIcon as (color: string) => ReactElement)(color)}</View>;
+      return (
+        <View>
+          <ThemedIconColorHost
+            uniProps={iconColorMapping}
+            render={leftIcon as (color: string) => ReactElement}
+          />
+        </View>
+      );
     }
 
     // Component type
     const Icon = leftIcon as ComponentType<{ color: string; size: number }>;
     return (
       <View>
-        <Icon color={color} size={iconSize} />
+        <ThemedIconComponentHost Icon={Icon} size={iconSize} uniProps={iconColorMapping} />
       </View>
     );
   }

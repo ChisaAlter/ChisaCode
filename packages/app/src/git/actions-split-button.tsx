@@ -6,7 +6,7 @@ import {
   Pressable,
   type PressableStateCallbackType,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronDown, Info, MoreVertical } from "lucide-react-native";
 import {
   DropdownMenu,
@@ -17,11 +17,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useToast } from "@/contexts/toast-context";
 import type { GitAction, GitActions } from "@/git/policy";
 import { useTranslation } from "react-i18next";
+import { type Theme } from "@/styles/theme";
+
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedMoreVertical = withUnistyles(MoreVertical);
+const ThemedInfo = withUnistyles(Info);
+
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface GitActionsSplitButtonProps {
   gitActions: GitActions;
@@ -75,10 +87,14 @@ function GitActionMenuItem({
 }
 
 export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSplitButtonProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
   const archiveShortcutKeys = useShortcutKeys("archive-worktree");
+
+  const unavailableToastIcon = useMemo(
+    () => <ThemedInfo size={16} uniProps={foregroundColorMapping} />,
+    [],
+  );
 
   const getActionDisplayLabel = useCallback((action: GitAction): string => {
     if (action.status === "pending") return action.pendingLabel;
@@ -91,13 +107,13 @@ export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSpli
       if (action.unavailableMessage) {
         toast.show(action.unavailableMessage, {
           durationMs: 3200,
-          icon: <Info size={16} color={theme.colors.foreground} />,
+          icon: unavailableToastIcon,
         });
         return;
       }
       action.handler();
     },
-    [theme.colors.foreground, toast],
+    [toast, unavailableToastIcon],
   );
 
   const handlePrimaryPress = useCallback(() => {
@@ -113,20 +129,18 @@ export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSpli
   const primaryPressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.splitButtonPrimary,
-      (Boolean(hovered) || pressed) &&
-        inlineUnistylesStyle({ backgroundColor: theme.colors.surface1 }),
+      (Boolean(hovered) || pressed) && styles.splitButtonPrimaryHovered,
       primaryDisabled && styles.splitButtonPrimaryDisabled,
     ],
-    [primaryDisabled, theme.colors.surface1],
+    [primaryDisabled],
   );
 
   const caretTriggerStyle = useCallback(
     ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
       styles.splitButtonCaret,
-      (hovered || pressed || open) &&
-        inlineUnistylesStyle({ backgroundColor: theme.colors.surface1 }),
+      (hovered || pressed || open) && styles.splitButtonCaretHovered,
     ],
-    [theme.colors.surface1],
+    [],
   );
 
   return (
@@ -142,10 +156,10 @@ export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSpli
             accessibilityLabel={gitActions.primary.label}
           >
             {gitActions.primary.status === "pending" ? (
-              <ActivityIndicator
+              <ThemedActivityIndicator
                 size="small"
-                color={theme.colors.foreground}
                 style={styles.splitButtonSpinnerOnly}
+                uniProps={foregroundColorMapping}
               />
             ) : (
               <View style={styles.splitButtonContent}>
@@ -166,7 +180,7 @@ export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSpli
                 accessibilityRole="button"
                 accessibilityLabel={t("git.moreOptions")}
               >
-                <ChevronDown size={16} color={theme.colors.foregroundMuted} />
+                <ThemedChevronDown size={16} uniProps={foregroundMutedColorMapping} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" testID="changes-primary-cta-menu">
                 {gitActions.secondary.map((action, index) => (
@@ -196,7 +210,7 @@ export function GitActionsSplitButton({ gitActions, hideLabels }: GitActionsSpli
             accessibilityRole="button"
             accessibilityLabel={t("git.moreActions")}
           >
-            <MoreVertical size={16} color={theme.colors.foregroundMuted} />
+            <ThemedMoreVertical size={16} uniProps={foregroundMutedColorMapping} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" width={220} testID="changes-overflow-content">
             {gitActions.menu.map((action) => (
@@ -237,6 +251,9 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     position: "relative",
   },
+  splitButtonPrimaryHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
   splitButtonPrimaryDisabled: {
     opacity: 0.6,
   },
@@ -262,6 +279,9 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     borderLeftWidth: theme.borderWidth[1],
     borderLeftColor: theme.colors.border,
+  },
+  splitButtonCaretHovered: {
+    backgroundColor: theme.colors.surface1,
   },
   // Soft .top-tools .icon-btn: 32 r10.
   iconButton: {

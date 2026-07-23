@@ -1,5 +1,7 @@
+/** Single key token used when formatting a keyboard shortcut */
 export type ShortcutKey = string;
 
+/** Platform style used when rendering shortcut modifiers */
 export type ShortcutOs = "mac" | "non-mac";
 
 const KEY_DISPLAY: Record<string, string> = {
@@ -20,6 +22,12 @@ function normalizeKey(key: string): string {
   return key;
 }
 
+/**
+ * Formats a key chord for display on Mac or non-Mac platforms
+ * @param keys Modifier and key tokens such as `mod`, `shift`, and letter keys
+ * @param os Platform style that selects symbols versus Ctrl/Alt labels
+ * @returns Display string for the shortcut
+ */
 export function formatShortcut(keys: ShortcutKey[], os: ShortcutOs): string {
   const normalized = keys.map((k) => (typeof k === "string" ? k : String(k)));
 

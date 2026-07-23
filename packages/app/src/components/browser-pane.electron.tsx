@@ -9,7 +9,13 @@ import {
 } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { ArrowLeft, ArrowRight, MousePointer2, PencilRuler, RotateCw } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import {
+  StyleSheet,
+  UnistyleDependency,
+  UnistylesRuntime,
+  withUnistyles,
+} from "react-native-unistyles";
+import { type Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import {
   buildWorkspaceAttachmentScopeKey,
@@ -25,6 +31,21 @@ import {
 } from "@/desktop/host";
 import { isDev } from "@/constants/platform";
 import { useBrowserStore, normalizeWorkspaceBrowserUrl } from "@/stores/browser-store";
+
+const ThemedArrowLeft = withUnistyles(ArrowLeft);
+const ThemedArrowRight = withUnistyles(ArrowRight);
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedPencilRuler = withUnistyles(PencilRuler);
+const ThemedMousePointer2 = withUnistyles(MousePointer2);
+const ThemedTextInput = withUnistyles(TextInput);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
+const placeholderColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+});
+const selectorIconColorMapping = (active: boolean) =>
+  active ? accentColorMapping : foregroundMutedColorMapping;
 
 type ElectronWebview = HTMLElement & {
   canGoBack?: () => boolean;
@@ -283,7 +304,6 @@ export function BrowserPane({
   isInteractive?: boolean;
   onFocusPane?: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const browser = useBrowserStore((state) => state.browsersById[browserId] ?? null);
   const updateBrowser = useBrowserStore((state) => state.updateBrowser);
@@ -307,28 +327,10 @@ export function BrowserPane({
   const setWorkspaceAttachments = useWorkspaceAttachmentsStore(
     (state) => state.setWorkspaceAttachments,
   );
-  const titleStyle = useMemo(
-    () => [styles.unavailableTitle, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
-  const subtitleStyle = useMemo(
-    () => [styles.unavailableSubtitle, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
-  const urlInputStyle = useMemo(
-    () => [
-      styles.urlInput,
-      {
-        color: theme.colors.foreground,
-        outlineStyle: "none",
-      } as object,
-    ],
-    [theme.colors.foreground],
-  );
-  const errorTextStyle = useMemo(
-    () => [styles.metaError, { color: theme.colors.palette.red[500] }],
-    [theme.colors.palette.red],
-  );
+  const titleStyle = styles.unavailableTitle;
+  const subtitleStyle = styles.unavailableSubtitle;
+  const urlInputStyle = styles.urlInput;
+  const errorTextStyle = styles.metaError;
 
   useEffect(() => {
     const nextUrl = browser?.url ?? "https://example.com";
@@ -916,6 +918,33 @@ export function BrowserPane({
     [selectorActive],
   );
 
+  const [webviewHostBackground, setWebviewHostBackground] = useState(() => {
+    try {
+      return (UnistylesRuntime.getTheme() as Theme).colors.surface0;
+    } catch {
+      return "#000000";
+    }
+  });
+  useEffect(() => {
+    try {
+      setWebviewHostBackground((UnistylesRuntime.getTheme() as Theme).colors.surface0);
+    } catch {
+      // Theme may not be ready during bootstrap.
+    }
+    const dispose = StyleSheet.addChangeListener((dependencies) => {
+      if (
+        dependencies.includes(UnistyleDependency.Theme) ||
+        dependencies.includes(UnistyleDependency.ThemeName)
+      ) {
+        try {
+          setWebviewHostBackground((UnistylesRuntime.getTheme() as Theme).colors.surface0);
+        } catch {
+          // ignore
+        }
+      }
+    });
+    return dispose;
+  }, []);
   const webviewHostStyle = useMemo<CSSProperties>(
     () => ({
       display: "flex",
@@ -923,9 +952,9 @@ export function BrowserPane({
       width: "100%",
       height: "100%",
       minHeight: 0,
-      background: theme.colors.surface0,
+      background: webviewHostBackground,
     }),
-    [theme.colors.surface0],
+    [webviewHostBackground],
   );
 
   if (!isElectronRuntime()) {
@@ -948,7 +977,7 @@ export function BrowserPane({
             onPress={handleBack}
             style={backIconButtonStyle}
           >
-            <ArrowLeft size={16} color={theme.colors.foregroundMuted} />
+            <ThemedArrowLeft size={16} uniProps={foregroundMutedColorMapping} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -957,7 +986,7 @@ export function BrowserPane({
             onPress={handleForward}
             style={forwardIconButtonStyle}
           >
-            <ArrowRight size={16} color={theme.colors.foregroundMuted} />
+            <ThemedArrowRight size={16} uniProps={foregroundMutedColorMapping} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -965,11 +994,11 @@ export function BrowserPane({
             onPress={handleRefresh}
             style={baseIconButtonStyle}
           >
-            <RotateCw size={16} color={theme.colors.foregroundMuted} />
+            <ThemedRotateCw size={16} uniProps={foregroundMutedColorMapping} />
           </Pressable>
         </View>
         <View style={styles.urlBarWrap}>
-          <TextInput
+          <ThemedTextInput
             accessibilityLabel={t("browser.urlLabel")}
             autoCapitalize="none"
             autoCorrect={false}
@@ -977,7 +1006,7 @@ export function BrowserPane({
             onFocus={handleUrlBarFocus}
             onSubmitEditing={handleNavigateDraftUrl}
             placeholder={t("browser.urlPlaceholder")}
-            placeholderTextColor={theme.colors.foregroundMuted}
+            uniProps={placeholderColorMapping}
             ref={urlInputRef}
             style={urlInputStyle}
             value={draftUrl}
@@ -992,7 +1021,7 @@ export function BrowserPane({
                 onPress={handleOpenDevTools}
                 style={baseIconButtonStyle}
               >
-                <PencilRuler size={16} color={theme.colors.foregroundMuted} />
+                <ThemedPencilRuler size={16} uniProps={foregroundMutedColorMapping} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -1002,9 +1031,9 @@ export function BrowserPane({
                 onPress={handleToggleElementSelector}
                 style={selectorIconButtonStyle}
               >
-                <MousePointer2
+                <ThemedMousePointer2
                   size={16}
-                  color={selectorActive ? theme.colors.accent : theme.colors.foregroundMuted}
+                  uniProps={selectorIconColorMapping(selectorActive)}
                 />
               </Pressable>
             </>
@@ -1095,7 +1124,9 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 18,
     paddingVertical: 0,
     paddingHorizontal: 0,
-  },
+    color: theme.colors.foreground,
+    outlineStyle: "none",
+  } as object,
   errorRow: {
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
@@ -1107,6 +1138,7 @@ const styles = StyleSheet.create((theme) => ({
   metaError: {
     fontSize: 12.5,
     lineHeight: 18,
+    color: theme.colors.palette.red[500],
   },
   webviewWrap: {
     flex: 1,
@@ -1125,9 +1157,11 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 14.5,
     lineHeight: 20,
     fontWeight: "500",
+    color: theme.colors.foreground,
   },
   unavailableSubtitle: {
     fontSize: 12.5,
     lineHeight: 18,
+    color: theme.colors.foregroundMuted,
   },
 }));

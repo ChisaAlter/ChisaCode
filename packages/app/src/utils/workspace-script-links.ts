@@ -2,6 +2,7 @@ import { parseHostPort } from "@chisacode/protocol/daemon-endpoints";
 import type { WorkspaceScriptPayload } from "@chisacode/protocol/messages";
 import type { ActiveConnection } from "@/runtime/host-runtime";
 
+/** Resolved open and display URLs for a workspace service script */
 export interface ResolvedWorkspaceScriptLink {
   openUrl: string | null;
   labelUrl: string | null;
@@ -24,6 +25,11 @@ function buildDirectServiceUrl(endpoint: string, port: number): string | null {
   }
 }
 
+/**
+ * Resolves clickable and display URLs for a running workspace service script
+ * @param input Script payload and the active host connection used for reachability
+ * @returns Open/label URLs, which may be proxy, direct, or null when not openable
+ */
 export function resolveWorkspaceScriptLink(input: {
   script: WorkspaceScriptPayload;
   activeConnection: ActiveConnection | null;

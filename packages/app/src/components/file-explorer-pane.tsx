@@ -12,7 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { Fonts } from "@/constants/theme";
@@ -27,7 +27,6 @@ import {
   RotateCw,
 } from "lucide-react-native";
 import { getFileIconSvg } from "@/components/material-file-icons";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { AgentFileExplorerState, ExplorerEntry } from "@/stores/session-store";
 import { useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -46,8 +45,20 @@ import { formatTimeAgo } from "@/utils/time";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { useWebScrollViewScrollbar } from "@/components/use-web-scrollbar";
 import { isWeb } from "@/constants/platform";
+import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
 
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+const ThemedCopy = withUnistyles(Copy);
+const ThemedDownload = withUnistyles(Download);
+const ThemedMoreVertical = withUnistyles(MoreVertical);
+const ThemedRotateCw = withUnistyles(RotateCw);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 const INDENT_PER_LEVEL = 16;
 
 function formatFileSize({ size }: { size: number }): string {
@@ -111,7 +122,6 @@ function TreeRowItem({
   onCopyPath,
   onDownloadEntry,
 }: TreeRowItemProps) {
-  const { theme } = useUnistyles();
   const isDirectory = entry.kind === "directory";
 
   const handlePress = useCallback(() => {
@@ -121,12 +131,12 @@ function TreeRowItem({
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.entryRow,
-      { paddingLeft: theme.spacing[2] + depth * INDENT_PER_LEVEL },
+      { paddingLeft: SPACING[2] + depth * INDENT_PER_LEVEL },
       // Soft: hover wash surface1; solid selected surface3.
       isSelected && styles.entryRowSelected,
       !isSelected && (Boolean(hovered) || pressed) && styles.entryRowHovered,
     ],
-    [depth, isSelected, theme.spacing],
+    [depth, isSelected],
   );
 
   const handleCopy = useCallback(() => {
@@ -143,12 +153,12 @@ function TreeRowItem({
   );
 
   const copyLeading = useMemo(
-    () => <Copy size={14} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
   const downloadLeading = useMemo(
-    () => <Download size={14} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedDownload size={14} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
 
   return (
@@ -163,7 +173,7 @@ function TreeRowItem({
             if (loading) return <ActivityIndicator size="small" />;
             return (
               <View style={chevronStyle}>
-                <ChevronRight size={16} color={theme.colors.foregroundMuted} />
+                <ThemedChevronRight size={16} uniProps={foregroundMutedColorMapping} />
               </View>
             );
           })()}
@@ -174,7 +184,7 @@ function TreeRowItem({
       </View>
       <DropdownMenu>
         <DropdownMenuTrigger hitSlop={8} onPressIn={stopPressInPropagation} style={menuButtonStyle}>
-          <MoreVertical size={16} color={theme.colors.foregroundMuted} />
+          <ThemedMoreVertical size={16} uniProps={foregroundMutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" width={220}>
           <View style={styles.contextMetaBlock}>
@@ -535,7 +545,6 @@ interface FileExplorerPaneContentProps {
 
 function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const {
     error,
     showInitialLoading,
@@ -595,7 +604,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
       <View style={styles.paneHeader} testID="files-pane-header">
         <Pressable onPress={handleSortCycle} style={sortTriggerStyleProp}>
           <Text style={styles.sortTriggerText}>{currentSortLabel}</Text>
-          <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+          <ThemedChevronDown size={12} uniProps={foregroundMutedColorMapping} />
         </Pressable>
         <Pressable
           onPress={handleRefresh}
@@ -607,9 +616,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         >
           <View style={styles.refreshIcon}>
             {isRefreshFetching ? (
-              <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedActivityIndicator size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
             ) : (
-              <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
             )}
           </View>
         </Pressable>
@@ -1262,10 +1271,9 @@ interface IndentGuideProps {
 }
 
 function IndentGuide({ index }: IndentGuideProps) {
-  const { theme } = useUnistyles();
   const guideStyle = useMemo(
-    () => [styles.indentGuide, { left: theme.spacing[3] + index * INDENT_PER_LEVEL + 4 }],
-    [index, theme.spacing],
+    () => [styles.indentGuide, { left: SPACING[3] + index * INDENT_PER_LEVEL + 4 }],
+    [index],
   );
   return <View style={guideStyle} />;
 }

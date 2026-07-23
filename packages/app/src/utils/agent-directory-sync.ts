@@ -11,6 +11,11 @@ interface PendingPermissionEntry {
   request: Agent["pendingPermissions"][number];
 }
 
+/**
+ * Builds session-store agent and pending-permission maps from a directory fetch
+ * @param input Server id and fetched agent directory entries
+ * @returns Normalized agents map and pending permission entries keyed for the store
+ */
 export function buildAgentDirectoryState(input: {
   serverId: string;
   entries: AgentDirectoryFetchEntry[];
@@ -42,6 +47,11 @@ export function buildAgentDirectoryState(input: {
   return { agents, pendingPermissions };
 }
 
+/**
+ * Replaces the session-store agent directory for a server with fetched entries
+ * @param input Server id and daemon fetch results for that server
+ * @returns The agents map written into the session store
+ */
 export function replaceFetchedAgentDirectory(input: {
   serverId: string;
   entries: FetchAgentsEntry[];

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 
 interface ColumnDef {
@@ -24,7 +24,6 @@ function getSortIndicator(sortKey: string | null, sortDir: string, colKey: strin
 }
 
 export default function DataTable({ instanceId, props, sendAction }: TableProps) {
-  const { theme } = useUnistyles();
   const pageSize = props.pageSize ?? 10;
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -99,22 +98,8 @@ export default function DataTable({ instanceId, props, sendAction }: TableProps)
     setPage((p) => p + 1);
   }, []);
 
-  const prevTextStyle = useMemo(
-    () => ({
-      color: page === 0 ? theme.colors.foregroundFaint : theme.colors.accent,
-      fontSize: 12.5,
-      lineHeight: 16,
-    }),
-    [page, theme.colors.accent, theme.colors.foregroundFaint],
-  );
-  const nextTextStyle = useMemo(
-    () => ({
-      color: page >= totalPages - 1 ? theme.colors.foregroundFaint : theme.colors.accent,
-      fontSize: 12.5,
-      lineHeight: 16,
-    }),
-    [page, totalPages, theme.colors.accent, theme.colors.foregroundFaint],
-  );
+  const isPrevDisabled = page === 0;
+  const isNextDisabled = page >= totalPages - 1;
 
   return (
     <View style={styles.container}>
@@ -164,14 +149,14 @@ export default function DataTable({ instanceId, props, sendAction }: TableProps)
 
       {totalPages > 1 ? (
         <View style={styles.paginationRow}>
-          <TouchableOpacity disabled={page === 0} onPress={handlePrevPage}>
-            <Text style={prevTextStyle}>Prev</Text>
+          <TouchableOpacity disabled={isPrevDisabled} onPress={handlePrevPage}>
+            <Text style={isPrevDisabled ? styles.pageNavDisabled : styles.pageNavActive}>Prev</Text>
           </TouchableOpacity>
           <Text style={styles.pageCount}>
             {page + 1} / {totalPages}
           </Text>
-          <TouchableOpacity disabled={page >= totalPages - 1} onPress={handleNextPage}>
-            <Text style={nextTextStyle}>Next</Text>
+          <TouchableOpacity disabled={isNextDisabled} onPress={handleNextPage}>
+            <Text style={isNextDisabled ? styles.pageNavDisabled : styles.pageNavActive}>Next</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -240,5 +225,15 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 12.5,
     lineHeight: 16,
     color: theme.colors.foregroundMuted,
+  },
+  pageNavActive: {
+    color: theme.colors.accent,
+    fontSize: 12.5,
+    lineHeight: 16,
+  },
+  pageNavDisabled: {
+    color: theme.colors.foregroundFaint,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 }));

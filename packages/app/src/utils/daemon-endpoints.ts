@@ -28,6 +28,11 @@ export {
   shouldUseTlsForDefaultHostedRelay,
 };
 
+/**
+ * Builds a client-role relay WebSocket URL for the given endpoint and server
+ * @param params Relay endpoint, server id, and TLS preference
+ * @returns WebSocket URL used by the app to connect through the relay
+ */
 export function buildRelayWebSocketUrl(params: {
   endpoint: string;
   serverId: string;

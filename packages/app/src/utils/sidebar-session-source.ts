@@ -22,6 +22,11 @@ function compareSidebarLiveAgents(left: AggregatedAgent, right: AggregatedAgent)
   return getActivityTime(right) - getActivityTime(left);
 }
 
+/**
+ * Builds non-archived live agents for the left sidebar from a session store map
+ * @param input Agents map, active server id, and display label for that server
+ * @returns Aggregated live agents sorted with running agents first by activity
+ */
 export function buildSidebarLiveAgents(input: {
   agents: Map<string, Agent> | undefined;
   serverId: string | null;
@@ -58,6 +63,11 @@ export function buildSidebarLiveAgents(input: {
   return liveAgents;
 }
 
+/**
+ * Merges live and historical sidebar agents while preserving selection when still present
+ * @param input Live agents, history agents, optional suppressions, and selected agent id
+ * @returns Deduplicated agents and a selected id only when it still exists in the merge
+ */
 export function mergeSidebarSessionSources(input: {
   liveAgents: AggregatedAgent[];
   historyAgents: AggregatedAgent[];

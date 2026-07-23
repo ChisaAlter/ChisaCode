@@ -1,6 +1,6 @@
 import { Component, useCallback, useMemo, type ErrorInfo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
 import { useTranslation } from "react-i18next";
 import { appI18n } from "@/i18n";
@@ -129,7 +129,7 @@ const fallbackStyles = StyleSheet.create({
 
 /**
  * 分级 ErrorBoundary 使用的局部 fallback。与根级 DefaultErrorFallback 不同，
- * 这里通过 useUnistyles 读取 theme token，避免硬编码 fontSize/color，样式随主题变化。
+ * 这里通过 StyleSheet theme factory 读取 theme token，避免硬编码 fontSize/color，样式随主题变化。
  * 作为真正的函数组件渲染（由 ErrorBoundary 的 fallback render callback 返回对应元素），
  * 因此可以使用 hooks。
  */
@@ -154,7 +154,6 @@ export function SectionErrorFallback({
   sectionLabel,
   compact = false,
 }: SectionErrorFallbackProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const message =
     error instanceof Error
@@ -168,71 +167,24 @@ export function SectionErrorFallback({
     : t("startup.errorTitle", { defaultValue: "出错了" });
 
   const containerStyle = useMemo(
-    () =>
-      compact
-        ? [
-            sectionStyles.compactContainer,
-            {
-              padding: theme.spacing[3],
-              gap: theme.spacing[2],
-              borderColor: theme.colors.border,
-              borderRadius: 14,
-              backgroundColor: theme.colors.surface0,
-              ...(isWeb
-                ? {
-                    boxShadow:
-                      "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
-                  }
-                : theme.shadow.sm),
-            },
-          ]
-        : [
-            sectionStyles.container,
-            {
-              padding: theme.spacing[4],
-              gap: theme.spacing[3],
-              backgroundColor: theme.colors.background,
-            },
-          ],
-    [compact, theme],
-  );
-
-  const titleStyle = useMemo(
-    () => [sectionStyles.title, { color: theme.colors.foreground, fontSize: 14.5 }],
-    [theme],
-  );
-
-  const messageStyle = useMemo(
-    () => [sectionStyles.message, { color: theme.colors.foregroundMuted, fontSize: 12.5 }],
-    [theme],
-  );
-
-  const retryTextStyle = useMemo(
-    () => [sectionStyles.retryText, { color: theme.colors.foreground, fontSize: 12.5 }],
-    [theme],
+    () => (compact ? sectionStyles.compactContainer : sectionStyles.container),
+    [compact],
   );
 
   const sectionRetryButtonStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
       sectionStyles.retryButton,
-      {
-        paddingHorizontal: theme.spacing[3],
-        paddingVertical: theme.spacing[2],
-        borderRadius: 10,
-        borderColor: theme.colors.border,
-        backgroundColor: theme.colors.surface0,
-      },
       pressed && sectionStyles.retryButtonPressed,
     ],
-    [theme],
+    [],
   );
 
   return (
     <View style={containerStyle}>
-      <Text style={titleStyle} numberOfLines={2}>
+      <Text style={sectionStyles.title} numberOfLines={2}>
         {title}
       </Text>
-      <Text style={messageStyle} numberOfLines={compact ? 3 : 5}>
+      <Text style={sectionStyles.message} numberOfLines={compact ? 3 : 5}>
         {message}
       </Text>
       <Pressable
@@ -241,37 +193,61 @@ export function SectionErrorFallback({
         onPress={onReset}
         style={sectionRetryButtonStyle}
       >
-        <Text style={retryTextStyle}>{t("common.retry", { defaultValue: "重试" })}</Text>
+        <Text style={sectionStyles.retryText}>{t("common.retry", { defaultValue: "重试" })}</Text>
       </Pressable>
     </View>
   );
 }
 
-const sectionStyles = StyleSheet.create({
+const sectionStyles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    padding: theme.spacing[4],
+    gap: theme.spacing[3],
+    backgroundColor: theme.colors.background,
   },
   compactContainer: {
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    padding: theme.spacing[3],
+    gap: theme.spacing[2],
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface0,
+    ...(isWeb
+      ? {
+          boxShadow: "0 1px 2px rgba(20, 23, 31, 0.04), 0 8px 24px rgba(20, 23, 31, 0.06)",
+        }
+      : theme.shadow.sm),
   },
   title: {
     fontWeight: "600",
     textAlign: "center",
+    color: theme.colors.foreground,
+    fontSize: 14.5,
   },
   message: {
     textAlign: "center",
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
   },
   retryButton: {
     borderWidth: 1,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: 10,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
   },
   retryButtonPressed: {
     opacity: 0.7,
   },
   retryText: {
     fontWeight: "500",
+    color: theme.colors.foreground,
+    fontSize: 12.5,
   },
-});
+}));

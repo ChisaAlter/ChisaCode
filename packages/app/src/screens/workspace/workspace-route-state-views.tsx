@@ -1,11 +1,18 @@
 import { StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import { ArrowLeftToLine, RotateCw, Settings } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { type Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { WorkspaceRouteState } from "@/screens/workspace/workspace-route-state";
+
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface WorkspaceRouteStateActions {
   onRetryHost: () => void;
@@ -57,7 +64,6 @@ export function WorkspaceReconnectingBanner({
   onRetry: () => void;
   onManageHost: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const canRetry = state.connectionStatus === "offline" || state.connectionStatus === "error";
   let title = t("workspace.routeState.unableToConnect", { host: state.hostName });
@@ -75,7 +81,7 @@ export function WorkspaceReconnectingBanner({
     >
       <View style={styles.reconnectingBannerBody}>
         {state.connectionStatus === "connecting" || state.connectionStatus === "idle" ? (
-          <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+          <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
         ) : null}
         <View style={styles.reconnectingTextStack}>
           <Text style={styles.reconnectingTitle} numberOfLines={1}>
@@ -121,12 +127,11 @@ function formatRouteConnectionStatus(
 }
 
 function WorkspaceConnecting({ hostName }: { hostName: string }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
 
   return (
     <View style={styles.emptyState}>
-      <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+      <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
       <View style={styles.textStack}>
         <Text style={styles.title}>{t("workspace.routeState.loadingWorkspace")}</Text>
         <Text style={styles.description}>{hostName}</Text>
@@ -146,7 +151,6 @@ function WorkspaceUnreachable({
   onManageHost: () => void;
   offerConnectionRecovery: boolean;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isConnectingLike =
     state.connectionStatus === "connecting" || state.connectionStatus === "idle";
@@ -166,7 +170,7 @@ function WorkspaceUnreachable({
   return (
     <View style={styles.emptyState}>
       {isConnectingLike ? (
-        <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
       ) : null}
       <View style={styles.textStack}>
         <Text style={styles.title}>{getWorkspaceHostStateTitle(state, t)}</Text>

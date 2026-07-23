@@ -1,9 +1,16 @@
 import { useCallback, type ReactNode } from "react";
 import { Pressable, Text } from "react-native";
 import { ArrowUpRight } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { openExternalUrl } from "@/utils/open-external-url";
+import type { Theme } from "@/styles/theme";
+
+const ThemedArrowUpRight = withUnistyles(ArrowUpRight);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface ExternalLinkProps {
   href: string;
@@ -25,7 +32,6 @@ export function ExternalLink({
   testID,
   accessibilityLabel,
 }: ExternalLinkProps) {
-  const { theme } = useUnistyles();
   const handlePress = useCallback(() => {
     void openExternalUrl(href);
   }, [href]);
@@ -40,7 +46,7 @@ export function ExternalLink({
       style={styles.trigger}
     >
       <Text style={styles.label}>{label}</Text>
-      <ArrowUpRight size={12} color={theme.colors.foregroundMuted} />
+      <ThemedArrowUpRight size={12} uniProps={foregroundMutedColorMapping} />
     </Pressable>
   );
 

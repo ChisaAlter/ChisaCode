@@ -1,11 +1,17 @@
 import { useMemo } from "react";
 import { View, Text } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Check } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { settingsStyles } from "@/styles/settings";
 import type { DesktopPermissionStatus } from "@/desktop/permissions/desktop-permissions";
 import { useTranslation } from "react-i18next";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+const ThemedCheck = withUnistyles(Check);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 export interface DesktopPermissionRowProps {
   title: string;
@@ -30,7 +36,6 @@ export function DesktopPermissionRow({
   isExtraActionDisabled = false,
   onExtraAction,
 }: DesktopPermissionRowProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const state = status?.state ?? "unknown";
   const isGranted = state === "granted";
@@ -55,7 +60,7 @@ export function DesktopPermissionRow({
         {isGranted ? (
           <View style={styles.permissionGrantedActions}>
             <View style={styles.permissionStatusPill}>
-              <Check size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <ThemedCheck size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
               <Text style={styles.permissionStatusText}>{t("settings.permissions.granted")}</Text>
             </View>
             {extraActionLabel && onExtraAction ? (

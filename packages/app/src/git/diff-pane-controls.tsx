@@ -18,7 +18,7 @@ import {
   RotateCw,
   WrapText,
 } from "lucide-react-native";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
@@ -34,7 +34,6 @@ import { GitActionsSplitButton } from "@/git/actions-split-button";
 import type { GitActions } from "@/git/policy";
 import type { ReviewSummaryModel } from "@/git/review-summary";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
 interface DiffPaneControlsProps {
   diffMode: "uncommitted" | "base";
@@ -65,6 +64,17 @@ const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const refreshIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedAlignJustify = withUnistyles(AlignJustify);
+const ThemedColumns2 = withUnistyles(Columns2);
+const ThemedPilcrow = withUnistyles(Pilcrow);
+const ThemedWrapText = withUnistyles(WrapText);
+const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);
+const ThemedListChevronsUpDown = withUnistyles(ListChevronsUpDown);
+
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+
 /** Renders diff mode, layout, whitespace, wrapping, expansion, and refresh controls. */
 export function DiffPaneControls({
   diffMode,
@@ -86,49 +96,35 @@ export function DiffPaneControls({
   onToggleExpandAll,
   onRefresh,
 }: DiffPaneControlsProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
-  // Soft selected control wash: active surface3, not solid surface1 hover fill.
-  const controlSurfaceColor = theme.colors.surface3;
 
-  const diffModeTriggerStyle = useMemo(
-    () => buildDiffModeTriggerStyle(controlSurfaceColor),
-    [controlSurfaceColor],
-  );
+  const diffModeTriggerStyle = useMemo(() => buildDiffModeTriggerStyle(), []);
   const unifiedToggleStyle = useMemo(
     () =>
-      buildToggleButtonStyle(
-        layout === "unified",
-        [styles.toggleButton, styles.toggleButtonGroupStart],
-        controlSurfaceColor,
-      ),
-    [controlSurfaceColor, layout],
+      buildToggleButtonStyle(layout === "unified", [
+        styles.toggleButton,
+        styles.toggleButtonGroupStart,
+      ]),
+    [layout],
   );
   const splitToggleStyle = useMemo(
     () =>
-      buildToggleButtonStyle(
-        layout === "split",
-        [styles.toggleButton, styles.toggleButtonGroupEnd],
-        controlSurfaceColor,
-      ),
-    [controlSurfaceColor, layout],
+      buildToggleButtonStyle(layout === "split", [
+        styles.toggleButton,
+        styles.toggleButtonGroupEnd,
+      ]),
+    [layout],
   );
   const hideWhitespaceToggleStyle = useMemo(
-    () => buildToggleButtonStyle(hideWhitespace, styles.iconButton, controlSurfaceColor),
-    [controlSurfaceColor, hideWhitespace],
+    () => buildToggleButtonStyle(hideWhitespace, styles.iconButton),
+    [hideWhitespace],
   );
   const wrapLinesToggleStyle = useMemo(
-    () => buildToggleButtonStyle(wrapLines, styles.iconButton, controlSurfaceColor),
-    [controlSurfaceColor, wrapLines],
+    () => buildToggleButtonStyle(wrapLines, styles.iconButton),
+    [wrapLines],
   );
-  const expandAllToggleStyle = useMemo(
-    () => buildIconButtonStyle(controlSurfaceColor),
-    [controlSurfaceColor],
-  );
-  const refreshToggleStyle = useMemo(
-    () => buildIconButtonStyle(controlSurfaceColor),
-    [controlSurfaceColor],
-  );
+  const expandAllToggleStyle = useMemo(() => buildIconButtonStyle(), []);
+  const refreshToggleStyle = useMemo(() => buildIconButtonStyle(), []);
 
   const handleLayoutUnified = useCallback(() => onLayoutChange("unified"), [onLayoutChange]);
   const handleLayoutSplit = useCallback(() => onLayoutChange("split"), [onLayoutChange]);
@@ -146,7 +142,7 @@ export function DiffPaneControls({
             <Text style={styles.diffStatusText} numberOfLines={1}>
               {diffMode === "uncommitted" ? t("git.uncommitted") : t("git.committed")}
             </Text>
-            <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+            <ThemedChevronDown size={12} uniProps={foregroundMutedColorMapping} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" width={260} testID="changes-diff-status-menu">
             <DropdownMenuItem
@@ -271,8 +267,11 @@ function DiffLayoutToggleGroup({
   onUnified: () => void;
   onSplit: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const unifiedColorMapping =
+    layout === "unified" ? foregroundColorMapping : foregroundMutedColorMapping;
+  const splitColorMapping =
+    layout === "split" ? foregroundColorMapping : foregroundMutedColorMapping;
   return (
     <View style={styles.toggleButtonGroup}>
       <Tooltip delayDuration={300}>
@@ -284,10 +283,7 @@ function DiffLayoutToggleGroup({
             onPress={onUnified}
             style={unifiedToggleStyle}
           >
-            <AlignJustify
-              size={14}
-              color={layout === "unified" ? theme.colors.foreground : theme.colors.foregroundMuted}
-            />
+            <ThemedAlignJustify size={14} uniProps={unifiedColorMapping} />
           </Pressable>
         </TooltipTrigger>
         <TooltipContent side="bottom">
@@ -303,10 +299,7 @@ function DiffLayoutToggleGroup({
             onPress={onSplit}
             style={splitToggleStyle}
           >
-            <Columns2
-              size={14}
-              color={layout === "split" ? theme.colors.foreground : theme.colors.foregroundMuted}
-            />
+            <ThemedColumns2 size={14} uniProps={splitColorMapping} />
           </Pressable>
         </TooltipTrigger>
         <TooltipContent side="bottom">
@@ -328,8 +321,8 @@ function DiffWhitespaceToggle({
   toggleStyle: PressableStyleFn;
   onToggle: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const iconColorMapping = hideWhitespace ? foregroundColorMapping : foregroundMutedColorMapping;
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
@@ -340,10 +333,7 @@ function DiffWhitespaceToggle({
           style={toggleStyle}
           onPress={onToggle}
         >
-          <Pilcrow
-            size={isMobile ? 18 : 14}
-            color={hideWhitespace ? theme.colors.foreground : theme.colors.foregroundMuted}
-          />
+          <ThemedPilcrow size={isMobile ? 18 : 14} uniProps={iconColorMapping} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="bottom">
@@ -370,8 +360,8 @@ function DiffFilesToolbar({
   onToggleWrapLines: () => void;
   onToggleExpandAll: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const wrapColorMapping = wrapLines ? foregroundColorMapping : foregroundMutedColorMapping;
   return (
     <View style={styles.buttonRow}>
       <Tooltip delayDuration={300}>
@@ -382,10 +372,7 @@ function DiffFilesToolbar({
             accessibilityRole="button"
             accessibilityLabel={wrapLines ? t("git.scrollLongLines") : t("git.wrapLongLines")}
           >
-            <WrapText
-              size={isMobile ? 18 : 14}
-              color={wrapLines ? theme.colors.foreground : theme.colors.foregroundMuted}
-            />
+            <ThemedWrapText size={isMobile ? 18 : 14} uniProps={wrapColorMapping} />
           </Pressable>
         </TooltipTrigger>
         <TooltipContent side="bottom">
@@ -403,9 +390,15 @@ function DiffFilesToolbar({
             accessibilityLabel={allExpanded ? t("git.collapseAllFiles") : t("git.expandAllFiles")}
           >
             {allExpanded ? (
-              <ListChevronsDownUp size={isMobile ? 18 : 14} color={theme.colors.foregroundMuted} />
+              <ThemedListChevronsDownUp
+                size={isMobile ? 18 : 14}
+                uniProps={foregroundMutedColorMapping}
+              />
             ) : (
-              <ListChevronsUpDown size={isMobile ? 18 : 14} color={theme.colors.foregroundMuted} />
+              <ThemedListChevronsUpDown
+                size={isMobile ? 18 : 14}
+                uniProps={foregroundMutedColorMapping}
+              />
             )}
           </Pressable>
         </TooltipTrigger>
@@ -456,34 +449,35 @@ function DiffRefreshButton({
   );
 }
 
-function buildDiffModeTriggerStyle(surfaceColor: string): PressableStyleFn {
+function buildDiffModeTriggerStyle(): PressableStyleFn {
   return ({ hovered, pressed, open }) => [
     styles.diffModeTrigger,
-    (Boolean(hovered) || pressed || Boolean(open)) &&
-      inlineUnistylesStyle({ backgroundColor: surfaceColor }),
+    (Boolean(hovered) || pressed || Boolean(open)) && styles.controlSurfaceActive,
   ];
 }
 
-function buildIconButtonStyle(surfaceColor: string): PressableStyleFn {
+function buildIconButtonStyle(): PressableStyleFn {
   return ({ hovered, pressed }) => [
     styles.iconButton,
-    (Boolean(hovered) || pressed) && inlineUnistylesStyle({ backgroundColor: surfaceColor }),
+    (Boolean(hovered) || pressed) && styles.controlSurfaceActive,
   ];
 }
 
 function buildToggleButtonStyle(
   selected: boolean,
   baseStyles: StyleProp<ViewStyle> | StyleProp<ViewStyle>[],
-  surfaceColor: string,
 ): PressableStyleFn {
   return ({ hovered, pressed }) => [
     baseStyles,
-    (selected || Boolean(hovered) || pressed) &&
-      inlineUnistylesStyle({ backgroundColor: surfaceColor }),
+    (selected || Boolean(hovered) || pressed) && styles.controlSurfaceActive,
   ];
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Soft selected control wash: active surface3, not solid surface1 hover fill.
+  controlSurfaceActive: {
+    backgroundColor: theme.colors.surface3,
+  },
   container: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     borderBottomWidth: 1,

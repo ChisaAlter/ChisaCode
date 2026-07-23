@@ -7,13 +7,14 @@ import {
   ActivityIndicator,
   type PressableStateCallbackType,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, CircleHelp, X } from "lucide-react-native";
 import type { PendingPermission } from "@/types/shared";
 import type { AgentPermissionResponse } from "@chisacode/protocol/agent-types";
 import { isWeb } from "@/constants/platform";
+import type { Theme } from "@/styles/theme";
 import {
   areQuestionsAnswered,
   buildQuestionFormAnswers,
@@ -32,6 +33,21 @@ interface QuestionFormCardProps {
 }
 
 const IS_WEB = isWeb;
+
+const ThemedCheck = withUnistyles(Check);
+const ThemedCircleHelp = withUnistyles(CircleHelp);
+const ThemedX = withUnistyles(X);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedTextInput = withUnistyles(TextInput, (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+}));
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
 
 function getQuestionInputPlaceholder(question: QuestionFormQuestion): string {
   return (
@@ -58,8 +74,6 @@ function QuestionOptionRow({
   isResponding,
   onToggle,
 }: QuestionOptionRowProps) {
-  const { theme } = useUnistyles();
-
   const handlePress = useCallback(() => {
     onToggle(qIndex, optIndex, multiSelect);
   }, [onToggle, qIndex, optIndex, multiSelect]);
@@ -68,34 +82,25 @@ function QuestionOptionRow({
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.optionItem,
       // Soft: hover wash surface1; solid selected surface3.
-      Boolean(hovered) && !isSelected && { backgroundColor: theme.colors.surface1 },
-      isSelected && { backgroundColor: theme.colors.surface3 },
+      Boolean(hovered) && !isSelected && styles.optionItemHovered,
+      isSelected && styles.optionItemSelected,
       pressed && styles.optionItemPressed,
     ],
-    [isSelected, theme.colors.surface1, theme.colors.surface3],
-  );
-
-  const optionLabelStyle = useMemo(
-    () => [styles.optionLabel, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
-  const optionDescriptionStyle = useMemo(
-    () => [styles.optionDescription, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
+    [isSelected],
   );
 
   return (
     <Pressable style={pressableStyle} onPress={handlePress} disabled={isResponding}>
       <View style={styles.optionItemContent}>
         <View style={styles.optionTextBlock}>
-          <Text style={optionLabelStyle}>{option.label}</Text>
+          <Text style={styles.optionLabel}>{option.label}</Text>
           {option.description ? (
-            <Text style={optionDescriptionStyle}>{option.description}</Text>
+            <Text style={styles.optionDescription}>{option.description}</Text>
           ) : null}
         </View>
         {isSelected ? (
           <View style={styles.optionCheckSlot}>
-            <Check size={16} color={theme.colors.foregroundMuted} />
+            <ThemedCheck size={16} uniProps={foregroundMutedColorMapping} />
           </View>
         ) : null}
       </View>
@@ -120,7 +125,6 @@ function QuestionOtherInput({
   onChange,
   onSubmit,
 }: QuestionOtherInputProps) {
-  const { theme } = useUnistyles();
   const handleChange = useCallback(
     (text: string) => {
       onChange(qIndex, text);
@@ -131,21 +135,15 @@ function QuestionOtherInput({
     () =>
       [
         styles.otherInput,
-        {
-          borderColor: theme.colors.border,
-          color: theme.colors.foreground,
-          backgroundColor: theme.colors.surface0,
-        },
         IS_WEB ? { outlineStyle: "none", outlineWidth: 0, outlineColor: "transparent" } : null,
       ] as const,
-    [theme.colors.border, theme.colors.foreground, theme.colors.surface0],
+    [],
   );
   return (
-    <TextInput
+    <ThemedTextInput
       // @ts-expect-error - outlineStyle is web-only
       style={otherInputStyle}
       placeholder={placeholder}
-      placeholderTextColor={theme.colors.foregroundMuted}
       value={value}
       onChangeText={handleChange}
       onSubmitEditing={onSubmit}
@@ -156,7 +154,6 @@ function QuestionOtherInput({
 }
 
 export function QuestionFormCard({ permission, onRespond, isResponding }: QuestionFormCardProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const questions = parseQuestionFormQuestions(permission.request.input);
@@ -247,59 +244,32 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
   const dismissButtonStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.actionButton,
-      {
-        backgroundColor: hovered ? theme.colors.surfaceWorkspace : theme.colors.surface0,
-        borderColor: theme.colors.border,
-      },
+      hovered ? styles.actionButtonHovered : styles.actionButtonDefault,
       pressed && styles.optionItemPressed,
     ],
-    [theme.colors.surfaceWorkspace, theme.colors.surface0, theme.colors.border],
+    [],
   );
 
   const submitDisabled = !allAnswered || isResponding;
   const submitButtonStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.actionButton,
-      {
-        backgroundColor:
-          hovered && !submitDisabled ? theme.colors.surfaceWorkspace : theme.colors.surface0,
-        borderColor: theme.colors.border,
-        opacity: submitDisabled ? 0.5 : 1,
-      },
+      hovered && !submitDisabled ? styles.actionButtonHovered : styles.actionButtonDefault,
+      submitDisabled && styles.actionButtonDisabled,
       pressed && !submitDisabled ? styles.optionItemPressed : null,
     ],
-    [submitDisabled, theme.colors.surfaceWorkspace, theme.colors.surface0, theme.colors.border],
+    [submitDisabled],
   );
 
-  const containerStyle = useMemo(
-    () => [
-      styles.container,
-      {
-        backgroundColor: theme.colors.surface0,
-        borderColor: theme.colors.border,
-      },
-    ],
-    [theme.colors.surface0, theme.colors.border],
-  );
-  const questionTextStyle = useMemo(
-    () => [styles.questionText, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
+  const containerStyle = styles.container;
+  const questionTextStyle = styles.questionText;
   const actionsContainerStyle = useMemo(
     () => [styles.actionsContainer, !isMobile && styles.actionsContainerDesktop],
     [isMobile],
   );
-  const dismissActionTextStyle = useMemo(
-    () => [styles.actionText, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
-  const submitActionTextColor = allAnswered
-    ? theme.colors.foreground
-    : theme.colors.foregroundMuted;
-  const submitActionTextStyle = useMemo(
-    () => [styles.actionText, { color: submitActionTextColor }],
-    [submitActionTextColor],
-  );
+  const dismissActionTextStyle = styles.actionTextMuted;
+  const submitActionTextStyle = allAnswered ? styles.actionTextForeground : styles.actionTextMuted;
+  const submitIconMapping = allAnswered ? foregroundColorMapping : foregroundMutedColorMapping;
 
   if (!questions) {
     return null;
@@ -318,7 +288,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
           <View key={q.question} style={styles.questionBlock}>
             <View style={styles.questionHeader}>
               <Text style={questionTextStyle}>{q.question}</Text>
-              <CircleHelp size={14} color={theme.colors.foregroundMuted} />
+              <ThemedCircleHelp size={14} uniProps={foregroundMutedColorMapping} />
             </View>
             {q.options.length > 0 ? (
               <View style={styles.optionsWrap}>
@@ -353,10 +323,10 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
       <View style={actionsContainerStyle}>
         <Pressable style={dismissButtonStyle} onPress={handleDeny} disabled={isResponding}>
           {respondingAction === "dismiss" ? (
-            <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+            <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
           ) : (
             <View style={styles.actionContent}>
-              <X size={14} color={theme.colors.foregroundMuted} />
+              <ThemedX size={14} uniProps={foregroundMutedColorMapping} />
               <Text style={dismissActionTextStyle}>{dismissLabel}</Text>
             </View>
           )}
@@ -364,10 +334,10 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
 
         <Pressable style={submitButtonStyle} onPress={handleSubmit} disabled={submitDisabled}>
           {respondingAction === "submit" ? (
-            <ActivityIndicator size="small" color={theme.colors.foreground} />
+            <ThemedActivityIndicator size="small" uniProps={foregroundColorMapping} />
           ) : (
             <View style={styles.actionContent}>
-              <Check size={14} color={submitActionTextColor} />
+              <ThemedCheck size={14} uniProps={submitIconMapping} />
               <Text style={submitActionTextStyle}>{t("workspace.questionFormSubmit")}</Text>
             </View>
           )}
@@ -401,9 +371,38 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     fontSize: 14.5,
     lineHeight: 22,
+    color: theme.colors.foreground,
   },
   optionsWrap: {
     gap: theme.spacing[1],
+  },
+
+  optionItemHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  optionItemSelected: {
+    backgroundColor: theme.colors.surface3,
+  },
+  actionButtonDefault: {
+    backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
+  },
+  actionButtonHovered: {
+    backgroundColor: theme.colors.surfaceWorkspace,
+    borderColor: theme.colors.border,
+  },
+  actionButtonDisabled: {
+    opacity: 0.5,
+  },
+  actionTextMuted: {
+    color: theme.colors.foregroundMuted,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  actionTextForeground: {
+    color: theme.colors.foreground,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   optionItem: {
     flexDirection: "row",
@@ -429,10 +428,12 @@ const styles = StyleSheet.create((theme) => ({
     // Soft chrome: 12.5 meta.
     fontSize: 12.5,
     lineHeight: 18,
+    color: theme.colors.foreground,
   },
   optionDescription: {
     fontSize: 12.5,
     lineHeight: 16,
+    color: theme.colors.foregroundMuted,
   },
   optionCheckSlot: {
     width: 16,
@@ -448,6 +449,9 @@ const styles = StyleSheet.create((theme) => ({
     // Soft form field body: 14.5 readability.
     fontSize: 14.5,
     lineHeight: 22,
+    borderColor: theme.colors.border,
+    color: theme.colors.foreground,
+    backgroundColor: theme.colors.surface0,
   },
   actionsContainer: {
     gap: theme.spacing[2],

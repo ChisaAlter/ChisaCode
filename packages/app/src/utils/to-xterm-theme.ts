@@ -4,6 +4,11 @@ import type { Theme } from "@/styles/theme";
 
 type TerminalPalette = Theme["colors"]["terminal"];
 
+/**
+ * Maps the app terminal color palette to an xterm.js theme object
+ * @param terminal Theme terminal palette tokens
+ * @returns xterm-compatible theme colors
+ */
 export function toXtermTheme(terminal: TerminalPalette): ITheme {
   return {
     background: terminal.background,

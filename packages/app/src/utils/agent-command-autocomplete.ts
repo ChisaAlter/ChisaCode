@@ -19,6 +19,12 @@ function scoreCommandAutocompleteEntry(
   return scoreTextFields(query, [entry.command.name, ...(entry.command.aliases ?? [])]);
 }
 
+/**
+ * Filters and ranks slash-command autocomplete entries by fuzzy match score
+ * @param entries Command entries with name and optional aliases
+ * @param query Current autocomplete query text
+ * @returns Matching entries ordered by score then command name
+ */
 export function filterAndRankCommandAutocompleteEntries<TEntry extends CommandAutocompleteEntry>(
   entries: readonly TEntry[],
   query: string,

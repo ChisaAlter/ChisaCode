@@ -1,5 +1,6 @@
 import { highlightCode, isLanguageSupported, type HighlightToken } from "@chisacode/highlight";
 
+/** One line inside a parsed unified-diff hunk, optionally with syntax tokens */
 export interface DiffLine {
   type: "add" | "remove" | "context" | "header";
   content: string;
@@ -7,6 +8,7 @@ export interface DiffLine {
   tokens?: HighlightToken[];
 }
 
+/** A unified-diff hunk with old/new ranges and parsed content lines */
 export interface DiffHunk {
   oldStart: number;
   oldCount: number;
@@ -15,6 +17,7 @@ export interface DiffHunk {
   lines: DiffLine[];
 }
 
+/** Structured representation of one file section from a multi-file unified diff */
 export interface ParsedDiffFile {
   path: string;
   isNew: boolean;
@@ -132,7 +135,9 @@ function parseHunks(lines: string[]): HunkParseResult {
 }
 
 /**
- * Parse a unified diff into structured data
+ * Parses a unified multi-file diff into structured per-file data
+ * @param diffText Raw unified diff text, typically from git
+ * @returns Parsed files with hunks and add/delete counts; empty when input is blank
  */
 export function parseDiff(diffText: string): ParsedDiffFile[] {
   if (!diffText || diffText.trim().length === 0) {
@@ -157,8 +162,9 @@ export function parseDiff(diffText: string): ParsedDiffFile[] {
 }
 
 /**
- * Reconstruct the "new" version of a file from diff hunks.
- * Returns a map of new line numbers to their content.
+ * Reconstructs the "new" version of a file from diff hunks
+ * @param hunks Parsed hunks for a single file
+ * @returns Map of new-file line numbers to line content
  */
 export function reconstructNewFile(hunks: DiffHunk[]): Map<number, string> {
   const lines = new Map<number, string>();
@@ -181,8 +187,9 @@ export function reconstructNewFile(hunks: DiffHunk[]): Map<number, string> {
 }
 
 /**
- * Reconstruct the "old" version of a file from diff hunks.
- * Returns a map of old line numbers to their content.
+ * Reconstructs the "old" version of a file from diff hunks
+ * @param hunks Parsed hunks for a single file
+ * @returns Map of old-file line numbers to line content
  */
 export function reconstructOldFile(hunks: DiffHunk[]): Map<number, string> {
   const lines = new Map<number, string>();
@@ -205,12 +212,14 @@ export function reconstructOldFile(hunks: DiffHunk[]): Map<number, string> {
 }
 
 /**
- * Apply syntax highlighting to diff hunks.
+ * Applies syntax highlighting to a parsed diff file's hunk lines.
  *
  * Strategy:
  * 1. Reconstruct both old and new file versions from the hunks
  * 2. Highlight each version as a complete file
  * 3. Map highlighted tokens back to diff lines using line numbers
+ * @param file Parsed diff file whose language is inferred from path
+ * @returns A copy of the file with tokens attached when the language is supported
  */
 export function highlightDiffFile(file: ParsedDiffFile): ParsedDiffFile {
   if (!isLanguageSupported(file.path)) {
@@ -305,7 +314,9 @@ function buildTokenLookup(
 }
 
 /**
- * Parse and highlight a complete diff
+ * Parses a unified diff and applies syntax highlighting to each file
+ * @param diffText Raw unified diff text
+ * @returns Parsed files with highlighted tokens where languages are supported
  */
 export function parseAndHighlightDiff(diffText: string): ParsedDiffFile[] {
   const files = parseDiff(diffText);

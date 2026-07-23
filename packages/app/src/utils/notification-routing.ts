@@ -87,6 +87,11 @@ export function normalizeAndroidNotificationData(data: unknown): AndroidNotifica
   return parseAndroidNotificationData(encoded);
 }
 
+/**
+ * Extracts server/agent/workspace ids from notification payload data
+ * @param data Raw notification data record
+ * @returns Nullable navigation identifiers present on the payload
+ */
 export function resolveNotificationTarget(data: NotificationData): {
   serverId: string | null;
   agentId: string | null;
@@ -99,6 +104,11 @@ export function resolveNotificationTarget(data: NotificationData): {
   };
 }
 
+/**
+ * Builds the in-app route for a notification payload
+ * @param data Raw notification data with optional server/agent/workspace ids
+ * @returns Host agent, workspace, root, or app-home route
+ */
 export function buildNotificationRoute(data: NotificationData): NotificationRoute {
   const { serverId, agentId, workspaceId } = resolveNotificationTarget(data);
   if (serverId && agentId) {

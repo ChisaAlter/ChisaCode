@@ -29,7 +29,7 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { ResizeHandle } from "@/components/resize-handle";
 import { shouldFocusPaneFromEventTarget } from "@/components/split-container-pane-focus";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
@@ -689,23 +689,10 @@ function DragOverlayTabChipInner({
   normalizedServerId: string;
   normalizedWorkspaceId: string;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
 
-  const chipStyle = useMemo(
-    () => [
-      styles.dragOverlayChip,
-      {
-        backgroundColor: theme.colors.surface0,
-        borderColor: theme.colors.border,
-      },
-    ],
-    [theme.colors.surface0, theme.colors.border],
-  );
-  const chipLabelStyle = useMemo(
-    () => [styles.dragOverlayLabel, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
+  const chipStyle = styles.dragOverlayChip;
+  const chipLabelStyle = styles.dragOverlayLabel;
 
   return (
     <WorkspaceTabPresentationResolver
@@ -942,7 +929,6 @@ function SplitPaneView({
   canClosePane,
   onClosePane,
 }: SplitPaneViewProps) {
-  const { theme: _theme } = useUnistyles();
   const paneRef = useRef<View | null>(null);
   const stableOnFocusPane = useStableEvent(onFocusPane);
   const padding = useWindowControlsPadding("tabRow");
@@ -1267,10 +1253,13 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: 10,
     borderWidth: 1,
     maxWidth: 200,
+    backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
   },
   dragOverlayLabel: {
     fontSize: 12.5,
     lineHeight: 16,
     flexShrink: 1,
+    color: theme.colors.foreground,
   },
 }));

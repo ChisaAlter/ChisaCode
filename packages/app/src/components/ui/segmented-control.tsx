@@ -1,9 +1,10 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
 import { SETTINGS_CONTROL_HEIGHT } from "@/constants/layout";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 type SegmentedControlSize = "sm" | "md";
 
@@ -28,6 +29,28 @@ interface SegmentedControlProps<T extends string> {
   compact?: boolean;
 }
 
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
+/** Host that injects a theme-reactive `color` into the caller's icon renderer. */
+function SegmentIconHost({
+  color,
+  size,
+  icon,
+}: {
+  color: string;
+  size: number;
+  icon: SegmentedControlIconRenderer;
+}) {
+  return <>{icon({ color, size })}</>;
+}
+
+const ThemedSegmentIconHost = withUnistyles(SegmentIconHost);
+
 export function SegmentedControl<T extends string>({
   options,
   value,
@@ -38,11 +61,10 @@ export function SegmentedControl<T extends string>({
   testID,
   compact = false,
 }: SegmentedControlProps<T>) {
-  const { theme } = useUnistyles();
   const containerSizeStyle = size === "sm" ? styles.containerSm : styles.containerMd;
   const segmentSizeStyle = size === "sm" ? styles.segmentSm : styles.segmentMd;
   const labelSizeStyle = size === "sm" ? styles.labelSm : styles.labelMd;
-  const iconSize = size === "sm" ? theme.iconSize.sm : theme.iconSize.md;
+  const iconSize = size === "sm" ? ICON_SIZE.sm : ICON_SIZE.md;
 
   const containerStyle = useMemo(
     () => [styles.container, containerSizeStyle, compact && styles.containerCompact, style],
@@ -61,14 +83,12 @@ export function SegmentedControl<T extends string>({
     <View style={containerStyle} testID={testID}>
       {options.map((option) => {
         const isSelected = option.value === value;
-        const iconColor = isSelected ? theme.colors.foreground : theme.colors.foregroundMuted;
 
         return (
           <SegmentItem
             key={option.value}
             option={option}
             isSelected={isSelected}
-            iconColor={iconColor}
             iconSize={iconSize}
             hideLabels={hideLabels}
             segmentSizeStyle={segmentStyle}
@@ -85,7 +105,6 @@ export function SegmentedControl<T extends string>({
 function SegmentItem<T extends string>({
   option,
   isSelected,
-  iconColor,
   iconSize,
   hideLabels,
   segmentSizeStyle,
@@ -95,7 +114,6 @@ function SegmentItem<T extends string>({
 }: {
   option: SegmentedControlOption<T>;
   isSelected: boolean;
-  iconColor: string;
   iconSize: number;
   hideLabels: boolean;
   segmentSizeStyle: StyleProp<ViewStyle>;
@@ -127,6 +145,12 @@ function SegmentItem<T extends string>({
     () => ({ selected: isSelected, disabled: option.disabled }),
     [isSelected, option.disabled],
   );
+
+  let iconColorMapping = foregroundMutedColorMapping;
+  if (isSelected) {
+    iconColorMapping = foregroundColorMapping;
+  }
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -138,7 +162,7 @@ function SegmentItem<T extends string>({
     >
       {option.icon ? (
         <View style={styles.iconContainer}>
-          {option.icon({ color: iconColor, size: iconSize })}
+          <ThemedSegmentIconHost size={iconSize} icon={option.icon} uniProps={iconColorMapping} />
         </View>
       ) : null}
       {hideLabels ? null : (

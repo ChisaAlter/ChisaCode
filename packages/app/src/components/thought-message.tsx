@@ -2,9 +2,10 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "
 import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SyncedLoader } from "@/components/synced-loader";
 import { Fonts } from "@/constants/theme";
+import type { Theme } from "@/styles/theme";
 import type { ThoughtStatus } from "@/types/stream";
 
 export interface ThoughtMessageProps {
@@ -14,28 +15,26 @@ export interface ThoughtMessageProps {
   isLastInSequence?: boolean;
 }
 
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
 export const ThoughtMessage = memo(function ThoughtMessage({
   text,
   status,
   defaultCollapsed = false,
 }: ThoughtMessageProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const content = text.trim();
   const hasContent = content.length > 0;
   const isLoading = status === "loading";
   const [isExpanded, setIsExpanded] = useState(() => hasContent && !defaultCollapsed);
   const previousStatusRef = useRef(status);
   const label = isLoading ? t("stream.thinkingRunning") : t("stream.thinking");
-  const Icon = isExpanded ? ChevronDown : ChevronRight;
-  const loaderColor =
-    theme.colorScheme === "light"
-      ? theme.colors.palette.amber[700]
-      : theme.colors.palette.amber[500];
-  const pixelDotStyle = useMemo(
-    () => [styles.pixelDot, { backgroundColor: loaderColor }],
-    [loaderColor],
-  );
+  const Icon = isExpanded ? ThemedChevronDown : ThemedChevronRight;
 
   useEffect(() => {
     if (!hasContent) {
@@ -71,9 +70,9 @@ export const ThoughtMessage = memo(function ThoughtMessage({
       >
         <View style={styles.iconRail}>
           {isLoading ? (
-            <SyncedLoader size={14} color={loaderColor} />
+            <SyncedLoader size={14} color={styles.loaderColor.color} />
           ) : (
-            <View style={pixelDotStyle} testID="thought-pixel-dot" />
+            <View style={styles.pixelDot} testID="thought-pixel-dot" />
           )}
         </View>
         <Text numberOfLines={1} style={styles.label}>
@@ -85,7 +84,7 @@ export const ThoughtMessage = memo(function ThoughtMessage({
           </Text>
         ) : null}
         {hasContent ? (
-          <Icon size={14} color={theme.colors.foregroundMuted} style={styles.chevron} />
+          <Icon size={14} style={styles.chevron} uniProps={foregroundMutedColorMapping} />
         ) : null}
       </Pressable>
       {isExpanded && hasContent ? (
@@ -123,6 +122,16 @@ const styles = StyleSheet.create((theme) => ({
     width: 4,
     height: 4,
     borderRadius: 1,
+    backgroundColor:
+      theme.colorScheme === "light"
+        ? theme.colors.palette.amber[700]
+        : theme.colors.palette.amber[500],
+  },
+  loaderColor: {
+    color:
+      theme.colorScheme === "light"
+        ? theme.colors.palette.amber[700]
+        : theme.colors.palette.amber[500],
   },
   // Soft thought chip: 12.5 muted meta.
   label: {

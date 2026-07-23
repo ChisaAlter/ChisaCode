@@ -33,6 +33,11 @@ function buildProviderModes(entry: ProviderSnapshotEntry): AgentProviderModeDefi
   );
 }
 
+/**
+ * Builds UI provider definitions from daemon provider snapshot entries
+ * @param snapshotEntries Provider entries from server_info/providers, if any
+ * @returns Provider definitions with labels, modes, and defaults filled from builtins
+ */
 export function buildProviderDefinitions(
   snapshotEntries: ProviderSnapshotEntry[] | undefined,
 ): AgentProviderDefinition[] {
@@ -52,6 +57,12 @@ export function buildProviderDefinitions(
   });
 }
 
+/**
+ * Resolves a display label for a provider id from snapshot entries
+ * @param provider Provider id to label
+ * @param snapshotEntries Provider entries from the daemon snapshot, if any
+ * @returns Snapshot label when present, otherwise the raw provider id
+ */
 export function resolveProviderLabel(
   provider: string,
   snapshotEntries: ProviderSnapshotEntry[] | undefined,
@@ -59,6 +70,12 @@ export function resolveProviderLabel(
   return snapshotEntries?.find((entry) => entry.provider === provider)?.label ?? provider;
 }
 
+/**
+ * Resolves a full provider definition for a provider id
+ * @param provider Provider id to resolve
+ * @param snapshotEntries Provider entries from the daemon snapshot, if any
+ * @returns Matching definition, or undefined when the provider is unknown
+ */
 export function resolveProviderDefinition(
   provider: string,
   snapshotEntries: ProviderSnapshotEntry[] | undefined,

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, GitBranch } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Combobox, ComboboxItem } from "@/components/ui/combobox";
 import type { ComboboxProps } from "@/components/ui/combobox";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -11,6 +11,14 @@ import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { useTranslation } from "react-i18next";
+import type { Theme } from "@/styles/theme";
+
+const ThemedGitBranch = withUnistyles(GitBranch);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface BranchSwitcherProps {
   currentBranchName: string | null;
@@ -32,7 +40,6 @@ export function BranchSwitcher({
   isGitCheckout,
   presentation = "default",
 }: BranchSwitcherProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const anchorRef = useRef<View>(null);
@@ -60,7 +67,7 @@ export function BranchSwitcher({
     </Text>
   ) : (
     <View style={styles.titleRow}>
-      {isGitCheckout ? <GitBranch size={14} color={theme.colors.foregroundMuted} /> : null}
+      {isGitCheckout ? <ThemedGitBranch size={14} uniProps={foregroundMutedColorMapping} /> : null}
       <ScreenTitle testID="workspace-header-title">{title}</ScreenTitle>
     </View>
   );
@@ -77,8 +84,8 @@ export function BranchSwitcher({
   );
 
   const branchLeadingSlot = useMemo(
-    () => <GitBranch size={14} color={theme.colors.foregroundMuted} />,
-    [theme.colors.foregroundMuted],
+    () => <ThemedGitBranch size={14} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
 
   const renderBranchOption = useCallback<NonNullable<ComboboxProps["renderOption"]>>(
@@ -113,7 +120,7 @@ export function BranchSwitcher({
       >
         {titleContent}
         {!isCompact || isSoftPill ? (
-          <ChevronDown size={12} color={theme.colors.foregroundMuted} />
+          <ThemedChevronDown size={12} uniProps={foregroundMutedColorMapping} />
         ) : null}
       </Pressable>
       <Combobox

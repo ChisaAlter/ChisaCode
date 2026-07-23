@@ -1,3 +1,9 @@
+/**
+ * Normalizes unknown thrown values into a displayable error message
+ * @param error Unknown error value from catch blocks or APIs
+ * @param fallbackMessage Optional message used when the error string is unusable
+ * @returns Trimmed human-readable error message
+ */
 export function toErrorMessage(error: unknown, fallbackMessage?: string): string {
   let message: string;
   if (error instanceof Error) {

@@ -1,6 +1,13 @@
 import { Share } from "react-native";
 import { isWeb } from "@/constants/platform";
 
+/**
+ * Downloads or shares a text file on the current platform
+ * @param filename Suggested download filename
+ * @param content File body text
+ * @param mimeType MIME type used for web blob downloads
+ * @returns True when the download/share flow started successfully
+ */
 export async function downloadTextFile(
   filename: string,
   content: string,

@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { ArrowUpRight, Terminal, Blocks, Check, Download } from "lucide-react-native";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
@@ -26,6 +27,16 @@ import {
 } from "@/hooks/use-acp-provider-catalog";
 import { useTranslation } from "react-i18next";
 import type { ProviderSnapshotEntry } from "@chisacode/protocol/agent-types";
+
+const ThemedArrowUpRight = withUnistyles(ArrowUpRight);
+const ThemedTerminal = withUnistyles(Terminal);
+const ThemedBlocks = withUnistyles(Blocks);
+const ThemedCheck = withUnistyles(Check);
+const ThemedDownload = withUnistyles(Download);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
 const CLI_DOCS_URL = "https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/cli.md";
 const SKILLS_DOCS_URL = "https://github.com/ChisaAlter/ChisaCode/blob/cn-main/docs/skills.md";
@@ -57,7 +68,6 @@ function formatUpdateMessage(
 }
 
 export function IntegrationsSection() {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const showSection = shouldUseDesktopDaemon();
   const {
@@ -134,8 +144,8 @@ export function IntegrationsSection() {
   }, []);
 
   const arrowIcon = useMemo(
-    () => <ArrowUpRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
-    [theme.iconSize.sm, theme.colors.foregroundMuted],
+    () => <ThemedArrowUpRight size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
 
   const trailing = useMemo(
@@ -181,7 +191,7 @@ export function IntegrationsSection() {
           <View style={settingsStyles.row}>
             <View style={settingsStyles.rowContent}>
               <View style={styles.rowTitleRow}>
-                <Terminal size={theme.iconSize.md} color={theme.colors.foreground} />
+                <ThemedTerminal size={ICON_SIZE.md} uniProps={foregroundColorMapping} />
                 <Text style={settingsStyles.rowTitle}>
                   {t("settings.integrations.commandLine")}
                 </Text>
@@ -192,7 +202,7 @@ export function IntegrationsSection() {
             </View>
             {cliStatus?.installed ? (
               <View style={styles.installedLabel}>
-                <Check size={14} color={theme.colors.foregroundMuted} />
+                <ThemedCheck size={14} uniProps={foregroundMutedColorMapping} />
                 <Text style={styles.mutedText}>{t("settings.integrations.installed")}</Text>
               </View>
             ) : (
@@ -211,7 +221,7 @@ export function IntegrationsSection() {
           <View style={ROW_WITH_BORDER_STYLE}>
             <View style={settingsStyles.rowContent}>
               <View style={styles.rowTitleRow}>
-                <Blocks size={theme.iconSize.md} color={theme.colors.foreground} />
+                <ThemedBlocks size={ICON_SIZE.md} uniProps={foregroundColorMapping} />
                 <Text style={settingsStyles.rowTitle}>
                   {t("settings.integrations.orchestrationSkills")}
                 </Text>
@@ -246,14 +256,13 @@ interface SkillsActionsProps {
 }
 
 function SkillsActions({ state, isWorking, onInstall, onUpdate, onUninstall }: SkillsActionsProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
 
   if (state === "up-to-date") {
     return (
       <View style={styles.actionsRow}>
         <View style={styles.installedLabel}>
-          <Check size={14} color={theme.colors.foregroundMuted} />
+          <ThemedCheck size={14} uniProps={foregroundMutedColorMapping} />
           <Text style={styles.mutedText}>{t("settings.integrations.installed")}</Text>
         </View>
         <Button variant="outline" size="sm" onPress={onUninstall} disabled={isWorking}>
@@ -410,9 +419,9 @@ function AgentToolRow({
   onCheck,
   onToolingAction,
 }: AgentToolRowProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const ProviderIcon = getProviderIcon(catalogEntry.id);
+  const ThemedProviderIcon = useMemo(() => withUnistyles(ProviderIcon), [ProviderIcon]);
   const versionView = getAgentToolVersionView(providerEntry);
   const rowStyle = useMemo(
     () => [settingsStyles.row, !isFirst && settingsStyles.rowBorder],
@@ -440,15 +449,15 @@ function AgentToolRow({
     [catalogEntry.id, onToolingAction],
   );
   const downloadIcon = useMemo(
-    () => <Download size={14} color={theme.colors.foreground} />,
-    [theme.colors.foreground],
+    () => <ThemedDownload size={14} uniProps={foregroundColorMapping} />,
+    [],
   );
 
   return (
     <View style={rowStyle} accessibilityLabel={`${catalogEntry.title} agent tool`}>
       <View style={settingsStyles.rowContent}>
         <View style={styles.rowTitleRow}>
-          <ProviderIcon size={theme.iconSize.md} color={theme.colors.foreground} />
+          <ThemedProviderIcon size={ICON_SIZE.md} uniProps={foregroundColorMapping} />
           <Text style={settingsStyles.rowTitle}>{catalogEntry.title}</Text>
         </View>
         <View style={styles.versionColumn}>
@@ -463,7 +472,9 @@ function AgentToolRow({
         </View>
       </View>
       <View style={styles.actionsRow}>
-        {isWorking ? <LoadingSpinner size={14} color={theme.colors.foregroundMuted} /> : null}
+        {isWorking ? (
+          <ThemedLoadingSpinner size={14} uniProps={foregroundMutedColorMapping} />
+        ) : null}
         <Button
           variant="outline"
           size="sm"

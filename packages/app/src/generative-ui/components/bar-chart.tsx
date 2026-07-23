@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 
 interface BarChartDataPoint {
@@ -18,7 +18,6 @@ interface BarChartProps extends GenerativeUiComponentBaseProps {
 }
 
 export default function BarChart({ instanceId, props, sendAction }: BarChartProps) {
-  const { theme } = useUnistyles();
   const height = props.height ?? 280;
   const data = useMemo(() => props.data ?? [], [props.data]);
   const labelKey = props.label;
@@ -48,20 +47,16 @@ export default function BarChart({ instanceId, props, sendAction }: BarChartProp
     [height],
   );
 
-  const barStyles = useMemo(
+  const barHeightStyles = useMemo(
     () =>
       numericData.map((val) => {
         const safeVal = Number.isNaN(val) ? 0 : val;
         const barH = max > 0 ? (safeVal / max) * (height - 30) : 0;
         return {
-          width: "100%" as const,
-          backgroundColor: theme.colors.accent,
-          borderRadius: theme.borderRadius.base,
-          minHeight: 2,
           height: barH,
         };
       }),
-    [numericData, max, height, theme.colors.accent, theme.borderRadius.base],
+    [numericData, max, height],
   );
 
   const barHandlers = useMemo(
@@ -98,7 +93,10 @@ export default function BarChart({ instanceId, props, sendAction }: BarChartProp
           return (
             <View key={barKeys[i]} style={styles.barItem}>
               <Text style={styles.barValue}>{String(val ?? "")}</Text>
-              <TouchableOpacity style={barStyles[i]} onPress={barHandlers[i]} />
+              <TouchableOpacity
+                style={StyleSheet.compose(styles.bar, barHeightStyles[i])}
+                onPress={barHandlers[i]}
+              />
               <Text style={styles.barLabel} numberOfLines={1}>
                 {String(d[labelKey] ?? "")}
               </Text>
@@ -146,5 +144,11 @@ const styles = StyleSheet.create((theme) => ({
   barItem: {
     flex: 1,
     alignItems: "center",
+  },
+  bar: {
+    width: "100%",
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.borderRadius.base,
+    minHeight: 2,
   },
 }));

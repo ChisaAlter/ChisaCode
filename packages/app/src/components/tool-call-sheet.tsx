@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
 import { View, Text, Pressable } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import Animated from "react-native-reanimated";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   BottomSheetScrollView,
   BottomSheetBackdrop,
@@ -15,6 +14,7 @@ import {
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
 import type { ToolCallIconComponent } from "@/utils/tool-call-icon";
+import type { Theme } from "@/styles/theme";
 import { ToolCallDetailsContent } from "./tool-call-details";
 
 // ----- Types -----
@@ -45,16 +45,19 @@ export function useToolCallSheet(): ToolCallSheetContextValue {
   return context;
 }
 
+const ThemedX = withUnistyles(X);
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
 // ----- Custom Background Component -----
 
 function CustomSheetBackground({ style }: BottomSheetBackgroundProps) {
-  const { theme } = useUnistyles();
-  const containerStyle = useMemo(
-    // Soft sheet surface: composer-family r18.
-    () => [style, { backgroundColor: theme.colors.surface0, borderRadius: 18 }],
-    [style, theme.colors.surface0],
-  );
-  return <Animated.View pointerEvents="none" style={containerStyle} />;
+  // Theme-reactive surface lives in StyleSheet.create (styles.sheetBackground);
+  // layer incoming `style` first to preserve the original [style, themed] order.
+  const containerStyle = useMemo(() => [style, styles.sheetBackground], [style]);
+  return <View pointerEvents="none" style={containerStyle} />;
 }
 
 // ----- Provider Component -----
@@ -64,7 +67,6 @@ interface ToolCallSheetProviderProps {
 }
 
 export function ToolCallSheetProvider({ children }: ToolCallSheetProviderProps) {
-  const { theme } = useUnistyles();
   const [sheetData, setSheetData] = React.useState<ToolCallSheetData | null>(null);
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
 
@@ -105,11 +107,6 @@ export function ToolCallSheetProvider({ children }: ToolCallSheetProviderProps) 
     [openToolCall, closeToolCall],
   );
 
-  const handleIndicatorStyle = useMemo(
-    () => ({ backgroundColor: theme.colors.foregroundFaint }),
-    [theme.colors.foregroundFaint],
-  );
-
   return (
     <ToolCallSheetContext.Provider value={contextValue}>
       {children}
@@ -123,7 +120,7 @@ export function ToolCallSheetProvider({ children }: ToolCallSheetProviderProps) 
         backdropComponent={renderBackdrop}
         enablePanDownToClose
         backgroundComponent={CustomSheetBackground}
-        handleIndicatorStyle={handleIndicatorStyle}
+        handleIndicatorStyle={styles.sheetHandleIndicator}
       >
         {sheetData && <ToolCallSheetContent data={sheetData} onClose={closeToolCall} />}
       </IsolatedBottomSheetModal>
@@ -139,21 +136,21 @@ interface ToolCallSheetContentProps {
 }
 
 function ToolCallSheetContent({ data, onClose }: ToolCallSheetContentProps) {
-  const { theme } = useUnistyles();
   const { displayName, detail, errorText, icon: IconComponent, showLoadingSkeleton } = data;
+  const ThemedIcon = useMemo(() => withUnistyles(IconComponent), [IconComponent]);
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <IconComponent size={20} color={theme.colors.foreground} />
+          <ThemedIcon size={20} uniProps={foregroundColorMapping} />
           <Text style={styles.headerTitle} numberOfLines={1}>
             {displayName}
           </Text>
         </View>
         <Pressable onPress={onClose} style={styles.closeButton}>
-          <X size={20} color={theme.colors.foregroundMuted} />
+          <ThemedX size={20} uniProps={foregroundMutedColorMapping} />
         </Pressable>
       </View>
 
@@ -212,5 +209,13 @@ const styles = StyleSheet.create((theme) => ({
   contentContainer: {
     padding: 0,
     flexGrow: 1,
+  },
+  // Soft sheet surface: composer-family r18.
+  sheetBackground: {
+    backgroundColor: theme.colors.surface0,
+    borderRadius: 18,
+  },
+  sheetHandleIndicator: {
+    backgroundColor: theme.colors.foregroundFaint,
   },
 }));

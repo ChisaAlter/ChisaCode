@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { listenToDesktopEvent } from "@/desktop/electron/events";
+import type { Theme } from "@/styles/theme";
+
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 export function QuittingOverlay() {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const [quitting, setQuitting] = useState(false);
 
   useEffect(() => {
@@ -38,7 +44,7 @@ export function QuittingOverlay() {
 
   return (
     <View style={styles.overlay}>
-      <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
+      <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
       <Text style={styles.title}>{t("desktop.quittingTitle")}</Text>
       <Text style={styles.detail}>{t("desktop.stoppingDaemon")}</Text>
     </View>

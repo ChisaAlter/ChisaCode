@@ -1,12 +1,13 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
 import {
   HEADER_INNER_HEIGHT,
   HEADER_INNER_HEIGHT_MOBILE,
   SETTINGS_DESKTOP_BACK_HEIGHT,
 } from "@/constants/layout";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 interface SidebarHeaderRowProps {
   icon: LucideIcon;
@@ -19,6 +20,11 @@ interface SidebarHeaderRowProps {
   trailing?: ReactNode;
   compact?: boolean;
 }
+
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 /**
  * Top-of-sidebar header row: a sidebar-height pressable with an icon + label
@@ -37,7 +43,7 @@ export function SidebarHeaderRow({
   trailing,
   compact = false,
 }: SidebarHeaderRowProps) {
-  const { theme } = useUnistyles();
+  const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
 
   const buttonStyle = useCallback(
     ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -51,27 +57,20 @@ export function SidebarHeaderRow({
   const renderChildren = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) => {
       const isHighlighted = Boolean(state.hovered) || isActive;
-      const iconColor = isHighlighted ? theme.colors.foreground : theme.colors.foregroundMuted;
       return (
         <>
           <View style={styles.titleGroup}>
-            <Icon size={theme.iconSize.md} color={iconColor} />
+            <ThemedIcon
+              size={ICON_SIZE.md}
+              uniProps={isHighlighted ? foregroundColorMapping : foregroundMutedColorMapping}
+            />
             <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} compact={compact} />
           </View>
           {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
         </>
       );
     },
-    [
-      Icon,
-      compact,
-      isActive,
-      label,
-      theme.colors.foreground,
-      theme.colors.foregroundMuted,
-      theme.iconSize.md,
-      trailing,
-    ],
+    [ThemedIcon, compact, isActive, label, trailing],
   );
 
   const containerStyle = useMemo(

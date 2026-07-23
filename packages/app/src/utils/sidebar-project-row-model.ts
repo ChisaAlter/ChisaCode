@@ -3,6 +3,7 @@ import type {
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
 
+/** Flattened project row that links directly to its single workspace */
 export interface SidebarProjectWorkspaceLinkRowModel {
   kind: "workspace_link";
   workspace: SidebarWorkspaceEntry;
@@ -10,16 +11,23 @@ export interface SidebarProjectWorkspaceLinkRowModel {
   trailingAction: "new_worktree" | "none";
 }
 
+/** Expandable project section row shown when a project has multiple workspaces */
 export interface SidebarProjectSectionRowModel {
   kind: "project_section";
   chevron: "expand" | "collapse" | null;
   trailingAction: "new_worktree" | "none";
 }
 
+/** Discriminated row model for rendering a project entry in the left sidebar */
 export type SidebarProjectRowModel =
   | SidebarProjectWorkspaceLinkRowModel
   | SidebarProjectSectionRowModel;
 
+/**
+ * Whether a project should render as a single workspace link instead of a section
+ * @param project The sidebar project entry to evaluate
+ * @returns True when the project has one workspace and is not a multi-worktree git project
+ */
 export function isSidebarProjectFlattened(project: SidebarProjectEntry): boolean {
   if (project.workspaces.length !== 1) {
     return false;
@@ -32,6 +40,11 @@ export function isSidebarProjectFlattened(project: SidebarProjectEntry): boolean
   return project.workspaces[0]?.workspaceKind === "local_checkout";
 }
 
+/**
+ * Builds the left-sidebar row presentation for a project entry
+ * @param input The project and whether its section is currently collapsed
+ * @returns A workspace link model when flattened, otherwise a section model with chevron state
+ */
 export function buildSidebarProjectRowModel(input: {
   project: SidebarProjectEntry;
   collapsed: boolean;

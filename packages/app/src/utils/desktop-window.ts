@@ -109,6 +109,11 @@ function useRawWindowControlsPadding(): RawWindowControlsPadding {
   }, [isFullscreen]);
 }
 
+/**
+ * React hook returning desktop window-control padding for a UI region role
+ * @param role Layout region that may need traffic-light or caption-button insets
+ * @returns Left/right/top padding values for the current desktop window state
+ */
 export function useWindowControlsPadding(role: WindowControlsPaddingRole): {
   left: number;
   right: number;
@@ -131,6 +136,11 @@ export function useWindowControlsPadding(role: WindowControlsPaddingRole): {
   return useMemo(() => ({ left, right, top }), [left, right, top]);
 }
 
+/**
+ * Resolves which window-control padding a layout role should consume
+ * @param input Role, raw platform padding, and desktop panel/focus flags
+ * @returns Padding applied for the role; only titlebar currently uses raw padding
+ */
 export function resolveWindowControlsPadding(input: {
   role: WindowControlsPaddingRole;
   rawPadding: RawWindowControlsPadding;

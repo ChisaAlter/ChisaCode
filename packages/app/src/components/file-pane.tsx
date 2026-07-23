@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Fonts } from "@/constants/theme";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
@@ -28,6 +28,7 @@ import { createPreviewAttachmentId, getFileNameFromPath } from "@/attachments/ut
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import { FONT_SIZE } from "@/styles/theme";
 
 interface CodeLineProps {
   tokens: HighlightToken[];
@@ -193,7 +194,6 @@ function FilePreviewBody({
   location,
   imagePreviewUri,
 }: FilePreviewBodyProps) {
-  const { theme } = useUnistyles();
   const filePath = location.path;
   const isMarkdownFile =
     preview?.kind === "text" && isRenderedMarkdownFile(filePath) && !location.lineStart;
@@ -214,9 +214,9 @@ function FilePreviewBody({
 
   const gutterWidth = useMemo(() => {
     if (!highlightedLines) return 0;
-    return lineNumberGutterWidth(highlightedLines.length, theme.fontSize.code);
-  }, [highlightedLines, theme.fontSize.code]);
-  const lineHeight = theme.fontSize.code * 1.45;
+    return lineNumberGutterWidth(highlightedLines.length, FONT_SIZE.code);
+  }, [highlightedLines]);
+  const lineHeight = FONT_SIZE.code * 1.45;
   const lineSelection = useMemo(() => {
     if (!highlightedLines) {
       return null;

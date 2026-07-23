@@ -1,11 +1,5 @@
 import React, { useEffect } from "react";
-import {
-  StyleSheet as RNStyleSheet,
-  Text,
-  View,
-  type TextStyle,
-  type ViewStyle,
-} from "react-native";
+import { StyleSheet as RNStyleSheet, Text, View, type ViewStyle } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -17,8 +11,9 @@ import Animated, {
 import type { AgentLifecycleStatus } from "@chisacode/protocol/agent-lifecycle";
 import { AlertCircle, CheckCircle, ShieldAlert } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import type { Theme } from "@/styles/theme";
 
 export interface AgentStatusIndicatorProps {
   /** Agent lifecycle status */
@@ -32,6 +27,24 @@ export interface AgentStatusIndicatorProps {
   /** Size variant: "sm" for sidebar rows, "md" for full list */
   size?: "sm" | "md";
 }
+
+const ThemedCheckCircle = withUnistyles(CheckCircle);
+const ThemedAlertCircle = withUnistyles(AlertCircle);
+const ThemedShieldAlert = withUnistyles(ShieldAlert);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+
+const successColorMapping = (theme: Theme) => ({
+  color: theme.colors.statusSuccess,
+});
+const dangerColorMapping = (theme: Theme) => ({
+  color: theme.colors.statusDanger,
+});
+const warningColorMapping = (theme: Theme) => ({
+  color: theme.colors.statusWarning,
+});
+const accentColorMapping = (theme: Theme) => ({
+  color: theme.colors.accent,
+});
 
 /**
  * Compact visual indicator for agent status.
@@ -50,53 +63,13 @@ export function AgentStatusIndicator({
   size = "sm",
 }: AgentStatusIndicatorProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const needsAttention = requiresAttention || pendingPermissionCount > 0;
   const isRunning = status === "running";
   const isInitializing = status === "initializing";
   const isError = status === "error";
-  const dotSize = size === "sm" ? 6 : 8;
-  const dynamicStyles = React.useMemo(
-    () => ({
-      successText: [
-        styles.attentionText,
-        { color: theme.colors.statusSuccess } satisfies TextStyle,
-      ],
-      dangerText: [styles.attentionText, { color: theme.colors.statusDanger } satisfies TextStyle],
-      warningText: [
-        styles.attentionText,
-        { color: theme.colors.statusWarning } satisfies TextStyle,
-      ],
-      warningDot: [
-        staticStyles.dot,
-        {
-          backgroundColor: theme.colors.statusWarning,
-          width: dotSize,
-          height: dotSize,
-        } satisfies ViewStyle,
-      ],
-      dangerDot: [
-        staticStyles.dot,
-        {
-          backgroundColor: theme.colors.statusDanger,
-          width: dotSize,
-          height: dotSize,
-        } satisfies ViewStyle,
-      ],
-      countBadge: [
-        styles.countBadge,
-        { backgroundColor: theme.colors.statusWarningBg } satisfies ViewStyle,
-      ],
-      countText: [styles.countText, { color: theme.colors.statusWarning } satisfies TextStyle],
-    }),
-    [
-      dotSize,
-      theme.colors.statusDanger,
-      theme.colors.statusSuccess,
-      theme.colors.statusWarning,
-      theme.colors.statusWarningBg,
-    ],
-  );
+  const isSm = size === "sm";
+  const warningDotStyle = isSm ? styles.warningDotSm : styles.warningDotMd;
+  const dangerDotStyle = isSm ? styles.dangerDotSm : styles.dangerDotMd;
 
   // Hide indicator for idle/closed - nothing visual to show.
   if (status === "idle" || status === "closed") {
@@ -107,50 +80,27 @@ export function AgentStatusIndicator({
 
   // --- Running: pulsing accent dot ---
   if (isRunning) {
-    return <PulsingDot color={theme.colors.accent} size={dotSize} />;
+    return <PulsingDot size={isSm ? 6 : 8} />;
   }
 
   // --- Initializing: spinner ---
   if (isInitializing) {
-    return (
-      <LoadingSpinner color={theme.colors.accent} size={size === "sm" ? "small" : undefined} />
-    );
+    return <ThemedLoadingSpinner uniProps={accentColorMapping} size={isSm ? "small" : undefined} />;
   }
 
   // --- Attention badge for finished/error/permission (md only) ---
   if (size === "md" && attentionReason) {
-    switch (attentionReason) {
-      case "finished":
-        return (
-          <View style={styles.attentionBadge}>
-            <CheckCircle size={14} color={theme.colors.statusSuccess} />
-            <Text style={dynamicStyles.successText}>{t("agentStatus.completed")}</Text>
-          </View>
-        );
-      case "error":
-        return (
-          <View style={styles.attentionBadge}>
-            <AlertCircle size={14} color={theme.colors.statusDanger} />
-            <Text style={dynamicStyles.dangerText}>{t("agentStatus.errored")}</Text>
-          </View>
-        );
-      case "permission":
-        return (
-          <View style={styles.attentionBadge}>
-            <ShieldAlert size={14} color={theme.colors.statusWarning} />
-            <Text style={dynamicStyles.warningText}>{t("agentStatus.needsPermission")}</Text>
-          </View>
-        );
-    }
+    const badge = renderAttentionBadge(attentionReason, t);
+    if (badge) return badge;
   }
 
   // --- Permission count badge ---
   if (pendingPermissionCount > 0) {
     return (
       <View style={styles.permissionWrapper}>
-        <View style={dynamicStyles.warningDot} />
-        <View style={dynamicStyles.countBadge}>
-          <Text style={dynamicStyles.countText}>{pendingPermissionCount}</Text>
+        <View style={warningDotStyle} />
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{pendingPermissionCount}</Text>
         </View>
       </View>
     );
@@ -158,19 +108,47 @@ export function AgentStatusIndicator({
 
   // --- Error: static red dot ---
   if (isError) {
-    return <View style={dynamicStyles.dangerDot} />;
+    return <View style={dangerDotStyle} />;
   }
 
   // --- Generic attention (no specific reason) ---
   if (needsAttention) {
-    return <View style={dynamicStyles.warningDot} />;
+    return <View style={warningDotStyle} />;
   }
 
   return null;
 }
 
+function renderAttentionBadge(
+  attentionReason: "finished" | "error" | "permission",
+  t: (key: string) => string,
+) {
+  if (attentionReason === "finished") {
+    return (
+      <View style={styles.attentionBadge}>
+        <ThemedCheckCircle size={14} uniProps={successColorMapping} />
+        <Text style={styles.successText}>{t("agentStatus.completed")}</Text>
+      </View>
+    );
+  }
+  if (attentionReason === "error") {
+    return (
+      <View style={styles.attentionBadge}>
+        <ThemedAlertCircle size={14} uniProps={dangerColorMapping} />
+        <Text style={styles.dangerText}>{t("agentStatus.errored")}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.attentionBadge}>
+      <ThemedShieldAlert size={14} uniProps={warningColorMapping} />
+      <Text style={styles.warningText}>{t("agentStatus.needsPermission")}</Text>
+    </View>
+  );
+}
+
 /** Pulsing dot animation for "running" status */
-function PulsingDot({ color, size }: { color: string; size: number }) {
+function PulsingDot({ size }: { size: number }) {
   const opacity = useSharedValue(1);
 
   useEffect(() => {
@@ -187,16 +165,17 @@ function PulsingDot({ color, size }: { color: string; size: number }) {
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
   }));
-  const dotStyle = React.useMemo(
-    () => [
-      staticStyles.dot,
-      { backgroundColor: color, width: size, height: size } satisfies ViewStyle,
-      animatedStyle,
-    ],
-    [animatedStyle, color, size],
+  const outerStyle = React.useMemo(
+    () => [staticStyles.dot, { width: size, height: size } satisfies ViewStyle, animatedStyle],
+    [animatedStyle, size],
   );
 
-  return <Animated.View style={dotStyle} />;
+  // Theme fill on a plain View so Reanimated never receives Unistyles styles.
+  return (
+    <Animated.View style={outerStyle}>
+      <View style={styles.accentFill} />
+    </Animated.View>
+  );
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -211,11 +190,13 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: 1,
     minWidth: 16,
     alignItems: "center",
+    backgroundColor: theme.colors.statusWarningBg,
   },
   countText: {
     fontSize: 10,
     fontWeight: "600",
     lineHeight: 14,
+    color: theme.colors.statusWarning,
   },
   attentionBadge: {
     flexDirection: "row",
@@ -227,10 +208,58 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 16,
     fontWeight: "500",
   },
+  successText: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: theme.colors.statusSuccess,
+  },
+  dangerText: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: theme.colors.statusDanger,
+  },
+  warningText: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: theme.colors.statusWarning,
+  },
+  warningDotSm: {
+    width: 6,
+    height: 6,
+    borderRadius: 9999,
+    backgroundColor: theme.colors.statusWarning,
+  },
+  warningDotMd: {
+    width: 8,
+    height: 8,
+    borderRadius: 9999,
+    backgroundColor: theme.colors.statusWarning,
+  },
+  dangerDotSm: {
+    width: 6,
+    height: 6,
+    borderRadius: 9999,
+    backgroundColor: theme.colors.statusDanger,
+  },
+  dangerDotMd: {
+    width: 8,
+    height: 8,
+    borderRadius: 9999,
+    backgroundColor: theme.colors.statusDanger,
+  },
+  accentFill: {
+    ...RNStyleSheet.absoluteFill,
+    borderRadius: 9999,
+    backgroundColor: theme.colors.accent,
+  },
 }));
 
 const staticStyles = RNStyleSheet.create({
   dot: {
     borderRadius: 9999,
+    overflow: "hidden",
   },
 });

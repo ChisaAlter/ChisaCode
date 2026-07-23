@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { ActivityIndicator, View, type ViewStyle } from "react-native";
 import { ChevronDown, ChevronRight, CircleAlert, FolderGit2, Monitor } from "lucide-react-native";
-import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 
 import { ProjectIconView } from "@/components/project-icon-view";
 import { SyncedLoader } from "@/components/synced-loader";
@@ -25,6 +25,8 @@ const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolderGit2 = withUnistyles(FolderGit2);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -274,14 +276,13 @@ function ProjectLeadingVisualStatus({
 }
 
 function ProjectInlineChevron({ chevron }: { chevron: "expand" | "collapse" | null }) {
-  const { theme } = useUnistyles();
   if (chevron === null) {
     return null;
   }
   if (chevron === "collapse") {
-    return <ChevronDown size={14} color={theme.colors.foregroundMuted} />;
+    return <ThemedChevronDown size={14} uniProps={foregroundMutedColorMapping} />;
   }
-  return <ChevronRight size={14} color={theme.colors.foregroundMuted} />;
+  return <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />;
 }
 
 function getStatusDotColorStyle(bucket: SidebarStateBucket): ViewStyle | null {

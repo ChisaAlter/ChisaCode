@@ -67,6 +67,12 @@ function parseOrderedListStart(node: MarkdownNode): number {
   return 1;
 }
 
+/**
+ * Finds the markdown AST type of the node immediately after the given node
+ * @param node Current markdown node
+ * @param parent Parent node or ancestor chain from the renderer
+ * @returns Next sibling type, or undefined when there is no following sibling
+ */
 export function getMarkdownNextSiblingType(
   node: MarkdownNode,
   parent: unknown,
@@ -91,6 +97,12 @@ function hasListItemAncestor(parent: unknown): boolean {
   return toParentNodes(parent).some((ancestor) => ancestor?.type === "list_item");
 }
 
+/**
+ * Computes vertical margins for a markdown list based on nesting and neighbors
+ * @param node List node being spaced
+ * @param parent Parent node or ancestor chain from the renderer
+ * @returns Top and bottom margin values for the list container
+ */
 export function getMarkdownListSpacing(
   node: MarkdownNode,
   parent: unknown,
@@ -118,6 +130,12 @@ export function getMarkdownListSpacing(
   };
 }
 
+/**
+ * Builds the list marker string for a bullet or ordered list item
+ * @param node List item node
+ * @param parent Parent node or ancestor chain used to find the list container
+ * @returns Ordered flag and the marker text to render
+ */
 export function getMarkdownListMarker(
   node: MarkdownNode,
   parent: unknown,

@@ -3,7 +3,7 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { isWeb } from "@/constants/platform";
 import { router, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -12,6 +12,13 @@ import { useProjects, type ProjectHostError } from "@/hooks/use-projects";
 import { settingsStyles } from "@/styles/settings";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
 import type { ProjectHostEntry, ProjectSummary } from "@/utils/projects";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+const ThemedChevronRight = withUnistyles(ChevronRight);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface ProjectsScreenProps {
   view: { kind: "projects" } | { kind: "project"; projectKey: string };
@@ -81,7 +88,6 @@ interface ProjectRowProps {
 }
 
 function ProjectRow({ project, isFirst, isSelected, returnTo }: ProjectRowProps) {
-  const { theme } = useUnistyles();
   const { hosts, projectKey, projectName } = project;
   const leadingHost = hosts[0];
 
@@ -118,7 +124,7 @@ function ProjectRow({ project, isFirst, isSelected, returnTo }: ProjectRowProps)
           {projectName}
         </Text>
       </View>
-      <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      <ThemedChevronRight size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
     </Pressable>
   );
 }

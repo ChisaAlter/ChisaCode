@@ -14,6 +14,10 @@ function toVersionOrNull(value: unknown): string | null {
   return trimmed;
 }
 
+/**
+ * Resolves the running app version from package or Expo config metadata
+ * @returns Version string when available, otherwise null
+ */
 export function resolveAppVersion(): string | null {
   const packageVersion = toVersionOrNull(appPackage?.version);
   if (packageVersion) {

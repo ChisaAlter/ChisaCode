@@ -37,6 +37,11 @@ function getOrderedWorkspaceTabs(input: {
   return orderedTabs;
 }
 
+/**
+ * Resolves the agent id selected by the focused workspace layout tab
+ * @param layout Workspace split layout, if any
+ * @returns Focused agent id, or null when no agent tab is selected
+ */
 export function resolveSelectedSidebarAgentIdFromWorkspaceLayout(
   layout: WorkspaceLayout | null | undefined,
 ): string | null {

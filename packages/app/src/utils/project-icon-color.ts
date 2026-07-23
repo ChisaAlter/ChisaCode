@@ -21,6 +21,11 @@ function hashProjectKey(projectKey: string): number {
   return hash;
 }
 
+/**
+ * Picks a stable project icon background color from a project key hash
+ * @param projectKey Stable project identity string
+ * @returns Hex color chosen from the fixed project-icon palette
+ */
 export function deriveProjectIconColor(projectKey: string): string {
   return PROJECT_ICON_COLORS[hashProjectKey(projectKey) % PROJECT_ICON_COLORS.length];
 }

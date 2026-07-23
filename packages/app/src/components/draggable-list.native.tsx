@@ -4,12 +4,20 @@ import DraggableFlatList, {
   NestableDraggableFlatList,
   type RenderItemParams,
 } from "react-native-draggable-flatlist";
-import { useUnistyles } from "react-native-unistyles";
+import { withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 import type { DraggableListProps, DraggableRenderItemInfo } from "./draggable-list.types";
 
 export type { DraggableListProps, DraggableRenderItemInfo };
 
 const SCROLL_ENABLED_FLEX_STYLE = { flex: 1 };
+
+const ThemedRefreshControl = withUnistyles(RefreshControl);
+
+const refreshControlColorMapping = (theme: Theme) => ({
+  tintColor: theme.colors.foregroundMuted,
+  colors: [theme.colors.foregroundMuted],
+});
 
 export function DraggableList<T>({
   data,
@@ -34,7 +42,6 @@ export function DraggableList<T>({
   onDragBegin: onDragBeginProp,
   nestable = false,
 }: DraggableListProps<T>) {
-  const { theme } = useUnistyles();
   const [isDragging, setIsDragging] = useState(false);
 
   // Pass the ref directly to DraggableFlatList - it handles gesture
@@ -42,11 +49,6 @@ export function DraggableList<T>({
   const simultaneousHandlers = useMemo(
     () => (simultaneousGestureRef ? [simultaneousGestureRef] : undefined),
     [simultaneousGestureRef],
-  );
-
-  const refreshColors = useMemo(
-    () => [theme.colors.foregroundMuted],
-    [theme.colors.foregroundMuted],
   );
 
   const handleRenderItem = useCallback(
@@ -91,14 +93,13 @@ export function DraggableList<T>({
   const refreshControl = useMemo(
     () =>
       shouldShowRefreshControl ? (
-        <RefreshControl
+        <ThemedRefreshControl
           refreshing={refreshing ?? false}
           onRefresh={onRefresh}
-          tintColor={theme.colors.foregroundMuted}
-          colors={refreshColors}
+          uniProps={refreshControlColorMapping}
         />
       ) : undefined,
-    [shouldShowRefreshControl, refreshing, onRefresh, theme.colors.foregroundMuted, refreshColors],
+    [shouldShowRefreshControl, refreshing, onRefresh],
   );
 
   return (

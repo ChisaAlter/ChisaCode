@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image as ExpoImage } from "expo-image";
 import { X } from "lucide-react-native";
@@ -8,14 +8,20 @@ import { useTranslation } from "react-i18next";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { isWeb } from "@/constants/platform";
+import { SPACING, type Theme } from "@/styles/theme";
 
 interface AttachmentLightboxProps {
   metadata: AttachmentMetadata | null;
   onClose: () => void;
 }
 
+const ThemedX = withUnistyles(X);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
 export function AttachmentLightbox({ metadata, onClose }: AttachmentLightboxProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const url = useAttachmentPreviewUrl(metadata);
@@ -42,11 +48,11 @@ export function AttachmentLightbox({ metadata, onClose }: AttachmentLightboxProp
     () => [
       styles.closeButton,
       {
-        top: insets.top + theme.spacing[3],
-        right: insets.right + theme.spacing[3],
+        top: insets.top + SPACING[3],
+        right: insets.right + SPACING[3],
       },
     ],
-    [insets.top, insets.right, theme.spacing],
+    [insets.top, insets.right],
   );
 
   const handleImageError = useCallback(() => setErrored(true), []);
@@ -93,7 +99,7 @@ export function AttachmentLightbox({ metadata, onClose }: AttachmentLightboxProp
             onPress={onClose}
             style={closeButtonStyle}
           >
-            <X size={16} color={theme.colors.foregroundMuted} />
+            <ThemedX size={16} uniProps={foregroundMutedColorMapping} />
           </Pressable>
         </View>
       </View>

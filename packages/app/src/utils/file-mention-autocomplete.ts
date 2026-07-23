@@ -1,3 +1,4 @@
+/** Active `@file` mention span inside composer text */
 export interface FileMentionRange {
   start: number;
   end: number;
@@ -17,6 +18,11 @@ interface ApplyFileMentionReplacementInput {
 
 const INVALID_MENTION_QUERY_CHARS = /[\s\n\r\t"']/;
 
+/**
+ * Finds the active `@...` file mention under the caret
+ * @param input Composer text and caret index
+ * @returns Mention range and query, or null when no valid mention is active
+ */
 export function findActiveFileMention(input: FindActiveFileMentionInput): FileMentionRange | null {
   const clampedCursor = Math.max(0, Math.min(input.cursorIndex, input.text.length));
   const beforeCursor = input.text.slice(0, clampedCursor);
@@ -40,6 +46,11 @@ export function findActiveFileMention(input: FindActiveFileMentionInput): FileMe
   return null;
 }
 
+/**
+ * Replaces an active file mention with a quoted relative path
+ * @param input Composer text, mention range, and selected relative path
+ * @returns Updated composer text with the mention substituted
+ */
 export function applyFileMentionReplacement(input: ApplyFileMentionReplacementInput): string {
   const safePath = input.relativePath.replace(/"/g, '\\"');
   const before = input.text.slice(0, input.mention.start);

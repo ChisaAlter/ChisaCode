@@ -1,5 +1,10 @@
 import type { AgentAttachment, GitHubSearchItem } from "@chisacode/protocol/messages";
 
+/**
+ * Converts a GitHub search hit into a PR or issue agent attachment
+ * @param item GitHub PR/issue search item, if any
+ * @returns Agent attachment payload, or null when item is missing
+ */
 export function buildGitHubAttachmentFromSearchItem(
   item: GitHubSearchItem | null,
 ): AgentAttachment | null {

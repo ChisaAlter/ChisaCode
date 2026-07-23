@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { router, type Href } from "expo-router";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, MoreVertical, Pencil, Plus, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -960,14 +960,17 @@ function HostContext({ hosts, selectedHost, onSelectHost }: HostContextProps) {
 }
 
 function HostStatusDot({ serverId }: { serverId: string }) {
-  const { theme } = useUnistyles();
   const snapshot = useHostRuntimeSnapshot(serverId);
   const status = snapshot?.connectionStatus ?? "connecting";
-  let color: string;
-  if (status === "online") color = theme.colors.palette.green[400];
-  else if (status === "connecting") color = theme.colors.palette.amber[500];
-  else color = theme.colors.palette.red[500];
-  const dotStyle = useMemo(() => [styles.hostStatusDot, { backgroundColor: color }], [color]);
+  let statusStyle: { backgroundColor: string };
+  if (status === "online") {
+    statusStyle = styles.hostStatusDotOnline;
+  } else if (status === "connecting") {
+    statusStyle = styles.hostStatusDotConnecting;
+  } else {
+    statusStyle = styles.hostStatusDotOffline;
+  }
+  const dotStyle = useMemo(() => [styles.hostStatusDot, statusStyle], [statusStyle]);
   return <View style={dotStyle} />;
 }
 
@@ -1379,6 +1382,15 @@ const styles = StyleSheet.create((theme) => ({
     width: 8,
     height: 8,
     borderRadius: theme.borderRadius.full,
+  },
+  hostStatusDotOnline: {
+    backgroundColor: theme.colors.palette.green[400],
+  },
+  hostStatusDotConnecting: {
+    backgroundColor: theme.colors.palette.amber[500],
+  },
+  hostStatusDotOffline: {
+    backgroundColor: theme.colors.palette.red[500],
   },
   hostName: {
     color: theme.colors.foregroundMuted,

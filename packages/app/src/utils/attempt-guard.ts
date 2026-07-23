@@ -1,3 +1,4 @@
+/** Error thrown when an async attempt is no longer the active one */
 export class AttemptCancelledError extends Error {
   constructor(message = "Attempt cancelled") {
     super(message);

@@ -1,6 +1,6 @@
 import { memo, useMemo } from "react";
 import { View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 
 import type { ResizeHandleProps } from "./resize-handle.types";
 
@@ -18,20 +18,17 @@ import type { ResizeHandleProps } from "./resize-handle.types";
  * to the correct implementation per platform.
  */
 export const ResizeHandle = memo(function ResizeHandleNative({ direction }: ResizeHandleProps) {
-  const { theme } = useUnistyles();
   const directionStyle =
     direction === "horizontal" ? stylesheet.handleHorizontal : stylesheet.handleVertical;
-  const style = useMemo(
-    () => [stylesheet.handle, directionStyle, { backgroundColor: theme.colors.border }],
-    [directionStyle, theme.colors.border],
-  );
+  const style = useMemo(() => [stylesheet.handle, directionStyle], [directionStyle]);
   return <View style={style} />;
 });
 
-const stylesheet = StyleSheet.create((_theme) => ({
+const stylesheet = StyleSheet.create((theme) => ({
   handle: {
     position: "relative",
     flexShrink: 0,
+    backgroundColor: theme.colors.border,
   },
   handleHorizontal: {
     width: 1,

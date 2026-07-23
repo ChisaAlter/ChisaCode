@@ -1,5 +1,5 @@
 import { StyleSheet as RNStyleSheet, View, Text } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Animated, { useAnimatedStyle, withTiming, useSharedValue } from "react-native-reanimated";
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { Upload } from "lucide-react-native";
 import { useFileDropZone } from "@/hooks/use-file-drop-zone";
 import type { ImageAttachment } from "@/composer/types";
 import { isWeb } from "@/constants/platform";
+import type { Theme } from "@/styles/theme";
 
 interface FileDropZoneProps {
   children: React.ReactNode;
@@ -16,9 +17,14 @@ interface FileDropZoneProps {
 
 const IS_WEB = isWeb;
 
+const ThemedUpload = withUnistyles(Upload);
+
+const primaryColorMapping = (theme: Theme) => ({
+  color: theme.colors.primary,
+});
+
 export function FileDropZone({ children, onFilesDropped, disabled = false }: FileDropZoneProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const { isDragging, containerRef } = useFileDropZone({
     onFilesDropped,
     disabled,
@@ -59,7 +65,7 @@ export function FileDropZone({ children, onFilesDropped, disabled = false }: Fil
         <View style={styles.backdrop} />
         {/* Content */}
         <View style={styles.overlayContent}>
-          <Upload size={32} color={theme.colors.primary} />
+          <ThemedUpload size={32} uniProps={primaryColorMapping} />
           <Text style={styles.overlayText}>{t("files.dropImagesHere")}</Text>
         </View>
       </Animated.View>

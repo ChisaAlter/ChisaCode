@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { BarcodeScanningResult, BarcodeSettings } from "expo-camera";
 import { useTranslation } from "react-i18next";
@@ -15,6 +15,7 @@ import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes"
 import { isWeb } from "@/constants/platform";
 import { BackHeader } from "@/components/headers/back-header";
 import { useToast } from "@/contexts/toast-context";
+import { SPACING } from "@/styles/theme";
 
 const styles = StyleSheet.create((theme) => ({
   container: {
@@ -84,6 +85,14 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 14.5,
     lineHeight: 22,
   },
+  // Pairing scan status uses full foreground (not muted helper).
+  helperTextActive: {
+    marginTop: theme.spacing[6],
+    color: theme.colors.foreground,
+    textAlign: "center",
+    fontSize: 14.5,
+    lineHeight: 22,
+  },
   permissionCard: {
     marginTop: theme.spacing[6],
     padding: theme.spacing[6],
@@ -129,7 +138,6 @@ function extractOfferUrlFromScan(result: BarcodeScanningResult): string | null {
 }
 
 export default function PairScanScreen() {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -217,12 +225,8 @@ export default function PairScanScreen() {
   }, [requestPermission]);
 
   const bodyStyle = useMemo(
-    () => [styles.body, { paddingBottom: insets.bottom + theme.spacing[6] }],
-    [insets.bottom, theme.spacing],
-  );
-  const helperTextStyle = useMemo(
-    () => [styles.helperText, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
+    () => [styles.body, { paddingBottom: insets.bottom + SPACING[6] }],
+    [insets.bottom],
   );
 
   if (isWeb) {
@@ -272,7 +276,9 @@ export default function PairScanScreen() {
                 <View style={CORNER_BL_STYLE} />
                 <View style={CORNER_BR_STYLE} />
               </View>
-              {isPairing ? <Text style={helperTextStyle}>{t("pairing.pairing")}</Text> : null}
+              {isPairing ? (
+                <Text style={styles.helperTextActive}>{t("pairing.pairing")}</Text>
+              ) : null}
             </View>
           </View>
         )}

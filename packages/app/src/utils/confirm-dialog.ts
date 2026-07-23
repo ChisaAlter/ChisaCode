@@ -2,6 +2,7 @@ import { Alert } from "react-native";
 import { getDesktopHost, type DesktopDialogAskOptions } from "@/desktop/host";
 import { isNative } from "@/constants/platform";
 
+/** Inputs for a cross-platform confirmation dialog */
 export interface ConfirmDialogInput {
   title: string;
   message: string;
@@ -103,6 +104,12 @@ function showWebConfirmDialog(input: ConfirmDialogInput): boolean {
   return browserConfirm(promptMessage);
 }
 
+/**
+ * Shows a confirm/cancel dialog on native, desktop, or web
+ * @param input Title, message, optional button labels, and destructive styling
+ * @returns Resolves true when confirmed, false when cancelled
+ * @throws {Error} When no web confirmation backend is available
+ */
 export async function confirmDialog(input: ConfirmDialogInput): Promise<boolean> {
   if (isNative) {
     return showNativeConfirmDialog(input);
@@ -116,6 +123,7 @@ export async function confirmDialog(input: ConfirmDialogInput): Promise<boolean>
   return showWebConfirmDialog(input);
 }
 
+/** Test-only helpers for confirming dialog internals */
 export const __private__ = {
   blurActiveWebElement,
   buildDesktopAskOptions,

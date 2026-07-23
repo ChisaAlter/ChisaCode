@@ -1,12 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Check, X, XCircle } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useDownloadStore, formatSpeed, formatEta, type Download } from "@/stores/download-store";
+import { SPACING, type Theme } from "@/styles/theme";
 
 const AUTO_DISMISS_DELAY = 3000;
+
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedCheck = withUnistyles(Check);
+const ThemedXCircle = withUnistyles(XCircle);
+const ThemedX = withUnistyles(X);
+
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const primaryColorMapping = (theme: Theme) => ({
+  color: theme.colors.primary,
+});
+const destructiveColorMapping = (theme: Theme) => ({
+  color: theme.colors.destructive,
+});
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 function getDownloadStatusText(download: Download, t: (key: string) => string): string {
   if (download.status === "downloading") {
@@ -20,7 +39,6 @@ function getDownloadStatusText(download: Download, t: (key: string) => string): 
 }
 
 export function DownloadToast() {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const downloads = useDownloadStore((state) => state.downloads);
@@ -50,8 +68,8 @@ export function DownloadToast() {
   }, [activeDownload, dismissDownload]);
 
   const containerStyle = useMemo(
-    () => [styles.container, { bottom: theme.spacing[4] + insets.bottom }],
-    [theme.spacing, insets.bottom],
+    () => [styles.container, { bottom: SPACING[4] + insets.bottom }],
+    [insets.bottom],
   );
 
   const handleDismiss = useCallback(() => {
@@ -68,13 +86,13 @@ export function DownloadToast() {
     <View style={containerStyle} pointerEvents="box-none">
       <View style={styles.toast}>
         {activeDownload.status === "downloading" ? (
-          <ActivityIndicator size="small" color={theme.colors.foreground} />
+          <ThemedActivityIndicator size="small" uniProps={foregroundColorMapping} />
         ) : null}
         {activeDownload.status === "complete" ? (
-          <Check size={18} color={theme.colors.primary} />
+          <ThemedCheck size={18} uniProps={primaryColorMapping} />
         ) : null}
         {activeDownload.status !== "downloading" && activeDownload.status !== "complete" ? (
-          <XCircle size={18} color={theme.colors.destructive} />
+          <ThemedXCircle size={18} uniProps={destructiveColorMapping} />
         ) : null}
         <View style={styles.textContainer}>
           <Text style={styles.fileName} numberOfLines={1}>
@@ -89,7 +107,7 @@ export function DownloadToast() {
         </View>
         {activeDownload.status !== "downloading" && (
           <Pressable onPress={handleDismiss} hitSlop={8} style={styles.dismiss}>
-            <X size={16} color={theme.colors.foregroundMuted} />
+            <ThemedX size={16} uniProps={foregroundMutedColorMapping} />
           </Pressable>
         )}
       </View>

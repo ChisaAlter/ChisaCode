@@ -6,6 +6,11 @@ interface FocusWithRetriesOptions {
   onTimeout?: () => void;
 }
 
+/**
+ * Retries focusing an element until focus is observed or a timeout elapses
+ * @param options Focus/isFocused callbacks, optional timeout, and success/timeout hooks
+ * @returns Cancel function that stops further retry attempts
+ */
 export function focusWithRetries({
   focus,
   isFocused,

@@ -1,9 +1,15 @@
+/** Inputs used to rank and filter working-directory autocomplete suggestions */
 export interface BuildWorkingDirectorySuggestionsInput {
   recommendedPaths: string[];
   serverPaths: string[];
   query: string;
 }
 
+/**
+ * Builds ordered working-directory suggestions from recommended and server paths
+ * @param input Recommended paths, server paths, and the current query filter
+ * @returns Deduplicated paths with recommended entries first, filtered by query when present
+ */
 export function buildWorkingDirectorySuggestions(
   input: BuildWorkingDirectorySuggestionsInput,
 ): string[] {

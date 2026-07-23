@@ -28,9 +28,10 @@ import {
   type ViewStyle,
 } from "react-native";
 import { FadeIn, FadeOut } from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor, WORKBENCH_ENVIRONMENT_PANEL_SHADOW } from "@/constants/layout";
 import { Check, CheckCircle } from "lucide-react-native";
+import type { Theme } from "@/styles/theme";
 import { BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -41,6 +42,19 @@ import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { isWeb, isNative } from "@/constants/platform";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 
+const ThemedCheck = withUnistyles(Check);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const ThemedCheckCircle = withUnistyles(CheckCircle);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const successColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.green[500],
+});
 // Keep parity with dropdown-menu action statuses.
 export type ActionStatus = "idle" | "pending" | "success";
 
@@ -386,7 +400,6 @@ export function ContextMenuContent({
   testID?: string;
 }>): ReactElement | null {
   const context = useContextMenuContext("ContextMenuContent");
-  const { theme } = useUnistyles();
   const webScrollbarStyle = useWebScrollbarStyle();
   const isMobile = useIsCompactFormFactor();
   const useMobileSheet = isMobile && mobileMode === "sheet";
@@ -417,20 +430,8 @@ export function ContextMenuContent({
     [],
   );
 
-  const sheetBackgroundStyle = useMemo(
-    () => [
-      styles.sheetBackground,
-      {
-        backgroundColor: theme.colors.surface0,
-        borderColor: theme.colors.border,
-      },
-    ],
-    [theme.colors.surface0, theme.colors.border],
-  );
-  const sheetHandleStyle = useMemo(
-    () => [styles.sheetHandle, { backgroundColor: theme.colors.foregroundFaint }],
-    [theme.colors.foregroundFaint],
-  );
+  const sheetBackgroundStyle = styles.sheetBackground;
+  const sheetHandleStyle = styles.sheetHandle;
 
   // Measure trigger when opening (fallback) and capture point anchors.
   useEffect(() => {
@@ -626,17 +627,16 @@ export function ContextMenuHint({
 function resolveLeadingContent(input: {
   isPending: boolean;
   isSuccess: boolean;
-  leading: ReactElement | null | undefined;
-  pendingColor: string;
-  successColor: string;
+  leading?: ReactElement | null;
 }): ReactElement | null {
-  if (input.isPending) {
-    return <ActivityIndicator size={16} color={input.pendingColor} />;
+  const { isPending, isSuccess, leading } = input;
+  if (isPending) {
+    return <ThemedActivityIndicator size={16} uniProps={foregroundMutedColorMapping} />;
   }
-  if (input.isSuccess) {
-    return <CheckCircle size={16} color={input.successColor} />;
+  if (isSuccess) {
+    return <ThemedCheckCircle size={16} uniProps={successColorMapping} />;
   }
-  return input.leading ?? null;
+  return leading ?? null;
 }
 
 function resolveItemLabel(input: {
@@ -688,7 +688,6 @@ export function ContextMenuItem({
   testID?: string;
   tooltip?: string;
 }>): ReactElement {
-  const { theme } = useUnistyles();
   const { setOpen } = useContextMenuContext("ContextMenuItem");
 
   const isPending = status === "pending" || Boolean(loading);
@@ -699,8 +698,6 @@ export function ContextMenuItem({
     isPending,
     isSuccess,
     leading,
-    pendingColor: theme.colors.foregroundMuted,
-    successColor: theme.colors.palette.green[500],
   });
 
   const label = resolveItemLabel({ children, isPending, isSuccess, pendingLabel, successLabel });
@@ -708,7 +705,7 @@ export function ContextMenuItem({
   const trailingContent =
     trailing ??
     (!showSelectedCheck && selected ? (
-      <Check size={16} color={theme.colors.foregroundMuted} />
+      <ThemedCheck size={16} uniProps={foregroundMutedColorMapping} />
     ) : null);
 
   const handleItemPress = useCallback(() => {
@@ -766,7 +763,7 @@ export function ContextMenuItem({
     >
       {showSelectedCheck ? (
         <View style={styles.checkSlot}>
-          {selected ? <Check size={16} color={theme.colors.foreground} /> : null}
+          {selected ? <ThemedCheck size={16} uniProps={foregroundColorMapping} /> : null}
         </View>
       ) : null}
       {leadingContent ? <View style={styles.leadingSlot}>{leadingContent}</View> : null}

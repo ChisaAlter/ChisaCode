@@ -7,7 +7,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { ScrollView as GHScrollView } from "react-native-gesture-handler";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ExternalLink } from "lucide-react-native";
 import { Fonts } from "@/constants/theme";
 import type { DiffLine } from "@/utils/tool-call-parsers";
@@ -15,9 +15,15 @@ import { diffLinePrefix } from "@/utils/diff-highlight";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import type { Theme } from "@/styles/theme";
 import { getCodeInsets } from "./code-insets";
 import { isWeb } from "@/constants/platform";
 import { useTranslation } from "react-i18next";
+
+const ThemedExternalLink = withUnistyles(ExternalLink);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 const ScrollView = isWeb ? RNScrollView : GHScrollView;
 
@@ -207,7 +213,6 @@ export function DiffViewer({
 }: DiffViewerProps) {
   const [scrollViewWidth, setScrollViewWidth] = React.useState(0);
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const webScrollbarStyle = useWebScrollbarStyle();
   const handleInnerLayout = React.useCallback(
     (e: { nativeEvent: { layout: { width: number } } }) =>
@@ -321,7 +326,7 @@ export function DiffViewer({
           accessibilityRole="button"
           accessibilityLabel="Open in DiffPane"
         >
-          <ExternalLink size={12} color={theme.colors.foregroundMuted} />
+          <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
           <Text style={styles.openInDiffPaneText}>{t("workspace.diffOpenInPane")}</Text>
         </Pressable>
       )}

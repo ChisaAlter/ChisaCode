@@ -1,8 +1,15 @@
 import type { StyleProp, TextStyle } from "react-native";
 import { useMemo } from "react";
 import { TextInput, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
+import type { Theme } from "@/styles/theme";
+
+const ThemedTextInput = withUnistyles(TextInput);
+
+const placeholderTextColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.foregroundMuted,
+});
 
 interface SettingsTextAreaProps {
   accessibilityLabel: string;
@@ -21,18 +28,17 @@ export function SettingsTextArea({
   testID,
   style,
 }: SettingsTextAreaProps) {
-  const { theme } = useUnistyles();
   const inputStyle = useMemo(() => [styles.input, style], [style]);
 
   return (
-    <TextInput
+    <ThemedTextInput
       testID={testID}
       accessibilityLabel={accessibilityLabel}
       multiline
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      placeholderTextColor={theme.colors.foregroundMuted}
+      uniProps={placeholderTextColorMapping}
       style={inputStyle}
     />
   );

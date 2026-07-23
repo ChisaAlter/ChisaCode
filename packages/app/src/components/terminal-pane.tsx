@@ -3,13 +3,17 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet as RNStyleSheet,
   Text,
   View,
   type PressableStateCallbackType,
 } from "react-native";
 import Animated, { runOnJS, useAnimatedReaction } from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import {
+  StyleSheet,
+  UnistyleDependency,
+  UnistylesRuntime,
+  withUnistyles,
+} from "react-native-unistyles";
 import { encodeTerminalKeyInput } from "@chisacode/protocol/terminal-key-input";
 import type { TerminalInputModeState } from "@chisacode/protocol/terminal-input-mode";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -50,6 +54,17 @@ import {
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
 import { ErrorBoundary, SectionErrorFallback } from "@/components/error-boundary";
+import { type Theme } from "@/styles/theme";
+
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
+function readTerminalXtermTheme() {
+  const theme = UnistylesRuntime.getTheme() as Theme;
+  return toXtermTheme(theme.colors.terminal);
+}
 
 interface TerminalPaneProps {
   serverId: string;
@@ -188,9 +203,34 @@ export function TerminalPane({
 }: TerminalPaneProps) {
   const { t: terminalT } = useTranslation();
   const isAppVisible = useAppVisible();
-  const { theme } = useUnistyles();
   const { settings } = useAppSettings();
-  const xtermTheme = useMemo(() => toXtermTheme(theme.colors.terminal), [theme]);
+  const [xtermTheme, setXtermTheme] = useState(() => {
+    try {
+      return readTerminalXtermTheme();
+    } catch {
+      return undefined as ReturnType<typeof toXtermTheme> | undefined;
+    }
+  });
+  useEffect(() => {
+    try {
+      setXtermTheme(readTerminalXtermTheme());
+    } catch {
+      // Theme may not be ready during bootstrap.
+    }
+    const dispose = StyleSheet.addChangeListener((dependencies) => {
+      if (
+        dependencies.includes(UnistyleDependency.Theme) ||
+        dependencies.includes(UnistyleDependency.ThemeName)
+      ) {
+        try {
+          setXtermTheme(readTerminalXtermTheme());
+        } catch {
+          // ignore
+        }
+      }
+    });
+    return dispose;
+  }, []);
   const isMobile = useIsCompactFormFactor();
   const mobileView = usePanelStore((state) => state.mobileView);
   const showMobileAgentList = usePanelStore((state) => state.showMobileAgentList);
@@ -733,12 +773,8 @@ export function TerminalPane({
   );
 
   const containerStyle = useMemo(
-    () => [
-      staticStyles.container,
-      { backgroundColor: theme.colors.surface0 },
-      keyboardPaddingStyle,
-    ],
-    [keyboardPaddingStyle, theme.colors.surface0],
+    () => [styles.terminalContainer, keyboardPaddingStyle],
+    [keyboardPaddingStyle],
   );
 
   const handleSwipeRight = useCallback(() => {
@@ -820,7 +856,7 @@ export function TerminalPane({
               pointerEvents="none"
               testID="terminal-attach-loading"
             >
-              <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
+              <ThemedActivityIndicator size="small" uniProps={foregroundMutedColorMapping} />
             </View>
           ) : null}
         </View>
@@ -898,6 +934,10 @@ export function TerminalPane({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  terminalContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.surface0,
+  },
   outputContainer: {
     flex: 1,
     minHeight: 0,
@@ -986,13 +1026,6 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
-
-const staticStyles = RNStyleSheet.create({
-  container: {
-    flex: 1,
-    minHeight: 0,
-  },
-});
 
 const TERMINAL_EMULATOR_DOM_PROPS = {
   style: { flex: 1 },

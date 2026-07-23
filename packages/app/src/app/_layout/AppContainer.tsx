@@ -2,7 +2,7 @@ import { type CSSProperties, type ReactNode, useCallback, useMemo } from "react"
 import { Pressable, View, type PressableStateCallbackType } from "react-native";
 import { usePathname } from "expo-router";
 import { PanelLeft } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { getIsElectronRuntime, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
@@ -12,7 +12,7 @@ import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-
 import { useAppSettings } from "@/hooks/use-settings";
 import { useHosts } from "@/runtime/host-runtime";
 import { usePanelStore } from "@/stores/panel-store";
-import { ACTIVE_THEME_NAMES, type ThemeName } from "@/styles/theme";
+import { ACTIVE_THEME_NAMES, type Theme, type ThemeName } from "@/styles/theme";
 import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
 import { useWindowControlsPadding } from "@/utils/desktop-window";
 import { resolveActiveHost } from "@/utils/active-host";
@@ -34,7 +34,6 @@ import { QuittingOverlay } from "@/components/quitting-overlay";
 import { keyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher";
 import { appI18n } from "@/i18n";
 import { MobileGestureWrapper } from "./MobileGesture";
-import { resolveAppSurfaceBackgrounds } from "./app-surface-backgrounds";
 
 export interface AppContainerProps {
   children: ReactNode;
@@ -48,35 +47,28 @@ const DESKTOP_WORKBENCH_FONT_CSS = `[data-testid="app-surface"] * {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }`;
 
+const ThemedPanelLeft = withUnistyles(PanelLeft);
+
+const foregroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.foreground,
+});
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
 function AppContainer({
   children,
   selectedAgentId,
   chromeEnabled: chromeEnabledOverride,
 }: AppContainerProps) {
-  const { theme } = useUnistyles();
   const isCompactLayout = useIsCompactFormFactor();
-  const surfaceBackgrounds = resolveAppSurfaceBackgrounds({
-    frameEnabled: !isCompactLayout && getIsElectronRuntime(),
-    glassEnabled: theme.glass.enabled,
-    surfaceWorkspace: theme.colors.surfaceWorkspace,
-    surface0: theme.colors.surface0,
-    glassShell: theme.glass.shell,
-    borderAccent: theme.colors.border,
-  });
+  const frameEnabled = !isCompactLayout && getIsElectronRuntime();
   const surfaceFillStyle = useMemo(
     () => [
       layoutStyles.surfaceFill,
-      {
-        backgroundColor: surfaceBackgrounds.root,
-        borderWidth: surfaceBackgrounds.frameBorderWidth,
-        borderColor: surfaceBackgrounds.frameBorderColor,
-      },
+      frameEnabled ? layoutStyles.surfaceFillFrame : layoutStyles.surfaceFillNoFrame,
     ],
-    [
-      surfaceBackgrounds.frameBorderColor,
-      surfaceBackgrounds.frameBorderWidth,
-      surfaceBackgrounds.root,
-    ],
+    [frameEnabled],
   );
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
@@ -131,11 +123,8 @@ function AppContainer({
   const desktopWorkbenchFontEnabled =
     !isCompactLayout && getIsElectronRuntime() && pathname.includes("/workspace/");
   const appRowStyle = useMemo(
-    () => [
-      layoutStyles.appRow,
-      !isCompactLayout && { backgroundColor: surfaceBackgrounds.desktopRow },
-    ],
-    [isCompactLayout, surfaceBackgrounds.desktopRow],
+    () => [layoutStyles.appRow, !isCompactLayout && layoutStyles.appRowDesktop],
+    [isCompactLayout],
   );
   const desktopSidebarRestoreButtonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -171,12 +160,13 @@ function AppContainer({
             style={desktopSidebarRestoreButtonStyle}
             testID="desktop-left-sidebar-open-focus"
           >
-            {({ hovered, pressed }) => (
-              <PanelLeft
-                size={20}
-                color={hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
-              />
-            )}
+            {({ hovered, pressed }) => {
+              let iconMapping = foregroundMutedColorMapping;
+              if (hovered || pressed) {
+                iconMapping = foregroundColorMapping;
+              }
+              return <ThemedPanelLeft size={20} uniProps={iconMapping} />;
+            }}
           </Pressable>
         </View>
       ) : null}
@@ -248,6 +238,17 @@ export const layoutStyles = StyleSheet.create((theme) => ({
   surfaceFill: {
     flex: 1,
     position: "relative",
+    // Soft Workbench root: glass shell is transparent over LiquidNeonBackdrop;
+    // solid themes paint the workspace canvas.
+    backgroundColor: theme.glass.enabled ? "transparent" : theme.colors.surfaceWorkspace,
+  },
+  surfaceFillFrame: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  surfaceFillNoFrame: {
+    borderWidth: 0,
+    borderColor: "transparent",
   },
   // Soft: spacer is transparent clearance only (no white band / no hard divider).
   desktopTitlebarSpacer: {
@@ -258,6 +259,9 @@ export const layoutStyles = StyleSheet.create((theme) => ({
   appRow: {
     flex: 1,
     flexDirection: "row",
+  },
+  appRowDesktop: {
+    backgroundColor: theme.glass.enabled ? theme.glass.shell : theme.colors.surfaceWorkspace,
   },
   appContent: {
     flex: 1,

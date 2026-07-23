@@ -11,6 +11,11 @@ function trimNonEmpty(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * Builds the route to open after archiving the currently viewed workspace
+ * @param input Server id, archived workspace id, and available workspaces
+ * @returns New-workspace route for the archived project's root, or host root as fallback
+ */
 export function buildWorkspaceArchiveRedirectRoute(input: {
   serverId: string;
   archivedWorkspaceId: string;

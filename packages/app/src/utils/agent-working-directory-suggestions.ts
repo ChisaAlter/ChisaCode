@@ -1,3 +1,4 @@
+/** Agent-like source used when collecting working directory suggestions */
 export interface AgentWorkingDirectorySource {
   cwd?: string | null;
   createdAt?: Date | null;
@@ -6,6 +7,11 @@ export interface AgentWorkingDirectorySource {
 
 const MANAGED_WORKTREE_PATH_PATTERN = /(^|\/)\.(?:chisacode|chisacode)\/worktrees(\/|$)/;
 
+/**
+ * Collects unique agent working directories ordered by most recent activity
+ * @param sources Iterable of agent cwd/activity sources
+ * @returns Deduplicated cwd paths excluding managed ChisaCode worktrees
+ */
 export function collectAgentWorkingDirectorySuggestions(
   sources: Iterable<AgentWorkingDirectorySource>,
 ): string[] {

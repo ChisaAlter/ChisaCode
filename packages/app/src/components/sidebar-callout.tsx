@@ -1,7 +1,8 @@
 import { X } from "lucide-react-native";
 import { useCallback, useMemo, type ReactNode } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 
 export type SidebarCalloutActionVariant = "primary" | "secondary";
 
@@ -25,6 +26,13 @@ export interface SidebarCalloutProps {
   testID?: string;
 }
 
+const ThemedX = withUnistyles(X);
+
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+
 export function SidebarCalloutDescriptionText({ children }: { children: ReactNode }) {
   return <Text style={styles.description}>{children}</Text>;
 }
@@ -38,7 +46,6 @@ export function SidebarCallout({
   onDismiss,
   testID,
 }: SidebarCalloutProps) {
-  const { theme } = useUnistyles();
   const visibleActions = (actions ?? []).slice(0, 2);
   const hasHeader = title != null || icon != null;
   const hasDescription = description != null && description !== "";
@@ -73,9 +80,9 @@ export function SidebarCallout({
                 accessibilityRole="button"
               >
                 {({ hovered }) => (
-                  <X
+                  <ThemedX
                     size={14}
-                    color={hovered ? theme.colors.foreground : theme.colors.foregroundMuted}
+                    uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
                   />
                 )}
               </Pressable>

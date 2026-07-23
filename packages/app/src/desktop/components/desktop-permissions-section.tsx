@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { View, Text } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { RotateCw } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { DesktopPermissionRow } from "@/desktop/components/desktop-permission-row";
@@ -8,9 +8,14 @@ import { useDesktopPermissions } from "@/desktop/permissions/use-desktop-permiss
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useTranslation } from "react-i18next";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+
+const ThemedRotateCw = withUnistyles(RotateCw);
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 export function DesktopPermissionsSection() {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const {
     isDesktopApp,
@@ -23,11 +28,6 @@ export function DesktopPermissionsSection() {
     requestPermission,
     sendTestNotification,
   } = useDesktopPermissions();
-
-  const errorTextStyle = useMemo(
-    () => [styles.errorText, { color: theme.colors.destructive }],
-    [theme.colors.destructive],
-  );
 
   const handleRefreshPress = useCallback(() => {
     void refreshPermissions();
@@ -49,8 +49,8 @@ export function DesktopPermissionsSection() {
   const notificationsGranted = snapshot?.notifications.state === "granted";
 
   const refreshIcon = useMemo(
-    () => <RotateCw size={theme.iconSize.md} color={theme.colors.foregroundMuted} />,
-    [theme.iconSize.md, theme.colors.foregroundMuted],
+    () => <ThemedRotateCw size={ICON_SIZE.md} uniProps={foregroundMutedColorMapping} />,
+    [],
   );
 
   const refreshButton = useMemo(
@@ -86,7 +86,9 @@ export function DesktopPermissionsSection() {
           isExtraActionDisabled={!notificationsGranted || isBusy}
           onExtraAction={handleSendTestNotification}
         />
-        {testNotificationError ? <Text style={errorTextStyle}>{testNotificationError}</Text> : null}
+        {testNotificationError ? (
+          <Text style={styles.errorText}>{testNotificationError}</Text>
+        ) : null}
         <DesktopPermissionRow
           title={t("settings.permissions.microphone")}
           showBorder
@@ -105,5 +107,6 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 16,
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[2],
+    color: theme.colors.destructive,
   },
 }));

@@ -1,8 +1,14 @@
+/** Selectable branch option for combo/autocomplete UIs */
 export interface BranchComboOption {
   id: string;
   label: string;
 }
 
+/**
+ * Normalizes a git ref-like name into a short branch option id
+ * @param input Branch, HEAD, or refs/* string to normalize
+ * @returns Short branch name, or null for empty/HEAD values
+ */
 export function normalizeBranchOptionName(input: string | null | undefined): string | null {
   const trimmed = input?.trim();
   if (!trimmed || trimmed === "HEAD") {
@@ -22,6 +28,11 @@ export function normalizeBranchOptionName(input: string | null | undefined): str
   return normalized.length > 0 && normalized !== "HEAD" ? normalized : null;
 }
 
+/**
+ * Builds a deduplicated list of branch combo options from related branch fields
+ * @param input Suggested branches plus current/base/typed/worktree branch labels
+ * @returns Unique branch options sorted by first-seen insertion order
+ */
 export function buildBranchComboOptions(input: {
   suggestedBranches?: string[];
   currentBranch?: string | null;

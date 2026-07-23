@@ -1,8 +1,9 @@
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import Svg, { Circle } from "react-native-svg";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { Theme } from "@/styles/theme";
 
 interface ContextWindowMeterProps {
   maxTokens: number;
@@ -15,6 +16,24 @@ const CENTER = SVG_SIZE / 2;
 const RADIUS = 7;
 const STROKE_WIDTH = 2.25;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+const ThemedCircle = withUnistyles(Circle);
+
+const trackStrokeMapping = (theme: Theme) => ({
+  stroke: theme.colors.surfaceWorkspace,
+});
+
+const progressMutedStrokeMapping = (theme: Theme) => ({
+  stroke: theme.colors.foregroundMuted,
+});
+
+const progressAmberStrokeMapping = (theme: Theme) => ({
+  stroke: theme.colors.palette.amber[500],
+});
+
+const progressDestructiveStrokeMapping = (theme: Theme) => ({
+  stroke: theme.colors.destructive,
+});
 
 function isValidMaxTokens(value: number): boolean {
   return Number.isFinite(value) && value > 0;
@@ -55,19 +74,14 @@ function formatSessionCost(value: number): string | null {
   return `$${value.toFixed(2)}`;
 }
 
-function getMeterColors(
-  percentage: number,
-  theme: ReturnType<typeof useUnistyles>["theme"],
-): { progress: string; track: string } {
-  // Soft meter track: workspace canvas wash, not solid surface1 hover fill.
-  const track = theme.colors.surfaceWorkspace;
+function getProgressStrokeMapping(percentage: number): (theme: Theme) => { stroke: string } {
   if (percentage > 90) {
-    return { progress: theme.colors.destructive, track };
+    return progressDestructiveStrokeMapping;
   }
   if (percentage >= 70) {
-    return { progress: theme.colors.palette.amber[500], track };
+    return progressAmberStrokeMapping;
   }
-  return { progress: theme.colors.foregroundMuted, track };
+  return progressMutedStrokeMapping;
 }
 
 export function ContextWindowMeter({
@@ -76,7 +90,6 @@ export function ContextWindowMeter({
   totalCostUsd,
 }: ContextWindowMeterProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const percentage = getUsagePercentage(maxTokens, usedTokens);
 
   if (percentage === null) {
@@ -86,7 +99,7 @@ export function ContextWindowMeter({
   const clampedPercentage = clampPercentage(percentage);
   const roundedPercentage = Math.round(percentage);
   const dashOffset = CIRCUMFERENCE - (clampedPercentage / 100) * CIRCUMFERENCE;
-  const colors = getMeterColors(clampedPercentage, theme);
+  const progressStrokeMapping = getProgressStrokeMapping(clampedPercentage);
   const formattedSessionCost =
     typeof totalCostUsd === "number" ? formatSessionCost(totalCostUsd) : null;
 
@@ -106,24 +119,24 @@ export function ContextWindowMeter({
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
-            <Circle
+            <ThemedCircle
               cx={CENTER}
               cy={CENTER}
               r={RADIUS}
               fill="none"
-              stroke={colors.track}
               strokeWidth={STROKE_WIDTH}
+              uniProps={trackStrokeMapping}
             />
-            <Circle
+            <ThemedCircle
               cx={CENTER}
               cy={CENTER}
               r={RADIUS}
               fill="none"
-              stroke={colors.progress}
               strokeWidth={STROKE_WIDTH}
               strokeLinecap="round"
               strokeDasharray={CIRCUMFERENCE}
               strokeDashoffset={dashOffset}
+              uniProps={progressStrokeMapping}
             />
           </Svg>
         </Pressable>

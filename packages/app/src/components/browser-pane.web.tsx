@@ -1,6 +1,5 @@
-import { useMemo } from "react";
 import { Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 interface BrowserPaneProps {
@@ -13,27 +12,18 @@ interface BrowserPaneProps {
 }
 
 export function BrowserPane({ browserId }: BrowserPaneProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const titleStyle = useMemo(
-    () => [styles.title, { color: theme.colors.foreground }],
-    [theme.colors.foreground],
-  );
-  const subtitleStyle = useMemo(
-    () => [styles.subtitle, { color: theme.colors.foregroundMuted }],
-    [theme.colors.foregroundMuted],
-  );
 
   return (
     <View style={styles.container}>
-      <Text style={titleStyle}>{t("browser.desktopOnlyTitle")}</Text>
-      <Text style={subtitleStyle}>{t("browser.desktopOnlyBody")}</Text>
-      <Text style={subtitleStyle}>浏览器会话 {browserId}</Text>
+      <Text style={styles.title}>{t("browser.desktopOnlyTitle")}</Text>
+      <Text style={styles.subtitle}>{t("browser.desktopOnlyBody")}</Text>
+      <Text style={styles.subtitle}>浏览器会话 {browserId}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     alignItems: "center",
@@ -46,9 +36,11 @@ const styles = StyleSheet.create(() => ({
     fontSize: 14.5,
     lineHeight: 20,
     fontWeight: "500",
+    color: theme.colors.foreground,
   },
   subtitle: {
     fontSize: 12.5,
     lineHeight: 18,
+    color: theme.colors.foregroundMuted,
   },
 }));

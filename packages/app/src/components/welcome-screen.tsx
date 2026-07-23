@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { QrCode, Link2, ClipboardPaste, ExternalLink, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { HostProfile } from "@/types/host-connection";
@@ -16,13 +16,25 @@ import { buildHostRootRoute } from "@/utils/host-routes";
 import { ChisaCodeLogo } from "@/components/icons/chisacode-logo";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isWeb, isNative } from "@/constants/platform";
+import { SPACING, type Theme } from "@/styles/theme";
+
+const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedQrCode = withUnistyles(QrCode);
+const ThemedLink2 = withUnistyles(Link2);
+const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
+
+const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
+const accentForegroundColorMapping = (theme: Theme) => ({
+  color: theme.colors.accentForeground,
+});
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
 interface WelcomeAction {
   key: "scan-qr" | "direct-connection" | "paste-pairing-link";
   label: string;
   testID: string;
   primary: boolean;
-  icon: typeof QrCode;
+  icon: typeof ThemedQrCode;
   onPress: () => void;
 }
 
@@ -172,7 +184,6 @@ export interface WelcomeScreenProps {
 
 export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const appVersion = resolveAppVersion();
@@ -225,7 +236,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           label: t("onboarding.directConnection"),
           testID: "welcome-direct-connection",
           primary: true,
-          icon: Link2,
+          icon: ThemedLink2,
           onPress: handleOpenDirect,
         },
         {
@@ -233,7 +244,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           label: t("onboarding.pastePairingLink"),
           testID: "welcome-paste-pairing-link",
           primary: false,
-          icon: ClipboardPaste,
+          icon: ThemedClipboardPaste,
           onPress: handleOpenPasteLink,
         },
       ]
@@ -243,7 +254,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           label: t("onboarding.scanQr"),
           testID: "welcome-scan-qr",
           primary: true,
-          icon: QrCode,
+          icon: ThemedQrCode,
           onPress: handleScanQr,
         },
         {
@@ -251,7 +262,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           label: t("onboarding.directConnection"),
           testID: "welcome-direct-connection",
           primary: false,
-          icon: Link2,
+          icon: ThemedLink2,
           onPress: handleOpenDirect,
         },
         {
@@ -259,14 +270,14 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           label: t("onboarding.pastePairingLink"),
           testID: "welcome-paste-pairing-link",
           primary: false,
-          icon: ClipboardPaste,
+          icon: ThemedClipboardPaste,
           onPress: handleOpenPasteLink,
         },
       ];
 
   const scrollContentContainerStyle = useMemo(
-    () => [styles.container, { paddingBottom: theme.spacing[6] + insets.bottom }],
-    [theme.spacing, insets.bottom],
+    () => [styles.container, { paddingBottom: SPACING[6] + insets.bottom }],
+    [insets.bottom],
   );
 
   return (
@@ -285,7 +296,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
             {isNative ? (
               <Pressable style={styles.setupLink} onPress={handleOpenChisaCodeSite}>
                 <Text style={styles.setupLinkText}>chisacode.sh</Text>
-                <ExternalLink size={14} color={theme.colors.accent} />
+                <ThemedExternalLink size={14} uniProps={accentColorMapping} />
               </Pressable>
             ) : null}
           </View>
@@ -330,7 +341,6 @@ interface WelcomeActionButtonProps {
 }
 
 function WelcomeActionButton({ action }: WelcomeActionButtonProps) {
-  const { theme } = useUnistyles();
   const Icon = action.icon;
   const buttonStyle = useMemo(
     () => [styles.actionButton, action.primary ? styles.actionButtonPrimary : null],
@@ -340,12 +350,13 @@ function WelcomeActionButton({ action }: WelcomeActionButtonProps) {
     () => [styles.actionText, action.primary ? styles.actionTextPrimary : null],
     [action.primary],
   );
+  let iconColorMapping = foregroundColorMapping;
+  if (action.primary) {
+    iconColorMapping = accentForegroundColorMapping;
+  }
   return (
     <Pressable style={buttonStyle} onPress={action.onPress} testID={action.testID}>
-      <Icon
-        size={18}
-        color={action.primary ? theme.colors.accentForeground : theme.colors.foreground}
-      />
+      <Icon size={18} uniProps={iconColorMapping} />
       <Text style={textStyle}>{action.label}</Text>
     </Pressable>
   );

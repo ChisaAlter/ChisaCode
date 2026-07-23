@@ -1,13 +1,12 @@
 import { useMemo } from "react";
-import { View } from "react-native";
+import { View, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@chisacode/protocol/agent-lifecycle";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
-import { getStatusDotColor } from "@/utils/status-dot-color";
 
 export function AgentStatusDot({
   status,
@@ -22,7 +21,6 @@ export function AgentStatusDot({
   pendingPermissionCount?: number;
   showInactive?: boolean;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
 
   if (!status) {
@@ -38,13 +36,15 @@ export function AgentStatusDot({
     attentionReason: attentionReason ?? null,
     pendingPermissionCount: pendingPermissionCount ?? 0,
   });
-  const color = getStatusDotColor({ theme, bucket, showDoneAsInactive: showInactive });
+  const colorStyle = getStatusDotColorStyle(bucket, showInactive);
 
-  if (!color) {
+  if (!colorStyle) {
     return null;
   }
 
-  return <AgentStatusDotView color={color} accessibilityLabel={labelForBucket(bucket, t)} />;
+  return (
+    <AgentStatusDotView colorStyle={colorStyle} accessibilityLabel={labelForBucket(bucket, t)} />
+  );
 }
 
 function labelForBucket(
@@ -66,13 +66,13 @@ function labelForBucket(
 }
 
 function AgentStatusDotView({
-  color,
+  colorStyle,
   accessibilityLabel,
 }: {
-  color: string;
+  colorStyle: ViewStyle;
   accessibilityLabel: string;
 }) {
-  const dotStyle = useMemo(() => [styles.dot, { backgroundColor: color }], [color]);
+  const dotStyle = useMemo(() => [styles.dot, colorStyle], [colorStyle]);
   return (
     <View accessibilityLabel={accessibilityLabel} accessibilityRole="image" style={dotStyle} />
   );
@@ -82,10 +82,44 @@ function isAgentLifecycleStatus(value: string): value is AgentLifecycleStatus {
   return AGENT_LIFECYCLE_STATUSES.some((status) => status === value);
 }
 
+function getStatusDotColorStyle(
+  bucket: ReturnType<typeof deriveSidebarStateBucket>,
+  showDoneAsInactive: boolean,
+): ViewStyle | null {
+  switch (bucket) {
+    case "needs_input":
+      return styles.dotNeedsInput;
+    case "failed":
+      return styles.dotFailed;
+    case "running":
+      return styles.dotRunning;
+    case "attention":
+      return styles.dotAttention;
+    case "done":
+      return showDoneAsInactive ? styles.dotInactive : null;
+  }
+}
+
 const styles = StyleSheet.create((theme) => ({
   dot: {
     width: 8,
     height: 8,
     borderRadius: theme.borderRadius.full,
+  },
+  // Status colors mirror getStatusDotColor() so theme updates stay on the StyleSheet path.
+  dotNeedsInput: {
+    backgroundColor: theme.colors.palette.amber[500],
+  },
+  dotFailed: {
+    backgroundColor: theme.colors.palette.red[500],
+  },
+  dotRunning: {
+    backgroundColor: theme.colors.palette.blue[500],
+  },
+  dotAttention: {
+    backgroundColor: theme.colors.palette.green[500],
+  },
+  dotInactive: {
+    backgroundColor: theme.colors.border,
   },
 }));

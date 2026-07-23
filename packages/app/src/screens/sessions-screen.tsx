@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useEffect } from "react";
 import { View, Text } from "react-native";
 import { router, useIsFocused } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronLeft } from "lucide-react-native";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,13 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { AgentList } from "@/components/agent-list";
 import { useAgentHistory } from "@/hooks/use-agent-history";
 import { buildHostOpenProjectRoute } from "@/utils/host-routes";
+import { type Theme } from "@/styles/theme";
+
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+
+const foregroundMutedColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 const SESSION_SKELETON_KEYS = ["one", "two", "three", "four", "five"] as const;
 const SLOW_LOADING_DELAY_MS = 4_000;
@@ -26,7 +33,6 @@ export function SessionsScreen({ serverId }: { serverId: string }) {
 
 function SessionsScreenContent({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const { agents, hasMore, isInitialLoad, isLoadingMore, isRevalidating, loadMore, refreshAll } =
     useAgentHistory({
       serverId,
@@ -94,7 +100,7 @@ function SessionsScreenContent({ serverId }: { serverId: string }) {
             ))}
           </View>
           <View style={styles.loadingStatusRow}>
-            <LoadingSpinner size={14} color={theme.colors.foregroundMuted} />
+            <ThemedLoadingSpinner size={14} uniProps={foregroundMutedColorMapping} />
             <Text style={styles.loadingStatusText}>{t("session.loadingRecentSessions")}</Text>
             {showSlowLoadingStatus ? (
               <Button variant="ghost" size="sm" onPress={refreshAll}>

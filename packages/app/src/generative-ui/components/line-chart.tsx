@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import type { GenerativeUiComponentBaseProps } from "@/generative-ui/registry/types";
 
 interface LineChartDataPoint {
@@ -23,12 +23,11 @@ interface LineChartProps extends GenerativeUiComponentBaseProps {
  * Renders a simplified line chart using react-native primitives.
  */
 export default function LineChart({ instanceId, props, sendAction }: LineChartProps) {
-  const { theme } = useUnistyles();
   const height = props.height ?? 300;
   const data = useMemo(() => props.data ?? [], [props.data]);
   const xKey = props.xAxis;
   const yKey = props.yAxis;
-  const color = props.color ?? theme.colors.accent;
+  const colorOverride = props.color;
 
   const numericData = useMemo(
     () =>
@@ -59,15 +58,14 @@ export default function LineChart({ instanceId, props, sendAction }: LineChartPr
 
   const chartContainerStyle = useMemo(() => ({ height, position: "relative" as const }), [height]);
 
-  const pointStyles = useMemo(
+  const pointPositionStyles = useMemo(
     () =>
       points.map((p) => ({
-        ...styles.dot,
         left: `${p.x}%` as const,
         top: `${p.y}%` as const,
-        backgroundColor: color,
+        ...(colorOverride ? { backgroundColor: colorOverride } : null),
       })),
-    [points, color],
+    [points, colorOverride],
   );
 
   const pointHandlers = useMemo(
@@ -103,7 +101,7 @@ export default function LineChart({ instanceId, props, sendAction }: LineChartPr
           {points.map((p, i) => (
             <TouchableOpacity
               key={`point-${p.x}-${p.y}`}
-              style={pointStyles[i]}
+              style={StyleSheet.compose(styles.dot, pointPositionStyles[i])}
               onPress={pointHandlers[i]}
             />
           ))}
@@ -158,6 +156,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: 6,
     marginLeft: -6,
     marginTop: -6,
+    backgroundColor: theme.colors.accent,
   },
   lineSegment: {
     position: "absolute",

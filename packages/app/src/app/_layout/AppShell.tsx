@@ -9,7 +9,7 @@ import {
   useRootNavigationState,
   useRouter,
 } from "expo-router";
-import { useUnistyles } from "react-native-unistyles";
+import { withUnistyles } from "react-native-unistyles";
 import { SidebarAnimationProvider } from "@/contexts/sidebar-animation-context";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { useHosts } from "@/runtime/host-runtime";
@@ -26,6 +26,7 @@ import {
   parseWorkspaceOpenIntent,
 } from "@/utils/host-routes";
 import { resolveSelectedSidebarAgentIdFromWorkspaceLayout } from "@/utils/selected-sidebar-agent";
+import type { Theme } from "@/styles/theme";
 import { AppContainer } from "./AppContainer";
 import { useStoreReady } from "./BootstrapProvider";
 import { OpenProjectListener } from "./LinkListeners";
@@ -112,17 +113,14 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
 
 const AGENT_SCREEN_OPTIONS = { gestureEnabled: false };
 
-function RootStack() {
-  const storeReady = useStoreReady();
-  const { theme } = useUnistyles();
-  const stackBackground = resolveAppSurfaceBackgrounds({
-    frameEnabled: false,
-    glassEnabled: theme.glass.enabled,
-    surfaceWorkspace: theme.colors.surfaceWorkspace,
-    surface0: theme.colors.surface0,
-    glassShell: theme.glass.shell,
-    borderAccent: theme.colors.border,
-  }).stack;
+interface RootStackViewProps {
+  storeReady: boolean;
+  stackBackground: string;
+  isDark: boolean;
+  glassEnabled: boolean;
+}
+
+function RootStackView({ storeReady, stackBackground, isDark, glassEnabled }: RootStackViewProps) {
   const stackScreenOptions = useMemo(
     () => ({
       headerShown: false,
@@ -135,16 +133,16 @@ function RootStack() {
     [stackBackground],
   );
   const navigationTheme = useMemo(() => {
-    const baseTheme = theme.isDark ? DarkTheme : DefaultTheme;
+    const baseTheme = isDark ? DarkTheme : DefaultTheme;
     return {
       ...baseTheme,
       colors: {
         ...baseTheme.colors,
         background: stackBackground,
-        card: theme.glass.enabled ? "transparent" : baseTheme.colors.card,
+        card: glassEnabled ? "transparent" : baseTheme.colors.card,
       },
     };
-  }, [stackBackground, theme.glass.enabled, theme.isDark]);
+  }, [stackBackground, glassEnabled, isDark]);
   return (
     <ThemeProvider value={navigationTheme}>
       <Stack screenOptions={stackScreenOptions}>
@@ -174,6 +172,29 @@ function RootStack() {
       </Stack>
     </ThemeProvider>
   );
+}
+
+const rootStackThemeMapping = (theme: Theme) => {
+  const stackBackground = resolveAppSurfaceBackgrounds({
+    frameEnabled: false,
+    glassEnabled: theme.glass.enabled,
+    surfaceWorkspace: theme.colors.surfaceWorkspace,
+    surface0: theme.colors.surface0,
+    glassShell: theme.glass.shell,
+    borderAccent: theme.colors.border,
+  }).stack;
+  return {
+    stackBackground,
+    isDark: theme.isDark,
+    glassEnabled: theme.glass.enabled,
+  };
+};
+
+const ThemedRootStackView = withUnistyles(RootStackView);
+
+function RootStack() {
+  const storeReady = useStoreReady();
+  return <ThemedRootStackView storeReady={storeReady} uniProps={rootStackThemeMapping} />;
 }
 
 function AppShell() {

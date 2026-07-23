@@ -1,6 +1,7 @@
 import type { ToolCallDetail, ToolCallIconName } from "@chisacode/protocol/agent-types";
 import { isChisaCodeToolName } from "@chisacode/protocol/tool-name-normalization";
 
+/** Canonical tool-call icon name used by UI icon resolvers */
 export type ToolCallIcon = ToolCallIconName | "chisacode";
 
 const TOOL_DETAIL_ICON_NAMES: Record<ToolCallDetail["type"], ToolCallIcon> = {
@@ -17,6 +18,12 @@ const TOOL_DETAIL_ICON_NAMES: Record<ToolCallDetail["type"], ToolCallIcon> = {
   unknown: "wrench",
 };
 
+/**
+ * Resolves the icon name for a tool call from its name and optional detail
+ * @param toolName Tool name from the agent protocol
+ * @param detail Optional structured tool-call detail
+ * @returns Canonical icon name for the tool call
+ */
 export function resolveToolCallIconName(toolName: string, detail?: ToolCallDetail): ToolCallIcon {
   const lowerName = toolName.trim().toLowerCase();
 
